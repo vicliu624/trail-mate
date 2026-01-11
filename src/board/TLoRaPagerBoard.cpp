@@ -715,8 +715,21 @@ void TLoRaPagerBoard::stopNFCDiscovery()
 
 bool TLoRaPagerBoard::initGPS()
 {
+    Serial.printf("[TLoRaPagerBoard::initGPS] Starting GPS initialization...\n");
+    Serial.printf("[TLoRaPagerBoard::initGPS] Opening Serial1: baud=38400, RX=%d, TX=%d\n", GPS_RX, GPS_TX);
     Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
-    return gps.init(&Serial1);
+    delay(100);  // Give Serial1 time to initialize
+    Serial.printf("[TLoRaPagerBoard::initGPS] Serial1 opened, calling gps.init(&Serial1)...\n");
+    bool result = gps.init(&Serial1);
+    Serial.printf("[TLoRaPagerBoard::initGPS] gps.init() returned: %d\n", result);
+    if (result) {
+        Serial.printf("[TLoRaPagerBoard::initGPS] GPS initialized successfully, model: %s\n", gps.getModel().c_str());
+        devices_probe |= HW_GPS_ONLINE;
+        Serial.printf("[TLoRaPagerBoard::initGPS] Set HW_GPS_ONLINE flag, devices_probe=0x%08X\n", devices_probe);
+    } else {
+        Serial.printf("[TLoRaPagerBoard::initGPS] GPS initialization FAILED\n");
+    }
+    return result;
 }
 
 void TLoRaPagerBoard::setBrightness(uint8_t level)
