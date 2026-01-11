@@ -79,7 +79,6 @@ static void gps_update_timer_cb(lv_timer_t *timer)
     
     if (g_gps_state.pending_refresh) {
         g_gps_state.pending_refresh = false;
-        
         update_map_tiles(false);
     }
     

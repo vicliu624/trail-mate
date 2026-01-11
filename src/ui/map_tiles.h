@@ -39,6 +39,14 @@ struct MapAnchor {
     bool valid;
 };
 
+// Decoded tile image cache entry (for RAM cache to avoid re-decoding)
+struct DecodedTileCache {
+    int32_t x, y, z;  // Tile coordinates
+    lv_image_dsc_t* img_dsc;  // Decoded image descriptor (RGB565 data in RAM)
+    uint32_t last_used_ms;  // For LRU eviction
+    bool in_use;  // True if currently used by a visible tile
+};
+
 // Map tile structure
 struct MapTile {
     int32_t x;  // Tile X coordinate (wrapped, max 262,143 at zoom 18)
@@ -52,6 +60,7 @@ struct MapTile {
     bool record_evicted;  // Record should be removed from vector
     int priority;  // Loading priority (distance from center, lower = higher priority)
     bool has_png_file;  // True if tile has PNG file (not placeholder)
+    DecodedTileCache* cached_img;  // Pointer to decoded image cache entry (NULL if not cached)
 };
 
 // Tile management context (passed to functions instead of using global state)

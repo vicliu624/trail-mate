@@ -37,6 +37,7 @@ static void disp_flush(lv_display_t *disp_drv, const lv_area_t *area, uint8_t *c
 #endif
 
     plane->pushColors(area->x1, area->y1, w, h, (uint16_t *)color_p);
+    
     lv_display_flush_ready(disp_drv);
 }
 

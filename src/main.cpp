@@ -666,6 +666,8 @@ void setup()
 
 void loop()
 {
+    static uint32_t last_loop_ms = 0;
     lv_timer_handler();
+    
     delay(2);
 }

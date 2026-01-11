@@ -147,8 +147,6 @@ void on_ui_event(lv_event_t* e) {
                 return;
             }
             
-            GPS_LOG("[GPS] PanH KEY: key=%d, step=%d, pan_x: %d -> %d\n", 
-                    key, step, g_gps_state.pan_x, g_gps_state.pan_x + step * MAP_PAN_STEP);
             g_gps_state.pan_x += step * MAP_PAN_STEP;
             g_gps_state.pending_refresh = true;
             if (g_gps_state.map != NULL) {

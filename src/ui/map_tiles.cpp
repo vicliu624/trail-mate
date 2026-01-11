@@ -9,14 +9,98 @@
 #include <cmath>
 #include <algorithm>
 #include <SD.h>
+#include <cstring>  // For memcpy
+
+// Use LVGL's decoder API to decode PNG images
+// We'll decode PNG to RGB565 and cache it in RAM to avoid re-decoding on every render
+// This approach uses LVGL's built-in decoder, avoiding direct lodepng dependency
 
 // Debug logging control
-#define GPS_DEBUG 0
+#define GPS_DEBUG 1
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
 #define GPS_LOG(...)
 #endif
+
+// Decoded tile image cache (LRU, max 8 tiles)
+#define TILE_DECODE_CACHE_SIZE 8
+static DecodedTileCache g_tile_decode_cache[TILE_DECODE_CACHE_SIZE];
+static bool g_tile_cache_initialized = false;
+
+/**
+ * Initialize tile decode cache
+ */
+static void init_tile_decode_cache()
+{
+    if (g_tile_cache_initialized) return;
+    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++) {
+        g_tile_decode_cache[i].x = -1;
+        g_tile_decode_cache[i].y = -1;
+        g_tile_decode_cache[i].z = -1;
+        g_tile_decode_cache[i].img_dsc = NULL;
+        g_tile_decode_cache[i].last_used_ms = 0;
+        g_tile_decode_cache[i].in_use = false;
+    }
+    g_tile_cache_initialized = true;
+    GPS_LOG("[GPS] Tile decode cache initialized (size=%d)\n", TILE_DECODE_CACHE_SIZE);
+}
+
+/**
+ * Find cached decoded tile image
+ */
+static DecodedTileCache* find_cached_tile(int x, int y, int z)
+{
+    if (!g_tile_cache_initialized) init_tile_decode_cache();
+    
+    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++) {
+        if (g_tile_decode_cache[i].x == x && 
+            g_tile_decode_cache[i].y == y && 
+            g_tile_decode_cache[i].z == z &&
+            g_tile_decode_cache[i].img_dsc != NULL) {
+            g_tile_decode_cache[i].last_used_ms = millis();
+            return &g_tile_decode_cache[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * Get least recently used cache slot
+ */
+static DecodedTileCache* get_lru_cache_slot()
+{
+    if (!g_tile_cache_initialized) init_tile_decode_cache();
+    
+    uint32_t oldest_ms = UINT32_MAX;
+    int lru_idx = 0;
+    
+    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++) {
+        if (g_tile_decode_cache[i].img_dsc == NULL) {
+            return &g_tile_decode_cache[i];  // Empty slot
+        }
+        if (!g_tile_decode_cache[i].in_use && g_tile_decode_cache[i].last_used_ms < oldest_ms) {
+            oldest_ms = g_tile_decode_cache[i].last_used_ms;
+            lru_idx = i;
+        }
+    }
+    
+    // Evict LRU entry
+    if (g_tile_decode_cache[lru_idx].img_dsc != NULL) {
+        GPS_LOG("[GPS] Evicting cached tile %d/%d/%d from decode cache\n",
+                g_tile_decode_cache[lru_idx].z,
+                g_tile_decode_cache[lru_idx].x,
+                g_tile_decode_cache[lru_idx].y);
+        // Free the image descriptor (data was allocated by us)
+        if (g_tile_decode_cache[lru_idx].img_dsc->data != NULL) {
+            lv_free((void*)g_tile_decode_cache[lru_idx].img_dsc->data);
+        }
+        lv_free(g_tile_decode_cache[lru_idx].img_dsc);
+        g_tile_decode_cache[lru_idx].img_dsc = NULL;
+    }
+    
+    return &g_tile_decode_cache[lru_idx];
+}
 
 /**
  * Normalize tile coordinates to valid range (wrap x, clamp y)
@@ -242,6 +326,7 @@ static MapTile& ensure_tile(TileContext& ctx, int x, int y, int z, int priority)
     t.record_evicted = false;
     t.priority = priority;
     t.has_png_file = false;
+    t.cached_img = NULL;  // No cached image initially
     ctx.tiles->push_back(t);
     return ctx.tiles->back();
 }
@@ -313,14 +398,114 @@ static void load_tile_image(TileContext& ctx, MapTile &tile)
     }
     
     if (file_exists) {
+        // Check cache first
+        DecodedTileCache* cached = find_cached_tile(tile.x, tile.y, tile.z);
+        
         // File exists: use lv_image
         tile.img_obj = lv_image_create(ctx.map_container);
         lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
         lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
         style_tile_obj(tile.img_obj);
         
-        GPS_LOG("[GPS] Setting image source for tile %d/%d/%d\n", tile.z, tile.x, tile.y);
-        lv_image_set_src(tile.img_obj, path);
+        if (cached && cached->img_dsc != NULL) {
+            // Use cached decoded image (no PNG decode needed)
+            GPS_LOG("[GPS] Using cached decoded image for tile %d/%d/%d\n", tile.z, tile.x, tile.y);
+            lv_image_set_src(tile.img_obj, cached->img_dsc);
+            cached->in_use = true;
+            cached->last_used_ms = millis();
+            tile.cached_img = cached;
+        } else {
+            // Decode PNG and cache it in RAM
+            GPS_LOG("[GPS] Decoding and caching tile %d/%d/%d\n", tile.z, tile.x, tile.y);
+            
+            // Use LVGL's decoder to decode PNG
+            lv_image_decoder_dsc_t decoder_dsc;
+            memset(&decoder_dsc, 0, sizeof(decoder_dsc));
+            
+            lv_result_t decode_res = lv_image_decoder_open(&decoder_dsc, path, NULL);
+            if (decode_res == LV_RESULT_OK && decoder_dsc.decoded != NULL) {
+                // Decode successful - copy decoded data to our cache
+                
+                // Get decoded image info (decoded is const)
+                const lv_draw_buf_t* decoded_buf = decoder_dsc.decoded;
+                uint32_t width = decoded_buf->header.w;
+                uint32_t height = decoded_buf->header.h;
+                lv_color_format_t cf = (lv_color_format_t)decoded_buf->header.cf;
+                uint32_t stride = decoded_buf->header.stride;
+                uint32_t data_size = decoded_buf->data_size;
+                
+                GPS_LOG("[GPS] Decoded tile %d/%d/%d: %dx%d, cf=%d, stride=%d, size=%d\n",
+                        tile.z, tile.x, tile.y, width, height, cf, stride, data_size);
+                
+                // Allocate memory for cached image descriptor
+                DecodedTileCache* cache_slot = get_lru_cache_slot();
+                cache_slot->img_dsc = (lv_image_dsc_t*)lv_malloc(sizeof(lv_image_dsc_t));
+                if (cache_slot->img_dsc == NULL) {
+                    GPS_LOG("[GPS] ERROR: Failed to allocate memory for img_dsc\n");
+                    lv_image_decoder_close(&decoder_dsc);
+                    // Fall back to file path
+                    lv_image_set_src(tile.img_obj, path);
+                    tile.cached_img = NULL;
+                } else {
+                    // Allocate memory for image data
+                    uint8_t* img_data = (uint8_t*)lv_malloc(data_size);
+                    if (img_data == NULL) {
+                        GPS_LOG("[GPS] ERROR: Failed to allocate memory for image data (%d bytes)\n", data_size);
+                        lv_free(cache_slot->img_dsc);
+                        cache_slot->img_dsc = NULL;
+                        lv_image_decoder_close(&decoder_dsc);
+                        // Fall back to file path
+                        lv_image_set_src(tile.img_obj, path);
+                        tile.cached_img = NULL;
+                    } else {
+                        // Copy decoded data to our cache
+                        memcpy(img_data, decoded_buf->data, data_size);
+                        
+                        // Fill image descriptor (LVGL v9 structure)
+                        cache_slot->img_dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+                        cache_slot->img_dsc->header.w = width;
+                        cache_slot->img_dsc->header.h = height;
+                        cache_slot->img_dsc->header.cf = cf;
+                        cache_slot->img_dsc->header.flags = 0;
+                        cache_slot->img_dsc->header.stride = stride;
+                        cache_slot->img_dsc->data_size = data_size;
+                        cache_slot->img_dsc->data = (const uint8_t*)img_data;
+                        
+                        // Update cache entry
+                        cache_slot->x = tile.x;
+                        cache_slot->y = tile.y;
+                        cache_slot->z = tile.z;
+                        cache_slot->last_used_ms = millis();
+                        cache_slot->in_use = true;
+                        tile.cached_img = cache_slot;
+                        
+                        // Close decoder (we've copied the data)
+                        lv_image_decoder_close(&decoder_dsc);
+                        
+                        // Use cached decoded image
+                        lv_image_set_src(tile.img_obj, cache_slot->img_dsc);
+                        GPS_LOG("[GPS] Tile %d/%d/%d decoded and cached successfully\n", tile.z, tile.x, tile.y);
+                    }
+                }
+            } else {
+                // Decode failed - fall back to file path
+                GPS_LOG("[GPS] WARNING: Failed to decode tile %d/%d/%d, using file path\n", tile.z, tile.x, tile.y);
+                lv_image_decoder_close(&decoder_dsc);
+                
+                // Create cache entry placeholder (will be decoded later if possible)
+                DecodedTileCache* cache_slot = get_lru_cache_slot();
+                cache_slot->img_dsc = NULL;  // Not yet decoded
+                cache_slot->x = tile.x;
+                cache_slot->y = tile.y;
+                cache_slot->z = tile.z;
+                cache_slot->last_used_ms = millis();
+                cache_slot->in_use = false;
+                tile.cached_img = cache_slot;
+                
+                lv_image_set_src(tile.img_obj, path);
+            }
+        }
+        
         tile.has_png_file = true;
         *ctx.has_map_data = true;  // Global flag - any tile ever loaded
         GPS_LOG("[GPS] Tile %d/%d/%d image loaded successfully\n", tile.z, tile.x, tile.y);
@@ -425,10 +610,15 @@ void update_map_anchor(TileContext& ctx, double lat, double lng, int zoom, int p
 static void mark_all_invisible(TileContext& ctx, int target_zoom)
 {
     if (!ctx.tiles) return;
-    
+
     // First pass: immediately delete objects from different zoom levels
     // This frees memory immediately when zoom changes, preventing accumulation
     for (auto &tile : *ctx.tiles) {
+        // Mark cache entry as not in use before marking invisible
+        if (tile.cached_img != NULL) {
+            tile.cached_img->in_use = false;
+        }
+        
         tile.visible = false;
         // Delete tile objects that don't match target zoom level immediately
         // This prevents memory buildup when switching zoom levels frequently
@@ -436,6 +626,7 @@ static void mark_all_invisible(TileContext& ctx, int target_zoom)
             lv_obj_del(tile.img_obj);
             tile.img_obj = NULL;
             tile.has_png_file = false;
+            tile.cached_img = NULL;  // Clear cache reference
             tile.obj_evicted_ms = millis();  // Mark as evicted for record cleanup protection
         }
     }
@@ -560,6 +751,14 @@ static void layout_loaded_tile_objects(TileContext& ctx)
         bool is_visible = tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0);
         tile.visible = is_visible;
         
+        // Update cache in_use flag based on visibility
+        if (tile.cached_img != NULL) {
+            tile.cached_img->in_use = is_visible;
+            if (is_visible) {
+                tile.cached_img->last_used_ms = millis();
+            }
+        }
+        
         if (is_visible) {
             // If tile is visible but has no object yet, create placeholder immediately
             if (tile.img_obj == NULL) {
@@ -650,8 +849,13 @@ static void evict_cache(TileContext& ctx)
         for (size_t i = 0; i < to_delete && i < obj_candidates.size(); i++) {
             size_t idx = obj_candidates[i].second;
             if ((*ctx.tiles)[idx].img_obj != NULL) {
+                // Mark cache entry as not in use
+                if ((*ctx.tiles)[idx].cached_img != NULL) {
+                    (*ctx.tiles)[idx].cached_img->in_use = false;
+                }
                 lv_obj_del((*ctx.tiles)[idx].img_obj);
                 (*ctx.tiles)[idx].img_obj = NULL;
+                (*ctx.tiles)[idx].cached_img = NULL;  // Clear cache reference
                 (*ctx.tiles)[idx].has_png_file = false;
                 (*ctx.tiles)[idx].obj_evicted_ms = millis();
             }
@@ -728,9 +932,13 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
 
     // Mark all tiles invisible and hide objects from different zoom levels
     mark_all_invisible(ctx, zoom);
+    
     update_map_anchor(ctx, lat, lng, zoom, pan_x, pan_y, has_fix);
+    
     collect_required_tiles(ctx, lat, lng, zoom, pan_x, pan_y, has_fix);
+    
     layout_loaded_tile_objects(ctx);
+    
     evict_cache(ctx);
     
     // Count tiles to load for logging

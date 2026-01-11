@@ -16,7 +16,7 @@ extern void reset_title_status_cache();
 #define DEFAULT_LAT 51.5074
 #define DEFAULT_LNG -0.1278
 
-#define GPS_DEBUG 0
+#define GPS_DEBUG 1
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
