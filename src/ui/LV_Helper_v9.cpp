@@ -57,10 +57,39 @@ static void touchpad_read(lv_indev_t *drv, lv_indev_data_t *data)
 #endif
 
 #ifdef USING_INPUT_DEV_ROTARY
+// Forward declaration from main.cpp
+extern bool isScreenSleeping();
+extern void updateUserActivity();
+// Forward declaration from ui_gps.cpp
+extern bool isGPSLoadingTiles();
+
 static void lv_encoder_read(lv_indev_t *drv, lv_indev_data_t *data)
 {
     auto *plane = (LilyGo_Display *)lv_indev_get_user_data(drv);
     RotaryMsg_t msg = plane->getRotary();
+    
+    // If screen is sleeping, only wake it up, don't pass input to UI
+    if (isScreenSleeping()) {
+        if (msg.dir != ROTARY_DIR_NONE || msg.centerBtnPressed) {
+            updateUserActivity();  // Wake up screen
+        }
+        data->enc_diff = 0;
+        data->state = LV_INDEV_STATE_RELEASED;  // Don't pass input to UI
+        return;
+    }
+    
+    // If GPS is loading tiles, ignore input
+    if (isGPSLoadingTiles()) {
+        data->enc_diff = 0;
+        data->state = LV_INDEV_STATE_RELEASED;
+        return;
+    }
+    
+    // Screen is awake, process input normally
+    if (msg.dir != ROTARY_DIR_NONE || msg.centerBtnPressed) {
+        updateUserActivity();  // Update activity timestamp
+    }
+    
     switch (msg.dir) {
     case ROTARY_DIR_UP:
         data->enc_diff = 1;
@@ -80,12 +109,28 @@ static void lv_encoder_read(lv_indev_t *drv, lv_indev_data_t *data)
 #endif
 
 #ifdef USING_INPUT_DEV_KEYBOARD
+// Forward declaration from main.cpp
+extern bool isScreenSleeping();
+extern void updateUserActivity();
+
 static void keypad_read(lv_indev_t *drv, lv_indev_data_t *data)
 {
     char c = '\0';
     auto *plane = (LilyGo_Display *)lv_indev_get_user_data(drv);
     int state = plane->getKeyChar(&c);
+    
+    // If screen is sleeping, only wake it up, don't pass input to UI
+    if (isScreenSleeping()) {
+        if (state == KEYBOARD_PRESSED) {
+            updateUserActivity();  // Wake up screen
+        }
+        data->state = LV_INDEV_STATE_REL;  // Don't pass key to UI
+        return;
+    }
+    
+    // Screen is awake, process input normally
     if (state == KEYBOARD_PRESSED) {
+        updateUserActivity();  // Update activity timestamp
         data->key = c;
         data->state = LV_INDEV_STATE_PR;
         plane->feedback((void *)drv);
