@@ -1,0 +1,79 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Explicitly declare text files you want to always be normalized and converted
+# to native line endings on checkout.
+*.c text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.cxx text eol=lf
+*.hxx text eol=lf
+*.cc text eol=lf
+*.hh text eol=lf
+
+# Source files
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+*.conf text eol=lf
+*.config text eol=lf
+*.csv text eol=lf
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+
+# PlatformIO specific
+platformio.ini text eol=lf
+*.ini text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.rst text eol=lf
+*.txt text eol=lf
+
+# Scripts
+*.sh text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.bin binary
+*.hex binary
+*.elf binary
+*.o binary
+*.a binary
+*.lib binary
+*.so binary
+*.dll binary
+*.exe binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.rar binary
+
+# PlatformIO build artifacts
+.pio/** binary
+build/** binary
+libdeps/** binary
+
+# IDE files (keep as is)
+.vscode/** text eol=lf
+.idea/** text eol=lf
+
+# Keep existing line endings for these
+*.patch text -eol
+
