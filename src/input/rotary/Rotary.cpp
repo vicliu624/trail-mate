@@ -5,8 +5,8 @@
  *
  */
 
-#include "Arduino.h"
 #include "Rotary.h"
+#include "Arduino.h"
 
 /*
  * The below state table has, for each state (row), the new state
@@ -25,18 +25,18 @@
 #define R_CW_BEGIN_M 0x4
 #define R_CCW_BEGIN_M 0x5
 const unsigned char ttable[6][4] = {
-  // R_START (00)
-  {R_START_M,            R_CW_BEGIN,     R_CCW_BEGIN,  R_START},
-  // R_CCW_BEGIN
-  {R_START_M | DIR_CCW, R_START,        R_CCW_BEGIN,  R_START},
-  // R_CW_BEGIN
-  {R_START_M | DIR_CW,  R_CW_BEGIN,     R_START,      R_START},
-  // R_START_M (11)
-  {R_START_M,            R_CCW_BEGIN_M,  R_CW_BEGIN_M, R_START},
-  // R_CW_BEGIN_M
-  {R_START_M,            R_START_M,      R_CW_BEGIN_M, R_START | DIR_CW},
-  // R_CCW_BEGIN_M
-  {R_START_M,            R_CCW_BEGIN_M,  R_START_M,    R_START | DIR_CCW},
+    // R_START (00)
+    {R_START_M, R_CW_BEGIN, R_CCW_BEGIN, R_START},
+    // R_CCW_BEGIN
+    {R_START_M | DIR_CCW, R_START, R_CCW_BEGIN, R_START},
+    // R_CW_BEGIN
+    {R_START_M | DIR_CW, R_CW_BEGIN, R_START, R_START},
+    // R_START_M (11)
+    {R_START_M, R_CCW_BEGIN_M, R_CW_BEGIN_M, R_START},
+    // R_CW_BEGIN_M
+    {R_START_M, R_START_M, R_CW_BEGIN_M, R_START | DIR_CW},
+    // R_CCW_BEGIN_M
+    {R_START_M, R_CCW_BEGIN_M, R_START_M, R_START | DIR_CCW},
 };
 #else
 // Use the full-step state table (emits a code at 00 only)
@@ -48,55 +48,61 @@ const unsigned char ttable[6][4] = {
 #define R_CCW_NEXT 0x6
 
 const unsigned char ttable[7][4] = {
-  // R_START
-  {R_START,    R_CW_BEGIN,  R_CCW_BEGIN, R_START},
-  // R_CW_FINAL
-  {R_CW_NEXT,  R_START,     R_CW_FINAL,  R_START | DIR_CW},
-  // R_CW_BEGIN
-  {R_CW_NEXT,  R_CW_BEGIN,  R_START,     R_START},
-  // R_CW_NEXT
-  {R_CW_NEXT,  R_CW_BEGIN,  R_CW_FINAL,  R_START},
-  // R_CCW_BEGIN
-  {R_CCW_NEXT, R_START,     R_CCW_BEGIN, R_START},
-  // R_CCW_FINAL
-  {R_CCW_NEXT, R_CCW_FINAL, R_START,     R_START | DIR_CCW},
-  // R_CCW_NEXT
-  {R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START},
+    // R_START
+    {R_START, R_CW_BEGIN, R_CCW_BEGIN, R_START},
+    // R_CW_FINAL
+    {R_CW_NEXT, R_START, R_CW_FINAL, R_START | DIR_CW},
+    // R_CW_BEGIN
+    {R_CW_NEXT, R_CW_BEGIN, R_START, R_START},
+    // R_CW_NEXT
+    {R_CW_NEXT, R_CW_BEGIN, R_CW_FINAL, R_START},
+    // R_CCW_BEGIN
+    {R_CCW_NEXT, R_START, R_CCW_BEGIN, R_START},
+    // R_CCW_FINAL
+    {R_CCW_NEXT, R_CCW_FINAL, R_START, R_START | DIR_CCW},
+    // R_CCW_NEXT
+    {R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START},
 };
 #endif
 
 /*
  * Constructor. Each arg is the pin number for each encoder contact.
  */
-Rotary::Rotary(char _pin1, char _pin2) {
-  // Assign variables.
-  pin1 = _pin1;
-  pin2 = _pin2;
-  // Initialise state.
-  state = R_START;
-  // Don't invert read pin state by default
-  inverter = 0;
+Rotary::Rotary(char _pin1, char _pin2)
+{
+    // Assign variables.
+    pin1 = _pin1;
+    pin2 = _pin2;
+    // Initialise state.
+    state = R_START;
+    // Don't invert read pin state by default
+    inverter = 0;
 }
 
-void Rotary::begin(bool internalPullup, bool flipLogicForPulldown) {
+void Rotary::begin(bool internalPullup, bool flipLogicForPulldown)
+{
 
-  if (internalPullup){
-    // Enable weak pullups
-    pinMode(pin1,INPUT_PULLUP);
-    pinMode(pin2,INPUT_PULLUP);
-  }else{
-    // Set pins to input.
-    pinMode(pin1, INPUT);
-    pinMode(pin2, INPUT);
-  }
-  inverter = flipLogicForPulldown ? 1 : 0;
+    if (internalPullup)
+    {
+        // Enable weak pullups
+        pinMode(pin1, INPUT_PULLUP);
+        pinMode(pin2, INPUT_PULLUP);
+    }
+    else
+    {
+        // Set pins to input.
+        pinMode(pin1, INPUT);
+        pinMode(pin2, INPUT);
+    }
+    inverter = flipLogicForPulldown ? 1 : 0;
 }
 
-unsigned char Rotary::process() {
-  // Grab state of input pins.
-  unsigned char pinstate = ((inverter ^ digitalRead(pin2)) << 1) | (inverter ^ digitalRead(pin1));
-  // Determine new state from the pins and state table.
-  state = ttable[state & 0xf][pinstate];
-  // Return emit bits, ie the generated event.
-  return state & 0x30;
+unsigned char Rotary::process()
+{
+    // Grab state of input pins.
+    unsigned char pinstate = ((inverter ^ digitalRead(pin2)) << 1) | (inverter ^ digitalRead(pin1));
+    // Determine new state from the pins and state table.
+    state = ttable[state & 0xf][pinstate];
+    // Return emit bits, ie the generated event.
+    return state & 0x30;
 }

@@ -2,7 +2,8 @@
 #include "usecase/gps_service.h"
 #include <cmath>
 
-namespace gps {
+namespace gps
+{
 
 GpsState gps_get_data()
 {
@@ -35,13 +36,13 @@ double calculate_map_resolution(int zoom, double lat)
     double lat_clamped = lat;
     if (lat_clamped > MAX_LAT) lat_clamped = MAX_LAT;
     if (lat_clamped < -MAX_LAT) lat_clamped = -MAX_LAT;
-    
+
     double resolution_equator = 156543.03392 / std::pow(2.0, zoom);
-    
+
     double lat_rad = lat_clamped * M_PI / 180.0;
     double resolution = resolution_equator * std::cos(lat_rad);
-    
+
     return resolution;
 }
 
-}  // namespace gps
+} // namespace gps

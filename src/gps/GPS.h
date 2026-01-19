@@ -13,44 +13,52 @@
 
 class GPS : public TinyGPSPlus
 {
-public:
+  public:
     GPS();
 
     ~GPS();
 
-    bool init(Stream *stream);
+    bool init(Stream* stream);
     bool factory();
 
-    uint32_t  loop(bool debug = false)
+    uint32_t loop(bool debug = false)
     {
         static uint32_t loop_count = 0;
         static uint32_t last_log_ms = 0;
         uint32_t now = millis();
-        
+
         uint32_t chars_processed = 0;
-        while (_stream->available()) {
+        while (_stream->available())
+        {
             int c = _stream->read();
             chars_processed++;
-            if (debug) {
+            if (debug)
+            {
                 Serial.write(c);
-            } else {
+            }
+            else
+            {
                 encode(c);
             }
         }
-        if (debug) {
-            while (Serial.available()) {
+        if (debug)
+        {
+            while (Serial.available())
+            {
                 _stream->write(Serial.read());
             }
         }
-        
+
         // Log periodically (every 100 loops or every 5 seconds)
         loop_count++;
-        if (loop_count % 100 == 0 || (now - last_log_ms) >= 5000) {
+        if (loop_count % 100 == 0 || (now - last_log_ms) >= 5000)
+        {
             uint32_t total_chars = charsProcessed();
             bool has_fix = location.isValid();
-            Serial.printf("[GPS::loop] Loop #%lu: chars_processed_this_loop=%lu, total_chars=%lu, has_fix=%d", 
-                         loop_count, chars_processed, total_chars, has_fix);
-            if (has_fix) {
+            Serial.printf("[GPS::loop] Loop #%lu: chars_processed_this_loop=%lu, total_chars=%lu, has_fix=%d",
+                          loop_count, chars_processed, total_chars, has_fix);
+            if (has_fix)
+            {
                 Serial.printf(", lat=%.6f, lng=%.6f, sat=%d", location.lat(), location.lng(), satellites.value());
             }
             Serial.printf("\n");
@@ -64,8 +72,9 @@ public:
     {
         return model;
     }
-private:
-    int getAck(uint8_t *buffer, uint16_t size, uint8_t requestedClass, uint8_t requestedID);
-    Stream *_stream;
+
+  private:
+    int getAck(uint8_t* buffer, uint16_t size, uint8_t requestedClass, uint8_t requestedID);
+    Stream* _stream;
     String model;
 };

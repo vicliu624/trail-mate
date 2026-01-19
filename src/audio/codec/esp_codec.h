@@ -17,15 +17,15 @@
 #endif
 #include <Wire.h>
 
-
 /**
  * @enum EspCodecType
  * @brief Enumeration of supported audio codec types.
  * @details This enum lists different audio codec models supported by the EspCodec class.
  *          Each value corresponds to a specific codec chip model.
  */
-typedef enum {
-    CODEC_TYPE_ES8311,    /**< ES8311 audio codec chip */
+typedef enum
+{
+    CODEC_TYPE_ES8311, /**< ES8311 audio codec chip */
 } EspCodecType;
 
 /**
@@ -34,7 +34,7 @@ typedef enum {
  * @param enable True to enable the PA pin, false to disable it.
  * @param user_data User-provided data pointer passed to the callback.
  */
-using EspCodecPaPinCallback_t = void(*)(bool enable, void *user_data);
+using EspCodecPaPinCallback_t = void (*)(bool enable, void* user_data);
 
 /**
  * @class EspCodec
@@ -45,7 +45,7 @@ using EspCodecPaPinCallback_t = void(*)(bool enable, void *user_data);
  */
 class EspCodec
 {
-public:
+  public:
     /**
      * @brief Set power amplifier (PA) parameters.
      * @param pa_pin GPIO pin number for the PA control.
@@ -58,7 +58,7 @@ public:
      * @param cb Callback function to be called when PA state changes.
      * @param user_data User-specific data to pass to the callback.
      */
-    void setPaPinCallback(EspCodecPaPinCallback_t cb, void *user_data);
+    void setPaPinCallback(EspCodecPaPinCallback_t cb, void* user_data);
 
     /**
      * @brief Configure I2S interface pins.
@@ -104,7 +104,7 @@ public:
      * @param size Size of the data buffer in bytes.
      * @return Number of bytes written, or negative error code on failure.
      */
-    int write(uint8_t * buffer, size_t size);
+    int write(uint8_t* buffer, size_t size);
 
     /**
      * @brief Read audio data from the codec during recording.
@@ -112,7 +112,7 @@ public:
      * @param size Maximum number of bytes to read.
      * @return Number of bytes read, or negative error code on failure.
      */
-    int read(uint8_t * buffer, size_t size);
+    int read(uint8_t* buffer, size_t size);
 
     /**
      * @brief Set the audio volume level.
@@ -158,7 +158,7 @@ public:
      * @param out_size Pointer to receive the size of the recorded data.
      * @return True if recording succeeds, false otherwise.
      */
-    bool recordWAV(size_t rec_seconds, uint8_t**output, size_t *out_size, uint16_t sample_rate = 16000, uint8_t num_channels = 1);
+    bool recordWAV(size_t rec_seconds, uint8_t** output, size_t* out_size, uint16_t sample_rate = 16000, uint8_t num_channels = 1);
 
     /**
      * @brief Play a WAV audio file from buffer.
@@ -167,7 +167,7 @@ public:
      * @param len Length of the WAV data buffer in bytes.
      * @return True if playback starts successfully, false otherwise.
      */
-    bool playWAV(uint8_t *data, size_t len);
+    bool playWAV(uint8_t* data, size_t len);
 
     /**
      * @brief Constructor for EspCodec.
@@ -181,7 +181,7 @@ public:
      */
     ~EspCodec();
 
-private:
+  private:
     /**
      * @brief Internal function to initialize the I2S peripheral.
      * @return ESP_OK on success, or other ESP error codes on failure.
@@ -193,23 +193,22 @@ private:
      */
     void _i2s_deinit();
 
-    int _mck_io_num;     /**< Master clock (MCK) pin number (limited to GPIO0/GPIO1/GPIO3 on ESP32) */
-    int _bck_io_num;     /**< Bit clock (BCK) pin number */
-    int _ws_io_num;      /**< Word select (WS) pin number */
-    int _data_out_num;   /**< Data output (DOUT) pin number */
-    int _data_in_num;    /**< Data input (DIN) pin number */
-    int _pa_num;         /**< Power amplifier (PA) control pin number */
-    float _pa_voltage;   /**< PA voltage setting */
-    uint8_t _i2s_num;    /**< I2S peripheral number (0 or 1) */
-    const audio_codec_gpio_if_t *gpio_if;   /**< GPIO interface for codec control */
-    const audio_codec_ctrl_if_t *i2c_ctrl_if; /**< I2C control interface for codec */
-    const audio_codec_if_t      *codec_if;    /**< Core codec interface */
-    const audio_codec_data_if_t *i2s_data_if; /**< I2S data transfer interface */
-    esp_codec_dev_handle_t      codec_dev;    /**< Handle to the codec device */
-    TwoWire *wire;                            /**< Pointer to the I2C interface object */
-    EspCodecPaPinCallback_t     paPinCb;      /**< Callback function for PA pin control */
-    void                       *paPinUserData; /**< User data for PA pin callback */
+    int _mck_io_num;                          /**< Master clock (MCK) pin number (limited to GPIO0/GPIO1/GPIO3 on ESP32) */
+    int _bck_io_num;                          /**< Bit clock (BCK) pin number */
+    int _ws_io_num;                           /**< Word select (WS) pin number */
+    int _data_out_num;                        /**< Data output (DOUT) pin number */
+    int _data_in_num;                         /**< Data input (DIN) pin number */
+    int _pa_num;                              /**< Power amplifier (PA) control pin number */
+    float _pa_voltage;                        /**< PA voltage setting */
+    uint8_t _i2s_num;                         /**< I2S peripheral number (0 or 1) */
+    const audio_codec_gpio_if_t* gpio_if;     /**< GPIO interface for codec control */
+    const audio_codec_ctrl_if_t* i2c_ctrl_if; /**< I2C control interface for codec */
+    const audio_codec_if_t* codec_if;         /**< Core codec interface */
+    const audio_codec_data_if_t* i2s_data_if; /**< I2S data transfer interface */
+    esp_codec_dev_handle_t codec_dev;         /**< Handle to the codec device */
+    TwoWire* wire;                            /**< Pointer to the I2C interface object */
+    EspCodecPaPinCallback_t paPinCb;          /**< Callback function for PA pin control */
+    void* paPinUserData;                      /**< User data for PA pin callback */
 };
 
 #endif
-

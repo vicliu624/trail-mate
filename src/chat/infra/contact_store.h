@@ -14,19 +14,23 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <SD.h>
-#include <vector>
 #include <string>
+#include <vector>
 
-namespace chat {
-namespace contacts {
+namespace chat
+{
+namespace contacts
+{
 
-class ContactStore : public IContactStore {
-public:
+class ContactStore : public IContactStore
+{
+  public:
     ContactStore() = default;
 
-    struct Entry {
+    struct Entry
+    {
         uint32_t node_id;
-        char nickname[13];  // 12 bytes + null terminator
+        char nickname[13]; // 12 bytes + null terminator
     };
 
     /**
@@ -72,11 +76,12 @@ public:
     /**
      * @brief Get number of contacts
      */
-    size_t getCount() const override {
+    size_t getCount() const override
+    {
         return entries_.size();
     }
 
-private:
+  private:
     static constexpr size_t kMaxContacts = 100;
     static constexpr const char* kSdPath = "/sd/contacts.dat";
     static constexpr const char* kPrefNs = "contacts";

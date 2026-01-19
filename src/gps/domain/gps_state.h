@@ -2,9 +2,11 @@
 
 #include <stdint.h>
 
-namespace gps {
+namespace gps
+{
 
-struct GpsState {
+struct GpsState
+{
     double lat = 0.0;
     double lng = 0.0;
     uint8_t satellites = 0;
@@ -12,4 +14,4 @@ struct GpsState {
     uint32_t age = 0;
 };
 
-}  // namespace gps
+} // namespace gps

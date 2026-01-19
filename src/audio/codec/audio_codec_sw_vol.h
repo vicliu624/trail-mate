@@ -9,16 +9,17 @@
 #include "./interface/audio_codec_vol_if.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/**
- * @brief         New software volume processor interface
- *                Notes: currently only support 16bits input
- * @return        NULL: Memory not enough
- *                -Others: Software volume interface handle
- */
-const audio_codec_vol_if_t* audio_codec_new_sw_vol(void);
+    /**
+     * @brief         New software volume processor interface
+     *                Notes: currently only support 16bits input
+     * @return        NULL: Memory not enough
+     *                -Others: Software volume interface handle
+     */
+    const audio_codec_vol_if_t* audio_codec_new_sw_vol(void);
 
 #ifdef __cplusplus
 }

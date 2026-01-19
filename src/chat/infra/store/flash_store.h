@@ -5,15 +5,17 @@
 
 #pragma once
 
-#include "../../ports/i_chat_store.h"
 #include "../../domain/chat_types.h"
+#include "../../ports/i_chat_store.h"
 #include <Preferences.h>
 #include <vector>
 
-namespace chat {
+namespace chat
+{
 
-class FlashStore : public IChatStore {
-public:
+class FlashStore : public IChatStore
+{
+  public:
     static constexpr size_t kMaxMessages = 300;
     static constexpr size_t kMaxTextLen = 220;
 
@@ -30,8 +32,9 @@ public:
 
     std::vector<ChatMessage> loadAll() const;
 
-private:
-    struct Record {
+  private:
+    struct Record
+    {
         uint8_t channel;
         uint8_t status;
         uint16_t text_len;

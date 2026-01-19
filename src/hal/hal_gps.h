@@ -4,12 +4,13 @@
 
 class TLoRaPagerBoard;
 
-namespace hal {
+namespace hal
+{
 
 class HalGps
 {
-public:
-    void begin(TLoRaPagerBoard &board);
+  public:
+    void begin(TLoRaPagerBoard& board);
     bool isReady() const;
     bool init();
     void powerOn();
@@ -21,8 +22,8 @@ public:
     uint8_t satellites() const;
     bool syncTime(uint32_t gps_task_interval_ms);
 
-private:
-    TLoRaPagerBoard *board_ = nullptr;
+  private:
+    TLoRaPagerBoard* board_ = nullptr;
 };
 
-}  // namespace hal
+} // namespace hal

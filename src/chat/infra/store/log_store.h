@@ -8,10 +8,11 @@
 #include "../../ports/i_chat_store.h"
 #include <FS.h>
 #include <SD.h>
-#include <vector>
 #include <array>
+#include <vector>
 
-namespace chat {
+namespace chat
+{
 
 /**
  * @brief SD-backed append-only log with per-channel ring index.
@@ -20,8 +21,9 @@ namespace chat {
  * - Log file: /chat/chat.log (append-only records)
  * - Index per channel: /chat/idx_chX.bin (head A/B + 1000 slots)
  */
-class LogStore : public IChatStore {
-public:
+class LogStore : public IChatStore
+{
+  public:
     static constexpr size_t kSlotsPerChannel = 1000;
     static constexpr const char* kDir = "/chat";
     static constexpr const char* kLogFile = "/chat/chat.log";
@@ -42,10 +44,11 @@ public:
     int getUnread(ChannelId channel) const override;
     void clearChannel(ChannelId channel) override;
 
-private:
+  private:
     fs::FS* fs_;
 
-    struct RecordHeader {
+    struct RecordHeader
+    {
         uint16_t magic;
         uint8_t ver;
         uint8_t flags;
@@ -55,7 +58,8 @@ private:
         uint16_t payload_len;
     } __attribute__((packed));
 
-    struct IndexHead {
+    struct IndexHead
+    {
         uint32_t seq;
         uint16_t next;
         uint16_t count;
@@ -63,7 +67,8 @@ private:
         uint32_t crc;
     };
 
-    struct IndexSlot {
+    struct IndexSlot
+    {
         uint32_t offset;
         uint16_t len;
         uint32_t ts;
@@ -73,7 +78,8 @@ private:
         uint32_t peer;
     };
 
-    struct ChannelIndex {
+    struct ChannelIndex
+    {
         IndexHead head;
         std::array<IndexSlot, kSlotsPerChannel> slots;
     };

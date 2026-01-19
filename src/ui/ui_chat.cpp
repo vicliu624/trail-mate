@@ -46,8 +46,8 @@ void ui_chat_enter(lv_obj_t *parent)
     lv_obj_set_style_radius(chat_container, 0, 0);
     
     // Create UI controller
-    ui_controller = std::make_unique<chat::ui::UiController>(
-        chat_container, ctx.getChatService());
+    ui_controller = std::unique_ptr<chat::ui::UiController>(
+        new chat::ui::UiController(chat_container, ctx.getChatService()));
     ui_controller->init();
     
     // Store in context (for access from main loop)

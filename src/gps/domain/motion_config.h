@@ -1,11 +1,13 @@
 #pragma once
 
-#include <stdint.h>
 #include "motion_sensor_ids.h"
+#include <stdint.h>
 
-namespace gps {
+namespace gps
+{
 
-struct MotionConfig {
+struct MotionConfig
+{
     uint32_t idle_timeout_ms = 5 * 60 * 1000;
     uint32_t poll_interval_ms = 1000;
     uint32_t task_interval_ms = 200;
@@ -13,4 +15,4 @@ struct MotionConfig {
     uint8_t interrupt_ctrl = 0x40;
 };
 
-}  // namespace gps
+} // namespace gps

@@ -7,12 +7,16 @@
 
 inline void pb_put_varint(std::string& out, uint64_t v)
 {
-    while (true) {
+    while (true)
+    {
         uint8_t b = v & 0x7F;
         v >>= 7;
-        if (v) {
+        if (v)
+        {
             out.push_back(b | 0x80);
-        } else {
+        }
+        else
+        {
             out.push_back(b);
             break;
         }
@@ -31,10 +35,12 @@ inline bool pb_read_varint(const uint8_t* buf, size_t len, size_t& off, uint64_t
 {
     uint64_t v = 0;
     int shift = 0;
-    while (off < len && shift < 64) {
+    while (off < len && shift < 64)
+    {
         uint8_t b = buf[off++];
         v |= (uint64_t)(b & 0x7F) << shift;
-        if ((b & 0x80) == 0) {
+        if ((b & 0x80) == 0)
+        {
             out = v;
             return true;
         }

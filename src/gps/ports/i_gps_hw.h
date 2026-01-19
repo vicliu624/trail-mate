@@ -2,11 +2,12 @@
 
 #include <stdint.h>
 
-namespace gps {
+namespace gps
+{
 
 class IGpsHardware
 {
-public:
+  public:
     virtual ~IGpsHardware() = default;
     virtual bool isReady() const = 0;
     virtual bool init() = 0;
@@ -20,4 +21,4 @@ public:
     virtual bool syncTime(uint32_t gps_task_interval_ms) = 0;
 };
 
-}  // namespace gps
+} // namespace gps

@@ -1,32 +1,37 @@
 #include "chat_compose_components.h"
 
+#include "chat_compose_input.h"
 #include "chat_compose_layout.h"
 #include "chat_compose_styles.h"
-#include "chat_compose_input.h"
 
 #include "../../widgets/ime/ime_widget.h"
 
 #include <Arduino.h>
+#include <cstdio> // snprintf
 #include <cstring>
-#include <cstdio>   // snprintf
 
-namespace chat::ui {
+namespace chat::ui
+{
 
-struct ChatComposeScreen::Impl {
+struct ChatComposeScreen::Impl
+{
     chat::ui::compose::layout::Spec spec;
     chat::ui::compose::layout::Widgets w;
     chat::ui::compose::input::State input_state;
 };
 
-static void set_btn_label_white(lv_obj_t* btn) {
+static void set_btn_label_white(lv_obj_t* btn)
+{
     lv_obj_t* child = lv_obj_get_child(btn, 0);
-    if (child && lv_obj_check_type(child, &lv_label_class)) {
+    if (child && lv_obj_check_type(child, &lv_label_class))
+    {
         lv_obj_set_style_text_color(child, lv_color_white(), 0);
     }
 }
 
 ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv)
-    : conv_(conv) {
+    : conv_(conv)
+{
 
     impl_ = new Impl();
 
@@ -53,10 +58,12 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     refresh_len();
 }
 
-ChatComposeScreen::~ChatComposeScreen() {
+ChatComposeScreen::~ChatComposeScreen()
+{
     if (!impl_) return;
 
-    if (impl_->w.container) {
+    if (impl_->w.container)
+    {
         lv_obj_del(impl_->w.container);
     }
 
@@ -64,16 +71,21 @@ ChatComposeScreen::~ChatComposeScreen() {
     impl_ = nullptr;
 }
 
-lv_obj_t* ChatComposeScreen::getObj() const {
+lv_obj_t* ChatComposeScreen::getObj() const
+{
     return impl_ ? impl_->w.container : nullptr;
 }
 
-void ChatComposeScreen::init_topbar() {
+void ChatComposeScreen::init_topbar()
+{
     char title_buf[32];
 
-    if (conv_.peer == 0) {
+    if (conv_.peer == 0)
+    {
         snprintf(title_buf, sizeof(title_buf), "Broadcast");
-    } else {
+    }
+    else
+    {
         snprintf(title_buf, sizeof(title_buf), "%04lX",
                  static_cast<unsigned long>(conv_.peer & 0xFFFF));
     }
@@ -83,51 +95,61 @@ void ChatComposeScreen::init_topbar() {
     ::ui::widgets::top_bar_set_back_callback(impl_->w.top_bar, on_back, this);
 }
 
-void ChatComposeScreen::setHeaderText(const char* title, const char* status) {
+void ChatComposeScreen::setHeaderText(const char* title, const char* status)
+{
     if (!impl_) return;
-    if (title)  ::ui::widgets::top_bar_set_title(impl_->w.top_bar, title);
+    if (title) ::ui::widgets::top_bar_set_title(impl_->w.top_bar, title);
     if (status) ::ui::widgets::top_bar_set_right_text(impl_->w.top_bar, status);
 }
 
-std::string ChatComposeScreen::getText() const {
+std::string ChatComposeScreen::getText() const
+{
     if (!impl_ || !impl_->w.textarea) return "";
     const char* text = lv_textarea_get_text(impl_->w.textarea);
     return text ? std::string(text) : "";
 }
 
-void ChatComposeScreen::clearText() {
+void ChatComposeScreen::clearText()
+{
     if (!impl_) return;
     lv_textarea_set_text(impl_->w.textarea, "");
     refresh_len();
 }
 
-void ChatComposeScreen::setActionCallback(void (*cb)(bool send, void*), void* user_data) {
+void ChatComposeScreen::setActionCallback(void (*cb)(bool send, void*), void* user_data)
+{
     action_cb_ = cb;
     action_cb_user_data_ = user_data;
 }
 
-void ChatComposeScreen::setBackCallback(void (*cb)(void*), void* user_data) {
+void ChatComposeScreen::setBackCallback(void (*cb)(void*), void* user_data)
+{
     back_cb_ = cb;
     back_cb_user_data_ = user_data;
 }
 
-void ChatComposeScreen::attachImeWidget(::ui::widgets::ImeWidget* widget) {
+void ChatComposeScreen::attachImeWidget(::ui::widgets::ImeWidget* widget)
+{
     ime_widget_ = widget;
 }
 
-lv_obj_t* ChatComposeScreen::getTextarea() const {
+lv_obj_t* ChatComposeScreen::getTextarea() const
+{
     return impl_ ? impl_->w.textarea : nullptr;
 }
 
-lv_obj_t* ChatComposeScreen::getContent() const {
+lv_obj_t* ChatComposeScreen::getContent() const
+{
     return impl_ ? impl_->w.content : nullptr;
 }
 
-lv_obj_t* ChatComposeScreen::getActionBar() const {
+lv_obj_t* ChatComposeScreen::getActionBar() const
+{
     return impl_ ? impl_->w.action_bar : nullptr;
 }
 
-void ChatComposeScreen::refresh_len() {
+void ChatComposeScreen::refresh_len()
+{
     if (!impl_) return;
 
     const char* text = lv_textarea_get_text(impl_->w.textarea);
@@ -140,34 +162,39 @@ void ChatComposeScreen::refresh_len() {
 
 // ---------- LVGL callbacks ----------
 
-void ChatComposeScreen::on_action_click(lv_event_t* e) {
+void ChatComposeScreen::on_action_click(lv_event_t* e)
+{
     auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
     if (!screen || !screen->action_cb_ || !screen->impl_) return;
 
     auto* target = reinterpret_cast<lv_obj_t*>(lv_event_get_target(e)); // 兼容 void*
     bool send = (target == screen->impl_->w.send_btn);
-
     screen->action_cb_(send, screen->action_cb_user_data_);
 }
 
-void ChatComposeScreen::on_text_changed(lv_event_t* e) {
+void ChatComposeScreen::on_text_changed(lv_event_t* e)
+{
     auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
     if (!screen) return;
     screen->refresh_len();
 }
 
-void ChatComposeScreen::on_back(void* user_data) {
+void ChatComposeScreen::on_back(void* user_data)
+{
     auto* screen = static_cast<ChatComposeScreen*>(user_data);
-    if (screen && screen->back_cb_) {
+    if (screen && screen->back_cb_)
+    {
         screen->back_cb_(screen->back_cb_user_data_);
     }
 }
 
-void ChatComposeScreen::on_key(lv_event_t* e) {
+void ChatComposeScreen::on_key(lv_event_t* e)
+{
     auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
     if (!screen || !screen->impl_) return;
 
-    if (screen->ime_widget_ && screen->ime_widget_->handle_key(e)) {
+    if (screen->ime_widget_ && screen->ime_widget_->handle_key(e))
+    {
         return;
     }
 
@@ -177,8 +204,10 @@ void ChatComposeScreen::on_key(lv_event_t* e) {
     lv_indev_t* indev = lv_indev_get_act();
     bool is_encoder = indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER;
 
-    if (is_encoder && key == LV_KEY_ENTER && screen->impl_->w.send_btn) {
-        if (lv_group_t* g = lv_group_get_default()) {
+    if (is_encoder && key == LV_KEY_ENTER && screen->impl_->w.send_btn)
+    {
+        if (lv_group_t* g = lv_group_get_default())
+        {
             lv_group_focus_obj(screen->impl_->w.send_btn);
         }
     }

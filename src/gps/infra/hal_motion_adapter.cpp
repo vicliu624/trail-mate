@@ -2,9 +2,10 @@
 
 #include "board/TLoRaPagerBoard.h"
 
-namespace gps {
+namespace gps
+{
 
-void HalMotionAdapter::begin(TLoRaPagerBoard &board)
+void HalMotionAdapter::begin(TLoRaPagerBoard& board)
 {
     hal_motion_.begin(board);
 }
@@ -15,7 +16,7 @@ bool HalMotionAdapter::isReady() const
 }
 
 bool HalMotionAdapter::configure(uint8_t sensor_id, uint8_t interrupt_ctrl,
-                                 SensorDataParseCallback callback, void *user_data)
+                                 SensorDataParseCallback callback, void* user_data)
 {
     return hal_motion_.configure(sensor_id, interrupt_ctrl, callback, user_data);
 }
@@ -40,4 +41,4 @@ void HalMotionAdapter::update()
     hal_motion_.update();
 }
 
-}  // namespace gps
+} // namespace gps

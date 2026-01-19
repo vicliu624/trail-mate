@@ -2,12 +2,12 @@
 #include <Arduino.h>
 #include <vector>
 
-#define DISP_CMD_MADCTL       (0x36)
-#define DISP_CMD_CASET        (0x2A)
-#define DISP_CMD_RASET        (0x2B)
-#define DISP_CMD_RAMWR        (0x2C)
-#define DISP_CMD_SLPIN        (0x10)
-#define DISP_CMD_SLPOUT       (0x11)
+#define DISP_CMD_MADCTL (0x36)
+#define DISP_CMD_CASET (0x2A)
+#define DISP_CMD_RASET (0x2B)
+#define DISP_CMD_RAMWR (0x2C)
+#define DISP_CMD_SLPIN (0x10)
+#define DISP_CMD_SLPOUT (0x11)
 
 bool LilyGoDispArduinoSPI::lock(TickType_t xTicksToWait)
 {
@@ -32,12 +32,13 @@ bool LilyGoDispArduinoSPI::init(int sck,
                                 int dc,
                                 int backlight,
                                 uint32_t freq_Mhz,
-                                SPIClass &spi)
+                                SPIClass& spi)
 {
     _lock = xSemaphoreCreateMutex();
     _spi = &spi;
 
-    if (rst != -1) {
+    if (rst != -1)
+    {
         pinMode(rst, OUTPUT);
         digitalWrite(rst, LOW);
         delay(20);
@@ -56,16 +57,19 @@ bool LilyGoDispArduinoSPI::init(int sck,
     digitalWrite(_dc, HIGH);
 
     _backlight = backlight;
-    if (_backlight != -1) {
+    if (_backlight != -1)
+    {
         pinMode(_backlight, OUTPUT);
         digitalWrite(_backlight, HIGH);
     }
 
     _spi->begin(sck, miso, mosi);
 
-    for (uint32_t i = 0; i < _init_list_length; i++) {
-        writeParams(_init_list[i].cmd, (uint8_t *)_init_list[i].data, _init_list[i].len & 0x1F);
-        if (_init_list[i].len & 0x80) {
+    for (uint32_t i = 0; i < _init_list_length; i++)
+    {
+        writeParams(_init_list[i].cmd, (uint8_t*)_init_list[i].data, _init_list[i].len & 0x1F);
+        if (_init_list[i].len & 0x80)
+        {
             delay(120);
         }
     }
@@ -101,19 +105,19 @@ void LilyGoDispArduinoSPI::setRotation(uint8_t rotation)
     _offset_y = _rotation_configs[_rotation].offset_y;
 }
 
-void LilyGoDispArduinoSPI::pushColors(uint16_t *data, uint32_t len)
+void LilyGoDispArduinoSPI::pushColors(uint16_t* data, uint32_t len)
 {
     xSemaphoreTake(_lock, portMAX_DELAY);
     digitalWrite(_cs, LOW);
     _spi->beginTransaction(SPISettings(_spi_freq, MSBFIRST, SPI_MODE0));
     digitalWrite(_dc, HIGH);
-    _spi->writeBytes((const uint8_t *)data, len * sizeof(uint16_t));
+    _spi->writeBytes((const uint8_t*)data, len * sizeof(uint16_t));
     _spi->endTransaction();
     digitalWrite(_cs, HIGH);
     xSemaphoreGive(_lock);
 }
 
-void LilyGoDispArduinoSPI::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t *color)
+void LilyGoDispArduinoSPI::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color)
 {
     setAddrWindow(x1, y1, x1 + x2 - 1, y1 + y2 - 1);
     pushColors(color, x2 * y2);
@@ -140,7 +144,8 @@ void LilyGoDispArduinoSPI::setAddrWindow(uint16_t xs, uint16_t ys, uint16_t xe, 
         {DISP_CMD_RASET, {uint8_t(ys >> 8), (uint8_t)ys, uint8_t(ye >> 8), uint8_t(ye)}, 0x04},
         {DISP_CMD_RAMWR, {0x00}, 0x00},
     };
-    for (uint32_t i = 0; i < 3; i++) {
+    for (uint32_t i = 0; i < 3; i++)
+    {
         writeParams(t[i].cmd, t[i].data, t[i].len);
     }
 }
@@ -170,10 +175,11 @@ void LilyGoDispArduinoSPI::writeData(uint8_t data)
     xSemaphoreGive(_lock);
 }
 
-void LilyGoDispArduinoSPI::writeParams(uint8_t cmd, uint8_t *data, size_t length)
+void LilyGoDispArduinoSPI::writeParams(uint8_t cmd, uint8_t* data, size_t length)
 {
     writeCommand(cmd);
-    for (size_t i = 0; i < length; i++) {
+    for (size_t i = 0; i < length; i++)
+    {
         writeData(data[i]);
     }
 }

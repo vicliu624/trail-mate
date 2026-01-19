@@ -1,14 +1,17 @@
 #include "motion_policy.h"
 
-namespace gps {
+namespace gps
+{
 
-namespace {
-MotionPolicy *g_instance = nullptr;
+namespace
+{
+MotionPolicy* g_instance = nullptr;
 }
 
-bool MotionPolicy::begin(IMotionHardware &motion, const MotionConfig &config)
+bool MotionPolicy::begin(IMotionHardware& motion, const MotionConfig& config)
 {
-    if (enabled_ && motion_ != nullptr) {
+    if (enabled_ && motion_ != nullptr)
+    {
         motion_->removeCallback(config_.sensor_id, motionEventCallback);
         motion_->detachInterrupt();
     }
@@ -17,7 +20,8 @@ bool MotionPolicy::begin(IMotionHardware &motion, const MotionConfig &config)
     config_ = config;
     enabled_ = false;
 
-    if (!motion_->isReady()) {
+    if (!motion_->isReady())
+    {
         return false;
     }
 
@@ -25,9 +29,9 @@ bool MotionPolicy::begin(IMotionHardware &motion, const MotionConfig &config)
         config_.sensor_id,
         config_.interrupt_ctrl,
         motionEventCallback,
-        this
-    );
-    if (!configured) {
+        this);
+    if (!configured)
+    {
         return false;
     }
 
@@ -47,7 +51,8 @@ void MotionPolicy::onSensorInterrupt()
 
 bool MotionPolicy::shouldUpdateSensor(uint32_t now_ms)
 {
-    if (sensor_irq_pending_) {
+    if (sensor_irq_pending_)
+    {
         sensor_irq_pending_ = false;
         return true;
     }
@@ -61,11 +66,13 @@ void MotionPolicy::markSensorUpdated(uint32_t now_ms)
 
 bool MotionPolicy::shouldEnableGps(uint32_t now_ms)
 {
-    if (!enabled_) {
+    if (!enabled_)
+    {
         return false;
     }
 
-    if (motion_event_pending_) {
+    if (motion_event_pending_)
+    {
         motion_event_pending_ = false;
     }
 
@@ -75,24 +82,26 @@ bool MotionPolicy::shouldEnableGps(uint32_t now_ms)
 
 void IRAM_ATTR MotionPolicy::sensorInterruptHandler()
 {
-    if (g_instance != nullptr) {
+    if (g_instance != nullptr)
+    {
         g_instance->onSensorInterrupt();
     }
 }
 
-void MotionPolicy::motionEventCallback(uint8_t sensor_id, uint8_t *data, uint32_t size,
-                                       uint64_t *timestamp, void *user_data)
+void MotionPolicy::motionEventCallback(uint8_t sensor_id, uint8_t* data, uint32_t size,
+                                       uint64_t* timestamp, void* user_data)
 {
     (void)sensor_id;
     (void)data;
     (void)size;
     (void)timestamp;
-    auto *policy = static_cast<MotionPolicy *>(user_data);
-    if (policy == nullptr) {
+    auto* policy = static_cast<MotionPolicy*>(user_data);
+    if (policy == nullptr)
+    {
         return;
     }
     policy->motion_event_pending_ = true;
     policy->last_motion_ms_ = millis();
 }
 
-}  // namespace gps
+} // namespace gps

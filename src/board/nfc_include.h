@@ -4,7 +4,7 @@
  * @license   MIT
  * @copyright Copyright (c) 2024  ShenZhen XinYuan Electronic Technology Co., Ltd
  * @date      2024-12-04
- * 
+ *
  */
 
 #pragma once
@@ -28,13 +28,12 @@
 #include <rfal_nfcf.h>
 #include <rfal_nfcv.h>
 #include <rfal_rf.h>
+#include <rfal_rfst25r3916.h>
 #include <rfal_st25tb.h>
 #include <rfal_st25xv.h>
 #include <rfal_t1t.h>
 #include <rfal_t2t.h>
 #include <rfal_t4t.h>
 #include <st_errno.h>
-#include <rfal_rfst25r3916.h>
 
 #endif
-

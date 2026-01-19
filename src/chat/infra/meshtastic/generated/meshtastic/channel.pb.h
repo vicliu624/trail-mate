@@ -19,7 +19,8 @@
  cross band routing as needed.
  If a device has only a single radio (the common case) only one channel can be PRIMARY at a time
  (but any number of SECONDARY channels can't be sent received on that common frequency) */
-typedef enum _meshtastic_Channel_Role {
+typedef enum _meshtastic_Channel_Role
+{
     /* This channel is not in use right now */
     meshtastic_Channel_Role_DISABLED = 0,
     /* This channel is used to set the frequency for the radio - all other enabled channels must be SECONDARY */
@@ -31,7 +32,8 @@ typedef enum _meshtastic_Channel_Role {
 
 /* Struct definitions */
 /* This message is specifically for modules to store per-channel configuration data. */
-typedef struct _meshtastic_ModuleSettings {
+typedef struct _meshtastic_ModuleSettings
+{
     /* Bits of precision for the location sent in position packets. */
     uint32_t position_precision;
     /* Controls whether or not the client / device should mute the current channel
@@ -55,7 +57,8 @@ typedef PB_BYTES_ARRAY_T(32) meshtastic_ChannelSettings_psk_t;
  FIXME: Add description of multi-channel support and how primary vs secondary channels are used.
  FIXME: explain how apps use channels for security.
  explain how remote settings and remote gpio are managed as an example */
-typedef struct _meshtastic_ChannelSettings {
+typedef struct _meshtastic_ChannelSettings
+{
     /* Deprecated in favor of LoraConfig.channel_num */
     uint32_t channel_num;
     /* A simple pre-shared key for now for crypto.
@@ -100,7 +103,8 @@ typedef struct _meshtastic_ChannelSettings {
 } meshtastic_ChannelSettings;
 
 /* A pair of a channel number, mode and the (sharable) settings for that channel */
-typedef struct _meshtastic_Channel {
+typedef struct _meshtastic_Channel
+{
     /* The index of this channel in the channel table (from 0 to MAX_NUM_CHANNELS-1)
  (Someday - not currently implemented) An index of -1 could be used to mean "set by name",
  in which case the target node will find and set the channel by settings.name. */
@@ -112,73 +116,88 @@ typedef struct _meshtastic_Channel {
     meshtastic_Channel_Role role;
 } meshtastic_Channel;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_Channel_Role_MIN meshtastic_Channel_Role_DISABLED
 #define _meshtastic_Channel_Role_MAX meshtastic_Channel_Role_SECONDARY
-#define _meshtastic_Channel_Role_ARRAYSIZE ((meshtastic_Channel_Role)(meshtastic_Channel_Role_SECONDARY+1))
-
-
+#define _meshtastic_Channel_Role_ARRAYSIZE ((meshtastic_Channel_Role)(meshtastic_Channel_Role_SECONDARY + 1))
 
 #define meshtastic_Channel_role_ENUMTYPE meshtastic_Channel_Role
 
-
 /* Initializer values for message structs */
-#define meshtastic_ChannelSettings_init_default  {0, {0, {0}}, "", 0, 0, 0, false, meshtastic_ModuleSettings_init_default}
-#define meshtastic_ModuleSettings_init_default   {0, 0}
-#define meshtastic_Channel_init_default          {0, false, meshtastic_ChannelSettings_init_default, _meshtastic_Channel_Role_MIN}
-#define meshtastic_ChannelSettings_init_zero     {0, {0, {0}}, "", 0, 0, 0, false, meshtastic_ModuleSettings_init_zero}
-#define meshtastic_ModuleSettings_init_zero      {0, 0}
-#define meshtastic_Channel_init_zero             {0, false, meshtastic_ChannelSettings_init_zero, _meshtastic_Channel_Role_MIN}
+#define meshtastic_ChannelSettings_init_default                                 \
+    {                                                                           \
+        0, {0, {0}}, "", 0, 0, 0, false, meshtastic_ModuleSettings_init_default \
+    }
+#define meshtastic_ModuleSettings_init_default \
+    {                                          \
+        0, 0                                   \
+    }
+#define meshtastic_Channel_init_default                                                 \
+    {                                                                                   \
+        0, false, meshtastic_ChannelSettings_init_default, _meshtastic_Channel_Role_MIN \
+    }
+#define meshtastic_ChannelSettings_init_zero                                 \
+    {                                                                        \
+        0, {0, {0}}, "", 0, 0, 0, false, meshtastic_ModuleSettings_init_zero \
+    }
+#define meshtastic_ModuleSettings_init_zero \
+    {                                       \
+        0, 0                                \
+    }
+#define meshtastic_Channel_init_zero                                                 \
+    {                                                                                \
+        0, false, meshtastic_ChannelSettings_init_zero, _meshtastic_Channel_Role_MIN \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
 #define meshtastic_ModuleSettings_position_precision_tag 1
-#define meshtastic_ModuleSettings_is_muted_tag   2
+#define meshtastic_ModuleSettings_is_muted_tag 2
 #define meshtastic_ChannelSettings_channel_num_tag 1
-#define meshtastic_ChannelSettings_psk_tag       2
-#define meshtastic_ChannelSettings_name_tag      3
-#define meshtastic_ChannelSettings_id_tag        4
+#define meshtastic_ChannelSettings_psk_tag 2
+#define meshtastic_ChannelSettings_name_tag 3
+#define meshtastic_ChannelSettings_id_tag 4
 #define meshtastic_ChannelSettings_uplink_enabled_tag 5
 #define meshtastic_ChannelSettings_downlink_enabled_tag 6
 #define meshtastic_ChannelSettings_module_settings_tag 7
-#define meshtastic_Channel_index_tag             1
-#define meshtastic_Channel_settings_tag          2
-#define meshtastic_Channel_role_tag              3
+#define meshtastic_Channel_index_tag 1
+#define meshtastic_Channel_settings_tag 2
+#define meshtastic_Channel_role_tag 3
 
 /* Struct field encoding specification for nanopb */
-#define meshtastic_ChannelSettings_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   channel_num,       1) \
-X(a, STATIC,   SINGULAR, BYTES,    psk,               2) \
-X(a, STATIC,   SINGULAR, STRING,   name,              3) \
-X(a, STATIC,   SINGULAR, FIXED32,  id,                4) \
-X(a, STATIC,   SINGULAR, BOOL,     uplink_enabled,    5) \
-X(a, STATIC,   SINGULAR, BOOL,     downlink_enabled,   6) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  module_settings,   7)
+#define meshtastic_ChannelSettings_FIELDLIST(X, a)    \
+    X(a, STATIC, SINGULAR, UINT32, channel_num, 1)    \
+    X(a, STATIC, SINGULAR, BYTES, psk, 2)             \
+    X(a, STATIC, SINGULAR, STRING, name, 3)           \
+    X(a, STATIC, SINGULAR, FIXED32, id, 4)            \
+    X(a, STATIC, SINGULAR, BOOL, uplink_enabled, 5)   \
+    X(a, STATIC, SINGULAR, BOOL, downlink_enabled, 6) \
+    X(a, STATIC, OPTIONAL, MESSAGE, module_settings, 7)
 #define meshtastic_ChannelSettings_CALLBACK NULL
 #define meshtastic_ChannelSettings_DEFAULT NULL
 #define meshtastic_ChannelSettings_module_settings_MSGTYPE meshtastic_ModuleSettings
 
-#define meshtastic_ModuleSettings_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   position_precision,   1) \
-X(a, STATIC,   SINGULAR, BOOL,     is_muted,          2)
+#define meshtastic_ModuleSettings_FIELDLIST(X, a)         \
+    X(a, STATIC, SINGULAR, UINT32, position_precision, 1) \
+    X(a, STATIC, SINGULAR, BOOL, is_muted, 2)
 #define meshtastic_ModuleSettings_CALLBACK NULL
 #define meshtastic_ModuleSettings_DEFAULT NULL
 
-#define meshtastic_Channel_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, INT32,    index,             1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  settings,          2) \
-X(a, STATIC,   SINGULAR, UENUM,    role,              3)
+#define meshtastic_Channel_FIELDLIST(X, a)       \
+    X(a, STATIC, SINGULAR, INT32, index, 1)      \
+    X(a, STATIC, OPTIONAL, MESSAGE, settings, 2) \
+    X(a, STATIC, SINGULAR, UENUM, role, 3)
 #define meshtastic_Channel_CALLBACK NULL
 #define meshtastic_Channel_DEFAULT NULL
 #define meshtastic_Channel_settings_MSGTYPE meshtastic_ChannelSettings
 
-extern const pb_msgdesc_t meshtastic_ChannelSettings_msg;
-extern const pb_msgdesc_t meshtastic_ModuleSettings_msg;
-extern const pb_msgdesc_t meshtastic_Channel_msg;
+    extern const pb_msgdesc_t meshtastic_ChannelSettings_msg;
+    extern const pb_msgdesc_t meshtastic_ModuleSettings_msg;
+    extern const pb_msgdesc_t meshtastic_Channel_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_ChannelSettings_fields &meshtastic_ChannelSettings_msg
@@ -187,9 +206,9 @@ extern const pb_msgdesc_t meshtastic_Channel_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define MESHTASTIC_MESHTASTIC_CHANNEL_PB_H_MAX_SIZE meshtastic_Channel_size
-#define meshtastic_ChannelSettings_size          72
-#define meshtastic_Channel_size                  87
-#define meshtastic_ModuleSettings_size           8
+#define meshtastic_ChannelSettings_size 72
+#define meshtastic_Channel_size 87
+#define meshtastic_ModuleSettings_size 8
 
 #ifdef __cplusplus
 } /* extern "C" */

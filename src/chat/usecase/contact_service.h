@@ -10,20 +10,23 @@
 #pragma once
 
 #include "../domain/contact_types.h"
-#include "../ports/i_node_store.h"
 #include "../ports/i_contact_store.h"
+#include "../ports/i_node_store.h"
 #include <string>
 #include <vector>
 
-namespace chat {
-namespace contacts {
+namespace chat
+{
+namespace contacts
+{
 
 /**
  * @brief Contact service
  * Use case layer: coordinates domain model and storage adapters
  */
-class ContactService {
-public:
+class ContactService
+{
+  public:
     /**
      * @brief Constructor with dependency injection
      * @param node_store Node store implementation
@@ -45,8 +48,13 @@ public:
      * @param snr Signal-to-Noise Ratio
      * @param now_secs Current timestamp (seconds)
      */
-    void updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name, 
-                       float snr, uint32_t now_secs);
+    void updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
+                        float snr, uint32_t now_secs, uint8_t protocol = 0);
+
+    /**
+     * @brief Update node protocol type (without changing names)
+     */
+    void updateNodeProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs);
 
     /**
      * @brief Get display name for a node (nickname if contact, short_name otherwise)
@@ -95,12 +103,17 @@ public:
      */
     const NodeInfo* getNodeInfo(uint32_t node_id) const;
 
-private:
+    /**
+     * @brief Clear cached node info
+     */
+    void clearCache();
+
+  private:
     INodeStore& node_store_;
     IContactStore& contact_store_;
-    mutable std::vector<NodeInfo> cached_nodes_;  // Cache for getContacts/getNearby
+    mutable std::vector<NodeInfo> cached_nodes_; // Cache for getContacts/getNearby
     mutable uint32_t cache_timestamp_;
-    static constexpr uint32_t kCacheTimeoutMs = 1000;  // 1 second cache
+    static constexpr uint32_t kCacheTimeoutMs = 1000; // 1 second cache
 
     void invalidateCache() const;
     void buildCache() const;
