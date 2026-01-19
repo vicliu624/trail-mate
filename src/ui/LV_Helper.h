@@ -8,10 +8,10 @@
 #warning "Lvgl fs mismatch, may not be able to use fs function"
 #endif
 
-void beginLvglHelper(LilyGo_Display &display, bool debug = false);
+void beginLvglHelper(LilyGo_Display& display, bool debug = false);
 void updateLvglHelper();
 
-void lv_set_default_group(lv_group_t *group);
-lv_indev_t *lv_get_touch_indev();
-lv_indev_t *lv_get_keyboard_indev();
-lv_indev_t *lv_get_encoder_indev();
+void lv_set_default_group(lv_group_t* group);
+lv_indev_t* lv_get_touch_indev();
+lv_indev_t* lv_get_keyboard_indev();
+lv_indev_t* lv_get_encoder_indev();

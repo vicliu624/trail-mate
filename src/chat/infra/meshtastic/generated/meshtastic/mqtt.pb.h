@@ -3,9 +3,9 @@
 
 #ifndef PB_MESHTASTIC_MESHTASTIC_MQTT_PB_H_INCLUDED
 #define PB_MESHTASTIC_MESHTASTIC_MQTT_PB_H_INCLUDED
-#include <pb.h>
 #include "meshtastic/config.pb.h"
 #include "meshtastic/mesh.pb.h"
+#include <pb.h>
 
 #if PB_PROTO_HEADER_VERSION != 40
 #error Regenerate this file with the current version of nanopb generator.
@@ -13,19 +13,21 @@
 
 /* Struct definitions */
 /* This message wraps a MeshPacket with extra metadata about the sender and how it arrived. */
-typedef struct _meshtastic_ServiceEnvelope {
+typedef struct _meshtastic_ServiceEnvelope
+{
     /* The (probably encrypted) packet */
-    struct _meshtastic_MeshPacket *packet;
+    struct _meshtastic_MeshPacket* packet;
     /* The global channel ID it was sent on */
-    char *channel_id;
+    char* channel_id;
     /* The sending gateway node ID. Can we use this to authenticate/prevent fake
  nodeid impersonation for senders? - i.e. use gateway/mesh id (which is authenticated) + local node id as
  the globally trusted nodenum */
-    char *gateway_id;
+    char* gateway_id;
 } meshtastic_ServiceEnvelope;
 
 /* Information about a node intended to be reported unencrypted to a map using MQTT. */
-typedef struct _meshtastic_MapReport {
+typedef struct _meshtastic_MapReport
+{
     /* A full name for this user, i.e. "Kevin Hester" */
     char long_name[40];
     /* A VERY short name, ideally two characters.
@@ -59,65 +61,77 @@ typedef struct _meshtastic_MapReport {
     bool has_opted_report_location;
 } meshtastic_MapReport;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Initializer values for message structs */
-#define meshtastic_ServiceEnvelope_init_default  {NULL, NULL, NULL}
-#define meshtastic_MapReport_init_default        {"", "", _meshtastic_Config_DeviceConfig_Role_MIN, _meshtastic_HardwareModel_MIN, "", _meshtastic_Config_LoRaConfig_RegionCode_MIN, _meshtastic_Config_LoRaConfig_ModemPreset_MIN, 0, 0, 0, 0, 0, 0, 0}
-#define meshtastic_ServiceEnvelope_init_zero     {NULL, NULL, NULL}
-#define meshtastic_MapReport_init_zero           {"", "", _meshtastic_Config_DeviceConfig_Role_MIN, _meshtastic_HardwareModel_MIN, "", _meshtastic_Config_LoRaConfig_RegionCode_MIN, _meshtastic_Config_LoRaConfig_ModemPreset_MIN, 0, 0, 0, 0, 0, 0, 0}
+#define meshtastic_ServiceEnvelope_init_default \
+    {                                           \
+        NULL, NULL, NULL                        \
+    }
+#define meshtastic_MapReport_init_default                                                                                                                                                                     \
+    {                                                                                                                                                                                                         \
+        "", "", _meshtastic_Config_DeviceConfig_Role_MIN, _meshtastic_HardwareModel_MIN, "", _meshtastic_Config_LoRaConfig_RegionCode_MIN, _meshtastic_Config_LoRaConfig_ModemPreset_MIN, 0, 0, 0, 0, 0, 0, 0 \
+    }
+#define meshtastic_ServiceEnvelope_init_zero \
+    {                                        \
+        NULL, NULL, NULL                     \
+    }
+#define meshtastic_MapReport_init_zero                                                                                                                                                                        \
+    {                                                                                                                                                                                                         \
+        "", "", _meshtastic_Config_DeviceConfig_Role_MIN, _meshtastic_HardwareModel_MIN, "", _meshtastic_Config_LoRaConfig_RegionCode_MIN, _meshtastic_Config_LoRaConfig_ModemPreset_MIN, 0, 0, 0, 0, 0, 0, 0 \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
-#define meshtastic_ServiceEnvelope_packet_tag    1
+#define meshtastic_ServiceEnvelope_packet_tag 1
 #define meshtastic_ServiceEnvelope_channel_id_tag 2
 #define meshtastic_ServiceEnvelope_gateway_id_tag 3
-#define meshtastic_MapReport_long_name_tag       1
-#define meshtastic_MapReport_short_name_tag      2
-#define meshtastic_MapReport_role_tag            3
-#define meshtastic_MapReport_hw_model_tag        4
+#define meshtastic_MapReport_long_name_tag 1
+#define meshtastic_MapReport_short_name_tag 2
+#define meshtastic_MapReport_role_tag 3
+#define meshtastic_MapReport_hw_model_tag 4
 #define meshtastic_MapReport_firmware_version_tag 5
-#define meshtastic_MapReport_region_tag          6
-#define meshtastic_MapReport_modem_preset_tag    7
+#define meshtastic_MapReport_region_tag 6
+#define meshtastic_MapReport_modem_preset_tag 7
 #define meshtastic_MapReport_has_default_channel_tag 8
-#define meshtastic_MapReport_latitude_i_tag      9
-#define meshtastic_MapReport_longitude_i_tag     10
-#define meshtastic_MapReport_altitude_tag        11
+#define meshtastic_MapReport_latitude_i_tag 9
+#define meshtastic_MapReport_longitude_i_tag 10
+#define meshtastic_MapReport_altitude_tag 11
 #define meshtastic_MapReport_position_precision_tag 12
 #define meshtastic_MapReport_num_online_local_nodes_tag 13
 #define meshtastic_MapReport_has_opted_report_location_tag 14
 
 /* Struct field encoding specification for nanopb */
 #define meshtastic_ServiceEnvelope_FIELDLIST(X, a) \
-X(a, POINTER,  OPTIONAL, MESSAGE,  packet,            1) \
-X(a, POINTER,  SINGULAR, STRING,   channel_id,        2) \
-X(a, POINTER,  SINGULAR, STRING,   gateway_id,        3)
+    X(a, POINTER, OPTIONAL, MESSAGE, packet, 1)    \
+    X(a, POINTER, SINGULAR, STRING, channel_id, 2) \
+    X(a, POINTER, SINGULAR, STRING, gateway_id, 3)
 #define meshtastic_ServiceEnvelope_CALLBACK NULL
 #define meshtastic_ServiceEnvelope_DEFAULT NULL
 #define meshtastic_ServiceEnvelope_packet_MSGTYPE meshtastic_MeshPacket
 
-#define meshtastic_MapReport_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   long_name,         1) \
-X(a, STATIC,   SINGULAR, STRING,   short_name,        2) \
-X(a, STATIC,   SINGULAR, UENUM,    role,              3) \
-X(a, STATIC,   SINGULAR, UENUM,    hw_model,          4) \
-X(a, STATIC,   SINGULAR, STRING,   firmware_version,   5) \
-X(a, STATIC,   SINGULAR, UENUM,    region,            6) \
-X(a, STATIC,   SINGULAR, UENUM,    modem_preset,      7) \
-X(a, STATIC,   SINGULAR, BOOL,     has_default_channel,   8) \
-X(a, STATIC,   SINGULAR, SFIXED32, latitude_i,        9) \
-X(a, STATIC,   SINGULAR, SFIXED32, longitude_i,      10) \
-X(a, STATIC,   SINGULAR, INT32,    altitude,         11) \
-X(a, STATIC,   SINGULAR, UINT32,   position_precision,  12) \
-X(a, STATIC,   SINGULAR, UINT32,   num_online_local_nodes,  13) \
-X(a, STATIC,   SINGULAR, BOOL,     has_opted_report_location,  14)
+#define meshtastic_MapReport_FIELDLIST(X, a)                   \
+    X(a, STATIC, SINGULAR, STRING, long_name, 1)               \
+    X(a, STATIC, SINGULAR, STRING, short_name, 2)              \
+    X(a, STATIC, SINGULAR, UENUM, role, 3)                     \
+    X(a, STATIC, SINGULAR, UENUM, hw_model, 4)                 \
+    X(a, STATIC, SINGULAR, STRING, firmware_version, 5)        \
+    X(a, STATIC, SINGULAR, UENUM, region, 6)                   \
+    X(a, STATIC, SINGULAR, UENUM, modem_preset, 7)             \
+    X(a, STATIC, SINGULAR, BOOL, has_default_channel, 8)       \
+    X(a, STATIC, SINGULAR, SFIXED32, latitude_i, 9)            \
+    X(a, STATIC, SINGULAR, SFIXED32, longitude_i, 10)          \
+    X(a, STATIC, SINGULAR, INT32, altitude, 11)                \
+    X(a, STATIC, SINGULAR, UINT32, position_precision, 12)     \
+    X(a, STATIC, SINGULAR, UINT32, num_online_local_nodes, 13) \
+    X(a, STATIC, SINGULAR, BOOL, has_opted_report_location, 14)
 #define meshtastic_MapReport_CALLBACK NULL
 #define meshtastic_MapReport_DEFAULT NULL
 
-extern const pb_msgdesc_t meshtastic_ServiceEnvelope_msg;
-extern const pb_msgdesc_t meshtastic_MapReport_msg;
+    extern const pb_msgdesc_t meshtastic_ServiceEnvelope_msg;
+    extern const pb_msgdesc_t meshtastic_MapReport_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_ServiceEnvelope_fields &meshtastic_ServiceEnvelope_msg
@@ -126,7 +140,7 @@ extern const pb_msgdesc_t meshtastic_MapReport_msg;
 /* Maximum encoded size of messages (where known) */
 /* meshtastic_ServiceEnvelope_size depends on runtime parameters */
 #define MESHTASTIC_MESHTASTIC_MQTT_PB_H_MAX_SIZE meshtastic_MapReport_size
-#define meshtastic_MapReport_size                110
+#define meshtastic_MapReport_size 110
 
 #ifdef __cplusplus
 } /* extern "C" */

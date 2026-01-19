@@ -8,20 +8,12 @@
 
 PB_BIND(meshtastic_DeviceConnectionStatus, meshtastic_DeviceConnectionStatus, AUTO)
 
-
 PB_BIND(meshtastic_WifiConnectionStatus, meshtastic_WifiConnectionStatus, AUTO)
-
 
 PB_BIND(meshtastic_EthernetConnectionStatus, meshtastic_EthernetConnectionStatus, AUTO)
 
-
 PB_BIND(meshtastic_NetworkConnectionStatus, meshtastic_NetworkConnectionStatus, AUTO)
-
 
 PB_BIND(meshtastic_BluetoothConnectionStatus, meshtastic_BluetoothConnectionStatus, AUTO)
 
-
 PB_BIND(meshtastic_SerialConnectionStatus, meshtastic_SerialConnectionStatus, AUTO)
-
-
-

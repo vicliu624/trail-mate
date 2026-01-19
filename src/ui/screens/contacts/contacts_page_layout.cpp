@@ -30,9 +30,9 @@
  * │   ├─ ListContainer(grow=1,COL) -> ListItem(x4/page)-> NameLabel, StatusLabel
  * │   └─ BottomBar(ROW) -> PrevBtn, NextBtn, BackBtn
  * └─ ActionPanel(80,COL) -> (TBD action buttons)
- * 
- * 
-  * Preconditions:
+ *
+ *
+ * Preconditions:
  * - The parent/root container uses LV_FLEX_FLOW_ROW to place 3 panels horizontally.
  *
  * Implementation notes:
@@ -45,23 +45,29 @@
  * @brief Contacts layout
  */
 
-#include <Arduino.h>
 #include "contacts_page_layout.h"
+#include "../../../app/app_context.h"
+#include "../../../chat/domain/chat_types.h"
+#include "../../../chat/infra/meshtastic/mt_region.h"
+#include <Arduino.h>
 
 using namespace contacts::ui;
 
-namespace contacts {
-namespace ui {
-namespace layout {
+namespace contacts
+{
+namespace ui
+{
+namespace layout
+{
 
 // 布局常量
 static constexpr int kFilterPanelWidth = 80;
 static constexpr int kActionPanelWidth = 80;
 static constexpr int kButtonHeight = 32;
 static constexpr int kButtonSpacing = 3;
-static constexpr int kPanelGap = 3;           // 三列之间的间距
-static constexpr int kScreenEdgePadding = 3;   // 屏幕边缘的padding
-static constexpr int kTopBarContentGap = 3;    // TopBar与Content之间的间距
+static constexpr int kPanelGap = 3;          // 三列之间的间距
+static constexpr int kScreenEdgePadding = 3; // 屏幕边缘的padding
+static constexpr int kTopBarContentGap = 3;  // TopBar与Content之间的间距
 
 // 工具函数
 static void make_non_scrollable(lv_obj_t* obj)
@@ -77,6 +83,35 @@ static void apply_base_container_style(lv_obj_t* obj)
     lv_obj_set_style_radius(obj, 0, 0);
     make_non_scrollable(obj);
 }
+
+namespace
+{
+
+void format_contacts_title(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    const chat::MeshConfig& config = app_ctx.getConfig().mesh_config;
+    chat::MeshProtocol protocol = app_ctx.getConfig().mesh_protocol;
+    if (protocol == chat::MeshProtocol::Meshtastic)
+    {
+        float freq_mhz =
+            chat::meshtastic::estimateFrequencyMhz(config.region, config.modem_preset);
+        snprintf(out, out_len, "Contacts (Meshtastic - %.3fMHz)", freq_mhz);
+        return;
+    }
+    if (protocol == chat::MeshProtocol::MeshCore)
+    {
+        snprintf(out, out_len, "Contacts (MeshCore)");
+        return;
+    }
+    snprintf(out, out_len, "Contacts");
+}
+
+} // namespace
 
 lv_obj_t* create_root(lv_obj_t* parent)
 {
@@ -111,7 +146,9 @@ lv_obj_t* create_header(lv_obj_t* root,
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::widgets::kTopBarHeight;
     ::ui::widgets::top_bar_init(g_contacts_state.top_bar, header, cfg);
-    ::ui::widgets::top_bar_set_title(g_contacts_state.top_bar, "Contacts");
+    char title[64];
+    format_contacts_title(title, sizeof(title));
+    ::ui::widgets::top_bar_set_title(g_contacts_state.top_bar, title);
     ::ui::widgets::top_bar_set_back_callback(g_contacts_state.top_bar, back_callback, user_data);
 
     return header;
@@ -127,9 +164,9 @@ lv_obj_t* create_content(lv_obj_t* root)
     lv_obj_set_flex_grow(content, 1);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(content,
-                         LV_FLEX_ALIGN_START,
-                         LV_FLEX_ALIGN_START,
-                         LV_FLEX_ALIGN_START);
+                          LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_START);
 
     // 样式
     lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
@@ -228,7 +265,8 @@ void ensure_list_subcontainers()
 {
     if (g_contacts_state.list_panel == nullptr) return;
 
-    if (g_contacts_state.sub_container == nullptr) {
+    if (g_contacts_state.sub_container == nullptr)
+    {
         g_contacts_state.sub_container = lv_obj_create(g_contacts_state.list_panel);
         make_non_scrollable(g_contacts_state.sub_container);
 
@@ -243,7 +281,8 @@ void ensure_list_subcontainers()
         lv_obj_set_style_pad_row(g_contacts_state.sub_container, 2, LV_PART_MAIN);
     }
 
-    if (g_contacts_state.bottom_container == nullptr) {
+    if (g_contacts_state.bottom_container == nullptr)
+    {
         g_contacts_state.bottom_container = lv_obj_create(g_contacts_state.list_panel);
         make_non_scrollable(g_contacts_state.bottom_container);
 
@@ -289,4 +328,3 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
 } // namespace layout
 } // namespace ui
 } // namespace contacts
-

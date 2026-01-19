@@ -5,24 +5,29 @@
 
 #pragma once
 
-#include "lvgl.h"
 #include "../../widgets/top_bar.h"
+#include "lvgl.h"
 #include <cstddef>
 
-namespace settings::ui {
+namespace settings::ui
+{
 
-enum class SettingType {
+enum class SettingType
+{
     Toggle,
     Enum,
     Text,
+    Action,
 };
 
-struct SettingOption {
+struct SettingOption
+{
     const char* label;
     int value;
 };
 
-struct SettingItem {
+struct SettingItem
+{
     const char* label;
     SettingType type;
     const SettingOption* options;
@@ -35,7 +40,8 @@ struct SettingItem {
     const char* pref_key;
 };
 
-struct SettingsData {
+struct SettingsData
+{
     // GPS
     int gps_mode = 0;
     int gps_sat_mask = 0x1 | 0x8 | 0x4;
@@ -54,9 +60,11 @@ struct SettingsData {
     // Chat
     char user_name[32] = "TrailMate";
     char short_name[16] = "TM";
+    int chat_protocol = 1;
     int chat_region = 0;
     int chat_channel = 0;
     char chat_psk[33] = {};
+    bool needs_restart = false;
 
     // Network
     int net_modem_preset = 0;
@@ -78,13 +86,15 @@ struct SettingsData {
     bool advanced_debug_logs = false;
 };
 
-struct ItemWidget {
+struct ItemWidget
+{
     const SettingItem* def = nullptr;
     lv_obj_t* btn = nullptr;
     lv_obj_t* value_label = nullptr;
 };
 
-struct UiState {
+struct UiState
+{
     lv_obj_t* parent = nullptr;
     lv_obj_t* root = nullptr;
     lv_obj_t* content = nullptr;
@@ -92,9 +102,9 @@ struct UiState {
     lv_obj_t* list_panel = nullptr;
     lv_obj_t* list_back_btn = nullptr;
     ::ui::widgets::TopBar top_bar;
-    lv_obj_t* filter_buttons[8] {};
+    lv_obj_t* filter_buttons[8]{};
     size_t filter_count = 0;
-    ItemWidget item_widgets[12] {};
+    ItemWidget item_widgets[12]{};
     size_t item_count = 0;
     int current_category = 0;
 

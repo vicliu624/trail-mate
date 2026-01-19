@@ -8,8 +8,4 @@
 
 PB_BIND(meshtastic_LocalConfig, meshtastic_LocalConfig, 2)
 
-
 PB_BIND(meshtastic_LocalModuleConfig, meshtastic_LocalModuleConfig, 2)
-
-
-

@@ -12,7 +12,9 @@
 #include "widgets/top_bar.h"
 #include "ui_common.h"
 #include "../../app/app_context.h"
+#include "../../chat/domain/chat_types.h"
 #include <Arduino.h>
+#include <algorithm>
 
 #define CONTACTS_DEBUG 1
 #if CONTACTS_DEBUG
@@ -115,10 +117,39 @@ void refresh_contacts_data_impl()
 {
     app::AppContext& app_ctx = app::AppContext::getInstance();
     chat::contacts::ContactService& contact_service = app_ctx.getContactService();
-    
+
+    auto should_keep = [](const chat::contacts::NodeInfo& node, chat::MeshProtocol protocol) {
+        if (protocol == chat::MeshProtocol::Meshtastic) {
+            return node.protocol != chat::contacts::NodeProtocolType::MeshCore;
+        }
+        if (protocol == chat::MeshProtocol::MeshCore) {
+            return node.protocol != chat::contacts::NodeProtocolType::Meshtastic;
+        }
+        return true;
+    };
+
+    chat::MeshProtocol protocol = app_ctx.getConfig().mesh_protocol;
+
     g_contacts_state.contacts_list = contact_service.getContacts();
+    g_contacts_state.contacts_list.erase(
+        std::remove_if(
+            g_contacts_state.contacts_list.begin(),
+            g_contacts_state.contacts_list.end(),
+            [protocol, &should_keep](const chat::contacts::NodeInfo& node) {
+                return !should_keep(node, protocol);
+            }),
+        g_contacts_state.contacts_list.end());
+
     g_contacts_state.nearby_list = contact_service.getNearby();
-    
+    g_contacts_state.nearby_list.erase(
+        std::remove_if(
+            g_contacts_state.nearby_list.begin(),
+            g_contacts_state.nearby_list.end(),
+            [protocol, &should_keep](const chat::contacts::NodeInfo& node) {
+                return !should_keep(node, protocol);
+            }),
+        g_contacts_state.nearby_list.end());
+
     CONTACTS_LOG("[Contacts] Data refreshed: %zu contacts, %zu nearby\n",
                  g_contacts_state.contacts_list.size(),
                  g_contacts_state.nearby_list.size());

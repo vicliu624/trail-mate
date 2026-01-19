@@ -1,16 +1,17 @@
 #pragma once
 
-#include "../ports/i_gps_hw.h"
 #include "../../hal/hal_gps.h"
+#include "../ports/i_gps_hw.h"
 
 class TLoRaPagerBoard;
 
-namespace gps {
+namespace gps
+{
 
 class HalGpsAdapter : public IGpsHardware
 {
-public:
-    void begin(TLoRaPagerBoard &board);
+  public:
+    void begin(TLoRaPagerBoard& board);
 
     bool isReady() const override;
     bool init() override;
@@ -23,8 +24,8 @@ public:
     uint8_t satellites() const override;
     bool syncTime(uint32_t gps_task_interval_ms) override;
 
-private:
-    hal::HalGps hal_gps_ {};
+  private:
+    hal::HalGps hal_gps_{};
 };
 
-}  // namespace gps
+} // namespace gps

@@ -12,7 +12,8 @@
 /* Enum definitions */
 /* 001 - 063 = From Router
  064 - 127 = From Client */
-typedef enum _meshtastic_StoreAndForward_RequestResponse {
+typedef enum _meshtastic_StoreAndForward_RequestResponse
+{
     /* Unset/unused */
     meshtastic_StoreAndForward_RequestResponse_UNSET = 0,
     /* Router is an in error state. */
@@ -51,7 +52,8 @@ typedef enum _meshtastic_StoreAndForward_RequestResponse {
 
 /* Struct definitions */
 /* TODO: REPLACE */
-typedef struct _meshtastic_StoreAndForward_Statistics {
+typedef struct _meshtastic_StoreAndForward_Statistics
+{
     /* Number of messages we have ever seen */
     uint32_t messages_total;
     /* Number of messages we have currently saved our history. */
@@ -73,7 +75,8 @@ typedef struct _meshtastic_StoreAndForward_Statistics {
 } meshtastic_StoreAndForward_Statistics;
 
 /* TODO: REPLACE */
-typedef struct _meshtastic_StoreAndForward_History {
+typedef struct _meshtastic_StoreAndForward_History
+{
     /* Number of that will be sent to the client */
     uint32_t history_messages;
     /* The window of messages that was used to filter the history client requested */
@@ -84,7 +87,8 @@ typedef struct _meshtastic_StoreAndForward_History {
 } meshtastic_StoreAndForward_History;
 
 /* TODO: REPLACE */
-typedef struct _meshtastic_StoreAndForward_Heartbeat {
+typedef struct _meshtastic_StoreAndForward_Heartbeat
+{
     /* Period in seconds that the heartbeat is sent out that will be sent to the client */
     uint32_t period;
     /* If set, this is not the primary Store & Forward router on the mesh */
@@ -93,11 +97,13 @@ typedef struct _meshtastic_StoreAndForward_Heartbeat {
 
 typedef PB_BYTES_ARRAY_T(233) meshtastic_StoreAndForward_text_t;
 /* TODO: REPLACE */
-typedef struct _meshtastic_StoreAndForward {
+typedef struct _meshtastic_StoreAndForward
+{
     /* TODO: REPLACE */
     meshtastic_StoreAndForward_RequestResponse rr;
     pb_size_t which_variant;
-    union {
+    union
+    {
         /* TODO: REPLACE */
         meshtastic_StoreAndForward_Statistics stats;
         /* TODO: REPLACE */
@@ -109,31 +115,51 @@ typedef struct _meshtastic_StoreAndForward {
     } variant;
 } meshtastic_StoreAndForward;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_StoreAndForward_RequestResponse_MIN meshtastic_StoreAndForward_RequestResponse_UNSET
 #define _meshtastic_StoreAndForward_RequestResponse_MAX meshtastic_StoreAndForward_RequestResponse_CLIENT_ABORT
-#define _meshtastic_StoreAndForward_RequestResponse_ARRAYSIZE ((meshtastic_StoreAndForward_RequestResponse)(meshtastic_StoreAndForward_RequestResponse_CLIENT_ABORT+1))
+#define _meshtastic_StoreAndForward_RequestResponse_ARRAYSIZE ((meshtastic_StoreAndForward_RequestResponse)(meshtastic_StoreAndForward_RequestResponse_CLIENT_ABORT + 1))
 
 #define meshtastic_StoreAndForward_rr_ENUMTYPE meshtastic_StoreAndForward_RequestResponse
 
-
-
-
-
 /* Initializer values for message structs */
-#define meshtastic_StoreAndForward_init_default  {_meshtastic_StoreAndForward_RequestResponse_MIN, 0, {meshtastic_StoreAndForward_Statistics_init_default}}
-#define meshtastic_StoreAndForward_Statistics_init_default {0, 0, 0, 0, 0, 0, 0, 0, 0}
-#define meshtastic_StoreAndForward_History_init_default {0, 0, 0}
-#define meshtastic_StoreAndForward_Heartbeat_init_default {0, 0}
-#define meshtastic_StoreAndForward_init_zero     {_meshtastic_StoreAndForward_RequestResponse_MIN, 0, {meshtastic_StoreAndForward_Statistics_init_zero}}
-#define meshtastic_StoreAndForward_Statistics_init_zero {0, 0, 0, 0, 0, 0, 0, 0, 0}
-#define meshtastic_StoreAndForward_History_init_zero {0, 0, 0}
-#define meshtastic_StoreAndForward_Heartbeat_init_zero {0, 0}
+#define meshtastic_StoreAndForward_init_default                                                                    \
+    {                                                                                                              \
+        _meshtastic_StoreAndForward_RequestResponse_MIN, 0, { meshtastic_StoreAndForward_Statistics_init_default } \
+    }
+#define meshtastic_StoreAndForward_Statistics_init_default \
+    {                                                      \
+        0, 0, 0, 0, 0, 0, 0, 0, 0                          \
+    }
+#define meshtastic_StoreAndForward_History_init_default \
+    {                                                   \
+        0, 0, 0                                         \
+    }
+#define meshtastic_StoreAndForward_Heartbeat_init_default \
+    {                                                     \
+        0, 0                                              \
+    }
+#define meshtastic_StoreAndForward_init_zero                                                                    \
+    {                                                                                                           \
+        _meshtastic_StoreAndForward_RequestResponse_MIN, 0, { meshtastic_StoreAndForward_Statistics_init_zero } \
+    }
+#define meshtastic_StoreAndForward_Statistics_init_zero \
+    {                                                   \
+        0, 0, 0, 0, 0, 0, 0, 0, 0                       \
+    }
+#define meshtastic_StoreAndForward_History_init_zero \
+    {                                                \
+        0, 0, 0                                      \
+    }
+#define meshtastic_StoreAndForward_Heartbeat_init_zero \
+    {                                                  \
+        0, 0                                           \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
 #define meshtastic_StoreAndForward_Statistics_messages_total_tag 1
@@ -150,19 +176,19 @@ extern "C" {
 #define meshtastic_StoreAndForward_History_last_request_tag 3
 #define meshtastic_StoreAndForward_Heartbeat_period_tag 1
 #define meshtastic_StoreAndForward_Heartbeat_secondary_tag 2
-#define meshtastic_StoreAndForward_rr_tag        1
-#define meshtastic_StoreAndForward_stats_tag     2
-#define meshtastic_StoreAndForward_history_tag   3
+#define meshtastic_StoreAndForward_rr_tag 1
+#define meshtastic_StoreAndForward_stats_tag 2
+#define meshtastic_StoreAndForward_history_tag 3
 #define meshtastic_StoreAndForward_heartbeat_tag 4
-#define meshtastic_StoreAndForward_text_tag      5
+#define meshtastic_StoreAndForward_text_tag 5
 
 /* Struct field encoding specification for nanopb */
-#define meshtastic_StoreAndForward_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    rr,                1) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (variant,stats,variant.stats),   2) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (variant,history,variant.history),   3) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (variant,heartbeat,variant.heartbeat),   4) \
-X(a, STATIC,   ONEOF,    BYTES,    (variant,text,variant.text),   5)
+#define meshtastic_StoreAndForward_FIELDLIST(X, a)                           \
+    X(a, STATIC, SINGULAR, UENUM, rr, 1)                                     \
+    X(a, STATIC, ONEOF, MESSAGE, (variant, stats, variant.stats), 2)         \
+    X(a, STATIC, ONEOF, MESSAGE, (variant, history, variant.history), 3)     \
+    X(a, STATIC, ONEOF, MESSAGE, (variant, heartbeat, variant.heartbeat), 4) \
+    X(a, STATIC, ONEOF, BYTES, (variant, text, variant.text), 5)
 #define meshtastic_StoreAndForward_CALLBACK NULL
 #define meshtastic_StoreAndForward_DEFAULT NULL
 #define meshtastic_StoreAndForward_variant_stats_MSGTYPE meshtastic_StoreAndForward_Statistics
@@ -170,35 +196,35 @@ X(a, STATIC,   ONEOF,    BYTES,    (variant,text,variant.text),   5)
 #define meshtastic_StoreAndForward_variant_heartbeat_MSGTYPE meshtastic_StoreAndForward_Heartbeat
 
 #define meshtastic_StoreAndForward_Statistics_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   messages_total,    1) \
-X(a, STATIC,   SINGULAR, UINT32,   messages_saved,    2) \
-X(a, STATIC,   SINGULAR, UINT32,   messages_max,      3) \
-X(a, STATIC,   SINGULAR, UINT32,   up_time,           4) \
-X(a, STATIC,   SINGULAR, UINT32,   requests,          5) \
-X(a, STATIC,   SINGULAR, UINT32,   requests_history,   6) \
-X(a, STATIC,   SINGULAR, BOOL,     heartbeat,         7) \
-X(a, STATIC,   SINGULAR, UINT32,   return_max,        8) \
-X(a, STATIC,   SINGULAR, UINT32,   return_window,     9)
+    X(a, STATIC, SINGULAR, UINT32, messages_total, 1)         \
+    X(a, STATIC, SINGULAR, UINT32, messages_saved, 2)         \
+    X(a, STATIC, SINGULAR, UINT32, messages_max, 3)           \
+    X(a, STATIC, SINGULAR, UINT32, up_time, 4)                \
+    X(a, STATIC, SINGULAR, UINT32, requests, 5)               \
+    X(a, STATIC, SINGULAR, UINT32, requests_history, 6)       \
+    X(a, STATIC, SINGULAR, BOOL, heartbeat, 7)                \
+    X(a, STATIC, SINGULAR, UINT32, return_max, 8)             \
+    X(a, STATIC, SINGULAR, UINT32, return_window, 9)
 #define meshtastic_StoreAndForward_Statistics_CALLBACK NULL
 #define meshtastic_StoreAndForward_Statistics_DEFAULT NULL
 
 #define meshtastic_StoreAndForward_History_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   history_messages,   1) \
-X(a, STATIC,   SINGULAR, UINT32,   window,            2) \
-X(a, STATIC,   SINGULAR, UINT32,   last_request,      3)
+    X(a, STATIC, SINGULAR, UINT32, history_messages, 1)    \
+    X(a, STATIC, SINGULAR, UINT32, window, 2)              \
+    X(a, STATIC, SINGULAR, UINT32, last_request, 3)
 #define meshtastic_StoreAndForward_History_CALLBACK NULL
 #define meshtastic_StoreAndForward_History_DEFAULT NULL
 
 #define meshtastic_StoreAndForward_Heartbeat_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   period,            1) \
-X(a, STATIC,   SINGULAR, UINT32,   secondary,         2)
+    X(a, STATIC, SINGULAR, UINT32, period, 1)                \
+    X(a, STATIC, SINGULAR, UINT32, secondary, 2)
 #define meshtastic_StoreAndForward_Heartbeat_CALLBACK NULL
 #define meshtastic_StoreAndForward_Heartbeat_DEFAULT NULL
 
-extern const pb_msgdesc_t meshtastic_StoreAndForward_msg;
-extern const pb_msgdesc_t meshtastic_StoreAndForward_Statistics_msg;
-extern const pb_msgdesc_t meshtastic_StoreAndForward_History_msg;
-extern const pb_msgdesc_t meshtastic_StoreAndForward_Heartbeat_msg;
+    extern const pb_msgdesc_t meshtastic_StoreAndForward_msg;
+    extern const pb_msgdesc_t meshtastic_StoreAndForward_Statistics_msg;
+    extern const pb_msgdesc_t meshtastic_StoreAndForward_History_msg;
+    extern const pb_msgdesc_t meshtastic_StoreAndForward_Heartbeat_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_StoreAndForward_fields &meshtastic_StoreAndForward_msg
@@ -209,9 +235,9 @@ extern const pb_msgdesc_t meshtastic_StoreAndForward_Heartbeat_msg;
 /* Maximum encoded size of messages (where known) */
 #define MESHTASTIC_MESHTASTIC_STOREFORWARD_PB_H_MAX_SIZE meshtastic_StoreAndForward_size
 #define meshtastic_StoreAndForward_Heartbeat_size 12
-#define meshtastic_StoreAndForward_History_size  18
+#define meshtastic_StoreAndForward_History_size 18
 #define meshtastic_StoreAndForward_Statistics_size 50
-#define meshtastic_StoreAndForward_size          238
+#define meshtastic_StoreAndForward_size 238
 
 #ifdef __cplusplus
 } /* extern "C" */

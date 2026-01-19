@@ -2,9 +2,10 @@
 
 #include "board/TLoRaPagerBoard.h"
 
-namespace gps {
+namespace gps
+{
 
-void HalGpsAdapter::begin(TLoRaPagerBoard &board)
+void HalGpsAdapter::begin(TLoRaPagerBoard& board)
 {
     hal_gps_.begin(board);
 }
@@ -59,4 +60,4 @@ bool HalGpsAdapter::syncTime(uint32_t gps_task_interval_ms)
     return hal_gps_.syncTime(gps_task_interval_ms);
 }
 
-}  // namespace gps
+} // namespace gps

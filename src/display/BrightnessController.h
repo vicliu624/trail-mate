@@ -7,17 +7,17 @@
  *
  */
 #pragma once
-#include <stdint.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/timers.h"
+#include <stdint.h>
 
-template<typename T, uint8_t MIN_BRIGHTNESS, uint8_t MAX_BRIGHTNESS, uint32_t DEFAULT_DELAY_MS>
+template <typename T, uint8_t MIN_BRIGHTNESS, uint8_t MAX_BRIGHTNESS, uint32_t DEFAULT_DELAY_MS>
 class BrightnessController
 {
-protected:
+  protected:
     TimerHandle_t timerHandler = nullptr;
 
-public:
+  public:
     /**
      * @brief Decrease the display brightness to the target level.
      *
@@ -34,20 +34,26 @@ public:
         if (target_level < MIN_BRIGHTNESS) target_level = MIN_BRIGHTNESS;
         if (target_level > MAX_BRIGHTNESS) target_level = MAX_BRIGHTNESS;
 
-        if (!async) {
-            uint8_t brightness = static_cast<T *>(this)->getBrightness();
+        if (!async)
+        {
+            uint8_t brightness = static_cast<T*>(this)->getBrightness();
             if (target_level >= brightness)
                 return;
-            for (int i = brightness; i > target_level; i--) {
-                static_cast<T *>(this)->setBrightness(i);
+            for (int i = brightness; i > target_level; i--)
+            {
+                static_cast<T*>(this)->setBrightness(i);
                 delay(delay_ms);
             }
-            static_cast<T * >(this)->setBrightness(target_level);
-        } else {
+            static_cast<T*>(this)->setBrightness(target_level);
+        }
+        else
+        {
             static uint8_t pvTimerParams;
             pvTimerParams = target_level;
-            if (!timerHandler) {
-                timerHandler = xTimerCreate("bri", pdMS_TO_TICKS(delay_ms), pdTRUE, &pvTimerParams, [](TimerHandle_t xTimer) {
+            if (!timerHandler)
+            {
+                timerHandler = xTimerCreate("bri", pdMS_TO_TICKS(delay_ms), pdTRUE, &pvTimerParams, [](TimerHandle_t xTimer)
+                                            {
                     uint8_t *target_level_ptr = (uint8_t *)pvTimerGetTimerID(xTimer);
                     T* inst = T::getInstance();
                     uint8_t brightness = inst->getBrightness();
@@ -62,22 +68,22 @@ public:
                         xTimerStop(controller->timerHandler, portMAX_DELAY);
                         xTimerDelete(controller->timerHandler, portMAX_DELAY);
                         controller->timerHandler = NULL;
-                    }
-                });
+                    } });
             }
 
-            uint8_t current_brightness = static_cast<T *>(this)->getBrightness();
-            if (current_brightness <= target_level) {
+            uint8_t current_brightness = static_cast<T*>(this)->getBrightness();
+            if (current_brightness <= target_level)
+            {
                 return;
             }
 
-            if (xTimerIsTimerActive(timerHandler) == pdTRUE) {
+            if (xTimerIsTimerActive(timerHandler) == pdTRUE)
+            {
                 return;
             }
             xTimerStart(timerHandler, portMAX_DELAY);
         }
     }
-
 
     /**
      * @brief Increase the display brightness to the target level.
@@ -95,19 +101,25 @@ public:
         if (target_level < MIN_BRIGHTNESS) target_level = MIN_BRIGHTNESS;
         if (target_level > MAX_BRIGHTNESS) target_level = MAX_BRIGHTNESS;
 
-        if (!async) {
-            uint8_t brightness = static_cast<T *>(this)->getBrightness();
+        if (!async)
+        {
+            uint8_t brightness = static_cast<T*>(this)->getBrightness();
             if (target_level <= brightness)
                 return;
-            for (int i = brightness + 1; i <= target_level; i++) {
-                static_cast<T *>(this)->setBrightness(i);
+            for (int i = brightness + 1; i <= target_level; i++)
+            {
+                static_cast<T*>(this)->setBrightness(i);
                 delay(delay_ms);
             }
-        } else {
+        }
+        else
+        {
             static uint8_t pvTimerParams;
             pvTimerParams = target_level;
-            if (!timerHandler) {
-                timerHandler = xTimerCreate("bri", pdMS_TO_TICKS(delay_ms), pdTRUE, &pvTimerParams, [](TimerHandle_t xTimer) {
+            if (!timerHandler)
+            {
+                timerHandler = xTimerCreate("bri", pdMS_TO_TICKS(delay_ms), pdTRUE, &pvTimerParams, [](TimerHandle_t xTimer)
+                                            {
                     uint8_t *target_level_ptr = (uint8_t *)pvTimerGetTimerID(xTimer);
                     T* inst = T::getInstance();
                     uint8_t brightness = inst->getBrightness();
@@ -120,16 +132,17 @@ public:
                         xTimerStop(controller->timerHandler, portMAX_DELAY);
                         xTimerDelete(controller->timerHandler, portMAX_DELAY);
                         controller->timerHandler = NULL;
-                    }
-                });
+                    } });
             }
 
-            uint8_t current_brightness = static_cast<T *>(this)->getBrightness();
-            if (current_brightness >= target_level) {
+            uint8_t current_brightness = static_cast<T*>(this)->getBrightness();
+            if (current_brightness >= target_level)
+            {
                 return;
             }
 
-            if (xTimerIsTimerActive(timerHandler) == pdTRUE) {
+            if (xTimerIsTimerActive(timerHandler) == pdTRUE)
+            {
                 return;
             }
             xTimerStart(timerHandler, portMAX_DELAY);

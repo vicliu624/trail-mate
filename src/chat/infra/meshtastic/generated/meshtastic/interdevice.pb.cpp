@@ -8,10 +8,4 @@
 
 PB_BIND(meshtastic_SensorData, meshtastic_SensorData, AUTO)
 
-
 PB_BIND(meshtastic_InterdeviceMessage, meshtastic_InterdeviceMessage, 2)
-
-
-
-
-

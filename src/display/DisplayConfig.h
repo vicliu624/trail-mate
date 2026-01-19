@@ -2,20 +2,24 @@
 
 #include <cstdint>
 
-namespace display {
+namespace display
+{
 
-enum class Driver {
+enum class Driver
+{
     Unknown = 0,
     ST7796,
     ST7789V2,
 };
 
-struct ScreenSize {
+struct ScreenSize
+{
     int width;
     int height;
 };
 
-struct Config {
+struct Config
+{
     Driver driver;
     ScreenSize screen;
 };

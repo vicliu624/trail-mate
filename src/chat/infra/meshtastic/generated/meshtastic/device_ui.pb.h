@@ -10,7 +10,8 @@
 #endif
 
 /* Enum definitions */
-typedef enum _meshtastic_CompassMode {
+typedef enum _meshtastic_CompassMode
+{
     /* Compass with dynamic ring and heading */
     meshtastic_CompassMode_DYNAMIC = 0,
     /* Compass with fixed ring and heading */
@@ -19,7 +20,8 @@ typedef enum _meshtastic_CompassMode {
     meshtastic_CompassMode_FREEZE_HEADING = 2
 } meshtastic_CompassMode;
 
-typedef enum _meshtastic_Theme {
+typedef enum _meshtastic_Theme
+{
     /* Dark */
     meshtastic_Theme_DARK = 0,
     /* Light */
@@ -29,7 +31,8 @@ typedef enum _meshtastic_Theme {
 } meshtastic_Theme;
 
 /* Localization */
-typedef enum _meshtastic_Language {
+typedef enum _meshtastic_Language
+{
     /* English */
     meshtastic_Language_ENGLISH = 0,
     /* French */
@@ -77,7 +80,8 @@ typedef enum _meshtastic_Language {
 } meshtastic_Language;
 
 /* How the GPS coordinates are displayed on the OLED screen. */
-typedef enum _meshtastic_DeviceUIConfig_GpsCoordinateFormat {
+typedef enum _meshtastic_DeviceUIConfig_GpsCoordinateFormat
+{
     /* GPS coordinates are displayed in the normal decimal degrees format:
  DD.DDDDDD DDD.DDDDDD */
     meshtastic_DeviceUIConfig_GpsCoordinateFormat_DEC = 0,
@@ -103,7 +107,8 @@ typedef enum _meshtastic_DeviceUIConfig_GpsCoordinateFormat {
 } meshtastic_DeviceUIConfig_GpsCoordinateFormat;
 
 /* Struct definitions */
-typedef struct _meshtastic_NodeFilter {
+typedef struct _meshtastic_NodeFilter
+{
     /* Filter unknown nodes */
     bool unknown_switch;
     /* Filter offline nodes */
@@ -120,7 +125,8 @@ typedef struct _meshtastic_NodeFilter {
     int8_t channel;
 } meshtastic_NodeFilter;
 
-typedef struct _meshtastic_NodeHighlight {
+typedef struct _meshtastic_NodeHighlight
+{
     /* Hightlight nodes w/ active chat */
     bool chat_switch;
     /* Highlight nodes w/ position */
@@ -133,7 +139,8 @@ typedef struct _meshtastic_NodeHighlight {
     char node_name[16];
 } meshtastic_NodeHighlight;
 
-typedef struct _meshtastic_GeoPoint {
+typedef struct _meshtastic_GeoPoint
+{
     /* Zoom level */
     int8_t zoom;
     /* Coordinate: latitude */
@@ -142,7 +149,8 @@ typedef struct _meshtastic_GeoPoint {
     int32_t longitude;
 } meshtastic_GeoPoint;
 
-typedef struct _meshtastic_Map {
+typedef struct _meshtastic_Map
+{
     /* Home coordinates */
     bool has_home;
     meshtastic_GeoPoint home;
@@ -153,7 +161,8 @@ typedef struct _meshtastic_Map {
 } meshtastic_Map;
 
 typedef PB_BYTES_ARRAY_T(16) meshtastic_DeviceUIConfig_calibration_data_t;
-typedef struct _meshtastic_DeviceUIConfig {
+typedef struct _meshtastic_DeviceUIConfig
+{
     /* A version integer used to invalidate saved files when we make incompatible changes. */
     uint32_t version;
     /* TFT display brightness 1..255 */
@@ -195,156 +204,181 @@ typedef struct _meshtastic_DeviceUIConfig {
     meshtastic_DeviceUIConfig_GpsCoordinateFormat gps_format;
 } meshtastic_DeviceUIConfig;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_CompassMode_MIN meshtastic_CompassMode_DYNAMIC
 #define _meshtastic_CompassMode_MAX meshtastic_CompassMode_FREEZE_HEADING
-#define _meshtastic_CompassMode_ARRAYSIZE ((meshtastic_CompassMode)(meshtastic_CompassMode_FREEZE_HEADING+1))
+#define _meshtastic_CompassMode_ARRAYSIZE ((meshtastic_CompassMode)(meshtastic_CompassMode_FREEZE_HEADING + 1))
 
 #define _meshtastic_Theme_MIN meshtastic_Theme_DARK
 #define _meshtastic_Theme_MAX meshtastic_Theme_RED
-#define _meshtastic_Theme_ARRAYSIZE ((meshtastic_Theme)(meshtastic_Theme_RED+1))
+#define _meshtastic_Theme_ARRAYSIZE ((meshtastic_Theme)(meshtastic_Theme_RED + 1))
 
 #define _meshtastic_Language_MIN meshtastic_Language_ENGLISH
 #define _meshtastic_Language_MAX meshtastic_Language_TRADITIONAL_CHINESE
-#define _meshtastic_Language_ARRAYSIZE ((meshtastic_Language)(meshtastic_Language_TRADITIONAL_CHINESE+1))
+#define _meshtastic_Language_ARRAYSIZE ((meshtastic_Language)(meshtastic_Language_TRADITIONAL_CHINESE + 1))
 
 #define _meshtastic_DeviceUIConfig_GpsCoordinateFormat_MIN meshtastic_DeviceUIConfig_GpsCoordinateFormat_DEC
 #define _meshtastic_DeviceUIConfig_GpsCoordinateFormat_MAX meshtastic_DeviceUIConfig_GpsCoordinateFormat_MLS
-#define _meshtastic_DeviceUIConfig_GpsCoordinateFormat_ARRAYSIZE ((meshtastic_DeviceUIConfig_GpsCoordinateFormat)(meshtastic_DeviceUIConfig_GpsCoordinateFormat_MLS+1))
+#define _meshtastic_DeviceUIConfig_GpsCoordinateFormat_ARRAYSIZE ((meshtastic_DeviceUIConfig_GpsCoordinateFormat)(meshtastic_DeviceUIConfig_GpsCoordinateFormat_MLS + 1))
 
 #define meshtastic_DeviceUIConfig_theme_ENUMTYPE meshtastic_Theme
 #define meshtastic_DeviceUIConfig_language_ENUMTYPE meshtastic_Language
 #define meshtastic_DeviceUIConfig_compass_mode_ENUMTYPE meshtastic_CompassMode
 #define meshtastic_DeviceUIConfig_gps_format_ENUMTYPE meshtastic_DeviceUIConfig_GpsCoordinateFormat
 
-
-
-
-
-
 /* Initializer values for message structs */
-#define meshtastic_DeviceUIConfig_init_default   {0, 0, 0, 0, 0, 0, _meshtastic_Theme_MIN, 0, 0, 0, _meshtastic_Language_MIN, false, meshtastic_NodeFilter_init_default, false, meshtastic_NodeHighlight_init_default, {0, {0}}, false, meshtastic_Map_init_default, _meshtastic_CompassMode_MIN, 0, 0, _meshtastic_DeviceUIConfig_GpsCoordinateFormat_MIN}
-#define meshtastic_NodeFilter_init_default       {0, 0, 0, 0, 0, "", 0}
-#define meshtastic_NodeHighlight_init_default    {0, 0, 0, 0, ""}
-#define meshtastic_GeoPoint_init_default         {0, 0, 0}
-#define meshtastic_Map_init_default              {false, meshtastic_GeoPoint_init_default, "", 0}
-#define meshtastic_DeviceUIConfig_init_zero      {0, 0, 0, 0, 0, 0, _meshtastic_Theme_MIN, 0, 0, 0, _meshtastic_Language_MIN, false, meshtastic_NodeFilter_init_zero, false, meshtastic_NodeHighlight_init_zero, {0, {0}}, false, meshtastic_Map_init_zero, _meshtastic_CompassMode_MIN, 0, 0, _meshtastic_DeviceUIConfig_GpsCoordinateFormat_MIN}
-#define meshtastic_NodeFilter_init_zero          {0, 0, 0, 0, 0, "", 0}
-#define meshtastic_NodeHighlight_init_zero       {0, 0, 0, 0, ""}
-#define meshtastic_GeoPoint_init_zero            {0, 0, 0}
-#define meshtastic_Map_init_zero                 {false, meshtastic_GeoPoint_init_zero, "", 0}
+#define meshtastic_DeviceUIConfig_init_default                                                                                                                                                                                                                                                                   \
+    {                                                                                                                                                                                                                                                                                                            \
+        0, 0, 0, 0, 0, 0, _meshtastic_Theme_MIN, 0, 0, 0, _meshtastic_Language_MIN, false, meshtastic_NodeFilter_init_default, false, meshtastic_NodeHighlight_init_default, {0, {0}}, false, meshtastic_Map_init_default, _meshtastic_CompassMode_MIN, 0, 0, _meshtastic_DeviceUIConfig_GpsCoordinateFormat_MIN \
+    }
+#define meshtastic_NodeFilter_init_default \
+    {                                      \
+        0, 0, 0, 0, 0, "", 0               \
+    }
+#define meshtastic_NodeHighlight_init_default \
+    {                                         \
+        0, 0, 0, 0, ""                        \
+    }
+#define meshtastic_GeoPoint_init_default \
+    {                                    \
+        0, 0, 0                          \
+    }
+#define meshtastic_Map_init_default                    \
+    {                                                  \
+        false, meshtastic_GeoPoint_init_default, "", 0 \
+    }
+#define meshtastic_DeviceUIConfig_init_zero                                                                                                                                                                                                                                                             \
+    {                                                                                                                                                                                                                                                                                                   \
+        0, 0, 0, 0, 0, 0, _meshtastic_Theme_MIN, 0, 0, 0, _meshtastic_Language_MIN, false, meshtastic_NodeFilter_init_zero, false, meshtastic_NodeHighlight_init_zero, {0, {0}}, false, meshtastic_Map_init_zero, _meshtastic_CompassMode_MIN, 0, 0, _meshtastic_DeviceUIConfig_GpsCoordinateFormat_MIN \
+    }
+#define meshtastic_NodeFilter_init_zero \
+    {                                   \
+        0, 0, 0, 0, 0, "", 0            \
+    }
+#define meshtastic_NodeHighlight_init_zero \
+    {                                      \
+        0, 0, 0, 0, ""                     \
+    }
+#define meshtastic_GeoPoint_init_zero \
+    {                                 \
+        0, 0, 0                       \
+    }
+#define meshtastic_Map_init_zero                    \
+    {                                               \
+        false, meshtastic_GeoPoint_init_zero, "", 0 \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
 #define meshtastic_NodeFilter_unknown_switch_tag 1
 #define meshtastic_NodeFilter_offline_switch_tag 2
 #define meshtastic_NodeFilter_public_key_switch_tag 3
-#define meshtastic_NodeFilter_hops_away_tag      4
+#define meshtastic_NodeFilter_hops_away_tag 4
 #define meshtastic_NodeFilter_position_switch_tag 5
-#define meshtastic_NodeFilter_node_name_tag      6
-#define meshtastic_NodeFilter_channel_tag        7
+#define meshtastic_NodeFilter_node_name_tag 6
+#define meshtastic_NodeFilter_channel_tag 7
 #define meshtastic_NodeHighlight_chat_switch_tag 1
 #define meshtastic_NodeHighlight_position_switch_tag 2
 #define meshtastic_NodeHighlight_telemetry_switch_tag 3
-#define meshtastic_NodeHighlight_iaq_switch_tag  4
-#define meshtastic_NodeHighlight_node_name_tag   5
-#define meshtastic_GeoPoint_zoom_tag             1
-#define meshtastic_GeoPoint_latitude_tag         2
-#define meshtastic_GeoPoint_longitude_tag        3
-#define meshtastic_Map_home_tag                  1
-#define meshtastic_Map_style_tag                 2
-#define meshtastic_Map_follow_gps_tag            3
-#define meshtastic_DeviceUIConfig_version_tag    1
+#define meshtastic_NodeHighlight_iaq_switch_tag 4
+#define meshtastic_NodeHighlight_node_name_tag 5
+#define meshtastic_GeoPoint_zoom_tag 1
+#define meshtastic_GeoPoint_latitude_tag 2
+#define meshtastic_GeoPoint_longitude_tag 3
+#define meshtastic_Map_home_tag 1
+#define meshtastic_Map_style_tag 2
+#define meshtastic_Map_follow_gps_tag 3
+#define meshtastic_DeviceUIConfig_version_tag 1
 #define meshtastic_DeviceUIConfig_screen_brightness_tag 2
 #define meshtastic_DeviceUIConfig_screen_timeout_tag 3
 #define meshtastic_DeviceUIConfig_screen_lock_tag 4
 #define meshtastic_DeviceUIConfig_settings_lock_tag 5
-#define meshtastic_DeviceUIConfig_pin_code_tag   6
-#define meshtastic_DeviceUIConfig_theme_tag      7
+#define meshtastic_DeviceUIConfig_pin_code_tag 6
+#define meshtastic_DeviceUIConfig_theme_tag 7
 #define meshtastic_DeviceUIConfig_alert_enabled_tag 8
 #define meshtastic_DeviceUIConfig_banner_enabled_tag 9
 #define meshtastic_DeviceUIConfig_ring_tone_id_tag 10
-#define meshtastic_DeviceUIConfig_language_tag   11
+#define meshtastic_DeviceUIConfig_language_tag 11
 #define meshtastic_DeviceUIConfig_node_filter_tag 12
 #define meshtastic_DeviceUIConfig_node_highlight_tag 13
 #define meshtastic_DeviceUIConfig_calibration_data_tag 14
-#define meshtastic_DeviceUIConfig_map_data_tag   15
+#define meshtastic_DeviceUIConfig_map_data_tag 15
 #define meshtastic_DeviceUIConfig_compass_mode_tag 16
 #define meshtastic_DeviceUIConfig_screen_rgb_color_tag 17
 #define meshtastic_DeviceUIConfig_is_clockface_analog_tag 18
 #define meshtastic_DeviceUIConfig_gps_format_tag 19
 
 /* Struct field encoding specification for nanopb */
-#define meshtastic_DeviceUIConfig_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   version,           1) \
-X(a, STATIC,   SINGULAR, UINT32,   screen_brightness,   2) \
-X(a, STATIC,   SINGULAR, UINT32,   screen_timeout,    3) \
-X(a, STATIC,   SINGULAR, BOOL,     screen_lock,       4) \
-X(a, STATIC,   SINGULAR, BOOL,     settings_lock,     5) \
-X(a, STATIC,   SINGULAR, UINT32,   pin_code,          6) \
-X(a, STATIC,   SINGULAR, UENUM,    theme,             7) \
-X(a, STATIC,   SINGULAR, BOOL,     alert_enabled,     8) \
-X(a, STATIC,   SINGULAR, BOOL,     banner_enabled,    9) \
-X(a, STATIC,   SINGULAR, UINT32,   ring_tone_id,     10) \
-X(a, STATIC,   SINGULAR, UENUM,    language,         11) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  node_filter,      12) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  node_highlight,   13) \
-X(a, STATIC,   SINGULAR, BYTES,    calibration_data,  14) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  map_data,         15) \
-X(a, STATIC,   SINGULAR, UENUM,    compass_mode,     16) \
-X(a, STATIC,   SINGULAR, UINT32,   screen_rgb_color,  17) \
-X(a, STATIC,   SINGULAR, BOOL,     is_clockface_analog,  18) \
-X(a, STATIC,   SINGULAR, UENUM,    gps_format,       19)
+#define meshtastic_DeviceUIConfig_FIELDLIST(X, a)         \
+    X(a, STATIC, SINGULAR, UINT32, version, 1)            \
+    X(a, STATIC, SINGULAR, UINT32, screen_brightness, 2)  \
+    X(a, STATIC, SINGULAR, UINT32, screen_timeout, 3)     \
+    X(a, STATIC, SINGULAR, BOOL, screen_lock, 4)          \
+    X(a, STATIC, SINGULAR, BOOL, settings_lock, 5)        \
+    X(a, STATIC, SINGULAR, UINT32, pin_code, 6)           \
+    X(a, STATIC, SINGULAR, UENUM, theme, 7)               \
+    X(a, STATIC, SINGULAR, BOOL, alert_enabled, 8)        \
+    X(a, STATIC, SINGULAR, BOOL, banner_enabled, 9)       \
+    X(a, STATIC, SINGULAR, UINT32, ring_tone_id, 10)      \
+    X(a, STATIC, SINGULAR, UENUM, language, 11)           \
+    X(a, STATIC, OPTIONAL, MESSAGE, node_filter, 12)      \
+    X(a, STATIC, OPTIONAL, MESSAGE, node_highlight, 13)   \
+    X(a, STATIC, SINGULAR, BYTES, calibration_data, 14)   \
+    X(a, STATIC, OPTIONAL, MESSAGE, map_data, 15)         \
+    X(a, STATIC, SINGULAR, UENUM, compass_mode, 16)       \
+    X(a, STATIC, SINGULAR, UINT32, screen_rgb_color, 17)  \
+    X(a, STATIC, SINGULAR, BOOL, is_clockface_analog, 18) \
+    X(a, STATIC, SINGULAR, UENUM, gps_format, 19)
 #define meshtastic_DeviceUIConfig_CALLBACK NULL
 #define meshtastic_DeviceUIConfig_DEFAULT NULL
 #define meshtastic_DeviceUIConfig_node_filter_MSGTYPE meshtastic_NodeFilter
 #define meshtastic_DeviceUIConfig_node_highlight_MSGTYPE meshtastic_NodeHighlight
 #define meshtastic_DeviceUIConfig_map_data_MSGTYPE meshtastic_Map
 
-#define meshtastic_NodeFilter_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, BOOL,     unknown_switch,    1) \
-X(a, STATIC,   SINGULAR, BOOL,     offline_switch,    2) \
-X(a, STATIC,   SINGULAR, BOOL,     public_key_switch,   3) \
-X(a, STATIC,   SINGULAR, INT32,    hops_away,         4) \
-X(a, STATIC,   SINGULAR, BOOL,     position_switch,   5) \
-X(a, STATIC,   SINGULAR, STRING,   node_name,         6) \
-X(a, STATIC,   SINGULAR, INT32,    channel,           7)
+#define meshtastic_NodeFilter_FIELDLIST(X, a)          \
+    X(a, STATIC, SINGULAR, BOOL, unknown_switch, 1)    \
+    X(a, STATIC, SINGULAR, BOOL, offline_switch, 2)    \
+    X(a, STATIC, SINGULAR, BOOL, public_key_switch, 3) \
+    X(a, STATIC, SINGULAR, INT32, hops_away, 4)        \
+    X(a, STATIC, SINGULAR, BOOL, position_switch, 5)   \
+    X(a, STATIC, SINGULAR, STRING, node_name, 6)       \
+    X(a, STATIC, SINGULAR, INT32, channel, 7)
 #define meshtastic_NodeFilter_CALLBACK NULL
 #define meshtastic_NodeFilter_DEFAULT NULL
 
-#define meshtastic_NodeHighlight_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, BOOL,     chat_switch,       1) \
-X(a, STATIC,   SINGULAR, BOOL,     position_switch,   2) \
-X(a, STATIC,   SINGULAR, BOOL,     telemetry_switch,   3) \
-X(a, STATIC,   SINGULAR, BOOL,     iaq_switch,        4) \
-X(a, STATIC,   SINGULAR, STRING,   node_name,         5)
+#define meshtastic_NodeHighlight_FIELDLIST(X, a)      \
+    X(a, STATIC, SINGULAR, BOOL, chat_switch, 1)      \
+    X(a, STATIC, SINGULAR, BOOL, position_switch, 2)  \
+    X(a, STATIC, SINGULAR, BOOL, telemetry_switch, 3) \
+    X(a, STATIC, SINGULAR, BOOL, iaq_switch, 4)       \
+    X(a, STATIC, SINGULAR, STRING, node_name, 5)
 #define meshtastic_NodeHighlight_CALLBACK NULL
 #define meshtastic_NodeHighlight_DEFAULT NULL
 
-#define meshtastic_GeoPoint_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, INT32,    zoom,              1) \
-X(a, STATIC,   SINGULAR, INT32,    latitude,          2) \
-X(a, STATIC,   SINGULAR, INT32,    longitude,         3)
+#define meshtastic_GeoPoint_FIELDLIST(X, a)    \
+    X(a, STATIC, SINGULAR, INT32, zoom, 1)     \
+    X(a, STATIC, SINGULAR, INT32, latitude, 2) \
+    X(a, STATIC, SINGULAR, INT32, longitude, 3)
 #define meshtastic_GeoPoint_CALLBACK NULL
 #define meshtastic_GeoPoint_DEFAULT NULL
 
-#define meshtastic_Map_FIELDLIST(X, a) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  home,              1) \
-X(a, STATIC,   SINGULAR, STRING,   style,             2) \
-X(a, STATIC,   SINGULAR, BOOL,     follow_gps,        3)
+#define meshtastic_Map_FIELDLIST(X, a)       \
+    X(a, STATIC, OPTIONAL, MESSAGE, home, 1) \
+    X(a, STATIC, SINGULAR, STRING, style, 2) \
+    X(a, STATIC, SINGULAR, BOOL, follow_gps, 3)
 #define meshtastic_Map_CALLBACK NULL
 #define meshtastic_Map_DEFAULT NULL
 #define meshtastic_Map_home_MSGTYPE meshtastic_GeoPoint
 
-extern const pb_msgdesc_t meshtastic_DeviceUIConfig_msg;
-extern const pb_msgdesc_t meshtastic_NodeFilter_msg;
-extern const pb_msgdesc_t meshtastic_NodeHighlight_msg;
-extern const pb_msgdesc_t meshtastic_GeoPoint_msg;
-extern const pb_msgdesc_t meshtastic_Map_msg;
+    extern const pb_msgdesc_t meshtastic_DeviceUIConfig_msg;
+    extern const pb_msgdesc_t meshtastic_NodeFilter_msg;
+    extern const pb_msgdesc_t meshtastic_NodeHighlight_msg;
+    extern const pb_msgdesc_t meshtastic_GeoPoint_msg;
+    extern const pb_msgdesc_t meshtastic_Map_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_DeviceUIConfig_fields &meshtastic_DeviceUIConfig_msg
@@ -355,11 +389,11 @@ extern const pb_msgdesc_t meshtastic_Map_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define MESHTASTIC_MESHTASTIC_DEVICE_UI_PB_H_MAX_SIZE meshtastic_DeviceUIConfig_size
-#define meshtastic_DeviceUIConfig_size           204
-#define meshtastic_GeoPoint_size                 33
-#define meshtastic_Map_size                      58
-#define meshtastic_NodeFilter_size               47
-#define meshtastic_NodeHighlight_size            25
+#define meshtastic_DeviceUIConfig_size 204
+#define meshtastic_GeoPoint_size 33
+#define meshtastic_Map_size 58
+#define meshtastic_NodeFilter_size 47
+#define meshtastic_NodeHighlight_size 25
 
 #ifdef __cplusplus
 } /* extern "C" */

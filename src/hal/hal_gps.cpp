@@ -4,9 +4,10 @@
 #include "board/TLoRaPagerTypes.h"
 #include "pins_arduino.h"
 
-namespace hal {
+namespace hal
+{
 
-void HalGps::begin(TLoRaPagerBoard &board)
+void HalGps::begin(TLoRaPagerBoard& board)
 {
     board_ = &board;
 }
@@ -18,7 +19,8 @@ bool HalGps::isReady() const
 
 bool HalGps::init()
 {
-    if (board_ == nullptr) {
+    if (board_ == nullptr)
+    {
         return false;
     }
     return board_->initGPS();
@@ -26,7 +28,8 @@ bool HalGps::init()
 
 void HalGps::powerOn()
 {
-    if (board_ == nullptr) {
+    if (board_ == nullptr)
+    {
         return;
     }
     board_->powerControl(POWER_GPS, true);
@@ -35,7 +38,8 @@ void HalGps::powerOn()
 
 void HalGps::powerOff()
 {
-    if (board_ == nullptr) {
+    if (board_ == nullptr)
+    {
         return;
     }
     Serial1.end();
@@ -45,7 +49,8 @@ void HalGps::powerOff()
 
 uint32_t HalGps::loop()
 {
-    if (board_ == nullptr) {
+    if (board_ == nullptr)
+    {
         return 0;
     }
     return board_->gps.loop();
@@ -73,10 +78,11 @@ uint8_t HalGps::satellites() const
 
 bool HalGps::syncTime(uint32_t gps_task_interval_ms)
 {
-    if (board_ == nullptr) {
+    if (board_ == nullptr)
+    {
         return false;
     }
     return board_->syncTimeFromGPS(gps_task_interval_ms);
 }
 
-}  // namespace hal
+} // namespace hal

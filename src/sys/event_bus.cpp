@@ -5,7 +5,8 @@
 
 #include "event_bus.h"
 
-namespace sys {
+namespace sys
+{
 
 // Define static instance here (not in header to avoid multiple definition)
 EventBus EventBus::instance_;

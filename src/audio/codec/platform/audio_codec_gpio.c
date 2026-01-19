@@ -3,10 +3,10 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "../interface/audio_codec_ctrl_if.h"
 #include "../include/esp_codec_dev_defaults.h"
-#include "esp_err.h"
+#include "../interface/audio_codec_ctrl_if.h"
 #include "driver/gpio.h"
+#include "esp_err.h"
 #include "esp_log.h"
 #include <string.h>
 
@@ -14,7 +14,8 @@
 
 static int _gpio_cfg(int16_t gpio, audio_gpio_dir_t dir, audio_gpio_mode_t mode)
 {
-    if (gpio == -1) {
+    if (gpio == -1)
+    {
         return ESP_CODEC_DEV_INVALID_ARG;
     }
     gpio_config_t io_conf;
@@ -29,25 +30,28 @@ static int _gpio_cfg(int16_t gpio, audio_gpio_dir_t dir, audio_gpio_mode_t mode)
 }
 static int _gpio_set(int16_t gpio, bool high)
 {
-    if (gpio == -1) {
+    if (gpio == -1)
+    {
         return ESP_CODEC_DEV_INVALID_ARG;
     }
-    int ret = gpio_set_level((gpio_num_t) gpio, high ? 1 : 0);
+    int ret = gpio_set_level((gpio_num_t)gpio, high ? 1 : 0);
     return ret == 0 ? ESP_CODEC_DEV_OK : ESP_CODEC_DEV_DRV_ERR;
 }
 
 static bool _gpio_get(int16_t gpio)
 {
-    if (gpio == -1) {
+    if (gpio == -1)
+    {
         return false;
     }
-    return (bool) gpio_get_level((gpio_num_t) gpio);
+    return (bool)gpio_get_level((gpio_num_t)gpio);
 }
 
-const audio_codec_gpio_if_t *audio_codec_new_gpio(void)
+const audio_codec_gpio_if_t* audio_codec_new_gpio(void)
 {
-    audio_codec_gpio_if_t *gpio_if = (audio_codec_gpio_if_t *) calloc(1, sizeof(audio_codec_gpio_if_t));
-    if (gpio_if == NULL) {
+    audio_codec_gpio_if_t* gpio_if = (audio_codec_gpio_if_t*)calloc(1, sizeof(audio_codec_gpio_if_t));
+    if (gpio_if == NULL)
+    {
         ESP_LOGE(TAG, "No memory for instance");
         return NULL;
     }

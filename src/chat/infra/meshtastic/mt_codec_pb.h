@@ -1,30 +1,32 @@
 /**
  * @file mt_codec_pb.h
  * @brief Meshtastic protocol codec using protobuf (nanopb)
- * 
+ *
  * Uses the actual Meshtastic protobuf definitions from M5Tab5-GPS
  */
 
 #pragma once
 
+#include "../../domain/chat_types.h"
 #include <Arduino.h>
 #include <stdint.h>
 #include <string>
-#include "../../domain/chat_types.h"
 
 // Include generated nanopb headers from M5Tab5-GPS
 // Note: pb.h must be included first, and paths are relative to generated/ directory
-#include "pb.h"
-#include "pb_encode.h"
-#include "pb_decode.h"
+#include "meshtastic/channel.pb.h"
 #include "meshtastic/mesh.pb.h"
 #include "meshtastic/portnums.pb.h"
-#include "meshtastic/channel.pb.h"
+#include "pb.h"
+#include "pb_decode.h"
+#include "pb_encode.h"
 
 #define MESHTASTIC_PROTOBUF_AVAILABLE 1
 
-namespace chat {
-namespace meshtastic {
+namespace chat
+{
+namespace meshtastic
+{
 
 /**
  * @brief Encode text message to Meshtastic Data payload using protobuf
@@ -36,9 +38,9 @@ namespace meshtastic {
  * @param out_size Output buffer size (updated with actual size)
  * @return true if successful
  */
-bool encodeTextMessage(ChannelId channel, const std::string& text, 
-                      NodeId from_node, uint32_t packet_id,
-                      uint8_t* out_buffer, size_t* out_size);
+bool encodeTextMessage(ChannelId channel, const std::string& text,
+                       NodeId from_node, uint32_t packet_id,
+                       uint8_t* out_buffer, size_t* out_size);
 
 /**
  * @brief Decode Meshtastic Data payload to text message using protobuf

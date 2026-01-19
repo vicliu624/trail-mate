@@ -7,23 +7,31 @@
 #include <Arduino.h>
 #include <cstring>
 
-namespace chat {
+namespace chat
+{
 
-namespace {
+namespace
+{
 constexpr uint16_t kMagic = 0x434D; // "CM"
 constexpr uint8_t kVersion = 1;
-constexpr size_t kHeadCopies = 2;   // A/B
+constexpr size_t kHeadCopies = 2; // A/B
 
-const char* indexPath(ChannelId ch) {
-    switch (ch) {
-        case ChannelId::PRIMARY: return "/chat/idx_ch0.bin";
-        case ChannelId::SECONDARY: return "/chat/idx_ch1.bin";
-        default: return "/chat/idx_other.bin";
+const char* indexPath(ChannelId ch)
+{
+    switch (ch)
+    {
+    case ChannelId::PRIMARY:
+        return "/chat/idx_ch0.bin";
+    case ChannelId::SECONDARY:
+        return "/chat/idx_ch1.bin";
+    default:
+        return "/chat/idx_other.bin";
     }
 }
 } // namespace
 
-bool LogStore::begin(fs::FS& fs) {
+bool LogStore::begin(fs::FS& fs)
+{
     fs_ = &fs;
     if (!ensureDir()) return false;
 
@@ -32,7 +40,8 @@ bool LogStore::begin(fs::FS& fs) {
     return true;
 }
 
-void LogStore::append(const ChatMessage& msg) {
+void LogStore::append(const ChatMessage& msg)
+{
     if (!fs_) return;
     File log = fs_->open(kLogFile, FILE_APPEND);
     if (!log) return;
@@ -49,11 +58,13 @@ void LogStore::append(const ChatMessage& msg) {
     uint32_t offset = log.size();
 
     log.write(reinterpret_cast<uint8_t*>(&hdr), sizeof(hdr));
-    if (hdr.payload_len > 0) {
+    if (hdr.payload_len > 0)
+    {
         log.write(reinterpret_cast<const uint8_t*>(msg.text.data()), hdr.payload_len);
     }
     uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
-    if (hdr.payload_len > 0) {
+    if (hdr.payload_len > 0)
+    {
         crc = crc32(reinterpret_cast<const uint8_t*>(msg.text.data()), hdr.payload_len) ^ crc;
     }
     log.write(reinterpret_cast<uint8_t*>(&crc), sizeof(crc));
@@ -78,7 +89,8 @@ void LogStore::append(const ChatMessage& msg) {
     persistHead(msg.channel);
 }
 
-std::vector<ChatMessage> LogStore::loadRecent(ChannelId channel, size_t n) {
+std::vector<ChatMessage> LogStore::loadRecent(ChannelId channel, size_t n)
+{
     std::vector<ChatMessage> out;
     if (!fs_) return out;
     const ChannelIndex& cx = idx(channel);
@@ -90,7 +102,8 @@ std::vector<ChatMessage> LogStore::loadRecent(ChannelId channel, size_t n) {
     File log = fs_->open(kLogFile, FILE_READ);
     if (!log) return out;
 
-    for (size_t i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i)
+    {
         int idx_pos = (cx.head.next + kSlotsPerChannel - 1 - i) % kSlotsPerChannel;
         const IndexSlot& slot = cx.slots[idx_pos];
         if (slot.len == 0) continue;
@@ -100,13 +113,15 @@ std::vector<ChatMessage> LogStore::loadRecent(ChannelId channel, size_t n) {
         if (hdr.magic != kMagic || hdr.ver != kVersion) continue;
         std::string payload;
         payload.resize(hdr.payload_len);
-        if (hdr.payload_len > 0) {
+        if (hdr.payload_len > 0)
+        {
             if (log.read(reinterpret_cast<uint8_t*>(&payload[0]), hdr.payload_len) != hdr.payload_len) continue;
         }
         uint32_t crc_disk = 0;
         log.read(reinterpret_cast<uint8_t*>(&crc_disk), sizeof(crc_disk));
         uint32_t crc_calc = crc32(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
-        if (hdr.payload_len > 0) {
+        if (hdr.payload_len > 0)
+        {
             crc_calc = crc32(reinterpret_cast<const uint8_t*>(payload.data()), hdr.payload_len) ^ crc_calc;
         }
         if (crc_calc != crc_disk) continue;
@@ -123,39 +138,47 @@ std::vector<ChatMessage> LogStore::loadRecent(ChannelId channel, size_t n) {
     return out;
 }
 
-void LogStore::setUnread(ChannelId, int) {
+void LogStore::setUnread(ChannelId, int)
+{
     // Unused in this store; ChatModel tracks unread.
 }
 
-int LogStore::getUnread(ChannelId) const {
+int LogStore::getUnread(ChannelId) const
+{
     return 0;
 }
 
-void LogStore::clearChannel(ChannelId channel) {
+void LogStore::clearChannel(ChannelId channel)
+{
     // Clear index slots for channel; keep log intact to avoid erase.
     ChannelIndex& cx = idx(channel);
     cx.head = {};
     persistHead(channel);
     // Zero slots file content
     File idx_file = fs_->open(indexPath(channel), FILE_WRITE);
-    if (idx_file) {
+    if (idx_file)
+    {
         IndexSlot zero{};
         idx_file.seek(sizeof(IndexHead) * kHeadCopies, SeekSet);
-        for (size_t i = 0; i < kSlotsPerChannel; ++i) {
+        for (size_t i = 0; i < kSlotsPerChannel; ++i)
+        {
             idx_file.write(reinterpret_cast<uint8_t*>(&zero), sizeof(IndexSlot));
         }
         idx_file.close();
     }
 }
 
-bool LogStore::loadIndex(ChannelId ch) {
+bool LogStore::loadIndex(ChannelId ch)
+{
     if (!fs_) return false;
     const char* path = indexPath(ch);
     File f = fs_->open(path, FILE_READ);
-    if (!f) {
+    if (!f)
+    {
         // Create empty index file
         File nf = fs_->open(path, FILE_WRITE);
-        if (nf) {
+        if (nf)
+        {
             ChannelIndex empty{};
             nf.write(reinterpret_cast<uint8_t*>(&empty), sizeof(empty));
             nf.close();
@@ -168,15 +191,19 @@ bool LogStore::loadIndex(ChannelId ch) {
     f.close();
 
     // Validate A/B head
-    auto head_crc_ok = [](const IndexHead& h) {
+    auto head_crc_ok = [](const IndexHead& h)
+    {
         uint32_t crc_calc = h.seq ^ h.next ^ h.count ^ h.last_offset;
         return crc_calc == h.crc;
     };
     const IndexHead* heads = reinterpret_cast<IndexHead*>(&tmp);
     IndexHead chosen = heads[0];
-    if (head_crc_ok(heads[1]) && heads[1].seq >= chosen.seq) {
+    if (head_crc_ok(heads[1]) && heads[1].seq >= chosen.seq)
+    {
         chosen = heads[1];
-    } else if (!head_crc_ok(chosen) && head_crc_ok(heads[1])) {
+    }
+    else if (!head_crc_ok(chosen) && head_crc_ok(heads[1]))
+    {
         chosen = heads[1];
     }
     indexes_[static_cast<int>(ch)].head = chosen;
@@ -185,7 +212,8 @@ bool LogStore::loadIndex(ChannelId ch) {
     return true;
 }
 
-void LogStore::persistHead(ChannelId ch) {
+void LogStore::persistHead(ChannelId ch)
+{
     if (!fs_) return;
     const char* path = indexPath(ch);
     File f = fs_->open(path, FILE_WRITE);
@@ -199,13 +227,15 @@ void LogStore::persistHead(ChannelId ch) {
     f.close();
 }
 
-void LogStore::persistSlot(ChannelId ch, uint16_t idx_slot) {
+void LogStore::persistSlot(ChannelId ch, uint16_t idx_slot)
+{
     if (!fs_) return;
     const char* path = indexPath(ch);
     File f = fs_->open(path, FILE_READ);
     if (!f) return;
     File f2 = fs_->open(path, FILE_WRITE);
-    if (!f2) {
+    if (!f2)
+    {
         f.close();
         return;
     }
@@ -218,18 +248,23 @@ void LogStore::persistSlot(ChannelId ch, uint16_t idx_slot) {
     f2.close();
 }
 
-bool LogStore::ensureDir() {
-    if (!fs_->exists(kDir)) {
+bool LogStore::ensureDir()
+{
+    if (!fs_->exists(kDir))
+    {
         return fs_->mkdir(kDir);
     }
     return true;
 }
 
-uint32_t LogStore::crc32(const uint8_t* data, size_t len) const {
+uint32_t LogStore::crc32(const uint8_t* data, size_t len) const
+{
     uint32_t crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i)
+    {
         crc ^= data[i];
-        for (int j = 0; j < 8; ++j) {
+        for (int j = 0; j < 8; ++j)
+        {
             if (crc & 1)
                 crc = (crc >> 1) ^ 0xEDB88320;
             else
@@ -239,11 +274,14 @@ uint32_t LogStore::crc32(const uint8_t* data, size_t len) const {
     return ~crc;
 }
 
-uint16_t LogStore::crc16(const uint8_t* data, size_t len) const {
+uint16_t LogStore::crc16(const uint8_t* data, size_t len) const
+{
     uint16_t crc = 0xFFFF;
-    for (size_t i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i)
+    {
         crc ^= data[i];
-        for (int j = 0; j < 8; ++j) {
+        for (int j = 0; j < 8; ++j)
+        {
             if (crc & 1)
                 crc = (crc >> 1) ^ 0xA001;
             else
@@ -253,11 +291,13 @@ uint16_t LogStore::crc16(const uint8_t* data, size_t len) const {
     return crc;
 }
 
-LogStore::ChannelIndex& LogStore::idx(ChannelId ch) {
+LogStore::ChannelIndex& LogStore::idx(ChannelId ch)
+{
     return indexes_[static_cast<int>(ch)];
 }
 
-const LogStore::ChannelIndex& LogStore::idx(ChannelId ch) const {
+const LogStore::ChannelIndex& LogStore::idx(ChannelId ch) const
+{
     return indexes_[static_cast<int>(ch)];
 }
 

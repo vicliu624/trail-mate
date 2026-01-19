@@ -1,6 +1,7 @@
 #include "display/DisplayConfig.h"
 
-namespace display {
+namespace display
+{
 
 Config get_config()
 {

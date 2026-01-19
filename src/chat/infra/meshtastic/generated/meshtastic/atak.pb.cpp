@@ -8,24 +8,12 @@
 
 PB_BIND(meshtastic_TAKPacket, meshtastic_TAKPacket, 2)
 
-
 PB_BIND(meshtastic_GeoChat, meshtastic_GeoChat, 2)
-
 
 PB_BIND(meshtastic_Group, meshtastic_Group, AUTO)
 
-
 PB_BIND(meshtastic_Status, meshtastic_Status, AUTO)
-
 
 PB_BIND(meshtastic_Contact, meshtastic_Contact, AUTO)
 
-
 PB_BIND(meshtastic_PLI, meshtastic_PLI, AUTO)
-
-
-
-
-
-
-

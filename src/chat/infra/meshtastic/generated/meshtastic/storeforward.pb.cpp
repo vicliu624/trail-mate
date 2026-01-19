@@ -8,16 +8,8 @@
 
 PB_BIND(meshtastic_StoreAndForward, meshtastic_StoreAndForward, AUTO)
 
-
 PB_BIND(meshtastic_StoreAndForward_Statistics, meshtastic_StoreAndForward_Statistics, AUTO)
-
 
 PB_BIND(meshtastic_StoreAndForward_History, meshtastic_StoreAndForward_History, AUTO)
 
-
 PB_BIND(meshtastic_StoreAndForward_Heartbeat, meshtastic_StoreAndForward_Heartbeat, AUTO)
-
-
-
-
-

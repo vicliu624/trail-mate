@@ -6,4 +6,3 @@
 #pragma once
 
 #define CONFIG_CODEC_ES8311_SUPPORT
-

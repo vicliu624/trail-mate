@@ -3,13 +3,13 @@
 
 #ifndef PB_MESHTASTIC_MESHTASTIC_ADMIN_PB_H_INCLUDED
 #define PB_MESHTASTIC_MESHTASTIC_ADMIN_PB_H_INCLUDED
-#include <pb.h>
 #include "meshtastic/channel.pb.h"
 #include "meshtastic/config.pb.h"
 #include "meshtastic/connection_status.pb.h"
 #include "meshtastic/device_ui.pb.h"
 #include "meshtastic/mesh.pb.h"
 #include "meshtastic/module_config.pb.h"
+#include <pb.h>
 
 #if PB_PROTO_HEADER_VERSION != 40
 #error Regenerate this file with the current version of nanopb generator.
@@ -17,7 +17,8 @@
 
 /* Enum definitions */
 /* TODO: REPLACE */
-typedef enum _meshtastic_AdminMessage_ConfigType {
+typedef enum _meshtastic_AdminMessage_ConfigType
+{
     /* TODO: REPLACE */
     meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG = 0,
     /* TODO: REPLACE */
@@ -41,7 +42,8 @@ typedef enum _meshtastic_AdminMessage_ConfigType {
 } meshtastic_AdminMessage_ConfigType;
 
 /* TODO: REPLACE */
-typedef enum _meshtastic_AdminMessage_ModuleConfigType {
+typedef enum _meshtastic_AdminMessage_ModuleConfigType
+{
     /* TODO: REPLACE */
     meshtastic_AdminMessage_ModuleConfigType_MQTT_CONFIG = 0,
     /* TODO: REPLACE */
@@ -70,7 +72,8 @@ typedef enum _meshtastic_AdminMessage_ModuleConfigType {
     meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG = 12
 } meshtastic_AdminMessage_ModuleConfigType;
 
-typedef enum _meshtastic_AdminMessage_BackupLocation {
+typedef enum _meshtastic_AdminMessage_BackupLocation
+{
     /* Backup to the internal flash */
     meshtastic_AdminMessage_BackupLocation_FLASH = 0,
     /* Backup to the SD card */
@@ -78,7 +81,8 @@ typedef enum _meshtastic_AdminMessage_BackupLocation {
 } meshtastic_AdminMessage_BackupLocation;
 
 /* Three stages of this request. */
-typedef enum _meshtastic_KeyVerificationAdmin_MessageType {
+typedef enum _meshtastic_KeyVerificationAdmin_MessageType
+{
     /* This is the first stage, where a client initiates */
     meshtastic_KeyVerificationAdmin_MessageType_INITIATE_VERIFICATION = 0,
     /* After the nonce has been returned over the mesh, the client prompts for the security number
@@ -92,7 +96,8 @@ typedef enum _meshtastic_KeyVerificationAdmin_MessageType {
 
 /* Struct definitions */
 /* Input event message to be sent to the node. */
-typedef struct _meshtastic_AdminMessage_InputEvent {
+typedef struct _meshtastic_AdminMessage_InputEvent
+{
     /* The input event code */
     uint8_t event_code;
     /* Keyboard character code */
@@ -104,7 +109,8 @@ typedef struct _meshtastic_AdminMessage_InputEvent {
 } meshtastic_AdminMessage_InputEvent;
 
 /* Parameters for setting up Meshtastic for ameteur radio usage */
-typedef struct _meshtastic_HamParameters {
+typedef struct _meshtastic_HamParameters
+{
     /* Amateur radio call sign, eg. KD2ABC */
     char call_sign[8];
     /* Transmit power in dBm at the LoRA transceiver, not including any amplification */
@@ -118,13 +124,15 @@ typedef struct _meshtastic_HamParameters {
 } meshtastic_HamParameters;
 
 /* Response envelope for node_remote_hardware_pins */
-typedef struct _meshtastic_NodeRemoteHardwarePinsResponse {
+typedef struct _meshtastic_NodeRemoteHardwarePinsResponse
+{
     /* Nodes and their respective remote hardware GPIO pins */
     pb_size_t node_remote_hardware_pins_count;
     meshtastic_NodeRemoteHardwarePin node_remote_hardware_pins[16];
 } meshtastic_NodeRemoteHardwarePinsResponse;
 
-typedef struct _meshtastic_SharedContact {
+typedef struct _meshtastic_SharedContact
+{
     /* The node number of the contact */
     uint32_t node_num;
     /* The User of the contact */
@@ -137,7 +145,8 @@ typedef struct _meshtastic_SharedContact {
 } meshtastic_SharedContact;
 
 /* This message is used by a client to initiate or complete a key verification */
-typedef struct _meshtastic_KeyVerificationAdmin {
+typedef struct _meshtastic_KeyVerificationAdmin
+{
     meshtastic_KeyVerificationAdmin_MessageType message_type;
     /* The nodenum we're requesting */
     uint32_t remote_nodenum;
@@ -152,9 +161,11 @@ typedef PB_BYTES_ARRAY_T(8) meshtastic_AdminMessage_session_passkey_t;
 /* This message is handled by the Admin module and is responsible for all settings/channel read/write operations.
  This message is used to do settings operations to both remote AND local nodes.
  (Prior to 1.2 these operations were done via special ToRadio operations) */
-typedef struct _meshtastic_AdminMessage {
+typedef struct _meshtastic_AdminMessage
+{
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         /* Send the specified channel in the response to this message
      NOTE: This field is sent with the channel index + 1 (to ensure we never try to send 'zero' - which protobufs treats as not present) */
         uint32_t get_channel_request;
@@ -282,27 +293,27 @@ typedef struct _meshtastic_AdminMessage {
     meshtastic_AdminMessage_session_passkey_t session_passkey;
 } meshtastic_AdminMessage;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_AdminMessage_ConfigType_MIN meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG
 #define _meshtastic_AdminMessage_ConfigType_MAX meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG
-#define _meshtastic_AdminMessage_ConfigType_ARRAYSIZE ((meshtastic_AdminMessage_ConfigType)(meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG+1))
+#define _meshtastic_AdminMessage_ConfigType_ARRAYSIZE ((meshtastic_AdminMessage_ConfigType)(meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG + 1))
 
 #define _meshtastic_AdminMessage_ModuleConfigType_MIN meshtastic_AdminMessage_ModuleConfigType_MQTT_CONFIG
 #define _meshtastic_AdminMessage_ModuleConfigType_MAX meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG
-#define _meshtastic_AdminMessage_ModuleConfigType_ARRAYSIZE ((meshtastic_AdminMessage_ModuleConfigType)(meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG+1))
+#define _meshtastic_AdminMessage_ModuleConfigType_ARRAYSIZE ((meshtastic_AdminMessage_ModuleConfigType)(meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG + 1))
 
 #define _meshtastic_AdminMessage_BackupLocation_MIN meshtastic_AdminMessage_BackupLocation_FLASH
 #define _meshtastic_AdminMessage_BackupLocation_MAX meshtastic_AdminMessage_BackupLocation_SD
-#define _meshtastic_AdminMessage_BackupLocation_ARRAYSIZE ((meshtastic_AdminMessage_BackupLocation)(meshtastic_AdminMessage_BackupLocation_SD+1))
+#define _meshtastic_AdminMessage_BackupLocation_ARRAYSIZE ((meshtastic_AdminMessage_BackupLocation)(meshtastic_AdminMessage_BackupLocation_SD + 1))
 
 #define _meshtastic_KeyVerificationAdmin_MessageType_MIN meshtastic_KeyVerificationAdmin_MessageType_INITIATE_VERIFICATION
 #define _meshtastic_KeyVerificationAdmin_MessageType_MAX meshtastic_KeyVerificationAdmin_MessageType_DO_NOT_VERIFY
-#define _meshtastic_KeyVerificationAdmin_MessageType_ARRAYSIZE ((meshtastic_KeyVerificationAdmin_MessageType)(meshtastic_KeyVerificationAdmin_MessageType_DO_NOT_VERIFY+1))
+#define _meshtastic_KeyVerificationAdmin_MessageType_ARRAYSIZE ((meshtastic_KeyVerificationAdmin_MessageType)(meshtastic_KeyVerificationAdmin_MessageType_DO_NOT_VERIFY + 1))
 
 #define meshtastic_AdminMessage_payload_variant_get_config_request_ENUMTYPE meshtastic_AdminMessage_ConfigType
 #define meshtastic_AdminMessage_payload_variant_get_module_config_request_ENUMTYPE meshtastic_AdminMessage_ModuleConfigType
@@ -310,39 +321,76 @@ extern "C" {
 #define meshtastic_AdminMessage_payload_variant_restore_preferences_ENUMTYPE meshtastic_AdminMessage_BackupLocation
 #define meshtastic_AdminMessage_payload_variant_remove_backup_preferences_ENUMTYPE meshtastic_AdminMessage_BackupLocation
 
-
-
-
-
 #define meshtastic_KeyVerificationAdmin_message_type_ENUMTYPE meshtastic_KeyVerificationAdmin_MessageType
 
-
 /* Initializer values for message structs */
-#define meshtastic_AdminMessage_init_default     {0, {0}, {0, {0}}}
-#define meshtastic_AdminMessage_InputEvent_init_default {0, 0, 0, 0}
-#define meshtastic_HamParameters_init_default    {"", 0, 0, ""}
-#define meshtastic_NodeRemoteHardwarePinsResponse_init_default {0, {meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default}}
-#define meshtastic_SharedContact_init_default    {0, false, meshtastic_User_init_default, 0, 0}
-#define meshtastic_KeyVerificationAdmin_init_default {_meshtastic_KeyVerificationAdmin_MessageType_MIN, 0, 0, false, 0}
-#define meshtastic_AdminMessage_init_zero        {0, {0}, {0, {0}}}
-#define meshtastic_AdminMessage_InputEvent_init_zero {0, 0, 0, 0}
-#define meshtastic_HamParameters_init_zero       {"", 0, 0, ""}
-#define meshtastic_NodeRemoteHardwarePinsResponse_init_zero {0, {meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero}}
-#define meshtastic_SharedContact_init_zero       {0, false, meshtastic_User_init_zero, 0, 0}
-#define meshtastic_KeyVerificationAdmin_init_zero {_meshtastic_KeyVerificationAdmin_MessageType_MIN, 0, 0, false, 0}
+#define meshtastic_AdminMessage_init_default \
+    {                                        \
+        0, {0},                              \
+        {                                    \
+            0, { 0 }                         \
+        }                                    \
+    }
+#define meshtastic_AdminMessage_InputEvent_init_default \
+    {                                                   \
+        0, 0, 0, 0                                      \
+    }
+#define meshtastic_HamParameters_init_default \
+    {                                         \
+        "", 0, 0, ""                          \
+    }
+#define meshtastic_NodeRemoteHardwarePinsResponse_init_default                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+        0, { meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default, meshtastic_NodeRemoteHardwarePin_init_default } \
+    }
+#define meshtastic_SharedContact_init_default        \
+    {                                                \
+        0, false, meshtastic_User_init_default, 0, 0 \
+    }
+#define meshtastic_KeyVerificationAdmin_init_default                     \
+    {                                                                    \
+        _meshtastic_KeyVerificationAdmin_MessageType_MIN, 0, 0, false, 0 \
+    }
+#define meshtastic_AdminMessage_init_zero \
+    {                                     \
+        0, {0},                           \
+        {                                 \
+            0, { 0 }                      \
+        }                                 \
+    }
+#define meshtastic_AdminMessage_InputEvent_init_zero \
+    {                                                \
+        0, 0, 0, 0                                   \
+    }
+#define meshtastic_HamParameters_init_zero \
+    {                                      \
+        "", 0, 0, ""                       \
+    }
+#define meshtastic_NodeRemoteHardwarePinsResponse_init_zero                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+        0, { meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero, meshtastic_NodeRemoteHardwarePin_init_zero } \
+    }
+#define meshtastic_SharedContact_init_zero        \
+    {                                             \
+        0, false, meshtastic_User_init_zero, 0, 0 \
+    }
+#define meshtastic_KeyVerificationAdmin_init_zero                        \
+    {                                                                    \
+        _meshtastic_KeyVerificationAdmin_MessageType_MIN, 0, 0, false, 0 \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
 #define meshtastic_AdminMessage_InputEvent_event_code_tag 1
 #define meshtastic_AdminMessage_InputEvent_kb_char_tag 2
 #define meshtastic_AdminMessage_InputEvent_touch_x_tag 3
 #define meshtastic_AdminMessage_InputEvent_touch_y_tag 4
-#define meshtastic_HamParameters_call_sign_tag   1
-#define meshtastic_HamParameters_tx_power_tag    2
-#define meshtastic_HamParameters_frequency_tag   3
-#define meshtastic_HamParameters_short_name_tag  4
+#define meshtastic_HamParameters_call_sign_tag 1
+#define meshtastic_HamParameters_tx_power_tag 2
+#define meshtastic_HamParameters_frequency_tag 3
+#define meshtastic_HamParameters_short_name_tag 4
 #define meshtastic_NodeRemoteHardwarePinsResponse_node_remote_hardware_pins_tag 1
-#define meshtastic_SharedContact_node_num_tag    1
-#define meshtastic_SharedContact_user_tag        2
+#define meshtastic_SharedContact_node_num_tag 1
+#define meshtastic_SharedContact_user_tag 2
 #define meshtastic_SharedContact_should_ignore_tag 3
 #define meshtastic_SharedContact_manually_verified_tag 4
 #define meshtastic_KeyVerificationAdmin_message_type_tag 1
@@ -370,14 +418,14 @@ extern "C" {
 #define meshtastic_AdminMessage_get_node_remote_hardware_pins_response_tag 20
 #define meshtastic_AdminMessage_enter_dfu_mode_request_tag 21
 #define meshtastic_AdminMessage_delete_file_request_tag 22
-#define meshtastic_AdminMessage_set_scale_tag    23
+#define meshtastic_AdminMessage_set_scale_tag 23
 #define meshtastic_AdminMessage_backup_preferences_tag 24
 #define meshtastic_AdminMessage_restore_preferences_tag 25
 #define meshtastic_AdminMessage_remove_backup_preferences_tag 26
 #define meshtastic_AdminMessage_send_input_event_tag 27
-#define meshtastic_AdminMessage_set_owner_tag    32
-#define meshtastic_AdminMessage_set_channel_tag  33
-#define meshtastic_AdminMessage_set_config_tag   34
+#define meshtastic_AdminMessage_set_owner_tag 32
+#define meshtastic_AdminMessage_set_channel_tag 33
+#define meshtastic_AdminMessage_set_config_tag 34
 #define meshtastic_AdminMessage_set_module_config_tag 35
 #define meshtastic_AdminMessage_set_canned_message_module_messages_tag 36
 #define meshtastic_AdminMessage_set_ringtone_message_tag 37
@@ -394,7 +442,7 @@ extern "C" {
 #define meshtastic_AdminMessage_remove_ignored_node_tag 48
 #define meshtastic_AdminMessage_begin_edit_settings_tag 64
 #define meshtastic_AdminMessage_commit_edit_settings_tag 65
-#define meshtastic_AdminMessage_add_contact_tag  66
+#define meshtastic_AdminMessage_add_contact_tag 66
 #define meshtastic_AdminMessage_key_verification_tag 67
 #define meshtastic_AdminMessage_factory_reset_device_tag 94
 #define meshtastic_AdminMessage_reboot_ota_seconds_tag 95
@@ -406,62 +454,62 @@ extern "C" {
 #define meshtastic_AdminMessage_session_passkey_tag 101
 
 /* Struct field encoding specification for nanopb */
-#define meshtastic_AdminMessage_FIELDLIST(X, a) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,get_channel_request,get_channel_request),   1) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_channel_response,get_channel_response),   2) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_owner_request,get_owner_request),   3) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_owner_response,get_owner_response),   4) \
-X(a, STATIC,   ONEOF,    UENUM,    (payload_variant,get_config_request,get_config_request),   5) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_config_response,get_config_response),   6) \
-X(a, STATIC,   ONEOF,    UENUM,    (payload_variant,get_module_config_request,get_module_config_request),   7) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_module_config_response,get_module_config_response),   8) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_canned_message_module_messages_request,get_canned_message_module_messages_request),  10) \
-X(a, STATIC,   ONEOF,    STRING,   (payload_variant,get_canned_message_module_messages_response,get_canned_message_module_messages_response),  11) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_device_metadata_request,get_device_metadata_request),  12) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_device_metadata_response,get_device_metadata_response),  13) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_ringtone_request,get_ringtone_request),  14) \
-X(a, STATIC,   ONEOF,    STRING,   (payload_variant,get_ringtone_response,get_ringtone_response),  15) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_device_connection_status_request,get_device_connection_status_request),  16) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_device_connection_status_response,get_device_connection_status_response),  17) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,set_ham_mode,set_ham_mode),  18) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_node_remote_hardware_pins_request,get_node_remote_hardware_pins_request),  19) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_node_remote_hardware_pins_response,get_node_remote_hardware_pins_response),  20) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,enter_dfu_mode_request,enter_dfu_mode_request),  21) \
-X(a, STATIC,   ONEOF,    STRING,   (payload_variant,delete_file_request,delete_file_request),  22) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,set_scale,set_scale),  23) \
-X(a, STATIC,   ONEOF,    UENUM,    (payload_variant,backup_preferences,backup_preferences),  24) \
-X(a, STATIC,   ONEOF,    UENUM,    (payload_variant,restore_preferences,restore_preferences),  25) \
-X(a, STATIC,   ONEOF,    UENUM,    (payload_variant,remove_backup_preferences,remove_backup_preferences),  26) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,send_input_event,send_input_event),  27) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,set_owner,set_owner),  32) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,set_channel,set_channel),  33) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,set_config,set_config),  34) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,set_module_config,set_module_config),  35) \
-X(a, STATIC,   ONEOF,    STRING,   (payload_variant,set_canned_message_module_messages,set_canned_message_module_messages),  36) \
-X(a, STATIC,   ONEOF,    STRING,   (payload_variant,set_ringtone_message,set_ringtone_message),  37) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,remove_by_nodenum,remove_by_nodenum),  38) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,set_favorite_node,set_favorite_node),  39) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,remove_favorite_node,remove_favorite_node),  40) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,set_fixed_position,set_fixed_position),  41) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,remove_fixed_position,remove_fixed_position),  42) \
-X(a, STATIC,   ONEOF,    FIXED32,  (payload_variant,set_time_only,set_time_only),  43) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,get_ui_config_request,get_ui_config_request),  44) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,get_ui_config_response,get_ui_config_response),  45) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,store_ui_config,store_ui_config),  46) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,set_ignored_node,set_ignored_node),  47) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,remove_ignored_node,remove_ignored_node),  48) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,begin_edit_settings,begin_edit_settings),  64) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,commit_edit_settings,commit_edit_settings),  65) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,add_contact,add_contact),  66) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,key_verification,key_verification),  67) \
-X(a, STATIC,   ONEOF,    INT32,    (payload_variant,factory_reset_device,factory_reset_device),  94) \
-X(a, STATIC,   ONEOF,    INT32,    (payload_variant,reboot_ota_seconds,reboot_ota_seconds),  95) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,exit_simulator,exit_simulator),  96) \
-X(a, STATIC,   ONEOF,    INT32,    (payload_variant,reboot_seconds,reboot_seconds),  97) \
-X(a, STATIC,   ONEOF,    INT32,    (payload_variant,shutdown_seconds,shutdown_seconds),  98) \
-X(a, STATIC,   ONEOF,    INT32,    (payload_variant,factory_reset_config,factory_reset_config),  99) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,nodedb_reset,nodedb_reset), 100) \
-X(a, STATIC,   SINGULAR, BYTES,    session_passkey, 101)
+#define meshtastic_AdminMessage_FIELDLIST(X, a)                                                                                                  \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, get_channel_request, get_channel_request), 1)                                                  \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_channel_response, get_channel_response), 2)                                               \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_owner_request, get_owner_request), 3)                                                        \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_owner_response, get_owner_response), 4)                                                   \
+    X(a, STATIC, ONEOF, UENUM, (payload_variant, get_config_request, get_config_request), 5)                                                     \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_config_response, get_config_response), 6)                                                 \
+    X(a, STATIC, ONEOF, UENUM, (payload_variant, get_module_config_request, get_module_config_request), 7)                                       \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_module_config_response, get_module_config_response), 8)                                   \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_canned_message_module_messages_request, get_canned_message_module_messages_request), 10)     \
+    X(a, STATIC, ONEOF, STRING, (payload_variant, get_canned_message_module_messages_response, get_canned_message_module_messages_response), 11) \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_device_metadata_request, get_device_metadata_request), 12)                                   \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_device_metadata_response, get_device_metadata_response), 13)                              \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_ringtone_request, get_ringtone_request), 14)                                                 \
+    X(a, STATIC, ONEOF, STRING, (payload_variant, get_ringtone_response, get_ringtone_response), 15)                                             \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_device_connection_status_request, get_device_connection_status_request), 16)                 \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_device_connection_status_response, get_device_connection_status_response), 17)            \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, set_ham_mode, set_ham_mode), 18)                                                              \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_node_remote_hardware_pins_request, get_node_remote_hardware_pins_request), 19)               \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_node_remote_hardware_pins_response, get_node_remote_hardware_pins_response), 20)          \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, enter_dfu_mode_request, enter_dfu_mode_request), 21)                                             \
+    X(a, STATIC, ONEOF, STRING, (payload_variant, delete_file_request, delete_file_request), 22)                                                 \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, set_scale, set_scale), 23)                                                                     \
+    X(a, STATIC, ONEOF, UENUM, (payload_variant, backup_preferences, backup_preferences), 24)                                                    \
+    X(a, STATIC, ONEOF, UENUM, (payload_variant, restore_preferences, restore_preferences), 25)                                                  \
+    X(a, STATIC, ONEOF, UENUM, (payload_variant, remove_backup_preferences, remove_backup_preferences), 26)                                      \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, send_input_event, send_input_event), 27)                                                      \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, set_owner, set_owner), 32)                                                                    \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, set_channel, set_channel), 33)                                                                \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, set_config, set_config), 34)                                                                  \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, set_module_config, set_module_config), 35)                                                    \
+    X(a, STATIC, ONEOF, STRING, (payload_variant, set_canned_message_module_messages, set_canned_message_module_messages), 36)                   \
+    X(a, STATIC, ONEOF, STRING, (payload_variant, set_ringtone_message, set_ringtone_message), 37)                                               \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, remove_by_nodenum, remove_by_nodenum), 38)                                                     \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, set_favorite_node, set_favorite_node), 39)                                                     \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, remove_favorite_node, remove_favorite_node), 40)                                               \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, set_fixed_position, set_fixed_position), 41)                                                  \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, remove_fixed_position, remove_fixed_position), 42)                                               \
+    X(a, STATIC, ONEOF, FIXED32, (payload_variant, set_time_only, set_time_only), 43)                                                            \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, get_ui_config_request, get_ui_config_request), 44)                                               \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, get_ui_config_response, get_ui_config_response), 45)                                          \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, store_ui_config, store_ui_config), 46)                                                        \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, set_ignored_node, set_ignored_node), 47)                                                       \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, remove_ignored_node, remove_ignored_node), 48)                                                 \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, begin_edit_settings, begin_edit_settings), 64)                                                   \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, commit_edit_settings, commit_edit_settings), 65)                                                 \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, add_contact, add_contact), 66)                                                                \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, key_verification, key_verification), 67)                                                      \
+    X(a, STATIC, ONEOF, INT32, (payload_variant, factory_reset_device, factory_reset_device), 94)                                                \
+    X(a, STATIC, ONEOF, INT32, (payload_variant, reboot_ota_seconds, reboot_ota_seconds), 95)                                                    \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, exit_simulator, exit_simulator), 96)                                                             \
+    X(a, STATIC, ONEOF, INT32, (payload_variant, reboot_seconds, reboot_seconds), 97)                                                            \
+    X(a, STATIC, ONEOF, INT32, (payload_variant, shutdown_seconds, shutdown_seconds), 98)                                                        \
+    X(a, STATIC, ONEOF, INT32, (payload_variant, factory_reset_config, factory_reset_config), 99)                                                \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, nodedb_reset, nodedb_reset), 100)                                                                \
+    X(a, STATIC, SINGULAR, BYTES, session_passkey, 101)
 #define meshtastic_AdminMessage_CALLBACK NULL
 #define meshtastic_AdminMessage_DEFAULT NULL
 #define meshtastic_AdminMessage_payload_variant_get_channel_response_MSGTYPE meshtastic_Channel
@@ -484,50 +532,50 @@ X(a, STATIC,   SINGULAR, BYTES,    session_passkey, 101)
 #define meshtastic_AdminMessage_payload_variant_key_verification_MSGTYPE meshtastic_KeyVerificationAdmin
 
 #define meshtastic_AdminMessage_InputEvent_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   event_code,        1) \
-X(a, STATIC,   SINGULAR, UINT32,   kb_char,           2) \
-X(a, STATIC,   SINGULAR, UINT32,   touch_x,           3) \
-X(a, STATIC,   SINGULAR, UINT32,   touch_y,           4)
+    X(a, STATIC, SINGULAR, UINT32, event_code, 1)          \
+    X(a, STATIC, SINGULAR, UINT32, kb_char, 2)             \
+    X(a, STATIC, SINGULAR, UINT32, touch_x, 3)             \
+    X(a, STATIC, SINGULAR, UINT32, touch_y, 4)
 #define meshtastic_AdminMessage_InputEvent_CALLBACK NULL
 #define meshtastic_AdminMessage_InputEvent_DEFAULT NULL
 
 #define meshtastic_HamParameters_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   call_sign,         1) \
-X(a, STATIC,   SINGULAR, INT32,    tx_power,          2) \
-X(a, STATIC,   SINGULAR, FLOAT,    frequency,         3) \
-X(a, STATIC,   SINGULAR, STRING,   short_name,        4)
+    X(a, STATIC, SINGULAR, STRING, call_sign, 1) \
+    X(a, STATIC, SINGULAR, INT32, tx_power, 2)   \
+    X(a, STATIC, SINGULAR, FLOAT, frequency, 3)  \
+    X(a, STATIC, SINGULAR, STRING, short_name, 4)
 #define meshtastic_HamParameters_CALLBACK NULL
 #define meshtastic_HamParameters_DEFAULT NULL
 
 #define meshtastic_NodeRemoteHardwarePinsResponse_FIELDLIST(X, a) \
-X(a, STATIC,   REPEATED, MESSAGE,  node_remote_hardware_pins,   1)
+    X(a, STATIC, REPEATED, MESSAGE, node_remote_hardware_pins, 1)
 #define meshtastic_NodeRemoteHardwarePinsResponse_CALLBACK NULL
 #define meshtastic_NodeRemoteHardwarePinsResponse_DEFAULT NULL
 #define meshtastic_NodeRemoteHardwarePinsResponse_node_remote_hardware_pins_MSGTYPE meshtastic_NodeRemoteHardwarePin
 
-#define meshtastic_SharedContact_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   node_num,          1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  user,              2) \
-X(a, STATIC,   SINGULAR, BOOL,     should_ignore,     3) \
-X(a, STATIC,   SINGULAR, BOOL,     manually_verified,   4)
+#define meshtastic_SharedContact_FIELDLIST(X, a)   \
+    X(a, STATIC, SINGULAR, UINT32, node_num, 1)    \
+    X(a, STATIC, OPTIONAL, MESSAGE, user, 2)       \
+    X(a, STATIC, SINGULAR, BOOL, should_ignore, 3) \
+    X(a, STATIC, SINGULAR, BOOL, manually_verified, 4)
 #define meshtastic_SharedContact_CALLBACK NULL
 #define meshtastic_SharedContact_DEFAULT NULL
 #define meshtastic_SharedContact_user_MSGTYPE meshtastic_User
 
 #define meshtastic_KeyVerificationAdmin_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    message_type,      1) \
-X(a, STATIC,   SINGULAR, UINT32,   remote_nodenum,    2) \
-X(a, STATIC,   SINGULAR, UINT64,   nonce,             3) \
-X(a, STATIC,   OPTIONAL, UINT32,   security_number,   4)
+    X(a, STATIC, SINGULAR, UENUM, message_type, 1)      \
+    X(a, STATIC, SINGULAR, UINT32, remote_nodenum, 2)   \
+    X(a, STATIC, SINGULAR, UINT64, nonce, 3)            \
+    X(a, STATIC, OPTIONAL, UINT32, security_number, 4)
 #define meshtastic_KeyVerificationAdmin_CALLBACK NULL
 #define meshtastic_KeyVerificationAdmin_DEFAULT NULL
 
-extern const pb_msgdesc_t meshtastic_AdminMessage_msg;
-extern const pb_msgdesc_t meshtastic_AdminMessage_InputEvent_msg;
-extern const pb_msgdesc_t meshtastic_HamParameters_msg;
-extern const pb_msgdesc_t meshtastic_NodeRemoteHardwarePinsResponse_msg;
-extern const pb_msgdesc_t meshtastic_SharedContact_msg;
-extern const pb_msgdesc_t meshtastic_KeyVerificationAdmin_msg;
+    extern const pb_msgdesc_t meshtastic_AdminMessage_msg;
+    extern const pb_msgdesc_t meshtastic_AdminMessage_InputEvent_msg;
+    extern const pb_msgdesc_t meshtastic_HamParameters_msg;
+    extern const pb_msgdesc_t meshtastic_NodeRemoteHardwarePinsResponse_msg;
+    extern const pb_msgdesc_t meshtastic_SharedContact_msg;
+    extern const pb_msgdesc_t meshtastic_KeyVerificationAdmin_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_AdminMessage_fields &meshtastic_AdminMessage_msg
@@ -539,12 +587,12 @@ extern const pb_msgdesc_t meshtastic_KeyVerificationAdmin_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define MESHTASTIC_MESHTASTIC_ADMIN_PB_H_MAX_SIZE meshtastic_AdminMessage_size
-#define meshtastic_AdminMessage_InputEvent_size  14
-#define meshtastic_AdminMessage_size             511
-#define meshtastic_HamParameters_size            31
-#define meshtastic_KeyVerificationAdmin_size     25
+#define meshtastic_AdminMessage_InputEvent_size 14
+#define meshtastic_AdminMessage_size 511
+#define meshtastic_HamParameters_size 31
+#define meshtastic_KeyVerificationAdmin_size 25
 #define meshtastic_NodeRemoteHardwarePinsResponse_size 496
-#define meshtastic_SharedContact_size            127
+#define meshtastic_SharedContact_size 127
 
 #ifdef __cplusplus
 } /* extern "C" */

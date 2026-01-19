@@ -3,70 +3,79 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include <stdlib.h>
-#include <string.h>
-#include "./interface/audio_codec_if.h"
 #include "./interface/audio_codec_ctrl_if.h"
 #include "./interface/audio_codec_data_if.h"
 #include "./interface/audio_codec_gpio_if.h"
+#include "./interface/audio_codec_if.h"
 #include "./interface/audio_codec_vol_if.h"
+#include <stdlib.h>
+#include <string.h>
 
-int audio_codec_delete_codec_if(const audio_codec_if_t *h)
+int audio_codec_delete_codec_if(const audio_codec_if_t* h)
 {
-    if (h) {
+    if (h)
+    {
         int ret = 0;
-        if (h->close) {
+        if (h->close)
+        {
             ret = h->close(h);
         }
-        free((void *) h);
+        free((void*)h);
         return ret;
     }
     return ESP_CODEC_DEV_INVALID_ARG;
 }
 
-int audio_codec_delete_ctrl_if(const audio_codec_ctrl_if_t *h)
+int audio_codec_delete_ctrl_if(const audio_codec_ctrl_if_t* h)
 {
-    if (h) {
+    if (h)
+    {
         int ret = 0;
-        if (h->close) {
+        if (h->close)
+        {
             ret = h->close(h);
         }
-        free((void *) h);
+        free((void*)h);
         return ret;
     }
     return ESP_CODEC_DEV_INVALID_ARG;
 }
 
-int audio_codec_delete_data_if(const audio_codec_data_if_t *h)
+int audio_codec_delete_data_if(const audio_codec_data_if_t* h)
 {
-    if (h) {
+    if (h)
+    {
         int ret = 0;
-        if (h->close) {
+        if (h->close)
+        {
             ret = h->close(h);
         }
-        free((void *) h);
+        free((void*)h);
         return ret;
     }
     return ESP_CODEC_DEV_INVALID_ARG;
 }
 
-int audio_codec_delete_gpio_if(const audio_codec_gpio_if_t *gpio_if)
+int audio_codec_delete_gpio_if(const audio_codec_gpio_if_t* gpio_if)
 {
-    if (gpio_if) {
-        free((void *) gpio_if);
+    if (gpio_if)
+    {
+        free((void*)gpio_if);
         return ESP_CODEC_DEV_OK;
     }
     return ESP_CODEC_DEV_INVALID_ARG;
 }
 
-int audio_codec_delete_vol_if(const audio_codec_vol_if_t *h)
+int audio_codec_delete_vol_if(const audio_codec_vol_if_t* h)
 {
-    if (h) {
+    if (h)
+    {
         int ret = 0;
-        if (h->close) {
+        if (h->close)
+        {
             ret = h->close(h);
         }
-        free((void *) h);
+        free((void*)h);
         return ret;
     }
     return ESP_CODEC_DEV_INVALID_ARG;

@@ -8,67 +8,83 @@
 #include <cstdio>
 #include <cstring>
 
+#include "../../../app/app_context.h"
+#include "../../../board/rtc_utils.h"
+#include "../../../chat/domain/chat_types.h"
+#include "../../../chat/infra/meshtastic/generated/meshtastic/config.pb.h"
+#include "../../../chat/infra/meshtastic/mt_region.h"
+#include "../../ui_common.h"
+#include "../../widgets/system_notification.h"
 #include "settings_page_components.h"
+#include "settings_page_input.h"
 #include "settings_page_layout.h"
 #include "settings_page_styles.h"
-#include "settings_page_input.h"
 #include "settings_state.h"
-#include "../../../chat/infra/meshtastic/generated/meshtastic/config.pb.h"
-#include "../../ui_common.h"
-#include "../../../board/rtc_utils.h"
 
 extern uint32_t getScreenSleepTimeout();
 extern void setScreenSleepTimeout(uint32_t timeout_ms);
 
-namespace settings::ui::components {
+namespace settings::ui::components
+{
 
-namespace {
+namespace
+{
 
 constexpr size_t kMaxItems = 12;
 constexpr size_t kMaxOptions = 40;
 constexpr const char* kPrefsNs = "settings_v2";
 
-struct CategoryDef {
+struct CategoryDef
+{
     const char* label;
     const settings::ui::SettingItem* items;
     size_t item_count;
 };
 
-struct OptionClick {
+struct OptionClick
+{
     const settings::ui::SettingItem* item;
     int value;
     settings::ui::ItemWidget* widget;
 };
 
-static OptionClick s_option_clicks[kMaxOptions] {};
+static OptionClick s_option_clicks[kMaxOptions]{};
 static size_t s_option_click_count = 0;
 static lv_group_t* s_modal_prev_group = nullptr;
 static int s_pending_category = -1;
 static bool s_category_update_scheduled = false;
 static bool s_building_list = false;
+static settings::ui::SettingOption kChatRegionOptions[32] = {};
+static size_t kChatRegionOptionCount = 0;
 
-static void prefs_put_int(const char* key, int value) {
+static void build_item_list();
+
+static void prefs_put_int(const char* key, int value)
+{
     Preferences prefs;
     prefs.begin(kPrefsNs, false);
     prefs.putInt(key, value);
     prefs.end();
 }
 
-static void prefs_put_bool(const char* key, bool value) {
+static void prefs_put_bool(const char* key, bool value)
+{
     Preferences prefs;
     prefs.begin(kPrefsNs, false);
     prefs.putBool(key, value);
     prefs.end();
 }
 
-static void prefs_put_str(const char* key, const char* value) {
+static void prefs_put_str(const char* key, const char* value)
+{
     Preferences prefs;
     prefs.begin(kPrefsNs, false);
     prefs.putString(key, value ? value : "");
     prefs.end();
 }
 
-static int prefs_get_int(const char* key, int default_value) {
+static int prefs_get_int(const char* key, int default_value)
+{
     Preferences prefs;
     prefs.begin(kPrefsNs, true);
     int value = prefs.getInt(key, default_value);
@@ -76,7 +92,8 @@ static int prefs_get_int(const char* key, int default_value) {
     return value;
 }
 
-static bool prefs_get_bool(const char* key, bool default_value) {
+static bool prefs_get_bool(const char* key, bool default_value)
+{
     Preferences prefs;
     prefs.begin(kPrefsNs, true);
     bool value = prefs.getBool(key, default_value);
@@ -84,8 +101,10 @@ static bool prefs_get_bool(const char* key, bool default_value) {
     return value;
 }
 
-static void prefs_get_str(const char* key, char* out, size_t out_len, const char* default_value) {
-    if (!out || out_len == 0) {
+static void prefs_get_str(const char* key, char* out, size_t out_len, const char* default_value)
+{
+    if (!out || out_len == 0)
+    {
         return;
     }
     Preferences prefs;
@@ -96,7 +115,179 @@ static void prefs_get_str(const char* key, char* out, size_t out_len, const char
     out[out_len - 1] = '\0';
 }
 
-static void settings_load() {
+static bool is_zero_key(const uint8_t* key, size_t len)
+{
+    if (!key || len == 0)
+    {
+        return true;
+    }
+    for (size_t i = 0; i < len; ++i)
+    {
+        if (key[i] != 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void bytes_to_hex(const uint8_t* data, size_t len, char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    out[0] = '\0';
+    if (!data || len == 0)
+    {
+        return;
+    }
+    static const char* kHex = "0123456789ABCDEF";
+    size_t required = len * 2 + 1;
+    if (out_len < required)
+    {
+        return;
+    }
+    for (size_t i = 0; i < len; ++i)
+    {
+        uint8_t b = data[i];
+        out[i * 2] = kHex[b >> 4];
+        out[i * 2 + 1] = kHex[b & 0x0F];
+    }
+    out[len * 2] = '\0';
+}
+
+static bool parse_hex_char(char c, uint8_t& out)
+{
+    if (c >= '0' && c <= '9')
+    {
+        out = static_cast<uint8_t>(c - '0');
+        return true;
+    }
+    if (c >= 'a' && c <= 'f')
+    {
+        out = static_cast<uint8_t>(10 + (c - 'a'));
+        return true;
+    }
+    if (c >= 'A' && c <= 'F')
+    {
+        out = static_cast<uint8_t>(10 + (c - 'A'));
+        return true;
+    }
+    return false;
+}
+
+static bool parse_psk(const char* text, uint8_t* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return false;
+    }
+    if (!text || text[0] == '\0')
+    {
+        memset(out, 0, out_len);
+        return true;
+    }
+    size_t len = strlen(text);
+    if (len == 32)
+    {
+        for (size_t i = 0; i < 16; ++i)
+        {
+            uint8_t hi = 0;
+            uint8_t lo = 0;
+            if (!parse_hex_char(text[i * 2], hi) || !parse_hex_char(text[i * 2 + 1], lo))
+            {
+                return false;
+            }
+            out[i] = static_cast<uint8_t>((hi << 4) | lo);
+        }
+        return true;
+    }
+    if (len == 16)
+    {
+        memcpy(out, text, 16);
+        return true;
+    }
+    return false;
+}
+
+static void mark_restart_required()
+{
+    g_settings.needs_restart = true;
+    prefs_put_bool("needs_restart", true);
+    ::ui::SystemNotification::show("Restart required", 4000);
+}
+
+static void reset_mesh_settings()
+{
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    app_ctx.getConfig().mesh_config = chat::MeshConfig();
+    app_ctx.getConfig().mesh_protocol = chat::MeshProtocol::Meshtastic;
+    app_ctx.saveConfig();
+    app_ctx.applyMeshConfig();
+
+    g_settings.chat_protocol = static_cast<int>(app_ctx.getConfig().mesh_protocol);
+    g_settings.chat_region = app_ctx.getConfig().mesh_config.region;
+    g_settings.chat_channel = 0;
+    g_settings.chat_psk[0] = '\0';
+    g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
+    g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
+    g_settings.net_duty_cycle = true;
+    g_settings.net_channel_util = 0;
+    g_settings.needs_restart = false;
+
+    Preferences prefs;
+    prefs.begin(kPrefsNs, false);
+    prefs.remove("mesh_protocol");
+    prefs.remove("chat_region");
+    prefs.remove("chat_channel");
+    prefs.remove("chat_psk");
+    prefs.remove("net_preset");
+    prefs.remove("net_relay");
+    prefs.remove("net_duty_cycle");
+    prefs.remove("net_util");
+    prefs.remove("needs_restart");
+    prefs.end();
+
+    build_item_list();
+    ::ui::SystemNotification::show("Resetting...", 1500);
+    delay(300);
+    ESP.restart();
+}
+
+static void reset_node_db()
+{
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    app_ctx.clearNodeDb();
+    ::ui::SystemNotification::show("Node DB reset", 3000);
+}
+
+static void clear_message_db()
+{
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    app_ctx.clearMessageDb();
+    ::ui::SystemNotification::show("Message DB cleared", 3000);
+}
+
+static void settings_load()
+{
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    g_settings.chat_protocol = static_cast<int>(app_ctx.getConfig().mesh_protocol);
+    g_settings.needs_restart = prefs_get_bool("needs_restart", false);
+
+    if (kChatRegionOptionCount == 0)
+    {
+        size_t region_count = 0;
+        const chat::meshtastic::RegionInfo* regions = chat::meshtastic::getRegionTable(&region_count);
+        size_t limit = sizeof(kChatRegionOptions) / sizeof(kChatRegionOptions[0]);
+        kChatRegionOptionCount = (region_count < limit) ? region_count : limit;
+        for (size_t i = 0; i < kChatRegionOptionCount; ++i)
+        {
+            kChatRegionOptions[i].label = regions[i].label;
+            kChatRegionOptions[i].value = regions[i].code;
+        }
+    }
+
     g_settings.gps_mode = prefs_get_int("gps_mode", 0);
     g_settings.gps_sat_mask = prefs_get_int("gps_sat_mask", 0x1 | 0x8 | 0x4);
     g_settings.gps_strategy = prefs_get_int("gps_strategy", 0);
@@ -112,12 +303,23 @@ static void settings_load() {
 
     prefs_get_str("chat_user", g_settings.user_name, sizeof(g_settings.user_name), "TrailMate");
     prefs_get_str("chat_short", g_settings.short_name, sizeof(g_settings.short_name), "TM");
-    g_settings.chat_region = prefs_get_int("chat_region", meshtastic_Config_LoRaConfig_RegionCode_CN);
+    g_settings.chat_region = app_ctx.getConfig().mesh_config.region;
     g_settings.chat_channel = prefs_get_int("chat_channel", 0);
-    prefs_get_str("chat_psk", g_settings.chat_psk, sizeof(g_settings.chat_psk), "");
+    if (is_zero_key(app_ctx.getConfig().mesh_config.secondary_key,
+                    sizeof(app_ctx.getConfig().mesh_config.secondary_key)))
+    {
+        g_settings.chat_psk[0] = '\0';
+    }
+    else
+    {
+        bytes_to_hex(app_ctx.getConfig().mesh_config.secondary_key,
+                     sizeof(app_ctx.getConfig().mesh_config.secondary_key),
+                     g_settings.chat_psk,
+                     sizeof(g_settings.chat_psk));
+    }
 
-    g_settings.net_modem_preset = prefs_get_int("net_preset", meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST);
-    g_settings.net_relay = prefs_get_bool("net_relay", true);
+    g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
+    g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
     g_settings.net_duty_cycle = prefs_get_bool("net_duty_cycle", true);
     g_settings.net_channel_util = prefs_get_int("net_util", 0);
 
@@ -132,43 +334,60 @@ static void settings_load() {
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
 }
 
-static void format_value(const settings::ui::SettingItem& item, char* out, size_t out_len) {
-    if (!out || out_len == 0) {
+static void format_value(const settings::ui::SettingItem& item, char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
         return;
     }
     out[0] = '\0';
-    switch (item.type) {
-        case settings::ui::SettingType::Toggle:
-            snprintf(out, out_len, "%s", (item.bool_value && *item.bool_value) ? "ON" : "OFF");
-            break;
-        case settings::ui::SettingType::Enum: {
-            int value = item.enum_value ? *item.enum_value : 0;
-            const char* label = "N/A";
-            for (size_t i = 0; i < item.option_count; ++i) {
-                if (item.options[i].value == value) {
-                    label = item.options[i].label;
-                    break;
-                }
+    switch (item.type)
+    {
+    case settings::ui::SettingType::Toggle:
+        snprintf(out, out_len, "%s", (item.bool_value && *item.bool_value) ? "ON" : "OFF");
+        break;
+    case settings::ui::SettingType::Enum:
+    {
+        int value = item.enum_value ? *item.enum_value : 0;
+        const char* label = "N/A";
+        for (size_t i = 0; i < item.option_count; ++i)
+        {
+            if (item.options[i].value == value)
+            {
+                label = item.options[i].label;
+                break;
             }
-            snprintf(out, out_len, "%s", label);
-            break;
         }
-        case settings::ui::SettingType::Text:
-            if (item.text_value && item.text_value[0] != '\0') {
-                if (item.mask_text) {
-                    snprintf(out, out_len, "****");
-                } else {
-                    snprintf(out, out_len, "%s", item.text_value);
-                }
-            } else {
-                snprintf(out, out_len, "Not set");
+        snprintf(out, out_len, "%s", label);
+        break;
+    }
+    case settings::ui::SettingType::Text:
+        if (item.text_value && item.text_value[0] != '\0')
+        {
+            if (item.mask_text)
+            {
+                snprintf(out, out_len, "****");
             }
-            break;
+            else
+            {
+                snprintf(out, out_len, "%s", item.text_value);
+            }
+        }
+        else
+        {
+            snprintf(out, out_len, "Not set");
+        }
+        break;
+    case settings::ui::SettingType::Action:
+        snprintf(out, out_len, "Run");
+        break;
     }
 }
 
-static void update_item_value(settings::ui::ItemWidget& widget) {
-    if (!widget.value_label || !widget.def) {
+static void update_item_value(settings::ui::ItemWidget& widget)
+{
+    if (!widget.value_label || !widget.def)
+    {
         return;
     }
     char value[48];
@@ -176,8 +395,10 @@ static void update_item_value(settings::ui::ItemWidget& widget) {
     lv_label_set_text(widget.value_label, value);
 }
 
-static void modal_prepare_group() {
-    if (g_state.modal_group) {
+static void modal_prepare_group()
+{
+    if (g_state.modal_group)
+    {
         return;
     }
     s_modal_prev_group = settings::ui::input::get_group();
@@ -185,19 +406,24 @@ static void modal_prepare_group() {
     set_default_group(g_state.modal_group);
 }
 
-static void modal_restore_group() {
-    if (g_state.modal_group) {
+static void modal_restore_group()
+{
+    if (g_state.modal_group)
+    {
         lv_group_del(g_state.modal_group);
         g_state.modal_group = nullptr;
     }
-    if (s_modal_prev_group) {
+    if (s_modal_prev_group)
+    {
         set_default_group(s_modal_prev_group);
     }
     settings::ui::input::on_ui_refreshed();
 }
 
-static void modal_close() {
-    if (g_state.modal_root) {
+static void modal_close()
+{
+    if (g_state.modal_root)
+    {
         lv_obj_del_async(g_state.modal_root);
         g_state.modal_root = nullptr;
     }
@@ -209,7 +435,8 @@ static void modal_close() {
     modal_restore_group();
 }
 
-static lv_obj_t* create_modal_root(lv_coord_t width, lv_coord_t height) {
+static lv_obj_t* create_modal_root(lv_coord_t width, lv_coord_t height)
+{
     lv_obj_t* bg = lv_obj_create(g_state.root);
     lv_obj_set_size(bg, LV_PCT(100), LV_PCT(100));
     style::apply_modal_bg(bg);
@@ -228,29 +455,49 @@ static lv_obj_t* create_modal_root(lv_coord_t width, lv_coord_t height) {
     return bg;
 }
 
-static void on_text_save_clicked(lv_event_t* e) {
+static void on_text_save_clicked(lv_event_t* e)
+{
     (void)e;
-    if (!g_state.editing_item || !g_state.modal_textarea || !g_state.editing_widget) {
+    if (!g_state.editing_item || !g_state.modal_textarea || !g_state.editing_widget)
+    {
         modal_close();
         return;
     }
     const char* text = lv_textarea_get_text(g_state.modal_textarea);
-    if (g_state.editing_item->text_value && g_state.editing_item->text_max > 0) {
+    if (g_state.editing_item->text_value && g_state.editing_item->text_max > 0)
+    {
         strncpy(g_state.editing_item->text_value, text, g_state.editing_item->text_max - 1);
         g_state.editing_item->text_value[g_state.editing_item->text_max - 1] = '\0';
         prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
         update_item_value(*g_state.editing_widget);
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_psk") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            uint8_t key[16] = {};
+            if (!parse_psk(g_state.editing_item->text_value, key, sizeof(key)))
+            {
+                ::ui::SystemNotification::show("PSK must be 32 hex or 16 chars", 4000);
+                modal_close();
+                return;
+            }
+            memcpy(app_ctx.getConfig().mesh_config.secondary_key, key, sizeof(key));
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
     }
     modal_close();
 }
 
-static void on_text_cancel_clicked(lv_event_t* e) {
+static void on_text_cancel_clicked(lv_event_t* e)
+{
     (void)e;
     modal_close();
 }
 
-static void open_text_modal(const settings::ui::SettingItem& item, settings::ui::ItemWidget& widget) {
-    if (g_state.modal_root) {
+static void open_text_modal(const settings::ui::SettingItem& item, settings::ui::ItemWidget& widget)
+{
+    if (g_state.modal_root)
+    {
         return;
     }
     modal_prepare_group();
@@ -264,12 +511,14 @@ static void open_text_modal(const settings::ui::SettingItem& item, settings::ui:
     g_state.modal_textarea = lv_textarea_create(win);
     lv_textarea_set_one_line(g_state.modal_textarea, true);
     lv_textarea_set_max_length(g_state.modal_textarea, static_cast<uint16_t>(item.text_max - 1));
-    if (item.mask_text) {
+    if (item.mask_text)
+    {
         lv_textarea_set_password_mode(g_state.modal_textarea, true);
     }
     lv_obj_set_width(g_state.modal_textarea, LV_PCT(100));
     lv_obj_align(g_state.modal_textarea, LV_ALIGN_TOP_MID, 0, 28);
-    if (item.text_value) {
+    if (item.text_value)
+    {
         lv_textarea_set_text(g_state.modal_textarea, item.text_value);
         lv_textarea_set_cursor_pos(g_state.modal_textarea, LV_TEXTAREA_CURSOR_LAST);
     }
@@ -308,29 +557,64 @@ static void open_text_modal(const settings::ui::SettingItem& item, settings::ui:
     lv_group_focus_obj(g_state.modal_textarea);
 }
 
-static void on_option_clicked(lv_event_t* e) {
+static void on_option_clicked(lv_event_t* e)
+{
     OptionClick* payload = static_cast<OptionClick*>(lv_event_get_user_data(e));
-    if (!payload || !payload->item || !payload->item->enum_value) {
+    if (!payload || !payload->item || !payload->item->enum_value)
+    {
         return;
     }
+    bool restart_now = false;
     int previous_value = *payload->item->enum_value;
     *payload->item->enum_value = payload->value;
     prefs_put_int(payload->item->pref_key, payload->value);
     update_item_value(*payload->widget);
-    if (payload->item->pref_key && strcmp(payload->item->pref_key, "screen_timeout") == 0) {
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mesh_protocol") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().mesh_protocol = static_cast<chat::MeshProtocol>(payload->value);
+        app_ctx.saveConfig();
+        restart_now = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "chat_region") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().mesh_config.region = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        restart_now = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_preset") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().mesh_config.modem_preset = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "screen_timeout") == 0)
+    {
         setScreenSleepTimeout(static_cast<uint32_t>(payload->value));
     }
-    if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0) {
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0)
+    {
         int delta = payload->value - previous_value;
-        if (delta != 0) {
+        if (delta != 0)
+        {
             board_adjust_rtc_by_offset_minutes(delta);
         }
     }
     modal_close();
+    if (restart_now)
+    {
+        ::ui::SystemNotification::show("Restarting...", 1500);
+        delay(300);
+        ESP.restart();
+    }
 }
 
-static void open_option_modal(const settings::ui::SettingItem& item, settings::ui::ItemWidget& widget) {
-    if (g_state.modal_root) {
+static void open_option_modal(const settings::ui::SettingItem& item, settings::ui::ItemWidget& widget)
+{
+    if (g_state.modal_root)
+    {
         return;
     }
     modal_prepare_group();
@@ -351,7 +635,8 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
     s_option_click_count = 0;
-    for (size_t i = 0; i < item.option_count && s_option_click_count < kMaxOptions; ++i) {
+    for (size_t i = 0; i < item.option_count && s_option_click_count < kMaxOptions; ++i)
+    {
         lv_obj_t* btn = lv_btn_create(list);
         lv_obj_set_size(btn, LV_PCT(100), 24);
         style::apply_btn_modal(btn);
@@ -363,13 +648,15 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
         s_option_clicks[s_option_click_count] = {&item, item.options[i].value, &widget};
         lv_obj_add_event_cb(btn, on_option_clicked, LV_EVENT_CLICKED,
                             &s_option_clicks[s_option_click_count]);
-        if (item.enum_value && item.options[i].value == *item.enum_value) {
+        if (item.enum_value && item.options[i].value == *item.enum_value)
+        {
             lv_obj_add_state(btn, LV_STATE_CHECKED);
         }
         lv_group_add_obj(g_state.modal_group, btn);
         s_option_click_count++;
     }
-    if (s_option_click_count > 0) {
+    if (s_option_click_count > 0)
+    {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
     }
 }
@@ -434,18 +721,13 @@ static const settings::ui::SettingOption kMapTrackFormatOptions[] = {
     {"Binary", 2},
 };
 
-static const settings::ui::SettingOption kChatRegionOptions[] = {
-    {"CN", meshtastic_Config_LoRaConfig_RegionCode_CN},
-    {"US", meshtastic_Config_LoRaConfig_RegionCode_US},
-    {"EU_868", meshtastic_Config_LoRaConfig_RegionCode_EU_868},
-    {"EU_433", meshtastic_Config_LoRaConfig_RegionCode_EU_433},
-    {"JP", meshtastic_Config_LoRaConfig_RegionCode_JP},
-    {"ANZ", meshtastic_Config_LoRaConfig_RegionCode_ANZ},
-    {"IN", meshtastic_Config_LoRaConfig_RegionCode_IN},
-};
 static const settings::ui::SettingOption kChatChannelOptions[] = {
     {"Primary", 0},
     {"Secondary", 1},
+};
+static const settings::ui::SettingOption kChatProtocolOptions[] = {
+    {"Meshtastic", static_cast<int>(chat::MeshProtocol::Meshtastic)},
+    {"MeshCore", static_cast<int>(chat::MeshProtocol::MeshCore)},
 };
 
 static const settings::ui::SettingOption kNetPresetOptions[] = {
@@ -534,9 +816,13 @@ static settings::ui::SettingItem kMapItems[] = {
 static settings::ui::SettingItem kChatItems[] = {
     {"User Name", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.user_name, sizeof(g_settings.user_name), false, "chat_user"},
     {"Short Name", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.short_name, sizeof(g_settings.short_name), false, "chat_short"},
-    {"Region", settings::ui::SettingType::Enum, kChatRegionOptions, 7, &g_settings.chat_region, nullptr, nullptr, 0, false, "chat_region"},
+    {"Protocol", settings::ui::SettingType::Enum, kChatProtocolOptions, 2, &g_settings.chat_protocol, nullptr, nullptr, 0, false, "mesh_protocol"},
+    {"Region", settings::ui::SettingType::Enum, kChatRegionOptions, 0, &g_settings.chat_region, nullptr, nullptr, 0, false, "chat_region"},
     {"Channel", settings::ui::SettingType::Enum, kChatChannelOptions, 2, &g_settings.chat_channel, nullptr, nullptr, 0, false, "chat_channel"},
     {"Channel Key / PSK", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.chat_psk, sizeof(g_settings.chat_psk), true, "chat_psk"},
+    {"Reset Mesh Params", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_mesh"},
+    {"Reset Node DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_nodes"},
+    {"Clear Message DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_clear_messages"},
 };
 
 static settings::ui::SettingItem kNetworkItems[] = {
@@ -572,20 +858,46 @@ static const CategoryDef kCategories[] = {
     {"Advanced", kAdvancedItems, sizeof(kAdvancedItems) / sizeof(kAdvancedItems[0])},
 };
 
-static void update_filter_styles() {
-    for (size_t i = 0; i < g_state.filter_count; ++i) {
+static void update_filter_styles()
+{
+    for (size_t i = 0; i < g_state.filter_count; ++i)
+    {
         if (!g_state.filter_buttons[i]) continue;
-        if (static_cast<int>(i) == g_state.current_category) {
+        if (static_cast<int>(i) == g_state.current_category)
+        {
             lv_obj_add_state(g_state.filter_buttons[i], LV_STATE_CHECKED);
-        } else {
+        }
+        else
+        {
             lv_obj_clear_state(g_state.filter_buttons[i], LV_STATE_CHECKED);
         }
     }
 }
 
-static void build_item_list() {
+static bool should_show_item(const settings::ui::SettingItem& item)
+{
+    if (!item.pref_key)
+    {
+        return true;
+    }
+    if (g_settings.chat_protocol == static_cast<int>(chat::MeshProtocol::MeshCore))
+    {
+        if (strcmp(item.pref_key, "chat_region") == 0) return false;
+        if (strcmp(item.pref_key, "chat_channel") == 0) return false;
+        if (strcmp(item.pref_key, "chat_psk") == 0) return false;
+        if (strcmp(item.pref_key, "net_preset") == 0) return false;
+        if (strcmp(item.pref_key, "net_relay") == 0) return false;
+        if (strcmp(item.pref_key, "net_duty_cycle") == 0) return false;
+        if (strcmp(item.pref_key, "net_util") == 0) return false;
+    }
+    return true;
+}
+
+static void build_item_list()
+{
     if (!g_state.list_panel) return;
-    if (s_building_list) {
+    if (s_building_list)
+    {
         return;
     }
     s_building_list = true;
@@ -595,9 +907,18 @@ static void build_item_list() {
     lv_obj_clear_flag(g_state.list_panel, LV_OBJ_FLAG_SCROLLABLE);
 
     const CategoryDef& cat = kCategories[g_state.current_category];
-    for (size_t i = 0; i < cat.item_count && g_state.item_count < kMaxItems; ++i) {
+    for (size_t i = 0; i < cat.item_count && g_state.item_count < kMaxItems; ++i)
+    {
         settings::ui::ItemWidget& widget = g_state.item_widgets[g_state.item_count];
         widget.def = &cat.items[i];
+        if (widget.def == &kChatItems[3])
+        {
+            kChatItems[3].option_count = kChatRegionOptionCount;
+        }
+        if (!should_show_item(*widget.def))
+        {
+            continue;
+        }
 
         lv_obj_t* btn = lv_btn_create(g_state.list_panel);
         lv_obj_set_size(btn, LV_PCT(100), 22);
@@ -640,29 +961,58 @@ static void build_item_list() {
     s_building_list = false;
 }
 
-static void on_item_clicked(lv_event_t* e) {
+static void on_item_clicked(lv_event_t* e)
+{
     settings::ui::ItemWidget* widget = static_cast<settings::ui::ItemWidget*>(lv_event_get_user_data(e));
     if (!widget || !widget->def) return;
     const SettingItem& item = *widget->def;
-    if (item.type == settings::ui::SettingType::Toggle) {
-        if (item.bool_value) {
+    if (item.type == settings::ui::SettingType::Toggle)
+    {
+        if (item.bool_value)
+        {
             *item.bool_value = !(*item.bool_value);
             prefs_put_bool(item.pref_key, *item.bool_value);
             update_item_value(*widget);
+            if (item.pref_key && strcmp(item.pref_key, "net_relay") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().mesh_config.enable_relay = *item.bool_value;
+                app_ctx.saveConfig();
+                app_ctx.applyMeshConfig();
+            }
         }
         return;
     }
-    if (item.type == settings::ui::SettingType::Enum) {
+    if (item.type == settings::ui::SettingType::Enum)
+    {
         open_option_modal(item, *widget);
         return;
     }
-    if (item.type == settings::ui::SettingType::Text) {
+    if (item.type == settings::ui::SettingType::Text)
+    {
         open_text_modal(item, *widget);
+        return;
+    }
+    if (item.type == settings::ui::SettingType::Action)
+    {
+        if (item.pref_key && strcmp(item.pref_key, "chat_reset_mesh") == 0)
+        {
+            reset_mesh_settings();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "chat_reset_nodes") == 0)
+        {
+            reset_node_db();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "chat_clear_messages") == 0)
+        {
+            clear_message_db();
+        }
         return;
     }
 }
 
-static void on_filter_clicked(lv_event_t* e) {
+static void on_filter_clicked(lv_event_t* e)
+{
     intptr_t idx = reinterpret_cast<intptr_t>(lv_event_get_user_data(e));
     if (idx < 0) return;
     if (s_building_list) return;
@@ -672,20 +1022,24 @@ static void on_filter_clicked(lv_event_t* e) {
     settings::ui::input::focus_to_list();
 }
 
-static void on_filter_focused(lv_event_t* e) {
+static void on_filter_focused(lv_event_t* e)
+{
     intptr_t idx = reinterpret_cast<intptr_t>(lv_event_get_user_data(e));
     if (idx < 0) return;
     if (s_building_list) return;
     s_pending_category = static_cast<int>(idx);
-    if (!s_category_update_scheduled) {
+    if (!s_category_update_scheduled)
+    {
         s_category_update_scheduled = true;
         lv_async_call(apply_pending_category_cb, nullptr);
     }
 }
 
-static void apply_pending_category_cb(void* /*user_data*/) {
+static void apply_pending_category_cb(void* /*user_data*/)
+{
     s_category_update_scheduled = false;
-    if (s_pending_category < 0) {
+    if (s_pending_category < 0)
+    {
         return;
     }
     g_state.current_category = s_pending_category;
@@ -696,11 +1050,13 @@ static void apply_pending_category_cb(void* /*user_data*/) {
     build_item_list();
 }
 
-static void on_list_back_clicked(lv_event_t* /*e*/) {
+static void on_list_back_clicked(lv_event_t* /*e*/)
+{
     settings::ui::input::focus_to_filter();
 }
 
-static void settings_back_cb(void* /*user_data*/) {
+static void settings_back_cb(void* /*user_data*/)
+{
     destroy();
     menu_show();
 }
@@ -720,7 +1076,8 @@ void create(lv_obj_t* parent)
     layout::create_list_panel(g_state.content);
 
     g_state.filter_count = sizeof(kCategories) / sizeof(kCategories[0]);
-    for (size_t i = 0; i < g_state.filter_count; ++i) {
+    for (size_t i = 0; i < g_state.filter_count; ++i)
+    {
         lv_obj_t* btn = lv_btn_create(g_state.filter_panel);
         lv_obj_set_size(btn, LV_PCT(100), 22);
         style::apply_btn_filter(btn);
@@ -740,15 +1097,18 @@ void create(lv_obj_t* parent)
 
 void destroy()
 {
-    if (g_state.modal_root) {
+    if (g_state.modal_root)
+    {
         modal_close();
     }
     settings::ui::input::cleanup();
-    if (g_state.root) {
+    if (g_state.root)
+    {
         lv_obj_del_async(g_state.root);
         g_state.root = nullptr;
     }
-    if (g_state.parent) {
+    if (g_state.parent)
+    {
         lv_obj_invalidate(g_state.parent);
     }
     g_state = settings::ui::UiState{};

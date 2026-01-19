@@ -3,7 +3,6 @@
 
 #ifndef PB_MESHTASTIC_MESHTASTIC_MESH_PB_H_INCLUDED
 #define PB_MESHTASTIC_MESHTASTIC_MESH_PB_H_INCLUDED
-#include <pb.h>
 #include "meshtastic/channel.pb.h"
 #include "meshtastic/config.pb.h"
 #include "meshtastic/device_ui.pb.h"
@@ -11,6 +10,7 @@
 #include "meshtastic/portnums.pb.h"
 #include "meshtastic/telemetry.pb.h"
 #include "meshtastic/xmodem.pb.h"
+#include <pb.h>
 
 #if PB_PROTO_HEADER_VERSION != 40
 #error Regenerate this file with the current version of nanopb generator.
@@ -21,7 +21,8 @@
  bin/build-all.sh script.
  Because they will be used to find firmware filenames in the android app for OTA updates.
  To match the old style filenames, _ is converted to -, p is converted to . */
-typedef enum _meshtastic_HardwareModel {
+typedef enum _meshtastic_HardwareModel
+{
     /* TODO: REPLACE */
     meshtastic_HardwareModel_UNSET = 0,
     /* TODO: REPLACE */
@@ -301,7 +302,8 @@ typedef enum _meshtastic_HardwareModel {
 } meshtastic_HardwareModel;
 
 /* Shared constants between device and phone */
-typedef enum _meshtastic_Constants {
+typedef enum _meshtastic_Constants
+{
     /* First enum must be zero, and we are just using this enum to
  pass int constants between two very different environments */
     meshtastic_Constants_ZERO = 0,
@@ -315,7 +317,8 @@ typedef enum _meshtastic_Constants {
  The device might report these fault codes on the screen.
  If you encounter a fault code, please post on the meshtastic.discourse.group
  and we'll try to help. */
-typedef enum _meshtastic_CriticalErrorCode {
+typedef enum _meshtastic_CriticalErrorCode
+{
     /* TODO: REPLACE */
     meshtastic_CriticalErrorCode_NONE = 0,
     /* A software bug was detected while trying to send lora */
@@ -354,7 +357,8 @@ typedef enum _meshtastic_CriticalErrorCode {
 
 /* Enum to indicate to clients whether this firmware is a special firmware build, like an event.
  The first 16 values are reserved for non-event special firmwares, like the Smart Citizen use case. */
-typedef enum _meshtastic_FirmwareEdition {
+typedef enum _meshtastic_FirmwareEdition
+{
     /* Vanilla firmware */
     meshtastic_FirmwareEdition_VANILLA = 0,
     /* Firmware for use in the Smart Citizen environmental monitoring network */
@@ -374,7 +378,8 @@ typedef enum _meshtastic_FirmwareEdition {
 /* Enum for modules excluded from a device's configuration.
  Each value represents a ModuleConfigType that can be toggled as excluded
  by setting its corresponding bit in the `excluded_modules` bitmask field. */
-typedef enum _meshtastic_ExcludedModules {
+typedef enum _meshtastic_ExcludedModules
+{
     /* Default value of 0 indicates no modules are excluded. */
     meshtastic_ExcludedModules_EXCLUDED_NONE = 0,
     /* MQTT module */
@@ -410,7 +415,8 @@ typedef enum _meshtastic_ExcludedModules {
 } meshtastic_ExcludedModules;
 
 /* How the location was acquired: manual, onboard GPS, external (EUD) GPS */
-typedef enum _meshtastic_Position_LocSource {
+typedef enum _meshtastic_Position_LocSource
+{
     /* TODO: REPLACE */
     meshtastic_Position_LocSource_LOC_UNSET = 0,
     /* TODO: REPLACE */
@@ -423,7 +429,8 @@ typedef enum _meshtastic_Position_LocSource {
 
 /* How the altitude was acquired: manual, GPS int/ext, etc
  Default: same as location_source if present */
-typedef enum _meshtastic_Position_AltSource {
+typedef enum _meshtastic_Position_AltSource
+{
     /* TODO: REPLACE */
     meshtastic_Position_AltSource_ALT_UNSET = 0,
     /* TODO: REPLACE */
@@ -438,7 +445,8 @@ typedef enum _meshtastic_Position_AltSource {
 
 /* A failure in delivering a message (usually used for routing control messages, but might be provided in addition to ack.fail_id to provide
  details on the type of failure). */
-typedef enum _meshtastic_Routing_Error {
+typedef enum _meshtastic_Routing_Error
+{
     /* This message is not a failure */
     meshtastic_Routing_Error_NONE = 0,
     /* Our node doesn't have a route to the requested destination anymore. */
@@ -496,7 +504,8 @@ typedef enum _meshtastic_Routing_Error {
  So I bit the bullet and implemented a new (internal - not sent over the air)
  field in MeshPacket called 'priority'.
  And the transmission queue in the router object is now a priority queue. */
-typedef enum _meshtastic_MeshPacket_Priority {
+typedef enum _meshtastic_MeshPacket_Priority
+{
     /* Treated as Priority.DEFAULT */
     meshtastic_MeshPacket_Priority_UNSET = 0,
     /* TODO: REPLACE */
@@ -524,7 +533,8 @@ typedef enum _meshtastic_MeshPacket_Priority {
 } meshtastic_MeshPacket_Priority;
 
 /* Identify if this is a delayed packet */
-typedef enum _meshtastic_MeshPacket_Delayed {
+typedef enum _meshtastic_MeshPacket_Delayed
+{
     /* If unset, the message is being sent in real time. */
     meshtastic_MeshPacket_Delayed_NO_DELAY = 0,
     /* The message is delayed and was originally a broadcast */
@@ -534,7 +544,8 @@ typedef enum _meshtastic_MeshPacket_Delayed {
 } meshtastic_MeshPacket_Delayed;
 
 /* Enum to identify which transport mechanism this packet arrived over */
-typedef enum _meshtastic_MeshPacket_TransportMechanism {
+typedef enum _meshtastic_MeshPacket_TransportMechanism
+{
     /* The default case is that the node generated a packet itself */
     meshtastic_MeshPacket_TransportMechanism_TRANSPORT_INTERNAL = 0,
     /* Arrived via the primary LoRa radio */
@@ -554,7 +565,8 @@ typedef enum _meshtastic_MeshPacket_TransportMechanism {
 } meshtastic_MeshPacket_TransportMechanism;
 
 /* Log levels, chosen to match python logging conventions. */
-typedef enum _meshtastic_LogRecord_Level {
+typedef enum _meshtastic_LogRecord_Level
+{
     /* Log levels, chosen to match python logging conventions. */
     meshtastic_LogRecord_Level_UNSET = 0,
     /* Log levels, chosen to match python logging conventions. */
@@ -573,7 +585,8 @@ typedef enum _meshtastic_LogRecord_Level {
 
 /* Struct definitions */
 /* A GPS Position */
-typedef struct _meshtastic_Position {
+typedef struct _meshtastic_Position
+{
     /* The new preferred location encoding, multiply by 1e-7 to get degrees
  in floating point */
     bool has_latitude_i;
@@ -669,7 +682,8 @@ typedef PB_BYTES_ARRAY_T(32) meshtastic_User_public_key_t;
  A few nodenums are reserved and will never be requested:
  0xff - broadcast
  0 through 3 - for future use */
-typedef struct _meshtastic_User {
+typedef struct _meshtastic_User
+{
     /* A globally unique ID string for this user.
  In the case of Signal that would mean +16504442323, for the default macaddr derived id it would be !<8 hexidecimal bytes>.
  Note: app developers are encouraged to also use the following standard
@@ -704,7 +718,8 @@ typedef struct _meshtastic_User {
 } meshtastic_User;
 
 /* A message used in a traceroute */
-typedef struct _meshtastic_RouteDiscovery {
+typedef struct _meshtastic_RouteDiscovery
+{
     /* The list of nodenums this packet has visited so far to the destination. */
     pb_size_t route_count;
     uint32_t route[8];
@@ -720,9 +735,11 @@ typedef struct _meshtastic_RouteDiscovery {
 } meshtastic_RouteDiscovery;
 
 /* A Routing control Data packet handled by the routing module */
-typedef struct _meshtastic_Routing {
+typedef struct _meshtastic_Routing
+{
     pb_size_t which_variant;
-    union {
+    union
+    {
         /* A route request going from the requester */
         meshtastic_RouteDiscovery route_request;
         /* A route reply */
@@ -737,7 +754,8 @@ typedef PB_BYTES_ARRAY_T(233) meshtastic_Data_payload_t;
 /* (Formerly called SubPacket)
  The payload portion fo a packet, this is the actual bytes that are sent
  inside a radio packet (because from/to are broken out by the comms library) */
-typedef struct _meshtastic_Data {
+typedef struct _meshtastic_Data
+{
     /* Formerly named typ and of type Type */
     meshtastic_PortNum portnum;
     /* TODO: REPLACE */
@@ -772,7 +790,8 @@ typedef struct _meshtastic_Data {
 typedef PB_BYTES_ARRAY_T(32) meshtastic_KeyVerification_hash1_t;
 typedef PB_BYTES_ARRAY_T(32) meshtastic_KeyVerification_hash2_t;
 /* The actual over-the-mesh message doing KeyVerification */
-typedef struct _meshtastic_KeyVerification {
+typedef struct _meshtastic_KeyVerification
+{
     /* random value Selected by the requesting node */
     uint64_t nonce;
     /* The final authoritative hash, only to be sent by NodeA at the end of the handshake */
@@ -783,7 +802,8 @@ typedef struct _meshtastic_KeyVerification {
 } meshtastic_KeyVerification;
 
 /* Waypoint message, used to share arbitrary locations across the mesh */
-typedef struct _meshtastic_Waypoint {
+typedef struct _meshtastic_Waypoint
+{
     /* Id of the waypoint */
     uint32_t id;
     /* latitude_i */
@@ -807,11 +827,13 @@ typedef struct _meshtastic_Waypoint {
 
 typedef PB_BYTES_ARRAY_T(435) meshtastic_MqttClientProxyMessage_data_t;
 /* This message will be proxied over the PhoneAPI for the client to deliver to the MQTT server */
-typedef struct _meshtastic_MqttClientProxyMessage {
+typedef struct _meshtastic_MqttClientProxyMessage
+{
     /* The MQTT topic this message will be sent /received on */
     char topic[60];
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         /* Bytes */
         meshtastic_MqttClientProxyMessage_data_t data;
         /* Text */
@@ -826,7 +848,8 @@ typedef PB_BYTES_ARRAY_T(32) meshtastic_MeshPacket_public_key_t;
 /* A packet envelope sent/received over the mesh
  only payload_variant is sent in the payload portion of the LORA packet.
  The other fields are either not sent at all, or sent in the special 16 byte LORA header. */
-typedef struct _meshtastic_MeshPacket {
+typedef struct _meshtastic_MeshPacket
+{
     /* The sending node number.
  Note: Our crypto implementation uses this field as well.
  See [crypto](/docs/overview/encryption) for details. */
@@ -846,7 +869,8 @@ typedef struct _meshtastic_MeshPacket {
  This 'trick' is only used while the payload_variant is an 'encrypted'. */
     uint8_t channel;
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         /* TODO: REPLACE */
         meshtastic_Data decoded;
         /* TODO: REPLACE */
@@ -931,7 +955,8 @@ typedef struct _meshtastic_MeshPacket {
  level etc) SET_CONFIG (switches device to a new set of radio params and
  preshared key, drops all existing nodes, force our node to rejoin this new group)
  Full information about a node on the mesh */
-typedef struct _meshtastic_NodeInfo {
+typedef struct _meshtastic_NodeInfo
+{
     /* The node number */
     uint32_t num;
     /* The user info for this node */
@@ -972,7 +997,8 @@ typedef PB_BYTES_ARRAY_T(16) meshtastic_MyNodeInfo_device_id_t;
 /* Unique local debugging info for this node
  Note: we don't include position or the user info, because that will come in the
  Sent to the phone in response to WantNodes. */
-typedef struct _meshtastic_MyNodeInfo {
+typedef struct _meshtastic_MyNodeInfo
+{
     /* Tells the phone what our node number is, default starting value is
  lowbyte of macaddr, but it will be fixed if that is already in use */
     uint32_t my_node_num;
@@ -998,7 +1024,8 @@ typedef struct _meshtastic_MyNodeInfo {
  on the message it is assumed to be a continuation of the previously sent message.
  This allows the device code to use fixed maxlen 64 byte strings for messages,
  and then extend as needed by emitting multiple records. */
-typedef struct _meshtastic_LogRecord {
+typedef struct _meshtastic_LogRecord
+{
     /* Log levels, chosen to match python logging conventions. */
     char message[384];
     /* Seconds since 1970 - or 0 for unknown/unset */
@@ -1009,7 +1036,8 @@ typedef struct _meshtastic_LogRecord {
     meshtastic_LogRecord_Level level;
 } meshtastic_LogRecord;
 
-typedef struct _meshtastic_QueueStatus {
+typedef struct _meshtastic_QueueStatus
+{
     /* Last attempt to queue status, ErrorCode */
     int8_t res;
     /* Free entries in the outgoing queue */
@@ -1020,29 +1048,34 @@ typedef struct _meshtastic_QueueStatus {
     uint32_t mesh_packet_id;
 } meshtastic_QueueStatus;
 
-typedef struct _meshtastic_KeyVerificationNumberInform {
+typedef struct _meshtastic_KeyVerificationNumberInform
+{
     uint64_t nonce;
     char remote_longname[40];
     uint32_t security_number;
 } meshtastic_KeyVerificationNumberInform;
 
-typedef struct _meshtastic_KeyVerificationNumberRequest {
+typedef struct _meshtastic_KeyVerificationNumberRequest
+{
     uint64_t nonce;
     char remote_longname[40];
 } meshtastic_KeyVerificationNumberRequest;
 
-typedef struct _meshtastic_KeyVerificationFinal {
+typedef struct _meshtastic_KeyVerificationFinal
+{
     uint64_t nonce;
     char remote_longname[40];
     bool isSender;
     char verification_characters[10];
 } meshtastic_KeyVerificationFinal;
 
-typedef struct _meshtastic_DuplicatedPublicKey {
+typedef struct _meshtastic_DuplicatedPublicKey
+{
     char dummy_field;
 } meshtastic_DuplicatedPublicKey;
 
-typedef struct _meshtastic_LowEntropyKey {
+typedef struct _meshtastic_LowEntropyKey
+{
     char dummy_field;
 } meshtastic_LowEntropyKey;
 
@@ -1050,7 +1083,8 @@ typedef struct _meshtastic_LowEntropyKey {
  To be used for important messages that should to be displayed to the user
  in the form of push notifications or validation messages when saving
  invalid configuration. */
-typedef struct _meshtastic_ClientNotification {
+typedef struct _meshtastic_ClientNotification
+{
     /* The id of the packet we're notifying in response to */
     bool has_reply_id;
     uint32_t reply_id;
@@ -1061,7 +1095,8 @@ typedef struct _meshtastic_ClientNotification {
     /* The message body of the notification */
     char message[400];
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         meshtastic_KeyVerificationNumberInform key_verification_number_inform;
         meshtastic_KeyVerificationNumberRequest key_verification_number_request;
         meshtastic_KeyVerificationFinal key_verification_final;
@@ -1071,7 +1106,8 @@ typedef struct _meshtastic_ClientNotification {
 } meshtastic_ClientNotification;
 
 /* Individual File info for the device */
-typedef struct _meshtastic_FileInfo {
+typedef struct _meshtastic_FileInfo
+{
     /* The fully qualified path of the file */
     char file_name[228];
     /* The size of the file in bytes */
@@ -1080,7 +1116,8 @@ typedef struct _meshtastic_FileInfo {
 
 typedef PB_BYTES_ARRAY_T(233) meshtastic_Compressed_data_t;
 /* Compressed message payload */
-typedef struct _meshtastic_Compressed {
+typedef struct _meshtastic_Compressed
+{
     /* PortNum to determine the how to handle the compressed payload. */
     meshtastic_PortNum portnum;
     /* Compressed data. */
@@ -1088,7 +1125,8 @@ typedef struct _meshtastic_Compressed {
 } meshtastic_Compressed;
 
 /* A single edge in the mesh */
-typedef struct _meshtastic_Neighbor {
+typedef struct _meshtastic_Neighbor
+{
     /* Node ID of neighbor */
     uint32_t node_id;
     /* SNR of last heard message */
@@ -1102,7 +1140,8 @@ typedef struct _meshtastic_Neighbor {
 } meshtastic_Neighbor;
 
 /* Full info on edges for a single node */
-typedef struct _meshtastic_NeighborInfo {
+typedef struct _meshtastic_NeighborInfo
+{
     /* The node ID of the node sending info on its neighbors */
     uint32_t node_id;
     /* Field to pass neighbor info for the next sending cycle */
@@ -1115,7 +1154,8 @@ typedef struct _meshtastic_NeighborInfo {
 } meshtastic_NeighborInfo;
 
 /* Device metadata response */
-typedef struct _meshtastic_DeviceMetadata {
+typedef struct _meshtastic_DeviceMetadata
+{
     /* Device firmware version string */
     char firmware_version[18];
     /* Device state version */
@@ -1147,12 +1187,14 @@ typedef struct _meshtastic_DeviceMetadata {
  It will support READ and NOTIFY. When a new packet arrives the device will BLE notify?
  It will sit in that descriptor until consumed by the phone,
  at which point the next item in the FIFO will be populated. */
-typedef struct _meshtastic_FromRadio {
+typedef struct _meshtastic_FromRadio
+{
     /* The packet id, used to allow the phone to request missing read packets from the FIFO,
  see our bluetooth docs */
     uint32_t id;
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         /* Log levels, chosen to match python logging conventions. */
         meshtastic_MeshPacket packet;
         /* Tells the phone what our node number is, can be -1 if we've not yet joined a mesh.
@@ -1198,16 +1240,19 @@ typedef struct _meshtastic_FromRadio {
 
 /* A heartbeat message is sent to the node from the client to keep the connection alive.
  This is currently only needed to keep serial connections alive, but can be used by any PhoneAPI. */
-typedef struct _meshtastic_Heartbeat {
+typedef struct _meshtastic_Heartbeat
+{
     /* The nonce of the heartbeat message */
     uint32_t nonce;
 } meshtastic_Heartbeat;
 
 /* Packets/commands to the radio will be written (reliably) to the toRadio characteristic.
  Once the write completes the phone can assume it is handled. */
-typedef struct _meshtastic_ToRadio {
+typedef struct _meshtastic_ToRadio
+{
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         /* Send this packet on the mesh */
         meshtastic_MeshPacket packet;
         /* Phone wants radio to send full node db to the phone, This is
@@ -1232,7 +1277,8 @@ typedef struct _meshtastic_ToRadio {
 } meshtastic_ToRadio;
 
 /* RemoteHardwarePins associated with a node */
-typedef struct _meshtastic_NodeRemoteHardwarePin {
+typedef struct _meshtastic_NodeRemoteHardwarePin
+{
     /* The node_num exposing the available gpio pin */
     uint32_t node_num;
     /* The the available gpio pin for usage with RemoteHardware module */
@@ -1241,7 +1287,8 @@ typedef struct _meshtastic_NodeRemoteHardwarePin {
 } meshtastic_NodeRemoteHardwarePin;
 
 typedef PB_BYTES_ARRAY_T(228) meshtastic_ChunkedPayload_payload_chunk_t;
-typedef struct _meshtastic_ChunkedPayload {
+typedef struct _meshtastic_ChunkedPayload
+{
     /* The ID of the entire payload */
     uint32_t payload_id;
     /* The total number of chunks in the payload */
@@ -1253,16 +1300,19 @@ typedef struct _meshtastic_ChunkedPayload {
 } meshtastic_ChunkedPayload;
 
 /* Wrapper message for broken repeated oneof support */
-typedef struct _meshtastic_resend_chunks {
+typedef struct _meshtastic_resend_chunks
+{
     pb_callback_t chunks;
 } meshtastic_resend_chunks;
 
 /* Responses to a ChunkedPayload request */
-typedef struct _meshtastic_ChunkedPayloadResponse {
+typedef struct _meshtastic_ChunkedPayloadResponse
+{
     /* The ID of the entire payload */
     uint32_t payload_id;
     pb_size_t which_payload_variant;
-    union {
+    union
+    {
         /* Request to transfer chunked payload */
         bool request_transfer;
         /* Accept the transfer chunked payload */
@@ -1272,59 +1322,59 @@ typedef struct _meshtastic_ChunkedPayloadResponse {
     } payload_variant;
 } meshtastic_ChunkedPayloadResponse;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_HardwareModel_MIN meshtastic_HardwareModel_UNSET
 #define _meshtastic_HardwareModel_MAX meshtastic_HardwareModel_PRIVATE_HW
-#define _meshtastic_HardwareModel_ARRAYSIZE ((meshtastic_HardwareModel)(meshtastic_HardwareModel_PRIVATE_HW+1))
+#define _meshtastic_HardwareModel_ARRAYSIZE ((meshtastic_HardwareModel)(meshtastic_HardwareModel_PRIVATE_HW + 1))
 
 #define _meshtastic_Constants_MIN meshtastic_Constants_ZERO
 #define _meshtastic_Constants_MAX meshtastic_Constants_DATA_PAYLOAD_LEN
-#define _meshtastic_Constants_ARRAYSIZE ((meshtastic_Constants)(meshtastic_Constants_DATA_PAYLOAD_LEN+1))
+#define _meshtastic_Constants_ARRAYSIZE ((meshtastic_Constants)(meshtastic_Constants_DATA_PAYLOAD_LEN + 1))
 
 #define _meshtastic_CriticalErrorCode_MIN meshtastic_CriticalErrorCode_NONE
 #define _meshtastic_CriticalErrorCode_MAX meshtastic_CriticalErrorCode_FLASH_CORRUPTION_UNRECOVERABLE
-#define _meshtastic_CriticalErrorCode_ARRAYSIZE ((meshtastic_CriticalErrorCode)(meshtastic_CriticalErrorCode_FLASH_CORRUPTION_UNRECOVERABLE+1))
+#define _meshtastic_CriticalErrorCode_ARRAYSIZE ((meshtastic_CriticalErrorCode)(meshtastic_CriticalErrorCode_FLASH_CORRUPTION_UNRECOVERABLE + 1))
 
 #define _meshtastic_FirmwareEdition_MIN meshtastic_FirmwareEdition_VANILLA
 #define _meshtastic_FirmwareEdition_MAX meshtastic_FirmwareEdition_DIY_EDITION
-#define _meshtastic_FirmwareEdition_ARRAYSIZE ((meshtastic_FirmwareEdition)(meshtastic_FirmwareEdition_DIY_EDITION+1))
+#define _meshtastic_FirmwareEdition_ARRAYSIZE ((meshtastic_FirmwareEdition)(meshtastic_FirmwareEdition_DIY_EDITION + 1))
 
 #define _meshtastic_ExcludedModules_MIN meshtastic_ExcludedModules_EXCLUDED_NONE
 #define _meshtastic_ExcludedModules_MAX meshtastic_ExcludedModules_NETWORK_CONFIG
-#define _meshtastic_ExcludedModules_ARRAYSIZE ((meshtastic_ExcludedModules)(meshtastic_ExcludedModules_NETWORK_CONFIG+1))
+#define _meshtastic_ExcludedModules_ARRAYSIZE ((meshtastic_ExcludedModules)(meshtastic_ExcludedModules_NETWORK_CONFIG + 1))
 
 #define _meshtastic_Position_LocSource_MIN meshtastic_Position_LocSource_LOC_UNSET
 #define _meshtastic_Position_LocSource_MAX meshtastic_Position_LocSource_LOC_EXTERNAL
-#define _meshtastic_Position_LocSource_ARRAYSIZE ((meshtastic_Position_LocSource)(meshtastic_Position_LocSource_LOC_EXTERNAL+1))
+#define _meshtastic_Position_LocSource_ARRAYSIZE ((meshtastic_Position_LocSource)(meshtastic_Position_LocSource_LOC_EXTERNAL + 1))
 
 #define _meshtastic_Position_AltSource_MIN meshtastic_Position_AltSource_ALT_UNSET
 #define _meshtastic_Position_AltSource_MAX meshtastic_Position_AltSource_ALT_BAROMETRIC
-#define _meshtastic_Position_AltSource_ARRAYSIZE ((meshtastic_Position_AltSource)(meshtastic_Position_AltSource_ALT_BAROMETRIC+1))
+#define _meshtastic_Position_AltSource_ARRAYSIZE ((meshtastic_Position_AltSource)(meshtastic_Position_AltSource_ALT_BAROMETRIC + 1))
 
 #define _meshtastic_Routing_Error_MIN meshtastic_Routing_Error_NONE
 #define _meshtastic_Routing_Error_MAX meshtastic_Routing_Error_RATE_LIMIT_EXCEEDED
-#define _meshtastic_Routing_Error_ARRAYSIZE ((meshtastic_Routing_Error)(meshtastic_Routing_Error_RATE_LIMIT_EXCEEDED+1))
+#define _meshtastic_Routing_Error_ARRAYSIZE ((meshtastic_Routing_Error)(meshtastic_Routing_Error_RATE_LIMIT_EXCEEDED + 1))
 
 #define _meshtastic_MeshPacket_Priority_MIN meshtastic_MeshPacket_Priority_UNSET
 #define _meshtastic_MeshPacket_Priority_MAX meshtastic_MeshPacket_Priority_MAX
-#define _meshtastic_MeshPacket_Priority_ARRAYSIZE ((meshtastic_MeshPacket_Priority)(meshtastic_MeshPacket_Priority_MAX+1))
+#define _meshtastic_MeshPacket_Priority_ARRAYSIZE ((meshtastic_MeshPacket_Priority)(meshtastic_MeshPacket_Priority_MAX + 1))
 
 #define _meshtastic_MeshPacket_Delayed_MIN meshtastic_MeshPacket_Delayed_NO_DELAY
 #define _meshtastic_MeshPacket_Delayed_MAX meshtastic_MeshPacket_Delayed_DELAYED_DIRECT
-#define _meshtastic_MeshPacket_Delayed_ARRAYSIZE ((meshtastic_MeshPacket_Delayed)(meshtastic_MeshPacket_Delayed_DELAYED_DIRECT+1))
+#define _meshtastic_MeshPacket_Delayed_ARRAYSIZE ((meshtastic_MeshPacket_Delayed)(meshtastic_MeshPacket_Delayed_DELAYED_DIRECT + 1))
 
 #define _meshtastic_MeshPacket_TransportMechanism_MIN meshtastic_MeshPacket_TransportMechanism_TRANSPORT_INTERNAL
 #define _meshtastic_MeshPacket_TransportMechanism_MAX meshtastic_MeshPacket_TransportMechanism_TRANSPORT_API
-#define _meshtastic_MeshPacket_TransportMechanism_ARRAYSIZE ((meshtastic_MeshPacket_TransportMechanism)(meshtastic_MeshPacket_TransportMechanism_TRANSPORT_API+1))
+#define _meshtastic_MeshPacket_TransportMechanism_ARRAYSIZE ((meshtastic_MeshPacket_TransportMechanism)(meshtastic_MeshPacket_TransportMechanism_TRANSPORT_API + 1))
 
 #define _meshtastic_LogRecord_Level_MIN meshtastic_LogRecord_Level_UNSET
 #define _meshtastic_LogRecord_Level_MAX meshtastic_LogRecord_Level_CRITICAL
-#define _meshtastic_LogRecord_Level_ARRAYSIZE ((meshtastic_LogRecord_Level)(meshtastic_LogRecord_Level_CRITICAL+1))
+#define _meshtastic_LogRecord_Level_ARRAYSIZE ((meshtastic_LogRecord_Level)(meshtastic_LogRecord_Level_CRITICAL + 1))
 
 #define meshtastic_Position_location_source_ENUMTYPE meshtastic_Position_LocSource
 #define meshtastic_Position_altitude_source_ENUMTYPE meshtastic_Position_AltSource
@@ -1332,222 +1382,408 @@ extern "C" {
 #define meshtastic_User_hw_model_ENUMTYPE meshtastic_HardwareModel
 #define meshtastic_User_role_ENUMTYPE meshtastic_Config_DeviceConfig_Role
 
-
 #define meshtastic_Routing_variant_error_reason_ENUMTYPE meshtastic_Routing_Error
 
 #define meshtastic_Data_portnum_ENUMTYPE meshtastic_PortNum
-
-
-
 
 #define meshtastic_MeshPacket_priority_ENUMTYPE meshtastic_MeshPacket_Priority
 #define meshtastic_MeshPacket_delayed_ENUMTYPE meshtastic_MeshPacket_Delayed
 #define meshtastic_MeshPacket_transport_mechanism_ENUMTYPE meshtastic_MeshPacket_TransportMechanism
 
-
 #define meshtastic_MyNodeInfo_firmware_edition_ENUMTYPE meshtastic_FirmwareEdition
 
 #define meshtastic_LogRecord_level_ENUMTYPE meshtastic_LogRecord_Level
 
-
-
 #define meshtastic_ClientNotification_level_ENUMTYPE meshtastic_LogRecord_Level
 
-
-
-
-
-
-
-
 #define meshtastic_Compressed_portnum_ENUMTYPE meshtastic_PortNum
-
-
 
 #define meshtastic_DeviceMetadata_role_ENUMTYPE meshtastic_Config_DeviceConfig_Role
 #define meshtastic_DeviceMetadata_hw_model_ENUMTYPE meshtastic_HardwareModel
 
-
-
-
-
-
-
 /* Initializer values for message structs */
-#define meshtastic_Position_init_default         {false, 0, false, 0, false, 0, 0, _meshtastic_Position_LocSource_MIN, _meshtastic_Position_AltSource_MIN, 0, 0, false, 0, false, 0, 0, 0, 0, 0, false, 0, false, 0, 0, 0, 0, 0, 0, 0, 0}
-#define meshtastic_User_init_default             {"", "", "", {0}, _meshtastic_HardwareModel_MIN, 0, _meshtastic_Config_DeviceConfig_Role_MIN, {0, {0}}, false, 0}
-#define meshtastic_RouteDiscovery_init_default   {0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}}
-#define meshtastic_Routing_init_default          {0, {meshtastic_RouteDiscovery_init_default}}
-#define meshtastic_Data_init_default             {_meshtastic_PortNum_MIN, {0, {0}}, 0, 0, 0, 0, 0, 0, false, 0}
-#define meshtastic_KeyVerification_init_default  {0, {0, {0}}, {0, {0}}}
-#define meshtastic_Waypoint_init_default         {0, false, 0, false, 0, 0, 0, "", "", 0}
-#define meshtastic_MqttClientProxyMessage_init_default {"", 0, {{0, {0}}}, 0}
-#define meshtastic_MeshPacket_init_default       {0, 0, 0, 0, {meshtastic_Data_init_default}, 0, 0, 0, 0, 0, _meshtastic_MeshPacket_Priority_MIN, 0, _meshtastic_MeshPacket_Delayed_MIN, 0, 0, {0, {0}}, 0, 0, 0, 0, _meshtastic_MeshPacket_TransportMechanism_MIN}
-#define meshtastic_NodeInfo_init_default         {0, false, meshtastic_User_init_default, false, meshtastic_Position_init_default, 0, 0, false, meshtastic_DeviceMetrics_init_default, 0, 0, false, 0, 0, 0, 0}
-#define meshtastic_MyNodeInfo_init_default       {0, 0, 0, {0, {0}}, "", _meshtastic_FirmwareEdition_MIN, 0}
-#define meshtastic_LogRecord_init_default        {"", 0, "", _meshtastic_LogRecord_Level_MIN}
-#define meshtastic_QueueStatus_init_default      {0, 0, 0, 0}
-#define meshtastic_FromRadio_init_default        {0, 0, {meshtastic_MeshPacket_init_default}}
-#define meshtastic_ClientNotification_init_default {false, 0, 0, _meshtastic_LogRecord_Level_MIN, "", 0, {meshtastic_KeyVerificationNumberInform_init_default}}
-#define meshtastic_KeyVerificationNumberInform_init_default {0, "", 0}
-#define meshtastic_KeyVerificationNumberRequest_init_default {0, ""}
-#define meshtastic_KeyVerificationFinal_init_default {0, "", 0, ""}
-#define meshtastic_DuplicatedPublicKey_init_default {0}
-#define meshtastic_LowEntropyKey_init_default    {0}
-#define meshtastic_FileInfo_init_default         {"", 0}
-#define meshtastic_ToRadio_init_default          {0, {meshtastic_MeshPacket_init_default}}
-#define meshtastic_Compressed_init_default       {_meshtastic_PortNum_MIN, {0, {0}}}
-#define meshtastic_NeighborInfo_init_default     {0, 0, 0, 0, {meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default}}
-#define meshtastic_Neighbor_init_default         {0, 0, 0, 0}
-#define meshtastic_DeviceMetadata_init_default   {"", 0, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_Role_MIN, 0, _meshtastic_HardwareModel_MIN, 0, 0, 0}
-#define meshtastic_Heartbeat_init_default        {0}
-#define meshtastic_NodeRemoteHardwarePin_init_default {0, false, meshtastic_RemoteHardwarePin_init_default}
-#define meshtastic_ChunkedPayload_init_default   {0, 0, 0, {0, {0}}}
-#define meshtastic_resend_chunks_init_default    {{{NULL}, NULL}}
-#define meshtastic_ChunkedPayloadResponse_init_default {0, 0, {0}}
-#define meshtastic_Position_init_zero            {false, 0, false, 0, false, 0, 0, _meshtastic_Position_LocSource_MIN, _meshtastic_Position_AltSource_MIN, 0, 0, false, 0, false, 0, 0, 0, 0, 0, false, 0, false, 0, 0, 0, 0, 0, 0, 0, 0}
-#define meshtastic_User_init_zero                {"", "", "", {0}, _meshtastic_HardwareModel_MIN, 0, _meshtastic_Config_DeviceConfig_Role_MIN, {0, {0}}, false, 0}
-#define meshtastic_RouteDiscovery_init_zero      {0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}}
-#define meshtastic_Routing_init_zero             {0, {meshtastic_RouteDiscovery_init_zero}}
-#define meshtastic_Data_init_zero                {_meshtastic_PortNum_MIN, {0, {0}}, 0, 0, 0, 0, 0, 0, false, 0}
-#define meshtastic_KeyVerification_init_zero     {0, {0, {0}}, {0, {0}}}
-#define meshtastic_Waypoint_init_zero            {0, false, 0, false, 0, 0, 0, "", "", 0}
-#define meshtastic_MqttClientProxyMessage_init_zero {"", 0, {{0, {0}}}, 0}
-#define meshtastic_MeshPacket_init_zero          {0, 0, 0, 0, {meshtastic_Data_init_zero}, 0, 0, 0, 0, 0, _meshtastic_MeshPacket_Priority_MIN, 0, _meshtastic_MeshPacket_Delayed_MIN, 0, 0, {0, {0}}, 0, 0, 0, 0, _meshtastic_MeshPacket_TransportMechanism_MIN}
-#define meshtastic_NodeInfo_init_zero            {0, false, meshtastic_User_init_zero, false, meshtastic_Position_init_zero, 0, 0, false, meshtastic_DeviceMetrics_init_zero, 0, 0, false, 0, 0, 0, 0}
-#define meshtastic_MyNodeInfo_init_zero          {0, 0, 0, {0, {0}}, "", _meshtastic_FirmwareEdition_MIN, 0}
-#define meshtastic_LogRecord_init_zero           {"", 0, "", _meshtastic_LogRecord_Level_MIN}
-#define meshtastic_QueueStatus_init_zero         {0, 0, 0, 0}
-#define meshtastic_FromRadio_init_zero           {0, 0, {meshtastic_MeshPacket_init_zero}}
-#define meshtastic_ClientNotification_init_zero  {false, 0, 0, _meshtastic_LogRecord_Level_MIN, "", 0, {meshtastic_KeyVerificationNumberInform_init_zero}}
-#define meshtastic_KeyVerificationNumberInform_init_zero {0, "", 0}
-#define meshtastic_KeyVerificationNumberRequest_init_zero {0, ""}
-#define meshtastic_KeyVerificationFinal_init_zero {0, "", 0, ""}
-#define meshtastic_DuplicatedPublicKey_init_zero {0}
-#define meshtastic_LowEntropyKey_init_zero       {0}
-#define meshtastic_FileInfo_init_zero            {"", 0}
-#define meshtastic_ToRadio_init_zero             {0, {meshtastic_MeshPacket_init_zero}}
-#define meshtastic_Compressed_init_zero          {_meshtastic_PortNum_MIN, {0, {0}}}
-#define meshtastic_NeighborInfo_init_zero        {0, 0, 0, 0, {meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero}}
-#define meshtastic_Neighbor_init_zero            {0, 0, 0, 0}
-#define meshtastic_DeviceMetadata_init_zero      {"", 0, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_Role_MIN, 0, _meshtastic_HardwareModel_MIN, 0, 0, 0}
-#define meshtastic_Heartbeat_init_zero           {0}
-#define meshtastic_NodeRemoteHardwarePin_init_zero {0, false, meshtastic_RemoteHardwarePin_init_zero}
-#define meshtastic_ChunkedPayload_init_zero      {0, 0, 0, {0, {0}}}
-#define meshtastic_resend_chunks_init_zero       {{{NULL}, NULL}}
-#define meshtastic_ChunkedPayloadResponse_init_zero {0, 0, {0}}
+#define meshtastic_Position_init_default                                                                                                                                                       \
+    {                                                                                                                                                                                          \
+        false, 0, false, 0, false, 0, 0, _meshtastic_Position_LocSource_MIN, _meshtastic_Position_AltSource_MIN, 0, 0, false, 0, false, 0, 0, 0, 0, 0, false, 0, false, 0, 0, 0, 0, 0, 0, 0, 0 \
+    }
+#define meshtastic_User_init_default                                                                                    \
+    {                                                                                                                   \
+        "", "", "", {0}, _meshtastic_HardwareModel_MIN, 0, _meshtastic_Config_DeviceConfig_Role_MIN, {0, {0}}, false, 0 \
+    }
+#define meshtastic_RouteDiscovery_init_default                                                                               \
+    {                                                                                                                        \
+        0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, { 0, 0, 0, 0, 0, 0, 0, 0 } \
+    }
+#define meshtastic_Routing_init_default               \
+    {                                                 \
+        0, { meshtastic_RouteDiscovery_init_default } \
+    }
+#define meshtastic_Data_init_default                                  \
+    {                                                                 \
+        _meshtastic_PortNum_MIN, {0, {0}}, 0, 0, 0, 0, 0, 0, false, 0 \
+    }
+#define meshtastic_KeyVerification_init_default \
+    {                                           \
+        0, {0, {0}},                            \
+        {                                       \
+            0, { 0 }                            \
+        }                                       \
+    }
+#define meshtastic_Waypoint_init_default       \
+    {                                          \
+        0, false, 0, false, 0, 0, 0, "", "", 0 \
+    }
+#define meshtastic_MqttClientProxyMessage_init_default \
+    {                                                  \
+        "", 0, {{0, {0}}}, 0                           \
+    }
+#define meshtastic_MeshPacket_init_default                                                                                                                                                                               \
+    {                                                                                                                                                                                                                    \
+        0, 0, 0, 0, {meshtastic_Data_init_default}, 0, 0, 0, 0, 0, _meshtastic_MeshPacket_Priority_MIN, 0, _meshtastic_MeshPacket_Delayed_MIN, 0, 0, {0, {0}}, 0, 0, 0, 0, _meshtastic_MeshPacket_TransportMechanism_MIN \
+    }
+#define meshtastic_NodeInfo_init_default                                                                                                                             \
+    {                                                                                                                                                                \
+        0, false, meshtastic_User_init_default, false, meshtastic_Position_init_default, 0, 0, false, meshtastic_DeviceMetrics_init_default, 0, 0, false, 0, 0, 0, 0 \
+    }
+#define meshtastic_MyNodeInfo_init_default                        \
+    {                                                             \
+        0, 0, 0, {0, {0}}, "", _meshtastic_FirmwareEdition_MIN, 0 \
+    }
+#define meshtastic_LogRecord_init_default          \
+    {                                              \
+        "", 0, "", _meshtastic_LogRecord_Level_MIN \
+    }
+#define meshtastic_QueueStatus_init_default \
+    {                                       \
+        0, 0, 0, 0                          \
+    }
+#define meshtastic_FromRadio_init_default            \
+    {                                                \
+        0, 0, { meshtastic_MeshPacket_init_default } \
+    }
+#define meshtastic_ClientNotification_init_default                                                                   \
+    {                                                                                                                \
+        false, 0, 0, _meshtastic_LogRecord_Level_MIN, "", 0, { meshtastic_KeyVerificationNumberInform_init_default } \
+    }
+#define meshtastic_KeyVerificationNumberInform_init_default \
+    {                                                       \
+        0, "", 0                                            \
+    }
+#define meshtastic_KeyVerificationNumberRequest_init_default \
+    {                                                        \
+        0, ""                                                \
+    }
+#define meshtastic_KeyVerificationFinal_init_default \
+    {                                                \
+        0, "", 0, ""                                 \
+    }
+#define meshtastic_DuplicatedPublicKey_init_default \
+    {                                               \
+        0                                           \
+    }
+#define meshtastic_LowEntropyKey_init_default \
+    {                                         \
+        0                                     \
+    }
+#define meshtastic_FileInfo_init_default \
+    {                                    \
+        "", 0                            \
+    }
+#define meshtastic_ToRadio_init_default           \
+    {                                             \
+        0, { meshtastic_MeshPacket_init_default } \
+    }
+#define meshtastic_Compressed_init_default \
+    {                                      \
+        _meshtastic_PortNum_MIN,           \
+        {                                  \
+            0, { 0 }                       \
+        }                                  \
+    }
+#define meshtastic_NeighborInfo_init_default                                                                                                                                                                                                                                                                                                                               \
+    {                                                                                                                                                                                                                                                                                                                                                                      \
+        0, 0, 0, 0, { meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default, meshtastic_Neighbor_init_default } \
+    }
+#define meshtastic_Neighbor_init_default \
+    {                                    \
+        0, 0, 0, 0                       \
+    }
+#define meshtastic_DeviceMetadata_init_default                                                                 \
+    {                                                                                                          \
+        "", 0, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_Role_MIN, 0, _meshtastic_HardwareModel_MIN, 0, 0, 0 \
+    }
+#define meshtastic_Heartbeat_init_default \
+    {                                     \
+        0                                 \
+    }
+#define meshtastic_NodeRemoteHardwarePin_init_default       \
+    {                                                       \
+        0, false, meshtastic_RemoteHardwarePin_init_default \
+    }
+#define meshtastic_ChunkedPayload_init_default \
+    {                                          \
+        0, 0, 0,                               \
+        {                                      \
+            0, { 0 }                           \
+        }                                      \
+    }
+#define meshtastic_resend_chunks_init_default \
+    {                                         \
+        {                                     \
+            {NULL}, NULL                      \
+        }                                     \
+    }
+#define meshtastic_ChunkedPayloadResponse_init_default \
+    {                                                  \
+        0, 0, { 0 }                                    \
+    }
+#define meshtastic_Position_init_zero                                                                                                                                                          \
+    {                                                                                                                                                                                          \
+        false, 0, false, 0, false, 0, 0, _meshtastic_Position_LocSource_MIN, _meshtastic_Position_AltSource_MIN, 0, 0, false, 0, false, 0, 0, 0, 0, 0, false, 0, false, 0, 0, 0, 0, 0, 0, 0, 0 \
+    }
+#define meshtastic_User_init_zero                                                                                       \
+    {                                                                                                                   \
+        "", "", "", {0}, _meshtastic_HardwareModel_MIN, 0, _meshtastic_Config_DeviceConfig_Role_MIN, {0, {0}}, false, 0 \
+    }
+#define meshtastic_RouteDiscovery_init_zero                                                                                  \
+    {                                                                                                                        \
+        0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, { 0, 0, 0, 0, 0, 0, 0, 0 } \
+    }
+#define meshtastic_Routing_init_zero               \
+    {                                              \
+        0, { meshtastic_RouteDiscovery_init_zero } \
+    }
+#define meshtastic_Data_init_zero                                     \
+    {                                                                 \
+        _meshtastic_PortNum_MIN, {0, {0}}, 0, 0, 0, 0, 0, 0, false, 0 \
+    }
+#define meshtastic_KeyVerification_init_zero \
+    {                                        \
+        0, {0, {0}},                         \
+        {                                    \
+            0, { 0 }                         \
+        }                                    \
+    }
+#define meshtastic_Waypoint_init_zero          \
+    {                                          \
+        0, false, 0, false, 0, 0, 0, "", "", 0 \
+    }
+#define meshtastic_MqttClientProxyMessage_init_zero \
+    {                                               \
+        "", 0, {{0, {0}}}, 0                        \
+    }
+#define meshtastic_MeshPacket_init_zero                                                                                                                                                                               \
+    {                                                                                                                                                                                                                 \
+        0, 0, 0, 0, {meshtastic_Data_init_zero}, 0, 0, 0, 0, 0, _meshtastic_MeshPacket_Priority_MIN, 0, _meshtastic_MeshPacket_Delayed_MIN, 0, 0, {0, {0}}, 0, 0, 0, 0, _meshtastic_MeshPacket_TransportMechanism_MIN \
+    }
+#define meshtastic_NodeInfo_init_zero                                                                                                                       \
+    {                                                                                                                                                       \
+        0, false, meshtastic_User_init_zero, false, meshtastic_Position_init_zero, 0, 0, false, meshtastic_DeviceMetrics_init_zero, 0, 0, false, 0, 0, 0, 0 \
+    }
+#define meshtastic_MyNodeInfo_init_zero                           \
+    {                                                             \
+        0, 0, 0, {0, {0}}, "", _meshtastic_FirmwareEdition_MIN, 0 \
+    }
+#define meshtastic_LogRecord_init_zero             \
+    {                                              \
+        "", 0, "", _meshtastic_LogRecord_Level_MIN \
+    }
+#define meshtastic_QueueStatus_init_zero \
+    {                                    \
+        0, 0, 0, 0                       \
+    }
+#define meshtastic_FromRadio_init_zero            \
+    {                                             \
+        0, 0, { meshtastic_MeshPacket_init_zero } \
+    }
+#define meshtastic_ClientNotification_init_zero                                                                   \
+    {                                                                                                             \
+        false, 0, 0, _meshtastic_LogRecord_Level_MIN, "", 0, { meshtastic_KeyVerificationNumberInform_init_zero } \
+    }
+#define meshtastic_KeyVerificationNumberInform_init_zero \
+    {                                                    \
+        0, "", 0                                         \
+    }
+#define meshtastic_KeyVerificationNumberRequest_init_zero \
+    {                                                     \
+        0, ""                                             \
+    }
+#define meshtastic_KeyVerificationFinal_init_zero \
+    {                                             \
+        0, "", 0, ""                              \
+    }
+#define meshtastic_DuplicatedPublicKey_init_zero \
+    {                                            \
+        0                                        \
+    }
+#define meshtastic_LowEntropyKey_init_zero \
+    {                                      \
+        0                                  \
+    }
+#define meshtastic_FileInfo_init_zero \
+    {                                 \
+        "", 0                         \
+    }
+#define meshtastic_ToRadio_init_zero           \
+    {                                          \
+        0, { meshtastic_MeshPacket_init_zero } \
+    }
+#define meshtastic_Compressed_init_zero \
+    {                                   \
+        _meshtastic_PortNum_MIN,        \
+        {                               \
+            0, { 0 }                    \
+        }                               \
+    }
+#define meshtastic_NeighborInfo_init_zero                                                                                                                                                                                                                                                                                                    \
+    {                                                                                                                                                                                                                                                                                                                                        \
+        0, 0, 0, 0, { meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero, meshtastic_Neighbor_init_zero } \
+    }
+#define meshtastic_Neighbor_init_zero \
+    {                                 \
+        0, 0, 0, 0                    \
+    }
+#define meshtastic_DeviceMetadata_init_zero                                                                    \
+    {                                                                                                          \
+        "", 0, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_Role_MIN, 0, _meshtastic_HardwareModel_MIN, 0, 0, 0 \
+    }
+#define meshtastic_Heartbeat_init_zero \
+    {                                  \
+        0                              \
+    }
+#define meshtastic_NodeRemoteHardwarePin_init_zero       \
+    {                                                    \
+        0, false, meshtastic_RemoteHardwarePin_init_zero \
+    }
+#define meshtastic_ChunkedPayload_init_zero \
+    {                                       \
+        0, 0, 0,                            \
+        {                                   \
+            0, { 0 }                        \
+        }                                   \
+    }
+#define meshtastic_resend_chunks_init_zero \
+    {                                      \
+        {                                  \
+            {NULL}, NULL                   \
+        }                                  \
+    }
+#define meshtastic_ChunkedPayloadResponse_init_zero \
+    {                                               \
+        0, 0, { 0 }                                 \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
-#define meshtastic_Position_latitude_i_tag       1
-#define meshtastic_Position_longitude_i_tag      2
-#define meshtastic_Position_altitude_tag         3
-#define meshtastic_Position_time_tag             4
-#define meshtastic_Position_location_source_tag  5
-#define meshtastic_Position_altitude_source_tag  6
-#define meshtastic_Position_timestamp_tag        7
+#define meshtastic_Position_latitude_i_tag 1
+#define meshtastic_Position_longitude_i_tag 2
+#define meshtastic_Position_altitude_tag 3
+#define meshtastic_Position_time_tag 4
+#define meshtastic_Position_location_source_tag 5
+#define meshtastic_Position_altitude_source_tag 6
+#define meshtastic_Position_timestamp_tag 7
 #define meshtastic_Position_timestamp_millis_adjust_tag 8
-#define meshtastic_Position_altitude_hae_tag     9
+#define meshtastic_Position_altitude_hae_tag 9
 #define meshtastic_Position_altitude_geoidal_separation_tag 10
-#define meshtastic_Position_PDOP_tag             11
-#define meshtastic_Position_HDOP_tag             12
-#define meshtastic_Position_VDOP_tag             13
-#define meshtastic_Position_gps_accuracy_tag     14
-#define meshtastic_Position_ground_speed_tag     15
-#define meshtastic_Position_ground_track_tag     16
-#define meshtastic_Position_fix_quality_tag      17
-#define meshtastic_Position_fix_type_tag         18
-#define meshtastic_Position_sats_in_view_tag     19
-#define meshtastic_Position_sensor_id_tag        20
-#define meshtastic_Position_next_update_tag      21
-#define meshtastic_Position_seq_number_tag       22
-#define meshtastic_Position_precision_bits_tag   23
-#define meshtastic_User_id_tag                   1
-#define meshtastic_User_long_name_tag            2
-#define meshtastic_User_short_name_tag           3
-#define meshtastic_User_macaddr_tag              4
-#define meshtastic_User_hw_model_tag             5
-#define meshtastic_User_is_licensed_tag          6
-#define meshtastic_User_role_tag                 7
-#define meshtastic_User_public_key_tag           8
-#define meshtastic_User_is_unmessagable_tag      9
-#define meshtastic_RouteDiscovery_route_tag      1
+#define meshtastic_Position_PDOP_tag 11
+#define meshtastic_Position_HDOP_tag 12
+#define meshtastic_Position_VDOP_tag 13
+#define meshtastic_Position_gps_accuracy_tag 14
+#define meshtastic_Position_ground_speed_tag 15
+#define meshtastic_Position_ground_track_tag 16
+#define meshtastic_Position_fix_quality_tag 17
+#define meshtastic_Position_fix_type_tag 18
+#define meshtastic_Position_sats_in_view_tag 19
+#define meshtastic_Position_sensor_id_tag 20
+#define meshtastic_Position_next_update_tag 21
+#define meshtastic_Position_seq_number_tag 22
+#define meshtastic_Position_precision_bits_tag 23
+#define meshtastic_User_id_tag 1
+#define meshtastic_User_long_name_tag 2
+#define meshtastic_User_short_name_tag 3
+#define meshtastic_User_macaddr_tag 4
+#define meshtastic_User_hw_model_tag 5
+#define meshtastic_User_is_licensed_tag 6
+#define meshtastic_User_role_tag 7
+#define meshtastic_User_public_key_tag 8
+#define meshtastic_User_is_unmessagable_tag 9
+#define meshtastic_RouteDiscovery_route_tag 1
 #define meshtastic_RouteDiscovery_snr_towards_tag 2
 #define meshtastic_RouteDiscovery_route_back_tag 3
-#define meshtastic_RouteDiscovery_snr_back_tag   4
-#define meshtastic_Routing_route_request_tag     1
-#define meshtastic_Routing_route_reply_tag       2
-#define meshtastic_Routing_error_reason_tag      3
-#define meshtastic_Data_portnum_tag              1
-#define meshtastic_Data_payload_tag              2
-#define meshtastic_Data_want_response_tag        3
-#define meshtastic_Data_dest_tag                 4
-#define meshtastic_Data_source_tag               5
-#define meshtastic_Data_request_id_tag           6
-#define meshtastic_Data_reply_id_tag             7
-#define meshtastic_Data_emoji_tag                8
-#define meshtastic_Data_bitfield_tag             9
-#define meshtastic_KeyVerification_nonce_tag     1
-#define meshtastic_KeyVerification_hash1_tag     2
-#define meshtastic_KeyVerification_hash2_tag     3
-#define meshtastic_Waypoint_id_tag               1
-#define meshtastic_Waypoint_latitude_i_tag       2
-#define meshtastic_Waypoint_longitude_i_tag      3
-#define meshtastic_Waypoint_expire_tag           4
-#define meshtastic_Waypoint_locked_to_tag        5
-#define meshtastic_Waypoint_name_tag             6
-#define meshtastic_Waypoint_description_tag      7
-#define meshtastic_Waypoint_icon_tag             8
+#define meshtastic_RouteDiscovery_snr_back_tag 4
+#define meshtastic_Routing_route_request_tag 1
+#define meshtastic_Routing_route_reply_tag 2
+#define meshtastic_Routing_error_reason_tag 3
+#define meshtastic_Data_portnum_tag 1
+#define meshtastic_Data_payload_tag 2
+#define meshtastic_Data_want_response_tag 3
+#define meshtastic_Data_dest_tag 4
+#define meshtastic_Data_source_tag 5
+#define meshtastic_Data_request_id_tag 6
+#define meshtastic_Data_reply_id_tag 7
+#define meshtastic_Data_emoji_tag 8
+#define meshtastic_Data_bitfield_tag 9
+#define meshtastic_KeyVerification_nonce_tag 1
+#define meshtastic_KeyVerification_hash1_tag 2
+#define meshtastic_KeyVerification_hash2_tag 3
+#define meshtastic_Waypoint_id_tag 1
+#define meshtastic_Waypoint_latitude_i_tag 2
+#define meshtastic_Waypoint_longitude_i_tag 3
+#define meshtastic_Waypoint_expire_tag 4
+#define meshtastic_Waypoint_locked_to_tag 5
+#define meshtastic_Waypoint_name_tag 6
+#define meshtastic_Waypoint_description_tag 7
+#define meshtastic_Waypoint_icon_tag 8
 #define meshtastic_MqttClientProxyMessage_topic_tag 1
 #define meshtastic_MqttClientProxyMessage_data_tag 2
 #define meshtastic_MqttClientProxyMessage_text_tag 3
 #define meshtastic_MqttClientProxyMessage_retained_tag 4
-#define meshtastic_MeshPacket_from_tag           1
-#define meshtastic_MeshPacket_to_tag             2
-#define meshtastic_MeshPacket_channel_tag        3
-#define meshtastic_MeshPacket_decoded_tag        4
-#define meshtastic_MeshPacket_encrypted_tag      5
-#define meshtastic_MeshPacket_id_tag             6
-#define meshtastic_MeshPacket_rx_time_tag        7
-#define meshtastic_MeshPacket_rx_snr_tag         8
-#define meshtastic_MeshPacket_hop_limit_tag      9
-#define meshtastic_MeshPacket_want_ack_tag       10
-#define meshtastic_MeshPacket_priority_tag       11
-#define meshtastic_MeshPacket_rx_rssi_tag        12
-#define meshtastic_MeshPacket_delayed_tag        13
-#define meshtastic_MeshPacket_via_mqtt_tag       14
-#define meshtastic_MeshPacket_hop_start_tag      15
-#define meshtastic_MeshPacket_public_key_tag     16
-#define meshtastic_MeshPacket_pki_encrypted_tag  17
-#define meshtastic_MeshPacket_next_hop_tag       18
-#define meshtastic_MeshPacket_relay_node_tag     19
-#define meshtastic_MeshPacket_tx_after_tag       20
+#define meshtastic_MeshPacket_from_tag 1
+#define meshtastic_MeshPacket_to_tag 2
+#define meshtastic_MeshPacket_channel_tag 3
+#define meshtastic_MeshPacket_decoded_tag 4
+#define meshtastic_MeshPacket_encrypted_tag 5
+#define meshtastic_MeshPacket_id_tag 6
+#define meshtastic_MeshPacket_rx_time_tag 7
+#define meshtastic_MeshPacket_rx_snr_tag 8
+#define meshtastic_MeshPacket_hop_limit_tag 9
+#define meshtastic_MeshPacket_want_ack_tag 10
+#define meshtastic_MeshPacket_priority_tag 11
+#define meshtastic_MeshPacket_rx_rssi_tag 12
+#define meshtastic_MeshPacket_delayed_tag 13
+#define meshtastic_MeshPacket_via_mqtt_tag 14
+#define meshtastic_MeshPacket_hop_start_tag 15
+#define meshtastic_MeshPacket_public_key_tag 16
+#define meshtastic_MeshPacket_pki_encrypted_tag 17
+#define meshtastic_MeshPacket_next_hop_tag 18
+#define meshtastic_MeshPacket_relay_node_tag 19
+#define meshtastic_MeshPacket_tx_after_tag 20
 #define meshtastic_MeshPacket_transport_mechanism_tag 21
-#define meshtastic_NodeInfo_num_tag              1
-#define meshtastic_NodeInfo_user_tag             2
-#define meshtastic_NodeInfo_position_tag         3
-#define meshtastic_NodeInfo_snr_tag              4
-#define meshtastic_NodeInfo_last_heard_tag       5
-#define meshtastic_NodeInfo_device_metrics_tag   6
-#define meshtastic_NodeInfo_channel_tag          7
-#define meshtastic_NodeInfo_via_mqtt_tag         8
-#define meshtastic_NodeInfo_hops_away_tag        9
-#define meshtastic_NodeInfo_is_favorite_tag      10
-#define meshtastic_NodeInfo_is_ignored_tag       11
+#define meshtastic_NodeInfo_num_tag 1
+#define meshtastic_NodeInfo_user_tag 2
+#define meshtastic_NodeInfo_position_tag 3
+#define meshtastic_NodeInfo_snr_tag 4
+#define meshtastic_NodeInfo_last_heard_tag 5
+#define meshtastic_NodeInfo_device_metrics_tag 6
+#define meshtastic_NodeInfo_channel_tag 7
+#define meshtastic_NodeInfo_via_mqtt_tag 8
+#define meshtastic_NodeInfo_hops_away_tag 9
+#define meshtastic_NodeInfo_is_favorite_tag 10
+#define meshtastic_NodeInfo_is_ignored_tag 11
 #define meshtastic_NodeInfo_is_key_manually_verified_tag 12
-#define meshtastic_MyNodeInfo_my_node_num_tag    1
-#define meshtastic_MyNodeInfo_reboot_count_tag   8
+#define meshtastic_MyNodeInfo_my_node_num_tag 1
+#define meshtastic_MyNodeInfo_reboot_count_tag 8
 #define meshtastic_MyNodeInfo_min_app_version_tag 11
-#define meshtastic_MyNodeInfo_device_id_tag      12
-#define meshtastic_MyNodeInfo_pio_env_tag        13
+#define meshtastic_MyNodeInfo_device_id_tag 12
+#define meshtastic_MyNodeInfo_pio_env_tag 13
 #define meshtastic_MyNodeInfo_firmware_edition_tag 14
-#define meshtastic_MyNodeInfo_nodedb_count_tag   15
-#define meshtastic_LogRecord_message_tag         1
-#define meshtastic_LogRecord_time_tag            2
-#define meshtastic_LogRecord_source_tag          3
-#define meshtastic_LogRecord_level_tag           4
-#define meshtastic_QueueStatus_res_tag           1
-#define meshtastic_QueueStatus_free_tag          2
-#define meshtastic_QueueStatus_maxlen_tag        3
+#define meshtastic_MyNodeInfo_nodedb_count_tag 15
+#define meshtastic_LogRecord_message_tag 1
+#define meshtastic_LogRecord_time_tag 2
+#define meshtastic_LogRecord_source_tag 3
+#define meshtastic_LogRecord_level_tag 4
+#define meshtastic_QueueStatus_res_tag 1
+#define meshtastic_QueueStatus_free_tag 2
+#define meshtastic_QueueStatus_maxlen_tag 3
 #define meshtastic_QueueStatus_mesh_packet_id_tag 4
 #define meshtastic_KeyVerificationNumberInform_nonce_tag 1
 #define meshtastic_KeyVerificationNumberInform_remote_longname_tag 2
@@ -1559,262 +1795,262 @@ extern "C" {
 #define meshtastic_KeyVerificationFinal_isSender_tag 3
 #define meshtastic_KeyVerificationFinal_verification_characters_tag 4
 #define meshtastic_ClientNotification_reply_id_tag 1
-#define meshtastic_ClientNotification_time_tag   2
-#define meshtastic_ClientNotification_level_tag  3
+#define meshtastic_ClientNotification_time_tag 2
+#define meshtastic_ClientNotification_level_tag 3
 #define meshtastic_ClientNotification_message_tag 4
 #define meshtastic_ClientNotification_key_verification_number_inform_tag 11
 #define meshtastic_ClientNotification_key_verification_number_request_tag 12
 #define meshtastic_ClientNotification_key_verification_final_tag 13
 #define meshtastic_ClientNotification_duplicated_public_key_tag 14
 #define meshtastic_ClientNotification_low_entropy_key_tag 15
-#define meshtastic_FileInfo_file_name_tag        1
-#define meshtastic_FileInfo_size_bytes_tag       2
-#define meshtastic_Compressed_portnum_tag        1
-#define meshtastic_Compressed_data_tag           2
-#define meshtastic_Neighbor_node_id_tag          1
-#define meshtastic_Neighbor_snr_tag              2
-#define meshtastic_Neighbor_last_rx_time_tag     3
+#define meshtastic_FileInfo_file_name_tag 1
+#define meshtastic_FileInfo_size_bytes_tag 2
+#define meshtastic_Compressed_portnum_tag 1
+#define meshtastic_Compressed_data_tag 2
+#define meshtastic_Neighbor_node_id_tag 1
+#define meshtastic_Neighbor_snr_tag 2
+#define meshtastic_Neighbor_last_rx_time_tag 3
 #define meshtastic_Neighbor_node_broadcast_interval_secs_tag 4
-#define meshtastic_NeighborInfo_node_id_tag      1
+#define meshtastic_NeighborInfo_node_id_tag 1
 #define meshtastic_NeighborInfo_last_sent_by_id_tag 2
 #define meshtastic_NeighborInfo_node_broadcast_interval_secs_tag 3
-#define meshtastic_NeighborInfo_neighbors_tag    4
+#define meshtastic_NeighborInfo_neighbors_tag 4
 #define meshtastic_DeviceMetadata_firmware_version_tag 1
 #define meshtastic_DeviceMetadata_device_state_version_tag 2
 #define meshtastic_DeviceMetadata_canShutdown_tag 3
-#define meshtastic_DeviceMetadata_hasWifi_tag    4
+#define meshtastic_DeviceMetadata_hasWifi_tag 4
 #define meshtastic_DeviceMetadata_hasBluetooth_tag 5
 #define meshtastic_DeviceMetadata_hasEthernet_tag 6
-#define meshtastic_DeviceMetadata_role_tag       7
+#define meshtastic_DeviceMetadata_role_tag 7
 #define meshtastic_DeviceMetadata_position_flags_tag 8
-#define meshtastic_DeviceMetadata_hw_model_tag   9
+#define meshtastic_DeviceMetadata_hw_model_tag 9
 #define meshtastic_DeviceMetadata_hasRemoteHardware_tag 10
-#define meshtastic_DeviceMetadata_hasPKC_tag     11
+#define meshtastic_DeviceMetadata_hasPKC_tag 11
 #define meshtastic_DeviceMetadata_excluded_modules_tag 12
-#define meshtastic_FromRadio_id_tag              1
-#define meshtastic_FromRadio_packet_tag          2
-#define meshtastic_FromRadio_my_info_tag         3
-#define meshtastic_FromRadio_node_info_tag       4
-#define meshtastic_FromRadio_config_tag          5
-#define meshtastic_FromRadio_log_record_tag      6
+#define meshtastic_FromRadio_id_tag 1
+#define meshtastic_FromRadio_packet_tag 2
+#define meshtastic_FromRadio_my_info_tag 3
+#define meshtastic_FromRadio_node_info_tag 4
+#define meshtastic_FromRadio_config_tag 5
+#define meshtastic_FromRadio_log_record_tag 6
 #define meshtastic_FromRadio_config_complete_id_tag 7
-#define meshtastic_FromRadio_rebooted_tag        8
-#define meshtastic_FromRadio_moduleConfig_tag    9
-#define meshtastic_FromRadio_channel_tag         10
-#define meshtastic_FromRadio_queueStatus_tag     11
-#define meshtastic_FromRadio_xmodemPacket_tag    12
-#define meshtastic_FromRadio_metadata_tag        13
+#define meshtastic_FromRadio_rebooted_tag 8
+#define meshtastic_FromRadio_moduleConfig_tag 9
+#define meshtastic_FromRadio_channel_tag 10
+#define meshtastic_FromRadio_queueStatus_tag 11
+#define meshtastic_FromRadio_xmodemPacket_tag 12
+#define meshtastic_FromRadio_metadata_tag 13
 #define meshtastic_FromRadio_mqttClientProxyMessage_tag 14
-#define meshtastic_FromRadio_fileInfo_tag        15
+#define meshtastic_FromRadio_fileInfo_tag 15
 #define meshtastic_FromRadio_clientNotification_tag 16
-#define meshtastic_FromRadio_deviceuiConfig_tag  17
-#define meshtastic_Heartbeat_nonce_tag           1
-#define meshtastic_ToRadio_packet_tag            1
-#define meshtastic_ToRadio_want_config_id_tag    3
-#define meshtastic_ToRadio_disconnect_tag        4
-#define meshtastic_ToRadio_xmodemPacket_tag      5
+#define meshtastic_FromRadio_deviceuiConfig_tag 17
+#define meshtastic_Heartbeat_nonce_tag 1
+#define meshtastic_ToRadio_packet_tag 1
+#define meshtastic_ToRadio_want_config_id_tag 3
+#define meshtastic_ToRadio_disconnect_tag 4
+#define meshtastic_ToRadio_xmodemPacket_tag 5
 #define meshtastic_ToRadio_mqttClientProxyMessage_tag 6
-#define meshtastic_ToRadio_heartbeat_tag         7
+#define meshtastic_ToRadio_heartbeat_tag 7
 #define meshtastic_NodeRemoteHardwarePin_node_num_tag 1
 #define meshtastic_NodeRemoteHardwarePin_pin_tag 2
 #define meshtastic_ChunkedPayload_payload_id_tag 1
 #define meshtastic_ChunkedPayload_chunk_count_tag 2
 #define meshtastic_ChunkedPayload_chunk_index_tag 3
 #define meshtastic_ChunkedPayload_payload_chunk_tag 4
-#define meshtastic_resend_chunks_chunks_tag      1
+#define meshtastic_resend_chunks_chunks_tag 1
 #define meshtastic_ChunkedPayloadResponse_payload_id_tag 1
 #define meshtastic_ChunkedPayloadResponse_request_transfer_tag 2
 #define meshtastic_ChunkedPayloadResponse_accept_transfer_tag 3
 #define meshtastic_ChunkedPayloadResponse_resend_chunks_tag 4
 
 /* Struct field encoding specification for nanopb */
-#define meshtastic_Position_FIELDLIST(X, a) \
-X(a, STATIC,   OPTIONAL, SFIXED32, latitude_i,        1) \
-X(a, STATIC,   OPTIONAL, SFIXED32, longitude_i,       2) \
-X(a, STATIC,   OPTIONAL, INT32,    altitude,          3) \
-X(a, STATIC,   SINGULAR, FIXED32,  time,              4) \
-X(a, STATIC,   SINGULAR, UENUM,    location_source,   5) \
-X(a, STATIC,   SINGULAR, UENUM,    altitude_source,   6) \
-X(a, STATIC,   SINGULAR, FIXED32,  timestamp,         7) \
-X(a, STATIC,   SINGULAR, INT32,    timestamp_millis_adjust,   8) \
-X(a, STATIC,   OPTIONAL, SINT32,   altitude_hae,      9) \
-X(a, STATIC,   OPTIONAL, SINT32,   altitude_geoidal_separation,  10) \
-X(a, STATIC,   SINGULAR, UINT32,   PDOP,             11) \
-X(a, STATIC,   SINGULAR, UINT32,   HDOP,             12) \
-X(a, STATIC,   SINGULAR, UINT32,   VDOP,             13) \
-X(a, STATIC,   SINGULAR, UINT32,   gps_accuracy,     14) \
-X(a, STATIC,   OPTIONAL, UINT32,   ground_speed,     15) \
-X(a, STATIC,   OPTIONAL, UINT32,   ground_track,     16) \
-X(a, STATIC,   SINGULAR, UINT32,   fix_quality,      17) \
-X(a, STATIC,   SINGULAR, UINT32,   fix_type,         18) \
-X(a, STATIC,   SINGULAR, UINT32,   sats_in_view,     19) \
-X(a, STATIC,   SINGULAR, UINT32,   sensor_id,        20) \
-X(a, STATIC,   SINGULAR, UINT32,   next_update,      21) \
-X(a, STATIC,   SINGULAR, UINT32,   seq_number,       22) \
-X(a, STATIC,   SINGULAR, UINT32,   precision_bits,   23)
+#define meshtastic_Position_FIELDLIST(X, a)                         \
+    X(a, STATIC, OPTIONAL, SFIXED32, latitude_i, 1)                 \
+    X(a, STATIC, OPTIONAL, SFIXED32, longitude_i, 2)                \
+    X(a, STATIC, OPTIONAL, INT32, altitude, 3)                      \
+    X(a, STATIC, SINGULAR, FIXED32, time, 4)                        \
+    X(a, STATIC, SINGULAR, UENUM, location_source, 5)               \
+    X(a, STATIC, SINGULAR, UENUM, altitude_source, 6)               \
+    X(a, STATIC, SINGULAR, FIXED32, timestamp, 7)                   \
+    X(a, STATIC, SINGULAR, INT32, timestamp_millis_adjust, 8)       \
+    X(a, STATIC, OPTIONAL, SINT32, altitude_hae, 9)                 \
+    X(a, STATIC, OPTIONAL, SINT32, altitude_geoidal_separation, 10) \
+    X(a, STATIC, SINGULAR, UINT32, PDOP, 11)                        \
+    X(a, STATIC, SINGULAR, UINT32, HDOP, 12)                        \
+    X(a, STATIC, SINGULAR, UINT32, VDOP, 13)                        \
+    X(a, STATIC, SINGULAR, UINT32, gps_accuracy, 14)                \
+    X(a, STATIC, OPTIONAL, UINT32, ground_speed, 15)                \
+    X(a, STATIC, OPTIONAL, UINT32, ground_track, 16)                \
+    X(a, STATIC, SINGULAR, UINT32, fix_quality, 17)                 \
+    X(a, STATIC, SINGULAR, UINT32, fix_type, 18)                    \
+    X(a, STATIC, SINGULAR, UINT32, sats_in_view, 19)                \
+    X(a, STATIC, SINGULAR, UINT32, sensor_id, 20)                   \
+    X(a, STATIC, SINGULAR, UINT32, next_update, 21)                 \
+    X(a, STATIC, SINGULAR, UINT32, seq_number, 22)                  \
+    X(a, STATIC, SINGULAR, UINT32, precision_bits, 23)
 #define meshtastic_Position_CALLBACK NULL
 #define meshtastic_Position_DEFAULT NULL
 
-#define meshtastic_User_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   id,                1) \
-X(a, STATIC,   SINGULAR, STRING,   long_name,         2) \
-X(a, STATIC,   SINGULAR, STRING,   short_name,        3) \
-X(a, STATIC,   SINGULAR, FIXED_LENGTH_BYTES, macaddr,           4) \
-X(a, STATIC,   SINGULAR, UENUM,    hw_model,          5) \
-X(a, STATIC,   SINGULAR, BOOL,     is_licensed,       6) \
-X(a, STATIC,   SINGULAR, UENUM,    role,              7) \
-X(a, STATIC,   SINGULAR, BYTES,    public_key,        8) \
-X(a, STATIC,   OPTIONAL, BOOL,     is_unmessagable,   9)
+#define meshtastic_User_FIELDLIST(X, a)                    \
+    X(a, STATIC, SINGULAR, STRING, id, 1)                  \
+    X(a, STATIC, SINGULAR, STRING, long_name, 2)           \
+    X(a, STATIC, SINGULAR, STRING, short_name, 3)          \
+    X(a, STATIC, SINGULAR, FIXED_LENGTH_BYTES, macaddr, 4) \
+    X(a, STATIC, SINGULAR, UENUM, hw_model, 5)             \
+    X(a, STATIC, SINGULAR, BOOL, is_licensed, 6)           \
+    X(a, STATIC, SINGULAR, UENUM, role, 7)                 \
+    X(a, STATIC, SINGULAR, BYTES, public_key, 8)           \
+    X(a, STATIC, OPTIONAL, BOOL, is_unmessagable, 9)
 #define meshtastic_User_CALLBACK NULL
 #define meshtastic_User_DEFAULT NULL
 
-#define meshtastic_RouteDiscovery_FIELDLIST(X, a) \
-X(a, STATIC,   REPEATED, FIXED32,  route,             1) \
-X(a, STATIC,   REPEATED, INT32,    snr_towards,       2) \
-X(a, STATIC,   REPEATED, FIXED32,  route_back,        3) \
-X(a, STATIC,   REPEATED, INT32,    snr_back,          4)
+#define meshtastic_RouteDiscovery_FIELDLIST(X, a)  \
+    X(a, STATIC, REPEATED, FIXED32, route, 1)      \
+    X(a, STATIC, REPEATED, INT32, snr_towards, 2)  \
+    X(a, STATIC, REPEATED, FIXED32, route_back, 3) \
+    X(a, STATIC, REPEATED, INT32, snr_back, 4)
 #define meshtastic_RouteDiscovery_CALLBACK NULL
 #define meshtastic_RouteDiscovery_DEFAULT NULL
 
-#define meshtastic_Routing_FIELDLIST(X, a) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (variant,route_request,route_request),   1) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (variant,route_reply,route_reply),   2) \
-X(a, STATIC,   ONEOF,    UENUM,    (variant,error_reason,error_reason),   3)
+#define meshtastic_Routing_FIELDLIST(X, a)                                   \
+    X(a, STATIC, ONEOF, MESSAGE, (variant, route_request, route_request), 1) \
+    X(a, STATIC, ONEOF, MESSAGE, (variant, route_reply, route_reply), 2)     \
+    X(a, STATIC, ONEOF, UENUM, (variant, error_reason, error_reason), 3)
 #define meshtastic_Routing_CALLBACK NULL
 #define meshtastic_Routing_DEFAULT NULL
 #define meshtastic_Routing_variant_route_request_MSGTYPE meshtastic_RouteDiscovery
 #define meshtastic_Routing_variant_route_reply_MSGTYPE meshtastic_RouteDiscovery
 
-#define meshtastic_Data_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    portnum,           1) \
-X(a, STATIC,   SINGULAR, BYTES,    payload,           2) \
-X(a, STATIC,   SINGULAR, BOOL,     want_response,     3) \
-X(a, STATIC,   SINGULAR, FIXED32,  dest,              4) \
-X(a, STATIC,   SINGULAR, FIXED32,  source,            5) \
-X(a, STATIC,   SINGULAR, FIXED32,  request_id,        6) \
-X(a, STATIC,   SINGULAR, FIXED32,  reply_id,          7) \
-X(a, STATIC,   SINGULAR, FIXED32,  emoji,             8) \
-X(a, STATIC,   OPTIONAL, UINT32,   bitfield,          9)
+#define meshtastic_Data_FIELDLIST(X, a)            \
+    X(a, STATIC, SINGULAR, UENUM, portnum, 1)      \
+    X(a, STATIC, SINGULAR, BYTES, payload, 2)      \
+    X(a, STATIC, SINGULAR, BOOL, want_response, 3) \
+    X(a, STATIC, SINGULAR, FIXED32, dest, 4)       \
+    X(a, STATIC, SINGULAR, FIXED32, source, 5)     \
+    X(a, STATIC, SINGULAR, FIXED32, request_id, 6) \
+    X(a, STATIC, SINGULAR, FIXED32, reply_id, 7)   \
+    X(a, STATIC, SINGULAR, FIXED32, emoji, 8)      \
+    X(a, STATIC, OPTIONAL, UINT32, bitfield, 9)
 #define meshtastic_Data_CALLBACK NULL
 #define meshtastic_Data_DEFAULT NULL
 
 #define meshtastic_KeyVerification_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT64,   nonce,             1) \
-X(a, STATIC,   SINGULAR, BYTES,    hash1,             2) \
-X(a, STATIC,   SINGULAR, BYTES,    hash2,             3)
+    X(a, STATIC, SINGULAR, UINT64, nonce, 1)       \
+    X(a, STATIC, SINGULAR, BYTES, hash1, 2)        \
+    X(a, STATIC, SINGULAR, BYTES, hash2, 3)
 #define meshtastic_KeyVerification_CALLBACK NULL
 #define meshtastic_KeyVerification_DEFAULT NULL
 
-#define meshtastic_Waypoint_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   id,                1) \
-X(a, STATIC,   OPTIONAL, SFIXED32, latitude_i,        2) \
-X(a, STATIC,   OPTIONAL, SFIXED32, longitude_i,       3) \
-X(a, STATIC,   SINGULAR, UINT32,   expire,            4) \
-X(a, STATIC,   SINGULAR, UINT32,   locked_to,         5) \
-X(a, STATIC,   SINGULAR, STRING,   name,              6) \
-X(a, STATIC,   SINGULAR, STRING,   description,       7) \
-X(a, STATIC,   SINGULAR, FIXED32,  icon,              8)
+#define meshtastic_Waypoint_FIELDLIST(X, a)          \
+    X(a, STATIC, SINGULAR, UINT32, id, 1)            \
+    X(a, STATIC, OPTIONAL, SFIXED32, latitude_i, 2)  \
+    X(a, STATIC, OPTIONAL, SFIXED32, longitude_i, 3) \
+    X(a, STATIC, SINGULAR, UINT32, expire, 4)        \
+    X(a, STATIC, SINGULAR, UINT32, locked_to, 5)     \
+    X(a, STATIC, SINGULAR, STRING, name, 6)          \
+    X(a, STATIC, SINGULAR, STRING, description, 7)   \
+    X(a, STATIC, SINGULAR, FIXED32, icon, 8)
 #define meshtastic_Waypoint_CALLBACK NULL
 #define meshtastic_Waypoint_DEFAULT NULL
 
-#define meshtastic_MqttClientProxyMessage_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   topic,             1) \
-X(a, STATIC,   ONEOF,    BYTES,    (payload_variant,data,payload_variant.data),   2) \
-X(a, STATIC,   ONEOF,    STRING,   (payload_variant,text,payload_variant.text),   3) \
-X(a, STATIC,   SINGULAR, BOOL,     retained,          4)
+#define meshtastic_MqttClientProxyMessage_FIELDLIST(X, a)                         \
+    X(a, STATIC, SINGULAR, STRING, topic, 1)                                      \
+    X(a, STATIC, ONEOF, BYTES, (payload_variant, data, payload_variant.data), 2)  \
+    X(a, STATIC, ONEOF, STRING, (payload_variant, text, payload_variant.text), 3) \
+    X(a, STATIC, SINGULAR, BOOL, retained, 4)
 #define meshtastic_MqttClientProxyMessage_CALLBACK NULL
 #define meshtastic_MqttClientProxyMessage_DEFAULT NULL
 
-#define meshtastic_MeshPacket_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, FIXED32,  from,              1) \
-X(a, STATIC,   SINGULAR, FIXED32,  to,                2) \
-X(a, STATIC,   SINGULAR, UINT32,   channel,           3) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,decoded,decoded),   4) \
-X(a, STATIC,   ONEOF,    BYTES,    (payload_variant,encrypted,encrypted),   5) \
-X(a, STATIC,   SINGULAR, FIXED32,  id,                6) \
-X(a, STATIC,   SINGULAR, FIXED32,  rx_time,           7) \
-X(a, STATIC,   SINGULAR, FLOAT,    rx_snr,            8) \
-X(a, STATIC,   SINGULAR, UINT32,   hop_limit,         9) \
-X(a, STATIC,   SINGULAR, BOOL,     want_ack,         10) \
-X(a, STATIC,   SINGULAR, UENUM,    priority,         11) \
-X(a, STATIC,   SINGULAR, INT32,    rx_rssi,          12) \
-X(a, STATIC,   SINGULAR, UENUM,    delayed,          13) \
-X(a, STATIC,   SINGULAR, BOOL,     via_mqtt,         14) \
-X(a, STATIC,   SINGULAR, UINT32,   hop_start,        15) \
-X(a, STATIC,   SINGULAR, BYTES,    public_key,       16) \
-X(a, STATIC,   SINGULAR, BOOL,     pki_encrypted,    17) \
-X(a, STATIC,   SINGULAR, UINT32,   next_hop,         18) \
-X(a, STATIC,   SINGULAR, UINT32,   relay_node,       19) \
-X(a, STATIC,   SINGULAR, UINT32,   tx_after,         20) \
-X(a, STATIC,   SINGULAR, UENUM,    transport_mechanism,  21)
+#define meshtastic_MeshPacket_FIELDLIST(X, a)                              \
+    X(a, STATIC, SINGULAR, FIXED32, from, 1)                               \
+    X(a, STATIC, SINGULAR, FIXED32, to, 2)                                 \
+    X(a, STATIC, SINGULAR, UINT32, channel, 3)                             \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, decoded, decoded), 4)   \
+    X(a, STATIC, ONEOF, BYTES, (payload_variant, encrypted, encrypted), 5) \
+    X(a, STATIC, SINGULAR, FIXED32, id, 6)                                 \
+    X(a, STATIC, SINGULAR, FIXED32, rx_time, 7)                            \
+    X(a, STATIC, SINGULAR, FLOAT, rx_snr, 8)                               \
+    X(a, STATIC, SINGULAR, UINT32, hop_limit, 9)                           \
+    X(a, STATIC, SINGULAR, BOOL, want_ack, 10)                             \
+    X(a, STATIC, SINGULAR, UENUM, priority, 11)                            \
+    X(a, STATIC, SINGULAR, INT32, rx_rssi, 12)                             \
+    X(a, STATIC, SINGULAR, UENUM, delayed, 13)                             \
+    X(a, STATIC, SINGULAR, BOOL, via_mqtt, 14)                             \
+    X(a, STATIC, SINGULAR, UINT32, hop_start, 15)                          \
+    X(a, STATIC, SINGULAR, BYTES, public_key, 16)                          \
+    X(a, STATIC, SINGULAR, BOOL, pki_encrypted, 17)                        \
+    X(a, STATIC, SINGULAR, UINT32, next_hop, 18)                           \
+    X(a, STATIC, SINGULAR, UINT32, relay_node, 19)                         \
+    X(a, STATIC, SINGULAR, UINT32, tx_after, 20)                           \
+    X(a, STATIC, SINGULAR, UENUM, transport_mechanism, 21)
 #define meshtastic_MeshPacket_CALLBACK NULL
 #define meshtastic_MeshPacket_DEFAULT NULL
 #define meshtastic_MeshPacket_payload_variant_decoded_MSGTYPE meshtastic_Data
 
-#define meshtastic_NodeInfo_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   num,               1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  user,              2) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  position,          3) \
-X(a, STATIC,   SINGULAR, FLOAT,    snr,               4) \
-X(a, STATIC,   SINGULAR, FIXED32,  last_heard,        5) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  device_metrics,    6) \
-X(a, STATIC,   SINGULAR, UINT32,   channel,           7) \
-X(a, STATIC,   SINGULAR, BOOL,     via_mqtt,          8) \
-X(a, STATIC,   OPTIONAL, UINT32,   hops_away,         9) \
-X(a, STATIC,   SINGULAR, BOOL,     is_favorite,      10) \
-X(a, STATIC,   SINGULAR, BOOL,     is_ignored,       11) \
-X(a, STATIC,   SINGULAR, BOOL,     is_key_manually_verified,  12)
+#define meshtastic_NodeInfo_FIELDLIST(X, a)            \
+    X(a, STATIC, SINGULAR, UINT32, num, 1)             \
+    X(a, STATIC, OPTIONAL, MESSAGE, user, 2)           \
+    X(a, STATIC, OPTIONAL, MESSAGE, position, 3)       \
+    X(a, STATIC, SINGULAR, FLOAT, snr, 4)              \
+    X(a, STATIC, SINGULAR, FIXED32, last_heard, 5)     \
+    X(a, STATIC, OPTIONAL, MESSAGE, device_metrics, 6) \
+    X(a, STATIC, SINGULAR, UINT32, channel, 7)         \
+    X(a, STATIC, SINGULAR, BOOL, via_mqtt, 8)          \
+    X(a, STATIC, OPTIONAL, UINT32, hops_away, 9)       \
+    X(a, STATIC, SINGULAR, BOOL, is_favorite, 10)      \
+    X(a, STATIC, SINGULAR, BOOL, is_ignored, 11)       \
+    X(a, STATIC, SINGULAR, BOOL, is_key_manually_verified, 12)
 #define meshtastic_NodeInfo_CALLBACK NULL
 #define meshtastic_NodeInfo_DEFAULT NULL
 #define meshtastic_NodeInfo_user_MSGTYPE meshtastic_User
 #define meshtastic_NodeInfo_position_MSGTYPE meshtastic_Position
 #define meshtastic_NodeInfo_device_metrics_MSGTYPE meshtastic_DeviceMetrics
 
-#define meshtastic_MyNodeInfo_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   my_node_num,       1) \
-X(a, STATIC,   SINGULAR, UINT32,   reboot_count,      8) \
-X(a, STATIC,   SINGULAR, UINT32,   min_app_version,  11) \
-X(a, STATIC,   SINGULAR, BYTES,    device_id,        12) \
-X(a, STATIC,   SINGULAR, STRING,   pio_env,          13) \
-X(a, STATIC,   SINGULAR, UENUM,    firmware_edition,  14) \
-X(a, STATIC,   SINGULAR, UINT32,   nodedb_count,     15)
+#define meshtastic_MyNodeInfo_FIELDLIST(X, a)           \
+    X(a, STATIC, SINGULAR, UINT32, my_node_num, 1)      \
+    X(a, STATIC, SINGULAR, UINT32, reboot_count, 8)     \
+    X(a, STATIC, SINGULAR, UINT32, min_app_version, 11) \
+    X(a, STATIC, SINGULAR, BYTES, device_id, 12)        \
+    X(a, STATIC, SINGULAR, STRING, pio_env, 13)         \
+    X(a, STATIC, SINGULAR, UENUM, firmware_edition, 14) \
+    X(a, STATIC, SINGULAR, UINT32, nodedb_count, 15)
 #define meshtastic_MyNodeInfo_CALLBACK NULL
 #define meshtastic_MyNodeInfo_DEFAULT NULL
 
-#define meshtastic_LogRecord_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   message,           1) \
-X(a, STATIC,   SINGULAR, FIXED32,  time,              2) \
-X(a, STATIC,   SINGULAR, STRING,   source,            3) \
-X(a, STATIC,   SINGULAR, UENUM,    level,             4)
+#define meshtastic_LogRecord_FIELDLIST(X, a)   \
+    X(a, STATIC, SINGULAR, STRING, message, 1) \
+    X(a, STATIC, SINGULAR, FIXED32, time, 2)   \
+    X(a, STATIC, SINGULAR, STRING, source, 3)  \
+    X(a, STATIC, SINGULAR, UENUM, level, 4)
 #define meshtastic_LogRecord_CALLBACK NULL
 #define meshtastic_LogRecord_DEFAULT NULL
 
 #define meshtastic_QueueStatus_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, INT32,    res,               1) \
-X(a, STATIC,   SINGULAR, UINT32,   free,              2) \
-X(a, STATIC,   SINGULAR, UINT32,   maxlen,            3) \
-X(a, STATIC,   SINGULAR, UINT32,   mesh_packet_id,    4)
+    X(a, STATIC, SINGULAR, INT32, res, 1)      \
+    X(a, STATIC, SINGULAR, UINT32, free, 2)    \
+    X(a, STATIC, SINGULAR, UINT32, maxlen, 3)  \
+    X(a, STATIC, SINGULAR, UINT32, mesh_packet_id, 4)
 #define meshtastic_QueueStatus_CALLBACK NULL
 #define meshtastic_QueueStatus_DEFAULT NULL
 
-#define meshtastic_FromRadio_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   id,                1) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,packet,packet),   2) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,my_info,my_info),   3) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,node_info,node_info),   4) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,config,config),   5) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,log_record,log_record),   6) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,config_complete_id,config_complete_id),   7) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,rebooted,rebooted),   8) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,moduleConfig,moduleConfig),   9) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,channel,channel),  10) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,queueStatus,queueStatus),  11) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,xmodemPacket,xmodemPacket),  12) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,metadata,metadata),  13) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,mqttClientProxyMessage,mqttClientProxyMessage),  14) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,fileInfo,fileInfo),  15) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,clientNotification,clientNotification),  16) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,deviceuiConfig,deviceuiConfig),  17)
+#define meshtastic_FromRadio_FIELDLIST(X, a)                                                            \
+    X(a, STATIC, SINGULAR, UINT32, id, 1)                                                               \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, packet, packet), 2)                                  \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, my_info, my_info), 3)                                \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, node_info, node_info), 4)                            \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, config, config), 5)                                  \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, log_record, log_record), 6)                          \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, config_complete_id, config_complete_id), 7)           \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, rebooted, rebooted), 8)                                 \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, moduleConfig, moduleConfig), 9)                      \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, channel, channel), 10)                               \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, queueStatus, queueStatus), 11)                       \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, xmodemPacket, xmodemPacket), 12)                     \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, metadata, metadata), 13)                             \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, mqttClientProxyMessage, mqttClientProxyMessage), 14) \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, fileInfo, fileInfo), 15)                             \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, clientNotification, clientNotification), 16)         \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, deviceuiConfig, deviceuiConfig), 17)
 #define meshtastic_FromRadio_CALLBACK NULL
 #define meshtastic_FromRadio_DEFAULT NULL
 #define meshtastic_FromRadio_payload_variant_packet_MSGTYPE meshtastic_MeshPacket
@@ -1832,16 +2068,16 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,deviceuiConfig,deviceuiConfi
 #define meshtastic_FromRadio_payload_variant_clientNotification_MSGTYPE meshtastic_ClientNotification
 #define meshtastic_FromRadio_payload_variant_deviceuiConfig_MSGTYPE meshtastic_DeviceUIConfig
 
-#define meshtastic_ClientNotification_FIELDLIST(X, a) \
-X(a, STATIC,   OPTIONAL, UINT32,   reply_id,          1) \
-X(a, STATIC,   SINGULAR, FIXED32,  time,              2) \
-X(a, STATIC,   SINGULAR, UENUM,    level,             3) \
-X(a, STATIC,   SINGULAR, STRING,   message,           4) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,key_verification_number_inform,payload_variant.key_verification_number_inform),  11) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,key_verification_number_request,payload_variant.key_verification_number_request),  12) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,key_verification_final,payload_variant.key_verification_final),  13) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,duplicated_public_key,payload_variant.duplicated_public_key),  14) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,low_entropy_key,payload_variant.low_entropy_key),  15)
+#define meshtastic_ClientNotification_FIELDLIST(X, a)                                                                                     \
+    X(a, STATIC, OPTIONAL, UINT32, reply_id, 1)                                                                                           \
+    X(a, STATIC, SINGULAR, FIXED32, time, 2)                                                                                              \
+    X(a, STATIC, SINGULAR, UENUM, level, 3)                                                                                               \
+    X(a, STATIC, SINGULAR, STRING, message, 4)                                                                                            \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, key_verification_number_inform, payload_variant.key_verification_number_inform), 11)   \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, key_verification_number_request, payload_variant.key_verification_number_request), 12) \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, key_verification_final, payload_variant.key_verification_final), 13)                   \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, duplicated_public_key, payload_variant.duplicated_public_key), 14)                     \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, low_entropy_key, payload_variant.low_entropy_key), 15)
 #define meshtastic_ClientNotification_CALLBACK NULL
 #define meshtastic_ClientNotification_DEFAULT NULL
 #define meshtastic_ClientNotification_payload_variant_key_verification_number_inform_MSGTYPE meshtastic_KeyVerificationNumberInform
@@ -1851,49 +2087,49 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,low_entropy_key,payload_vari
 #define meshtastic_ClientNotification_payload_variant_low_entropy_key_MSGTYPE meshtastic_LowEntropyKey
 
 #define meshtastic_KeyVerificationNumberInform_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT64,   nonce,             1) \
-X(a, STATIC,   SINGULAR, STRING,   remote_longname,   2) \
-X(a, STATIC,   SINGULAR, UINT32,   security_number,   3)
+    X(a, STATIC, SINGULAR, UINT64, nonce, 1)                   \
+    X(a, STATIC, SINGULAR, STRING, remote_longname, 2)         \
+    X(a, STATIC, SINGULAR, UINT32, security_number, 3)
 #define meshtastic_KeyVerificationNumberInform_CALLBACK NULL
 #define meshtastic_KeyVerificationNumberInform_DEFAULT NULL
 
 #define meshtastic_KeyVerificationNumberRequest_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT64,   nonce,             1) \
-X(a, STATIC,   SINGULAR, STRING,   remote_longname,   2)
+    X(a, STATIC, SINGULAR, UINT64, nonce, 1)                    \
+    X(a, STATIC, SINGULAR, STRING, remote_longname, 2)
 #define meshtastic_KeyVerificationNumberRequest_CALLBACK NULL
 #define meshtastic_KeyVerificationNumberRequest_DEFAULT NULL
 
 #define meshtastic_KeyVerificationFinal_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT64,   nonce,             1) \
-X(a, STATIC,   SINGULAR, STRING,   remote_longname,   2) \
-X(a, STATIC,   SINGULAR, BOOL,     isSender,          3) \
-X(a, STATIC,   SINGULAR, STRING,   verification_characters,   4)
+    X(a, STATIC, SINGULAR, UINT64, nonce, 1)            \
+    X(a, STATIC, SINGULAR, STRING, remote_longname, 2)  \
+    X(a, STATIC, SINGULAR, BOOL, isSender, 3)           \
+    X(a, STATIC, SINGULAR, STRING, verification_characters, 4)
 #define meshtastic_KeyVerificationFinal_CALLBACK NULL
 #define meshtastic_KeyVerificationFinal_DEFAULT NULL
 
-#define meshtastic_DuplicatedPublicKey_FIELDLIST(X, a) \
+#define meshtastic_DuplicatedPublicKey_FIELDLIST(X, a)
 
 #define meshtastic_DuplicatedPublicKey_CALLBACK NULL
 #define meshtastic_DuplicatedPublicKey_DEFAULT NULL
 
-#define meshtastic_LowEntropyKey_FIELDLIST(X, a) \
+#define meshtastic_LowEntropyKey_FIELDLIST(X, a)
 
 #define meshtastic_LowEntropyKey_CALLBACK NULL
 #define meshtastic_LowEntropyKey_DEFAULT NULL
 
-#define meshtastic_FileInfo_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   file_name,         1) \
-X(a, STATIC,   SINGULAR, UINT32,   size_bytes,        2)
+#define meshtastic_FileInfo_FIELDLIST(X, a)      \
+    X(a, STATIC, SINGULAR, STRING, file_name, 1) \
+    X(a, STATIC, SINGULAR, UINT32, size_bytes, 2)
 #define meshtastic_FileInfo_CALLBACK NULL
 #define meshtastic_FileInfo_DEFAULT NULL
 
-#define meshtastic_ToRadio_FIELDLIST(X, a) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,packet,packet),   1) \
-X(a, STATIC,   ONEOF,    UINT32,   (payload_variant,want_config_id,want_config_id),   3) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,disconnect,disconnect),   4) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,xmodemPacket,xmodemPacket),   5) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,mqttClientProxyMessage,mqttClientProxyMessage),   6) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,heartbeat,heartbeat),   7)
+#define meshtastic_ToRadio_FIELDLIST(X, a)                                                             \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, packet, packet), 1)                                 \
+    X(a, STATIC, ONEOF, UINT32, (payload_variant, want_config_id, want_config_id), 3)                  \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, disconnect, disconnect), 4)                            \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, xmodemPacket, xmodemPacket), 5)                     \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, mqttClientProxyMessage, mqttClientProxyMessage), 6) \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, heartbeat, heartbeat), 7)
 #define meshtastic_ToRadio_CALLBACK NULL
 #define meshtastic_ToRadio_DEFAULT NULL
 #define meshtastic_ToRadio_payload_variant_packet_MSGTYPE meshtastic_MeshPacket
@@ -1902,109 +2138,109 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,heartbeat,heartbeat),   7)
 #define meshtastic_ToRadio_payload_variant_heartbeat_MSGTYPE meshtastic_Heartbeat
 
 #define meshtastic_Compressed_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    portnum,           1) \
-X(a, STATIC,   SINGULAR, BYTES,    data,              2)
+    X(a, STATIC, SINGULAR, UENUM, portnum, 1) \
+    X(a, STATIC, SINGULAR, BYTES, data, 2)
 #define meshtastic_Compressed_CALLBACK NULL
 #define meshtastic_Compressed_DEFAULT NULL
 
-#define meshtastic_NeighborInfo_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   node_id,           1) \
-X(a, STATIC,   SINGULAR, UINT32,   last_sent_by_id,   2) \
-X(a, STATIC,   SINGULAR, UINT32,   node_broadcast_interval_secs,   3) \
-X(a, STATIC,   REPEATED, MESSAGE,  neighbors,         4)
+#define meshtastic_NeighborInfo_FIELDLIST(X, a)                     \
+    X(a, STATIC, SINGULAR, UINT32, node_id, 1)                      \
+    X(a, STATIC, SINGULAR, UINT32, last_sent_by_id, 2)              \
+    X(a, STATIC, SINGULAR, UINT32, node_broadcast_interval_secs, 3) \
+    X(a, STATIC, REPEATED, MESSAGE, neighbors, 4)
 #define meshtastic_NeighborInfo_CALLBACK NULL
 #define meshtastic_NeighborInfo_DEFAULT NULL
 #define meshtastic_NeighborInfo_neighbors_MSGTYPE meshtastic_Neighbor
 
-#define meshtastic_Neighbor_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   node_id,           1) \
-X(a, STATIC,   SINGULAR, FLOAT,    snr,               2) \
-X(a, STATIC,   SINGULAR, FIXED32,  last_rx_time,      3) \
-X(a, STATIC,   SINGULAR, UINT32,   node_broadcast_interval_secs,   4)
+#define meshtastic_Neighbor_FIELDLIST(X, a)          \
+    X(a, STATIC, SINGULAR, UINT32, node_id, 1)       \
+    X(a, STATIC, SINGULAR, FLOAT, snr, 2)            \
+    X(a, STATIC, SINGULAR, FIXED32, last_rx_time, 3) \
+    X(a, STATIC, SINGULAR, UINT32, node_broadcast_interval_secs, 4)
 #define meshtastic_Neighbor_CALLBACK NULL
 #define meshtastic_Neighbor_DEFAULT NULL
 
-#define meshtastic_DeviceMetadata_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, STRING,   firmware_version,   1) \
-X(a, STATIC,   SINGULAR, UINT32,   device_state_version,   2) \
-X(a, STATIC,   SINGULAR, BOOL,     canShutdown,       3) \
-X(a, STATIC,   SINGULAR, BOOL,     hasWifi,           4) \
-X(a, STATIC,   SINGULAR, BOOL,     hasBluetooth,      5) \
-X(a, STATIC,   SINGULAR, BOOL,     hasEthernet,       6) \
-X(a, STATIC,   SINGULAR, UENUM,    role,              7) \
-X(a, STATIC,   SINGULAR, UINT32,   position_flags,    8) \
-X(a, STATIC,   SINGULAR, UENUM,    hw_model,          9) \
-X(a, STATIC,   SINGULAR, BOOL,     hasRemoteHardware,  10) \
-X(a, STATIC,   SINGULAR, BOOL,     hasPKC,           11) \
-X(a, STATIC,   SINGULAR, UINT32,   excluded_modules,  12)
+#define meshtastic_DeviceMetadata_FIELDLIST(X, a)           \
+    X(a, STATIC, SINGULAR, STRING, firmware_version, 1)     \
+    X(a, STATIC, SINGULAR, UINT32, device_state_version, 2) \
+    X(a, STATIC, SINGULAR, BOOL, canShutdown, 3)            \
+    X(a, STATIC, SINGULAR, BOOL, hasWifi, 4)                \
+    X(a, STATIC, SINGULAR, BOOL, hasBluetooth, 5)           \
+    X(a, STATIC, SINGULAR, BOOL, hasEthernet, 6)            \
+    X(a, STATIC, SINGULAR, UENUM, role, 7)                  \
+    X(a, STATIC, SINGULAR, UINT32, position_flags, 8)       \
+    X(a, STATIC, SINGULAR, UENUM, hw_model, 9)              \
+    X(a, STATIC, SINGULAR, BOOL, hasRemoteHardware, 10)     \
+    X(a, STATIC, SINGULAR, BOOL, hasPKC, 11)                \
+    X(a, STATIC, SINGULAR, UINT32, excluded_modules, 12)
 #define meshtastic_DeviceMetadata_CALLBACK NULL
 #define meshtastic_DeviceMetadata_DEFAULT NULL
 
 #define meshtastic_Heartbeat_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   nonce,             1)
+    X(a, STATIC, SINGULAR, UINT32, nonce, 1)
 #define meshtastic_Heartbeat_CALLBACK NULL
 #define meshtastic_Heartbeat_DEFAULT NULL
 
 #define meshtastic_NodeRemoteHardwarePin_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   node_num,          1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  pin,               2)
+    X(a, STATIC, SINGULAR, UINT32, node_num, 1)          \
+    X(a, STATIC, OPTIONAL, MESSAGE, pin, 2)
 #define meshtastic_NodeRemoteHardwarePin_CALLBACK NULL
 #define meshtastic_NodeRemoteHardwarePin_DEFAULT NULL
 #define meshtastic_NodeRemoteHardwarePin_pin_MSGTYPE meshtastic_RemoteHardwarePin
 
-#define meshtastic_ChunkedPayload_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   payload_id,        1) \
-X(a, STATIC,   SINGULAR, UINT32,   chunk_count,       2) \
-X(a, STATIC,   SINGULAR, UINT32,   chunk_index,       3) \
-X(a, STATIC,   SINGULAR, BYTES,    payload_chunk,     4)
+#define meshtastic_ChunkedPayload_FIELDLIST(X, a)  \
+    X(a, STATIC, SINGULAR, UINT32, payload_id, 1)  \
+    X(a, STATIC, SINGULAR, UINT32, chunk_count, 2) \
+    X(a, STATIC, SINGULAR, UINT32, chunk_index, 3) \
+    X(a, STATIC, SINGULAR, BYTES, payload_chunk, 4)
 #define meshtastic_ChunkedPayload_CALLBACK NULL
 #define meshtastic_ChunkedPayload_DEFAULT NULL
 
 #define meshtastic_resend_chunks_FIELDLIST(X, a) \
-X(a, CALLBACK, REPEATED, UINT32,   chunks,            1)
+    X(a, CALLBACK, REPEATED, UINT32, chunks, 1)
 #define meshtastic_resend_chunks_CALLBACK pb_default_field_callback
 #define meshtastic_resend_chunks_DEFAULT NULL
 
-#define meshtastic_ChunkedPayloadResponse_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   payload_id,        1) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,request_transfer,payload_variant.request_transfer),   2) \
-X(a, STATIC,   ONEOF,    BOOL,     (payload_variant,accept_transfer,payload_variant.accept_transfer),   3) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload_variant,resend_chunks,payload_variant.resend_chunks),   4)
+#define meshtastic_ChunkedPayloadResponse_FIELDLIST(X, a)                                               \
+    X(a, STATIC, SINGULAR, UINT32, payload_id, 1)                                                       \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, request_transfer, payload_variant.request_transfer), 2) \
+    X(a, STATIC, ONEOF, BOOL, (payload_variant, accept_transfer, payload_variant.accept_transfer), 3)   \
+    X(a, STATIC, ONEOF, MESSAGE, (payload_variant, resend_chunks, payload_variant.resend_chunks), 4)
 #define meshtastic_ChunkedPayloadResponse_CALLBACK NULL
 #define meshtastic_ChunkedPayloadResponse_DEFAULT NULL
 #define meshtastic_ChunkedPayloadResponse_payload_variant_resend_chunks_MSGTYPE meshtastic_resend_chunks
 
-extern const pb_msgdesc_t meshtastic_Position_msg;
-extern const pb_msgdesc_t meshtastic_User_msg;
-extern const pb_msgdesc_t meshtastic_RouteDiscovery_msg;
-extern const pb_msgdesc_t meshtastic_Routing_msg;
-extern const pb_msgdesc_t meshtastic_Data_msg;
-extern const pb_msgdesc_t meshtastic_KeyVerification_msg;
-extern const pb_msgdesc_t meshtastic_Waypoint_msg;
-extern const pb_msgdesc_t meshtastic_MqttClientProxyMessage_msg;
-extern const pb_msgdesc_t meshtastic_MeshPacket_msg;
-extern const pb_msgdesc_t meshtastic_NodeInfo_msg;
-extern const pb_msgdesc_t meshtastic_MyNodeInfo_msg;
-extern const pb_msgdesc_t meshtastic_LogRecord_msg;
-extern const pb_msgdesc_t meshtastic_QueueStatus_msg;
-extern const pb_msgdesc_t meshtastic_FromRadio_msg;
-extern const pb_msgdesc_t meshtastic_ClientNotification_msg;
-extern const pb_msgdesc_t meshtastic_KeyVerificationNumberInform_msg;
-extern const pb_msgdesc_t meshtastic_KeyVerificationNumberRequest_msg;
-extern const pb_msgdesc_t meshtastic_KeyVerificationFinal_msg;
-extern const pb_msgdesc_t meshtastic_DuplicatedPublicKey_msg;
-extern const pb_msgdesc_t meshtastic_LowEntropyKey_msg;
-extern const pb_msgdesc_t meshtastic_FileInfo_msg;
-extern const pb_msgdesc_t meshtastic_ToRadio_msg;
-extern const pb_msgdesc_t meshtastic_Compressed_msg;
-extern const pb_msgdesc_t meshtastic_NeighborInfo_msg;
-extern const pb_msgdesc_t meshtastic_Neighbor_msg;
-extern const pb_msgdesc_t meshtastic_DeviceMetadata_msg;
-extern const pb_msgdesc_t meshtastic_Heartbeat_msg;
-extern const pb_msgdesc_t meshtastic_NodeRemoteHardwarePin_msg;
-extern const pb_msgdesc_t meshtastic_ChunkedPayload_msg;
-extern const pb_msgdesc_t meshtastic_resend_chunks_msg;
-extern const pb_msgdesc_t meshtastic_ChunkedPayloadResponse_msg;
+    extern const pb_msgdesc_t meshtastic_Position_msg;
+    extern const pb_msgdesc_t meshtastic_User_msg;
+    extern const pb_msgdesc_t meshtastic_RouteDiscovery_msg;
+    extern const pb_msgdesc_t meshtastic_Routing_msg;
+    extern const pb_msgdesc_t meshtastic_Data_msg;
+    extern const pb_msgdesc_t meshtastic_KeyVerification_msg;
+    extern const pb_msgdesc_t meshtastic_Waypoint_msg;
+    extern const pb_msgdesc_t meshtastic_MqttClientProxyMessage_msg;
+    extern const pb_msgdesc_t meshtastic_MeshPacket_msg;
+    extern const pb_msgdesc_t meshtastic_NodeInfo_msg;
+    extern const pb_msgdesc_t meshtastic_MyNodeInfo_msg;
+    extern const pb_msgdesc_t meshtastic_LogRecord_msg;
+    extern const pb_msgdesc_t meshtastic_QueueStatus_msg;
+    extern const pb_msgdesc_t meshtastic_FromRadio_msg;
+    extern const pb_msgdesc_t meshtastic_ClientNotification_msg;
+    extern const pb_msgdesc_t meshtastic_KeyVerificationNumberInform_msg;
+    extern const pb_msgdesc_t meshtastic_KeyVerificationNumberRequest_msg;
+    extern const pb_msgdesc_t meshtastic_KeyVerificationFinal_msg;
+    extern const pb_msgdesc_t meshtastic_DuplicatedPublicKey_msg;
+    extern const pb_msgdesc_t meshtastic_LowEntropyKey_msg;
+    extern const pb_msgdesc_t meshtastic_FileInfo_msg;
+    extern const pb_msgdesc_t meshtastic_ToRadio_msg;
+    extern const pb_msgdesc_t meshtastic_Compressed_msg;
+    extern const pb_msgdesc_t meshtastic_NeighborInfo_msg;
+    extern const pb_msgdesc_t meshtastic_Neighbor_msg;
+    extern const pb_msgdesc_t meshtastic_DeviceMetadata_msg;
+    extern const pb_msgdesc_t meshtastic_Heartbeat_msg;
+    extern const pb_msgdesc_t meshtastic_NodeRemoteHardwarePin_msg;
+    extern const pb_msgdesc_t meshtastic_ChunkedPayload_msg;
+    extern const pb_msgdesc_t meshtastic_resend_chunks_msg;
+    extern const pb_msgdesc_t meshtastic_ChunkedPayloadResponse_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_Position_fields &meshtastic_Position_msg
@@ -2043,35 +2279,35 @@ extern const pb_msgdesc_t meshtastic_ChunkedPayloadResponse_msg;
 /* meshtastic_resend_chunks_size depends on runtime parameters */
 /* meshtastic_ChunkedPayloadResponse_size depends on runtime parameters */
 #define MESHTASTIC_MESHTASTIC_MESH_PB_H_MAX_SIZE meshtastic_FromRadio_size
-#define meshtastic_ChunkedPayload_size           245
-#define meshtastic_ClientNotification_size       482
-#define meshtastic_Compressed_size               239
-#define meshtastic_Data_size                     269
-#define meshtastic_DeviceMetadata_size           54
-#define meshtastic_DuplicatedPublicKey_size      0
-#define meshtastic_FileInfo_size                 236
-#define meshtastic_FromRadio_size                510
-#define meshtastic_Heartbeat_size                6
-#define meshtastic_KeyVerificationFinal_size     65
+#define meshtastic_ChunkedPayload_size 245
+#define meshtastic_ClientNotification_size 482
+#define meshtastic_Compressed_size 239
+#define meshtastic_Data_size 269
+#define meshtastic_DeviceMetadata_size 54
+#define meshtastic_DuplicatedPublicKey_size 0
+#define meshtastic_FileInfo_size 236
+#define meshtastic_FromRadio_size 510
+#define meshtastic_Heartbeat_size 6
+#define meshtastic_KeyVerificationFinal_size 65
 #define meshtastic_KeyVerificationNumberInform_size 58
 #define meshtastic_KeyVerificationNumberRequest_size 52
-#define meshtastic_KeyVerification_size          79
-#define meshtastic_LogRecord_size                426
-#define meshtastic_LowEntropyKey_size            0
-#define meshtastic_MeshPacket_size               381
-#define meshtastic_MqttClientProxyMessage_size   501
-#define meshtastic_MyNodeInfo_size               83
-#define meshtastic_NeighborInfo_size             258
-#define meshtastic_Neighbor_size                 22
-#define meshtastic_NodeInfo_size                 323
-#define meshtastic_NodeRemoteHardwarePin_size    29
-#define meshtastic_Position_size                 144
-#define meshtastic_QueueStatus_size              23
-#define meshtastic_RouteDiscovery_size           256
-#define meshtastic_Routing_size                  259
-#define meshtastic_ToRadio_size                  504
-#define meshtastic_User_size                     115
-#define meshtastic_Waypoint_size                 165
+#define meshtastic_KeyVerification_size 79
+#define meshtastic_LogRecord_size 426
+#define meshtastic_LowEntropyKey_size 0
+#define meshtastic_MeshPacket_size 381
+#define meshtastic_MqttClientProxyMessage_size 501
+#define meshtastic_MyNodeInfo_size 83
+#define meshtastic_NeighborInfo_size 258
+#define meshtastic_Neighbor_size 22
+#define meshtastic_NodeInfo_size 323
+#define meshtastic_NodeRemoteHardwarePin_size 29
+#define meshtastic_Position_size 144
+#define meshtastic_QueueStatus_size 23
+#define meshtastic_RouteDiscovery_size 256
+#define meshtastic_Routing_size 259
+#define meshtastic_ToRadio_size 504
+#define meshtastic_User_size 115
+#define meshtastic_Waypoint_size 165
 
 #ifdef __cplusplus
 } /* extern "C" */

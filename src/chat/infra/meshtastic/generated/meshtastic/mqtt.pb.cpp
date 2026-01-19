@@ -8,8 +8,4 @@
 
 PB_BIND(meshtastic_ServiceEnvelope, meshtastic_ServiceEnvelope, AUTO)
 
-
 PB_BIND(meshtastic_MapReport, meshtastic_MapReport, AUTO)
-
-
-

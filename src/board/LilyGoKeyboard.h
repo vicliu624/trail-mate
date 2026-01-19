@@ -13,15 +13,16 @@
 #ifdef USING_INPUT_DEV_KEYBOARD
 #include <Adafruit_TCA8418.h>
 
-#define KB_NONE     -1
-#define KB_PRESSED  1
+#define KB_NONE -1
+#define KB_PRESSED 1
 #define KB_RELEASED 0
 
-typedef struct LilyGoKeyboardConfigure {
+typedef struct LilyGoKeyboardConfigure
+{
     uint8_t kb_rows;
     uint8_t kb_cols;
-    const char *current_keymap;
-    const char *current_symbol_map;
+    const char* current_keymap;
+    const char* current_symbol_map;
     uint8_t symbol_key_value;
     uint8_t alt_key_value;
     uint8_t caps_key_value;
@@ -30,15 +31,16 @@ typedef struct LilyGoKeyboardConfigure {
     uint8_t backspace_value;
     // Is there a symbol combination key?
     bool has_symbol_key;
-} LilyGoKeyboardConfigure_t;;
+} LilyGoKeyboardConfigure_t;
+;
 
 // This class, LilyGoKeyboard, inherits from Adafruit_TCA8418 and is designed to handle keyboard operations.
 class LilyGoKeyboard : public Adafruit_TCA8418
 {
-public:
+  public:
     // Typedef for a callback function that is invoked when a key is read.
     // It takes an integer representing the key state and a reference to a character to store the key value.
-    using KeyboardReadCallback = void (*)(int state, char &c);
+    using KeyboardReadCallback = void (*)(int state, char& c);
 
     // Typedef for a callback function that is called when defined as a gpio.
     using GpioEventCallback = void (*)(bool pressed, uint8_t gpio_idx);
@@ -84,7 +86,7 @@ public:
      * @param scl The I2C clock line pin number. Defaults to the SCL macro.
      * @return true if the initialization is successful, false otherwise.
      */
-    bool begin(const LilyGoKeyboardConfigure_t &config, TwoWire &w, uint8_t irq, uint8_t sda = SDA, uint8_t scl = SCL);
+    bool begin(const LilyGoKeyboardConfigure_t& config, TwoWire& w, uint8_t irq, uint8_t sda = SDA, uint8_t scl = SCL);
 
     /**
      * @brief Ends the keyboard operation and releases associated resources.
@@ -97,7 +99,7 @@ public:
      * @param c A pointer to a character where the key value will be stored.
      * @return An integer representing the state of the key press.
      */
-    int getKey(char *c);
+    int getKey(char* c);
 
     /**
      * @brief Sets the brightness level of the keyboard backlight.
@@ -152,14 +154,14 @@ public:
      */
     void setRepeat(bool enable);
 
-private:
+  private:
     /**
      * @brief Updates the keyboard state and retrieves the currently pressed key.
      *
      * @param c A pointer to a character where the key value will be stored.
      * @return An integer representing the state of the key press.
      */
-    int update(char *c);
+    int update(char* c);
 
     /**
      * @brief Prints debug information about the key press event.
@@ -178,7 +180,7 @@ private:
      * @param pressed A reference to a boolean indicating if the key is pressed.
      * @return The processed character value.
      */
-    char handleSpaceAndNullChar(char keyVal, char &lastKeyVal, bool &pressed);
+    char handleSpaceAndNullChar(char keyVal, char& lastKeyVal, bool& pressed);
 
     /**
      * @brief Converts a key code to its corresponding character value.
@@ -205,7 +207,7 @@ private:
      * @param c A pointer to a character to store the result of the special key action.
      * @return An integer representing the state of the special key action.
      */
-    int handleSpecialKeys(uint8_t k, bool pressed, char *c);
+    int handleSpecialKeys(uint8_t k, bool pressed, char* c);
 
     // Stores the last key value.
     char lastKeyVal = '\n';
@@ -236,8 +238,6 @@ private:
     // The time when the last key was pressed.
     uint32_t lastPressedTime = 0;
     // Pointer to the storage keyboard config
-    const LilyGoKeyboardConfigure_t *_config;
-
+    const LilyGoKeyboardConfigure_t* _config;
 };
 #endif
-

@@ -5,20 +5,22 @@
 
 #include "mt_adapter.h"
 #include "../../../sys/event_bus.h"
-#include <ctime>
+#include "../../domain/contact_types.h"
 #include <Arduino.h>
-#include <cstring>
-#include <cmath>
-#include <string>
 #include <Crypto.h>
+#include <cmath>
+#include <cstring>
+#include <ctime>
+#include <string>
 #define TEST_CURVE25519_FIELD_OPS
-#include <Curve25519.h>
-#include <SHA256.h>
-#include <RNG.h>
-#include <AES.h>
-#include <Preferences.h>
 #include "../../../board/TLoRaPagerTypes.h"
 #include "generated/meshtastic/config.pb.h"
+#include "mt_region.h"
+#include <AES.h>
+#include <Curve25519.h>
+#include <Preferences.h>
+#include <RNG.h>
+#include <SHA256.h>
 
 #ifndef LORA_LOG_ENABLE
 #define LORA_LOG_ENABLE 1
@@ -27,10 +29,14 @@
 #if LORA_LOG_ENABLE
 #define LORA_LOG(...) Serial.printf(__VA_ARGS__)
 #else
-#define LORA_LOG(...) do {} while (0)
+#define LORA_LOG(...) \
+    do                \
+    {                 \
+    } while (0)
 #endif
 
-namespace {
+namespace
+{
 constexpr uint8_t kDefaultPsk[16] = {0xd4, 0xf1, 0xbb, 0x3a, 0x20, 0x29, 0x07, 0x59,
                                      0xf0, 0xbc, 0xff, 0xab, 0xcf, 0x4e, 0x69, 0x01};
 constexpr uint8_t kDefaultPskIndex = 1;
@@ -40,50 +46,47 @@ constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
 
-static const char* portName(uint32_t portnum) {
-    switch (portnum) {
-        case meshtastic_PortNum_TEXT_MESSAGE_APP: return "TEXT";
-        case meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP: return "TEXT_COMP";
-        case meshtastic_PortNum_NODEINFO_APP: return "NODEINFO";
-        case meshtastic_PortNum_POSITION_APP: return "POSITION";
-        case meshtastic_PortNum_TELEMETRY_APP: return "TELEMETRY";
-        case meshtastic_PortNum_REMOTE_HARDWARE_APP: return "REMOTEHW";
-        case meshtastic_PortNum_TRACEROUTE_APP: return "TRACEROUTE";
-        case meshtastic_PortNum_WAYPOINT_APP: return "WAYPOINT";
-        default: return "UNKNOWN";
+static const char* portName(uint32_t portnum)
+{
+    switch (portnum)
+    {
+    case meshtastic_PortNum_TEXT_MESSAGE_APP:
+        return "TEXT";
+    case meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP:
+        return "TEXT_COMP";
+    case meshtastic_PortNum_NODEINFO_APP:
+        return "NODEINFO";
+    case meshtastic_PortNum_POSITION_APP:
+        return "POSITION";
+    case meshtastic_PortNum_TELEMETRY_APP:
+        return "TELEMETRY";
+    case meshtastic_PortNum_REMOTE_HARDWARE_APP:
+        return "REMOTEHW";
+    case meshtastic_PortNum_TRACEROUTE_APP:
+        return "TRACEROUTE";
+    case meshtastic_PortNum_WAYPOINT_APP:
+        return "WAYPOINT";
+    default:
+        return "UNKNOWN";
     }
 }
 
-struct RegionInfo {
-    meshtastic_Config_LoRaConfig_RegionCode code;
-    float freq_start_mhz;
-    float freq_end_mhz;
-    float spacing_khz;
-    bool wide_lora;
-};
-
-const RegionInfo kRegions[] = {
-    {meshtastic_Config_LoRaConfig_RegionCode_CN, 470.0f, 510.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_US, 902.0f, 928.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_EU_868, 869.4f, 869.65f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_EU_433, 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_JP, 920.5f, 923.5f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_ANZ, 915.0f, 928.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_IN, 865.0f, 867.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_UNSET, 902.0f, 928.0f, 0.0f, false},
-};
-
-uint8_t xorHash(const uint8_t* data, size_t len) {
+uint8_t xorHash(const uint8_t* data, size_t len)
+{
     uint8_t out = 0;
-    for (size_t i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i)
+    {
         out ^= data[i];
     }
     return out;
 }
 
-void expandShortPsk(uint8_t index, uint8_t* out, size_t* out_len) {
-    if (!out || !out_len || index == 0) {
-        if (out_len) {
+void expandShortPsk(uint8_t index, uint8_t* out, size_t* out_len)
+{
+    if (!out || !out_len || index == 0)
+    {
+        if (out_len)
+        {
             *out_len = 0;
         }
         return;
@@ -94,154 +97,118 @@ void expandShortPsk(uint8_t index, uint8_t* out, size_t* out_len) {
     *out_len = sizeof(kDefaultPsk);
 }
 
-bool isZeroKey(const uint8_t* key, size_t len) {
+bool isZeroKey(const uint8_t* key, size_t len)
+{
     if (!key || len == 0) return true;
-    for (size_t i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i)
+    {
         if (key[i] != 0) return false;
     }
     return true;
 }
 
-uint8_t computeChannelHash(const char* name, const uint8_t* key, size_t key_len) {
+uint8_t computeChannelHash(const char* name, const uint8_t* key, size_t key_len)
+{
     uint8_t h = xorHash(reinterpret_cast<const uint8_t*>(name), strlen(name));
-    if (key && key_len > 0) {
+    if (key && key_len > 0)
+    {
         h ^= xorHash(key, key_len);
     }
     return h;
 }
 
-std::string toHex(const uint8_t* data, size_t len, size_t max_len = 64) {
-    if (!data || len == 0) {
+std::string toHex(const uint8_t* data, size_t len, size_t max_len = 64)
+{
+    if (!data || len == 0)
+    {
         return {};
     }
     size_t capped = (len > max_len) ? max_len : len;
     static const char* kHex = "0123456789ABCDEF";
     std::string out;
     out.reserve(capped * 2);
-    for (size_t i = 0; i < capped; ++i) {
+    for (size_t i = 0; i < capped; ++i)
+    {
         uint8_t b = data[i];
         out.push_back(kHex[b >> 4]);
         out.push_back(kHex[b & 0x0F]);
     }
-    if (capped < len) {
+    if (capped < len)
+    {
         out.append("..");
     }
     return out;
 }
 
-uint32_t djb2Hash(const char* str) {
-    uint32_t hash = 5381;
-    int c;
-    while ((c = *str++) != 0) {
-        hash = ((hash << 5) + hash) + static_cast<uint8_t>(c);
-    }
-    return hash;
-}
-
-const RegionInfo* findRegion(meshtastic_Config_LoRaConfig_RegionCode code) {
-    for (const auto& region : kRegions) {
-        if (region.code == code) {
-            return &region;
-        }
-    }
-    return &kRegions[0];
-}
-
-const char* presetDisplayName(meshtastic_Config_LoRaConfig_ModemPreset preset) {
-    switch (preset) {
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-            return "LongFast";
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-            return "LongModerate";
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-            return "LongSlow";
-        case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-            return "MediumSlow";
-        case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-            return "MediumFast";
-        case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-            return "ShortSlow";
-        case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-            return "ShortFast";
-        case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-            return "ShortTurbo";
-        default:
-            return "LongFast";
-    }
-}
-
-float computeFrequencyMhz(const RegionInfo* region, float bw_khz, const char* channel_name) {
-    if (!region || !channel_name) {
-        return 0.0f;
-    }
-    float bw_mhz = bw_khz / 1000.0f;
-    float spacing_mhz = region->spacing_khz / 1000.0f;
-    float span_mhz = region->freq_end_mhz - region->freq_start_mhz;
-    uint32_t num_channels = static_cast<uint32_t>(floor(span_mhz / (spacing_mhz + bw_mhz)));
-    if (num_channels < 1) {
-        num_channels = 1;
-    }
-    uint32_t channel_num = djb2Hash(channel_name) % num_channels;
-    return region->freq_start_mhz + (bw_khz / 2000.0f) + (channel_num * (bw_khz / 1000.0f));
-}
-
 constexpr size_t kAesBlockSize = 16;
 
-class AesCcmCipher {
-public:
-    ~AesCcmCipher() {
+class AesCcmCipher
+{
+  public:
+    ~AesCcmCipher()
+    {
         delete aes_;
     }
 
-    void setKey(const uint8_t* key, size_t key_len) {
+    void setKey(const uint8_t* key, size_t key_len)
+    {
         delete aes_;
         aes_ = nullptr;
-        if (key_len != 0) {
+        if (key_len != 0)
+        {
             aes_ = new AESSmall256();
             aes_->setKey(key, key_len);
         }
     }
 
-    void encryptBlock(uint8_t* out, const uint8_t* in) {
-        if (!aes_) {
+    void encryptBlock(uint8_t* out, const uint8_t* in)
+    {
+        if (!aes_)
+        {
             memset(out, 0, kAesBlockSize);
             return;
         }
         aes_->encryptBlock(out, in);
     }
 
-private:
+  private:
     AESSmall256* aes_ = nullptr;
 };
 
 static AesCcmCipher g_aes_ccm;
 
-static int constant_time_compare(const void* a_, const void* b_, size_t len) {
+static int constant_time_compare(const void* a_, const void* b_, size_t len)
+{
     const volatile uint8_t* volatile a = (const volatile uint8_t* volatile)a_;
     const volatile uint8_t* volatile b = (const volatile uint8_t* volatile)b_;
     if (len == 0) return 0;
     if (!a || !b) return -1;
     volatile uint8_t d = 0U;
-    for (size_t i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i)
+    {
         d |= (a[i] ^ b[i]);
     }
     return (1 & ((d - 1) >> 8)) - 1;
 }
 
-static void put_be16(uint8_t* a, uint16_t val) {
+static void put_be16(uint8_t* a, uint16_t val)
+{
     a[0] = val >> 8;
     a[1] = val & 0xff;
 }
 
-static void xor_aes_block(uint8_t* dst, const uint8_t* src) {
-    for (size_t i = 0; i < kAesBlockSize; ++i) {
+static void xor_aes_block(uint8_t* dst, const uint8_t* src)
+{
+    for (size_t i = 0; i < kAesBlockSize; ++i)
+    {
         dst[i] ^= src[i];
     }
 }
 
 static void aes_ccm_auth_start(size_t m, size_t l, const uint8_t* nonce,
                                const uint8_t* aad, size_t aad_len, size_t plain_len,
-                               uint8_t* x) {
+                               uint8_t* x)
+{
     uint8_t aad_buf[2 * kAesBlockSize];
     uint8_t b[kAesBlockSize];
     b[0] = aad_len ? 0x40 : 0;
@@ -256,78 +223,95 @@ static void aes_ccm_auth_start(size_t m, size_t l, const uint8_t* nonce,
     memset(aad_buf + 2 + aad_len, 0, sizeof(aad_buf) - 2 - aad_len);
     xor_aes_block(aad_buf, x);
     g_aes_ccm.encryptBlock(x, aad_buf);
-    if (aad_len > kAesBlockSize - 2) {
+    if (aad_len > kAesBlockSize - 2)
+    {
         xor_aes_block(&aad_buf[kAesBlockSize], x);
         g_aes_ccm.encryptBlock(x, &aad_buf[kAesBlockSize]);
     }
 }
 
-static void aes_ccm_auth(const uint8_t* data, size_t len, uint8_t* x) {
+static void aes_ccm_auth(const uint8_t* data, size_t len, uint8_t* x)
+{
     size_t last = len % kAesBlockSize;
-    for (size_t i = 0; i < len / kAesBlockSize; ++i) {
+    for (size_t i = 0; i < len / kAesBlockSize; ++i)
+    {
         xor_aes_block(x, data);
         data += kAesBlockSize;
         g_aes_ccm.encryptBlock(x, x);
     }
-    if (last) {
-        for (size_t i = 0; i < last; ++i) {
+    if (last)
+    {
+        for (size_t i = 0; i < last; ++i)
+        {
             x[i] ^= *data++;
         }
         g_aes_ccm.encryptBlock(x, x);
     }
 }
 
-static void aes_ccm_encr_start(size_t l, const uint8_t* nonce, uint8_t* a) {
+static void aes_ccm_encr_start(size_t l, const uint8_t* nonce, uint8_t* a)
+{
     a[0] = l - 1;
     memcpy(&a[1], nonce, 15 - l);
 }
 
-static void aes_ccm_encr(size_t l, const uint8_t* in, size_t len, uint8_t* out, uint8_t* a) {
+static void aes_ccm_encr(size_t l, const uint8_t* in, size_t len, uint8_t* out, uint8_t* a)
+{
     size_t last = len % kAesBlockSize;
     size_t i = 0;
-    for (i = 1; i <= len / kAesBlockSize; ++i) {
+    for (i = 1; i <= len / kAesBlockSize; ++i)
+    {
         put_be16(&a[kAesBlockSize - 2], i);
         g_aes_ccm.encryptBlock(out, a);
         xor_aes_block(out, in);
         out += kAesBlockSize;
         in += kAesBlockSize;
     }
-    if (last) {
+    if (last)
+    {
         put_be16(&a[kAesBlockSize - 2], i);
         g_aes_ccm.encryptBlock(out, a);
-        for (size_t j = 0; j < last; ++j) {
+        for (size_t j = 0; j < last; ++j)
+        {
             *out++ ^= *in++;
         }
     }
 }
 
-static void aes_ccm_encr_auth(size_t m, const uint8_t* x, uint8_t* a, uint8_t* auth) {
+static void aes_ccm_encr_auth(size_t m, const uint8_t* x, uint8_t* a, uint8_t* auth)
+{
     uint8_t tmp[kAesBlockSize];
     put_be16(&a[kAesBlockSize - 2], 0);
     g_aes_ccm.encryptBlock(tmp, a);
-    for (size_t i = 0; i < m; ++i) {
+    for (size_t i = 0; i < m; ++i)
+    {
         auth[i] = x[i] ^ tmp[i];
     }
 }
 
-static void aes_ccm_decr_auth(size_t m, uint8_t* a, const uint8_t* auth, uint8_t* t) {
+static void aes_ccm_decr_auth(size_t m, uint8_t* a, const uint8_t* auth, uint8_t* t)
+{
     uint8_t tmp[kAesBlockSize];
     put_be16(&a[kAesBlockSize - 2], 0);
     g_aes_ccm.encryptBlock(tmp, a);
-    for (size_t i = 0; i < m; ++i) {
+    for (size_t i = 0; i < m; ++i)
+    {
         t[i] = auth[i] ^ tmp[i];
     }
 }
 
-static void hashSharedKey(uint8_t* bytes, size_t num_bytes) {
+static void hashSharedKey(uint8_t* bytes, size_t num_bytes)
+{
     SHA256 hash;
     size_t posn;
     uint8_t size = static_cast<uint8_t>(num_bytes);
     uint8_t inc = 16;
     hash.reset();
-    for (posn = 0; posn < size; posn += inc) {
+    for (posn = 0; posn < size; posn += inc)
+    {
         size_t len = size - posn;
-        if (len > inc) {
+        if (len > inc)
+        {
             len = inc;
         }
         hash.update(bytes + posn, len);
@@ -337,7 +321,8 @@ static void hashSharedKey(uint8_t* bytes, size_t num_bytes) {
 
 static bool aes_ccm_ad(const uint8_t* key, size_t key_len, const uint8_t* nonce, size_t m,
                        const uint8_t* crypt, size_t crypt_len, const uint8_t* aad,
-                       size_t aad_len, const uint8_t* auth, uint8_t* plain) {
+                       size_t aad_len, const uint8_t* auth, uint8_t* plain)
+{
     const size_t l = 2;
     uint8_t x[kAesBlockSize];
     uint8_t a[kAesBlockSize];
@@ -352,27 +337,31 @@ static bool aes_ccm_ad(const uint8_t* key, size_t key_len, const uint8_t* nonce,
     return constant_time_compare(x, t, m) == 0;
 }
 
-static void initPkiNonce(uint32_t from, uint64_t packet_id, uint32_t extra_nonce, uint8_t* nonce_out) {
+static void initPkiNonce(uint32_t from, uint64_t packet_id, uint32_t extra_nonce, uint8_t* nonce_out)
+{
     memset(nonce_out, 0, kAesBlockSize);
     memcpy(nonce_out, &packet_id, sizeof(packet_id));
     memcpy(nonce_out + sizeof(packet_id), &from, sizeof(from));
-    if (extra_nonce) {
+    if (extra_nonce)
+    {
         memcpy(nonce_out + sizeof(uint32_t), &extra_nonce, sizeof(extra_nonce));
     }
 }
 } // namespace
 
 // Use protobuf codec and wire packet functions
-using chat::meshtastic::encodeTextMessage;
-using chat::meshtastic::encodeNodeInfoMessage;
-using chat::meshtastic::decodeTextMessage;
 using chat::meshtastic::buildWirePacket;
-using chat::meshtastic::parseWirePacket;
+using chat::meshtastic::decodeTextMessage;
 using chat::meshtastic::decryptPayload;
+using chat::meshtastic::encodeNodeInfoMessage;
+using chat::meshtastic::encodeTextMessage;
 using chat::meshtastic::PacketHeaderWire;
+using chat::meshtastic::parseWirePacket;
 
-namespace chat {
-namespace meshtastic {
+namespace chat
+{
+namespace meshtastic
+{
 
 MtAdapter::MtAdapter(TLoRaPagerBoard& board)
     : board_(board),
@@ -389,22 +378,28 @@ MtAdapter::MtAdapter(TLoRaPagerBoard& board)
       secondary_psk_len_(0),
       pki_ready_(false),
       pki_public_key_{},
-      pki_private_key_{} {
+      pki_private_key_{},
+      last_raw_packet_len_(0),
+      has_pending_raw_packet_(false)
+{
     config_ = MeshConfig(); // Default config
     initNodeIdentity();
     initPkiKeys();
     updateChannelKeys();
 }
 
-MtAdapter::~MtAdapter() {
+MtAdapter::~MtAdapter()
+{
 }
 
-bool MtAdapter::sendText(ChannelId channel, const std::string& text, 
-                         MessageId* out_msg_id, NodeId peer) {
-    if (!ready_ || text.empty()) {
+bool MtAdapter::sendText(ChannelId channel, const std::string& text,
+                         MessageId* out_msg_id, NodeId peer)
+{
+    if (!ready_ || text.empty())
+    {
         return false;
     }
-    
+
     PendingSend pending;
     pending.channel = channel;
     pending.text = text;
@@ -412,51 +407,90 @@ bool MtAdapter::sendText(ChannelId channel, const std::string& text,
     pending.dest = (peer != 0) ? peer : 0xFFFFFFFF;
     pending.retry_count = 0;
     pending.last_attempt = 0;
-    
+
     send_queue_.push(pending);
     LORA_LOG("[LORA] queue text ch=%u len=%u id=%lu\n",
              static_cast<unsigned>(channel),
              static_cast<unsigned>(text.size()),
              static_cast<unsigned long>(pending.msg_id));
-    
-    if (out_msg_id) {
+
+    if (out_msg_id)
+    {
         *out_msg_id = pending.msg_id;
     }
-    
+
     return true;
 }
 
-bool MtAdapter::pollIncomingText(MeshIncomingText* out) {
-    if (receive_queue_.empty()) {
+bool MtAdapter::pollIncomingText(MeshIncomingText* out)
+{
+    if (receive_queue_.empty())
+    {
         return false;
     }
-    
+
     *out = receive_queue_.front();
     receive_queue_.pop();
     return true;
 }
 
-void MtAdapter::applyConfig(const MeshConfig& config) {
+void MtAdapter::applyConfig(const MeshConfig& config)
+{
     config_ = config;
     updateChannelKeys();
     configureRadio();
 }
 
-bool MtAdapter::isReady() const {
+bool MtAdapter::isReady() const
+{
     return ready_ && board_.isHardwareOnline(HW_RADIO_ONLINE);
 }
 
-void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
-    if (!data || size == 0) {
+bool MtAdapter::pollIncomingRawPacket(uint8_t* out_data, size_t& out_len, size_t max_len)
+{
+    if (!has_pending_raw_packet_ || !out_data || max_len == 0)
+    {
+        return false;
+    }
+
+    // Copy the stored raw packet data
+    size_t copy_len = (last_raw_packet_len_ < max_len) ? last_raw_packet_len_ : max_len;
+    memcpy(out_data, last_raw_packet_, copy_len);
+    out_len = copy_len;
+
+    // Mark as consumed
+    has_pending_raw_packet_ = false;
+
+    return true;
+}
+
+void MtAdapter::handleRawPacket(const uint8_t* data, size_t size)
+{
+    processReceivedPacket(data, size);
+}
+
+void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
+{
+    if (!data || size == 0)
+    {
         return;
     }
-    
+
+    // Store raw packet data for protocol detection
+    if (size <= sizeof(last_raw_packet_))
+    {
+        memcpy(last_raw_packet_, data, size);
+        last_raw_packet_len_ = size;
+        has_pending_raw_packet_ = true;
+    }
+
     // Parse wire packet header
     PacketHeaderWire header;
     uint8_t payload[256];
     size_t payload_size = sizeof(payload);
-    
-    if (!parseWirePacket(data, size, &header, payload, &payload_size)) {
+
+    if (!parseWirePacket(data, size, &header, payload, &payload_size))
+    {
         std::string raw_hex = toHex(data, size);
         LORA_LOG("[LORA] RX parse fail len=%u hex=%s\n",
                  (unsigned)size,
@@ -464,6 +498,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
         return;
     }
 
+    std::string full_hex = toHex(data, size, size);
     LORA_LOG("[LORA] RX wire from=%08lX to=%08lX id=%08lX ch=0x%02X flags=0x%02X len=%u\n",
              (unsigned long)header.from,
              (unsigned long)header.to,
@@ -471,36 +506,42 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
              header.channel,
              header.flags,
              (unsigned)payload_size);
-    if (header.from == node_id_) {
+    LORA_LOG("[LORA] RX full packet hex: %s\n", full_hex.c_str());
+    if (header.from == node_id_)
+    {
         LORA_LOG("[LORA] RX self drop id=%08lX\n", (unsigned long)header.id);
         return;
     }
-    
+
     // Check for duplicates
-    if (dedup_.isDuplicate(header.from, header.id)) {
+    if (dedup_.isDuplicate(header.from, header.id))
+    {
         LORA_LOG("[LORA] RX dedup from=%08lX id=%08lX\n",
                  (unsigned long)header.from,
                  (unsigned long)header.id);
         return; // Duplicate, ignore
     }
-    
+
     // Mark as seen
     dedup_.markSeen(header.from, header.id);
-    
+
     // Decrypt payload if needed
     uint8_t plaintext[256];
     size_t plaintext_len = sizeof(plaintext);
-    
+
     const uint8_t* psk = nullptr;
     size_t psk_len = 0;
 
     bool unknown_channel = false;
 
-    if (header.channel == 0) {
-        if (header.to != node_id_ || header.to == 0xFFFFFFFF || payload_size <= 12 || !pki_ready_) {
+    if (header.channel == 0)
+    {
+        if (header.to != node_id_ || header.to == 0xFFFFFFFF || payload_size <= 12 || !pki_ready_)
+        {
             return;
         }
-        if (!decryptPkiPayload(header.from, header.id, payload, payload_size, plaintext, &plaintext_len)) {
+        if (!decryptPkiPayload(header.from, header.id, payload, payload_size, plaintext, &plaintext_len))
+        {
             std::string cipher_hex = toHex(payload, payload_size);
             LORA_LOG("[LORA] RX PKI decrypt fail from=%08lX id=%08lX len=%u hex=%s\n",
                      (unsigned long)header.from,
@@ -509,14 +550,21 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
                      cipher_hex.c_str());
             return;
         }
-    } else {
-        if (header.channel == primary_channel_hash_) {
+    }
+    else
+    {
+        if (header.channel == primary_channel_hash_)
+        {
             psk = primary_psk_;
             psk_len = primary_psk_len_;
-        } else if (header.channel == secondary_channel_hash_) {
+        }
+        else if (header.channel == secondary_channel_hash_)
+        {
             psk = secondary_psk_;
             psk_len = secondary_psk_len_;
-        } else {
+        }
+        else
+        {
             std::string cipher_hex = toHex(payload, payload_size);
             LORA_LOG("[LORA] RX unknown channel hash=0x%02X from=%08lX id=%08lX len=%u hex=%s (skip decode)\n",
                      header.channel,
@@ -527,13 +575,16 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
             unknown_channel = true;
         }
 
-        if (unknown_channel) {
+        if (unknown_channel)
+        {
             return;
         }
 
-        if (psk && psk_len > 0) {
-            if (!decryptPayload(header, payload, payload_size, psk, psk_len, plaintext, &plaintext_len)) {
-                std::string cipher_hex = toHex(payload, payload_size);
+        if (psk && psk_len > 0)
+        {
+            if (!decryptPayload(header, payload, payload_size, psk, psk_len, plaintext, &plaintext_len))
+            {
+                std::string cipher_hex = toHex(payload, payload_size, payload_size);
                 LORA_LOG("[LORA] RX decrypt fail id=%08lX ch=0x%02X psk=%u len=%u hex=%s\n",
                          (unsigned long)header.id,
                          header.channel,
@@ -542,102 +593,137 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
                          cipher_hex.c_str());
                 return;
             }
-        } else {
+        }
+        else
+        {
             memcpy(plaintext, payload, payload_size);
             plaintext_len = payload_size;
+        }
+
+        // Log decrypted protobuf payload (meshtastic_Data wire format)
+        if (plaintext_len > 0)
+        {
+            std::string protobuf_hex = toHex(plaintext, plaintext_len, plaintext_len);
+            LORA_LOG("[LORA] RX protobuf hex: %s\n", protobuf_hex.c_str());
         }
     }
 
     meshtastic_Data decoded = meshtastic_Data_init_default;
     pb_istream_t stream = pb_istream_from_buffer(plaintext, plaintext_len);
-    if (pb_decode(&stream, meshtastic_Data_fields, &decoded)) {
+    if (pb_decode(&stream, meshtastic_Data_fields, &decoded))
+    {
         LORA_LOG("[LORA] RX data portnum=%u (%s) payload=%u\n",
                  (unsigned)decoded.portnum,
                  portName(decoded.portnum),
                  (unsigned)decoded.payload.size);
+        if (decoded.payload.size > 0)
+        {
+            std::string payload_hex = toHex(decoded.payload.bytes, decoded.payload.size, decoded.payload.size);
+            LORA_LOG("[LORA] RX data payload hex: %s\n", payload_hex.c_str());
+        }
 
-    if (decoded.portnum == meshtastic_PortNum_NODEINFO_APP && decoded.payload.size > 0) {
-        meshtastic_User user = meshtastic_User_init_default;
-        pb_istream_t ustream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
-        if (pb_decode(&ustream, meshtastic_User_fields, &user)) {
-            const uint32_t node_id = header.from;
-            const char* short_name = user.short_name[0] ? user.short_name : "";
-            const char* long_name = user.long_name[0] ? user.long_name : "";
-            LORA_LOG("[LORA] RX User from %08lX id='%s' short='%s' long='%s'\n",
-                     (unsigned long)node_id, user.id, short_name, long_name);
-            if (user.public_key.size == 32) {
-                std::array<uint8_t, 32> key{};
-                memcpy(key.data(), user.public_key.bytes, 32);
-                node_public_keys_[node_id] = key;
-                LORA_LOG("[LORA] PKI key stored for %08lX\n", (unsigned long)node_id);
-            }
-
-            // Publish NodeInfo update event (SNR not available in User message, use 0.0)
-            uint32_t now_secs = time(nullptr);
-            sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
-                node_id, short_name, long_name, 0.0f, now_secs);
-            sys::EventBus::publish(event, 0);
-
-            if (decoded.want_response) {
-                uint32_t now_ms = millis();
-                auto it = nodeinfo_last_seen_ms_.find(node_id);
-                bool allow_reply = true;
-                if (it != nodeinfo_last_seen_ms_.end()) {
-                    uint32_t since = now_ms - it->second;
-                    if (since < NODEINFO_REPLY_SUPPRESS_MS) {
-                        allow_reply = false;
-                    }
+        if (decoded.portnum == meshtastic_PortNum_NODEINFO_APP && decoded.payload.size > 0)
+        {
+            meshtastic_User user = meshtastic_User_init_default;
+            pb_istream_t ustream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+            if (pb_decode(&ustream, meshtastic_User_fields, &user))
+            {
+                const uint32_t node_id = header.from;
+                const char* short_name = user.short_name[0] ? user.short_name : "";
+                const char* long_name = user.long_name[0] ? user.long_name : "";
+                LORA_LOG("[LORA] RX User from %08lX id='%s' short='%s' long='%s'\n",
+                         (unsigned long)node_id, user.id, short_name, long_name);
+                if (user.public_key.size == 32)
+                {
+                    std::array<uint8_t, 32> key{};
+                    memcpy(key.data(), user.public_key.bytes, 32);
+                    node_public_keys_[node_id] = key;
+                    LORA_LOG("[LORA] PKI key stored for %08lX\n", (unsigned long)node_id);
                 }
-                nodeinfo_last_seen_ms_[node_id] = now_ms;
-                if (allow_reply && node_id != node_id_) {
-                    sendNodeInfoTo(node_id, false);
-                }
-            }
-        } else {
-            LORA_LOG("[LORA] RX User decode fail from=%08lX err=%s\n",
-                     (unsigned long)header.from,
-                     PB_GET_ERROR(&ustream));
-            meshtastic_NodeInfo node = meshtastic_NodeInfo_init_default;
-            pb_istream_t nstream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
-            if (pb_decode(&nstream, meshtastic_NodeInfo_fields, &node)) {
-                uint32_t node_id = node.num ? node.num : header.from;
-                const char* short_name = node.has_user ? node.user.short_name : "";
-                const char* long_name = node.has_user ? node.user.long_name : "";
-                float snr = node.snr;  // Get SNR from NodeInfo
-                LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
-                         (unsigned long)node_id, short_name, long_name, snr);
-                
-                // Publish NodeInfo update event (including SNR)
+
+                // Publish NodeInfo update event (SNR not available in User message, use 0.0)
                 uint32_t now_secs = time(nullptr);
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
-                    node_id, short_name, long_name, snr, now_secs);
+                    node_id, short_name, long_name, 0.0f, now_secs,
+                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
                 sys::EventBus::publish(event, 0);
-            } else {
-                LORA_LOG("[LORA] RX NodeInfo decode fail from=%08lX err=%s\n",
+
+                if (decoded.want_response)
+                {
+                    uint32_t now_ms = millis();
+                    auto it = nodeinfo_last_seen_ms_.find(node_id);
+                    bool allow_reply = true;
+                    if (it != nodeinfo_last_seen_ms_.end())
+                    {
+                        uint32_t since = now_ms - it->second;
+                        if (since < NODEINFO_REPLY_SUPPRESS_MS)
+                        {
+                            allow_reply = false;
+                        }
+                    }
+                    nodeinfo_last_seen_ms_[node_id] = now_ms;
+                    if (allow_reply && node_id != node_id_)
+                    {
+                        sendNodeInfoTo(node_id, false);
+                    }
+                }
+            }
+            else
+            {
+                LORA_LOG("[LORA] RX User decode fail from=%08lX err=%s\n",
                          (unsigned long)header.from,
-                         PB_GET_ERROR(&nstream));
+                         PB_GET_ERROR(&ustream));
+                meshtastic_NodeInfo node = meshtastic_NodeInfo_init_default;
+                pb_istream_t nstream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+                if (pb_decode(&nstream, meshtastic_NodeInfo_fields, &node))
+                {
+                    uint32_t node_id = node.num ? node.num : header.from;
+                    const char* short_name = node.has_user ? node.user.short_name : "";
+                    const char* long_name = node.has_user ? node.user.long_name : "";
+                    float snr = node.snr; // Get SNR from NodeInfo
+                    LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
+                             (unsigned long)node_id, short_name, long_name, snr);
+
+                    // Publish NodeInfo update event (including SNR)
+                    uint32_t now_secs = time(nullptr);
+                    sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
+                        node_id, short_name, long_name, snr, now_secs,
+                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                    sys::EventBus::publish(event, 0);
+                }
+                else
+                {
+                    LORA_LOG("[LORA] RX NodeInfo decode fail from=%08lX err=%s\n",
+                             (unsigned long)header.from,
+                             PB_GET_ERROR(&nstream));
+                }
             }
         }
-    }
 
         bool want_ack_flag = (header.flags & PACKET_FLAGS_WANT_ACK_MASK) != 0;
         bool want_response = decoded.want_response ||
-            (decoded.has_bitfield && ((decoded.bitfield & kBitfieldWantResponseMask) != 0));
+                             (decoded.has_bitfield && ((decoded.bitfield & kBitfieldWantResponseMask) != 0));
         bool to_us = (header.to == node_id_);
         bool is_text_port = (decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
                              decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP);
-        if ((want_ack_flag || want_response) && to_us && is_text_port) {
-            if (sendRoutingAck(header.from, header.id, header.channel, psk, psk_len)) {
+        if ((want_ack_flag || want_response) && to_us && is_text_port)
+        {
+            if (sendRoutingAck(header.from, header.id, header.channel, psk, psk_len))
+            {
                 LORA_LOG("[LORA] TX ack to=%08lX req=%08lX\n",
                          (unsigned long)header.from,
                          (unsigned long)header.id);
-            } else {
+            }
+            else
+            {
                 LORA_LOG("[LORA] TX ack fail to=%08lX req=%08lX\n",
                          (unsigned long)header.from,
                          (unsigned long)header.id);
             }
         }
-    } else {
+    }
+    else
+    {
         std::string plain_hex = toHex(plaintext, plaintext_len);
         LORA_LOG("[LORA] RX data decode fail id=%08lX err=%s len=%u hex=%s\n",
                  (unsigned long)header.id,
@@ -645,63 +731,78 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size) {
                  (unsigned)plaintext_len,
                  plain_hex.c_str());
     }
-    
+
     // Decode Data message
     MeshIncomingText incoming;
-    if (decodeTextMessage(plaintext, plaintext_len, &incoming)) {
+    if (decodeTextMessage(plaintext, plaintext_len, &incoming))
+    {
         // Fill in packet info from header
         incoming.from = header.from;
         incoming.msg_id = header.id;
-        if (header.channel == secondary_channel_hash_) {
+        if (header.channel == secondary_channel_hash_)
+        {
             incoming.channel = ChannelId::SECONDARY;
-        } else {
+        }
+        else
+        {
             incoming.channel = ChannelId::PRIMARY;
         }
         incoming.hop_limit = header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
         incoming.encrypted = (psk != nullptr && psk_len > 0);
-        
+
         receive_queue_.push(incoming);
         LORA_LOG("[LORA] RX text from=%08lX id=%08lX ch=%u len=%u\n",
                  (unsigned long)incoming.from,
                  (unsigned long)incoming.msg_id,
                  static_cast<unsigned>(incoming.channel),
                  (unsigned)incoming.text.size());
-        if (!incoming.text.empty()) {
+        if (!incoming.text.empty())
+        {
             LORA_LOG("[LORA] RX text msg='%s'\n", incoming.text.c_str());
         }
     }
 }
 
-void MtAdapter::processSendQueue() {
+void MtAdapter::processSendQueue()
+{
     uint32_t now = millis();
 
     maybeBroadcastNodeInfo(now);
 
-    if (!send_queue_.empty()) {
+    if (!send_queue_.empty())
+    {
         LORA_LOG("[LORA] TX queue pending=%u\n", (unsigned)send_queue_.size());
     }
-    
-    while (!send_queue_.empty()) {
+
+    while (!send_queue_.empty())
+    {
         PendingSend& pending = send_queue_.front();
-        
+
         // Check if ready to send
-        if (now - pending.last_attempt < RETRY_DELAY_MS && pending.retry_count > 0) {
+        if (now - pending.last_attempt < RETRY_DELAY_MS && pending.retry_count > 0)
+        {
             break; // Wait before retry
         }
-        
+
         // Try to send
-        if (sendPacket(pending)) {
+        if (sendPacket(pending))
+        {
             // Success, remove from queue
             send_queue_.pop();
-        } else {
+        }
+        else
+        {
             // Failed, retry or drop
             pending.retry_count++;
             pending.last_attempt = now;
-            
-            if (pending.retry_count > MAX_RETRIES) {
+
+            if (pending.retry_count > MAX_RETRIES)
+            {
                 // Max retries reached, drop
                 send_queue_.pop();
-            } else {
+            }
+            else
+            {
                 // Will retry later
                 break;
             }
@@ -709,21 +810,23 @@ void MtAdapter::processSendQueue() {
     }
 }
 
-bool MtAdapter::sendPacket(const PendingSend& pending) {
+bool MtAdapter::sendPacket(const PendingSend& pending)
+{
     // Create Data message payload
     uint8_t data_buffer[256];
     size_t data_size = sizeof(data_buffer);
-    
+
     NodeId from_node = node_id_;
-    if (!encodeTextMessage(pending.channel, pending.text, from_node, 
-                          pending.msg_id, data_buffer, &data_size)) {
+    if (!encodeTextMessage(pending.channel, pending.text, from_node,
+                           pending.msg_id, data_buffer, &data_size))
+    {
         return false;
     }
-    
+
     // Build full wire packet (like M5Tab5-GPS)
     uint8_t wire_buffer[512];
     size_t wire_size = sizeof(wire_buffer);
-    
+
     uint8_t channel_hash =
         (pending.channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
     uint8_t hop_limit = config_.hop_limit;
@@ -739,25 +842,32 @@ bool MtAdapter::sendPacket(const PendingSend& pending) {
                    (node_public_keys_.find(dest) != node_public_keys_.end());
     uint8_t pki_buf[256];
     size_t pki_len = sizeof(pki_buf);
-    if (use_pki && encryptPkiPayload(dest, pending.msg_id, data_buffer, data_size, pki_buf, &pki_len)) {
+    if (use_pki && encryptPkiPayload(dest, pending.msg_id, data_buffer, data_size, pki_buf, &pki_len))
+    {
         payload = pki_buf;
         payload_len = pki_len;
         channel_hash = 0; // PKI channel
         want_ack = true;
-    } else {
+    }
+    else
+    {
         // Fallback to PSK
-        if (pending.channel == ChannelId::SECONDARY) {
+        if (pending.channel == ChannelId::SECONDARY)
+        {
             psk = secondary_psk_;
             psk_len = secondary_psk_len_;
-        } else {
+        }
+        else
+        {
             psk = primary_psk_;
             psk_len = primary_psk_len_;
         }
     }
-    
+
     if (!buildWirePacket(payload, payload_len, from_node, pending.msg_id,
-                        dest, channel_hash, hop_limit, want_ack,
-                        psk, psk_len, wire_buffer, &wire_size)) {
+                         dest, channel_hash, hop_limit, want_ack,
+                         psk, psk_len, wire_buffer, &wire_size))
+    {
         return false;
     }
     LORA_LOG("[LORA] TX wire ch=0x%02X hop=%u ack=%d psk=%u wire=%u dest=%08lX\n",
@@ -767,14 +877,17 @@ bool MtAdapter::sendPacket(const PendingSend& pending) {
              (unsigned)psk_len,
              (unsigned)wire_size,
              (unsigned long)dest);
-    
+    std::string tx_full_hex = toHex(wire_buffer, wire_size, wire_size);
+    LORA_LOG("[LORA] TX full packet hex: %s\n", tx_full_hex.c_str());
+
     // Send via LoRa using RadioLib
     int state = RADIOLIB_ERR_NONE;
-    
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE)) {
+
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
         return false;
     }
-    
+
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     // For now, send directly (in production, use task queue)
     state = board_.radio.transmit(wire_buffer, wire_size);
@@ -782,28 +895,32 @@ bool MtAdapter::sendPacket(const PendingSend& pending) {
     // Other radio types - implement as needed
     state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
-    
+
     bool ok = (state == RADIOLIB_ERR_NONE);
     LORA_LOG("[LORA] TX text id=%08lX ch=%u len=%u ok=%d\n",
              (unsigned long)pending.msg_id,
              static_cast<unsigned>(pending.channel),
              (unsigned)wire_size,
              ok ? 1 : 0);
-    if (ok) {
+    if (ok)
+    {
         startRadioReceive();
     }
     return ok;
 }
 
-bool MtAdapter::sendNodeInfo() {
-    if (!ready_) {
+bool MtAdapter::sendNodeInfo()
+{
+    if (!ready_)
+    {
         return false;
     }
 
     return sendNodeInfoTo(0xFFFFFFFF, false);
 }
 
-bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response) {
+bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
+{
     uint8_t data_buffer[256];
     size_t data_size = sizeof(data_buffer);
 
@@ -826,7 +943,8 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response) {
             pki_ready_ ? pki_public_key_.size() : 0,
             want_response,
             data_buffer,
-            &data_size)) {
+            &data_size))
+    {
         return false;
     }
 
@@ -842,15 +960,19 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response) {
 
     if (!buildWirePacket(data_buffer, data_size, node_id_, next_packet_id_++,
                          dest, channel_hash, hop_limit, want_ack,
-                         primary_psk_, primary_psk_len_, wire_buffer, &wire_size)) {
+                         primary_psk_, primary_psk_len_, wire_buffer, &wire_size))
+    {
         return false;
     }
     LORA_LOG("[LORA] TX nodeinfo wire ch=0x%02X hop=%u wire=%u\n",
              channel_hash,
              hop_limit,
              (unsigned)wire_size);
+    std::string nodeinfo_full_hex = toHex(wire_buffer, wire_size, wire_size);
+    LORA_LOG("[LORA] TX nodeinfo full packet hex: %s\n", nodeinfo_full_hex.c_str());
 
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE)) {
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
         return false;
     }
 
@@ -864,40 +986,48 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response) {
              (unsigned long)(next_packet_id_ - 1),
              (unsigned)wire_size,
              ok ? 1 : 0);
-    if (ok) {
+    if (ok)
+    {
         startRadioReceive();
     }
     return ok;
 }
 
-void MtAdapter::maybeBroadcastNodeInfo(uint32_t now_ms) {
-    if (!ready_) {
+void MtAdapter::maybeBroadcastNodeInfo(uint32_t now_ms)
+{
+    if (!ready_)
+    {
         return;
     }
 
-    if (last_nodeinfo_ms_ == 0 || (now_ms - last_nodeinfo_ms_) >= NODEINFO_INTERVAL_MS) {
-        if (sendNodeInfo()) {
+    if (last_nodeinfo_ms_ == 0 || (now_ms - last_nodeinfo_ms_) >= NODEINFO_INTERVAL_MS)
+    {
+        if (sendNodeInfo())
+        {
             last_nodeinfo_ms_ = now_ms;
         }
     }
 }
 
-void MtAdapter::configureRadio() {
+void MtAdapter::configureRadio()
+{
     // Configure LoRa radio based on config_
     // This is a placeholder - actual configuration depends on RadioLib API
     // and Meshtastic region/preset settings
 
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE)) {
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
         ready_ = false;
         return;
     }
 
     meshtastic_Config_LoRaConfig_RegionCode region_code =
         static_cast<meshtastic_Config_LoRaConfig_RegionCode>(config_.region);
-    if (region_code == meshtastic_Config_LoRaConfig_RegionCode_UNSET) {
+    if (region_code == meshtastic_Config_LoRaConfig_RegionCode_UNSET)
+    {
         region_code = meshtastic_Config_LoRaConfig_RegionCode_CN;
     }
-    const RegionInfo* region = findRegion(region_code);
+    const chat::meshtastic::RegionInfo* region = chat::meshtastic::findRegion(region_code);
 
     meshtastic_Config_LoRaConfig_ModemPreset preset =
         static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(config_.modem_preset);
@@ -905,53 +1035,55 @@ void MtAdapter::configureRadio() {
     float bw_khz = 250.0f;
     uint8_t sf = 11;
     uint8_t cr_denom = 5;
-    switch (preset) {
-        case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-            bw_khz = region->wide_lora ? 1625.0f : 500.0f;
-            cr_denom = 5;
-            sf = 7;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-            bw_khz = region->wide_lora ? 812.5f : 250.0f;
-            cr_denom = 5;
-            sf = 7;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-            bw_khz = region->wide_lora ? 812.5f : 250.0f;
-            cr_denom = 5;
-            sf = 8;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-            bw_khz = region->wide_lora ? 812.5f : 250.0f;
-            cr_denom = 5;
-            sf = 9;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-            bw_khz = region->wide_lora ? 812.5f : 250.0f;
-            cr_denom = 5;
-            sf = 10;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-            bw_khz = region->wide_lora ? 406.25f : 125.0f;
-            cr_denom = 8;
-            sf = 11;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-            bw_khz = region->wide_lora ? 406.25f : 125.0f;
-            cr_denom = 8;
-            sf = 12;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-        default:
-            bw_khz = region->wide_lora ? 812.5f : 250.0f;
-            cr_denom = 5;
-            sf = 11;
-            break;
+    switch (preset)
+    {
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
+        bw_khz = region->wide_lora ? 1625.0f : 500.0f;
+        cr_denom = 5;
+        sf = 7;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 7;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 8;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 9;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 10;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
+        bw_khz = region->wide_lora ? 406.25f : 125.0f;
+        cr_denom = 8;
+        sf = 11;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
+        bw_khz = region->wide_lora ? 406.25f : 125.0f;
+        cr_denom = 8;
+        sf = 12;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
+    default:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 11;
+        break;
     }
 
-    const char* channel_name = presetDisplayName(preset);
-    float freq_mhz = computeFrequencyMhz(region, bw_khz, channel_name);
-    if (freq_mhz <= 0.0f) {
+    const char* channel_name = chat::meshtastic::presetDisplayName(preset);
+    float freq_mhz = chat::meshtastic::computeFrequencyMhz(region, bw_khz, channel_name);
+    if (freq_mhz <= 0.0f)
+    {
         freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f);
     }
 
@@ -981,9 +1113,11 @@ void MtAdapter::configureRadio() {
     startRadioReceive();
 }
 
-void MtAdapter::initNodeIdentity() {
+void MtAdapter::initNodeIdentity()
+{
     uint64_t mac = ESP.getEfuseMac();
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 6; i++)
+    {
         mac_addr_[5 - i] = (mac >> (8 * i)) & 0xFF;
     }
     node_id_ = (static_cast<uint32_t>(mac_addr_[2]) << 24) |
@@ -992,20 +1126,27 @@ void MtAdapter::initNodeIdentity() {
                static_cast<uint32_t>(mac_addr_[5]);
 }
 
-void MtAdapter::updateChannelKeys() {
-    if (isZeroKey(config_.primary_key, sizeof(config_.primary_key))) {
+void MtAdapter::updateChannelKeys()
+{
+    if (isZeroKey(config_.primary_key, sizeof(config_.primary_key)))
+    {
         size_t len = 0;
         expandShortPsk(kDefaultPskIndex, primary_psk_, &len);
         primary_psk_len_ = len;
-    } else {
+    }
+    else
+    {
         memcpy(primary_psk_, config_.primary_key, sizeof(primary_psk_));
         primary_psk_len_ = sizeof(primary_psk_);
     }
 
-    if (isZeroKey(config_.secondary_key, sizeof(config_.secondary_key))) {
+    if (isZeroKey(config_.secondary_key, sizeof(config_.secondary_key)))
+    {
         secondary_psk_len_ = 0;
         memset(secondary_psk_, 0, sizeof(secondary_psk_));
-    } else {
+    }
+    else
+    {
         memcpy(secondary_psk_, config_.secondary_key, sizeof(secondary_psk_));
         secondary_psk_len_ = sizeof(secondary_psk_);
     }
@@ -1025,19 +1166,23 @@ void MtAdapter::updateChannelKeys() {
              (unsigned)secondary_psk_len_);
 }
 
-void MtAdapter::startRadioReceive() {
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE)) {
+void MtAdapter::startRadioReceive()
+{
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
         return;
     }
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     int state = board_.radio.startReceive();
-    if (state != RADIOLIB_ERR_NONE) {
+    if (state != RADIOLIB_ERR_NONE)
+    {
         LORA_LOG("[LORA] RX start fail state=%d\n", state);
     }
 #endif
 }
 
-bool MtAdapter::initPkiKeys() {
+bool MtAdapter::initPkiKeys()
+{
     Preferences prefs;
     prefs.begin("chat", false);
     size_t pub_len = prefs.getBytes("pki_pub", pki_public_key_.data(), pki_public_key_.size());
@@ -1045,7 +1190,8 @@ bool MtAdapter::initPkiKeys() {
     bool have_keys = (pub_len == pki_public_key_.size() && priv_len == pki_private_key_.size() &&
                       !isZeroKey(pki_private_key_.data(), pki_private_key_.size()));
 
-    if (!have_keys) {
+    if (!have_keys)
+    {
         RNG.begin("trail-mate");
         RNG.stir(mac_addr_, sizeof(mac_addr_));
         uint32_t noise = random();
@@ -1053,7 +1199,8 @@ bool MtAdapter::initPkiKeys() {
 
         Curve25519::dh1(pki_public_key_.data(), pki_private_key_.data());
         have_keys = !isZeroKey(pki_private_key_.data(), pki_private_key_.size());
-        if (have_keys) {
+        if (have_keys)
+        {
             prefs.putBytes("pki_pub", pki_public_key_.data(), pki_public_key_.size());
             prefs.putBytes("pki_priv", pki_private_key_.data(), pki_private_key_.size());
         }
@@ -1061,9 +1208,12 @@ bool MtAdapter::initPkiKeys() {
     prefs.end();
 
     pki_ready_ = have_keys;
-    if (pki_ready_) {
+    if (pki_ready_)
+    {
         LORA_LOG("[LORA] PKI ready, public key set\n");
-    } else {
+    }
+    else
+    {
         LORA_LOG("[LORA] PKI init failed\n");
     }
     return pki_ready_;
@@ -1071,15 +1221,19 @@ bool MtAdapter::initPkiKeys() {
 
 bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
                                   const uint8_t* cipher, size_t cipher_len,
-                                  uint8_t* out_plain, size_t* out_plain_len) {
-    if (!cipher || cipher_len <= 12 || !out_plain || !out_plain_len) {
+                                  uint8_t* out_plain, size_t* out_plain_len)
+{
+    if (!cipher || cipher_len <= 12 || !out_plain || !out_plain_len)
+    {
         return false;
     }
-    if (!pki_ready_) {
+    if (!pki_ready_)
+    {
         return false;
     }
     auto it = node_public_keys_.find(from);
-    if (it == node_public_keys_.end()) {
+    if (it == node_public_keys_.end())
+    {
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)from);
         return false;
     }
@@ -1088,7 +1242,8 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     uint8_t local_priv[32];
     memcpy(shared, it->second.data(), sizeof(shared));
     memcpy(local_priv, pki_private_key_.data(), sizeof(local_priv));
-    if (!Curve25519::dh2(shared, local_priv)) {
+    if (!Curve25519::dh2(shared, local_priv))
+    {
         return false;
     }
 
@@ -1103,13 +1258,15 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     initPkiNonce(from, packet_id64, extra_nonce, nonce);
 
     size_t plain_len = cipher_len - 12;
-    if (*out_plain_len < plain_len) {
+    if (*out_plain_len < plain_len)
+    {
         *out_plain_len = plain_len;
         return false;
     }
 
     if (!aes_ccm_ad(shared, sizeof(shared), nonce, 8,
-                    cipher, plain_len, nullptr, 0, auth, out_plain)) {
+                    cipher, plain_len, nullptr, 0, auth, out_plain))
+    {
         return false;
     }
 
@@ -1119,11 +1276,13 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
 
 bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
                                   const uint8_t* plain, size_t plain_len,
-                                  uint8_t* out_cipher, size_t* out_cipher_len) {
+                                  uint8_t* out_cipher, size_t* out_cipher_len)
+{
     if (!plain || !out_cipher || !out_cipher_len) return false;
     if (!pki_ready_) return false;
     auto it = node_public_keys_.find(dest);
-    if (it == node_public_keys_.end()) {
+    if (it == node_public_keys_.end())
+    {
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)dest);
         return false;
     }
@@ -1132,7 +1291,8 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
     uint8_t local_priv[32];
     memcpy(shared, it->second.data(), sizeof(shared));
     memcpy(local_priv, pki_private_key_.data(), sizeof(local_priv));
-    if (!Curve25519::dh2(shared, local_priv)) {
+    if (!Curve25519::dh2(shared, local_priv))
+    {
         return false;
     }
     hashSharedKey(shared, sizeof(shared));
@@ -1145,7 +1305,8 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
     const size_t m = 8;
     const size_t l = 2;
     size_t needed = plain_len + m + sizeof(extra_nonce);
-    if (*out_cipher_len < needed) {
+    if (*out_cipher_len < needed)
+    {
         *out_cipher_len = needed;
         return false;
     }
@@ -1165,12 +1326,15 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
 }
 
 bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
-                               const uint8_t* psk, size_t psk_len) {
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE)) {
+                               const uint8_t* psk, size_t psk_len)
+{
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
         return false;
     }
 
-    if (channel_hash == 0) {
+    if (channel_hash == 0)
+    {
         channel_hash = primary_channel_hash_;
         psk = primary_psk_;
         psk_len = primary_psk_len_;
@@ -1182,7 +1346,8 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
 
     uint8_t routing_buf[64];
     pb_ostream_t rstream = pb_ostream_from_buffer(routing_buf, sizeof(routing_buf));
-    if (!pb_encode(&rstream, meshtastic_Routing_fields, &routing)) {
+    if (!pb_encode(&rstream, meshtastic_Routing_fields, &routing))
+    {
         return false;
     }
 
@@ -1195,14 +1360,16 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
     data.has_bitfield = true;
     data.bitfield = 0;
     data.payload.size = rstream.bytes_written;
-    if (data.payload.size > sizeof(data.payload.bytes)) {
+    if (data.payload.size > sizeof(data.payload.bytes))
+    {
         return false;
     }
     memcpy(data.payload.bytes, routing_buf, data.payload.size);
 
     uint8_t data_buf[128];
     pb_ostream_t dstream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
-    if (!pb_encode(&dstream, meshtastic_Data_fields, &data)) {
+    if (!pb_encode(&dstream, meshtastic_Data_fields, &data))
+    {
         return false;
     }
 
@@ -1212,16 +1379,21 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
     bool want_ack = false;
     if (!buildWirePacket(data_buf, dstream.bytes_written, node_id_, next_packet_id_++,
                          dest, channel_hash, hop_limit, want_ack,
-                         psk, psk_len, wire_buffer, &wire_size)) {
+                         psk, psk_len, wire_buffer, &wire_size))
+    {
         return false;
     }
+
+    std::string ack_full_hex = toHex(wire_buffer, wire_size, wire_size);
+    LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     int state = board_.radio.transmit(wire_buffer, wire_size);
 #else
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
-    if (state == RADIOLIB_ERR_NONE) {
+    if (state == RADIOLIB_ERR_NONE)
+    {
         startRadioReceive();
         return true;
     }

@@ -11,7 +11,8 @@
 
 /* Enum definitions */
 /* TODO: REPLACE */
-typedef enum _meshtastic_HardwareMessage_Type {
+typedef enum _meshtastic_HardwareMessage_Type
+{
     /* Unset/unused */
     meshtastic_HardwareMessage_Type_UNSET = 0,
     /* Set gpio gpios based on gpio_mask/gpio_value */
@@ -38,7 +39,8 @@ typedef enum _meshtastic_HardwareMessage_Type {
  because no security yet (beyond the channel mechanism).
  It should be off by default and then protected based on some TBD mechanism
  (a special channel once multichannel support is included?) */
-typedef struct _meshtastic_HardwareMessage {
+typedef struct _meshtastic_HardwareMessage
+{
     /* What type of HardwareMessage is this? */
     meshtastic_HardwareMessage_Type type;
     /* What gpios are we changing. Not used for all MessageTypes, see MessageType for details */
@@ -48,44 +50,49 @@ typedef struct _meshtastic_HardwareMessage {
     uint64_t gpio_value;
 } meshtastic_HardwareMessage;
 
-
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_HardwareMessage_Type_MIN meshtastic_HardwareMessage_Type_UNSET
 #define _meshtastic_HardwareMessage_Type_MAX meshtastic_HardwareMessage_Type_READ_GPIOS_REPLY
-#define _meshtastic_HardwareMessage_Type_ARRAYSIZE ((meshtastic_HardwareMessage_Type)(meshtastic_HardwareMessage_Type_READ_GPIOS_REPLY+1))
+#define _meshtastic_HardwareMessage_Type_ARRAYSIZE ((meshtastic_HardwareMessage_Type)(meshtastic_HardwareMessage_Type_READ_GPIOS_REPLY + 1))
 
 #define meshtastic_HardwareMessage_type_ENUMTYPE meshtastic_HardwareMessage_Type
 
-
 /* Initializer values for message structs */
-#define meshtastic_HardwareMessage_init_default  {_meshtastic_HardwareMessage_Type_MIN, 0, 0}
-#define meshtastic_HardwareMessage_init_zero     {_meshtastic_HardwareMessage_Type_MIN, 0, 0}
+#define meshtastic_HardwareMessage_init_default    \
+    {                                              \
+        _meshtastic_HardwareMessage_Type_MIN, 0, 0 \
+    }
+#define meshtastic_HardwareMessage_init_zero       \
+    {                                              \
+        _meshtastic_HardwareMessage_Type_MIN, 0, 0 \
+    }
 
 /* Field tags (for use in manual encoding/decoding) */
-#define meshtastic_HardwareMessage_type_tag      1
+#define meshtastic_HardwareMessage_type_tag 1
 #define meshtastic_HardwareMessage_gpio_mask_tag 2
 #define meshtastic_HardwareMessage_gpio_value_tag 3
 
 /* Struct field encoding specification for nanopb */
 #define meshtastic_HardwareMessage_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    type,              1) \
-X(a, STATIC,   SINGULAR, UINT64,   gpio_mask,         2) \
-X(a, STATIC,   SINGULAR, UINT64,   gpio_value,        3)
+    X(a, STATIC, SINGULAR, UENUM, type, 1)         \
+    X(a, STATIC, SINGULAR, UINT64, gpio_mask, 2)   \
+    X(a, STATIC, SINGULAR, UINT64, gpio_value, 3)
 #define meshtastic_HardwareMessage_CALLBACK NULL
 #define meshtastic_HardwareMessage_DEFAULT NULL
 
-extern const pb_msgdesc_t meshtastic_HardwareMessage_msg;
+    extern const pb_msgdesc_t meshtastic_HardwareMessage_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_HardwareMessage_fields &meshtastic_HardwareMessage_msg
 
 /* Maximum encoded size of messages (where known) */
 #define MESHTASTIC_MESHTASTIC_REMOTE_HARDWARE_PB_H_MAX_SIZE meshtastic_HardwareMessage_size
-#define meshtastic_HardwareMessage_size          24
+#define meshtastic_HardwareMessage_size 24
 
 #ifdef __cplusplus
 } /* extern "C" */

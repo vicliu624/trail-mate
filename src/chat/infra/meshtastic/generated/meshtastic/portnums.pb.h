@@ -22,7 +22,8 @@
  Note: This was formerly a Type enum named 'typ' with the same id #
  We have change to this 'portnum' based scheme for specifying app handlers for particular payloads.
  This change is backwards compatible by treating the legacy OPAQUE/CLEAR_TEXT values identically. */
-typedef enum _meshtastic_PortNum {
+typedef enum _meshtastic_PortNum
+{
     /* Deprecated: do not use in new code (formerly called OPAQUE)
  A message sent from a device outside of the mesh, in a form the mesh does not understand
  NOTE: This must be 0, because it is documented in IMeshService.aidl to be so
@@ -149,14 +150,14 @@ typedef enum _meshtastic_PortNum {
 } meshtastic_PortNum;
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Helper constants for enums */
 #define _meshtastic_PortNum_MIN meshtastic_PortNum_UNKNOWN_APP
 #define _meshtastic_PortNum_MAX meshtastic_PortNum_MAX
-#define _meshtastic_PortNum_ARRAYSIZE ((meshtastic_PortNum)(meshtastic_PortNum_MAX+1))
-
+#define _meshtastic_PortNum_ARRAYSIZE ((meshtastic_PortNum)(meshtastic_PortNum_MAX + 1))
 
 #ifdef __cplusplus
 } /* extern "C" */
