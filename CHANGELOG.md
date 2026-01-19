@@ -18,6 +18,20 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.1-alpha] - 2026-01-20
+### Added / 新增
+- Mesh protocol factory with explicit Meshtastic/MeshCore selection / Mesh 协议工厂，支持显式选择 Meshtastic/MeshCore
+- Settings actions: reset mesh params, reset node DB, clear message DB / 设置操作：重置 Mesh 参数、重置节点库、清空消息库
+- Meshtastic region utilities and docs (region table, frequency helpers, protocol docs) / Meshtastic 区域工具与文档（区域表、频率计算、协议文档）
+
+### Changed / 变更
+- Settings: protocol/region changes now restart immediately / 设置：协议/区域修改后立即重启
+- Config sync: protocol/region/preset and PSK wired to AppConfig/applyConfig / 配置同步：协议/区域/预设与 PSK 接入 AppConfig/applyConfig
+- UI assets and README screenshots refreshed / UI 资源与 README 截图更新
+
+### Fixed / 修复
+- CN region frequency calculation alignment for LongFast / CN 区域 LongFast 频点计算对齐
+
 ## [0.1.0-alpha] - 2026-01-18
 ### Added / 新增
 - Offline GPS mapping with fixed north-up orientation, zoom levels, and breadcrumb trails / 离线 GPS 地图（固定北向上、缩放级别、面包屑轨迹）
