@@ -6,6 +6,7 @@
 #include "mt_adapter.h"
 #include "../../../sys/event_bus.h"
 #include "../../domain/contact_types.h"
+#include "../../../team/protocol/team_portnum.h"
 #include <Arduino.h>
 #include <Crypto.h>
 #include <cmath>
@@ -66,6 +67,12 @@ static const char* portName(uint32_t portnum)
         return "TRACEROUTE";
     case meshtastic_PortNum_WAYPOINT_APP:
         return "WAYPOINT";
+    case team::proto::TEAM_MGMT_APP:
+        return "TEAM_MGMT";
+    case team::proto::TEAM_POSITION_APP:
+        return "TEAM_POS";
+    case team::proto::TEAM_WAYPOINT_APP:
+        return "TEAM_WP";
     default:
         return "UNKNOWN";
     }
@@ -354,6 +361,7 @@ using chat::meshtastic::buildWirePacket;
 using chat::meshtastic::decodeTextMessage;
 using chat::meshtastic::decryptPayload;
 using chat::meshtastic::encodeNodeInfoMessage;
+using chat::meshtastic::encodeAppData;
 using chat::meshtastic::encodeTextMessage;
 using chat::meshtastic::PacketHeaderWire;
 using chat::meshtastic::parseWirePacket;
@@ -431,6 +439,76 @@ bool MtAdapter::pollIncomingText(MeshIncomingText* out)
 
     *out = receive_queue_.front();
     receive_queue_.pop();
+    return true;
+}
+
+bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
+                            const uint8_t* payload, size_t len,
+                            NodeId dest, bool want_ack)
+{
+    if (!ready_)
+    {
+        return false;
+    }
+
+    uint8_t data_buffer[256];
+    size_t data_size = sizeof(data_buffer);
+    if (!encodeAppData(portnum, payload, len, want_ack, data_buffer, &data_size))
+    {
+        return false;
+    }
+
+    uint8_t wire_buffer[512];
+    size_t wire_size = sizeof(wire_buffer);
+
+    uint8_t channel_hash =
+        (channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
+    const uint8_t* psk =
+        (channel == ChannelId::SECONDARY) ? secondary_psk_ : primary_psk_;
+    size_t psk_len =
+        (channel == ChannelId::SECONDARY) ? secondary_psk_len_ : primary_psk_len_;
+    uint8_t hop_limit = config_.hop_limit;
+    uint32_t dest_node = (dest != 0) ? dest : 0xFFFFFFFF;
+    bool want_ack_flag = want_ack && (dest_node != 0xFFFFFFFF);
+
+    if (!buildWirePacket(data_buffer, data_size, node_id_, next_packet_id_++,
+                         dest_node, channel_hash, hop_limit, want_ack_flag,
+                         psk, psk_len, wire_buffer, &wire_size))
+    {
+        return false;
+    }
+
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
+        return false;
+    }
+
+    int state = RADIOLIB_ERR_UNSUPPORTED;
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    state = board_.radio.transmit(wire_buffer, wire_size);
+#endif
+
+    bool ok = (state == RADIOLIB_ERR_NONE);
+    LORA_LOG("[LORA] TX app port=%u len=%u ok=%d\n",
+             (unsigned)portnum,
+             (unsigned)wire_size,
+             ok ? 1 : 0);
+    if (ok)
+    {
+        startRadioReceive();
+    }
+    return ok;
+}
+
+bool MtAdapter::pollIncomingData(MeshIncomingData* out)
+{
+    if (app_receive_queue_.empty())
+    {
+        return false;
+    }
+
+    *out = app_receive_queue_.front();
+    app_receive_queue_.pop();
     return true;
 }
 
@@ -706,6 +784,9 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         bool to_us = (header.to == node_id_);
         bool is_text_port = (decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
                              decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP);
+        bool is_nodeinfo_port = (decoded.portnum == meshtastic_PortNum_NODEINFO_APP);
+        ChannelId channel_id =
+            (header.channel == secondary_channel_hash_) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
         if ((want_ack_flag || want_response) && to_us && is_text_port)
         {
             if (sendRoutingAck(header.from, header.id, header.channel, psk, psk_len))
@@ -719,6 +800,24 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 LORA_LOG("[LORA] TX ack fail to=%08lX req=%08lX\n",
                          (unsigned long)header.from,
                          (unsigned long)header.id);
+            }
+        }
+
+        if (!is_text_port && !is_nodeinfo_port && decoded.payload.size > 0)
+        {
+            MeshIncomingData incoming;
+            incoming.portnum = decoded.portnum;
+            incoming.from = header.from;
+            incoming.to = header.to;
+            incoming.packet_id = header.id;
+            incoming.channel = channel_id;
+            incoming.channel_hash = header.channel;
+            incoming.want_response = want_response;
+            incoming.payload.assign(decoded.payload.bytes,
+                                    decoded.payload.bytes + decoded.payload.size);
+            if (app_receive_queue_.size() < MAX_APP_QUEUE)
+            {
+                app_receive_queue_.push(incoming);
             }
         }
     }

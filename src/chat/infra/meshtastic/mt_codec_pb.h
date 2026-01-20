@@ -68,6 +68,19 @@ bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_n
                            bool want_response, uint8_t* out_buffer, size_t* out_size);
 
 /**
+ * @brief Encode app payload to Meshtastic Data message
+ * @param portnum Application port number
+ * @param payload Payload bytes
+ * @param payload_len Payload length
+ * @param want_response Request response
+ * @param out_buffer Output buffer
+ * @param out_size Output buffer size (updated with actual size)
+ * @return true if successful
+ */
+bool encodeAppData(uint32_t portnum, const uint8_t* payload, size_t payload_len,
+                   bool want_response, uint8_t* out_buffer, size_t* out_size);
+
+/**
  * @brief Encode MeshPacket to buffer
  * @param packet MeshPacket structure
  * @param out_buffer Output buffer

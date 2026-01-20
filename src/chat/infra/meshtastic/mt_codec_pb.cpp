@@ -181,6 +181,44 @@ bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_n
     return true;
 }
 
+bool encodeAppData(uint32_t portnum, const uint8_t* payload, size_t payload_len,
+                   bool want_response, uint8_t* out_buffer, size_t* out_size)
+{
+    if (!out_buffer || !out_size)
+    {
+        return false;
+    }
+
+    meshtastic_Data data = meshtastic_Data_init_default;
+    data.portnum = static_cast<meshtastic_PortNum>(portnum);
+    data.want_response = want_response;
+    data.has_bitfield = true;
+    data.bitfield = 0;
+
+    if (payload_len > sizeof(data.payload.bytes))
+    {
+        return false;
+    }
+    data.payload.size = static_cast<pb_size_t>(payload_len);
+    if (payload_len > 0)
+    {
+        if (!payload)
+        {
+            return false;
+        }
+        memcpy(data.payload.bytes, payload, payload_len);
+    }
+
+    pb_ostream_t data_stream = pb_ostream_from_buffer(out_buffer, *out_size);
+    if (!pb_encode(&data_stream, meshtastic_Data_fields, &data))
+    {
+        return false;
+    }
+
+    *out_size = data_stream.bytes_written;
+    return true;
+}
+
 bool encodeMeshPacket(const meshtastic_MeshPacket& packet, uint8_t* out_buffer, size_t* out_size)
 {
     if (!out_buffer || !out_size)

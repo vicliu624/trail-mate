@@ -10,6 +10,9 @@
 #include "freertos/semphr.h"
 #include <Arduino.h>
 #include <cstring>
+#include <vector>
+
+#include "../team/domain/team_events.h"
 
 namespace sys
 {
@@ -25,6 +28,14 @@ enum class EventType
     ChatChannelSwitched, // Channel switched
     NodeInfoUpdate,      // Node info updated (from mesh network)
     NodeProtocolUpdate,  // Node protocol update (from message)
+    TeamAdvertise,       // Team advertise received
+    TeamJoinRequest,     // Team join request received
+    TeamJoinAccept,      // Team join accept received
+    TeamJoinConfirm,     // Team join confirm received
+    TeamStatus,          // Team status received
+    TeamPosition,        // Team position received
+    TeamWaypoint,        // Team waypoint received
+    TeamError,           // Team protocol error
     InputEvent,          // Input event (keyboard/rotary)
     SystemTick           // System tick (for periodic tasks)
 };
@@ -136,6 +147,94 @@ struct NodeProtocolUpdateEvent : public Event
 
     NodeProtocolUpdateEvent(uint32_t id, uint32_t ts, uint8_t proto)
         : Event(EventType::NodeProtocolUpdate), node_id(id), timestamp(ts), protocol(proto) {}
+};
+
+/**
+ * @brief Team advertise event
+ */
+struct TeamAdvertiseEvent : public Event
+{
+    team::TeamAdvertiseEvent data;
+
+    explicit TeamAdvertiseEvent(const team::TeamAdvertiseEvent& evt)
+        : Event(EventType::TeamAdvertise), data(evt) {}
+};
+
+/**
+ * @brief Team join request event
+ */
+struct TeamJoinRequestEvent : public Event
+{
+    team::TeamJoinRequestEvent data;
+
+    explicit TeamJoinRequestEvent(const team::TeamJoinRequestEvent& evt)
+        : Event(EventType::TeamJoinRequest), data(evt) {}
+};
+
+/**
+ * @brief Team join accept event
+ */
+struct TeamJoinAcceptEvent : public Event
+{
+    team::TeamJoinAcceptEvent data;
+
+    explicit TeamJoinAcceptEvent(const team::TeamJoinAcceptEvent& evt)
+        : Event(EventType::TeamJoinAccept), data(evt) {}
+};
+
+/**
+ * @brief Team join confirm event
+ */
+struct TeamJoinConfirmEvent : public Event
+{
+    team::TeamJoinConfirmEvent data;
+
+    explicit TeamJoinConfirmEvent(const team::TeamJoinConfirmEvent& evt)
+        : Event(EventType::TeamJoinConfirm), data(evt) {}
+};
+
+/**
+ * @brief Team status event
+ */
+struct TeamStatusEvent : public Event
+{
+    team::TeamStatusEvent data;
+
+    explicit TeamStatusEvent(const team::TeamStatusEvent& evt)
+        : Event(EventType::TeamStatus), data(evt) {}
+};
+
+/**
+ * @brief Team position event
+ */
+struct TeamPositionEvent : public Event
+{
+    team::TeamPositionEvent data;
+
+    explicit TeamPositionEvent(const team::TeamPositionEvent& evt)
+        : Event(EventType::TeamPosition), data(evt) {}
+};
+
+/**
+ * @brief Team waypoint event
+ */
+struct TeamWaypointEvent : public Event
+{
+    team::TeamWaypointEvent data;
+
+    explicit TeamWaypointEvent(const team::TeamWaypointEvent& evt)
+        : Event(EventType::TeamWaypoint), data(evt) {}
+};
+
+/**
+ * @brief Team error event
+ */
+struct TeamErrorEvent : public Event
+{
+    team::TeamErrorEvent data;
+
+    explicit TeamErrorEvent(const team::TeamErrorEvent& evt)
+        : Event(EventType::TeamError), data(evt) {}
 };
 
 /**

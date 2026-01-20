@@ -37,6 +37,27 @@ class IMeshAdapter
     virtual bool pollIncomingText(MeshIncomingText* out) = 0;
 
     /**
+     * @brief Send app payload data (non-text)
+     * @param channel Channel ID
+     * @param portnum Application port number
+     * @param payload Payload bytes
+     * @param len Payload length
+     * @param dest Destination node (0 for broadcast)
+     * @param want_ack Request ACK if supported
+     * @return true if queued successfully
+     */
+    virtual bool sendAppData(ChannelId channel, uint32_t portnum,
+                             const uint8_t* payload, size_t len,
+                             NodeId dest = 0, bool want_ack = false) = 0;
+
+    /**
+     * @brief Poll for incoming app payload data
+     * @param out Output data (if available)
+     * @return true if data available
+     */
+    virtual bool pollIncomingData(MeshIncomingData* out) = 0;
+
+    /**
      * @brief Apply mesh configuration
      * @param config Configuration to apply
      */

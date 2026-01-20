@@ -189,6 +189,25 @@ bool MeshCoreAdapter::pollIncomingText(MeshIncomingText* out)
     return true;
 }
 
+bool MeshCoreAdapter::sendAppData(ChannelId channel, uint32_t portnum,
+                                  const uint8_t* payload, size_t len,
+                                  NodeId dest, bool want_ack)
+{
+    (void)channel;
+    (void)portnum;
+    (void)payload;
+    (void)len;
+    (void)dest;
+    (void)want_ack;
+    return false;
+}
+
+bool MeshCoreAdapter::pollIncomingData(MeshIncomingData* out)
+{
+    (void)out;
+    return false;
+}
+
 void MeshCoreAdapter::applyConfig(const MeshConfig& config)
 {
     config_ = config;

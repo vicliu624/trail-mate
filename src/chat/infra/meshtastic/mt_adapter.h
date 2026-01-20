@@ -36,6 +36,10 @@ class MtAdapter : public chat::IMeshAdapter
     bool sendText(ChannelId channel, const std::string& text,
                   MessageId* out_msg_id, NodeId peer = 0) override;
     bool pollIncomingText(MeshIncomingText* out) override;
+    bool sendAppData(ChannelId channel, uint32_t portnum,
+                     const uint8_t* payload, size_t len,
+                     NodeId dest = 0, bool want_ack = false) override;
+    bool pollIncomingData(MeshIncomingData* out) override;
     void applyConfig(const MeshConfig& config) override;
     bool isReady() const override;
 
@@ -103,12 +107,14 @@ class MtAdapter : public chat::IMeshAdapter
 
     std::queue<PendingSend> send_queue_;
     std::queue<MeshIncomingText> receive_queue_;
+    std::queue<MeshIncomingData> app_receive_queue_;
 
     static constexpr size_t MAX_PACKET_SIZE = 255;
     static constexpr uint32_t RETRY_DELAY_MS = 1000;
     static constexpr uint8_t MAX_RETRIES = 1;
     static constexpr uint32_t NODEINFO_INTERVAL_MS = 3 * 60 * 60 * 1000;
     static constexpr uint32_t NODEINFO_REPLY_SUPPRESS_MS = 12 * 60 * 60 * 1000;
+    static constexpr size_t MAX_APP_QUEUE = 10;
 
     bool sendPacket(const PendingSend& pending);
     bool sendNodeInfo();

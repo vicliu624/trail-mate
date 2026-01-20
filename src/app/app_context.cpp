@@ -75,6 +75,13 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     chat_service_ = std::make_unique<chat::ChatService>(
         *chat_model_, *mesh_adapter_, *chat_store_);
 
+    // Create team service (protocol-only for now)
+    team_crypto_ = std::make_unique<team::infra::TeamCrypto>();
+    team_event_sink_ = std::make_unique<team::infra::TeamEventBusSink>();
+    team_service_ = std::make_unique<team::TeamService>(
+        *team_crypto_, *mesh_adapter_, *team_event_sink_);
+    team_controller_ = std::make_unique<team::TeamController>(*team_service_);
+
     // Load persisted messages into model (no unread)
     if (flash_store_)
     {
@@ -118,6 +125,10 @@ void AppContext::update()
     if (chat_service_)
     {
         chat_service_->processIncoming();
+    }
+    if (team_service_)
+    {
+        team_service_->processIncoming();
     }
 
     // Update UI controller
