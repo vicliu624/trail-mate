@@ -169,12 +169,12 @@ bool ImeWidget::handle_key(lv_event_t* e) {
         }
     } else if (key == LV_KEY_UP || key == LV_KEY_LEFT) {
         if (ime_.hasBuffer()) {
-            ime_.moveCandidate(-kCandidatesPerPage);
+            ime_.moveCandidate(-1);
             consumed = true;
         }
     } else if (key == LV_KEY_DOWN || key == LV_KEY_RIGHT) {
         if (ime_.hasBuffer()) {
-            ime_.moveCandidate(kCandidatesPerPage);
+            ime_.moveCandidate(1);
             consumed = true;
         }
     } else if (key == LV_KEY_ENTER) {
@@ -188,13 +188,11 @@ bool ImeWidget::handle_key(lv_event_t* e) {
         }
     } else if (key == ' ') {
         if (ime_.hasBuffer()) {
-            ime_.moveCandidate(1);
-            consumed = true;
-        } else {
-            committed = true;
-            committed_text = " ";
-            consumed = true;
+            ime_.reset();
         }
+        committed = true;
+        committed_text = " ";
+        consumed = true;
     } else if (key >= 32 && key <= 126) {
         char c = static_cast<char>(key);
         if (c >= 'A' && c <= 'Z') {
