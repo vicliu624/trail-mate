@@ -18,6 +18,20 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.2-alpha] - 2026-01-21
+### Added / 新增
+- Meshtastic routing ACK decoding with reason mapping, ack timeouts, and richer RX/TX diagnostics / Meshtastic 路由 ACK 解码，增加原因映射、ACK 超时和更详细的收发日志
+- PKI peer key persistence and per-node PKI backoff after NO_CHANNEL/UNKNOWN_PUBKEY / PKI 公钥持久化，对 NO_CHANNEL/UNKNOWN_PUBKEY 加入单节点 PKI 退避
+- Time helpers for chat timestamps / 聊天时间戳辅助工具
+
+### Changed / 变更
+- Chat app switching now calls exit callbacks and clears active app on menu return / Chat 应用切换支持 exit 回调，返回菜单清空 active app
+- Contacts compose flow supports broadcast channels and avoids UI tree mismatch when chat container exists / Contacts 撰写支持广播频道，在 chat container 存在时避免 UI 树错位
+- UI timestamp display applies stored timezone offset / UI 显示时间应用已存储时区偏移
+
+### Fixed / 修复
+- Chat screen cleanup safety on repeated enter/exit to prevent black-screen stacking / Chat 重复进出时更安全清理，避免黑屏堆叠
+
 ## [0.1.1-alpha] - 2026-01-20
 ### Added / 新增
 - Mesh protocol factory with explicit Meshtastic/MeshCore selection / Mesh 协议工厂，支持显式选择 Meshtastic/MeshCore
