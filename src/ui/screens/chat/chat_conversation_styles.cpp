@@ -19,6 +19,8 @@ static lv_style_t s_bubble_base;
 static lv_style_t s_bubble_self;
 static lv_style_t s_bubble_other;
 static lv_style_t s_bubble_text;
+static lv_style_t s_bubble_time;
+static lv_style_t s_bubble_status;
 
 static constexpr lv_coord_t kPadX = 8;
 static constexpr lv_coord_t kPadY = 6;
@@ -110,6 +112,16 @@ void init_once()
     lv_style_set_text_color(&s_bubble_text, kTextColor);
     lv_style_set_text_align(&s_bubble_text, LV_TEXT_ALIGN_LEFT);
     lv_style_set_text_font(&s_bubble_text, &lv_font_noto_cjk_16_2bpp);
+
+    lv_style_init(&s_bubble_time);
+    lv_style_set_text_color(&s_bubble_time, lv_color_hex(0x707070));
+    lv_style_set_text_align(&s_bubble_time, LV_TEXT_ALIGN_LEFT);
+    lv_style_set_text_font(&s_bubble_time, &lv_font_montserrat_12);
+
+    lv_style_init(&s_bubble_status);
+    lv_style_set_text_color(&s_bubble_status, lv_color_hex(0xB00020));
+    lv_style_set_text_align(&s_bubble_status, LV_TEXT_ALIGN_LEFT);
+    lv_style_set_text_font(&s_bubble_status, &lv_font_montserrat_12);
 }
 
 void apply_root(lv_obj_t* root)
@@ -160,6 +172,18 @@ void apply_bubble_text(lv_obj_t* label)
 {
     init_once();
     lv_obj_add_style(label, &s_bubble_text, 0);
+}
+
+void apply_bubble_time(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_bubble_time, 0);
+}
+
+void apply_bubble_status(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_bubble_status, 0);
 }
 
 } // namespace chat::ui::conversation::styles

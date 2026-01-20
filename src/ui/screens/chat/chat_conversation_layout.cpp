@@ -134,6 +134,20 @@ lv_obj_t* create_bubble_text(lv_obj_t* bubble_parent)
     return label;
 }
 
+lv_obj_t* create_bubble_time(lv_obj_t* bubble_parent)
+{
+    lv_obj_t* label = lv_label_create(bubble_parent);
+    lv_obj_set_width(label, LV_SIZE_CONTENT);
+    return label;
+}
+
+lv_obj_t* create_bubble_status(lv_obj_t* bubble_parent)
+{
+    lv_obj_t* label = lv_label_create(bubble_parent);
+    lv_obj_set_width(label, LV_SIZE_CONTENT);
+    return label;
+}
+
 void align_message_row(lv_obj_t* row, bool is_self)
 {
     // Match original behavior:

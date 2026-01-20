@@ -14,8 +14,17 @@ extern "C" void lv_draw_buf_destroy(lv_draw_buf_t* draw_buf);
 #include <cstdio>
 #include <ctime>
 #include <vector>
+#include <Preferences.h>
 
 extern TLoRaPagerBoard &instance;
+
+namespace {
+constexpr const char* kPrefsNs = "settings_v2";
+constexpr const char* kTimezoneKey = "timezone_offset";
+
+static bool s_tz_loaded = false;
+static int s_tz_offset_min = 0;
+} // namespace
 
 void set_default_group(lv_group_t *group)
 {
@@ -40,6 +49,7 @@ void set_default_group(lv_group_t *group)
 
 void menu_show()
 {
+    ui_clear_active_app();
     set_default_group(menu_g);
     lv_tileview_set_tile_by_index(main_screen, 0, 0, LV_ANIM_ON);
 }
@@ -88,6 +98,33 @@ void ui_update_top_bar_battery(ui::widgets::TopBar& bar)
     ui::widgets::top_bar_set_right_text(bar, battery_buf);
 }
 
+int ui_get_timezone_offset_min()
+{
+    if (!s_tz_loaded) {
+        Preferences prefs;
+        prefs.begin(kPrefsNs, true);
+        s_tz_offset_min = prefs.getInt(kTimezoneKey, 0);
+        prefs.end();
+        s_tz_loaded = true;
+    }
+    return s_tz_offset_min;
+}
+
+void ui_set_timezone_offset_min(int offset_min)
+{
+    s_tz_offset_min = offset_min;
+    s_tz_loaded = true;
+}
+
+time_t ui_apply_timezone_offset(time_t utc_seconds)
+{
+    if (utc_seconds <= 0) {
+        return utc_seconds;
+    }
+    int offset_min = ui_get_timezone_offset_min();
+    return utc_seconds + static_cast<time_t>(offset_min) * 60;
+}
+
 bool ui_take_screenshot_to_sd()
 {
 #if LV_USE_SNAPSHOT
@@ -128,7 +165,8 @@ bool ui_take_screenshot_to_sd()
 
     char path[64];
     time_t now = time(nullptr);
-    struct tm* info = localtime(&now);
+    time_t local = ui_apply_timezone_offset(now);
+    struct tm* info = gmtime(&local);
     if (info) {
         char ts[20];
         strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", info);

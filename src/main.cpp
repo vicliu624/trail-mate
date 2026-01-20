@@ -31,12 +31,18 @@ extern "C"
 
 // Forward declarations for app entry functions (implemented in ui_*.cpp)
 void ui_gps_enter(lv_obj_t* parent);
+void ui_gps_exit(lv_obj_t* parent);
 void ui_chat_enter(lv_obj_t* parent);
+void ui_chat_exit(lv_obj_t* parent);
 void ui_contacts_enter(lv_obj_t* parent);
+void ui_contacts_exit(lv_obj_t* parent);
 void ui_team_enter(lv_obj_t* parent);
+void ui_team_exit(lv_obj_t* parent);
 void ui_setting_enter(lv_obj_t* parent);
+void ui_setting_exit(lv_obj_t* parent);
 #ifdef ARDUINO_USB_MODE
 void ui_usb_enter(lv_obj_t* parent);
+void ui_usb_exit(lv_obj_t* parent);
 #endif
 
 // GPS data access - now provided by GpsService
@@ -83,35 +89,37 @@ typedef struct
     void* user_data;
 } app_t;
 
+static app_t* s_active_app = nullptr;
+
 // App entry functions (implemented in ui_*.cpp files, global scope)
 
 app_t ui_gps_main = {
     .setup_func_cb = ui_gps_enter,
-    .exit_func_cb = nullptr,
+    .exit_func_cb = ui_gps_exit,
     .user_data = nullptr,
 };
 
 app_t ui_chat_main = {
     .setup_func_cb = ui_chat_enter,
-    .exit_func_cb = nullptr,
+    .exit_func_cb = ui_chat_exit,
     .user_data = nullptr,
 };
 
 app_t ui_contacts_main = {
     .setup_func_cb = ui_contacts_enter,
-    .exit_func_cb = nullptr,
+    .exit_func_cb = ui_contacts_exit,
     .user_data = nullptr,
 };
 
 app_t ui_team_main = {
     .setup_func_cb = ui_team_enter,
-    .exit_func_cb = nullptr,
+    .exit_func_cb = ui_team_exit,
     .user_data = nullptr,
 };
 
 app_t ui_setting_main = {
     .setup_func_cb = ui_setting_enter,
-    .exit_func_cb = nullptr,
+    .exit_func_cb = ui_setting_exit,
     .user_data = nullptr,
 };
 
@@ -132,7 +140,7 @@ app_t ui_shutdown_main = {
 #ifdef ARDUINO_USB_MODE
 app_t ui_usb_main = {
     .setup_func_cb = ui_usb_enter,
-    .exit_func_cb = nullptr,
+    .exit_func_cb = ui_usb_exit,
     .user_data = nullptr,
 };
 #endif
@@ -213,9 +221,13 @@ static void create_app(lv_obj_t* parent, const char* name, const lv_image_dsc_t*
         }
         if (c == LV_EVENT_CLICKED) {
             set_default_group(app_g);
+            if (s_active_app && s_active_app != func_cb && s_active_app->exit_func_cb) {
+                (*s_active_app->exit_func_cb)(parent);
+            }
             if (func_cb->setup_func_cb) {
                 (*func_cb->setup_func_cb)(parent);
             }
+            s_active_app = func_cb;
             menu_hidden();
         } },
         LV_EVENT_CLICKED, app_fun);
@@ -237,6 +249,10 @@ void menu_name_label_event_cb(lv_event_t* e)
 // App entry functions are implemented in ui_gps.cpp, ui_chat.cpp, ui_setting.cpp
 
 } // namespace
+void ui_clear_active_app()
+{
+    s_active_app = nullptr;
+}
 
 // GPS data access - now provided by TLoRaPagerBoard
 // GPS data collection task is now in TLoRaPagerBoard class

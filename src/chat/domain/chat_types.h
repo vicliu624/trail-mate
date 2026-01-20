@@ -109,6 +109,7 @@ struct MeshIncomingText
 {
     ChannelId channel;
     NodeId from;
+    NodeId to;
     MessageId msg_id;
     uint32_t timestamp;
     std::string text;

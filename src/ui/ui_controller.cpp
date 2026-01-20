@@ -9,6 +9,8 @@
 #include "ui_common.h"
 #include <ctime>
 
+extern bool isScreenSleeping();
+
 namespace chat
 {
 namespace ui
@@ -208,8 +210,17 @@ void UiController::onChatEvent(sys::Event* event)
     case sys::EventType::ChatSendResult:
     {
         sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
-        // Update message status in conversation
-        // (Would need to track message indices)
+        if (state_ == State::Conversation && conversation_)
+        {
+            auto messages = service_.getRecentMessages(current_conv_, 50);
+            conversation_->clearMessages();
+            for (const auto& m : messages)
+            {
+                conversation_->addMessage(m);
+            }
+            conversation_->scrollToBottom();
+        }
+        (void)result_event;
         break;
     }
 
@@ -229,6 +240,16 @@ void UiController::onChatEvent(sys::Event* event)
 void UiController::switchToChannelList()
 {
     state_ = State::ChannelList;
+    Serial.printf("[UiController] switchToChannelList: parent=%p active=%p sleeping=%d\n",
+                  parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0);
+    if (lv_obj_t* active = lv_screen_active()) {
+        Serial.printf("[UiController] switchToChannelList active child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(active));
+    }
+    if (parent_) {
+        Serial.printf("[UiController] switchToChannelList parent child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(parent_));
+    }
 
     if (conversation_)
     {
@@ -255,6 +276,17 @@ void UiController::switchToConversation(chat::ConversationId conv)
     state_ = State::Conversation;
     current_channel_ = conv.channel;
     current_conv_ = conv;
+    Serial.printf("[UiController] switchToConversation: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
+                  parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0,
+                  (unsigned long)conv.peer);
+    if (lv_obj_t* active = lv_screen_active()) {
+        Serial.printf("[UiController] switchToConversation active child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(active));
+    }
+    if (parent_) {
+        Serial.printf("[UiController] switchToConversation parent child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(parent_));
+    }
 
     if (channel_list_)
     {
@@ -318,6 +350,17 @@ void UiController::switchToCompose(chat::ConversationId conv)
     state_ = State::Compose;
     current_channel_ = conv.channel;
     current_conv_ = conv;
+    Serial.printf("[UiController] switchToCompose: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
+                  parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0,
+                  (unsigned long)conv.peer);
+    if (lv_obj_t* active = lv_screen_active()) {
+        Serial.printf("[UiController] switchToCompose active child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(active));
+    }
+    if (parent_) {
+        Serial.printf("[UiController] switchToCompose parent child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(parent_));
+    }
 
     if (channel_list_)
     {
@@ -422,14 +465,7 @@ void UiController::refreshUnreadCounts()
     }
 
     channel_list_->setConversations(convs);
-    for (size_t i = 0; i < convs.size(); ++i)
-    {
-        if (convs[i].id == current_conv_)
-        {
-            channel_list_->setSelected(static_cast<int>(i));
-            break;
-        }
-    }
+    channel_list_->setSelectedConversation(current_conv_);
 
     // Update header status (battery only, with icon)
     channel_list_->updateBatteryFromBoard();

@@ -6,6 +6,7 @@
  */
 
 #include "mt_codec_pb.h"
+#include "../../time_utils.h"
 #include "compression/unishox2.h"
 #include <cstring>
 
@@ -111,7 +112,7 @@ bool decodeTextMessage(const uint8_t* buffer, size_t size, MeshIncomingText* out
     // This will be done in mt_adapter when decoding full packet
     out->from = 0;   // Will be set from packet header
     out->msg_id = 0; // Will be set from packet header
-    out->timestamp = millis() / 1000;
+    out->timestamp = now_message_timestamp();
     out->channel = ChannelId::PRIMARY; // Will be set from packet header
     out->hop_limit = 2;
     out->encrypted = false;

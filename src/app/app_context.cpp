@@ -8,6 +8,7 @@
 #include "../gps/usecase/gps_service.h"
 #include "../sys/event_bus.h"
 #include "../ui/widgets/system_notification.h"
+#include "../ui/ui_common.h"
 #include "app_tasks.h"
 #include <SD.h>
 
@@ -27,6 +28,7 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
 
     // Load configuration
     config_.load(preferences_);
+    (void)ui_get_timezone_offset_min();
 
     gps::GpsService::getInstance().begin(
         board,
@@ -98,7 +100,7 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
             {
                 chat_model_->onIncoming(msg);
             }
-            chat::ConversationId conv(msg.channel, msg.peer ? msg.peer : msg.from);
+            chat::ConversationId conv(msg.channel, msg.peer);
             touched.push_back(conv);
         }
         for (const auto& conv : touched)
@@ -167,7 +169,16 @@ void AppContext::update()
             }
 
             // Show system notification
-            ui::SystemNotification::show(msg_event->text, 10000);
+            ui::SystemNotification::show(msg_event->text, 3000);
+            break;
+        }
+        case sys::EventType::ChatSendResult:
+        {
+            sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
+            if (chat_service_)
+            {
+                chat_service_->handleSendResult(result_event->msg_id, result_event->success);
+            }
             break;
         }
         case sys::EventType::NodeInfoUpdate:

@@ -34,6 +34,12 @@ static void set_btn_label_white(lv_obj_t* btn)
 ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv)
     : conv_(conv)
 {
+    lv_obj_t* active = lv_screen_active();
+    if (!active) {
+        Serial.printf("[ChatCompose] WARNING: lv_screen_active() is null\n");
+    } else {
+        Serial.printf("[ChatCompose] init: active=%p parent=%p\n", active, parent);
+    }
 
     impl_ = new Impl();
 
@@ -56,6 +62,13 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
 
     input::bind_textarea_events(impl_->w, this, on_key, on_text_changed);
     input::setup_default_group_focus(impl_->w);
+
+    if (impl_->w.container && !lv_obj_is_valid(impl_->w.container)) {
+        Serial.printf("[ChatCompose] WARNING: container invalid\n");
+    }
+    if (impl_->w.textarea && !lv_obj_is_valid(impl_->w.textarea)) {
+        Serial.printf("[ChatCompose] WARNING: textarea invalid\n");
+    }
 
     refresh_len();
 }

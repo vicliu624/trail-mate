@@ -60,6 +60,21 @@ class RingBuffer
     }
 
     /**
+     * @brief Get mutable element at index (0 = oldest, count-1 = newest)
+     * @param index Index
+     * @return Pointer to element, or nullptr if index out of range
+     */
+    T* get(size_t index)
+    {
+        if (index >= count_)
+        {
+            return nullptr;
+        }
+        size_t pos = (tail_ + index) % N;
+        return &buffer_[pos];
+    }
+
+    /**
      * @brief Get the newest element
      * @return Pointer to newest element, or nullptr if empty
      */

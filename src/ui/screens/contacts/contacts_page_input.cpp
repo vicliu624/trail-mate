@@ -83,6 +83,7 @@ static void bind_filter_column(bool keep_mode_focus)
     // ② Filter buttons
     if (g_contacts_state.contacts_btn) lv_group_add_obj(s_group, g_contacts_state.contacts_btn);
     if (g_contacts_state.nearby_btn)   lv_group_add_obj(s_group, g_contacts_state.nearby_btn);
+    if (g_contacts_state.broadcast_btn) lv_group_add_obj(s_group, g_contacts_state.broadcast_btn);
 
     // Focus preference:
     // - keep_mode_focus: focus current mode button (better for rotate-to-switch-mode UX)
@@ -92,12 +93,16 @@ static void bind_filter_column(bool keep_mode_focus)
             focus_first_valid(g_contacts_state.contacts_btn);
         } else if (g_contacts_state.current_mode == ContactsMode::Nearby && g_contacts_state.nearby_btn) {
             focus_first_valid(g_contacts_state.nearby_btn);
+        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast && g_contacts_state.broadcast_btn) {
+            focus_first_valid(g_contacts_state.broadcast_btn);
         } else if (g_contacts_state.top_bar.back_btn) {
             focus_first_valid(g_contacts_state.top_bar.back_btn);
         } else if (g_contacts_state.contacts_btn) {
             focus_first_valid(g_contacts_state.contacts_btn);
         } else if (g_contacts_state.nearby_btn) {
             focus_first_valid(g_contacts_state.nearby_btn);
+        } else if (g_contacts_state.broadcast_btn) {
+            focus_first_valid(g_contacts_state.broadcast_btn);
         }
     } else {
         // first entry: prefer current mode button
@@ -105,16 +110,19 @@ static void bind_filter_column(bool keep_mode_focus)
             focus_first_valid(g_contacts_state.contacts_btn);
         } else if (g_contacts_state.current_mode == ContactsMode::Nearby && g_contacts_state.nearby_btn) {
             focus_first_valid(g_contacts_state.nearby_btn);
+        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast && g_contacts_state.broadcast_btn) {
+            focus_first_valid(g_contacts_state.broadcast_btn);
         } else if (g_contacts_state.contacts_btn) {
             focus_first_valid(g_contacts_state.contacts_btn);
         } else if (g_contacts_state.nearby_btn) {
             focus_first_valid(g_contacts_state.nearby_btn);
+        } else if (g_contacts_state.broadcast_btn) {
+            focus_first_valid(g_contacts_state.broadcast_btn);
         } else if (g_contacts_state.top_bar.back_btn) {
             focus_first_valid(g_contacts_state.top_bar.back_btn);
         }
     }
 
-    CONTACTS_LOG("[Contacts][Input] bind_filter_column (with topbar back)\n");
 }
 
 
@@ -159,11 +167,13 @@ static void bind_action_column()
     if (g_contacts_state.current_mode == ContactsMode::Contacts) {
         if (g_contacts_state.edit_btn) { lv_group_add_obj(s_group, g_contacts_state.edit_btn); any = true; }
         if (g_contacts_state.del_btn)  { lv_group_add_obj(s_group, g_contacts_state.del_btn);  any = true; }
-    } else {
+    } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
         if (g_contacts_state.add_btn)  { lv_group_add_obj(s_group, g_contacts_state.add_btn);  any = true; }
     }
 
-    if (g_contacts_state.info_btn) { lv_group_add_obj(s_group, g_contacts_state.info_btn); any = true; }
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast) {
+        if (g_contacts_state.info_btn) { lv_group_add_obj(s_group, g_contacts_state.info_btn); any = true; }
+    }
 
     // ② Back (added last, not the default focus)
     if (g_contacts_state.action_back_btn) {

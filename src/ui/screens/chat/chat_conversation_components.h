@@ -24,6 +24,9 @@ public:
     void setActionCallback(void (*cb)(bool compose, void*), void* user_data);
 
     lv_obj_t* getObj() const { return container_; }
+    lv_obj_t* getMsgList() const { return msg_list_; }
+    lv_obj_t* getReplyBtn() const { return reply_btn_; }
+    lv_obj_t* getBackBtn() const { return top_bar_.back_btn; }
 
     chat::ChannelId getChannel() const { return conv_.channel; }
 

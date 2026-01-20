@@ -218,6 +218,14 @@ void create_filter_panel(lv_obj_t* parent)
     lv_obj_t* nearby_label = lv_label_create(g_contacts_state.nearby_btn);
     lv_label_set_text(nearby_label, "Nearby");
     lv_obj_center(nearby_label);
+
+    g_contacts_state.broadcast_btn = lv_btn_create(g_contacts_state.filter_panel);
+    make_non_scrollable(g_contacts_state.broadcast_btn);
+    style::apply_btn_filter(g_contacts_state.broadcast_btn);
+    lv_obj_set_size(g_contacts_state.broadcast_btn, LV_PCT(100), kButtonHeight);
+    lv_obj_t* broadcast_label = lv_label_create(g_contacts_state.broadcast_btn);
+    lv_label_set_text(broadcast_label, "Broadcast");
+    lv_obj_center(broadcast_label);
 }
 
 void create_list_panel(lv_obj_t* parent)

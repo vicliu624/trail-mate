@@ -4,11 +4,20 @@
 
 namespace chat::ui::layout {
 
+struct MessageListLayout {
+    lv_obj_t* root;
+    lv_obj_t* content;
+    lv_obj_t* filter_panel;
+    lv_obj_t* list_panel;
+    lv_obj_t* direct_btn;
+    lv_obj_t* broadcast_btn;
+};
+
 // root/page
 lv_obj_t* create_root(lv_obj_t* parent);
 
-// content panel
-lv_obj_t* create_panel(lv_obj_t* parent);
+// split content (filter + list)
+MessageListLayout create_layout(lv_obj_t* parent);
 
 // message list item (button with labels)
 struct MessageItemWidgets {

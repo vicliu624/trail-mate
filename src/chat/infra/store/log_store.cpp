@@ -168,6 +168,12 @@ void LogStore::clearChannel(ChannelId channel)
     }
 }
 
+bool LogStore::updateMessageStatus(MessageId, MessageStatus)
+{
+    // Append-only log; no in-place status updates.
+    return false;
+}
+
 bool LogStore::loadIndex(ChannelId ch)
 {
     if (!fs_) return false;

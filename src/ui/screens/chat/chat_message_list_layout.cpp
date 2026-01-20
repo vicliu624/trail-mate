@@ -66,33 +66,95 @@ static void make_non_scrollable(lv_obj_t* obj)
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
 }
 
+namespace {
+constexpr int kFilterPanelWidth = 80;
+constexpr int kButtonHeight = 32;
+constexpr int kPanelGap = 0;
+constexpr int kScreenEdgePadding = 0;
+} // namespace
+
 lv_obj_t* create_root(lv_obj_t* parent)
 {
     lv_obj_t* root = lv_obj_create(parent);
     lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(root, 0, 0);
+    lv_obj_set_style_pad_row(root, 3, 0);
     lv_obj_set_style_pad_all(root, 0, 0); // layout padding only
     make_non_scrollable(root);
     return root;
 }
 
-lv_obj_t* create_panel(lv_obj_t* parent)
+static lv_obj_t* create_content(lv_obj_t* parent)
+{
+    lv_obj_t* content = lv_obj_create(parent);
+    lv_obj_set_size(content, LV_PCT(100), 0);
+    lv_obj_set_flex_grow(content, 1);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_left(content, kScreenEdgePadding, 0);
+    lv_obj_set_style_pad_right(content, kScreenEdgePadding, 0);
+    lv_obj_set_style_pad_top(content, 0, 0);
+    lv_obj_set_style_pad_bottom(content, 0, 0);
+    make_non_scrollable(content);
+    return content;
+}
+
+static lv_obj_t* create_filter_panel(lv_obj_t* parent, lv_obj_t** direct_btn, lv_obj_t** broadcast_btn)
 {
     lv_obj_t* panel = lv_obj_create(parent);
-    lv_obj_set_size(panel, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_width(panel, kFilterPanelWidth);
+    lv_obj_set_height(panel, LV_PCT(100));
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(panel, 3, LV_PART_MAIN);
+    lv_obj_set_style_margin_right(panel, kPanelGap, LV_PART_MAIN);
+    make_non_scrollable(panel);
+
+    lv_obj_t* direct = lv_btn_create(panel);
+    lv_obj_set_size(direct, LV_PCT(100), kButtonHeight);
+    make_non_scrollable(direct);
+    lv_obj_t* direct_label = lv_label_create(direct);
+    lv_label_set_text(direct_label, "Direct");
+    lv_obj_center(direct_label);
+
+    lv_obj_t* broadcast = lv_btn_create(panel);
+    lv_obj_set_size(broadcast, LV_PCT(100), kButtonHeight);
+    make_non_scrollable(broadcast);
+    lv_obj_t* broadcast_label = lv_label_create(broadcast);
+    lv_label_set_text(broadcast_label, "Broadcast");
+    lv_obj_center(broadcast_label);
+
+    if (direct_btn) *direct_btn = direct;
+    if (broadcast_btn) *broadcast_btn = broadcast;
+    return panel;
+}
+
+static lv_obj_t* create_list_panel(lv_obj_t* parent)
+{
+    lv_obj_t* panel = lv_obj_create(parent);
+    lv_obj_set_height(panel, LV_PCT(100));
+    lv_obj_set_width(panel, 0);
     lv_obj_set_flex_grow(panel, 1);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
     // layout spacing only
-    lv_obj_set_style_pad_row(panel, 2, 0);
+    lv_obj_set_style_pad_row(panel, 3, 0);
     lv_obj_set_style_pad_left(panel, 5, 0);
     lv_obj_set_style_pad_right(panel, 5, 0);
     lv_obj_set_style_pad_all(panel, 3, 0);
 
     make_non_scrollable(panel);
     return panel;
+}
+
+MessageListLayout create_layout(lv_obj_t* parent)
+{
+    MessageListLayout w{};
+    w.root = create_root(parent);
+    w.content = create_content(w.root);
+    w.filter_panel = create_filter_panel(w.content, &w.direct_btn, &w.broadcast_btn);
+    w.list_panel = create_list_panel(w.content);
+    return w;
 }
 
 MessageItemWidgets create_message_item(lv_obj_t* parent)

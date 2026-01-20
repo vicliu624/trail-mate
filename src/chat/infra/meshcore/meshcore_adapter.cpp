@@ -4,6 +4,7 @@
  */
 
 #include "meshcore_adapter.h"
+#include "../../time_utils.h"
 #include <Arduino.h>
 #include <cstring>
 
@@ -282,8 +283,9 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
         MeshIncomingText incoming;
         incoming.channel = ChannelId::PRIMARY;
         incoming.from = 0;
+        incoming.to = 0xFFFFFFFF;
         incoming.msg_id = next_msg_id_++;
-        incoming.timestamp = millis() / 1000;
+        incoming.timestamp = now_message_timestamp();
         incoming.text.assign(reinterpret_cast<const char*>(payload), payload_len);
         incoming.hop_limit = 0;
         incoming.encrypted = false;

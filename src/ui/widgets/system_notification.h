@@ -24,9 +24,9 @@ public:
     /**
      * @brief Show a notification
      * @param text Message text (will be truncated to 15 characters)
-     * @param duration_ms Display duration in milliseconds (default 5000ms)
+     * @param duration_ms Display duration in milliseconds (default 3000ms)
      */
-    static void show(const char* text, uint32_t duration_ms = 5000);
+    static void show(const char* text, uint32_t duration_ms = 3000);
     
     /**
      * @brief Hide the current notification

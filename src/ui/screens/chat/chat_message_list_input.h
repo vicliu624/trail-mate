@@ -33,5 +33,12 @@ void init(ChatMessageListScreen* screen);
  */
 void cleanup();
 
+/**
+ * @brief Rebind focus after UI rebuild
+ */
+void on_ui_refreshed();
+void focus_filter();
+void focus_list();
+
 } // namespace message_list::input
 } // namespace chat::ui
