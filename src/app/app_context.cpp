@@ -8,6 +8,7 @@
 #include "../gps/usecase/gps_service.h"
 #include "../sys/event_bus.h"
 #include "../ui/widgets/system_notification.h"
+#include "../ui/ui_common.h"
 #include "app_tasks.h"
 #include <SD.h>
 
@@ -27,6 +28,7 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
 
     // Load configuration
     config_.load(preferences_);
+    (void)ui_get_timezone_offset_min();
 
     gps::GpsService::getInstance().begin(
         board,
@@ -75,6 +77,13 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     chat_service_ = std::make_unique<chat::ChatService>(
         *chat_model_, *mesh_adapter_, *chat_store_);
 
+    // Create team service (protocol-only for now)
+    team_crypto_ = std::make_unique<team::infra::TeamCrypto>();
+    team_event_sink_ = std::make_unique<team::infra::TeamEventBusSink>();
+    team_service_ = std::make_unique<team::TeamService>(
+        *team_crypto_, *mesh_adapter_, *team_event_sink_);
+    team_controller_ = std::make_unique<team::TeamController>(*team_service_);
+
     // Load persisted messages into model (no unread)
     if (flash_store_)
     {
@@ -91,7 +100,7 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
             {
                 chat_model_->onIncoming(msg);
             }
-            chat::ConversationId conv(msg.channel, msg.peer ? msg.peer : msg.from);
+            chat::ConversationId conv(msg.channel, msg.peer);
             touched.push_back(conv);
         }
         for (const auto& conv : touched)
@@ -118,6 +127,10 @@ void AppContext::update()
     if (chat_service_)
     {
         chat_service_->processIncoming();
+    }
+    if (team_service_)
+    {
+        team_service_->processIncoming();
     }
 
     // Update UI controller
@@ -156,7 +169,16 @@ void AppContext::update()
             }
 
             // Show system notification
-            ui::SystemNotification::show(msg_event->text, 10000);
+            ui::SystemNotification::show(msg_event->text, 3000);
+            break;
+        }
+        case sys::EventType::ChatSendResult:
+        {
+            sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
+            if (chat_service_)
+            {
+                chat_service_->handleSendResult(result_event->msg_id, result_event->success);
+            }
             break;
         }
         case sys::EventType::NodeInfoUpdate:

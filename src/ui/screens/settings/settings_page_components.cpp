@@ -9,7 +9,6 @@
 #include <cstring>
 
 #include "../../../app/app_context.h"
-#include "../../../board/rtc_utils.h"
 #include "../../../chat/domain/chat_types.h"
 #include "../../../chat/infra/meshtastic/generated/meshtastic/config.pb.h"
 #include "../../../chat/infra/meshtastic/mt_region.h"
@@ -596,11 +595,9 @@ static void on_option_clicked(lv_event_t* e)
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0)
     {
-        int delta = payload->value - previous_value;
-        if (delta != 0)
-        {
-            board_adjust_rtc_by_offset_minutes(delta);
-        }
+        ui_set_timezone_offset_min(payload->value);
+        (void)previous_value;
+        restart_now = true;
     }
     modal_close();
     if (restart_now)

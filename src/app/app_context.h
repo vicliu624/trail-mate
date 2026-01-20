@@ -8,6 +8,10 @@
 #include "../chat/domain/chat_model.h"
 #include "../chat/usecase/chat_service.h"
 #include "../chat/usecase/contact_service.h"
+#include "../team/infra/crypto/team_crypto.h"
+#include "../team/infra/event/team_event_bus_sink.h"
+#include "../team/usecase/team_controller.h"
+#include "../team/usecase/team_service.h"
 
 namespace app
 {
@@ -76,6 +80,14 @@ class AppContext
     }
 
     /**
+     * @brief Get team controller (UI/state entry points)
+     */
+    team::TeamController* getTeamController()
+    {
+        return team_controller_.get();
+    }
+
+    /**
      * @brief Get configuration
      */
     AppConfig& getConfig()
@@ -140,6 +152,10 @@ class AppContext
     // Use case
     std::unique_ptr<chat::ChatService> chat_service_;
     std::unique_ptr<chat::contacts::ContactService> contact_service_;
+    std::unique_ptr<team::infra::TeamCrypto> team_crypto_;
+    std::unique_ptr<team::infra::TeamEventBusSink> team_event_sink_;
+    std::unique_ptr<team::TeamService> team_service_;
+    std::unique_ptr<team::TeamController> team_controller_;
 
     // UI
     std::unique_ptr<chat::ui::UiController> ui_controller_;

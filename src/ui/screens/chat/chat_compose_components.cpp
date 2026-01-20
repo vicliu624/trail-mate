@@ -13,6 +13,8 @@
 namespace chat::ui
 {
 
+static constexpr size_t kMaxInputBytes = 233;
+
 struct ChatComposeScreen::Impl
 {
     chat::ui::compose::layout::Spec spec;
@@ -32,6 +34,12 @@ static void set_btn_label_white(lv_obj_t* btn)
 ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv)
     : conv_(conv)
 {
+    lv_obj_t* active = lv_screen_active();
+    if (!active) {
+        Serial.printf("[ChatCompose] WARNING: lv_screen_active() is null\n");
+    } else {
+        Serial.printf("[ChatCompose] init: active=%p parent=%p\n", active, parent);
+    }
 
     impl_ = new Impl();
 
@@ -42,7 +50,7 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
 
     lv_textarea_set_placeholder_text(impl_->w.textarea, "");
     lv_textarea_set_one_line(impl_->w.textarea, false);
-    lv_textarea_set_max_length(impl_->w.textarea, 220);
+    lv_textarea_set_max_length(impl_->w.textarea, kMaxInputBytes);
 
     lv_obj_add_event_cb(impl_->w.send_btn, on_action_click, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(impl_->w.cancel_btn, on_action_click, LV_EVENT_CLICKED, this);
@@ -54,6 +62,13 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
 
     input::bind_textarea_events(impl_->w, this, on_key, on_text_changed);
     input::setup_default_group_focus(impl_->w);
+
+    if (impl_->w.container && !lv_obj_is_valid(impl_->w.container)) {
+        Serial.printf("[ChatCompose] WARNING: container invalid\n");
+    }
+    if (impl_->w.textarea && !lv_obj_is_valid(impl_->w.textarea)) {
+        Serial.printf("[ChatCompose] WARNING: textarea invalid\n");
+    }
 
     refresh_len();
 }
@@ -154,9 +169,10 @@ void ChatComposeScreen::refresh_len()
 
     const char* text = lv_textarea_get_text(impl_->w.textarea);
     size_t len = text ? strlen(text) : 0;
+    size_t remaining = (len < kMaxInputBytes) ? (kMaxInputBytes - len) : 0;
 
     char buf[16];
-    snprintf(buf, sizeof(buf), "Len: %u", static_cast<unsigned int>(len));
+    snprintf(buf, sizeof(buf), "Remain: %u", static_cast<unsigned int>(remaining));
     lv_label_set_text(impl_->w.len_label, buf);
 }
 

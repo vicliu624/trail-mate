@@ -8,9 +8,11 @@ void init_once();
 // containers
 void apply_root_container(lv_obj_t* obj);
 void apply_panel(lv_obj_t* obj);
+void apply_filter_panel(lv_obj_t* obj);
 
 // list item
 void apply_item_btn(lv_obj_t* btn);
+void apply_filter_btn(lv_obj_t* btn);
 
 // labels
 void apply_label_name(lv_obj_t* label);

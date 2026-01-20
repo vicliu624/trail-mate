@@ -43,6 +43,7 @@ class LogStore : public IChatStore
     void setUnread(ChannelId channel, int unread) override;
     int getUnread(ChannelId channel) const override;
     void clearChannel(ChannelId channel) override;
+    bool updateMessageStatus(MessageId msg_id, MessageStatus status) override;
 
   private:
     fs::FS* fs_;

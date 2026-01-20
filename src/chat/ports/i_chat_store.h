@@ -53,6 +53,14 @@ class IChatStore
      * @param channel Channel ID
      */
     virtual void clearChannel(ChannelId channel) = 0;
+
+    /**
+     * @brief Update stored message status by message ID
+     * @param msg_id Message ID
+     * @param status New status
+     * @return true if updated
+     */
+    virtual bool updateMessageStatus(MessageId msg_id, MessageStatus status) = 0;
 };
 
 } // namespace chat

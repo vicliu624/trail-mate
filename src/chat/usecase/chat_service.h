@@ -73,6 +73,13 @@ class ChatService
     void processIncoming();
 
     /**
+     * @brief Handle send result (ack/timeout)
+     * @param msg_id Message ID
+     * @param ok true if sent successfully
+     */
+    void handleSendResult(MessageId msg_id, bool ok);
+
+    /**
      * @brief Get current channel
      */
     ChannelId getCurrentChannel() const

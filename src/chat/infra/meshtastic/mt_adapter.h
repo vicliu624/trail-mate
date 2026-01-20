@@ -36,6 +36,10 @@ class MtAdapter : public chat::IMeshAdapter
     bool sendText(ChannelId channel, const std::string& text,
                   MessageId* out_msg_id, NodeId peer = 0) override;
     bool pollIncomingText(MeshIncomingText* out) override;
+    bool sendAppData(ChannelId channel, uint32_t portnum,
+                     const uint8_t* payload, size_t len,
+                     NodeId dest = 0, bool want_ack = false) override;
+    bool pollIncomingData(MeshIncomingData* out) override;
     void applyConfig(const MeshConfig& config) override;
     bool isReady() const override;
 
@@ -84,7 +88,10 @@ class MtAdapter : public chat::IMeshAdapter
     std::array<uint8_t, 32> pki_public_key_;
     std::array<uint8_t, 32> pki_private_key_;
     std::map<uint32_t, std::array<uint8_t, 32>> node_public_keys_;
+    std::map<uint32_t, ChannelId> node_last_channel_;
+    std::map<uint32_t, uint32_t> pki_disabled_until_ms_;
     std::map<uint32_t, uint32_t> nodeinfo_last_seen_ms_;
+    std::map<uint32_t, uint32_t> pending_ack_ms_;
 
     // Raw packet data storage for protocol detection
     uint8_t last_raw_packet_[256];
@@ -94,6 +101,7 @@ class MtAdapter : public chat::IMeshAdapter
     struct PendingSend
     {
         ChannelId channel;
+        uint32_t portnum;
         std::string text;
         MessageId msg_id;
         NodeId dest;
@@ -103,12 +111,19 @@ class MtAdapter : public chat::IMeshAdapter
 
     std::queue<PendingSend> send_queue_;
     std::queue<MeshIncomingText> receive_queue_;
+    std::queue<MeshIncomingData> app_receive_queue_;
 
     static constexpr size_t MAX_PACKET_SIZE = 255;
     static constexpr uint32_t RETRY_DELAY_MS = 1000;
     static constexpr uint8_t MAX_RETRIES = 1;
     static constexpr uint32_t NODEINFO_INTERVAL_MS = 3 * 60 * 60 * 1000;
     static constexpr uint32_t NODEINFO_REPLY_SUPPRESS_MS = 12 * 60 * 60 * 1000;
+    static constexpr uint32_t PKI_BACKOFF_MS = 5 * 60 * 1000;
+    static constexpr size_t MAX_APP_QUEUE = 10;
+    static constexpr uint32_t ACK_TIMEOUT_MS = 15000;
+    static constexpr size_t kMaxPkiNodes = 16;
+    static constexpr const char* kPkiPrefsNs = "chat";
+    static constexpr const char* kPkiPrefsKey = "pki_nodes";
 
     bool sendPacket(const PendingSend& pending);
     bool sendNodeInfo();
@@ -119,6 +134,8 @@ class MtAdapter : public chat::IMeshAdapter
     void updateChannelKeys();
     void startRadioReceive();
     bool initPkiKeys();
+    void loadPkiNodeKeys();
+    void savePkiNodeKey(uint32_t node_id, const uint8_t* key, size_t key_len);
     bool decryptPkiPayload(uint32_t from, uint32_t packet_id,
                            const uint8_t* cipher, size_t cipher_len,
                            uint8_t* out_plain, size_t* out_plain_len);

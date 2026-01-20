@@ -6,6 +6,7 @@
  */
 
 #include "mt_codec_pb.h"
+#include "../../time_utils.h"
 #include "compression/unishox2.h"
 #include <cstring>
 
@@ -111,7 +112,7 @@ bool decodeTextMessage(const uint8_t* buffer, size_t size, MeshIncomingText* out
     // This will be done in mt_adapter when decoding full packet
     out->from = 0;   // Will be set from packet header
     out->msg_id = 0; // Will be set from packet header
-    out->timestamp = millis() / 1000;
+    out->timestamp = now_message_timestamp();
     out->channel = ChannelId::PRIMARY; // Will be set from packet header
     out->hop_limit = 2;
     out->encrypted = false;
@@ -170,6 +171,44 @@ bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_n
     }
     data.payload.size = user_len;
     memcpy(data.payload.bytes, user_buf, user_len);
+
+    pb_ostream_t data_stream = pb_ostream_from_buffer(out_buffer, *out_size);
+    if (!pb_encode(&data_stream, meshtastic_Data_fields, &data))
+    {
+        return false;
+    }
+
+    *out_size = data_stream.bytes_written;
+    return true;
+}
+
+bool encodeAppData(uint32_t portnum, const uint8_t* payload, size_t payload_len,
+                   bool want_response, uint8_t* out_buffer, size_t* out_size)
+{
+    if (!out_buffer || !out_size)
+    {
+        return false;
+    }
+
+    meshtastic_Data data = meshtastic_Data_init_default;
+    data.portnum = static_cast<meshtastic_PortNum>(portnum);
+    data.want_response = want_response;
+    data.has_bitfield = true;
+    data.bitfield = 0;
+
+    if (payload_len > sizeof(data.payload.bytes))
+    {
+        return false;
+    }
+    data.payload.size = static_cast<pb_size_t>(payload_len);
+    if (payload_len > 0)
+    {
+        if (!payload)
+        {
+            return false;
+        }
+        memcpy(data.payload.bytes, payload, payload_len);
+    }
 
     pb_ostream_t data_stream = pb_ostream_from_buffer(out_buffer, *out_size);
     if (!pb_encode(&data_stream, meshtastic_Data_fields, &data))

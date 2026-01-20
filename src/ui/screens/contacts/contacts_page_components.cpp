@@ -30,6 +30,8 @@
 
 using namespace contacts::ui;
 
+lv_obj_t* ui_chat_get_container();
+
 static constexpr int kItemsPerPage = 4;
 static constexpr int kButtonHeight = 32;
 static constexpr int kButtonWidth  = 80;
@@ -37,6 +39,7 @@ static constexpr int kButtonWidth  = 80;
 static lv_group_t* s_compose_group = nullptr;
 static lv_group_t* s_compose_prev_group = nullptr;
 static uint32_t s_compose_peer_id = 0;
+static chat::ChannelId s_compose_channel = chat::ChannelId::PRIMARY;
 static bool s_refreshing_ui = false;
 
 // --- Forward declarations (same behavior as original) ---
@@ -56,6 +59,7 @@ static void on_action_back_clicked(lv_event_t* e);
 static void ensure_action_buttons();   // 新增：创建/更新第三列按钮
 static void on_action_clicked(lv_event_t* e);
 static const chat::contacts::NodeInfo* get_selected_node();
+static chat::ChannelId get_selected_channel();
 static void open_add_edit_modal(bool is_edit);
 static void open_delete_confirm_modal();
 static void open_info_modal();
@@ -156,6 +160,10 @@ void create_filter_panel(lv_obj_t* parent)
         lv_obj_add_event_cb(g_contacts_state.nearby_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
         lv_obj_add_event_cb(g_contacts_state.nearby_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
     }
+    if (g_contacts_state.broadcast_btn) {
+        lv_obj_add_event_cb(g_contacts_state.broadcast_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
+        lv_obj_add_event_cb(g_contacts_state.broadcast_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
+    }
 
     // TopBar back button must be reachable by rotary and also respond to press
     // (Press should exit page, not enter List column)
@@ -165,14 +173,17 @@ void create_filter_panel(lv_obj_t* parent)
 
     // Keep highlight consistent with mode using CHECKED state
     // (visual-only; does not change behavior)
-    if (g_contacts_state.contacts_btn && g_contacts_state.nearby_btn) {
+    if (g_contacts_state.contacts_btn && g_contacts_state.nearby_btn && g_contacts_state.broadcast_btn) {
         lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
         lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+        lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
 
         if (g_contacts_state.current_mode == ContactsMode::Contacts) {
             lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
-        } else {
+        } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
             lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+        } else {
+            lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
         }
     }
 }
@@ -218,6 +229,7 @@ static void on_filter_focused(lv_event_t* e)
     ContactsMode new_mode = g_contacts_state.current_mode;
     if (tgt == g_contacts_state.contacts_btn) new_mode = ContactsMode::Contacts;
     else if (tgt == g_contacts_state.nearby_btn) new_mode = ContactsMode::Nearby;
+    else if (tgt == g_contacts_state.broadcast_btn) new_mode = ContactsMode::Broadcast;
     else return;
 
     if (new_mode != g_contacts_state.current_mode) {
@@ -290,6 +302,9 @@ static void on_back_clicked(lv_event_t* /*e*/)
 
 static const chat::contacts::NodeInfo* get_selected_node()
 {
+    if (g_contacts_state.current_mode == ContactsMode::Broadcast) {
+        return nullptr;
+    }
     if (g_contacts_state.selected_index < 0) {
         return nullptr;
     }
@@ -300,6 +315,20 @@ static const chat::contacts::NodeInfo* get_selected_node()
         return nullptr;
     }
     return &list[g_contacts_state.selected_index];
+}
+
+static chat::ChannelId get_selected_channel()
+{
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast) {
+        return chat::ChannelId::PRIMARY;
+    }
+    if (g_contacts_state.selected_index < 0) {
+        return chat::ChannelId::PRIMARY;
+    }
+    if (g_contacts_state.selected_index == 1) {
+        return chat::ChannelId::SECONDARY;
+    }
+    return chat::ChannelId::PRIMARY;
 }
 
 static void modal_prepare_group()
@@ -560,13 +589,18 @@ static void open_chat_compose()
         return;
     }
     const auto* node = get_selected_node();
-    if (!node) {
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast && !node) {
         return;
     }
 
     lv_obj_t* parent = g_contacts_state.root
         ? lv_obj_get_parent(g_contacts_state.root)
         : lv_screen_active();
+    if (lv_obj_t* chat_parent = ui_chat_get_container()) {
+        if (lv_obj_is_valid(chat_parent)) {
+            parent = chat_parent;
+        }
+    }
 
     s_compose_prev_group = lv_group_get_default();
     if (!s_compose_group) {
@@ -575,7 +609,25 @@ static void open_chat_compose()
     lv_group_remove_all_objs(s_compose_group);
     set_default_group(s_compose_group);
 
-    chat::ConversationId conv(chat::ChannelId::PRIMARY, node->node_id);
+    chat::ChannelId channel = chat::ChannelId::PRIMARY;
+    uint32_t peer_id = 0;
+    std::string title;
+    if (g_contacts_state.current_mode == ContactsMode::Broadcast) {
+        channel = get_selected_channel();
+        peer_id = 0;
+        title = "Broadcast";
+    } else {
+        channel = chat::ChannelId::PRIMARY;
+        peer_id = node->node_id;
+        if (g_contacts_state.contact_service) {
+            title = g_contacts_state.contact_service->getContactName(node->node_id);
+        }
+        if (title.empty()) {
+            title = node->display_name;
+        }
+    }
+
+    chat::ConversationId conv(channel, peer_id);
     g_contacts_state.compose_screen = new chat::ui::ChatComposeScreen(parent, conv);
     g_contacts_state.compose_screen->setActionCallback(on_compose_action, nullptr);
     g_contacts_state.compose_screen->setBackCallback(on_compose_back, nullptr);
@@ -593,15 +645,9 @@ static void open_chat_compose()
         }
     }
 
-    std::string title;
-    if (g_contacts_state.contact_service) {
-        title = g_contacts_state.contact_service->getContactName(node->node_id);
-    }
-    if (title.empty()) {
-        title = node->display_name;
-    }
     g_contacts_state.compose_screen->setHeaderText(title.c_str(), "RSSI --");
-    s_compose_peer_id = node->node_id;
+    s_compose_peer_id = peer_id;
+    s_compose_channel = channel;
 
     if (g_contacts_state.root) {
         lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
@@ -624,6 +670,7 @@ static void close_chat_compose()
     delete g_contacts_state.compose_screen;
     g_contacts_state.compose_screen = nullptr;
     s_compose_peer_id = 0;
+    s_compose_channel = chat::ChannelId::PRIMARY;
 
     if (g_contacts_state.root) {
         lv_obj_clear_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
@@ -645,12 +692,11 @@ static void close_chat_compose()
 
 static void on_compose_action(bool send, void* /*user_data*/)
 {
-    if (send && g_contacts_state.compose_screen && s_compose_peer_id != 0 &&
-        g_contacts_state.chat_service) {
+    if (send && g_contacts_state.compose_screen && g_contacts_state.chat_service) {
         std::string text = g_contacts_state.compose_screen->getText();
         if (!text.empty()) {
             g_contacts_state.chat_service->sendText(
-                chat::ChannelId::PRIMARY, text, s_compose_peer_id
+                s_compose_channel, text, s_compose_peer_id
             );
         }
     }
@@ -934,18 +980,27 @@ static void ensure_action_buttons()
         lv_obj_clear_flag(g_contacts_state.edit_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag  (g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.edit_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.del_btn,  lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-    } else {
+    } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
         lv_obj_add_flag  (g_contacts_state.edit_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag  (g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.add_btn,  lv_color_hex(0xF1B65A), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+    } else {
+        lv_obj_add_flag  (g_contacts_state.edit_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
     }
 
@@ -957,12 +1012,14 @@ static void ensure_action_buttons()
     set_enabled(g_contacts_state.action_back_btn, true);
 
     set_enabled(g_contacts_state.chat_btn, has_sel);
-    set_enabled(g_contacts_state.info_btn, has_sel);
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast) {
+        set_enabled(g_contacts_state.info_btn, has_sel);
+    }
 
     if (g_contacts_state.current_mode == ContactsMode::Contacts) {
         set_enabled(g_contacts_state.edit_btn, has_sel);
         set_enabled(g_contacts_state.del_btn,  has_sel);
-    } else {
+    } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
         set_enabled(g_contacts_state.add_btn,  has_sel);
     }
 }
@@ -1015,6 +1072,20 @@ void refresh_ui()
     }
     s_refreshing_ui = true;
 
+    lv_obj_t* active = lv_screen_active();
+    if (!active) {
+        CONTACTS_LOG("[Contacts] WARNING: lv_screen_active() is null\n");
+    } else {
+        CONTACTS_LOG("[Contacts] refresh_ui: active=%p root=%p list_panel=%p\n",
+                     active, g_contacts_state.root, g_contacts_state.list_panel);
+    }
+    if (g_contacts_state.root && !lv_obj_is_valid(g_contacts_state.root)) {
+        CONTACTS_LOG("[Contacts] WARNING: root is invalid\n");
+    }
+    if (g_contacts_state.list_panel && !lv_obj_is_valid(g_contacts_state.list_panel)) {
+        CONTACTS_LOG("[Contacts] WARNING: list_panel is invalid\n");
+    }
+
     lv_obj_clear_flag(g_contacts_state.list_panel, LV_OBJ_FLAG_SCROLLABLE);
     if (g_contacts_state.sub_container) {
         lv_obj_clear_flag(g_contacts_state.sub_container, LV_OBJ_FLAG_SCROLLABLE);
@@ -1042,11 +1113,23 @@ void refresh_ui()
     g_contacts_state.list_items.clear();
 
     // Choose list by mode (unchanged)
-    const auto& current_list = (g_contacts_state.current_mode == ContactsMode::Contacts)
-        ? g_contacts_state.contacts_list
-        : g_contacts_state.nearby_list;
+    std::vector<chat::contacts::NodeInfo> broadcast_list;
+    const std::vector<chat::contacts::NodeInfo>* current_list = nullptr;
+    if (g_contacts_state.current_mode == ContactsMode::Contacts) {
+        current_list = &g_contacts_state.contacts_list;
+    } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
+        current_list = &g_contacts_state.nearby_list;
+    } else {
+        chat::contacts::NodeInfo primary{};
+        primary.display_name = "Primary";
+        chat::contacts::NodeInfo secondary{};
+        secondary.display_name = "Secondary";
+        broadcast_list.push_back(primary);
+        broadcast_list.push_back(secondary);
+        current_list = &broadcast_list;
+    }
 
-    g_contacts_state.total_items = current_list.size();
+    g_contacts_state.total_items = current_list->size();
 
     if (g_contacts_state.selected_index >= static_cast<int>(g_contacts_state.total_items)) {
         g_contacts_state.selected_index = -1;
@@ -1071,13 +1154,15 @@ void refresh_ui()
 
     // Create list items for current page (structure in layout; status string computed here)
     for (int i = start_idx; i < end_idx; ++i) {
-        const auto& node = current_list[i];
+        const auto& node = (*current_list)[i];
 
         std::string status_text;
         if (g_contacts_state.current_mode == ContactsMode::Contacts) {
             status_text = format_time_status(node.last_seen);
-        } else {
+        } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
             status_text = format_snr(node.snr);
+        } else {
+            status_text = "Channel";
         }
 
         lv_obj_t* item = contacts::ui::layout::create_list_item(
@@ -1143,14 +1228,19 @@ void refresh_ui()
     lv_obj_clear_state(g_contacts_state.back_btn, LV_STATE_DISABLED);
 
     // Update filter highlights (visual-only, using CHECKED state)
-    if (g_contacts_state.contacts_btn != nullptr && g_contacts_state.nearby_btn != nullptr) {
+    if (g_contacts_state.contacts_btn != nullptr &&
+        g_contacts_state.nearby_btn != nullptr &&
+        g_contacts_state.broadcast_btn != nullptr) {
         lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
         lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+        lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
 
         if (g_contacts_state.current_mode == ContactsMode::Contacts) {
             lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
-        } else {
+        } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
             lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+        } else {
+            lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
         }
     }
 
@@ -1166,12 +1256,6 @@ void refresh_ui()
     }
     s_refreshing_ui = false;
 
-    CONTACTS_LOG("[Contacts] UI refreshed: mode=%d, page=%d/%d, items=%zu\n",
-                 (int)g_contacts_state.current_mode,
-                 g_contacts_state.current_page + 1,
-                 (static_cast<int>(g_contacts_state.total_items) + kItemsPerPage - 1) / kItemsPerPage,
-                 g_contacts_state.total_items);
-                 
     ensure_action_buttons();
     contacts_input_on_ui_refreshed();
 }

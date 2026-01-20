@@ -18,7 +18,7 @@ ChatModel::~ChatModel()
 
 void ChatModel::onIncoming(const ChatMessage& msg)
 {
-    ConversationId conv(msg.channel, msg.peer ? msg.peer : msg.from);
+    ConversationId conv(msg.channel, msg.peer);
     ConversationData& data = getConvData(conv);
 
     data.messages.append(msg);
@@ -41,7 +41,10 @@ void ChatModel::onSendQueued(const ChatMessage& msg)
     {
         copy.msg_id = next_msg_id_++;
     }
-    copy.status = MessageStatus::Queued;
+    if (copy.status != MessageStatus::Failed)
+    {
+        copy.status = MessageStatus::Queued;
+    }
 
     data.messages.append(copy);
     data.preview = copy.text;
@@ -56,14 +59,13 @@ void ChatModel::onSendResult(MessageId msg_id, bool ok)
         ConversationData& data = pair.second;
         for (size_t i = 0; i < data.messages.count(); i++)
         {
-            const ChatMessage* msg = data.messages.get(i);
+            ChatMessage* msg = data.messages.get(i);
             if (msg && msg->msg_id == msg_id)
             {
+                msg->status = ok ? MessageStatus::Sent : MessageStatus::Failed;
                 if (!ok)
                 {
-                    ChatMessage failed_msg = *msg;
-                    failed_msg.status = MessageStatus::Failed;
-                    failed_messages_.append(failed_msg);
+                    failed_messages_.append(*msg);
                 }
                 return;
             }

@@ -11,6 +11,11 @@
 static lv_obj_t *chat_container = NULL;
 static std::unique_ptr<chat::ui::UiController> ui_controller = nullptr;
 
+lv_obj_t* ui_chat_get_container()
+{
+    return chat_container;
+}
+
 static void back_event_handler(lv_event_t *e)
 {
     lv_obj_t *obj = (lv_obj_t *)lv_event_get_target(e);
@@ -36,6 +41,13 @@ void ui_chat_enter(lv_obj_t *parent)
         set_default_group(app_g);
     }
     
+    Serial.printf("[UI Chat] enter: parent=%p active=%p\n",
+                  parent, lv_screen_active());
+    if (lv_obj_t* active = lv_screen_active()) {
+        Serial.printf("[UI Chat] active child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(active));
+    }
+
     // Create container
     chat_container = lv_obj_create(parent);
     lv_obj_set_size(chat_container, LV_PCT(100), LV_PCT(100));
@@ -45,6 +57,14 @@ void ui_chat_enter(lv_obj_t *parent)
     lv_obj_set_style_pad_all(chat_container, 0, 0);
     lv_obj_set_style_radius(chat_container, 0, 0);
     
+    Serial.printf("[UI Chat] container=%p valid=%d\n",
+                  chat_container,
+                  chat_container ? (lv_obj_is_valid(chat_container) ? 1 : 0) : 0);
+    if (chat_container) {
+        Serial.printf("[UI Chat] container child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(chat_container));
+    }
+
     // Create UI controller
     ui_controller = std::unique_ptr<chat::ui::UiController>(
         new chat::ui::UiController(chat_container, ctx.getChatService()));
@@ -57,6 +77,19 @@ void ui_chat_enter(lv_obj_t *parent)
 
 void ui_chat_exit(lv_obj_t *parent)
 {
+    Serial.printf("[UI Chat] exit: parent=%p container=%p\n",
+                  parent, chat_container);
+    if (lv_obj_t* active = lv_screen_active()) {
+        Serial.printf("[UI Chat] exit active child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(active));
+    }
+    if (chat_container && lv_obj_is_valid(chat_container)) {
+        Serial.printf("[UI Chat] exit container child count=%u\n",
+                      (unsigned)lv_obj_get_child_cnt(chat_container));
+    }
+    if (chat_container && !lv_obj_is_valid(chat_container)) {
+        chat_container = NULL;
+    }
     if (chat_container) {
         lv_obj_clean(chat_container);
         lv_obj_del(chat_container);

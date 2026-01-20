@@ -32,7 +32,8 @@ namespace ui {
 
 enum class ContactsMode {
     Contacts,  // Show contacts (nodes with nicknames)
-    Nearby     // Show nearby nodes (nodes without nicknames)
+    Nearby,    // Show nearby nodes (nodes without nicknames)
+    Broadcast  // Show broadcast channels
 };
 
 struct ContactsPageState {
@@ -45,6 +46,7 @@ struct ContactsPageState {
     lv_obj_t* filter_panel = nullptr;
     lv_obj_t* contacts_btn = nullptr;
     lv_obj_t* nearby_btn = nullptr;
+    lv_obj_t* broadcast_btn = nullptr;
     
     // Second column: Node list
     lv_obj_t* list_panel = nullptr;

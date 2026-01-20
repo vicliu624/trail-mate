@@ -148,6 +148,28 @@ void FlashStore::clearChannel(ChannelId channel)
     }
 }
 
+bool FlashStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
+{
+    if (!ready_ || msg_id == 0) return false;
+
+    for (size_t i = 0; i < count_; ++i)
+    {
+        size_t idx = (head_ + kMaxMessages - 1 - i) % kMaxMessages;
+        Record& rec = records_[idx];
+        if (rec.text_len == 0) continue;
+        if (rec.msg_id != msg_id) continue;
+        if (rec.from != 0) continue; // only update outgoing messages
+        uint8_t new_status = static_cast<uint8_t>(status);
+        if (rec.status == new_status) {
+            return true;
+        }
+        rec.status = new_status;
+        persistRecord(static_cast<uint16_t>(idx));
+        return true;
+    }
+    return false;
+}
+
 void FlashStore::loadFromPrefs()
 {
     uint8_t ver = prefs_.getUChar(kKeyVer, 0);

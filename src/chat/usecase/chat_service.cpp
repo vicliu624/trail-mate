@@ -4,6 +4,7 @@
  */
 
 #include "chat_service.h"
+#include "../time_utils.h"
 #include "../../sys/event_bus.h"
 
 namespace chat
@@ -22,36 +23,24 @@ MessageId ChatService::sendText(ChannelId channel, const std::string& text, Node
         return 0;
     }
 
+    // Try to send via adapter first to get packet ID
+    MessageId msg_id = 0;
+    bool queued = adapter_.sendText(channel, text, &msg_id, peer);
+
     ChatMessage msg;
     msg.channel = channel;
     msg.from = 0; // Local message
     msg.peer = peer;
-    msg.timestamp = millis() / 1000; // Convert to seconds
+    msg.msg_id = msg_id;
+    msg.timestamp = now_message_timestamp();
     msg.text = text;
-    msg.status = MessageStatus::Queued;
+    msg.status = queued ? MessageStatus::Queued : MessageStatus::Failed;
 
     // Queue in model
     model_.onSendQueued(msg);
-
-    // Try to send via adapter
-    MessageId msg_id = 0;
-    if (adapter_.sendText(channel, text, &msg_id, peer))
+    if (!queued && msg_id != 0)
     {
-        // Update message ID if adapter provided one
-        if (msg_id != 0)
-        {
-            // Find and update message (simplified - in real impl might need better tracking)
-            const ChatMessage* found = model_.getMessage(msg_id);
-            if (found)
-            {
-                // Message ID already set
-            }
-        }
-    }
-    else
-    {
-        // Send failed, mark as failed
-        model_.onSendResult(msg.msg_id, false);
+        model_.onSendResult(msg_id, false);
     }
 
     // Store message
@@ -139,9 +128,13 @@ void ChatService::processIncoming()
         ChatMessage msg;
         msg.channel = incoming.channel;
         msg.from = incoming.from;
-        msg.peer = incoming.from;
+        if (incoming.to == 0xFFFFFFFF || incoming.to == 0) {
+            msg.peer = 0;
+        } else {
+            msg.peer = incoming.from;
+        }
         msg.msg_id = incoming.msg_id;
-        msg.timestamp = incoming.timestamp ? incoming.timestamp : (millis() / 1000);
+        msg.timestamp = incoming.timestamp ? incoming.timestamp : now_message_timestamp();
         msg.text = incoming.text;
         msg.status = MessageStatus::Incoming;
 
@@ -155,6 +148,16 @@ void ChatService::processIncoming()
         sys::EventBus::publish(new sys::ChatNewMessageEvent(static_cast<uint8_t>(msg.channel),
                                                             msg.msg_id,
                                                             msg.text.c_str()));
+    }
+}
+
+void ChatService::handleSendResult(MessageId msg_id, bool ok)
+{
+    if (msg_id == 0) return;
+    model_.onSendResult(msg_id, ok);
+    if (!ok)
+    {
+        store_.updateMessageStatus(msg_id, MessageStatus::Failed);
     }
 }
 

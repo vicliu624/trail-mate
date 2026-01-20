@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace chat
 {
@@ -108,11 +109,32 @@ struct MeshIncomingText
 {
     ChannelId channel;
     NodeId from;
+    NodeId to;
     MessageId msg_id;
     uint32_t timestamp;
     std::string text;
     uint8_t hop_limit; // Remaining hops
     bool encrypted;    // Whether message was encrypted
+};
+
+/**
+ * @brief Incoming non-text mesh payload
+ */
+struct MeshIncomingData
+{
+    uint32_t portnum;
+    NodeId from;
+    NodeId to;
+    MessageId packet_id;
+    ChannelId channel;
+    uint8_t channel_hash;
+    bool want_response;
+    std::vector<uint8_t> payload;
+
+    MeshIncomingData()
+        : portnum(0), from(0), to(0), packet_id(0),
+          channel(ChannelId::PRIMARY), channel_hash(0),
+          want_response(false) {}
 };
 
 /**
