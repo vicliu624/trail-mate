@@ -43,7 +43,6 @@ private:
     lv_obj_t* toggle_btn_ = nullptr;
     lv_obj_t* toggle_label_ = nullptr;
     lv_obj_t* focus_proxy_ = nullptr;
-    lv_obj_t* buffer_label_ = nullptr;
     lv_obj_t* candidates_label_ = nullptr;
     lv_obj_t* textarea_ = nullptr;
     Mode mode_ = Mode::EN;

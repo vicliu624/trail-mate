@@ -83,7 +83,7 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w) {
     lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
 
     w.len_label = lv_label_create(w.action_bar);
-    lv_label_set_text(w.len_label, "Len: 0");
+    lv_label_set_text(w.len_label, "Remain: 233");
 }
 
 } // namespace chat::ui::compose::layout

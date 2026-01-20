@@ -97,11 +97,6 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea) {
         self->handle_key(e);
     }, LV_EVENT_KEY, this);
 
-    buffer_label_ = lv_label_create(container_);
-    lv_label_set_text(buffer_label_, "EN");
-    lv_obj_set_style_text_font(buffer_label_, &lv_font_noto_cjk_16_2bpp, 0);
-    lv_obj_set_style_text_color(buffer_label_, lv_color_hex(0x404040), 0);
-
     candidates_label_ = lv_label_create(container_);
     lv_label_set_text(candidates_label_, "");
     lv_obj_set_style_text_font(candidates_label_, &lv_font_noto_cjk_16_2bpp, 0);
@@ -117,7 +112,6 @@ void ImeWidget::detach() {
     toggle_btn_ = nullptr;
     toggle_label_ = nullptr;
     focus_proxy_ = nullptr;
-    buffer_label_ = nullptr;
     candidates_label_ = nullptr;
     textarea_ = nullptr;
     if (s_active_ime == this) {
@@ -221,7 +215,7 @@ bool ImeWidget::handle_key(lv_event_t* e) {
 }
 
 void ImeWidget::refresh_labels() {
-    if (!toggle_label_ || !buffer_label_ || !candidates_label_) return;
+    if (!toggle_label_ || !candidates_label_) return;
 
     if (textarea_) {
         if (mode_ == Mode::CN && ime_.hasBuffer()) {
@@ -241,24 +235,16 @@ void ImeWidget::refresh_labels() {
 
     if (mode_ == Mode::EN) {
         lv_label_set_text(toggle_label_, "EN");
-        lv_label_set_text(buffer_label_, "EN");
         lv_label_set_text(candidates_label_, "");
         return;
     }
     if (mode_ == Mode::NUM) {
         lv_label_set_text(toggle_label_, "123");
-        lv_label_set_text(buffer_label_, "123");
         lv_label_set_text(candidates_label_, "");
         return;
     }
 
     lv_label_set_text(toggle_label_, "CN");
-    if (ime_.hasBuffer()) {
-        std::string buf = "CN: " + ime_.buffer();
-        lv_label_set_text(buffer_label_, buf.c_str());
-    } else {
-        lv_label_set_text(buffer_label_, "CN");
-    }
     refresh_candidates();
 }
 
