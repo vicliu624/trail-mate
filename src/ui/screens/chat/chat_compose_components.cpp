@@ -5,6 +5,7 @@
 #include "chat_compose_styles.h"
 
 #include "../../widgets/ime/ime_widget.h"
+#include "../../../chat/usecase/chat_service.h"
 
 #include <Arduino.h>
 #include <cstdio> // snprintf
@@ -14,12 +15,26 @@ namespace chat::ui
 {
 
 static constexpr size_t kMaxInputBytes = 233;
+static constexpr uint32_t kSendTimeoutMs = 3000;
+static constexpr uint32_t kSendResultHoldMs = 600;
 
 struct ChatComposeScreen::Impl
 {
     chat::ui::compose::layout::Spec spec;
     chat::ui::compose::layout::Widgets w;
     chat::ui::compose::input::State input_state;
+    lv_obj_t* sending_overlay = nullptr;
+    lv_obj_t* sending_label = nullptr;
+    lv_timer_t* send_timer = nullptr;
+    uint32_t send_start_ms = 0;
+    uint32_t send_finish_ms = 0;
+    chat::MessageId pending_msg_id = 0;
+    chat::ChatService* send_service = nullptr;
+    bool send_finished = false;
+    bool send_timeout = false;
+    bool send_ok = false;
+    void (*send_done_cb)(bool ok, bool timeout, void*) = nullptr;
+    void* send_done_user_data = nullptr;
 };
 
 static void set_btn_label_white(lv_obj_t* btn)
@@ -77,6 +92,12 @@ ChatComposeScreen::~ChatComposeScreen()
 {
     if (!impl_) return;
 
+    if (impl_->send_timer)
+    {
+        lv_timer_del(impl_->send_timer);
+        impl_->send_timer = nullptr;
+    }
+
     if (impl_->w.container)
     {
         lv_obj_del(impl_->w.container);
@@ -129,6 +150,76 @@ void ChatComposeScreen::clearText()
     if (!impl_) return;
     lv_textarea_set_text(impl_->w.textarea, "");
     refresh_len();
+}
+
+void ChatComposeScreen::beginSend(chat::ChatService* service,
+                                  chat::MessageId msg_id,
+                                  void (*done_cb)(bool ok, bool timeout, void*),
+                                  void* user_data)
+{
+    if (!impl_) return;
+
+    impl_->send_service = service;
+    impl_->pending_msg_id = msg_id;
+    impl_->send_start_ms = millis();
+    impl_->send_finish_ms = 0;
+    impl_->send_finished = false;
+    impl_->send_timeout = false;
+    impl_->send_ok = false;
+    impl_->send_done_cb = done_cb;
+    impl_->send_done_user_data = user_data;
+
+    if (!impl_->sending_overlay)
+    {
+        impl_->sending_overlay = lv_obj_create(impl_->w.container);
+        lv_obj_set_size(impl_->sending_overlay, LV_PCT(100), LV_PCT(100));
+        lv_obj_set_style_bg_color(impl_->sending_overlay, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(impl_->sending_overlay, LV_OPA_60, LV_PART_MAIN);
+        lv_obj_set_style_border_width(impl_->sending_overlay, 0, LV_PART_MAIN);
+        lv_obj_clear_flag(impl_->sending_overlay, LV_OBJ_FLAG_SCROLLABLE);
+
+        impl_->sending_label = lv_label_create(impl_->sending_overlay);
+        lv_obj_set_style_text_color(impl_->sending_label, lv_color_white(), 0);
+        lv_obj_center(impl_->sending_label);
+    }
+    setSendingText("Sending...");
+    lv_obj_clear_flag(impl_->sending_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(impl_->sending_overlay);
+
+    if (impl_->w.send_btn) lv_obj_add_state(impl_->w.send_btn, LV_STATE_DISABLED);
+    if (impl_->w.cancel_btn) lv_obj_add_state(impl_->w.cancel_btn, LV_STATE_DISABLED);
+    if (impl_->w.textarea) lv_obj_add_state(impl_->w.textarea, LV_STATE_DISABLED);
+    if (impl_->w.top_bar.back_btn) lv_obj_add_state(impl_->w.top_bar.back_btn, LV_STATE_DISABLED);
+
+    if (impl_->send_timer)
+    {
+        lv_timer_del(impl_->send_timer);
+        impl_->send_timer = nullptr;
+    }
+    impl_->send_timer = lv_timer_create(on_send_timer, 150, this);
+    if (!impl_->send_timer) return;
+
+    if (impl_->pending_msg_id == 0 || !impl_->send_service)
+    {
+        finishSend(false, false, "Send failed");
+    }
+}
+
+void ChatComposeScreen::finishSend(bool ok, bool timeout, const char* message)
+{
+    if (!impl_) return;
+    impl_->send_finished = true;
+    impl_->send_timeout = timeout;
+    impl_->send_ok = ok;
+    impl_->send_finish_ms = millis();
+    setSendingText(message);
+}
+
+void ChatComposeScreen::setSendingText(const char* text)
+{
+    if (!impl_ || !impl_->sending_label) return;
+    lv_label_set_text(impl_->sending_label, text ? text : "");
+    lv_obj_center(impl_->sending_label);
 }
 
 void ChatComposeScreen::setActionCallback(void (*cb)(bool send, void*), void* user_data)
@@ -225,6 +316,63 @@ void ChatComposeScreen::on_key(lv_event_t* e)
         if (lv_group_t* g = lv_group_get_default())
         {
             lv_group_focus_obj(screen->impl_->w.send_btn);
+        }
+    }
+}
+
+void ChatComposeScreen::on_send_timer(lv_timer_t* timer)
+{
+    auto* screen = static_cast<ChatComposeScreen*>(timer->user_data);
+    if (!screen || !screen->impl_) return;
+    auto* impl = screen->impl_;
+
+    uint32_t now = millis();
+    if (!impl->send_finished)
+    {
+        if (!impl->send_service || impl->pending_msg_id == 0)
+        {
+            screen->finishSend(false, false, "Send failed");
+        }
+        else
+        {
+            const ChatMessage* msg = impl->send_service->getMessage(impl->pending_msg_id);
+            if (msg)
+            {
+                if (msg->status == MessageStatus::Sent)
+                {
+                    screen->finishSend(true, false, "Sent");
+                }
+                else if (msg->status == MessageStatus::Failed)
+                {
+                    screen->finishSend(false, false, "Failed");
+                }
+            }
+        }
+        if (!impl->send_finished && (now - impl->send_start_ms >= kSendTimeoutMs))
+        {
+            screen->finishSend(false, true, "No response");
+        }
+    }
+
+    if (impl->send_finished && (now - impl->send_finish_ms >= kSendResultHoldMs))
+    {
+        auto* done_cb = impl->send_done_cb;
+        void* done_user = impl->send_done_user_data;
+        bool ok = impl->send_ok;
+        bool timeout = impl->send_timeout;
+
+        if (impl->sending_overlay)
+        {
+            lv_obj_add_flag(impl->sending_overlay, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (impl->send_timer)
+        {
+            lv_timer_del(impl->send_timer);
+            impl->send_timer = nullptr;
+        }
+        if (done_cb)
+        {
+            done_cb(ok, timeout, done_user);
         }
     }
 }

@@ -107,10 +107,11 @@ std::vector<ConversationMeta> ChatService::getConversations() const
 void ChatService::clearAllMessages()
 {
     model_.clearAll();
-    store_.clearChannel(ChannelId::PRIMARY);
-    store_.clearChannel(ChannelId::SECONDARY);
+    store_.clearAll();
     store_.setUnread(ChannelId::PRIMARY, 0);
     store_.setUnread(ChannelId::SECONDARY, 0);
+    sys::EventBus::publish(new sys::ChatUnreadChangedEvent(static_cast<uint8_t>(ChannelId::PRIMARY), 0), 0);
+    sys::EventBus::publish(new sys::ChatUnreadChangedEvent(static_cast<uint8_t>(ChannelId::SECONDARY), 0), 0);
 }
 
 void ChatService::markConversationRead(const ConversationId& conv)
@@ -159,6 +160,11 @@ void ChatService::handleSendResult(MessageId msg_id, bool ok)
     {
         store_.updateMessageStatus(msg_id, MessageStatus::Failed);
     }
+}
+
+const ChatMessage* ChatService::getMessage(MessageId msg_id) const
+{
+    return model_.getMessage(msg_id);
 }
 
 } // namespace chat

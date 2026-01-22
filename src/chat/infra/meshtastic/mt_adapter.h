@@ -69,6 +69,22 @@ class MtAdapter : public chat::IMeshAdapter
      */
     void processSendQueue() override;
 
+    /**
+     * @brief Submit key verification number for ongoing PKI verification
+     * @param node_id Remote node id
+     * @param nonce Verification nonce
+     * @param number Security number
+     * @return true if processed
+     */
+    bool submitKeyVerificationNumber(NodeId node_id, uint64_t nonce, uint32_t number);
+
+    /**
+     * @brief Start PKI key verification with a remote node
+     * @param node_id Remote node id
+     * @return true if sent
+     */
+    bool startKeyVerification(NodeId node_id);
+
   private:
     TLoRaPagerBoard& board_;
     MeshConfig config_;
@@ -88,10 +104,31 @@ class MtAdapter : public chat::IMeshAdapter
     std::array<uint8_t, 32> pki_public_key_;
     std::array<uint8_t, 32> pki_private_key_;
     std::map<uint32_t, std::array<uint8_t, 32>> node_public_keys_;
+    std::map<uint32_t, uint32_t> node_key_last_seen_;
     std::map<uint32_t, ChannelId> node_last_channel_;
     std::map<uint32_t, uint32_t> pki_disabled_until_ms_;
     std::map<uint32_t, uint32_t> nodeinfo_last_seen_ms_;
     std::map<uint32_t, uint32_t> pending_ack_ms_;
+    std::map<uint32_t, uint32_t> pending_ack_dest_;
+    std::map<uint32_t, std::string> node_long_names_;
+
+    enum class KeyVerificationState : uint8_t
+    {
+        Idle,
+        SenderInitiated,
+        SenderAwaitingNumber,
+        SenderAwaitingUser,
+        ReceiverAwaitingHash1,
+        ReceiverAwaitingUser
+    };
+
+    KeyVerificationState kv_state_;
+    uint64_t kv_nonce_;
+    uint32_t kv_nonce_ms_;
+    uint32_t kv_security_number_;
+    uint32_t kv_remote_node_;
+    std::array<uint8_t, 32> kv_hash1_;
+    std::array<uint8_t, 32> kv_hash2_;
 
     // Raw packet data storage for protocol detection
     uint8_t last_raw_packet_[256];
@@ -122,8 +159,10 @@ class MtAdapter : public chat::IMeshAdapter
     static constexpr size_t MAX_APP_QUEUE = 10;
     static constexpr uint32_t ACK_TIMEOUT_MS = 15000;
     static constexpr size_t kMaxPkiNodes = 16;
-    static constexpr const char* kPkiPrefsNs = "chat";
+    static constexpr const char* kPkiPrefsNs = "chat_pki";
     static constexpr const char* kPkiPrefsKey = "pki_nodes";
+    static constexpr const char* kPkiPrefsKeyVer = "pki_nodes_ver";
+    static constexpr uint8_t kPkiPrefsVersion = 2;
 
     bool sendPacket(const PendingSend& pending);
     bool sendNodeInfo();
@@ -142,8 +181,26 @@ class MtAdapter : public chat::IMeshAdapter
     bool encryptPkiPayload(uint32_t dest, uint32_t packet_id,
                            const uint8_t* plain, size_t plain_len,
                            uint8_t* out_cipher, size_t* out_cipher_len);
+    void savePkiKeysToPrefs();
+    void touchPkiNodeKey(uint32_t node_id);
     bool sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
                         const uint8_t* psk, size_t psk_len);
+    bool sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
+                          const uint8_t* psk, size_t psk_len,
+                          meshtastic_Routing_Error reason);
+
+    void updateKeyVerificationState();
+    void resetKeyVerificationState();
+    bool handleKeyVerificationInit(const PacketHeaderWire& header,
+                                   const meshtastic_KeyVerification& kv);
+    bool handleKeyVerificationReply(const PacketHeaderWire& header,
+                                    const meshtastic_KeyVerification& kv);
+    bool handleKeyVerificationFinal(const PacketHeaderWire& header,
+                                    const meshtastic_KeyVerification& kv);
+    bool sendKeyVerificationPacket(uint32_t dest, const meshtastic_KeyVerification& kv,
+                                   bool want_response);
+    bool processKeyVerificationNumber(uint32_t remote_node, uint64_t nonce, uint32_t number);
+    void buildVerificationCode(char* out, size_t out_len) const;
 };
 
 } // namespace meshtastic

@@ -30,6 +30,7 @@ class FlashStore : public IChatStore
     int getUnread(ChannelId channel) const override;
     void clearChannel(ChannelId channel) override;
     bool updateMessageStatus(MessageId msg_id, MessageStatus status) override;
+    void clearAll();
 
     std::vector<ChatMessage> loadAll() const;
 
@@ -62,7 +63,6 @@ class FlashStore : public IChatStore
     void loadFromPrefs();
     void persistMeta();
     void persistRecord(uint16_t idx);
-    void clearAll();
 };
 
 } // namespace chat

@@ -258,6 +258,14 @@ static void reset_node_db()
 {
     app::AppContext& app_ctx = app::AppContext::getInstance();
     app_ctx.clearNodeDb();
+    {
+        Preferences prefs;
+        if (prefs.begin("chat_pki", false))
+        {
+            prefs.clear();
+            prefs.end();
+        }
+    }
     ::ui::SystemNotification::show("Node DB reset", 3000);
 }
 

@@ -16,9 +16,14 @@ FlashStore::FlashStore()
     records_.resize(kMaxMessages);
     if (!ready_)
     {
+        Serial.printf("[FlashStore] open failed ns=%s\n", kPrefsNs);
         return;
     }
     loadFromPrefs();
+    Serial.printf("[FlashStore] ready=%d count=%u head=%u\n",
+                  ready_ ? 1 : 0,
+                  static_cast<unsigned>(count_),
+                  static_cast<unsigned>(head_));
 }
 
 FlashStore::~FlashStore()
@@ -217,14 +222,11 @@ void FlashStore::persistRecord(uint16_t idx)
 
 void FlashStore::clearAll()
 {
+    if (!ready_) return;
     head_ = 0;
     count_ = 0;
     std::fill(records_.begin(), records_.end(), Record{});
     persistMeta();
-    for (uint16_t i = 0; i < kMaxMessages; ++i)
-    {
-        persistRecord(i);
-    }
 }
 
 } // namespace chat

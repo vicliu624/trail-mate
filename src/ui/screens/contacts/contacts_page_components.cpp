@@ -76,6 +76,7 @@ static void open_chat_compose();
 static void close_chat_compose();
 static void on_compose_action(bool send, void* user_data);
 static void on_compose_back(void* user_data);
+static void on_compose_send_done(bool ok, bool timeout, void* user_data);
 
 // Forward declaration - actual implementation moved to ui_contacts.cpp
 // to avoid library compilation issues with Arduino framework dependencies
@@ -84,6 +85,9 @@ extern void refresh_contacts_data_impl();
 void refresh_contacts_data()
 {
     refresh_contacts_data_impl();
+    CONTACTS_LOG("[Contacts] contacts=%u nearby=%u\n",
+                 (unsigned)g_contacts_state.contacts_list.size(),
+                 (unsigned)g_contacts_state.nearby_list.size());
 }
 
 // ---------------- Formatting helpers ----------------
@@ -695,15 +699,26 @@ static void on_compose_action(bool send, void* /*user_data*/)
     if (send && g_contacts_state.compose_screen && g_contacts_state.chat_service) {
         std::string text = g_contacts_state.compose_screen->getText();
         if (!text.empty()) {
-            g_contacts_state.chat_service->sendText(
+            chat::MessageId msg_id = g_contacts_state.chat_service->sendText(
                 s_compose_channel, text, s_compose_peer_id
             );
+            g_contacts_state.compose_screen->beginSend(
+                g_contacts_state.chat_service,
+                msg_id,
+                on_compose_send_done,
+                nullptr);
+            return;
         }
     }
     close_chat_compose();
 }
 
 static void on_compose_back(void* /*user_data*/)
+{
+    close_chat_compose();
+}
+
+static void on_compose_send_done(bool /*ok*/, bool /*timeout*/, void* /*user_data*/)
 {
     close_chat_compose();
 }

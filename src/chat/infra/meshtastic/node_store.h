@@ -10,6 +10,7 @@
 #pragma once
 
 #include "../../ports/i_node_store.h"
+#include "node_persist.h"
 #include <Arduino.h>
 #include <Preferences.h>
 #include <string>
@@ -54,13 +55,15 @@ class NodeStore : public contacts::INodeStore
     void clear() override;
 
   private:
-    static constexpr size_t kMaxNodes = 16;
-    static constexpr const char* kNs = "nodes";
-    static constexpr const char* kKey = "node_blob";
+    static constexpr size_t kMaxNodes = kPersistMaxNodes;
+    static constexpr uint32_t kSaveIntervalMs = 5000;
 
     std::vector<contacts::NodeEntry> entries_;
+    uint32_t last_save_ms_ = 0;
+    bool dirty_ = false;
 
     void save();
+    void maybeSave();
 };
 
 } // namespace meshtastic

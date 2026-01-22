@@ -34,12 +34,13 @@ namespace meshtastic
  * @param text Message text
  * @param from_node Source node ID
  * @param packet_id Packet ID
+ * @param dest_node Destination node ID (0xFFFFFFFF for broadcast)
  * @param out_buffer Output buffer (Data message encoded)
  * @param out_size Output buffer size (updated with actual size)
  * @return true if successful
  */
 bool encodeTextMessage(ChannelId channel, const std::string& text,
-                       NodeId from_node, uint32_t packet_id,
+                       NodeId from_node, uint32_t packet_id, NodeId dest_node,
                        uint8_t* out_buffer, size_t* out_size);
 
 /**
@@ -50,6 +51,15 @@ bool encodeTextMessage(ChannelId channel, const std::string& text,
  * @return true if successful
  */
 bool decodeTextMessage(const uint8_t* buffer, size_t size, MeshIncomingText* out);
+
+/**
+ * @brief Decode Meshtastic Data payload to key verification message
+ * @param buffer Data message buffer (already decrypted)
+ * @param size Buffer size
+ * @param out Output KeyVerification message
+ * @return true if successful
+ */
+bool decodeKeyVerificationMessage(const uint8_t* buffer, size_t size, meshtastic_KeyVerification* out);
 
 /**
  * @brief Encode node info (User) message to Meshtastic Data payload using protobuf

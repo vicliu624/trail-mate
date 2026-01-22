@@ -5,6 +5,7 @@
 
 #include "node_store.h"
 #include "../../ports/i_node_store.h"
+#include "node_persist.h"
 #include <cstring>
 
 namespace chat
@@ -12,29 +13,131 @@ namespace chat
 namespace meshtastic
 {
 
+namespace
+{
+uint32_t crc32(const uint8_t* data, size_t len)
+{
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; ++i)
+    {
+        crc ^= data[i];
+        for (int j = 0; j < 8; ++j)
+        {
+            if (crc & 1U)
+            {
+                crc = (crc >> 1) ^ 0xEDB88320U;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+    return ~crc;
+}
+} // namespace
+
 void NodeStore::begin()
 {
     Preferences prefs;
-    if (!prefs.begin(kNs, true))
+    if (!prefs.begin(kPersistNodesNs, false))
     {
+        Serial.printf("[NodeStore] begin failed ns=%s\n", kPersistNodesNs);
         return;
     }
-    size_t len = prefs.getBytesLength(kKey);
-    if (len > 0 && (len % sizeof(contacts::NodeEntry) == 0))
+    size_t len = prefs.getBytesLength(kPersistNodesKey);
+    uint8_t ver = prefs.getUChar(kPersistNodesKeyVer, 0);
+    bool has_crc = prefs.isKey(kPersistNodesKeyCrc);
+    uint32_t stored_crc = has_crc ? prefs.getUInt(kPersistNodesKeyCrc, 0) : 0;
+    Serial.printf("[NodeStore] blob len=%u ver=%u crc=%08lX has_crc=%u\n",
+                  static_cast<unsigned>(len),
+                  static_cast<unsigned>(ver),
+                  static_cast<unsigned long>(stored_crc),
+                  has_crc ? 1U : 0U);
+    bool needs_migrate = false;
+    bool loaded = false;
+    if (len == 0 && has_crc)
+    {
+        Serial.printf("[NodeStore] stale meta detected, clearing ver/crc\n");
+        prefs.remove(kPersistNodesKeyVer);
+        prefs.remove(kPersistNodesKeyCrc);
+    }
+
+    if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
+    {
+        size_t count = len / sizeof(PersistedNodeEntry);
+        if (count > kPersistMaxNodes)
+        {
+            count = kPersistMaxNodes;
+        }
+        std::vector<PersistedNodeEntry> persisted(count);
+        prefs.getBytes(kPersistNodesKey, persisted.data(), count * sizeof(PersistedNodeEntry));
+        if (ver == kPersistVersion && has_crc)
+        {
+            uint32_t calc_crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()),
+                                      persisted.size() * sizeof(PersistedNodeEntry));
+            if (calc_crc != stored_crc)
+            {
+                prefs.end();
+                Serial.printf("[NodeStore] crc mismatch stored=%08lX calc=%08lX\n",
+                              static_cast<unsigned long>(stored_crc),
+                              static_cast<unsigned long>(calc_crc));
+                clear();
+                Serial.printf("[NodeStore] loaded=0\n");
+                return;
+            }
+        }
+        else
+        {
+            needs_migrate = true;
+        }
+        entries_.clear();
+        entries_.reserve(count);
+        for (const auto& src : persisted)
+        {
+            contacts::NodeEntry dst{};
+            dst.node_id = src.node_id;
+            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
+            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
+            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
+            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
+            dst.last_seen = src.last_seen;
+            dst.snr = src.snr;
+            dst.protocol = src.protocol;
+            entries_.push_back(dst);
+        }
+        loaded = true;
+    }
+    else if (len > 0 && (len % sizeof(contacts::NodeEntry) == 0))
     {
         size_t count = len / sizeof(contacts::NodeEntry);
-        if (count > kMaxNodes)
+        if (count > kPersistMaxNodes)
         {
-            count = kMaxNodes;
+            count = kPersistMaxNodes;
         }
         entries_.resize(count);
-        prefs.getBytes(kKey, entries_.data(), count * sizeof(contacts::NodeEntry));
+        prefs.getBytes(kPersistNodesKey, entries_.data(), count * sizeof(contacts::NodeEntry));
+        loaded = true;
+        needs_migrate = true;
+    }
+    else if (len > 0)
+    {
+        Serial.printf("[NodeStore] invalid blob size=%u\n", static_cast<unsigned>(len));
     }
     prefs.end();
+    if (loaded && needs_migrate)
+    {
+        save();
+    }
+    Serial.printf("[NodeStore] loaded=%u\n", static_cast<unsigned>(entries_.size()));
 }
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name, uint32_t now_secs, float snr, uint8_t protocol)
 {
+    Serial.printf("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f\n",
+                  (unsigned long)node_id,
+                  (unsigned long)now_secs,
+                  snr);
     // find existing
     for (auto& e : entries_)
     {
@@ -56,7 +159,8 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
             {
                 e.protocol = protocol;
             }
-            save();
+            dirty_ = true;
+            maybeSave();
             return;
         }
     }
@@ -81,7 +185,8 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
     e.snr = snr;
     e.protocol = protocol;
     entries_.push_back(e);
-    save();
+    dirty_ = true;
+    maybeSave();
 }
 
 void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs)
@@ -96,7 +201,8 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
         {
             e.protocol = protocol;
             e.last_seen = now_secs;
-            save();
+            dirty_ = true;
+            maybeSave();
             return;
         }
     }
@@ -113,36 +219,100 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
     e.snr = 0.0f;
     e.protocol = protocol;
     entries_.push_back(e);
-    save();
+    dirty_ = true;
+    maybeSave();
 }
 
 void NodeStore::save()
 {
     Preferences prefs;
-    if (!prefs.begin(kNs, false))
+    if (!prefs.begin(kPersistNodesNs, false))
     {
+        Serial.printf("[NodeStore] save failed ns=%s\n", kPersistNodesNs);
         return;
     }
     if (!entries_.empty())
     {
-        prefs.putBytes(kKey, entries_.data(), entries_.size() * sizeof(contacts::NodeEntry));
+        std::vector<PersistedNodeEntry> persisted;
+        persisted.reserve(entries_.size());
+        for (const auto& src : entries_)
+        {
+            PersistedNodeEntry dst{};
+            dst.node_id = src.node_id;
+            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
+            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
+            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
+            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
+            dst.last_seen = src.last_seen;
+            dst.snr = src.snr;
+            dst.protocol = src.protocol;
+            persisted.push_back(dst);
+        }
+        size_t expected = persisted.size() * sizeof(PersistedNodeEntry);
+        size_t written = prefs.putBytes(kPersistNodesKey, persisted.data(), expected);
+        if (written != expected)
+        {
+            prefs.remove(kPersistNodesKey);
+            written = prefs.putBytes(kPersistNodesKey, persisted.data(), expected);
+        }
+        uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()), expected);
+        prefs.putUChar(kPersistNodesKeyVer, kPersistVersion);
+        prefs.putUInt(kPersistNodesKeyCrc, crc);
+        if (written != expected)
+        {
+            Serial.printf("[NodeStore] save failed wrote=%u expected=%u\n",
+                          static_cast<unsigned>(written),
+                          static_cast<unsigned>(expected));
+        }
+        else
+        {
+            size_t verify_len = prefs.getBytesLength(kPersistNodesKey);
+            uint8_t verify_ver = prefs.getUChar(kPersistNodesKeyVer, 0);
+            uint32_t verify_crc = prefs.getUInt(kPersistNodesKeyCrc, 0);
+            Serial.printf("[NodeStore] save ok len=%u ver=%u crc=%08lX\n",
+                          static_cast<unsigned>(verify_len),
+                          static_cast<unsigned>(verify_ver),
+                          static_cast<unsigned long>(verify_crc));
+        }
     }
     else
     {
-        prefs.remove(kKey);
+        prefs.remove(kPersistNodesKey);
+        prefs.remove(kPersistNodesKeyVer);
+        prefs.remove(kPersistNodesKeyCrc);
     }
     prefs.end();
+    Serial.printf("[NodeStore] saved=%u\n", static_cast<unsigned>(entries_.size()));
+}
+
+void NodeStore::maybeSave()
+{
+    if (!dirty_)
+    {
+        return;
+    }
+    uint32_t now_ms = millis();
+    if (last_save_ms_ == 0 || (now_ms - last_save_ms_) >= kSaveIntervalMs)
+    {
+        save();
+        last_save_ms_ = now_ms;
+        dirty_ = false;
+    }
 }
 
 void NodeStore::clear()
 {
     entries_.clear();
+    dirty_ = false;
+    last_save_ms_ = 0;
     Preferences prefs;
-    if (!prefs.begin(kNs, false))
+    if (!prefs.begin(kPersistNodesNs, false))
     {
         return;
     }
-    prefs.remove(kKey);
+    prefs.remove(kPersistNodesKey);
+    prefs.remove(kPersistNodesKeyVer);
+    prefs.remove(kPersistNodesKeyCrc);
     prefs.end();
 }
 

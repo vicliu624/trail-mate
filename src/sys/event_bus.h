@@ -28,6 +28,9 @@ enum class EventType
     ChatChannelSwitched, // Channel switched
     NodeInfoUpdate,      // Node info updated (from mesh network)
     NodeProtocolUpdate,  // Node protocol update (from message)
+    KeyVerificationNumberRequest, // PKI key verification number requested
+    KeyVerificationNumberInform,  // PKI key verification number provided
+    KeyVerificationFinal,         // PKI key verification final confirmation
     TeamAdvertise,       // Team advertise received
     TeamJoinRequest,     // Team join request received
     TeamJoinAccept,      // Team join accept received
@@ -147,6 +150,56 @@ struct NodeProtocolUpdateEvent : public Event
 
     NodeProtocolUpdateEvent(uint32_t id, uint32_t ts, uint8_t proto)
         : Event(EventType::NodeProtocolUpdate), node_id(id), timestamp(ts), protocol(proto) {}
+};
+
+/**
+ * @brief Key verification number request event
+ */
+struct KeyVerificationNumberRequestEvent : public Event
+{
+    uint32_t node_id;
+    uint64_t nonce;
+
+    KeyVerificationNumberRequestEvent(uint32_t id, uint64_t n)
+        : Event(EventType::KeyVerificationNumberRequest), node_id(id), nonce(n) {}
+};
+
+/**
+ * @brief Key verification number inform event
+ */
+struct KeyVerificationNumberInformEvent : public Event
+{
+    uint32_t node_id;
+    uint64_t nonce;
+    uint32_t security_number;
+
+    KeyVerificationNumberInformEvent(uint32_t id, uint64_t n, uint32_t number)
+        : Event(EventType::KeyVerificationNumberInform), node_id(id), nonce(n), security_number(number) {}
+};
+
+/**
+ * @brief Key verification final confirmation event
+ */
+struct KeyVerificationFinalEvent : public Event
+{
+    uint32_t node_id;
+    uint64_t nonce;
+    bool is_sender;
+    char verification_code[12];
+
+    KeyVerificationFinalEvent(uint32_t id, uint64_t n, bool sender, const char* code)
+        : Event(EventType::KeyVerificationFinal), node_id(id), nonce(n), is_sender(sender)
+    {
+        if (code)
+        {
+            strncpy(verification_code, code, sizeof(verification_code) - 1);
+            verification_code[sizeof(verification_code) - 1] = '\0';
+        }
+        else
+        {
+            verification_code[0] = '\0';
+        }
+    }
 };
 
 /**

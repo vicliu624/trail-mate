@@ -88,6 +88,8 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     if (flash_store_)
     {
         std::vector<chat::ChatMessage> all_msgs = flash_store_->loadAll();
+        Serial.printf("[AppContext] flash messages loaded=%u\n",
+                      static_cast<unsigned>(all_msgs.size()));
         std::vector<chat::ConversationId> touched;
         touched.reserve(all_msgs.size());
         for (const auto& msg : all_msgs)
@@ -184,6 +186,9 @@ void AppContext::update()
         case sys::EventType::NodeInfoUpdate:
         {
             sys::NodeInfoUpdateEvent* node_event = (sys::NodeInfoUpdateEvent*)event;
+            Serial.printf("[AppContext] NodeInfo event consumed node=%08lX pending=%u\n",
+                          static_cast<unsigned long>(node_event->node_id),
+                          static_cast<unsigned>(sys::EventBus::pendingCount()));
             // Update ContactService with node info from event
             if (contact_service_)
             {
@@ -202,6 +207,9 @@ void AppContext::update()
         case sys::EventType::NodeProtocolUpdate:
         {
             sys::NodeProtocolUpdateEvent* node_event = (sys::NodeProtocolUpdateEvent*)event;
+            Serial.printf("[AppContext] NodeProtocol event consumed node=%08lX pending=%u\n",
+                          static_cast<unsigned long>(node_event->node_id),
+                          static_cast<unsigned>(sys::EventBus::pendingCount()));
             if (contact_service_)
             {
                 contact_service_->updateNodeProtocol(
@@ -209,6 +217,59 @@ void AppContext::update()
                     node_event->protocol,
                     node_event->timestamp);
             }
+            delete event;
+            continue;
+        }
+        case sys::EventType::KeyVerificationNumberRequest:
+        {
+            auto* kv_event = (sys::KeyVerificationNumberRequestEvent*)event;
+            std::string name = contact_service_ ? contact_service_->getContactName(kv_event->node_id) : "";
+            if (name.empty())
+            {
+                char fallback[16];
+                snprintf(fallback, sizeof(fallback), "%08lX",
+                         static_cast<unsigned long>(kv_event->node_id));
+                name = fallback;
+            }
+            std::string msg = "Key verify: enter number for " + name;
+            ui::SystemNotification::show(msg.c_str(), 4000);
+            delete event;
+            continue;
+        }
+        case sys::EventType::KeyVerificationNumberInform:
+        {
+            auto* kv_event = (sys::KeyVerificationNumberInformEvent*)event;
+            std::string name = contact_service_ ? contact_service_->getContactName(kv_event->node_id) : "";
+            if (name.empty())
+            {
+                char fallback[16];
+                snprintf(fallback, sizeof(fallback), "%08lX",
+                         static_cast<unsigned long>(kv_event->node_id));
+                name = fallback;
+            }
+            uint32_t number = kv_event->security_number % 1000000;
+            char number_buf[16];
+            snprintf(number_buf, sizeof(number_buf), "%03u %03u",
+                     number / 1000, number % 1000);
+            std::string msg = "Key verify: " + name + " " + number_buf;
+            ui::SystemNotification::show(msg.c_str(), 5000);
+            delete event;
+            continue;
+        }
+        case sys::EventType::KeyVerificationFinal:
+        {
+            auto* kv_event = (sys::KeyVerificationFinalEvent*)event;
+            std::string name = contact_service_ ? contact_service_->getContactName(kv_event->node_id) : "";
+            if (name.empty())
+            {
+                char fallback[16];
+                snprintf(fallback, sizeof(fallback), "%08lX",
+                         static_cast<unsigned long>(kv_event->node_id));
+                name = fallback;
+            }
+            std::string msg = std::string("Key verify: ") + (kv_event->is_sender ? "send " : "confirm ") +
+                              kv_event->verification_code + " " + name;
+            ui::SystemNotification::show(msg.c_str(), 5000);
             delete event;
             continue;
         }

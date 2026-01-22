@@ -16,7 +16,7 @@ namespace meshtastic
 {
 
 bool encodeTextMessage(ChannelId channel, const std::string& text,
-                       NodeId from_node, uint32_t packet_id,
+                       NodeId from_node, uint32_t packet_id, NodeId dest_node,
                        uint8_t* out_buffer, size_t* out_size)
 {
     if (!out_buffer || !out_size || text.empty())
@@ -30,6 +30,7 @@ bool encodeTextMessage(ChannelId channel, const std::string& text,
     data.want_response = false;
     data.has_bitfield = true;
     data.bitfield = 0; // No special flags for now
+    data.dest = dest_node;
 
     // Set text payload
     size_t text_len = text.length();
@@ -118,6 +119,35 @@ bool decodeTextMessage(const uint8_t* buffer, size_t size, MeshIncomingText* out
     out->encrypted = false;
 
     return true;
+}
+
+bool decodeKeyVerificationMessage(const uint8_t* buffer, size_t size,
+                                  meshtastic_KeyVerification* out)
+{
+    if (!buffer || !out || size == 0)
+    {
+        return false;
+    }
+
+    meshtastic_Data data = meshtastic_Data_init_default;
+    pb_istream_t stream = pb_istream_from_buffer(buffer, size);
+    if (!pb_decode(&stream, meshtastic_Data_fields, &data))
+    {
+        return false;
+    }
+
+    if (data.portnum != meshtastic_PortNum_KEY_VERIFICATION_APP)
+    {
+        return false;
+    }
+
+    if (data.payload.size == 0 || data.payload.size > sizeof(data.payload.bytes))
+    {
+        return false;
+    }
+
+    pb_istream_t kv_stream = pb_istream_from_buffer(data.payload.bytes, data.payload.size);
+    return pb_decode(&kv_stream, meshtastic_KeyVerification_fields, out);
 }
 
 bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_name,

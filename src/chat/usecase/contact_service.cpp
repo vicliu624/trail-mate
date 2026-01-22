@@ -30,6 +30,10 @@ void ContactService::begin()
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
                                     float snr, uint32_t now_secs, uint8_t protocol)
 {
+    Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f ts=%lu\n",
+                  (unsigned long)node_id,
+                  snr,
+                  (unsigned long)now_secs);
     node_store_.upsert(node_id, short_name, long_name, now_secs, snr, protocol);
     invalidateCache();
 }
@@ -208,16 +212,8 @@ void ContactService::buildCache() const
 
 bool ContactService::isNodeVisible(uint32_t last_seen) const
 {
-    uint32_t now_secs = time(nullptr);
-    if (now_secs < last_seen)
-    {
-        return false; // Invalid timestamp
-    }
-
-    uint32_t age_secs = now_secs - last_seen;
-    const uint32_t kSixDaysSecs = 6 * 24 * 60 * 60;
-
-    return age_secs <= kSixDaysSecs;
+    (void)last_seen;
+    return true;
 }
 
 std::string ContactService::formatTimeStatus(uint32_t last_seen) const

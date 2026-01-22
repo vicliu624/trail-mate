@@ -80,6 +80,11 @@ class ChatService
     void handleSendResult(MessageId msg_id, bool ok);
 
     /**
+     * @brief Get message by ID (for UI send status)
+     */
+    const ChatMessage* getMessage(MessageId msg_id) const;
+
+    /**
      * @brief Get current channel
      */
     ChannelId getCurrentChannel() const

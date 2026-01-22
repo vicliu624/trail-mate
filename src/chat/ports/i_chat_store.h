@@ -55,6 +55,15 @@ class IChatStore
     virtual void clearChannel(ChannelId channel) = 0;
 
     /**
+     * @brief Clear all messages for all channels
+     */
+    virtual void clearAll()
+    {
+        clearChannel(ChannelId::PRIMARY);
+        clearChannel(ChannelId::SECONDARY);
+    }
+
+    /**
      * @brief Update stored message status by message ID
      * @param msg_id Message ID
      * @param status New status

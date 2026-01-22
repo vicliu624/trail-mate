@@ -6,16 +6,19 @@
 #include "mt_adapter.h"
 #include "../../../sys/event_bus.h"
 #include "../../domain/contact_types.h"
+#include "../../ports/i_node_store.h"
 #include "../../../team/protocol/team_portnum.h"
 #include <Arduino.h>
 #include <Crypto.h>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 #include <ctime>
 #include <string>
 #define TEST_CURVE25519_FIELD_OPS
 #include "../../../board/TLoRaPagerTypes.h"
 #include "generated/meshtastic/config.pb.h"
+#include "node_persist.h"
 #include "mt_region.h"
 #include <AES.h>
 #include <Curve25519.h>
@@ -47,6 +50,13 @@ constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
+using chat::meshtastic::PersistedNodeEntry;
+using chat::meshtastic::kPersistMaxNodes;
+using chat::meshtastic::kPersistNodesKey;
+using chat::meshtastic::kPersistNodesKeyCrc;
+using chat::meshtastic::kPersistNodesKeyVer;
+using chat::meshtastic::kPersistNodesNs;
+using chat::meshtastic::kPersistVersion;
 
 bool allowPkiForPortnum(uint32_t portnum)
 {
@@ -78,6 +88,8 @@ static const char* portName(uint32_t portnum)
         return "TRACEROUTE";
     case meshtastic_PortNum_WAYPOINT_APP:
         return "WAYPOINT";
+    case meshtastic_PortNum_KEY_VERIFICATION_APP:
+        return "KEY_VERIFY";
     case team::proto::TEAM_MGMT_APP:
         return "TEAM_MGMT";
     case team::proto::TEAM_POSITION_APP:
@@ -87,6 +99,188 @@ static const char* portName(uint32_t portnum)
     default:
         return "UNKNOWN";
     }
+}
+
+static const char* keyVerificationStage(const meshtastic_KeyVerification& kv)
+{
+    const size_t hash1_len = kv.hash1.size;
+    const size_t hash2_len = kv.hash2.size;
+    if (hash1_len == 0 && hash2_len == 0)
+    {
+        return "INIT";
+    }
+    if (hash1_len == 0 && hash2_len == 32)
+    {
+        return "REPLY";
+    }
+    if (hash1_len == 32)
+    {
+        return "FINAL";
+    }
+    return "UNKNOWN";
+}
+
+static uint32_t crc32(const uint8_t* data, size_t len)
+{
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; ++i)
+    {
+        crc ^= data[i];
+        for (int j = 0; j < 8; ++j)
+        {
+            if (crc & 1U)
+            {
+                crc = (crc >> 1) ^ 0xEDB88320U;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+    return ~crc;
+}
+
+static void fastPersistNodeInfo(uint32_t node_id,
+                                const char* short_name,
+                                const char* long_name,
+                                float snr,
+                                uint32_t now_secs,
+                                uint8_t protocol)
+{
+    if (node_id == 0)
+    {
+        return;
+    }
+
+    std::vector<PersistedNodeEntry> entries;
+    Preferences prefs;
+    if (!prefs.begin(kPersistNodesNs, false))
+    {
+        LORA_LOG("[LORA] fastPersistNodeInfo open failed ns=%s\n", kPersistNodesNs);
+        return;
+    }
+
+    size_t len = prefs.getBytesLength(kPersistNodesKey);
+    if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
+    {
+        size_t count = len / sizeof(PersistedNodeEntry);
+        if (count > kPersistMaxNodes)
+        {
+            count = kPersistMaxNodes;
+        }
+        entries.resize(count);
+        prefs.getBytes(kPersistNodesKey, entries.data(), count * sizeof(PersistedNodeEntry));
+    }
+    else if (len > 0 && (len % sizeof(chat::contacts::NodeEntry) == 0))
+    {
+        size_t count = len / sizeof(chat::contacts::NodeEntry);
+        if (count > kPersistMaxNodes)
+        {
+            count = kPersistMaxNodes;
+        }
+        std::vector<chat::contacts::NodeEntry> legacy(count);
+        prefs.getBytes(kPersistNodesKey, legacy.data(), count * sizeof(chat::contacts::NodeEntry));
+        entries.clear();
+        entries.reserve(count);
+        for (const auto& src : legacy)
+        {
+            PersistedNodeEntry dst{};
+            dst.node_id = src.node_id;
+            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
+            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
+            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
+            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
+            dst.last_seen = src.last_seen;
+            dst.snr = src.snr;
+            dst.protocol = src.protocol;
+            entries.push_back(dst);
+        }
+    }
+
+    bool updated = false;
+    for (auto& entry : entries)
+    {
+        if (entry.node_id == node_id)
+        {
+            if (short_name && short_name[0] != '\0')
+            {
+                strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
+                entry.short_name[sizeof(entry.short_name) - 1] = '\0';
+            }
+            if (long_name && long_name[0] != '\0')
+            {
+                strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
+                entry.long_name[sizeof(entry.long_name) - 1] = '\0';
+            }
+            entry.last_seen = now_secs;
+            entry.snr = snr;
+            if (protocol != 0)
+            {
+                entry.protocol = protocol;
+            }
+            updated = true;
+            break;
+        }
+    }
+
+    if (!updated)
+    {
+        if (entries.size() >= kPersistMaxNodes)
+        {
+            entries.erase(entries.begin());
+        }
+        PersistedNodeEntry entry{};
+        entry.node_id = node_id;
+        if (short_name && short_name[0] != '\0')
+        {
+            strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
+            entry.short_name[sizeof(entry.short_name) - 1] = '\0';
+        }
+        if (long_name && long_name[0] != '\0')
+        {
+            strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
+            entry.long_name[sizeof(entry.long_name) - 1] = '\0';
+        }
+        entry.last_seen = now_secs;
+        entry.snr = snr;
+        entry.protocol = protocol;
+        entries.push_back(entry);
+    }
+
+    if (!entries.empty())
+    {
+        size_t expected = entries.size() * sizeof(PersistedNodeEntry);
+        size_t written = prefs.putBytes(kPersistNodesKey, entries.data(), expected);
+        if (written != expected)
+        {
+            prefs.remove(kPersistNodesKey);
+            written = prefs.putBytes(kPersistNodesKey, entries.data(), expected);
+        }
+        uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(entries.data()), expected);
+        prefs.putUChar(kPersistNodesKeyVer, kPersistVersion);
+        prefs.putUInt(kPersistNodesKeyCrc, crc);
+        if (written != expected)
+        {
+            LORA_LOG("[LORA] fastPersistNodeInfo write failed wrote=%u expected=%u\n",
+                     static_cast<unsigned>(written),
+                     static_cast<unsigned>(expected));
+        }
+        else
+        {
+            size_t verify_len = prefs.getBytesLength(kPersistNodesKey);
+            uint8_t verify_ver = prefs.getUChar(kPersistNodesKeyVer, 0);
+            uint32_t verify_crc = prefs.getUInt(kPersistNodesKeyCrc, 0);
+            LORA_LOG("[LORA] fastPersistNodeInfo write ok len=%u ver=%u crc=%08lX\n",
+                     static_cast<unsigned>(verify_len),
+                     static_cast<unsigned>(verify_ver),
+                     static_cast<unsigned long>(verify_crc));
+        }
+    }
+    prefs.end();
+    LORA_LOG("[LORA] fastPersistNodeInfo saved node=%08lX total=%u\n",
+             static_cast<unsigned long>(node_id),
+             static_cast<unsigned>(entries.size()));
 }
 
 static const char* routingErrorName(meshtastic_Routing_Error err)
@@ -413,6 +607,7 @@ static void initPkiNonce(uint32_t from, uint64_t packet_id, uint32_t extra_nonce
 // Use protobuf codec and wire packet functions
 using chat::meshtastic::buildWirePacket;
 using chat::meshtastic::decodeTextMessage;
+using chat::meshtastic::decodeKeyVerificationMessage;
 using chat::meshtastic::decryptPayload;
 using chat::meshtastic::encodeNodeInfoMessage;
 using chat::meshtastic::encodeAppData;
@@ -437,15 +632,24 @@ MtAdapter::MtAdapter(TLoRaPagerBoard& board)
       primary_psk_len_(0),
       secondary_channel_hash_(0),
       secondary_psk_{0},
-      secondary_psk_len_(0),
-      pki_ready_(false),
-      pki_public_key_{},
-      pki_private_key_{},
-      last_raw_packet_len_(0),
-      has_pending_raw_packet_(false)
+        secondary_psk_len_(0),
+        pki_ready_(false),
+        pki_public_key_{},
+        pki_private_key_{},
+        kv_state_(KeyVerificationState::Idle),
+        kv_nonce_(0),
+        kv_nonce_ms_(0),
+        kv_security_number_(0),
+        kv_remote_node_(0),
+        kv_hash1_{},
+        kv_hash2_{},
+        last_raw_packet_len_(0),
+        has_pending_raw_packet_(false)
 {
     config_ = MeshConfig(); // Default config
     initNodeIdentity();
+    next_packet_id_ = static_cast<MessageId>(random(1, 0x7FFFFFFF));
+    LORA_LOG("[LORA] packet id start=%lu\n", static_cast<unsigned long>(next_packet_id_));
     initPkiKeys();
     loadPkiNodeKeys();
     updateChannelKeys();
@@ -552,6 +756,25 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                    allowPkiForPortnum(portnum) &&
                    !pki_disabled &&
                    (node_public_keys_.find(dest_node) != node_public_keys_.end());
+    if (use_pki)
+    {
+        auto seen_it = node_key_last_seen_.find(dest_node);
+        if (seen_it != node_key_last_seen_.end())
+        {
+            time_t now_secs = time(nullptr);
+            if (now_secs > 0)
+            {
+                uint32_t age = static_cast<uint32_t>(now_secs) - seen_it->second;
+                if (age > 86400U)
+                {
+                    use_pki = false;
+                    LORA_LOG("[LORA] PKI age=%lu sec, fallback PSK dest=%08lX\n",
+                             static_cast<unsigned long>(age),
+                             static_cast<unsigned long>(dest_node));
+                }
+            }
+        }
+    }
     uint8_t pki_buf[256];
     size_t pki_len = sizeof(pki_buf);
     if (use_pki && encryptPkiPayload(dest_node, msg_id, data_buffer, data_size, pki_buf, &pki_len))
@@ -832,6 +1055,10 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 const char* long_name = user.long_name[0] ? user.long_name : "";
                 LORA_LOG("[LORA] RX User from %08lX id='%s' short='%s' long='%s'\n",
                          (unsigned long)node_id, user.id, short_name, long_name);
+                if (long_name[0])
+                {
+                    node_long_names_[node_id] = long_name;
+                }
                 if (user.public_key.size == 32)
                 {
                     std::array<uint8_t, 32> key{};
@@ -839,6 +1066,13 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     node_public_keys_[node_id] = key;
                     savePkiNodeKey(node_id, key.data(), key.size());
                     LORA_LOG("[LORA] PKI key stored for %08lX\n", (unsigned long)node_id);
+                    auto backoff_it = pki_disabled_until_ms_.find(node_id);
+                    if (backoff_it != pki_disabled_until_ms_.end())
+                    {
+                        pki_disabled_until_ms_.erase(backoff_it);
+                        LORA_LOG("[LORA] PKI backoff cleared for %08lX\n",
+                                 (unsigned long)node_id);
+                    }
                 }
 
                 // Publish NodeInfo update event (SNR not available in User message, use 0.0)
@@ -846,8 +1080,20 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                     node_id, short_name, long_name, 0.0f, now_secs,
                     static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
-                sys::EventBus::publish(event, 0);
-
+                bool published = sys::EventBus::publish(event, 0);
+                if (published)
+                {
+                    LORA_LOG("[LORA] NodeInfo event published node=%08lX\n",
+                             (unsigned long)node_id);
+                }
+                else
+                {
+                    LORA_LOG("[LORA] NodeInfo event dropped node=%08lX pending=%u\n",
+                             (unsigned long)node_id,
+                             static_cast<unsigned>(sys::EventBus::pendingCount()));
+                }
+                fastPersistNodeInfo(node_id, short_name, long_name, 0.0f, now_secs,
+                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
                 if (decoded.want_response)
                 {
                     uint32_t now_ms = millis();
@@ -883,13 +1129,30 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     float snr = node.snr; // Get SNR from NodeInfo
                     LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
                              (unsigned long)node_id, short_name, long_name, snr);
+                    if (long_name[0])
+                    {
+                        node_long_names_[node_id] = long_name;
+                    }
 
                     // Publish NodeInfo update event (including SNR)
                     uint32_t now_secs = time(nullptr);
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                         node_id, short_name, long_name, snr, now_secs,
                         static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
-                    sys::EventBus::publish(event, 0);
+                    bool published = sys::EventBus::publish(event, 0);
+                    if (published)
+                    {
+                        LORA_LOG("[LORA] NodeInfo event published node=%08lX\n",
+                                 (unsigned long)node_id);
+                    }
+                    else
+                    {
+                        LORA_LOG("[LORA] NodeInfo event dropped node=%08lX pending=%u\n",
+                                 (unsigned long)node_id,
+                                 static_cast<unsigned>(sys::EventBus::pendingCount()));
+                    }
+                    fastPersistNodeInfo(node_id, short_name, long_name, snr, now_secs,
+                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
                 }
                 else
                 {
@@ -921,6 +1184,16 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                         ok = false;
                     }
                     if (routing.which_variant == meshtastic_Routing_error_reason_tag &&
+                        routing.error_reason != meshtastic_Routing_Error_NONE)
+                    {
+                        uint32_t now_ms = millis();
+                        pki_disabled_until_ms_[header.from] = now_ms + PKI_BACKOFF_MS;
+                        LORA_LOG("[LORA] PKI backoff (routing err) for %08lX reason=%s until=%lu\n",
+                                 (unsigned long)header.from,
+                                 routingErrorName(routing.error_reason),
+                                 (unsigned long)(now_ms + PKI_BACKOFF_MS));
+                    }
+                    if (routing.which_variant == meshtastic_Routing_error_reason_tag &&
                         (routing.error_reason == meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY ||
                          routing.error_reason == meshtastic_Routing_Error_NO_CHANNEL))
                     {
@@ -933,6 +1206,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                                  (unsigned long)(now_ms + PKI_BACKOFF_MS));
                     }
                     pending_ack_ms_.erase(decoded.request_id);
+                    pending_ack_dest_.erase(decoded.request_id);
                     LORA_LOG("[LORA] RX ack reason=%u (%s)\n",
                              static_cast<unsigned>(routing.error_reason),
                              routingErrorName(routing.error_reason));
@@ -949,6 +1223,48 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 LORA_LOG("[LORA] RX Routing decode fail from=%08lX err=%s\n",
                          (unsigned long)header.from,
                          PB_GET_ERROR(&rstream));
+            }
+        }
+
+        if (decoded.portnum == meshtastic_PortNum_KEY_VERIFICATION_APP && decoded.payload.size > 0)
+        {
+            meshtastic_KeyVerification kv = meshtastic_KeyVerification_init_default;
+            if (decodeKeyVerificationMessage(plaintext, plaintext_len, &kv))
+            {
+                LORA_LOG("[LORA] RX key verification from=%08lX nonce=%llu hash1=%u hash2=%u stage=%s\n",
+                         (unsigned long)header.from,
+                         static_cast<unsigned long long>(kv.nonce),
+                         static_cast<unsigned>(kv.hash1.size),
+                         static_cast<unsigned>(kv.hash2.size),
+                         keyVerificationStage(kv));
+                bool handled = false;
+                if (header.channel != 0)
+                {
+                    LORA_LOG("[LORA] RX key verification ignored non-PKI channel=0x%02X\n",
+                             header.channel);
+                }
+                else if (kv.hash1.size == 0 && kv.hash2.size == 0)
+                {
+                    handled = handleKeyVerificationInit(header, kv);
+                }
+                else if (kv.hash1.size == 0 && kv.hash2.size == 32)
+                {
+                    handled = handleKeyVerificationReply(header, kv);
+                }
+                else if (kv.hash1.size == 32 && kv.hash2.size == 0)
+                {
+                    handled = handleKeyVerificationFinal(header, kv);
+                }
+                if (!handled)
+                {
+                    LORA_LOG("[LORA] RX key verification ignored stage=%s\n",
+                             keyVerificationStage(kv));
+                }
+            }
+            else
+            {
+                LORA_LOG("[LORA] RX key verification decode fail from=%08lX\n",
+                         (unsigned long)header.from);
             }
         }
 
@@ -1053,6 +1369,15 @@ void MtAdapter::processSendQueue()
         {
             LORA_LOG("[LORA] RX ack timeout req=%08lX\n",
                      (unsigned long)it->first);
+            auto dest_it = pending_ack_dest_.find(it->first);
+            if (dest_it != pending_ack_dest_.end())
+            {
+                pki_disabled_until_ms_[dest_it->second] = now + PKI_BACKOFF_MS;
+                LORA_LOG("[LORA] PKI backoff (ack timeout) dest=%08lX until=%lu\n",
+                         (unsigned long)dest_it->second,
+                         (unsigned long)(now + PKI_BACKOFF_MS));
+                pending_ack_dest_.erase(dest_it);
+            }
             sys::EventBus::publish(
                 new sys::ChatSendResultEvent(it->first, false), 0);
             it = pending_ack_ms_.erase(it);
@@ -1110,10 +1435,12 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
 
     NodeId from_node = node_id_;
     if (!encodeTextMessage(pending.channel, pending.text, from_node,
-                           pending.msg_id, data_buffer, &data_size))
+                           pending.msg_id, pending.dest, data_buffer, &data_size))
     {
         return false;
     }
+    std::string data_hex = toHex(data_buffer, data_size, data_size);
+    LORA_LOG("[LORA] TX data protobuf hex: %s\n", data_hex.c_str());
 
     // Build full wire packet (like M5Tab5-GPS)
     uint8_t wire_buffer[512];
@@ -1152,6 +1479,25 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
                    allowPkiForPortnum(pending.portnum) &&
                    !pki_disabled &&
                    (node_public_keys_.find(dest) != node_public_keys_.end());
+    if (use_pki)
+    {
+        auto seen_it = node_key_last_seen_.find(dest);
+        if (seen_it != node_key_last_seen_.end())
+        {
+            time_t now_secs = time(nullptr);
+            if (now_secs > 0)
+            {
+                uint32_t age = static_cast<uint32_t>(now_secs) - seen_it->second;
+                if (age > 86400U)
+                {
+                    use_pki = false;
+                    LORA_LOG("[LORA] PKI age=%lu sec, fallback PSK dest=%08lX\n",
+                             static_cast<unsigned long>(age),
+                             static_cast<unsigned long>(dest));
+                }
+            }
+        }
+    }
     uint8_t pki_buf[256];
     size_t pki_len = sizeof(pki_buf);
     if (use_pki && encryptPkiPayload(dest, pending.msg_id, data_buffer, data_size, pki_buf, &pki_len))
@@ -1243,6 +1589,10 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     if (ok && want_ack)
     {
         pending_ack_ms_[pending.msg_id] = millis();
+        if (dest != 0xFFFFFFFF)
+        {
+            pending_ack_dest_[pending.msg_id] = dest;
+        }
     }
     if (ok)
     {
@@ -1458,6 +1808,7 @@ void MtAdapter::configureRadio()
 void MtAdapter::initNodeIdentity()
 {
     uint64_t mac = ESP.getEfuseMac();
+    LORA_LOG("[LORA] ESP eFuse MAC raw=0x%012llX\n", static_cast<unsigned long long>(mac));
     for (int i = 0; i < 6; i++)
     {
         mac_addr_[5 - i] = (mac >> (8 * i)) & 0xFF;
@@ -1569,37 +1920,138 @@ bool MtAdapter::initPkiKeys()
 
 void MtAdapter::loadPkiNodeKeys()
 {
-    Preferences prefs;
-    prefs.begin(kPkiPrefsNs, true);
-    size_t total = prefs.getBytesLength(kPkiPrefsKey);
     struct PkiKeyEntry {
         uint32_t node_id;
         uint8_t key[32];
     };
-    if (total < sizeof(PkiKeyEntry)) {
-        prefs.end();
-        return;
-    }
-    size_t count = total / sizeof(PkiKeyEntry);
-    if (count > kMaxPkiNodes) {
-        count = kMaxPkiNodes;
-    }
-    std::vector<PkiKeyEntry> entries(count);
-    size_t read = prefs.getBytes(kPkiPrefsKey, entries.data(),
-                                 entries.size() * sizeof(PkiKeyEntry));
-    prefs.end();
-
-    size_t actual = read / sizeof(PkiKeyEntry);
-    for (size_t i = 0; i < actual; ++i) {
-        if (entries[i].node_id == 0) {
-            continue;
+    struct PkiKeyEntryV2 {
+        uint32_t node_id;
+        uint32_t last_seen;
+        uint8_t key[32];
+    } __attribute__((packed));
+    std::vector<PkiKeyEntry> entries;
+    std::vector<PkiKeyEntryV2> entries_v2;
+    size_t actual = 0;
+    bool needs_migrate = false;
+    auto loadFromNs = [&](const char* ns) -> bool {
+        Preferences prefs;
+        if (!prefs.begin(ns, true))
+        {
+            LORA_LOG("[LORA] PKI prefs open failed ns=%s\n", ns);
+            return false;
         }
-        std::array<uint8_t, 32> key{};
-        memcpy(key.data(), entries[i].key, sizeof(entries[i].key));
-        node_public_keys_[entries[i].node_id] = key;
+        size_t total = prefs.getBytesLength(kPkiPrefsKey);
+        if (total < sizeof(PkiKeyEntry))
+        {
+            prefs.end();
+            return false;
+        }
+        uint8_t ver = prefs.getUChar(kPkiPrefsKeyVer, 0);
+        if (ver == kPkiPrefsVersion && (total % sizeof(PkiKeyEntryV2) == 0))
+        {
+            size_t count = total / sizeof(PkiKeyEntryV2);
+            if (count > kMaxPkiNodes)
+            {
+                count = kMaxPkiNodes;
+            }
+            entries_v2.resize(count);
+            size_t read = prefs.getBytes(kPkiPrefsKey, entries_v2.data(),
+                                         entries_v2.size() * sizeof(PkiKeyEntryV2));
+            prefs.end();
+            actual = read / sizeof(PkiKeyEntryV2);
+            if (actual == 0)
+            {
+                return false;
+            }
+            if (actual < entries_v2.size())
+            {
+                entries_v2.resize(actual);
+            }
+            return true;
+        }
+        if (total % sizeof(PkiKeyEntry) != 0)
+        {
+            prefs.end();
+            return false;
+        }
+        size_t count = total / sizeof(PkiKeyEntry);
+        if (count > kMaxPkiNodes)
+        {
+            count = kMaxPkiNodes;
+        }
+        entries.resize(count);
+        size_t read = prefs.getBytes(kPkiPrefsKey, entries.data(),
+                                     entries.size() * sizeof(PkiKeyEntry));
+        prefs.end();
+        actual = read / sizeof(PkiKeyEntry);
+        if (actual == 0)
+        {
+            return false;
+        }
+        if (actual < entries.size())
+        {
+            entries.resize(actual);
+        }
+        needs_migrate = true;
+        return true;
+    };
+
+    const char* loaded_ns = nullptr;
+    bool loaded = loadFromNs(kPkiPrefsNs);
+    if (loaded)
+    {
+        loaded_ns = kPkiPrefsNs;
     }
-    if (actual > 0) {
-        LORA_LOG("[LORA] PKI keys loaded=%u\n", (unsigned)actual);
+
+    if (!loaded || entries.empty())
+    {
+        if (!loaded || entries_v2.empty())
+        {
+            return;
+        }
+    }
+
+    if (!entries_v2.empty())
+    {
+        for (size_t i = 0; i < entries_v2.size(); ++i)
+        {
+            if (entries_v2[i].node_id == 0)
+            {
+                continue;
+            }
+            std::array<uint8_t, 32> key{};
+            memcpy(key.data(), entries_v2[i].key, sizeof(entries_v2[i].key));
+            node_public_keys_[entries_v2[i].node_id] = key;
+            node_key_last_seen_[entries_v2[i].node_id] = entries_v2[i].last_seen;
+            LORA_LOG("[LORA] PKI key loaded for %08lX\n",
+                     static_cast<unsigned long>(entries_v2[i].node_id));
+        }
+        LORA_LOG("[LORA] PKI keys loaded=%u ns=%s\n",
+                 (unsigned)entries_v2.size(),
+                 loaded_ns ? loaded_ns : "?");
+    }
+    else
+    {
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            if (entries[i].node_id == 0)
+            {
+                continue;
+            }
+            std::array<uint8_t, 32> key{};
+            memcpy(key.data(), entries[i].key, sizeof(entries[i].key));
+            node_public_keys_[entries[i].node_id] = key;
+            node_key_last_seen_[entries[i].node_id] = 0;
+            LORA_LOG("[LORA] PKI key loaded for %08lX\n",
+                     static_cast<unsigned long>(entries[i].node_id));
+        }
+        LORA_LOG("[LORA] PKI keys loaded=%u ns=%s\n",
+                 (unsigned)entries.size(),
+                 loaded_ns ? loaded_ns : "?");
+    }
+    if (needs_migrate && !node_public_keys_.empty())
+    {
+        savePkiKeysToPrefs();
     }
 }
 
@@ -1608,49 +2060,73 @@ void MtAdapter::savePkiNodeKey(uint32_t node_id, const uint8_t* key, size_t key_
     if (node_id == 0 || !key || key_len != 32) {
         return;
     }
-    struct PkiKeyEntry {
+    std::array<uint8_t, 32> key_copy{};
+    memcpy(key_copy.data(), key, 32);
+    node_public_keys_[node_id] = key_copy;
+    touchPkiNodeKey(node_id);
+    savePkiKeysToPrefs();
+}
+
+void MtAdapter::savePkiKeysToPrefs()
+{
+    struct PkiKeyEntryV2 {
         uint32_t node_id;
+        uint32_t last_seen;
         uint8_t key[32];
-    };
-    std::vector<PkiKeyEntry> entries;
+    } __attribute__((packed));
+
+    std::vector<PkiKeyEntryV2> entries;
+    entries.reserve(node_public_keys_.size());
+    for (const auto& kv : node_public_keys_)
+    {
+        PkiKeyEntryV2 entry{};
+        entry.node_id = kv.first;
+        auto seen_it = node_key_last_seen_.find(kv.first);
+        entry.last_seen = (seen_it != node_key_last_seen_.end()) ? seen_it->second : 0;
+        memcpy(entry.key, kv.second.data(), sizeof(entry.key));
+        entries.push_back(entry);
+    }
+    if (entries.size() > kMaxPkiNodes)
+    {
+        std::sort(entries.begin(), entries.end(),
+                  [](const PkiKeyEntryV2& a, const PkiKeyEntryV2& b) {
+                      return a.last_seen < b.last_seen;
+                  });
+        size_t drop = entries.size() - kMaxPkiNodes;
+        for (size_t i = 0; i < drop; ++i)
+        {
+            node_public_keys_.erase(entries[i].node_id);
+            node_key_last_seen_.erase(entries[i].node_id);
+        }
+        entries.erase(entries.begin(), entries.begin() + static_cast<long>(drop));
+    }
 
     Preferences prefs;
-    prefs.begin(kPkiPrefsNs, false);
-    size_t total = prefs.getBytesLength(kPkiPrefsKey);
-    if (total >= sizeof(PkiKeyEntry)) {
-        size_t count = total / sizeof(PkiKeyEntry);
-        if (count > kMaxPkiNodes) {
-            count = kMaxPkiNodes;
-        }
-        entries.resize(count);
-        prefs.getBytes(kPkiPrefsKey, entries.data(),
-                       entries.size() * sizeof(PkiKeyEntry));
+    if (!prefs.begin(kPkiPrefsNs, false))
+    {
+        LORA_LOG("[LORA] PKI key save failed open ns=%s\n", kPkiPrefsNs);
+        return;
     }
-
-    bool updated = false;
-    for (auto& entry : entries) {
-        if (entry.node_id == node_id) {
-            memcpy(entry.key, key, 32);
-            updated = true;
-            break;
-        }
+    if (!entries.empty())
+    {
+        prefs.putBytes(kPkiPrefsKey, entries.data(), entries.size() * sizeof(PkiKeyEntryV2));
+        prefs.putUChar(kPkiPrefsKeyVer, kPkiPrefsVersion);
+        LORA_LOG("[LORA] PKI key saved (total=%u ns=%s)\n",
+                 static_cast<unsigned>(entries.size()),
+                 kPkiPrefsNs);
     }
-    if (!updated) {
-        if (entries.size() < kMaxPkiNodes) {
-            PkiKeyEntry entry{};
-            entry.node_id = node_id;
-            memcpy(entry.key, key, 32);
-            entries.push_back(entry);
-        } else if (!entries.empty()) {
-            entries.back().node_id = node_id;
-            memcpy(entries.back().key, key, 32);
-        }
-    }
-    if (!entries.empty()) {
-        prefs.putBytes(kPkiPrefsKey, entries.data(),
-                       entries.size() * sizeof(PkiKeyEntry));
+    else
+    {
+        prefs.remove(kPkiPrefsKey);
+        prefs.remove(kPkiPrefsKeyVer);
     }
     prefs.end();
+}
+
+void MtAdapter::touchPkiNodeKey(uint32_t node_id)
+{
+    uint32_t now_secs = static_cast<uint32_t>(time(nullptr));
+    node_key_last_seen_[node_id] = now_secs;
 }
 
 bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
@@ -1669,8 +2145,22 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     if (it == node_public_keys_.end())
     {
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)from);
+        uint32_t now_ms = millis();
+        auto backoff_it = pki_disabled_until_ms_.find(from);
+        bool allow_reply = (backoff_it == pki_disabled_until_ms_.end() || now_ms >= backoff_it->second);
+        if (allow_reply)
+        {
+            pki_disabled_until_ms_[from] = now_ms + PKI_BACKOFF_MS;
+            sendNodeInfoTo(from, true);
+            sendRoutingError(from, packet_id, 0, nullptr, 0,
+                             meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
+            LORA_LOG("[LORA] PKI unknown for %08lX, sent nodeinfo backoff until=%lu\n",
+                     (unsigned long)from,
+                     (unsigned long)(now_ms + PKI_BACKOFF_MS));
+        }
         return false;
     }
+    touchPkiNodeKey(from);
 
     uint8_t shared[32];
     uint8_t local_priv[32];
@@ -1709,8 +2199,8 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
 }
 
 bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
-                                  const uint8_t* plain, size_t plain_len,
-                                  uint8_t* out_cipher, size_t* out_cipher_len)
+                                 const uint8_t* plain, size_t plain_len,
+                                 uint8_t* out_cipher, size_t* out_cipher_len)
 {
     if (!plain || !out_cipher || !out_cipher_len) return false;
     if (!pki_ready_) return false;
@@ -1720,6 +2210,7 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)dest);
         return false;
     }
+    touchPkiNodeKey(dest);
 
     uint8_t shared[32];
     uint8_t local_priv[32];
@@ -1757,6 +2248,339 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
     memcpy(out_cipher + plain_len + m, &extra_nonce, sizeof(extra_nonce));
     *out_cipher_len = needed;
     return true;
+}
+
+bool MtAdapter::startKeyVerification(NodeId node_id)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::Idle)
+    {
+        return false;
+    }
+    if (!pki_ready_ || node_public_keys_.find(node_id) == node_public_keys_.end())
+    {
+        return false;
+    }
+
+    kv_remote_node_ = node_id;
+    kv_nonce_ = static_cast<uint64_t>(random());
+    kv_nonce_ms_ = millis();
+    kv_security_number_ = 0;
+    kv_hash1_.fill(0);
+    kv_hash2_.fill(0);
+
+    meshtastic_KeyVerification init = meshtastic_KeyVerification_init_zero;
+    init.nonce = kv_nonce_;
+    init.hash1.size = 0;
+    init.hash2.size = 0;
+
+    if (!sendKeyVerificationPacket(kv_remote_node_, init, true))
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::SenderInitiated;
+    return true;
+}
+
+bool MtAdapter::submitKeyVerificationNumber(NodeId node_id, uint64_t nonce, uint32_t number)
+{
+    return processKeyVerificationNumber(node_id, nonce, number);
+}
+
+void MtAdapter::updateKeyVerificationState()
+{
+    if (kv_state_ == KeyVerificationState::Idle)
+    {
+        return;
+    }
+
+    uint32_t now_ms = millis();
+    if (kv_nonce_ms_ != 0 && (now_ms - kv_nonce_ms_) > 60000)
+    {
+        resetKeyVerificationState();
+        return;
+    }
+    kv_nonce_ms_ = now_ms;
+}
+
+void MtAdapter::resetKeyVerificationState()
+{
+    kv_state_ = KeyVerificationState::Idle;
+    kv_nonce_ = 0;
+    kv_nonce_ms_ = 0;
+    kv_security_number_ = 0;
+    kv_remote_node_ = 0;
+    kv_hash1_.fill(0);
+    kv_hash2_.fill(0);
+}
+
+void MtAdapter::buildVerificationCode(char* out, size_t out_len) const
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    if (out_len < 10)
+    {
+        out[0] = '\0';
+        return;
+    }
+    for (int i = 0; i < 4; ++i)
+    {
+        out[i] = static_cast<char>((kv_hash1_[i] >> 2) + 48);
+    }
+    out[4] = ' ';
+    for (int i = 0; i < 4; ++i)
+    {
+        out[i + 5] = static_cast<char>((kv_hash1_[i + 4] >> 2) + 48);
+    }
+    out[9] = '\0';
+}
+
+bool MtAdapter::handleKeyVerificationInit(const PacketHeaderWire& header,
+                                          const meshtastic_KeyVerification& kv)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::Idle)
+    {
+        return false;
+    }
+    if (header.to != node_id_ || header.to == 0xFFFFFFFF)
+    {
+        return false;
+    }
+    if (!pki_ready_)
+    {
+        return false;
+    }
+    auto key_it = node_public_keys_.find(header.from);
+    if (key_it == node_public_keys_.end())
+    {
+        return false;
+    }
+
+    kv_nonce_ = kv.nonce;
+    kv_nonce_ms_ = millis();
+    kv_remote_node_ = header.from;
+    kv_security_number_ = static_cast<uint32_t>(random(1, 1000000));
+
+    SHA256 hash;
+    hash.reset();
+    hash.update(&kv_security_number_, sizeof(kv_security_number_));
+    hash.update(&kv_nonce_, sizeof(kv_nonce_));
+    hash.update(&kv_remote_node_, sizeof(kv_remote_node_));
+    hash.update(&node_id_, sizeof(node_id_));
+    hash.update(key_it->second.data(), key_it->second.size());
+    hash.update(pki_public_key_.data(), pki_public_key_.size());
+    hash.finalize(kv_hash1_.data(), kv_hash1_.size());
+
+    hash.reset();
+    hash.update(&kv_nonce_, sizeof(kv_nonce_));
+    hash.update(kv_hash1_.data(), kv_hash1_.size());
+    hash.finalize(kv_hash2_.data(), kv_hash2_.size());
+
+    meshtastic_KeyVerification reply = meshtastic_KeyVerification_init_zero;
+    reply.nonce = kv_nonce_;
+    reply.hash2.size = static_cast<pb_size_t>(kv_hash2_.size());
+    memcpy(reply.hash2.bytes, kv_hash2_.data(), kv_hash2_.size());
+    reply.hash1.size = 0;
+
+    if (!sendKeyVerificationPacket(kv_remote_node_, reply, false))
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::ReceiverAwaitingHash1;
+    sys::EventBus::publish(
+        new sys::KeyVerificationNumberInformEvent(kv_remote_node_, kv_nonce_, kv_security_number_), 0);
+    return true;
+}
+
+bool MtAdapter::handleKeyVerificationReply(const PacketHeaderWire& header,
+                                           const meshtastic_KeyVerification& kv)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::SenderInitiated)
+    {
+        return false;
+    }
+    if (header.to != node_id_ || header.to == 0xFFFFFFFF)
+    {
+        return false;
+    }
+    if (kv.nonce != kv_nonce_ || header.from != kv_remote_node_)
+    {
+        return false;
+    }
+    if (kv.hash1.size != 0 || kv.hash2.size != 32)
+    {
+        return false;
+    }
+
+    memcpy(kv_hash2_.data(), kv.hash2.bytes, 32);
+    kv_state_ = KeyVerificationState::SenderAwaitingNumber;
+    kv_nonce_ms_ = millis();
+
+    sys::EventBus::publish(
+        new sys::KeyVerificationNumberRequestEvent(kv_remote_node_, kv_nonce_), 0);
+    return true;
+}
+
+bool MtAdapter::processKeyVerificationNumber(uint32_t remote_node, uint64_t nonce, uint32_t number)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::SenderAwaitingNumber)
+    {
+        return false;
+    }
+    if (kv_remote_node_ != remote_node || kv_nonce_ != nonce)
+    {
+        return false;
+    }
+    auto key_it = node_public_keys_.find(remote_node);
+    if (key_it == node_public_keys_.end())
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    SHA256 hash;
+    std::array<uint8_t, 32> scratch_hash{};
+    kv_security_number_ = number;
+
+    hash.reset();
+    hash.update(&kv_security_number_, sizeof(kv_security_number_));
+    hash.update(&kv_nonce_, sizeof(kv_nonce_));
+    hash.update(&node_id_, sizeof(node_id_));
+    hash.update(&kv_remote_node_, sizeof(kv_remote_node_));
+    hash.update(pki_public_key_.data(), pki_public_key_.size());
+    hash.update(key_it->second.data(), key_it->second.size());
+    hash.finalize(kv_hash1_.data(), kv_hash1_.size());
+
+    hash.reset();
+    hash.update(&kv_nonce_, sizeof(kv_nonce_));
+    hash.update(kv_hash1_.data(), kv_hash1_.size());
+    hash.finalize(scratch_hash.data(), scratch_hash.size());
+
+    if (memcmp(scratch_hash.data(), kv_hash2_.data(), kv_hash2_.size()) != 0)
+    {
+        return false;
+    }
+
+    meshtastic_KeyVerification response = meshtastic_KeyVerification_init_zero;
+    response.nonce = kv_nonce_;
+    response.hash1.size = static_cast<pb_size_t>(kv_hash1_.size());
+    memcpy(response.hash1.bytes, kv_hash1_.data(), kv_hash1_.size());
+    response.hash2.size = 0;
+
+    if (!sendKeyVerificationPacket(kv_remote_node_, response, true))
+    {
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::SenderAwaitingUser;
+    kv_nonce_ms_ = millis();
+
+    char code[12];
+    buildVerificationCode(code, sizeof(code));
+    sys::EventBus::publish(
+        new sys::KeyVerificationFinalEvent(kv_remote_node_, kv_nonce_, true, code), 0);
+    return true;
+}
+
+bool MtAdapter::handleKeyVerificationFinal(const PacketHeaderWire& header,
+                                           const meshtastic_KeyVerification& kv)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::ReceiverAwaitingHash1)
+    {
+        return false;
+    }
+    if (header.to != node_id_ || header.to == 0xFFFFFFFF)
+    {
+        return false;
+    }
+    if (kv.nonce != kv_nonce_ || header.from != kv_remote_node_)
+    {
+        return false;
+    }
+    if (kv.hash1.size != 32 || kv.hash2.size != 0)
+    {
+        return false;
+    }
+    if (memcmp(kv.hash1.bytes, kv_hash1_.data(), kv_hash1_.size()) != 0)
+    {
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::ReceiverAwaitingUser;
+    kv_nonce_ms_ = millis();
+
+    char code[12];
+    buildVerificationCode(code, sizeof(code));
+    sys::EventBus::publish(
+        new sys::KeyVerificationFinalEvent(kv_remote_node_, kv_nonce_, false, code), 0);
+    return true;
+}
+
+bool MtAdapter::sendKeyVerificationPacket(uint32_t dest, const meshtastic_KeyVerification& kv,
+                                          bool want_response)
+{
+    if (!pki_ready_ || node_public_keys_.find(dest) == node_public_keys_.end())
+    {
+        return false;
+    }
+
+    uint8_t kv_buf[96];
+    pb_ostream_t kv_stream = pb_ostream_from_buffer(kv_buf, sizeof(kv_buf));
+    if (!pb_encode(&kv_stream, meshtastic_KeyVerification_fields, &kv))
+    {
+        return false;
+    }
+
+    uint8_t data_buf[160];
+    size_t data_size = sizeof(data_buf);
+    if (!encodeAppData(meshtastic_PortNum_KEY_VERIFICATION_APP,
+                       kv_buf, kv_stream.bytes_written,
+                       want_response, data_buf, &data_size))
+    {
+        return false;
+    }
+
+    uint8_t pki_buf[256];
+    size_t pki_len = sizeof(pki_buf);
+    MessageId msg_id = next_packet_id_++;
+    if (!encryptPkiPayload(dest, msg_id, data_buf, data_size, pki_buf, &pki_len))
+    {
+        return false;
+    }
+
+    uint8_t wire_buffer[512];
+    size_t wire_size = sizeof(wire_buffer);
+    uint8_t hop_limit = config_.hop_limit;
+    uint8_t channel_hash = 0;
+    bool want_ack = false;
+    if (!buildWirePacket(pki_buf, pki_len, node_id_, msg_id,
+                         dest, channel_hash, hop_limit, want_ack,
+                         nullptr, 0, wire_buffer, &wire_size))
+    {
+        return false;
+    }
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    int state = board_.radio.transmit(wire_buffer, wire_size);
+#else
+    int state = RADIOLIB_ERR_UNSUPPORTED;
+#endif
+    if (state == RADIOLIB_ERR_NONE)
+    {
+        startRadioReceive();
+        return true;
+    }
+    return false;
 }
 
 bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
@@ -1820,6 +2644,82 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
 
     std::string ack_full_hex = toHex(wire_buffer, wire_size, wire_size);
     LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    int state = board_.radio.transmit(wire_buffer, wire_size);
+#else
+    int state = RADIOLIB_ERR_UNSUPPORTED;
+#endif
+    if (state == RADIOLIB_ERR_NONE)
+    {
+        startRadioReceive();
+        return true;
+    }
+    return false;
+}
+
+bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
+                                 const uint8_t* psk, size_t psk_len,
+                                 meshtastic_Routing_Error reason)
+{
+    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    {
+        return false;
+    }
+
+    if (channel_hash == 0)
+    {
+        channel_hash = primary_channel_hash_;
+        psk = primary_psk_;
+        psk_len = primary_psk_len_;
+    }
+
+    meshtastic_Routing routing = meshtastic_Routing_init_default;
+    routing.which_variant = meshtastic_Routing_error_reason_tag;
+    routing.error_reason = reason;
+
+    uint8_t routing_buf[64];
+    pb_ostream_t rstream = pb_ostream_from_buffer(routing_buf, sizeof(routing_buf));
+    if (!pb_encode(&rstream, meshtastic_Routing_fields, &routing))
+    {
+        return false;
+    }
+
+    meshtastic_Data data = meshtastic_Data_init_default;
+    data.portnum = meshtastic_PortNum_ROUTING_APP;
+    data.want_response = false;
+    data.dest = dest;
+    data.source = node_id_;
+    data.request_id = request_id;
+    data.has_bitfield = true;
+    data.bitfield = 0;
+    data.payload.size = rstream.bytes_written;
+    if (data.payload.size > sizeof(data.payload.bytes))
+    {
+        return false;
+    }
+    memcpy(data.payload.bytes, routing_buf, data.payload.size);
+
+    uint8_t data_buf[128];
+    pb_ostream_t dstream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
+    if (!pb_encode(&dstream, meshtastic_Data_fields, &data))
+    {
+        return false;
+    }
+
+    uint8_t wire_buffer[256];
+    size_t wire_size = sizeof(wire_buffer);
+    uint8_t hop_limit = 0;
+    bool want_ack = false;
+    if (!buildWirePacket(data_buf, dstream.bytes_written, node_id_, next_packet_id_++,
+                         dest, channel_hash, hop_limit, want_ack,
+                         psk, psk_len, wire_buffer, &wire_size))
+    {
+        return false;
+    }
+
+    std::string err_full_hex = toHex(wire_buffer, wire_size, wire_size);
+    LORA_LOG("[LORA] TX routing error full packet hex: %s\n", err_full_hex.c_str());
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     int state = board_.radio.transmit(wire_buffer, wire_size);

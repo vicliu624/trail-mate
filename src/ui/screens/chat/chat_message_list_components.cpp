@@ -34,6 +34,18 @@ static void format_time_hhmm(char out[16], uint32_t ts)
     }
 }
 
+static std::string truncate_preview(const std::string& text)
+{
+    static constexpr size_t kMaxPreviewBytes = 18;
+    if (text.size() <= kMaxPreviewBytes)
+    {
+        return text;
+    }
+    std::string out = text.substr(0, kMaxPreviewBytes);
+    out.append("...");
+    return out;
+}
+
 // ------------------------------------------------
 
 ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
@@ -228,7 +240,8 @@ void ChatMessageListScreen::rebuildList()
 
         // ----- Content -----
         lv_label_set_text(item.name_label, conv.name.c_str());
-        lv_label_set_text(item.preview_label, conv.preview.c_str());
+        std::string preview = truncate_preview(conv.preview);
+        lv_label_set_text(item.preview_label, preview.c_str());
 
         char time_buf[16];
         format_time_hhmm(time_buf, conv.last_timestamp);
