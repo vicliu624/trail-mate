@@ -144,7 +144,6 @@ class AppContext
 
     // Infrastructure
     std::unique_ptr<chat::IChatStore> chat_store_;
-    chat::FlashStore* flash_store_ = nullptr;
     std::unique_ptr<chat::IMeshAdapter> mesh_adapter_;
     std::unique_ptr<chat::meshtastic::NodeStore> node_store_;
     std::unique_ptr<chat::contacts::ContactStore> contact_store_;

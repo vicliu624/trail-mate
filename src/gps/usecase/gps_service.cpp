@@ -8,6 +8,16 @@ namespace
 constexpr uint32_t kGpsSampleIntervalMs = 60000;
 }
 
+#ifndef GPS_TASK_LOG_ENABLE
+#define GPS_TASK_LOG_ENABLE 0
+#endif
+
+#if GPS_TASK_LOG_ENABLE
+#define GPS_TASK_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define GPS_TASK_LOG(...)
+#endif
+
 namespace gps
 {
 
@@ -224,9 +234,9 @@ void GpsService::gpsTask(void* pvParameters)
     uint32_t task_start_ms = millis();
     uint32_t last_log_ms = 0;
 
-    Serial.printf("[GPS Task] ===== TASK STARTED =====\n");
-    Serial.printf("[GPS Task] Started at %lu ms, GPS ready: %d\n", task_start_ms, service->gps_adapter_.isReady());
-    Serial.printf("[GPS Task] Collection interval: %lu ms\n", service->getCollectionInterval());
+    GPS_TASK_LOG("[GPS Task] ===== TASK STARTED =====\n");
+    GPS_TASK_LOG("[GPS Task] Started at %lu ms, GPS ready: %d\n", task_start_ms, service->gps_adapter_.isReady());
+    GPS_TASK_LOG("[GPS Task] Collection interval: %lu ms\n", service->getCollectionInterval());
 
     while (true)
     {
@@ -240,8 +250,8 @@ void GpsService::gpsTask(void* pvParameters)
 
         if (should_log)
         {
-            Serial.printf("[GPS Task] Loop %lu: GPS ready=%d, valid=%d, mutex=%p\n",
-                          loop_count, gps_ready, service->gps_state_.valid, service->gps_data_mutex_);
+            GPS_TASK_LOG("[GPS Task] Loop %lu: GPS ready=%d, valid=%d, mutex=%p\n",
+                         loop_count, gps_ready, service->gps_state_.valid, service->gps_data_mutex_);
             last_log_ms = now_ms;
         }
 
@@ -249,9 +259,9 @@ void GpsService::gpsTask(void* pvParameters)
         {
             if (should_log)
             {
-                Serial.printf("[GPS Task] GPS power OFF (motion_control=%d), skipping (loop %lu)\n",
-                              service->motion_control_enabled_ ? 1 : 0,
-                              loop_count);
+                GPS_TASK_LOG("[GPS Task] GPS power OFF (motion_control=%d), skipping (loop %lu)\n",
+                             service->motion_control_enabled_ ? 1 : 0,
+                             loop_count);
             }
         }
         else if (gps_ready)
@@ -263,8 +273,8 @@ void GpsService::gpsTask(void* pvParameters)
 
             if (should_log && chars_this_loop > 0)
             {
-                Serial.printf("[GPS Task] GPS loop processed %lu characters this cycle (total: %lu)\n",
-                              chars_this_loop, total_chars);
+                GPS_TASK_LOG("[GPS Task] GPS loop processed %lu characters this cycle (total: %lu)\n",
+                             chars_this_loop, total_chars);
             }
 
             if (service->gps_data_mutex_ != NULL && xSemaphoreTake(service->gps_data_mutex_, portMAX_DELAY) == pdTRUE)
@@ -279,8 +289,8 @@ void GpsService::gpsTask(void* pvParameters)
                     if (service->gps_adapter_.syncTime(gps_interval))
                     {
                         service->gps_time_synced_ = true;
-                        Serial.printf("[GPS Task] *** TIME SYNCED TO RTC (automatic) *** (loop %lu, sat=%d)\n",
-                                      loop_count, sat_count);
+                        GPS_TASK_LOG("[GPS Task] *** TIME SYNCED TO RTC (automatic) *** (loop %lu, sat=%d)\n",
+                                     loop_count, sat_count);
                     }
                 }
 
@@ -295,9 +305,9 @@ void GpsService::gpsTask(void* pvParameters)
 
                     if (!was_valid || should_log)
                     {
-                        Serial.printf("[GPS Task] *** FIX ACQUIRED *** lat=%.6f, lng=%.6f, sat=%d (loop %lu)\n",
-                                      service->gps_state_.lat, service->gps_state_.lng,
-                                      service->gps_state_.satellites, loop_count);
+                        GPS_TASK_LOG("[GPS Task] *** FIX ACQUIRED *** lat=%.6f, lng=%.6f, sat=%d (loop %lu)\n",
+                                     service->gps_state_.lat, service->gps_state_.lng,
+                                     service->gps_state_.satellites, loop_count);
                     }
                 }
                 else
@@ -305,19 +315,19 @@ void GpsService::gpsTask(void* pvParameters)
                     service->gps_state_.valid = false;
                     if (was_valid)
                     {
-                        Serial.printf("[GPS Task] *** FIX LOST *** (loop %lu)\n", loop_count);
+                        GPS_TASK_LOG("[GPS Task] *** FIX LOST *** (loop %lu)\n", loop_count);
                     }
                     if (should_log)
                     {
-                        Serial.printf("[GPS Task] GPS ready but no fix yet (loop %lu, sat=%d, chars_this_cycle=%lu)\n",
-                                      loop_count, sat_count, chars_this_loop);
+                        GPS_TASK_LOG("[GPS Task] GPS ready but no fix yet (loop %lu, sat=%d, chars_this_cycle=%lu)\n",
+                                     loop_count, sat_count, chars_this_loop);
                     }
                 }
                 xSemaphoreGive(service->gps_data_mutex_);
             }
             else
             {
-                Serial.printf("[GPS Task] ERROR: Failed to take mutex (loop %lu)\n", loop_count);
+                GPS_TASK_LOG("[GPS Task] ERROR: Failed to take mutex (loop %lu)\n", loop_count);
             }
         }
         else
@@ -327,25 +337,25 @@ void GpsService::gpsTask(void* pvParameters)
 
             if (should_log)
             {
-                Serial.printf("[GPS Task] GPS not ready (loop %lu)\n", loop_count);
+                GPS_TASK_LOG("[GPS Task] GPS not ready (loop %lu)\n", loop_count);
             }
 
             if (last_retry_ms == 0 || (now_ms - last_retry_ms) >= RETRY_INTERVAL_MS)
             {
-                Serial.printf("[GPS Task] Attempting to reinitialize GPS (last retry: %lu ms ago, loop %lu)\n",
-                              last_retry_ms > 0 ? (now_ms - last_retry_ms) : 0, loop_count);
+                GPS_TASK_LOG("[GPS Task] Attempting to reinitialize GPS (last retry: %lu ms ago, loop %lu)\n",
+                             last_retry_ms > 0 ? (now_ms - last_retry_ms) : 0, loop_count);
 
                 bool retry_result = service->gps_adapter_.init();
                 last_retry_ms = now_ms;
 
                 if (retry_result)
                 {
-                    Serial.printf("[GPS Task] *** GPS REINITIALIZATION SUCCESSFUL *** (loop %lu)\n", loop_count);
+                    GPS_TASK_LOG("[GPS Task] *** GPS REINITIALIZATION SUCCESSFUL *** (loop %lu)\n", loop_count);
                 }
                 else
                 {
-                    Serial.printf("[GPS Task] GPS reinitialization failed, will retry in %lu ms (loop %lu)\n",
-                                  RETRY_INTERVAL_MS, loop_count);
+                    GPS_TASK_LOG("[GPS Task] GPS reinitialization failed, will retry in %lu ms (loop %lu)\n",
+                                 RETRY_INTERVAL_MS, loop_count);
                 }
             }
         }
@@ -355,7 +365,7 @@ void GpsService::gpsTask(void* pvParameters)
 
         if (should_log)
         {
-            Serial.printf("[GPS Task] Waiting %lu ms until next cycle...\n", interval_ms);
+            GPS_TASK_LOG("[GPS Task] Waiting %lu ms until next cycle...\n", interval_ms);
         }
 
         vTaskDelayUntil(&last_wake_time, frequency);

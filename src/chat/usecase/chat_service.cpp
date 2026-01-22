@@ -36,11 +36,14 @@ MessageId ChatService::sendText(ChannelId channel, const std::string& text, Node
     msg.text = text;
     msg.status = queued ? MessageStatus::Queued : MessageStatus::Failed;
 
-    // Queue in model
-    model_.onSendQueued(msg);
-    if (!queued && msg_id != 0)
+    // Queue in model (if enabled)
+    if (model_enabled_)
     {
-        model_.onSendResult(msg_id, false);
+        model_.onSendQueued(msg);
+        if (!queued && msg_id != 0)
+        {
+            model_.onSendResult(msg_id, false);
+        }
     }
 
     // Store message
@@ -53,12 +56,6 @@ void ChatService::switchChannel(ChannelId channel)
 {
     current_channel_ = channel;
     // Could emit event here
-}
-
-void ChatService::markChannelRead(ChannelId channel)
-{
-    model_.markRead(channel);
-    store_.setUnread(channel, 0);
 }
 
 bool ChatService::resendFailed(MessageId msg_id)
@@ -84,40 +81,28 @@ bool ChatService::resendFailed(MessageId msg_id)
     return false;
 }
 
-int ChatService::getUnreadCount(ChannelId channel) const
-{
-    return model_.getUnread(channel);
-}
-
-std::vector<ChatMessage> ChatService::getRecentMessages(ChannelId channel, size_t limit) const
-{
-    return model_.getRecent(channel, limit);
-}
-
 std::vector<ChatMessage> ChatService::getRecentMessages(const ConversationId& conv, size_t limit) const
 {
-    return model_.getRecent(conv, limit);
+    return store_.loadRecent(conv, limit);
 }
 
-std::vector<ConversationMeta> ChatService::getConversations() const
+std::vector<ConversationMeta> ChatService::getConversations(size_t offset,
+                                                            size_t limit,
+                                                            size_t* total) const
 {
-    return model_.getConversations();
+    return store_.loadConversationPage(offset, limit, total);
 }
 
 void ChatService::clearAllMessages()
 {
     model_.clearAll();
     store_.clearAll();
-    store_.setUnread(ChannelId::PRIMARY, 0);
-    store_.setUnread(ChannelId::SECONDARY, 0);
-    sys::EventBus::publish(new sys::ChatUnreadChangedEvent(static_cast<uint8_t>(ChannelId::PRIMARY), 0), 0);
-    sys::EventBus::publish(new sys::ChatUnreadChangedEvent(static_cast<uint8_t>(ChannelId::SECONDARY), 0), 0);
 }
 
 void ChatService::markConversationRead(const ConversationId& conv)
 {
     model_.markRead(conv);
-    store_.setUnread(conv.channel, 0);
+    store_.setUnread(conv, 0);
 }
 
 void ChatService::processIncoming()
@@ -129,7 +114,7 @@ void ChatService::processIncoming()
         ChatMessage msg;
         msg.channel = incoming.channel;
         msg.from = incoming.from;
-        if (incoming.to == 0xFFFFFFFF || incoming.to == 0) {
+        if (incoming.to == 0xFFFFFFFF) {
             msg.peer = 0;
         } else {
             msg.peer = incoming.from;
@@ -139,8 +124,19 @@ void ChatService::processIncoming()
         msg.text = incoming.text;
         msg.status = MessageStatus::Incoming;
 
-        // Add to model
-        model_.onIncoming(msg);
+        Serial.printf("[ChatService] incoming ch=%u from=%08lX to=%08lX peer=%08lX ts=%lu len=%u\n",
+                      static_cast<unsigned>(msg.channel),
+                      static_cast<unsigned long>(msg.from),
+                      static_cast<unsigned long>(incoming.to),
+                      static_cast<unsigned long>(msg.peer),
+                      static_cast<unsigned long>(msg.timestamp),
+                      static_cast<unsigned>(msg.text.size()));
+
+        // Add to model (if enabled)
+        if (model_enabled_)
+        {
+            model_.onIncoming(msg);
+        }
 
         // Store
         store_.append(msg);
@@ -155,16 +151,29 @@ void ChatService::processIncoming()
 void ChatService::handleSendResult(MessageId msg_id, bool ok)
 {
     if (msg_id == 0) return;
-    model_.onSendResult(msg_id, ok);
-    if (!ok)
+    if (model_enabled_)
     {
-        store_.updateMessageStatus(msg_id, MessageStatus::Failed);
+        model_.onSendResult(msg_id, ok);
     }
+    store_.updateMessageStatus(msg_id, ok ? MessageStatus::Sent : MessageStatus::Failed);
 }
 
 const ChatMessage* ChatService::getMessage(MessageId msg_id) const
 {
     return model_.getMessage(msg_id);
+}
+
+void ChatService::setModelEnabled(bool enabled)
+{
+    if (model_enabled_ == enabled)
+    {
+        return;
+    }
+    model_enabled_ = enabled;
+    if (!model_enabled_)
+    {
+        model_.clearAll();
+    }
 }
 
 } // namespace chat

@@ -14,6 +14,16 @@ extern "C" void ui_ime_toggle_mode();
 extern "C" bool ui_ime_is_active();
 bool ui_take_screenshot_to_sd();
 
+#ifndef KEYBOARD_LOG_ENABLE
+#define KEYBOARD_LOG_ENABLE 0
+#endif
+
+#if KEYBOARD_LOG_ENABLE
+#define KEYBOARD_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define KEYBOARD_LOG(...)
+#endif
+
 #ifndef LEDC_BACKLIGHT_CHANNEL
 #define LEDC_BACKLIGHT_CHANNEL 4
 #endif
@@ -264,9 +274,9 @@ int LilyGoKeyboard::handleSpecialKeys(uint8_t k, bool pressed, char* c)
 {
     static uint32_t last_alt_press_ms = 0;
     static constexpr uint32_t kAltDoublePressMs = 350;
-    Serial.printf("[Keyboard] special key=%u pressed=%d\n",
-                  static_cast<unsigned int>(k),
-                  pressed ? 1 : 0);
+    KEYBOARD_LOG("[Keyboard] special key=%u pressed=%d\n",
+                 static_cast<unsigned int>(k),
+                 pressed ? 1 : 0);
     if (k == _config->symbol_key_value)
     {
         symbol_key_pressed = !symbol_key_pressed; // Switch symbol mode
@@ -435,12 +445,12 @@ char LilyGoKeyboard::handleSpaceAndNullChar(char keyVal, char& lastKeyVal, bool&
 
 void LilyGoKeyboard::printDebugInfo(bool pressed, uint8_t k, char keyVal)
 {
-    Serial.printf("Debug: symbol=%d, caps=%d, alt=%d\n",
-                  symbol_key_pressed, cap_key_pressed, alt_key_pressed);
-    Serial.print(pressed ? "Pressed" : "Released");
-    Serial.printf(" - Key:0x%X, Row:%d, Col:%d\n",
-                  k, k / 10, k % 10);
-    Serial.printf("Char:'%c' (0x%X)\n", keyVal, keyVal);
+    KEYBOARD_LOG("Debug: symbol=%d, caps=%d, alt=%d\n",
+                 symbol_key_pressed, cap_key_pressed, alt_key_pressed);
+    KEYBOARD_LOG("%s", pressed ? "Pressed" : "Released");
+    KEYBOARD_LOG(" - Key:0x%X, Row:%d, Col:%d\n",
+                 k, k / 10, k % 10);
+    KEYBOARD_LOG("Char:'%c' (0x%X)\n", keyVal, keyVal);
 }
 
 int LilyGoKeyboard::update(char* c)

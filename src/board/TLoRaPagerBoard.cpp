@@ -14,6 +14,16 @@
 #include "ui/widgets/system_notification.h"
 #include <Preferences.h>
 
+#ifndef GPS_BOARD_LOG_ENABLE
+#define GPS_BOARD_LOG_ENABLE 0
+#endif
+
+#if GPS_BOARD_LOG_ENABLE
+#define GPS_BOARD_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define GPS_BOARD_LOG(...)
+#endif
+
 // ------------------------------
 // I2C addresses from board configuration
 // ------------------------------
@@ -930,8 +940,8 @@ void TLoRaPagerBoard::stopNFCDiscovery()
 
 bool TLoRaPagerBoard::initGPS()
 {
-    Serial.printf("[TLoRaPagerBoard::initGPS] Starting GPS initialization...\n");
-    Serial.printf("[TLoRaPagerBoard::initGPS] Opening Serial1: baud=38400, RX=%d, TX=%d\n", GPS_RX, GPS_TX);
+    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] Starting GPS initialization...\n");
+    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] Opening Serial1: baud=38400, RX=%d, TX=%d\n", GPS_RX, GPS_TX);
 
     // Clear HW_GPS_ONLINE flag before attempting initialization
     // This ensures we don't have stale state if reinitializing
@@ -939,18 +949,18 @@ bool TLoRaPagerBoard::initGPS()
 
     Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
     delay(100); // Give Serial1 time to initialize
-    Serial.printf("[TLoRaPagerBoard::initGPS] Serial1 opened, calling gps.init(&Serial1)...\n");
+    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] Serial1 opened, calling gps.init(&Serial1)...\n");
     bool result = gps.init(&Serial1);
-    Serial.printf("[TLoRaPagerBoard::initGPS] gps.init() returned: %d\n", result);
+    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] gps.init() returned: %d\n", result);
     if (result)
     {
-        Serial.printf("[TLoRaPagerBoard::initGPS] GPS initialized successfully, model: %s\n", gps.getModel().c_str());
+        GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] GPS initialized successfully, model: %s\n", gps.getModel().c_str());
         devices_probe |= HW_GPS_ONLINE;
-        Serial.printf("[TLoRaPagerBoard::initGPS] Set HW_GPS_ONLINE flag, devices_probe=0x%08X\n", devices_probe);
+        GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] Set HW_GPS_ONLINE flag, devices_probe=0x%08X\n", devices_probe);
     }
     else
     {
-        Serial.printf("[TLoRaPagerBoard::initGPS] GPS initialization FAILED\n");
+        GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] GPS initialization FAILED\n");
         // Ensure flag is cleared on failure
         devices_probe &= ~HW_GPS_ONLINE;
     }
@@ -1011,7 +1021,7 @@ bool TLoRaPagerBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
     // Check if GPS time is valid
     if (!gps.date.isValid() || !gps.time.isValid())
     {
-        Serial.printf("[TLoRaPagerBoard::syncTimeFromGPS] GPS time not valid (date valid=%d, time valid=%d)\n",
+        GPS_BOARD_LOG("[TLoRaPagerBoard::syncTimeFromGPS] GPS time not valid (date valid=%d, time valid=%d)\n",
                       gps.date.isValid(), gps.time.isValid());
         return false;
     }
@@ -1019,7 +1029,7 @@ bool TLoRaPagerBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
     // Check if RTC is ready
     if (!isRTCReady())
     {
-        Serial.printf("[TLoRaPagerBoard::syncTimeFromGPS] RTC not ready\n");
+        GPS_BOARD_LOG("[TLoRaPagerBoard::syncTimeFromGPS] RTC not ready\n");
         return false;
     }
 

@@ -31,6 +31,7 @@ bool encodeTextMessage(ChannelId channel, const std::string& text,
     data.has_bitfield = true;
     data.bitfield = 0; // No special flags for now
     data.dest = dest_node;
+    data.source = from_node;
 
     // Set text payload
     size_t text_len = text.length();

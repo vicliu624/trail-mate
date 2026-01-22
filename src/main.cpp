@@ -5,6 +5,7 @@
 #include "ui/LV_Helper.h"
 #include <Preferences.h>
 #include <cmath>
+#include <ctime>
 #include <esp_sleep.h>
 
 #include "app/app_context.h"
@@ -78,6 +79,26 @@ lv_obj_t* battery_label = nullptr; // Battery display label at top right of menu
 
 namespace
 {
+bool format_menu_time(char* out, size_t out_len)
+{
+    if (!out || out_len < 6)
+    {
+        return false;
+    }
+    time_t now = time(nullptr);
+    if (now <= 0)
+    {
+        return false;
+    }
+    time_t local = ui_apply_timezone_offset(now);
+    struct tm* info = gmtime(&local);
+    if (!info)
+    {
+        return false;
+    }
+    strftime(out, out_len, "%H:%M", info);
+    return true;
+}
 
 // App function types (like factory example)
 typedef void (*app_func_t)(lv_obj_t* parent);
@@ -721,9 +742,9 @@ void setup()
             return;
         }
         
-        // Get current time from RTC (HH:MM format, no seconds)
+        // Get current time with timezone offset (HH:MM format, no seconds)
         char time_str[16];
-        if (instance.getRTCTimeString(time_str, sizeof(time_str), false)) {
+        if (format_menu_time(time_str, sizeof(time_str))) {
             // Only update if text actually changed (saves UI redraw)
             static char last_time_str[16] = "";
             if (strcmp(time_str, last_time_str) != 0) {
@@ -775,7 +796,7 @@ void setup()
     if (instance.isRTCReady())
     {
         char time_str[16];
-        if (instance.getRTCTimeString(time_str, sizeof(time_str), false))
+        if (format_menu_time(time_str, sizeof(time_str)))
         {
             lv_label_set_text(time_label, time_str);
         }

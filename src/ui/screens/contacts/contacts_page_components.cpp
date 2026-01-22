@@ -21,7 +21,7 @@
 #include <ctime>
 #include <string>
 
-#define CONTACTS_DEBUG 1
+#define CONTACTS_DEBUG 0
 #if CONTACTS_DEBUG
 #define CONTACTS_LOG(...) Serial.printf(__VA_ARGS__)
 #else

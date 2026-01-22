@@ -8,6 +8,7 @@
 #include "../../domain/chat_types.h"
 #include "../../ports/i_chat_store.h"
 #include <Preferences.h>
+#include <map>
 #include <vector>
 
 namespace chat
@@ -25,14 +26,15 @@ class FlashStore : public IChatStore
     bool isReady() const { return ready_; }
 
     void append(const ChatMessage& msg) override;
-    std::vector<ChatMessage> loadRecent(ChannelId channel, size_t n) override;
-    void setUnread(ChannelId channel, int unread) override;
-    int getUnread(ChannelId channel) const override;
-    void clearChannel(ChannelId channel) override;
+    std::vector<ChatMessage> loadRecent(const ConversationId& conv, size_t n) override;
+    std::vector<ConversationMeta> loadConversationPage(size_t offset,
+                                                       size_t limit,
+                                                       size_t* total) override;
+    void setUnread(const ConversationId& conv, int unread) override;
+    int getUnread(const ConversationId& conv) const override;
+    void clearConversation(const ConversationId& conv) override;
+    void clearAll() override;
     bool updateMessageStatus(MessageId msg_id, MessageStatus status) override;
-    void clearAll();
-
-    std::vector<ChatMessage> loadAll() const;
 
   private:
     struct Record
@@ -59,6 +61,7 @@ class FlashStore : public IChatStore
     uint16_t head_ = 0;
     uint16_t count_ = 0;
     std::vector<Record> records_;
+    std::map<ConversationId, int> unread_;
 
     void loadFromPrefs();
     void persistMeta();

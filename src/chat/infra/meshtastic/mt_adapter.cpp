@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+#include <array>
 #include <ctime>
 #include <string>
 #define TEST_CURVE25519_FIELD_OPS
@@ -735,75 +736,32 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
 
     const uint8_t* out_payload = data_buffer;
     size_t out_len = data_size;
-    bool pki_disabled = false;
     if (dest_node != 0xFFFFFFFF)
     {
-        uint32_t now_ms = millis();
-        auto disable_it = pki_disabled_until_ms_.find(dest_node);
-        if (disable_it != pki_disabled_until_ms_.end())
+        if (!pki_ready_ || !allowPkiForPortnum(portnum) ||
+            (node_public_keys_.find(dest_node) == node_public_keys_.end()))
         {
-            if (now_ms < disable_it->second)
-            {
-                pki_disabled = true;
-            }
-            else
-            {
-                pki_disabled_until_ms_.erase(disable_it);
-            }
+            LORA_LOG("[LORA] TX app PKI required but unavailable dest=%08lX port=%u\n",
+                     (unsigned long)dest_node,
+                     (unsigned)portnum);
+            return false;
         }
-    }
-    bool use_pki = (dest_node != 0xFFFFFFFF) && pki_ready_ &&
-                   allowPkiForPortnum(portnum) &&
-                   !pki_disabled &&
-                   (node_public_keys_.find(dest_node) != node_public_keys_.end());
-    if (use_pki)
-    {
-        auto seen_it = node_key_last_seen_.find(dest_node);
-        if (seen_it != node_key_last_seen_.end())
+
+        uint8_t pki_buf[256];
+        size_t pki_len = sizeof(pki_buf);
+        if (!encryptPkiPayload(dest_node, msg_id, data_buffer, data_size, pki_buf, &pki_len))
         {
-            time_t now_secs = time(nullptr);
-            if (now_secs > 0)
-            {
-                uint32_t age = static_cast<uint32_t>(now_secs) - seen_it->second;
-                if (age > 86400U)
-                {
-                    use_pki = false;
-                    LORA_LOG("[LORA] PKI age=%lu sec, fallback PSK dest=%08lX\n",
-                             static_cast<unsigned long>(age),
-                             static_cast<unsigned long>(dest_node));
-                }
-            }
+            LORA_LOG("[LORA] TX app PKI encrypt failed dest=%08lX port=%u\n",
+                     (unsigned long)dest_node,
+                     (unsigned)portnum);
+            return false;
         }
-    }
-    uint8_t pki_buf[256];
-    size_t pki_len = sizeof(pki_buf);
-    if (use_pki && encryptPkiPayload(dest_node, msg_id, data_buffer, data_size, pki_buf, &pki_len))
-    {
         out_payload = pki_buf;
         out_len = pki_len;
         channel_hash = 0; // PKI channel
         want_ack_flag = true;
         psk = nullptr;
         psk_len = 0;
-    }
-    else if (dest_node != 0xFFFFFFFF && out_channel == ChannelId::PRIMARY)
-    {
-        if (pki_disabled)
-        {
-            uint32_t until_ms = pki_disabled_until_ms_[dest_node];
-            LORA_LOG("[LORA] PKI disabled for %08lX until=%lu\n",
-                     (unsigned long)dest_node,
-                     (unsigned long)until_ms);
-        }
-        auto it = node_last_channel_.find(dest_node);
-        if (it != node_last_channel_.end())
-        {
-            out_channel = it->second;
-            channel_hash =
-                (out_channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
-            psk = (out_channel == ChannelId::SECONDARY) ? secondary_psk_ : primary_psk_;
-            psk_len = (out_channel == ChannelId::SECONDARY) ? secondary_psk_len_ : primary_psk_len_;
-        }
     }
 
     if (!buildWirePacket(out_payload, out_len, node_id_, msg_id,
@@ -1038,6 +996,15 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                  (unsigned)decoded.portnum,
                  portName(decoded.portnum),
                  (unsigned)decoded.payload.size);
+        LORA_LOG("[LORA] RX data plain port=%u dest=%08lX src=%08lX req=%08lX want_resp=%u bitfield=%u has_bitfield=%u payload=%u\n",
+                 (unsigned)decoded.portnum,
+                 (unsigned long)decoded.dest,
+                 (unsigned long)decoded.source,
+                 (unsigned long)decoded.request_id,
+                 decoded.want_response ? 1U : 0U,
+                 (unsigned)decoded.bitfield,
+                 decoded.has_bitfield ? 1U : 0U,
+                 (unsigned)decoded.payload.size);
         if (decoded.payload.size > 0)
         {
             std::string payload_hex = toHex(decoded.payload.bytes, decoded.payload.size, decoded.payload.size);
@@ -1065,14 +1032,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     memcpy(key.data(), user.public_key.bytes, 32);
                     node_public_keys_[node_id] = key;
                     savePkiNodeKey(node_id, key.data(), key.size());
-                    LORA_LOG("[LORA] PKI key stored for %08lX\n", (unsigned long)node_id);
-                    auto backoff_it = pki_disabled_until_ms_.find(node_id);
-                    if (backoff_it != pki_disabled_until_ms_.end())
-                    {
-                        pki_disabled_until_ms_.erase(backoff_it);
-                        LORA_LOG("[LORA] PKI backoff cleared for %08lX\n",
-                                 (unsigned long)node_id);
-                    }
+                    std::string key_fp = toHex(key.data(), key.size(), 8);
+                    LORA_LOG("[LORA] PKI key stored for %08lX fp=%s\n",
+                             (unsigned long)node_id, key_fp.c_str());
+                    LORA_LOG("[LORA] PKI key updated for %08lX\n",
+                             (unsigned long)node_id);
                 }
 
                 // Publish NodeInfo update event (SNR not available in User message, use 0.0)
@@ -1099,12 +1063,13 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     uint32_t now_ms = millis();
                     auto it = nodeinfo_last_seen_ms_.find(node_id);
                     bool allow_reply = true;
-                    if (it != nodeinfo_last_seen_ms_.end())
-                    {
-                        uint32_t since = now_ms - it->second;
-                        if (since < NODEINFO_REPLY_SUPPRESS_MS)
-                        {
-                            allow_reply = false;
+                    // 直连 NodeInfo 总是允许回复（不受时间抑制）
+                    if (header.to == 0xFFFFFFFF) {  // 只有广播 NodeInfo 才检查时间抑制
+                        if (it != nodeinfo_last_seen_ms_.end()) {
+                            uint32_t since = now_ms - it->second;
+                            if (since < NODEINFO_REPLY_SUPPRESS_MS) {
+                                allow_reply = false;
+                            }
                         }
                     }
                     nodeinfo_last_seen_ms_[node_id] = now_ms;
@@ -1184,26 +1149,13 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                         ok = false;
                     }
                     if (routing.which_variant == meshtastic_Routing_error_reason_tag &&
-                        routing.error_reason != meshtastic_Routing_Error_NONE)
-                    {
-                        uint32_t now_ms = millis();
-                        pki_disabled_until_ms_[header.from] = now_ms + PKI_BACKOFF_MS;
-                        LORA_LOG("[LORA] PKI backoff (routing err) for %08lX reason=%s until=%lu\n",
-                                 (unsigned long)header.from,
-                                 routingErrorName(routing.error_reason),
-                                 (unsigned long)(now_ms + PKI_BACKOFF_MS));
-                    }
-                    if (routing.which_variant == meshtastic_Routing_error_reason_tag &&
                         (routing.error_reason == meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY ||
                          routing.error_reason == meshtastic_Routing_Error_NO_CHANNEL))
                     {
-                        uint32_t now_ms = millis();
-                        pki_disabled_until_ms_[header.from] = now_ms + PKI_BACKOFF_MS;
                         sendNodeInfoTo(header.from, true);
-                        LORA_LOG("[LORA] PKI backoff for %08lX reason=%s until=%lu\n",
+                        LORA_LOG("[LORA] TX nodeinfo after routing err from=%08lX reason=%s\n",
                                  (unsigned long)header.from,
-                                 routingErrorName(routing.error_reason),
-                                 (unsigned long)(now_ms + PKI_BACKOFF_MS));
+                                 routingErrorName(routing.error_reason));
                     }
                     pending_ack_ms_.erase(decoded.request_id);
                     pending_ack_dest_.erase(decoded.request_id);
@@ -1372,10 +1324,6 @@ void MtAdapter::processSendQueue()
             auto dest_it = pending_ack_dest_.find(it->first);
             if (dest_it != pending_ack_dest_.end())
             {
-                pki_disabled_until_ms_[dest_it->second] = now + PKI_BACKOFF_MS;
-                LORA_LOG("[LORA] PKI backoff (ack timeout) dest=%08lX until=%lu\n",
-                         (unsigned long)dest_it->second,
-                         (unsigned long)(now + PKI_BACKOFF_MS));
                 pending_ack_dest_.erase(dest_it);
             }
             sys::EventBus::publish(
@@ -1439,6 +1387,26 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     {
         return false;
     }
+    {
+        meshtastic_Data decoded = meshtastic_Data_init_default;
+        pb_istream_t stream = pb_istream_from_buffer(data_buffer, data_size);
+        if (pb_decode(&stream, meshtastic_Data_fields, &decoded))
+        {
+            LORA_LOG("[LORA] TX data plain port=%u dest=%08lX src=%08lX req=%08lX want_resp=%u bitfield=%u has_bitfield=%u payload=%u\n",
+                     (unsigned)decoded.portnum,
+                     (unsigned long)decoded.dest,
+                     (unsigned long)decoded.source,
+                     (unsigned long)decoded.request_id,
+                     decoded.want_response ? 1U : 0U,
+                     (unsigned)decoded.bitfield,
+                     decoded.has_bitfield ? 1U : 0U,
+                     (unsigned)decoded.payload.size);
+        }
+        else
+        {
+            LORA_LOG("[LORA] TX data plain decode fail err=%s\n", PB_GET_ERROR(&stream));
+        }
+    }
     std::string data_hex = toHex(data_buffer, data_size, data_size);
     LORA_LOG("[LORA] TX data protobuf hex: %s\n", data_hex.c_str());
 
@@ -1450,58 +1418,31 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     uint8_t channel_hash =
         (channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
     uint8_t hop_limit = config_.hop_limit;
-    bool want_ack = false; // Broadcast doesn't need ACK unless PKI direct
     uint32_t dest = (pending.dest != 0) ? pending.dest : 0xFFFFFFFF;
+    bool want_ack = (dest != 0xFFFFFFFF);
 
     // Try PKI encryption for direct messages when key is known
     const uint8_t* payload = data_buffer;
     size_t payload_len = data_size;
     const uint8_t* psk = nullptr;
     size_t psk_len = 0;
-    bool pki_disabled = false;
     if (dest != 0xFFFFFFFF)
     {
-        uint32_t now_ms = millis();
-        auto disable_it = pki_disabled_until_ms_.find(dest);
-        if (disable_it != pki_disabled_until_ms_.end())
+        if (!pki_ready_ || !allowPkiForPortnum(pending.portnum) ||
+            (node_public_keys_.find(dest) == node_public_keys_.end()))
         {
-            if (now_ms < disable_it->second)
-            {
-                pki_disabled = true;
-            }
-            else
-            {
-                pki_disabled_until_ms_.erase(disable_it);
-            }
+            LORA_LOG("[LORA] TX text PKI required but unavailable dest=%08lX\n",
+                     (unsigned long)dest);
+            return false;
         }
-    }
-    bool use_pki = (dest != 0xFFFFFFFF) && pki_ready_ &&
-                   allowPkiForPortnum(pending.portnum) &&
-                   !pki_disabled &&
-                   (node_public_keys_.find(dest) != node_public_keys_.end());
-    if (use_pki)
-    {
-        auto seen_it = node_key_last_seen_.find(dest);
-        if (seen_it != node_key_last_seen_.end())
+        uint8_t pki_buf[256];
+        size_t pki_len = sizeof(pki_buf);
+        if (!encryptPkiPayload(dest, pending.msg_id, data_buffer, data_size, pki_buf, &pki_len))
         {
-            time_t now_secs = time(nullptr);
-            if (now_secs > 0)
-            {
-                uint32_t age = static_cast<uint32_t>(now_secs) - seen_it->second;
-                if (age > 86400U)
-                {
-                    use_pki = false;
-                    LORA_LOG("[LORA] PKI age=%lu sec, fallback PSK dest=%08lX\n",
-                             static_cast<unsigned long>(age),
-                             static_cast<unsigned long>(dest));
-                }
-            }
+            LORA_LOG("[LORA] TX text PKI encrypt failed dest=%08lX\n",
+                     (unsigned long)dest);
+            return false;
         }
-    }
-    uint8_t pki_buf[256];
-    size_t pki_len = sizeof(pki_buf);
-    if (use_pki && encryptPkiPayload(dest, pending.msg_id, data_buffer, data_size, pki_buf, &pki_len))
-    {
         payload = pki_buf;
         payload_len = pki_len;
         channel_hash = 0; // PKI channel
@@ -1509,24 +1450,6 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     }
     else
     {
-        if (dest != 0xFFFFFFFF && channel == ChannelId::PRIMARY)
-        {
-            if (pki_disabled)
-            {
-                uint32_t until_ms = pki_disabled_until_ms_[dest];
-                LORA_LOG("[LORA] PKI disabled for %08lX until=%lu\n",
-                         (unsigned long)dest,
-                         (unsigned long)until_ms);
-            }
-            auto it = node_last_channel_.find(dest);
-            if (it != node_last_channel_.end())
-            {
-                channel = it->second;
-                channel_hash =
-                    (channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
-            }
-        }
-        // Fallback to PSK
         if (channel == ChannelId::SECONDARY)
         {
             psk = secondary_psk_;
@@ -1545,7 +1468,7 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
              channel_name,
              channel_hash,
              (unsigned)psk_len,
-             use_pki ? 1U : 0U,
+             (channel_hash == 0) ? 1U : 0U,
              (unsigned long)dest);
 
     if (!buildWirePacket(payload, payload_len, from_node, pending.msg_id,
@@ -1791,7 +1714,8 @@ void MtAdapter::configureRadio()
 #endif
 
     ready_ = true;
-    last_nodeinfo_ms_ = 0;
+    // Suppress auto NodeInfo broadcast at boot; wait for interval to elapse.
+    last_nodeinfo_ms_ = millis();
     LORA_LOG("[LORA] adapter ready, node_id=%08lX\n", (unsigned long)node_id_);
     LORA_LOG("[LORA] radio config region=%u preset=%u freq=%.3fMHz sf=%u bw=%.1f cr=4/%u sync=0x%02X preamble=%u\n",
              static_cast<unsigned>(region_code),
@@ -1884,8 +1808,20 @@ bool MtAdapter::initPkiKeys()
 {
     Preferences prefs;
     prefs.begin("chat", false);
-    size_t pub_len = prefs.getBytes("pki_pub", pki_public_key_.data(), pki_public_key_.size());
+    std::array<uint8_t, 32> pub_before{};
+    size_t pub_len = prefs.getBytes("pki_pub", pub_before.data(), pub_before.size());
     size_t priv_len = prefs.getBytes("pki_priv", pki_private_key_.data(), pki_private_key_.size());
+    if (pub_len > 0)
+    {
+        std::string stored_fp = toHex(pub_before.data(), pub_len, 8);
+        LORA_LOG("[LORA] PKI stored pub len=%u fp=%s\n",
+                 static_cast<unsigned>(pub_len), stored_fp.c_str());
+    }
+    else
+    {
+        LORA_LOG("[LORA] PKI stored pub len=0\n");
+    }
+    LORA_LOG("[LORA] PKI stored priv len=%u\n", static_cast<unsigned>(priv_len));
     bool have_keys = (pub_len == pki_public_key_.size() && priv_len == pki_private_key_.size() &&
                       !isZeroKey(pki_private_key_.data(), pki_private_key_.size()));
 
@@ -1900,9 +1836,17 @@ bool MtAdapter::initPkiKeys()
         have_keys = !isZeroKey(pki_private_key_.data(), pki_private_key_.size());
         if (have_keys)
         {
+            std::string gen_fp = toHex(pki_public_key_.data(), pki_public_key_.size(), 8);
+            LORA_LOG("[LORA] PKI keys generated pub fp=%s\n", gen_fp.c_str());
             prefs.putBytes("pki_pub", pki_public_key_.data(), pki_public_key_.size());
             prefs.putBytes("pki_priv", pki_private_key_.data(), pki_private_key_.size());
         }
+    }
+    else
+    {
+        memcpy(pki_public_key_.data(), pub_before.data(), pki_public_key_.size());
+        std::string loaded_fp = toHex(pki_public_key_.data(), pki_public_key_.size(), 8);
+        LORA_LOG("[LORA] PKI keys loaded pub fp=%s\n", loaded_fp.c_str());
     }
     prefs.end();
 
@@ -2145,19 +2089,11 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     if (it == node_public_keys_.end())
     {
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)from);
-        uint32_t now_ms = millis();
-        auto backoff_it = pki_disabled_until_ms_.find(from);
-        bool allow_reply = (backoff_it == pki_disabled_until_ms_.end() || now_ms >= backoff_it->second);
-        if (allow_reply)
-        {
-            pki_disabled_until_ms_[from] = now_ms + PKI_BACKOFF_MS;
-            sendNodeInfoTo(from, true);
-            sendRoutingError(from, packet_id, 0, nullptr, 0,
-                             meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
-            LORA_LOG("[LORA] PKI unknown for %08lX, sent nodeinfo backoff until=%lu\n",
-                     (unsigned long)from,
-                     (unsigned long)(now_ms + PKI_BACKOFF_MS));
-        }
+        sendNodeInfoTo(from, true);
+        sendRoutingError(from, packet_id, 0, nullptr, 0,
+                         meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
+        LORA_LOG("[LORA] PKI unknown for %08lX, sent nodeinfo\n",
+                 (unsigned long)from);
         return false;
     }
     touchPkiNodeKey(from);
@@ -2210,6 +2146,9 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)dest);
         return false;
     }
+    std::string key_fp = toHex(it->second.data(), it->second.size(), 8);
+    LORA_LOG("[LORA] PKI encrypt dest=%08lX key_fp=%s\n",
+             (unsigned long)dest, key_fp.c_str());
     touchPkiNodeKey(dest);
 
     uint8_t shared[32];
@@ -2221,8 +2160,13 @@ bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
         return false;
     }
     hashSharedKey(shared, sizeof(shared));
+    g_aes_ccm.setKey(shared, sizeof(shared));
 
     uint32_t extra_nonce = (uint32_t)random();
+    LORA_LOG("[LORA] PKI encrypt packet_id=%08lX extra_nonce=%08lX plain_len=%u\n",
+             (unsigned long)packet_id,
+             (unsigned long)extra_nonce,
+             (unsigned)plain_len);
     uint8_t nonce[16];
     uint64_t packet_id64 = static_cast<uint64_t>(packet_id);
     initPkiNonce(node_id_, packet_id64, extra_nonce, nonce);
@@ -2591,13 +2535,6 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
         return false;
     }
 
-    if (channel_hash == 0)
-    {
-        channel_hash = primary_channel_hash_;
-        psk = primary_psk_;
-        psk_len = primary_psk_len_;
-    }
-
     meshtastic_Routing routing = meshtastic_Routing_init_default;
     routing.which_variant = meshtastic_Routing_error_reason_tag;
     routing.error_reason = meshtastic_Routing_Error_NONE;
@@ -2628,6 +2565,48 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
     pb_ostream_t dstream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
     if (!pb_encode(&dstream, meshtastic_Data_fields, &data))
     {
+        return false;
+    }
+
+    if (channel_hash == 0)
+    {
+        if (!pki_ready_ || node_public_keys_.find(dest) == node_public_keys_.end())
+        {
+            return false;
+        }
+
+        uint8_t pki_buf[256];
+        size_t pki_len = sizeof(pki_buf);
+        MessageId msg_id = next_packet_id_++;
+        if (!encryptPkiPayload(dest, msg_id, data_buf, dstream.bytes_written, pki_buf, &pki_len))
+        {
+            return false;
+        }
+
+        uint8_t wire_buffer[256];
+        size_t wire_size = sizeof(wire_buffer);
+        uint8_t hop_limit = 0;
+        bool want_ack = false;
+        if (!buildWirePacket(pki_buf, pki_len, node_id_, msg_id,
+                             dest, channel_hash, hop_limit, want_ack,
+                             nullptr, 0, wire_buffer, &wire_size))
+        {
+            return false;
+        }
+
+        std::string ack_full_hex = toHex(wire_buffer, wire_size, wire_size);
+        LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+        int state = board_.radio.transmit(wire_buffer, wire_size);
+#else
+        int state = RADIOLIB_ERR_UNSUPPORTED;
+#endif
+        if (state == RADIOLIB_ERR_NONE)
+        {
+            startRadioReceive();
+            return true;
+        }
         return false;
     }
 
@@ -2667,13 +2646,6 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
         return false;
     }
 
-    if (channel_hash == 0)
-    {
-        channel_hash = primary_channel_hash_;
-        psk = primary_psk_;
-        psk_len = primary_psk_len_;
-    }
-
     meshtastic_Routing routing = meshtastic_Routing_init_default;
     routing.which_variant = meshtastic_Routing_error_reason_tag;
     routing.error_reason = reason;
@@ -2704,6 +2676,48 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
     pb_ostream_t dstream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
     if (!pb_encode(&dstream, meshtastic_Data_fields, &data))
     {
+        return false;
+    }
+
+    if (channel_hash == 0)
+    {
+        if (!pki_ready_ || node_public_keys_.find(dest) == node_public_keys_.end())
+        {
+            return false;
+        }
+
+        uint8_t pki_buf[256];
+        size_t pki_len = sizeof(pki_buf);
+        MessageId msg_id = next_packet_id_++;
+        if (!encryptPkiPayload(dest, msg_id, data_buf, dstream.bytes_written, pki_buf, &pki_len))
+        {
+            return false;
+        }
+
+        uint8_t wire_buffer[256];
+        size_t wire_size = sizeof(wire_buffer);
+        uint8_t hop_limit = 0;
+        bool want_ack = false;
+        if (!buildWirePacket(pki_buf, pki_len, node_id_, msg_id,
+                             dest, channel_hash, hop_limit, want_ack,
+                             nullptr, 0, wire_buffer, &wire_size))
+        {
+            return false;
+        }
+
+        std::string err_full_hex = toHex(wire_buffer, wire_size, wire_size);
+        LORA_LOG("[LORA] TX routing error full packet hex: %s\n", err_full_hex.c_str());
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+        int state = board_.radio.transmit(wire_buffer, wire_size);
+#else
+        int state = RADIOLIB_ERR_UNSUPPORTED;
+#endif
+        if (state == RADIOLIB_ERR_NONE)
+        {
+            startRadioReceive();
+            return true;
+        }
         return false;
     }
 

@@ -6,6 +6,7 @@
 #include "flash_store.h"
 #include <algorithm>
 #include <cstring>
+#include <map>
 
 namespace chat
 {
@@ -51,15 +52,27 @@ void FlashStore::append(const ChatMessage& msg)
         memcpy(rec.text, msg.text.data(), rec.text_len);
     }
 
+    Serial.printf("[FlashStore] append ch=%u status=%u from=%08lX peer=%08lX ts=%lu len=%u\n",
+                  static_cast<unsigned>(rec.channel),
+                  static_cast<unsigned>(rec.status),
+                  static_cast<unsigned long>(rec.from),
+                  static_cast<unsigned long>(rec.peer),
+                  static_cast<unsigned long>(rec.timestamp),
+                  static_cast<unsigned>(rec.text_len));
     records_[head_] = rec;
     persistRecord(head_);
     head_ = static_cast<uint16_t>((head_ + 1) % kMaxMessages);
     count_ = std::min<uint16_t>(static_cast<uint16_t>(count_ + 1), static_cast<uint16_t>(kMaxMessages));
 
     persistMeta();
+    if (msg.status == MessageStatus::Incoming)
+    {
+        ConversationId conv(msg.channel, msg.peer);
+        unread_[conv] = unread_[conv] + 1;
+    }
 }
 
-std::vector<ChatMessage> FlashStore::loadRecent(ChannelId channel, size_t n)
+std::vector<ChatMessage> FlashStore::loadRecent(const ConversationId& conv, size_t n)
 {
     std::vector<ChatMessage> out;
     if (!ready_ || count_ == 0 || n == 0) return out;
@@ -75,7 +88,11 @@ std::vector<ChatMessage> FlashStore::loadRecent(ChannelId channel, size_t n)
         {
             continue;
         }
-        if (static_cast<ChannelId>(rec.channel) != channel)
+        if (static_cast<ChannelId>(rec.channel) != conv.channel)
+        {
+            continue;
+        }
+        if (rec.peer != conv.peer)
         {
             continue;
         }
@@ -95,12 +112,21 @@ std::vector<ChatMessage> FlashStore::loadRecent(ChannelId channel, size_t n)
     return out;
 }
 
-std::vector<ChatMessage> FlashStore::loadAll() const
+std::vector<ConversationMeta> FlashStore::loadConversationPage(size_t offset,
+                                                               size_t limit,
+                                                               size_t* total)
 {
-    std::vector<ChatMessage> out;
-    if (!ready_ || count_ == 0) return out;
+    std::vector<ConversationMeta> list;
+    if (!ready_ || count_ == 0)
+    {
+        if (total)
+        {
+            *total = 0;
+        }
+        return list;
+    }
 
-    out.reserve(count_);
+    std::map<ConversationId, ChatMessage> last;
     size_t start = (head_ + kMaxMessages - count_) % kMaxMessages;
     for (size_t i = 0; i < count_; ++i)
     {
@@ -118,39 +144,96 @@ std::vector<ChatMessage> FlashStore::loadAll() const
         msg.timestamp = rec.timestamp;
         msg.text.assign(rec.text, rec.text_len);
         msg.status = static_cast<MessageStatus>(rec.status);
-        out.push_back(msg);
+        ConversationId conv(msg.channel, msg.peer);
+        auto it = last.find(conv);
+        if (it == last.end() || it->second.timestamp <= msg.timestamp)
+        {
+            last[conv] = msg;
+        }
     }
-    return out;
+
+    list.reserve(last.size());
+    for (const auto& pair : last)
+    {
+        const ConversationId& conv = pair.first;
+        const ChatMessage& msg = pair.second;
+        ConversationMeta meta;
+        meta.id = conv;
+        meta.preview = msg.text;
+        meta.last_timestamp = msg.timestamp;
+        auto unread_it = unread_.find(conv);
+        meta.unread = (unread_it != unread_.end()) ? unread_it->second : 0;
+        if (conv.peer == 0)
+        {
+            meta.name = "Broadcast";
+        }
+        else
+        {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%04lX",
+                     static_cast<unsigned long>(conv.peer & 0xFFFF));
+            meta.name = buf;
+        }
+        list.push_back(meta);
+    }
+    std::sort(list.begin(), list.end(),
+              [](const ConversationMeta& a, const ConversationMeta& b) {
+                  return a.last_timestamp > b.last_timestamp;
+              });
+    if (total)
+    {
+        *total = list.size();
+    }
+    if (limit != 0 && offset < list.size())
+    {
+        size_t end = offset + limit;
+        if (end > list.size())
+        {
+            end = list.size();
+        }
+        return std::vector<ConversationMeta>(list.begin() + static_cast<long>(offset),
+                                             list.begin() + static_cast<long>(end));
+    }
+    if (offset >= list.size())
+    {
+        return {};
+    }
+    if (offset > 0)
+    {
+        return std::vector<ConversationMeta>(list.begin() + static_cast<long>(offset), list.end());
+    }
+    return list;
 }
 
-void FlashStore::setUnread(ChannelId channel, int unread)
+void FlashStore::setUnread(const ConversationId& conv, int unread)
 {
-    if (!ready_) return;
-    char key[16];
-    snprintf(key, sizeof(key), "unread_%u", static_cast<uint8_t>(channel));
-    prefs_.putInt(key, unread);
+    (void)ready_;
+    unread_[conv] = unread;
 }
 
-int FlashStore::getUnread(ChannelId channel) const
+int FlashStore::getUnread(const ConversationId& conv) const
 {
-    if (!ready_) return 0;
-    char key[16];
-    snprintf(key, sizeof(key), "unread_%u", static_cast<uint8_t>(channel));
-    return prefs_.getInt(key, 0);
+    auto it = unread_.find(conv);
+    if (it == unread_.end())
+    {
+        return 0;
+    }
+    return it->second;
 }
 
-void FlashStore::clearChannel(ChannelId channel)
+void FlashStore::clearConversation(const ConversationId& conv)
 {
     if (!ready_) return;
     for (size_t i = 0; i < kMaxMessages; ++i)
     {
         Record& rec = records_[i];
-        if (static_cast<ChannelId>(rec.channel) == channel)
+        if (static_cast<ChannelId>(rec.channel) == conv.channel && rec.peer == conv.peer)
         {
             rec = {};
             persistRecord(static_cast<uint16_t>(i));
         }
     }
+    unread_.erase(conv);
 }
 
 bool FlashStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
@@ -207,9 +290,16 @@ void FlashStore::loadFromPrefs()
 
 void FlashStore::persistMeta()
 {
-    prefs_.putUChar(kKeyVer, kVersion);
-    prefs_.putUShort(kKeyHead, head_);
-    prefs_.putUShort(kKeyCount, count_);
+    size_t ver_written = prefs_.putUChar(kKeyVer, kVersion);
+    size_t head_written = prefs_.putUShort(kKeyHead, head_);
+    size_t count_written = prefs_.putUShort(kKeyCount, count_);
+    if (ver_written == 0 || head_written == 0 || count_written == 0)
+    {
+        Serial.printf("[FlashStore] persistMeta failed ver=%u head=%u count=%u\n",
+                      static_cast<unsigned>(ver_written),
+                      static_cast<unsigned>(head_written),
+                      static_cast<unsigned>(count_written));
+    }
 }
 
 void FlashStore::persistRecord(uint16_t idx)
@@ -217,7 +307,26 @@ void FlashStore::persistRecord(uint16_t idx)
     if (idx >= kMaxMessages) return;
     char key[8];
     snprintf(key, sizeof(key), "m%03u", static_cast<unsigned int>(idx));
-    prefs_.putBytes(key, &records_[idx], sizeof(Record));
+    size_t expected = sizeof(Record);
+    size_t written = prefs_.putBytes(key, &records_[idx], expected);
+    if (written != expected)
+    {
+        Serial.printf("[FlashStore] persistRecord failed idx=%u wrote=%u expected=%u\n",
+                      static_cast<unsigned>(idx),
+                      static_cast<unsigned>(written),
+                      static_cast<unsigned>(expected));
+    }
+    else
+    {
+        size_t actual = prefs_.getBytesLength(key);
+        if (actual != expected)
+        {
+            Serial.printf("[FlashStore] persistRecord size mismatch idx=%u len=%u expected=%u\n",
+                          static_cast<unsigned>(idx),
+                          static_cast<unsigned>(actual),
+                          static_cast<unsigned>(expected));
+        }
+    }
 }
 
 void FlashStore::clearAll()
@@ -226,6 +335,7 @@ void FlashStore::clearAll()
     head_ = 0;
     count_ = 0;
     std::fill(records_.begin(), records_.end(), Record{});
+    unread_.clear();
     persistMeta();
 }
 

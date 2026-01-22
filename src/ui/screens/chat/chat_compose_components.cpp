@@ -11,6 +11,16 @@
 #include <cstdio> // snprintf
 #include <cstring>
 
+#ifndef CHAT_COMPOSE_LOG_ENABLE
+#define CHAT_COMPOSE_LOG_ENABLE 0
+#endif
+
+#if CHAT_COMPOSE_LOG_ENABLE
+#define CHAT_COMPOSE_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define CHAT_COMPOSE_LOG(...)
+#endif
+
 namespace chat::ui
 {
 
@@ -51,9 +61,9 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
 {
     lv_obj_t* active = lv_screen_active();
     if (!active) {
-        Serial.printf("[ChatCompose] WARNING: lv_screen_active() is null\n");
+        CHAT_COMPOSE_LOG("[ChatCompose] WARNING: lv_screen_active() is null\n");
     } else {
-        Serial.printf("[ChatCompose] init: active=%p parent=%p\n", active, parent);
+        CHAT_COMPOSE_LOG("[ChatCompose] init: active=%p parent=%p\n", active, parent);
     }
 
     impl_ = new Impl();
@@ -79,10 +89,10 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     input::setup_default_group_focus(impl_->w);
 
     if (impl_->w.container && !lv_obj_is_valid(impl_->w.container)) {
-        Serial.printf("[ChatCompose] WARNING: container invalid\n");
+        CHAT_COMPOSE_LOG("[ChatCompose] WARNING: container invalid\n");
     }
     if (impl_->w.textarea && !lv_obj_is_valid(impl_->w.textarea)) {
-        Serial.printf("[ChatCompose] WARNING: textarea invalid\n");
+        CHAT_COMPOSE_LOG("[ChatCompose] WARNING: textarea invalid\n");
     }
 
     refresh_len();
@@ -306,7 +316,7 @@ void ChatComposeScreen::on_key(lv_event_t* e)
     }
 
     uint32_t key = lv_event_get_key(e);
-    Serial.printf("[ChatCompose] key=%lu\n", static_cast<unsigned long>(key));
+    CHAT_COMPOSE_LOG("[ChatCompose] key=%lu\n", static_cast<unsigned long>(key));
 
     lv_indev_t* indev = lv_indev_get_act();
     bool is_encoder = indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER;

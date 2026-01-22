@@ -11,6 +11,16 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
 
+#ifndef GPS_LOG_ENABLE
+#define GPS_LOG_ENABLE 0
+#endif
+
+#if GPS_LOG_ENABLE
+#define GPS_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define GPS_LOG(...)
+#endif
+
 class GPS : public TinyGPSPlus
 {
   public:
@@ -51,17 +61,17 @@ class GPS : public TinyGPSPlus
 
         // Log periodically (every 100 loops or every 5 seconds)
         loop_count++;
-        if (loop_count % 100 == 0 || (now - last_log_ms) >= 5000)
+        if (GPS_LOG_ENABLE && (loop_count % 100 == 0 || (now - last_log_ms) >= 5000))
         {
             uint32_t total_chars = charsProcessed();
             bool has_fix = location.isValid();
-            Serial.printf("[GPS::loop] Loop #%lu: chars_processed_this_loop=%lu, total_chars=%lu, has_fix=%d",
-                          loop_count, chars_processed, total_chars, has_fix);
+            GPS_LOG("[GPS::loop] Loop #%lu: chars_processed_this_loop=%lu, total_chars=%lu, has_fix=%d",
+                    loop_count, chars_processed, total_chars, has_fix);
             if (has_fix)
             {
-                Serial.printf(", lat=%.6f, lng=%.6f, sat=%d", location.lat(), location.lng(), satellites.value());
+                GPS_LOG(", lat=%.6f, lng=%.6f, sat=%d", location.lat(), location.lng(), satellites.value());
             }
-            Serial.printf("\n");
+            GPS_LOG("\n");
             last_log_ms = now;
         }
 

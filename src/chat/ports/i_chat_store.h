@@ -27,41 +27,48 @@ class IChatStore
     virtual void append(const ChatMessage& msg) = 0;
 
     /**
-     * @brief Load recent messages for channel
-     * @param channel Channel ID
+     * @brief Load recent messages for a conversation
+     * @param conv Conversation ID
      * @param n Number of messages to load
      * @return Vector of messages (oldest first)
      */
-    virtual std::vector<ChatMessage> loadRecent(ChannelId channel, size_t n) = 0;
+    virtual std::vector<ChatMessage> loadRecent(const ConversationId& conv, size_t n) = 0;
 
     /**
-     * @brief Set unread count for channel
-     * @param channel Channel ID
+     * @brief Load conversation list metadata
+     * @param offset Start offset (pagination)
+     * @param limit Max items to return (0 means all)
+     * @param total Optional total count out-parameter
+     * @return Vector of conversation meta items
+     */
+    virtual std::vector<ConversationMeta> loadConversationPage(size_t offset,
+                                                               size_t limit,
+                                                               size_t* total) = 0;
+
+    /**
+     * @brief Set unread count for conversation
+     * @param conv Conversation ID
      * @param unread Unread count
      */
-    virtual void setUnread(ChannelId channel, int unread) = 0;
+    virtual void setUnread(const ConversationId& conv, int unread) = 0;
 
     /**
-     * @brief Get unread count for channel
-     * @param channel Channel ID
+     * @brief Get unread count for conversation
+     * @param conv Conversation ID
      * @return Unread count
      */
-    virtual int getUnread(ChannelId channel) const = 0;
+    virtual int getUnread(const ConversationId& conv) const = 0;
 
     /**
-     * @brief Clear all messages for channel
-     * @param channel Channel ID
+     * @brief Clear all messages for conversation
+     * @param conv Conversation ID
      */
-    virtual void clearChannel(ChannelId channel) = 0;
+    virtual void clearConversation(const ConversationId& conv) = 0;
 
     /**
      * @brief Clear all messages for all channels
      */
-    virtual void clearAll()
-    {
-        clearChannel(ChannelId::PRIMARY);
-        clearChannel(ChannelId::SECONDARY);
-    }
+    virtual void clearAll() = 0;
 
     /**
      * @brief Update stored message status by message ID

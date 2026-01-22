@@ -37,10 +37,9 @@ class ChatService
     void switchChannel(ChannelId channel);
 
     /**
-     * @brief Mark channel as read
-     * @param channel Channel ID
+     * @brief Mark conversation as read
+     * @param conv Conversation ID
      */
-    void markChannelRead(ChannelId channel);
     void markConversationRead(const ConversationId& conv);
 
     /**
@@ -51,16 +50,16 @@ class ChatService
     bool resendFailed(MessageId msg_id);
 
     /**
-     * @brief Get unread count for channel
+     * @brief Get recent messages for a conversation
      */
-    int getUnreadCount(ChannelId channel) const;
+    std::vector<ChatMessage> getRecentMessages(const ConversationId& conv, size_t limit) const;
+    std::vector<ConversationMeta> getConversations(size_t offset, size_t limit, size_t* total) const;
 
     /**
-     * @brief Get recent messages for channel
+     * @brief Enable/disable in-memory model updates
      */
-    std::vector<ChatMessage> getRecentMessages(ChannelId channel, size_t limit) const;
-    std::vector<ChatMessage> getRecentMessages(const ConversationId& conv, size_t limit) const;
-    std::vector<ConversationMeta> getConversations() const;
+    void setModelEnabled(bool enabled);
+    bool isModelEnabled() const { return model_enabled_; }
 
     /**
      * @brief Clear all stored messages and model state
@@ -97,6 +96,7 @@ class ChatService
     IMeshAdapter& adapter_;
     IChatStore& store_;
     ChannelId current_channel_;
+    bool model_enabled_ = true;
 };
 
 } // namespace chat

@@ -106,7 +106,6 @@ class MtAdapter : public chat::IMeshAdapter
     std::map<uint32_t, std::array<uint8_t, 32>> node_public_keys_;
     std::map<uint32_t, uint32_t> node_key_last_seen_;
     std::map<uint32_t, ChannelId> node_last_channel_;
-    std::map<uint32_t, uint32_t> pki_disabled_until_ms_;
     std::map<uint32_t, uint32_t> nodeinfo_last_seen_ms_;
     std::map<uint32_t, uint32_t> pending_ack_ms_;
     std::map<uint32_t, uint32_t> pending_ack_dest_;

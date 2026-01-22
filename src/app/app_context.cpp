@@ -40,16 +40,20 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     chat_model_ = std::make_unique<chat::ChatModel>();
     chat_model_->setPolicy(config_.chat_policy);
 
-    // Create storage (flash-backed ring, 300 messages FIFO)
-    auto flash_store = std::make_unique<chat::FlashStore>();
-    if (flash_store->isReady())
+    // Create storage (prefer SD log, fallback to RAM)
+    bool sd_available = (SD.cardType() != CARD_NONE);
+    if (sd_available)
     {
-        flash_store_ = flash_store.get();
-        chat_store_ = std::move(flash_store);
+        auto log_store = std::make_unique<chat::LogStore>();
+        if (log_store->begin(SD))
+        {
+            Serial.printf("[AppContext] chat store=LogStore (SD)\n");
+            chat_store_ = std::move(log_store);
+        }
     }
-    else
+    if (!chat_store_)
     {
-        flash_store_ = nullptr;
+        Serial.printf("[AppContext] chat store=RamStore\n");
         chat_store_ = std::make_unique<chat::RamStore>();
     }
 
@@ -83,33 +87,6 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     team_service_ = std::make_unique<team::TeamService>(
         *team_crypto_, *mesh_adapter_, *team_event_sink_);
     team_controller_ = std::make_unique<team::TeamController>(*team_service_);
-
-    // Load persisted messages into model (no unread)
-    if (flash_store_)
-    {
-        std::vector<chat::ChatMessage> all_msgs = flash_store_->loadAll();
-        Serial.printf("[AppContext] flash messages loaded=%u\n",
-                      static_cast<unsigned>(all_msgs.size()));
-        std::vector<chat::ConversationId> touched;
-        touched.reserve(all_msgs.size());
-        for (const auto& msg : all_msgs)
-        {
-            if (msg.from == 0)
-            {
-                chat_model_->onSendQueued(msg);
-            }
-            else
-            {
-                chat_model_->onIncoming(msg);
-            }
-            chat::ConversationId conv(msg.channel, msg.peer);
-            touched.push_back(conv);
-        }
-        for (const auto& conv : touched)
-        {
-            chat_model_->markRead(conv);
-        }
-    }
 
     // Create contact infrastructure
     node_store_ = std::make_unique<chat::meshtastic::NodeStore>();
@@ -312,10 +289,7 @@ void AppContext::clearMessageDb()
         chat_model_->clearAll();
         if (chat_store_)
         {
-            chat_store_->clearChannel(chat::ChannelId::PRIMARY);
-            chat_store_->clearChannel(chat::ChannelId::SECONDARY);
-            chat_store_->setUnread(chat::ChannelId::PRIMARY, 0);
-            chat_store_->setUnread(chat::ChannelId::SECONDARY, 0);
+            chat_store_->clearAll();
         }
     }
 }

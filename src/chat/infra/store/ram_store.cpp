@@ -4,15 +4,14 @@
  */
 
 #include "ram_store.h"
+#include <algorithm>
+#include <cstdio>
 
 namespace chat
 {
 
 RamStore::RamStore()
 {
-    // Initialize channels (use emplace to avoid temporary on stack)
-    channels_.emplace(ChannelId::PRIMARY, ChannelStorage());
-    channels_.emplace(ChannelId::SECONDARY, ChannelStorage());
 }
 
 RamStore::~RamStore()
@@ -21,13 +20,18 @@ RamStore::~RamStore()
 
 void RamStore::append(const ChatMessage& msg)
 {
-    ChannelStorage& storage = getChannelStorage(msg.channel);
+    ConversationId conv(msg.channel, msg.peer);
+    ConversationStorage& storage = getConversationStorage(conv);
     storage.messages.append(msg);
+    if (msg.status == MessageStatus::Incoming)
+    {
+        storage.unread_count++;
+    }
 }
 
-std::vector<ChatMessage> RamStore::loadRecent(ChannelId channel, size_t n)
+std::vector<ChatMessage> RamStore::loadRecent(const ConversationId& conv, size_t n)
 {
-    const ChannelStorage& storage = getChannelStorage(channel);
+    const ConversationStorage& storage = getConversationStorage(conv);
     std::vector<ChatMessage> result;
 
     size_t count = storage.messages.count();
@@ -45,31 +49,104 @@ std::vector<ChatMessage> RamStore::loadRecent(ChannelId channel, size_t n)
     return result;
 }
 
-void RamStore::setUnread(ChannelId channel, int unread)
+std::vector<ConversationMeta> RamStore::loadConversationPage(size_t offset,
+                                                            size_t limit,
+                                                            size_t* total)
 {
-    ChannelStorage& storage = getChannelStorage(channel);
+    std::vector<ConversationMeta> list;
+    list.reserve(conversations_.size());
+    for (const auto& pair : conversations_)
+    {
+        const ConversationId& conv = pair.first;
+        const ConversationStorage& storage = pair.second;
+        size_t count = storage.messages.count();
+        if (count == 0)
+        {
+            continue;
+        }
+        const ChatMessage* last = storage.messages.get(count - 1);
+        if (!last)
+        {
+            continue;
+        }
+        ConversationMeta meta;
+        meta.id = conv;
+        meta.preview = last->text;
+        meta.last_timestamp = last->timestamp;
+        meta.unread = storage.unread_count;
+        if (conv.peer == 0)
+        {
+            meta.name = "Broadcast";
+        }
+        else
+        {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%04lX",
+                     static_cast<unsigned long>(conv.peer & 0xFFFF));
+            meta.name = buf;
+        }
+        list.push_back(meta);
+    }
+
+    std::sort(list.begin(), list.end(),
+              [](const ConversationMeta& a, const ConversationMeta& b) {
+                  return a.last_timestamp > b.last_timestamp;
+              });
+    if (total)
+    {
+        *total = list.size();
+    }
+    if (limit != 0 && offset < list.size())
+    {
+        size_t end = offset + limit;
+        if (end > list.size())
+        {
+            end = list.size();
+        }
+        return std::vector<ConversationMeta>(list.begin() + static_cast<long>(offset),
+                                             list.begin() + static_cast<long>(end));
+    }
+    if (offset >= list.size())
+    {
+        return {};
+    }
+    if (offset > 0)
+    {
+        return std::vector<ConversationMeta>(list.begin() + static_cast<long>(offset), list.end());
+    }
+    return list;
+}
+
+void RamStore::setUnread(const ConversationId& conv, int unread)
+{
+    ConversationStorage& storage = getConversationStorage(conv);
     storage.unread_count = unread;
 }
 
-int RamStore::getUnread(ChannelId channel) const
+int RamStore::getUnread(const ConversationId& conv) const
 {
-    const ChannelStorage& storage = getChannelStorage(channel);
+    const ConversationStorage& storage = getConversationStorage(conv);
     return storage.unread_count;
 }
 
-void RamStore::clearChannel(ChannelId channel)
+void RamStore::clearConversation(const ConversationId& conv)
 {
-    ChannelStorage& storage = getChannelStorage(channel);
+    ConversationStorage& storage = getConversationStorage(conv);
     storage.messages.clear();
     storage.unread_count = 0;
+}
+
+void RamStore::clearAll()
+{
+    conversations_.clear();
 }
 
 bool RamStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
 {
     if (msg_id == 0) return false;
-    for (auto& pair : channels_)
+    for (auto& pair : conversations_)
     {
-        ChannelStorage& storage = pair.second;
+        ConversationStorage& storage = pair.second;
         size_t count = storage.messages.count();
         for (size_t i = 0; i < count; ++i)
         {
@@ -84,24 +161,23 @@ bool RamStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
     return false;
 }
 
-RamStore::ChannelStorage& RamStore::getChannelStorage(ChannelId channel)
+RamStore::ConversationStorage& RamStore::getConversationStorage(const ConversationId& conv)
 {
-    auto it = channels_.find(channel);
-    if (it == channels_.end())
+    auto it = conversations_.find(conv);
+    if (it == conversations_.end())
     {
-        // Use emplace to avoid temporary on stack
-        auto result = channels_.emplace(channel, ChannelStorage());
+        auto result = conversations_.emplace(conv, ConversationStorage());
         return result.first->second;
     }
     return it->second;
 }
 
-const RamStore::ChannelStorage& RamStore::getChannelStorage(ChannelId channel) const
+const RamStore::ConversationStorage& RamStore::getConversationStorage(const ConversationId& conv) const
 {
-    auto it = channels_.find(channel);
-    if (it == channels_.end())
+    auto it = conversations_.find(conv);
+    if (it == conversations_.end())
     {
-        static ChannelStorage empty;
+        static ConversationStorage empty;
         return empty;
     }
     return it->second;

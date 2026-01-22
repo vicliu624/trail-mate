@@ -95,18 +95,7 @@ void ui_update_top_bar_battery(ui::widgets::TopBar& bar)
     int battery = instance.getBatteryLevel();
     bool charging = instance.isCharging();
     ui_format_battery(battery, charging, battery_buf, sizeof(battery_buf));
-
-    char time_buf[8] = "--:--";
-    time_t now = time(nullptr);
-    time_t local = ui_apply_timezone_offset(now);
-    struct tm* info = gmtime(&local);
-    if (info) {
-        strftime(time_buf, sizeof(time_buf), "%H:%M", info);
-    }
-
-    char status_buf[32];
-    snprintf(status_buf, sizeof(status_buf), "%s  %s", time_buf, battery_buf);
-    ui::widgets::top_bar_set_right_text(bar, status_buf);
+    ui::widgets::top_bar_set_right_text(bar, battery_buf);
 }
 
 int ui_get_timezone_offset_min()

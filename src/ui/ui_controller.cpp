@@ -268,6 +268,7 @@ void UiController::switchToChannelList()
         channel_list_->setBackCallback(handle_back, this);
     }
 
+    service_.setModelEnabled(true);
     refreshUnreadCounts();
 }
 
@@ -318,7 +319,8 @@ void UiController::switchToConversation(chat::ConversationId conv)
         else
         {
             // Fallback to short_name from conversation meta
-            auto convs = service_.getConversations();
+            size_t total = 0;
+            auto convs = service_.getConversations(0, 0, &total);
             for (const auto& c : convs)
             {
                 if (c.id == conv)
@@ -411,7 +413,8 @@ void UiController::switchToCompose(chat::ConversationId conv)
         else
         {
             // Fallback to short_name from conversation meta
-            auto convs = service_.getConversations();
+            size_t total = 0;
+            auto convs = service_.getConversations(0, 0, &total);
             for (const auto& c : convs)
             {
                 if (c.id == conv)
@@ -447,7 +450,8 @@ void UiController::refreshUnreadCounts()
         return;
     }
 
-    auto convs = service_.getConversations();
+    size_t total = 0;
+    auto convs = service_.getConversations(0, 0, &total);
 
     // Update conversation names with contact nicknames
     app::AppContext& app_ctx = app::AppContext::getInstance();
@@ -499,6 +503,7 @@ void UiController::handleComposeAction(bool send)
 void UiController::exitToMenu()
 {
     // Clean up UI objects
+    service_.setModelEnabled(false);
     cleanupComposeIme();
     compose_.reset();
     conversation_.reset();
