@@ -8,8 +8,10 @@
 #include "../../../chat/usecase/chat_service.h"
 
 #include <Arduino.h>
+#include <algorithm>
 #include <cstdio> // snprintf
 #include <cstring>
+#include <vector>
 
 #ifndef CHAT_COMPOSE_LOG_ENABLE
 #define CHAT_COMPOSE_LOG_ENABLE 0
@@ -28,11 +30,45 @@ static constexpr size_t kMaxInputBytes = 233;
 static constexpr uint32_t kSendTimeoutMs = 3000;
 static constexpr uint32_t kSendResultHoldMs = 600;
 
+enum class SendState
+{
+    Idle,
+    Waiting,
+    DoneOk,
+    DoneFail,
+    DoneTimeout
+};
+
+struct ChatComposeScreen::LifetimeGuard
+{
+    bool alive = false;
+    int pending_async = 0;
+    ChatComposeScreen* owner = nullptr;
+};
+
+struct ChatComposeScreen::DonePayload
+{
+    LifetimeGuard* guard = nullptr;
+    void (*done_cb)(bool ok, bool timeout, void*) = nullptr;
+    void* user_data = nullptr;
+    bool ok = false;
+    bool timeout = false;
+};
+
 struct ChatComposeScreen::Impl
 {
     chat::ui::compose::layout::Spec spec;
     chat::ui::compose::layout::Widgets w;
     chat::ui::compose::input::State input_state;
+    LifetimeGuard* guard = nullptr;
+    std::vector<lv_timer_t*> timers;
+    struct ActionContext
+    {
+        ChatComposeScreen* screen = nullptr;
+        ActionIntent intent = ActionIntent::Send;
+    };
+    ActionContext send_ctx;
+    ActionContext cancel_ctx;
     lv_obj_t* sending_overlay = nullptr;
     lv_obj_t* sending_label = nullptr;
     lv_timer_t* send_timer = nullptr;
@@ -40,9 +76,7 @@ struct ChatComposeScreen::Impl
     uint32_t send_finish_ms = 0;
     chat::MessageId pending_msg_id = 0;
     chat::ChatService* send_service = nullptr;
-    bool send_finished = false;
-    bool send_timeout = false;
-    bool send_ok = false;
+    SendState send_state = SendState::Idle;
     void (*send_done_cb)(bool ok, bool timeout, void*) = nullptr;
     void* send_done_user_data = nullptr;
 };
@@ -53,6 +87,108 @@ static void set_btn_label_white(lv_obj_t* btn)
     if (child && lv_obj_check_type(child, &lv_label_class))
     {
         lv_obj_set_style_text_color(child, lv_color_white(), 0);
+    }
+}
+
+lv_timer_t* ChatComposeScreen::add_timer(ChatComposeScreen::Impl* impl,
+                                         lv_timer_cb_t cb,
+                                         uint32_t period_ms,
+                                         void* user_data)
+{
+    if (!impl) return nullptr;
+    lv_timer_t* timer = lv_timer_create(cb, period_ms, user_data);
+    if (timer)
+    {
+        impl->timers.push_back(timer);
+    }
+    return timer;
+}
+
+void ChatComposeScreen::clear_timers(ChatComposeScreen::Impl* impl)
+{
+    if (!impl) return;
+    for (auto* timer : impl->timers)
+    {
+        if (timer)
+        {
+            lv_timer_del(timer);
+        }
+    }
+    impl->timers.clear();
+    impl->send_timer = nullptr;
+}
+
+void ChatComposeScreen::async_done_cb(void* user_data)
+{
+    auto* payload = static_cast<DonePayload*>(user_data);
+    if (!payload)
+    {
+        return;
+    }
+    LifetimeGuard* guard = payload->guard;
+    if (guard && guard->alive && payload->done_cb)
+    {
+        payload->done_cb(payload->ok, payload->timeout, payload->user_data);
+    }
+    if (guard)
+    {
+        guard->pending_async = std::max(0, guard->pending_async - 1);
+        if (!guard->alive && guard->pending_async == 0)
+        {
+            delete guard;
+        }
+    }
+    delete payload;
+}
+
+void ChatComposeScreen::schedule_done_async(LifetimeGuard* guard,
+                                            void (*done_cb)(bool ok, bool timeout, void*),
+                                            void* user_data,
+                                            bool ok,
+                                            bool timeout)
+{
+    if (!guard || !done_cb)
+    {
+        return;
+    }
+    auto* payload = new DonePayload();
+    payload->guard = guard;
+    payload->done_cb = done_cb;
+    payload->user_data = user_data;
+    payload->ok = ok;
+    payload->timeout = timeout;
+    guard->pending_async++;
+    lv_async_call(async_done_cb, payload);
+}
+
+void ChatComposeScreen::on_root_deleted(lv_event_t* e)
+{
+    auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
+    if (!screen || !screen->impl_)
+    {
+        return;
+    }
+    ChatComposeScreen::Impl* impl = screen->impl_;
+    if (impl->guard)
+    {
+        impl->guard->alive = false;
+    }
+    clear_timers(impl);
+    impl->send_service = nullptr;
+    impl->send_done_cb = nullptr;
+    impl->send_done_user_data = nullptr;
+    screen->action_cb_ = nullptr;
+    screen->action_cb_user_data_ = nullptr;
+    screen->back_cb_ = nullptr;
+    screen->back_cb_user_data_ = nullptr;
+    screen->ime_widget_ = nullptr;
+
+    LifetimeGuard* guard = impl->guard;
+    screen->impl_ = nullptr;
+    delete impl;
+    if (guard && guard->pending_async == 0)
+    {
+        delete guard;
     }
 }
 
@@ -67,18 +203,31 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     }
 
     impl_ = new Impl();
+    impl_->guard = new LifetimeGuard();
+    impl_->guard->alive = true;
+    impl_->guard->pending_async = 0;
+    impl_->guard->owner = this;
 
     using namespace chat::ui::compose;
 
     layout::create(parent, impl_->spec, impl_->w);
     styles::apply_all(impl_->w);
 
+    if (impl_->w.container)
+    {
+        lv_obj_add_event_cb(impl_->w.container, on_root_deleted, LV_EVENT_DELETE, this);
+    }
+
     lv_textarea_set_placeholder_text(impl_->w.textarea, "");
     lv_textarea_set_one_line(impl_->w.textarea, false);
     lv_textarea_set_max_length(impl_->w.textarea, kMaxInputBytes);
 
-    lv_obj_add_event_cb(impl_->w.send_btn, on_action_click, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(impl_->w.cancel_btn, on_action_click, LV_EVENT_CLICKED, this);
+    impl_->send_ctx.screen = this;
+    impl_->send_ctx.intent = ActionIntent::Send;
+    impl_->cancel_ctx.screen = this;
+    impl_->cancel_ctx.intent = ActionIntent::Cancel;
+    lv_obj_add_event_cb(impl_->w.send_btn, on_action_click, LV_EVENT_CLICKED, &impl_->send_ctx);
+    lv_obj_add_event_cb(impl_->w.cancel_btn, on_action_click, LV_EVENT_CLICKED, &impl_->cancel_ctx);
 
     set_btn_label_white(impl_->w.send_btn);
     set_btn_label_white(impl_->w.cancel_btn);
@@ -101,20 +250,10 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
 ChatComposeScreen::~ChatComposeScreen()
 {
     if (!impl_) return;
-
-    if (impl_->send_timer)
-    {
-        lv_timer_del(impl_->send_timer);
-        impl_->send_timer = nullptr;
-    }
-
-    if (impl_->w.container)
+    if (impl_->w.container && lv_obj_is_valid(impl_->w.container))
     {
         lv_obj_del(impl_->w.container);
     }
-
-    delete impl_;
-    impl_ = nullptr;
 }
 
 lv_obj_t* ChatComposeScreen::getObj() const
@@ -167,15 +306,13 @@ void ChatComposeScreen::beginSend(chat::ChatService* service,
                                   void (*done_cb)(bool ok, bool timeout, void*),
                                   void* user_data)
 {
-    if (!impl_) return;
+    if (!impl_ || !impl_->guard || !impl_->guard->alive) return;
 
     impl_->send_service = service;
     impl_->pending_msg_id = msg_id;
     impl_->send_start_ms = millis();
     impl_->send_finish_ms = 0;
-    impl_->send_finished = false;
-    impl_->send_timeout = false;
-    impl_->send_ok = false;
+    impl_->send_state = SendState::Waiting;
     impl_->send_done_cb = done_cb;
     impl_->send_done_user_data = user_data;
 
@@ -203,10 +340,9 @@ void ChatComposeScreen::beginSend(chat::ChatService* service,
 
     if (impl_->send_timer)
     {
-        lv_timer_del(impl_->send_timer);
-        impl_->send_timer = nullptr;
+        clear_timers(impl_);
     }
-    impl_->send_timer = lv_timer_create(on_send_timer, 150, this);
+    impl_->send_timer = add_timer(impl_, on_send_timer, 150, this);
     if (!impl_->send_timer) return;
 
     if (impl_->pending_msg_id == 0 || !impl_->send_service)
@@ -217,10 +353,19 @@ void ChatComposeScreen::beginSend(chat::ChatService* service,
 
 void ChatComposeScreen::finishSend(bool ok, bool timeout, const char* message)
 {
-    if (!impl_) return;
-    impl_->send_finished = true;
-    impl_->send_timeout = timeout;
-    impl_->send_ok = ok;
+    if (!impl_ || !impl_->guard || !impl_->guard->alive) return;
+    if (timeout)
+    {
+        impl_->send_state = SendState::DoneTimeout;
+    }
+    else if (ok)
+    {
+        impl_->send_state = SendState::DoneOk;
+    }
+    else
+    {
+        impl_->send_state = SendState::DoneFail;
+    }
     impl_->send_finish_ms = millis();
     setSendingText(message);
 }
@@ -232,7 +377,7 @@ void ChatComposeScreen::setSendingText(const char* text)
     lv_obj_center(impl_->sending_label);
 }
 
-void ChatComposeScreen::setActionCallback(void (*cb)(bool send, void*), void* user_data)
+void ChatComposeScreen::setActionCallback(void (*cb)(ActionIntent intent, void*), void* user_data)
 {
     action_cb_ = cb;
     action_cb_user_data_ = user_data;
@@ -281,25 +426,41 @@ void ChatComposeScreen::refresh_len()
 
 void ChatComposeScreen::on_action_click(lv_event_t* e)
 {
-    auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
-    if (!screen || !screen->action_cb_ || !screen->impl_) return;
-
-    auto* target = reinterpret_cast<lv_obj_t*>(lv_event_get_target(e)); // 兼容 void*
-    bool send = (target == screen->impl_->w.send_btn);
-    screen->action_cb_(send, screen->action_cb_user_data_);
+    auto* ctx = static_cast<Impl::ActionContext*>(lv_event_get_user_data(e));
+    if (!ctx || !ctx->screen)
+    {
+        return;
+    }
+    auto* screen = ctx->screen;
+    if (!screen->impl_ || !screen->impl_->guard || !screen->impl_->guard->alive)
+    {
+        return;
+    }
+    if (!screen->action_cb_)
+    {
+        return;
+    }
+    screen->action_cb_(ctx->intent, screen->action_cb_user_data_);
 }
 
 void ChatComposeScreen::on_text_changed(lv_event_t* e)
 {
     auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
-    if (!screen) return;
+    if (!screen || !screen->impl_ || !screen->impl_->guard || !screen->impl_->guard->alive)
+    {
+        return;
+    }
     screen->refresh_len();
 }
 
 void ChatComposeScreen::on_back(void* user_data)
 {
     auto* screen = static_cast<ChatComposeScreen*>(user_data);
-    if (screen && screen->back_cb_)
+    if (!screen || !screen->impl_ || !screen->impl_->guard || !screen->impl_->guard->alive)
+    {
+        return;
+    }
+    if (screen->back_cb_)
     {
         screen->back_cb_(screen->back_cb_user_data_);
     }
@@ -308,7 +469,10 @@ void ChatComposeScreen::on_back(void* user_data)
 void ChatComposeScreen::on_key(lv_event_t* e)
 {
     auto* screen = static_cast<ChatComposeScreen*>(lv_event_get_user_data(e));
-    if (!screen || !screen->impl_) return;
+    if (!screen || !screen->impl_ || !screen->impl_->guard || !screen->impl_->guard->alive)
+    {
+        return;
+    }
 
     if (screen->ime_widget_ && screen->ime_widget_->handle_key(e))
     {
@@ -333,11 +497,14 @@ void ChatComposeScreen::on_key(lv_event_t* e)
 void ChatComposeScreen::on_send_timer(lv_timer_t* timer)
 {
     auto* screen = static_cast<ChatComposeScreen*>(timer->user_data);
-    if (!screen || !screen->impl_) return;
+    if (!screen || !screen->impl_ || !screen->impl_->guard || !screen->impl_->guard->alive)
+    {
+        return;
+    }
     auto* impl = screen->impl_;
 
     uint32_t now = millis();
-    if (!impl->send_finished)
+    if (impl->send_state == SendState::Waiting)
     {
         if (!impl->send_service || impl->pending_msg_id == 0)
         {
@@ -358,32 +525,32 @@ void ChatComposeScreen::on_send_timer(lv_timer_t* timer)
                 }
             }
         }
-        if (!impl->send_finished && (now - impl->send_start_ms >= kSendTimeoutMs))
+        if (impl->send_state == SendState::Waiting &&
+            (now - impl->send_start_ms >= kSendTimeoutMs))
         {
             screen->finishSend(false, true, "No response");
         }
     }
 
-    if (impl->send_finished && (now - impl->send_finish_ms >= kSendResultHoldMs))
+    if (impl->send_state != SendState::Waiting &&
+        impl->send_state != SendState::Idle &&
+        (now - impl->send_finish_ms >= kSendResultHoldMs))
     {
         auto* done_cb = impl->send_done_cb;
         void* done_user = impl->send_done_user_data;
-        bool ok = impl->send_ok;
-        bool timeout = impl->send_timeout;
+        bool ok = (impl->send_state == SendState::DoneOk);
+        bool timeout = (impl->send_state == SendState::DoneTimeout);
 
         if (impl->sending_overlay)
         {
             lv_obj_add_flag(impl->sending_overlay, LV_OBJ_FLAG_HIDDEN);
         }
-        if (impl->send_timer)
-        {
-            lv_timer_del(impl->send_timer);
-            impl->send_timer = nullptr;
-        }
-        if (done_cb)
-        {
-            done_cb(ok, timeout, done_user);
-        }
+        clear_timers(impl);
+        impl->send_done_cb = nullptr;
+        impl->send_done_user_data = nullptr;
+        impl->send_service = nullptr;
+        impl->send_state = SendState::Idle;
+        schedule_done_async(impl->guard, done_cb, done_user, ok, timeout);
     }
 }
 
