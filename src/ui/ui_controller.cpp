@@ -45,12 +45,13 @@ void handle_compose_back(void* user_data)
     }
 }
 
-void handle_compose_action(bool send, void* user_data)
+void handle_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* user_data)
 {
     auto* controller = static_cast<UiController*>(user_data);
     if (controller)
     {
-        controller->handleComposeAction(send);
+        controller->handleComposeAction(
+            intent == chat::ui::ChatComposeScreen::ActionIntent::Send);
     }
 }
 
