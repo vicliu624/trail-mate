@@ -4,6 +4,7 @@
 build/
 libdeps/
 test/
+.trunk/
 
 # Compiled Object files
 *.o

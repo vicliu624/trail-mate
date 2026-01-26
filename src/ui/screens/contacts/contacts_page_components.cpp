@@ -74,7 +74,7 @@ static void on_del_cancel_clicked(lv_event_t* e);
 static void on_info_ok_clicked(lv_event_t* e);
 static void open_chat_compose();
 static void close_chat_compose();
-static void on_compose_action(bool send, void* user_data);
+static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* user_data);
 static void on_compose_back(void* user_data);
 static void on_compose_send_done(bool ok, bool timeout, void* user_data);
 
@@ -694,9 +694,10 @@ static void close_chat_compose()
     refresh_ui();
 }
 
-static void on_compose_action(bool send, void* /*user_data*/)
+static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* /*user_data*/)
 {
-    if (send && g_contacts_state.compose_screen && g_contacts_state.chat_service) {
+    if (intent == chat::ui::ChatComposeScreen::ActionIntent::Send &&
+        g_contacts_state.compose_screen && g_contacts_state.chat_service) {
         std::string text = g_contacts_state.compose_screen->getText();
         if (!text.empty()) {
             chat::MessageId msg_id = g_contacts_state.chat_service->sendText(
