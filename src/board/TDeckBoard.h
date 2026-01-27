@@ -58,6 +58,7 @@ class TDeckBoard : public BoardBase,
     void pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color) override;
     uint16_t width() override;
     uint16_t height() override;
+    bool useDMA() override { return true; }
 
     // LoraBoard
     bool isRadioOnline() const override { return (devices_probe_ & HW_RADIO_ONLINE) != 0; }

@@ -1,27 +1,12 @@
 #include "board/TDeckBoard.h"
-
-namespace
-{
-// Minimal ST7789 init sequence with required delays.
-static const CommandTable_t kSt7789Init[] = {
-    {0x11, {0}, 0x80},      // Sleep out + delay
-    {0x3A, {0x55}, 1},      // 16-bit color
-    {0x21, {0}, 0},         // Display inversion on
-    {0x29, {0}, 0x80},      // Display on + delay
-};
-
-static const DispRotationConfig_t kSt7789Rot[4] = {
-    {static_cast<uint8_t>(0x00 | 0x08), SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0},
-    {static_cast<uint8_t>(0x60 | 0x08), SCREEN_HEIGHT, SCREEN_WIDTH, 0, 0},
-    {static_cast<uint8_t>(0xC0 | 0x08), SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0},
-    {static_cast<uint8_t>(0xA0 | 0x08), SCREEN_HEIGHT, SCREEN_WIDTH, 0, 0},
-};
-} // namespace
+#include "display/drivers/ST7789TDeck.h"
 
 TDeckBoard::TDeckBoard()
     : LilyGo_Display(SPI_DRIVER, false),
-      disp_(SCREEN_WIDTH, SCREEN_HEIGHT, kSt7789Init, sizeof(kSt7789Init) / sizeof(kSt7789Init[0]),
-            kSt7789Rot)
+      disp_(SCREEN_WIDTH, SCREEN_HEIGHT,
+            display::drivers::ST7789TDeck::getInitCommands(),
+            display::drivers::ST7789TDeck::getInitCommandsCount(),
+            display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT))
 {
 }
 
@@ -98,7 +83,8 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 
     // Initialize display (ST7789) before LVGL starts flushing.
 #if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
-    disp_.init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 40, SPI);
+    // ST7789 on T-Deck is sensitive to long full-frame bursts; use a safer SPI clock.
+    disp_.init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 20, SPI);
     rotation_ = disp_.getRotation();
     Serial.printf("[TDeckBoard] display init OK: %ux%u\n", disp_._width, disp_._height);
 #else
