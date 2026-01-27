@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file mt_adapter.cpp
  * @brief Meshtastic mesh adapter implementation
  */
@@ -25,6 +25,7 @@
 #include <Curve25519.h>
 #include <Preferences.h>
 #include <RNG.h>
+#include <RadioLib.h>
 #include <SHA256.h>
 #include <vector>
 
@@ -621,7 +622,7 @@ namespace chat
 namespace meshtastic
 {
 
-MtAdapter::MtAdapter(TLoRaPagerBoard& board)
+MtAdapter::MtAdapter(LoraBoard& board)
     : board_(board),
       next_packet_id_(1),
       ready_(false),
@@ -771,14 +772,17 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         return false;
     }
 
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         return false;
     }
 
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    state = board_.radio.transmit(wire_buffer, wire_size);
+    state = board_.transmitRadio(wire_buffer, wire_size);
+#else
+    // Other radio types - implement as needed
+    state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
 
     bool ok = (state == RADIOLIB_ERR_NONE);
@@ -814,7 +818,7 @@ void MtAdapter::applyConfig(const MeshConfig& config)
 
 bool MtAdapter::isReady() const
 {
-    return ready_ && board_.isHardwareOnline(HW_RADIO_ONLINE);
+    return ready_ && board_.isRadioOnline();
 }
 
 bool MtAdapter::pollIncomingRawPacket(uint8_t* out_data, size_t& out_len, size_t max_len)
@@ -1490,14 +1494,14 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     // Send via LoRa using RadioLib
     int state = RADIOLIB_ERR_NONE;
 
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         return false;
     }
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     // For now, send directly (in production, use task queue)
-    state = board_.radio.transmit(wire_buffer, wire_size);
+    state = board_.transmitRadio(wire_buffer, wire_size);
 #else
     // Other radio types - implement as needed
     state = RADIOLIB_ERR_UNSUPPORTED;
@@ -1586,13 +1590,13 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
     std::string nodeinfo_full_hex = toHex(wire_buffer, wire_size, wire_size);
     LORA_LOG("[LORA] TX nodeinfo full packet hex: %s\n", nodeinfo_full_hex.c_str());
 
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         return false;
     }
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.radio.transmit(wire_buffer, wire_size);
+    int state = board_.transmitRadio(wire_buffer, wire_size);
 #else
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
@@ -1630,7 +1634,7 @@ void MtAdapter::configureRadio()
     // This is a placeholder - actual configuration depends on RadioLib API
     // and Meshtastic region/preset settings
 
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         ready_ = false;
         return;
@@ -1703,14 +1707,8 @@ void MtAdapter::configureRadio()
     }
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    board_.radio.setFrequency(freq_mhz);
-    board_.radio.setBandwidth(bw_khz);
-    board_.radio.setSpreadingFactor(sf);
-    board_.radio.setCodingRate(cr_denom);
-    board_.radio.setOutputPower(config_.tx_power);
-    board_.radio.setPreambleLength(kLoraPreambleLen);
-    board_.radio.setSyncWord(kLoraSyncWord);
-    board_.radio.setCRC(2);
+    board_.configureLoraRadio(freq_mhz, bw_khz, sf, cr_denom, config_.tx_power,
+                             kLoraPreambleLen, kLoraSyncWord, 2);
 #endif
 
     ready_ = true;
@@ -1791,12 +1789,12 @@ void MtAdapter::updateChannelKeys()
 
 void MtAdapter::startRadioReceive()
 {
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         return;
     }
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.radio.startReceive();
+    int state = board_.startRadioReceive();
     if (state != RADIOLIB_ERR_NONE)
     {
         LORA_LOG("[LORA] RX start fail state=%d\n", state);
@@ -2515,7 +2513,7 @@ bool MtAdapter::sendKeyVerificationPacket(uint32_t dest, const meshtastic_KeyVer
     }
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.radio.transmit(wire_buffer, wire_size);
+    int state = board_.transmitRadio(wire_buffer, wire_size);
 #else
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
@@ -2530,7 +2528,7 @@ bool MtAdapter::sendKeyVerificationPacket(uint32_t dest, const meshtastic_KeyVer
 bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
                                const uint8_t* psk, size_t psk_len)
 {
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         return false;
     }
@@ -2598,7 +2596,7 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
         LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-        int state = board_.radio.transmit(wire_buffer, wire_size);
+        int state = board_.transmitRadio(wire_buffer, wire_size);
 #else
         int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
@@ -2625,7 +2623,7 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
     LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.radio.transmit(wire_buffer, wire_size);
+    int state = board_.transmitRadio(wire_buffer, wire_size);
 #else
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
@@ -2641,7 +2639,7 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
                                  const uint8_t* psk, size_t psk_len,
                                  meshtastic_Routing_Error reason)
 {
-    if (!board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (!board_.isRadioOnline())
     {
         return false;
     }
@@ -2709,7 +2707,7 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
         LORA_LOG("[LORA] TX routing error full packet hex: %s\n", err_full_hex.c_str());
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-        int state = board_.radio.transmit(wire_buffer, wire_size);
+        int state = board_.transmitRadio(wire_buffer, wire_size);
 #else
         int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif
@@ -2736,7 +2734,7 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
     LORA_LOG("[LORA] TX routing error full packet hex: %s\n", err_full_hex.c_str());
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.radio.transmit(wire_buffer, wire_size);
+    int state = board_.transmitRadio(wire_buffer, wire_size);
 #else
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #endif

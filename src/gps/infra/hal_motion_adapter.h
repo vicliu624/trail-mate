@@ -2,8 +2,7 @@
 
 #include "../../hal/hal_motion.h"
 #include "../ports/i_motion_hw.h"
-
-class TLoRaPagerBoard;
+#include "board/MotionBoard.h"
 
 namespace gps
 {
@@ -11,7 +10,7 @@ namespace gps
 class HalMotionAdapter : public IMotionHardware
 {
   public:
-    void begin(TLoRaPagerBoard& board);
+    void begin(MotionBoard& board);
 
     bool isReady() const override;
     bool configure(uint8_t sensor_id, uint8_t interrupt_ctrl,

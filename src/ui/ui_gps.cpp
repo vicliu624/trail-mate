@@ -7,7 +7,7 @@
 #include "screens/gps/gps_page_map.h"
 #include "screens/gps/gps_constants.h"
 #include "ui_common.h"
-#include "board/TLoRaPagerBoard.h"
+#include "board/BoardBase.h"
 #include "display/DisplayInterface.h"
 #include "gps/GPS.h"
 #include <Arduino.h>
@@ -80,8 +80,8 @@ static void gps_update_timer_cb(lv_timer_t *timer)
 
 void ui_gps_enter(lv_obj_t *parent)
 {
-    GPS_LOG("[GPS] Entering GPS page, SD ready: %d, GPS ready: %d\n", 
-            instance.isSDReady(), instance.isGPSReady());
+    GPS_LOG("[GPS] Entering GPS page, SD ready: %d, GPS ready: %d\n",
+            board.isSDReady(), board.isGPSReady());
     
     // CRITICAL: 重置 control tag 池，避免溢出
     reset_control_tags();

@@ -6,6 +6,7 @@
 #include "meshcore_adapter.h"
 #include "../../time_utils.h"
 #include <Arduino.h>
+#include <RadioLib.h>
 #include <cstring>
 
 namespace chat
@@ -105,7 +106,7 @@ bool parsePacket(const uint8_t* data, size_t len, uint8_t& payload_type, const u
 }
 } // namespace
 
-MeshCoreAdapter::MeshCoreAdapter(TLoRaPagerBoard& board)
+MeshCoreAdapter::MeshCoreAdapter(LoraBoard& board)
     : board_(board),
       initialized_(false),
       last_raw_packet_len_(0),
@@ -152,9 +153,9 @@ bool MeshCoreAdapter::sendText(ChannelId channel, const std::string& text,
 
     int state = RADIOLIB_ERR_UNSUPPORTED;
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    if (board_.isHardwareOnline(HW_RADIO_ONLINE))
+    if (board_.isRadioOnline())
     {
-        state = board_.radio.transmit(buffer, index);
+        state = board_.transmitRadio(buffer, index);
     }
 #endif
 

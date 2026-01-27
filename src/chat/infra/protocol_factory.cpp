@@ -4,19 +4,20 @@
  */
 
 #include "protocol_factory.h"
+#include "../../board/LoraBoard.h"
 #include "meshtastic/mt_adapter.h"
 #include "meshcore/meshcore_adapter.h"
 
 namespace chat {
 
 std::unique_ptr<IMeshAdapter> ProtocolFactory::createAdapter(MeshProtocol protocol,
-                                                             TLoRaPagerBoard& board) {
+                                                             LoraBoard& board) {
     switch (protocol) {
         case MeshProtocol::MeshCore:
-            return std::make_unique<chat::meshcore::MeshCoreAdapter>(board);
+            return std::unique_ptr<IMeshAdapter>(new chat::meshcore::MeshCoreAdapter(board));
         case MeshProtocol::Meshtastic:
         default:
-            return std::make_unique<chat::meshtastic::MtAdapter>(board);
+            return std::unique_ptr<IMeshAdapter>(new chat::meshtastic::MtAdapter(board));
     }
 }
 

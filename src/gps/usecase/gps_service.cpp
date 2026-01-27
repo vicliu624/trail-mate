@@ -1,6 +1,6 @@
 #include "gps/usecase/gps_service.h"
 
-#include "board/TLoRaPagerBoard.h"
+#include "board/GpsBoard.h"
 #include "board/TLoRaPagerTypes.h"
 
 namespace
@@ -27,12 +27,14 @@ GpsService& GpsService::getInstance()
     return instance;
 }
 
-void GpsService::begin(TLoRaPagerBoard& board, uint32_t disable_hw_init,
-                       uint32_t gps_interval_ms, const MotionConfig& motion_config)
+void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
+                       uint32_t disable_hw_init, uint32_t gps_interval_ms,
+                       const MotionConfig& motion_config)
 {
-    board_ = &board;
-    gps_adapter_.begin(board);
-    motion_adapter_.begin(board);
+    gps_board_ = &gps_board;
+    motion_board_ = &motion_board;
+    gps_adapter_.begin(gps_board);
+    motion_adapter_.begin(motion_board);
 
     gps_disabled_ = (disable_hw_init & NO_HW_GPS) != 0;
     if (gps_disabled_)
@@ -157,7 +159,7 @@ void GpsService::setCollectionInterval(uint32_t interval_ms)
 
 void GpsService::setMotionConfig(const MotionConfig& config)
 {
-    if (board_ == nullptr || gps_disabled_)
+    if (gps_board_ == nullptr || gps_disabled_)
     {
         return;
     }

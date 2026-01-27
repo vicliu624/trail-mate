@@ -1,11 +1,10 @@
 #include "gps/infra/hal_gps_adapter.h"
-
-#include "board/TLoRaPagerBoard.h"
+#include "board/GpsBoard.h"
 
 namespace gps
 {
 
-void HalGpsAdapter::begin(TLoRaPagerBoard& board)
+void HalGpsAdapter::begin(GpsBoard& board)
 {
     hal_gps_.begin(board);
 }

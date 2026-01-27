@@ -12,7 +12,7 @@
 
 #include "ui_usb.h"
 #include "ui_common.h"
-#include "board/TLoRaPagerBoard.h"
+#include "board/BoardBase.h"
 #include "../gps/gps_service_api.h"
 #include <USB.h>
 #include <USBMSC.h>
@@ -142,7 +142,7 @@ static void update_status_message(const char *message)
 static void setup_usb_msc()
 {
     // Verify SD card is ready before starting USB MSC
-    if (!instance.isCardReady()) {
+    if (!board.isCardReady()) {
         update_status_message("SD Card Not Ready");
         return;
     }
@@ -244,7 +244,7 @@ static void back_event_handler(lv_event_t *e)
 void ui_usb_enter(lv_obj_t *parent)
 {
     // Check if SD card is ready
-    if (!instance.isCardReady()) {
+    if (!board.isCardReady()) {
         // Show error message
         menu = create_menu(parent, back_event_handler);
         lv_obj_t *main_page = lv_menu_page_create(menu, "USB Mass Storage");

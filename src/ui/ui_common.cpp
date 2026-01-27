@@ -4,7 +4,7 @@
  */
 
 #include "ui_common.h"
-#include "../board/TLoRaPagerBoard.h"
+#include "../board/BoardBase.h"
 #include "lvgl.h"
 #if LV_USE_SNAPSHOT
 extern "C" lv_draw_buf_t* lv_snapshot_take(lv_obj_t* obj, lv_color_format_t cf);
@@ -16,7 +16,7 @@ extern "C" void lv_draw_buf_destroy(lv_draw_buf_t* draw_buf);
 #include <vector>
 #include <Preferences.h>
 
-extern TLoRaPagerBoard &instance;
+extern BoardBase &board;
 
 namespace {
 constexpr const char* kPrefsNs = "settings_v2";
@@ -92,8 +92,8 @@ void ui_format_battery(int level, bool charging, char* out, size_t out_len)
 void ui_update_top_bar_battery(ui::widgets::TopBar& bar)
 {
     char battery_buf[24] = "?%";
-    int battery = instance.getBatteryLevel();
-    bool charging = instance.isCharging();
+    int battery = board.getBatteryLevel();
+    bool charging = board.isCharging();
     ui_format_battery(battery, charging, battery_buf, sizeof(battery_buf));
     ui::widgets::top_bar_set_right_text(bar, battery_buf);
 }

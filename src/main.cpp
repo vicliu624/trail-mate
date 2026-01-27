@@ -1,4 +1,8 @@
+#if defined(ARDUINO_T_DECK)
+#include "board/TDeckBoard.h"
+#else
 #include "board/TLoRaPagerBoard.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -149,7 +153,7 @@ static void ui_shutdown_enter(lv_obj_t* parent)
 {
     // Directly trigger software shutdown without confirmation dialog
     // The main menu access already implies user intent
-    instance.softwareShutdown();
+    board.softwareShutdown();
 }
 
 app_t ui_shutdown_main = {
@@ -390,11 +394,11 @@ void disableScreenSleep()
             if (screen_sleeping)
             {
                 screen_sleeping = false;
-                instance.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
                 // Restore keyboard brightness
-                if (instance.hasKeyboard())
+                if (board.hasKeyboard())
                 {
-                    instance.kb.setBrightness(saved_keyboard_brightness);
+                    board.keyboardSetBrightness(saved_keyboard_brightness);
                 }
             }
             xSemaphoreGive(activity_mutex);
@@ -452,11 +456,11 @@ void updateUserActivity()
             if (screen_sleeping)
             {
                 screen_sleeping = false;
-                instance.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
                 // Restore keyboard brightness
-                if (instance.hasKeyboard())
+                if (board.hasKeyboard())
                 {
-                    instance.kb.setBrightness(saved_keyboard_brightness);
+                    board.keyboardSetBrightness(saved_keyboard_brightness);
                 }
             }
             xSemaphoreGive(activity_mutex);
@@ -512,11 +516,11 @@ static void screenSleepTask(void* pvParameters)
                     if (screen_sleeping)
                     {
                         screen_sleeping = false;
-                        instance.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                        board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
                         // Restore keyboard brightness
-                        if (instance.hasKeyboard())
+                        if (board.hasKeyboard())
                         {
-                            instance.kb.setBrightness(saved_keyboard_brightness);
+                            board.keyboardSetBrightness(saved_keyboard_brightness);
                         }
                     }
                     xSemaphoreGive(activity_mutex);
@@ -529,22 +533,22 @@ static void screenSleepTask(void* pvParameters)
                         // Put screen to sleep
                         screen_sleeping = true;
                         // Save current keyboard brightness before turning off
-                        if (instance.hasKeyboard())
+                        if (board.hasKeyboard())
                         {
-                            saved_keyboard_brightness = instance.kb.getBrightness();
-                            instance.kb.setBrightness(0); // Turn off keyboard backlight
+                            saved_keyboard_brightness = board.keyboardGetBrightness();
+                            board.keyboardSetBrightness(0); // Turn off keyboard backlight
                         }
-                        instance.setBrightness(0); // Turn off display backlight
+                        board.setBrightness(0); // Turn off display backlight
                     }
                     else if (screen_sleeping && time_since_activity < current_timeout)
                     {
                         // Wake up screen (shouldn't happen here, but just in case)
                         screen_sleeping = false;
-                        instance.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                        board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
                         // Restore keyboard brightness
-                        if (instance.hasKeyboard())
+                        if (board.hasKeyboard())
                         {
-                            instance.kb.setBrightness(saved_keyboard_brightness);
+                            board.keyboardSetBrightness(saved_keyboard_brightness);
                         }
                     }
 
@@ -574,14 +578,14 @@ void setup()
         Serial.printf("[Setup] Wakeup cause: %d\n", wakeup_reason);
     }
 
-    instance.begin();
+    board.begin();
 
     // If waking from deep sleep, perform wake up initialization
     if (waking_from_sleep)
     {
-        instance.wakeUp();
+        board.wakeUp();
     }
-    beginLvglHelper(instance);
+    beginLvglHelper(static_cast<LilyGo_Display&>(instance));
 
     // Initialize system notification component
     ui::SystemNotification::init();
@@ -589,7 +593,7 @@ void setup()
     // Initialize chat application context
     app::AppContext& app_ctx = app::AppContext::getInstance();
     bool use_mock = false; // Enable real LoRa adapter for logging and radio tests
-    if (app_ctx.init(instance, use_mock))
+    if (app_ctx.init(board, &instance, &instance, &instance, use_mock))
     {
         Serial.printf("[Setup] Chat application context initialized\n");
     }
@@ -737,7 +741,7 @@ void setup()
         }
         
         // Check if RTC is ready
-        if (!instance.isRTCReady()) {
+        if (!board.isRTCReady()) {
             lv_label_set_text(time_label, "--:--");
             return;
         }
@@ -770,8 +774,8 @@ void setup()
         }
         
         char battery_str[32];
-        bool charging = instance.isCharging();
-        int level = instance.getBatteryLevel();
+        bool charging = board.isCharging();
+        int level = board.getBatteryLevel();
         
         if (level < 0) {
             // Battery gauge not available
@@ -793,7 +797,7 @@ void setup()
     lv_timer_set_repeat_count(battery_timer, -1); // Repeat indefinitely
 
     // Update time immediately (don't wait for first timer tick)
-    if (instance.isRTCReady())
+    if (board.isRTCReady())
     {
         char time_str[16];
         if (format_menu_time(time_str, sizeof(time_str)))
@@ -804,8 +808,8 @@ void setup()
 
     // Update battery immediately (don't wait for first timer tick)
     char battery_str[32];
-    bool charging = instance.isCharging();
-    int level = instance.getBatteryLevel();
+    bool charging = board.isCharging();
+    int level = board.getBatteryLevel();
     if (level >= 0)
     {
         // Select appropriate battery symbol based on level
@@ -838,7 +842,7 @@ void setup()
         lv_label_set_text(battery_label, battery_str);
     }
 
-    instance.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+    board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
 
     // GPS data collection task is now created in TLoRaPagerBoard::begin()
 
@@ -917,7 +921,7 @@ void loop()
 
     // Normal processing when NOT in low power mode
     // Handle power button events
-    instance.handlePowerButton();
+    board.handlePowerButton();
 
     // Update chat application context
     app::AppContext& app_ctx = app::AppContext::getInstance();

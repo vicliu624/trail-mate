@@ -22,6 +22,10 @@ class AppContext;
 #include "../chat/infra/store/flash_store.h"
 #include "../chat/infra/store/log_store.h"
 #include "../chat/infra/store/ram_store.h"
+#include "../board/BoardBase.h"
+#include "../board/LoraBoard.h"
+#include "../board/GpsBoard.h"
+#include "../board/MotionBoard.h"
 #include "../chat/ports/i_chat_store.h"
 #include "../chat/ports/i_contact_store.h"
 #include "../chat/ports/i_mesh_adapter.h"
@@ -30,7 +34,7 @@ class AppContext;
 #include "app_config.h"
 #include <memory>
 
-class TLoRaPagerBoard;
+class BoardBase;
 
 namespace app
 {
@@ -53,7 +57,8 @@ class AppContext
      * @param board Board instance
      * @param use_mock_adapter Use mock adapter instead of real LoRa
      */
-    bool init(TLoRaPagerBoard& board, bool use_mock_adapter = true, uint32_t disable_hw_init = 0);
+    bool init(BoardBase& board, LoraBoard* lora_board = nullptr, GpsBoard* gps_board = nullptr,
+              MotionBoard* motion_board = nullptr, bool use_mock_adapter = true, uint32_t disable_hw_init = 0);
 
     /**
      * @brief Get chat service
@@ -166,7 +171,10 @@ class AppContext
     Preferences preferences_;
 
     // Board reference for hardware access (haptic feedback, etc.)
-    TLoRaPagerBoard* board_ = nullptr;
+    BoardBase* board_ = nullptr;
+    LoraBoard* lora_board_ = nullptr;
+    GpsBoard* gps_board_ = nullptr;
+    MotionBoard* motion_board_ = nullptr;
 };
 
 } // namespace app

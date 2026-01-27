@@ -1,12 +1,12 @@
 #include "gps/gps_hw_status.h"
-#include "board/TLoRaPagerBoard.h"
+#include "board/BoardBase.h"
 
 bool gps_hw_is_ready()
 {
-    return instance.isGPSReady();
+    return board.isGPSReady();
 }
 
 bool sd_hw_is_ready()
 {
-    return instance.isSDReady();
+    return board.isSDReady();
 }

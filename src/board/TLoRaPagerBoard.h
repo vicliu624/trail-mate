@@ -15,6 +15,11 @@
 #include <Wire.h>
 #include <memory>
 
+#include "BoardBase.h"
+#include "LoraBoard.h"
+#include "GpsBoard.h"
+#include "MotionBoard.h"
+
 // Forward declaration to avoid circular includes
 namespace app
 {
@@ -62,7 +67,11 @@ class AppContext;
  * This class manages all hardware components on the T-LoRa-Pager board.
  * It provides initialization, control, and status query functions for each component.
  */
-class TLoRaPagerBoard : public LilyGo_Display,
+class TLoRaPagerBoard : public BoardBase,
+                        public LoraBoard,
+                        public GpsBoard,
+                        public MotionBoard,
+                        public LilyGo_Display,
                         public LilyGoDispArduinoSPI,
                         public BrightnessController<TLoRaPagerBoard, 0, 16, 50>
 {
@@ -79,7 +88,7 @@ class TLoRaPagerBoard : public LilyGo_Display,
      *                        Use NO_HW_* flags from TLoRaPagerTypes.h
      * @return Bitmask indicating which hardware components are online (HW_* flags)
      */
-    uint32_t begin(uint32_t disable_hw_init = 0);
+    uint32_t begin(uint32_t disable_hw_init = 0) override;
 
     /**
      * @brief Main loop function - call this periodically in your main loop
@@ -90,7 +99,7 @@ class TLoRaPagerBoard : public LilyGo_Display,
 
     // Hardware initialization functions
     bool initPMU();
-    bool initGPS();
+    bool initGPS() override;
     bool initLoRa();
     bool initNFC();
     bool initKeyboard();
@@ -99,7 +108,7 @@ class TLoRaPagerBoard : public LilyGo_Display,
     bool initRTC();
     bool installSD();
     void uninstallSD();
-    bool isCardReady();
+    bool isCardReady() override;
 
     /**
      * @brief Sync RTC time from GPS (if GPS time is valid)
@@ -115,13 +124,13 @@ class TLoRaPagerBoard : public LilyGo_Display,
      * - GPS task interval (if provided, for better accuracy)
      * - Processing and RTC write delays
      */
-    bool syncTimeFromGPS(uint32_t gps_task_interval_ms = 0);
+    bool syncTimeFromGPS(uint32_t gps_task_interval_ms = 0) override;
 
     /**
      * @brief Update GPS online flag
      * @param online true to set HW_GPS_ONLINE, false to clear it
      */
-    void setGPSOnline(bool online)
+    void setGPSOnlineInternal(bool online)
     {
         if (online)
         {
@@ -134,7 +143,7 @@ class TLoRaPagerBoard : public LilyGo_Display,
     }
 
     // Power control
-    void powerControl(PowerCtrlChannel_t ch, bool enable);
+    void powerControl(PowerCtrlChannel_t ch, bool enable) override;
 
     // Power button management
     /**
@@ -147,7 +156,7 @@ class TLoRaPagerBoard : public LilyGo_Display,
      * @brief Handle power button press (call this in main loop)
      * Processes power button events for wake/shutdown functionality
      */
-    void handlePowerButton();
+    void handlePowerButton() override;
 
     /**
      * @brief Shutdown the device safely
@@ -159,16 +168,16 @@ class TLoRaPagerBoard : public LilyGo_Display,
      * @brief Software-initiated shutdown (for UI buttons, etc.)
      * Checks shutdown conditions before proceeding
      */
-    void softwareShutdown();
+    void softwareShutdown() override;
 
     /**
      * @brief Wake up the device from sleep
      */
-    void wakeUp();
+    void wakeUp() override;
 
     // Display
-    void setBrightness(uint8_t level);
-    uint8_t getBrightness();
+    void setBrightness(uint8_t level) override;
+    uint8_t getBrightness() override;
     void setRotation(uint8_t rotation) override;
     uint8_t getRotation() override;
     uint16_t width() override;
@@ -187,12 +196,12 @@ class TLoRaPagerBoard : public LilyGo_Display,
     /**
      * @brief Trigger haptic feedback (vibration)
      */
-    void vibrator();
+    void vibrator() override;
 
     /**
      * @brief Stop haptic feedback
      */
-    void stopVibrator();
+    void stopVibrator() override;
 
     /**
      * @brief Set haptic effect waveform
@@ -208,6 +217,8 @@ class TLoRaPagerBoard : public LilyGo_Display,
 
     // Keyboard
     bool hasKeyboard() override;
+    void keyboardSetBrightness(uint8_t level) override;
+    uint8_t keyboardGetBrightness() override;
     int getKey(char* c);
     int getKeyChar(char* c) override;
 
@@ -250,22 +261,50 @@ class TLoRaPagerBoard : public LilyGo_Display,
     /**
      * @brief Check if GPS is initialized and online
      */
-    bool isGPSReady() const { return isHardwareOnline(HW_GPS_ONLINE); }
+    bool isGPSReady() const override { return isHardwareOnline(HW_GPS_ONLINE); }
 
     /**
      * @brief Check if LoRa is initialized and online
      */
-    bool isLoRaReady() const { return isHardwareOnline(HW_RADIO_ONLINE); }
+    bool isRadioOnline() const override { return isHardwareOnline(HW_RADIO_ONLINE); }
+    int transmitRadio(const uint8_t* data, size_t len) override { return radio_.transmit(data, len); }
+    int startRadioReceive() override { return radio_.startReceive(); }
+    uint32_t getRadioIrqFlags() override { return radio_.getIrqFlags(); }
+    int getRadioPacketLength(bool update) override { return static_cast<int>(radio_.getPacketLength(update)); }
+    int readRadioData(uint8_t* buf, size_t len) override { return radio_.readData(buf, len); }
+    void clearRadioIrqFlags(uint32_t flags) override { radio_.clearIrqFlags(flags); }
+    void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
+                            int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
+                            uint8_t crc_len) override
+    {
+        auto& radio = radio_;
+        radio.setFrequency(freq_mhz);
+        radio.setBandwidth(bw_khz);
+        radio.setSpreadingFactor(sf);
+        radio.setCodingRate(cr_denom);
+        radio.setOutputPower(tx_power);
+        radio.setPreambleLength(preamble_len);
+        radio.setSyncWord(sync_word);
+        radio.setCRC(crc_len);
+    }
+
+    // GpsBoard
+    void setGPSOnline(bool online) override { setGPSOnlineInternal(online); }
+    GPS& getGPS() override { return gps; }
+
+    // MotionBoard
+    SensorBHI260AP& getMotionSensor() override { return sensor; }
+    bool isSensorReady() const override { return isHardwareOnline(HW_BHI260AP_ONLINE); }
 
     /**
      * @brief Check if SD card is ready
      */
-    bool isSDReady() const { return isHardwareOnline(HW_SD_ONLINE); }
+    bool isSDReady() const override { return isHardwareOnline(HW_SD_ONLINE); }
 
     /**
      * @brief Check if RTC is initialized and online
      */
-    bool isRTCReady() const { return isHardwareOnline(HW_RTC_ONLINE); }
+    bool isRTCReady() const override { return isHardwareOnline(HW_RTC_ONLINE); }
 
     /**
      * @brief Get current time string from RTC
@@ -282,11 +321,6 @@ class TLoRaPagerBoard : public LilyGo_Display,
      * @return true if RTC updated successfully
      */
     bool adjustRTCByOffsetMinutes(int offset_minutes);
-
-    /**
-     * @brief Check if sensor is initialized and online
-     */
-    bool isSensorReady() const { return isHardwareOnline(HW_BHI260AP_ONLINE); }
 
     /**
      * @brief Check if haptic driver is initialized and online
@@ -307,13 +341,13 @@ class TLoRaPagerBoard : public LilyGo_Display,
      * @brief Get battery level percentage (0-100)
      * @return Battery percentage, or -1 if gauge is not ready
      */
-    int getBatteryLevel();
+    int getBatteryLevel() override;
 
     /**
      * @brief Check if battery is currently charging
      * @return true if charging, false if not charging or PMU is not ready
      */
-    bool isCharging();
+    bool isCharging() override;
 
     /**
      * @brief Read ADC value with optimal accuracy and minimal resource usage
@@ -365,15 +399,15 @@ class TLoRaPagerBoard : public LilyGo_Display,
 #endif
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
-    SX1262 radio = newModule();
+    SX1262 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SX1280)
-    SX1280 radio = newModule();
+    SX1280 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_CC1101)
-    CC1101 radio = newModule();
+    CC1101 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_LR1121)
-    LR1121 radio = newModule();
+    LR1121 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SI4432)
-    Si4432 radio = newModule();
+    Si4432 radio_ = newModule();
 #endif
 
   private:
@@ -403,6 +437,7 @@ class TLoRaPagerBoard : public LilyGo_Display,
 };
 
 extern TLoRaPagerBoard& instance;
+extern BoardBase& board;
 
 #define DEVICE_MAX_BRIGHTNESS_LEVEL 16
 #define DEVICE_MIN_BRIGHTNESS_LEVEL 0
