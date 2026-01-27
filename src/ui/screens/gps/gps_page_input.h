@@ -10,6 +10,7 @@
 #define ENCODER_KEY_ROTATE_UP   19  // 向上滚（逆时针）
 
 enum class ControlId : uint8_t {
+    BackBtn,
     ZoomBtn,
     PosBtn,
     PanHBtn,

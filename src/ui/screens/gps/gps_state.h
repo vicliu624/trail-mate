@@ -27,6 +27,8 @@ struct GPSPageState {
     };
 
     // UI refs
+    lv_obj_t *root = nullptr;
+    lv_obj_t *header = nullptr;
     lv_obj_t *menu = nullptr;
     lv_obj_t *page = nullptr;
     lv_obj_t *map = nullptr;
@@ -61,8 +63,6 @@ struct GPSPageState {
     std::vector<MapTile> tiles;
     TileContext tile_ctx;  // Context for tile operations
     
-    // loader
-    bool loading = false;
     uint32_t initial_load_ms = 0;
     bool initial_tiles_loaded = false;
     
@@ -75,9 +75,14 @@ struct GPSPageState {
     // misc
     lv_timer_t* timer = nullptr;  // Main timer for tile loading and GPS updates
     lv_timer_t* title_timer = nullptr;  // Separate timer for title updates (30s)
+    std::vector<lv_timer_t*> timers;  // Lifetime-managed timers for this screen
     lv_indev_t* encoder = nullptr;
-    
+    lv_group_t* app_group = nullptr;  // App-level focus group captured at enter
+
     // flags
+    bool alive = false;  // Hard lifetime guard: false after root delete hook runs
+    bool delete_hook_bound = false;  // Ensure root delete hook is only bound once
+    bool exiting = false;  // Prevent re-entrant exit while async exit is pending
     bool has_map_data = false;  // Global: any tile ever loaded
     bool has_visible_map_data = false;  // Viewport: current visible tiles have PNG
 
@@ -94,12 +99,6 @@ struct GPSPageState {
     
     // Edit mode state machine
     uint8_t edit_mode = 0;  // 0=None, 1=PanH, 2=PanV, 3=ZoomPopup
-    
-    // Dirty flags for UI updates
-    uint8_t dirty_map : 1;
-    uint8_t dirty_title : 1;
-    uint8_t dirty_status : 1;
-    uint8_t dirty_resolution : 1;
     
     // refresh optimization
     bool pending_refresh = false;  // Flag to indicate map needs refresh (for batched updates)

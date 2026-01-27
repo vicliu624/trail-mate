@@ -10,4 +10,7 @@ constexpr int kMaxZoom = 18;
 constexpr double kDefaultLat = 51.5074;
 constexpr double kDefaultLng = -0.1278;
 
+// UI policy: do not show a blocking loading overlay on the GPS map.
+constexpr bool kShowLoadingOverlay = false;
+
 }  // namespace gps_ui

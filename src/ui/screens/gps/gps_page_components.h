@@ -24,8 +24,4 @@ void hide_zoom_popup();
 // UI layout helper
 void fix_ui_elements_position();
 
-// Style helpers
-void style_control_button(lv_obj_t* btn, lv_color_t bg);
-void style_popup_window(lv_obj_t* win);
-
 #endif // GPS_PAGE_COMPONENTS_H

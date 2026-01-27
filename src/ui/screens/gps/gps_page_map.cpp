@@ -1,4 +1,5 @@
 #include "gps_page_map.h"
+#include "gps_page_lifetime.h"
 #include "gps_state.h"
 #include "gps_page_components.h"
 #include "../../widgets/map/map_tiles.h"
@@ -23,6 +24,8 @@ extern "C" {
 #endif
 
 extern GPSPageState g_gps_state;
+
+using gps::ui::lifetime::is_alive;
 
 // GPS data access - now provided by TLoRaPagerBoard
 #include "../../gps/gps_service_api.h"
@@ -58,7 +61,7 @@ static double approx_distance_m(double lat1, double lng1, double lat2, double ln
 
 void update_resolution_display()
 {
-    if (g_gps_state.resolution_label == NULL) {
+    if (!is_alive() || g_gps_state.resolution_label == NULL) {
         return;
     }
     
@@ -89,6 +92,9 @@ void update_resolution_display()
 
 void update_title_and_status()
 {
+    if (!is_alive()) {
+        return;
+    }
     bool sd_ready = sd_hw_is_ready();
     bool gps_ready = gps_hw_is_ready();
     GPSData gps_data = gps::gps_get_data();
@@ -178,6 +184,9 @@ void reset_title_status_cache()
 
 void update_map_anchor()
 {
+    if (!is_alive()) {
+        return;
+    }
     ::update_map_anchor(g_gps_state.tile_ctx, 
                        g_gps_state.lat, g_gps_state.lng, 
                        g_gps_state.zoom_level, 
@@ -187,7 +196,7 @@ void update_map_anchor()
 
 void update_map_tiles(bool lightweight)
 {
-    if (g_gps_state.map == NULL) {
+    if (!is_alive() || g_gps_state.map == NULL) {
         return;
     }
 
@@ -199,22 +208,6 @@ void update_map_tiles(bool lightweight)
     
     if (!lightweight) {
         fix_ui_elements_position();
-    }
-    
-    bool has_tiles_to_load = false;
-    for (const auto &tile : g_gps_state.tiles) {
-        if (tile.visible && tile.img_obj == NULL) {
-            has_tiles_to_load = true;
-            break;
-        }
-    }
-    
-    if (has_tiles_to_load && !g_gps_state.loading) {
-        g_gps_state.loading = true;
-        show_loading();
-    } else if (!has_tiles_to_load && g_gps_state.loading) {
-        g_gps_state.loading = false;
-        hide_loading();
     }
     
     if (!lightweight) {
@@ -242,7 +235,7 @@ void update_map_tiles(bool lightweight)
  */
 void update_gps_marker_position()
 {
-    if (g_gps_state.gps_marker == NULL || g_gps_state.map == NULL) {
+    if (!is_alive() || g_gps_state.gps_marker == NULL || g_gps_state.map == NULL) {
         return;
     }
     
@@ -270,7 +263,7 @@ void update_gps_marker_position()
  */
 void create_gps_marker()
 {
-    if (!g_gps_state.has_fix || g_gps_state.map == NULL) {
+    if (!is_alive() || !g_gps_state.has_fix || g_gps_state.map == NULL) {
         return;
     }
     
@@ -298,6 +291,9 @@ void create_gps_marker()
  */
 void hide_gps_marker()
 {
+    if (!is_alive()) {
+        return;
+    }
     if (g_gps_state.gps_marker != NULL) {
         lv_obj_add_flag(g_gps_state.gps_marker, LV_OBJ_FLAG_HIDDEN);
     }
@@ -305,6 +301,9 @@ void hide_gps_marker()
 
 void tick_loader()
 {
+    if (!is_alive()) {
+        return;
+    }
     static bool prev_has_visible_map_data = false;
     
     if (!g_gps_state.initial_tiles_loaded && g_gps_state.map != NULL) {
@@ -322,24 +321,13 @@ void tick_loader()
         last_fix_ui_ms = now_ms;
     }
     
-    bool has_unloaded = false;
-    for (const auto &tile : g_gps_state.tiles) {
-        if (tile.visible && tile.img_obj == NULL) {
-            has_unloaded = true;
-            break;
-        }
-    }
-    
-    if (!has_unloaded && g_gps_state.loading) {
-        g_gps_state.loading = false;
-        hide_loading();
-        g_gps_state.initial_load_ms = 0;
-        GPS_LOG("[GPS] All visible tiles loaded, hiding loading indicator\n");
-    }
 }
 
 void tick_gps_update(bool allow_map_refresh)
 {
+    if (!is_alive()) {
+        return;
+    }
     GPSData gps_data = gps::gps_get_data();
 
     static bool prev_has_fix = false;

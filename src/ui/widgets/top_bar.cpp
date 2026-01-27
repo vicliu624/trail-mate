@@ -4,6 +4,7 @@
  */
 
 #include "top_bar.h"
+#include <Arduino.h>
 
 namespace ui {
 namespace widgets {
@@ -11,6 +12,8 @@ namespace widgets {
 static void back_event_cb(lv_event_t* e)
 {
     TopBar* bar = static_cast<TopBar*>(lv_event_get_user_data(e));
+    Serial.printf("[TopBar] back_event_cb code=%d bar=%p cb=%p\n",
+                  (int)lv_event_get_code(e), bar, bar ? (void*)bar->back_cb : nullptr);
     if (bar != nullptr && bar->back_cb != nullptr) {
         bar->back_cb(bar->back_user_data);
     }

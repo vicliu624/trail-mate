@@ -2,6 +2,8 @@
 
 #include "gps_modal.h"
 #include "gps_page_map.h"
+#include "gps_page_lifetime.h"
+#include "gps_page_styles.h"
 #include "gps_state.h"
 #include "../../../gps/gps_service_api.h"
 #include "../../ui_common.h"
@@ -18,6 +20,8 @@ extern void show_toast(const char* message, uint32_t duration_ms);
 
 namespace
 {
+using gps::ui::lifetime::is_alive;
+
 constexpr double kMinDistanceM = 2.0;
 constexpr double kMinDistanceMaxM = 30.0;
 constexpr double kSamplePixels = 4.0;
@@ -142,6 +146,9 @@ bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::Track
 
 void compute_screen_points()
 {
+    if (!is_alive()) {
+        return;
+    }
     auto& s = g_gps_state;
     s.tracker_screen_points.clear();
 
@@ -205,6 +212,9 @@ void compute_screen_points()
 
 void apply_tracker_view_defaults()
 {
+    if (!is_alive()) {
+        return;
+    }
     auto& s = g_gps_state;
     if (s.tracker_points.empty())
     {
@@ -231,6 +241,9 @@ void apply_tracker_view_defaults()
 
 void close_tracker_modal()
 {
+    if (!is_alive()) {
+        return;
+    }
     if (!modal_is_open(g_gps_state.tracker_modal))
     {
         return;
@@ -241,6 +254,9 @@ void close_tracker_modal()
 
 void on_track_selected(lv_event_t* e)
 {
+    if (!is_alive()) {
+        return;
+    }
     const uintptr_t idx = (uintptr_t)lv_event_get_user_data(e);
     if (idx >= s_modal_names.size())
     {
@@ -269,6 +285,9 @@ void on_track_selected(lv_event_t* e)
 
 void build_tracker_modal()
 {
+    if (!is_alive()) {
+        return;
+    }
     auto& s = g_gps_state;
 
     lv_obj_t* title = lv_label_create(s.tracker_modal.win);
@@ -277,7 +296,7 @@ void build_tracker_modal()
 
     lv_obj_t* list = lv_list_create(s.tracker_modal.win);
     lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_pad_top(list, 32, 0);
+    gps::ui::styles::apply_tracker_modal_list(list);
 
     File dir = SD.open("/trackers");
     if (!dir || !dir.isDirectory())
@@ -327,6 +346,9 @@ void build_tracker_modal()
 
 void gps_tracker_open_modal()
 {
+    if (!is_alive()) {
+        return;
+    }
     if (SD.cardType() == CARD_NONE)
     {
         show_toast("No SD Card", 1200);
@@ -343,6 +365,9 @@ void gps_tracker_open_modal()
 
 void gps_tracker_draw_event(lv_event_t* e)
 {
+    if (!is_alive()) {
+        return;
+    }
     if (!e || lv_event_get_code(e) != LV_EVENT_DRAW_POST)
     {
         return;
@@ -400,6 +425,16 @@ void gps_tracker_draw_event(lv_event_t* e)
 
 void gps_tracker_cleanup()
 {
+    if (!is_alive()) {
+        if (modal_is_open(g_gps_state.tracker_modal)) {
+            modal_close(g_gps_state.tracker_modal);
+        }
+        g_gps_state.tracker_overlay_active = false;
+        g_gps_state.tracker_points.clear();
+        g_gps_state.tracker_screen_points.clear();
+        g_gps_state.tracker_file.clear();
+        return;
+    }
     close_tracker_modal();
     g_gps_state.tracker_overlay_active = false;
     g_gps_state.tracker_points.clear();

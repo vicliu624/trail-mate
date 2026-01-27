@@ -1,4 +1,5 @@
 #include "gps_page_input.h"
+#include "gps_page_lifetime.h"
 #include "gps_state.h"
 #include "../../widgets/map/map_tiles.h"
 #include "gps_constants.h"
@@ -21,6 +22,8 @@
 extern GPSPageState g_gps_state;
 extern void updateUserActivity();
 
+using gps::ui::lifetime::is_alive;
+
 // GPS data access - now provided by TLoRaPagerBoard
 #include "../../gps/gps_service_api.h"
 
@@ -38,7 +41,7 @@ ControlId ctrl_id(lv_obj_t* obj) {
     return tag ? tag->id : ControlId::Page;
 }
 
-// 文件级静态变量，可重置
+// Control tag pool (fixed-size, reset on enter).
 static ControlTag s_tags[256];
 static uint16_t s_tag_index = 0;
 
@@ -62,6 +65,8 @@ static void handle_click(lv_obj_t* target);
 static void handle_rotary(lv_obj_t* target, int32_t diff);
 static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e);
 
+static void action_back_exit();
+static void action_back_exit_async(void* user_data);
 static void action_zoom_open_popup();
 static void action_position_center();
 static void action_pan_enter(ControlId axis_id);
@@ -103,9 +108,11 @@ static void exit_pan_v_mode() {
     GPS_LOG("[GPS] exit_pan_v_mode: exited vertical pan editing mode\n");
 }
 
-// 注意：边沿检测已移到 poll_encoder_for_pan() 中，这里不再需要
-
+// 注意：边沿检测已移到 poll_encoder_for_pan() 中，这里不再需�?
 void on_ui_event(lv_event_t* e) {
+    if (!is_alive()) {
+        return;
+    }
     auto code = lv_event_get_code(e);
     auto* target = (lv_obj_t*)lv_event_get_target(e);
     
@@ -116,6 +123,7 @@ void on_ui_event(lv_event_t* e) {
     lv_obj_t* focused = app_g ? lv_group_get_focused(app_g) : nullptr;
     bool editing = app_g ? lv_group_get_editing(app_g) : false;
     ControlId target_id = ctrl_id(target);
+    if (target_id == ControlId::BackBtn) { GPS_LOG("[GPS][BACK] on_ui_event: code=%d target=%p focused=%p editing=%d\n", (int)code, target, focused, editing); }
     
     if (code == LV_EVENT_KEY) {
         lv_key_t key = (lv_key_t)lv_event_get_key(e);
@@ -141,21 +149,21 @@ void on_ui_event(lv_event_t* e) {
         if (g_gps_state.zoom_modal.is_open()) return;
         updateUserActivity();
         
-        // Key event: 旋转时收到 KEY 事件（ENCODER_KEY_ROTATE_UP/DOWN）
+        // Key event: encoder rotation generates KEY events.
         if (code == LV_EVENT_KEY && g_gps_state.pan_h_editing) {
             lv_key_t key = (lv_key_t)lv_event_get_key(e);
-            
+
             int32_t step = 0;
             if (key == ENCODER_KEY_ROTATE_DOWN) {
-                step = +1;  // 向下滚 → 向右移动（pan_x 增加）
+                step = +1;
             } else if (key == ENCODER_KEY_ROTATE_UP) {
-                step = -1;  // 向上滚 → 向左移动（pan_x 减少）
+                step = -1;
             } else {
                 GPS_LOG("[GPS] PanH KEY: unexpected keycode=%d (expected %d or %d), ignoring\n",
                         key, ENCODER_KEY_ROTATE_UP, ENCODER_KEY_ROTATE_DOWN);
                 return;
             }
-            
+
             g_gps_state.pan_x += step * gps_ui::kMapPanStep;
             g_gps_state.pending_refresh = true;
             if (g_gps_state.map != NULL) {
@@ -163,30 +171,30 @@ void on_ui_event(lv_event_t* e) {
             }
             return;
         }
-        
-        // CLICKED 事件由 pan_indicator_event_cb 处理（退出 pan 模式）
+
+        // CLICKED is handled by pan_indicator_event_cb.
         return;
     }
-    
+
     if (target == g_gps_state.pan_v_indicator) {
         if (g_gps_state.zoom_modal.is_open()) return;
         updateUserActivity();
-        
-        // Key event: 旋转时收到 KEY 事件（ENCODER_KEY_ROTATE_UP/DOWN）
+
+        // Key event: encoder rotation generates KEY events.
         if (code == LV_EVENT_KEY && g_gps_state.pan_v_editing) {
             lv_key_t key = (lv_key_t)lv_event_get_key(e);
-            
+
             int32_t step = 0;
             if (key == ENCODER_KEY_ROTATE_DOWN) {
-                step = +1;  // 向下滚 → 向下移动（pan_y 增加）
+                step = +1;
             } else if (key == ENCODER_KEY_ROTATE_UP) {
-                step = -1;  // 向上滚 → 向上移动（pan_y 减少）
+                step = -1;
             } else {
                 GPS_LOG("[GPS] PanV KEY: unexpected keycode=%d (expected %d or %d), ignoring\n",
                         key, ENCODER_KEY_ROTATE_UP, ENCODER_KEY_ROTATE_DOWN);
                 return;
             }
-            
+
             GPS_LOG("[GPS] PanV KEY: key=%d, step=%d, pan_y: %d -> %d\n",
                     key, step, g_gps_state.pan_y, g_gps_state.pan_y + step * gps_ui::kMapPanStep);
             g_gps_state.pan_y += step * gps_ui::kMapPanStep;
@@ -196,22 +204,22 @@ void on_ui_event(lv_event_t* e) {
             }
             return;
         }
-        
-        // CLICKED 事件由 pan_indicator_event_cb 处理（退出 pan 模式）
+
+        // CLICKED is handled by pan_indicator_event_cb.
         return;
     }
-    
-    if (g_gps_state.loading) {
-        return;
-    }
+
+    const bool is_back_btn = (target_id == ControlId::BackBtn);
     
     if (g_gps_state.zoom_modal.is_open()) {
-        if (target_id != ControlId::ZoomValueLabel && target_id != ControlId::ZoomWin) {
+        if (!is_back_btn &&
+            target_id != ControlId::ZoomValueLabel &&
+            target_id != ControlId::ZoomWin) {
             return;
         }
     }
 
-    if (modal_is_open(g_gps_state.tracker_modal)) {
+    if (modal_is_open(g_gps_state.tracker_modal) && !is_back_btn) {
         return;
     }
     
@@ -219,7 +227,7 @@ void on_ui_event(lv_event_t* e) {
         case LV_EVENT_CLICKED:
             handle_click(target);
             break;
-        // LV_EVENT_ROTARY 从未收到，实际收到的是 LV_EVENT_KEY (keycode 19/20)
+        // LV_EVENT_ROTARY 从未收到，实际收到的�?LV_EVENT_KEY (keycode 19/20)
         // case LV_EVENT_ROTARY:
         //     handle_rotary(target, lv_event_get_rotary_diff(e));
         //     break;
@@ -232,6 +240,9 @@ void on_ui_event(lv_event_t* e) {
 }
 
 void pan_indicator_event_cb(lv_event_t* e) {
+    if (!is_alive()) {
+        return;
+    }
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t* target = (lv_obj_t*)lv_event_get_target(e);
     
@@ -281,6 +292,9 @@ static void handle_click(lv_obj_t* target) {
     GPS_LOG("[GPS] handle_click: id=%d, edit_mode=%d\n", (int)id, g_gps_state.edit_mode);
     
     switch (id) {
+        case ControlId::BackBtn:
+            action_back_exit();
+            break;
         case ControlId::ZoomBtn:
             action_zoom_open_popup();
             break;
@@ -350,7 +364,14 @@ static void handle_rotary(lv_obj_t* target, int32_t diff) {
 static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e) {
     ControlId id = ctrl_id(target);
     updateUserActivity();
-    
+
+    if (id == ControlId::BackBtn) {
+        if (key == LV_KEY_ENTER || key == LV_KEY_ESC) {
+            action_back_exit();
+            return;
+        }
+    }
+
     if (g_gps_state.zoom_modal.is_open()) {
         if (id == ControlId::ZoomValueLabel || id == ControlId::ZoomWin) {
             extern void zoom_popup_handle_key(lv_key_t key, lv_event_t* e);
@@ -364,6 +385,10 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e) {
     }
     
     if (key == LV_KEY_ENTER) {
+        if (id == ControlId::BackBtn) {
+            action_back_exit();
+            return;
+        }
         if (id == ControlId::ZoomBtn) {
             action_zoom_open_popup();
             return;
@@ -429,7 +454,32 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e) {
     }
 }
 
+static void action_back_exit() {
+    if (!is_alive()) {
+        return;
+    }
+    if (g_gps_state.exiting) {
+        return;
+    }
+    g_gps_state.exiting = true;
+    // Exiting the screen can delete the current event target.
+    // Schedule it asynchronously to avoid deleting during an LVGL callback.
+    GPS_LOG("[GPS][BACK] action_back_exit: scheduling async exit (alive=%d exiting=%d root=%p)\n", g_gps_state.alive, g_gps_state.exiting, g_gps_state.root);
+    lv_async_call(action_back_exit_async, nullptr);
+}
+
+static void action_back_exit_async(void* /*user_data*/)
+{
+    GPS_LOG("[GPS][BACK] action_back_exit_async: calling ui_gps_exit + menu_show (alive=%d exiting=%d root=%p)\n", g_gps_state.alive, g_gps_state.exiting, g_gps_state.root);
+    extern void ui_gps_exit(lv_obj_t* parent);
+    ui_gps_exit(nullptr);
+    menu_show();
+}
+
 static void action_zoom_open_popup() {
+    if (!is_alive()) {
+        return;
+    }
     extern void show_zoom_popup();
     uint32_t now = millis();
     if (g_gps_state.zoom_modal.close_ms > 0 && 
@@ -443,6 +493,9 @@ static void action_zoom_open_popup() {
 }
 
 static void action_position_center() {
+    if (!is_alive()) {
+        return;
+    }
     extern void show_toast(const char* message, uint32_t duration_ms);
     extern void update_map_tiles(bool lightweight);
     extern void create_gps_marker();
@@ -475,6 +528,9 @@ static void action_position_center() {
 }
 
 static void action_pan_enter(ControlId axis_id) {
+    if (!is_alive()) {
+        return;
+    }
     extern void show_pan_h_indicator();
     extern void show_pan_v_indicator();
     extern void hide_pan_h_indicator();
@@ -492,12 +548,11 @@ static void action_pan_enter(ControlId axis_id) {
             set_default_group(app_g);
             bind_encoder_to_group(app_g);
             
-            // CRITICAL: 确保 indicator 在 group 中且可聚焦
-            // 如果 focus 失败，说明 indicator 没在 group 里或不可聚焦
+            // CRITICAL: 确保 indicator �?group 中且可聚�?            // 如果 focus 失败，说�?indicator 没在 group 里或不可聚焦
             lv_group_focus_obj(g_gps_state.pan_h_indicator);
             lv_group_set_editing(app_g, true);
             
-            // 断言日志：确认焦点和编辑状态
+            // Focus diagnostics.
             lv_obj_t* f = lv_group_get_focused(app_g);
             bool editing = lv_group_get_editing(app_g);
             GPS_LOG("[GPS] Horizontal pan: editing mode ON, focus=%p, indicator=%p, editing=%d\n",
@@ -522,7 +577,7 @@ static void action_pan_enter(ControlId axis_id) {
             lv_group_focus_obj(g_gps_state.pan_v_indicator);
             lv_group_set_editing(app_g, true);
             
-            // 断言日志：确认焦点和编辑状态
+            // Focus diagnostics.
             lv_obj_t* f = lv_group_get_focused(app_g);
             GPS_LOG("[GPS] Vertical pan: editing mode ON, focus=%p, indicator=%p, editing=%d\n",
                     f, g_gps_state.pan_v_indicator, lv_group_get_editing(app_g));
@@ -539,6 +594,9 @@ static void action_pan_exit() {
 }
 
 static void action_pan_step(ControlId axis_id, int32_t step) {
+    if (!is_alive()) {
+        return;
+    }
     if (axis_id == ControlId::PanHIndicator) {
         g_gps_state.pan_x += step * gps_ui::kMapPanStep;
     } else if (axis_id == ControlId::PanVIndicator) {
@@ -546,15 +604,13 @@ static void action_pan_step(ControlId axis_id, int32_t step) {
     }
     
     g_gps_state.pending_refresh = true;
-    g_gps_state.dirty_map = true;
-    g_gps_state.dirty_resolution = true;
     if (g_gps_state.map != NULL) {
         lv_obj_invalidate(g_gps_state.map);
     }
 }
 
 void zoom_popup_handle_rotary(int32_t diff) {
-    if (g_gps_state.loading) {
+    if (!is_alive()) {
         return;
     }
     
@@ -585,6 +641,9 @@ void zoom_popup_handle_rotary(int32_t diff) {
 }
 
 void zoom_popup_handle_key(lv_key_t key, lv_event_t* e) {
+    if (!is_alive()) {
+        return;
+    }
     extern void hide_zoom_popup();
     extern void update_map_tiles(bool lightweight);
     extern void update_map_anchor();
@@ -634,10 +693,6 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e) {
         
         GPS_LOG("[GPS] Zoom applied: level=%d, center=(%.6f, %.6f)\n", 
                 g_gps_state.zoom_level, g_gps_state.lat, g_gps_state.lng);
-        return;
-    }
-    
-    if (g_gps_state.loading) {
         return;
     }
     
