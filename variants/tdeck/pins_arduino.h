@@ -74,6 +74,8 @@ static const uint8_t SCK  = 40;
 
 // SD
 #define SD_CS (39)
+// Battery ADC (per LilyGo utilities.h)
+#define BOARD_BAT_ADC (4)
 
 // Feature flags: keep minimal; add only when verified on T-Deck
 // #define USING_ST25R3916

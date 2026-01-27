@@ -188,8 +188,10 @@ bool TDeckBoard::initSD()
 #endif
     pinMode(SD_CS, OUTPUT);
     digitalWrite(SD_CS, HIGH);
-
-    bool ok = SD.begin(SD_CS, SPI, 4000000U, "/sd");
+    pinMode(MISO, INPUT_PULLUP);
+    SPI.begin(SCK, MISO, MOSI);
+    // T-Deck example uses a very conservative SD clock (800 kHz).
+    bool ok = SD.begin(SD_CS, SPI, 800000U);
     Serial.printf("[TDeckBoard] SD init: %s\n", ok ? "OK" : "FAIL");
     return ok;
 #else
@@ -217,7 +219,22 @@ int TDeckBoard::getBatteryLevel()
 {
     if (!pmu_ready_)
     {
+        // Fallback: approximate via ADC if PMU is not reachable.
+#ifdef BOARD_BAT_ADC
+        int raw = analogRead(BOARD_BAT_ADC);
+        if (raw <= 0)
+        {
+            return -1;
+        }
+        // Rough linear map for Li-ion; better than always showing ?%.
+        float v = (raw / 4095.0f) * 3.3f;
+        int pct = static_cast<int>(((v - 3.3f) / (4.2f - 3.3f)) * 100.0f);
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        return pct;
+#else
         return -1;
+#endif
     }
 
     int percent = pmu_.getBatteryPercent();
