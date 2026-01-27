@@ -64,6 +64,17 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     SPI.begin(SCK, MISO, MOSI);
     Serial.println("[TDeckBoard] SPI bus initialized");
 
+    // Initialize trackball pins early; they are active-low in LilyGo examples.
+#if defined(TRACKBALL_UP) && defined(TRACKBALL_DOWN) && defined(TRACKBALL_LEFT) && defined(TRACKBALL_RIGHT)
+    pinMode(TRACKBALL_UP, INPUT_PULLUP);
+    pinMode(TRACKBALL_DOWN, INPUT_PULLUP);
+    pinMode(TRACKBALL_LEFT, INPUT_PULLUP);
+    pinMode(TRACKBALL_RIGHT, INPUT_PULLUP);
+#endif
+#if defined(TRACKBALL_CLICK)
+    pinMode(TRACKBALL_CLICK, INPUT_PULLUP);
+#endif
+
     // Ensure backlight rail is enabled even before full display init.
 #ifdef DISP_BL
     if (DISP_BL >= 0)
@@ -141,6 +152,38 @@ uint16_t TDeckBoard::width()
 uint16_t TDeckBoard::height()
 {
     return disp_._height;
+}
+
+RotaryMsg_t TDeckBoard::getRotary()
+{
+    RotaryMsg_t msg{};
+
+    const uint32_t now = millis();
+    const uint32_t repeat_ms = 120;   // Trackball repeat rate
+    const uint32_t click_ms = 200;    // Click debounce
+
+#if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
+    bool right = digitalRead(TRACKBALL_RIGHT) == LOW;
+    bool left = digitalRead(TRACKBALL_LEFT) == LOW;
+
+    if ((right || left) && (now - last_trackball_ms_) >= repeat_ms)
+    {
+        // Map horizontal movement to encoder diff for menu switching.
+        msg.dir = right ? ROTARY_DIR_UP : ROTARY_DIR_DOWN;
+        last_trackball_ms_ = now;
+    }
+#endif
+
+#if defined(TRACKBALL_CLICK)
+    bool click = digitalRead(TRACKBALL_CLICK) == LOW;
+    if (click && (now - last_click_ms_) >= click_ms)
+    {
+        msg.centerBtnPressed = true;
+        last_click_ms_ = now;
+    }
+#endif
+
+    return msg;
 }
 
 namespace

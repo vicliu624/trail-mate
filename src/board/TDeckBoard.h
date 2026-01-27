@@ -59,6 +59,8 @@ class TDeckBoard : public BoardBase,
     uint16_t width() override;
     uint16_t height() override;
     bool useDMA() override { return true; }
+    bool hasEncoder() override { return true; }
+    RotaryMsg_t getRotary() override;
 
     // LoraBoard
     bool isRadioOnline() const override { return (devices_probe_ & HW_RADIO_ONLINE) != 0; }
@@ -111,6 +113,8 @@ class TDeckBoard : public BoardBase,
     uint8_t brightness_ = 8;
     uint8_t keyboard_brightness_ = 0;
     uint8_t rotation_ = 0;
+    uint32_t last_trackball_ms_ = 0;
+    uint32_t last_click_ms_ = 0;
 
     GPS gps_;
     SensorBHI260AP sensor_;

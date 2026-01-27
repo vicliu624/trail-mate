@@ -52,10 +52,12 @@ static const uint8_t SCK  = 40;
 #define KB_INT       (-1)
 #define KB_BACKLIGHT (-1)
 
-// Rotary (not present on T-Deck)
-#define ROTARY_A (-1)
-#define ROTARY_B (-1)
-#define ROTARY_C (-1)
+// Trackball / joystick-like inputs (from LilyGo T-Deck examples)
+#define TRACKBALL_UP    (3)
+#define TRACKBALL_DOWN  (15)
+#define TRACKBALL_LEFT  (1)
+#define TRACKBALL_RIGHT (2)
+#define TRACKBALL_CLICK (0)
 
 // Interrupt pins (not present / unknown)
 #define RTC_INT    (-1)
@@ -73,7 +75,8 @@ static const uint8_t SCK  = 40;
 // Feature flags: keep minimal; add only when verified on T-Deck
 // #define USING_ST25R3916
 // #define USING_BHI260_SENSOR
-// #define USING_INPUT_DEV_ROTARY
+// Enable encoder-style input; T-Deck trackball will be mapped to rotary events.
+#define USING_INPUT_DEV_ROTARY
 // #define USING_INPUT_DEV_KEYBOARD
 // #define HAS_SD_CARD_SOCKET
 
