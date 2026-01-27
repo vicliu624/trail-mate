@@ -23,7 +23,8 @@ class TDeckBoard : public BoardBase,
                    public LoraBoard,
                    public GpsBoard,
                    public MotionBoard,
-                   public LilyGo_Display
+                   public LilyGo_Display,
+                   public LilyGoDispArduinoSPI
 {
   public:
     static TDeckBoard* getInstance();
@@ -64,25 +65,15 @@ class TDeckBoard : public BoardBase,
 
     // LoraBoard
     bool isRadioOnline() const override { return (devices_probe_ & HW_RADIO_ONLINE) != 0; }
-    int transmitRadio(const uint8_t* data, size_t len) override { return radio_.transmit(data, len); }
-    int startRadioReceive() override { return radio_.startReceive(); }
-    uint32_t getRadioIrqFlags() override { return radio_.getIrqFlags(); }
-    int getRadioPacketLength(bool update) override { return static_cast<int>(radio_.getPacketLength(update)); }
-    int readRadioData(uint8_t* buf, size_t len) override { return radio_.readData(buf, len); }
-    void clearRadioIrqFlags(uint32_t flags) override { radio_.clearIrqFlags(flags); }
+    int transmitRadio(const uint8_t* data, size_t len) override;
+    int startRadioReceive() override;
+    uint32_t getRadioIrqFlags() override;
+    int getRadioPacketLength(bool update) override;
+    int readRadioData(uint8_t* buf, size_t len) override;
+    void clearRadioIrqFlags(uint32_t flags) override;
     void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                             int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
-                            uint8_t crc_len) override
-    {
-        radio_.setFrequency(freq_mhz);
-        radio_.setBandwidth(bw_khz);
-        radio_.setSpreadingFactor(sf);
-        radio_.setCodingRate(cr_denom);
-        radio_.setOutputPower(tx_power);
-        radio_.setPreambleLength(preamble_len);
-        radio_.setSyncWord(sync_word);
-        radio_.setCRC(crc_len);
-    }
+                            uint8_t crc_len) override;
 
     // GpsBoard
     bool initGPS() override;
@@ -118,7 +109,6 @@ class TDeckBoard : public BoardBase,
 
     GPS gps_;
     SensorBHI260AP sensor_;
-    LilyGoDispArduinoSPI disp_;
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
     SX1262 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SX1280)

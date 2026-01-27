@@ -3,10 +3,10 @@
 
 TDeckBoard::TDeckBoard()
     : LilyGo_Display(SPI_DRIVER, false),
-      disp_(SCREEN_WIDTH, SCREEN_HEIGHT,
-            display::drivers::ST7789TDeck::getInitCommands(),
-            display::drivers::ST7789TDeck::getInitCommandsCount(),
-            display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT))
+      LilyGoDispArduinoSPI(SCREEN_WIDTH, SCREEN_HEIGHT,
+                           display::drivers::ST7789TDeck::getInitCommands(),
+                           display::drivers::ST7789TDeck::getInitCommandsCount(),
+                           display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT))
 {
 }
 
@@ -94,10 +94,12 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 
     // Initialize display (ST7789) before LVGL starts flushing.
 #if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
-    // ST7789 on T-Deck is sensitive to long full-frame bursts; use a safer SPI clock.
-    disp_.init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 20, SPI);
-    rotation_ = disp_.getRotation();
-    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", disp_._width, disp_._height);
+    // ST7789 on T-Deck is sensitive to long bursts; use a conservative SPI clock.
+    LilyGoDispArduinoSPI::init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 10, SPI);
+    // T-Deck default orientation should be rotated right by 90 degrees.
+    LilyGoDispArduinoSPI::setRotation(1);
+    rotation_ = LilyGoDispArduinoSPI::getRotation();
+    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
 #else
     Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
 #endif
@@ -130,28 +132,111 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 
 void TDeckBoard::setRotation(uint8_t rotation)
 {
-    disp_.setRotation(rotation);
-    rotation_ = disp_.getRotation();
+    LilyGoDispArduinoSPI::setRotation(rotation);
+    rotation_ = LilyGoDispArduinoSPI::getRotation();
 }
 
 uint8_t TDeckBoard::getRotation()
 {
-    return disp_.getRotation();
+    return LilyGoDispArduinoSPI::getRotation();
 }
 
 void TDeckBoard::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color)
 {
-    disp_.pushColors(x1, y1, x2, y2, color);
+    LilyGoDispArduinoSPI::pushColors(x1, y1, x2, y2, color);
 }
 
 uint16_t TDeckBoard::width()
 {
-    return disp_._width;
+    return LilyGoDispArduinoSPI::_width;
 }
 
 uint16_t TDeckBoard::height()
 {
-    return disp_._height;
+    return LilyGoDispArduinoSPI::_height;
+}
+
+int TDeckBoard::transmitRadio(const uint8_t* data, size_t len)
+{
+    // Share the SPI bus with display to avoid tearing due to contention.
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.transmit(data, len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+int TDeckBoard::startRadioReceive()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.startReceive();
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+uint32_t TDeckBoard::getRadioIrqFlags()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        uint32_t flags = radio_.getIrqFlags();
+        LilyGoDispArduinoSPI::unlock();
+        return flags;
+    }
+    return 0;
+}
+
+int TDeckBoard::getRadioPacketLength(bool update)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        int len = static_cast<int>(radio_.getPacketLength(update));
+        LilyGoDispArduinoSPI::unlock();
+        return len;
+    }
+    return 0;
+}
+
+int TDeckBoard::readRadioData(uint8_t* buf, size_t len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.readData(buf, len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+void TDeckBoard::clearRadioIrqFlags(uint32_t flags)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        radio_.clearIrqFlags(flags);
+        LilyGoDispArduinoSPI::unlock();
+    }
+}
+
+void TDeckBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
+                                    int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
+                                    uint8_t crc_len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(100)))
+    {
+        radio_.setFrequency(freq_mhz);
+        radio_.setBandwidth(bw_khz);
+        radio_.setSpreadingFactor(sf);
+        radio_.setCodingRate(cr_denom);
+        radio_.setOutputPower(tx_power);
+        radio_.setPreambleLength(preamble_len);
+        radio_.setSyncWord(sync_word);
+        radio_.setCRC(crc_len);
+        LilyGoDispArduinoSPI::unlock();
+    }
 }
 
 RotaryMsg_t TDeckBoard::getRotary()
