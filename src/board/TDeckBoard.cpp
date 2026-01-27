@@ -102,18 +102,6 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     }
 #endif
 
-    // Initialize display (ST7789) before LVGL starts flushing.
-#if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
-    // ST7789 on T-Deck is sensitive to long bursts; use a conservative SPI clock.
-    LilyGoDispArduinoSPI::init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 10, SPI);
-    // T-Deck default orientation should be rotated right by 90 degrees.
-    LilyGoDispArduinoSPI::setRotation(1);
-    rotation_ = LilyGoDispArduinoSPI::getRotation();
-    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
-#else
-    Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
-#endif
-
     // Initialize radio minimally; only mark online on success.
     devices_probe_ = 0;
     pmu_ready_ = initPMU();
@@ -146,6 +134,18 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     {
         Serial.println("[TDeckBoard] SD init skipped by NO_HW_SD");
     }
+
+    // Initialize display (ST7789) after SD to avoid SPI bus pollution during card init.
+#if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
+    // ST7789 on T-Deck is sensitive to long bursts; use a conservative SPI clock.
+    LilyGoDispArduinoSPI::init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 10, SPI);
+    // T-Deck default orientation should be rotated right by 90 degrees.
+    LilyGoDispArduinoSPI::setRotation(1);
+    rotation_ = LilyGoDispArduinoSPI::getRotation();
+    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
+#else
+    Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
+#endif
 
     // Initialize radio after SD; SX1262 can perturb the shared SPI bus at boot.
     radio_.reset();
