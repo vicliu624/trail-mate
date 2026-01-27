@@ -37,19 +37,11 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
 
     // Ensure SPI bus pins are initialized for SD access.
     pinMode(MISO, INPUT_PULLUP);
-    // Use a dedicated SPI instance for SD to avoid display/radio bus pollution.
-#if defined(ARDUINO_ARCH_ESP32)
-    static SPIClass sdSpi(HSPI);
-    sdSpi.end();
-    delay(2);
-    sdSpi.begin(SCK, MISO, MOSI);
-    SPIClass& sd_bus = sdSpi;
-#else
+    // Use the same SPI host as the rest of the board to avoid dual-host pin conflicts.
     SPI.end();
     delay(2);
     SPI.begin(SCK, MISO, MOSI);
     SPIClass& sd_bus = SPI;
-#endif
     // Re-assert CS lines after SPI re-init.
     for (size_t i = 0; i < extra_cs_count; ++i)
     {
