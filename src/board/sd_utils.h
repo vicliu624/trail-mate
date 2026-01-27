@@ -36,7 +36,17 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
 
     // Ensure SPI bus pins are initialized for SD access.
     pinMode(MISO, INPUT_PULLUP);
+    // Reset SPI state to avoid leftover display transactions holding the bus.
+    SPI.end();
+    delay(2);
     SPI.begin(SCK, MISO, MOSI);
+    // Re-assert CS lines after SPI re-init.
+    for (size_t i = 0; i < extra_cs_count; ++i)
+    {
+        setCsHigh(extra_cs[i]);
+    }
+    setCsHigh(sd_cs);
+    delay(2);
     Serial.printf("[SD] SPI pins sck=%d miso=%d mosi=%d cs=%d hz=%lu\n",
                   SCK, MISO, MOSI, sd_cs, (unsigned long)spi_hz);
 
