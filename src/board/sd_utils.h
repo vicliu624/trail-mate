@@ -49,6 +49,11 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
     delay(2);
     Serial.printf("[SD] SPI pins sck=%d miso=%d mosi=%d cs=%d hz=%lu\n",
                   SCK, MISO, MOSI, sd_cs, (unsigned long)spi_hz);
+    for (size_t i = 0; i < extra_cs_count; ++i)
+    {
+        Serial.printf("[SD] extra CS pin=%d level=%d\n", extra_cs[i], digitalRead(extra_cs[i]));
+    }
+    Serial.printf("[SD] sd CS pin=%d level=%d\n", sd_cs, digitalRead(sd_cs));
 
     bool ok = false;
     uint8_t card_type = CARD_NONE;
@@ -58,6 +63,12 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
     {
         ok = SD.begin(sd_cs, SPI, spi_hz, mount_point);
         Serial.printf("[SD] SD.begin -> %d\n", ok ? 1 : 0);
+        if (!ok)
+        {
+            // Some cores/boards are picky about the mount point overload.
+            ok = SD.begin(sd_cs, SPI, spi_hz);
+            Serial.printf("[SD] SD.begin (no mount) -> %d\n", ok ? 1 : 0);
+        }
         if (ok)
         {
             card_type = SD.cardType();
