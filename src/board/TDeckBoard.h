@@ -119,9 +119,13 @@ class TDeckBoard : public BoardBase,
     uint32_t last_click_ms_ = 0;
     uint8_t left_count_ = 0;
     uint8_t right_count_ = 0;
+    uint8_t up_count_ = 0;
+    uint8_t down_count_ = 0;
     uint8_t click_count_ = 0;
     bool left_latched_ = false;
     bool right_latched_ = false;
+    bool up_latched_ = false;
+    bool down_latched_ = false;
     bool click_latched_ = false;
     static constexpr uint32_t kRotaryBootGuardMs = 1200;
 

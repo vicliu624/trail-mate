@@ -5,7 +5,7 @@
 
 namespace
 {
-constexpr uint32_t kGpsSampleIntervalMs = 60000;
+constexpr uint32_t kGpsSampleIntervalMs = 5000;
 }
 
 #ifndef GPS_TASK_LOG_ENABLE

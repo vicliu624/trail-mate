@@ -442,9 +442,9 @@ RotaryMsg_t TDeckBoard::getRotary()
         return msg;
     }
 
-    const uint32_t repeat_ms = 140;   // Slightly more responsive
-    const uint32_t click_ms = 220;    // Click debounce
-    const uint8_t stable_polls = 2;   // Still filtered, but more sensitive
+    const uint32_t repeat_ms = 70;    // Even more responsive trackball repeat
+    const uint32_t click_ms = 110;    // Click debounce
+    const uint8_t stable_polls = 2;   // Increase sensitivity on T-Deck trackball
 
 #if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
     const bool right_pressed = digitalRead(TRACKBALL_RIGHT) == LOW;
@@ -477,20 +477,81 @@ RotaryMsg_t TDeckBoard::getRotary()
         left_latched_ = false;
     }
 
-    if (right_count_ >= stable_polls && !right_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+#endif
+
+#if defined(TRACKBALL_UP) && defined(TRACKBALL_DOWN)
+    const bool up_pressed = digitalRead(TRACKBALL_UP) == LOW;
+    const bool down_pressed = digitalRead(TRACKBALL_DOWN) == LOW;
+
+    if (up_pressed && !down_pressed)
     {
-        msg.dir = ROTARY_DIR_UP;
-        last_trackball_ms_ = now;
-        // Latch both directions until release to prevent oscillation.
-        right_latched_ = true;
-        left_latched_ = true;
+        if (up_count_ < stable_polls)
+        {
+            ++up_count_;
+        }
     }
-    else if (left_count_ >= stable_polls && !left_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+    else
+    {
+        up_count_ = 0;
+        up_latched_ = false;
+    }
+
+    if (down_pressed && !up_pressed)
+    {
+        if (down_count_ < stable_polls)
+        {
+            ++down_count_;
+        }
+    }
+    else
+    {
+        down_count_ = 0;
+        down_latched_ = false;
+    }
+
+    // Prefer vertical motion when present.
+    if (up_count_ >= stable_polls && !up_latched_ && (now - last_trackball_ms_) >= repeat_ms)
     {
         msg.dir = ROTARY_DIR_DOWN;
         last_trackball_ms_ = now;
+        up_latched_ = true;
+        down_latched_ = true;
         left_latched_ = true;
         right_latched_ = true;
+    }
+    else if (down_count_ >= stable_polls && !down_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+    {
+        msg.dir = ROTARY_DIR_UP;
+        last_trackball_ms_ = now;
+        down_latched_ = true;
+        up_latched_ = true;
+        left_latched_ = true;
+        right_latched_ = true;
+    }
+#endif
+
+#if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
+    // Horizontal fallback when no vertical event was generated.
+    if (msg.dir == ROTARY_DIR_NONE)
+    {
+        if (right_count_ >= stable_polls && !right_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+        {
+            msg.dir = ROTARY_DIR_DOWN;
+            last_trackball_ms_ = now;
+            right_latched_ = true;
+            left_latched_ = true;
+            up_latched_ = true;
+            down_latched_ = true;
+        }
+        else if (left_count_ >= stable_polls && !left_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+        {
+            msg.dir = ROTARY_DIR_UP;
+            last_trackball_ms_ = now;
+            left_latched_ = true;
+            right_latched_ = true;
+            up_latched_ = true;
+            down_latched_ = true;
+        }
     }
 #endif
 
