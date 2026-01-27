@@ -1,6 +1,29 @@
 #include "board/TDeckBoard.h"
 
-TDeckBoard::TDeckBoard() : LilyGo_Display(SPI_DRIVER, false) {}
+namespace
+{
+// Minimal ST7789 init sequence with required delays.
+static const CommandTable_t kSt7789Init[] = {
+    {0x11, {0}, 0x80},      // Sleep out + delay
+    {0x3A, {0x55}, 1},      // 16-bit color
+    {0x21, {0}, 0},         // Display inversion on
+    {0x29, {0}, 0x80},      // Display on + delay
+};
+
+static const DispRotationConfig_t kSt7789Rot[4] = {
+    {static_cast<uint8_t>(0x00 | 0x08), SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0},
+    {static_cast<uint8_t>(0x60 | 0x08), SCREEN_HEIGHT, SCREEN_WIDTH, 0, 0},
+    {static_cast<uint8_t>(0xC0 | 0x08), SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0},
+    {static_cast<uint8_t>(0xA0 | 0x08), SCREEN_HEIGHT, SCREEN_WIDTH, 0, 0},
+};
+} // namespace
+
+TDeckBoard::TDeckBoard()
+    : LilyGo_Display(SPI_DRIVER, false),
+      disp_(SCREEN_WIDTH, SCREEN_HEIGHT, kSt7789Init, sizeof(kSt7789Init) / sizeof(kSt7789Init[0]),
+            kSt7789Rot)
+{
+}
 
 TDeckBoard* TDeckBoard::getInstance()
 {
@@ -73,6 +96,15 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     }
 #endif
 
+    // Initialize display (ST7789) before LVGL starts flushing.
+#if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
+    disp_.init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 40, SPI);
+    rotation_ = disp_.getRotation();
+    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", disp_._width, disp_._height);
+#else
+    Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
+#endif
+
     // Initialize radio minimally; only mark online on success.
     devices_probe_ = 0;
     radio_.reset();
@@ -97,6 +129,32 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     }
     Serial.println("[TDeckBoard] begin: early probe done");
     return devices_probe_;
+}
+
+void TDeckBoard::setRotation(uint8_t rotation)
+{
+    disp_.setRotation(rotation);
+    rotation_ = disp_.getRotation();
+}
+
+uint8_t TDeckBoard::getRotation()
+{
+    return disp_.getRotation();
+}
+
+void TDeckBoard::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color)
+{
+    disp_.pushColors(x1, y1, x2, y2, color);
+}
+
+uint16_t TDeckBoard::width()
+{
+    return disp_._width;
+}
+
+uint16_t TDeckBoard::height()
+{
+    return disp_._height;
 }
 
 namespace

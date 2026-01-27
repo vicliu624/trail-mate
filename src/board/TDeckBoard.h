@@ -53,11 +53,11 @@ class TDeckBoard : public BoardBase,
     void stopVibrator() override {}
 
     // LilyGo_Display
-    void setRotation(uint8_t rotation) override { rotation_ = rotation; }
-    uint8_t getRotation() override { return rotation_; }
-    void pushColors(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t*) override {}
-    uint16_t width() override { return SCREEN_WIDTH; }
-    uint16_t height() override { return SCREEN_HEIGHT; }
+    void setRotation(uint8_t rotation) override;
+    uint8_t getRotation() override;
+    void pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color) override;
+    uint16_t width() override;
+    uint16_t height() override;
 
     // LoraBoard
     bool isRadioOnline() const override { return (devices_probe_ & HW_RADIO_ONLINE) != 0; }
@@ -113,6 +113,7 @@ class TDeckBoard : public BoardBase,
 
     GPS gps_;
     SensorBHI260AP sensor_;
+    LilyGoDispArduinoSPI disp_;
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
     SX1262 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SX1280)
