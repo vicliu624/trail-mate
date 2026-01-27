@@ -3,6 +3,7 @@
 #include "gps_modal.h"
 #include "gps_page_map.h"
 #include "gps_state.h"
+#include "../../../gps/gps_service_api.h"
 #include "../../ui_common.h"
 #include "../../widgets/map/map_tiles.h"
 
@@ -18,8 +19,11 @@ extern void show_toast(const char* message, uint32_t duration_ms);
 namespace
 {
 constexpr double kMinDistanceM = 2.0;
+constexpr double kMinDistanceMaxM = 30.0;
+constexpr double kSamplePixels = 4.0;
 constexpr int kMaxDrawPoints = 100;
 constexpr int kDefaultTrackerZoom = 16;
+constexpr uint32_t kTrackColor = 0xFF2D55; // vivid pink/red, uncommon on map tiles
 std::vector<String> s_modal_names;
 
 double deg2rad(double deg)
@@ -37,6 +41,13 @@ double haversine_m(double lat1, double lon1, double lat2, double lon2)
                          std::sin(dlon / 2) * std::sin(dlon / 2);
     const double c = 2 * std::atan2(std::sqrt(a), std::sqrt(1 - a));
     return R * c;
+}
+
+double sampling_distance_m(int zoom, double lat)
+{
+    const double mpp = gps::calculate_map_resolution(zoom, lat);
+    const double scaled = mpp * kSamplePixels;
+    return std::max(kMinDistanceM, std::min(kMinDistanceMaxM, scaled));
 }
 
 bool parse_attr_double(const String& line, const char* key, double& out)
@@ -57,7 +68,7 @@ bool parse_attr_double(const String& line, const char* key, double& out)
     return true;
 }
 
-bool load_gpx_points(const char* path, std::vector<GPSPageState::TrackOverlayPoint>& out_points)
+bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::TrackOverlayPoint>& out_points)
 {
     out_points.clear();
     if (SD.cardType() == CARD_NONE)
@@ -98,8 +109,9 @@ bool load_gpx_points(const char* path, std::vector<GPSPageState::TrackOverlayPoi
 
         if (have_last)
         {
+            const double min_d = sampling_distance_m(zoom, pt.lat);
             const double d = haversine_m(last.lat, last.lng, pt.lat, pt.lng);
-            if (d < kMinDistanceM)
+            if (d < min_d)
             {
                 continue;
             }
@@ -160,8 +172,9 @@ void compute_screen_points()
         const auto& pt = s.tracker_points[(size_t)i];
         if (have_prev)
         {
+            const double min_d = sampling_distance_m(s.zoom_level, pt.lat);
             const double d = haversine_m(prev.lat, prev.lng, pt.lat, pt.lng);
-            if (d < kMinDistanceM)
+            if (d < min_d)
             {
                 continue;
             }
@@ -239,7 +252,7 @@ void on_track_selected(lv_event_t* e)
     snprintf(path, sizeof(path), "/trackers/%s", name.c_str());
 
     std::vector<GPSPageState::TrackOverlayPoint> pts;
-    if (!load_gpx_points(path, pts))
+    if (!load_gpx_points(path, kDefaultTrackerZoom, pts))
     {
         show_toast("Failed to load GPX", 1500);
         close_tracker_modal();
@@ -354,7 +367,7 @@ void gps_tracker_draw_event(lv_event_t* e)
 
     lv_draw_line_dsc_t line_dsc;
     lv_draw_line_dsc_init(&line_dsc);
-    line_dsc.color = lv_color_hex(0xEBA341);
+    line_dsc.color = lv_color_hex(kTrackColor);
     line_dsc.width = 3;
     line_dsc.opa = LV_OPA_COVER;
 
@@ -369,7 +382,7 @@ void gps_tracker_draw_event(lv_event_t* e)
 
     lv_draw_rect_dsc_t dot_dsc;
     lv_draw_rect_dsc_init(&dot_dsc);
-    dot_dsc.bg_color = lv_color_hex(0xEBA341);
+    dot_dsc.bg_color = lv_color_hex(kTrackColor);
     dot_dsc.bg_opa = LV_OPA_COVER;
     dot_dsc.radius = LV_RADIUS_CIRCLE;
     dot_dsc.border_width = 0;
