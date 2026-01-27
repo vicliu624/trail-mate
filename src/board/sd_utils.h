@@ -36,10 +36,19 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
 
     // Ensure SPI bus pins are initialized for SD access.
     pinMode(MISO, INPUT_PULLUP);
-    // Reset SPI state to avoid leftover display transactions holding the bus.
+    // Use a dedicated SPI instance for SD to avoid display/radio bus pollution.
+#if defined(ARDUINO_ARCH_ESP32)
+    static SPIClass sdSpi(HSPI);
+    sdSpi.end();
+    delay(2);
+    sdSpi.begin(SCK, MISO, MOSI);
+    SPIClass& sd_bus = sdSpi;
+#else
     SPI.end();
     delay(2);
     SPI.begin(SCK, MISO, MOSI);
+    SPIClass& sd_bus = SPI;
+#endif
     // Re-assert CS lines after SPI re-init.
     for (size_t i = 0; i < extra_cs_count; ++i)
     {
@@ -67,12 +76,12 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
         {
             const uint32_t hz_try = freqs[i];
             Serial.printf("[SD] try hz=%lu\n", (unsigned long)hz_try);
-            ok = SD.begin(sd_cs, SPI, hz_try, mount_point);
+            ok = SD.begin(sd_cs, sd_bus, hz_try, mount_point);
             Serial.printf("[SD] SD.begin -> %d\n", ok ? 1 : 0);
             if (!ok)
             {
                 // Some cores/boards are picky about the mount point overload.
-                ok = SD.begin(sd_cs, SPI, hz_try);
+                ok = SD.begin(sd_cs, sd_bus, hz_try);
                 Serial.printf("[SD] SD.begin (no mount) -> %d\n", ok ? 1 : 0);
             }
             if (ok)

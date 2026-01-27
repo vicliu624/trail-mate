@@ -118,26 +118,6 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     devices_probe_ = 0;
     pmu_ready_ = initPMU();
     rtc_ready_ = (time(nullptr) > 0);
-    radio_.reset();
-    int radio_state = radio_.begin();
-    if (radio_state == RADIOLIB_ERR_NONE)
-    {
-        devices_probe_ |= HW_RADIO_ONLINE;
-        Serial.println("[TDeckBoard] radio init OK");
-    }
-    else
-    {
-        Serial.printf("[TDeckBoard] radio init failed: %d\n", radio_state);
-    }
-
-    if ((disable_hw_init & NO_HW_GPS) == 0)
-    {
-        (void)initGPS();
-    }
-    else
-    {
-        Serial.println("[TDeckBoard] GPS init skipped by NO_HW_GPS");
-    }
 
     if ((disable_hw_init & NO_HW_SD) == 0)
     {
@@ -165,6 +145,28 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     else
     {
         Serial.println("[TDeckBoard] SD init skipped by NO_HW_SD");
+    }
+
+    // Initialize radio after SD; SX1262 can perturb the shared SPI bus at boot.
+    radio_.reset();
+    int radio_state = radio_.begin();
+    if (radio_state == RADIOLIB_ERR_NONE)
+    {
+        devices_probe_ |= HW_RADIO_ONLINE;
+        Serial.println("[TDeckBoard] radio init OK");
+    }
+    else
+    {
+        Serial.printf("[TDeckBoard] radio init failed: %d\n", radio_state);
+    }
+
+    if ((disable_hw_init & NO_HW_GPS) == 0)
+    {
+        (void)initGPS();
+    }
+    else
+    {
+        Serial.println("[TDeckBoard] GPS init skipped by NO_HW_GPS");
     }
     Serial.println("[TDeckBoard] begin: early probe done");
     return devices_probe_;
