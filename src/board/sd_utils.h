@@ -20,7 +20,8 @@ inline void setCsHigh(int pin)
 template <typename Lockable>
 inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* mount_point,
                          const int* extra_cs, size_t extra_cs_count,
-                         uint8_t* out_card_type = nullptr, uint32_t* out_card_size_mb = nullptr)
+                         uint8_t* out_card_type = nullptr, uint32_t* out_card_size_mb = nullptr,
+                         bool use_lock = true)
 {
     if (sd_cs < 0)
     {
@@ -68,7 +69,13 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
     uint8_t card_type = CARD_NONE;
     uint32_t card_size_mb = 0;
 
-    if (bus.lock(pdMS_TO_TICKS(300)))
+    bool locked = true;
+    if (use_lock)
+    {
+        locked = bus.lock(pdMS_TO_TICKS(300));
+    }
+
+    if (locked)
     {
         // Try a small frequency fallback ladder; some SD cards/rails are picky at boot.
         const uint32_t freqs[] = {spi_hz, 400000U, 200000U};
@@ -105,7 +112,10 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
                 SD.end();
             }
         }
-        bus.unlock();
+        if (use_lock)
+        {
+            bus.unlock();
+        }
     }
     else
     {

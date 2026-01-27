@@ -113,6 +113,7 @@ class TDeckBoard : public BoardBase,
     bool pmu_ready_ = false;
     bool rtc_ready_ = false;
     bool sd_ready_ = false;
+    bool display_ready_ = false;
     uint32_t boot_ms_ = 0;
     uint32_t last_trackball_ms_ = 0;
     uint32_t last_click_ms_ = 0;

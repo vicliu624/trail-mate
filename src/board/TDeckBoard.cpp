@@ -107,6 +107,33 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     pmu_ready_ = initPMU();
     rtc_ready_ = (time(nullptr) > 0);
 
+    // Initialize display (ST7789) before SD so the SPI lock exists (pager-style ordering).
+#if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
+    // ST7789 on T-Deck is sensitive to long bursts; use a conservative SPI clock.
+    LilyGoDispArduinoSPI::init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 10, SPI);
+    // T-Deck default orientation should be rotated right by 90 degrees.
+    LilyGoDispArduinoSPI::setRotation(1);
+    rotation_ = LilyGoDispArduinoSPI::getRotation();
+    display_ready_ = true;
+    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
+#else
+    Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
+#endif
+
+    // Initialize radio before SD to align with the pager begin() sequence.
+    radio_.reset();
+    int radio_state = radio_.begin();
+    if (radio_state == RADIOLIB_ERR_NONE)
+    {
+        devices_probe_ |= HW_RADIO_ONLINE;
+        Serial.println("[TDeckBoard] radio init OK");
+    }
+    else
+    {
+        Serial.printf("[TDeckBoard] radio init failed: %d\n", radio_state);
+    }
+
+    // Initialize SD card - optional, with retry (pager-style ordering).
     if ((disable_hw_init & NO_HW_SD) == 0)
     {
         const int max_retries = 2;
@@ -133,31 +160,6 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     else
     {
         Serial.println("[TDeckBoard] SD init skipped by NO_HW_SD");
-    }
-
-    // Initialize display (ST7789) after SD to avoid SPI bus pollution during card init.
-#if defined(DISP_SCK) && defined(DISP_MISO) && defined(DISP_MOSI) && defined(DISP_CS) && defined(DISP_DC)
-    // ST7789 on T-Deck is sensitive to long bursts; use a conservative SPI clock.
-    LilyGoDispArduinoSPI::init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, DISP_BL, 10, SPI);
-    // T-Deck default orientation should be rotated right by 90 degrees.
-    LilyGoDispArduinoSPI::setRotation(1);
-    rotation_ = LilyGoDispArduinoSPI::getRotation();
-    Serial.printf("[TDeckBoard] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
-#else
-    Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
-#endif
-
-    // Initialize radio after SD; SX1262 can perturb the shared SPI bus at boot.
-    radio_.reset();
-    int radio_state = radio_.begin();
-    if (radio_state == RADIOLIB_ERR_NONE)
-    {
-        devices_probe_ |= HW_RADIO_ONLINE;
-        Serial.println("[TDeckBoard] radio init OK");
-    }
-    else
-    {
-        Serial.printf("[TDeckBoard] radio init failed: %d\n", radio_state);
     }
 
     if ((disable_hw_init & NO_HW_GPS) == 0)
@@ -218,7 +220,8 @@ bool TDeckBoard::installSD()
     // T-Deck reference example uses a conservative 800 kHz SPI speed.
     bool ok = sdutil::installSpiSd(*this, SD_CS, 800000U, "/sd",
                                    extra_cs, extra_cs_count,
-                                   &cardType, &cardSizeMB);
+                                   &cardType, &cardSizeMB,
+                                   display_ready_);
 
     Serial.printf("[TDeckBoard] SD init: %s\n", ok ? "OK" : "FAIL");
     if (ok)
