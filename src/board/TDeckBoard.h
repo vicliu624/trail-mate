@@ -47,8 +47,8 @@ class TDeckBoard : public BoardBase,
     bool isCharging() override;
     int getBatteryLevel() override;
 
-    bool isSDReady() const override { return false; }
-    bool isCardReady() override { return false; }
+    bool isSDReady() const override { return sd_ready_; }
+    bool isCardReady() override { return sd_ready_; }
     bool isGPSReady() const override { return (devices_probe_ & HW_GPS_ONLINE) != 0; }
 
     void vibrator() override {}
@@ -100,6 +100,7 @@ class TDeckBoard : public BoardBase,
   private:
     TDeckBoard();
     bool initPMU();
+    bool initSD();
 
   private:
     uint32_t devices_probe_ = 0;
@@ -108,6 +109,8 @@ class TDeckBoard : public BoardBase,
     uint8_t rotation_ = 0;
     bool pmu_ready_ = false;
     bool rtc_ready_ = false;
+    bool sd_ready_ = false;
+    uint32_t boot_ms_ = 0;
     uint32_t last_trackball_ms_ = 0;
     uint32_t last_click_ms_ = 0;
     uint8_t left_count_ = 0;
@@ -116,6 +119,7 @@ class TDeckBoard : public BoardBase,
     bool left_latched_ = false;
     bool right_latched_ = false;
     bool click_latched_ = false;
+    static constexpr uint32_t kRotaryBootGuardMs = 1200;
 
     GPS gps_;
     SensorBHI260AP sensor_;

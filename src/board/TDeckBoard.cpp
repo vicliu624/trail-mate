@@ -1,5 +1,6 @@
 #include "board/TDeckBoard.h"
 #include "display/drivers/ST7789TDeck.h"
+#include <SD.h>
 #include <Wire.h>
 #include <ctime>
 
@@ -33,6 +34,7 @@ bool TDeckBoard::initGPS()
 uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 {
     (void)disable_hw_init;
+    boot_ms_ = millis();
 
     // Early probe: try to bring up serial ASAP for boot diagnostics.
     Serial.begin(115200);
@@ -135,16 +137,65 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     {
         Serial.println("[TDeckBoard] GPS init skipped by NO_HW_GPS");
     }
+
+    if ((disable_hw_init & NO_HW_SD) == 0)
+    {
+        sd_ready_ = initSD();
+        if (sd_ready_)
+        {
+            devices_probe_ |= HW_SD_ONLINE;
+        }
+    }
+    else
+    {
+        Serial.println("[TDeckBoard] SD init skipped by NO_HW_SD");
+    }
     Serial.println("[TDeckBoard] begin: early probe done");
     return devices_probe_;
 }
 
 bool TDeckBoard::initPMU()
 {
-    // T-Deck commonly ships with AXP2101 on the main I2C bus.
+    // T-Deck commonly ships with AXP2101 at 0x34, but I2C pins can differ by revision.
     bool ok = pmu_.begin(Wire, AXP2101_SLAVE_ADDRESS, SDA, SCL);
+    if (!ok)
+    {
+#if defined(SENSOR_SDA) && defined(SENSOR_SCL)
+        if (SENSOR_SDA != SDA || SENSOR_SCL != SCL)
+        {
+            Wire.begin(SENSOR_SDA, SENSOR_SCL);
+            delay(10);
+            ok = pmu_.begin(Wire, AXP2101_SLAVE_ADDRESS, SENSOR_SDA, SENSOR_SCL);
+        }
+#endif
+        // Restore the primary bus for the rest of the system.
+        Wire.begin(SDA, SCL);
+        delay(5);
+    }
     Serial.printf("[TDeckBoard] PMU init: %s\n", ok ? "OK" : "FAIL");
     return ok;
+}
+
+bool TDeckBoard::initSD()
+{
+#ifdef SD_CS
+    // Match pager behavior: assert other CS lines high before SD init.
+#ifdef LORA_CS
+    digitalWrite(LORA_CS, HIGH);
+#endif
+#ifdef DISP_CS
+    digitalWrite(DISP_CS, HIGH);
+#endif
+    pinMode(SD_CS, OUTPUT);
+    digitalWrite(SD_CS, HIGH);
+
+    bool ok = SD.begin(SD_CS, SPI, 4000000U, "/sd");
+    Serial.printf("[TDeckBoard] SD init: %s\n", ok ? "OK" : "FAIL");
+    return ok;
+#else
+    Serial.println("[TDeckBoard] SD init skipped: missing SD_CS");
+    return false;
+#endif
 }
 
 bool TDeckBoard::isRTCReady() const
@@ -295,9 +346,15 @@ RotaryMsg_t TDeckBoard::getRotary()
     RotaryMsg_t msg{};
 
     const uint32_t now = millis();
-    const uint32_t repeat_ms = 180;   // Conservative repeat to suppress noise
-    const uint32_t click_ms = 250;    // Click debounce
-    const uint8_t stable_polls = 3;   // Require N consecutive polls before firing
+    if ((now - boot_ms_) < kRotaryBootGuardMs)
+    {
+        // Ignore early boot noise from the trackball/boot pins.
+        return msg;
+    }
+
+    const uint32_t repeat_ms = 140;   // Slightly more responsive
+    const uint32_t click_ms = 220;    // Click debounce
+    const uint8_t stable_polls = 2;   // Still filtered, but more sensitive
 
 #if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
     const bool right_pressed = digitalRead(TRACKBALL_RIGHT) == LOW;

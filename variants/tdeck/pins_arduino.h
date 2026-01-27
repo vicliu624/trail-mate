@@ -15,6 +15,9 @@ static const uint8_t RX = 44;
 // I2C
 static const uint8_t SDA = 18;
 static const uint8_t SCL = 8;
+// Some T-Deck peripherals (e.g., PMU on certain revisions) may be on the 39/40 bus.
+#define SENSOR_SDA (39)
+#define SENSOR_SCL (40)
 
 // SPI (T-Deck defaults)
 static const uint8_t SS   = 9;
