@@ -14,6 +14,7 @@ enum class ControlId : uint8_t {
     PosBtn,
     PanHBtn,
     PanVBtn,
+    TrackerBtn,
     PanHIndicator,
     PanVIndicator,
     ZoomValueLabel,

@@ -6,6 +6,7 @@
 #include "screens/gps/gps_page_components.h"
 #include "screens/gps/gps_page_map.h"
 #include "screens/gps/gps_constants.h"
+#include "screens/gps/gps_tracker_overlay.h"
 #include "ui_common.h"
 #include "board/BoardBase.h"
 #include "display/DisplayInterface.h"
@@ -22,10 +23,12 @@ extern void updateUserActivity();
 
 
 #define GPS_DEBUG 1  // Enable debug logging
+#ifndef GPS_LOG
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
 #define GPS_LOG(...)
+#endif
 #endif
 
 void ui_gps_exit(lv_obj_t *parent);
@@ -69,6 +72,11 @@ static void gps_update_timer_cb(lv_timer_t *timer)
     
     if (g_gps_state.zoom_modal.is_open()) {
         tick_gps_update(false);  
+        return;
+    }
+
+    if (modal_is_open(g_gps_state.tracker_modal)) {
+        tick_gps_update(false);
         return;
     }
     
@@ -160,6 +168,11 @@ void ui_gps_enter(lv_obj_t *parent)
     
     
     g_gps_state.tile_ctx.map_container = g_gps_state.map;
+
+    if (!g_gps_state.tracker_draw_cb_bound) {
+        lv_obj_add_event_cb(g_gps_state.map, gps_tracker_draw_event, LV_EVENT_DRAW_POST, NULL);
+        g_gps_state.tracker_draw_cb_bound = true;
+    }
     
     extern lv_group_t *app_g;
 
@@ -261,16 +274,29 @@ void ui_gps_enter(lv_obj_t *parent)
     lv_obj_set_style_text_color(pan_v_lbl, lv_color_hex(0x202020), LV_PART_MAIN);
     lv_obj_set_style_text_font(pan_v_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
     lv_obj_center(pan_v_lbl);
+
+    g_gps_state.tracker_btn = lv_btn_create(g_gps_state.panel);
+    style_control_button(g_gps_state.tracker_btn, lv_color_hex(0xF4C77A));
+    set_control_id(g_gps_state.tracker_btn, ControlId::TrackerBtn);
+    lv_obj_add_event_cb(g_gps_state.tracker_btn, on_ui_event, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(g_gps_state.tracker_btn, on_ui_event, LV_EVENT_KEY, NULL);
+
+    lv_obj_t* tracker_lbl = lv_label_create(g_gps_state.tracker_btn);
+    lv_label_set_text(tracker_lbl, "[T]racker");
+    lv_obj_set_style_text_color(tracker_lbl, lv_color_hex(0x202020), LV_PART_MAIN);
+    lv_obj_set_style_text_font(tracker_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
+    lv_obj_center(tracker_lbl);
     
     
     lv_group_add_obj(app_g, g_gps_state.zoom);
     lv_group_add_obj(app_g, g_gps_state.pos);
     lv_group_add_obj(app_g, g_gps_state.pan_h);
     lv_group_add_obj(app_g, g_gps_state.pan_v);
+    lv_group_add_obj(app_g, g_gps_state.tracker_btn);
     
     
-    GPS_LOG("[GPS] Button addresses: zoom=%p, pos=%p, pan_h=%p, pan_v=%p\n",
-            g_gps_state.zoom, g_gps_state.pos, g_gps_state.pan_h, g_gps_state.pan_v);
+    GPS_LOG("[GPS] Button addresses: zoom=%p, pos=%p, pan_h=%p, pan_v=%p, tracker=%p\n",
+            g_gps_state.zoom, g_gps_state.pos, g_gps_state.pan_h, g_gps_state.pan_v, g_gps_state.tracker_btn);
     
     
     
@@ -418,11 +444,16 @@ void ui_gps_exit(lv_obj_t *parent)
     hide_loading();
     hide_toast();
     hide_zoom_popup();
+    gps_tracker_cleanup();
     
     
     if (g_gps_state.zoom_modal.group != NULL) {
         lv_group_del(g_gps_state.zoom_modal.group);
         g_gps_state.zoom_modal.group = nullptr;
+    }
+    if (g_gps_state.tracker_modal.group != NULL) {
+        lv_group_del(g_gps_state.tracker_modal.group);
+        g_gps_state.tracker_modal.group = nullptr;
     }
     
     

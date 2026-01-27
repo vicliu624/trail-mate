@@ -3,6 +3,8 @@
 #include "../../widgets/map/map_tiles.h"
 #include "gps_constants.h"
 #include "../../ui_common.h"
+#include "gps_modal.h"
+#include "gps_tracker_overlay.h"
 #include <cstdint>
 #include <Arduino.h>
 #include <cstdio>
@@ -208,6 +210,10 @@ void on_ui_event(lv_event_t* e) {
             return;
         }
     }
+
+    if (modal_is_open(g_gps_state.tracker_modal)) {
+        return;
+    }
     
     switch (code) {
         case LV_EVENT_CLICKED:
@@ -298,6 +304,10 @@ static void handle_click(lv_obj_t* target) {
                 action_pan_enter(ControlId::PanVBtn);
             }
             break;
+
+        case ControlId::TrackerBtn:
+            gps_tracker_open_modal();
+            break;
             
         default:
             break;
@@ -348,6 +358,10 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e) {
             return;
         }
     }
+
+    if (modal_is_open(g_gps_state.tracker_modal)) {
+        return;
+    }
     
     if (key == LV_KEY_ENTER) {
         if (id == ControlId::ZoomBtn) {
@@ -372,6 +386,10 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e) {
             } else {
                 action_pan_enter(ControlId::PanVBtn);
             }
+            return;
+        }
+        if (id == ControlId::TrackerBtn) {
+            gps_tracker_open_modal();
             return;
         }
     }
@@ -402,6 +420,11 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e) {
         } else {
             action_pan_enter(ControlId::PanVBtn);
         }
+        return;
+    }
+
+    if (key == 't' || key == 'T') {
+        gps_tracker_open_modal();
         return;
     }
 }

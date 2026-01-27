@@ -13,6 +13,7 @@
 // Forward declarations
 extern lv_obj_t *main_screen;
 extern lv_group_t *menu_g;
+extern lv_group_t *app_g;
 
 void menu_show();
 void ui_clear_active_app();

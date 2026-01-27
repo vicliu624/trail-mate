@@ -26,6 +26,7 @@ extern "C"
     extern const lv_image_dsc_t Setting;
     extern const lv_image_dsc_t contact;
     extern const lv_image_dsc_t team_icon;
+    extern const lv_image_dsc_t tracker_icon;
     extern const lv_image_dsc_t shutdown;
     // Note: img_usb is already declared in images.h (C++ linkage)
 }
@@ -43,6 +44,8 @@ void ui_contacts_enter(lv_obj_t* parent);
 void ui_contacts_exit(lv_obj_t* parent);
 void ui_team_enter(lv_obj_t* parent);
 void ui_team_exit(lv_obj_t* parent);
+void ui_tracker_enter(lv_obj_t* parent);
+void ui_tracker_exit(lv_obj_t* parent);
 void ui_setting_enter(lv_obj_t* parent);
 void ui_setting_exit(lv_obj_t* parent);
 #ifdef ARDUINO_USB_MODE
@@ -142,6 +145,12 @@ app_t ui_team_main = {
     .user_data = nullptr,
 };
 
+app_t ui_tracker_main = {
+    .setup_func_cb = ui_tracker_enter,
+    .exit_func_cb = ui_tracker_exit,
+    .user_data = nullptr,
+};
+
 app_t ui_setting_main = {
     .setup_func_cb = ui_setting_enter,
     .exit_func_cb = ui_setting_exit,
@@ -171,15 +180,15 @@ app_t ui_usb_main = {
 #endif
 
 #ifdef ARDUINO_USB_MODE
-const char* kAppNames[7] = {"GPS", "Chat", "Contacts", "Team", "USB Mass Storage", "Setting", "Shutdown"};
-const lv_image_dsc_t* kAppImages[7] = {&gps_icon, &Chat, &contact, &team_icon, &img_usb, &Setting, &shutdown};
-app_t* kAppFuncs[7] = {&ui_gps_main, &ui_chat_main, &ui_contacts_main, &ui_team_main, &ui_usb_main, &ui_setting_main, &ui_shutdown_main};
-#define NUM_APPS 7
+const char* kAppNames[8] = {"GPS", "Tracker", "Chat", "Contacts", "Team", "USB Mass Storage", "Setting", "Shutdown"};
+const lv_image_dsc_t* kAppImages[8] = {&gps_icon, &tracker_icon, &Chat, &contact, &team_icon, &img_usb, &Setting, &shutdown};
+app_t* kAppFuncs[8] = {&ui_gps_main, &ui_tracker_main, &ui_chat_main, &ui_contacts_main, &ui_team_main, &ui_usb_main, &ui_setting_main, &ui_shutdown_main};
+#define NUM_APPS 8
 #else
-const char* kAppNames[6] = {"GPS", "Chat", "Contacts", "Team", "Setting", "Shutdown"};
-const lv_image_dsc_t* kAppImages[6] = {&gps_icon, &Chat, &contact, &team_icon, &Setting, &shutdown};
-app_t* kAppFuncs[6] = {&ui_gps_main, &ui_chat_main, &ui_contacts_main, &ui_team_main, &ui_setting_main, &ui_shutdown_main};
-#define NUM_APPS 6
+const char* kAppNames[7] = {"GPS", "Tracker", "Chat", "Contacts", "Team", "Setting", "Shutdown"};
+const lv_image_dsc_t* kAppImages[7] = {&gps_icon, &tracker_icon, &Chat, &contact, &team_icon, &Setting, &shutdown};
+app_t* kAppFuncs[7] = {&ui_gps_main, &ui_tracker_main, &ui_chat_main, &ui_contacts_main, &ui_team_main, &ui_setting_main, &ui_shutdown_main};
+#define NUM_APPS 7
 #endif
 
 #if LVGL_VERSION_MAJOR == 9
