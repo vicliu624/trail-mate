@@ -61,11 +61,10 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
     uint8_t card_type = CARD_NONE;
     uint32_t card_size_mb = 0;
 
+    // Skip SPI locking to align with pager behavior during early SD init.
+    (void)bus;
+    (void)use_lock;
     bool locked = true;
-    if (use_lock)
-    {
-        locked = bus.lock(pdMS_TO_TICKS(300));
-    }
 
     if (locked)
     {
@@ -104,14 +103,6 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
                 SD.end();
             }
         }
-        if (use_lock)
-        {
-            bus.unlock();
-        }
-    }
-    else
-    {
-        Serial.println("[SD] SPI lock failed");
     }
 
     if (out_card_type)
