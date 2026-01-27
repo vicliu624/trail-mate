@@ -1,5 +1,7 @@
 #include "board/TDeckBoard.h"
 #include "display/drivers/ST7789TDeck.h"
+#include <Wire.h>
+#include <ctime>
 
 TDeckBoard::TDeckBoard()
     : LilyGo_Display(SPI_DRIVER, false),
@@ -61,6 +63,11 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 #ifdef MISO
     pinMode(MISO, INPUT_PULLUP);
 #endif
+
+    // Initialize I2C early for PMU/RTC-class peripherals.
+    Wire.begin(SDA, SCL);
+    delay(10);
+
     SPI.begin(SCK, MISO, MOSI);
     Serial.println("[TDeckBoard] SPI bus initialized");
 
@@ -106,6 +113,8 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 
     // Initialize radio minimally; only mark online on success.
     devices_probe_ = 0;
+    pmu_ready_ = initPMU();
+    rtc_ready_ = (time(nullptr) > 0);
     radio_.reset();
     int radio_state = radio_.begin();
     if (radio_state == RADIOLIB_ERR_NONE)
@@ -128,6 +137,48 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     }
     Serial.println("[TDeckBoard] begin: early probe done");
     return devices_probe_;
+}
+
+bool TDeckBoard::initPMU()
+{
+    // T-Deck commonly ships with AXP2101 on the main I2C bus.
+    bool ok = pmu_.begin(Wire, AXP2101_SLAVE_ADDRESS, SDA, SCL);
+    Serial.printf("[TDeckBoard] PMU init: %s\n", ok ? "OK" : "FAIL");
+    return ok;
+}
+
+bool TDeckBoard::isRTCReady() const
+{
+    // T-Deck has no guaranteed external RTC; treat system time as RTC readiness.
+    return rtc_ready_ || (time(nullptr) > 0);
+}
+
+bool TDeckBoard::isCharging()
+{
+    if (!pmu_ready_)
+    {
+        return false;
+    }
+    return pmu_.isCharging();
+}
+
+int TDeckBoard::getBatteryLevel()
+{
+    if (!pmu_ready_)
+    {
+        return -1;
+    }
+
+    int percent = pmu_.getBatteryPercent();
+    if (percent < 0)
+    {
+        return -1;
+    }
+    if (percent > 100)
+    {
+        percent = 100;
+    }
+    return percent;
 }
 
 void TDeckBoard::setRotation(uint8_t rotation)

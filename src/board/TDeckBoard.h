@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <RadioLib.h>
 #include <SensorBHI260AP.hpp>
+#include <XPowersAXP2101.tpp>
 
 #include "BoardBase.h"
 #include "GpsBoard.h"
@@ -42,9 +43,9 @@ class TDeckBoard : public BoardBase,
     void keyboardSetBrightness(uint8_t level) override { keyboard_brightness_ = level; }
     uint8_t keyboardGetBrightness() override { return keyboard_brightness_; }
 
-    bool isRTCReady() const override { return false; }
-    bool isCharging() override { return false; }
-    int getBatteryLevel() override { return -1; }
+    bool isRTCReady() const override;
+    bool isCharging() override;
+    int getBatteryLevel() override;
 
     bool isSDReady() const override { return false; }
     bool isCardReady() override { return false; }
@@ -98,12 +99,15 @@ class TDeckBoard : public BoardBase,
 
   private:
     TDeckBoard();
+    bool initPMU();
 
   private:
     uint32_t devices_probe_ = 0;
     uint8_t brightness_ = 8;
     uint8_t keyboard_brightness_ = 0;
     uint8_t rotation_ = 0;
+    bool pmu_ready_ = false;
+    bool rtc_ready_ = false;
     uint32_t last_trackball_ms_ = 0;
     uint32_t last_click_ms_ = 0;
     uint8_t left_count_ = 0;
@@ -115,6 +119,7 @@ class TDeckBoard : public BoardBase,
 
     GPS gps_;
     SensorBHI260AP sensor_;
+    XPowersAXP2101 pmu_;
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
     SX1262 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SX1280)
