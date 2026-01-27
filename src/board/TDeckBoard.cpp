@@ -11,6 +11,14 @@ TDeckBoard* TDeckBoard::getInstance()
 uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 {
     (void)disable_hw_init;
+
+    // T-Deck requires the power enable pin to be asserted very early.
+#ifdef BOARD_POWERON
+    pinMode(BOARD_POWERON, OUTPUT);
+    digitalWrite(BOARD_POWERON, HIGH);
+    delay(50);
+#endif
+
     // Minimal probe flags so higher layers can run without board-specific init.
     devices_probe_ = HW_RADIO_ONLINE;
     return devices_probe_;

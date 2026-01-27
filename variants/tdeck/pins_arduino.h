@@ -22,23 +22,26 @@ static const uint8_t MOSI = 41;
 static const uint8_t MISO = 38;
 static const uint8_t SCK  = 40;
 
-// Display pins (placeholder mapping for compile)
+// Board power enable (required very early on T-Deck)
+#define BOARD_POWERON (10)
+
+// Display pins (aligned with LilyGo T-Deck examples)
 #define DISP_MOSI (MOSI)
 #define DISP_MISO (MISO)
 #define DISP_SCK  (SCK)
 #define DISP_RST  (-1)
-#define DISP_CS   (SS)
-#define DISP_DC   (7)
+#define DISP_CS   (12)
+#define DISP_DC   (11)
 #define DISP_BL   (42)
 
-// LoRa pins (placeholder mapping for compile)
+// LoRa pins (aligned with LilyGo T-Deck examples)
 #define LORA_SCK  (SCK)
 #define LORA_MISO (MISO)
 #define LORA_MOSI (MOSI)
-#define LORA_CS   (SS)
-#define LORA_RST  (6)
-#define LORA_BUSY (5)
-#define LORA_IRQ  (4)
+#define LORA_CS   (9)
+#define LORA_RST  (17)
+#define LORA_BUSY (13)
+#define LORA_IRQ  (45)
 
 // GPS pins (T-Deck examples show 43/44; keep explicit)
 #define GPS_TX  (43)
@@ -65,7 +68,7 @@ static const uint8_t SCK  = 40;
 #define BOOT_KEY  (0)
 
 // SD
-#define SD_CS (SS)
+#define SD_CS (39)
 
 // Feature flags: keep minimal; add only when verified on T-Deck
 // #define USING_ST25R3916
