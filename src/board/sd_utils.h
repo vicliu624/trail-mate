@@ -61,13 +61,26 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
 
     if (bus.lock(pdMS_TO_TICKS(300)))
     {
-        ok = SD.begin(sd_cs, SPI, spi_hz, mount_point);
-        Serial.printf("[SD] SD.begin -> %d\n", ok ? 1 : 0);
-        if (!ok)
+        // Try a small frequency fallback ladder; some SD cards/rails are picky at boot.
+        const uint32_t freqs[] = {spi_hz, 400000U, 200000U};
+        for (size_t i = 0; i < (sizeof(freqs) / sizeof(freqs[0])); ++i)
         {
-            // Some cores/boards are picky about the mount point overload.
-            ok = SD.begin(sd_cs, SPI, spi_hz);
-            Serial.printf("[SD] SD.begin (no mount) -> %d\n", ok ? 1 : 0);
+            const uint32_t hz_try = freqs[i];
+            Serial.printf("[SD] try hz=%lu\n", (unsigned long)hz_try);
+            ok = SD.begin(sd_cs, SPI, hz_try, mount_point);
+            Serial.printf("[SD] SD.begin -> %d\n", ok ? 1 : 0);
+            if (!ok)
+            {
+                // Some cores/boards are picky about the mount point overload.
+                ok = SD.begin(sd_cs, SPI, hz_try);
+                Serial.printf("[SD] SD.begin (no mount) -> %d\n", ok ? 1 : 0);
+            }
+            if (ok)
+            {
+                break;
+            }
+            SD.end();
+            delay(5);
         }
         if (ok)
         {
