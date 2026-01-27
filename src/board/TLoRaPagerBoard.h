@@ -16,9 +16,10 @@
 #include <memory>
 
 #include "BoardBase.h"
-#include "LoraBoard.h"
 #include "GpsBoard.h"
+#include "LoraBoard.h"
 #include "MotionBoard.h"
+#include "SdBoard.h"
 
 // Forward declaration to avoid circular includes
 namespace app
@@ -71,6 +72,7 @@ class TLoRaPagerBoard : public BoardBase,
                         public LoraBoard,
                         public GpsBoard,
                         public MotionBoard,
+                        public SdBoard,
                         public LilyGo_Display,
                         public LilyGoDispArduinoSPI,
                         public BrightnessController<TLoRaPagerBoard, 0, 16, 50>

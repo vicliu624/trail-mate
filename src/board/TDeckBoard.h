@@ -9,6 +9,7 @@
 #include "GpsBoard.h"
 #include "LoraBoard.h"
 #include "MotionBoard.h"
+#include "SdBoard.h"
 #include "board/TLoRaPagerTypes.h"
 #include "display/DisplayInterface.h"
 #include "gps/GPS.h"
@@ -24,6 +25,7 @@ class TDeckBoard : public BoardBase,
                    public LoraBoard,
                    public GpsBoard,
                    public MotionBoard,
+                   public SdBoard,
                    public LilyGo_Display,
                    public LilyGoDispArduinoSPI
 {
@@ -48,7 +50,7 @@ class TDeckBoard : public BoardBase,
     int getBatteryLevel() override;
 
     bool isSDReady() const override { return sd_ready_; }
-    bool isCardReady() override { return sd_ready_; }
+    bool isCardReady() override;
     bool isGPSReady() const override { return (devices_probe_ & HW_GPS_ONLINE) != 0; }
 
     void vibrator() override {}
@@ -100,7 +102,8 @@ class TDeckBoard : public BoardBase,
   private:
     TDeckBoard();
     bool initPMU();
-    bool initSD();
+    bool installSD();
+    void uninstallSD();
 
   private:
     uint32_t devices_probe_ = 0;

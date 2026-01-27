@@ -1,4 +1,5 @@
 #include "board/TLoRaPagerBoard.h"
+#include "board/sd_utils.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -656,23 +657,18 @@ bool TLoRaPagerBoard::installSD()
     // Ensure SPI pins are initialized
     initShareSPIPins();
 
-    // Initialize SD card with 4MHz SPI speed, mount point: /sd
-    if (!SD.begin(SD_CS, SPI, 4000000U, "/sd"))
+    uint8_t card_type = CARD_NONE;
+    uint32_t card_size_mb = 0;
+    bool ok = sdutil::installSpiSd(*this, SD_CS, 4000000U, "/sd",
+                                   nullptr, 0, &card_type, &card_size_mb);
+    if (!ok)
     {
         log_w("SD card initialization failed");
         return false;
     }
-
-    // Verify card is actually present
-    if (SD.cardType() != CARD_NONE)
-    {
-        uint64_t cardSizeMB = SD.cardSize() / (1024 * 1024);
-        log_d("SD card detected, size: %llu MB", cardSizeMB);
-        return true;
-    }
-
-    log_w("SD card type is NONE");
-    return false;
+    log_d("SD card detected, type=%u size=%lu MB",
+          (unsigned)card_type, (unsigned long)card_size_mb);
+    return true;
 }
 
 void TLoRaPagerBoard::uninstallSD()

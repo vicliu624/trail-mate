@@ -1,4 +1,5 @@
 #include "board/TDeckBoard.h"
+#include "board/sd_utils.h"
 #include "display/drivers/ST7789TDeck.h"
 #include <SD.h>
 #include <Wire.h>
@@ -140,10 +141,25 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 
     if ((disable_hw_init & NO_HW_SD) == 0)
     {
-        sd_ready_ = initSD();
-        if (sd_ready_)
+        const int max_retries = 2;
+        sd_ready_ = false;
+        for (int retry = 0; retry < max_retries; ++retry)
         {
-            devices_probe_ |= HW_SD_ONLINE;
+            if (installSD())
+            {
+                sd_ready_ = true;
+                devices_probe_ |= HW_SD_ONLINE;
+                break;
+            }
+            if (retry < max_retries - 1)
+            {
+                Serial.printf("[TDeckBoard] SD init failed, retrying... (%d/%d)\n", retry + 1, max_retries);
+                delay(100);
+            }
+            else
+            {
+                Serial.printf("[TDeckBoard] SD init failed after %d attempts\n", max_retries);
+            }
         }
     }
     else
@@ -176,28 +192,57 @@ bool TDeckBoard::initPMU()
     return ok;
 }
 
-bool TDeckBoard::initSD()
+bool TDeckBoard::installSD()
 {
 #ifdef SD_CS
-    // Match pager behavior: assert other CS lines high before SD init.
-#ifdef LORA_CS
-    digitalWrite(LORA_CS, HIGH);
+    const int* extra_cs = nullptr;
+    size_t extra_cs_count = 0;
+#if defined(LORA_CS) && defined(DISP_CS)
+    static const int extra_cs_pins[] = {LORA_CS, DISP_CS};
+    extra_cs = extra_cs_pins;
+    extra_cs_count = sizeof(extra_cs_pins) / sizeof(extra_cs_pins[0]);
+#elif defined(LORA_CS)
+    static const int extra_cs_pins[] = {LORA_CS};
+    extra_cs = extra_cs_pins;
+    extra_cs_count = 1;
+#elif defined(DISP_CS)
+    static const int extra_cs_pins[] = {DISP_CS};
+    extra_cs = extra_cs_pins;
+    extra_cs_count = 1;
 #endif
-#ifdef DISP_CS
-    digitalWrite(DISP_CS, HIGH);
-#endif
-    pinMode(SD_CS, OUTPUT);
-    digitalWrite(SD_CS, HIGH);
-    pinMode(MISO, INPUT_PULLUP);
-    SPI.begin(SCK, MISO, MOSI);
-    // T-Deck example uses a very conservative SD clock (800 kHz).
-    bool ok = SD.begin(SD_CS, SPI, 800000U);
+
+    uint8_t cardType = CARD_NONE;
+    uint32_t cardSizeMB = 0;
+    // T-Deck reference example uses a conservative 800 kHz SPI speed.
+    bool ok = sdutil::installSpiSd(*this, SD_CS, 800000U, "/sd",
+                                   extra_cs, extra_cs_count,
+                                   &cardType, &cardSizeMB);
+
     Serial.printf("[TDeckBoard] SD init: %s\n", ok ? "OK" : "FAIL");
+    if (ok)
+    {
+        Serial.printf("[TDeckBoard] SD card type=%u size=%luMB\n",
+                      (unsigned)cardType, (unsigned long)cardSizeMB);
+    }
     return ok;
 #else
     Serial.println("[TDeckBoard] SD init skipped: missing SD_CS");
     return false;
 #endif
+}
+
+void TDeckBoard::uninstallSD()
+{
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
+    {
+        SD.end();
+        LilyGoDispArduinoSPI::unlock();
+        Serial.println("[TDeckBoard] SD unmounted");
+    }
+    else
+    {
+        Serial.println("[TDeckBoard] SD unmount: SPI lock failed");
+    }
 }
 
 bool TDeckBoard::isRTCReady() const
@@ -226,11 +271,23 @@ int TDeckBoard::getBatteryLevel()
         {
             return -1;
         }
-        // Rough linear map for Li-ion; better than always showing ?%.
-        float v = (raw / 4095.0f) * 3.3f;
+        // Configure attenuation for full-scale ~3.3V before converting.
+        analogSetPinAttenuation(BOARD_BAT_ADC, ADC_11db);
+#ifndef BAT_ADC_MULTIPLIER
+#define BAT_ADC_MULTIPLIER 2.0f
+#endif
+        // Account for the board's voltage divider via BAT_ADC_MULTIPLIER.
+        float v = (raw / 4095.0f) * 3.3f * BAT_ADC_MULTIPLIER;
         int pct = static_cast<int>(((v - 3.3f) / (4.2f - 3.3f)) * 100.0f);
         if (pct < 0) pct = 0;
         if (pct > 100) pct = 100;
+        static bool logged_once = false;
+        if (!logged_once)
+        {
+            logged_once = true;
+            Serial.printf("[TDeckBoard] BAT adc raw=%d v=%.3f pct=%d (mult=%.2f)\n",
+                          raw, (double)v, pct, (double)BAT_ADC_MULTIPLIER);
+        }
         return pct;
 #else
         return -1;
@@ -247,6 +304,17 @@ int TDeckBoard::getBatteryLevel()
         percent = 100;
     }
     return percent;
+}
+
+bool TDeckBoard::isCardReady()
+{
+    bool ready = false;
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(100)))
+    {
+        ready = (SD.sectorSize() != 0);
+        LilyGoDispArduinoSPI::unlock();
+    }
+    return ready;
 }
 
 void TDeckBoard::setRotation(uint8_t rotation)
