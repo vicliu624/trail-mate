@@ -244,27 +244,77 @@ RotaryMsg_t TDeckBoard::getRotary()
     RotaryMsg_t msg{};
 
     const uint32_t now = millis();
-    const uint32_t repeat_ms = 120;   // Trackball repeat rate
-    const uint32_t click_ms = 200;    // Click debounce
+    const uint32_t repeat_ms = 180;   // Conservative repeat to suppress noise
+    const uint32_t click_ms = 250;    // Click debounce
+    const uint8_t stable_polls = 3;   // Require N consecutive polls before firing
 
 #if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
-    bool right = digitalRead(TRACKBALL_RIGHT) == LOW;
-    bool left = digitalRead(TRACKBALL_LEFT) == LOW;
+    const bool right_pressed = digitalRead(TRACKBALL_RIGHT) == LOW;
+    const bool left_pressed = digitalRead(TRACKBALL_LEFT) == LOW;
 
-    if ((right || left) && (now - last_trackball_ms_) >= repeat_ms)
+    // Treat simultaneous left+right as noise and require stable edges.
+    if (right_pressed && !left_pressed)
     {
-        // Map horizontal movement to encoder diff for menu switching.
-        msg.dir = right ? ROTARY_DIR_UP : ROTARY_DIR_DOWN;
+        if (right_count_ < stable_polls)
+        {
+            ++right_count_;
+        }
+    }
+    else
+    {
+        right_count_ = 0;
+        right_latched_ = false;
+    }
+
+    if (left_pressed && !right_pressed)
+    {
+        if (left_count_ < stable_polls)
+        {
+            ++left_count_;
+        }
+    }
+    else
+    {
+        left_count_ = 0;
+        left_latched_ = false;
+    }
+
+    if (right_count_ >= stable_polls && !right_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+    {
+        msg.dir = ROTARY_DIR_UP;
         last_trackball_ms_ = now;
+        // Latch both directions until release to prevent oscillation.
+        right_latched_ = true;
+        left_latched_ = true;
+    }
+    else if (left_count_ >= stable_polls && !left_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+    {
+        msg.dir = ROTARY_DIR_DOWN;
+        last_trackball_ms_ = now;
+        left_latched_ = true;
+        right_latched_ = true;
     }
 #endif
 
 #if defined(TRACKBALL_CLICK)
-    bool click = digitalRead(TRACKBALL_CLICK) == LOW;
-    if (click && (now - last_click_ms_) >= click_ms)
+    const bool click_pressed = digitalRead(TRACKBALL_CLICK) == LOW;
+    if (click_pressed)
     {
-        msg.centerBtnPressed = true;
-        last_click_ms_ = now;
+        if (click_count_ < stable_polls)
+        {
+            ++click_count_;
+        }
+        if (click_count_ >= stable_polls && !click_latched_ && (now - last_click_ms_) >= click_ms)
+        {
+            msg.centerBtnPressed = true;
+            last_click_ms_ = now;
+            click_latched_ = true;
+        }
+    }
+    else
+    {
+        click_count_ = 0;
+        click_latched_ = false;
     }
 #endif
 

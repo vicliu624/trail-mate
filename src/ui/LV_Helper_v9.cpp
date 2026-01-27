@@ -21,7 +21,7 @@ static lv_indev_t* indev_keyboard;
 static lv_color16_t* buf = nullptr;
 static lv_color16_t* buf1 = nullptr;
 
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK)
 #define _SWAP_COLORS
 #endif
 

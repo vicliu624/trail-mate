@@ -106,6 +106,12 @@ class TDeckBoard : public BoardBase,
     uint8_t rotation_ = 0;
     uint32_t last_trackball_ms_ = 0;
     uint32_t last_click_ms_ = 0;
+    uint8_t left_count_ = 0;
+    uint8_t right_count_ = 0;
+    uint8_t click_count_ = 0;
+    bool left_latched_ = false;
+    bool right_latched_ = false;
+    bool click_latched_ = false;
 
     GPS gps_;
     SensorBHI260AP sensor_;
