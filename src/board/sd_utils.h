@@ -37,6 +37,8 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
     // Ensure SPI bus pins are initialized for SD access.
     pinMode(MISO, INPUT_PULLUP);
     SPI.begin(SCK, MISO, MOSI);
+    Serial.printf("[SD] SPI pins sck=%d miso=%d mosi=%d cs=%d hz=%lu\n",
+                  SCK, MISO, MOSI, sd_cs, (unsigned long)spi_hz);
 
     bool ok = false;
     uint8_t card_type = CARD_NONE;
@@ -45,9 +47,11 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
     if (bus.lock(pdMS_TO_TICKS(300)))
     {
         ok = SD.begin(sd_cs, SPI, spi_hz, mount_point);
+        Serial.printf("[SD] SD.begin -> %d\n", ok ? 1 : 0);
         if (ok)
         {
             card_type = SD.cardType();
+            Serial.printf("[SD] cardType=%u\n", (unsigned)card_type);
             if (card_type != CARD_NONE)
             {
                 card_size_mb = static_cast<uint32_t>(SD.cardSize() / (1024 * 1024));
@@ -59,6 +63,10 @@ inline bool installSpiSd(Lockable& bus, int sd_cs, uint32_t spi_hz, const char* 
             }
         }
         bus.unlock();
+    }
+    else
+    {
+        Serial.println("[SD] SPI lock failed");
     }
 
     if (out_card_type)
