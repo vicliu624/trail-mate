@@ -88,7 +88,6 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.pan_h = nullptr;
     g_gps_state.pan_v = nullptr;
     g_gps_state.tracker_btn = nullptr;
-    g_gps_state.status = nullptr;
     g_gps_state.resolution_label = nullptr;
 }
 

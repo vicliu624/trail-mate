@@ -100,30 +100,6 @@ void update_title_and_status()
     GPSData gps_data = gps::gps_get_data();
     uint8_t satellites = gps_data.satellites;
     
-    if (g_gps_state.status != NULL) {
-        char status_text[128];
-        
-        if (!sd_ready) {
-            snprintf(status_text, sizeof(status_text), 
-                "SD Card Not Found\nPlease insert SD card\nwith map tiles");
-        } else if (!g_gps_state.has_visible_map_data) {
-            snprintf(status_text, sizeof(status_text),
-                "No Map Data\nPlease add map tiles to\n/sd/maps/ directory");
-        } else if (!gps_ready) {
-            snprintf(status_text, sizeof(status_text), 
-                "GPS Not Ready\nWorld Map\nZoom: %d", g_gps_state.zoom_level);
-        } else if (g_gps_state.has_fix) {
-            snprintf(status_text, sizeof(status_text), 
-                "Lat: %.6f\nLng: %.6f\nZoom: %d\nSat: %d", 
-                g_gps_state.lat, g_gps_state.lng, g_gps_state.zoom_level, satellites);
-        } else {
-            snprintf(status_text, sizeof(status_text), 
-                "Searching GPS...\nWorld Map\nZoom: %d", g_gps_state.zoom_level);
-        }
-        
-        lv_label_set_text(g_gps_state.status, status_text);
-    }
-    
     bool state_changed = !last_status_state.initialized ||
                          (last_status_state.cached_has_fix != g_gps_state.has_fix ||
                          last_status_state.cached_sd_ready != sd_ready ||

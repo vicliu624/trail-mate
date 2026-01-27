@@ -10,10 +10,6 @@ struct Spec {
     int panel_top_offset = 3;
     int panel_row_gap = 3;
 
-    int status_pad = 8;
-    int status_x = 10;
-    int status_y = 10;
-
     int resolution_pad = 4;
     int resolution_x = 10;
     int resolution_y = -10;
@@ -28,7 +24,6 @@ struct Widgets {
     lv_obj_t* content = nullptr;
     lv_obj_t* map = nullptr;
 
-    lv_obj_t* status = nullptr;
     lv_obj_t* resolution_label = nullptr;
 
     lv_obj_t* panel = nullptr;
@@ -49,4 +44,3 @@ struct Widgets {
 void create(lv_obj_t* parent, const Spec& spec, Widgets& w);
 
 } // namespace gps::ui::layout
-

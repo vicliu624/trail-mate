@@ -35,9 +35,9 @@ void ui_gps_exit(lv_obj_t* parent);
 
 static void gps_exit_async(void* /*user_data*/)
 {
-    GPS_LOG("[GPS][EXIT] gps_exit_async: menu_show -> ui_gps_exit\n");
-    menu_show();
+    GPS_LOG("[GPS][EXIT] gps_exit_async: ui_gps_exit -> menu_show\n");
     ui_gps_exit(nullptr);
+    menu_show();
 }
 
 static void gps_top_bar_back(void* /*user_data*/)
@@ -65,7 +65,6 @@ void assign_layout_widgets(const gps::ui::layout::Widgets& w)
     g_gps_state.header = w.header;
     g_gps_state.page = w.content;
     g_gps_state.map = w.map;
-    g_gps_state.status = w.status;
     g_gps_state.resolution_label = w.resolution_label;
     g_gps_state.panel = w.panel;
     g_gps_state.zoom = w.zoom_btn;
@@ -183,12 +182,15 @@ static void gps_update_timer_cb(lv_timer_t* timer)
         return;
     }
 
+    // If there's no GPS fix and nothing explicitly requested a refresh,
+    // avoid driving full UI/map updates on every tick.
+    GPSData gps_data = gps::gps_get_data();
+    const bool has_fix_now = gps_data.valid || g_gps_state.has_fix;
+
     if (g_gps_state.pending_refresh) {
         g_gps_state.pending_refresh = false;
         update_map_tiles(false);
     }
-
-    tick_loader();
 
     if (g_gps_state.zoom_modal.is_open()) {
         tick_gps_update(false);
@@ -200,7 +202,30 @@ static void gps_update_timer_cb(lv_timer_t* timer)
         return;
     }
 
+    if (!has_fix_now && !g_gps_state.pending_refresh) {
+        return;
+    }
+
     tick_gps_update(true);
+}
+
+static void gps_loader_timer_cb(lv_timer_t* timer)
+{
+    (void)timer;
+    if (!gps::ui::lifetime::is_alive()) {
+        return;
+    }
+    tick_loader();
+}
+
+static void gps_initial_tiles_async(void* /*user_data*/)
+{
+    if (!gps::ui::lifetime::is_alive() || !g_gps_state.map) {
+        return;
+    }
+    // Ensure final sizes before first tile calculation to avoid visible jitter.
+    lv_obj_update_layout(gps_root);
+    update_map_tiles(false);
 }
 
 void ui_gps_enter(lv_obj_t* parent)
@@ -233,6 +258,9 @@ void ui_gps_enter(lv_obj_t* parent)
     ::ui::widgets::top_bar_init(g_gps_state.top_bar, g_gps_state.header, cfg);
     ::ui::widgets::top_bar_set_title(g_gps_state.top_bar, "GPS");
     ::ui::widgets::top_bar_set_back_callback(g_gps_state.top_bar, gps_top_bar_back, nullptr);
+
+    // Ensure layout sizes are finalized before any tile calculations.
+    lv_obj_update_layout(gps_root);
 
     ::init_tile_context(g_gps_state.tile_ctx,
                         nullptr,
@@ -272,17 +300,20 @@ void ui_gps_enter(lv_obj_t* parent)
     g_gps_state.last_resolution_lat = g_gps_state.lat;
     update_resolution_display();
 
-    if (g_gps_state.map != NULL && g_gps_state.tile_ctx.map_container == g_gps_state.map) {
-        update_map_tiles(false);
-    } else {
+    if (g_gps_state.map == NULL || g_gps_state.tile_ctx.map_container != g_gps_state.map) {
         GPS_LOG("[GPS] WARNING: map=%p, tile_ctx.map_container=%p, skipping initial tile calculation\n",
                 g_gps_state.map, g_gps_state.tile_ctx.map_container);
+    } else {
+        // Defer the first tile calculation to the next LVGL tick to stabilize layout.
+        lv_async_call(gps_initial_tiles_async, nullptr);
     }
 
     set_default_group(app_g);
     lv_group_set_editing(app_g, false);
 
-    g_gps_state.timer = gps::ui::lifetime::add_timer(gps_update_timer_cb, 33, NULL);
+    // Split timers: fast tile loading + slower GPS refresh.
+    g_gps_state.loader_timer = gps::ui::lifetime::add_timer(gps_loader_timer_cb, 50, NULL);
+    g_gps_state.timer = gps::ui::lifetime::add_timer(gps_update_timer_cb, 200, NULL);
     g_gps_state.title_timer = gps::ui::lifetime::add_timer(title_update_timer_cb, 30000, NULL);
 
     update_title_and_status();
@@ -304,6 +335,7 @@ void ui_gps_exit(lv_obj_t* parent)
     // Mirror Contacts cleanup order: stop timers/inputs, close modals, delete root, reset state.
     gps::ui::lifetime::clear_timers();
     g_gps_state.timer = nullptr;
+    g_gps_state.loader_timer = nullptr;
     g_gps_state.title_timer = nullptr;
     g_gps_state.toast_timer = nullptr;
     GPS_LOG("[GPS][EXIT] timers cleared\n");

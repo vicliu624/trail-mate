@@ -9,7 +9,6 @@ namespace gps::ui::layout {
  *   [header: top bar host]
  *   [content: grow]
  *     [map: fills content]
- *       [status: top-left overlay]
  *       [resolution_label: bottom-left overlay]
  *       [panel: top-right column]
  *         [zoom_btn]
@@ -28,7 +27,6 @@ namespace gps::ui::layout {
  * |- header
  * `- content
  *    `- map
- *       |- status
  *       |- resolution_label
  *       `- panel
  *          |- zoom_btn
@@ -68,9 +66,6 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     lv_obj_clear_flag(w.map, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(w.map, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(w.map, LV_OBJ_FLAG_CLICKABLE);
-
-    w.status = lv_label_create(w.map);
-    lv_obj_align(w.status, LV_ALIGN_TOP_LEFT, spec.status_x, spec.status_y);
 
     w.resolution_label = lv_label_create(w.map);
     lv_obj_align(w.resolution_label, LV_ALIGN_BOTTOM_LEFT, spec.resolution_x, spec.resolution_y);

@@ -32,7 +32,6 @@ struct GPSPageState {
     lv_obj_t *menu = nullptr;
     lv_obj_t *page = nullptr;
     lv_obj_t *map = nullptr;
-    lv_obj_t *status = nullptr;
     lv_obj_t *resolution_label = nullptr;  // Resolution display label (bottom-left)
     lv_obj_t *panel = nullptr;
     lv_obj_t *zoom = nullptr;
@@ -74,6 +73,7 @@ struct GPSPageState {
     
     // misc
     lv_timer_t* timer = nullptr;  // Main timer for tile loading and GPS updates
+    lv_timer_t* loader_timer = nullptr;  // Tile loader timer (higher frequency)
     lv_timer_t* title_timer = nullptr;  // Separate timer for title updates (30s)
     std::vector<lv_timer_t*> timers;  // Lifetime-managed timers for this screen
     lv_indev_t* encoder = nullptr;

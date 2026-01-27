@@ -12,7 +12,6 @@ lv_style_t s_content_black;
 lv_style_t s_map_black;
 lv_style_t s_panel_transparent;
 
-lv_style_t s_status_overlay;
 lv_style_t s_resolution_label;
 
 lv_style_t s_control_btn_main;
@@ -100,11 +99,6 @@ void init_once()
     lv_style_set_border_width(&s_panel_transparent, 0);
     lv_style_set_pad_all(&s_panel_transparent, 0);
     lv_style_set_margin_all(&s_panel_transparent, 0);
-
-    lv_style_init(&s_status_overlay);
-    lv_style_set_bg_color(&s_status_overlay, lv_color_hex(kBlack));
-    lv_style_set_bg_opa(&s_status_overlay, LV_OPA_70);
-    lv_style_set_text_color(&s_status_overlay, lv_color_hex(kWhite));
 
     lv_style_init(&s_resolution_label);
     lv_style_set_bg_opa(&s_resolution_label, LV_OPA_TRANSP);
@@ -245,14 +239,6 @@ void apply_control_button_label(lv_obj_t* label)
     lv_obj_add_style(label, &s_control_btn_label, LV_PART_MAIN);
 }
 
-void apply_status_overlay(lv_obj_t* label, const layout::Spec& spec)
-{
-    if (!label) return;
-    init_once();
-    lv_obj_add_style(label, &s_status_overlay, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(label, spec.status_pad, 0);
-}
-
 void apply_resolution_label(lv_obj_t* label, const layout::Spec& spec)
 {
     if (!label) return;
@@ -375,7 +361,6 @@ void apply_all(const layout::Widgets& w, const layout::Spec& spec)
     if (w.map) lv_obj_add_style(w.map, &s_map_black, LV_PART_MAIN);
 
     apply_panel(w.panel, spec);
-    apply_status_overlay(w.status, spec);
     apply_resolution_label(w.resolution_label, spec);
 
     apply_control_button(w.zoom_btn);

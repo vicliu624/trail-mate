@@ -11,7 +11,6 @@ void apply_all(const layout::Widgets& w, const layout::Spec& spec);
 void apply_control_button(lv_obj_t* btn);
 void apply_control_button_label(lv_obj_t* label);
 
-void apply_status_overlay(lv_obj_t* label, const layout::Spec& spec);
 void apply_resolution_label(lv_obj_t* label, const layout::Spec& spec);
 void apply_panel(lv_obj_t* panel, const layout::Spec& spec);
 
