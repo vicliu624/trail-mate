@@ -8,6 +8,18 @@ TDeckBoard* TDeckBoard::getInstance()
     return &instance;
 }
 
+bool TDeckBoard::initGPS()
+{
+    // T-Deck examples wire GPS to UART on pins 43/44.
+    Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
+    delay(50);
+
+    bool ok = gps_.init(&Serial1);
+    setGPSOnline(ok);
+    Serial.printf("[TDeckBoard] GPS init: %s\n", ok ? "OK" : "FAIL");
+    return ok;
+}
+
 uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 {
     (void)disable_hw_init;
@@ -61,8 +73,28 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     }
 #endif
 
-    // Minimal probe flags so higher layers can run without board-specific init.
-    devices_probe_ = HW_RADIO_ONLINE;
+    // Initialize radio minimally; only mark online on success.
+    devices_probe_ = 0;
+    radio_.reset();
+    int radio_state = radio_.begin();
+    if (radio_state == RADIOLIB_ERR_NONE)
+    {
+        devices_probe_ |= HW_RADIO_ONLINE;
+        Serial.println("[TDeckBoard] radio init OK");
+    }
+    else
+    {
+        Serial.printf("[TDeckBoard] radio init failed: %d\n", radio_state);
+    }
+
+    if ((disable_hw_init & NO_HW_GPS) == 0)
+    {
+        (void)initGPS();
+    }
+    else
+    {
+        Serial.println("[TDeckBoard] GPS init skipped by NO_HW_GPS");
+    }
     Serial.println("[TDeckBoard] begin: early probe done");
     return devices_probe_;
 }

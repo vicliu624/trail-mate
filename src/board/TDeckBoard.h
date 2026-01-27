@@ -82,7 +82,7 @@ class TDeckBoard : public BoardBase,
     }
 
     // GpsBoard
-    bool initGPS() override { return false; }
+    bool initGPS() override;
     void setGPSOnline(bool online) override
     {
         if (online)
