@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../../../board/TLoRaPagerBoard.h"
+#include "../../../board/LoraBoard.h"
 #include "../../domain/chat_types.h"
 #include "../../ports/i_mesh_adapter.h"
 #include "freertos/FreeRTOS.h"
@@ -30,7 +30,7 @@ namespace meshtastic
 class MtAdapter : public chat::IMeshAdapter
 {
   public:
-    MtAdapter(TLoRaPagerBoard& board);
+    MtAdapter(LoraBoard& board);
     virtual ~MtAdapter();
 
     bool sendText(ChannelId channel, const std::string& text,
@@ -86,7 +86,7 @@ class MtAdapter : public chat::IMeshAdapter
     bool startKeyVerification(NodeId node_id);
 
   private:
-    TLoRaPagerBoard& board_;
+    LoraBoard& board_;
     MeshConfig config_;
     MtDedup dedup_;
     MessageId next_packet_id_;

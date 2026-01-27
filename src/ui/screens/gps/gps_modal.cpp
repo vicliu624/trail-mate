@@ -4,6 +4,8 @@
  */
 
 #include "gps_modal.h"
+#include "gps_page_lifetime.h"
+#include "gps_page_styles.h"
 #include "../../ui_common.h"
 #include "../../LV_Helper.h"
 #include <Arduino.h>
@@ -21,6 +23,8 @@
 
 // Static encoder cache
 static lv_indev_t* g_encoder_indev = nullptr;
+
+using gps::ui::lifetime::is_alive;
 
 /**
  * Get encoder input device (use helper function from LV_Helper)
@@ -55,6 +59,9 @@ void bind_encoder_to_group(lv_group_t *g)
  */
 bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group)
 {
+    if (!is_alive()) {
+        return false;
+    }
     if (m.is_open()) {
         GPS_LOG("[GPS] Modal already open\n");
         return false;
@@ -85,12 +92,7 @@ bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group)
     lv_coord_t screen_h = lv_obj_get_height(screen);
     lv_obj_set_size(m.bg, screen_w, screen_h);
     lv_obj_set_pos(m.bg, 0, 0);
-    lv_obj_set_style_bg_color(m.bg, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(m.bg, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_border_width(m.bg, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(m.bg, 0, LV_PART_MAIN);
-    lv_obj_clear_flag(m.bg, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(m.bg, LV_OBJ_FLAG_CLICKABLE);
+    gps::ui::styles::apply_modal_bg(m.bg);
     lv_obj_move_to_index(m.bg, -1);
     
     // Modal bg only swallows pointer events, not KEY/ROTARY
@@ -118,14 +120,7 @@ bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group)
     lv_obj_set_size(m.win, win_w, win_h);
     lv_obj_set_pos(m.win, win_x, win_y);
     
-    // Set window background to white/light color for better visibility
-    lv_obj_set_style_bg_color(m.win, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(m.win, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(m.win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(m.win, lv_color_hex(0x333333), LV_PART_MAIN);
-    lv_obj_set_style_radius(m.win, 10, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(m.win, 10, LV_PART_MAIN);
-    lv_obj_clear_flag(m.win, LV_OBJ_FLAG_SCROLLABLE);
+    gps::ui::styles::apply_modal_win(m.win);
     
     lv_obj_move_to_index(m.win, -1);
     
@@ -158,11 +153,13 @@ void modal_close(Modal& m)
         return;
     }
     
-    // Restore default group and encoder binding BEFORE deleting objects
-    extern lv_group_t *app_g;
-    lv_group_t* restore = m.prev_default ? m.prev_default : app_g;
-    set_default_group(restore);
-    bind_encoder_to_group(restore);
+    if (is_alive()) {
+        // Restore default group and encoder binding BEFORE deleting objects
+        extern lv_group_t *app_g;
+        lv_group_t* restore = m.prev_default ? m.prev_default : app_g;
+        set_default_group(restore);
+        bind_encoder_to_group(restore);
+    }
     
     // Only delete bg (win is child of bg, will be deleted automatically)
     if (m.bg != NULL) {

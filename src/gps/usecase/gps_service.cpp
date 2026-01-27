@@ -1,11 +1,12 @@
 #include "gps/usecase/gps_service.h"
 
-#include "board/TLoRaPagerBoard.h"
+#include "board/GpsBoard.h"
 #include "board/TLoRaPagerTypes.h"
+#include "gps/usecase/track_recorder.h"
 
 namespace
 {
-constexpr uint32_t kGpsSampleIntervalMs = 60000;
+constexpr uint32_t kGpsSampleIntervalMs = 5000;
 }
 
 #ifndef GPS_TASK_LOG_ENABLE
@@ -27,12 +28,14 @@ GpsService& GpsService::getInstance()
     return instance;
 }
 
-void GpsService::begin(TLoRaPagerBoard& board, uint32_t disable_hw_init,
-                       uint32_t gps_interval_ms, const MotionConfig& motion_config)
+void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
+                       uint32_t disable_hw_init, uint32_t gps_interval_ms,
+                       const MotionConfig& motion_config)
 {
-    board_ = &board;
-    gps_adapter_.begin(board);
-    motion_adapter_.begin(board);
+    gps_board_ = &gps_board;
+    motion_board_ = &motion_board;
+    gps_adapter_.begin(gps_board);
+    motion_adapter_.begin(motion_board);
 
     gps_disabled_ = (disable_hw_init & NO_HW_GPS) != 0;
     if (gps_disabled_)
@@ -157,7 +160,7 @@ void GpsService::setCollectionInterval(uint32_t interval_ms)
 
 void GpsService::setMotionConfig(const MotionConfig& config)
 {
-    if (board_ == nullptr || gps_disabled_)
+    if (gps_board_ == nullptr || gps_disabled_)
     {
         return;
     }
@@ -282,6 +285,8 @@ void GpsService::gpsTask(void* pvParameters)
                 bool was_valid = service->gps_state_.valid;
                 bool has_fix = service->gps_adapter_.hasFix();
                 uint8_t sat_count = service->gps_adapter_.satellites();
+                gps::TrackPoint track_pt{};
+                bool have_track_point = false;
 
                 if (!service->gps_time_synced_)
                 {
@@ -302,6 +307,11 @@ void GpsService::gpsTask(void* pvParameters)
                     service->gps_state_.valid = true;
                     service->gps_last_update_time_ = millis();
                     service->gps_state_.age = 0;
+                    track_pt.lat = service->gps_state_.lat;
+                    track_pt.lon = service->gps_state_.lng;
+                    track_pt.satellites = sat_count;
+                    track_pt.timestamp = time(nullptr);
+                    have_track_point = true;
 
                     if (!was_valid || should_log)
                     {
@@ -324,6 +334,12 @@ void GpsService::gpsTask(void* pvParameters)
                     }
                 }
                 xSemaphoreGive(service->gps_data_mutex_);
+
+                // Append GPX track points outside the GPS mutex to keep the task responsive.
+                if (have_track_point && gps::TrackRecorder::getInstance().isRecording())
+                {
+                    gps::TrackRecorder::getInstance().appendPoint(track_pt);
+                }
             }
             else
             {

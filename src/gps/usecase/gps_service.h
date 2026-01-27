@@ -9,8 +9,8 @@
 #include "../infra/hal_gps_adapter.h"
 #include "../infra/hal_motion_adapter.h"
 #include "../motion_policy.h"
-
-class TLoRaPagerBoard;
+#include "board/GpsBoard.h"
+#include "board/MotionBoard.h"
 
 namespace gps
 {
@@ -20,7 +20,7 @@ class GpsService
   public:
     static GpsService& getInstance();
 
-    void begin(TLoRaPagerBoard& board, uint32_t disable_hw_init,
+    void begin(GpsBoard& gps_board, MotionBoard& motion_board, uint32_t disable_hw_init,
                uint32_t gps_interval_ms, const MotionConfig& motion_config);
     GpsState getData();
     uint32_t getCollectionInterval() const;
@@ -42,7 +42,8 @@ class GpsService
     void setGPSPowerState(bool enable);
     void updateMotionState(uint32_t now_ms);
 
-    TLoRaPagerBoard* board_ = nullptr;
+    GpsBoard* gps_board_ = nullptr;
+    MotionBoard* motion_board_ = nullptr;
     GpsState gps_state_{};
     SemaphoreHandle_t gps_data_mutex_ = nullptr;
     TaskHandle_t gps_task_handle_ = nullptr;

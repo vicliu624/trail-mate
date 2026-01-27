@@ -13,6 +13,7 @@
 #include "../../widgets/top_bar.h"
 #include <vector>
 #include <cstdint>
+#include <string>
 
 /**
  * GPS Page State - consolidate all static state variables
@@ -20,17 +21,24 @@
  * Note: No macro aliases - use g_gps_state.member directly
  */
 struct GPSPageState {
+    struct TrackOverlayPoint {
+        double lat = 0.0;
+        double lng = 0.0;
+    };
+
     // UI refs
+    lv_obj_t *root = nullptr;
+    lv_obj_t *header = nullptr;
     lv_obj_t *menu = nullptr;
     lv_obj_t *page = nullptr;
     lv_obj_t *map = nullptr;
-    lv_obj_t *status = nullptr;
     lv_obj_t *resolution_label = nullptr;  // Resolution display label (bottom-left)
     lv_obj_t *panel = nullptr;
     lv_obj_t *zoom = nullptr;
     lv_obj_t *pos = nullptr;
     lv_obj_t *pan_h = nullptr;  // Horizontal pan button
     lv_obj_t *pan_v = nullptr;  // Vertical pan button
+    lv_obj_t *tracker_btn = nullptr;  // Tracker button
     lv_obj_t *pan_h_indicator = nullptr;  // Horizontal pan indicator (line with arrows at bottom)
     lv_obj_t *pan_v_indicator = nullptr;  // Vertical pan indicator (line with arrows on right)
     lv_obj_t *popup_label = nullptr;  // zoom_popup_label
@@ -54,24 +62,36 @@ struct GPSPageState {
     std::vector<MapTile> tiles;
     TileContext tile_ctx;  // Context for tile operations
     
-    // loader
-    bool loading = false;
     uint32_t initial_load_ms = 0;
     bool initial_tiles_loaded = false;
     
     // popup
     Modal zoom_modal;
+    Modal tracker_modal;
     int popup_zoom = gps_ui::kDefaultZoom;
     bool zoom_win_cb_bound = false;
     
     // misc
     lv_timer_t* timer = nullptr;  // Main timer for tile loading and GPS updates
+    lv_timer_t* loader_timer = nullptr;  // Tile loader timer (higher frequency)
     lv_timer_t* title_timer = nullptr;  // Separate timer for title updates (30s)
+    std::vector<lv_timer_t*> timers;  // Lifetime-managed timers for this screen
     lv_indev_t* encoder = nullptr;
-    
+    lv_group_t* app_group = nullptr;  // App-level focus group captured at enter
+
     // flags
+    bool alive = false;  // Hard lifetime guard: false after root delete hook runs
+    bool delete_hook_bound = false;  // Ensure root delete hook is only bound once
+    bool exiting = false;  // Prevent re-entrant exit while async exit is pending
     bool has_map_data = false;  // Global: any tile ever loaded
     bool has_visible_map_data = false;  // Viewport: current visible tiles have PNG
+
+    // Tracker overlay
+    bool tracker_overlay_active = false;
+    bool tracker_draw_cb_bound = false;
+    std::string tracker_file{};
+    std::vector<TrackOverlayPoint> tracker_points;
+    std::vector<lv_point_t> tracker_screen_points;
     
     // pan button editing state (for toggle behavior) - DEPRECATED, use edit_mode instead
     bool pan_h_editing = false;  // Horizontal pan button in editing mode (rotary scrolls map)
@@ -79,12 +99,6 @@ struct GPSPageState {
     
     // Edit mode state machine
     uint8_t edit_mode = 0;  // 0=None, 1=PanH, 2=PanV, 3=ZoomPopup
-    
-    // Dirty flags for UI updates
-    uint8_t dirty_map : 1;
-    uint8_t dirty_title : 1;
-    uint8_t dirty_status : 1;
-    uint8_t dirty_resolution : 1;
     
     // refresh optimization
     bool pending_refresh = false;  // Flag to indicate map needs refresh (for batched updates)

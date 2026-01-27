@@ -2,8 +2,7 @@
 
 #include "../../hal/hal_gps.h"
 #include "../ports/i_gps_hw.h"
-
-class TLoRaPagerBoard;
+#include "board/GpsBoard.h"
 
 namespace gps
 {
@@ -11,7 +10,7 @@ namespace gps
 class HalGpsAdapter : public IGpsHardware
 {
   public:
-    void begin(TLoRaPagerBoard& board);
+    void begin(GpsBoard& board);
 
     bool isReady() const override;
     bool init() override;

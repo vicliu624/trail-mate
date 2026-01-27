@@ -1,4 +1,5 @@
 #include "board/TLoRaPagerBoard.h"
+#include "board/sd_utils.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -360,12 +361,12 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
 
     // GPS service is initialized by AppContext after configuration is loaded
 
-    // Initialize LoRa radio - optional
+    // Initialize LoRa radio_ - optional
     if (!(disable_hw_init & NO_HW_LORA))
     {
         if (initLoRa())
         {
-            log_d("LoRa radio initialized successfully");
+            log_d("LoRa radio_ initialized successfully");
         }
     }
 
@@ -559,7 +560,7 @@ bool TLoRaPagerBoard::initDrv()
         drv.selectLibrary(1);
         drv.setMode(SensorDRV2605::MODE_INTTRIG);
         drv.useERM();
-        // 不在上电时震动，效果在需要时由 vibrator() 触发
+        // 不在上电时震动，效果在需要时?vibrator() 触发
         drv.setWaveform(0, 0);
         drv.setWaveform(1, 0);
         powerControl(POWER_HAPTIC_DRIVER, false);
@@ -622,9 +623,9 @@ bool TLoRaPagerBoard::initKeyboard()
 
 bool TLoRaPagerBoard::initLoRa()
 {
-    radio.reset();
+    radio_.reset();
 
-    int state = radio.begin();
+    int state = radio_.begin();
 
     if (state != RADIOLIB_ERR_NONE)
     {
@@ -656,23 +657,18 @@ bool TLoRaPagerBoard::installSD()
     // Ensure SPI pins are initialized
     initShareSPIPins();
 
-    // Initialize SD card with 4MHz SPI speed, mount point: /sd
-    if (!SD.begin(SD_CS, SPI, 4000000U, "/sd"))
+    uint8_t card_type = CARD_NONE;
+    uint32_t card_size_mb = 0;
+    bool ok = sdutil::installSpiSd(*this, SD_CS, 4000000U, "/sd",
+                                   nullptr, 0, &card_type, &card_size_mb);
+    if (!ok)
     {
         log_w("SD card initialization failed");
         return false;
     }
-
-    // Verify card is actually present
-    if (SD.cardType() != CARD_NONE)
-    {
-        uint64_t cardSizeMB = SD.cardSize() / (1024 * 1024);
-        log_d("SD card detected, size: %llu MB", cardSizeMB);
-        return true;
-    }
-
-    log_w("SD card type is NONE");
-    return false;
+    log_d("SD card detected, type=%u size=%lu MB",
+          (unsigned)card_type, (unsigned long)card_size_mb);
+    return true;
 }
 
 void TLoRaPagerBoard::uninstallSD()
@@ -1013,6 +1009,24 @@ bool TLoRaPagerBoard::hasKeyboard()
     return (devices_probe & HW_KEYBOARD_ONLINE) != 0;
 #else
     return false;
+#endif
+}
+
+void TLoRaPagerBoard::keyboardSetBrightness(uint8_t level)
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    kb.setBrightness(level);
+#else
+    (void)level;
+#endif
+}
+
+uint8_t TLoRaPagerBoard::keyboardGetBrightness()
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    return kb.getBrightness();
+#else
+    return 0;
 #endif
 }
 
@@ -1607,8 +1621,7 @@ bool TLoRaPagerBoard::initPowerButton()
 
 void TLoRaPagerBoard::handlePowerButton()
 {
-    // 根据LilyGo文档：POWER键只负责从Power OFF状态唤醒，不负责关机
-    // "The power button is only valid when the device is turned off"
+    // 根据LilyGo文档：POWER键只负责从Power OFF状态唤醒，不负责关?    // "The power button is only valid when the device is turned off"
 
     if (power_button_event)
     {
@@ -1616,8 +1629,7 @@ void TLoRaPagerBoard::handlePowerButton()
 
         if (power_button_state)
         {
-            // POWER键按下 - 这是一个唤醒信号
-            log_d("POWER button pressed - wake up signal");
+            // POWER键按?- 这是一个唤醒信?            log_d("POWER button pressed - wake up signal");
 
             // 检查是否从deep sleep唤醒
             esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
@@ -1628,15 +1640,13 @@ void TLoRaPagerBoard::handlePowerButton()
             }
             else
             {
-                // 设备已经在运行状态 - POWER键按下可能用于其他功能
-                log_d("POWER button pressed while device is running");
+                // 设备已经在运行状?- POWER键按下可能用于其他功?                log_d("POWER button pressed while device is running");
                 // 可以在这里添加屏幕开关或其他功能
             }
         }
         else
         {
-            // POWER键释放
-            log_d("POWER button released");
+            // POWER键释?            log_d("POWER button released");
         }
     }
 }
@@ -1818,18 +1828,15 @@ void TLoRaPagerBoard::shutdown(bool save_data)
 
 void TLoRaPagerBoard::softwareShutdown()
 {
-    // 检查USB连接状态
+    // Check USB connection; avoid shutting down while host power is present.
     if (isUsbPresent_bestEffort())
     {
         log_w("Cannot shutdown: USB is connected (PMIC will maintain power)");
-
-        // 显示用户提示
-        ui::SystemNotification::show("请先断开USB连接再关机");
-
+        ui::SystemNotification::show("???? USB ?????");
         return;
     }
 
-    log_i("Shutdown conditions met - entering Power OFF mode (26µA)");
+log_i("Shutdown conditions met - entering Power OFF mode (26µA)");
     shutdown(true);
 }
 
@@ -1902,3 +1909,4 @@ TLoRaPagerBoard& getInstanceRef()
 } // namespace
 
 TLoRaPagerBoard& instance = getInstanceRef();
+BoardBase& board = getInstanceRef();

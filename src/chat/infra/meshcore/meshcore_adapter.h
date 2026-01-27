@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../../../board/TLoRaPagerBoard.h"
+#include "../../../board/LoraBoard.h"
 #include "../../ports/i_mesh_adapter.h"
 #include <queue>
 
@@ -28,7 +28,7 @@ class MeshCoreAdapter : public IMeshAdapter
     /**
      * @brief Constructor
      */
-    MeshCoreAdapter(TLoRaPagerBoard& board);
+    MeshCoreAdapter(LoraBoard& board);
 
     /**
      * @brief Destructor
@@ -73,7 +73,7 @@ class MeshCoreAdapter : public IMeshAdapter
     void processSendQueue() override;
 
   private:
-    TLoRaPagerBoard& board_;
+    LoraBoard& board_;
 
     // Configuration
     MeshConfig config_;

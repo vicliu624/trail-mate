@@ -3,8 +3,7 @@
 #include "bosch/BoschParseCallbackManager.hpp"
 #include <Arduino.h>
 #include <SensorBHI260AP.hpp>
-
-class TLoRaPagerBoard;
+#include "board/MotionBoard.h"
 
 namespace hal
 {
@@ -12,7 +11,7 @@ namespace hal
 class HalMotion
 {
   public:
-    void begin(TLoRaPagerBoard& board);
+    void begin(MotionBoard& board);
     bool isReady() const;
     bool configure(uint8_t sensor_id, uint8_t interrupt_ctrl,
                    SensorDataParseCallback callback, void* user_data);
@@ -22,7 +21,7 @@ class HalMotion
     void update();
 
   private:
-    TLoRaPagerBoard* board_ = nullptr;
+    MotionBoard* board_ = nullptr;
 };
 
 } // namespace hal

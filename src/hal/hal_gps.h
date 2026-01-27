@@ -1,8 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-
-class TLoRaPagerBoard;
+#include "board/GpsBoard.h"
 
 namespace hal
 {
@@ -10,7 +9,7 @@ namespace hal
 class HalGps
 {
   public:
-    void begin(TLoRaPagerBoard& board);
+    void begin(GpsBoard& board);
     bool isReady() const;
     bool init();
     void powerOn();
@@ -23,7 +22,7 @@ class HalGps
     bool syncTime(uint32_t gps_task_interval_ms);
 
   private:
-    TLoRaPagerBoard* board_ = nullptr;
+    GpsBoard* board_ = nullptr;
 };
 
 } // namespace hal

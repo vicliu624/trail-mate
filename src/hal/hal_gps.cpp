@@ -1,13 +1,14 @@
 #include "hal/hal_gps.h"
 
-#include "board/TLoRaPagerBoard.h"
+#include "board/GpsBoard.h"
+#include "../gps/GPS.h"
 #include "board/TLoRaPagerTypes.h"
 #include "pins_arduino.h"
 
 namespace hal
 {
 
-void HalGps::begin(TLoRaPagerBoard& board)
+void HalGps::begin(GpsBoard& board)
 {
     board_ = &board;
 }
@@ -53,27 +54,27 @@ uint32_t HalGps::loop()
     {
         return 0;
     }
-    return board_->gps.loop();
+    return board_->getGPS().loop();
 }
 
 bool HalGps::hasFix() const
 {
-    return board_ != nullptr && board_->gps.location.isValid();
+    return board_ != nullptr && board_->getGPS().location.isValid();
 }
 
 double HalGps::latitude() const
 {
-    return board_ != nullptr ? board_->gps.location.lat() : 0.0;
+    return board_ != nullptr ? board_->getGPS().location.lat() : 0.0;
 }
 
 double HalGps::longitude() const
 {
-    return board_ != nullptr ? board_->gps.location.lng() : 0.0;
+    return board_ != nullptr ? board_->getGPS().location.lng() : 0.0;
 }
 
 uint8_t HalGps::satellites() const
 {
-    return board_ != nullptr ? board_->gps.satellites.value() : 0;
+    return board_ != nullptr ? board_->getGPS().satellites.value() : 0;
 }
 
 bool HalGps::syncTime(uint32_t gps_task_interval_ms)

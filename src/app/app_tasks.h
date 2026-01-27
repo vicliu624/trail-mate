@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../board/TLoRaPagerBoard.h"
+#include "../board/LoraBoard.h"
 #include "../chat/ports/i_mesh_adapter.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -36,7 +36,7 @@ class AppTasks
      * @param board Board instance
      * @param adapter Mesh adapter
      */
-    static bool init(TLoRaPagerBoard& board, chat::IMeshAdapter* adapter);
+    static bool init(LoraBoard& board, chat::IMeshAdapter* adapter);
 
     /**
      * @brief Radio task (high priority)
@@ -70,7 +70,7 @@ class AppTasks
     static QueueHandle_t mesh_queue_;
     static TaskHandle_t radio_task_handle_;
     static TaskHandle_t mesh_task_handle_;
-    static TLoRaPagerBoard* board_;
+    static LoraBoard* board_;
     static chat::IMeshAdapter* adapter_;
 };
 

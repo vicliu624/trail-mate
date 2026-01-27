@@ -7,7 +7,7 @@
 
 #include "../domain/chat_types.h"
 #include "../ports/i_mesh_adapter.h"
-#include "../../board/TLoRaPagerBoard.h"
+#include "../../board/LoraBoard.h"
 #include <memory>
 
 namespace chat {
@@ -24,7 +24,7 @@ public:
      * @brief Create a mesh adapter for the specified protocol
      */
     static std::unique_ptr<IMeshAdapter> createAdapter(MeshProtocol protocol,
-                                                       TLoRaPagerBoard& board);
+                                                       LoraBoard& board);
 };
 
 } // namespace chat

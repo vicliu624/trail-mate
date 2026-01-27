@@ -15,10 +15,14 @@
 namespace app
 {
 
-bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t disable_hw_init)
+bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_board, MotionBoard* motion_board,
+                     bool use_mock_adapter, uint32_t disable_hw_init)
 {
     // Store board reference for hardware access
     board_ = &board;
+    lora_board_ = lora_board;
+    gps_board_ = gps_board;
+    motion_board_ = motion_board;
 
     // Initialize event bus
     if (!sys::EventBus::init())
@@ -30,11 +34,15 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     config_.load(preferences_);
     (void)ui_get_timezone_offset_min();
 
-    gps::GpsService::getInstance().begin(
-        board,
-        disable_hw_init,
-        config_.gps_interval_ms,
-        config_.motion_config);
+    if (gps_board_ && motion_board_)
+    {
+        gps::GpsService::getInstance().begin(
+            *gps_board_,
+            *motion_board_,
+            disable_hw_init,
+            config_.gps_interval_ms,
+            config_.motion_config);
+    }
 
     // Create domain model
     chat_model_ = std::make_unique<chat::ChatModel>();
@@ -59,7 +67,11 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
 
     // Create mesh adapter (selected by config)
     (void)use_mock_adapter;
-    auto adapter = chat::ProtocolFactory::createAdapter(config_.mesh_protocol, board);
+    std::unique_ptr<chat::IMeshAdapter> adapter;
+    if (lora_board_)
+    {
+        adapter = chat::ProtocolFactory::createAdapter(config_.mesh_protocol, *lora_board_);
+    }
     if (adapter)
     {
         adapter->applyConfig(config_.mesh_config);
@@ -68,13 +80,20 @@ bool AppContext::init(TLoRaPagerBoard& board, bool use_mock_adapter, uint32_t di
     chat::IMeshAdapter* adapter_raw = mesh_adapter_.get();
 
     // Initialize tasks for real LoRa
-    if (!app::AppTasks::init(board, adapter_raw))
+    if (lora_board_)
     {
-        Serial.printf("[APP] WARNING: Failed to start LoRa tasks\n");
+        if (!app::AppTasks::init(*lora_board_, adapter_raw))
+        {
+            Serial.printf("[APP] WARNING: Failed to start LoRa tasks\n");
+        }
+        else
+        {
+            Serial.printf("[APP] LoRa tasks started\n");
+        }
     }
     else
     {
-        Serial.printf("[APP] LoRa tasks started\n");
+        Serial.printf("[APP] WARNING: Board type not supported for LoRa tasks\n");
     }
 
     // Create chat service

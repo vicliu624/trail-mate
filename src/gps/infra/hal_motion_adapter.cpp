@@ -1,11 +1,10 @@
 #include "gps/infra/hal_motion_adapter.h"
-
-#include "board/TLoRaPagerBoard.h"
+#include "board/MotionBoard.h"
 
 namespace gps
 {
 
-void HalMotionAdapter::begin(TLoRaPagerBoard& board)
+void HalMotionAdapter::begin(MotionBoard& board)
 {
     hal_motion_.begin(board);
 }
