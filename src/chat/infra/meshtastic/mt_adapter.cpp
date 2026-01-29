@@ -1729,17 +1729,37 @@ void MtAdapter::configureRadio()
 
 void MtAdapter::initNodeIdentity()
 {
-    uint64_t mac = ESP.getEfuseMac();
-    LORA_LOG("[LORA] ESP eFuse MAC raw=0x%012llX\n", static_cast<unsigned long long>(mac));
-    for (int i = 0; i < 6; i++)
-    {
-        mac_addr_[5 - i] = (mac >> (8 * i)) & 0xFF;
-    }
+    const uint64_t raw = ESP.getEfuseMac();
+
+    // 重要：getEfuseMac() 是把 6 bytes MAC 写进 uint64_t 的内存低地址处。
+    // ESP32 是 little-endian，所以 raw 的“整数值”不等于“MAC字符串”。
+    // 正确做法：按字节读取。
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(&raw);
+
+    // p[0..5] 就是 esp_efuse_mac_get_default 写入的那 6 个字节（顺序与 API 一致）
+    // 为了避免任何误解，这里先把它们复制出来
+    mac_addr_[0] = p[0];
+    mac_addr_[1] = p[1];
+    mac_addr_[2] = p[2];
+    mac_addr_[3] = p[3];
+    mac_addr_[4] = p[4];
+    mac_addr_[5] = p[5];
+
+    LORA_LOG("[LORA] ESP.getEfuseMac raw=0x%016llX\n",
+             static_cast<unsigned long long>(raw));
+    LORA_LOG("[LORA] eFuse MAC=%02X:%02X:%02X:%02X:%02X:%02X\n",
+             mac_addr_[0], mac_addr_[1], mac_addr_[2],
+             mac_addr_[3], mac_addr_[4], mac_addr_[5]);
+
+    // 你的原逻辑：取 MAC 的后 4 字节作为 node_id
     node_id_ = (static_cast<uint32_t>(mac_addr_[2]) << 24) |
                (static_cast<uint32_t>(mac_addr_[3]) << 16) |
-               (static_cast<uint32_t>(mac_addr_[4]) << 8) |
-               static_cast<uint32_t>(mac_addr_[5]);
+               (static_cast<uint32_t>(mac_addr_[4]) <<  8) |
+               (static_cast<uint32_t>(mac_addr_[5]) <<  0);
+
+    LORA_LOG("[LORA] node_id=0x%08X\n", static_cast<unsigned>(node_id_));
 }
+
 
 void MtAdapter::updateChannelKeys()
 {
