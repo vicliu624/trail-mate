@@ -12,12 +12,22 @@ namespace team
 class TeamService
 {
   public:
+    enum class SendError
+    {
+        None,
+        KeysNotReady,
+        EncodeFail,
+        EncryptFail,
+        MeshSendFail
+    };
     TeamService(team::ITeamCrypto& crypto,
                 chat::IMeshAdapter& mesh,
                 team::ITeamEventSink& sink);
 
     void setKeys(const TeamKeys& keys);
     void clearKeys();
+    bool setKeysFromPsk(const TeamId& team_id, uint32_t key_id,
+                        const uint8_t* psk, size_t psk_len);
 
     void processIncoming();
 
@@ -29,18 +39,32 @@ class TeamService
                         chat::ChannelId channel, chat::NodeId dest);
     bool sendJoinConfirm(const team::proto::TeamJoinConfirm& msg,
                          chat::ChannelId channel, chat::NodeId dest = 0);
+    bool sendJoinDecision(const team::proto::TeamJoinDecision& msg,
+                          chat::ChannelId channel, chat::NodeId dest);
+    bool sendKick(const team::proto::TeamKick& msg,
+                  chat::ChannelId channel, chat::NodeId dest = 0);
+    bool sendTransferLeader(const team::proto::TeamTransferLeader& msg,
+                            chat::ChannelId channel, chat::NodeId dest = 0);
+    bool sendKeyDist(const team::proto::TeamKeyDist& msg,
+                     chat::ChannelId channel, chat::NodeId dest);
+    bool sendKeyDistPlain(const team::proto::TeamKeyDist& msg,
+                          chat::ChannelId channel, chat::NodeId dest);
     bool sendStatus(const team::proto::TeamStatus& msg,
                     chat::ChannelId channel, chat::NodeId dest = 0);
+    bool sendStatusPlain(const team::proto::TeamStatus& msg,
+                         chat::ChannelId channel, chat::NodeId dest = 0);
     bool sendPosition(const std::vector<uint8_t>& payload,
                       chat::ChannelId channel);
     bool sendWaypoint(const std::vector<uint8_t>& payload,
                       chat::ChannelId channel);
+    SendError getLastSendError() const { return last_send_error_; }
 
   private:
     team::ITeamCrypto& crypto_;
     chat::IMeshAdapter& mesh_;
     team::ITeamEventSink& sink_;
     TeamKeys keys_{};
+    SendError last_send_error_ = SendError::None;
 
     bool decodeEncryptedPayload(const chat::MeshIncomingData& data,
                                 const uint8_t* key, size_t key_len,

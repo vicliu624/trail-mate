@@ -25,6 +25,26 @@ void TeamEventBusSink::onTeamJoinConfirm(const TeamJoinConfirmEvent& event)
     sys::EventBus::publish(new sys::TeamJoinConfirmEvent(event), 0);
 }
 
+void TeamEventBusSink::onTeamJoinDecision(const TeamJoinDecisionEvent& event)
+{
+    sys::EventBus::publish(new sys::TeamJoinDecisionEvent(event), 0);
+}
+
+void TeamEventBusSink::onTeamKick(const TeamKickEvent& event)
+{
+    sys::EventBus::publish(new sys::TeamKickEvent(event), 0);
+}
+
+void TeamEventBusSink::onTeamTransferLeader(const TeamTransferLeaderEvent& event)
+{
+    sys::EventBus::publish(new sys::TeamTransferLeaderEvent(event), 0);
+}
+
+void TeamEventBusSink::onTeamKeyDist(const TeamKeyDistEvent& event)
+{
+    sys::EventBus::publish(new sys::TeamKeyDistEvent(event), 0);
+}
+
 void TeamEventBusSink::onTeamStatus(const TeamStatusEvent& event)
 {
     sys::EventBus::publish(new sys::TeamStatusEvent(event), 0);

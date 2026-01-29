@@ -7,6 +7,7 @@
 #include "../chat/infra/protocol_factory.h"
 #include "../gps/usecase/gps_service.h"
 #include "../sys/event_bus.h"
+#include "../ui/ui_team.h"
 #include "../ui/widgets/system_notification.h"
 #include "../ui/ui_common.h"
 #include "app_tasks.h"
@@ -274,6 +275,25 @@ void AppContext::update()
         }
 
         // Forward event to UI controller if it exists
+        if (event->type == sys::EventType::TeamAdvertise ||
+            event->type == sys::EventType::TeamJoinRequest ||
+            event->type == sys::EventType::TeamJoinAccept ||
+            event->type == sys::EventType::TeamJoinConfirm ||
+            event->type == sys::EventType::TeamJoinDecision ||
+            event->type == sys::EventType::TeamKick ||
+            event->type == sys::EventType::TeamTransferLeader ||
+            event->type == sys::EventType::TeamKeyDist ||
+            event->type == sys::EventType::TeamStatus ||
+            event->type == sys::EventType::TeamPosition ||
+            event->type == sys::EventType::TeamWaypoint ||
+            event->type == sys::EventType::TeamError ||
+            event->type == sys::EventType::SystemTick)
+        {
+            ui_team_handle_event(event);
+            delete event;
+            continue;
+        }
+
         if (ui_controller_)
         {
             ui_controller_->onChatEvent(event);

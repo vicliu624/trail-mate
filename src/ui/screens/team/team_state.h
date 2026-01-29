@@ -7,35 +7,102 @@
 
 #include "lvgl.h"
 #include "../../widgets/top_bar.h"
+#include "../../../team/domain/team_types.h"
+#include "../../../team/protocol/team_mgmt.h"
+#include <string>
+#include <vector>
+#include <array>
 
 namespace team
 {
 namespace ui
 {
 
+enum class TeamPage
+{
+    StatusNotInTeam,
+    StatusInTeam,
+    TeamHome,
+    Invite,
+    JoinTeam,
+    JoinPending,
+    Members,
+    MemberDetail,
+    KickConfirm,
+    KickedOut
+};
+
+struct TeamMemberUi
+{
+    uint32_t node_id = 0;
+    std::string name;
+    bool online = false;
+    bool leader = false;
+    uint32_t last_seen_s = 0;
+};
+
+struct NearbyTeamUi
+{
+    TeamId team_id{};
+    std::string name;
+    uint8_t signal_bars = 0;
+    uint32_t last_seen_s = 0;
+    uint32_t join_hint = 0;
+    bool has_join_hint = false;
+};
+
 struct TeamPageState
 {
     lv_obj_t* root = nullptr;
-    lv_obj_t* page = nullptr;
+    lv_obj_t* page_obj = nullptr;
     lv_obj_t* header = nullptr;
     lv_obj_t* content = nullptr;
+    lv_obj_t* body = nullptr;
+    lv_obj_t* actions = nullptr;
 
-    lv_obj_t* state_container = nullptr;
-    lv_obj_t* idle_container = nullptr;
-    lv_obj_t* active_container = nullptr;
+    lv_obj_t* action_btns[3] = { nullptr, nullptr, nullptr };
+    lv_obj_t* action_labels[3] = { nullptr, nullptr, nullptr };
+    lv_obj_t* detail_label = nullptr;
 
-    lv_obj_t* idle_status_label = nullptr;
-    lv_obj_t* create_btn = nullptr;
-    lv_obj_t* join_btn = nullptr;
-
-    lv_obj_t* active_status_label = nullptr;
-    lv_obj_t* share_btn = nullptr;
-    lv_obj_t* leave_btn = nullptr;
-    lv_obj_t* disband_btn = nullptr;
-    const char* title_override = nullptr;
+    std::vector<lv_obj_t*> list_items;
+    std::vector<lv_obj_t*> focusables;
+    std::vector<TeamPage> nav_stack;
+    lv_obj_t* default_focus = nullptr;
 
     ::ui::widgets::TopBar top_bar_widget;
     lv_group_t* group = nullptr;
+    lv_group_t* modal_group = nullptr;
+    lv_group_t* prev_group = nullptr;
+    lv_obj_t* join_request_modal = nullptr;
+
+    TeamPage page = TeamPage::StatusNotInTeam;
+    int selected_member_index = -1;
+
+    bool in_team = false;
+    bool pending_join = false;
+    bool kicked_out = false;
+    bool self_is_leader = false;
+
+    TeamId team_id{};
+    bool has_team_id = false;
+    TeamId join_target_id{};
+    bool has_join_target = false;
+
+    std::string team_name;
+    uint32_t security_round = 0;
+    std::string invite_code;
+    uint32_t invite_expires_s = 0;
+    uint32_t last_update_s = 0;
+    std::array<uint8_t, team::proto::kTeamChannelPskSize> team_psk{};
+    bool has_team_psk = false;
+    bool waiting_new_keys = false;
+    uint32_t pending_join_started_s = 0;
+
+    std::vector<TeamMemberUi> members;
+    std::vector<NearbyTeamUi> nearby_teams;
+
+    uint32_t pending_join_node_id = 0;
+    std::string pending_join_name;
 };
 
 extern TeamPageState g_team_state;

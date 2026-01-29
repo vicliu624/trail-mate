@@ -22,7 +22,11 @@ enum class TeamMgmtType : uint8_t
     Status = 5,
     Rotate = 6,
     Leave = 7,
-    Disband = 8
+    Disband = 8,
+    JoinDecision = 9,
+    Kick = 10,
+    TransferLeader = 11,
+    KeyDist = 12
 };
 
 struct TeamParams
@@ -58,11 +62,13 @@ struct TeamJoinRequest
 
 struct TeamJoinAccept
 {
+    std::array<uint8_t, kTeamIdSize> team_id{};
     uint8_t channel_index = 0;
     std::array<uint8_t, kTeamChannelPskSize> channel_psk{};
     uint8_t channel_psk_len = 0;
     uint32_t key_id = 0;
     TeamParams params;
+    bool has_team_id = false;
 };
 
 struct TeamJoinConfirm
@@ -72,6 +78,31 @@ struct TeamJoinConfirm
     uint8_t battery = 0;
     bool has_capabilities = false;
     bool has_battery = false;
+};
+
+struct TeamJoinDecision
+{
+    bool accept = false;
+    uint32_t reason = 0;
+    bool has_reason = false;
+};
+
+struct TeamKick
+{
+    uint32_t target = 0;
+};
+
+struct TeamTransferLeader
+{
+    uint32_t target = 0;
+};
+
+struct TeamKeyDist
+{
+    std::array<uint8_t, kTeamIdSize> team_id{};
+    uint32_t key_id = 0;
+    std::array<uint8_t, kTeamChannelPskSize> channel_psk{};
+    uint8_t channel_psk_len = 0;
 };
 
 struct TeamStatus
@@ -100,6 +131,18 @@ bool decodeTeamJoinAccept(const uint8_t* data, size_t len, TeamJoinAccept* out);
 
 bool encodeTeamJoinConfirm(const TeamJoinConfirm& input, std::vector<uint8_t>& out);
 bool decodeTeamJoinConfirm(const uint8_t* data, size_t len, TeamJoinConfirm* out);
+
+bool encodeTeamJoinDecision(const TeamJoinDecision& input, std::vector<uint8_t>& out);
+bool decodeTeamJoinDecision(const uint8_t* data, size_t len, TeamJoinDecision* out);
+
+bool encodeTeamKick(const TeamKick& input, std::vector<uint8_t>& out);
+bool decodeTeamKick(const uint8_t* data, size_t len, TeamKick* out);
+
+bool encodeTeamTransferLeader(const TeamTransferLeader& input, std::vector<uint8_t>& out);
+bool decodeTeamTransferLeader(const uint8_t* data, size_t len, TeamTransferLeader* out);
+
+bool encodeTeamKeyDist(const TeamKeyDist& input, std::vector<uint8_t>& out);
+bool decodeTeamKeyDist(const uint8_t* data, size_t len, TeamKeyDist* out);
 
 bool encodeTeamStatus(const TeamStatus& input, std::vector<uint8_t>& out);
 bool decodeTeamStatus(const uint8_t* data, size_t len, TeamStatus* out);
