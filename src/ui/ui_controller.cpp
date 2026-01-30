@@ -18,12 +18,23 @@ namespace ui
 
 namespace
 {
-void handle_channel_click(chat::ChannelId channel, void* user_data)
+void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
+                                const chat::ConversationId& conv,
+                                void* user_data)
 {
     auto* controller = static_cast<UiController*>(user_data);
-    if (controller)
+    if (!controller)
     {
-        controller->onChannelClicked(channel);
+        return;
+    }
+    if (intent == chat::ui::ChatMessageListScreen::ActionIntent::SelectConversation)
+    {
+        controller->onChannelClicked(conv);
+        return;
+    }
+    if (intent == chat::ui::ChatMessageListScreen::ActionIntent::Back)
+    {
+        controller->exitToMenu();
     }
 }
 
@@ -52,15 +63,6 @@ void handle_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, voi
     {
         controller->handleComposeAction(
             intent == chat::ui::ChatComposeScreen::ActionIntent::Send);
-    }
-}
-
-void handle_back(void* user_data)
-{
-    auto* controller = static_cast<UiController*>(user_data);
-    if (controller)
-    {
-        controller->exitToMenu();
     }
 }
 
@@ -116,12 +118,11 @@ void UiController::update()
     }
 }
 
-void UiController::onChannelClicked(chat::ChannelId channel)
+void UiController::onChannelClicked(chat::ConversationId conv)
 {
-    (void)channel;
     if (channel_list_)
     {
-        handleChannelSelected(channel_list_->getSelectedConversation());
+        handleChannelSelected(conv);
     }
 }
 
@@ -265,8 +266,7 @@ void UiController::switchToChannelList()
     if (!channel_list_)
     {
         channel_list_.reset(new ChatMessageListScreen(parent_));
-        channel_list_->setChannelSelectCallback(handle_channel_click, this);
-        channel_list_->setBackCallback(handle_back, this);
+        channel_list_->setActionCallback(handle_message_list_action, this);
     }
 
     service_.setModelEnabled(true);

@@ -88,9 +88,9 @@ public:
     }
 
     /**
-     * @brief Handle channel click from UI
+     * @brief Handle conversation selection from UI
      */
-    void onChannelClicked(chat::ChannelId channel);
+    void onChannelClicked(chat::ConversationId conv);
 
 private:
     lv_obj_t* parent_;
