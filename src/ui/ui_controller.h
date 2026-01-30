@@ -61,7 +61,7 @@ public:
     /**
      * @brief Handle conversation action (reply/compose)
      */
-    void handleConversationAction(bool compose);
+    void handleConversationAction(ChatConversationScreen::ActionIntent intent);
 
     /**
      * @brief Handle compose action (send/cancel)

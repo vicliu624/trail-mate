@@ -27,12 +27,12 @@ void handle_channel_click(chat::ChannelId channel, void* user_data)
     }
 }
 
-void handle_conversation_action(bool compose, void* user_data)
+void handle_conversation_action(chat::ui::ChatConversationScreen::ActionIntent intent, void* user_data)
 {
     auto* controller = static_cast<UiController*>(user_data);
     if (controller)
     {
-        controller->handleConversationAction(compose);
+        controller->handleConversationAction(intent);
     }
 }
 
@@ -476,10 +476,11 @@ void UiController::refreshUnreadCounts()
     channel_list_->updateBatteryFromBoard();
 }
 
-void UiController::handleConversationAction(bool compose)
+void UiController::handleConversationAction(ChatConversationScreen::ActionIntent intent)
 {
-    (void)compose;
-    switchToCompose(current_conv_);
+    if (intent == ChatConversationScreen::ActionIntent::Reply) {
+        switchToCompose(current_conv_);
+    }
 }
 
 void UiController::handleComposeAction(bool send)

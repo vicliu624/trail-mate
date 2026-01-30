@@ -2,15 +2,14 @@
  * @file chat_conversation_layout.cpp
  * @brief Layout (structure only) for ChatConversationScreen
  *
- * UI Wireframe / Layout Tree (TopBarHost version)
+ * UI Wireframe / Layout Tree
  * --------------------------------------------------------------------
  *
  * Root Container (COLUMN, full screen)
  *
  * ┌───────────────────────────────────────────────────────────────────┐
- * │  TopBarHost (fixed/content height, non-scrollable)                 │
+ * │  TopBar widget (fixed height)                                      │
  * │  ┌─────────────────────────────────────────────────────────────┐  │
- * │  │ TopBar widget (created INSIDE TopBarHost)                    │  │
  * │  │ < Back     (Title)                            (Status/...)  │  │
  * │  └─────────────────────────────────────────────────────────────┘  │
  * │                                                                   │
@@ -30,8 +29,7 @@
  *
  * Tree view:
  * Root(COL)
- * ├─ TopBarHost(COL/none, fixed/content)
- * │   └─ TopBar(widget)    // created by top_bar_init(top_bar_, TopBarHost)
+ * ├─ TopBar(widget)    // created by top_bar_init(top_bar_, root)
  * ├─ MsgList(COL, scroll V, grow=1)
  * │   └─ MsgRow*(repeat, ROW, full)
  * │       └─ Bubble(COL, content) -> TextLabel(WRAP)
@@ -40,7 +38,6 @@
  * Notes:
  * - Structure/layout only: create objects, set size/flex/align/flags.
  * - Visual style (colors/radius/padding) lives in styles.*.
- * - TopBar MUST be parented to TopBarHost to preserve layout order.
  */
 
 #include <Arduino.h>
@@ -64,15 +61,6 @@ ConversationWidgets create_conversation_base(lv_obj_t* parent)
     lv_obj_set_flex_flow(w.root, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(w.root, 0, 0);
     make_non_scrollable(w.root);
-
-    // NEW: topbar host (must be the first child in root)
-    w.topbar_host = lv_obj_create(w.root);
-    lv_obj_set_size(w.topbar_host, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_grow(w.topbar_host, 0);
-    lv_obj_set_flex_flow(w.topbar_host, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(w.topbar_host, 0, 0);
-    lv_obj_set_style_pad_row(w.topbar_host, 0, 0);
-    make_non_scrollable(w.topbar_host);
 
     // Msg list (scrollable, grow=1)
     w.msg_list = lv_obj_create(w.root);

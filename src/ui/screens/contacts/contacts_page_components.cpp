@@ -94,7 +94,7 @@ static void on_compose_send_done(bool ok, bool timeout, void* user_data);
 static void open_team_conversation();
 static void close_team_conversation();
 static void refresh_team_conversation();
-static void on_team_conversation_action(bool compose, void* user_data);
+static void on_team_conversation_action(chat::ui::ChatConversationScreen::ActionIntent intent, void* user_data);
 static void on_team_conversation_back(void* user_data);
 static void send_team_position();
 
@@ -829,10 +829,12 @@ static void refresh_team_conversation()
     g_contacts_state.chat_service->markConversationRead(conv);
 }
 
-static void on_team_conversation_action(bool /*compose*/, void* /*user_data*/)
+static void on_team_conversation_action(chat::ui::ChatConversationScreen::ActionIntent intent, void* /*user_data*/)
 {
-    s_compose_from_conversation = true;
-    open_chat_compose();
+    if (intent == chat::ui::ChatConversationScreen::ActionIntent::Reply) {
+        s_compose_from_conversation = true;
+        open_chat_compose();
+    }
 }
 
 static void on_team_conversation_back(void* /*user_data*/)

@@ -8,9 +8,6 @@ namespace chat::ui::layout {
 struct ConversationWidgets {
     lv_obj_t* root = nullptr;
 
-    // NEW: host container for TopBar widget, guaranteed to be the 1st row in root(COL)
-    lv_obj_t* topbar_host = nullptr;
-
     lv_obj_t* msg_list = nullptr;
     lv_obj_t* action_bar = nullptr;
     lv_obj_t* reply_btn = nullptr;
@@ -18,8 +15,7 @@ struct ConversationWidgets {
 };
 
 /**
- * Root(Column): TopBarHost(fixed/content) + MsgList(grow=1) + ActionBar(fixed height)
- * Note: TopBar widget MUST be created with parent = topbar_host, not root.
+ * Root(Column): TopBar(widget) + MsgList(grow=1) + ActionBar(fixed height)
  */
 ConversationWidgets create_conversation_base(lv_obj_t* parent);
 
