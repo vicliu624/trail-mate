@@ -14,11 +14,19 @@
 #include "../../widgets/ime/ime_widget.h"
 #include "../../../chat/usecase/contact_service.h"
 #include "../../../chat/usecase/chat_service.h"
+#include "../../../app/app_context.h"
+#include "../../../gps/gps_service_api.h"
 #include "../chat/chat_compose_components.h"
+#include "../chat/chat_conversation_components.h"
+#include "../team/team_state.h"
+#include "../team/team_ui_store.h"
+#include "meshtastic/mesh.pb.h"
+#include "pb_encode.h"
 
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cmath>
 #include <string>
 
 #define CONTACTS_DEBUG 0
@@ -41,6 +49,12 @@ static lv_group_t* s_compose_prev_group = nullptr;
 static uint32_t s_compose_peer_id = 0;
 static chat::ChannelId s_compose_channel = chat::ChannelId::PRIMARY;
 static bool s_refreshing_ui = false;
+static lv_group_t* s_conv_group = nullptr;
+static lv_group_t* s_conv_prev_group = nullptr;
+static bool s_compose_from_conversation = false;
+static bool s_compose_is_team = false;
+static std::string s_last_sent_text;
+static uint32_t s_last_sent_ts = 0;
 
 // --- Forward declarations (same behavior as original) ---
 static void contacts_btn_event_handler(lv_event_t* e);
@@ -77,6 +91,12 @@ static void close_chat_compose();
 static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* user_data);
 static void on_compose_back(void* user_data);
 static void on_compose_send_done(bool ok, bool timeout, void* user_data);
+static void open_team_conversation();
+static void close_team_conversation();
+static void refresh_team_conversation();
+static void on_team_conversation_action(bool compose, void* user_data);
+static void on_team_conversation_back(void* user_data);
+static void send_team_position();
 
 // Forward declaration - actual implementation moved to ui_contacts.cpp
 // to avoid library compilation issues with Arduino framework dependencies
@@ -144,6 +164,11 @@ static std::string format_snr(float snr)
     return std::string(buf);
 }
 
+static bool is_team_available()
+{
+    return team::ui::g_team_state.in_team && team::ui::g_team_state.has_team_id;
+}
+
 // ---------------- Panel creation (public API) ----------------
 
 void create_filter_panel(lv_obj_t* parent)
@@ -168,6 +193,10 @@ void create_filter_panel(lv_obj_t* parent)
         lv_obj_add_event_cb(g_contacts_state.broadcast_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
         lv_obj_add_event_cb(g_contacts_state.broadcast_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
     }
+    if (g_contacts_state.team_btn) {
+        lv_obj_add_event_cb(g_contacts_state.team_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
+        lv_obj_add_event_cb(g_contacts_state.team_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
+    }
 
     // TopBar back button must be reachable by rotary and also respond to press
     // (Press should exit page, not enter List column)
@@ -181,13 +210,18 @@ void create_filter_panel(lv_obj_t* parent)
         lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
         lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
         lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
+        if (g_contacts_state.team_btn) {
+            lv_obj_clear_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
+        }
 
         if (g_contacts_state.current_mode == ContactsMode::Contacts) {
             lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
         } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
             lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
-        } else {
+        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast) {
             lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
+        } else if (g_contacts_state.team_btn) {
+            lv_obj_add_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
         }
     }
 }
@@ -234,6 +268,7 @@ static void on_filter_focused(lv_event_t* e)
     if (tgt == g_contacts_state.contacts_btn) new_mode = ContactsMode::Contacts;
     else if (tgt == g_contacts_state.nearby_btn) new_mode = ContactsMode::Nearby;
     else if (tgt == g_contacts_state.broadcast_btn) new_mode = ContactsMode::Broadcast;
+    else if (tgt == g_contacts_state.team_btn) new_mode = ContactsMode::Team;
     else return;
 
     if (new_mode != g_contacts_state.current_mode) {
@@ -306,7 +341,8 @@ static void on_back_clicked(lv_event_t* /*e*/)
 
 static const chat::contacts::NodeInfo* get_selected_node()
 {
-    if (g_contacts_state.current_mode == ContactsMode::Broadcast) {
+    if (g_contacts_state.current_mode == ContactsMode::Broadcast ||
+        g_contacts_state.current_mode == ContactsMode::Team) {
         return nullptr;
     }
     if (g_contacts_state.selected_index < 0) {
@@ -592,8 +628,16 @@ static void open_chat_compose()
     if (g_contacts_state.compose_screen) {
         return;
     }
+    if (!g_contacts_state.conversation_screen) {
+        s_compose_from_conversation = false;
+    }
     const auto* node = get_selected_node();
-    if (g_contacts_state.current_mode != ContactsMode::Broadcast && !node) {
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast &&
+        g_contacts_state.current_mode != ContactsMode::Team &&
+        !node) {
+        return;
+    }
+    if (g_contacts_state.current_mode == ContactsMode::Team && !is_team_available()) {
         return;
     }
 
@@ -620,6 +664,12 @@ static void open_chat_compose()
         channel = get_selected_channel();
         peer_id = 0;
         title = "Broadcast";
+    } else if (g_contacts_state.current_mode == ContactsMode::Team) {
+        channel = chat::ChannelId::PRIMARY;
+        peer_id = 0;
+        title = team::ui::g_team_state.team_name.empty()
+            ? "Team"
+            : team::ui::g_team_state.team_name;
     } else {
         channel = chat::ChannelId::PRIMARY;
         peer_id = node->node_id;
@@ -652,12 +702,20 @@ static void open_chat_compose()
     g_contacts_state.compose_screen->setHeaderText(title.c_str(), "RSSI --");
     s_compose_peer_id = peer_id;
     s_compose_channel = channel;
+    s_compose_is_team = (g_contacts_state.current_mode == ContactsMode::Team);
 
-    if (g_contacts_state.root) {
-        lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (g_contacts_state.refresh_timer) {
-        lv_timer_pause(g_contacts_state.refresh_timer);
+    if (s_compose_from_conversation && g_contacts_state.conversation_screen) {
+        lv_obj_add_flag(g_contacts_state.conversation_screen->getObj(), LV_OBJ_FLAG_HIDDEN);
+        if (g_contacts_state.conversation_timer) {
+            lv_timer_pause(g_contacts_state.conversation_timer);
+        }
+    } else {
+        if (g_contacts_state.root) {
+            lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (g_contacts_state.refresh_timer) {
+            lv_timer_pause(g_contacts_state.refresh_timer);
+        }
     }
 }
 
@@ -675,23 +733,35 @@ static void close_chat_compose()
     g_contacts_state.compose_screen = nullptr;
     s_compose_peer_id = 0;
     s_compose_channel = chat::ChannelId::PRIMARY;
+    s_compose_is_team = false;
 
-    if (g_contacts_state.root) {
-        lv_obj_clear_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+    if (s_compose_from_conversation && g_contacts_state.conversation_screen) {
+        lv_obj_clear_flag(g_contacts_state.conversation_screen->getObj(), LV_OBJ_FLAG_HIDDEN);
+        if (g_contacts_state.conversation_timer) {
+            lv_timer_resume(g_contacts_state.conversation_timer);
+        }
+        s_compose_from_conversation = false;
+        s_compose_prev_group = nullptr;
+        if (s_conv_group) {
+            set_default_group(s_conv_group);
+        }
+    } else {
+        if (g_contacts_state.root) {
+            lv_obj_clear_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (g_contacts_state.refresh_timer) {
+            lv_timer_resume(g_contacts_state.refresh_timer);
+        }
+        lv_group_t* contacts_group = contacts_input_get_group();
+        if (contacts_group) {
+            set_default_group(contacts_group);
+        } else if (s_compose_prev_group) {
+            set_default_group(s_compose_prev_group);
+        }
+        s_compose_prev_group = nullptr;
+        contacts_focus_to_list();
+        refresh_ui();
     }
-    if (g_contacts_state.refresh_timer) {
-        lv_timer_resume(g_contacts_state.refresh_timer);
-    }
-
-    lv_group_t* contacts_group = contacts_input_get_group();
-    if (contacts_group) {
-        set_default_group(contacts_group);
-    } else if (s_compose_prev_group) {
-        set_default_group(s_compose_prev_group);
-    }
-    s_compose_prev_group = nullptr;
-    contacts_focus_to_list();
-    refresh_ui();
 }
 
 static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* /*user_data*/)
@@ -700,6 +770,8 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
         g_contacts_state.compose_screen && g_contacts_state.chat_service) {
         std::string text = g_contacts_state.compose_screen->getText();
         if (!text.empty()) {
+            s_last_sent_text = text;
+            s_last_sent_ts = static_cast<uint32_t>(time(nullptr));
             chat::MessageId msg_id = g_contacts_state.chat_service->sendText(
                 s_compose_channel, text, s_compose_peer_id
             );
@@ -719,9 +791,219 @@ static void on_compose_back(void* /*user_data*/)
     close_chat_compose();
 }
 
-static void on_compose_send_done(bool /*ok*/, bool /*timeout*/, void* /*user_data*/)
+static void on_compose_send_done(bool ok, bool /*timeout*/, void* /*user_data*/)
 {
+    if (ok && s_compose_is_team &&
+        team::ui::g_team_state.has_team_id &&
+        !s_last_sent_text.empty()) {
+        uint32_t ts = s_last_sent_ts;
+        if (ts == 0) {
+            ts = static_cast<uint32_t>(time(nullptr));
+        }
+        team::ui::team_ui_chatlog_append(team::ui::g_team_state.team_id,
+                                         0,
+                                         false,
+                                         ts,
+                                         s_last_sent_text);
+    }
     close_chat_compose();
+    s_last_sent_text.clear();
+    s_last_sent_ts = 0;
+    if (g_contacts_state.conversation_screen) {
+        refresh_team_conversation();
+    }
+}
+
+static void refresh_team_conversation()
+{
+    if (!g_contacts_state.conversation_screen || !g_contacts_state.chat_service) {
+        return;
+    }
+    chat::ConversationId conv(chat::ChannelId::PRIMARY, 0);
+    auto messages = g_contacts_state.chat_service->getRecentMessages(conv, 50);
+    g_contacts_state.conversation_screen->clearMessages();
+    for (const auto& msg : messages) {
+        g_contacts_state.conversation_screen->addMessage(msg);
+    }
+    g_contacts_state.conversation_screen->scrollToBottom();
+    g_contacts_state.chat_service->markConversationRead(conv);
+}
+
+static void on_team_conversation_action(bool /*compose*/, void* /*user_data*/)
+{
+    s_compose_from_conversation = true;
+    open_chat_compose();
+}
+
+static void on_team_conversation_back(void* /*user_data*/)
+{
+    close_team_conversation();
+}
+
+static void open_team_conversation()
+{
+    if (g_contacts_state.conversation_screen) {
+        return;
+    }
+    if (!is_team_available() || !g_contacts_state.chat_service) {
+        return;
+    }
+
+    lv_obj_t* parent = g_contacts_state.root
+        ? lv_obj_get_parent(g_contacts_state.root)
+        : lv_screen_active();
+    if (lv_obj_t* chat_parent = ui_chat_get_container()) {
+        if (lv_obj_is_valid(chat_parent)) {
+            parent = chat_parent;
+        }
+    }
+
+    s_conv_prev_group = lv_group_get_default();
+    if (!s_conv_group) {
+        s_conv_group = lv_group_create();
+    }
+    lv_group_remove_all_objs(s_conv_group);
+    set_default_group(s_conv_group);
+
+    chat::ConversationId conv(chat::ChannelId::PRIMARY, 0);
+    g_contacts_state.conversation_screen = new chat::ui::ChatConversationScreen(parent, conv);
+    g_contacts_state.conversation_screen->setActionCallback(on_team_conversation_action, nullptr);
+    g_contacts_state.conversation_screen->setBackCallback(on_team_conversation_back, nullptr);
+
+    const char* title = team::ui::g_team_state.team_name.empty()
+        ? "Team"
+        : team::ui::g_team_state.team_name.c_str();
+    g_contacts_state.conversation_screen->setHeaderText(title, nullptr);
+    g_contacts_state.conversation_screen->updateBatteryFromBoard();
+    refresh_team_conversation();
+
+    if (g_contacts_state.root) {
+        lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (g_contacts_state.refresh_timer) {
+        lv_timer_pause(g_contacts_state.refresh_timer);
+    }
+    if (!g_contacts_state.conversation_timer) {
+        g_contacts_state.conversation_timer = lv_timer_create([](lv_timer_t* timer) {
+            (void)timer;
+            refresh_team_conversation();
+        }, 1000, nullptr);
+        lv_timer_set_repeat_count(g_contacts_state.conversation_timer, -1);
+    } else {
+        lv_timer_resume(g_contacts_state.conversation_timer);
+    }
+}
+
+static void close_team_conversation()
+{
+    if (g_contacts_state.conversation_timer) {
+        lv_timer_pause(g_contacts_state.conversation_timer);
+    }
+    if (g_contacts_state.conversation_screen) {
+        delete g_contacts_state.conversation_screen;
+        g_contacts_state.conversation_screen = nullptr;
+    }
+
+    if (g_contacts_state.root) {
+        lv_obj_clear_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (g_contacts_state.refresh_timer) {
+        lv_timer_resume(g_contacts_state.refresh_timer);
+    }
+
+    if (s_conv_prev_group) {
+        set_default_group(s_conv_prev_group);
+    } else if (lv_group_t* contacts_group = contacts_input_get_group()) {
+        set_default_group(contacts_group);
+    }
+    s_conv_prev_group = nullptr;
+    contacts_focus_to_list();
+    refresh_ui();
+}
+
+static void send_team_position()
+{
+    if (!is_team_available()) {
+        return;
+    }
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    team::TeamController* controller = app_ctx.getTeamController();
+    if (!controller) {
+        return;
+    }
+
+    gps::GpsState gps_state = gps::gps_get_data();
+    if (!gps_state.valid) {
+        CONTACTS_LOG("[Contacts] team position: no gps fix\n");
+        return;
+    }
+
+    int32_t lat_e7 = static_cast<int32_t>(gps_state.lat * 1e7);
+    int32_t lon_e7 = static_cast<int32_t>(gps_state.lng * 1e7);
+    uint32_t ts = static_cast<uint32_t>(time(nullptr));
+
+    meshtastic_Position pos = meshtastic_Position_init_zero;
+    pos.has_latitude_i = true;
+    pos.latitude_i = lat_e7;
+    pos.has_longitude_i = true;
+    pos.longitude_i = lon_e7;
+    pos.location_source = meshtastic_Position_LocSource_LOC_INTERNAL;
+    if (gps_state.has_alt) {
+        pos.has_altitude = true;
+        pos.altitude = static_cast<int32_t>(lround(gps_state.alt_m));
+        pos.altitude_source = meshtastic_Position_AltSource_ALT_INTERNAL;
+    }
+    if (gps_state.has_speed) {
+        pos.has_ground_speed = true;
+        pos.ground_speed = static_cast<uint32_t>(lround(gps_state.speed_mps));
+    }
+    if (gps_state.has_course) {
+        double course = gps_state.course_deg;
+        if (course < 0.0) course = 0.0;
+        uint32_t cdeg = static_cast<uint32_t>(lround(course * 100.0));
+        if (cdeg >= 36000U) cdeg = 35999U;
+        pos.has_ground_track = true;
+        pos.ground_track = cdeg;
+    }
+    if (gps_state.satellites > 0) {
+        pos.sats_in_view = gps_state.satellites;
+    }
+    if (ts >= 1577836800U) {
+        pos.timestamp = ts;
+    }
+
+    uint8_t buf[128];
+    pb_ostream_t stream = pb_ostream_from_buffer(buf, sizeof(buf));
+    if (!pb_encode(&stream, meshtastic_Position_fields, &pos)) {
+        CONTACTS_LOG("[Contacts] team position: encode fail\n");
+        return;
+    }
+    std::vector<uint8_t> payload(buf, buf + stream.bytes_written);
+
+    bool ok = controller->onPosition(payload, chat::ChannelId::PRIMARY);
+    if (ok) {
+        int16_t alt_m = gps_state.has_alt
+            ? static_cast<int16_t>(lround(gps_state.alt_m))
+            : 0;
+        if (gps_state.has_alt) {
+            if (gps_state.alt_m > 32767.0) alt_m = 32767;
+            else if (gps_state.alt_m < -32768.0) alt_m = -32768;
+        }
+        uint16_t speed_dmps = 0;
+        if (gps_state.has_speed) {
+            double dmps = gps_state.speed_mps * 10.0;
+            if (dmps < 0.0) dmps = 0.0;
+            if (dmps > 65535.0) dmps = 65535.0;
+            speed_dmps = static_cast<uint16_t>(lround(dmps));
+        }
+        team::ui::team_ui_posring_append(team::ui::g_team_state.team_id,
+                                         0,
+                                         lat_e7,
+                                         lon_e7,
+                                         alt_m,
+                                         speed_dmps,
+                                         ts);
+    }
 }
 
 static void on_add_edit_save_clicked(lv_event_t* /*e*/)
@@ -824,6 +1106,7 @@ static void ensure_action_buttons()
     if (g_contacts_state.current_mode != g_contacts_state.last_action_mode) {
         lv_obj_clean(g_contacts_state.action_panel);
         g_contacts_state.chat_btn = nullptr;
+        g_contacts_state.position_btn = nullptr;
         g_contacts_state.edit_btn = nullptr;
         g_contacts_state.del_btn = nullptr;
         g_contacts_state.add_btn = nullptr;
@@ -858,6 +1141,31 @@ static void ensure_action_buttons()
 
         lv_obj_add_event_cb(
             g_contacts_state.chat_btn,
+            on_action_clicked,
+            LV_EVENT_CLICKED,
+            nullptr
+        );
+    }
+
+    /* ---------- Position ---------- */
+    if (!g_contacts_state.position_btn) {
+        g_contacts_state.position_btn =
+            lv_btn_create(g_contacts_state.action_panel);
+        lv_obj_set_size(
+            g_contacts_state.position_btn,
+            kButtonWidth, kButtonHeight
+        );
+        contacts::ui::style::apply_btn_basic(
+            g_contacts_state.position_btn
+        );
+        lv_obj_set_style_bg_color(g_contacts_state.position_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+
+        lv_obj_t* l = lv_label_create(g_contacts_state.position_btn);
+        lv_label_set_text(l, "Position");
+        lv_obj_center(l);
+
+        lv_obj_add_event_cb(
+            g_contacts_state.position_btn,
             on_action_clicked,
             LV_EVENT_CLICKED,
             nullptr
@@ -997,6 +1305,7 @@ static void ensure_action_buttons()
         lv_obj_clear_flag(g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag  (g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.edit_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.del_btn,  lv_color_hex(0xEBA341), LV_PART_MAIN);
@@ -1007,15 +1316,26 @@ static void ensure_action_buttons()
         lv_obj_add_flag  (g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.add_btn,  lv_color_hex(0xF1B65A), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+    } else if (g_contacts_state.current_mode == ContactsMode::Team) {
+        lv_obj_add_flag  (g_contacts_state.edit_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.position_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
     } else {
         lv_obj_add_flag  (g_contacts_state.edit_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag  (g_contacts_state.del_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag  (g_contacts_state.add_btn,  LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag  (g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag  (g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
     }
@@ -1028,7 +1348,11 @@ static void ensure_action_buttons()
     set_enabled(g_contacts_state.action_back_btn, true);
 
     set_enabled(g_contacts_state.chat_btn, has_sel);
-    if (g_contacts_state.current_mode != ContactsMode::Broadcast) {
+    if (g_contacts_state.current_mode == ContactsMode::Team) {
+        set_enabled(g_contacts_state.position_btn, has_sel);
+    }
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast &&
+        g_contacts_state.current_mode != ContactsMode::Team) {
         set_enabled(g_contacts_state.info_btn, has_sel);
     }
 
@@ -1046,7 +1370,15 @@ static void on_action_clicked(lv_event_t* e)
     CONTACTS_LOG("[Contacts] action clicked, selected=%d\n", g_contacts_state.selected_index);
 
     if (tgt == g_contacts_state.chat_btn) {
-        open_chat_compose();
+        if (g_contacts_state.current_mode == ContactsMode::Team) {
+            open_team_conversation();
+        } else {
+            open_chat_compose();
+        }
+        return;
+    }
+    if (tgt == g_contacts_state.position_btn) {
+        send_team_position();
         return;
     }
     if (tgt == g_contacts_state.info_btn) {
@@ -1107,6 +1439,20 @@ void refresh_ui()
         lv_obj_clear_flag(g_contacts_state.sub_container, LV_OBJ_FLAG_SCROLLABLE);
     }
 
+    bool team_available = is_team_available();
+    if (g_contacts_state.team_btn) {
+        if (team_available) {
+            lv_obj_clear_flag(g_contacts_state.team_btn, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(g_contacts_state.team_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (!team_available && g_contacts_state.current_mode == ContactsMode::Team) {
+        g_contacts_state.current_mode = ContactsMode::Contacts;
+        g_contacts_state.current_page = 0;
+        g_contacts_state.selected_index = -1;
+    }
+
     // Log nearby nodes if in nearby mode (unchanged)
     if (g_contacts_state.current_mode == ContactsMode::Nearby) {
         CONTACTS_LOG("[Contacts] Nearby mode: %zu nodes\n", g_contacts_state.nearby_list.size());
@@ -1130,11 +1476,24 @@ void refresh_ui()
 
     // Choose list by mode (unchanged)
     std::vector<chat::contacts::NodeInfo> broadcast_list;
+    std::vector<chat::contacts::NodeInfo> team_list;
     const std::vector<chat::contacts::NodeInfo>* current_list = nullptr;
     if (g_contacts_state.current_mode == ContactsMode::Contacts) {
         current_list = &g_contacts_state.contacts_list;
     } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
         current_list = &g_contacts_state.nearby_list;
+    } else if (g_contacts_state.current_mode == ContactsMode::Team) {
+        chat::contacts::NodeInfo team_node{};
+        team_node.node_id = 0;
+        team_node.last_seen = 0;
+        team_node.snr = 0.0f;
+        team_node.is_contact = false;
+        team_node.protocol = chat::contacts::NodeProtocolType::Unknown;
+        team_node.display_name = team::ui::g_team_state.team_name.empty()
+            ? "Team"
+            : team::ui::g_team_state.team_name;
+        team_list.push_back(team_node);
+        current_list = &team_list;
     } else {
         chat::contacts::NodeInfo primary{};
         primary.display_name = "Primary";
@@ -1177,6 +1536,8 @@ void refresh_ui()
             status_text = format_time_status(node.last_seen);
         } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
             status_text = format_snr(node.snr);
+        } else if (g_contacts_state.current_mode == ContactsMode::Team) {
+            status_text = "Team";
         } else {
             status_text = "Channel";
         }
@@ -1250,13 +1611,18 @@ void refresh_ui()
         lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
         lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
         lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
+        if (g_contacts_state.team_btn) {
+            lv_obj_clear_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
+        }
 
         if (g_contacts_state.current_mode == ContactsMode::Contacts) {
             lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
         } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
             lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
-        } else {
+        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast) {
             lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
+        } else if (g_contacts_state.team_btn) {
+            lv_obj_add_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
         }
     }
 

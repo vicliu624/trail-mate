@@ -18,6 +18,12 @@ class HalGps
     bool hasFix() const;
     double latitude() const;
     double longitude() const;
+    bool hasAltitude() const;
+    double altitude() const;
+    bool hasSpeed() const;
+    double speed() const;
+    bool hasCourse() const;
+    double course() const;
     uint8_t satellites() const;
     bool syncTime(uint32_t gps_task_interval_ms);
 

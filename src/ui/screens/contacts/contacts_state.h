@@ -17,6 +17,7 @@ namespace contacts {
 } // namespace contacts
 namespace ui {
     class ChatComposeScreen;
+    class ChatConversationScreen;
 } // namespace ui
 class ChatService;
 } // namespace chat
@@ -33,7 +34,8 @@ namespace ui {
 enum class ContactsMode {
     Contacts,  // Show contacts (nodes with nicknames)
     Nearby,    // Show nearby nodes (nodes without nicknames)
-    Broadcast  // Show broadcast channels
+    Broadcast, // Show broadcast channels
+    Team       // Show team (if joined)
 };
 
 struct ContactsPageState {
@@ -47,6 +49,7 @@ struct ContactsPageState {
     lv_obj_t* contacts_btn = nullptr;
     lv_obj_t* nearby_btn = nullptr;
     lv_obj_t* broadcast_btn = nullptr;
+    lv_obj_t* team_btn = nullptr;
     
     // Second column: Node list
     lv_obj_t* list_panel = nullptr;
@@ -60,6 +63,7 @@ struct ContactsPageState {
     // Third column: Action buttons
     lv_obj_t* action_panel = nullptr;
     lv_obj_t* chat_btn = nullptr;
+    lv_obj_t* position_btn = nullptr;
     lv_obj_t* edit_btn = nullptr;
     lv_obj_t* del_btn = nullptr;
     lv_obj_t* add_btn = nullptr;
@@ -94,6 +98,8 @@ struct ContactsPageState {
     // Compose screen (Chat button)
     chat::ui::ChatComposeScreen* compose_screen = nullptr;
     ::ui::widgets::ImeWidget* compose_ime = nullptr;
+    chat::ui::ChatConversationScreen* conversation_screen = nullptr;
+    lv_timer_t* conversation_timer = nullptr;
 
     // Services (owned by AppContext)
     chat::contacts::ContactService* contact_service = nullptr;

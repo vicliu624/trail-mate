@@ -20,6 +20,12 @@ class HalGpsAdapter : public IGpsHardware
     bool hasFix() const override;
     double latitude() const override;
     double longitude() const override;
+    bool hasAltitude() const override;
+    double altitude() const override;
+    bool hasSpeed() const override;
+    double speed() const override;
+    bool hasCourse() const override;
+    double course() const override;
     uint8_t satellites() const override;
     bool syncTime(uint32_t gps_task_interval_ms) override;
 

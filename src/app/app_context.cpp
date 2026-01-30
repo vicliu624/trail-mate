@@ -10,6 +10,9 @@
 #include "../ui/ui_team.h"
 #include "../ui/widgets/system_notification.h"
 #include "../ui/ui_common.h"
+#ifdef USING_ST25R3916
+#include "../team/infra/nfc/team_nfc.h"
+#endif
 #include "app_tasks.h"
 #include <SD.h>
 
@@ -137,6 +140,13 @@ void AppContext::update()
     {
         ui_controller_->update();
     }
+
+#ifdef USING_ST25R3916
+    if (team::nfc::is_share_active())
+    {
+        team::nfc::poll_share();
+    }
+#endif
 
     // Process events
     sys::Event* event = nullptr;

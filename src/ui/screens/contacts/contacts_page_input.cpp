@@ -57,10 +57,16 @@ static void clear_action_focus_states()
     lv_state_t clear_mask = (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY | LV_STATE_EDITED);
     if (g_contacts_state.action_back_btn) lv_obj_clear_state(g_contacts_state.action_back_btn, clear_mask);
     if (g_contacts_state.chat_btn) lv_obj_clear_state(g_contacts_state.chat_btn, clear_mask);
+    if (g_contacts_state.position_btn) lv_obj_clear_state(g_contacts_state.position_btn, clear_mask);
     if (g_contacts_state.edit_btn) lv_obj_clear_state(g_contacts_state.edit_btn, clear_mask);
     if (g_contacts_state.del_btn) lv_obj_clear_state(g_contacts_state.del_btn, clear_mask);
     if (g_contacts_state.add_btn) lv_obj_clear_state(g_contacts_state.add_btn, clear_mask);
     if (g_contacts_state.info_btn) lv_obj_clear_state(g_contacts_state.info_btn, clear_mask);
+}
+
+static bool is_visible(lv_obj_t* obj)
+{
+    return obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void focus_first_valid(lv_obj_t* obj)
@@ -81,9 +87,10 @@ static void bind_filter_column(bool keep_mode_focus)
     }
 
     // ② Filter buttons
-    if (g_contacts_state.contacts_btn) lv_group_add_obj(s_group, g_contacts_state.contacts_btn);
-    if (g_contacts_state.nearby_btn)   lv_group_add_obj(s_group, g_contacts_state.nearby_btn);
-    if (g_contacts_state.broadcast_btn) lv_group_add_obj(s_group, g_contacts_state.broadcast_btn);
+    if (is_visible(g_contacts_state.contacts_btn)) lv_group_add_obj(s_group, g_contacts_state.contacts_btn);
+    if (is_visible(g_contacts_state.nearby_btn))   lv_group_add_obj(s_group, g_contacts_state.nearby_btn);
+    if (is_visible(g_contacts_state.broadcast_btn)) lv_group_add_obj(s_group, g_contacts_state.broadcast_btn);
+    if (is_visible(g_contacts_state.team_btn)) lv_group_add_obj(s_group, g_contacts_state.team_btn);
 
     // Focus preference:
     // - keep_mode_focus: focus current mode button (better for rotate-to-switch-mode UX)
@@ -93,31 +100,39 @@ static void bind_filter_column(bool keep_mode_focus)
             focus_first_valid(g_contacts_state.contacts_btn);
         } else if (g_contacts_state.current_mode == ContactsMode::Nearby && g_contacts_state.nearby_btn) {
             focus_first_valid(g_contacts_state.nearby_btn);
-        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast && g_contacts_state.broadcast_btn) {
+        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast && is_visible(g_contacts_state.broadcast_btn)) {
             focus_first_valid(g_contacts_state.broadcast_btn);
+        } else if (g_contacts_state.current_mode == ContactsMode::Team && is_visible(g_contacts_state.team_btn)) {
+            focus_first_valid(g_contacts_state.team_btn);
         } else if (g_contacts_state.top_bar.back_btn) {
             focus_first_valid(g_contacts_state.top_bar.back_btn);
-        } else if (g_contacts_state.contacts_btn) {
+        } else if (is_visible(g_contacts_state.contacts_btn)) {
             focus_first_valid(g_contacts_state.contacts_btn);
-        } else if (g_contacts_state.nearby_btn) {
+        } else if (is_visible(g_contacts_state.nearby_btn)) {
             focus_first_valid(g_contacts_state.nearby_btn);
-        } else if (g_contacts_state.broadcast_btn) {
+        } else if (is_visible(g_contacts_state.broadcast_btn)) {
             focus_first_valid(g_contacts_state.broadcast_btn);
+        } else if (is_visible(g_contacts_state.team_btn)) {
+            focus_first_valid(g_contacts_state.team_btn);
         }
     } else {
         // first entry: prefer current mode button
-        if (g_contacts_state.current_mode == ContactsMode::Contacts && g_contacts_state.contacts_btn) {
+        if (g_contacts_state.current_mode == ContactsMode::Contacts && is_visible(g_contacts_state.contacts_btn)) {
             focus_first_valid(g_contacts_state.contacts_btn);
-        } else if (g_contacts_state.current_mode == ContactsMode::Nearby && g_contacts_state.nearby_btn) {
+        } else if (g_contacts_state.current_mode == ContactsMode::Nearby && is_visible(g_contacts_state.nearby_btn)) {
             focus_first_valid(g_contacts_state.nearby_btn);
-        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast && g_contacts_state.broadcast_btn) {
+        } else if (g_contacts_state.current_mode == ContactsMode::Broadcast && is_visible(g_contacts_state.broadcast_btn)) {
             focus_first_valid(g_contacts_state.broadcast_btn);
-        } else if (g_contacts_state.contacts_btn) {
+        } else if (g_contacts_state.current_mode == ContactsMode::Team && is_visible(g_contacts_state.team_btn)) {
+            focus_first_valid(g_contacts_state.team_btn);
+        } else if (is_visible(g_contacts_state.contacts_btn)) {
             focus_first_valid(g_contacts_state.contacts_btn);
-        } else if (g_contacts_state.nearby_btn) {
+        } else if (is_visible(g_contacts_state.nearby_btn)) {
             focus_first_valid(g_contacts_state.nearby_btn);
-        } else if (g_contacts_state.broadcast_btn) {
+        } else if (is_visible(g_contacts_state.broadcast_btn)) {
             focus_first_valid(g_contacts_state.broadcast_btn);
+        } else if (is_visible(g_contacts_state.team_btn)) {
+            focus_first_valid(g_contacts_state.team_btn);
         } else if (g_contacts_state.top_bar.back_btn) {
             focus_first_valid(g_contacts_state.top_bar.back_btn);
         }
@@ -169,9 +184,12 @@ static void bind_action_column()
         if (g_contacts_state.del_btn)  { lv_group_add_obj(s_group, g_contacts_state.del_btn);  any = true; }
     } else if (g_contacts_state.current_mode == ContactsMode::Nearby) {
         if (g_contacts_state.add_btn)  { lv_group_add_obj(s_group, g_contacts_state.add_btn);  any = true; }
+    } else if (g_contacts_state.current_mode == ContactsMode::Team) {
+        if (g_contacts_state.position_btn) { lv_group_add_obj(s_group, g_contacts_state.position_btn); any = true; }
     }
 
-    if (g_contacts_state.current_mode != ContactsMode::Broadcast) {
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast &&
+        g_contacts_state.current_mode != ContactsMode::Team) {
         if (g_contacts_state.info_btn) { lv_group_add_obj(s_group, g_contacts_state.info_btn); any = true; }
     }
 
@@ -198,6 +216,8 @@ static void bind_action_column()
     // Default focus to the first action button (Chat) instead of Back
     if (g_contacts_state.chat_btn) {
         focus_first_valid(g_contacts_state.chat_btn);
+    } else if (g_contacts_state.position_btn) {
+        focus_first_valid(g_contacts_state.position_btn);
     } else if (g_contacts_state.info_btn) {
         focus_first_valid(g_contacts_state.info_btn);
     } else if (g_contacts_state.action_back_btn) {

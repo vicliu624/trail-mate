@@ -12,13 +12,17 @@
 #include "../../../app/app_context.h"
 #include "../../../team/protocol/team_mgmt.h"
 #include "../../../team/usecase/team_service.h"
+#include "../../../team/infra/nfc/team_nfc.h"
 #include "../../../sys/event_bus.h"
 #include "../../widgets/system_notification.h"
+#include "meshtastic/mesh.pb.h"
+#include "pb_decode.h"
 
 #include <Arduino.h>
 #include <cstdio>
 #include <string>
 #include <algorithm>
+#include <cmath>
 
 namespace team
 {
@@ -34,8 +38,61 @@ constexpr int kInviteTtlSec = 9 * 60;
 constexpr uint8_t kKeyDistMaxRetries = 3;
 constexpr uint32_t kKeyDistRetryIntervalSec = 5;
 constexpr uint32_t kJoinPendingTimeoutSec = 30;
+constexpr uint32_t kNfcScanDurationSec = 10;
+constexpr size_t kInviteCodeLen = 6;
+bool s_state_loaded = false;
 
 uint32_t now_secs();
+void stop_nfc_share();
+void stop_nfc_scan();
+void handle_join_enter_code(lv_event_t*);
+std::string generate_invite_code();
+
+uint64_t team_id_to_u64(const TeamId& id)
+{
+    uint64_t value = 0;
+    for (size_t i = 0; i < id.size(); ++i)
+    {
+        value |= (static_cast<uint64_t>(id[i]) << (8 * i));
+    }
+    return value;
+}
+
+void write_u32_le(std::vector<uint8_t>& out, uint32_t v)
+{
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void write_u64_le(std::vector<uint8_t>& out, uint64_t v)
+{
+    for (int i = 0; i < 8; ++i)
+    {
+        out.push_back(static_cast<uint8_t>((v >> (8 * i)) & 0xFF));
+    }
+}
+
+bool append_key_event(TeamKeyEventType type, const std::vector<uint8_t>& payload)
+{
+    if (!g_team_state.has_team_id)
+    {
+        return false;
+    }
+    uint32_t seq = g_team_state.last_event_seq + 1;
+    if (!team_ui_append_key_event(g_team_state.team_id,
+                                  type,
+                                  seq,
+                                  now_secs(),
+                                  payload.data(),
+                                  payload.size()))
+    {
+        return false;
+    }
+    g_team_state.last_event_seq = seq;
+    return true;
+}
 
 void notify_send_failed(const char* action, bool needs_keys)
 {
@@ -197,13 +254,22 @@ void enter_kicked_out_state()
     g_team_state.pending_join_started_s = 0;
     g_team_state.kicked_out = true;
     g_team_state.self_is_leader = false;
+    g_team_state.last_event_seq = 0;
     g_team_state.members.clear();
     g_team_state.has_team_id = false;
     g_team_state.team_name.clear();
     g_team_state.security_round = 0;
     g_team_state.has_team_psk = false;
     g_team_state.waiting_new_keys = false;
+    g_team_state.invite_mode = TeamInviteMode::Radio;
+    g_team_state.invite_mode = TeamInviteMode::Radio;
     g_team_state.has_join_target = false;
+    g_team_state.has_nfc_next_psk = false;
+    g_team_state.nfc_next_key_id = 0;
+    g_team_state.nfc_payload.clear();
+    g_team_state.has_nfc_payload = false;
+    stop_nfc_share();
+    stop_nfc_scan();
     s_keydist_pending.clear();
     g_team_state.page = TeamPage::KickedOut;
     g_team_state.nav_stack.clear();
@@ -248,6 +314,7 @@ void clear_content()
         label = nullptr;
     }
     g_team_state.detail_label = nullptr;
+    g_team_state.invite_code_textarea = nullptr;
     clear_focusables();
 }
 
@@ -321,6 +388,99 @@ void close_join_request_modal()
 uint32_t now_secs()
 {
     return static_cast<uint32_t>(millis() / 1000);
+}
+
+void ensure_invite_code()
+{
+    if (g_team_state.invite_code.empty())
+    {
+        g_team_state.invite_code = generate_invite_code();
+    }
+    if (g_team_state.invite_expires_s == 0)
+    {
+        g_team_state.invite_expires_s = kInviteTtlSec;
+    }
+}
+
+bool ensure_nfc_share_payload()
+{
+    if (!g_team_state.has_team_id)
+    {
+        return false;
+    }
+    ensure_invite_code();
+    uint32_t next_key_id = g_team_state.security_round ? (g_team_state.security_round + 1) : 1;
+    std::array<uint8_t, team::proto::kTeamChannelPskSize> next_psk{};
+    for (size_t i = 0; i < next_psk.size(); ++i)
+    {
+        next_psk[i] = static_cast<uint8_t>(random(0, 256));
+    }
+
+    std::vector<uint8_t> payload;
+    uint32_t expires_at = now_secs() + g_team_state.invite_expires_s;
+    if (!team::nfc::build_payload(g_team_state.team_id,
+                                  next_key_id,
+                                  expires_at,
+                                  next_psk.data(),
+                                  next_psk.size(),
+                                  g_team_state.invite_code,
+                                  payload))
+    {
+        return false;
+    }
+
+    g_team_state.nfc_next_key_id = next_key_id;
+    g_team_state.nfc_next_psk = next_psk;
+    g_team_state.has_nfc_next_psk = true;
+    g_team_state.nfc_payload = payload;
+    g_team_state.has_nfc_payload = true;
+    return true;
+}
+
+void stop_nfc_share()
+{
+    if (g_team_state.nfc_share_active)
+    {
+        team::nfc::stop_share();
+    }
+    g_team_state.nfc_share_active = false;
+    g_team_state.has_nfc_next_psk = false;
+    g_team_state.nfc_next_key_id = 0;
+}
+
+bool start_nfc_share()
+{
+    if (!ensure_nfc_share_payload())
+    {
+        return false;
+    }
+    if (!team::nfc::start_share(g_team_state.nfc_payload))
+    {
+        return false;
+    }
+    g_team_state.nfc_share_active = true;
+    return true;
+}
+
+void stop_nfc_scan()
+{
+    if (g_team_state.nfc_scan_active)
+    {
+        team::nfc::stop_scan();
+    }
+    g_team_state.nfc_scan_active = false;
+    g_team_state.nfc_scan_started_s = 0;
+}
+
+bool start_nfc_scan()
+{
+    if (!team::nfc::start_scan(static_cast<uint16_t>(kNfcScanDurationSec * 1000)))
+    {
+        return false;
+    }
+    g_team_state.nfc_scan_active = true;
+    g_team_state.nfc_scan_started_s = now_secs();
+    return true;
 }
 
 int online_count()
@@ -422,20 +582,7 @@ std::string format_invite_code(const std::string& code)
     {
         return "--";
     }
-    std::string out;
-    out.reserve(code.size() + 2);
-    for (char c : code)
-    {
-        if (c == '-')
-        {
-            out += " \xE2\x80\x93 "; // en dash
-        }
-        else
-        {
-            out.push_back(c);
-        }
-    }
-    return out;
+    return code;
 }
 
 uint32_t hash_invite_code(const std::string& code)
@@ -457,15 +604,31 @@ std::string generate_invite_code()
         return kAlphabet[random(0, kAlphaLen)];
     };
     std::string code;
-    code.reserve(7);
-    code.push_back(pick());
-    code.push_back(pick());
-    code.push_back(pick());
-    code.push_back('-');
-    code.push_back(pick());
-    code.push_back(pick());
-    code.push_back(pick());
+    code.reserve(6);
+    for (int i = 0; i < 6; ++i)
+    {
+        code.push_back(pick());
+    }
     return code;
+}
+
+std::string normalize_invite_code(const std::string& raw)
+{
+    std::string out;
+    out.reserve(raw.size());
+    for (char c : raw)
+    {
+        if (c == '-' || c == ' ' || c == '\t' || c == '\n' || c == '\r')
+        {
+            continue;
+        }
+        if (c >= 'a' && c <= 'z')
+        {
+            c = static_cast<char>(c - 'a' + 'A');
+        }
+        out.push_back(c);
+    }
+    return out;
 }
 
 std::string format_last_seen(uint32_t last_seen_s)
@@ -603,6 +766,7 @@ TeamUiSnapshot snapshot_from_state()
     snap.pending_join_started_s = g_team_state.pending_join_started_s;
     snap.kicked_out = g_team_state.kicked_out;
     snap.self_is_leader = g_team_state.self_is_leader;
+    snap.last_event_seq = g_team_state.last_event_seq;
     snap.team_id = g_team_state.team_id;
     snap.has_team_id = g_team_state.has_team_id;
     snap.join_target_id = g_team_state.join_target_id;
@@ -626,6 +790,7 @@ void apply_snapshot(const TeamUiSnapshot& snap)
     g_team_state.pending_join_started_s = snap.pending_join_started_s;
     g_team_state.kicked_out = snap.kicked_out;
     g_team_state.self_is_leader = snap.self_is_leader;
+    g_team_state.last_event_seq = snap.last_event_seq;
     g_team_state.team_id = snap.team_id;
     g_team_state.has_team_id = snap.has_team_id;
     g_team_state.join_target_id = snap.join_target_id;
@@ -648,8 +813,7 @@ bool is_team_ui_active()
 
 void load_state_from_store()
 {
-    static bool s_loaded = false;
-    if (s_loaded)
+    if (s_state_loaded)
     {
         return;
     }
@@ -658,7 +822,7 @@ void load_state_from_store()
     {
         apply_snapshot(snap);
     }
-    s_loaded = true;
+    s_state_loaded = true;
 }
 
 void save_state_to_store()
@@ -760,17 +924,27 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
             }
 
             team::proto::TeamJoinAccept accept{};
-            uint32_t old_key_id = g_team_state.security_round;
-            if (old_key_id == 0)
-            {
-                old_key_id = 1;
-            }
-            uint32_t new_key_id = old_key_id + 1;
-
+            bool use_nfc = (g_team_state.invite_mode == TeamInviteMode::Nfc) &&
+                           g_team_state.has_nfc_next_psk;
+            uint32_t new_key_id = 0;
             std::array<uint8_t, team::proto::kTeamChannelPskSize> new_psk{};
-            for (size_t i = 0; i < new_psk.size(); ++i)
+            if (use_nfc)
             {
-                new_psk[i] = static_cast<uint8_t>(random(0, 256));
+                new_key_id = g_team_state.nfc_next_key_id;
+                new_psk = g_team_state.nfc_next_psk;
+            }
+            else
+            {
+                uint32_t old_key_id = g_team_state.security_round;
+                if (old_key_id == 0)
+                {
+                    old_key_id = 1;
+                }
+                new_key_id = old_key_id + 1;
+                for (size_t i = 0; i < new_psk.size(); ++i)
+                {
+                    new_psk[i] = static_cast<uint8_t>(random(0, 256));
+                }
             }
 
             team::proto::TeamKeyDist kd{};
@@ -786,23 +960,46 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
                 {
                     continue;
                 }
+                if (use_nfc && m.node_id == g_team_state.pending_join_node_id)
+                {
+                    continue;
+                }
                 if (!controller->onKeyDist(kd, chat::ChannelId::PRIMARY, m.node_id))
                 {
                     notify_send_failed_detail("KeyDist", controller->getLastSendError());
                 }
                 add_keydist_pending(m.node_id, new_key_id);
             }
-            if (!controller->onKeyDist(kd, chat::ChannelId::PRIMARY,
-                                       g_team_state.pending_join_node_id))
+            if (!use_nfc)
             {
-                notify_send_failed_detail("KeyDist", controller->getLastSendError());
+                if (!controller->onKeyDist(kd, chat::ChannelId::PRIMARY,
+                                           g_team_state.pending_join_node_id))
+                {
+                    notify_send_failed_detail("KeyDist", controller->getLastSendError());
+                }
+                add_keydist_pending(g_team_state.pending_join_node_id, new_key_id);
             }
-            add_keydist_pending(g_team_state.pending_join_node_id, new_key_id);
 
             g_team_state.security_round = new_key_id;
             g_team_state.team_psk = new_psk;
             g_team_state.has_team_psk = true;
             g_team_state.waiting_new_keys = false;
+            g_team_state.has_nfc_next_psk = false;
+            g_team_state.nfc_next_key_id = 0;
+            {
+                std::vector<uint8_t> payload;
+                write_u32_le(payload, g_team_state.pending_join_node_id);
+                payload.push_back(1);
+                payload.push_back(0);
+                payload.push_back(0);
+                payload.push_back(0);
+                append_key_event(TeamKeyEventType::MemberAccepted, payload);
+            }
+            {
+                std::vector<uint8_t> payload;
+                write_u32_le(payload, g_team_state.security_round);
+                append_key_event(TeamKeyEventType::EpochRotated, payload);
+            }
             if (!controller->setKeysFromPsk(g_team_state.team_id,
                                             g_team_state.security_round,
                                             g_team_state.team_psk.data(),
@@ -817,8 +1014,11 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
                 accept.team_id = g_team_state.team_id;
                 accept.has_team_id = true;
             }
-            accept.channel_psk_len = static_cast<uint8_t>(g_team_state.team_psk.size());
-            accept.channel_psk = g_team_state.team_psk;
+            if (!use_nfc)
+            {
+                accept.channel_psk_len = static_cast<uint8_t>(g_team_state.team_psk.size());
+                accept.channel_psk = g_team_state.team_psk;
+            }
             if (!controller->onAcceptJoin(accept, chat::ChannelId::PRIMARY,
                                           g_team_state.pending_join_node_id))
             {
@@ -834,6 +1034,10 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
             if (!controller->onStatusPlain(status, chat::ChannelId::PRIMARY, 0))
             {
                 notify_send_failed("Status", false);
+            }
+            if (use_nfc)
+            {
+                stop_nfc_share();
             }
         }
         touch_member(g_team_state.pending_join_node_id, now_secs());
@@ -909,6 +1113,22 @@ void handle_team_join_accept(const team::TeamJoinAcceptEvent& ev)
     g_team_state.nav_stack.clear();
     g_team_state.waiting_new_keys = false;
 
+    {
+        std::vector<uint8_t> payload;
+        write_u32_le(payload, 0);
+        payload.push_back(1);
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(0);
+        append_key_event(TeamKeyEventType::MemberAccepted, payload);
+    }
+    if (g_team_state.security_round != 0)
+    {
+        std::vector<uint8_t> payload;
+        write_u32_le(payload, g_team_state.security_round);
+        append_key_event(TeamKeyEventType::EpochRotated, payload);
+    }
+
     app::AppContext& app_ctx = app::AppContext::getInstance();
     team::TeamController* controller = app_ctx.getTeamController();
     if (controller && ev.msg.channel_psk_len > 0 && g_team_state.has_team_id)
@@ -983,6 +1203,7 @@ void handle_team_status(const team::TeamStatusEvent& ev)
     {
         return;
     }
+    uint32_t prev_round = g_team_state.security_round;
     if (!g_team_state.has_team_id)
     {
         g_team_state.team_id = ev.ctx.team_id;
@@ -993,20 +1214,26 @@ void handle_team_status(const team::TeamStatusEvent& ev)
     {
         g_team_state.security_round = ev.ctx.key_id;
     }
-    if (ev.msg.key_id != 0)
+        if (ev.msg.key_id != 0)
+        {
+            if (ev.msg.key_id > g_team_state.security_round)
+            {
+                g_team_state.waiting_new_keys = true;
+            }
+            else if (ev.msg.key_id == g_team_state.security_round)
+            {
+                g_team_state.waiting_new_keys = false;
+            }
+            if (ev.ctx.from != 0)
+            {
+                mark_keydist_confirmed(ev.ctx.from, ev.msg.key_id);
+            }
+        }
+    if (ev.msg.key_id != 0 && ev.msg.key_id > prev_round)
     {
-        if (ev.msg.key_id > g_team_state.security_round)
-        {
-            g_team_state.waiting_new_keys = true;
-        }
-        else if (ev.msg.key_id == g_team_state.security_round)
-        {
-            g_team_state.waiting_new_keys = false;
-        }
-        if (ev.ctx.from != 0)
-        {
-            mark_keydist_confirmed(ev.ctx.from, ev.msg.key_id);
-        }
+        std::vector<uint8_t> payload;
+        write_u32_le(payload, ev.msg.key_id);
+        append_key_event(TeamKeyEventType::EpochRotated, payload);
     }
     g_team_state.last_update_s = ev.ctx.timestamp;
 }
@@ -1027,6 +1254,46 @@ void handle_team_position(const team::TeamPositionEvent& ev)
     if (ev.ctx.key_id != 0 && ev.ctx.from != 0)
     {
         mark_keydist_confirmed(ev.ctx.from, ev.ctx.key_id);
+    }
+    if (!ev.payload.empty())
+    {
+        meshtastic_Position pos = meshtastic_Position_init_zero;
+        pb_istream_t stream = pb_istream_from_buffer(ev.payload.data(), ev.payload.size());
+        if (pb_decode(&stream, meshtastic_Position_fields, &pos))
+        {
+            if (pos.has_latitude_i && pos.has_longitude_i)
+            {
+                int32_t lat_e7 = pos.latitude_i;
+                int32_t lon_e7 = pos.longitude_i;
+                int16_t alt_m = 0;
+                if (pos.has_altitude)
+                {
+                    if (pos.altitude > 32767) alt_m = 32767;
+                    else if (pos.altitude < -32768) alt_m = -32768;
+                    else alt_m = static_cast<int16_t>(pos.altitude);
+                }
+                uint16_t speed_dmps = 0;
+                if (pos.has_ground_speed)
+                {
+                    double dmps = static_cast<double>(pos.ground_speed) * 10.0;
+                    if (dmps < 0.0) dmps = 0.0;
+                    if (dmps > 65535.0) dmps = 65535.0;
+                    speed_dmps = static_cast<uint16_t>(lround(dmps));
+                }
+                uint32_t ts = pos.timestamp != 0 ? pos.timestamp : ev.ctx.timestamp;
+                if (ts == 0)
+                {
+                    ts = now_secs();
+                }
+                team_ui_posring_append(g_team_state.team_id,
+                                       ev.ctx.from,
+                                       lat_e7,
+                                       lon_e7,
+                                       alt_m,
+                                       speed_dmps,
+                                       ts);
+            }
+        }
     }
     g_team_state.last_update_s = ev.ctx.timestamp;
 }
@@ -1059,7 +1326,18 @@ void handle_team_kick(const team::TeamKickEvent& ev)
     {
         g_team_state.members.erase(g_team_state.members.begin() + idx);
     }
+    {
+        std::vector<uint8_t> payload;
+        write_u32_le(payload, target);
+        append_key_event(TeamKeyEventType::MemberKicked, payload);
+    }
     g_team_state.security_round += 1;
+    if (g_team_state.security_round != 0)
+    {
+        std::vector<uint8_t> payload;
+        write_u32_le(payload, g_team_state.security_round);
+        append_key_event(TeamKeyEventType::EpochRotated, payload);
+    }
 
     if (target == 0)
     {
@@ -1070,6 +1348,11 @@ void handle_team_kick(const team::TeamKickEvent& ev)
 void handle_team_transfer_leader(const team::TeamTransferLeaderEvent& ev)
 {
     uint32_t target = ev.msg.target;
+    {
+        std::vector<uint8_t> payload;
+        write_u32_le(payload, target);
+        append_key_event(TeamKeyEventType::LeaderTransferred, payload);
+    }
     for (auto& m : g_team_state.members)
     {
         m.leader = false;
@@ -1122,6 +1405,7 @@ void handle_team_key_dist(const team::TeamKeyDistEvent& ev)
 void nav_to(TeamPage page, bool push = true);
 void nav_back();
 void render_page();
+void handle_page_transition(TeamPage next_page);
 
 void top_bar_back(void*)
 {
@@ -1134,6 +1418,7 @@ void nav_to(TeamPage page, bool push)
     {
         g_team_state.nav_stack.push_back(g_team_state.page);
     }
+    handle_page_transition(page);
     g_team_state.page = page;
     render_page();
 }
@@ -1142,8 +1427,10 @@ void nav_back()
 {
     if (!g_team_state.nav_stack.empty())
     {
-        g_team_state.page = g_team_state.nav_stack.back();
+        TeamPage next_page = g_team_state.nav_stack.back();
         g_team_state.nav_stack.pop_back();
+        handle_page_transition(next_page);
+        g_team_state.page = next_page;
         render_page();
         return;
     }
@@ -1155,8 +1442,31 @@ void nav_back()
 void nav_reset(TeamPage page)
 {
     g_team_state.nav_stack.clear();
+    handle_page_transition(page);
     g_team_state.page = page;
     render_page();
+}
+
+void handle_page_transition(TeamPage next_page)
+{
+    if (g_team_state.page == TeamPage::JoinNfc && next_page != TeamPage::JoinNfc)
+    {
+        stop_nfc_scan();
+    }
+    if (g_team_state.page == TeamPage::InviteNfc && next_page != TeamPage::InviteNfc)
+    {
+        stop_nfc_share();
+    }
+
+    if (next_page == TeamPage::JoinNfc && !g_team_state.nfc_scan_active)
+    {
+        g_team_state.has_nfc_payload = false;
+        g_team_state.nfc_payload.clear();
+        if (!start_nfc_scan())
+        {
+            ::ui::SystemNotification::show("NFC scan failed", 2000);
+        }
+    }
 }
 
 void handle_create(lv_event_t*)
@@ -1196,6 +1506,15 @@ void handle_create(lv_event_t*)
         }
         g_team_state.has_team_psk = true;
     }
+
+    if (g_team_state.has_team_id)
+    {
+        std::vector<uint8_t> payload;
+        write_u64_le(payload, team_id_to_u64(g_team_state.team_id));
+        write_u32_le(payload, 0);
+        write_u32_le(payload, g_team_state.security_round);
+        append_key_event(TeamKeyEventType::TeamCreated, payload);
+    }
     if (controller)
     {
         if (!controller->setKeysFromPsk(g_team_state.team_id,
@@ -1222,6 +1541,11 @@ void handle_join(lv_event_t*)
     nav_to(TeamPage::JoinTeam);
 }
 
+void handle_join_nfc(lv_event_t*)
+{
+    nav_to(TeamPage::JoinNfc);
+}
+
 void handle_view_team(lv_event_t*)
 {
     nav_to(TeamPage::TeamHome);
@@ -1234,12 +1558,44 @@ void handle_invite(lv_event_t*)
         ::ui::SystemNotification::show("Only leader can invite", 2000);
         return;
     }
-    if (g_team_state.invite_code.empty())
-    {
-        g_team_state.invite_code = generate_invite_code();
-        g_team_state.invite_expires_s = kInviteTtlSec;
-    }
+    ensure_invite_code();
+    g_team_state.invite_mode = TeamInviteMode::Radio;
     nav_to(TeamPage::Invite);
+}
+
+void handle_invite_switch_mode(lv_event_t*)
+{
+    if (!g_team_state.self_is_leader)
+    {
+        ::ui::SystemNotification::show("Only leader can invite", 2000);
+        return;
+    }
+    if (g_team_state.invite_mode == TeamInviteMode::Radio)
+    {
+        g_team_state.invite_mode = TeamInviteMode::Nfc;
+        nav_to(TeamPage::InviteNfc);
+    }
+    else
+    {
+        g_team_state.invite_mode = TeamInviteMode::Radio;
+        stop_nfc_share();
+        g_team_state.has_nfc_next_psk = false;
+        g_team_state.nfc_next_key_id = 0;
+        g_team_state.nfc_payload.clear();
+        g_team_state.has_nfc_payload = false;
+        nav_to(TeamPage::Invite);
+    }
+}
+
+void handle_invite_start_nfc(lv_event_t*)
+{
+    g_team_state.invite_mode = TeamInviteMode::Nfc;
+    if (!start_nfc_share())
+    {
+        ::ui::SystemNotification::show("NFC start failed", 2000);
+        return;
+    }
+    render_page();
 }
 
 void handle_leave(lv_event_t*)
@@ -1255,12 +1611,19 @@ void handle_leave(lv_event_t*)
     g_team_state.pending_join_started_s = 0;
     g_team_state.kicked_out = false;
     g_team_state.self_is_leader = false;
+    g_team_state.last_event_seq = 0;
     g_team_state.members.clear();
     g_team_state.has_team_id = false;
     g_team_state.team_name.clear();
     g_team_state.security_round = 0;
     g_team_state.has_team_psk = false;
     g_team_state.waiting_new_keys = false;
+    g_team_state.has_nfc_next_psk = false;
+    g_team_state.nfc_next_key_id = 0;
+    g_team_state.nfc_payload.clear();
+    g_team_state.has_nfc_payload = false;
+    stop_nfc_share();
+    stop_nfc_scan();
     s_keydist_pending.clear();
     save_state_to_store();
     nav_reset(TeamPage::StatusNotInTeam);
@@ -1393,6 +1756,11 @@ void handle_transfer_leader(lv_event_t*)
         }
         g_team_state.members[idx].leader = true;
         g_team_state.self_is_leader = false;
+        {
+            std::vector<uint8_t> payload;
+            write_u32_le(payload, g_team_state.members[idx].node_id);
+            append_key_event(TeamKeyEventType::LeaderTransferred, payload);
+        }
     }
     save_state_to_store();
     nav_reset(TeamPage::TeamHome);
@@ -1420,7 +1788,7 @@ void handle_invite_refresh(lv_event_t*)
 
     app::AppContext& app_ctx = app::AppContext::getInstance();
     team::TeamController* controller = app_ctx.getTeamController();
-    if (controller)
+    if (controller && g_team_state.invite_mode == TeamInviteMode::Radio)
     {
         if (!controller->setKeysFromPsk(g_team_state.team_id,
                                         g_team_state.security_round ? g_team_state.security_round : 1,
@@ -1441,6 +1809,21 @@ void handle_invite_refresh(lv_event_t*)
             notify_send_failed("Invite", false);
         }
     }
+    if (g_team_state.invite_mode == TeamInviteMode::Nfc)
+    {
+        if (!ensure_nfc_share_payload())
+        {
+            ::ui::SystemNotification::show("NFC payload failed", 2000);
+        }
+        if (g_team_state.nfc_share_active)
+        {
+            stop_nfc_share();
+            if (!start_nfc_share())
+            {
+                ::ui::SystemNotification::show("NFC start failed", 2000);
+            }
+        }
+    }
     g_team_state.last_update_s = now_secs();
     save_state_to_store();
     render_page();
@@ -1450,8 +1833,91 @@ void handle_invite_stop(lv_event_t*)
 {
     g_team_state.invite_code.clear();
     g_team_state.invite_expires_s = 0;
+    g_team_state.invite_mode = TeamInviteMode::Radio;
+    g_team_state.has_nfc_next_psk = false;
+    g_team_state.nfc_next_key_id = 0;
+    g_team_state.nfc_payload.clear();
+    g_team_state.has_nfc_payload = false;
+    stop_nfc_share();
     save_state_to_store();
     nav_reset(TeamPage::TeamHome);
+}
+
+void handle_enter_code_open(lv_event_t*)
+{
+    nav_to(TeamPage::EnterCode);
+}
+
+void handle_enter_code_cancel(lv_event_t*)
+{
+    g_team_state.has_nfc_payload = false;
+    g_team_state.nfc_payload.clear();
+    nav_back();
+}
+
+void handle_enter_code_confirm(lv_event_t*)
+{
+    if (!g_team_state.invite_code_textarea)
+    {
+        return;
+    }
+    const char* raw = lv_textarea_get_text(g_team_state.invite_code_textarea);
+    std::string code = raw ? normalize_invite_code(raw) : std::string();
+    if (code.size() != kInviteCodeLen)
+    {
+        ::ui::SystemNotification::show("Invalid code", 2000);
+        return;
+    }
+
+    if (g_team_state.has_nfc_payload)
+    {
+        team::nfc::Payload payload{};
+        if (!team::nfc::decode_payload(g_team_state.nfc_payload.data(),
+                                       g_team_state.nfc_payload.size(),
+                                       &payload))
+        {
+            ::ui::SystemNotification::show("Bad NFC payload", 2000);
+            return;
+        }
+        if (payload.expires_at != 0 && now_secs() > payload.expires_at)
+        {
+            ::ui::SystemNotification::show("NFC invite expired", 2000);
+            return;
+        }
+        std::array<uint8_t, team::proto::kTeamChannelPskSize> psk{};
+        if (!team::nfc::decrypt_payload(payload, code, psk))
+        {
+            ::ui::SystemNotification::show("Decrypt failed", 2000);
+            return;
+        }
+
+        g_team_state.team_id = payload.team_id;
+        g_team_state.has_team_id = true;
+        update_team_name_from_id(payload.team_id);
+        g_team_state.security_round = payload.key_id;
+        g_team_state.team_psk = psk;
+        g_team_state.has_team_psk = true;
+        g_team_state.waiting_new_keys = false;
+        g_team_state.join_target_id = payload.team_id;
+        g_team_state.has_join_target = true;
+        g_team_state.has_nfc_payload = false;
+        g_team_state.nfc_payload.clear();
+
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        team::TeamController* controller = app_ctx.getTeamController();
+        if (controller)
+        {
+            if (!controller->setKeysFromPsk(g_team_state.team_id,
+                                            g_team_state.security_round,
+                                            g_team_state.team_psk.data(),
+                                            g_team_state.team_psk.size()))
+            {
+                notify_send_failed("Keys", true);
+            }
+        }
+    }
+
+    handle_join_enter_code(nullptr);
 }
 
 void handle_join_enter_code(lv_event_t*)
@@ -1510,6 +1976,7 @@ void handle_join_cancel(lv_event_t*)
 {
     g_team_state.pending_join = false;
     g_team_state.pending_join_started_s = 0;
+    stop_nfc_scan();
     save_state_to_store();
     nav_back();
 }
@@ -1650,25 +2117,72 @@ void render_invite()
 {
     update_top_bar_title("Invite");
 
-    add_label(g_team_state.body, "Invite Code", true, false);
+    g_team_state.invite_mode = TeamInviteMode::Radio;
+    ensure_invite_code();
+    char line[64];
+    add_label(g_team_state.body, "Mode: Radio", false, true);
+    std::string team_name = current_team_name();
+    snprintf(line, sizeof(line), "Team: %s", team_name.c_str());
+    add_label(g_team_state.body, line, true, false);
+    add_label(g_team_state.body, "Invite Code", false, true);
     std::string pretty_code = format_invite_code(g_team_state.invite_code);
     add_label(g_team_state.body, pretty_code.c_str(), false, false);
-    char line[32];
+
     if (g_team_state.invite_expires_s == 0)
     {
-        snprintf(line, sizeof(line), "Expires in: --:--");
+        snprintf(line, sizeof(line), "Time left: --:--");
     }
     else
     {
         unsigned minutes = g_team_state.invite_expires_s / 60;
         unsigned seconds = g_team_state.invite_expires_s % 60;
-        snprintf(line, sizeof(line), "Expires in: %02u:%02u", minutes, seconds);
+        snprintf(line, sizeof(line), "Time left: %02u:%02u", minutes, seconds);
     }
     add_label(g_team_state.body, line, false, true);
-    add_label(g_team_state.body, "Nearby devices can join", false, true);
+    add_label(g_team_state.body, "Nearby devices can request to join", false, true);
 
     int width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Refresh Code", width, handle_invite_refresh);
+    g_team_state.action_btns[0] = create_action_button("Stop Invite", width, handle_invite_stop);
+    g_team_state.action_btns[1] = create_action_button("Switch Mode", width, handle_invite_switch_mode);
+    register_focus(g_team_state.action_btns[0], true);
+    register_focus(g_team_state.action_btns[1]);
+}
+
+void render_invite_nfc()
+{
+    update_top_bar_title("Invite via NFC");
+
+    g_team_state.invite_mode = TeamInviteMode::Nfc;
+    ensure_invite_code();
+    char line[64];
+    add_label(g_team_state.body, "Mode: NFC", false, true);
+    std::string team_name = current_team_name();
+    snprintf(line, sizeof(line), "Team: %s", team_name.c_str());
+    add_label(g_team_state.body, line, true, false);
+    add_label(g_team_state.body, "Invite Code", false, true);
+    std::string pretty_code = format_invite_code(g_team_state.invite_code);
+    add_label(g_team_state.body, pretty_code.c_str(), false, false);
+
+    if (g_team_state.invite_expires_s == 0)
+    {
+        snprintf(line, sizeof(line), "Time left: --:--");
+    }
+    else
+    {
+        unsigned minutes = g_team_state.invite_expires_s / 60;
+        unsigned seconds = g_team_state.invite_expires_s % 60;
+        snprintf(line, sizeof(line), "Time left: %02u:%02u", minutes, seconds);
+    }
+    add_label(g_team_state.body, line, false, true);
+    add_label(g_team_state.body, "Tap another device to share key", false, true);
+    add_label(g_team_state.body, "Invite code protects the NFC key", false, true);
+    if (g_team_state.nfc_share_active)
+    {
+        add_label(g_team_state.body, "NFC is active", false, true);
+    }
+
+    int width = kActionBtnWidth2;
+    g_team_state.action_btns[0] = create_action_button("Start NFC", width, handle_invite_start_nfc);
     g_team_state.action_btns[1] = create_action_button("Stop Invite", width, handle_invite_stop);
     register_focus(g_team_state.action_btns[0], true);
     register_focus(g_team_state.action_btns[1]);
@@ -1693,12 +2207,58 @@ void render_join_team()
         register_focus(item, g_team_state.default_focus == nullptr);
     }
 
-    add_label(g_team_state.body, "Or enter invite code", false, true);
+    add_label(g_team_state.body, "Other options", false, true);
+    add_label(g_team_state.body, "• Enter Invite Code (Radio)", false, true);
+    add_label(g_team_state.body, "• Tap to join (NFC)", false, true);
+
+    int width = kActionBtnWidth3;
+    g_team_state.action_btns[0] = create_action_button("Enter Invite Code", width, handle_enter_code_open);
+    g_team_state.action_btns[1] = create_action_button("Join via NFC", width, handle_join_nfc);
+    g_team_state.action_btns[2] = create_action_button("Refresh", width, handle_join_refresh);
+    register_focus(g_team_state.action_btns[0], g_team_state.default_focus == nullptr);
+    register_focus(g_team_state.action_btns[1]);
+    register_focus(g_team_state.action_btns[2]);
+}
+
+void render_join_nfc()
+{
+    update_top_bar_title("Join via NFC");
+
+    add_label(g_team_state.body, "Hold device near leader/device", false, true);
+    uint32_t now = now_secs();
+    uint32_t elapsed = (g_team_state.nfc_scan_started_s == 0) ? 0 : (now - g_team_state.nfc_scan_started_s);
+    uint32_t remaining = (elapsed >= kNfcScanDurationSec) ? 0 : (kNfcScanDurationSec - elapsed);
+    char line[32];
+    snprintf(line, sizeof(line), "Scanning... %us", (unsigned)remaining);
+    add_label(g_team_state.body, line, false, true);
+    add_label(g_team_state.body, "NFC is on only during this screen", false, true);
 
     int width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Enter Code", width, handle_join_enter_code);
-    g_team_state.action_btns[1] = create_action_button("Refresh", width, handle_join_refresh);
-    register_focus(g_team_state.action_btns[0], g_team_state.default_focus == nullptr);
+    g_team_state.action_btns[0] = create_action_button("Cancel", width, handle_join_cancel);
+    register_focus(g_team_state.action_btns[0], true);
+}
+
+void render_enter_code()
+{
+    update_top_bar_title("Enter Code");
+
+    add_label(g_team_state.body, "Code:", true, false);
+    lv_obj_t* textarea = lv_textarea_create(g_team_state.body);
+    lv_textarea_set_one_line(textarea, true);
+    lv_textarea_set_max_length(textarea, static_cast<uint16_t>(kInviteCodeLen));
+    lv_textarea_set_accepted_chars(textarea, "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+    lv_obj_set_width(textarea, LV_PCT(100));
+    lv_textarea_set_placeholder_text(textarea, "______");
+    g_team_state.invite_code_textarea = textarea;
+    register_focus(textarea, true);
+
+    add_label(g_team_state.body, "Radio: request join", false, true);
+    add_label(g_team_state.body, "NFC: decrypt shared key", false, true);
+
+    int width = kActionBtnWidth2;
+    g_team_state.action_btns[0] = create_action_button("Cancel", width, handle_enter_code_cancel);
+    g_team_state.action_btns[1] = create_action_button("Confirm", width, handle_enter_code_confirm);
+    register_focus(g_team_state.action_btns[0]);
     register_focus(g_team_state.action_btns[1]);
 }
 
@@ -1846,8 +2406,17 @@ void render_page()
     case TeamPage::Invite:
         render_invite();
         break;
+    case TeamPage::InviteNfc:
+        render_invite_nfc();
+        break;
     case TeamPage::JoinTeam:
         render_join_team();
+        break;
+    case TeamPage::JoinNfc:
+        render_join_nfc();
+        break;
+    case TeamPage::EnterCode:
+        render_enter_code();
         break;
     case TeamPage::JoinPending:
         render_join_pending();
@@ -1980,6 +2549,8 @@ void team_page_destroy()
     cleanup_team_input();
 
     close_join_request_modal();
+    stop_nfc_share();
+    stop_nfc_scan();
     if (g_team_state.modal_group)
     {
         lv_group_del(g_team_state.modal_group);
@@ -1993,6 +2564,7 @@ void team_page_destroy()
         g_team_state.root = nullptr;
     }
     g_team_state = TeamPageState{};
+    s_state_loaded = false;
 }
 
 void team_page_refresh()
@@ -2047,6 +2619,42 @@ bool team_page_handle_event(sys::Event* event)
     case sys::EventType::SystemTick:
     {
         process_keydist_retries();
+        if (g_team_state.nfc_share_active)
+        {
+            team::nfc::poll_share();
+        }
+        if (g_team_state.nfc_scan_active)
+        {
+            std::vector<uint8_t> payload;
+            if (team::nfc::poll_scan(payload))
+            {
+                g_team_state.nfc_scan_active = false;
+                g_team_state.nfc_payload = std::move(payload);
+                g_team_state.has_nfc_payload = true;
+                g_team_state.page = TeamPage::EnterCode;
+                g_team_state.nav_stack.clear();
+                changed = true;
+            }
+            else if (g_team_state.nfc_scan_started_s != 0)
+            {
+                uint32_t now = now_secs();
+                if ((now - g_team_state.nfc_scan_started_s) >= kNfcScanDurationSec)
+                {
+                    stop_nfc_scan();
+                    ::ui::SystemNotification::show("NFC scan timed out", 2000);
+                    if (g_team_state.page == TeamPage::JoinNfc)
+                    {
+                        g_team_state.page = TeamPage::JoinTeam;
+                        g_team_state.nav_stack.clear();
+                        changed = true;
+                    }
+                }
+            }
+            if (g_team_state.page == TeamPage::JoinNfc)
+            {
+                changed = true;
+            }
+        }
         if (g_team_state.pending_join && g_team_state.pending_join_started_s != 0)
         {
             uint32_t now = now_secs();

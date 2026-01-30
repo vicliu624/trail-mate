@@ -6,6 +6,7 @@
 #pragma once
 
 #include "team_state.h"
+#include <cstddef>
 
 namespace team
 {
@@ -19,6 +20,7 @@ struct TeamUiSnapshot
     uint32_t pending_join_started_s = 0;
     bool kicked_out = false;
     bool self_is_leader = false;
+    uint32_t last_event_seq = 0;
 
     TeamId team_id{};
     bool has_team_id = false;
@@ -35,6 +37,15 @@ struct TeamUiSnapshot
 
     std::vector<TeamMemberUi> members;
     std::vector<NearbyTeamUi> nearby_teams;
+};
+
+enum class TeamKeyEventType : uint8_t
+{
+    TeamCreated = 1,
+    MemberAccepted = 2,
+    MemberKicked = 3,
+    LeaderTransferred = 4,
+    EpochRotated = 5
 };
 
 class ITeamUiStore
@@ -61,6 +72,24 @@ class TeamUiStoreStub : public ITeamUiStore
 
 ITeamUiStore& team_ui_get_store();
 void team_ui_set_store(ITeamUiStore* store);
+bool team_ui_append_key_event(const TeamId& team_id,
+                              TeamKeyEventType type,
+                              uint32_t event_seq,
+                              uint32_t ts,
+                              const uint8_t* payload,
+                              size_t len);
+bool team_ui_posring_append(const TeamId& team_id,
+                            uint32_t member_id,
+                            int32_t lat_e7,
+                            int32_t lon_e7,
+                            int16_t alt_m,
+                            uint16_t speed_dmps,
+                            uint32_t ts);
+bool team_ui_chatlog_append(const TeamId& team_id,
+                            uint32_t peer_id,
+                            bool incoming,
+                            uint32_t ts,
+                            const std::string& text);
 
 } // namespace ui
 } // namespace team

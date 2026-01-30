@@ -118,6 +118,12 @@ bool TeamController::onStatusPlain(const team::proto::TeamStatus& status,
     return service_.sendStatusPlain(status, channel, dest);
 }
 
+bool TeamController::onPosition(const std::vector<uint8_t>& payload,
+                                chat::ChannelId channel)
+{
+    return service_.sendPosition(payload, channel);
+}
+
 void TeamController::resetUiState()
 {
     state_ = TeamUiState::Idle;

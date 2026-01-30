@@ -232,12 +232,17 @@ class TLoRaPagerBoard : public BoardBase,
      * @param totalDuration Total discovery duration in ms
      * @return true if successful, false otherwise
      */
-    bool startNFCDiscovery(uint8_t techs2Find = RFAL_NFC_POLL_TECH_A, uint16_t totalDuration = 1000);
+    bool startNFCDiscovery(uint16_t techs2Find = RFAL_NFC_POLL_TECH_A, uint16_t totalDuration = 1000);
 
     /**
      * @brief Stop NFC discovery mode
      */
     void stopNFCDiscovery();
+
+    /**
+     * @brief Poll NFC interrupt registers (IRQ line free)
+     */
+    void pollNfcIrq();
 
     /**
      * @brief Check if NFC is ready

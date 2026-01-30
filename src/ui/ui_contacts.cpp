@@ -94,6 +94,14 @@ void ui_contacts_exit(lv_obj_t* parent)
         delete g_contacts_state.compose_screen;
         g_contacts_state.compose_screen = nullptr;
     }
+    if (g_contacts_state.conversation_screen) {
+        delete g_contacts_state.conversation_screen;
+        g_contacts_state.conversation_screen = nullptr;
+    }
+    if (g_contacts_state.conversation_timer != nullptr) {
+        lv_timer_del(g_contacts_state.conversation_timer);
+        g_contacts_state.conversation_timer = nullptr;
+    }
 
     if (g_contacts_state.refresh_timer != nullptr) {
         lv_timer_del(g_contacts_state.refresh_timer);

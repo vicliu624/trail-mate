@@ -72,6 +72,36 @@ double HalGps::longitude() const
     return board_ != nullptr ? board_->getGPS().location.lng() : 0.0;
 }
 
+bool HalGps::hasAltitude() const
+{
+    return board_ != nullptr && board_->getGPS().altitude.isValid();
+}
+
+double HalGps::altitude() const
+{
+    return board_ != nullptr ? board_->getGPS().altitude.meters() : 0.0;
+}
+
+bool HalGps::hasSpeed() const
+{
+    return board_ != nullptr && board_->getGPS().speed.isValid();
+}
+
+double HalGps::speed() const
+{
+    return board_ != nullptr ? board_->getGPS().speed.mps() : 0.0;
+}
+
+bool HalGps::hasCourse() const
+{
+    return board_ != nullptr && board_->getGPS().course.isValid();
+}
+
+double HalGps::course() const
+{
+    return board_ != nullptr ? board_->getGPS().course.deg() : 0.0;
+}
+
 uint8_t HalGps::satellites() const
 {
     return board_ != nullptr ? board_->getGPS().satellites.value() : 0;

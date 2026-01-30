@@ -24,12 +24,21 @@ enum class TeamPage
     StatusInTeam,
     TeamHome,
     Invite,
+    InviteNfc,
     JoinTeam,
+    JoinNfc,
+    EnterCode,
     JoinPending,
     Members,
     MemberDetail,
     KickConfirm,
     KickedOut
+};
+
+enum class TeamInviteMode
+{
+    Radio,
+    Nfc
 };
 
 struct TeamMemberUi
@@ -77,11 +86,13 @@ struct TeamPageState
 
     TeamPage page = TeamPage::StatusNotInTeam;
     int selected_member_index = -1;
+    TeamInviteMode invite_mode = TeamInviteMode::Radio;
 
     bool in_team = false;
     bool pending_join = false;
     bool kicked_out = false;
     bool self_is_leader = false;
+    uint32_t last_event_seq = 0;
 
     TeamId team_id{};
     bool has_team_id = false;
@@ -97,6 +108,15 @@ struct TeamPageState
     bool has_team_psk = false;
     bool waiting_new_keys = false;
     uint32_t pending_join_started_s = 0;
+    std::array<uint8_t, team::proto::kTeamChannelPskSize> nfc_next_psk{};
+    bool has_nfc_next_psk = false;
+    uint32_t nfc_next_key_id = 0;
+    std::vector<uint8_t> nfc_payload;
+    bool has_nfc_payload = false;
+    bool nfc_share_active = false;
+    bool nfc_scan_active = false;
+    uint32_t nfc_scan_started_s = 0;
+    lv_obj_t* invite_code_textarea = nullptr;
 
     std::vector<TeamMemberUi> members;
     std::vector<NearbyTeamUi> nearby_teams;

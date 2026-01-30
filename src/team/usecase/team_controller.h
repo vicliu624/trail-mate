@@ -49,6 +49,8 @@ class TeamController
                   chat::ChannelId channel, chat::NodeId dest = 0);
     bool onStatusPlain(const team::proto::TeamStatus& status,
                        chat::ChannelId channel, chat::NodeId dest = 0);
+    bool onPosition(const std::vector<uint8_t>& payload,
+                    chat::ChannelId channel);
     TeamService::SendError getLastSendError() const { return service_.getLastSendError(); }
 
     TeamUiState getState() const { return state_; }
