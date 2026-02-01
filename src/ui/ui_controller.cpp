@@ -888,12 +888,8 @@ void UiController::exitToMenu()
     compose_.reset();
     conversation_.reset();
     channel_list_.reset();
-    if (parent_)
-    {
-        lv_obj_del(parent_);
-        parent_ = nullptr;
-    }
-    menu_show();
+    parent_ = nullptr;
+    ui_request_exit_to_menu();
 }
 
 } // namespace ui

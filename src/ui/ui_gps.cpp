@@ -33,13 +33,6 @@ extern void updateUserActivity();
 
 void ui_gps_exit(lv_obj_t* parent);
 
-static void gps_exit_async(void* /*user_data*/)
-{
-    GPS_LOG("[GPS][EXIT] gps_exit_async: ui_gps_exit -> menu_show\n");
-    ui_gps_exit(nullptr);
-    menu_show();
-}
-
 static void gps_top_bar_back(void* /*user_data*/)
 {
     GPS_LOG("[GPS][BACK] gps_top_bar_back: exiting=%d alive=%d root=%p\n",
@@ -50,7 +43,7 @@ static void gps_top_bar_back(void* /*user_data*/)
     }
     g_gps_state.exiting = true;
     GPS_LOG("[GPS][BACK] gps_top_bar_back: scheduling async exit\n");
-    lv_async_call(gps_exit_async, nullptr);
+    ui_request_exit_to_menu();
 }
 
 GPSPageState g_gps_state;

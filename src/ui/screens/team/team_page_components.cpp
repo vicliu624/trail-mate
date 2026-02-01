@@ -1655,9 +1655,7 @@ void nav_back()
         render_page();
         return;
     }
-    reset_team_ui_state();
-    team_page_destroy();
-    menu_show();
+    ui_request_exit_to_menu();
 }
 
 void nav_reset(TeamPage page)

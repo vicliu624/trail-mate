@@ -27,8 +27,22 @@ using namespace contacts::ui;
 
 static void contacts_top_bar_back(void* /*user_data*/)
 {
-    ui_contacts_exit(nullptr);
-    menu_show();
+    if (g_contacts_state.exiting) {
+        return;
+    }
+    g_contacts_state.exiting = true;
+    if (g_contacts_state.refresh_timer != nullptr) {
+        lv_timer_del(g_contacts_state.refresh_timer);
+        g_contacts_state.refresh_timer = nullptr;
+    }
+    if (g_contacts_state.conversation_timer != nullptr) {
+        lv_timer_del(g_contacts_state.conversation_timer);
+        g_contacts_state.conversation_timer = nullptr;
+    }
+    if (g_contacts_state.root) {
+        lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+    }
+    ui_request_exit_to_menu();
 }
 
 void ui_contacts_enter(lv_obj_t* parent)
@@ -43,6 +57,7 @@ void ui_contacts_enter(lv_obj_t* parent)
 
     // Bind services for Contacts screen usage (avoid heavy includes in components)
     app::AppContext& app_ctx = app::AppContext::getInstance();
+    g_contacts_state.exiting = false;
     g_contacts_state.contact_service = &app_ctx.getContactService();
     g_contacts_state.chat_service = &app_ctx.getChatService();
 
@@ -65,6 +80,12 @@ void ui_contacts_enter(lv_obj_t* parent)
     create_filter_panel(content);
     create_list_panel(content);
     create_action_panel(content);
+
+    // Reset mode/focus state on every enter
+    g_contacts_state.current_mode = ContactsMode::Contacts;
+    g_contacts_state.last_action_mode = ContactsMode::Contacts;
+    g_contacts_state.current_page = 0;
+    g_contacts_state.selected_index = -1;
     
     // Initialize input handling
     init_contacts_input();
@@ -72,14 +93,6 @@ void ui_contacts_enter(lv_obj_t* parent)
     // Load data and refresh UI
     refresh_contacts_data();
     refresh_ui();
-    
-    // Create refresh timer (update every 5 seconds)
-    g_contacts_state.refresh_timer = lv_timer_create([](lv_timer_t* timer) {
-        (void)timer;
-        refresh_contacts_data();
-        refresh_ui();
-    }, 5000, nullptr);
-    lv_timer_set_repeat_count(g_contacts_state.refresh_timer, -1);
     
     g_contacts_state.initialized = true;
     CONTACTS_LOG("[Contacts] Contacts page initialized\n");
@@ -91,6 +104,11 @@ void ui_contacts_exit(lv_obj_t* parent)
     CONTACTS_LOG("[Contacts] Exiting Contacts page\n");
     
     if (g_contacts_state.compose_screen) {
+        if (g_contacts_state.compose_ime) {
+            g_contacts_state.compose_ime->detach();
+            delete g_contacts_state.compose_ime;
+            g_contacts_state.compose_ime = nullptr;
+        }
         delete g_contacts_state.compose_screen;
         g_contacts_state.compose_screen = nullptr;
     }

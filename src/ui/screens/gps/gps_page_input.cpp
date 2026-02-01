@@ -470,10 +470,9 @@ static void action_back_exit() {
 
 static void action_back_exit_async(void* /*user_data*/)
 {
-    GPS_LOG("[GPS][BACK] action_back_exit_async: calling ui_gps_exit + menu_show (alive=%d exiting=%d root=%p)\n", g_gps_state.alive, g_gps_state.exiting, g_gps_state.root);
-    extern void ui_gps_exit(lv_obj_t* parent);
-    ui_gps_exit(nullptr);
-    menu_show();
+    GPS_LOG("[GPS][BACK] action_back_exit_async: requesting exit to menu (alive=%d exiting=%d root=%p)\n",
+            g_gps_state.alive, g_gps_state.exiting, g_gps_state.root);
+    ui_request_exit_to_menu();
 }
 
 static void action_zoom_open_popup() {

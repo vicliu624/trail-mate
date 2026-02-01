@@ -106,6 +106,7 @@ struct ContactsPageState {
     chat::ChatService* chat_service = nullptr;
     
     bool initialized = false;
+    bool exiting = false;
 };
 
 extern ContactsPageState g_contacts_state;

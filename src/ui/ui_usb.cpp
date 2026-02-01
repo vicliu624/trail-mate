@@ -212,29 +212,7 @@ static void back_event_handler(lv_event_t *e)
 {
     lv_obj_t *obj = (lv_obj_t *)lv_event_get_target(e);
     if (lv_menu_back_button_is_root(menu, obj)) {
-        // Stop USB MSC
-        should_stop = true;
-        usb_mode_active = false;
-        msc.end();
-        
-        // Re-enable screen sleep now that USB mode is exiting
-        ::enableScreenSleep();
-        
-        // Resume GPS task now that USB mode is exiting
-        TaskHandle_t gps_task_handle = gps::gps_get_task_handle();
-        if (gps_task_handle != NULL) {
-            vTaskResume(gps_task_handle);
-        }
-        
-        // Clean up UI
-        if (status_label) {
-            status_label = NULL;
-        }
-        lv_obj_clean(menu);
-        lv_obj_del(menu);
-        menu = NULL;
-        
-        menu_show();
+        ui_request_exit_to_menu();
     }
 }
 

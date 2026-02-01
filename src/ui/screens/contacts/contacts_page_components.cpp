@@ -300,12 +300,6 @@ void create_filter_panel(lv_obj_t* parent)
         lv_obj_add_event_cb(g_contacts_state.team_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
     }
 
-    // TopBar back button must be reachable by rotary and also respond to press
-    // (Press should exit page, not enter List column)
-    if (g_contacts_state.top_bar.back_btn) {
-        lv_obj_add_event_cb(g_contacts_state.top_bar.back_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
-    }
-
     // Keep highlight consistent with mode using CHECKED state
     // (visual-only; does not change behavior)
     if (g_contacts_state.contacts_btn && g_contacts_state.nearby_btn && g_contacts_state.broadcast_btn) {
@@ -377,6 +371,7 @@ static void on_filter_focused(lv_event_t* e)
         g_contacts_state.current_mode = new_mode;
         g_contacts_state.current_page = 0;
         g_contacts_state.selected_index = -1;
+        refresh_contacts_data();
         refresh_ui();  // 旋转到另一个按钮，就刷新第二列
     }
 }
@@ -385,15 +380,10 @@ static void on_filter_clicked(lv_event_t* e)
 {
     lv_obj_t* tgt = (lv_obj_t*)lv_event_get_target(e);
 
-    // Press on topbar back: let topbar handle exit (its own CLICKED callback)
-    if (tgt == g_contacts_state.top_bar.back_btn) {
-        lv_obj_send_event(tgt, LV_EVENT_CLICKED, nullptr);
-        return;
-    }
-
     // Press on Contacts/Nearby: move focus to List column
     contacts_focus_to_list();
 }
+
 
 
 static void on_list_item_clicked(lv_event_t* e)

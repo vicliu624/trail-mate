@@ -43,7 +43,8 @@ void init_once()
     s_inited = true;
 
     lv_style_init(&s_root);
-    lv_style_set_bg_opa(&s_root, LV_OPA_TRANSP);
+    lv_style_set_bg_color(&s_root, lv_color_white());
+    lv_style_set_bg_opa(&s_root, LV_OPA_COVER);
     lv_style_set_border_width(&s_root, 0);
     lv_style_set_pad_all(&s_root, 0);
 
@@ -54,20 +55,23 @@ void init_once()
     lv_style_set_pad_all(&s_header, 0);
 
     lv_style_init(&s_content);
-    lv_style_set_bg_opa(&s_content, LV_OPA_TRANSP);
+    lv_style_set_bg_color(&s_content, lv_color_white());
+    lv_style_set_bg_opa(&s_content, LV_OPA_COVER);
     lv_style_set_border_width(&s_content, 0);
     lv_style_set_pad_all(&s_content, 0);
     lv_style_set_pad_top(&s_content, 3);
 
     lv_style_init(&s_body);
-    lv_style_set_bg_opa(&s_body, LV_OPA_TRANSP);
+    lv_style_set_bg_color(&s_body, lv_color_white());
+    lv_style_set_bg_opa(&s_body, LV_OPA_COVER);
     lv_style_set_border_width(&s_body, 0);
     lv_style_set_pad_all(&s_body, 6);
     lv_style_set_pad_row(&s_body, 6);
     lv_style_set_pad_column(&s_body, 0);
 
     lv_style_init(&s_actions);
-    lv_style_set_bg_opa(&s_actions, LV_OPA_TRANSP);
+    lv_style_set_bg_color(&s_actions, lv_color_white());
+    lv_style_set_bg_opa(&s_actions, LV_OPA_COVER);
     lv_style_set_border_width(&s_actions, 0);
     lv_style_set_pad_all(&s_actions, 4);
     lv_style_set_pad_row(&s_actions, 0);

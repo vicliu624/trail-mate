@@ -20,14 +20,7 @@ static void back_event_handler(lv_event_t *e)
 {
     lv_obj_t *obj = (lv_obj_t *)lv_event_get_target(e);
     if (obj == chat_container || lv_obj_get_parent(obj) == chat_container) {
-        // Return to main menu
-        if (chat_container) {
-            lv_obj_clean(chat_container);
-            lv_obj_del(chat_container);
-            chat_container = NULL;
-        }
-        ui_controller.reset();
-        menu_show();
+        ui_request_exit_to_menu();
     }
 }
 
