@@ -788,7 +788,8 @@ void TLoRaPagerBoard::vibrator()
     log_d("[vibrator] Enabling power and starting vibration (effect=%d)...", _haptic_effects);
     powerControl(POWER_HAPTIC_DRIVER, true);
     drv.setWaveform(0, _haptic_effects);
-    drv.setWaveform(1, 0);
+    drv.setWaveform(1, _haptic_effects);
+    drv.setWaveform(2, 0);
     drv.run();
     log_d("[vibrator] Vibration started, setting up stop timer...");
 

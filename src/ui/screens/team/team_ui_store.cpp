@@ -11,6 +11,7 @@
 #include <string>
 #include <cstring>
 #include <cmath>
+#include <algorithm>
 
 namespace team
 {
@@ -38,7 +39,8 @@ constexpr uint16_t kSnapshotVersion = 1;
 constexpr uint16_t kEventVersion = 1;
 constexpr uint8_t kKeysVersion = 1;
 constexpr uint8_t kPosringVersion = 1;
-constexpr uint8_t kChatlogVersion = 1;
+constexpr uint8_t kChatlogVersionV1 = 1;
+constexpr uint8_t kChatlogVersionV2 = 2;
 
 constexpr uint8_t kRoleNone = 0;
 constexpr uint8_t kRoleMember = 1;
@@ -1155,11 +1157,124 @@ bool team_ui_posring_append(const TeamId& team_id,
     return true;
 }
 
+bool team_ui_posring_load_latest(const TeamId& team_id,
+                                 std::vector<TeamPosSample>& out)
+{
+    out.clear();
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    std::string dir = team_dir_from_id(team_id);
+    std::string dir_path = std::string(kBaseDir) + "/" + dir;
+    std::string path = dir_path + "/" + kPosringName;
+    if (!SD.exists(path.c_str()))
+    {
+        return false;
+    }
+    File f = SD.open(path.c_str(), FILE_READ);
+    if (!f)
+    {
+        return false;
+    }
+    uint32_t write_offset = 0;
+    if (!read_posring_header(f, write_offset))
+    {
+        f.close();
+        return false;
+    }
+    if (f.size() < kPosHeaderSize + kPosRecSize)
+    {
+        f.close();
+        return false;
+    }
+    size_t data_size = kPosRingCapacity;
+    if (kPosHeaderSize + data_size > f.size())
+    {
+        data_size = f.size() - kPosHeaderSize;
+    }
+    std::vector<uint8_t> buf(data_size);
+    f.seek(kPosHeaderSize);
+    bool ok = (f.read(buf.data(), buf.size()) == buf.size());
+    f.close();
+    if (!ok)
+    {
+        return false;
+    }
+
+    for (size_t base = 0; base + kPosRecSize <= buf.size(); base += kPosRecSize)
+    {
+        size_t off = base;
+        uint16_t magic = 0;
+        uint8_t ver = 0;
+        uint8_t flags = 0;
+        uint32_t ts = 0;
+        uint32_t member_id = 0;
+        uint32_t lat_u = 0;
+        uint32_t lon_u = 0;
+        uint16_t alt_u = 0;
+        uint16_t speed_u = 0;
+        if (!read_u16(buf, off, magic) ||
+            !read_u8(buf, off, ver) ||
+            !read_u8(buf, off, flags) ||
+            !read_u32(buf, off, ts) ||
+            !read_u32(buf, off, member_id) ||
+            !read_u32(buf, off, lat_u) ||
+            !read_u32(buf, off, lon_u) ||
+            !read_u16(buf, off, alt_u) ||
+            !read_u16(buf, off, speed_u))
+        {
+            break;
+        }
+        if (magic != 0x5053 || ver != kPosringVersion || ts == 0)
+        {
+            continue;
+        }
+        (void)flags;
+        TeamPosSample sample;
+        sample.member_id = member_id;
+        sample.lat_e7 = static_cast<int32_t>(lat_u);
+        sample.lon_e7 = static_cast<int32_t>(lon_u);
+        sample.alt_m = static_cast<int16_t>(alt_u);
+        sample.speed_dmps = speed_u;
+        sample.ts = ts;
+
+        auto it = std::find_if(out.begin(), out.end(),
+                               [&](const TeamPosSample& s) { return s.member_id == member_id; });
+        if (it == out.end())
+        {
+            out.push_back(sample);
+        }
+        else if (sample.ts > it->ts)
+        {
+            *it = sample;
+        }
+    }
+    return !out.empty();
+}
+
 bool team_ui_chatlog_append(const TeamId& team_id,
                             uint32_t peer_id,
                             bool incoming,
                             uint32_t ts,
                             const std::string& text)
+{
+    std::vector<uint8_t> payload;
+    payload.assign(text.begin(), text.end());
+    return team_ui_chatlog_append_structured(team_id,
+                                             peer_id,
+                                             incoming,
+                                             ts,
+                                             team::proto::TeamChatType::Text,
+                                             payload);
+}
+
+bool team_ui_chatlog_append_structured(const TeamId& team_id,
+                                       uint32_t peer_id,
+                                       bool incoming,
+                                       uint32_t ts,
+                                       team::proto::TeamChatType type,
+                                       const std::vector<uint8_t>& payload)
 {
     std::string dir_path;
     if (!ensure_team_dir_for_id(team_id, dir_path))
@@ -1168,7 +1283,7 @@ bool team_ui_chatlog_append(const TeamId& team_id,
     }
 
     std::string path = dir_path + "/" + kChatlogName;
-    size_t record_len = 2 + 1 + 1 + 4 + 4 + 2 + 2 + text.size();
+    size_t record_len = 2 + 1 + 1 + 4 + 4 + 1 + 3 + 2 + 2 + payload.size();
     if (SD.exists(path.c_str()))
     {
         File f = SD.open(path.c_str(), FILE_READ);
@@ -1194,20 +1309,151 @@ bool team_ui_chatlog_append(const TeamId& team_id,
         return false;
     }
     out.write(reinterpret_cast<const uint8_t*>("CH"), 2);
-    write_u8(out, kChatlogVersion);
+    write_u8(out, kChatlogVersionV2);
     write_u8(out, incoming ? 1 : 0);
     write_u32(out, ts);
     write_u32(out, peer_id);
-    uint16_t text_len = static_cast<uint16_t>(text.size());
-    write_u16(out, text_len);
+    write_u8(out, static_cast<uint8_t>(type));
+    write_u8(out, 0);
+    write_u8(out, 0);
+    write_u8(out, 0);
+    uint16_t payload_len = static_cast<uint16_t>(payload.size());
+    write_u16(out, payload_len);
     write_u16(out, 0);
-    if (text_len > 0)
+    if (payload_len > 0)
     {
-        out.write(reinterpret_cast<const uint8_t*>(text.data()), text_len);
+        out.write(payload.data(), payload_len);
     }
     out.flush();
     out.close();
     return true;
+}
+
+bool team_ui_chatlog_load_recent(const TeamId& team_id,
+                                 size_t max_count,
+                                 std::vector<TeamChatLogEntry>& out)
+{
+    out.clear();
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    std::string dir_path;
+    if (!ensure_team_dir_for_id(team_id, dir_path))
+    {
+        return false;
+    }
+    std::string path = dir_path + "/" + kChatlogName;
+    if (!SD.exists(path.c_str()))
+    {
+        return false;
+    }
+    File f = SD.open(path.c_str(), FILE_READ);
+    if (!f)
+    {
+        return false;
+    }
+    size_t file_size = f.size();
+    if (file_size == 0)
+    {
+        f.close();
+        return false;
+    }
+    std::vector<uint8_t> buf(file_size);
+    bool ok = (f.read(buf.data(), buf.size()) == buf.size());
+    f.close();
+    if (!ok)
+    {
+        return false;
+    }
+
+    size_t off = 0;
+    while (off + 4 <= buf.size())
+    {
+        if (buf[off] != 'C' || buf[off + 1] != 'H')
+        {
+            break;
+        }
+        off += 2;
+        uint8_t version = buf[off++];
+        uint8_t flags = buf[off++];
+        TeamChatLogEntry entry;
+        entry.incoming = (flags & 0x01) != 0;
+
+        uint32_t ts = 0;
+        uint32_t peer_id = 0;
+        uint16_t payload_len = 0;
+
+        if (version == kChatlogVersionV1)
+        {
+            if (!read_u32(buf, off, ts) ||
+                !read_u32(buf, off, peer_id))
+            {
+                break;
+            }
+            uint16_t text_len = 0;
+            uint16_t reserved = 0;
+            if (!read_u16(buf, off, text_len) ||
+                !read_u16(buf, off, reserved))
+            {
+                break;
+            }
+            if (off + text_len > buf.size())
+            {
+                break;
+            }
+            entry.type = team::proto::TeamChatType::Text;
+            entry.ts = ts;
+            entry.peer_id = peer_id;
+            if (text_len > 0)
+            {
+                entry.payload.assign(buf.begin() + off, buf.begin() + off + text_len);
+            }
+            off += text_len;
+        }
+        else if (version == kChatlogVersionV2)
+        {
+            if (!read_u32(buf, off, ts) ||
+                !read_u32(buf, off, peer_id))
+            {
+                break;
+            }
+            if (off + 4 > buf.size())
+            {
+                break;
+            }
+            entry.type = static_cast<team::proto::TeamChatType>(buf[off]);
+            off += 4;
+            uint16_t reserved = 0;
+            if (!read_u16(buf, off, payload_len) ||
+                !read_u16(buf, off, reserved))
+            {
+                break;
+            }
+            if (off + payload_len > buf.size())
+            {
+                break;
+            }
+            entry.ts = ts;
+            entry.peer_id = peer_id;
+            if (payload_len > 0)
+            {
+                entry.payload.assign(buf.begin() + off, buf.begin() + off + payload_len);
+            }
+            off += payload_len;
+        }
+        else
+        {
+            break;
+        }
+
+        if (max_count > 0 && out.size() >= max_count)
+        {
+            out.erase(out.begin());
+        }
+        out.push_back(std::move(entry));
+    }
+    return !out.empty();
 }
 
 } // namespace ui

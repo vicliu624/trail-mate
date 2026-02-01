@@ -2,6 +2,7 @@
 
 #include "../../chat/ports/i_mesh_adapter.h"
 #include "../domain/team_types.h"
+#include "../protocol/team_chat.h"
 #include "../ports/i_team_crypto.h"
 #include "../ports/i_team_event_sink.h"
 #include <vector>
@@ -57,6 +58,11 @@ class TeamService
                       chat::ChannelId channel);
     bool sendWaypoint(const std::vector<uint8_t>& payload,
                       chat::ChannelId channel);
+    bool sendChat(const team::proto::TeamChatMessage& msg,
+                  chat::ChannelId channel);
+    bool requestNodeInfo(chat::NodeId dest, bool want_response);
+    bool startPkiVerification(chat::NodeId dest);
+    bool submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number);
     SendError getLastSendError() const { return last_send_error_; }
 
   private:

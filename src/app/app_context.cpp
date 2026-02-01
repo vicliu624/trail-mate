@@ -10,6 +10,7 @@
 #include "../ui/ui_team.h"
 #include "../ui/widgets/system_notification.h"
 #include "../ui/ui_common.h"
+#include "../team/protocol/team_chat.h"
 #ifdef USING_ST25R3916
 #include "../team/infra/nfc/team_nfc.h"
 #endif
@@ -181,6 +182,72 @@ void AppContext::update()
             ui::SystemNotification::show(msg_event->text, 3000);
             break;
         }
+        case sys::EventType::TeamChat:
+        {
+            sys::TeamChatEvent* team_event = (sys::TeamChatEvent*)event;
+            if (board_)
+            {
+                board_->vibrator();
+            }
+            std::string notice = "Team: ";
+            const auto& msg = team_event->data.msg;
+            if (msg.header.type == team::proto::TeamChatType::Text)
+            {
+                std::string text(msg.payload.begin(), msg.payload.end());
+                if (text.size() > 48)
+                {
+                    text = text.substr(0, 45) + "...";
+                }
+                notice += text;
+            }
+            else if (msg.header.type == team::proto::TeamChatType::Location)
+            {
+                team::proto::TeamChatLocation loc;
+                if (team::proto::decodeTeamChatLocation(msg.payload.data(), msg.payload.size(), &loc) &&
+                    !loc.label.empty())
+                {
+                    notice += "Location: " + loc.label;
+                }
+                else
+                {
+                    notice += "Location";
+                }
+            }
+            else if (msg.header.type == team::proto::TeamChatType::Command)
+            {
+                team::proto::TeamChatCommand cmd;
+                if (team::proto::decodeTeamChatCommand(msg.payload.data(), msg.payload.size(), &cmd))
+                {
+                    const char* name = "Command";
+                    switch (cmd.cmd_type)
+                    {
+                    case team::proto::TeamCommandType::RallyTo:
+                        name = "RallyTo";
+                        break;
+                    case team::proto::TeamCommandType::MoveTo:
+                        name = "MoveTo";
+                        break;
+                    case team::proto::TeamCommandType::Hold:
+                        name = "Hold";
+                        break;
+                    default:
+                        break;
+                    }
+                    notice += "Command: ";
+                    notice += name;
+                }
+                else
+                {
+                    notice += "Command";
+                }
+            }
+            else
+            {
+                notice += "Message";
+            }
+            ui::SystemNotification::show(notice.c_str(), 3000);
+            break;
+        }
         case sys::EventType::ChatSendResult:
         {
             sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
@@ -296,6 +363,7 @@ void AppContext::update()
             event->type == sys::EventType::TeamStatus ||
             event->type == sys::EventType::TeamPosition ||
             event->type == sys::EventType::TeamWaypoint ||
+            event->type == sys::EventType::TeamChat ||
             event->type == sys::EventType::TeamError ||
             event->type == sys::EventType::SystemTick)
         {

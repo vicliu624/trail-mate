@@ -1,6 +1,7 @@
 #pragma once
 
 #include "team_types.h"
+#include "../protocol/team_chat.h"
 #include "../protocol/team_mgmt.h"
 #include <cstdint>
 #include <vector>
@@ -80,6 +81,12 @@ struct TeamWaypointEvent
 {
     TeamEventContext ctx;
     std::vector<uint8_t> payload;
+};
+
+struct TeamChatEvent
+{
+    TeamEventContext ctx;
+    team::proto::TeamChatMessage msg;
 };
 
 enum class TeamProtocolError

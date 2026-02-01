@@ -506,6 +506,7 @@ static void load_tile_image(TileContext& ctx, MapTile &tile)
         lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
         lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
         style_tile_obj(tile.img_obj);
+        lv_obj_move_background(tile.img_obj);
         
         if (cached && cached->img_dsc != NULL) {
             // Use cached decoded image (no PNG decode needed)
@@ -866,6 +867,7 @@ static void layout_loaded_tile_objects(TileContext& ctx)
                 lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
                 lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
                 style_placeholder_label(tile.img_obj);
+                lv_obj_move_background(tile.img_obj);
                 
                 // Set text content: z/x/y format
                 char coord_text[32];

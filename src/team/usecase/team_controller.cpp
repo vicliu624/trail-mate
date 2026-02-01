@@ -124,6 +124,27 @@ bool TeamController::onPosition(const std::vector<uint8_t>& payload,
     return service_.sendPosition(payload, channel);
 }
 
+bool TeamController::onChat(const team::proto::TeamChatMessage& msg,
+                            chat::ChannelId channel)
+{
+    return service_.sendChat(msg, channel);
+}
+
+bool TeamController::requestNodeInfo(chat::NodeId dest, bool want_response)
+{
+    return service_.requestNodeInfo(dest, want_response);
+}
+
+bool TeamController::startPkiVerification(chat::NodeId dest)
+{
+    return service_.startPkiVerification(dest);
+}
+
+bool TeamController::submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number)
+{
+    return service_.submitPkiNumber(dest, nonce, number);
+}
+
 void TeamController::resetUiState()
 {
     state_ = TeamUiState::Idle;

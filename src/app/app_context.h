@@ -100,6 +100,11 @@ class AppContext
         return config_;
     }
 
+    chat::NodeId getSelfNodeId() const
+    {
+        return mesh_adapter_ ? mesh_adapter_->getNodeId() : 0;
+    }
+
     void saveConfig()
     {
         config_.save(preferences_);

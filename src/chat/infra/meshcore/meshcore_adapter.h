@@ -50,6 +50,7 @@ class MeshCoreAdapter : public IMeshAdapter
     void applyConfig(const MeshConfig& config) override;
 
     bool isReady() const override;
+    NodeId getNodeId() const override { return 0; }
 
     /**
      * @brief Poll for incoming raw packet data

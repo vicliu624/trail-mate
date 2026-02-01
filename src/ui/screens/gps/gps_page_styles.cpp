@@ -361,6 +361,7 @@ void apply_all(const layout::Widgets& w, const layout::Spec& spec)
     if (w.map) lv_obj_add_style(w.map, &s_map_black, LV_PART_MAIN);
 
     apply_panel(w.panel, spec);
+    apply_panel(w.member_panel, spec);
     apply_resolution_label(w.resolution_label, spec);
 
     apply_control_button(w.zoom_btn);

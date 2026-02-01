@@ -34,6 +34,7 @@ struct GPSPageState {
     lv_obj_t *map = nullptr;
     lv_obj_t *resolution_label = nullptr;  // Resolution display label (bottom-left)
     lv_obj_t *panel = nullptr;
+    lv_obj_t *member_panel = nullptr;
     lv_obj_t *zoom = nullptr;
     lv_obj_t *pos = nullptr;
     lv_obj_t *pan_h = nullptr;  // Horizontal pan button
@@ -92,6 +93,25 @@ struct GPSPageState {
     std::string tracker_file{};
     std::vector<TrackOverlayPoint> tracker_points;
     std::vector<lv_point_t> tracker_screen_points;
+
+    std::vector<lv_obj_t*> member_btns;
+    std::vector<uint32_t> member_btn_ids;
+    uint32_t member_list_hash = 0;
+    uint32_t member_panel_last_ms = 0;
+    uint32_t selected_member_id = 0xFFFFFFFFu;
+
+    struct TeamMarker
+    {
+        uint32_t member_id = 0;
+        int32_t lat_e7 = 0;
+        int32_t lon_e7 = 0;
+        uint32_t ts = 0;
+        uint32_t color = 0;
+        lv_obj_t* obj = nullptr;
+        lv_obj_t* label = nullptr;
+    };
+    std::vector<TeamMarker> team_markers;
+    uint32_t team_marker_last_ms = 0;
     
     // pan button editing state (for toggle behavior) - DEPRECATED, use edit_mode instead
     bool pan_h_editing = false;  // Horizontal pan button in editing mode (rotary scrolls map)

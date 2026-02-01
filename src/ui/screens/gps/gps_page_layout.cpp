@@ -21,6 +21,7 @@ namespace gps::ui::layout {
  *           [pan_v_label]
  *         [tracker_btn]
  *           [tracker_label]
+ *       [member_panel: top-left column]
  *
  * Tree View
  * root
@@ -28,12 +29,13 @@ namespace gps::ui::layout {
  * `- content
  *    `- map
  *       |- resolution_label
- *       `- panel
- *          |- zoom_btn
- *          |- pos_btn
- *          |- pan_h_btn
- *          |- pan_v_btn
- *          `- tracker_btn
+ *       |- panel
+ *       |  |- zoom_btn
+ *       |  |- pos_btn
+ *       |  |- pan_h_btn
+ *       |  |- pan_v_btn
+ *       |  `- tracker_btn
+ *       `- member_panel
  */
 void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 {
@@ -77,6 +79,14 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     lv_obj_clear_flag(w.panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(w.panel, LV_SCROLLBAR_MODE_OFF);
     lv_obj_align(w.panel, LV_ALIGN_TOP_RIGHT, 0, spec.panel_top_offset);
+
+    w.member_panel = lv_obj_create(w.map);
+    lv_obj_set_size(w.member_panel, spec.member_panel_width, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(w.member_panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(w.member_panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_clear_flag(w.member_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(w.member_panel, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_align(w.member_panel, LV_ALIGN_TOP_LEFT, spec.member_panel_left_offset, spec.member_panel_top_offset);
 
     auto create_control = [&](lv_obj_t*& btn, lv_obj_t*& label, const char* text) {
         btn = lv_btn_create(w.panel);

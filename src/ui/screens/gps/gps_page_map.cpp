@@ -2,12 +2,18 @@
 #include "gps_page_lifetime.h"
 #include "gps_state.h"
 #include "gps_page_components.h"
+#include "gps_page_styles.h"
 #include "../../widgets/map/map_tiles.h"
 #include "gps_constants.h"
 #include "../../gps/gps_hw_status.h"
+#include "../team/team_ui_store.h"
+#include "../team/team_state.h"
+#include "../../../app/app_context.h"
 #include "../../ui_common.h"
 #include "lvgl.h"
 #include <Arduino.h>
+#include <algorithm>
+#include <cstdint>
 #include <cmath>
 #include <cstdio>
 
@@ -58,6 +64,220 @@ static double approx_distance_m(double lat1, double lng1, double lat2, double ln
     double y = dlat;
     return sqrt(x * x + y * y) * kEarthRadiusM;
 }
+
+namespace
+{
+constexpr int kTeamMarkerSize = 10;
+constexpr int kTeamMarkerLabelWidth = 44;
+constexpr int kTeamMarkerLabelOffsetX = 6;
+constexpr int kTeamMarkerLabelOffsetY = 0;
+constexpr uint32_t kTeamMarkerColor = 0x00AEEF;
+constexpr uint32_t kTeamMarkerBorder = 0xFFFFFF;
+constexpr uint32_t kTeamMarkerRefreshMs = 1000;
+constexpr uint32_t kMemberPanelRefreshMs = 2000;
+constexpr uint32_t kInvalidMemberId = 0xFFFFFFFFu;
+
+uint32_t hash_member_list(const std::vector<team::ui::TeamMemberUi>& members)
+{
+    uint32_t h = 2166136261u;
+    auto mix = [&](uint32_t v) {
+        h ^= v;
+        h *= 16777619u;
+    };
+    for (const auto& m : members)
+    {
+        uint32_t node_id = m.node_id;
+        if (node_id == 0)
+        {
+            node_id = app::AppContext::getInstance().getSelfNodeId();
+        }
+        mix(node_id);
+        mix(static_cast<uint32_t>(team::ui::team_color_index_from_node_id(node_id)));
+        for (char c : m.name)
+        {
+            mix(static_cast<uint8_t>(c));
+        }
+    }
+    return h;
+}
+
+void ensure_member_colors(std::vector<team::ui::TeamMemberUi>& members)
+{
+    for (auto& m : members)
+    {
+        uint32_t node_id = m.node_id;
+        if (node_id == 0)
+        {
+            node_id = app::AppContext::getInstance().getSelfNodeId();
+        }
+        m.color_index = team::ui::team_color_index_from_node_id(node_id);
+    }
+}
+
+bool load_team_data(team::TeamId& out_id, std::vector<team::ui::TeamMemberUi>& out_members)
+{
+    if (team::ui::g_team_state.in_team && team::ui::g_team_state.has_team_id)
+    {
+        out_id = team::ui::g_team_state.team_id;
+        out_members = team::ui::g_team_state.members;
+        ensure_member_colors(out_members);
+        return true;
+    }
+
+    team::ui::TeamUiSnapshot snap;
+    if (team::ui::team_ui_get_store().load(snap) && snap.in_team && snap.has_team_id)
+    {
+        out_id = snap.team_id;
+        out_members = snap.members;
+        ensure_member_colors(out_members);
+        return true;
+    }
+    return false;
+}
+
+bool member_exists(const std::vector<team::ui::TeamMemberUi>& members, uint32_t member_id)
+{
+    return std::find_if(members.begin(), members.end(),
+                        [&](const team::ui::TeamMemberUi& m) {
+                            return m.node_id == member_id;
+                        }) != members.end();
+}
+
+const team::ui::TeamMemberUi* find_member(const std::vector<team::ui::TeamMemberUi>& members, uint32_t member_id)
+{
+    auto it = std::find_if(members.begin(), members.end(),
+                           [&](const team::ui::TeamMemberUi& m) {
+                               return m.node_id == member_id;
+                           });
+    if (it == members.end())
+    {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+uint32_t resolve_member_color(const std::vector<team::ui::TeamMemberUi>& members, uint32_t member_id)
+{
+    auto it = std::find_if(members.begin(), members.end(),
+                           [&](const team::ui::TeamMemberUi& m) {
+                               return m.node_id == member_id;
+                           });
+    if (it == members.end())
+    {
+        return kTeamMarkerColor;
+    }
+    if (it->color_index >= team::ui::kTeamMaxMembers)
+    {
+        return kTeamMarkerColor;
+    }
+    return team::ui::team_color_from_index(it->color_index);
+}
+
+lv_color_t marker_text_color(uint32_t color)
+{
+    uint8_t r = static_cast<uint8_t>((color >> 16) & 0xFF);
+    uint8_t g = static_cast<uint8_t>((color >> 8) & 0xFF);
+    uint8_t b = static_cast<uint8_t>(color & 0xFF);
+    uint32_t lum = (static_cast<uint32_t>(r) * 299 +
+                    static_cast<uint32_t>(g) * 587 +
+                    static_cast<uint32_t>(b) * 114) / 1000;
+    return (lum > 160) ? lv_color_black() : lv_color_white();
+}
+
+std::string resolve_member_label(const std::vector<team::ui::TeamMemberUi>& members, uint32_t member_id)
+{
+    std::string contact_name = app::AppContext::getInstance().getContactService().getContactName(member_id);
+    if (!contact_name.empty())
+    {
+        return contact_name;
+    }
+    const team::ui::TeamMemberUi* member = find_member(members, member_id);
+    if (member && !member->name.empty())
+    {
+        return member->name;
+    }
+    char fallback[8];
+    snprintf(fallback, sizeof(fallback), "%04lX", static_cast<unsigned long>(member_id & 0xFFFFu));
+    return std::string(fallback);
+}
+
+std::string resolve_member_label(uint32_t member_id, const std::string& member_name)
+{
+    std::string contact_name = app::AppContext::getInstance().getContactService().getContactName(member_id);
+    if (!contact_name.empty())
+    {
+        return contact_name;
+    }
+    if (!member_name.empty())
+    {
+        return member_name;
+    }
+    char fallback[8];
+    snprintf(fallback, sizeof(fallback), "%04lX", static_cast<unsigned long>(member_id & 0xFFFFu));
+    return std::string(fallback);
+}
+
+lv_obj_t* create_team_marker_obj(uint32_t color)
+{
+    if (!g_gps_state.map)
+    {
+        return nullptr;
+    }
+    lv_obj_t* obj = lv_obj_create(g_gps_state.map);
+    lv_obj_set_size(obj, kTeamMarkerSize, kTeamMarkerSize);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_color(obj, lv_color_hex(kTeamMarkerBorder), LV_PART_MAIN);
+    lv_obj_set_style_border_width(obj, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(obj, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    return obj;
+}
+
+lv_obj_t* create_team_marker_label(const std::string& text, uint32_t color)
+{
+    if (!g_gps_state.map)
+    {
+        return nullptr;
+    }
+    lv_obj_t* label = lv_label_create(g_gps_state.map);
+    lv_label_set_text(label, text.c_str());
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(label, kTeamMarkerLabelWidth);
+    lv_obj_set_style_bg_opa(label, LV_OPA_70, 0);
+    lv_obj_set_style_bg_color(label, lv_color_hex(color), 0);
+    lv_obj_set_style_border_width(label, 0, 0);
+    lv_obj_set_style_pad_hor(label, 3, 0);
+    lv_obj_set_style_pad_ver(label, 1, 0);
+    lv_obj_set_style_radius(label, 4, 0);
+    lv_obj_set_style_text_color(label, marker_text_color(color), 0);
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_SCROLLABLE);
+    return label;
+}
+
+void update_team_marker_label(lv_obj_t* label, const std::string& text, uint32_t color)
+{
+    if (!label)
+    {
+        return;
+    }
+    lv_label_set_text(label, text.c_str());
+    lv_obj_set_style_bg_color(label, lv_color_hex(color), 0);
+    lv_obj_set_style_text_color(label, marker_text_color(color), 0);
+}
+
+int find_team_marker_index(uint32_t member_id)
+{
+    for (size_t i = 0; i < g_gps_state.team_markers.size(); ++i)
+    {
+        if (g_gps_state.team_markers[i].member_id == member_id)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+} // namespace
 
 void update_resolution_display()
 {
@@ -200,6 +420,7 @@ void update_map_tiles(bool lightweight)
         if (g_gps_state.gps_marker != NULL) {
             update_gps_marker_position();
         }
+        update_team_marker_positions();
     }
     
     lv_obj_invalidate(g_gps_state.map);
@@ -275,6 +496,375 @@ void hide_gps_marker()
     }
 }
 
+void clear_team_markers()
+{
+    for (auto& marker : g_gps_state.team_markers)
+    {
+        if (marker.obj)
+        {
+            lv_obj_del(marker.obj);
+            marker.obj = nullptr;
+        }
+        if (marker.label)
+        {
+            lv_obj_del(marker.label);
+            marker.label = nullptr;
+        }
+    }
+    g_gps_state.team_markers.clear();
+}
+
+static void clear_member_panel_buttons()
+{
+    if (g_gps_state.app_group)
+    {
+        for (auto* btn : g_gps_state.member_btns)
+        {
+            if (btn)
+            {
+                lv_group_remove_obj(btn);
+            }
+        }
+    }
+    g_gps_state.member_btns.clear();
+    g_gps_state.member_btn_ids.clear();
+    if (g_gps_state.member_panel)
+    {
+        lv_obj_clean(g_gps_state.member_panel);
+    }
+}
+
+static void update_member_button_states()
+{
+    for (size_t i = 0; i < g_gps_state.member_btns.size(); ++i)
+    {
+        lv_obj_t* btn = g_gps_state.member_btns[i];
+        if (!btn)
+        {
+            continue;
+        }
+        bool selected = (g_gps_state.member_btn_ids[i] == g_gps_state.selected_member_id);
+        lv_obj_set_style_outline_width(btn, selected ? 2 : 0, LV_PART_MAIN);
+        lv_obj_set_style_outline_color(btn, lv_color_hex(kTeamMarkerBorder), LV_PART_MAIN);
+    }
+}
+
+static void select_member(uint32_t member_id)
+{
+    if (member_id == 0)
+    {
+        return;
+    }
+    g_gps_state.selected_member_id = member_id;
+    g_gps_state.team_marker_last_ms = 0;
+    clear_team_markers();
+    update_member_button_states();
+}
+
+static void member_btn_event_cb(lv_event_t* e)
+{
+    if (!is_alive())
+    {
+        return;
+    }
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code != LV_EVENT_CLICKED && code != LV_EVENT_KEY)
+    {
+        return;
+    }
+    if (code == LV_EVENT_KEY)
+    {
+        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
+        if (key != LV_KEY_ENTER)
+        {
+            return;
+        }
+    }
+    extern void updateUserActivity();
+    updateUserActivity();
+    uint32_t member_id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+    if (member_id == 0 || member_id == kInvalidMemberId)
+    {
+        return;
+    }
+    select_member(member_id);
+    refresh_team_markers_from_posring();
+}
+
+static lv_obj_t* create_member_button(const team::ui::TeamMemberUi& member, uint32_t color)
+{
+    if (!g_gps_state.member_panel)
+    {
+        return nullptr;
+    }
+    lv_obj_t* btn = lv_btn_create(g_gps_state.member_panel);
+    lv_obj_set_width(btn, LV_PCT(100));
+    lv_obj_set_height(btn, 28);
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+    gps::ui::styles::apply_control_button(btn);
+    lv_obj_set_style_pad_all(btn, 0, LV_PART_MAIN);
+
+    lv_obj_t* dot = lv_obj_create(btn);
+    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(dot, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(dot, lv_color_hex(kTeamMarkerBorder), LV_PART_MAIN);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_align(dot, LV_ALIGN_LEFT_MID, 3, 0);
+
+    lv_obj_t* label = lv_label_create(btn);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    std::string label_text = resolve_member_label(member.node_id, member.name);
+    lv_label_set_text(label, label_text.c_str());
+    gps::ui::styles::apply_control_button_label(label);
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_obj_set_style_pad_left(label, 16, 0);
+    lv_obj_set_style_pad_right(label, 6, 0);
+    lv_obj_align(label, LV_ALIGN_LEFT_MID, 0, 0);
+
+    return btn;
+}
+
+void refresh_member_panel(bool force)
+{
+    if (!is_alive() || !g_gps_state.member_panel)
+    {
+        return;
+    }
+    uint32_t now_ms = millis();
+    if (!force && (now_ms - g_gps_state.member_panel_last_ms) < kMemberPanelRefreshMs)
+    {
+        return;
+    }
+    g_gps_state.member_panel_last_ms = now_ms;
+
+    team::TeamId team_id{};
+    std::vector<team::ui::TeamMemberUi> members;
+    if (!load_team_data(team_id, members) || members.empty())
+    {
+        if (g_gps_state.member_panel)
+        {
+            lv_obj_add_flag(g_gps_state.member_panel, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (!g_gps_state.member_btns.empty() || g_gps_state.member_list_hash != 0)
+        {
+            clear_member_panel_buttons();
+            g_gps_state.member_list_hash = 0;
+            g_gps_state.selected_member_id = kInvalidMemberId;
+            clear_team_markers();
+        }
+        return;
+    }
+    (void)team_id;
+    lv_obj_clear_flag(g_gps_state.member_panel, LV_OBJ_FLAG_HIDDEN);
+
+    uint32_t hash = hash_member_list(members);
+    bool rebuild = force ||
+                   hash != g_gps_state.member_list_hash ||
+                   members.size() != g_gps_state.member_btns.size();
+
+    if (rebuild)
+    {
+        clear_member_panel_buttons();
+        g_gps_state.member_btn_ids.reserve(members.size());
+        g_gps_state.member_btns.reserve(members.size());
+        for (const auto& m : members)
+        {
+            uint32_t color = resolve_member_color(members, m.node_id);
+            lv_obj_t* btn = create_member_button(m, color);
+            if (!btn)
+            {
+                continue;
+            }
+            void* user_data = reinterpret_cast<void*>(static_cast<uintptr_t>(m.node_id));
+            lv_obj_add_event_cb(btn, member_btn_event_cb, LV_EVENT_CLICKED, user_data);
+            lv_obj_add_event_cb(btn, member_btn_event_cb, LV_EVENT_KEY, user_data);
+            if (g_gps_state.app_group)
+            {
+                lv_group_add_obj(g_gps_state.app_group, btn);
+            }
+            g_gps_state.member_btns.push_back(btn);
+            g_gps_state.member_btn_ids.push_back(m.node_id);
+        }
+        g_gps_state.member_list_hash = hash;
+        fix_ui_elements_position();
+    }
+
+    if (!member_exists(members, g_gps_state.selected_member_id))
+    {
+        g_gps_state.selected_member_id = kInvalidMemberId;
+        clear_team_markers();
+    }
+
+    update_member_button_states();
+}
+
+void update_team_marker_positions()
+{
+    if (!is_alive() || g_gps_state.map == NULL)
+    {
+        return;
+    }
+    if (!g_gps_state.tile_ctx.anchor || !g_gps_state.tile_ctx.anchor->valid)
+    {
+        for (auto& marker : g_gps_state.team_markers)
+        {
+            if (marker.obj)
+            {
+                lv_obj_add_flag(marker.obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (marker.label)
+            {
+                lv_obj_add_flag(marker.label, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        return;
+    }
+    for (auto& marker : g_gps_state.team_markers)
+    {
+        if (!marker.obj)
+        {
+            continue;
+        }
+        double lat = static_cast<double>(marker.lat_e7) / 1e7;
+        double lng = static_cast<double>(marker.lon_e7) / 1e7;
+        int screen_x = 0;
+        int screen_y = 0;
+        if (gps_screen_pos(g_gps_state.tile_ctx, lat, lng, screen_x, screen_y))
+        {
+            lv_obj_set_pos(marker.obj,
+                           screen_x - kTeamMarkerSize / 2,
+                           screen_y - kTeamMarkerSize / 2);
+            lv_obj_clear_flag(marker.obj, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(marker.obj);
+            if (marker.label)
+            {
+                lv_obj_update_layout(marker.label);
+                int label_h = lv_obj_get_height(marker.label);
+                int label_x = screen_x + kTeamMarkerSize / 2 + kTeamMarkerLabelOffsetX;
+                int label_y = screen_y - (label_h / 2) + kTeamMarkerLabelOffsetY;
+                lv_obj_set_pos(marker.label, label_x, label_y);
+                lv_obj_clear_flag(marker.label, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_move_foreground(marker.label);
+            }
+        }
+        else
+        {
+            lv_obj_add_flag(marker.obj, LV_OBJ_FLAG_HIDDEN);
+            if (marker.label)
+            {
+                lv_obj_add_flag(marker.label, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+}
+
+void refresh_team_markers_from_posring()
+{
+    if (!is_alive() || g_gps_state.map == NULL)
+    {
+        return;
+    }
+    if (g_gps_state.selected_member_id == kInvalidMemberId)
+    {
+        clear_team_markers();
+        return;
+    }
+    uint32_t now_ms = millis();
+    if (now_ms - g_gps_state.team_marker_last_ms < kTeamMarkerRefreshMs)
+    {
+        return;
+    }
+    g_gps_state.team_marker_last_ms = now_ms;
+
+    team::TeamId team_id{};
+    std::vector<team::ui::TeamMemberUi> members;
+    if (!load_team_data(team_id, members))
+    {
+        clear_team_markers();
+        return;
+    }
+    if (!member_exists(members, g_gps_state.selected_member_id))
+    {
+        clear_team_markers();
+        return;
+    }
+    std::string label_text = resolve_member_label(members, g_gps_state.selected_member_id);
+
+    std::vector<team::ui::TeamPosSample> samples;
+    if (!team::ui::team_ui_posring_load_latest(team_id, samples))
+    {
+        clear_team_markers();
+        return;
+    }
+    auto sample_it = std::find_if(samples.begin(), samples.end(),
+                                  [&](const team::ui::TeamPosSample& s) {
+                                      return s.member_id == g_gps_state.selected_member_id;
+                                  });
+    if (sample_it == samples.end())
+    {
+        clear_team_markers();
+        return;
+    }
+
+    for (auto it = g_gps_state.team_markers.begin(); it != g_gps_state.team_markers.end(); )
+    {
+        if (it->member_id != g_gps_state.selected_member_id)
+        {
+            if (it->obj)
+            {
+                lv_obj_del(it->obj);
+            }
+            if (it->label)
+            {
+                lv_obj_del(it->label);
+            }
+            it = g_gps_state.team_markers.erase(it);
+            continue;
+        }
+        ++it;
+    }
+
+    uint32_t color = resolve_member_color(members, g_gps_state.selected_member_id);
+    int idx = find_team_marker_index(g_gps_state.selected_member_id);
+    if (idx < 0)
+    {
+        GPSPageState::TeamMarker marker;
+        marker.member_id = sample_it->member_id;
+        marker.lat_e7 = sample_it->lat_e7;
+        marker.lon_e7 = sample_it->lon_e7;
+        marker.ts = sample_it->ts;
+        marker.color = color;
+        marker.obj = create_team_marker_obj(color);
+        marker.label = create_team_marker_label(label_text, color);
+        g_gps_state.team_markers.push_back(marker);
+    }
+    else
+    {
+        auto& marker = g_gps_state.team_markers[idx];
+        marker.lat_e7 = sample_it->lat_e7;
+        marker.lon_e7 = sample_it->lon_e7;
+        marker.ts = sample_it->ts;
+        if (!marker.obj)
+        {
+            marker.obj = create_team_marker_obj(color);
+        }
+        if (!marker.label)
+        {
+            marker.label = create_team_marker_label(label_text, color);
+        }
+        update_team_marker_label(marker.label, label_text, color);
+        if (marker.color != color && marker.obj)
+        {
+            lv_obj_set_style_bg_color(marker.obj, lv_color_hex(color), LV_PART_MAIN);
+            marker.color = color;
+        }
+    }
+
+    update_team_marker_positions();
+}
+
 void tick_loader()
 {
     if (!is_alive()) {
@@ -290,12 +880,6 @@ void tick_loader()
     
     ::tile_loader_step(g_gps_state.tile_ctx);
     
-    static uint32_t last_fix_ui_ms = 0;
-    uint32_t now_ms = millis();
-    if (now_ms - last_fix_ui_ms > 100) {
-        fix_ui_elements_position();
-        last_fix_ui_ms = now_ms;
-    }
     
 }
 

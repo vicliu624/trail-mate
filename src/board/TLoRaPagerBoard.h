@@ -440,7 +440,7 @@ class TLoRaPagerBoard : public BoardBase,
     bool isUsbPresent_bestEffort();
 
     uint32_t devices_probe = 0;    ///< Hardware detection status bitmask
-    uint8_t _haptic_effects = 100; ///< Default haptic effect (very strong buzz for message notification)
+    uint8_t _haptic_effects = 120; ///< Default haptic effect (stronger buzz for message notification)
 };
 
 extern TLoRaPagerBoard& instance;

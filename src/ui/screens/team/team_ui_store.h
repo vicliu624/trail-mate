@@ -6,6 +6,7 @@
 #pragma once
 
 #include "team_state.h"
+#include "../../../team/protocol/team_chat.h"
 #include <cstddef>
 
 namespace team
@@ -48,6 +49,25 @@ enum class TeamKeyEventType : uint8_t
     EpochRotated = 5
 };
 
+struct TeamChatLogEntry
+{
+    bool incoming = false;
+    uint32_t ts = 0;
+    uint32_t peer_id = 0;
+    team::proto::TeamChatType type = team::proto::TeamChatType::Text;
+    std::vector<uint8_t> payload;
+};
+
+struct TeamPosSample
+{
+    uint32_t member_id = 0;
+    int32_t lat_e7 = 0;
+    int32_t lon_e7 = 0;
+    int16_t alt_m = 0;
+    uint16_t speed_dmps = 0;
+    uint32_t ts = 0;
+};
+
 class ITeamUiStore
 {
   public:
@@ -85,11 +105,22 @@ bool team_ui_posring_append(const TeamId& team_id,
                             int16_t alt_m,
                             uint16_t speed_dmps,
                             uint32_t ts);
+bool team_ui_posring_load_latest(const TeamId& team_id,
+                                 std::vector<TeamPosSample>& out);
 bool team_ui_chatlog_append(const TeamId& team_id,
                             uint32_t peer_id,
                             bool incoming,
                             uint32_t ts,
                             const std::string& text);
+bool team_ui_chatlog_append_structured(const TeamId& team_id,
+                                       uint32_t peer_id,
+                                       bool incoming,
+                                       uint32_t ts,
+                                       team::proto::TeamChatType type,
+                                       const std::vector<uint8_t>& payload);
+bool team_ui_chatlog_load_recent(const TeamId& team_id,
+                                 size_t max_count,
+                                 std::vector<TeamChatLogEntry>& out);
 
 } // namespace ui
 } // namespace team

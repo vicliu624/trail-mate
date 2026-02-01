@@ -1,4 +1,4 @@
-# Pager Team Core｜SD-only 持久化方案（完整版）
+﻿﻿﻿﻿﻿﻿# Pager Team Core｜SD-only 持久化方案（完整版）
 
 ## 0. 目标与三条原则
 
@@ -320,6 +320,28 @@ ChatRecHeaderV1 {
 text[text_len]                  // UTF-8
 ```
 
+#### Team chat????????V2, TEAM_CHAT_APP?
+???? TeamChat ?????????? V2 ?? chatlog.log?
+
+```c
+ChatRecHeaderV2 {
+  char   magic[2] = "CH";
+  uint8  version  = 2;
+  uint8  flags;                 // bit0 incoming/outgoing
+
+  uint32 ts;
+  uint32 peer_id;               // sender node_id
+
+  uint8  msg_type;              // 1=Text 2=Location 3=Command
+  uint8  reserved1[3];
+
+  uint16 payload_len;
+  uint16 reserved2;
+}
+payload[payload_len]            // decoded TeamChat payload
+```
+```
+
 #### 上限策略（简单）
 
 * 上限：**256KB** 或 **1000 条**（二选一）
@@ -435,6 +457,7 @@ Member Core                          Mesh                         Leader Core
 ## 9. PosRing / ChatLog 接入点（答疑合并入规范）
 
 ### 9.1 posring.log：从接收写还是从发送写？
+组队模式下 GPS 从 posring.log 渲染队员位置（包含自己）。
 
 ✅ 定稿：**两边都写，并统一走同一个节流器**
 
@@ -454,6 +477,9 @@ Member Core                          Mesh                         Leader Core
 * 本机 GPS 更新处：`TeamCore::onLocalPositionFix(fix)` → `posring_append_throttled(self_id, pos, ts)` → 再决定是否 `TeamService.sendPosition(...)`
 
 ### 9.2 chatlog.log：记录 Mesh chat（Team channel）还是仅 Team 协议？
+决策（v0.1）：队伍聊天使用 TEAM_CHAT_APP；TeamChat 消息按 V2 写入 chatlog.log。
+地图交互：收到消息只弹系统通知；弹窗由 Chat 会话中选中地图标注后触发，显示该位置瓦片地图的裁剪图。
+不要把 TEAM_MGMT_APP 记录到 chatlog.log。
 
 先分清三种消息域：
 

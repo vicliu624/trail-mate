@@ -58,6 +58,70 @@ class IMeshAdapter
     virtual bool pollIncomingData(MeshIncomingData* out) = 0;
 
     /**
+     * @brief Request NodeInfo from a specific node (if supported)
+     * @param dest Destination node (0 for broadcast)
+     * @param want_response Request response if supported
+     * @return true if request queued
+     */
+    virtual bool requestNodeInfo(NodeId dest, bool want_response)
+    {
+        (void)dest;
+        (void)want_response;
+        return false;
+    }
+
+    /**
+     * @brief Start PKI key verification with a remote node (if supported)
+     * @param dest Destination node
+     * @return true if started
+     */
+    virtual bool startKeyVerification(NodeId dest)
+    {
+        (void)dest;
+        return false;
+    }
+
+    /**
+     * @brief Submit PKI verification number (if supported)
+     * @param dest Destination node
+     * @param nonce Verification nonce
+     * @param number Security number
+     * @return true if accepted
+     */
+    virtual bool submitKeyVerificationNumber(NodeId dest, uint64_t nonce, uint32_t number)
+    {
+        (void)dest;
+        (void)nonce;
+        (void)number;
+        return false;
+    }
+
+    /**
+     * @brief Get local node ID (if supported)
+     */
+    virtual NodeId getNodeId() const
+    {
+        return 0;
+    }
+
+    /**
+     * @brief Check if PKI is ready (if supported)
+     */
+    virtual bool isPkiReady() const
+    {
+        return false;
+    }
+
+    /**
+     * @brief Check if PKI public key for node is known (if supported)
+     */
+    virtual bool hasPkiKey(NodeId dest) const
+    {
+        (void)dest;
+        return false;
+    }
+
+    /**
      * @brief Apply mesh configuration
      * @param config Configuration to apply
      */

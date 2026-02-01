@@ -361,6 +361,11 @@ void fix_ui_elements_position()
         lv_obj_move_foreground(g_gps_state.panel);
     }
 
+    if (g_gps_state.member_panel != NULL) {
+        lv_obj_align(g_gps_state.member_panel, LV_ALIGN_TOP_LEFT, 0, 3);
+        lv_obj_move_foreground(g_gps_state.member_panel);
+    }
+
     if (g_gps_state.resolution_label != NULL) {
         lv_obj_align(g_gps_state.resolution_label, LV_ALIGN_BOTTOM_LEFT, 10, -10);
         lv_obj_move_foreground(g_gps_state.resolution_label);

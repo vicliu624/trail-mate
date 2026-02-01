@@ -40,8 +40,14 @@ class MtAdapter : public chat::IMeshAdapter
                      const uint8_t* payload, size_t len,
                      NodeId dest = 0, bool want_ack = false) override;
     bool pollIncomingData(MeshIncomingData* out) override;
+    bool requestNodeInfo(NodeId dest, bool want_response) override;
+    bool startKeyVerification(NodeId node_id) override;
+    bool submitKeyVerificationNumber(NodeId node_id, uint64_t nonce, uint32_t number) override;
+    bool isPkiReady() const override;
+    bool hasPkiKey(NodeId dest) const override;
     void applyConfig(const MeshConfig& config) override;
     bool isReady() const override;
+    NodeId getNodeId() const override { return node_id_; }
 
     /**
      * @brief Poll for incoming raw packet data
@@ -68,22 +74,6 @@ class MtAdapter : public chat::IMeshAdapter
      * @brief Process send queue (call periodically)
      */
     void processSendQueue() override;
-
-    /**
-     * @brief Submit key verification number for ongoing PKI verification
-     * @param node_id Remote node id
-     * @param nonce Verification nonce
-     * @param number Security number
-     * @return true if processed
-     */
-    bool submitKeyVerificationNumber(NodeId node_id, uint64_t nonce, uint32_t number);
-
-    /**
-     * @brief Start PKI key verification with a remote node
-     * @param node_id Remote node id
-     * @return true if sent
-     */
-    bool startKeyVerification(NodeId node_id);
 
   private:
     LoraBoard& board_;

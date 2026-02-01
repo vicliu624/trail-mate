@@ -51,6 +51,11 @@ class TeamController
                        chat::ChannelId channel, chat::NodeId dest = 0);
     bool onPosition(const std::vector<uint8_t>& payload,
                     chat::ChannelId channel);
+    bool onChat(const team::proto::TeamChatMessage& msg,
+                chat::ChannelId channel);
+    bool requestNodeInfo(chat::NodeId dest, bool want_response);
+    bool startPkiVerification(chat::NodeId dest);
+    bool submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number);
     TeamService::SendError getLastSendError() const { return service_.getLastSendError(); }
 
     TeamUiState getState() const { return state_; }

@@ -60,6 +60,11 @@ void TeamEventBusSink::onTeamWaypoint(const TeamWaypointEvent& event)
     sys::EventBus::publish(new sys::TeamWaypointEvent(event), 0);
 }
 
+void TeamEventBusSink::onTeamChat(const TeamChatEvent& event)
+{
+    sys::EventBus::publish(new sys::TeamChatEvent(event), 0);
+}
+
 void TeamEventBusSink::onTeamError(const TeamErrorEvent& event)
 {
     sys::EventBus::publish(new sys::TeamErrorEvent(event), 0);

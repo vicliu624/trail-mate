@@ -91,6 +91,8 @@ const char* teamPortName(uint32_t portnum)
         return "TEAM_POS";
     case team::proto::TEAM_WAYPOINT_APP:
         return "TEAM_WP";
+    case team::proto::TEAM_CHAT_APP:
+        return "TEAM_CHAT";
     default:
         return "TEAM_OTHER";
     }
@@ -348,6 +350,11 @@ bool TeamService::setKeysFromPsk(const TeamId& team_id, uint32_t key_id,
     }
     if (!crypto_.deriveKey(psk, psk_len, "team_wp",
                            keys.wp_key.data(), keys.wp_key.size()))
+    {
+        return false;
+    }
+    if (!crypto_.deriveKey(psk, psk_len, "team_chat",
+                           keys.chat_key.data(), keys.chat_key.size()))
     {
         return false;
     }
@@ -636,6 +643,36 @@ void TeamService::processIncoming()
             TeamWaypointEvent event{makeContext(data, &envelope), plain};
             sink_.onTeamWaypoint(event);
         }
+        else if (data.portnum == team::proto::TEAM_CHAT_APP)
+        {
+            std::string rx_raw_hex = toHex(data.payload.data(), data.payload.size(), data.payload.size());
+            TEAM_LOG("[TEAM] RX TEAM_CHAT raw from=%08lX len=%u hex=%s\n",
+                     static_cast<unsigned long>(data.from),
+                     static_cast<unsigned>(data.payload.size()),
+                     rx_raw_hex.c_str());
+            team::proto::TeamEncrypted envelope;
+            std::vector<uint8_t> plain;
+            if (!decodeEncryptedPayload(data, keys_.chat_key.data(), keys_.chat_key.size(),
+                                        &envelope, plain, true))
+            {
+                continue;
+            }
+
+            logTeamEncrypted("RX", data, envelope, &plain, nullptr, "decrypt-ok");
+            team::proto::TeamChatMessage msg;
+            if (!team::proto::decodeTeamChatMessage(plain.data(), plain.size(), &msg))
+            {
+                emitError(data, TeamProtocolError::DecodeFail, &envelope);
+                continue;
+            }
+            if (msg.header.version != team::proto::kTeamChatVersion)
+            {
+                emitError(data, TeamProtocolError::UnknownVersion, &envelope);
+                continue;
+            }
+            TeamChatEvent event{makeContext(data, &envelope), msg};
+            sink_.onTeamChat(event);
+        }
     }
 }
 
@@ -891,6 +928,73 @@ bool TeamService::sendWaypoint(const std::vector<uint8_t>& payload,
         return false;
     }
     return true;
+}
+
+bool TeamService::sendChat(const team::proto::TeamChatMessage& msg,
+                           chat::ChannelId channel)
+{
+    if (!keys_.valid)
+    {
+        last_send_error_ = SendError::KeysNotReady;
+        TEAM_LOG("[TEAM] TX TEAM_CHAT keys not ready\n");
+        return false;
+    }
+
+    std::vector<uint8_t> plain;
+    if (!team::proto::encodeTeamChatMessage(msg, plain))
+    {
+        last_send_error_ = SendError::EncodeFail;
+        TEAM_LOG("[TEAM] TX TEAM_CHAT encode fail\n");
+        return false;
+    }
+
+    team::proto::TeamEncrypted envelope;
+    std::vector<uint8_t> wire;
+    if (!encodeEncryptedPayload(plain, keys_.chat_key.data(), keys_.chat_key.size(),
+                                &envelope, wire))
+    {
+        last_send_error_ = SendError::EncryptFail;
+        TEAM_LOG("[TEAM] TX TEAM_CHAT encrypt fail plain_len=%u\n",
+                 static_cast<unsigned>(plain.size()));
+        return false;
+    }
+
+    std::string plain_hex = toHex(plain.data(), plain.size(), plain.size());
+    TEAM_LOG("[TEAM] TX TEAM_CHAT plain_len=%u plain_hex=%s\n",
+             static_cast<unsigned>(plain.size()),
+             plain_hex.c_str());
+    std::string wire_hex = toHex(wire.data(), wire.size(), wire.size());
+    TEAM_LOG("[TEAM] TX TEAM_CHAT wire_len=%u wire_hex=%s\n",
+             static_cast<unsigned>(wire.size()),
+             wire_hex.c_str());
+    chat::MeshIncomingData dummy;
+    dummy.portnum = team::proto::TEAM_CHAT_APP;
+    logTeamEncrypted("TX", dummy, envelope, nullptr, nullptr, "encrypt-ok");
+    if (!mesh_.sendAppData(channel, team::proto::TEAM_CHAT_APP,
+                           wire.data(), wire.size(), 0, false))
+    {
+        last_send_error_ = SendError::MeshSendFail;
+        TEAM_LOG("[TEAM] TX TEAM_CHAT send fail wire_len=%u\n",
+                 static_cast<unsigned>(wire.size()));
+        return false;
+    }
+    last_send_error_ = SendError::None;
+    return true;
+}
+
+bool TeamService::requestNodeInfo(chat::NodeId dest, bool want_response)
+{
+    return mesh_.requestNodeInfo(dest, want_response);
+}
+
+bool TeamService::startPkiVerification(chat::NodeId dest)
+{
+    return mesh_.startKeyVerification(dest);
+}
+
+bool TeamService::submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number)
+{
+    return mesh_.submitKeyVerificationNumber(dest, nonce, number);
 }
 
 bool TeamService::decodeEncryptedPayload(const chat::MeshIncomingData& data,
