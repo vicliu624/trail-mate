@@ -453,8 +453,10 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     log_d("Board initialization complete. Hardware online: 0x%08X", devices_probe);
     Serial.printf("[TLoRaPagerBoard::begin] ===== HARDWARE INITIALIZATION COMPLETE =====\n");
     Serial.printf("[TLoRaPagerBoard::begin] devices_probe=0x%08X\n", devices_probe);
-    Serial.printf("[TLoRaPagerBoard::begin] GPS online: %s (HW_GPS_ONLINE=0x%08X)\n",
-                  (devices_probe & HW_GPS_ONLINE) ? "YES" : "NO", HW_GPS_ONLINE);
+    const char* gps_state =
+        (devices_probe & HW_GPS_ONLINE) ? "YES" :
+        ((disable_hw_init & NO_HW_GPS) ? "SKIPPED" : "DEFERRED");
+    Serial.printf("[TLoRaPagerBoard::begin] GPS online: %s\n", gps_state);
     Serial.printf("[TLoRaPagerBoard::begin] NFC online: %s (HW_NFC_ONLINE=0x%08X)\n",
                   (devices_probe & HW_NFC_ONLINE) ? "YES" : "NO", HW_NFC_ONLINE);
 

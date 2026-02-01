@@ -447,7 +447,8 @@ void GpsService::setGPSPowerState(bool enable)
         }
         gps_adapter_.powerOn();
         gps_powered_ = true;
-        gps_adapter_.init();
+        bool init_ok = gps_adapter_.init();
+        Serial.printf("[GPS] init: %s\n", init_ok ? "OK" : "FAIL");
         setCollectionInterval(kGpsSampleIntervalMs);
         if (gps_task_handle_ != nullptr)
         {

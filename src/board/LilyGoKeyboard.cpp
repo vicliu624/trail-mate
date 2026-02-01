@@ -433,10 +433,9 @@ char LilyGoKeyboard::handleSpaceAndNullChar(char keyVal, char& lastKeyVal, bool&
             }
         }
         // 无符号键的配置：上一个键为空字符则当前转换为空格
-        else if (lastKeyVal == '\0')
+        else if (lastKeyVal == '\0' && keyVal == '\0' && pressed)
         {
             keyVal = ' ';
-            pressed = true;
         }
     }
 #endif
