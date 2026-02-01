@@ -20,8 +20,7 @@ namespace
 {
 void on_back(void*)
 {
-    ui_clear_active_app();
-    menu_show();
+    ui_request_exit_to_menu();
 }
 
 void refresh_track_list()
@@ -138,4 +137,3 @@ void cleanup_page()
 } // namespace components
 } // namespace ui
 } // namespace tracker
-

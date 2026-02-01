@@ -7,6 +7,7 @@
 #define UI_COMMON_H
 
 #include "lvgl.h"
+#include "app_screen.h"
 #include "widgets/top_bar.h"
 #include <ctime>
 
@@ -17,6 +18,10 @@ extern lv_group_t *app_g;
 
 void menu_show();
 void ui_clear_active_app();
+AppScreen* ui_get_active_app();
+void ui_switch_to_app(AppScreen* app, lv_obj_t* parent);
+void ui_exit_active_app(lv_obj_t* parent);
+void ui_request_exit_to_menu();
 void set_default_group(lv_group_t *group);
 
 // Menu creation helper (simplified version of factory's create_menu)

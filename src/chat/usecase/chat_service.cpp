@@ -120,7 +120,8 @@ void ChatService::processIncoming()
             msg.peer = incoming.from;
         }
         msg.msg_id = incoming.msg_id;
-        msg.timestamp = incoming.timestamp ? incoming.timestamp : now_message_timestamp();
+        // Use local receive time to avoid sender clock skew.
+        msg.timestamp = now_message_timestamp();
         msg.text = incoming.text;
         msg.status = MessageStatus::Incoming;
 

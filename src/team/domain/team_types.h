@@ -18,6 +18,7 @@ struct TeamKeys
     std::array<uint8_t, kTeamKeySize> mgmt_key{};
     std::array<uint8_t, kTeamKeySize> pos_key{};
     std::array<uint8_t, kTeamKeySize> wp_key{};
+    std::array<uint8_t, kTeamKeySize> chat_key{};
     bool valid = false;
 };
 

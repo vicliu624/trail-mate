@@ -12,6 +12,12 @@
 
 #if LVGL_VERSION_MAJOR == 9
 
+// Test toggles (set to 0 to disable)
+#define LV_TEST_FORCE_DMA_BUF 1
+#define LV_TEST_FORCE_DMA_FULL_SIZE 0
+#define LV_TEST_FLUSH_LOG 1
+#define LV_TEST_FLUSH_SAMPLE 1
+
 static lv_display_t* disp_drv;
 static lv_draw_buf_t draw_buf;
 static lv_indev_t* indev_touch;
@@ -27,6 +33,14 @@ static lv_color16_t* buf1 = nullptr;
 
 static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* color_p)
 {
+#if LV_TEST_FLUSH_LOG
+    static uint32_t s_flush_count = 0;
+    static uint32_t s_flush_last_ms = 0;
+    static lv_area_t s_last_area = {0, 0, 0, 0};
+#if LV_TEST_FLUSH_SAMPLE
+    static uint32_t s_zero_streak = 0;
+#endif
+#endif
     size_t len = lv_area_get_size(area);
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
@@ -39,6 +53,47 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
     plane->pushColors(area->x1, area->y1, w, h, (uint16_t*)color_p);
 
     lv_display_flush_ready(disp_drv);
+
+#if LV_TEST_FLUSH_LOG
+#if LV_TEST_FLUSH_SAMPLE
+    bool all_zero_sample = false;
+    if (color_p && len > 0) {
+        const uint16_t* pix = reinterpret_cast<const uint16_t*>(color_p);
+        size_t step = len / 8;
+        if (step == 0) step = 1;
+        all_zero_sample = true;
+        for (size_t i = 0, idx = 0; i < 8 && idx < len; ++i, idx += step) {
+            if (pix[idx] != 0) {
+                all_zero_sample = false;
+                break;
+            }
+        }
+    }
+    if (all_zero_sample) {
+        s_zero_streak++;
+    } else {
+        s_zero_streak = 0;
+    }
+#endif
+    s_flush_count++;
+    s_last_area = *area;
+    uint32_t now_ms = millis();
+    if (now_ms - s_flush_last_ms >= 1000) {
+        lv_obj_t* scr = lv_screen_active();
+        unsigned child_cnt = scr ? (unsigned)lv_obj_get_child_cnt(scr) : 0;
+        Serial.printf("[LVGL] flush/s=%lu last_area=%d,%d-%d,%d children=%u",
+                      (unsigned long)s_flush_count,
+                      (int)s_last_area.x1, (int)s_last_area.y1,
+                      (int)s_last_area.x2, (int)s_last_area.y2,
+                      child_cnt);
+#if LV_TEST_FLUSH_SAMPLE
+        Serial.printf(" zero_streak=%lu", (unsigned long)s_zero_streak);
+#endif
+        Serial.printf("\n");
+        s_flush_count = 0;
+        s_flush_last_ms = now_ms;
+    }
+#endif
 }
 
 #ifdef USING_INPUT_DEV_TOUCHPAD
@@ -191,12 +246,19 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
     // Allocate display buffers
     // Use DMA-capable memory if board supports DMA, otherwise use PSRAM
     bool useDMA = board.useDMA();
+#if LV_TEST_FORCE_DMA_BUF
+    useDMA = true;
+#endif
     size_t lv_buffer_size = board.width() * board.height() * sizeof(lv_color16_t);
 
     if (useDMA)
     {
         // For DMA, use smaller buffer (1/6 of screen size) and DMA-capable memory
+#if LV_TEST_FORCE_DMA_FULL_SIZE
+        // keep full size for testing if memory allows
+#else
         lv_buffer_size = (board.width() * board.height() / 6) * sizeof(lv_color16_t);
+#endif
         buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
         buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
         log_d("Using DMA buffers, size: %d bytes each", lv_buffer_size);

@@ -11,8 +11,6 @@
 
 namespace chat::ui::conversation::input {
 
-static ChatConversationScreen* s_screen = nullptr;
-
 namespace {
 constexpr int kEncoderKeyRotateUp = 19;
 constexpr int kEncoderKeyRotateDown = 20;
@@ -22,7 +20,7 @@ constexpr lv_coord_t kScrollStep = 24;
 static void on_msg_list_key(lv_event_t* e)
 {
     auto* screen = static_cast<ChatConversationScreen*>(lv_event_get_user_data(e));
-    if (!screen) return;
+    if (!screen || !screen->isAlive()) return;
 
     uint32_t key = lv_event_get_key(e);
 
@@ -52,33 +50,63 @@ static void on_msg_list_key(lv_event_t* e)
     }
 }
 
-void init(ChatConversationScreen* screen)
+void init(ChatConversationScreen* screen, Binding* binding)
 {
-    s_screen = screen;
-    if (!s_screen) {
+    if (!binding) {
+        return;
+    }
+    binding->bound = false;
+    binding->msg_list = screen ? screen->getMsgList() : nullptr;
+    binding->reply_btn = screen ? screen->getReplyBtn() : nullptr;
+    binding->back_btn = screen ? screen->getBackBtn() : nullptr;
+    binding->group = lv_group_get_default();
+
+    if (!screen) {
         CHAT_CONV_INPUT_LOG("[ChatConversationInput] init (no screen)\n");
         return;
     }
-    if (lv_group_t* g = lv_group_get_default()) {
-        if (lv_obj_t* msg_list = s_screen->getMsgList()) {
-            lv_group_add_obj(g, msg_list);
-            lv_group_focus_obj(msg_list);
-            lv_group_set_editing(g, true);
-            lv_obj_add_event_cb(msg_list, on_msg_list_key, LV_EVENT_KEY, s_screen);
-        }
-        if (lv_obj_t* reply_btn = s_screen->getReplyBtn()) {
-            lv_group_add_obj(g, reply_btn);
-        }
-        if (lv_obj_t* back_btn = s_screen->getBackBtn()) {
-            lv_group_add_obj(g, back_btn);
-        }
+    if (!binding->group) {
+        CHAT_CONV_INPUT_LOG("[ChatConversationInput] init (no group)\n");
+        return;
     }
+
+    if (binding->msg_list) {
+        lv_group_add_obj(binding->group, binding->msg_list);
+        lv_group_focus_obj(binding->msg_list);
+        lv_group_set_editing(binding->group, true);
+        lv_obj_add_event_cb(binding->msg_list, on_msg_list_key, LV_EVENT_KEY, screen);
+    }
+    if (binding->reply_btn) {
+        lv_group_add_obj(binding->group, binding->reply_btn);
+    }
+    if (binding->back_btn) {
+        lv_group_add_obj(binding->group, binding->back_btn);
+    }
+    binding->bound = true;
     CHAT_CONV_INPUT_LOG("[ChatConversationInput] init (group focus msg list)\n");
 }
 
-void cleanup()
+void cleanup(Binding* binding)
 {
-    s_screen = nullptr;
+    if (!binding || !binding->bound) {
+        return;
+    }
+    if (binding->group) {
+        if (binding->msg_list) {
+            lv_group_remove_obj(binding->msg_list);
+        }
+        if (binding->reply_btn) {
+            lv_group_remove_obj(binding->reply_btn);
+        }
+        if (binding->back_btn) {
+            lv_group_remove_obj(binding->back_btn);
+        }
+    }
+    binding->msg_list = nullptr;
+    binding->reply_btn = nullptr;
+    binding->back_btn = nullptr;
+    binding->group = nullptr;
+    binding->bound = false;
     CHAT_CONV_INPUT_LOG("[ChatConversationInput] cleanup\n");
 }
 

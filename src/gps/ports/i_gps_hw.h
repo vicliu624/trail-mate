@@ -17,6 +17,12 @@ class IGpsHardware
     virtual bool hasFix() const = 0;
     virtual double latitude() const = 0;
     virtual double longitude() const = 0;
+    virtual bool hasAltitude() const = 0;
+    virtual double altitude() const = 0;
+    virtual bool hasSpeed() const = 0;
+    virtual double speed() const = 0;
+    virtual bool hasCourse() const = 0;
+    virtual double course() const = 0;
     virtual uint8_t satellites() const = 0;
     virtual bool syncTime(uint32_t gps_task_interval_ms) = 0;
 };

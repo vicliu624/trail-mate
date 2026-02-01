@@ -15,6 +15,7 @@
 #include "app/app_context.h"
 #include "display/DisplayConfig.h"
 #include "ui/assets/images.h"
+#include "ui/app_screen.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 
@@ -78,6 +79,7 @@ bool isScreenSleepDisabled();
 // Factory-style menu structure (global for ui_*.cpp access)
 lv_obj_t* main_screen = nullptr;
 lv_obj_t* menu_panel = nullptr;
+lv_obj_t* app_panel = nullptr;
 lv_group_t* menu_g = nullptr;
 lv_group_t* app_g = nullptr;
 lv_obj_t* desc_label = nullptr;
@@ -108,86 +110,63 @@ bool format_menu_time(char* out, size_t out_len)
 }
 
 // App function types (like factory example)
-typedef void (*app_func_t)(lv_obj_t* parent);
+class FunctionAppScreen : public AppScreen {
+public:
+    FunctionAppScreen(const char* name,
+                      const lv_image_dsc_t* icon,
+                      void (*enter)(lv_obj_t*),
+                      void (*exit)(lv_obj_t*))
+        : name_(name), icon_(icon), enter_(enter), exit_(exit) {}
 
-typedef struct
-{
-    app_func_t setup_func_cb;
-    app_func_t exit_func_cb;
-    void* user_data;
-} app_t;
+    const char* name() const override { return name_; }
+    const lv_image_dsc_t* icon() const override { return icon_; }
 
-static app_t* s_active_app = nullptr;
+    void enter(lv_obj_t* parent) override
+    {
+        if (enter_) {
+            enter_(parent);
+        }
+    }
 
-// App entry functions (implemented in ui_*.cpp files, global scope)
+    void exit(lv_obj_t* parent) override
+    {
+        if (exit_) {
+            exit_(parent);
+        }
+    }
 
-app_t ui_gps_main = {
-    .setup_func_cb = ui_gps_enter,
-    .exit_func_cb = ui_gps_exit,
-    .user_data = nullptr,
-};
-
-app_t ui_chat_main = {
-    .setup_func_cb = ui_chat_enter,
-    .exit_func_cb = ui_chat_exit,
-    .user_data = nullptr,
-};
-
-app_t ui_contacts_main = {
-    .setup_func_cb = ui_contacts_enter,
-    .exit_func_cb = ui_contacts_exit,
-    .user_data = nullptr,
-};
-
-app_t ui_team_main = {
-    .setup_func_cb = ui_team_enter,
-    .exit_func_cb = ui_team_exit,
-    .user_data = nullptr,
-};
-
-app_t ui_tracker_main = {
-    .setup_func_cb = ui_tracker_enter,
-    .exit_func_cb = ui_tracker_exit,
-    .user_data = nullptr,
-};
-
-app_t ui_setting_main = {
-    .setup_func_cb = ui_setting_enter,
-    .exit_func_cb = ui_setting_exit,
-    .user_data = nullptr,
+private:
+    const char* name_;
+    const lv_image_dsc_t* icon_;
+    void (*enter_)(lv_obj_t*);
+    void (*exit_)(lv_obj_t*);
 };
 
 // Shutdown app - directly triggers system shutdown
 static void ui_shutdown_enter(lv_obj_t* parent)
 {
+    (void)parent;
     // Directly trigger software shutdown without confirmation dialog
     // The main menu access already implies user intent
     board.softwareShutdown();
 }
 
-app_t ui_shutdown_main = {
-    .setup_func_cb = ui_shutdown_enter,
-    .exit_func_cb = nullptr,
-    .user_data = nullptr,
-};
+static FunctionAppScreen s_gps_app("GPS", &gps_icon, ui_gps_enter, ui_gps_exit);
+static FunctionAppScreen s_tracker_app("Tracker", &tracker_icon, ui_tracker_enter, ui_tracker_exit);
+static FunctionAppScreen s_chat_app("Chat", &Chat, ui_chat_enter, ui_chat_exit);
+static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter, ui_contacts_exit);
+static FunctionAppScreen s_team_app("Team", &team_icon, ui_team_enter, ui_team_exit);
+static FunctionAppScreen s_setting_app("Setting", &Setting, ui_setting_enter, ui_setting_exit);
+static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter, nullptr);
 
 #ifdef ARDUINO_USB_MODE
-app_t ui_usb_main = {
-    .setup_func_cb = ui_usb_enter,
-    .exit_func_cb = ui_usb_exit,
-    .user_data = nullptr,
-};
-#endif
-
-#ifdef ARDUINO_USB_MODE
-const char* kAppNames[8] = {"GPS", "Tracker", "Chat", "Contacts", "Team", "USB Mass Storage", "Setting", "Shutdown"};
-const lv_image_dsc_t* kAppImages[8] = {&gps_icon, &tracker_icon, &Chat, &contact, &team_icon, &img_usb, &Setting, &shutdown};
-app_t* kAppFuncs[8] = {&ui_gps_main, &ui_tracker_main, &ui_chat_main, &ui_contacts_main, &ui_team_main, &ui_usb_main, &ui_setting_main, &ui_shutdown_main};
+static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
+static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
+                                   &s_team_app, &s_usb_app, &s_setting_app, &s_shutdown_app};
 #define NUM_APPS 8
 #else
-const char* kAppNames[7] = {"GPS", "Tracker", "Chat", "Contacts", "Team", "Setting", "Shutdown"};
-const lv_image_dsc_t* kAppImages[7] = {&gps_icon, &tracker_icon, &Chat, &contact, &team_icon, &Setting, &shutdown};
-app_t* kAppFuncs[7] = {&ui_gps_main, &ui_tracker_main, &ui_chat_main, &ui_contacts_main, &ui_team_main, &ui_setting_main, &ui_shutdown_main};
+static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
+                                   &s_team_app, &s_setting_app, &s_shutdown_app};
 #define NUM_APPS 7
 #endif
 
@@ -216,8 +195,11 @@ static void btn_event_cb(lv_event_t* e)
     }
 }
 
-static void create_app(lv_obj_t* parent, const char* name, const lv_image_dsc_t* img, app_t* app_fun)
+static void create_app(lv_obj_t* parent, AppScreen* app)
 {
+    const char* name = app ? app->name() : "";
+    const lv_image_dsc_t* img = app ? app->icon() : nullptr;
+
     lv_obj_t* btn = lv_btn_create(parent);
     lv_coord_t w = 150;
     lv_coord_t h = LV_PCT(100);
@@ -248,23 +230,17 @@ static void create_app(lv_obj_t* parent, const char* name, const lv_image_dsc_t*
         btn, [](lv_event_t* e)
         {
         lv_event_code_t c = lv_event_get_code(e);
-        app_t *func_cb = (app_t *)lv_event_get_user_data(e);
+        auto* target_app = static_cast<AppScreen*>(lv_event_get_user_data(e));
         lv_obj_t *parent = lv_obj_get_child(main_screen, 1);
         if (lv_obj_has_flag(main_screen, LV_OBJ_FLAG_HIDDEN)) {
             return;
         }
         if (c == LV_EVENT_CLICKED) {
             set_default_group(app_g);
-            if (s_active_app && s_active_app != func_cb && s_active_app->exit_func_cb) {
-                (*s_active_app->exit_func_cb)(parent);
-            }
-            if (func_cb->setup_func_cb) {
-                (*func_cb->setup_func_cb)(parent);
-            }
-            s_active_app = func_cb;
+            ui_switch_to_app(target_app, parent);
             menu_hidden();
         } },
-        LV_EVENT_CLICKED, app_fun);
+        LV_EVENT_CLICKED, app);
 }
 
 void menu_name_label_event_cb(lv_event_t* e)
@@ -283,11 +259,6 @@ void menu_name_label_event_cb(lv_event_t* e)
 // App entry functions are implemented in ui_gps.cpp, ui_chat.cpp, ui_setting.cpp
 
 } // namespace
-void ui_clear_active_app()
-{
-    s_active_app = nullptr;
-}
-
 // GPS data access - now provided by TLoRaPagerBoard
 // GPS data collection task is now in TLoRaPagerBoard class
 
@@ -635,7 +606,12 @@ void setup()
 
     /* Create two views for switching menus and app UI */
     menu_panel = lv_tileview_add_tile(main_screen, 0, 0, LV_DIR_HOR);
-    lv_tileview_add_tile(main_screen, 0, 1, LV_DIR_HOR);
+    app_panel = lv_tileview_add_tile(main_screen, 0, 1, LV_DIR_HOR);
+    if (app_panel)
+    {
+        lv_obj_set_style_bg_color(app_panel, lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(app_panel, LV_OPA_COVER, 0);
+    }
 
     lv_obj_set_scrollbar_mode(main_screen, LV_SCROLLBAR_MODE_OFF);
     lv_obj_remove_flag(main_screen, LV_OBJ_FLAG_SCROLLABLE);
@@ -702,7 +678,7 @@ void setup()
     /* Add applications */
     for (int i = 0; i < NUM_APPS; ++i)
     {
-        create_app(panel, kAppNames[i], kAppImages[i], kAppFuncs[i]);
+        create_app(panel, kAppScreens[i]);
         lv_group_add_obj(menu_g, lv_obj_get_child(panel, i));
     }
 
@@ -910,13 +886,21 @@ extern bool ui_usb_is_active();
 
 void loop()
 {
+    static uint32_t last_lvgl_ms = 0;
+    constexpr uint32_t kLvglIntervalMs = 20;
+    uint32_t now_ms = millis();
+
 #ifdef ARDUINO_USB_MODE
     // If USB mode is active, run USB loop (like Launcher's loop() function)
     // This ensures USB tasks get CPU time and prevents other tasks from interfering
     if (ui_usb_is_active())
     {
         // Process LVGL for USB mode
-        lv_timer_handler();
+        if (now_ms - last_lvgl_ms >= kLvglIntervalMs)
+        {
+            last_lvgl_ms = now_ms;
+            lv_timer_handler();
+        }
 
         // Yield to allow USB and other critical tasks to run
         // This is critical for USB stability (like Launcher's yield())
@@ -939,7 +923,6 @@ void loop()
 #if MAIN_TIMING_DEBUG
     static uint32_t last_loop_ms = 0;
     static uint32_t loop_count = 0;
-    uint32_t now_ms = millis();
 
     // Record loop() call interval
     if (last_loop_ms > 0)
@@ -952,21 +935,33 @@ void loop()
     }
     last_loop_ms = now_ms;
     loop_count++;
-
-    uint32_t t_before = millis();
 #endif
 
     // Normal processing only when NOT in low power mode
-    lv_timer_handler();
+    bool run_lvgl = (now_ms - last_lvgl_ms >= kLvglIntervalMs);
+#if MAIN_TIMING_DEBUG
+    uint32_t t_before = 0;
+#endif
+    if (run_lvgl)
+    {
+        last_lvgl_ms = now_ms;
+#if MAIN_TIMING_DEBUG
+        t_before = millis();
+#endif
+        lv_timer_handler();
+    }
 
 #if MAIN_TIMING_DEBUG
-    uint32_t t_after = millis();
-    uint32_t handler_duration = t_after - t_before;
-
-    // Log lv_timer_handler() execution time
-    if (handler_duration > 10)
+    if (run_lvgl)
     {
-        Serial.printf("[MAIN] lv_timer_handler() took %lu ms\n", handler_duration);
+        uint32_t t_after = millis();
+        uint32_t handler_duration = t_after - t_before;
+
+        // Log lv_timer_handler() execution time
+        if (handler_duration > 10)
+        {
+            Serial.printf("[MAIN] lv_timer_handler() took %lu ms\n", handler_duration);
+        }
     }
 #endif
 

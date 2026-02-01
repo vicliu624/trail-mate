@@ -78,6 +78,8 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
     }
 
     motion_control_enabled_ = motion_policy_.begin(motion_adapter_, motion_config_);
+    // Force GPS always-on: do not suspend or gate by motion policy.
+    motion_control_enabled_ = false;
 
     if (motion_control_enabled_ && gps_task_handle_ != nullptr)
     {
@@ -303,6 +305,18 @@ void GpsService::gpsTask(void* pvParameters)
                 {
                     service->gps_state_.lat = service->gps_adapter_.latitude();
                     service->gps_state_.lng = service->gps_adapter_.longitude();
+                    service->gps_state_.has_alt = service->gps_adapter_.hasAltitude();
+                    service->gps_state_.alt_m = service->gps_state_.has_alt
+                                                ? service->gps_adapter_.altitude()
+                                                : 0.0;
+                    service->gps_state_.has_speed = service->gps_adapter_.hasSpeed();
+                    service->gps_state_.speed_mps = service->gps_state_.has_speed
+                                                    ? service->gps_adapter_.speed()
+                                                    : 0.0;
+                    service->gps_state_.has_course = service->gps_adapter_.hasCourse();
+                    service->gps_state_.course_deg = service->gps_state_.has_course
+                                                     ? service->gps_adapter_.course()
+                                                     : 0.0;
                     service->gps_state_.satellites = sat_count;
                     service->gps_state_.valid = true;
                     service->gps_last_update_time_ = millis();
@@ -323,6 +337,12 @@ void GpsService::gpsTask(void* pvParameters)
                 else
                 {
                     service->gps_state_.valid = false;
+                    service->gps_state_.has_alt = false;
+                    service->gps_state_.has_speed = false;
+                    service->gps_state_.has_course = false;
+                    service->gps_state_.alt_m = 0.0;
+                    service->gps_state_.speed_mps = 0.0;
+                    service->gps_state_.course_deg = 0.0;
                     if (was_valid)
                     {
                         GPS_TASK_LOG("[GPS Task] *** FIX LOST *** (loop %lu)\n", loop_count);
@@ -427,7 +447,8 @@ void GpsService::setGPSPowerState(bool enable)
         }
         gps_adapter_.powerOn();
         gps_powered_ = true;
-        gps_adapter_.init();
+        bool init_ok = gps_adapter_.init();
+        Serial.printf("[GPS] init: %s\n", init_ok ? "OK" : "FAIL");
         setCollectionInterval(kGpsSampleIntervalMs);
         if (gps_task_handle_ != nullptr)
         {

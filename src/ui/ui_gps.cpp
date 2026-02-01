@@ -33,13 +33,6 @@ extern void updateUserActivity();
 
 void ui_gps_exit(lv_obj_t* parent);
 
-static void gps_exit_async(void* /*user_data*/)
-{
-    GPS_LOG("[GPS][EXIT] gps_exit_async: ui_gps_exit -> menu_show\n");
-    ui_gps_exit(nullptr);
-    menu_show();
-}
-
 static void gps_top_bar_back(void* /*user_data*/)
 {
     GPS_LOG("[GPS][BACK] gps_top_bar_back: exiting=%d alive=%d root=%p\n",
@@ -50,7 +43,7 @@ static void gps_top_bar_back(void* /*user_data*/)
     }
     g_gps_state.exiting = true;
     GPS_LOG("[GPS][BACK] gps_top_bar_back: scheduling async exit\n");
-    lv_async_call(gps_exit_async, nullptr);
+    ui_request_exit_to_menu();
 }
 
 GPSPageState g_gps_state;
@@ -67,6 +60,7 @@ void assign_layout_widgets(const gps::ui::layout::Widgets& w)
     g_gps_state.map = w.map;
     g_gps_state.resolution_label = w.resolution_label;
     g_gps_state.panel = w.panel;
+    g_gps_state.member_panel = w.member_panel;
     g_gps_state.zoom = w.zoom_btn;
     g_gps_state.pos = w.pos_btn;
     g_gps_state.pan_h = w.pan_h_btn;
@@ -192,6 +186,9 @@ static void gps_update_timer_cb(lv_timer_t* timer)
         update_map_tiles(false);
     }
 
+    refresh_member_panel(false);
+    refresh_team_markers_from_posring();
+
     if (g_gps_state.zoom_modal.is_open()) {
         tick_gps_update(false);
         return;
@@ -289,6 +286,8 @@ void ui_gps_enter(lv_obj_t* parent)
     hide_pan_h_indicator();
     hide_pan_v_indicator();
 
+    refresh_member_panel(true);
+
     if (app_g != NULL) {
         lv_group_set_editing(app_g, false);
     }
@@ -355,6 +354,9 @@ void ui_gps_exit(lv_obj_t* parent)
         remove_if(g_gps_state.tracker_btn);
         remove_if(g_gps_state.pan_h_indicator);
         remove_if(g_gps_state.pan_v_indicator);
+        for (auto* btn : g_gps_state.member_btns) {
+            remove_if(btn);
+        }
         GPS_LOG("[GPS][EXIT] removed objs from group\n");
     }
 

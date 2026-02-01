@@ -10,6 +10,9 @@
 #pragma once
 
 #ifdef USING_ST25R3916
+#ifdef BR
+#undef BR
+#endif
 #include <ndef_buffer.h>
 #include <ndef_class.h>
 #include <ndef_message.h>
@@ -17,9 +20,8 @@
 #include <ndef_record.h>
 #include <ndef_type_wifi.h>
 #include <ndef_types.h>
-#include <ndef_types_mime.h>
-#include <ndef_types_rtd.h>
 #include <nfc_utils.h>
+#include <rfal_rf.h>
 #include <rfal_isoDep.h>
 #include <rfal_nfc.h>
 #include <rfal_nfcDep.h>
@@ -27,7 +29,9 @@
 #include <rfal_nfcb.h>
 #include <rfal_nfcf.h>
 #include <rfal_nfcv.h>
-#include <rfal_rf.h>
+#ifdef rfalRunBlocking
+#undef rfalRunBlocking
+#endif
 #include <rfal_rfst25r3916.h>
 #include <rfal_st25tb.h>
 #include <rfal_st25xv.h>

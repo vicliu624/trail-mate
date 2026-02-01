@@ -63,28 +63,14 @@ void refresh_team_input()
         lv_group_add_obj(s_group, g_team_state.top_bar_widget.back_btn);
     }
 
-    app::AppContext& app_ctx = app::AppContext::getInstance();
-    team::TeamController* controller = app_ctx.getTeamController();
-    team::TeamUiState state = controller ? controller->getState() : team::TeamUiState::Idle;
-
-    if (state == team::TeamUiState::Idle)
+    for (lv_obj_t* obj : g_team_state.focusables)
     {
-        add_if(g_team_state.create_btn);
-        add_if(g_team_state.join_btn);
-        if (g_team_state.create_btn)
-        {
-            lv_group_focus_obj(g_team_state.create_btn);
-        }
+        add_if(obj);
     }
-    else
+
+    if (g_team_state.default_focus)
     {
-        add_if(g_team_state.share_btn);
-        add_if(g_team_state.leave_btn);
-        add_if(g_team_state.disband_btn);
-        if (g_team_state.share_btn)
-        {
-            lv_group_focus_obj(g_team_state.share_btn);
-        }
+        lv_group_focus_obj(g_team_state.default_focus);
     }
 }
 

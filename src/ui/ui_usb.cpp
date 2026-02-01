@@ -12,6 +12,7 @@
 
 #include "ui_usb.h"
 #include "ui_common.h"
+#include "widgets/top_bar.h"
 #include "board/BoardBase.h"
 #include "../gps/gps_service_api.h"
 #include <USB.h>
@@ -28,13 +29,22 @@ extern void enableScreenSleep();
 // GPS task handle is now accessed via GpsService
 
 static lv_obj_t *status_label = NULL;
-static lv_obj_t *menu = NULL;
+static lv_obj_t *root = NULL;
+static lv_obj_t *content = NULL;
+static lv_obj_t *loading_overlay = NULL;
+static lv_obj_t *loading_box = NULL;
+static lv_timer_t *exit_timer = NULL;
+static ui::widgets::TopBar top_bar;
 static USBMSC msc;
 static bool should_stop = false;
 static bool usb_mode_active = false;  // Track if USB mode is active
+static bool usb_exit_started = false;
+static bool usb_stopped = false;
 
 // Forward declarations
-static void back_event_handler(lv_event_t *e);
+static void back_event_handler(void* user_data);
+static void show_loading(const char *message);
+static void stop_usb_async_cb(lv_timer_t* timer);
 static void update_status_message(const char *message);
 static int32_t usbReadCallback(uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize);
 static int32_t usbWriteCallback(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize);
@@ -133,6 +143,66 @@ static void update_status_message(const char *message)
     Serial.printf("[USB] %s\n", message);
 }
 
+static void show_loading(const char *message)
+{
+    lv_obj_t* top_layer = lv_layer_top();
+    if (!top_layer) {
+        return;
+    }
+
+    if (loading_overlay) {
+        lv_obj_del(loading_overlay);
+        loading_overlay = NULL;
+        loading_box = NULL;
+    }
+
+    loading_overlay = lv_obj_create(top_layer);
+    lv_obj_set_size(loading_overlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(loading_overlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(loading_overlay, LV_OPA_70, LV_PART_MAIN);
+    lv_obj_set_style_border_width(loading_overlay, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(loading_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(loading_overlay, LV_OBJ_FLAG_CLICKABLE);
+
+    loading_box = lv_obj_create(loading_overlay);
+    lv_obj_set_size(loading_box, 160, 80);
+    lv_obj_center(loading_box);
+    lv_obj_set_style_bg_color(loading_box, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(loading_box, LV_OPA_90, LV_PART_MAIN);
+    lv_obj_set_style_border_width(loading_box, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(loading_box, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_radius(loading_box, 8, LV_PART_MAIN);
+    lv_obj_clear_flag(loading_box, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* label = lv_label_create(loading_box);
+    lv_label_set_text(label, message ? message : "Loading...");
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_center(label);
+}
+
+static void stop_usb_async_cb(lv_timer_t* timer)
+{
+    if (timer) {
+        lv_timer_del(timer);
+    }
+    exit_timer = NULL;
+
+    if (!usb_stopped) {
+        should_stop = true;
+        usb_mode_active = false;
+        msc.end();
+        ::enableScreenSleep();
+        TaskHandle_t gps_task_handle = gps::gps_get_task_handle();
+        if (gps_task_handle != NULL) {
+            vTaskResume(gps_task_handle);
+        }
+        usb_stopped = true;
+    }
+
+    ui_request_exit_to_menu();
+}
+
 /**
  * @brief Setup USB Mass Storage
  * 
@@ -208,33 +278,22 @@ static void setup_usb_msc()
 /**
  * @brief Back button event handler
  */
-static void back_event_handler(lv_event_t *e)
+static void back_event_handler(void* /*user_data*/)
 {
-    lv_obj_t *obj = (lv_obj_t *)lv_event_get_target(e);
-    if (lv_menu_back_button_is_root(menu, obj)) {
-        // Stop USB MSC
-        should_stop = true;
-        usb_mode_active = false;
-        msc.end();
-        
-        // Re-enable screen sleep now that USB mode is exiting
-        ::enableScreenSleep();
-        
-        // Resume GPS task now that USB mode is exiting
-        TaskHandle_t gps_task_handle = gps::gps_get_task_handle();
-        if (gps_task_handle != NULL) {
-            vTaskResume(gps_task_handle);
-        }
-        
-        // Clean up UI
-        if (status_label) {
-            status_label = NULL;
-        }
-        lv_obj_clean(menu);
-        lv_obj_del(menu);
-        menu = NULL;
-        
-        menu_show();
+    if (usb_exit_started) {
+        return;
+    }
+    usb_exit_started = true;
+    show_loading("Exiting USB...");
+    update_status_message("Stopping USB...");
+
+    if (exit_timer) {
+        lv_timer_del(exit_timer);
+        exit_timer = NULL;
+    }
+    exit_timer = lv_timer_create(stop_usb_async_cb, 100, NULL);
+    if (exit_timer) {
+        lv_timer_set_repeat_count(exit_timer, 1);
     }
 }
 
@@ -243,19 +302,56 @@ static void back_event_handler(lv_event_t *e)
  */
 void ui_usb_enter(lv_obj_t *parent)
 {
+    usb_exit_started = false;
+    usb_stopped = false;
+    if (exit_timer) {
+        lv_timer_del(exit_timer);
+        exit_timer = NULL;
+    }
+
+    if (root) {
+        lv_obj_del(root);
+        root = NULL;
+        content = NULL;
+        status_label = NULL;
+        loading_box = NULL;
+        if (loading_overlay) {
+            lv_obj_del(loading_overlay);
+            loading_overlay = NULL;
+        }
+        top_bar = {};
+    }
+
+    root = lv_obj_create(parent);
+    lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_color(root, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(root, 0, 0);
+    lv_obj_set_style_pad_all(root, 0, 0);
+    lv_obj_clear_flag(root, LV_OBJ_FLAG_SCROLLABLE);
+
+    ::ui::widgets::top_bar_init(top_bar, root);
+    ::ui::widgets::top_bar_set_title(top_bar, "USB Mass Storage");
+    ::ui::widgets::top_bar_set_back_callback(top_bar, back_event_handler, nullptr);
+    ui_update_top_bar_battery(top_bar);
+
+    content = lv_obj_create(root);
+    lv_obj_set_size(content, LV_PCT(100), 0);
+    lv_obj_set_flex_grow(content, 1);
+    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(content, 0, 0);
+    lv_obj_set_style_pad_all(content, 0, 0);
+    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+
     // Check if SD card is ready
     if (!board.isCardReady()) {
         // Show error message
-        menu = create_menu(parent, back_event_handler);
-        lv_obj_t *main_page = lv_menu_page_create(menu, "USB Mass Storage");
-        
-        lv_obj_t *error_label = lv_label_create(main_page);
+        lv_obj_t *error_label = lv_label_create(content);
         lv_label_set_text(error_label, "SD Card Not Found\nPlease insert SD card");
         lv_obj_center(error_label);
         lv_obj_set_style_text_font(error_label, &lv_font_montserrat_18, LV_PART_MAIN);
         lv_obj_set_style_text_color(error_label, lv_color_hex(0xFF0000), LV_PART_MAIN);
-        
-        lv_menu_set_page(menu, main_page);
         return;
     }
     
@@ -271,27 +367,21 @@ void ui_usb_enter(lv_obj_t *parent)
             vTaskSuspend(gps_task_handle);
         }
     
-    // Create menu
-    menu = create_menu(parent, back_event_handler);
-    lv_obj_t *main_page = lv_menu_page_create(menu, "USB Mass Storage");
-    
     // Create status label
-    status_label = lv_label_create(main_page);
+    status_label = lv_label_create(content);
     lv_label_set_text(status_label, "Initializing...");
     lv_obj_center(status_label);
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_18, LV_PART_MAIN);
-    lv_obj_set_style_text_color(status_label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(status_label, lv_color_hex(0x202020), LV_PART_MAIN);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     
     // Create info label
-    lv_obj_t *info_label = lv_label_create(main_page);
+    lv_obj_t *info_label = lv_label_create(content);
     lv_label_set_text(info_label, "Press Back to exit USB mode");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_text_font(info_label, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(info_label, lv_color_hex(0xAAAAAA), LV_PART_MAIN);
-    lv_obj_set_style_text_opa(info_label, LV_OPA_70, LV_PART_MAIN);
-    
-    lv_menu_set_page(menu, main_page);
+    lv_obj_set_style_text_color(info_label, lv_color_hex(0x606060), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(info_label, LV_OPA_80, LV_PART_MAIN);
     
     // Setup USB MSC
     setup_usb_msc();
@@ -313,31 +403,45 @@ void ui_usb_exit(lv_obj_t *parent)
 {
     (void)parent;
     
-    // Signal loop to exit
-    should_stop = true;
-    usb_mode_active = false;
-    
-    if (menu) {
+    if (exit_timer) {
+        lv_timer_del(exit_timer);
+        exit_timer = NULL;
+    }
+
+    if (!usb_stopped) {
+        // Signal loop to exit
+        should_stop = true;
+        usb_mode_active = false;
+
         // Stop USB MSC (similar to Launcher's destructor)
         msc.end();
-        
+
         // Re-enable screen sleep now that USB mode is exiting
         ::enableScreenSleep();
-        
+
         // Resume GPS task now that USB mode is exiting
         TaskHandle_t gps_task_handle = gps::gps_get_task_handle();
         if (gps_task_handle != NULL) {
             vTaskResume(gps_task_handle);
         }
-        
-        // Clean up UI
-        if (status_label) {
-            status_label = NULL;
-        }
-        lv_obj_clean(menu);
-        lv_obj_del(menu);
-        menu = NULL;
+        usb_stopped = true;
     }
+
+    // Clean up UI
+    if (status_label) {
+        status_label = NULL;
+    }
+    if (loading_overlay) {
+        lv_obj_del(loading_overlay);
+        loading_overlay = NULL;
+        loading_box = NULL;
+    }
+    if (root) {
+        lv_obj_del(root);
+        root = NULL;
+    }
+    content = NULL;
+    top_bar = {};
 }
 
 /**

@@ -232,12 +232,17 @@ class TLoRaPagerBoard : public BoardBase,
      * @param totalDuration Total discovery duration in ms
      * @return true if successful, false otherwise
      */
-    bool startNFCDiscovery(uint8_t techs2Find = RFAL_NFC_POLL_TECH_A, uint16_t totalDuration = 1000);
+    bool startNFCDiscovery(uint16_t techs2Find = RFAL_NFC_POLL_TECH_A, uint16_t totalDuration = 1000);
 
     /**
      * @brief Stop NFC discovery mode
      */
     void stopNFCDiscovery();
+
+    /**
+     * @brief Poll NFC interrupt registers (IRQ line free)
+     */
+    void pollNfcIrq();
 
     /**
      * @brief Check if NFC is ready
@@ -269,26 +274,15 @@ class TLoRaPagerBoard : public BoardBase,
      * @brief Check if LoRa is initialized and online
      */
     bool isRadioOnline() const override { return isHardwareOnline(HW_RADIO_ONLINE); }
-    int transmitRadio(const uint8_t* data, size_t len) override { return radio_.transmit(data, len); }
-    int startRadioReceive() override { return radio_.startReceive(); }
-    uint32_t getRadioIrqFlags() override { return radio_.getIrqFlags(); }
-    int getRadioPacketLength(bool update) override { return static_cast<int>(radio_.getPacketLength(update)); }
-    int readRadioData(uint8_t* buf, size_t len) override { return radio_.readData(buf, len); }
-    void clearRadioIrqFlags(uint32_t flags) override { radio_.clearIrqFlags(flags); }
+    int transmitRadio(const uint8_t* data, size_t len) override;
+    int startRadioReceive() override;
+    uint32_t getRadioIrqFlags() override;
+    int getRadioPacketLength(bool update) override;
+    int readRadioData(uint8_t* buf, size_t len) override;
+    void clearRadioIrqFlags(uint32_t flags) override;
     void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                             int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
-                            uint8_t crc_len) override
-    {
-        auto& radio = radio_;
-        radio.setFrequency(freq_mhz);
-        radio.setBandwidth(bw_khz);
-        radio.setSpreadingFactor(sf);
-        radio.setCodingRate(cr_denom);
-        radio.setOutputPower(tx_power);
-        radio.setPreambleLength(preamble_len);
-        radio.setSyncWord(sync_word);
-        radio.setCRC(crc_len);
-    }
+                            uint8_t crc_len) override;
 
     // GpsBoard
     void setGPSOnline(bool online) override { setGPSOnlineInternal(online); }
@@ -435,7 +429,7 @@ class TLoRaPagerBoard : public BoardBase,
     bool isUsbPresent_bestEffort();
 
     uint32_t devices_probe = 0;    ///< Hardware detection status bitmask
-    uint8_t _haptic_effects = 100; ///< Default haptic effect (very strong buzz for message notification)
+    uint8_t _haptic_effects = 15; ///< Default haptic effect (strong buzz for message notification)
 };
 
 extern TLoRaPagerBoard& instance;

@@ -44,6 +44,10 @@ void detach_group_objs()
     remove_if(g_gps_state.tracker_btn);
     remove_if(g_gps_state.pan_h_indicator);
     remove_if(g_gps_state.pan_v_indicator);
+    for (auto* btn : g_gps_state.member_btns)
+    {
+        remove_if(btn);
+    }
 }
 
 void on_root_deleted(lv_event_t* e)
@@ -83,6 +87,9 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.header = nullptr;
     g_gps_state.page = nullptr;
     g_gps_state.panel = nullptr;
+    g_gps_state.member_panel = nullptr;
+    g_gps_state.member_btns.clear();
+    g_gps_state.member_btn_ids.clear();
     g_gps_state.zoom = nullptr;
     g_gps_state.pos = nullptr;
     g_gps_state.pan_h = nullptr;

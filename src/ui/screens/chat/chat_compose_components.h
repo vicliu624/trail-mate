@@ -22,6 +22,7 @@ public:
     enum class ActionIntent
     {
         Send,
+        Position,
         Cancel
     };
 
@@ -29,6 +30,8 @@ public:
     ~ChatComposeScreen();
 
     void setHeaderText(const char* title, const char* status = nullptr);
+    void setActionLabels(const char* send_label, const char* cancel_label);
+    void setPositionButton(const char* label, bool visible);
     std::string getText() const;
     void clearText();
 

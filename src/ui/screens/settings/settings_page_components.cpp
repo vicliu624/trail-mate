@@ -1062,8 +1062,7 @@ static void on_list_back_clicked(lv_event_t* /*e*/)
 
 static void settings_back_cb(void* /*user_data*/)
 {
-    destroy();
-    menu_show();
+    ui_request_exit_to_menu();
 }
 
 } // namespace

@@ -61,12 +61,12 @@ public:
     /**
      * @brief Handle conversation action (reply/compose)
      */
-    void handleConversationAction(bool compose);
+    void handleConversationAction(ChatConversationScreen::ActionIntent intent);
 
     /**
      * @brief Handle compose action (send/cancel)
      */
-    void handleComposeAction(bool send);
+    void handleComposeAction(ChatComposeScreen::ActionIntent intent);
 
     /**
      * @brief Exit chat UI to main menu
@@ -88,9 +88,9 @@ public:
     }
 
     /**
-     * @brief Handle channel click from UI
+     * @brief Handle conversation selection from UI
      */
-    void onChannelClicked(chat::ChannelId channel);
+    void onChannelClicked(chat::ConversationId conv);
 
 private:
     lv_obj_t* parent_;
@@ -104,7 +104,10 @@ private:
     
     chat::ChannelId current_channel_;
     chat::ConversationId current_conv_;
-    
+    bool team_conv_active_ = false;
+    lv_timer_t* team_conv_timer_ = nullptr;
+    bool exiting_ = false;
+
     void switchToChannelList();
     void switchToConversation(chat::ConversationId conv);
     void switchToCompose(chat::ConversationId conv);
@@ -112,6 +115,10 @@ private:
     void handleSendMessage(const std::string& text);
     void refreshUnreadCounts();
     void cleanupComposeIme();
+    bool isTeamConversation(const chat::ConversationId& conv) const;
+    void refreshTeamConversation();
+    void startTeamConversationTimer();
+    void stopTeamConversationTimer();
 };
 
 } // namespace ui

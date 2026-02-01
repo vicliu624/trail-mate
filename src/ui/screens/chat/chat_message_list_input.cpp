@@ -25,16 +25,6 @@ namespace chat::ui::message_list::input {
 
 namespace {
 
-enum class FocusColumn {
-    Filter = 0,
-    List = 1
-};
-
-static ChatMessageListScreen* s_screen = nullptr;
-static lv_group_t* s_group = nullptr;
-static lv_group_t* s_prev_group = nullptr;
-static FocusColumn s_col = FocusColumn::Filter;
-
 static bool is_encoder_active()
 {
     lv_indev_t* indev = lv_indev_get_act();
@@ -47,150 +37,178 @@ static void group_clear_all(lv_group_t* g)
     lv_group_remove_all_objs(g);
 }
 
-static void focus_first_valid(lv_obj_t* obj)
+static bool screen_alive(const Binding* binding)
 {
-    if (!s_group || !obj || !lv_obj_is_valid(obj)) return;
+    return binding && binding->screen && binding->screen->isAlive();
+}
+
+static void focus_first_valid(Binding* binding, lv_obj_t* obj)
+{
+    if (!binding || !binding->group || !obj || !lv_obj_is_valid(obj)) return;
     lv_group_focus_obj(obj);
 }
 
-static void group_add_if_valid(lv_obj_t* obj)
+static void group_add_if_valid(Binding* binding, lv_obj_t* obj)
 {
-    if (!s_group || !obj || !lv_obj_is_valid(obj)) return;
-    lv_group_add_obj(s_group, obj);
+    if (!binding || !binding->group || !obj || !lv_obj_is_valid(obj)) return;
+    lv_group_add_obj(binding->group, obj);
 }
 
-static void clear_list_focus_states()
+static bool is_visible(lv_obj_t* obj)
 {
-    if (!s_screen) return;
+    return obj && lv_obj_is_valid(obj) && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void clear_list_focus_states(Binding* binding)
+{
+    if (!binding || !binding->screen) return;
     lv_state_t clear_mask = (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY);
-    size_t count = s_screen->getItemCount();
+    size_t count = binding->screen->getItemCount();
     for (size_t i = 0; i < count; ++i) {
-        if (lv_obj_t* btn = s_screen->getItemButton(i)) {
+        if (lv_obj_t* btn = binding->screen->getItemButton(i)) {
             if (lv_obj_is_valid(btn)) {
                 lv_obj_clear_state(btn, clear_mask);
             }
         }
     }
-    if (lv_obj_t* back = s_screen->getListBackButton()) {
+    if (lv_obj_t* back = binding->screen->getListBackButton()) {
         if (lv_obj_is_valid(back)) {
             lv_obj_clear_state(back, clear_mask);
         }
     }
 }
 
-static void bind_filter_column()
+static void bind_filter_column(Binding* binding)
 {
-    if (!s_group || !s_screen) return;
-    lv_group_focus_freeze(s_group, true);
-    group_clear_all(s_group);
-    clear_list_focus_states();
+    if (!binding || !binding->group || !binding->screen) return;
+    lv_group_focus_freeze(binding->group, true);
+    group_clear_all(binding->group);
+    clear_list_focus_states(binding);
 
-    if (lv_obj_t* back = s_screen->getBackButton()) {
-        group_add_if_valid(back);
+    if (lv_obj_t* back = binding->screen->getBackButton()) {
+        group_add_if_valid(binding, back);
     }
-    if (lv_obj_t* direct = s_screen->getDirectButton()) {
-        group_add_if_valid(direct);
+    if (lv_obj_t* direct = binding->screen->getDirectButton()) {
+        group_add_if_valid(binding, direct);
     }
-    if (lv_obj_t* broadcast = s_screen->getBroadcastButton()) {
-        group_add_if_valid(broadcast);
+    if (lv_obj_t* broadcast = binding->screen->getBroadcastButton()) {
+        group_add_if_valid(binding, broadcast);
+    }
+    if (lv_obj_t* team = binding->screen->getTeamButton()) {
+        if (is_visible(team)) {
+            group_add_if_valid(binding, team);
+        }
     }
 
-    lv_group_focus_freeze(s_group, false);
+    lv_group_focus_freeze(binding->group, false);
 
-    if (lv_obj_t* direct = s_screen->getDirectButton()) {
+    if (lv_obj_t* direct = binding->screen->getDirectButton()) {
         if (lv_obj_has_state(direct, LV_STATE_CHECKED)) {
-            focus_first_valid(direct);
+            focus_first_valid(binding, direct);
             return;
         }
     }
-    if (lv_obj_t* broadcast = s_screen->getBroadcastButton()) {
+    if (lv_obj_t* broadcast = binding->screen->getBroadcastButton()) {
         if (lv_obj_has_state(broadcast, LV_STATE_CHECKED)) {
-            focus_first_valid(broadcast);
+            focus_first_valid(binding, broadcast);
+            return;
+        }
+    }
+    if (lv_obj_t* team = binding->screen->getTeamButton()) {
+        if (is_visible(team) && lv_obj_has_state(team, LV_STATE_CHECKED)) {
+            focus_first_valid(binding, team);
             return;
         }
     }
 
-    if (lv_obj_t* direct = s_screen->getDirectButton()) {
-        focus_first_valid(direct);
-    } else if (lv_obj_t* broadcast = s_screen->getBroadcastButton()) {
-        focus_first_valid(broadcast);
-    } else if (lv_obj_t* back = s_screen->getBackButton()) {
-        focus_first_valid(back);
+    if (lv_obj_t* direct = binding->screen->getDirectButton()) {
+        focus_first_valid(binding, direct);
+    } else if (lv_obj_t* broadcast = binding->screen->getBroadcastButton()) {
+        focus_first_valid(binding, broadcast);
+    } else if (lv_obj_t* team = binding->screen->getTeamButton()) {
+        if (is_visible(team)) {
+            focus_first_valid(binding, team);
+        }
+    } else if (lv_obj_t* back = binding->screen->getBackButton()) {
+        focus_first_valid(binding, back);
     }
 }
 
-static void bind_list_column()
+static void bind_list_column(Binding* binding)
 {
-    if (!s_group || !s_screen) return;
-    lv_group_focus_freeze(s_group, true);
-    group_clear_all(s_group);
+    if (!binding || !binding->group || !binding->screen) return;
+    lv_group_focus_freeze(binding->group, true);
+    group_clear_all(binding->group);
 
-    size_t count = s_screen->getItemCount();
+    size_t count = binding->screen->getItemCount();
     for (size_t i = 0; i < count; ++i) {
-        if (lv_obj_t* btn = s_screen->getItemButton(i)) {
-            group_add_if_valid(btn);
+        if (lv_obj_t* btn = binding->screen->getItemButton(i)) {
+            group_add_if_valid(binding, btn);
         }
     }
-    if (lv_obj_t* back = s_screen->getListBackButton()) {
-        group_add_if_valid(back);
+    if (lv_obj_t* back = binding->screen->getListBackButton()) {
+        group_add_if_valid(binding, back);
     }
 
-    lv_group_focus_freeze(s_group, false);
+    lv_group_focus_freeze(binding->group, false);
 
     if (count > 0) {
-        int selected = s_screen->getSelectedIndex();
+        int selected = binding->screen->getSelectedIndex();
         if (selected >= 0 && static_cast<size_t>(selected) < count) {
-            focus_first_valid(s_screen->getItemButton(static_cast<size_t>(selected)));
+            focus_first_valid(binding, binding->screen->getItemButton(static_cast<size_t>(selected)));
         } else {
-            focus_first_valid(s_screen->getItemButton(0));
+            focus_first_valid(binding, binding->screen->getItemButton(0));
         }
-    } else if (lv_obj_t* back = s_screen->getListBackButton()) {
-        focus_first_valid(back);
+    } else if (lv_obj_t* back = binding->screen->getListBackButton()) {
+        focus_first_valid(binding, back);
     } else {
-        s_col = FocusColumn::Filter;
-        bind_filter_column();
+        binding->col = FocusColumn::Filter;
+        bind_filter_column(binding);
     }
 }
 
-static void rebind_by_column()
+static void rebind_by_column(Binding* binding)
 {
-    if (s_col == FocusColumn::Filter) {
-        bind_filter_column();
+    if (!binding) return;
+    if (binding->col == FocusColumn::Filter) {
+        bind_filter_column(binding);
     } else {
-        bind_list_column();
+        bind_list_column(binding);
     }
 }
 
 static void root_key_event_cb(lv_event_t* e)
 {
     if (!is_encoder_active()) return;
+    auto* binding = static_cast<Binding*>(lv_event_get_user_data(e));
+    if (!screen_alive(binding)) return;
 
     uint32_t key = lv_event_get_key(e);
     if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE) {
-        s_col = FocusColumn::Filter;
-        rebind_by_column();
+        binding->col = FocusColumn::Filter;
+        rebind_by_column(binding);
         return;
     }
 
     if (key != LV_KEY_ENTER) return;
 
-    lv_obj_t* focused = s_group ? lv_group_get_focused(s_group) : nullptr;
-    if (!focused || !s_screen) return;
+    lv_obj_t* focused = binding->group ? lv_group_get_focused(binding->group) : nullptr;
+    if (!focused || !binding->screen) return;
 
-    if (s_col == FocusColumn::Filter) {
-        if (focused == s_screen->getBackButton()) {
+    if (binding->col == FocusColumn::Filter) {
+        if (focused == binding->screen->getBackButton()) {
             lv_obj_send_event(focused, LV_EVENT_CLICKED, nullptr);
             return;
         }
-        s_col = FocusColumn::List;
-        rebind_by_column();
+        binding->col = FocusColumn::List;
+        rebind_by_column(binding);
         return;
     }
 
-    if (s_col == FocusColumn::List) {
-        if (focused == s_screen->getListBackButton()) {
-            s_col = FocusColumn::Filter;
-            rebind_by_column();
+    if (binding->col == FocusColumn::List) {
+        if (focused == binding->screen->getListBackButton()) {
+            binding->col = FocusColumn::Filter;
+            rebind_by_column(binding);
             return;
         }
     }
@@ -198,59 +216,68 @@ static void root_key_event_cb(lv_event_t* e)
 
 } // namespace
 
-void init(ChatMessageListScreen* screen)
+void init(ChatMessageListScreen* screen, Binding* binding)
 {
-    s_screen = screen;
-    if (s_group) {
-        cleanup();
+    if (!binding) {
+        return;
     }
-    s_group = lv_group_create();
-    s_prev_group = lv_group_get_default();
-    set_default_group(nullptr);
-    s_col = FocusColumn::Filter;
-    rebind_by_column();
-    set_default_group(s_group);
+    if (binding->bound) {
+        cleanup(binding);
+    }
 
-    if (s_screen && s_screen->getObj()) {
-        lv_obj_add_event_cb(s_screen->getObj(), root_key_event_cb, LV_EVENT_KEY, nullptr);
+    binding->screen = screen;
+    binding->group = lv_group_create();
+    binding->prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+    binding->col = FocusColumn::Filter;
+    rebind_by_column(binding);
+    set_default_group(binding->group);
+
+    if (binding->screen && binding->screen->getObj()) {
+        lv_obj_add_event_cb(binding->screen->getObj(), root_key_event_cb, LV_EVENT_KEY, binding);
     }
+    binding->bound = true;
 
     CHAT_INPUT_LOG("[ChatMessageListInput] init\n");
 }
 
-void cleanup()
+void cleanup(Binding* binding)
 {
-    s_screen = nullptr;
-    if (s_group) {
+    if (!binding || !binding->bound) {
+        return;
+    }
+    binding->screen = nullptr;
+    if (binding->group) {
         set_default_group(nullptr);
-        lv_group_del(s_group);
-        s_group = nullptr;
+        lv_group_del(binding->group);
+        binding->group = nullptr;
     }
-    if (s_prev_group) {
-        set_default_group(s_prev_group);
+    if (binding->prev_group) {
+        set_default_group(binding->prev_group);
     }
-    s_prev_group = nullptr;
+    binding->prev_group = nullptr;
+    binding->bound = false;
     CHAT_INPUT_LOG("[ChatMessageListInput] cleanup\n");
 }
 
-void on_ui_refreshed()
+void on_ui_refreshed(Binding* binding)
 {
-    if (!s_group) return;
-    rebind_by_column();
+    if (!binding || !binding->group || !screen_alive(binding)) return;
+    rebind_by_column(binding);
 }
 
-void focus_filter()
+void focus_filter(Binding* binding)
 {
-    if (!s_group) return;
-    s_col = FocusColumn::Filter;
-    rebind_by_column();
+    if (!binding || !binding->group || !screen_alive(binding)) return;
+    binding->col = FocusColumn::Filter;
+    rebind_by_column(binding);
 }
 
-void focus_list()
+void focus_list(Binding* binding)
 {
-    if (!s_group) return;
-    s_col = FocusColumn::List;
-    rebind_by_column();
+    if (!binding || !binding->group || !screen_alive(binding)) return;
+    binding->col = FocusColumn::List;
+    rebind_by_column(binding);
 }
 
-} // namespace chat::ui::input
+} // namespace chat::ui::message_list::input

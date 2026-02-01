@@ -282,8 +282,13 @@ bool encodeTeamJoinAccept(const TeamJoinAccept& input, std::vector<uint8_t>& out
 
     uint16_t flags = 0;
     if (input.params.has_params) flags |= 0x01;
+    if (input.has_team_id) flags |= 0x02;
     writer.putU16(flags);
     if (!encodeTeamParams(input.params, writer)) return false;
+    if (input.has_team_id)
+    {
+        writer.putBytes(input.team_id.data(), input.team_id.size());
+    }
 
     return true;
 }
@@ -305,7 +310,9 @@ bool decodeTeamJoinAccept(const uint8_t* data, size_t len, TeamJoinAccept* out)
     if (!reader.getU16(&flags)) return false;
 
     out->params.has_params = (flags & 0x01) != 0;
+    out->has_team_id = (flags & 0x02) != 0;
     if (out->params.has_params && !decodeTeamParams(reader, &out->params)) return false;
+    if (out->has_team_id && !reader.getBytes(out->team_id.data(), out->team_id.size())) return false;
     return true;
 }
 
@@ -343,6 +350,103 @@ bool decodeTeamJoinConfirm(const uint8_t* data, size_t len, TeamJoinConfirm* out
 
     if (out->has_capabilities && !reader.getU32(&out->capabilities)) return false;
     if (out->has_battery && !reader.getU8(&out->battery)) return false;
+    return true;
+}
+
+bool encodeTeamJoinDecision(const TeamJoinDecision& input, std::vector<uint8_t>& out)
+{
+    out.clear();
+    ByteWriter writer(out);
+    writer.putU8(input.accept ? 1 : 0);
+    uint16_t flags = 0;
+    if (input.has_reason) flags |= 0x01;
+    writer.putU16(flags);
+    if (input.has_reason) writer.putU32(input.reason);
+    return true;
+}
+
+bool decodeTeamJoinDecision(const uint8_t* data, size_t len, TeamJoinDecision* out)
+{
+    if (!data || !out)
+    {
+        return false;
+    }
+    ByteReader reader(data, len);
+    uint16_t flags = 0;
+    uint8_t accept = 0;
+    if (!reader.getU8(&accept)) return false;
+    out->accept = (accept != 0);
+    if (!reader.getU16(&flags)) return false;
+    out->has_reason = (flags & 0x01) != 0;
+    if (out->has_reason && !reader.getU32(&out->reason)) return false;
+    return true;
+}
+
+bool encodeTeamKick(const TeamKick& input, std::vector<uint8_t>& out)
+{
+    out.clear();
+    ByteWriter writer(out);
+    writer.putU32(input.target);
+    return true;
+}
+
+bool decodeTeamKick(const uint8_t* data, size_t len, TeamKick* out)
+{
+    if (!data || !out)
+    {
+        return false;
+    }
+    ByteReader reader(data, len);
+    if (!reader.getU32(&out->target)) return false;
+    return true;
+}
+
+bool encodeTeamTransferLeader(const TeamTransferLeader& input, std::vector<uint8_t>& out)
+{
+    out.clear();
+    ByteWriter writer(out);
+    writer.putU32(input.target);
+    return true;
+}
+
+bool decodeTeamTransferLeader(const uint8_t* data, size_t len, TeamTransferLeader* out)
+{
+    if (!data || !out)
+    {
+        return false;
+    }
+    ByteReader reader(data, len);
+    if (!reader.getU32(&out->target)) return false;
+    return true;
+}
+
+bool encodeTeamKeyDist(const TeamKeyDist& input, std::vector<uint8_t>& out)
+{
+    if (input.channel_psk_len > input.channel_psk.size())
+    {
+        return false;
+    }
+    out.clear();
+    ByteWriter writer(out);
+    writer.putBytes(input.team_id.data(), input.team_id.size());
+    writer.putU32(input.key_id);
+    writer.putU8(input.channel_psk_len);
+    writer.putBytes(input.channel_psk.data(), input.channel_psk_len);
+    return true;
+}
+
+bool decodeTeamKeyDist(const uint8_t* data, size_t len, TeamKeyDist* out)
+{
+    if (!data || !out)
+    {
+        return false;
+    }
+    ByteReader reader(data, len);
+    if (!reader.getBytes(out->team_id.data(), out->team_id.size())) return false;
+    if (!reader.getU32(&out->key_id)) return false;
+    if (!reader.getU8(&out->channel_psk_len)) return false;
+    if (out->channel_psk_len > out->channel_psk.size()) return false;
+    if (!reader.getBytes(out->channel_psk.data(), out->channel_psk_len)) return false;
     return true;
 }
 

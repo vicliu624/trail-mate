@@ -1,6 +1,7 @@
 #pragma once
 
 #include "team_types.h"
+#include "../protocol/team_chat.h"
 #include "../protocol/team_mgmt.h"
 #include <cstdint>
 #include <vector>
@@ -40,6 +41,30 @@ struct TeamJoinConfirmEvent
     team::proto::TeamJoinConfirm msg;
 };
 
+struct TeamJoinDecisionEvent
+{
+    TeamEventContext ctx;
+    team::proto::TeamJoinDecision msg;
+};
+
+struct TeamKickEvent
+{
+    TeamEventContext ctx;
+    team::proto::TeamKick msg;
+};
+
+struct TeamTransferLeaderEvent
+{
+    TeamEventContext ctx;
+    team::proto::TeamTransferLeader msg;
+};
+
+struct TeamKeyDistEvent
+{
+    TeamEventContext ctx;
+    team::proto::TeamKeyDist msg;
+};
+
 struct TeamStatusEvent
 {
     TeamEventContext ctx;
@@ -56,6 +81,12 @@ struct TeamWaypointEvent
 {
     TeamEventContext ctx;
     std::vector<uint8_t> payload;
+};
+
+struct TeamChatEvent
+{
+    TeamEventContext ctx;
+    team::proto::TeamChatMessage msg;
 };
 
 enum class TeamProtocolError

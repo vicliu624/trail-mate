@@ -9,6 +9,7 @@
 
 #include <driver/gpio.h>
 #include <esp_sleep.h>
+#include <cstring>
 
 #include "display/drivers/ST7796.h"
 #include "pins_arduino.h"
@@ -321,7 +322,7 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     log_d("SPI bus initialized (SCK=%d, MISO=%d, MOSI=%d)", LORA_SCK, LORA_MISO, LORA_MOSI);
 
     // Configure NFC interrupt pin
-    pinMode(NFC_INT, INPUT);
+    pinMode(NFC_INT, INPUT_PULLUP);
 
     // Initialize RTC (PCF85063) - optional
     if (!(disable_hw_init & NO_HW_RTC))
@@ -452,8 +453,12 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     log_d("Board initialization complete. Hardware online: 0x%08X", devices_probe);
     Serial.printf("[TLoRaPagerBoard::begin] ===== HARDWARE INITIALIZATION COMPLETE =====\n");
     Serial.printf("[TLoRaPagerBoard::begin] devices_probe=0x%08X\n", devices_probe);
-    Serial.printf("[TLoRaPagerBoard::begin] GPS online: %s (HW_GPS_ONLINE=0x%08X)\n",
-                  (devices_probe & HW_GPS_ONLINE) ? "YES" : "NO", HW_GPS_ONLINE);
+    const char* gps_state =
+        (devices_probe & HW_GPS_ONLINE) ? "YES" :
+        ((disable_hw_init & NO_HW_GPS) ? "SKIPPED" : "DEFERRED");
+    Serial.printf("[TLoRaPagerBoard::begin] GPS online: %s\n", gps_state);
+    Serial.printf("[TLoRaPagerBoard::begin] NFC online: %s (HW_NFC_ONLINE=0x%08X)\n",
+                  (devices_probe & HW_NFC_ONLINE) ? "YES" : "NO", HW_NFC_ONLINE);
 
     return devices_probe;
 }
@@ -573,6 +578,7 @@ bool TLoRaPagerBoard::initNFC()
 {
 #ifdef USING_ST25R3916
     bool res = false;
+    ReturnCode rc = ERR_NONE;
     log_d("Init NFC");
 
     // Enable NFC power before initialization
@@ -580,16 +586,20 @@ bool TLoRaPagerBoard::initNFC()
     delay(10); // Wait for power to stabilize
 
     // Initialize NFC reader
-    res = NFCReader.rfalNfcInitialize() == ST_ERR_NONE;
+    rc = NFCReader.rfalNfcInitialize();
+    res = (rc == ERR_NONE);
     if (!res)
     {
-        log_e("Failed to find NFC Reader");
+        log_e("Failed to find NFC Reader (rc=%d)", rc);
+        Serial.printf("[TLoRaPagerBoard::initNFC] NFC init failed rc=%d\n", rc);
         powerControl(POWER_NFC, false);
     }
     else
     {
         log_d("Initializing NFC Reader succeeded");
+        Serial.printf("[TLoRaPagerBoard::initNFC] NFC init ok\n");
         devices_probe |= HW_NFC_ONLINE;
+        detachInterrupt(NFC_INT);
         // Turn off NFC power after initialization (will be enabled when needed)
         powerControl(POWER_NFC, false);
     }
@@ -780,7 +790,8 @@ void TLoRaPagerBoard::vibrator()
     log_d("[vibrator] Enabling power and starting vibration (effect=%d)...", _haptic_effects);
     powerControl(POWER_HAPTIC_DRIVER, true);
     drv.setWaveform(0, _haptic_effects);
-    drv.setWaveform(1, 0);
+    drv.setWaveform(1, _haptic_effects);
+    drv.setWaveform(2, 0);
     drv.run();
     log_d("[vibrator] Vibration started, setting up stop timer...");
 
@@ -876,7 +887,7 @@ int TLoRaPagerBoard::getKeyChar(char* c)
 }
 
 #ifdef USING_ST25R3916
-bool TLoRaPagerBoard::startNFCDiscovery(uint8_t techs2Find, uint16_t totalDuration)
+bool TLoRaPagerBoard::startNFCDiscovery(uint16_t techs2Find, uint16_t totalDuration)
 {
     if (!(devices_probe & HW_NFC_ONLINE))
     {
@@ -889,26 +900,49 @@ bool TLoRaPagerBoard::startNFCDiscovery(uint8_t techs2Find, uint16_t totalDurati
     delay(10); // Wait for power to stabilize
 
     // Reinitialize NFC reader
-    if (NFCReader.rfalNfcInitialize() != ST_ERR_NONE)
+    ReturnCode rc = NFCReader.rfalNfcInitialize();
+    if (rc != ERR_NONE)
     {
         log_e("Failed to reinitialize NFC");
+        Serial.printf("[TLoRaPagerBoard::startNFCDiscovery] rfalNfcInitialize rc=%d\n", rc);
         powerControl(POWER_NFC, false);
         return false;
     }
+    detachInterrupt(NFC_INT);
 
     // Setup discovery parameters
     rfalNfcDiscoverParam discover_params;
+    rfalNfcDefaultDiscParams(&discover_params);
     discover_params.devLimit = 1;
     discover_params.techs2Find = techs2Find;
-    discover_params.GBLen = RFAL_NFCDEP_GB_MAX_LEN;
     discover_params.notifyCb = nullptr; // Can be set by user if needed
     discover_params.totalDuration = totalDuration;
-    discover_params.wakeupEnabled = false;
+
+    if (techs2Find & RFAL_NFC_LISTEN_TECH_A)
+    {
+        static bool nfcid_init = false;
+        static uint8_t nfcid[RFAL_NFCID1_TRIPLE_LEN] = { 0 };
+        if (!nfcid_init)
+        {
+            nfcid[0] = static_cast<uint8_t>(random(1, 255));
+            nfcid[1] = static_cast<uint8_t>(random(0, 256));
+            nfcid[2] = static_cast<uint8_t>(random(0, 256));
+            nfcid[3] = static_cast<uint8_t>(random(0, 256));
+            nfcid_init = true;
+        }
+        discover_params.lmConfigPA.nfcidLen = RFAL_LM_NFCID_LEN_04;
+        memcpy(discover_params.lmConfigPA.nfcid, nfcid, sizeof(nfcid));
+        discover_params.lmConfigPA.SENS_RES[0] = 0x04;
+        discover_params.lmConfigPA.SENS_RES[1] = 0x00;
+        discover_params.lmConfigPA.SEL_RES = RFAL_NFCA_SEL_RES_CONF_T4T;
+    }
 
     // Start discovery
-    if (NFCReader.rfalNfcDiscover(&discover_params) != ST_ERR_NONE)
+    rc = NFCReader.rfalNfcDiscover(&discover_params);
+    if (rc != ERR_NONE)
     {
         log_e("Failed to start NFC discovery");
+        Serial.printf("[TLoRaPagerBoard::startNFCDiscovery] rfalNfcDiscover rc=%d\n", rc);
         powerControl(POWER_NFC, false);
         return false;
     }
@@ -925,12 +959,26 @@ void TLoRaPagerBoard::stopNFCDiscovery()
     }
 
     // Deactivate NFC
-    NFCReader.rfalNfcDeactivate(true);
+    NFCReader.rfalNfcDeactivate(RFAL_NFC_DEACTIVATE_IDLE);
 
     // Turn off NFC power
     powerControl(POWER_NFC, false);
 
     log_d("NFC discovery stopped");
+}
+
+void TLoRaPagerBoard::pollNfcIrq()
+{
+    if (!nfc)
+    {
+        return;
+    }
+    RfalRfClass* rf = nfc->getRfalRf();
+    if (!rf)
+    {
+        return;
+    }
+    static_cast<RfalRfST25R3916Class*>(rf)->st25r3916CheckForReceivedInterrupts();
 }
 #endif
 
@@ -996,6 +1044,88 @@ uint16_t TLoRaPagerBoard::height()
 void TLoRaPagerBoard::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color)
 {
     LilyGoDispArduinoSPI::pushColors(x1, y1, x2, y2, color);
+}
+
+int TLoRaPagerBoard::transmitRadio(const uint8_t* data, size_t len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.transmit(data, len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+int TLoRaPagerBoard::startRadioReceive()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.startReceive();
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+uint32_t TLoRaPagerBoard::getRadioIrqFlags()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        uint32_t flags = radio_.getIrqFlags();
+        LilyGoDispArduinoSPI::unlock();
+        return flags;
+    }
+    return 0;
+}
+
+int TLoRaPagerBoard::getRadioPacketLength(bool update)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        int len = static_cast<int>(radio_.getPacketLength(update));
+        LilyGoDispArduinoSPI::unlock();
+        return len;
+    }
+    return 0;
+}
+
+int TLoRaPagerBoard::readRadioData(uint8_t* buf, size_t len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.readData(buf, len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+void TLoRaPagerBoard::clearRadioIrqFlags(uint32_t flags)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        radio_.clearIrqFlags(flags);
+        LilyGoDispArduinoSPI::unlock();
+    }
+}
+
+void TLoRaPagerBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
+                                         int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
+                                         uint8_t crc_len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(100)))
+    {
+        radio_.setFrequency(freq_mhz);
+        radio_.setBandwidth(bw_khz);
+        radio_.setSpreadingFactor(sf);
+        radio_.setCodingRate(cr_denom);
+        radio_.setOutputPower(tx_power);
+        radio_.setPreambleLength(preamble_len);
+        radio_.setSyncWord(sync_word);
+        radio_.setCRC(crc_len);
+        LilyGoDispArduinoSPI::unlock();
+    }
 }
 
 bool TLoRaPagerBoard::hasEncoder()
@@ -1068,7 +1198,7 @@ bool TLoRaPagerBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
         day < 1 || day > 31 ||
         hour >= 24 || minute >= 60 || second >= 60)
     {
-        Serial.printf("[TLoRaPagerBoard::syncTimeFromGPS] Invalid GPS time values: %04d-%02d-%02d %02d:%02d:%02d\n",
+        GPS_BOARD_LOG("[TLoRaPagerBoard::syncTimeFromGPS] Invalid GPS time values: %04d-%02d-%02d %02d:%02d:%02d\n",
                       year, month, day, hour, minute, second);
         return false;
     }

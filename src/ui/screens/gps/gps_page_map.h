@@ -12,6 +12,12 @@ void update_gps_marker_position();
 void create_gps_marker();
 void hide_gps_marker();
 
+// Team markers (posring)
+void refresh_team_markers_from_posring();
+void update_team_marker_positions();
+void clear_team_markers();
+void refresh_member_panel(bool force = false);
+
 // UI status and title updates (moved from presenter)
 void update_title_and_status();
 void update_resolution_display();

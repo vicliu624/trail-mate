@@ -49,6 +49,36 @@ double HalGpsAdapter::longitude() const
     return hal_gps_.longitude();
 }
 
+bool HalGpsAdapter::hasAltitude() const
+{
+    return hal_gps_.hasAltitude();
+}
+
+double HalGpsAdapter::altitude() const
+{
+    return hal_gps_.altitude();
+}
+
+bool HalGpsAdapter::hasSpeed() const
+{
+    return hal_gps_.hasSpeed();
+}
+
+double HalGpsAdapter::speed() const
+{
+    return hal_gps_.speed();
+}
+
+bool HalGpsAdapter::hasCourse() const
+{
+    return hal_gps_.hasCourse();
+}
+
+double HalGpsAdapter::course() const
+{
+    return hal_gps_.course();
+}
+
 uint8_t HalGpsAdapter::satellites() const
 {
     return hal_gps_.satellites();

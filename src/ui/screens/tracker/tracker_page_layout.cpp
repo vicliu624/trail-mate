@@ -26,6 +26,13 @@ inline void make_non_scrollable(lv_obj_t* obj)
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
 }
+
+inline void apply_base_container_style(lv_obj_t* obj)
+{
+    lv_obj_set_style_border_width(obj, 0, 0);
+    lv_obj_set_style_radius(obj, 0, 0);
+    make_non_scrollable(obj);
+}
 } // namespace
 
 lv_obj_t* create_root(lv_obj_t* parent)
@@ -35,7 +42,9 @@ lv_obj_t* create_root(lv_obj_t* parent)
     lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(root, 0, 0);
     lv_obj_set_style_pad_row(root, 4, 0);
-    make_non_scrollable(root);
+    lv_obj_set_style_bg_color(root, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
+    apply_base_container_style(root);
     return root;
 }
 
@@ -45,7 +54,9 @@ lv_obj_t* create_header(lv_obj_t* root)
     lv_obj_set_width(header, LV_PCT(100));
     lv_obj_set_height(header, ::ui::widgets::kTopBarHeight);
     lv_obj_set_style_pad_all(header, 0, 0);
-    make_non_scrollable(header);
+    lv_obj_set_style_bg_color(header, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
+    apply_base_container_style(header);
     return header;
 }
 
@@ -57,6 +68,9 @@ lv_obj_t* create_content(lv_obj_t* root)
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(content, 8, 0);
     lv_obj_set_style_pad_row(content, 6, 0);
+    lv_obj_set_style_bg_color(content, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(content, LV_OPA_COVER, 0);
+    apply_base_container_style(content);
     return content;
 }
 
@@ -78,4 +92,3 @@ lv_obj_t* create_list(lv_obj_t* content)
 } // namespace layout
 } // namespace ui
 } // namespace tracker
-

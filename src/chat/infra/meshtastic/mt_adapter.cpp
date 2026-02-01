@@ -98,6 +98,8 @@ static const char* portName(uint32_t portnum)
         return "TEAM_POS";
     case team::proto::TEAM_WAYPOINT_APP:
         return "TEAM_WP";
+    case team::proto::TEAM_CHAT_APP:
+        return "TEAM_CHAT";
     default:
         return "UNKNOWN";
     }
@@ -807,6 +809,26 @@ bool MtAdapter::pollIncomingData(MeshIncomingData* out)
     *out = app_receive_queue_.front();
     app_receive_queue_.pop();
     return true;
+}
+
+bool MtAdapter::requestNodeInfo(NodeId dest, bool want_response)
+{
+    if (!ready_)
+    {
+        return false;
+    }
+    uint32_t target = (dest == 0) ? 0xFFFFFFFF : dest;
+    return sendNodeInfoTo(target, want_response);
+}
+
+bool MtAdapter::isPkiReady() const
+{
+    return pki_ready_;
+}
+
+bool MtAdapter::hasPkiKey(NodeId dest) const
+{
+    return node_public_keys_.find(dest) != node_public_keys_.end();
 }
 
 void MtAdapter::applyConfig(const MeshConfig& config)

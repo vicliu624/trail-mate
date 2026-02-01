@@ -35,9 +35,14 @@ enum class EventType
     TeamJoinRequest,     // Team join request received
     TeamJoinAccept,      // Team join accept received
     TeamJoinConfirm,     // Team join confirm received
+    TeamJoinDecision,    // Team join decision received
+    TeamKick,            // Team kick received
+    TeamTransferLeader,  // Team transfer leader received
+    TeamKeyDist,         // Team key distribution received
     TeamStatus,          // Team status received
     TeamPosition,        // Team position received
     TeamWaypoint,        // Team waypoint received
+    TeamChat,            // Team chat received
     TeamError,           // Team protocol error
     InputEvent,          // Input event (keyboard/rotary)
     SystemTick           // System tick (for periodic tasks)
@@ -247,6 +252,50 @@ struct TeamJoinConfirmEvent : public Event
 };
 
 /**
+ * @brief Team join decision event
+ */
+struct TeamJoinDecisionEvent : public Event
+{
+    team::TeamJoinDecisionEvent data;
+
+    explicit TeamJoinDecisionEvent(const team::TeamJoinDecisionEvent& evt)
+        : Event(EventType::TeamJoinDecision), data(evt) {}
+};
+
+/**
+ * @brief Team kick event
+ */
+struct TeamKickEvent : public Event
+{
+    team::TeamKickEvent data;
+
+    explicit TeamKickEvent(const team::TeamKickEvent& evt)
+        : Event(EventType::TeamKick), data(evt) {}
+};
+
+/**
+ * @brief Team transfer leader event
+ */
+struct TeamTransferLeaderEvent : public Event
+{
+    team::TeamTransferLeaderEvent data;
+
+    explicit TeamTransferLeaderEvent(const team::TeamTransferLeaderEvent& evt)
+        : Event(EventType::TeamTransferLeader), data(evt) {}
+};
+
+/**
+ * @brief Team key distribution event
+ */
+struct TeamKeyDistEvent : public Event
+{
+    team::TeamKeyDistEvent data;
+
+    explicit TeamKeyDistEvent(const team::TeamKeyDistEvent& evt)
+        : Event(EventType::TeamKeyDist), data(evt) {}
+};
+
+/**
  * @brief Team status event
  */
 struct TeamStatusEvent : public Event
@@ -277,6 +326,17 @@ struct TeamWaypointEvent : public Event
 
     explicit TeamWaypointEvent(const team::TeamWaypointEvent& evt)
         : Event(EventType::TeamWaypoint), data(evt) {}
+};
+
+/**
+ * @brief Team chat event
+ */
+struct TeamChatEvent : public Event
+{
+    team::TeamChatEvent data;
+
+    explicit TeamChatEvent(const team::TeamChatEvent& evt)
+        : Event(EventType::TeamChat), data(evt) {}
 };
 
 /**

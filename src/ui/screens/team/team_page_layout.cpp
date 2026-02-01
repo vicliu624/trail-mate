@@ -4,26 +4,16 @@
  *
  * Root (COLUMN)
  * ├─ Header (TopBar)
- * └─ Content (flex-grow = 1)
- *    └─ StateContainer (COLUMN, centered)
- *       ├─ IdleContainer
- *       │  ├─ IdleStatusLabel
- *       │  ├─ CreateBtn
- *       │  └─ JoinBtn
- *       └─ ActiveContainer
- *          ├─ ActiveStatusLabel
- *          ├─ ViewMapBtn
- *          ├─ ShareBtn
- *          ├─ LeaveBtn
- *          └─ DisbandBtn
+ * └─ Content (COLUMN, flex-grow = 1)
+ *    ├─ Body (flex-grow = 1)
+ *    └─ Actions (row)
  *
  * Tree view:
  * Root(COL)
  * ├─ Header
  * └─ Content(COL)
- *    └─ StateContainer(COL)
- *       ├─ IdleContainer(COL) -> IdleStatusLabel, CreateBtn, JoinBtn
- *       └─ ActiveContainer(COL) -> ActiveStatusLabel, ViewMapBtn, ShareBtn, LeaveBtn, DisbandBtn
+ *    ├─ Body(COL)
+ *    └─ Actions(ROW)
  *
  * ASCII wireframe (layout only):
  * +----------------------------------------------------------+
@@ -31,23 +21,10 @@
  * +----------------------------------------------------------+
  * |                                                          |
  * |  +----------------------------------------------------+  |
- * |  | StateContainer (column, centered)                  |  |
- * |  |                                                    |  |
- * |  |  +------------------------------+                  |  |
- * |  |  | IdleContainer (column)       |                  |  |
- * |  |  | [StatusLabel]                |                  |  |
- * |  |  | [CreateBtn]                  |                  |  |
- * |  |  | [JoinBtn]                    |                  |  |
- * |  |  +------------------------------+                  |  |
- * |  |                                                    |  |
- * |  |  +------------------------------+                  |  |
- * |  |  | ActiveContainer (column)     |                  |  |
- * |  |  | [StatusLabel]                |                  |  |
- * |  |  | [ViewMapBtn]                 |                  |  |
- * |  |  | [ShareBtn]                   |                  |  |
- * |  |  | [LeaveBtn]                   |                  |  |
- * |  |  | [DisbandBtn]                 |                  |  |
- * |  |  +------------------------------+                  |  |
+ * |  | Body (column, scrollable if needed)                |  |
+ * |  +----------------------------------------------------+  |
+ * |  | Actions (row)                                      |  |
+ * |  | [Action 1]    [Action 2]    [Action 3]             |  |
  * |  +----------------------------------------------------+  |
  * |                                                          |
  * +----------------------------------------------------------+ */
@@ -58,7 +35,7 @@
  */
 
 #include "team_page_layout.h"
-#include "team_state.h"
+#include "../../widgets/top_bar.h"
 
 namespace team
 {
@@ -69,9 +46,6 @@ namespace layout
 
 namespace
 {
-constexpr int kButtonWidth = 220;
-constexpr int kButtonHeight = 32;
-
 void make_non_scrollable(lv_obj_t* obj)
 {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
@@ -107,62 +81,28 @@ lv_obj_t* create_content(lv_obj_t* root)
     return content;
 }
 
-lv_obj_t* create_state_container(lv_obj_t* content)
+lv_obj_t* create_body(lv_obj_t* content)
 {
-    lv_obj_t* container = lv_obj_create(content);
-    lv_obj_set_size(container, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-    make_non_scrollable(container);
-    return container;
+    lv_obj_t* body = lv_obj_create(content);
+    lv_obj_set_size(body, LV_PCT(100), 0);
+    lv_obj_set_flex_grow(body, 1);
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
+    return body;
 }
 
-lv_obj_t* create_idle_container(lv_obj_t* parent)
+lv_obj_t* create_actions(lv_obj_t* content)
 {
-    lv_obj_t* container = lv_obj_create(parent);
-    lv_obj_set_width(container, LV_PCT(100));
-    lv_obj_set_height(container, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-    make_non_scrollable(container);
-
-    g_team_state.idle_status_label = lv_label_create(container);
-    g_team_state.create_btn = lv_btn_create(container);
-    g_team_state.join_btn = lv_btn_create(container);
-
-    lv_obj_set_width(g_team_state.idle_status_label, kButtonWidth);
-    lv_obj_set_width(g_team_state.create_btn, kButtonWidth);
-    lv_obj_set_width(g_team_state.join_btn, kButtonWidth);
-    lv_obj_set_height(g_team_state.create_btn, kButtonHeight);
-    lv_obj_set_height(g_team_state.join_btn, kButtonHeight);
-
-    return container;
-}
-
-lv_obj_t* create_active_container(lv_obj_t* parent)
-{
-    lv_obj_t* container = lv_obj_create(parent);
-    lv_obj_set_width(container, LV_PCT(100));
-    lv_obj_set_height(container, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-    make_non_scrollable(container);
-
-    g_team_state.active_status_label = lv_label_create(container);
-    g_team_state.share_btn = lv_btn_create(container);
-    g_team_state.leave_btn = lv_btn_create(container);
-    g_team_state.disband_btn = lv_btn_create(container);
-
-    lv_obj_set_width(g_team_state.active_status_label, kButtonWidth);
-    lv_obj_set_width(g_team_state.share_btn, kButtonWidth);
-    lv_obj_set_width(g_team_state.leave_btn, kButtonWidth);
-    lv_obj_set_width(g_team_state.disband_btn, kButtonWidth);
-    lv_obj_set_height(g_team_state.share_btn, kButtonHeight);
-    lv_obj_set_height(g_team_state.leave_btn, kButtonHeight);
-    lv_obj_set_height(g_team_state.disband_btn, kButtonHeight);
-
-    return container;
+    lv_obj_t* actions = lv_obj_create(content);
+    lv_obj_set_size(actions, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_SPACE_EVENLY,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    make_non_scrollable(actions);
+    return actions;
 }
 
 } // namespace layout
 } // namespace ui
 } // namespace team
-
