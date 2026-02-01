@@ -108,6 +108,10 @@ void exit_to_menu_timer_cb(lv_timer_t* timer)
     }
     lv_obj_t* parent = lv_obj_get_child(main_screen, 1);
     app->exit(parent);
+    if (menu_g) {
+        set_default_group(menu_g);
+        lv_group_set_editing(menu_g, false);
+    }
 }
 } // namespace
 

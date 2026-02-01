@@ -106,6 +106,7 @@ private:
     chat::ConversationId current_conv_;
     bool team_conv_active_ = false;
     lv_timer_t* team_conv_timer_ = nullptr;
+    bool exiting_ = false;
 
     void switchToChannelList();
     void switchToConversation(chat::ConversationId conv);

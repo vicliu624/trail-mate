@@ -192,6 +192,7 @@ UiController::UiController(lv_obj_t* parent, chat::ChatService& service)
 UiController::~UiController()
 {
     stopTeamConversationTimer();
+    service_.setModelEnabled(false);
     channel_list_.reset();
     conversation_.reset();
     cleanupComposeIme();
@@ -210,7 +211,6 @@ void UiController::cleanupComposeIme()
 void UiController::init()
 {
     switchToChannelList();
-    refreshUnreadCounts();
 }
 
 void UiController::update()
@@ -880,15 +880,12 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
 
 void UiController::exitToMenu()
 {
-    // Clean up UI objects
+    if (exiting_) {
+        return;
+    }
+    exiting_ = true;
     stopTeamConversationTimer();
     team_conv_active_ = false;
-    service_.setModelEnabled(false);
-    cleanupComposeIme();
-    compose_.reset();
-    conversation_.reset();
-    channel_list_.reset();
-    parent_ = nullptr;
     ui_request_exit_to_menu();
 }
 

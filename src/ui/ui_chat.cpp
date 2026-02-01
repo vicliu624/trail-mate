@@ -80,13 +80,16 @@ void ui_chat_exit(lv_obj_t *parent)
         Serial.printf("[UI Chat] exit container child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(chat_container));
     }
+
+    // Destroy controller first so child screens can clean up safely.
+    ui_controller.reset();
+
     if (chat_container && !lv_obj_is_valid(chat_container)) {
         chat_container = NULL;
     }
     if (chat_container) {
-        lv_obj_clean(chat_container);
         lv_obj_del(chat_container);
         chat_container = NULL;
     }
-    ui_controller.reset();
+
 }
