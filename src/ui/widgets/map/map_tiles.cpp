@@ -28,6 +28,8 @@
 #define TILE_DECODE_CACHE_SIZE 12
 static DecodedTileCache g_tile_decode_cache[TILE_DECODE_CACHE_SIZE];
 static bool g_tile_cache_initialized = false;
+static uint32_t g_cache_full_until_ms = 0;
+static uint32_t g_cache_full_log_ms = 0;
 
 /**
  * Initialize tile decode cache
@@ -93,7 +95,12 @@ static DecodedTileCache* get_lru_cache_slot()
     
     // If all slots are in use, return NULL to avoid use-after-free
     if (!found_unused || lru_idx == -1) {
-        GPS_LOG("[GPS] All cache slots are in use, cannot evict safely\n");
+        uint32_t now_ms = millis();
+        g_cache_full_until_ms = now_ms + 500;
+        if (now_ms - g_cache_full_log_ms >= 1000) {
+            GPS_LOG("[GPS] All cache slots are in use, cannot evict safely\n");
+            g_cache_full_log_ms = now_ms;
+        }
         return NULL;
     }
     
@@ -1072,6 +1079,12 @@ void tile_loader_step(TileContext& ctx)
 {
     if (!ctx.map_container || !ctx.tiles) {
         return;
+    }
+    if (g_cache_full_until_ms != 0) {
+        uint32_t now_ms = millis();
+        if ((int32_t)(now_ms - g_cache_full_until_ms) < 0) {
+            return;
+        }
     }
     
     // Find visible unloaded tiles with minimum priority

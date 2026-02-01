@@ -1046,6 +1046,88 @@ void TLoRaPagerBoard::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t
     LilyGoDispArduinoSPI::pushColors(x1, y1, x2, y2, color);
 }
 
+int TLoRaPagerBoard::transmitRadio(const uint8_t* data, size_t len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.transmit(data, len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+int TLoRaPagerBoard::startRadioReceive()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.startReceive();
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+uint32_t TLoRaPagerBoard::getRadioIrqFlags()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        uint32_t flags = radio_.getIrqFlags();
+        LilyGoDispArduinoSPI::unlock();
+        return flags;
+    }
+    return 0;
+}
+
+int TLoRaPagerBoard::getRadioPacketLength(bool update)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        int len = static_cast<int>(radio_.getPacketLength(update));
+        LilyGoDispArduinoSPI::unlock();
+        return len;
+    }
+    return 0;
+}
+
+int TLoRaPagerBoard::readRadioData(uint8_t* buf, size_t len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.readData(buf, len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+void TLoRaPagerBoard::clearRadioIrqFlags(uint32_t flags)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        radio_.clearIrqFlags(flags);
+        LilyGoDispArduinoSPI::unlock();
+    }
+}
+
+void TLoRaPagerBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
+                                         int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
+                                         uint8_t crc_len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(100)))
+    {
+        radio_.setFrequency(freq_mhz);
+        radio_.setBandwidth(bw_khz);
+        radio_.setSpreadingFactor(sf);
+        radio_.setCodingRate(cr_denom);
+        radio_.setOutputPower(tx_power);
+        radio_.setPreambleLength(preamble_len);
+        radio_.setSyncWord(sync_word);
+        radio_.setCRC(crc_len);
+        LilyGoDispArduinoSPI::unlock();
+    }
+}
+
 bool TLoRaPagerBoard::hasEncoder()
 {
     return true;
