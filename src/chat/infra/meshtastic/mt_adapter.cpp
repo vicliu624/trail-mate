@@ -98,6 +98,8 @@ static const char* portName(uint32_t portnum)
         return "TEAM_POS";
     case team::proto::TEAM_WAYPOINT_APP:
         return "TEAM_WP";
+    case team::proto::TEAM_CHAT_APP:
+        return "TEAM_CHAT";
     default:
         return "UNKNOWN";
     }

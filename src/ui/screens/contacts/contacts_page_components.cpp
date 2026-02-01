@@ -257,6 +257,10 @@ static void refresh_team_state_from_store()
     team::ui::g_team_state.team_name = snap.team_name;
     team::ui::g_team_state.has_team_psk = snap.has_team_psk;
     team::ui::g_team_state.security_round = snap.security_round;
+    if (snap.has_team_psk)
+    {
+        team::ui::g_team_state.team_psk = snap.team_psk;
+    }
     team::ui::g_team_state.members = snap.members;
 }
 
@@ -872,6 +876,20 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
                 team::TeamController* controller = app_ctx.getTeamController();
                 if (!controller || !is_team_available()) {
                     ::ui::SystemNotification::show("Team chat send failed", 2000);
+                    close_chat_compose();
+                    return;
+                }
+                if (!team::ui::g_team_state.has_team_psk ||
+                    team::ui::g_team_state.security_round == 0) {
+                    ::ui::SystemNotification::show("Team keys not ready", 2000);
+                    close_chat_compose();
+                    return;
+                }
+                if (!controller->setKeysFromPsk(team::ui::g_team_state.team_id,
+                                                team::ui::g_team_state.security_round,
+                                                team::ui::g_team_state.team_psk.data(),
+                                                team::ui::g_team_state.team_psk.size())) {
+                    ::ui::SystemNotification::show("Team keys not ready", 2000);
                     close_chat_compose();
                     return;
                 }
