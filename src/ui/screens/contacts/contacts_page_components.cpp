@@ -267,7 +267,8 @@ static void refresh_team_state_from_store()
 static bool is_team_available()
 {
     refresh_team_state_from_store();
-    return team::ui::g_team_state.in_team && team::ui::g_team_state.has_team_id;
+    // Team chat should be reachable once we know a team_id (e.g. after receiving TEAM_CHAT).
+    return team::ui::g_team_state.has_team_id;
 }
 
 // ---------------- Panel creation (public API) ----------------
@@ -804,6 +805,12 @@ static void open_chat_compose()
     s_compose_peer_id = peer_id;
     s_compose_channel = channel;
     s_compose_is_team = (g_contacts_state.current_mode == ContactsMode::Team);
+    if (s_compose_is_team) {
+        g_contacts_state.compose_screen->setActionLabels("Send", "Cancel");
+        g_contacts_state.compose_screen->setPositionButton("Position", true);
+    } else {
+        g_contacts_state.compose_screen->setPositionButton(nullptr, false);
+    }
 
     if (s_compose_from_conversation && g_contacts_state.conversation_screen) {
         lv_obj_add_flag(g_contacts_state.conversation_screen->getObj(), LV_OBJ_FLAG_HIDDEN);
@@ -867,35 +874,90 @@ static void close_chat_compose()
 
 static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* /*user_data*/)
 {
-    if (intent == chat::ui::ChatComposeScreen::ActionIntent::Send &&
+    if ((intent == chat::ui::ChatComposeScreen::ActionIntent::Send ||
+         intent == chat::ui::ChatComposeScreen::ActionIntent::Position) &&
         g_contacts_state.compose_screen) {
-        std::string text = g_contacts_state.compose_screen->getText();
-        if (!text.empty()) {
-            if (s_compose_is_team) {
-                app::AppContext& app_ctx = app::AppContext::getInstance();
-                team::TeamController* controller = app_ctx.getTeamController();
-                if (!controller || !is_team_available()) {
+        if (s_compose_is_team) {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            team::TeamController* controller = app_ctx.getTeamController();
+            if (!controller || !is_team_available()) {
+                ::ui::SystemNotification::show("Team chat send failed", 2000);
+                close_chat_compose();
+                return;
+            }
+            if (!team::ui::g_team_state.has_team_psk) {
+                ::ui::SystemNotification::show("Team keys not ready", 2000);
+                close_chat_compose();
+                return;
+            }
+            if (!controller->setKeysFromPsk(team::ui::g_team_state.team_id,
+                                            team::ui::g_team_state.security_round,
+                                            team::ui::g_team_state.team_psk.data(),
+                                            team::ui::g_team_state.team_psk.size())) {
+                ::ui::SystemNotification::show("Team keys not ready", 2000);
+                close_chat_compose();
+                return;
+            }
+            uint32_t ts = static_cast<uint32_t>(time(nullptr));
+            if (ts < 1577836800U) {
+                ts = static_cast<uint32_t>(millis() / 1000);
+            }
+
+            if (intent == chat::ui::ChatComposeScreen::ActionIntent::Position) {
+                std::string label = g_contacts_state.compose_screen->getText();
+                gps::GpsState gps_state = gps::gps_get_data();
+                if (!gps_state.valid) {
+                    ::ui::SystemNotification::show("No GPS fix", 2000);
+                    return;
+                }
+
+                team::proto::TeamChatLocation loc;
+                loc.lat_e7 = static_cast<int32_t>(gps_state.lat * 1e7);
+                loc.lon_e7 = static_cast<int32_t>(gps_state.lng * 1e7);
+                if (gps_state.has_alt) {
+                    double alt = gps_state.alt_m;
+                    if (alt > 32767.0) alt = 32767.0;
+                    if (alt < -32768.0) alt = -32768.0;
+                    loc.alt_m = static_cast<int16_t>(lround(alt));
+                }
+                loc.ts = ts;
+                if (!label.empty()) {
+                    loc.label = label;
+                }
+
+                std::vector<uint8_t> payload;
+                if (!team::proto::encodeTeamChatLocation(loc, payload)) {
+                    ::ui::SystemNotification::show("Team location encode failed", 2000);
+                    close_chat_compose();
+                    return;
+                }
+
+                team::proto::TeamChatMessage msg;
+                msg.header.type = team::proto::TeamChatType::Location;
+                msg.header.ts = ts;
+                msg.header.msg_id = s_team_msg_id++;
+                if (s_team_msg_id == 0) {
+                    s_team_msg_id = 1;
+                }
+                msg.payload = payload;
+
+                bool ok = controller->onChat(msg, chat::ChannelId::PRIMARY);
+                if (ok) {
+                    team::ui::team_ui_chatlog_append_structured(
+                        team::ui::g_team_state.team_id,
+                        0,
+                        false,
+                        ts,
+                        team::proto::TeamChatType::Location,
+                        payload);
+                } else {
                     ::ui::SystemNotification::show("Team chat send failed", 2000);
+                }
+            } else {
+                std::string text = g_contacts_state.compose_screen->getText();
+                if (text.empty()) {
                     close_chat_compose();
                     return;
-                }
-                if (!team::ui::g_team_state.has_team_psk ||
-                    team::ui::g_team_state.security_round == 0) {
-                    ::ui::SystemNotification::show("Team keys not ready", 2000);
-                    close_chat_compose();
-                    return;
-                }
-                if (!controller->setKeysFromPsk(team::ui::g_team_state.team_id,
-                                                team::ui::g_team_state.security_round,
-                                                team::ui::g_team_state.team_psk.data(),
-                                                team::ui::g_team_state.team_psk.size())) {
-                    ::ui::SystemNotification::show("Team keys not ready", 2000);
-                    close_chat_compose();
-                    return;
-                }
-                uint32_t ts = static_cast<uint32_t>(time(nullptr));
-                if (ts < 1577836800U) {
-                    ts = static_cast<uint32_t>(millis() / 1000);
                 }
                 team::proto::TeamChatMessage msg;
                 msg.header.type = team::proto::TeamChatType::Text;
@@ -918,13 +980,16 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
                 } else {
                     ::ui::SystemNotification::show("Team chat send failed", 2000);
                 }
-                close_chat_compose();
-                if (g_contacts_state.conversation_screen) {
-                    refresh_team_conversation();
-                }
-                return;
             }
+            close_chat_compose();
+            if (g_contacts_state.conversation_screen) {
+                refresh_team_conversation();
+            }
+            return;
+        }
 
+        std::string text = g_contacts_state.compose_screen->getText();
+        if (!text.empty()) {
             if (g_contacts_state.chat_service) {
                 s_last_sent_text = text;
                 s_last_sent_ts = static_cast<uint32_t>(time(nullptr));
@@ -1537,11 +1602,7 @@ static void on_action_clicked(lv_event_t* e)
     CONTACTS_LOG("[Contacts] action clicked, selected=%d\n", g_contacts_state.selected_index);
 
     if (tgt == g_contacts_state.chat_btn) {
-        if (g_contacts_state.current_mode == ContactsMode::Team) {
-            open_team_conversation();
-        } else {
-            open_chat_compose();
-        }
+        open_chat_compose();
         return;
     }
     if (tgt == g_contacts_state.position_btn) {

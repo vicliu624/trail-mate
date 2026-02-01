@@ -78,6 +78,8 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
     }
 
     motion_control_enabled_ = motion_policy_.begin(motion_adapter_, motion_config_);
+    // Force GPS always-on: do not suspend or gate by motion policy.
+    motion_control_enabled_ = false;
 
     if (motion_control_enabled_ && gps_task_handle_ != nullptr)
     {

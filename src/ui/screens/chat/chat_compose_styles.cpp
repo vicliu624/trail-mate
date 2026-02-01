@@ -71,6 +71,12 @@ void apply_all(const layout::Widgets& w) {
     lv_obj_add_style(w.send_btn, &s_btn_basic, LV_PART_MAIN);
     lv_obj_add_style(w.send_btn, &s_btn_focused, LV_STATE_FOCUSED);
 
+    if (w.position_btn)
+    {
+        lv_obj_add_style(w.position_btn, &s_btn_basic, LV_PART_MAIN);
+        lv_obj_add_style(w.position_btn, &s_btn_focused, LV_STATE_FOCUSED);
+    }
+
     lv_obj_add_style(w.cancel_btn, &s_btn_basic, LV_PART_MAIN);
     lv_obj_add_style(w.cancel_btn, &s_btn_focused, LV_STATE_FOCUSED);
 

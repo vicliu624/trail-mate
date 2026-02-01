@@ -996,7 +996,8 @@ class TeamUiStorePersisted : public ITeamUiStore
         uint32_t now = now_secs();
         bool force_write = (in.in_team != last_snapshot_in_team_) ||
                            (in.self_is_leader != last_snapshot_self_is_leader_) ||
-                           (in.security_round != last_snapshot_epoch_);
+                           (in.security_round != last_snapshot_epoch_) ||
+                           (in.has_team_psk != last_snapshot_has_psk_);
         bool seq_trigger = (in.last_event_seq >= last_snapshot_seq_ + 10);
         bool time_trigger = (now - last_snapshot_ts_ >= 60);
 
@@ -1019,6 +1020,7 @@ class TeamUiStorePersisted : public ITeamUiStore
             last_snapshot_in_team_ = in.in_team;
             last_snapshot_self_is_leader_ = in.self_is_leader;
             last_snapshot_epoch_ = in.security_round;
+            last_snapshot_has_psk_ = in.has_team_psk;
         }
     }
 
@@ -1033,6 +1035,7 @@ class TeamUiStorePersisted : public ITeamUiStore
     bool last_snapshot_in_team_ = false;
     bool last_snapshot_self_is_leader_ = false;
     uint32_t last_snapshot_epoch_ = 0;
+    bool last_snapshot_has_psk_ = false;
 };
 
 TeamUiStorePersisted s_persisted_store;
@@ -1454,6 +1457,32 @@ bool team_ui_chatlog_load_recent(const TeamId& team_id,
         out.push_back(std::move(entry));
     }
     return !out.empty();
+}
+
+bool team_ui_save_keys_now(const TeamId& team_id,
+                           uint32_t key_id,
+                           const std::array<uint8_t, team::proto::kTeamChannelPskSize>& psk)
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    if (key_id == 0)
+    {
+        return false;
+    }
+    std::string dir_path;
+    if (!ensure_team_dir_for_id(team_id, dir_path))
+    {
+        return false;
+    }
+    TeamUiSnapshot snap;
+    snap.team_id = team_id;
+    snap.has_team_id = true;
+    snap.security_round = key_id;
+    snap.team_psk = psk;
+    snap.has_team_psk = true;
+    return save_keys_to_path(dir_path, snap);
 }
 
 } // namespace ui

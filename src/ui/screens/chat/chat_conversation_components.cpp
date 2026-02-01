@@ -60,35 +60,38 @@ static void format_message_time(char* out, size_t out_len, uint32_t ts)
     }
     uint32_t diff = now_secs - ts;
 
-    if (diff >= kSecondsPerYear) {
-        uint32_t years = diff / kSecondsPerYear;
-        if (years == 0) years = 1;
-        snprintf(out, out_len, "%uy ago", static_cast<unsigned>(years));
-        return;
-    }
-    if (diff >= kSecondsPerMonth) {
-        uint32_t months = diff / kSecondsPerMonth;
-        if (months == 0) months = 1;
-        snprintf(out, out_len, "%um ago", static_cast<unsigned>(months));
-        return;
-    }
-    if (diff >= kSecondsPerDay) {
-        uint32_t days = diff / kSecondsPerDay;
-        if (days == 0) days = 1;
-        snprintf(out, out_len, "%ud ago", static_cast<unsigned>(days));
-        return;
-    }
-    if (ts_is_epoch) {
-        time_t t = ui_apply_timezone_offset(static_cast<time_t>(ts));
-        struct tm* info = gmtime(&t);
-        if (info) {
-            strftime(out, out_len, "%H:%M:%S", info);
-        } else {
-            snprintf(out, out_len, "--");
+    if (!ts_is_epoch) {
+        if (diff < 60U) {
+            snprintf(out, out_len, "now");
+            return;
         }
+        if (diff < 3600U) {
+            snprintf(out, out_len, "%um", static_cast<unsigned>(diff / 60U));
+            return;
+        }
+        if (diff < kSecondsPerDay) {
+            snprintf(out, out_len, "%uh", static_cast<unsigned>(diff / 3600U));
+            return;
+        }
+        if (diff < kSecondsPerMonth) {
+            snprintf(out, out_len, "%ud", static_cast<unsigned>(diff / kSecondsPerDay));
+            return;
+        }
+        if (diff < kSecondsPerYear) {
+            snprintf(out, out_len, "%umo", static_cast<unsigned>(diff / kSecondsPerMonth));
+            return;
+        }
+        snprintf(out, out_len, "%uy", static_cast<unsigned>(diff / kSecondsPerYear));
         return;
     }
-    format_hms(out, out_len, ts % kSecondsPerDay);
+
+    time_t t = ui_apply_timezone_offset(static_cast<time_t>(ts));
+    struct tm* info = gmtime(&t);
+    if (info) {
+        strftime(out, out_len, "%H:%M", info);
+    } else {
+        snprintf(out, out_len, "--");
+    }
 }
 
 ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::ConversationId conv)

@@ -54,6 +54,11 @@ static void group_add_if_valid(Binding* binding, lv_obj_t* obj)
     lv_group_add_obj(binding->group, obj);
 }
 
+static bool is_visible(lv_obj_t* obj)
+{
+    return obj && lv_obj_is_valid(obj) && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void clear_list_focus_states(Binding* binding)
 {
     if (!binding || !binding->screen) return;
@@ -89,6 +94,11 @@ static void bind_filter_column(Binding* binding)
     if (lv_obj_t* broadcast = binding->screen->getBroadcastButton()) {
         group_add_if_valid(binding, broadcast);
     }
+    if (lv_obj_t* team = binding->screen->getTeamButton()) {
+        if (is_visible(team)) {
+            group_add_if_valid(binding, team);
+        }
+    }
 
     lv_group_focus_freeze(binding->group, false);
 
@@ -104,11 +114,21 @@ static void bind_filter_column(Binding* binding)
             return;
         }
     }
+    if (lv_obj_t* team = binding->screen->getTeamButton()) {
+        if (is_visible(team) && lv_obj_has_state(team, LV_STATE_CHECKED)) {
+            focus_first_valid(binding, team);
+            return;
+        }
+    }
 
     if (lv_obj_t* direct = binding->screen->getDirectButton()) {
         focus_first_valid(binding, direct);
     } else if (lv_obj_t* broadcast = binding->screen->getBroadcastButton()) {
         focus_first_valid(binding, broadcast);
+    } else if (lv_obj_t* team = binding->screen->getTeamButton()) {
+        if (is_visible(team)) {
+            focus_first_valid(binding, team);
+        }
     } else if (lv_obj_t* back = binding->screen->getBackButton()) {
         focus_first_valid(binding, back);
     }

@@ -50,6 +50,7 @@ public:
     lv_obj_t* getObj() const { return container_; }
     lv_obj_t* getDirectButton() const { return direct_btn_; }
     lv_obj_t* getBroadcastButton() const { return broadcast_btn_; }
+    lv_obj_t* getTeamButton() const { return team_btn_; }
     lv_obj_t* getBackButton() const { return top_bar_.back_btn; }
     lv_obj_t* getListBackButton() const { return list_back_btn_; }
     size_t getItemCount() const { return items_.size(); }
@@ -85,7 +86,8 @@ private:
 
     enum class FilterMode {
         Direct,
-        Broadcast
+        Broadcast,
+        Team
     };
 
     lv_obj_t* container_ = nullptr;
@@ -94,6 +96,7 @@ private:
     lv_obj_t* list_panel_ = nullptr;
     lv_obj_t* direct_btn_ = nullptr;
     lv_obj_t* broadcast_btn_ = nullptr;
+    lv_obj_t* team_btn_ = nullptr;
     lv_obj_t* list_back_btn_ = nullptr;
 
     int selected_index_ = 0;

@@ -8,6 +8,7 @@
 #include "team_page_styles.h"
 #include "team_page_input.h"
 #include "team_state.h"
+#include "team_ui_store.h"
 #include "../../ui_common.h"
 #include "../../../app/app_context.h"
 #include "../../../team/protocol/team_mgmt.h"
@@ -50,6 +51,9 @@ void handle_join_enter_code(lv_event_t*);
 std::string generate_invite_code();
 bool is_team_ui_active();
 std::string resolve_node_name(uint32_t node_id);
+bool send_invite_advertise(bool regenerate_code);
+uint32_t hash_invite_code(const std::string& code);
+uint32_t resolve_leader_node_id();
 
 uint64_t team_id_to_u64(const TeamId& id)
 {
@@ -415,6 +419,44 @@ void ensure_invite_code()
     }
 }
 
+bool send_invite_advertise(bool regenerate_code)
+{
+    if (regenerate_code)
+    {
+        g_team_state.invite_code = generate_invite_code();
+        g_team_state.invite_expires_s = kInviteTtlSec;
+    }
+    ensure_invite_code();
+    if (!g_team_state.has_team_id)
+    {
+        notify_send_failed("Invite", false);
+        return false;
+    }
+
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    team::TeamController* controller = app_ctx.getTeamController();
+    if (!controller || g_team_state.invite_mode != TeamInviteMode::Radio)
+    {
+        return false;
+    }
+
+    team::proto::TeamAdvertise adv{};
+    adv.team_id = g_team_state.team_id;
+    adv.has_join_hint = true;
+    adv.join_hint = hash_invite_code(g_team_state.invite_code);
+    adv.has_expires_at = true;
+    adv.expires_at = now_secs() + g_team_state.invite_expires_s;
+    adv.nonce = random(0, 0xFFFFFFFF);
+    if (!controller->onAdvertise(adv, chat::ChannelId::PRIMARY, 0))
+    {
+        notify_send_failed("Invite", false);
+        return false;
+    }
+
+    g_team_state.last_update_s = now_secs();
+    return true;
+}
+
 bool ensure_nfc_share_payload()
 {
     if (!g_team_state.has_team_id)
@@ -737,6 +779,18 @@ int find_member_index(uint32_t node_id)
     return -1;
 }
 
+uint32_t resolve_leader_node_id()
+{
+    for (const auto& m : g_team_state.members)
+    {
+        if (m.leader)
+        {
+            return m.node_id;
+        }
+    }
+    return 0;
+}
+
 void assign_member_color(TeamMemberUi& member)
 {
     uint32_t node_id = member.node_id;
@@ -898,6 +952,32 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
     {
         return;
     }
+    if (find_member_index(ev.ctx.from) >= 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        team::TeamController* controller = app_ctx.getTeamController();
+        if (!controller || !g_team_state.has_team_psk ||
+            !g_team_state.has_team_id || g_team_state.security_round == 0)
+        {
+            notify_send_failed("KeyDist", true);
+            return;
+        }
+        team::proto::TeamKeyDist kd{};
+        kd.team_id = g_team_state.team_id;
+        kd.key_id = g_team_state.security_round;
+        kd.channel_psk_len = static_cast<uint8_t>(g_team_state.team_psk.size());
+        kd.channel_psk = g_team_state.team_psk;
+        if (!controller->onKeyDistPlain(kd, chat::ChannelId::PRIMARY, ev.ctx.from))
+        {
+            notify_send_failed_detail("KeyDist", controller->getLastSendError());
+        }
+        else
+        {
+            add_keydist_pending(ev.ctx.from, kd.key_id);
+            ::ui::SystemNotification::show("KeyDist resent", 2000);
+        }
+        return;
+    }
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
         team::TeamController* controller = app_ctx.getTeamController();
@@ -1014,8 +1094,8 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
             }
             if (!use_nfc)
             {
-                if (!controller->onKeyDist(kd, chat::ChannelId::PRIMARY,
-                                           g_team_state.pending_join_node_id))
+                if (!controller->onKeyDistPlain(kd, chat::ChannelId::PRIMARY,
+                                                g_team_state.pending_join_node_id))
                 {
                     notify_send_failed_detail("KeyDist", controller->getLastSendError());
                 }
@@ -1028,6 +1108,9 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
             g_team_state.waiting_new_keys = false;
             g_team_state.has_nfc_next_psk = false;
             g_team_state.nfc_next_key_id = 0;
+            team_ui_save_keys_now(g_team_state.team_id,
+                                  g_team_state.security_round,
+                                  g_team_state.team_psk);
             {
                 std::vector<uint8_t> payload;
                 write_u32_le(payload, g_team_state.pending_join_node_id);
@@ -1202,10 +1285,15 @@ void handle_team_join_accept(const team::TeamJoinAcceptEvent& ev)
     }
     if (controller && ev.msg.channel_psk_len > 0 && g_team_state.has_team_id)
     {
+        g_team_state.team_psk = ev.msg.channel_psk;
+        g_team_state.has_team_psk = true;
         controller->setKeysFromPsk(g_team_state.team_id,
                                    g_team_state.security_round,
                                    ev.msg.channel_psk.data(),
                                    ev.msg.channel_psk_len);
+        team_ui_save_keys_now(g_team_state.team_id,
+                              g_team_state.security_round,
+                              g_team_state.team_psk);
     }
 
     if (controller)
@@ -1270,7 +1358,11 @@ void handle_team_error(const team::TeamErrorEvent& ev)
     if (ev.error == team::TeamProtocolError::DecryptFail ||
         ev.error == team::TeamProtocolError::KeyMismatch)
     {
-        enter_kicked_out_state();
+        if (!g_team_state.waiting_new_keys)
+        {
+            ::ui::SystemNotification::show("Team keys mismatch", 2000);
+        }
+        g_team_state.waiting_new_keys = true;
     }
 }
 
@@ -1424,6 +1516,23 @@ void handle_team_chat(const team::TeamChatEvent& ev)
                                       ts,
                                       ev.msg.header.type,
                                       ev.msg.payload);
+    if (ev.msg.header.type == team::proto::TeamChatType::Location)
+    {
+        team::proto::TeamChatLocation loc;
+        if (team::proto::decodeTeamChatLocation(ev.msg.payload.data(),
+                                                ev.msg.payload.size(),
+                                                &loc))
+        {
+            uint32_t pos_ts = loc.ts != 0 ? loc.ts : ts;
+            team_ui_posring_append(g_team_state.team_id,
+                                   from_id,
+                                   loc.lat_e7,
+                                   loc.lon_e7,
+                                   loc.alt_m,
+                                   0,
+                                   pos_ts);
+        }
+    }
     g_team_state.last_update_s = ev.ctx.timestamp;
 }
 
@@ -1496,6 +1605,9 @@ void handle_team_key_dist(const team::TeamKeyDistEvent& ev)
     {
         g_team_state.team_psk = ev.msg.channel_psk;
         g_team_state.has_team_psk = true;
+        team_ui_save_keys_now(g_team_state.team_id,
+                              g_team_state.security_round,
+                              g_team_state.team_psk);
     }
     g_team_state.waiting_new_keys = false;
     g_team_state.last_update_s = ev.ctx.timestamp;
@@ -1637,6 +1749,9 @@ void handle_create(lv_event_t*)
             notify_send_failed("Keys", true);
         }
     }
+    team_ui_save_keys_now(g_team_state.team_id,
+                          g_team_state.security_round,
+                          g_team_state.team_psk);
     TeamMemberUi self;
     self.node_id = 0;
     self.name = "You";
@@ -1673,6 +1788,7 @@ void handle_invite(lv_event_t*)
     }
     ensure_invite_code();
     g_team_state.invite_mode = TeamInviteMode::Radio;
+    send_invite_advertise(false);
     nav_to(TeamPage::Invite);
 }
 
@@ -1936,9 +2052,6 @@ void handle_transfer_leader(lv_event_t*)
 
 void handle_invite_refresh(lv_event_t*)
 {
-    g_team_state.invite_code = generate_invite_code();
-    g_team_state.invite_expires_s = kInviteTtlSec;
-
     if (!g_team_state.has_team_id)
     {
         g_team_state.team_id = generate_team_id();
@@ -1958,24 +2071,7 @@ void handle_invite_refresh(lv_event_t*)
     team::TeamController* controller = app_ctx.getTeamController();
     if (controller && g_team_state.invite_mode == TeamInviteMode::Radio)
     {
-        if (!controller->setKeysFromPsk(g_team_state.team_id,
-                                        g_team_state.security_round ? g_team_state.security_round : 1,
-                                        g_team_state.team_psk.data(),
-                                        g_team_state.team_psk.size()))
-        {
-            notify_send_failed("Keys", true);
-        }
-        team::proto::TeamAdvertise adv{};
-        adv.team_id = g_team_state.team_id;
-        adv.has_join_hint = true;
-        adv.join_hint = hash_invite_code(g_team_state.invite_code);
-        adv.has_expires_at = true;
-        adv.expires_at = now_secs() + g_team_state.invite_expires_s;
-        adv.nonce = random(0, 0xFFFFFFFF);
-        if (!controller->onAdvertise(adv, chat::ChannelId::PRIMARY, 0))
-        {
-            notify_send_failed("Invite", false);
-        }
+        send_invite_advertise(true);
     }
     if (g_team_state.invite_mode == TeamInviteMode::Nfc)
     {
@@ -2140,6 +2236,30 @@ void handle_join_refresh(lv_event_t*)
     render_page();
 }
 
+void handle_request_keydist(lv_event_t*)
+{
+    if (!g_team_state.in_team || g_team_state.self_is_leader || !g_team_state.has_team_id)
+    {
+        return;
+    }
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    team::TeamController* controller = app_ctx.getTeamController();
+    if (!controller)
+    {
+        return;
+    }
+    team::proto::TeamJoinRequest join_request;
+    join_request.team_id = g_team_state.team_id;
+    join_request.nonce = random(0, 0xFFFFFFFF);
+    bool ok = controller->onJoinTeam(join_request, chat::ChannelId::PRIMARY, 0);
+    if (!ok)
+    {
+        notify_send_failed("KeyDist", false);
+        return;
+    }
+    ::ui::SystemNotification::show("KeyDist requested", 2000);
+}
+
 void handle_join_cancel(lv_event_t*)
 {
     g_team_state.pending_join = false;
@@ -2208,6 +2328,15 @@ void render_status_in_team()
     add_label(g_team_state.body, line, false, true);
     if (g_team_state.security_round == 0)
     {
+        snprintf(line, sizeof(line), "KeyId: --");
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "KeyId: %u", (unsigned)g_team_state.security_round);
+    }
+    add_label(g_team_state.body, line, false, true);
+    if (g_team_state.security_round == 0)
+    {
         snprintf(line, sizeof(line), "Security: OK (Round --)");
     }
     else
@@ -2229,7 +2358,14 @@ void render_status_in_team()
 
     int width = kActionBtnWidth3;
     g_team_state.action_btns[0] = create_action_button("View Team", width, handle_view_team);
-    g_team_state.action_btns[1] = create_action_button("Invite", width, handle_invite);
+    if (g_team_state.self_is_leader)
+    {
+        g_team_state.action_btns[1] = create_action_button("Invite", width, handle_invite);
+    }
+    else
+    {
+        g_team_state.action_btns[1] = create_action_button("Resend Keys", width, handle_request_keydist);
+    }
     g_team_state.action_btns[2] = create_action_button("Leave", width, handle_leave);
     bool keys_ready = g_team_state.has_team_psk && g_team_state.has_team_id && g_team_state.security_round > 0;
     register_focus(g_team_state.action_btns[0], true);
@@ -2304,12 +2440,6 @@ void render_team_home()
     g_team_state.action_btns[0] = create_action_button("Invite", width, handle_invite);
     g_team_state.action_btns[1] = create_action_button("Manage", width, handle_manage);
     g_team_state.action_btns[2] = create_action_button("Leave", width, handle_leave);
-    bool keys_ready = g_team_state.has_team_psk && g_team_state.has_team_id && g_team_state.security_round > 0;
-    if (!keys_ready || g_team_state.waiting_new_keys)
-    {
-        lv_obj_add_state(g_team_state.action_btns[0], LV_STATE_DISABLED);
-        lv_obj_add_state(g_team_state.action_btns[1], LV_STATE_DISABLED);
-    }
     register_focus(g_team_state.action_btns[0], g_team_state.default_focus == nullptr);
     register_focus(g_team_state.action_btns[1]);
     register_focus(g_team_state.action_btns[2]);

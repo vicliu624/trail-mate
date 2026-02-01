@@ -20,10 +20,44 @@ namespace chat {
 namespace ui {
 
 // ---- small helper (logic only, unchanged) ----
+namespace {
+constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
+constexpr uint32_t kSecondsPerDay = 24U * 60U * 60U;
+constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
+constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
+
+static bool is_valid_epoch_ts(uint32_t ts)
+{
+    return ts >= kMinValidEpochSeconds;
+}
+} // namespace
+
 static void format_time_hhmm(char out[16], uint32_t ts)
 {
     if (ts == 0) {
         snprintf(out, 16, "--:--");
+        return;
+    }
+    if (!is_valid_epoch_ts(ts)) {
+        uint32_t now_epoch = static_cast<uint32_t>(time(nullptr));
+        uint32_t now_secs = is_valid_epoch_ts(now_epoch) ? now_epoch : static_cast<uint32_t>(millis() / 1000U);
+        if (now_secs < ts) {
+            now_secs = ts;
+        }
+        uint32_t diff = now_secs - ts;
+        if (diff < 60U) {
+            snprintf(out, 16, "now");
+        } else if (diff < 3600U) {
+            snprintf(out, 16, "%um", static_cast<unsigned>(diff / 60U));
+        } else if (diff < kSecondsPerDay) {
+            snprintf(out, 16, "%uh", static_cast<unsigned>(diff / 3600U));
+        } else if (diff < kSecondsPerMonth) {
+            snprintf(out, 16, "%ud", static_cast<unsigned>(diff / kSecondsPerDay));
+        } else if (diff < kSecondsPerYear) {
+            snprintf(out, 16, "%umo", static_cast<unsigned>(diff / kSecondsPerMonth));
+        } else {
+            snprintf(out, 16, "%uy", static_cast<unsigned>(diff / kSecondsPerYear));
+        }
         return;
     }
     time_t t = ui_apply_timezone_offset(static_cast<time_t>(ts));
@@ -45,6 +79,14 @@ static std::string truncate_preview(const std::string& text)
     std::string out = text.substr(0, kMaxPreviewBytes);
     out.append("...");
     return out;
+}
+
+static bool is_team_conversation(const chat::ConversationId& conv)
+{
+    constexpr uint8_t kTeamChatChannelRaw = 2;
+    constexpr chat::ChannelId kTeamChatChannel =
+        static_cast<chat::ChannelId>(kTeamChatChannelRaw);
+    return conv.channel == kTeamChatChannel && conv.peer == 0;
 }
 
 // ------------------------------------------------
@@ -82,6 +124,7 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
     list_panel_ = w.list_panel;
     direct_btn_ = w.direct_btn;
     broadcast_btn_ = w.broadcast_btn;
+    team_btn_ = w.team_btn;
 
     // ---------- Styles ----------
     chat::ui::message_list::styles::apply_root_container(container_);
@@ -89,6 +132,7 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
     chat::ui::message_list::styles::apply_panel(list_panel_);
     if (direct_btn_) chat::ui::message_list::styles::apply_filter_btn(direct_btn_);
     if (broadcast_btn_) chat::ui::message_list::styles::apply_filter_btn(broadcast_btn_);
+    if (team_btn_) chat::ui::message_list::styles::apply_filter_btn(team_btn_);
 
     // ---------- Top bar (existing widget, unchanged) ----------
     ::ui::widgets::top_bar_init(top_bar_, container_);
@@ -111,6 +155,10 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
     if (broadcast_btn_) {
         lv_obj_add_event_cb(broadcast_btn_, filter_focus_cb, LV_EVENT_FOCUSED, this);
         lv_obj_add_event_cb(broadcast_btn_, filter_click_cb, LV_EVENT_CLICKED, this);
+    }
+    if (team_btn_) {
+        lv_obj_add_event_cb(team_btn_, filter_focus_cb, LV_EVENT_FOCUSED, this);
+        lv_obj_add_event_cb(team_btn_, filter_click_cb, LV_EVENT_CLICKED, this);
     }
     updateFilterHighlight();
 
@@ -149,6 +197,24 @@ void ChatMessageListScreen::setConversations(const std::vector<chat::Conversatio
         return;
     }
     convs_ = convs;
+    bool has_team = false;
+    for (const auto& conv : convs_) {
+        if (is_team_conversation(conv.id)) {
+            has_team = true;
+            break;
+        }
+    }
+    if (team_btn_) {
+        if (has_team) {
+            lv_obj_clear_flag(team_btn_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(team_btn_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (!has_team && filter_mode_ == FilterMode::Team) {
+        filter_mode_ = FilterMode::Broadcast;
+    }
+    updateFilterHighlight();
     rebuildList();
 }
 
@@ -234,6 +300,12 @@ void ChatMessageListScreen::rebuildList()
     std::vector<chat::ConversationMeta> filtered;
     filtered.reserve(convs_.size());
     for (const auto& conv : convs_) {
+        if (is_team_conversation(conv.id)) {
+            if (filter_mode_ == FilterMode::Team) {
+                filtered.push_back(conv);
+            }
+            continue;
+        }
         if (filter_mode_ == FilterMode::Direct && conv.id.peer != 0) {
             filtered.push_back(conv);
         } else if (filter_mode_ == FilterMode::Broadcast && conv.id.peer == 0) {
@@ -351,6 +423,8 @@ void ChatMessageListScreen::filter_focus_cb(lv_event_t* e)
         screen->setFilterMode(FilterMode::Direct);
     } else if (tgt == screen->broadcast_btn_) {
         screen->setFilterMode(FilterMode::Broadcast);
+    } else if (tgt == screen->team_btn_) {
+        screen->setFilterMode(FilterMode::Team);
     }
 }
 
@@ -366,6 +440,8 @@ void ChatMessageListScreen::filter_click_cb(lv_event_t* e)
         screen->setFilterMode(FilterMode::Direct);
     } else if (tgt == screen->broadcast_btn_) {
         screen->setFilterMode(FilterMode::Broadcast);
+    } else if (tgt == screen->team_btn_) {
+        screen->setFilterMode(FilterMode::Team);
     }
     chat::ui::message_list::input::focus_list(&screen->input_binding_);
 }
@@ -377,10 +453,15 @@ void ChatMessageListScreen::updateFilterHighlight()
     }
     lv_obj_clear_state(direct_btn_, LV_STATE_CHECKED);
     lv_obj_clear_state(broadcast_btn_, LV_STATE_CHECKED);
+    if (team_btn_) {
+        lv_obj_clear_state(team_btn_, LV_STATE_CHECKED);
+    }
     if (filter_mode_ == FilterMode::Direct) {
         lv_obj_add_state(direct_btn_, LV_STATE_CHECKED);
-    } else {
+    } else if (filter_mode_ == FilterMode::Broadcast) {
         lv_obj_add_state(broadcast_btn_, LV_STATE_CHECKED);
+    } else if (team_btn_) {
+        lv_obj_add_state(team_btn_, LV_STATE_CHECKED);
     }
 }
 

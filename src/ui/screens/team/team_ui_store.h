@@ -121,6 +121,9 @@ bool team_ui_chatlog_append_structured(const TeamId& team_id,
 bool team_ui_chatlog_load_recent(const TeamId& team_id,
                                  size_t max_count,
                                  std::vector<TeamChatLogEntry>& out);
+bool team_ui_save_keys_now(const TeamId& team_id,
+                           uint32_t key_id,
+                           const std::array<uint8_t, team::proto::kTeamChannelPskSize>& psk);
 
 } // namespace ui
 } // namespace team

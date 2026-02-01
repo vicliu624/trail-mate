@@ -99,7 +99,10 @@ static lv_obj_t* create_content(lv_obj_t* parent)
     return content;
 }
 
-static lv_obj_t* create_filter_panel(lv_obj_t* parent, lv_obj_t** direct_btn, lv_obj_t** broadcast_btn)
+static lv_obj_t* create_filter_panel(lv_obj_t* parent,
+                                     lv_obj_t** direct_btn,
+                                     lv_obj_t** broadcast_btn,
+                                     lv_obj_t** team_btn)
 {
     lv_obj_t* panel = lv_obj_create(parent);
     lv_obj_set_width(panel, kFilterPanelWidth);
@@ -123,8 +126,17 @@ static lv_obj_t* create_filter_panel(lv_obj_t* parent, lv_obj_t** direct_btn, lv
     lv_label_set_text(broadcast_label, "Broadcast");
     lv_obj_center(broadcast_label);
 
+    lv_obj_t* team = lv_btn_create(panel);
+    lv_obj_set_size(team, LV_PCT(100), kButtonHeight);
+    make_non_scrollable(team);
+    lv_obj_t* team_label = lv_label_create(team);
+    lv_label_set_text(team_label, "Team");
+    lv_obj_center(team_label);
+    lv_obj_add_flag(team, LV_OBJ_FLAG_HIDDEN);
+
     if (direct_btn) *direct_btn = direct;
     if (broadcast_btn) *broadcast_btn = broadcast;
+    if (team_btn) *team_btn = team;
     return panel;
 }
 
@@ -152,7 +164,7 @@ MessageListLayout create_layout(lv_obj_t* parent)
     MessageListLayout w{};
     w.root = create_root(parent);
     w.content = create_content(w.root);
-    w.filter_panel = create_filter_panel(w.content, &w.direct_btn, &w.broadcast_btn);
+    w.filter_panel = create_filter_panel(w.content, &w.direct_btn, &w.broadcast_btn, &w.team_btn);
     w.list_panel = create_list_panel(w.content);
     return w;
 }

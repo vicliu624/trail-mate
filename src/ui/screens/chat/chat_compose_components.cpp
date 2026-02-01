@@ -66,6 +66,7 @@ struct ChatComposeScreen::Impl
         ActionIntent intent = ActionIntent::Send;
     };
     ActionContext send_ctx;
+    ActionContext position_ctx;
     ActionContext cancel_ctx;
     lv_timer_t* send_timer = nullptr;
     uint32_t send_start_ms = 0;
@@ -85,6 +86,32 @@ static void set_btn_label_white(lv_obj_t* btn)
     }
 }
 
+static void set_btn_label_text(lv_obj_t* btn, const char* text)
+{
+    if (!btn || !text) return;
+    lv_obj_t* child = lv_obj_get_child(btn, 0);
+    if (child && lv_obj_check_type(child, &lv_label_class))
+    {
+        lv_label_set_text(child, text);
+    }
+}
+
+static void fit_btn_to_label(lv_obj_t* btn, int pad_lr)
+{
+    if (!btn) return;
+    lv_obj_t* child = lv_obj_get_child(btn, 0);
+    if (!child || !lv_obj_check_type(child, &lv_label_class)) return;
+    lv_obj_update_layout(child);
+    int label_w = lv_obj_get_width(child);
+    if (label_w <= 0) return;
+    int target_w = label_w + pad_lr * 2;
+    int cur_w = lv_obj_get_width(btn);
+    if (target_w > cur_w)
+    {
+        lv_obj_set_width(btn, target_w);
+    }
+}
+
 void ChatComposeScreen::setEnabled(bool enabled)
 {
     if (!impl_) return;
@@ -95,6 +122,7 @@ void ChatComposeScreen::setEnabled(bool enabled)
     };
 
     set(impl_->w.send_btn);
+    set(impl_->w.position_btn);
     set(impl_->w.cancel_btn);
     set(impl_->w.textarea);
     if (impl_->w.top_bar.back_btn) set(impl_->w.top_bar.back_btn);
@@ -251,13 +279,21 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
 
     impl_->send_ctx.screen = this;
     impl_->send_ctx.intent = ActionIntent::Send;
+    impl_->position_ctx.screen = this;
+    impl_->position_ctx.intent = ActionIntent::Position;
     impl_->cancel_ctx.screen = this;
     impl_->cancel_ctx.intent = ActionIntent::Cancel;
     lv_obj_add_event_cb(impl_->w.send_btn, on_action_click, LV_EVENT_CLICKED, &impl_->send_ctx);
+    lv_obj_add_event_cb(impl_->w.position_btn, on_action_click, LV_EVENT_CLICKED, &impl_->position_ctx);
     lv_obj_add_event_cb(impl_->w.cancel_btn, on_action_click, LV_EVENT_CLICKED, &impl_->cancel_ctx);
 
     set_btn_label_white(impl_->w.send_btn);
+    set_btn_label_white(impl_->w.position_btn);
     set_btn_label_white(impl_->w.cancel_btn);
+    if (impl_->w.position_btn)
+    {
+        lv_obj_add_flag(impl_->w.position_btn, LV_OBJ_FLAG_HIDDEN);
+    }
 
     init_topbar();
 
@@ -312,6 +348,51 @@ void ChatComposeScreen::setHeaderText(const char* title, const char* status)
     if (!impl_) return;
     if (title) ::ui::widgets::top_bar_set_title(impl_->w.top_bar, title);
     if (status) ::ui::widgets::top_bar_set_right_text(impl_->w.top_bar, status);
+}
+
+void ChatComposeScreen::setActionLabels(const char* send_label, const char* cancel_label)
+{
+    if (!impl_) return;
+    if (send_label)
+    {
+        set_btn_label_text(impl_->w.send_btn, send_label);
+        fit_btn_to_label(impl_->w.send_btn, 8);
+    }
+    if (cancel_label)
+    {
+        set_btn_label_text(impl_->w.cancel_btn, cancel_label);
+        fit_btn_to_label(impl_->w.cancel_btn, 8);
+    }
+}
+
+void ChatComposeScreen::setPositionButton(const char* label, bool visible)
+{
+    if (!impl_ || !impl_->w.position_btn) return;
+    if (label)
+    {
+        set_btn_label_text(impl_->w.position_btn, label);
+        fit_btn_to_label(impl_->w.position_btn, 8);
+    }
+    if (visible)
+    {
+        lv_obj_clear_flag(impl_->w.position_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        lv_obj_add_flag(impl_->w.position_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    if (lv_group_t* g = lv_group_get_default())
+    {
+        if (visible)
+        {
+            lv_group_add_obj(g, impl_->w.position_btn);
+        }
+        else
+        {
+            lv_group_remove_obj(impl_->w.position_btn);
+        }
+    }
 }
 
 std::string ChatComposeScreen::getText() const

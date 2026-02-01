@@ -11,6 +11,7 @@ struct MessageListLayout {
     lv_obj_t* list_panel;
     lv_obj_t* direct_btn;
     lv_obj_t* broadcast_btn;
+    lv_obj_t* team_btn;
 };
 
 // root/page

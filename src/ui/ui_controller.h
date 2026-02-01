@@ -66,7 +66,7 @@ public:
     /**
      * @brief Handle compose action (send/cancel)
      */
-    void handleComposeAction(bool send);
+    void handleComposeAction(ChatComposeScreen::ActionIntent intent);
 
     /**
      * @brief Exit chat UI to main menu
@@ -104,7 +104,9 @@ private:
     
     chat::ChannelId current_channel_;
     chat::ConversationId current_conv_;
-    
+    bool team_conv_active_ = false;
+    lv_timer_t* team_conv_timer_ = nullptr;
+
     void switchToChannelList();
     void switchToConversation(chat::ConversationId conv);
     void switchToCompose(chat::ConversationId conv);
@@ -112,6 +114,10 @@ private:
     void handleSendMessage(const std::string& text);
     void refreshUnreadCounts();
     void cleanupComposeIme();
+    bool isTeamConversation(const chat::ConversationId& conv) const;
+    void refreshTeamConversation();
+    void startTeamConversationTimer();
+    void stopTeamConversationTimer();
 };
 
 } // namespace ui

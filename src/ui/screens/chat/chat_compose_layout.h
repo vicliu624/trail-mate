@@ -14,6 +14,7 @@ struct Spec {
 
     int btn_h = 22;
     int send_w = 70;
+    int position_w = 80;
     int cancel_w = 80;
     int btn_gap = 10;
 };
@@ -25,6 +26,7 @@ struct Widgets {
 
     lv_obj_t* action_bar = nullptr;
     lv_obj_t* send_btn = nullptr;
+    lv_obj_t* position_btn = nullptr;
     lv_obj_t* cancel_btn = nullptr;
     lv_obj_t* len_label = nullptr;
 

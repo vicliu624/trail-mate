@@ -75,6 +75,9 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w) {
     w.send_btn = create_btn_with_label(w.action_bar, spec.send_w, spec.btn_h, "Send");
     lv_obj_set_style_pad_right(w.send_btn, spec.btn_gap, 0);
 
+    w.position_btn = create_btn_with_label(w.action_bar, spec.position_w, spec.btn_h, "Position");
+    lv_obj_set_style_pad_right(w.position_btn, spec.btn_gap, 0);
+
     w.cancel_btn = create_btn_with_label(w.action_bar, spec.cancel_w, spec.btn_h, "Cancel");
 
     lv_obj_t* spacer = lv_obj_create(w.action_bar);
@@ -87,4 +90,3 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w) {
 }
 
 } // namespace chat::ui::compose::layout
-
