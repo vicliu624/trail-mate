@@ -18,13 +18,9 @@ jobs:
 
       - name: Verify formatting
         run: |
-          files=$(git ls-files '*.c' '*.cpp' '*.h' '*.hpp')
-          if [ -z "$files" ]; then
-            echo "No C/C++ files to check."
-            exit 0
-          fi
           clang-format --version
-          clang-format --dry-run --Werror $files
+          git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' ':(exclude)src/chat/infra/meshtastic/generated/*' \
+            | xargs -0 clang-format --dry-run --Werror
 
   build:
     name: PlatformIO Build
