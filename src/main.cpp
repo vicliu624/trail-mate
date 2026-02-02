@@ -14,8 +14,8 @@
 
 #include "app/app_context.h"
 #include "display/DisplayConfig.h"
-#include "ui/assets/images.h"
 #include "ui/app_screen.h"
+#include "ui/assets/images.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 
@@ -110,8 +110,9 @@ bool format_menu_time(char* out, size_t out_len)
 }
 
 // App function types (like factory example)
-class FunctionAppScreen : public AppScreen {
-public:
+class FunctionAppScreen : public AppScreen
+{
+  public:
     FunctionAppScreen(const char* name,
                       const lv_image_dsc_t* icon,
                       void (*enter)(lv_obj_t*),
@@ -123,19 +124,21 @@ public:
 
     void enter(lv_obj_t* parent) override
     {
-        if (enter_) {
+        if (enter_)
+        {
             enter_(parent);
         }
     }
 
     void exit(lv_obj_t* parent) override
     {
-        if (exit_) {
+        if (exit_)
+        {
             exit_(parent);
         }
     }
 
-private:
+  private:
     const char* name_;
     const lv_image_dsc_t* icon_;
     void (*enter_)(lv_obj_t*);

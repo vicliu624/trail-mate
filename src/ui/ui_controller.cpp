@@ -4,13 +4,13 @@
  */
 
 #include "ui_controller.h"
-#include <Arduino.h>
 #include "../../app/app_context.h"
-#include "screens/team/team_ui_store.h"
-#include "widgets/system_notification.h"
-#include "../sys/event_bus.h"
-#include "ui_common.h"
 #include "../gps/gps_service_api.h"
+#include "../sys/event_bus.h"
+#include "screens/team/team_ui_store.h"
+#include "ui_common.h"
+#include "widgets/system_notification.h"
+#include <Arduino.h>
 #include <cmath>
 #include <ctime>
 
@@ -41,7 +41,8 @@ bool isTeamConversationId(const chat::ConversationId& conv)
 
 const char* team_command_name(team::proto::TeamCommandType type)
 {
-    switch (type) {
+    switch (type)
+    {
     case team::proto::TeamCommandType::RallyTo:
         return "RallyTo";
     case team::proto::TeamCommandType::MoveTo:
@@ -55,10 +56,12 @@ const char* team_command_name(team::proto::TeamCommandType type)
 
 std::string truncate_text(const std::string& text, size_t max_len)
 {
-    if (text.size() <= max_len) {
+    if (text.size() <= max_len)
+    {
         return text;
     }
-    if (max_len <= 3) {
+    if (max_len <= 3)
+    {
         return text.substr(0, max_len);
     }
     return text.substr(0, max_len - 3) + "...";
@@ -66,48 +69,64 @@ std::string truncate_text(const std::string& text, size_t max_len)
 
 std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
 {
-    if (entry.type == team::proto::TeamChatType::Text) {
+    if (entry.type == team::proto::TeamChatType::Text)
+    {
         std::string text(entry.payload.begin(), entry.payload.end());
         return truncate_text(text, 160);
     }
-    if (entry.type == team::proto::TeamChatType::Location) {
+    if (entry.type == team::proto::TeamChatType::Location)
+    {
         team::proto::TeamChatLocation loc;
         if (team::proto::decodeTeamChatLocation(entry.payload.data(),
                                                 entry.payload.size(),
-                                                &loc)) {
+                                                &loc))
+        {
             double lat = static_cast<double>(loc.lat_e7) / 1e7;
             double lon = static_cast<double>(loc.lon_e7) / 1e7;
             char buf[128];
-            if (!loc.label.empty()) {
+            if (!loc.label.empty())
+            {
                 snprintf(buf, sizeof(buf), "Location: %s %.5f, %.5f",
                          loc.label.c_str(), lat, lon);
-            } else {
+            }
+            else
+            {
                 snprintf(buf, sizeof(buf), "Location: %.5f, %.5f", lat, lon);
             }
             return std::string(buf);
         }
         return "Location";
     }
-    if (entry.type == team::proto::TeamChatType::Command) {
+    if (entry.type == team::proto::TeamChatType::Command)
+    {
         team::proto::TeamChatCommand cmd;
         if (team::proto::decodeTeamChatCommand(entry.payload.data(),
                                                entry.payload.size(),
-                                               &cmd)) {
+                                               &cmd))
+        {
             const char* name = team_command_name(cmd.cmd_type);
             double lat = static_cast<double>(cmd.lat_e7) / 1e7;
             double lon = static_cast<double>(cmd.lon_e7) / 1e7;
             char buf[160];
-            if (cmd.lat_e7 != 0 || cmd.lon_e7 != 0) {
-                if (!cmd.note.empty()) {
+            if (cmd.lat_e7 != 0 || cmd.lon_e7 != 0)
+            {
+                if (!cmd.note.empty())
+                {
                     snprintf(buf, sizeof(buf), "Command: %s %.5f, %.5f %s",
                              name, lat, lon, cmd.note.c_str());
-                } else {
+                }
+                else
+                {
                     snprintf(buf, sizeof(buf), "Command: %s %.5f, %.5f",
                              name, lat, lon);
                 }
-            } else if (!cmd.note.empty()) {
+            }
+            else if (!cmd.note.empty())
+            {
                 snprintf(buf, sizeof(buf), "Command: %s %s", name, cmd.note.c_str());
-            } else {
+            }
+            else
+            {
                 snprintf(buf, sizeof(buf), "Command: %s", name);
             }
             return std::string(buf);
@@ -119,7 +138,8 @@ std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
 
 std::string team_title_from_snapshot(const team::ui::TeamUiSnapshot& snap)
 {
-    if (!snap.team_name.empty()) {
+    if (!snap.team_name.empty())
+    {
         return snap.team_name;
     }
     return "Team";
@@ -353,11 +373,13 @@ void UiController::switchToChannelList()
     team_conv_active_ = false;
     Serial.printf("[UiController] switchToChannelList: parent=%p active=%p sleeping=%d\n",
                   parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0);
-    if (lv_obj_t* active = lv_screen_active()) {
+    if (lv_obj_t* active = lv_screen_active())
+    {
         Serial.printf("[UiController] switchToChannelList active child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(active));
     }
-    if (parent_) {
+    if (parent_)
+    {
         Serial.printf("[UiController] switchToChannelList parent child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(parent_));
     }
@@ -392,11 +414,13 @@ void UiController::switchToConversation(chat::ConversationId conv)
     Serial.printf("[UiController] switchToConversation: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
                   parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0,
                   (unsigned long)conv.peer);
-    if (lv_obj_t* active = lv_screen_active()) {
+    if (lv_obj_t* active = lv_screen_active())
+    {
         Serial.printf("[UiController] switchToConversation active child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(active));
     }
-    if (parent_) {
+    if (parent_)
+    {
         Serial.printf("[UiController] switchToConversation parent child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(parent_));
     }
@@ -480,11 +504,13 @@ void UiController::switchToCompose(chat::ConversationId conv)
     Serial.printf("[UiController] switchToCompose: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
                   parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0,
                   (unsigned long)conv.peer);
-    if (lv_obj_t* active = lv_screen_active()) {
+    if (lv_obj_t* active = lv_screen_active())
+    {
         Serial.printf("[UiController] switchToCompose active child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(active));
     }
-    if (parent_) {
+    if (parent_)
+    {
         Serial.printf("[UiController] switchToCompose parent child count=%u\n",
                       (unsigned)lv_obj_get_child_cnt(parent_));
     }
@@ -690,13 +716,14 @@ void UiController::startTeamConversationTimer()
         lv_timer_resume(team_conv_timer_);
         return;
     }
-    team_conv_timer_ = lv_timer_create([](lv_timer_t* timer) {
+    team_conv_timer_ = lv_timer_create([](lv_timer_t* timer)
+                                       {
         auto* controller = static_cast<UiController*>(timer->user_data);
         if (controller)
         {
             controller->refreshTeamConversation();
-        }
-    }, 1000, this);
+        } },
+                                       1000, this);
     if (team_conv_timer_)
     {
         lv_timer_set_repeat_count(team_conv_timer_, -1);
@@ -715,7 +742,8 @@ void UiController::stopTeamConversationTimer()
 
 void UiController::handleConversationAction(ChatConversationScreen::ActionIntent intent)
 {
-    if (intent == ChatConversationScreen::ActionIntent::Reply) {
+    if (intent == ChatConversationScreen::ActionIntent::Reply)
+    {
         switchToCompose(current_conv_);
     }
 }
@@ -880,7 +908,8 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
 
 void UiController::exitToMenu()
 {
-    if (exiting_) {
+    if (exiting_)
+    {
         return;
     }
     exiting_ = true;

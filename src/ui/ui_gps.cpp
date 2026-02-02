@@ -1,18 +1,18 @@
-#include "screens/gps/gps_state.h"
+#include "board/BoardBase.h"
+#include "display/DisplayInterface.h"
+#include "gps/GPS.h"
+#include "screens/gps/gps_constants.h"
 #include "screens/gps/gps_modal.h"
-#include "widgets/map/map_tiles.h"
 #include "screens/gps/gps_page_components.h"
 #include "screens/gps/gps_page_input.h"
 #include "screens/gps/gps_page_layout.h"
 #include "screens/gps/gps_page_lifetime.h"
 #include "screens/gps/gps_page_map.h"
 #include "screens/gps/gps_page_styles.h"
-#include "screens/gps/gps_constants.h"
+#include "screens/gps/gps_state.h"
 #include "screens/gps/gps_tracker_overlay.h"
 #include "ui_common.h"
-#include "board/BoardBase.h"
-#include "display/DisplayInterface.h"
-#include "gps/GPS.h"
+#include "widgets/map/map_tiles.h"
 
 #include <Arduino.h>
 #include <cmath>
@@ -37,7 +37,8 @@ static void gps_top_bar_back(void* /*user_data*/)
 {
     GPS_LOG("[GPS][BACK] gps_top_bar_back: exiting=%d alive=%d root=%p\n",
             g_gps_state.exiting, g_gps_state.alive, gps_root);
-    if (g_gps_state.exiting) {
+    if (g_gps_state.exiting)
+    {
         GPS_LOG("[GPS][BACK] gps_top_bar_back: already exiting, ignore\n");
         return;
     }
@@ -49,7 +50,8 @@ static void gps_top_bar_back(void* /*user_data*/)
 GPSPageState g_gps_state;
 static lv_obj_t* gps_root = nullptr;
 
-namespace {
+namespace
+{
 
 void assign_layout_widgets(const gps::ui::layout::Widgets& w)
 {
@@ -79,11 +81,13 @@ void bind_controls_and_group(lv_group_t* app_g)
     set_control_id(g_gps_state.pan_v, ControlId::PanVBtn);
     set_control_id(g_gps_state.tracker_btn, ControlId::TrackerBtn);
 
-    auto bind_btn_events = [](lv_obj_t* obj, bool include_rotary) {
+    auto bind_btn_events = [](lv_obj_t* obj, bool include_rotary)
+    {
         if (!obj) return;
         lv_obj_add_event_cb(obj, on_ui_event, LV_EVENT_CLICKED, NULL);
         lv_obj_add_event_cb(obj, on_ui_event, LV_EVENT_KEY, NULL);
-        if (include_rotary) {
+        if (include_rotary)
+        {
             lv_obj_add_event_cb(obj, on_ui_event, LV_EVENT_ROTARY, NULL);
         }
     };
@@ -94,13 +98,16 @@ void bind_controls_and_group(lv_group_t* app_g)
     bind_btn_events(g_gps_state.pan_v, true);
     bind_btn_events(g_gps_state.tracker_btn, false);
 
-    if (g_gps_state.top_bar.back_btn) {
+    if (g_gps_state.top_bar.back_btn)
+    {
         // Ensure encoder KEY events can trigger back even if LVGL doesn't emit CLICKED.
         lv_obj_add_event_cb(g_gps_state.top_bar.back_btn, on_ui_event, LV_EVENT_KEY, NULL);
     }
 
-    if (app_g) {
-        if (g_gps_state.top_bar.back_btn) {
+    if (app_g)
+    {
+        if (g_gps_state.top_bar.back_btn)
+        {
             lv_group_add_obj(app_g, g_gps_state.top_bar.back_btn);
         }
         lv_group_add_obj(app_g, g_gps_state.zoom);
@@ -118,11 +125,14 @@ void init_gps_state_defaults()
 {
     g_gps_state.exiting = false;
     GPSData gps_data = gps::gps_get_data();
-    if (gps_data.valid) {
+    if (gps_data.valid)
+    {
         g_gps_state.lat = gps_data.lat;
         g_gps_state.lng = gps_data.lng;
         g_gps_state.has_fix = true;
-    } else {
+    }
+    else
+    {
         g_gps_state.zoom_level = 0;
         g_gps_state.lat = gps_ui::kDefaultLat;
         g_gps_state.lng = gps_ui::kDefaultLng;
@@ -161,7 +171,8 @@ bool isGPSLoadingTiles()
 static void title_update_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    if (!gps::ui::lifetime::is_alive()) {
+    if (!gps::ui::lifetime::is_alive())
+    {
         return;
     }
 
@@ -172,7 +183,8 @@ static void title_update_timer_cb(lv_timer_t* timer)
 static void gps_update_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    if (!gps::ui::lifetime::is_alive()) {
+    if (!gps::ui::lifetime::is_alive())
+    {
         return;
     }
 
@@ -181,7 +193,8 @@ static void gps_update_timer_cb(lv_timer_t* timer)
     GPSData gps_data = gps::gps_get_data();
     const bool has_fix_now = gps_data.valid || g_gps_state.has_fix;
 
-    if (g_gps_state.pending_refresh) {
+    if (g_gps_state.pending_refresh)
+    {
         g_gps_state.pending_refresh = false;
         update_map_tiles(false);
     }
@@ -189,17 +202,20 @@ static void gps_update_timer_cb(lv_timer_t* timer)
     refresh_member_panel(false);
     refresh_team_markers_from_posring();
 
-    if (g_gps_state.zoom_modal.is_open()) {
+    if (g_gps_state.zoom_modal.is_open())
+    {
         tick_gps_update(false);
         return;
     }
 
-    if (modal_is_open(g_gps_state.tracker_modal)) {
+    if (modal_is_open(g_gps_state.tracker_modal))
+    {
         tick_gps_update(false);
         return;
     }
 
-    if (!has_fix_now && !g_gps_state.pending_refresh) {
+    if (!has_fix_now && !g_gps_state.pending_refresh)
+    {
         return;
     }
 
@@ -209,7 +225,8 @@ static void gps_update_timer_cb(lv_timer_t* timer)
 static void gps_loader_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    if (!gps::ui::lifetime::is_alive()) {
+    if (!gps::ui::lifetime::is_alive())
+    {
         return;
     }
     tick_loader();
@@ -217,7 +234,8 @@ static void gps_loader_timer_cb(lv_timer_t* timer)
 
 static void gps_initial_tiles_async(void* /*user_data*/)
 {
-    if (!gps::ui::lifetime::is_alive() || !g_gps_state.map) {
+    if (!gps::ui::lifetime::is_alive() || !g_gps_state.map)
+    {
         return;
     }
     // Ensure final sizes before first tile calculation to avoid visible jitter.
@@ -230,7 +248,8 @@ void ui_gps_enter(lv_obj_t* parent)
     GPS_LOG("[GPS] Entering GPS page, SD ready: %d, GPS ready: %d\n", board.isSDReady(), board.isGPSReady());
 
     // Ensure any previous instance is cleaned up before we reset state.
-    if (gps_root != nullptr) {
+    if (gps_root != nullptr)
+    {
         ui_gps_exit(nullptr);
     }
 
@@ -267,7 +286,8 @@ void ui_gps_enter(lv_obj_t* parent)
                         &g_gps_state.has_visible_map_data);
     g_gps_state.tile_ctx.map_container = g_gps_state.map;
 
-    if (!g_gps_state.tracker_draw_cb_bound) {
+    if (!g_gps_state.tracker_draw_cb_bound)
+    {
         lv_obj_add_event_cb(g_gps_state.map, gps_tracker_draw_event, LV_EVENT_DRAW_POST, NULL);
         g_gps_state.tracker_draw_cb_bound = true;
     }
@@ -277,7 +297,8 @@ void ui_gps_enter(lv_obj_t* parent)
     bind_controls_and_group(app_g);
 
     lv_obj_move_foreground(g_gps_state.panel);
-    if (g_gps_state.resolution_label != NULL) {
+    if (g_gps_state.resolution_label != NULL)
+    {
         lv_obj_move_foreground(g_gps_state.resolution_label);
     }
 
@@ -288,7 +309,8 @@ void ui_gps_enter(lv_obj_t* parent)
 
     refresh_member_panel(true);
 
-    if (app_g != NULL) {
+    if (app_g != NULL)
+    {
         lv_group_set_editing(app_g, false);
     }
 
@@ -299,10 +321,13 @@ void ui_gps_enter(lv_obj_t* parent)
     g_gps_state.last_resolution_lat = g_gps_state.lat;
     update_resolution_display();
 
-    if (g_gps_state.map == NULL || g_gps_state.tile_ctx.map_container != g_gps_state.map) {
+    if (g_gps_state.map == NULL || g_gps_state.tile_ctx.map_container != g_gps_state.map)
+    {
         GPS_LOG("[GPS] WARNING: map=%p, tile_ctx.map_container=%p, skipping initial tile calculation\n",
                 g_gps_state.map, g_gps_state.tile_ctx.map_container);
-    } else {
+    }
+    else
+    {
         // Defer the first tile calculation to the next LVGL tick to stabilize layout.
         lv_async_call(gps_initial_tiles_async, nullptr);
     }
@@ -340,9 +365,12 @@ void ui_gps_exit(lv_obj_t* parent)
     GPS_LOG("[GPS][EXIT] timers cleared\n");
 
     extern lv_group_t* app_g;
-    if (app_g) {
-        auto remove_if = [](lv_obj_t* obj) {
-            if (obj) {
+    if (app_g)
+    {
+        auto remove_if = [](lv_obj_t* obj)
+        {
+            if (obj)
+            {
                 lv_group_remove_obj(obj);
             }
         };
@@ -354,24 +382,28 @@ void ui_gps_exit(lv_obj_t* parent)
         remove_if(g_gps_state.tracker_btn);
         remove_if(g_gps_state.pan_h_indicator);
         remove_if(g_gps_state.pan_v_indicator);
-        for (auto* btn : g_gps_state.member_btns) {
+        for (auto* btn : g_gps_state.member_btns)
+        {
             remove_if(btn);
         }
         GPS_LOG("[GPS][EXIT] removed objs from group\n");
     }
 
-    if (g_gps_state.zoom_modal.is_open()) {
+    if (g_gps_state.zoom_modal.is_open())
+    {
         GPS_LOG("[GPS][EXIT] closing zoom modal\n");
         modal_close(g_gps_state.zoom_modal);
     }
     GPS_LOG("[GPS][EXIT] cleaning tracker overlay\n");
     gps_tracker_cleanup();
-    if (g_gps_state.zoom_modal.group) {
+    if (g_gps_state.zoom_modal.group)
+    {
         GPS_LOG("[GPS][EXIT] deleting zoom modal group\n");
         lv_group_del(g_gps_state.zoom_modal.group);
         g_gps_state.zoom_modal.group = nullptr;
     }
-    if (g_gps_state.tracker_modal.group) {
+    if (g_gps_state.tracker_modal.group)
+    {
         GPS_LOG("[GPS][EXIT] deleting tracker modal group\n");
         lv_group_del(g_gps_state.tracker_modal.group);
         g_gps_state.tracker_modal.group = nullptr;
@@ -381,7 +413,8 @@ void ui_gps_exit(lv_obj_t* parent)
     ::cleanup_tiles(g_gps_state.tile_ctx);
 
     // Delete the root last.
-    if (gps_root != nullptr) {
+    if (gps_root != nullptr)
+    {
         GPS_LOG("[GPS][EXIT] deleting root %p\n", gps_root);
         lv_obj_del(gps_root);
         gps_root = nullptr;

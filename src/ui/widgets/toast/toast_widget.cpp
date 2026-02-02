@@ -2,10 +2,12 @@
 #include <Arduino.h>
 #include <algorithm>
 
-namespace ui::widgets {
+namespace ui::widgets
+{
 
-struct Toast::Impl {
-    lv_obj_t* root  = nullptr;
+struct Toast::Impl
+{
+    lv_obj_t* root = nullptr;
     lv_obj_t* label = nullptr;
     lv_timer_t* timer = nullptr;
 
@@ -23,7 +25,8 @@ static void set_bg_opa(lv_obj_t* obj, int32_t v)
 
 static int clamp_int(int v, int lo, int hi)
 {
-    return (v < lo) ? lo : (v > hi) ? hi : v;
+    return (v < lo) ? lo : (v > hi) ? hi
+                                    : v;
 }
 
 void Toast::show(lv_obj_t* parent, const char* text, Type type)
@@ -118,7 +121,8 @@ void Toast::timer_cb(lv_timer_t* t)
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)set_bg_opa);
 
     // 动画结束后 hide（注意：hide 会 destroy 并清 active）
-    lv_anim_set_ready_cb(&a, [](lv_anim_t*) { Toast::hide(); });
+    lv_anim_set_ready_cb(&a, [](lv_anim_t*)
+                         { Toast::hide(); });
     lv_anim_start(&a);
 
     // timer 只负责触发一次淡出
@@ -130,11 +134,13 @@ void Toast::destroy(Impl* impl)
 {
     if (!impl) return;
 
-    if (impl->timer) {
+    if (impl->timer)
+    {
         lv_timer_del(impl->timer);
         impl->timer = nullptr;
     }
-    if (impl->root) {
+    if (impl->root)
+    {
         lv_obj_del(impl->root);
         impl->root = nullptr;
     }
@@ -145,10 +151,13 @@ lv_color_t Toast::bgColor(Type type)
 {
     switch (type)
     {
-    case Type::Success: return lv_palette_main(LV_PALETTE_GREEN);
-    case Type::Error:   return lv_palette_main(LV_PALETTE_RED);
+    case Type::Success:
+        return lv_palette_main(LV_PALETTE_GREEN);
+    case Type::Error:
+        return lv_palette_main(LV_PALETTE_RED);
     case Type::Info:
-    default:            return lv_palette_main(LV_PALETTE_GREY);
+    default:
+        return lv_palette_main(LV_PALETTE_GREY);
     }
 }
 

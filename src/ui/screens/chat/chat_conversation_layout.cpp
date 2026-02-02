@@ -40,10 +40,11 @@
  * - Visual style (colors/radius/padding) lives in styles.*.
  */
 
-#include <Arduino.h>
 #include "chat_conversation_layout.h"
+#include <Arduino.h>
 
-namespace chat::ui::layout {
+namespace chat::ui::layout
+{
 
 static void make_non_scrollable(lv_obj_t* obj)
 {
@@ -140,11 +141,14 @@ void align_message_row(lv_obj_t* row, bool is_self)
 {
     // Match original behavior:
     // self -> row aligns to END, other -> START
-    if (is_self) {
+    if (is_self)
+    {
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_END,
                               LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);
-    } else {
+    }
+    else
+    {
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
                               LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);

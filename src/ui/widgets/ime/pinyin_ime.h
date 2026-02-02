@@ -8,11 +8,14 @@
 #include <string>
 #include <vector>
 
-namespace ui {
-namespace widgets {
+namespace ui
+{
+namespace widgets
+{
 
-class PinyinIme {
-public:
+class PinyinIme
+{
+  public:
     void setEnabled(bool enabled);
     bool isEnabled() const;
 
@@ -29,7 +32,7 @@ public:
     bool commitCandidate(int index, std::string& out);
     bool commitActive(std::string& out);
 
-private:
+  private:
     void updateCandidates();
     void updateCandidatesFromBuiltin();
 

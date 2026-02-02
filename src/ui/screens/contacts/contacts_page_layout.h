@@ -1,12 +1,15 @@
 #pragma once
 
+#include "contacts_page_styles.h" // style::apply_*
+#include "contacts_state.h"       // g_contacts_state, ContactsMode
 #include "lvgl.h"
-#include "contacts_state.h"              // g_contacts_state, ContactsMode
-#include "contacts_page_styles.h"        // style::apply_*
 
-namespace contacts {
-namespace ui {
-namespace layout {
+namespace contacts
+{
+namespace ui
+{
+namespace layout
+{
 
 /**
  * @brief Create root container for contacts page

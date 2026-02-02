@@ -6,15 +6,18 @@
 #include "top_bar.h"
 #include <Arduino.h>
 
-namespace ui {
-namespace widgets {
+namespace ui
+{
+namespace widgets
+{
 
 static void back_event_cb(lv_event_t* e)
 {
     TopBar* bar = static_cast<TopBar*>(lv_event_get_user_data(e));
     Serial.printf("[TopBar] back_event_cb code=%d bar=%p cb=%p\n",
                   (int)lv_event_get_code(e), bar, bar ? (void*)bar->back_cb : nullptr);
-    if (bar != nullptr && bar->back_cb != nullptr) {
+    if (bar != nullptr && bar->back_cb != nullptr)
+    {
         bar->back_cb(bar->back_user_data);
     }
 }
@@ -40,16 +43,19 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_obj_set_style_pad_column(bar.container, 6, 0);
 
     // Back button: reuse override or create a rounded one
-    if (config.back_btn_override != nullptr) {
+    if (config.back_btn_override != nullptr)
+    {
         bar.back_btn = config.back_btn_override;
-    } else if (config.create_back) {
+    }
+    else if (config.create_back)
+    {
         bar.back_btn = lv_btn_create(bar.container);
         lv_obj_set_size(bar.back_btn, 30, 20);
         lv_obj_set_style_bg_color(bar.back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
         lv_obj_set_style_bg_opa(bar.back_btn, LV_OPA_COVER, LV_PART_MAIN);
         lv_obj_set_style_border_width(bar.back_btn, 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(bar.back_btn, lv_color_hex(0xB0B0B0), LV_PART_MAIN);
-        lv_obj_set_style_radius(bar.back_btn, 12, LV_PART_MAIN);  // oval, align with GPS style
+        lv_obj_set_style_radius(bar.back_btn, 12, LV_PART_MAIN); // oval, align with GPS style
         lv_obj_set_style_bg_color(bar.back_btn, lv_color_hex(0xE0E0E0), LV_STATE_FOCUSED);
         lv_obj_set_style_outline_width(bar.back_btn, 0, LV_STATE_FOCUSED);
         lv_obj_align(bar.back_btn, LV_ALIGN_LEFT_MID, 0, 0);
@@ -62,9 +68,12 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     // If an override is used, leave its styling/callbacks untouched.
 
     // Title label: reuse override or create centered
-    if (config.title_label_override != nullptr) {
+    if (config.title_label_override != nullptr)
+    {
         bar.title_label = config.title_label_override;
-    } else {
+    }
+    else
+    {
         bar.title_label = lv_label_create(bar.container);
         lv_label_set_text(bar.title_label, "");
         lv_label_set_long_mode(bar.title_label, LV_LABEL_LONG_DOT);
@@ -85,14 +94,16 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
 
 void top_bar_set_title(TopBar& bar, const char* title)
 {
-    if (bar.title_label != nullptr && title != nullptr) {
+    if (bar.title_label != nullptr && title != nullptr)
+    {
         lv_label_set_text(bar.title_label, title);
     }
 }
 
 void top_bar_set_right_text(TopBar& bar, const char* text)
 {
-    if (bar.right_label != nullptr && text != nullptr) {
+    if (bar.right_label != nullptr && text != nullptr)
+    {
         lv_label_set_text(bar.right_label, text);
     }
 }

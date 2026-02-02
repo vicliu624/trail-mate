@@ -8,15 +8,19 @@
 #include "lvgl.h"
 #include "pinyin_ime.h"
 
-namespace ui {
-namespace widgets {
+namespace ui
+{
+namespace widgets
+{
 
-class ImeWidget {
-public:
+class ImeWidget
+{
+  public:
     void init(lv_obj_t* parent, lv_obj_t* textarea);
     void detach();
 
-    enum class Mode {
+    enum class Mode
+    {
         EN,
         CN,
         NUM
@@ -32,7 +36,7 @@ public:
     lv_obj_t* toggle_btn() const { return toggle_btn_; }
     lv_obj_t* focus_obj() const { return focus_proxy_; }
 
-private:
+  private:
     void refresh_labels();
     void refresh_candidates();
 

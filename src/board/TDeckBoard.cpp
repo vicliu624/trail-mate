@@ -442,9 +442,9 @@ RotaryMsg_t TDeckBoard::getRotary()
         return msg;
     }
 
-    const uint32_t repeat_ms = 70;    // Even more responsive trackball repeat
-    const uint32_t click_ms = 110;    // Click debounce
-    const uint8_t stable_polls = 2;   // Increase sensitivity on T-Deck trackball
+    const uint32_t repeat_ms = 70;  // Even more responsive trackball repeat
+    const uint32_t click_ms = 110;  // Click debounce
+    const uint8_t stable_polls = 2; // Increase sensitivity on T-Deck trackball
 
 #if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
     const bool right_pressed = digitalRead(TRACKBALL_RIGHT) == LOW;

@@ -4,18 +4,22 @@
  */
 #pragma once
 
-#include "lvgl.h"
 #include "../../chat/domain/chat_types.h"
 #include "../../widgets/top_bar.h"
 #include "chat_conversation_input.h"
+#include "lvgl.h"
 #include <vector>
 
-namespace chat {
-namespace ui {
+namespace chat
+{
+namespace ui
+{
 
-class ChatConversationScreen {
-public:
-    enum class ActionIntent {
+class ChatConversationScreen
+{
+  public:
+    enum class ActionIntent
+    {
         Reply
     };
 
@@ -40,35 +44,41 @@ public:
     void updateBatteryFromBoard();
     void setBackCallback(void (*cb)(void*), void* user_data);
 
-private:
-    enum class TimerDomain {
+  private:
+    enum class TimerDomain
+    {
         ScreenGeneral,
         Input
     };
 
-    struct TimerEntry {
+    struct TimerEntry
+    {
         lv_timer_t* timer = nullptr;
         TimerDomain domain = TimerDomain::ScreenGeneral;
     };
 
-    struct LifetimeGuard {
+    struct LifetimeGuard
+    {
         bool alive = false;
         int pending_async = 0;
     };
 
-    struct ActionContext {
+    struct ActionContext
+    {
         ChatConversationScreen* screen = nullptr;
         ActionIntent intent = ActionIntent::Reply;
     };
 
-    struct ActionPayload {
+    struct ActionPayload
+    {
         LifetimeGuard* guard = nullptr;
         void (*action_cb)(ActionIntent intent, void*) = nullptr;
         void* user_data = nullptr;
         ActionIntent intent = ActionIntent::Reply;
     };
 
-    struct BackPayload {
+    struct BackPayload
+    {
         LifetimeGuard* guard = nullptr;
         void (*back_cb)(void*) = nullptr;
         void* user_data = nullptr;
@@ -88,12 +98,13 @@ private:
     void (*back_cb_)(void*) = nullptr;
     void* back_cb_user_data_ = nullptr;
 
-    struct MessageItem {
+    struct MessageItem
+    {
         chat::ChatMessage msg;
-        lv_obj_t* container = nullptr;   // row
-        lv_obj_t* text_label = nullptr;  // inside bubble
-        lv_obj_t* time_label = nullptr;  // reserved (not used)
-        lv_obj_t* status_label = nullptr;// reserved (not used)
+        lv_obj_t* container = nullptr;    // row
+        lv_obj_t* text_label = nullptr;   // inside bubble
+        lv_obj_t* time_label = nullptr;   // reserved (not used)
+        lv_obj_t* status_label = nullptr; // reserved (not used)
     };
 
     std::vector<MessageItem> messages_;

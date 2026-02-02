@@ -1,11 +1,13 @@
 #pragma once
 
-#include "lvgl.h"
 #include "../../widgets/top_bar.h"
+#include "lvgl.h"
 
-namespace gps::ui::layout {
+namespace gps::ui::layout
+{
 
-struct Spec {
+struct Spec
+{
     int panel_width = 85;
     int panel_top_offset = 3;
     int panel_row_gap = 3;
@@ -23,7 +25,8 @@ struct Spec {
     int control_btn_h = 32;
 };
 
-struct Widgets {
+struct Widgets
+{
     lv_obj_t* root = nullptr;
     lv_obj_t* header = nullptr;
     lv_obj_t* content = nullptr;

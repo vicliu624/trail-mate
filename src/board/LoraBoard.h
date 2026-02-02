@@ -1,8 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
-
+#include <cstdint>
 
 // LoRa ӿڣṩ RadioLib ķʡ
 class LoraBoard
@@ -11,7 +10,6 @@ class LoraBoard
     virtual ~LoraBoard() = default;
 
     virtual bool isRadioOnline() const = 0;
-
 
     virtual int transmitRadio(const uint8_t* data, size_t len) = 0;
     virtual int startRadioReceive() = 0;

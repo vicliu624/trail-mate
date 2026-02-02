@@ -1,7 +1,7 @@
 /**
  * @file images.h
  * @brief Image asset declarations for LVGL v9
- * 
+ *
  * This header declares external image descriptors that are defined
  * in the corresponding .c files in this directory.
  */

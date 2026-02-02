@@ -5,9 +5,10 @@
 
 #include "settings_state.h"
 
-namespace settings::ui {
+namespace settings::ui
+{
 
-SettingsData g_settings {};
-UiState g_state {};
+SettingsData g_settings{};
+UiState g_state{};
 
 } // namespace settings::ui

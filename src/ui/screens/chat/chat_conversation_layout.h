@@ -1,11 +1,13 @@
 #pragma once
 
-#include "lvgl.h"
 #include "../../chat/domain/chat_types.h"
+#include "lvgl.h"
 
-namespace chat::ui::layout {
+namespace chat::ui::layout
+{
 
-struct ConversationWidgets {
+struct ConversationWidgets
+{
     lv_obj_t* root = nullptr;
 
     lv_obj_t* msg_list = nullptr;

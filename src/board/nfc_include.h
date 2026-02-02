@@ -21,7 +21,6 @@
 #include <ndef_type_wifi.h>
 #include <ndef_types.h>
 #include <nfc_utils.h>
-#include <rfal_rf.h>
 #include <rfal_isoDep.h>
 #include <rfal_nfc.h>
 #include <rfal_nfcDep.h>
@@ -29,6 +28,7 @@
 #include <rfal_nfcb.h>
 #include <rfal_nfcf.h>
 #include <rfal_nfcv.h>
+#include <rfal_rf.h>
 #ifdef rfalRunBlocking
 #undef rfalRunBlocking
 #endif

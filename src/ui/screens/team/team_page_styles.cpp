@@ -13,12 +13,12 @@ namespace style
 {
 namespace
 {
-static constexpr uint32_t kBtnBg     = 0xF4C77A;
-static constexpr uint32_t kBtnBgFoc  = 0xEBA341;
+static constexpr uint32_t kBtnBg = 0xF4C77A;
+static constexpr uint32_t kBtnBgFoc = 0xEBA341;
 static constexpr uint32_t kBtnBorder = 0xEBA341;
-static constexpr uint32_t kTextMain  = 0x202020;
-static constexpr uint32_t kTextSub   = 0x4A4A4A;
-static constexpr uint32_t kListBg    = 0xFFFFFF;
+static constexpr uint32_t kTextMain = 0x202020;
+static constexpr uint32_t kTextSub = 0x4A4A4A;
+static constexpr uint32_t kListBg = 0xFFFFFF;
 static constexpr uint32_t kListBorder = 0xD2D2D2;
 
 static lv_style_t s_root;

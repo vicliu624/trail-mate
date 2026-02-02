@@ -1,24 +1,29 @@
 #pragma once
 
-#include "lvgl.h"
 #include "../../chat/domain/chat_types.h"
 #include "../../widgets/top_bar.h"
+#include "lvgl.h"
 #include <string>
 
-namespace ui {
-namespace widgets {
+namespace ui
+{
+namespace widgets
+{
 class ImeWidget;
 } // namespace widgets
 } // namespace ui
 
-namespace chat {
+namespace chat
+{
 class ChatService;
 }
 
-namespace chat::ui {
+namespace chat::ui
+{
 
-class ChatComposeScreen {
-public:
+class ChatComposeScreen
+{
+  public:
     enum class ActionIntent
     {
         Send,
@@ -50,13 +55,13 @@ public:
 
     lv_obj_t* getObj() const;
 
-private:
+  private:
     chat::ConversationId conv_;
 
     void setEnabled(bool enabled);
     lv_obj_t* toastHost() const;
     void showSendToast(bool ok, bool timeout, const char* message);
-    
+
     void (*action_cb_)(ActionIntent intent, void*) = nullptr;
     void* action_cb_user_data_ = nullptr;
 

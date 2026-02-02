@@ -5,13 +5,13 @@
 
 #pragma once
 
-#include "lvgl.h"
-#include "../../widgets/top_bar.h"
 #include "../../../team/domain/team_types.h"
 #include "../../../team/protocol/team_mgmt.h"
+#include "../../widgets/top_bar.h"
+#include "lvgl.h"
+#include <array>
 #include <string>
 #include <vector>
-#include <array>
 
 namespace team
 {
@@ -99,8 +99,8 @@ struct TeamPageState
     lv_obj_t* body = nullptr;
     lv_obj_t* actions = nullptr;
 
-    lv_obj_t* action_btns[3] = { nullptr, nullptr, nullptr };
-    lv_obj_t* action_labels[3] = { nullptr, nullptr, nullptr };
+    lv_obj_t* action_btns[3] = {nullptr, nullptr, nullptr};
+    lv_obj_t* action_labels[3] = {nullptr, nullptr, nullptr};
     lv_obj_t* detail_label = nullptr;
 
     std::vector<lv_obj_t*> list_items;

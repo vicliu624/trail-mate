@@ -5,10 +5,12 @@
 
 #include "contacts_state.h"
 
-namespace contacts {
-namespace ui {
+namespace contacts
+{
+namespace ui
+{
 
-ContactsPageState g_contacts_state;  // 这里是“唯一的定义”
+ContactsPageState g_contacts_state; // 这里是“唯一的定义”
 
 } // namespace ui
 } // namespace contacts

@@ -18,4 +18,3 @@ lv_obj_t* create_list(lv_obj_t* content);
 } // namespace layout
 } // namespace ui
 } // namespace tracker
-

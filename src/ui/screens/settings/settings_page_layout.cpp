@@ -4,11 +4,12 @@
  */
 
 #include "settings_page_layout.h"
-#include "settings_state.h"
-#include "settings_page_styles.h"
 #include "../../ui_common.h"
+#include "settings_page_styles.h"
+#include "settings_state.h"
 
-namespace settings::ui::layout {
+namespace settings::ui::layout
+{
 
 static constexpr int kFilterPanelWidth = 120;
 static constexpr int kTopBarContentGap = 3;

@@ -1,7 +1,8 @@
 #include "chat_message_list_styles.h"
 #include "../../assets/fonts/fonts.h"
 
-namespace chat::ui::message_list::styles {
+namespace chat::ui::message_list::styles
+{
 
 static constexpr uint32_t kPrimary = 0xEBA341;
 static constexpr uint32_t kPrimaryLight = 0xF1B65A;
@@ -136,10 +137,30 @@ void apply_filter_btn(lv_obj_t* btn)
     lv_obj_add_style(btn, &s_filter_btn_checked, LV_STATE_CHECKED);
 }
 
-void apply_label_name(lv_obj_t* label)      { init_once(); lv_obj_add_style(label, &s_label_name, 0); }
-void apply_label_preview(lv_obj_t* label)   { init_once(); lv_obj_add_style(label, &s_label_preview, 0); }
-void apply_label_time(lv_obj_t* label)      { init_once(); lv_obj_add_style(label, &s_label_time, 0); }
-void apply_label_unread(lv_obj_t* label)    { init_once(); lv_obj_add_style(label, &s_label_unread, 0); }
-void apply_label_placeholder(lv_obj_t* label){ init_once(); lv_obj_add_style(label, &s_label_placeholder, 0); }
+void apply_label_name(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_label_name, 0);
+}
+void apply_label_preview(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_label_preview, 0);
+}
+void apply_label_time(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_label_time, 0);
+}
+void apply_label_unread(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_label_unread, 0);
+}
+void apply_label_placeholder(lv_obj_t* label)
+{
+    init_once();
+    lv_obj_add_style(label, &s_label_placeholder, 0);
+}
 
 } // namespace chat::ui::message_list::styles

@@ -8,17 +8,21 @@
 #include "lvgl.h"
 #include <cstdint>
 
-namespace ui {
-namespace widgets {
+namespace ui
+{
+namespace widgets
+{
 
-struct TopBarConfig {
-    lv_obj_t* back_btn_override = nullptr;      // Use existing back button (keeps its style)
-    lv_obj_t* title_label_override = nullptr;   // Use existing title label if provided
-    bool create_back = true;                    // Create new back button when no override
-    lv_coord_t height = 26;                     // Default height
+struct TopBarConfig
+{
+    lv_obj_t* back_btn_override = nullptr;    // Use existing back button (keeps its style)
+    lv_obj_t* title_label_override = nullptr; // Use existing title label if provided
+    bool create_back = true;                  // Create new back button when no override
+    lv_coord_t height = 26;                   // Default height
 };
 
-struct TopBar {
+struct TopBar
+{
     lv_obj_t* container = nullptr;
     lv_obj_t* back_btn = nullptr;
     lv_obj_t* title_label = nullptr;

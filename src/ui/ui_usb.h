@@ -14,13 +14,13 @@
  * @brief Enter USB Mass Storage mode
  * @param parent Parent object for the UI
  */
-void ui_usb_enter(lv_obj_t *parent);
+void ui_usb_enter(lv_obj_t* parent);
 
 /**
  * @brief Exit USB Mass Storage mode
  * @param parent Parent object for the UI
  */
-void ui_usb_exit(lv_obj_t *parent);
+void ui_usb_exit(lv_obj_t* parent);
 
 /**
  * @brief Check if USB Mass Storage mode is currently active

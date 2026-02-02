@@ -7,7 +7,8 @@
 
 #include "lvgl.h"
 
-namespace settings::ui::components {
+namespace settings::ui::components
+{
 
 void create(lv_obj_t* parent);
 void destroy();

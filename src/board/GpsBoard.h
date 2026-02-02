@@ -16,4 +16,3 @@ class GpsBoard
     virtual void powerControl(PowerCtrlChannel_t ch, bool enable) = 0;
     virtual bool syncTimeFromGPS(uint32_t gps_task_interval_ms = 0) = 0;
 };
-

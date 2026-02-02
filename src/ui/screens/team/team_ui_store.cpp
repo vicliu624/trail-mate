@@ -7,11 +7,11 @@
 
 #include <Arduino.h>
 #include <SD.h>
-#include <vector>
-#include <string>
-#include <cstring>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <string>
+#include <vector>
 
 namespace team
 {
@@ -218,8 +218,7 @@ void write_u16(File& f, uint16_t v)
 {
     uint8_t b[2] = {
         static_cast<uint8_t>(v & 0xFF),
-        static_cast<uint8_t>((v >> 8) & 0xFF)
-    };
+        static_cast<uint8_t>((v >> 8) & 0xFF)};
     f.write(b, 2);
 }
 
@@ -1243,7 +1242,8 @@ bool team_ui_posring_load_latest(const TeamId& team_id,
         sample.ts = ts;
 
         auto it = std::find_if(out.begin(), out.end(),
-                               [&](const TeamPosSample& s) { return s.member_id == member_id; });
+                               [&](const TeamPosSample& s)
+                               { return s.member_id == member_id; });
         if (it == out.end())
         {
             out.push_back(sample);

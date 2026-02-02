@@ -2,9 +2,9 @@
 
 #include "../../chat/ports/i_mesh_adapter.h"
 #include "../domain/team_types.h"
-#include "../protocol/team_chat.h"
 #include "../ports/i_team_crypto.h"
 #include "../ports/i_team_event_sink.h"
+#include "../protocol/team_chat.h"
 #include <vector>
 
 namespace team

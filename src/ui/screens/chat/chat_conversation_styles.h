@@ -2,7 +2,8 @@
 
 #include "lvgl.h"
 
-namespace chat::ui::conversation::styles {
+namespace chat::ui::conversation::styles
+{
 
 void init_once();
 

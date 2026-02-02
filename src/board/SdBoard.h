@@ -9,4 +9,3 @@ class SdBoard
     virtual void uninstallSD() = 0;
     virtual bool isCardReady() = 0;
 };
-

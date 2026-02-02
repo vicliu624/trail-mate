@@ -5,7 +5,8 @@
 
 #include "settings_page_styles.h"
 
-namespace settings::ui::style {
+namespace settings::ui::style
+{
 
 static constexpr uint32_t kPrimary = 0xEBA341;
 static constexpr uint32_t kPrimaryLight = 0xF1B65A;

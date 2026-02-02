@@ -4,8 +4,8 @@
  */
 
 #include "chat_service.h"
-#include "../time_utils.h"
 #include "../../sys/event_bus.h"
+#include "../time_utils.h"
 
 namespace chat
 {
@@ -114,9 +114,12 @@ void ChatService::processIncoming()
         ChatMessage msg;
         msg.channel = incoming.channel;
         msg.from = incoming.from;
-        if (incoming.to == 0xFFFFFFFF) {
+        if (incoming.to == 0xFFFFFFFF)
+        {
             msg.peer = 0;
-        } else {
+        }
+        else
+        {
             msg.peer = incoming.from;
         }
         msg.msg_id = incoming.msg_id;

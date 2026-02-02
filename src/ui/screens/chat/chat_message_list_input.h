@@ -11,18 +11,22 @@
 
 #include "lvgl.h"
 
-namespace chat::ui {
+namespace chat::ui
+{
 
 class ChatMessageListScreen;
 
-namespace message_list::input {
+namespace message_list::input
+{
 
-enum class FocusColumn {
+enum class FocusColumn
+{
     Filter = 0,
     List = 1
 };
 
-struct Binding {
+struct Binding
+{
     ChatMessageListScreen* screen = nullptr;
     lv_group_t* group = nullptr;
     lv_group_t* prev_group = nullptr;

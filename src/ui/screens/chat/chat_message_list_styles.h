@@ -1,7 +1,8 @@
 #pragma once
 #include "lvgl.h"
 
-namespace chat::ui::message_list::styles {
+namespace chat::ui::message_list::styles
+{
 
 void init_once();
 

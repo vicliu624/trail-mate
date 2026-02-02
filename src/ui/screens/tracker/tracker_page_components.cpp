@@ -1,11 +1,11 @@
 #include <Arduino.h>
 
+#include "../../../gps/usecase/track_recorder.h"
+#include "../../ui_common.h"
 #include "tracker_page_components.h"
+#include "tracker_page_input.h"
 #include "tracker_page_layout.h"
 #include "tracker_state.h"
-#include "tracker_page_input.h"
-#include "../../ui_common.h"
-#include "../../../gps/usecase/track_recorder.h"
 
 #include <SD.h>
 
@@ -53,7 +53,8 @@ void refresh_track_list()
     for (size_t i = 0; i < count; ++i)
     {
         lv_obj_t* btn = lv_list_add_btn(state.list, LV_SYMBOL_FILE, names[i].c_str());
-        lv_obj_add_event_cb(btn, [](lv_event_t*) {}, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(
+            btn, [](lv_event_t*) {}, LV_EVENT_CLICKED, nullptr);
     }
 }
 

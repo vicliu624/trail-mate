@@ -1,8 +1,8 @@
 #pragma once
 
-#include "team_types.h"
 #include "../protocol/team_chat.h"
 #include "../protocol/team_mgmt.h"
+#include "team_types.h"
 #include <cstdint>
 #include <vector>
 

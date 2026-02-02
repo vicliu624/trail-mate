@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "team_state.h"
 #include "../../../team/protocol/team_chat.h"
+#include "team_state.h"
 #include <cstddef>
 
 namespace team

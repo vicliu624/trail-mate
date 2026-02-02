@@ -1,7 +1,8 @@
 #include "chat_conversation_styles.h"
 #include "../../assets/fonts/fonts.h"
 
-namespace chat::ui::conversation::styles {
+namespace chat::ui::conversation::styles
+{
 
 static bool inited = false;
 
@@ -30,8 +31,8 @@ static constexpr lv_coord_t kBubblePadY = 6;
 static constexpr lv_coord_t kBubbleRadius = 12;
 
 static const lv_color_t kBubbleOther = lv_color_hex(0xE5F0FF);
-static const lv_color_t kBubbleSelf  = lv_color_hex(0xFFF4E0);
-static const lv_color_t kTextColor   = lv_color_hex(0x202020);
+static const lv_color_t kBubbleSelf = lv_color_hex(0xFFF4E0);
+static const lv_color_t kTextColor = lv_color_hex(0x202020);
 
 void init_once()
 {

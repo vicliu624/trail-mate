@@ -18,6 +18,37 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.4-alpha] - 2026-02-02
+### Added / 新增
+- T-Deck board support and new build env / T-Deck 板级支持与新构建环境
+- GPS tracker/track recorder with Tracker screen and assets / GPS 轨迹记录与 Tracker 页面及资源
+- Team NFC support, team chat protocol, and team UI store / Team NFC 支持、团队聊天协议与 Team UI 存储
+- Toast widget and LVGL lifetime notes / Toast 组件与 LVGL 生命周期说明
+
+### Changed / 变更
+- UI lifecycle refactor with compose flow / UI 生命周期重构与 compose 流程
+- GPS page layout/styles and map overlay refactor / GPS 页面布局/样式与地图覆盖层重构
+- UI controller and app screen wiring adjustments / UI 控制器与页面接线调整
+
+### Fixed / 修复
+- Meshtastic node id handling error / Meshtastic 节点 ID 处理错误
+- UI glitches across chat/contacts/gps/team / Chat/Contacts/GPS/Team 页面 UI 问题修复
+
+## [0.1.3-alpha] - 2026-01-23
+### Added / 新增
+- Team management stack (domain/protocol/service) and Team screen / Team 管理模块（领域/协议/服务）与 Team 页面
+- Team docs/assets / Team 文档与资源
+- Send-status UI and message preview truncation / 发送状态 UI 与消息预览截断
+
+### Changed / 变更
+- Mesh persistence and PKI handling (node store/backoff) / Mesh 持久化与 PKI 处理（节点存储/退避）
+- Chat storage improvements across RAM/Flash/log stores / 聊天存储改进（RAM/Flash/日志）
+- Diagnostics and timestamp utilities / 诊断信息与时间戳工具改进
+
+### Fixed / 修复
+- Messaging reliability across reboots / 重启后消息可靠性
+- UI timezone offset application / UI 时区偏移应用
+
 ## [0.1.2-alpha] - 2026-01-21
 ### Added / 新增
 - Meshtastic routing ACK decoding with reason mapping, ack timeouts, and richer RX/TX diagnostics / Meshtastic 路由 ACK 解码，增加原因映射、ACK 超时和更详细的收发日志

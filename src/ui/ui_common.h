@@ -6,15 +6,15 @@
 #ifndef UI_COMMON_H
 #define UI_COMMON_H
 
-#include "lvgl.h"
 #include "app_screen.h"
+#include "lvgl.h"
 #include "widgets/top_bar.h"
 #include <ctime>
 
 // Forward declarations
-extern lv_obj_t *main_screen;
-extern lv_group_t *menu_g;
-extern lv_group_t *app_g;
+extern lv_obj_t* main_screen;
+extern lv_group_t* menu_g;
+extern lv_group_t* app_g;
 
 void menu_show();
 void ui_clear_active_app();
@@ -22,10 +22,10 @@ AppScreen* ui_get_active_app();
 void ui_switch_to_app(AppScreen* app, lv_obj_t* parent);
 void ui_exit_active_app(lv_obj_t* parent);
 void ui_request_exit_to_menu();
-void set_default_group(lv_group_t *group);
+void set_default_group(lv_group_t* group);
 
 // Menu creation helper (simplified version of factory's create_menu)
-lv_obj_t *create_menu(lv_obj_t *parent, lv_event_cb_t event_cb);
+lv_obj_t* create_menu(lv_obj_t* parent, lv_event_cb_t event_cb);
 
 // Battery/status formatting helper used across UI screens (chat, GPS, main menu)
 void ui_format_battery(int level, bool charging, char* out, size_t out_len);

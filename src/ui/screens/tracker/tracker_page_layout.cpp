@@ -9,8 +9,8 @@
  */
 
 #include "tracker_page_layout.h"
-#include "tracker_state.h"
 #include "../../widgets/top_bar.h"
+#include "tracker_state.h"
 
 namespace tracker
 {

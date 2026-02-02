@@ -4,11 +4,11 @@
  */
 
 #include "ui_team.h"
+#include "../app/app_context.h"
+#include "../sys/event_bus.h"
 #include "screens/team/team_page_components.h"
 #include "screens/team/team_state.h"
 #include "ui_common.h"
-#include "../app/app_context.h"
-#include "../sys/event_bus.h"
 
 namespace team
 {

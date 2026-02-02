@@ -1,23 +1,27 @@
 #include "gps_page_lifetime.h"
 
+#include "../../widgets/map/map_tiles.h"
 #include "gps_modal.h"
 #include "gps_page_map.h"
 #include "gps_state.h"
 #include "gps_tracker_overlay.h"
-#include "../../widgets/map/map_tiles.h"
 #include <algorithm>
 
-namespace gps::ui::lifetime {
+namespace gps::ui::lifetime
+{
 
-namespace {
+namespace
+{
 
 void clear_modal_groups()
 {
-    if (g_gps_state.zoom_modal.group) {
+    if (g_gps_state.zoom_modal.group)
+    {
         lv_group_del(g_gps_state.zoom_modal.group);
         g_gps_state.zoom_modal.group = nullptr;
     }
-    if (g_gps_state.tracker_modal.group) {
+    if (g_gps_state.tracker_modal.group)
+    {
         lv_group_del(g_gps_state.tracker_modal.group);
         g_gps_state.tracker_modal.group = nullptr;
     }
@@ -26,12 +30,15 @@ void clear_modal_groups()
 void detach_group_objs()
 {
     lv_group_t* group = g_gps_state.app_group;
-    if (!group) {
+    if (!group)
+    {
         return;
     }
 
-    auto remove_if = [group](lv_obj_t* obj) {
-        if (obj) {
+    auto remove_if = [group](lv_obj_t* obj)
+    {
+        if (obj)
+        {
             lv_group_remove_obj(obj);
         }
     };
@@ -54,7 +61,8 @@ void on_root_deleted(lv_event_t* e)
 {
     (void)e;
 
-    if (!g_gps_state.alive) {
+    if (!g_gps_state.alive)
+    {
         return;
     }
 
@@ -74,7 +82,8 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.popup_label = nullptr;
 
     // Close modals that are not children of the root container.
-    if (g_gps_state.zoom_modal.is_open()) {
+    if (g_gps_state.zoom_modal.is_open())
+    {
         modal_close(g_gps_state.zoom_modal);
     }
     gps_tracker_cleanup();
@@ -114,7 +123,8 @@ bool is_alive()
 
 void bind_root_delete_hook()
 {
-    if (!g_gps_state.root || g_gps_state.delete_hook_bound) {
+    if (!g_gps_state.root || g_gps_state.delete_hook_bound)
+    {
         return;
     }
     lv_obj_add_event_cb(g_gps_state.root, on_root_deleted, LV_EVENT_DELETE, nullptr);
@@ -123,11 +133,13 @@ void bind_root_delete_hook()
 
 lv_timer_t* add_timer(lv_timer_cb_t cb, uint32_t period_ms, void* user_data)
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return nullptr;
     }
     lv_timer_t* timer = lv_timer_create(cb, period_ms, user_data);
-    if (timer) {
+    if (timer)
+    {
         g_gps_state.timers.push_back(timer);
     }
     return timer;
@@ -135,8 +147,10 @@ lv_timer_t* add_timer(lv_timer_cb_t cb, uint32_t period_ms, void* user_data)
 
 void clear_timers()
 {
-    for (lv_timer_t* timer : g_gps_state.timers) {
-        if (timer) {
+    for (lv_timer_t* timer : g_gps_state.timers)
+    {
+        if (timer)
+        {
             lv_timer_del(timer);
         }
     }
@@ -145,7 +159,8 @@ void clear_timers()
 
 void remove_timer(lv_timer_t* timer)
 {
-    if (!timer) {
+    if (!timer)
+    {
         return;
     }
 

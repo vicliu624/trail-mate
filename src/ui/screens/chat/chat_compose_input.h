@@ -1,10 +1,12 @@
 #pragma once
-#include "lvgl.h"
 #include "chat_compose_layout.h"
+#include "lvgl.h"
 
-namespace chat::ui::compose::input {
+namespace chat::ui::compose::input
+{
 
-struct State {
+struct State
+{
     bool encoder_enter_focus_send = true;
 };
 

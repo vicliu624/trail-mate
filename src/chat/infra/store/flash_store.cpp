@@ -177,7 +177,8 @@ std::vector<ConversationMeta> FlashStore::loadConversationPage(size_t offset,
         list.push_back(meta);
     }
     std::sort(list.begin(), list.end(),
-              [](const ConversationMeta& a, const ConversationMeta& b) {
+              [](const ConversationMeta& a, const ConversationMeta& b)
+              {
                   return a.last_timestamp > b.last_timestamp;
               });
     if (total)
@@ -248,7 +249,8 @@ bool FlashStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
         if (rec.msg_id != msg_id) continue;
         if (rec.from != 0) continue; // only update outgoing messages
         uint8_t new_status = static_cast<uint8_t>(status);
-        if (rec.status == new_status) {
+        if (rec.status == new_status)
+        {
             return true;
         }
         rec.status = new_status;

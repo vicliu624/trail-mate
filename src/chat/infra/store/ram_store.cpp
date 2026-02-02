@@ -50,8 +50,8 @@ std::vector<ChatMessage> RamStore::loadRecent(const ConversationId& conv, size_t
 }
 
 std::vector<ConversationMeta> RamStore::loadConversationPage(size_t offset,
-                                                            size_t limit,
-                                                            size_t* total)
+                                                             size_t limit,
+                                                             size_t* total)
 {
     std::vector<ConversationMeta> list;
     list.reserve(conversations_.size());
@@ -89,7 +89,8 @@ std::vector<ConversationMeta> RamStore::loadConversationPage(size_t offset,
     }
 
     std::sort(list.begin(), list.end(),
-              [](const ConversationMeta& a, const ConversationMeta& b) {
+              [](const ConversationMeta& a, const ConversationMeta& b)
+              {
                   return a.last_timestamp > b.last_timestamp;
               });
     if (total)

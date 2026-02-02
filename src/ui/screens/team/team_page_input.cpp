@@ -3,11 +3,11 @@
  * @brief Team page input handling
  */
 
-#include <Arduino.h>
 #include "team_page_input.h"
-#include "team_state.h"
-#include "../../ui_common.h"
 #include "../../../app/app_context.h"
+#include "../../ui_common.h"
+#include "team_state.h"
+#include <Arduino.h>
 
 extern lv_group_t* app_g;
 

@@ -1,10 +1,12 @@
 #pragma once
-#include "lvgl.h"
 #include "../../chat/domain/chat_types.h"
+#include "lvgl.h"
 
-namespace chat::ui::layout {
+namespace chat::ui::layout
+{
 
-struct MessageListLayout {
+struct MessageListLayout
+{
     lv_obj_t* root;
     lv_obj_t* content;
     lv_obj_t* filter_panel;
@@ -21,7 +23,8 @@ lv_obj_t* create_root(lv_obj_t* parent);
 MessageListLayout create_layout(lv_obj_t* parent);
 
 // message list item (button with labels)
-struct MessageItemWidgets {
+struct MessageItemWidgets
+{
     lv_obj_t* btn;
     lv_obj_t* name_label;
     lv_obj_t* preview_label;

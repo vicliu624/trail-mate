@@ -4,22 +4,25 @@
  */
 #include "chat_conversation_components.h"
 
-#include "../ui_common.h"
 #include "../../../app/app_context.h"
+#include "../ui_common.h"
+#include "chat_conversation_input.h"
 #include "chat_conversation_layout.h"
 #include "chat_conversation_styles.h"
-#include "chat_conversation_input.h"
 
 #include <Arduino.h>
 #include <algorithm>
-#include <ctime>
 #include <cstdio>
+#include <ctime>
 
-namespace chat {
-namespace ui {
+namespace chat
+{
+namespace ui
+{
 
 // Keep original constant meaning (bubble max width and 70% rule)
-namespace {
+namespace
+{
 constexpr lv_coord_t kBubbleMaxWidth = 322; // same as original
 constexpr uint32_t kSecondsPerDay = 24U * 60U * 60U;
 constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
@@ -43,7 +46,8 @@ static void format_hms(char* out, size_t out_len, uint32_t seconds)
 static void format_message_time(char* out, size_t out_len, uint32_t ts)
 {
     if (!out || out_len == 0) return;
-    if (ts == 0) {
+    if (ts == 0)
+    {
         snprintf(out, out_len, "--");
         return;
     }
@@ -52,32 +56,40 @@ static void format_message_time(char* out, size_t out_len, uint32_t ts)
     bool ts_is_epoch = is_valid_epoch_ts(ts);
     bool now_is_epoch = is_valid_epoch_ts(now_epoch);
     uint32_t now_secs = now_is_epoch ? now_epoch : static_cast<uint32_t>(millis() / 1000U);
-    if (ts_is_epoch && !now_is_epoch) {
+    if (ts_is_epoch && !now_is_epoch)
+    {
         ts_is_epoch = false;
     }
-    if (now_secs < ts) {
+    if (now_secs < ts)
+    {
         now_secs = ts;
     }
     uint32_t diff = now_secs - ts;
 
-    if (!ts_is_epoch) {
-        if (diff < 60U) {
+    if (!ts_is_epoch)
+    {
+        if (diff < 60U)
+        {
             snprintf(out, out_len, "now");
             return;
         }
-        if (diff < 3600U) {
+        if (diff < 3600U)
+        {
             snprintf(out, out_len, "%um", static_cast<unsigned>(diff / 60U));
             return;
         }
-        if (diff < kSecondsPerDay) {
+        if (diff < kSecondsPerDay)
+        {
             snprintf(out, out_len, "%uh", static_cast<unsigned>(diff / 3600U));
             return;
         }
-        if (diff < kSecondsPerMonth) {
+        if (diff < kSecondsPerMonth)
+        {
             snprintf(out, out_len, "%ud", static_cast<unsigned>(diff / kSecondsPerDay));
             return;
         }
-        if (diff < kSecondsPerYear) {
+        if (diff < kSecondsPerYear)
+        {
             snprintf(out, out_len, "%umo", static_cast<unsigned>(diff / kSecondsPerMonth));
             return;
         }
@@ -87,9 +99,12 @@ static void format_message_time(char* out, size_t out_len, uint32_t ts)
 
     time_t t = ui_apply_timezone_offset(static_cast<time_t>(ts));
     struct tm* info = gmtime(&t);
-    if (info) {
+    if (info)
+    {
         strftime(out, out_len, "%H:%M", info);
-    } else {
+    }
+    else
+    {
         snprintf(out, out_len, "--");
     }
 }
@@ -102,9 +117,12 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     guard_->pending_async = 0;
 
     lv_obj_t* active = lv_screen_active();
-    if (!active) {
+    if (!active)
+    {
         Serial.printf("[ChatConversation] WARNING: lv_screen_active() is null\n");
-    } else {
+    }
+    else
+    {
         Serial.printf("[ChatConversation] init: active=%p parent=%p\n", active, parent);
     }
 
@@ -131,18 +149,22 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     ::ui::widgets::top_bar_set_title(top_bar_, title);
     ::ui::widgets::top_bar_set_right_text(top_bar_, "");
     ::ui::widgets::top_bar_set_back_callback(top_bar_, handle_back, this);
-    if (top_bar_.container) {
+    if (top_bar_.container)
+    {
         lv_obj_move_to_index(top_bar_.container, 0);
     }
 
-    if (container_) {
+    if (container_)
+    {
         lv_obj_add_event_cb(container_, on_root_deleted, LV_EVENT_DELETE, this);
     }
 
-    if (container_ && !lv_obj_is_valid(container_)) {
+    if (container_ && !lv_obj_is_valid(container_))
+    {
         Serial.printf("[ChatConversation] WARNING: container invalid\n");
     }
-    if (msg_list_ && !lv_obj_is_valid(msg_list_)) {
+    if (msg_list_ && !lv_obj_is_valid(msg_list_))
+    {
         Serial.printf("[ChatConversation] WARNING: msg_list invalid\n");
     }
 
@@ -157,12 +179,15 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
 
 ChatConversationScreen::~ChatConversationScreen()
 {
-    if (container_ && lv_obj_is_valid(container_)) {
+    if (container_ && lv_obj_is_valid(container_))
+    {
         lv_obj_del(container_);
     }
-    if (guard_) {
+    if (guard_)
+    {
         guard_->alive = false;
-        if (guard_->pending_async == 0) {
+        if (guard_->pending_async == 0)
+        {
             delete guard_;
         }
         guard_ = nullptr;
@@ -171,12 +196,15 @@ ChatConversationScreen::~ChatConversationScreen()
 
 void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
 {
-    if (!guard_ || !guard_->alive || !msg_list_ || !lv_obj_is_valid(msg_list_)) {
+    if (!guard_ || !guard_->alive || !msg_list_ || !lv_obj_is_valid(msg_list_))
+    {
         return;
     }
-    if (messages_.size() >= MAX_DISPLAY_MESSAGES) {
+    if (messages_.size() >= MAX_DISPLAY_MESSAGES)
+    {
         MessageItem& oldest = messages_[0];
-        if (oldest.container) {
+        if (oldest.container)
+        {
             lv_obj_del(oldest.container);
         }
         messages_.erase(messages_.begin());
@@ -188,11 +216,14 @@ void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
 
 void ChatConversationScreen::clearMessages()
 {
-    if (!guard_ || !guard_->alive) {
+    if (!guard_ || !guard_->alive)
+    {
         return;
     }
-    for (auto& item : messages_) {
-        if (item.container) {
+    for (auto& item : messages_)
+    {
+        if (item.container)
+        {
             lv_obj_del(item.container);
         }
     }
@@ -201,14 +232,16 @@ void ChatConversationScreen::clearMessages()
 
 void ChatConversationScreen::scrollToBottom()
 {
-    if (guard_ && guard_->alive && msg_list_) {
+    if (guard_ && guard_->alive && msg_list_)
+    {
         lv_obj_scroll_to_y(msg_list_, LV_COORD_MAX, LV_ANIM_OFF);
     }
 }
 
 void ChatConversationScreen::setActionCallback(void (*cb)(ActionIntent intent, void*), void* user_data)
 {
-    if (!guard_ || !guard_->alive) {
+    if (!guard_ || !guard_->alive)
+    {
         return;
     }
     action_cb_ = cb;
@@ -217,18 +250,21 @@ void ChatConversationScreen::setActionCallback(void (*cb)(ActionIntent intent, v
 
 void ChatConversationScreen::setHeaderText(const char* title, const char* status)
 {
-    if (!guard_ || !guard_->alive) {
+    if (!guard_ || !guard_->alive)
+    {
         return;
     }
     ::ui::widgets::top_bar_set_title(top_bar_, title);
-    if (status != nullptr) {
+    if (status != nullptr)
+    {
         ::ui::widgets::top_bar_set_right_text(top_bar_, status);
     }
 }
 
 void ChatConversationScreen::updateBatteryFromBoard()
 {
-    if (!guard_ || !guard_->alive) {
+    if (!guard_ || !guard_->alive)
+    {
         return;
     }
     ui_update_top_bar_battery(top_bar_);
@@ -236,7 +272,8 @@ void ChatConversationScreen::updateBatteryFromBoard()
 
 void ChatConversationScreen::setBackCallback(void (*cb)(void*), void* user_data)
 {
-    if (!guard_ || !guard_->alive) {
+    if (!guard_ || !guard_->alive)
+    {
         return;
     }
     back_cb_ = cb;
@@ -245,7 +282,8 @@ void ChatConversationScreen::setBackCallback(void (*cb)(void*), void* user_data)
 
 void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
 {
-    if (!guard_ || !guard_->alive || !msg_list_) {
+    if (!guard_ || !guard_->alive || !msg_list_)
+    {
         return;
     }
     MessageItem item;
@@ -260,12 +298,14 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     // Compute bubble max width (same logic as original)
     lv_coord_t max_bubble_w = kBubbleMaxWidth;
     lv_coord_t list_w = chat::ui::layout::get_msg_list_content_width(msg_list_);
-    if (list_w > 0) {
+    if (list_w > 0)
+    {
         // original: candidate = (list_w - 2 * kPadX) * 7 / 10
         // kPadX lives in styles; but for behavior parity we replicate formula using known 8px.
         constexpr lv_coord_t kPadX = 8;
         lv_coord_t candidate = (list_w - 2 * kPadX) * 7 / 10;
-        if (candidate > 0 && candidate < max_bubble_w) {
+        if (candidate > 0 && candidate < max_bubble_w)
+        {
             max_bubble_w = candidate;
         }
     }
@@ -278,13 +318,18 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     chat::ui::conversation::styles::apply_bubble_time(item.time_label);
     char time_buf[16];
     format_message_time(time_buf, sizeof(time_buf), msg.timestamp);
-    if (conv_.peer == 0) {
+    if (conv_.peer == 0)
+    {
         std::string sender;
-        if (msg.from == 0) {
+        if (msg.from == 0)
+        {
             sender = app::AppContext::getInstance().getConfig().short_name;
-        } else {
+        }
+        else
+        {
             sender = app::AppContext::getInstance().getContactService().getContactName(msg.from);
-            if (sender.empty()) {
+            if (sender.empty())
+            {
                 char buf[16];
                 snprintf(buf, sizeof(buf), "%04lX",
                          static_cast<unsigned long>(msg.from & 0xFFFF));
@@ -293,7 +338,9 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
         }
         std::string line = sender + " " + time_buf;
         lv_label_set_text(item.time_label, line.c_str());
-    } else {
+    }
+    else
+    {
         lv_label_set_text(item.time_label, time_buf);
     }
 
@@ -323,11 +370,13 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
 void ChatConversationScreen::action_event_cb(lv_event_t* e)
 {
     auto* ctx = static_cast<ActionContext*>(lv_event_get_user_data(e));
-    if (!ctx || !ctx->screen) {
+    if (!ctx || !ctx->screen)
+    {
         return;
     }
     ChatConversationScreen* screen = ctx->screen;
-    if (!screen->guard_ || !screen->guard_->alive) {
+    if (!screen->guard_ || !screen->guard_->alive)
+    {
         return;
     }
     screen->schedule_action_async(ctx->intent);
@@ -336,16 +385,20 @@ void ChatConversationScreen::action_event_cb(lv_event_t* e)
 void ChatConversationScreen::async_action_cb(void* user_data)
 {
     auto* payload = static_cast<ActionPayload*>(user_data);
-    if (!payload) {
+    if (!payload)
+    {
         return;
     }
     LifetimeGuard* guard = payload->guard;
-    if (guard && guard->alive && payload->action_cb) {
+    if (guard && guard->alive && payload->action_cb)
+    {
         payload->action_cb(payload->intent, payload->user_data);
     }
-    if (guard && guard->pending_async > 0) {
+    if (guard && guard->pending_async > 0)
+    {
         guard->pending_async--;
-        if (!guard->alive && guard->pending_async == 0) {
+        if (!guard->alive && guard->pending_async == 0)
+        {
             delete guard;
         }
     }
@@ -355,7 +408,8 @@ void ChatConversationScreen::async_action_cb(void* user_data)
 void ChatConversationScreen::on_root_deleted(lv_event_t* e)
 {
     auto* screen = static_cast<ChatConversationScreen*>(lv_event_get_user_data(e));
-    if (!screen) {
+    if (!screen)
+    {
         return;
     }
     screen->handle_root_deleted();
@@ -364,7 +418,8 @@ void ChatConversationScreen::on_root_deleted(lv_event_t* e)
 void ChatConversationScreen::handle_back(void* user_data)
 {
     ChatConversationScreen* screen = static_cast<ChatConversationScreen*>(user_data);
-    if (!screen || !screen->guard_ || !screen->guard_->alive) {
+    if (!screen || !screen->guard_ || !screen->guard_->alive)
+    {
         return;
     }
     screen->schedule_back_async();
@@ -373,16 +428,20 @@ void ChatConversationScreen::handle_back(void* user_data)
 void ChatConversationScreen::async_back_cb(void* user_data)
 {
     auto* payload = static_cast<BackPayload*>(user_data);
-    if (!payload) {
+    if (!payload)
+    {
         return;
     }
     LifetimeGuard* guard = payload->guard;
-    if (guard && guard->alive && payload->back_cb) {
+    if (guard && guard->alive && payload->back_cb)
+    {
         payload->back_cb(payload->user_data);
     }
-    if (guard && guard->pending_async > 0) {
+    if (guard && guard->pending_async > 0)
+    {
         guard->pending_async--;
-        if (!guard->alive && guard->pending_async == 0) {
+        if (!guard->alive && guard->pending_async == 0)
+        {
             delete guard;
         }
     }
@@ -394,11 +453,13 @@ lv_timer_t* ChatConversationScreen::add_timer(lv_timer_cb_t cb,
                                               void* user_data,
                                               TimerDomain domain)
 {
-    if (!guard_ || !guard_->alive) {
+    if (!guard_ || !guard_->alive)
+    {
         return nullptr;
     }
     lv_timer_t* timer = lv_timer_create(cb, period_ms, user_data);
-    if (timer) {
+    if (timer)
+    {
         TimerEntry entry;
         entry.timer = timer;
         entry.domain = domain;
@@ -409,25 +470,31 @@ lv_timer_t* ChatConversationScreen::add_timer(lv_timer_cb_t cb,
 
 void ChatConversationScreen::clear_timers(TimerDomain domain)
 {
-    if (timers_.empty()) {
+    if (timers_.empty())
+    {
         return;
     }
-    for (auto& entry : timers_) {
-        if (entry.timer && entry.domain == domain) {
+    for (auto& entry : timers_)
+    {
+        if (entry.timer && entry.domain == domain)
+        {
             lv_timer_del(entry.timer);
             entry.timer = nullptr;
         }
     }
     timers_.erase(
         std::remove_if(timers_.begin(), timers_.end(),
-                       [](const TimerEntry& entry) { return entry.timer == nullptr; }),
+                       [](const TimerEntry& entry)
+                       { return entry.timer == nullptr; }),
         timers_.end());
 }
 
 void ChatConversationScreen::clear_all_timers()
 {
-    for (auto& entry : timers_) {
-        if (entry.timer) {
+    for (auto& entry : timers_)
+    {
+        if (entry.timer)
+        {
             lv_timer_del(entry.timer);
             entry.timer = nullptr;
         }
@@ -437,11 +504,13 @@ void ChatConversationScreen::clear_all_timers()
 
 void ChatConversationScreen::handle_root_deleted()
 {
-    if ((!guard_ || !guard_->alive) && container_ == nullptr && msg_list_ == nullptr) {
+    if ((!guard_ || !guard_->alive) && container_ == nullptr && msg_list_ == nullptr)
+    {
         return;
     }
 
-    if (guard_) {
+    if (guard_)
+    {
         guard_->alive = false;
     }
     action_cb_ = nullptr;
@@ -453,7 +522,8 @@ void ChatConversationScreen::handle_root_deleted()
     chat::ui::conversation::input::cleanup(&input_binding_);
     clear_all_timers();
 
-    if (top_bar_.back_btn) {
+    if (top_bar_.back_btn)
+    {
         ::ui::widgets::top_bar_set_back_callback(top_bar_, nullptr, nullptr);
     }
 
@@ -466,7 +536,8 @@ void ChatConversationScreen::handle_root_deleted()
 
 void ChatConversationScreen::schedule_action_async(ActionIntent intent)
 {
-    if (!guard_ || !guard_->alive || !action_cb_) {
+    if (!guard_ || !guard_->alive || !action_cb_)
+    {
         return;
     }
     auto* payload = new ActionPayload();
@@ -480,7 +551,8 @@ void ChatConversationScreen::schedule_action_async(ActionIntent intent)
 
 void ChatConversationScreen::schedule_back_async()
 {
-    if (!guard_ || !guard_->alive || !back_cb_) {
+    if (!guard_ || !guard_->alive || !back_cb_)
+    {
         return;
     }
     auto* payload = new BackPayload();

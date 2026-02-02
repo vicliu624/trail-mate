@@ -1,7 +1,7 @@
 #pragma once
 
-#include "lvgl.h"
 #include "../../widgets/top_bar.h"
+#include "lvgl.h"
 
 namespace tracker
 {
@@ -24,4 +24,3 @@ extern TrackerPageState g_tracker_state;
 
 } // namespace ui
 } // namespace tracker
-

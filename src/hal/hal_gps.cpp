@@ -1,7 +1,7 @@
 #include "hal/hal_gps.h"
 
-#include "board/GpsBoard.h"
 #include "../gps/GPS.h"
+#include "board/GpsBoard.h"
 #include "board/TLoRaPagerTypes.h"
 #include "pins_arduino.h"
 

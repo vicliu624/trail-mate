@@ -7,7 +7,8 @@
 
 #include "lvgl.h"
 
-namespace settings::ui::input {
+namespace settings::ui::input
+{
 
 void init();
 void cleanup();

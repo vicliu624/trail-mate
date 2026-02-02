@@ -1,20 +1,21 @@
 #include "contacts_page_styles.h"
 
-namespace contacts::ui::style {
+namespace contacts::ui::style
+{
 
 // ---------- Colors (keep all visual tokens here) ----------
 static constexpr uint32_t kGrayPanel = 0xF5F5F5;
-static constexpr uint32_t kWhite     = 0xFFFFFF;
+static constexpr uint32_t kWhite = 0xFFFFFF;
 
-static constexpr uint32_t kBtnBg     = 0xF4C77A;
-static constexpr uint32_t kBtnBgSel  = 0xEBA341;
+static constexpr uint32_t kBtnBg = 0xF4C77A;
+static constexpr uint32_t kBtnBgSel = 0xEBA341;
 static constexpr uint32_t kBtnBorder = 0xEBA341;
 
-static constexpr uint32_t kItemBg    = 0xF7DCA8;
+static constexpr uint32_t kItemBg = 0xF7DCA8;
 static constexpr uint32_t kItemBgFoc = 0xF1B65A;
-static constexpr uint32_t kItemBorder= 0xEBA341;
+static constexpr uint32_t kItemBorder = 0xEBA341;
 
-static constexpr uint32_t kTextMain  = 0x202020;
+static constexpr uint32_t kTextMain = 0x202020;
 static constexpr uint32_t kTextMuted = 0x606060;
 
 // ---------- Styles ----------
@@ -25,10 +26,10 @@ static lv_style_t s_panel_main;
 static lv_style_t s_container_white;
 
 static lv_style_t s_btn_basic;
-static lv_style_t s_btn_filter_checked;   // applied via LV_STATE_CHECKED
+static lv_style_t s_btn_filter_checked; // applied via LV_STATE_CHECKED
 
 static lv_style_t s_item_base;
-static lv_style_t s_item_focused;         // applied via LV_STATE_FOCUSED
+static lv_style_t s_item_focused; // applied via LV_STATE_FOCUSED
 
 static lv_style_t s_label_primary;
 static lv_style_t s_label_muted;

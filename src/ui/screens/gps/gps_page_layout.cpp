@@ -1,6 +1,7 @@
 #include "gps_page_layout.h"
 
-namespace gps::ui::layout {
+namespace gps::ui::layout
+{
 
 /**
  * Wireframe (structure only; styles are applied elsewhere)
@@ -88,7 +89,8 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     lv_obj_set_scrollbar_mode(w.member_panel, LV_SCROLLBAR_MODE_OFF);
     lv_obj_align(w.member_panel, LV_ALIGN_TOP_LEFT, spec.member_panel_left_offset, spec.member_panel_top_offset);
 
-    auto create_control = [&](lv_obj_t*& btn, lv_obj_t*& label, const char* text) {
+    auto create_control = [&](lv_obj_t*& btn, lv_obj_t*& label, const char* text)
+    {
         btn = lv_btn_create(w.panel);
         lv_obj_set_size(btn, spec.control_btn_w, spec.control_btn_h);
         label = lv_label_create(btn);

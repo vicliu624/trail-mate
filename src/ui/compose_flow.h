@@ -1,20 +1,22 @@
 #pragma once
 
-#include "lvgl.h"
 #include "../chat/domain/chat_types.h"
+#include "lvgl.h"
 #include "screens/chat/chat_compose_components.h"
 #include "widgets/ime/ime_widget.h"
 #include <memory>
 
-namespace chat {
+namespace chat
+{
 class ChatService;
 }
 
-namespace chat::ui {
+namespace chat::ui
+{
 
 class ComposeFlow
 {
-public:
+  public:
     struct Callbacks
     {
         void (*on_closed)(bool sent, bool ok, bool timeout, void* user_data) = nullptr;
@@ -36,7 +38,7 @@ public:
     bool isOpen() const;
     ChatComposeScreen* screen() const;
 
-private:
+  private:
     static void on_action(ChatComposeScreen::ActionIntent intent, void* user_data);
     static void on_back(void* user_data);
     static void on_send_done(bool ok, bool timeout, void* user_data);

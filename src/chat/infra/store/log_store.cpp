@@ -181,7 +181,8 @@ std::vector<ConversationMeta> LogStore::loadConversationPage(size_t offset,
     }
 
     std::sort(entries.begin(), entries.end(),
-              [](const IndexEntry& a, const IndexEntry& b) {
+              [](const IndexEntry& a, const IndexEntry& b)
+              {
                   return a.last_timestamp > b.last_timestamp;
               });
 
@@ -280,7 +281,8 @@ void LogStore::clearConversation(const ConversationId& conv)
     }
 
     entries.erase(std::remove_if(entries.begin(), entries.end(),
-                                 [&](const IndexEntry& entry) {
+                                 [&](const IndexEntry& entry)
+                                 {
                                      return entry.peer == conv.peer &&
                                             entry.channel == static_cast<uint8_t>(conv.channel);
                                  }),

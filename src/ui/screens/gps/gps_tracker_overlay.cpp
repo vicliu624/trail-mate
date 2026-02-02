@@ -1,18 +1,18 @@
 #include "gps_tracker_overlay.h"
 
-#include "gps_modal.h"
-#include "gps_page_map.h"
-#include "gps_page_lifetime.h"
-#include "gps_page_styles.h"
-#include "gps_state.h"
 #include "../../../gps/gps_service_api.h"
 #include "../../ui_common.h"
 #include "../../widgets/map/map_tiles.h"
+#include "gps_modal.h"
+#include "gps_page_lifetime.h"
+#include "gps_page_map.h"
+#include "gps_page_styles.h"
+#include "gps_state.h"
 
 #include <SD.h>
-#include <esp_system.h>
 #include <algorithm>
 #include <cmath>
+#include <esp_system.h>
 #include <vector>
 
 // Implemented in gps_page_components.cpp
@@ -146,7 +146,8 @@ bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::Track
 
 void compute_screen_points()
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     auto& s = g_gps_state;
@@ -212,7 +213,8 @@ void compute_screen_points()
 
 void apply_tracker_view_defaults()
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     auto& s = g_gps_state;
@@ -241,7 +243,8 @@ void apply_tracker_view_defaults()
 
 void close_tracker_modal()
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     if (!modal_is_open(g_gps_state.tracker_modal))
@@ -254,7 +257,8 @@ void close_tracker_modal()
 
 void on_track_selected(lv_event_t* e)
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     const uintptr_t idx = (uintptr_t)lv_event_get_user_data(e);
@@ -285,7 +289,8 @@ void on_track_selected(lv_event_t* e)
 
 void build_tracker_modal()
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     auto& s = g_gps_state;
@@ -346,7 +351,8 @@ void build_tracker_modal()
 
 void gps_tracker_open_modal()
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     if (SD.cardType() == CARD_NONE)
@@ -365,7 +371,8 @@ void gps_tracker_open_modal()
 
 void gps_tracker_draw_event(lv_event_t* e)
 {
-    if (!is_alive()) {
+    if (!is_alive())
+    {
         return;
     }
     if (!e || lv_event_get_code(e) != LV_EVENT_DRAW_POST)
@@ -425,8 +432,10 @@ void gps_tracker_draw_event(lv_event_t* e)
 
 void gps_tracker_cleanup()
 {
-    if (!is_alive()) {
-        if (modal_is_open(g_gps_state.tracker_modal)) {
+    if (!is_alive())
+    {
+        if (modal_is_open(g_gps_state.tracker_modal))
+        {
             modal_close(g_gps_state.tracker_modal);
         }
         g_gps_state.tracker_overlay_active = false;

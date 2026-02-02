@@ -5,8 +5,8 @@
 
 #include "team_nfc.h"
 
-#include <Arduino.h>
 #include <AES.h>
+#include <Arduino.h>
 #include <GCM.h>
 #include <SHA256.h>
 #include <cstring>
@@ -20,13 +20,13 @@ namespace team::nfc
 {
 namespace
 {
-constexpr uint8_t kMagic[4] = { 'T', 'N', 'F', '1' };
+constexpr uint8_t kMagic[4] = {'T', 'N', 'F', '1'};
 constexpr size_t kDerivedKeyLen = 16;
 constexpr uint32_t kPbkdf2Iterations = 10000;
 constexpr size_t kHeaderSize = 4 + 1 + team::proto::kTeamIdSize + 4 + 4 + kNfcSaltSize + kNfcNonceSize;
 constexpr char kMimeType[] = "application/vnd.trailmate.teamkey";
-constexpr uint8_t kT4tCcFileId[2] = { 0xE1, 0x03 };
-constexpr uint8_t kT4tNdefFileId[2] = { 0xE1, 0x04 };
+constexpr uint8_t kT4tCcFileId[2] = {0xE1, 0x03};
+constexpr uint8_t kT4tNdefFileId[2] = {0xE1, 0x04};
 constexpr size_t kT4tCcFileLen = 15;
 
 #ifndef TEAM_NFC_LOG_ENABLE
@@ -278,9 +278,9 @@ bool write_ndef_message(const std::vector<uint8_t>& payload)
         return false;
     }
 
-    ndefConstBuffer8 type_buf{ reinterpret_cast<const uint8_t*>(kMimeType),
-                               static_cast<uint8_t>(sizeof(kMimeType) - 1) };
-    ndefConstBuffer payload_buf{ payload.data(), static_cast<uint32_t>(payload.size()) };
+    ndefConstBuffer8 type_buf{reinterpret_cast<const uint8_t*>(kMimeType),
+                              static_cast<uint8_t>(sizeof(kMimeType) - 1)};
+    ndefConstBuffer payload_buf{payload.data(), static_cast<uint32_t>(payload.size())};
 
     NdefClass ndef(board->nfc);
     if (ndef.ndefPollerContextInitializationWrapper(dev) != ERR_NONE)
@@ -309,7 +309,7 @@ bool write_ndef_message(const std::vector<uint8_t>& payload)
     }
 
     uint8_t raw_buf[256];
-    ndefBuffer raw{ raw_buf, sizeof(raw_buf) };
+    ndefBuffer raw{raw_buf, sizeof(raw_buf)};
     if (ndefMessageEncode(&message, &raw) != ERR_NONE)
     {
         TEAM_NFC_LOG("[NFC] write_ndef_message encode_failed\n");
@@ -369,7 +369,7 @@ bool read_ndef_message(std::vector<uint8_t>& out_payload)
 
     ndefMessage message{};
     ndefMessageInit(&message);
-    ndefConstBuffer msg_buf{ raw_buf, rcvd_len };
+    ndefConstBuffer msg_buf{raw_buf, rcvd_len};
     if (ndefMessageDecode(&msg_buf, &message) != ERR_NONE)
     {
         TEAM_NFC_LOG("[NFC] read_ndef_message decode_failed\n");
@@ -377,7 +377,7 @@ bool read_ndef_message(std::vector<uint8_t>& out_payload)
     }
 
     static const uint8_t kMimeType[] = "application/vnd.trailmate.teamkey";
-    ndefConstBuffer8 type_buf{ kMimeType, static_cast<uint8_t>(sizeof(kMimeType) - 1) };
+    ndefConstBuffer8 type_buf{kMimeType, static_cast<uint8_t>(sizeof(kMimeType) - 1)};
 
     for (ndefRecord* rec = ndefMessageGetFirstRecord(&message); rec; rec = ndefMessageGetNextRecord(rec))
     {
@@ -477,11 +477,11 @@ bool build_t4t_files(const std::vector<uint8_t>& payload)
     s_ndef_file.insert(s_ndef_file.end(), payload.begin(), payload.end());
 
     const uint16_t ndef_file_size = static_cast<uint16_t>(s_ndef_file.size());
-    s_cc_file = { 0x00, 0x0F, 0x20, 0x00, 0xFF, 0x00, 0xFF,
-                  0x04, 0x06, kT4tNdefFileId[0], kT4tNdefFileId[1],
-                  static_cast<uint8_t>((ndef_file_size >> 8) & 0xFF),
-                  static_cast<uint8_t>(ndef_file_size & 0xFF),
-                  0x00, 0xFF };
+    s_cc_file = {0x00, 0x0F, 0x20, 0x00, 0xFF, 0x00, 0xFF,
+                 0x04, 0x06, kT4tNdefFileId[0], kT4tNdefFileId[1],
+                 static_cast<uint8_t>((ndef_file_size >> 8) & 0xFF),
+                 static_cast<uint8_t>(ndef_file_size & 0xFF),
+                 0x00, 0xFF};
     TEAM_NFC_LOG("[NFC] build_t4t_files ok ndef_file_size=%u\n",
                  static_cast<unsigned>(ndef_file_size));
     log_hex("cc_file", s_cc_file.data(), s_cc_file.size());
@@ -551,8 +551,8 @@ void handle_apdu(const uint8_t* apdu, size_t len, std::vector<uint8_t>& response
         const uint8_t* data = apdu + 5;
         if (p1 == 0x04)
         {
-            static const uint8_t kAidV2[] = { 0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01 };
-            static const uint8_t kAidV1[] = { 0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x00 };
+            static const uint8_t kAidV2[] = {0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01};
+            static const uint8_t kAidV1[] = {0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x00};
             bool match_v2 = (lc == sizeof(kAidV2)) && (memcmp(data, kAidV2, sizeof(kAidV2)) == 0);
             bool match_v1 = (lc == sizeof(kAidV1)) && (memcmp(data, kAidV1, sizeof(kAidV1)) == 0);
             if (!match_v2 && !match_v1)

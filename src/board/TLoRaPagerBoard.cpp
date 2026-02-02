@@ -7,9 +7,9 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 
+#include <cstring>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
-#include <cstring>
 
 #include "display/drivers/ST7796.h"
 #include "pins_arduino.h"
@@ -454,8 +454,7 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     Serial.printf("[TLoRaPagerBoard::begin] ===== HARDWARE INITIALIZATION COMPLETE =====\n");
     Serial.printf("[TLoRaPagerBoard::begin] devices_probe=0x%08X\n", devices_probe);
     const char* gps_state =
-        (devices_probe & HW_GPS_ONLINE) ? "YES" :
-        ((disable_hw_init & NO_HW_GPS) ? "SKIPPED" : "DEFERRED");
+        (devices_probe & HW_GPS_ONLINE) ? "YES" : ((disable_hw_init & NO_HW_GPS) ? "SKIPPED" : "DEFERRED");
     Serial.printf("[TLoRaPagerBoard::begin] GPS online: %s\n", gps_state);
     Serial.printf("[TLoRaPagerBoard::begin] NFC online: %s (HW_NFC_ONLINE=0x%08X)\n",
                   (devices_probe & HW_NFC_ONLINE) ? "YES" : "NO", HW_NFC_ONLINE);
@@ -921,7 +920,7 @@ bool TLoRaPagerBoard::startNFCDiscovery(uint16_t techs2Find, uint16_t totalDurat
     if (techs2Find & RFAL_NFC_LISTEN_TECH_A)
     {
         static bool nfcid_init = false;
-        static uint8_t nfcid[RFAL_NFCID1_TRIPLE_LEN] = { 0 };
+        static uint8_t nfcid[RFAL_NFCID1_TRIPLE_LEN] = {0};
         if (!nfcid_init)
         {
             nfcid[0] = static_cast<uint8_t>(random(1, 255));
@@ -1966,7 +1965,7 @@ void TLoRaPagerBoard::softwareShutdown()
         return;
     }
 
-log_i("Shutdown conditions met - entering Power OFF mode (26µA)");
+    log_i("Shutdown conditions met - entering Power OFF mode (26µA)");
     shutdown(true);
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
-namespace gps_ui {
+namespace gps_ui
+{
 
 constexpr int kMapPanStep = 32;
 constexpr int kDefaultZoom = 12;
@@ -13,4 +14,4 @@ constexpr double kDefaultLng = -0.1278;
 // UI policy: do not show a blocking loading overlay on the GPS map.
 constexpr bool kShowLoadingOverlay = false;
 
-}  // namespace gps_ui
+} // namespace gps_ui

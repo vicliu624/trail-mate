@@ -16,4 +16,3 @@ void refresh_page();
 } // namespace components
 } // namespace ui
 } // namespace tracker
-

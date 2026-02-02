@@ -55,10 +55,11 @@
  * - Styles are applied via chat_message_list_styles.*.
  */
 
-#include <Arduino.h>
 #include "chat_message_list_layout.h"
+#include <Arduino.h>
 
-namespace chat::ui::layout {
+namespace chat::ui::layout
+{
 
 static void make_non_scrollable(lv_obj_t* obj)
 {
@@ -66,7 +67,8 @@ static void make_non_scrollable(lv_obj_t* obj)
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
 }
 
-namespace {
+namespace
+{
 constexpr int kFilterPanelWidth = 80;
 constexpr int kButtonHeight = 32;
 constexpr int kPanelGap = 0;

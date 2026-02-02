@@ -33,4 +33,3 @@ void bind_focus(lv_group_t* group)
 } // namespace input
 } // namespace ui
 } // namespace tracker
-

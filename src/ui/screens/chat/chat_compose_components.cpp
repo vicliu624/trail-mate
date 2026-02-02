@@ -115,7 +115,8 @@ static void fit_btn_to_label(lv_obj_t* btn, int pad_lr)
 void ChatComposeScreen::setEnabled(bool enabled)
 {
     if (!impl_) return;
-    auto set = [enabled](lv_obj_t* o) {
+    auto set = [enabled](lv_obj_t* o)
+    {
         if (!o) return;
         if (enabled) lv_obj_clear_state(o, LV_STATE_DISABLED);
         else lv_obj_add_state(o, LV_STATE_DISABLED);
@@ -251,9 +252,12 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     : conv_(conv)
 {
     lv_obj_t* active = lv_screen_active();
-    if (!active) {
+    if (!active)
+    {
         CHAT_COMPOSE_LOG("[ChatCompose] WARNING: lv_screen_active() is null\n");
-    } else {
+    }
+    else
+    {
         CHAT_COMPOSE_LOG("[ChatCompose] init: active=%p parent=%p\n", active, parent);
     }
 
@@ -300,10 +304,12 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     input::bind_textarea_events(impl_->w, this, on_key, on_text_changed);
     input::setup_default_group_focus(impl_->w);
 
-    if (impl_->w.container && !lv_obj_is_valid(impl_->w.container)) {
+    if (impl_->w.container && !lv_obj_is_valid(impl_->w.container))
+    {
         CHAT_COMPOSE_LOG("[ChatCompose] WARNING: container invalid\n");
     }
-    if (impl_->w.textarea && !lv_obj_is_valid(impl_->w.textarea)) {
+    if (impl_->w.textarea && !lv_obj_is_valid(impl_->w.textarea))
+    {
         CHAT_COMPOSE_LOG("[ChatCompose] WARNING: textarea invalid\n");
     }
 
@@ -410,9 +416,9 @@ void ChatComposeScreen::clearText()
 }
 
 void ChatComposeScreen::beginSend(chat::ChatService* service,
-    chat::MessageId msg_id,
-    void (*done_cb)(bool ok, bool timeout, void*),
-    void* user_data)
+                                  chat::MessageId msg_id,
+                                  void (*done_cb)(bool ok, bool timeout, void*),
+                                  void* user_data)
 {
     if (!impl_ || !impl_->guard || !impl_->guard->alive) return;
     if (impl_->send_state == SendState::Waiting) return;
@@ -448,8 +454,6 @@ void ChatComposeScreen::beginSend(chat::ChatService* service,
     }
 }
 
-
-
 void ChatComposeScreen::finishSend(bool ok, bool timeout, const char* message)
 {
     if (!impl_ || !impl_->guard || !impl_->guard->alive) return;
@@ -470,7 +474,6 @@ void ChatComposeScreen::finishSend(bool ok, bool timeout, const char* message)
     if (done_cb)
         schedule_done_async(impl_->guard, done_cb, done_user, ok, timeout);
 }
-
 
 void ChatComposeScreen::setActionCallback(void (*cb)(ActionIntent intent, void*), void* user_data)
 {

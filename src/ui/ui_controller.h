@@ -5,49 +5,53 @@
 
 #pragma once
 
-#include "lvgl.h"
-#include "../chat/usecase/chat_service.h"
 #include "../chat/domain/chat_types.h"
+#include "../chat/usecase/chat_service.h"
 #include "../sys/event_bus.h"
-#include "screens/chat/chat_message_list_components.h"
-#include "screens/chat/chat_conversation_components.h"
+#include "lvgl.h"
 #include "screens/chat/chat_compose_components.h"
+#include "screens/chat/chat_conversation_components.h"
+#include "screens/chat/chat_message_list_components.h"
 #include "widgets/ime/ime_widget.h"
 #include <memory>
 
-namespace chat {
-namespace ui {
+namespace chat
+{
+namespace ui
+{
 
 /**
  * @brief UI Controller
  * Manages chat UI state machine and coordinates with ChatService
  */
-class UiController {
-public:
-    enum class State {
-        ChannelList,    // Showing message list
-        Conversation,   // Showing message thread
-        Compose         // Showing compose editor
+class UiController
+{
+  public:
+    enum class State
+    {
+        ChannelList,  // Showing message list
+        Conversation, // Showing message thread
+        Compose       // Showing compose editor
     };
-    
+
     UiController(lv_obj_t* parent, chat::ChatService& service);
     ~UiController();
-    
+
     /**
      * @brief Initialize UI
      */
     void init();
-    
+
     /**
      * @brief Update UI (call from main loop)
      */
     void update();
-    
+
     /**
      * @brief Handle input event
      */
     void onInput(const sys::InputEvent& event);
-    
+
     /**
      * @brief Handle chat event
      */
@@ -72,18 +76,20 @@ public:
      * @brief Exit chat UI to main menu
      */
     void exitToMenu();
-    
+
     /**
      * @brief Get current state
      */
-    State getState() const {
+    State getState() const
+    {
         return state_;
     }
-    
+
     /**
      * @brief Get parent object
      */
-    lv_obj_t* getParent() const {
+    lv_obj_t* getParent() const
+    {
         return parent_;
     }
 
@@ -92,16 +98,16 @@ public:
      */
     void onChannelClicked(chat::ConversationId conv);
 
-private:
+  private:
     lv_obj_t* parent_;
     chat::ChatService& service_;
     State state_;
-    
+
     std::unique_ptr<ChatMessageListScreen> channel_list_;
     std::unique_ptr<ChatConversationScreen> conversation_;
     std::unique_ptr<ChatComposeScreen> compose_;
     std::unique_ptr<::ui::widgets::ImeWidget> compose_ime_;
-    
+
     chat::ChannelId current_channel_;
     chat::ConversationId current_conv_;
     bool team_conv_active_ = false;

@@ -10,15 +10,16 @@
 extern "C" lv_draw_buf_t* lv_snapshot_take(lv_obj_t* obj, lv_color_format_t cf);
 extern "C" void lv_draw_buf_destroy(lv_draw_buf_t* draw_buf);
 #endif
+#include <Preferences.h>
 #include <SD.h>
 #include <cstdio>
 #include <ctime>
 #include <vector>
-#include <Preferences.h>
 
-extern BoardBase &board;
+extern BoardBase& board;
 
-namespace {
+namespace
+{
 constexpr const char* kPrefsNs = "settings_v2";
 constexpr const char* kTimezoneKey = "timezone_offset";
 
@@ -30,21 +31,26 @@ lv_timer_t* s_exit_timer = nullptr;
 constexpr uint32_t kExitDelayMs = 120;
 } // namespace
 
-void set_default_group(lv_group_t *group)
+void set_default_group(lv_group_t* group)
 {
-    lv_indev_t *cur_drv = NULL;
-    for (;;) {
+    lv_indev_t* cur_drv = NULL;
+    for (;;)
+    {
         cur_drv = lv_indev_get_next(cur_drv);
-        if (!cur_drv) {
+        if (!cur_drv)
+        {
             break;
         }
-        if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_KEYPAD) {
+        if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_KEYPAD)
+        {
             lv_indev_set_group(cur_drv, group);
         }
-        if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_ENCODER) {
+        if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_ENCODER)
+        {
             lv_indev_set_group(cur_drv, group);
         }
-        if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_POINTER) {
+        if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_POINTER)
+        {
             lv_indev_set_group(cur_drv, group);
         }
     }
@@ -70,13 +76,16 @@ void ui_clear_active_app()
 
 void ui_switch_to_app(AppScreen* app, lv_obj_t* parent)
 {
-    if (s_pending_exit == app) {
+    if (s_pending_exit == app)
+    {
         s_pending_exit = nullptr;
     }
-    if (s_active_app && s_active_app != app) {
+    if (s_active_app && s_active_app != app)
+    {
         s_active_app->exit(parent);
     }
-    if (app) {
+    if (app)
+    {
         app->enter(parent);
     }
     s_active_app = app;
@@ -84,31 +93,37 @@ void ui_switch_to_app(AppScreen* app, lv_obj_t* parent)
 
 void ui_exit_active_app(lv_obj_t* parent)
 {
-    if (s_active_app) {
+    if (s_active_app)
+    {
         s_active_app->exit(parent);
     }
     s_active_app = nullptr;
 }
 
-namespace {
+namespace
+{
 void exit_to_menu_timer_cb(lv_timer_t* timer)
 {
     auto* app = static_cast<AppScreen*>(timer ? timer->user_data : nullptr);
-    if (timer) {
+    if (timer)
+    {
         lv_timer_del(timer);
     }
     s_exit_timer = nullptr;
-    if (!app || s_pending_exit != app) {
+    if (!app || s_pending_exit != app)
+    {
         return;
     }
     s_pending_exit = nullptr;
-    if (main_screen == nullptr) {
+    if (main_screen == nullptr)
+    {
         app->exit(nullptr);
         return;
     }
     lv_obj_t* parent = lv_obj_get_child(main_screen, 1);
     app->exit(parent);
-    if (menu_g) {
+    if (menu_g)
+    {
         set_default_group(menu_g);
         lv_group_set_editing(menu_g, false);
     }
@@ -119,26 +134,30 @@ void ui_request_exit_to_menu()
 {
     AppScreen* app = s_active_app;
     menu_show();
-    if (app == nullptr) {
+    if (app == nullptr)
+    {
         return;
     }
-    if (s_pending_exit == app) {
+    if (s_pending_exit == app)
+    {
         return;
     }
     s_pending_exit = app;
-    if (s_exit_timer) {
+    if (s_exit_timer)
+    {
         lv_timer_del(s_exit_timer);
         s_exit_timer = nullptr;
     }
     s_exit_timer = lv_timer_create(exit_to_menu_timer_cb, kExitDelayMs, app);
-    if (s_exit_timer) {
+    if (s_exit_timer)
+    {
         lv_timer_set_repeat_count(s_exit_timer, 1);
     }
 }
 
-lv_obj_t *create_menu(lv_obj_t *parent, lv_event_cb_t event_cb)
+lv_obj_t* create_menu(lv_obj_t* parent, lv_event_cb_t event_cb)
 {
-    lv_obj_t *menu = lv_menu_create(parent);
+    lv_obj_t* menu = lv_menu_create(parent);
     lv_menu_set_mode_root_back_button(menu, LV_MENU_ROOT_BACK_BUTTON_ENABLED);
     lv_obj_add_event_cb(menu, event_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_set_size(menu, LV_PCT(100), LV_PCT(100));
@@ -149,23 +168,35 @@ lv_obj_t *create_menu(lv_obj_t *parent, lv_event_cb_t event_cb)
 void ui_format_battery(int level, bool charging, char* out, size_t out_len)
 {
     if (!out || out_len == 0) return;
-    if (level < 0) {
+    if (level < 0)
+    {
         snprintf(out, out_len, "?%%");
         return;
     }
 
     const char* symbol;
-    if (charging) {
+    if (charging)
+    {
         symbol = LV_SYMBOL_CHARGE;
-    } else if (level >= 90) {
+    }
+    else if (level >= 90)
+    {
         symbol = LV_SYMBOL_BATTERY_FULL;
-    } else if (level >= 60) {
+    }
+    else if (level >= 60)
+    {
         symbol = LV_SYMBOL_BATTERY_3;
-    } else if (level >= 30) {
+    }
+    else if (level >= 30)
+    {
         symbol = LV_SYMBOL_BATTERY_2;
-    } else if (level >= 10) {
+    }
+    else if (level >= 10)
+    {
         symbol = LV_SYMBOL_BATTERY_1;
-    } else {
+    }
+    else
+    {
         symbol = LV_SYMBOL_BATTERY_EMPTY;
     }
     snprintf(out, out_len, "%s %d%%", symbol, level);
@@ -182,7 +213,8 @@ void ui_update_top_bar_battery(ui::widgets::TopBar& bar)
 
 int ui_get_timezone_offset_min()
 {
-    if (!s_tz_loaded) {
+    if (!s_tz_loaded)
+    {
         Preferences prefs;
         prefs.begin(kPrefsNs, true);
         s_tz_offset_min = prefs.getInt(kTimezoneKey, 0);
@@ -200,7 +232,8 @@ void ui_set_timezone_offset_min(int offset_min)
 
 time_t ui_apply_timezone_offset(time_t utc_seconds)
 {
-    if (utc_seconds <= 0) {
+    if (utc_seconds <= 0)
+    {
         return utc_seconds;
     }
     int offset_min = ui_get_timezone_offset_min();
@@ -210,25 +243,30 @@ time_t ui_apply_timezone_offset(time_t utc_seconds)
 bool ui_take_screenshot_to_sd()
 {
 #if LV_USE_SNAPSHOT
-    if (SD.cardType() == CARD_NONE) {
+    if (SD.cardType() == CARD_NONE)
+    {
         Serial.println("[Screenshot] SD not available");
         return false;
     }
 
-    if (!SD.exists("/screen")) {
-        if (!SD.mkdir("/screen")) {
+    if (!SD.exists("/screen"))
+    {
+        if (!SD.mkdir("/screen"))
+        {
             Serial.println("[Screenshot] mkdir /screen failed");
         }
     }
 
     lv_obj_t* screen = lv_screen_active();
-    if (!screen) {
+    if (!screen)
+    {
         Serial.println("[Screenshot] No active screen");
         return false;
     }
 
     lv_draw_buf_t* snap = lv_snapshot_take(screen, LV_COLOR_FORMAT_RGB565);
-    if (!snap) {
+    if (!snap)
+    {
         Serial.println("[Screenshot] Snapshot failed");
         return false;
     }
@@ -236,7 +274,8 @@ bool ui_take_screenshot_to_sd()
     uint32_t w = snap->header.w;
     uint32_t h = snap->header.h;
     uint32_t row_bytes = snap->header.stride;
-    if (row_bytes == 0) {
+    if (row_bytes == 0)
+    {
         row_bytes = lv_draw_buf_width_to_stride(w, LV_COLOR_FORMAT_RGB565);
     }
     uint32_t row24 = (w * 3 + 3) & ~3u;
@@ -249,17 +288,21 @@ bool ui_take_screenshot_to_sd()
     time_t now = time(nullptr);
     time_t local = ui_apply_timezone_offset(now);
     struct tm* info = gmtime(&local);
-    if (info) {
+    if (info)
+    {
         char ts[20];
         strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", info);
         snprintf(path, sizeof(path), "/screen/screenshot_%s.bmp", ts);
-    } else {
+    }
+    else
+    {
         snprintf(path, sizeof(path), "/screen/screenshot_%lu.bmp",
                  static_cast<unsigned long>(millis()));
     }
 
     File f = SD.open(path, FILE_WRITE);
-    if (!f) {
+    if (!f)
+    {
         Serial.printf("[Screenshot] Open failed: %s\n", path);
         lv_draw_buf_destroy(snap);
         return false;
@@ -276,8 +319,7 @@ bool ui_take_screenshot_to_sd()
         static_cast<uint8_t>(data_offset & 0xFF),
         static_cast<uint8_t>((data_offset >> 8) & 0xFF),
         static_cast<uint8_t>((data_offset >> 16) & 0xFF),
-        static_cast<uint8_t>((data_offset >> 24) & 0xFF)
-    };
+        static_cast<uint8_t>((data_offset >> 24) & 0xFF)};
     f.write(file_hdr, sizeof(file_hdr));
 
     // BITMAPINFOHEADER (24-bit, no compression)
@@ -291,9 +333,9 @@ bool ui_take_screenshot_to_sd()
     info_hdr[9] = static_cast<uint8_t>((h >> 8) & 0xFF);
     info_hdr[10] = static_cast<uint8_t>((h >> 16) & 0xFF);
     info_hdr[11] = static_cast<uint8_t>((h >> 24) & 0xFF);
-    info_hdr[12] = 1; // planes
+    info_hdr[12] = 1;  // planes
     info_hdr[14] = 24; // bpp
-    info_hdr[16] = 0; // BI_RGB
+    info_hdr[16] = 0;  // BI_RGB
     info_hdr[20] = static_cast<uint8_t>(pixel_bytes & 0xFF);
     info_hdr[21] = static_cast<uint8_t>((pixel_bytes >> 8) & 0xFF);
     info_hdr[22] = static_cast<uint8_t>((pixel_bytes >> 16) & 0xFF);
@@ -302,11 +344,13 @@ bool ui_take_screenshot_to_sd()
 
     const uint8_t* pixels = snap->data;
     std::vector<uint8_t> rowbuf(row24, 0);
-    for (uint32_t y = 0; y < h; ++y) {
+    for (uint32_t y = 0; y < h; ++y)
+    {
         const uint16_t* row = reinterpret_cast<const uint16_t*>(
             pixels + (h - 1 - y) * row_bytes);
         size_t idx = 0;
-        for (uint32_t x = 0; x < w; ++x) {
+        for (uint32_t x = 0; x < w; ++x)
+        {
             uint16_t px = row[x];
             uint8_t r5 = (px >> 11) & 0x1F;
             uint8_t g6 = (px >> 5) & 0x3F;

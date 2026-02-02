@@ -7,10 +7,10 @@
 #include "../chat/infra/protocol_factory.h"
 #include "../gps/usecase/gps_service.h"
 #include "../sys/event_bus.h"
+#include "../team/protocol/team_chat.h"
+#include "../ui/ui_common.h"
 #include "../ui/ui_team.h"
 #include "../ui/widgets/system_notification.h"
-#include "../ui/ui_common.h"
-#include "../team/protocol/team_chat.h"
 #ifdef USING_ST25R3916
 #include "../team/infra/nfc/team_nfc.h"
 #endif
@@ -21,7 +21,7 @@ namespace app
 {
 
 bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_board, MotionBoard* motion_board,
-                     bool use_mock_adapter, uint32_t disable_hw_init)
+                      bool use_mock_adapter, uint32_t disable_hw_init)
 {
     // Store board reference for hardware access
     board_ = &board;

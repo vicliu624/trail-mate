@@ -21,7 +21,7 @@ void refresh_member_panel(bool force = false);
 // UI status and title updates (moved from presenter)
 void update_title_and_status();
 void update_resolution_display();
-void reset_title_status_cache();  // Reset cached state to force next update
-void update_zoom_btn();  // Placeholder for future zoom button updates
+void reset_title_status_cache(); // Reset cached state to force next update
+void update_zoom_btn();          // Placeholder for future zoom button updates
 
 #endif // GPS_PAGE_MAP_H

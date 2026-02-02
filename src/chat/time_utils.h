@@ -9,7 +9,8 @@
 #include <cstdint>
 #include <ctime>
 
-namespace chat {
+namespace chat
+{
 
 constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
 
@@ -21,7 +22,8 @@ inline bool is_valid_epoch(uint32_t ts)
 inline uint32_t now_epoch_seconds()
 {
     time_t now = time(nullptr);
-    if (now < 0) {
+    if (now < 0)
+    {
         return 0;
     }
     return static_cast<uint32_t>(now);

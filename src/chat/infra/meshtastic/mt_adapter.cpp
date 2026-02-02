@@ -5,22 +5,22 @@
 
 #include "mt_adapter.h"
 #include "../../../sys/event_bus.h"
+#include "../../../team/protocol/team_portnum.h"
 #include "../../domain/contact_types.h"
 #include "../../ports/i_node_store.h"
-#include "../../../team/protocol/team_portnum.h"
 #include <Arduino.h>
 #include <Crypto.h>
-#include <cmath>
-#include <cstring>
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstring>
 #include <ctime>
 #include <string>
 #define TEST_CURVE25519_FIELD_OPS
 #include "../../../board/TLoRaPagerTypes.h"
 #include "generated/meshtastic/config.pb.h"
-#include "node_persist.h"
 #include "mt_region.h"
+#include "node_persist.h"
 #include <AES.h>
 #include <Curve25519.h>
 #include <Preferences.h>
@@ -52,13 +52,13 @@ constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
-using chat::meshtastic::PersistedNodeEntry;
 using chat::meshtastic::kPersistMaxNodes;
 using chat::meshtastic::kPersistNodesKey;
 using chat::meshtastic::kPersistNodesKeyCrc;
 using chat::meshtastic::kPersistNodesKeyVer;
 using chat::meshtastic::kPersistNodesNs;
 using chat::meshtastic::kPersistVersion;
+using chat::meshtastic::PersistedNodeEntry;
 
 bool allowPkiForPortnum(uint32_t portnum)
 {
@@ -610,11 +610,11 @@ static void initPkiNonce(uint32_t from, uint64_t packet_id, uint32_t extra_nonce
 
 // Use protobuf codec and wire packet functions
 using chat::meshtastic::buildWirePacket;
-using chat::meshtastic::decodeTextMessage;
 using chat::meshtastic::decodeKeyVerificationMessage;
+using chat::meshtastic::decodeTextMessage;
 using chat::meshtastic::decryptPayload;
-using chat::meshtastic::encodeNodeInfoMessage;
 using chat::meshtastic::encodeAppData;
+using chat::meshtastic::encodeNodeInfoMessage;
 using chat::meshtastic::encodeTextMessage;
 using chat::meshtastic::PacketHeaderWire;
 using chat::meshtastic::parseWirePacket;
@@ -636,19 +636,19 @@ MtAdapter::MtAdapter(LoraBoard& board)
       primary_psk_len_(0),
       secondary_channel_hash_(0),
       secondary_psk_{0},
-        secondary_psk_len_(0),
-        pki_ready_(false),
-        pki_public_key_{},
-        pki_private_key_{},
-        kv_state_(KeyVerificationState::Idle),
-        kv_nonce_(0),
-        kv_nonce_ms_(0),
-        kv_security_number_(0),
-        kv_remote_node_(0),
-        kv_hash1_{},
-        kv_hash2_{},
-        last_raw_packet_len_(0),
-        has_pending_raw_packet_(false)
+      secondary_psk_len_(0),
+      pki_ready_(false),
+      pki_public_key_{},
+      pki_private_key_{},
+      kv_state_(KeyVerificationState::Idle),
+      kv_nonce_(0),
+      kv_nonce_ms_(0),
+      kv_security_number_(0),
+      kv_remote_node_(0),
+      kv_hash1_{},
+      kv_hash2_{},
+      last_raw_packet_len_(0),
+      has_pending_raw_packet_(false)
 {
     config_ = MeshConfig(); // Default config
     initNodeIdentity();
@@ -904,11 +904,16 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
              header.flags,
              (unsigned)payload_size);
     const char* channel_kind = "UNKNOWN";
-    if (header.channel == 0) {
+    if (header.channel == 0)
+    {
         channel_kind = "PKI";
-    } else if (header.channel == primary_channel_hash_) {
+    }
+    else if (header.channel == primary_channel_hash_)
+    {
         channel_kind = "PRIMARY";
-    } else if (header.channel == secondary_channel_hash_) {
+    }
+    else if (header.channel == secondary_channel_hash_)
+    {
         channel_kind = "SECONDARY";
     }
     LORA_LOG("[LORA] RX channel kind=%s hash=0x%02X\n", channel_kind, header.channel);
@@ -1090,10 +1095,13 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     auto it = nodeinfo_last_seen_ms_.find(node_id);
                     bool allow_reply = true;
                     // 直连 NodeInfo 总是允许回复（不受时间抑制）
-                    if (header.to == 0xFFFFFFFF) {  // 只有广播 NodeInfo 才检查时间抑制
-                        if (it != nodeinfo_last_seen_ms_.end()) {
+                    if (header.to == 0xFFFFFFFF)
+                    { // 只有广播 NodeInfo 才检查时间抑制
+                        if (it != nodeinfo_last_seen_ms_.end())
+                        {
                             uint32_t since = now_ms - it->second;
-                            if (since < NODEINFO_REPLY_SUPPRESS_MS) {
+                            if (since < NODEINFO_REPLY_SUPPRESS_MS)
+                            {
                                 allow_reply = false;
                             }
                         }
@@ -1730,7 +1738,7 @@ void MtAdapter::configureRadio()
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     board_.configureLoraRadio(freq_mhz, bw_khz, sf, cr_denom, config_.tx_power,
-                             kLoraPreambleLen, kLoraSyncWord, 2);
+                              kLoraPreambleLen, kLoraSyncWord, 2);
 #endif
 
     ready_ = true;
@@ -1776,12 +1784,11 @@ void MtAdapter::initNodeIdentity()
     // 你的原逻辑：取 MAC 的后 4 字节作为 node_id
     node_id_ = (static_cast<uint32_t>(mac_addr_[2]) << 24) |
                (static_cast<uint32_t>(mac_addr_[3]) << 16) |
-               (static_cast<uint32_t>(mac_addr_[4]) <<  8) |
-               (static_cast<uint32_t>(mac_addr_[5]) <<  0);
+               (static_cast<uint32_t>(mac_addr_[4]) << 8) |
+               (static_cast<uint32_t>(mac_addr_[5]) << 0);
 
     LORA_LOG("[LORA] node_id=0x%08X\n", static_cast<unsigned>(node_id_));
 }
-
 
 void MtAdapter::updateChannelKeys()
 {
@@ -1904,11 +1911,13 @@ bool MtAdapter::initPkiKeys()
 
 void MtAdapter::loadPkiNodeKeys()
 {
-    struct PkiKeyEntry {
+    struct PkiKeyEntry
+    {
         uint32_t node_id;
         uint8_t key[32];
     };
-    struct PkiKeyEntryV2 {
+    struct PkiKeyEntryV2
+    {
         uint32_t node_id;
         uint32_t last_seen;
         uint8_t key[32];
@@ -1917,7 +1926,8 @@ void MtAdapter::loadPkiNodeKeys()
     std::vector<PkiKeyEntryV2> entries_v2;
     size_t actual = 0;
     bool needs_migrate = false;
-    auto loadFromNs = [&](const char* ns) -> bool {
+    auto loadFromNs = [&](const char* ns) -> bool
+    {
         Preferences prefs;
         if (!prefs.begin(ns, true))
         {
@@ -2041,7 +2051,8 @@ void MtAdapter::loadPkiNodeKeys()
 
 void MtAdapter::savePkiNodeKey(uint32_t node_id, const uint8_t* key, size_t key_len)
 {
-    if (node_id == 0 || !key || key_len != 32) {
+    if (node_id == 0 || !key || key_len != 32)
+    {
         return;
     }
     std::array<uint8_t, 32> key_copy{};
@@ -2053,7 +2064,8 @@ void MtAdapter::savePkiNodeKey(uint32_t node_id, const uint8_t* key, size_t key_
 
 void MtAdapter::savePkiKeysToPrefs()
 {
-    struct PkiKeyEntryV2 {
+    struct PkiKeyEntryV2
+    {
         uint32_t node_id;
         uint32_t last_seen;
         uint8_t key[32];
@@ -2073,7 +2085,8 @@ void MtAdapter::savePkiKeysToPrefs()
     if (entries.size() > kMaxPkiNodes)
     {
         std::sort(entries.begin(), entries.end(),
-                  [](const PkiKeyEntryV2& a, const PkiKeyEntryV2& b) {
+                  [](const PkiKeyEntryV2& a, const PkiKeyEntryV2& b)
+                  {
                       return a.last_seen < b.last_seen;
                   });
         size_t drop = entries.size() - kMaxPkiNodes;
@@ -2175,8 +2188,8 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
 }
 
 bool MtAdapter::encryptPkiPayload(uint32_t dest, uint32_t packet_id,
-                                 const uint8_t* plain, size_t plain_len,
-                                 uint8_t* out_cipher, size_t* out_cipher_len)
+                                  const uint8_t* plain, size_t plain_len,
+                                  uint8_t* out_cipher, size_t* out_cipher_len)
 {
     if (!plain || !out_cipher || !out_cipher_len) return false;
     if (!pki_ready_) return false;

@@ -428,7 +428,7 @@ class TLoRaPagerBoard : public BoardBase,
     // Two-stage power-off implementation
     bool isUsbPresent_bestEffort();
 
-    uint32_t devices_probe = 0;    ///< Hardware detection status bitmask
+    uint32_t devices_probe = 0;   ///< Hardware detection status bitmask
     uint8_t _haptic_effects = 15; ///< Default haptic effect (strong buzz for message notification)
 };
 

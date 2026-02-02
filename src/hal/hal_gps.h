@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Arduino.h>
 #include "board/GpsBoard.h"
+#include <Arduino.h>
 
 namespace hal
 {

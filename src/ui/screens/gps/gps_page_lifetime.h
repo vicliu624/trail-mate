@@ -2,7 +2,8 @@
 
 #include "lvgl.h"
 
-namespace gps::ui::lifetime {
+namespace gps::ui::lifetime
+{
 
 void mark_alive(lv_obj_t* root, lv_group_t* app_group);
 bool is_alive();

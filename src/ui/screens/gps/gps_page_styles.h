@@ -1,9 +1,10 @@
 #pragma once
 
-#include "lvgl.h"
 #include "gps_page_layout.h"
+#include "lvgl.h"
 
-namespace gps::ui::styles {
+namespace gps::ui::styles
+{
 
 void init_once();
 void apply_all(const layout::Widgets& w, const layout::Spec& spec);

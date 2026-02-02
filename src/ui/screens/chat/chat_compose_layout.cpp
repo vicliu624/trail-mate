@@ -29,9 +29,11 @@
  */
 #include "chat_compose_layout.h"
 
-namespace chat::ui::compose::layout {
+namespace chat::ui::compose::layout
+{
 
-static lv_obj_t* create_btn_with_label(lv_obj_t* parent, int w, int h, const char* text) {
+static lv_obj_t* create_btn_with_label(lv_obj_t* parent, int w, int h, const char* text)
+{
     lv_obj_t* btn = lv_btn_create(parent);
     lv_obj_set_size(btn, w, h);
 
@@ -41,7 +43,8 @@ static lv_obj_t* create_btn_with_label(lv_obj_t* parent, int w, int h, const cha
     return btn;
 }
 
-void create(lv_obj_t* parent, const Spec& spec, Widgets& w) {
+void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
+{
     w.container = lv_obj_create(parent);
     lv_obj_set_size(w.container, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(w.container, LV_FLEX_FLOW_COLUMN);

@@ -4,15 +4,15 @@
  */
 
 #include "ui_contacts.h"
-#include "screens/contacts/contacts_state.h"
-#include "screens/contacts/contacts_page_components.h"
-#include "screens/contacts/contacts_page_layout.h"
-#include "screens/contacts/contacts_page_input.h"
-#include "screens/chat/chat_compose_components.h"
-#include "widgets/top_bar.h"
-#include "ui_common.h"
 #include "../../app/app_context.h"
 #include "../../chat/domain/chat_types.h"
+#include "screens/chat/chat_compose_components.h"
+#include "screens/contacts/contacts_page_components.h"
+#include "screens/contacts/contacts_page_input.h"
+#include "screens/contacts/contacts_page_layout.h"
+#include "screens/contacts/contacts_state.h"
+#include "ui_common.h"
+#include "widgets/top_bar.h"
 #include <Arduino.h>
 #include <algorithm>
 
@@ -27,19 +27,23 @@ using namespace contacts::ui;
 
 static void contacts_top_bar_back(void* /*user_data*/)
 {
-    if (g_contacts_state.exiting) {
+    if (g_contacts_state.exiting)
+    {
         return;
     }
     g_contacts_state.exiting = true;
-    if (g_contacts_state.refresh_timer != nullptr) {
+    if (g_contacts_state.refresh_timer != nullptr)
+    {
         lv_timer_del(g_contacts_state.refresh_timer);
         g_contacts_state.refresh_timer = nullptr;
     }
-    if (g_contacts_state.conversation_timer != nullptr) {
+    if (g_contacts_state.conversation_timer != nullptr)
+    {
         lv_timer_del(g_contacts_state.conversation_timer);
         g_contacts_state.conversation_timer = nullptr;
     }
-    if (g_contacts_state.root) {
+    if (g_contacts_state.root)
+    {
         lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
     }
     ui_request_exit_to_menu();
@@ -50,7 +54,8 @@ void ui_contacts_enter(lv_obj_t* parent)
     CONTACTS_LOG("[Contacts] Entering Contacts page\n");
 
     // 清理旧状态
-    if (g_contacts_state.root != nullptr) {
+    if (g_contacts_state.root != nullptr)
+    {
         lv_obj_del(g_contacts_state.root);
         g_contacts_state.root = nullptr;
     }
@@ -67,8 +72,7 @@ void ui_contacts_enter(lv_obj_t* parent)
     lv_obj_t* header = contacts::ui::layout::create_header(
         g_contacts_state.root,
         contacts_top_bar_back,
-        nullptr
-    );
+        nullptr);
 
     lv_obj_t* content = contacts::ui::layout::create_content(g_contacts_state.root);
     g_contacts_state.page = content;
@@ -86,14 +90,14 @@ void ui_contacts_enter(lv_obj_t* parent)
     g_contacts_state.last_action_mode = ContactsMode::Contacts;
     g_contacts_state.current_page = 0;
     g_contacts_state.selected_index = -1;
-    
+
     // Initialize input handling
     init_contacts_input();
-    
+
     // Load data and refresh UI
     refresh_contacts_data();
     refresh_ui();
-    
+
     g_contacts_state.initialized = true;
     CONTACTS_LOG("[Contacts] Contacts page initialized\n");
 }
@@ -102,9 +106,11 @@ void ui_contacts_exit(lv_obj_t* parent)
 {
     (void)parent;
     CONTACTS_LOG("[Contacts] Exiting Contacts page\n");
-    
-    if (g_contacts_state.compose_screen) {
-        if (g_contacts_state.compose_ime) {
+
+    if (g_contacts_state.compose_screen)
+    {
+        if (g_contacts_state.compose_ime)
+        {
             g_contacts_state.compose_ime->detach();
             delete g_contacts_state.compose_ime;
             g_contacts_state.compose_ime = nullptr;
@@ -112,28 +118,32 @@ void ui_contacts_exit(lv_obj_t* parent)
         delete g_contacts_state.compose_screen;
         g_contacts_state.compose_screen = nullptr;
     }
-    if (g_contacts_state.conversation_screen) {
+    if (g_contacts_state.conversation_screen)
+    {
         delete g_contacts_state.conversation_screen;
         g_contacts_state.conversation_screen = nullptr;
     }
-    if (g_contacts_state.conversation_timer != nullptr) {
+    if (g_contacts_state.conversation_timer != nullptr)
+    {
         lv_timer_del(g_contacts_state.conversation_timer);
         g_contacts_state.conversation_timer = nullptr;
     }
 
-    if (g_contacts_state.refresh_timer != nullptr) {
+    if (g_contacts_state.refresh_timer != nullptr)
+    {
         lv_timer_del(g_contacts_state.refresh_timer);
         g_contacts_state.refresh_timer = nullptr;
     }
-    
+
     cleanup_contacts_input();
     cleanup_modals();
-    
-    if (g_contacts_state.root != nullptr) {
+
+    if (g_contacts_state.root != nullptr)
+    {
         lv_obj_del(g_contacts_state.root);
         g_contacts_state.root = nullptr;
     }
-    
+
     g_contacts_state = ContactsPageState{};
     CONTACTS_LOG("[Contacts] Contacts page cleaned up\n");
 }
@@ -144,11 +154,14 @@ void refresh_contacts_data_impl()
     app::AppContext& app_ctx = app::AppContext::getInstance();
     chat::contacts::ContactService& contact_service = app_ctx.getContactService();
 
-    auto should_keep = [](const chat::contacts::NodeInfo& node, chat::MeshProtocol protocol) {
-        if (protocol == chat::MeshProtocol::Meshtastic) {
+    auto should_keep = [](const chat::contacts::NodeInfo& node, chat::MeshProtocol protocol)
+    {
+        if (protocol == chat::MeshProtocol::Meshtastic)
+        {
             return node.protocol != chat::contacts::NodeProtocolType::MeshCore;
         }
-        if (protocol == chat::MeshProtocol::MeshCore) {
+        if (protocol == chat::MeshProtocol::MeshCore)
+        {
             return node.protocol != chat::contacts::NodeProtocolType::Meshtastic;
         }
         return true;
@@ -161,7 +174,8 @@ void refresh_contacts_data_impl()
         std::remove_if(
             g_contacts_state.contacts_list.begin(),
             g_contacts_state.contacts_list.end(),
-            [protocol, &should_keep](const chat::contacts::NodeInfo& node) {
+            [protocol, &should_keep](const chat::contacts::NodeInfo& node)
+            {
                 return !should_keep(node, protocol);
             }),
         g_contacts_state.contacts_list.end());
@@ -171,7 +185,8 @@ void refresh_contacts_data_impl()
         std::remove_if(
             g_contacts_state.nearby_list.begin(),
             g_contacts_state.nearby_list.end(),
-            [protocol, &should_keep](const chat::contacts::NodeInfo& node) {
+            [protocol, &should_keep](const chat::contacts::NodeInfo& node)
+            {
                 return !should_keep(node, protocol);
             }),
         g_contacts_state.nearby_list.end());

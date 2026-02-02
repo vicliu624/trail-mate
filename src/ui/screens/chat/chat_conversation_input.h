@@ -2,13 +2,16 @@
 
 #include "lvgl.h"
 
-namespace chat::ui {
+namespace chat::ui
+{
 
 class ChatConversationScreen;
 
-namespace conversation::input {
+namespace conversation::input
+{
 
-struct Binding {
+struct Binding
+{
     lv_obj_t* msg_list = nullptr;
     lv_obj_t* reply_btn = nullptr;
     lv_obj_t* back_btn = nullptr;

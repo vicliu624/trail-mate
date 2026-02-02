@@ -17,15 +17,15 @@ namespace app
 {
 class AppContext;
 }
+#include "../board/BoardBase.h"
+#include "../board/GpsBoard.h"
+#include "../board/LoraBoard.h"
+#include "../board/MotionBoard.h"
 #include "../chat/infra/contact_store.h"
 #include "../chat/infra/meshtastic/node_store.h"
 #include "../chat/infra/store/flash_store.h"
 #include "../chat/infra/store/log_store.h"
 #include "../chat/infra/store/ram_store.h"
-#include "../board/BoardBase.h"
-#include "../board/LoraBoard.h"
-#include "../board/GpsBoard.h"
-#include "../board/MotionBoard.h"
 #include "../chat/ports/i_chat_store.h"
 #include "../chat/ports/i_contact_store.h"
 #include "../chat/ports/i_mesh_adapter.h"

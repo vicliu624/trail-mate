@@ -22,30 +22,30 @@ namespace sys
  */
 enum class EventType
 {
-    ChatNewMessage,      // New message received
-    ChatSendResult,      // Message send result
-    ChatUnreadChanged,   // Unread count changed
-    ChatChannelSwitched, // Channel switched
-    NodeInfoUpdate,      // Node info updated (from mesh network)
-    NodeProtocolUpdate,  // Node protocol update (from message)
+    ChatNewMessage,               // New message received
+    ChatSendResult,               // Message send result
+    ChatUnreadChanged,            // Unread count changed
+    ChatChannelSwitched,          // Channel switched
+    NodeInfoUpdate,               // Node info updated (from mesh network)
+    NodeProtocolUpdate,           // Node protocol update (from message)
     KeyVerificationNumberRequest, // PKI key verification number requested
     KeyVerificationNumberInform,  // PKI key verification number provided
     KeyVerificationFinal,         // PKI key verification final confirmation
-    TeamAdvertise,       // Team advertise received
-    TeamJoinRequest,     // Team join request received
-    TeamJoinAccept,      // Team join accept received
-    TeamJoinConfirm,     // Team join confirm received
-    TeamJoinDecision,    // Team join decision received
-    TeamKick,            // Team kick received
-    TeamTransferLeader,  // Team transfer leader received
-    TeamKeyDist,         // Team key distribution received
-    TeamStatus,          // Team status received
-    TeamPosition,        // Team position received
-    TeamWaypoint,        // Team waypoint received
-    TeamChat,            // Team chat received
-    TeamError,           // Team protocol error
-    InputEvent,          // Input event (keyboard/rotary)
-    SystemTick           // System tick (for periodic tasks)
+    TeamAdvertise,                // Team advertise received
+    TeamJoinRequest,              // Team join request received
+    TeamJoinAccept,               // Team join accept received
+    TeamJoinConfirm,              // Team join confirm received
+    TeamJoinDecision,             // Team join decision received
+    TeamKick,                     // Team kick received
+    TeamTransferLeader,           // Team transfer leader received
+    TeamKeyDist,                  // Team key distribution received
+    TeamStatus,                   // Team status received
+    TeamPosition,                 // Team position received
+    TeamWaypoint,                 // Team waypoint received
+    TeamChat,                     // Team chat received
+    TeamError,                    // Team protocol error
+    InputEvent,                   // Input event (keyboard/rotary)
+    SystemTick                    // System tick (for periodic tasks)
 };
 
 /**

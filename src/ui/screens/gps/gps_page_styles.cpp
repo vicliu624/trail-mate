@@ -1,8 +1,10 @@
 #include "gps_page_styles.h"
 
-namespace gps::ui::styles {
+namespace gps::ui::styles
+{
 
-namespace {
+namespace
+{
 
 bool s_inited = false;
 
@@ -59,7 +61,8 @@ constexpr uint32_t kZoomValueFocusedBg = 0xF0F0F0;
 
 void init_once()
 {
-    if (s_inited) {
+    if (s_inited)
+    {
         return;
     }
 

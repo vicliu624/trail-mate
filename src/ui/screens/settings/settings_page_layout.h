@@ -7,7 +7,8 @@
 
 #include "lvgl.h"
 
-namespace settings::ui::layout {
+namespace settings::ui::layout
+{
 
 lv_obj_t* create_root(lv_obj_t* parent);
 lv_obj_t* create_header(lv_obj_t* root, void (*back_callback)(void*), void* user_data);

@@ -5,19 +5,23 @@
 
 #pragma once
 
-#include "lvgl.h"
 #include "../../chat/domain/chat_types.h"
 #include "../../widgets/top_bar.h"
 #include "chat_message_list_input.h"
-#include <vector>
+#include "lvgl.h"
 #include <string>
+#include <vector>
 
-namespace chat {
-namespace ui {
+namespace chat
+{
+namespace ui
+{
 
-class ChatMessageListScreen {
-public:
-    enum class ActionIntent {
+class ChatMessageListScreen
+{
+  public:
+    enum class ActionIntent
+    {
         SelectConversation,
         Back
     };
@@ -57,24 +61,28 @@ public:
     lv_obj_t* getItemButton(size_t index) const;
     int getSelectedIndex() const { return selected_index_; }
 
-private:
-    enum class TimerDomain {
+  private:
+    enum class TimerDomain
+    {
         ScreenGeneral,
         Input
     };
 
-    struct TimerEntry {
+    struct TimerEntry
+    {
         lv_timer_t* timer = nullptr;
         TimerDomain domain = TimerDomain::ScreenGeneral;
     };
 
-    struct LifetimeGuard {
+    struct LifetimeGuard
+    {
         bool alive = false;
         int pending_async = 0;
         bool owner_dead = false;
     };
 
-    struct ActionPayload {
+    struct ActionPayload
+    {
         LifetimeGuard* guard = nullptr;
         void (*action_cb)(ActionIntent intent,
                           const chat::ConversationId& conv,
@@ -84,7 +92,8 @@ private:
         chat::ConversationId conv{};
     };
 
-    enum class FilterMode {
+    enum class FilterMode
+    {
         Direct,
         Broadcast,
         Team
@@ -107,7 +116,8 @@ private:
                        void*) = nullptr;
     void* action_cb_user_data_ = nullptr;
 
-    struct MessageItem {
+    struct MessageItem
+    {
         chat::ConversationId conv{};
         lv_obj_t* btn = nullptr;
         lv_obj_t* name_label = nullptr;

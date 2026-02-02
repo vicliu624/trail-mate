@@ -3,15 +3,15 @@
 
 #include <stdint.h>
 
-#define USB_VID          0x303a
-#define USB_PID          0x82D4
+#define USB_VID 0x303a
+#define USB_PID 0x82D4
 #define USB_MANUFACTURER "LILYGO"
-#define USB_PRODUCT      "T-LoRa-Pager"
+#define USB_PRODUCT "T-LoRa-Pager"
 
 // ST7796
-#define DISP_WIDTH  (222)
+#define DISP_WIDTH (222)
 #define DISP_HEIGHT (480)
-#define SD_CS       (21)
+#define SD_CS (21)
 
 static const uint8_t TX = 43;
 static const uint8_t RX = 44;
@@ -26,7 +26,7 @@ static const uint8_t MOSI = 34;
 static const uint8_t MISO = 33;
 static const uint8_t SCK = 35;
 
-#define KB_INT       (6)
+#define KB_INT (6)
 #define KB_BACKLIGHT (46)
 
 // Rotary
@@ -35,58 +35,58 @@ static const uint8_t SCK = 35;
 #define ROTARY_C (7)
 
 // Interrupt IO port
-#define RTC_INT    (1)
-#define NFC_INT    (5)
+#define RTC_INT (1)
+#define NFC_INT (5)
 #define SENSOR_INT (8)
-#define NFC_CS     (39)
+#define NFC_CS (39)
 
 // Power management
-#define POWER_KEY  (0)   // Power/BOOT button (GPIO 0) - LilyGo wake source
-#define BOOT_KEY   (9)   // Boot button (GPIO 9)
+#define POWER_KEY (0) // Power/BOOT button (GPIO 0) - LilyGo wake source
+#define BOOT_KEY (9)  // Boot button (GPIO 9)
 
 // ES8311
-#define I2S_WS    (18)
-#define I2S_SCK   (11)
-#define I2S_MCLK  (10)
+#define I2S_WS (18)
+#define I2S_SCK (11)
+#define I2S_MCLK (10)
 #define I2S_SDOUT (45)
-#define I2S_SDIN  (17)
+#define I2S_SDIN (17)
 
 // GPS
-#define GPS_TX  (12)
-#define GPS_RX  (4)
+#define GPS_TX (12)
+#define GPS_RX (4)
 #define GPS_PPS (13)
 
 // LoRa, SD, ST25R3916 card share SPI bus
-#define LORA_SCK  (SCK)   // share spi bus
-#define LORA_MISO (MISO)  // share spi bus
-#define LORA_MOSI (MOSI)  // share spi bus
-#define LORA_CS   (36)
-#define LORA_RST  (47)
+#define LORA_SCK (SCK)   // share spi bus
+#define LORA_MISO (MISO) // share spi bus
+#define LORA_MOSI (MOSI) // share spi bus
+#define LORA_CS (36)
+#define LORA_RST (47)
 #define LORA_BUSY (48)
-#define LORA_IRQ  (14)
+#define LORA_IRQ (14)
 
 // SPI interface display
 #define DISP_MOSI (MOSI)
 #define DISP_MISO (MISO)
-#define DISP_SCK  (SCK)
-#define DISP_RST  (-1)
-#define DISP_CS   (38)
-#define DISP_DC   (37)
-#define DISP_BL   (42)
+#define DISP_SCK (SCK)
+#define DISP_RST (-1)
+#define DISP_CS (38)
+#define DISP_DC (37)
+#define DISP_BL (42)
 
 // External expansion chip IO definition
-#define EXPANDS_DRV_EN    (0)
-#define EXPANDS_AMP_EN    (1)
-#define EXPANDS_KB_RST    (2)
-#define EXPANDS_LORA_EN   (3)
-#define EXPANDS_GPS_EN    (4)
-#define EXPANDS_NFC_EN    (5)
-#define EXPANDS_GPS_RST   (7)
-#define EXPANDS_KB_EN     (8)
-#define EXPANDS_GPIO_EN   (9)
-#define EXPANDS_SD_DET    (10)
+#define EXPANDS_DRV_EN (0)
+#define EXPANDS_AMP_EN (1)
+#define EXPANDS_KB_RST (2)
+#define EXPANDS_LORA_EN (3)
+#define EXPANDS_GPS_EN (4)
+#define EXPANDS_NFC_EN (5)
+#define EXPANDS_GPS_RST (7)
+#define EXPANDS_KB_EN (8)
+#define EXPANDS_GPIO_EN (9)
+#define EXPANDS_SD_DET (10)
 #define EXPANDS_SD_PULLEN (11)
-#define EXPANDS_SD_EN     (12)
+#define EXPANDS_SD_EN (12)
 
 // Peripheral definition exists
 #define USING_AUDIO_CODEC

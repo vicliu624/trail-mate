@@ -57,28 +57,35 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
 #if LV_TEST_FLUSH_LOG
 #if LV_TEST_FLUSH_SAMPLE
     bool all_zero_sample = false;
-    if (color_p && len > 0) {
+    if (color_p && len > 0)
+    {
         const uint16_t* pix = reinterpret_cast<const uint16_t*>(color_p);
         size_t step = len / 8;
         if (step == 0) step = 1;
         all_zero_sample = true;
-        for (size_t i = 0, idx = 0; i < 8 && idx < len; ++i, idx += step) {
-            if (pix[idx] != 0) {
+        for (size_t i = 0, idx = 0; i < 8 && idx < len; ++i, idx += step)
+        {
+            if (pix[idx] != 0)
+            {
                 all_zero_sample = false;
                 break;
             }
         }
     }
-    if (all_zero_sample) {
+    if (all_zero_sample)
+    {
         s_zero_streak++;
-    } else {
+    }
+    else
+    {
         s_zero_streak = 0;
     }
 #endif
     s_flush_count++;
     s_last_area = *area;
     uint32_t now_ms = millis();
-    if (now_ms - s_flush_last_ms >= 1000) {
+    if (now_ms - s_flush_last_ms >= 1000)
+    {
         lv_obj_t* scr = lv_screen_active();
         unsigned child_cnt = scr ? (unsigned)lv_obj_get_child_cnt(scr) : 0;
         Serial.printf("[LVGL] flush/s=%lu last_area=%d,%d-%d,%d children=%u",

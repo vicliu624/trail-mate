@@ -9,4 +9,3 @@ TrackerPageState g_tracker_state{};
 
 } // namespace ui
 } // namespace tracker
-

@@ -1,9 +1,9 @@
 #pragma once
 
+#include "board/MotionBoard.h"
 #include "bosch/BoschParseCallbackManager.hpp"
 #include <Arduino.h>
 #include <SensorBHI260AP.hpp>
-#include "board/MotionBoard.h"
 
 namespace hal
 {

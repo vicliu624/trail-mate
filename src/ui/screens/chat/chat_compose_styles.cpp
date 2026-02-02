@@ -1,7 +1,8 @@
 #include "chat_compose_styles.h"
 #include "../../assets/fonts/fonts.h"
 
-namespace chat::ui::compose::styles {
+namespace chat::ui::compose::styles
+{
 
 static bool inited = false;
 
@@ -13,7 +14,8 @@ static lv_style_t s_btn_basic;
 static lv_style_t s_btn_focused;
 static lv_style_t s_len_label;
 
-void init_once() {
+void init_once()
+{
     if (inited) return;
     inited = true;
 
@@ -59,7 +61,8 @@ void init_once() {
     lv_style_set_text_color(&s_len_label, lv_color_hex(0x606060));
 }
 
-void apply_all(const layout::Widgets& w) {
+void apply_all(const layout::Widgets& w)
+{
     init_once();
 
     lv_obj_add_style(w.container, &s_container, 0);

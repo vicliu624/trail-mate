@@ -1,10 +1,12 @@
 #pragma once
-#include "lvgl.h"
 #include "../../widgets/top_bar.h"
+#include "lvgl.h"
 
-namespace chat::ui::compose::layout {
+namespace chat::ui::compose::layout
+{
 
-struct Spec {
+struct Spec
+{
     int action_bar_h = 30;
     int action_pad_lr = 10;
     int action_pad_tb = 4;
@@ -19,7 +21,8 @@ struct Spec {
     int btn_gap = 10;
 };
 
-struct Widgets {
+struct Widgets
+{
     lv_obj_t* container = nullptr;
     lv_obj_t* content = nullptr;
     lv_obj_t* textarea = nullptr;

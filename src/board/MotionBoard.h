@@ -11,4 +11,3 @@ class MotionBoard
     virtual SensorBHI260AP& getMotionSensor() = 0;
     virtual bool isSensorReady() const = 0;
 };
-

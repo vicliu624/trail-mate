@@ -4,27 +4,27 @@
  */
 
 #include "team_page_components.h"
-#include "team_page_layout.h"
-#include "team_page_styles.h"
-#include "team_page_input.h"
-#include "team_state.h"
-#include "team_ui_store.h"
-#include "../../ui_common.h"
 #include "../../../app/app_context.h"
+#include "../../../sys/event_bus.h"
+#include "../../../team/infra/nfc/team_nfc.h"
 #include "../../../team/protocol/team_mgmt.h"
 #include "../../../team/usecase/team_service.h"
-#include "../../../team/infra/nfc/team_nfc.h"
-#include "../../../sys/event_bus.h"
+#include "../../ui_common.h"
 #include "../../widgets/system_notification.h"
 #include "meshtastic/mesh.pb.h"
 #include "pb_decode.h"
+#include "team_page_input.h"
+#include "team_page_layout.h"
+#include "team_page_styles.h"
+#include "team_state.h"
+#include "team_ui_store.h"
 
 #include <Arduino.h>
-#include <cstdio>
-#include <string>
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace team
 {
@@ -174,7 +174,8 @@ void mark_keydist_confirmed(uint32_t node_id, uint32_t key_id)
 {
     s_keydist_pending.erase(
         std::remove_if(s_keydist_pending.begin(), s_keydist_pending.end(),
-                       [&](const KeyDistPending& item) {
+                       [&](const KeyDistPending& item)
+                       {
                            return item.node_id == node_id && item.key_id == key_id;
                        }),
         s_keydist_pending.end());
@@ -198,7 +199,7 @@ void process_keydist_retries()
         return;
     }
 
-    for (auto it = s_keydist_pending.begin(); it != s_keydist_pending.end(); )
+    for (auto it = s_keydist_pending.begin(); it != s_keydist_pending.end();)
     {
         if (now < it->next_retry_s)
         {
@@ -624,7 +625,6 @@ std::string format_signal(uint8_t bars)
     return std::string(buf);
 }
 
-
 std::string format_invite_code(const std::string& code)
 {
     if (code.empty())
@@ -649,7 +649,8 @@ std::string generate_invite_code()
 {
     static const char kAlphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     constexpr size_t kAlphaLen = sizeof(kAlphabet) - 1;
-    auto pick = []() {
+    auto pick = []()
+    {
         return kAlphabet[random(0, kAlphaLen)];
     };
     std::string code;
@@ -1030,7 +1031,9 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
     lv_obj_t* accept_label = lv_label_create(accept_btn);
     lv_label_set_text(accept_label, "Accept");
     lv_obj_center(accept_label);
-    lv_obj_add_event_cb(accept_btn, [](lv_event_t*) {
+    lv_obj_add_event_cb(
+        accept_btn, [](lv_event_t*)
+        {
         app::AppContext& app_ctx = app::AppContext::getInstance();
         team::TeamController* controller = app_ctx.getTeamController();
         if (controller)
@@ -1169,8 +1172,8 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
         touch_member(g_team_state.pending_join_node_id, now_secs());
         g_team_state.last_update_s = now_secs();
         save_state_to_store();
-        close_join_request_modal();
-    }, LV_EVENT_CLICKED, nullptr);
+        close_join_request_modal(); },
+        LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* reject_btn = lv_btn_create(btn_row);
     lv_obj_set_size(reject_btn, 90, 32);
@@ -1178,7 +1181,9 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
     lv_obj_t* reject_label = lv_label_create(reject_btn);
     lv_label_set_text(reject_label, "Reject");
     lv_obj_center(reject_label);
-    lv_obj_add_event_cb(reject_btn, [](lv_event_t*) {
+    lv_obj_add_event_cb(
+        reject_btn, [](lv_event_t*)
+        {
         app::AppContext& app_ctx = app::AppContext::getInstance();
         team::TeamController* controller = app_ctx.getTeamController();
         if (controller)
@@ -1193,8 +1198,8 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
                 notify_send_failed("Decision", false);
             }
         }
-        close_join_request_modal();
-    }, LV_EVENT_CLICKED, nullptr);
+        close_join_request_modal(); },
+        LV_EVENT_CLICKED, nullptr);
 
     lv_group_add_obj(g_team_state.modal_group, accept_btn);
     lv_group_add_obj(g_team_state.modal_group, reject_btn);
@@ -1383,21 +1388,21 @@ void handle_team_status(const team::TeamStatusEvent& ev)
     {
         g_team_state.security_round = ev.ctx.key_id;
     }
-        if (ev.msg.key_id != 0)
+    if (ev.msg.key_id != 0)
+    {
+        if (ev.msg.key_id > g_team_state.security_round)
         {
-            if (ev.msg.key_id > g_team_state.security_round)
-            {
-                g_team_state.waiting_new_keys = true;
-            }
-            else if (ev.msg.key_id == g_team_state.security_round)
-            {
-                g_team_state.waiting_new_keys = false;
-            }
-            if (ev.ctx.from != 0)
-            {
-                mark_keydist_confirmed(ev.ctx.from, ev.msg.key_id);
-            }
+            g_team_state.waiting_new_keys = true;
         }
+        else if (ev.msg.key_id == g_team_state.security_round)
+        {
+            g_team_state.waiting_new_keys = false;
+        }
+        if (ev.ctx.from != 0)
+        {
+            mark_keydist_confirmed(ev.ctx.from, ev.msg.key_id);
+        }
+    }
     if (ev.msg.key_id != 0 && ev.msg.key_id > prev_round)
     {
         std::vector<uint8_t> payload;
@@ -1713,7 +1718,7 @@ void handle_create(lv_event_t*)
     {
         for (size_t i = 0; i < g_team_state.team_psk.size(); ++i)
         {
-        g_team_state.team_psk[i] = static_cast<uint8_t>(random(0, 256));
+            g_team_state.team_psk[i] = static_cast<uint8_t>(random(0, 256));
         }
         g_team_state.has_team_psk = true;
     }
@@ -1891,9 +1896,10 @@ void handle_leave(lv_event_t*)
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
-    lv_obj_add_event_cb(cancel_btn, [](lv_event_t*) {
-        close_leave_confirm_modal();
-    }, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(
+        cancel_btn, [](lv_event_t*)
+        { close_leave_confirm_modal(); },
+        LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* leave_btn = lv_btn_create(btn_row);
     lv_obj_set_size(leave_btn, 90, 32);
@@ -1901,10 +1907,12 @@ void handle_leave(lv_event_t*)
     lv_obj_t* leave_label = lv_label_create(leave_btn);
     lv_label_set_text(leave_label, "Leave");
     lv_obj_center(leave_label);
-    lv_obj_add_event_cb(leave_btn, [](lv_event_t*) {
+    lv_obj_add_event_cb(
+        leave_btn, [](lv_event_t*)
+        {
         close_leave_confirm_modal();
-        perform_leave();
-    }, LV_EVENT_CLICKED, nullptr);
+        perform_leave(); },
+        LV_EVENT_CLICKED, nullptr);
 
     lv_group_add_obj(g_team_state.modal_group, cancel_btn);
     lv_group_add_obj(g_team_state.modal_group, leave_btn);
@@ -2274,7 +2282,6 @@ void handle_join_cancel(lv_event_t*)
     save_state_to_store();
     nav_back();
 }
-
 
 void handle_join_retry(lv_event_t*)
 {

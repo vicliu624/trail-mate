@@ -7,7 +7,8 @@
 
 #include "lvgl.h"
 
-namespace settings::ui::style {
+namespace settings::ui::style
+{
 
 void init_once();
 
