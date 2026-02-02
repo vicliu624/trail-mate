@@ -14,13 +14,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format-14
 
       - name: Verify formatting
         run: |
-          clang-format --version
+          clang-format-14 --version
           git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' ':(exclude)src/chat/infra/meshtastic/generated/*' \
-            | xargs -0 clang-format --dry-run --Werror
+            | xargs -0 clang-format-14 --dry-run --Werror
 
   build:
     name: PlatformIO Build
