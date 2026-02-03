@@ -1,6 +1,5 @@
 #include "gps_tracker_overlay.h"
 
-#include "../../../gps/gps_service_api.h"
 #include "../../ui_common.h"
 #include "../../widgets/map/map_tiles.h"
 #include "gps_modal.h"
@@ -12,7 +11,6 @@
 #include <SD.h>
 #include <algorithm>
 #include <cmath>
-#include <esp_system.h>
 #include <vector>
 
 // Implemented in gps_page_components.cpp
@@ -23,9 +21,7 @@ namespace
 using gps::ui::lifetime::is_alive;
 
 constexpr double kMinDistanceM = 2.0;
-constexpr double kMinDistanceMaxM = 30.0;
-constexpr double kSamplePixels = 4.0;
-constexpr int kMaxDrawPoints = 100;
+constexpr int kMaxDrawPoints = 150;
 constexpr int kDefaultTrackerZoom = 16;
 constexpr uint32_t kTrackColor = 0xFF2D55; // vivid pink/red, uncommon on map tiles
 std::vector<String> s_modal_names;
@@ -47,11 +43,9 @@ double haversine_m(double lat1, double lon1, double lat2, double lon2)
     return R * c;
 }
 
-double sampling_distance_m(int zoom, double lat)
+double sampling_distance_m()
 {
-    const double mpp = gps::calculate_map_resolution(zoom, lat);
-    const double scaled = mpp * kSamplePixels;
-    return std::max(kMinDistanceM, std::min(kMinDistanceMaxM, scaled));
+    return kMinDistanceM;
 }
 
 bool parse_attr_double(const String& line, const char* key, double& out)
@@ -72,7 +66,24 @@ bool parse_attr_double(const String& line, const char* key, double& out)
     return true;
 }
 
-bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::TrackOverlayPoint>& out_points)
+void downsample_points(std::vector<GPSPageState::TrackOverlayPoint>& points)
+{
+    if (points.size() <= (size_t)kMaxDrawPoints)
+    {
+        return;
+    }
+    const size_t total = points.size();
+    std::vector<GPSPageState::TrackOverlayPoint> reduced;
+    reduced.reserve(kMaxDrawPoints);
+    for (size_t i = 0; i < (size_t)kMaxDrawPoints; ++i)
+    {
+        const size_t idx = (i * (total - 1)) / (kMaxDrawPoints - 1);
+        reduced.push_back(points[idx]);
+    }
+    points.swap(reduced);
+}
+
+bool load_gpx_points(const char* path, std::vector<GPSPageState::TrackOverlayPoint>& out_points)
 {
     out_points.clear();
     if (SD.cardType() == CARD_NONE)
@@ -88,7 +99,6 @@ bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::Track
 
     bool have_last = false;
     GPSPageState::TrackOverlayPoint last{};
-    uint32_t accepted = 0;
 
     while (f.available())
     {
@@ -113,7 +123,7 @@ bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::Track
 
         if (have_last)
         {
-            const double min_d = sampling_distance_m(zoom, pt.lat);
+            const double min_d = sampling_distance_m();
             const double d = haversine_m(last.lat, last.lng, pt.lat, pt.lng);
             if (d < min_d)
             {
@@ -121,20 +131,8 @@ bool load_gpx_points(const char* path, int zoom, std::vector<GPSPageState::Track
             }
         }
 
-        ++accepted;
-        if (out_points.size() < (size_t)kMaxDrawPoints)
-        {
-            out_points.push_back(pt);
-        }
-        else
-        {
-            // Reservoir sampling: keep a uniform sample without loading all points.
-            const uint32_t j = (uint32_t)(esp_random() % accepted);
-            if (j < (uint32_t)out_points.size())
-            {
-                out_points[(size_t)j] = pt;
-            }
-        }
+        out_points.push_back(pt);
+        downsample_points(out_points);
 
         last = pt;
         have_last = true;
@@ -180,7 +178,7 @@ void compute_screen_points()
         const auto& pt = s.tracker_points[(size_t)i];
         if (have_prev)
         {
-            const double min_d = sampling_distance_m(s.zoom_level, pt.lat);
+            const double min_d = sampling_distance_m();
             const double d = haversine_m(prev.lat, prev.lng, pt.lat, pt.lng);
             if (d < min_d)
             {
@@ -192,12 +190,6 @@ void compute_screen_points()
         int sy = 0;
         if (!gps_screen_pos(s.tile_ctx, pt.lat, pt.lng, sx, sy))
         {
-            break;
-        }
-
-        if (sx < 0 || sy < 0 || sx >= w || sy >= h)
-        {
-            // Stop once points are off-screen to limit work and match the requirement.
             break;
         }
 
@@ -272,7 +264,7 @@ void on_track_selected(lv_event_t* e)
     snprintf(path, sizeof(path), "/trackers/%s", name.c_str());
 
     std::vector<GPSPageState::TrackOverlayPoint> pts;
-    if (!load_gpx_points(path, kDefaultTrackerZoom, pts))
+    if (!load_gpx_points(path, pts))
     {
         show_toast("Failed to load GPX", 1500);
         close_tracker_modal();
