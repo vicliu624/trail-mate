@@ -487,15 +487,13 @@ bool gps_route_focus(bool show_fail_toast)
     {
         int map_w = lv_obj_get_width(g_gps_state.map);
         int map_h = lv_obj_get_height(g_gps_state.map);
-        compute_fit_zoom(
-            RouteBounds{true,
-                        g_gps_state.route_min_lat,
-                        g_gps_state.route_min_lng,
-                        g_gps_state.route_max_lat,
-                        g_gps_state.route_max_lng},
-            map_w,
-            map_h,
-            fit_zoom);
+        RouteBounds bounds;
+        bounds.valid = true;
+        bounds.min_lat = g_gps_state.route_min_lat;
+        bounds.min_lng = g_gps_state.route_min_lng;
+        bounds.max_lat = g_gps_state.route_max_lat;
+        bounds.max_lng = g_gps_state.route_max_lng;
+        compute_fit_zoom(bounds, map_w, map_h, fit_zoom);
     }
 
     g_gps_state.zoom_level = fit_zoom;
