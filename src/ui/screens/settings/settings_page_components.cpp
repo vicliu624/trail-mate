@@ -223,6 +223,7 @@ static void reset_mesh_settings()
 {
     app::AppContext& app_ctx = app::AppContext::getInstance();
     app_ctx.getConfig().mesh_config = chat::MeshConfig();
+    app_ctx.getConfig().mesh_config.region = app::AppConfig::kDefaultRegionCode;
     app_ctx.getConfig().mesh_protocol = chat::MeshProtocol::Meshtastic;
     app_ctx.saveConfig();
     app_ctx.applyMeshConfig();

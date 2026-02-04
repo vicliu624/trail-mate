@@ -19,6 +19,7 @@ namespace app
  */
 struct AppConfig
 {
+    static constexpr uint8_t kDefaultRegionCode = 4; // Meshtastic CN
     // Chat settings
     chat::ChatPolicy chat_policy;
     chat::MeshConfig mesh_config;
@@ -66,6 +67,7 @@ struct AppConfig
     {
         chat_policy = chat::ChatPolicy::outdoor();
         mesh_config = chat::MeshConfig();
+        mesh_config.region = kDefaultRegionCode;
         mesh_protocol = chat::MeshProtocol::Meshtastic;
         strcpy(node_name, "TrailMate");
         strcpy(short_name, "TM");
@@ -113,6 +115,10 @@ struct AppConfig
 
         // Load mesh config
         mesh_config.region = prefs.getUChar("region", 0);
+        if (mesh_config.region == 0)
+        {
+            mesh_config.region = kDefaultRegionCode;
+        }
         mesh_config.modem_preset = prefs.getUChar("modem_preset", 0);
         mesh_config.tx_power = prefs.getChar("tx_power", 14);
         mesh_config.hop_limit = prefs.getUChar("mesh_hop_limit", 2);
