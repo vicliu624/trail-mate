@@ -3,9 +3,9 @@
  * ------------------------------------------------------------
  * Root(COL)
  * |-- Header(TopBar host, fixed height)
- * `-- Content(COL, grow=1)
- *     |-- StartStopBtn(fixed height)
- *     `-- TrackList(list, grow=1)
+ * `-- Body(ROW, grow=1)
+ *     |-- ModePanel(fixed width)
+ *     `-- MainPanel(COL, grow=1)
  */
 
 #include "tracker_page_layout.h"
@@ -60,33 +60,60 @@ lv_obj_t* create_header(lv_obj_t* root)
     return header;
 }
 
-lv_obj_t* create_content(lv_obj_t* root)
+lv_obj_t* create_body(lv_obj_t* root)
 {
-    lv_obj_t* content = lv_obj_create(root);
-    lv_obj_set_width(content, LV_PCT(100));
-    lv_obj_set_flex_grow(content, 1);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(content, 8, 0);
-    lv_obj_set_style_pad_row(content, 6, 0);
-    lv_obj_set_style_bg_color(content, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(content, LV_OPA_COVER, 0);
-    apply_base_container_style(content);
-    return content;
+    lv_obj_t* body = lv_obj_create(root);
+    lv_obj_set_width(body, LV_PCT(100));
+    lv_obj_set_flex_grow(body, 1);
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(body, 0, 0);
+    lv_obj_set_style_bg_color(body, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
+    apply_base_container_style(body);
+    return body;
 }
 
-lv_obj_t* create_start_stop_button(lv_obj_t* content)
+lv_obj_t* create_mode_panel(lv_obj_t* body, int width)
 {
-    lv_obj_t* btn = lv_btn_create(content);
-    lv_obj_set_width(btn, LV_PCT(100));
-    return btn;
+    lv_obj_t* panel = lv_obj_create(body);
+    lv_obj_set_width(panel, width);
+    lv_obj_set_height(panel, LV_PCT(100));
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_all(panel, 4, 0);
+    lv_obj_set_style_pad_row(panel, 6, 0);
+    lv_obj_set_style_bg_color(panel, lv_color_hex(0xF2F2F2), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(panel, 0, 0);
+    apply_base_container_style(panel);
+    return panel;
 }
 
-lv_obj_t* create_list(lv_obj_t* content)
+lv_obj_t* create_main_panel(lv_obj_t* body)
 {
-    lv_obj_t* list = lv_list_create(content);
-    lv_obj_set_width(list, LV_PCT(100));
-    lv_obj_set_flex_grow(list, 1);
-    return list;
+    lv_obj_t* panel = lv_obj_create(body);
+    lv_obj_set_flex_grow(panel, 1);
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(panel, 8, 0);
+    lv_obj_set_style_pad_row(panel, 6, 0);
+    lv_obj_set_style_bg_color(panel, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    apply_base_container_style(panel);
+    return panel;
+}
+
+lv_obj_t* create_section(lv_obj_t* parent)
+{
+    lv_obj_t* section = lv_obj_create(parent);
+    lv_obj_set_width(section, LV_PCT(100));
+    lv_obj_set_flex_grow(section, 1);
+    lv_obj_set_flex_flow(section, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(section, 4, 0);
+    lv_obj_set_style_pad_row(section, 6, 0);
+    lv_obj_set_style_bg_color(section, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(section, LV_OPA_COVER, 0);
+    apply_base_container_style(section);
+    return section;
 }
 
 } // namespace layout

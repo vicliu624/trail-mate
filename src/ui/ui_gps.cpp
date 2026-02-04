@@ -1,4 +1,5 @@
 #include "board/BoardBase.h"
+#include "../app/app_context.h"
 #include "display/DisplayInterface.h"
 #include "gps/GPS.h"
 #include "screens/gps/gps_constants.h"
@@ -11,6 +12,7 @@
 #include "screens/gps/gps_page_styles.h"
 #include "screens/gps/gps_state.h"
 #include "screens/gps/gps_tracker_overlay.h"
+#include "screens/gps/gps_route_overlay.h"
 #include "ui_common.h"
 #include "widgets/map/map_tiles.h"
 
@@ -68,6 +70,7 @@ void assign_layout_widgets(const gps::ui::layout::Widgets& w)
     g_gps_state.pan_h = w.pan_h_btn;
     g_gps_state.pan_v = w.pan_v_btn;
     g_gps_state.tracker_btn = w.tracker_btn;
+    g_gps_state.route_btn = w.route_btn;
     g_gps_state.top_bar = w.top_bar;
 }
 
@@ -80,6 +83,7 @@ void bind_controls_and_group(lv_group_t* app_g)
     set_control_id(g_gps_state.pan_h, ControlId::PanHBtn);
     set_control_id(g_gps_state.pan_v, ControlId::PanVBtn);
     set_control_id(g_gps_state.tracker_btn, ControlId::TrackerBtn);
+    set_control_id(g_gps_state.route_btn, ControlId::RouteBtn);
 
     auto bind_btn_events = [](lv_obj_t* obj, bool include_rotary)
     {
@@ -97,6 +101,7 @@ void bind_controls_and_group(lv_group_t* app_g)
     bind_btn_events(g_gps_state.pan_h, true);
     bind_btn_events(g_gps_state.pan_v, true);
     bind_btn_events(g_gps_state.tracker_btn, false);
+    bind_btn_events(g_gps_state.route_btn, false);
 
     if (g_gps_state.top_bar.back_btn)
     {
@@ -115,6 +120,7 @@ void bind_controls_and_group(lv_group_t* app_g)
         lv_group_add_obj(app_g, g_gps_state.pan_h);
         lv_group_add_obj(app_g, g_gps_state.pan_v);
         lv_group_add_obj(app_g, g_gps_state.tracker_btn);
+        lv_group_add_obj(app_g, g_gps_state.route_btn);
     }
 
     lv_obj_add_event_cb(g_gps_state.map, on_ui_event, LV_EVENT_KEY, NULL);
@@ -291,6 +297,11 @@ void ui_gps_enter(lv_obj_t* parent)
         lv_obj_add_event_cb(g_gps_state.map, gps_tracker_draw_event, LV_EVENT_DRAW_POST, NULL);
         g_gps_state.tracker_draw_cb_bound = true;
     }
+    if (!g_gps_state.route_draw_cb_bound)
+    {
+        lv_obj_add_event_cb(g_gps_state.map, gps_route_draw_event, LV_EVENT_DRAW_POST, NULL);
+        g_gps_state.route_draw_cb_bound = true;
+    }
 
     lv_label_set_text(g_gps_state.resolution_label, "");
 
@@ -306,6 +317,31 @@ void ui_gps_enter(lv_obj_t* parent)
 
     hide_pan_h_indicator();
     hide_pan_v_indicator();
+
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        const auto& cfg = app_ctx.getConfig();
+        bool show_route = cfg.route_enabled && (cfg.route_path[0] != '\0');
+        if (g_gps_state.route_btn)
+        {
+            if (show_route)
+            {
+                lv_obj_clear_flag(g_gps_state.route_btn, LV_OBJ_FLAG_HIDDEN);
+            }
+            else
+            {
+                lv_obj_add_flag(g_gps_state.route_btn, LV_OBJ_FLAG_HIDDEN);
+                if (app_g)
+                {
+                    lv_group_remove_obj(g_gps_state.route_btn);
+                }
+            }
+        }
+        if (show_route)
+        {
+            gps_route_sync_from_config(false);
+        }
+    }
 
     refresh_member_panel(true);
 
@@ -380,6 +416,7 @@ void ui_gps_exit(lv_obj_t* parent)
         remove_if(g_gps_state.pan_h);
         remove_if(g_gps_state.pan_v);
         remove_if(g_gps_state.tracker_btn);
+        remove_if(g_gps_state.route_btn);
         remove_if(g_gps_state.pan_h_indicator);
         remove_if(g_gps_state.pan_v_indicator);
         for (auto* btn : g_gps_state.member_btns)
@@ -396,6 +433,7 @@ void ui_gps_exit(lv_obj_t* parent)
     }
     GPS_LOG("[GPS][EXIT] cleaning tracker overlay\n");
     gps_tracker_cleanup();
+    gps_route_cleanup();
     if (g_gps_state.zoom_modal.group)
     {
         GPS_LOG("[GPS][EXIT] deleting zoom modal group\n");

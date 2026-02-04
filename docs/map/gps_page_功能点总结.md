@@ -16,6 +16,7 @@
     - `[H]oriz`（`PanHBtn`）
     - `[V]ert`（`PanVBtn`）
     - `[T]racker`（`TrackerBtn`）
+    - `[R]oute`（`RouteBtn`）
   - 创建分辨率标签 `g_gps_state.resolution_label`
   - 绑定地图输入事件（键盘/旋钮）
   - 启动定时器（见第 3 节）
@@ -36,6 +37,12 @@
     - `tracker_file`
     - `tracker_points`
     - `tracker_screen_points`
+  - 循迹叠加层数据（KML 路线）：
+    - `route_overlay_active`
+    - `route_file`
+    - `route_points`
+    - `route_screen_points`
+    - `route_bbox_valid / route_min_* / route_max_*`
 
 ## 3) 定时驱动（页面如何“动起来”）
 
@@ -111,7 +118,31 @@
   - 改变布局/层级/尺寸
 - DRAW 回调只负责“纯绘制”
 
-## 7) 退出与清理（避免状态泄漏）
+## 7) 循迹（KML 路线）
+
+循迹是“预设路线导航”模式，路线来自 KML 文件，业务入口在 Tracker 页面。
+
+业务流程（端到端）：
+- Tracker 页面 → Route 模式
+  - 从 `/routes` 目录读取 `.kml` 列表
+  - `Load`：写入 `AppConfig.route_enabled=true` 与 `AppConfig.route_path="/routes/xxx.kml"`
+  - `Disable`：清空 `route_enabled/route_path`
+- GPS 页面
+  - 读取配置后显示 `[R]oute` 按钮
+  - 点击 `[R]oute`：地图跳转到路线范围（自动居中 + 适配缩放）
+  - 路线在地图上以点状渲染（由浅到深，体现方向）
+
+核心文件与职责：
+- Tracker 入口与写配置：`src/ui/screens/tracker/tracker_page_components.cpp`
+- GPS 按钮显示/隐藏：`src/ui/ui_gps.cpp`
+- 输入映射（RouteBtn / R 键）：`src/ui/screens/gps/gps_page_input.cpp`
+- 路线解析与绘制：`src/ui/screens/gps/gps_route_overlay.cpp`
+
+KML 解析策略（当前支持）：
+- `gx:Track` 的 `<gx:coord>`（优先）
+- `LineString` / `<coordinates>`（兼容）
+
+## 8) 退出与清理（避免状态泄漏）
 
 清理入口：
 - `src/ui/ui_gps.cpp` 的 `ui_gps_exit(...)`
@@ -120,7 +151,7 @@
   - 停止定时器
   - 清理轨迹状态：`gps_tracker_cleanup()`
 
-## 8) 这页最容易被改坏的三个点（请优先避免）
+## 9) 这页最容易被改坏的三个点（请优先避免）
 
 1) 在 DRAW 事件里动层级或触发重绘
 - 这会直接导致抖动、撕裂、甚至卡死
@@ -139,4 +170,3 @@
 
 - 先冻结结构：只允许在 `update_map_tiles()` 末尾做层级修正
 - 再做优化：给轨迹点位计算加“变化检测/缓存”
-

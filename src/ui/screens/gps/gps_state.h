@@ -42,6 +42,7 @@ struct GPSPageState
     lv_obj_t* pan_h = nullptr;           // Horizontal pan button
     lv_obj_t* pan_v = nullptr;           // Vertical pan button
     lv_obj_t* tracker_btn = nullptr;     // Tracker button
+    lv_obj_t* route_btn = nullptr;       // Route focus button
     lv_obj_t* pan_h_indicator = nullptr; // Horizontal pan indicator (line with arrows at bottom)
     lv_obj_t* pan_v_indicator = nullptr; // Vertical pan indicator (line with arrows on right)
     lv_obj_t* popup_label = nullptr;     // zoom_popup_label
@@ -94,6 +95,18 @@ struct GPSPageState
     std::string tracker_file{};
     std::vector<TrackOverlayPoint> tracker_points;
     std::vector<lv_point_t> tracker_screen_points;
+
+    // Route overlay (KML)
+    bool route_overlay_active = false;
+    bool route_draw_cb_bound = false;
+    bool route_bbox_valid = false;
+    std::string route_file{};
+    std::vector<TrackOverlayPoint> route_points;
+    std::vector<lv_point_t> route_screen_points;
+    double route_min_lat = 0.0;
+    double route_min_lng = 0.0;
+    double route_max_lat = 0.0;
+    double route_max_lng = 0.0;
 
     std::vector<lv_obj_t*> member_btns;
     std::vector<uint32_t> member_btn_ids;

@@ -22,6 +22,8 @@ namespace gps::ui::layout
  *           [pan_v_label]
  *         [tracker_btn]
  *           [tracker_label]
+ *         [route_btn]
+ *           [route_label]
  *       [member_panel: top-left column]
  *
  * Tree View
@@ -35,7 +37,8 @@ namespace gps::ui::layout
  *       |  |- pos_btn
  *       |  |- pan_h_btn
  *       |  |- pan_v_btn
- *       |  `- tracker_btn
+ *       |  |- tracker_btn
+ *       |  `- route_btn
  *       `- member_panel
  */
 void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
@@ -103,6 +106,7 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     create_control(w.pan_h_btn, w.pan_h_label, "[H]oriz");
     create_control(w.pan_v_btn, w.pan_v_label, "[V]ert");
     create_control(w.tracker_btn, w.tracker_label, "[T]racker");
+    create_control(w.route_btn, w.route_label, "[R]oute");
 }
 
 } // namespace gps::ui::layout

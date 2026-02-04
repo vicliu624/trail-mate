@@ -372,12 +372,14 @@ void apply_all(const layout::Widgets& w, const layout::Spec& spec)
     apply_control_button(w.pan_h_btn);
     apply_control_button(w.pan_v_btn);
     apply_control_button(w.tracker_btn);
+    apply_control_button(w.route_btn);
 
     apply_control_button_label(w.zoom_label);
     apply_control_button_label(w.pos_label);
     apply_control_button_label(w.pan_h_label);
     apply_control_button_label(w.pan_v_label);
     apply_control_button_label(w.tracker_label);
+    apply_control_button_label(w.route_label);
 }
 
 } // namespace gps::ui::styles

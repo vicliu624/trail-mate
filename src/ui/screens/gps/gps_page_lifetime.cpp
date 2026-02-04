@@ -3,6 +3,7 @@
 #include "../../widgets/map/map_tiles.h"
 #include "gps_modal.h"
 #include "gps_page_map.h"
+#include "gps_route_overlay.h"
 #include "gps_state.h"
 #include "gps_tracker_overlay.h"
 #include <algorithm>
@@ -49,6 +50,7 @@ void detach_group_objs()
     remove_if(g_gps_state.pan_h);
     remove_if(g_gps_state.pan_v);
     remove_if(g_gps_state.tracker_btn);
+    remove_if(g_gps_state.route_btn);
     remove_if(g_gps_state.pan_h_indicator);
     remove_if(g_gps_state.pan_v_indicator);
     for (auto* btn : g_gps_state.member_btns)
@@ -87,6 +89,7 @@ void on_root_deleted(lv_event_t* e)
         modal_close(g_gps_state.zoom_modal);
     }
     gps_tracker_cleanup();
+    gps_route_cleanup();
     clear_modal_groups();
 
     ::cleanup_tiles(g_gps_state.tile_ctx);
@@ -104,6 +107,7 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.pan_h = nullptr;
     g_gps_state.pan_v = nullptr;
     g_gps_state.tracker_btn = nullptr;
+    g_gps_state.route_btn = nullptr;
     g_gps_state.resolution_label = nullptr;
 }
 

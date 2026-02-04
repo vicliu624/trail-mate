@@ -63,6 +63,10 @@ struct AppConfig
     uint8_t privacy_nmea_output;
     uint8_t privacy_nmea_sentence;
 
+    // Tracker route settings
+    bool route_enabled;
+    char route_path[96];
+
     AppConfig()
     {
         chat_policy = chat::ChatPolicy::outdoor();
@@ -97,6 +101,8 @@ struct AppConfig
         privacy_pki = false;
         privacy_nmea_output = 0;
         privacy_nmea_sentence = 0;
+        route_enabled = false;
+        route_path[0] = '\0';
     }
 
     /**
@@ -164,6 +170,13 @@ struct AppConfig
         privacy_pki = prefs.getBool("privacy_pki", privacy_pki);
         privacy_nmea_output = prefs.getUChar("privacy_nmea", privacy_nmea_output);
         privacy_nmea_sentence = prefs.getUChar("privacy_nmea_sent", privacy_nmea_sentence);
+        route_enabled = prefs.getBool("route_enabled", route_enabled);
+        if (prefs.isKey("route_path"))
+        {
+            String path = prefs.getString("route_path", "");
+            strncpy(route_path, path.c_str(), sizeof(route_path) - 1);
+            route_path[sizeof(route_path) - 1] = '\0';
+        }
         if (prefs.isKey("chat_user"))
         {
             String name = prefs.getString("chat_user", node_name);
@@ -238,6 +251,8 @@ struct AppConfig
         prefs.putBool("privacy_pki", privacy_pki);
         prefs.putUChar("privacy_nmea", privacy_nmea_output);
         prefs.putUChar("privacy_nmea_sent", privacy_nmea_sentence);
+        prefs.putBool("route_enabled", route_enabled);
+        prefs.putString("route_path", route_path);
         prefs.putString("chat_user", node_name);
         prefs.putString("chat_short", short_name);
         prefs.end();

@@ -6,6 +6,7 @@
 #include "gps_page_lifetime.h"
 #include "gps_state.h"
 #include "gps_tracker_overlay.h"
+#include "gps_route_overlay.h"
 #include <Arduino.h>
 #include <cstdint>
 #include <cstdio>
@@ -77,6 +78,7 @@ static void action_position_center();
 static void action_pan_enter(ControlId axis_id);
 static void action_pan_exit();
 static void action_pan_step(ControlId axis_id, int32_t step);
+static void action_route_focus();
 
 void zoom_popup_handle_rotary(int32_t diff);
 void zoom_popup_handle_key(lv_key_t key, lv_event_t* e);
@@ -386,6 +388,9 @@ static void handle_click(lv_obj_t* target)
         gps_tracker_open_modal();
         break;
 
+    case ControlId::RouteBtn:
+        action_route_focus();
+        break;
     default:
         break;
     }
@@ -504,6 +509,11 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
             gps_tracker_open_modal();
             return;
         }
+        if (id == ControlId::RouteBtn)
+        {
+            action_route_focus();
+            return;
+        }
     }
 
     if (key == 'z' || key == 'Z')
@@ -547,6 +557,12 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
     if (key == 't' || key == 'T')
     {
         gps_tracker_open_modal();
+        return;
+    }
+
+    if (key == 'r' || key == 'R')
+    {
+        action_route_focus();
         return;
     }
 }
@@ -631,6 +647,19 @@ static void action_position_center()
     update_map_tiles(false);
     GPS_LOG("[GPS] Position action: centered GPS marker at lat=%.6f, lng=%.6f\n",
             g_gps_state.lat, g_gps_state.lng);
+}
+
+static void action_route_focus()
+{
+    if (!is_alive())
+    {
+        return;
+    }
+    extern void show_toast(const char* message, uint32_t duration_ms);
+    if (!gps_route_focus(true))
+    {
+        show_toast("No route", 1500);
+    }
 }
 
 static void action_pan_enter(ControlId axis_id)
