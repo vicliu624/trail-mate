@@ -94,8 +94,8 @@ lv_obj_t* create_main_panel(lv_obj_t* body)
     lv_obj_t* panel = lv_obj_create(body);
     lv_obj_set_flex_grow(panel, 1);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(panel, 8, 0);
-    lv_obj_set_style_pad_row(panel, 6, 0);
+    lv_obj_set_style_pad_all(panel, 4, 0);
+    lv_obj_set_style_pad_row(panel, 2, 0);
     lv_obj_set_style_bg_color(panel, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
     apply_base_container_style(panel);

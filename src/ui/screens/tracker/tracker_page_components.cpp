@@ -340,10 +340,14 @@ void set_mode(TrackerPageState::Mode mode)
         if (mode == TrackerPageState::Mode::Record)
         {
             lv_obj_clear_flag(state.record_panel, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_flex_grow(state.record_panel, 1);
+            lv_obj_set_height(state.record_panel, LV_SIZE_CONTENT);
         }
         else
         {
             lv_obj_add_flag(state.record_panel, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_flex_grow(state.record_panel, 0);
+            lv_obj_set_height(state.record_panel, 0);
         }
     }
     if (state.route_panel)
@@ -351,10 +355,14 @@ void set_mode(TrackerPageState::Mode mode)
         if (mode == TrackerPageState::Mode::Route)
         {
             lv_obj_clear_flag(state.route_panel, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_flex_grow(state.route_panel, 1);
+            lv_obj_set_height(state.route_panel, LV_SIZE_CONTENT);
         }
         else
         {
             lv_obj_add_flag(state.route_panel, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_flex_grow(state.route_panel, 0);
+            lv_obj_set_height(state.route_panel, 0);
         }
     }
     update_mode_buttons();
@@ -1210,7 +1218,7 @@ void init_page(lv_obj_t* parent)
 
     state.record_panel = layout::create_section(state.main_panel);
     lv_obj_set_style_pad_all(state.record_panel, 2, 0);
-    lv_obj_set_style_pad_row(state.record_panel, 4, 0);
+    lv_obj_set_style_pad_row(state.record_panel, 2, 0);
     state.record_status_label = lv_label_create(state.record_panel);
     lv_label_set_text(state.record_status_label, "Stopped");
     lv_obj_set_style_text_font(state.record_status_label, &lv_font_noto_cjk_16_2bpp, 0);
@@ -1241,63 +1249,48 @@ void init_page(lv_obj_t* parent)
         lv_obj_add_event_cb(btn, on_record_item_defocused, LV_EVENT_DEFOCUSED, nullptr);
     }
 
-    lv_obj_t* record_pager = lv_obj_create(state.record_panel);
-    lv_obj_set_width(record_pager, LV_PCT(100));
-    lv_obj_set_height(record_pager, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(record_pager, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(record_pager, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(record_pager, 0, 0);
-    lv_obj_set_style_bg_opa(record_pager, LV_OPA_TRANSP, 0);
-    lv_obj_clear_flag(record_pager, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* record_footer = lv_obj_create(state.record_panel);
+    lv_obj_set_width(record_footer, LV_PCT(100));
+    lv_obj_set_height(record_footer, kListItemHeight);
+    lv_obj_set_style_pad_all(record_footer, 0, 0);
+    lv_obj_set_style_border_width(record_footer, 0, 0);
+    lv_obj_set_style_bg_opa(record_footer, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(record_footer, LV_OBJ_FLAG_SCROLLABLE);
 
-    state.record_back_btn = lv_btn_create(record_pager);
-    lv_obj_set_size(state.record_back_btn, 80, kListItemHeight);
+    state.record_back_btn = lv_btn_create(record_footer);
+    lv_obj_set_size(state.record_back_btn, 64, kListItemHeight);
     state.record_back_label = lv_label_create(state.record_back_btn);
     lv_label_set_text(state.record_back_label, "Back");
     lv_obj_center(state.record_back_label);
     apply_action_button(state.record_back_btn, state.record_back_label);
+    lv_obj_align(state.record_back_btn, LV_ALIGN_LEFT_MID, 0, 0);
 
-    state.record_prev_btn = lv_btn_create(record_pager);
-    lv_obj_set_size(state.record_prev_btn, 96, kListItemHeight);
+    state.record_prev_btn = lv_btn_create(record_footer);
+    lv_obj_set_size(state.record_prev_btn, 52, kListItemHeight);
     state.record_prev_label = lv_label_create(state.record_prev_btn);
     lv_label_set_text(state.record_prev_label, "Prev");
     lv_obj_center(state.record_prev_label);
     apply_action_button(state.record_prev_btn, state.record_prev_label);
 
-    state.record_next_btn = lv_btn_create(record_pager);
-    lv_obj_set_size(state.record_next_btn, 96, kListItemHeight);
+    state.record_next_btn = lv_btn_create(record_footer);
+    lv_obj_set_size(state.record_next_btn, 52, kListItemHeight);
     state.record_next_label = lv_label_create(state.record_next_btn);
     lv_label_set_text(state.record_next_label, "Next");
     lv_obj_center(state.record_next_label);
     apply_action_button(state.record_next_btn, state.record_next_label);
+    lv_obj_align(state.record_next_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_align_to(state.record_prev_btn, state.record_next_btn, LV_ALIGN_OUT_LEFT_MID, -4, 0);
 
-    lv_obj_t* record_spacer = lv_obj_create(state.record_panel);
-    lv_obj_set_width(record_spacer, LV_PCT(100));
-    lv_obj_set_height(record_spacer, 0);
-    lv_obj_set_flex_grow(record_spacer, 1);
-    lv_obj_set_style_border_width(record_spacer, 0, 0);
-    lv_obj_set_style_pad_all(record_spacer, 0, 0);
-    lv_obj_set_style_bg_opa(record_spacer, LV_OPA_TRANSP, 0);
-    lv_obj_clear_flag(record_spacer, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t* record_action_row = lv_obj_create(state.record_panel);
-    lv_obj_set_width(record_action_row, LV_PCT(100));
-    lv_obj_set_height(record_action_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(record_action_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(record_action_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(record_action_row, 0, 0);
-    lv_obj_set_style_bg_opa(record_action_row, LV_OPA_TRANSP, 0);
-    lv_obj_clear_flag(record_action_row, LV_OBJ_FLAG_SCROLLABLE);
-
-    state.start_stop_btn = lv_btn_create(record_action_row);
+    state.start_stop_btn = lv_btn_create(record_footer);
     lv_obj_set_height(state.start_stop_btn, kPrimaryButtonHeight);
     state.start_stop_label = lv_label_create(state.start_stop_btn);
     lv_obj_center(state.start_stop_label);
     apply_action_button(state.start_stop_btn, state.start_stop_label);
+    lv_obj_align(state.start_stop_btn, LV_ALIGN_CENTER, 0, 0);
 
     state.route_panel = layout::create_section(state.main_panel);
     lv_obj_set_style_pad_all(state.route_panel, 2, 0);
-    lv_obj_set_style_pad_row(state.route_panel, 4, 0);
+    lv_obj_set_style_pad_row(state.route_panel, 2, 0);
     state.route_status_label = lv_label_create(state.route_panel);
     lv_label_set_text(state.route_status_label, "No route selected");
     lv_obj_set_style_text_font(state.route_status_label, &lv_font_noto_cjk_16_2bpp, 0);
@@ -1328,68 +1321,53 @@ void init_page(lv_obj_t* parent)
         lv_obj_add_event_cb(btn, on_route_item_defocused, LV_EVENT_DEFOCUSED, nullptr);
     }
 
-    lv_obj_t* route_pager = lv_obj_create(state.route_panel);
-    lv_obj_set_width(route_pager, LV_PCT(100));
-    lv_obj_set_height(route_pager, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(route_pager, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(route_pager, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(route_pager, 0, 0);
-    lv_obj_set_style_bg_opa(route_pager, LV_OPA_TRANSP, 0);
-    lv_obj_clear_flag(route_pager, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* route_footer = lv_obj_create(state.route_panel);
+    lv_obj_set_width(route_footer, LV_PCT(100));
+    lv_obj_set_height(route_footer, kListItemHeight);
+    lv_obj_set_style_pad_all(route_footer, 0, 0);
+    lv_obj_set_style_border_width(route_footer, 0, 0);
+    lv_obj_set_style_bg_opa(route_footer, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(route_footer, LV_OBJ_FLAG_SCROLLABLE);
 
-    state.route_back_btn = lv_btn_create(route_pager);
-    lv_obj_set_size(state.route_back_btn, 80, kListItemHeight);
+    state.route_back_btn = lv_btn_create(route_footer);
+    lv_obj_set_size(state.route_back_btn, 64, kListItemHeight);
     state.route_back_label = lv_label_create(state.route_back_btn);
     lv_label_set_text(state.route_back_label, "Back");
     lv_obj_center(state.route_back_label);
     apply_action_button(state.route_back_btn, state.route_back_label);
+    lv_obj_align(state.route_back_btn, LV_ALIGN_LEFT_MID, 0, 0);
 
-    state.route_prev_btn = lv_btn_create(route_pager);
-    lv_obj_set_size(state.route_prev_btn, 96, kListItemHeight);
+    state.route_prev_btn = lv_btn_create(route_footer);
+    lv_obj_set_size(state.route_prev_btn, 52, kListItemHeight);
     state.route_prev_label = lv_label_create(state.route_prev_btn);
     lv_label_set_text(state.route_prev_label, "Prev");
     lv_obj_center(state.route_prev_label);
     apply_action_button(state.route_prev_btn, state.route_prev_label);
 
-    state.route_next_btn = lv_btn_create(route_pager);
-    lv_obj_set_size(state.route_next_btn, 96, kListItemHeight);
+    state.route_next_btn = lv_btn_create(route_footer);
+    lv_obj_set_size(state.route_next_btn, 52, kListItemHeight);
     state.route_next_label = lv_label_create(state.route_next_btn);
     lv_label_set_text(state.route_next_label, "Next");
     lv_obj_center(state.route_next_label);
     apply_action_button(state.route_next_btn, state.route_next_label);
+    lv_obj_align(state.route_next_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_align_to(state.route_prev_btn, state.route_next_btn, LV_ALIGN_OUT_LEFT_MID, -4, 0);
 
-    lv_obj_t* route_spacer = lv_obj_create(state.route_panel);
-    lv_obj_set_width(route_spacer, LV_PCT(100));
-    lv_obj_set_height(route_spacer, 0);
-    lv_obj_set_flex_grow(route_spacer, 1);
-    lv_obj_set_style_border_width(route_spacer, 0, 0);
-    lv_obj_set_style_pad_all(route_spacer, 0, 0);
-    lv_obj_set_style_bg_opa(route_spacer, LV_OPA_TRANSP, 0);
-    lv_obj_clear_flag(route_spacer, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t* route_action_row = lv_obj_create(state.route_panel);
-    lv_obj_set_width(route_action_row, LV_PCT(100));
-    lv_obj_set_height(route_action_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(route_action_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(route_action_row, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(route_action_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(route_action_row, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_clear_flag(route_action_row, LV_OBJ_FLAG_SCROLLABLE);
-
-    state.load_btn = lv_btn_create(route_action_row);
+    state.load_btn = lv_btn_create(route_footer);
     lv_obj_set_size(state.load_btn, 90, kSecondaryButtonHeight);
     state.load_label = lv_label_create(state.load_btn);
     lv_label_set_text(state.load_label, "Load");
     lv_obj_center(state.load_label);
     apply_action_button(state.load_btn, state.load_label);
 
-    state.unload_btn = lv_btn_create(route_action_row);
+    state.unload_btn = lv_btn_create(route_footer);
     lv_obj_set_size(state.unload_btn, 90, kSecondaryButtonHeight);
     state.unload_label = lv_label_create(state.unload_btn);
     lv_label_set_text(state.unload_label, "Disable");
     lv_obj_center(state.unload_label);
     apply_action_button(state.unload_btn, state.unload_label);
+    lv_obj_align(state.load_btn, LV_ALIGN_CENTER, -48, 0);
+    lv_obj_align_to(state.unload_btn, state.load_btn, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
 
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::widgets::kTopBarHeight;
