@@ -17,6 +17,13 @@ struct TrackPoint
     time_t timestamp = 0;
 };
 
+enum class TrackFormat : uint8_t
+{
+    GPX = 0,
+    CSV = 1,
+    Binary = 2
+};
+
 // Simple GPX recorder with append-only writes for SD stability.
 class TrackRecorder
 {
@@ -27,6 +34,11 @@ class TrackRecorder
     void stop();
     bool isRecording() const { return recording_; }
     const String& currentPath() const { return current_path_; }
+
+    void setAutoRecording(bool enabled);
+    void setIntervalSeconds(uint32_t seconds);
+    void setDistanceOnly(bool enabled);
+    void setFormat(TrackFormat format);
 
     // Append a single point if recording is active and SD is ready.
     void appendPoint(const TrackPoint& pt);
@@ -44,12 +56,21 @@ class TrackRecorder
     bool ensureDir() const;
     String makeTrackPath() const;
     static String isoTime(time_t t);
+    const char* formatExtension() const;
+    void beginNewFile();
 
     SemaphoreHandle_t mutex_ = xSemaphoreCreateMutex();
     bool recording_ = false;
+    bool auto_recording_ = false;
+    bool manual_recording_ = false;
     String current_path_{};
     bool last_point_valid_ = false;
     TrackPoint last_point_{};
+    time_t last_point_time_ = 0;
+    uint32_t last_point_ms_ = 0;
+    uint32_t min_interval_ms_ = 0;
+    bool distance_only_ = false;
+    TrackFormat format_ = TrackFormat::GPX;
 };
 
 } // namespace gps

@@ -237,3 +237,197 @@ bool GPS::factory()
     log_d("GPS reset successes!");
     return true;
 }
+
+void GPS::calcUbxChecksum(const uint8_t* data, uint16_t len, uint8_t& ck_a, uint8_t& ck_b)
+{
+    for (uint16_t i = 0; i < len; ++i)
+    {
+        ck_a = static_cast<uint8_t>(ck_a + data[i]);
+        ck_b = static_cast<uint8_t>(ck_b + ck_a);
+    }
+}
+
+bool GPS::sendUbx(uint8_t cls, uint8_t id, const uint8_t* payload, uint16_t len, bool wait_ack)
+{
+    if (_stream == nullptr)
+    {
+        return false;
+    }
+
+    uint8_t header[6] = {0xB5, 0x62, cls, id,
+                         static_cast<uint8_t>(len & 0xFF),
+                         static_cast<uint8_t>((len >> 8) & 0xFF)};
+
+    uint8_t ck_a = 0;
+    uint8_t ck_b = 0;
+    calcUbxChecksum(&header[2], 4, ck_a, ck_b);
+    if (payload && len > 0)
+    {
+        calcUbxChecksum(payload, len, ck_a, ck_b);
+    }
+
+    _stream->write(header, sizeof(header));
+    if (payload && len > 0)
+    {
+        _stream->write(payload, len);
+    }
+    uint8_t checksum[2] = {ck_a, ck_b};
+    _stream->write(checksum, sizeof(checksum));
+
+    if (!wait_ack)
+    {
+        return true;
+    }
+
+    uint8_t ack_buf[4] = {};
+    uint16_t ack_len = getAck(ack_buf, sizeof(ack_buf), 0x05, 0x01);
+    if (ack_len < 2)
+    {
+        return false;
+    }
+    return ack_buf[0] == cls && ack_buf[1] == id;
+}
+
+bool GPS::setReceiverMode(uint8_t mode, uint8_t sat_mask)
+{
+    if (_stream == nullptr)
+    {
+        return false;
+    }
+
+    bool want_power_save = (mode != 0);
+    if (want_power_save && (sat_mask & 0x2))
+    {
+        // Power Save is not supported when GLONASS is enabled.
+        want_power_save = false;
+    }
+
+    uint8_t payload[2] = {0x00, static_cast<uint8_t>(want_power_save ? 0x01 : 0x00)};
+    bool ok = sendUbx(0x06, 0x11, payload, sizeof(payload), true);
+    GPS_LOG("[GPS] CFG-RXM lpMode=%u ok=%d\n", payload[1], ok ? 1 : 0);
+    return ok;
+}
+
+bool GPS::configureGnss(uint8_t sat_mask)
+{
+    if (_stream == nullptr)
+    {
+        return false;
+    }
+
+    struct GnssBlock
+    {
+        uint8_t gnss_id;
+        uint8_t res_trk_ch;
+        uint8_t max_trk_ch;
+        uint8_t reserved1;
+        uint32_t flags;
+    };
+
+    auto make_flags = [](bool enable, uint8_t sig_cfg_mask) -> uint32_t
+    {
+        uint32_t flags = 0;
+        if (enable)
+        {
+            flags |= 0x01u;
+        }
+        flags |= (static_cast<uint32_t>(sig_cfg_mask) << 16);
+        return flags;
+    };
+
+    const bool enable_gps = (sat_mask & 0x1) != 0;
+    const bool enable_glo = (sat_mask & 0x2) != 0;
+    const bool enable_gal = (sat_mask & 0x4) != 0;
+    const bool enable_bds = (sat_mask & 0x8) != 0;
+
+    // Defaults for SPG 3.0x (numConfigBlocks = 7).
+    GnssBlock blocks[] = {
+        {0, 8, 16, 0, make_flags(enable_gps, 0x01)},  // GPS
+        {1, 1, 3, 0, make_flags(false, 0x00)},       // SBAS
+        {2, 4, 8, 0, make_flags(enable_gal, 0x01)},  // Galileo
+        {3, 8, 16, 0, make_flags(enable_bds, 0x01)}, // BeiDou
+        {4, 0, 8, 0, make_flags(false, 0x00)},       // IMES
+        {5, 0, 3, 0, make_flags(false, 0x00)},       // QZSS
+        {6, 8, 14, 0, make_flags(enable_glo, 0x01)}  // GLONASS
+    };
+
+    uint8_t payload[4 + sizeof(blocks)] = {};
+    payload[0] = 0x00; // msgVer
+    payload[1] = 32;   // numTrkChHw
+    payload[2] = 32;   // numTrkChUse
+    payload[3] = static_cast<uint8_t>(sizeof(blocks) / sizeof(blocks[0]));
+    memcpy(&payload[4], blocks, sizeof(blocks));
+
+    bool ok = sendUbx(0x06, 0x3E, payload, sizeof(payload), true);
+    GPS_LOG("[GPS] CFG-GNSS mask=0x%02X ok=%d\n", sat_mask, ok ? 1 : 0);
+
+    if (ok)
+    {
+        delay(600); // allow receiver to reinitialize GNSS config
+    }
+    return ok;
+}
+
+bool GPS::configureNmeaOutput(uint8_t output_hz, uint8_t sentence_mask)
+{
+    if (_stream == nullptr)
+    {
+        return false;
+    }
+
+    bool enable_gga = true;
+    bool enable_rmc = true;
+    bool enable_gsv = true;
+    switch (sentence_mask)
+    {
+    case 0: // GGA + RMC + GSV
+        enable_gga = true;
+        enable_rmc = true;
+        enable_gsv = true;
+        break;
+    case 1: // RMC + GSV
+        enable_gga = false;
+        enable_rmc = true;
+        enable_gsv = true;
+        break;
+    case 2: // GGA + RMC
+        enable_gga = true;
+        enable_rmc = true;
+        enable_gsv = false;
+        break;
+    default:
+        enable_gga = true;
+        enable_rmc = true;
+        enable_gsv = true;
+        break;
+    }
+
+    if (output_hz == 0)
+    {
+        enable_gga = false;
+        enable_rmc = false;
+        enable_gsv = false;
+    }
+
+    auto set_msg_rate = [this](uint8_t msg_id, uint8_t rate) -> bool
+    {
+        uint8_t payload[8] = {
+            0xF0, // NMEA standard message class
+            msg_id,
+            0x00, // I2C
+            rate, // UART1
+            0x00, // UART2
+            0x00, // USB
+            0x00, // SPI
+            0x00  // reserved
+        };
+        return sendUbx(0x06, 0x01, payload, sizeof(payload), true);
+    };
+
+    bool ok = true;
+    ok = ok && set_msg_rate(0x00, enable_gga ? output_hz : 0); // GGA
+    ok = ok && set_msg_rate(0x04, enable_rmc ? output_hz : 0); // RMC
+    ok = ok && set_msg_rate(0x03, enable_gsv ? output_hz : 0); // GSV
+    GPS_LOG("[GPS] CFG-MSG nmea_rate=%u mask=%u ok=%d\n", output_hz, sentence_mask, ok ? 1 : 0);
+    return ok;
+}

@@ -25,6 +25,9 @@ class GpsService
     GpsState getData();
     uint32_t getCollectionInterval() const;
     void setCollectionInterval(uint32_t interval_ms);
+    void setPowerStrategy(uint8_t strategy);
+    void setGnssConfig(uint8_t mode, uint8_t sat_mask);
+    void setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
     MotionConfig getMotionConfig() const { return motion_config_; }
     void setMotionConfig(const MotionConfig& config);
     void setMotionIdleTimeout(uint32_t timeout_ms);
@@ -41,6 +44,8 @@ class GpsService
 
     void setGPSPowerState(bool enable);
     void updateMotionState(uint32_t now_ms);
+    void applyGnssConfig();
+    void applyNmeaConfig();
 
     GpsBoard* gps_board_ = nullptr;
     MotionBoard* motion_board_ = nullptr;
@@ -51,6 +56,13 @@ class GpsService
 
     uint32_t gps_last_update_time_ = 0;
     uint32_t gps_collection_interval_ms_ = 60000;
+    uint8_t power_strategy_ = 0;
+    uint8_t gnss_mode_ = 0;
+    uint8_t gnss_sat_mask_ = 0x1 | 0x8 | 0x4;
+    bool gnss_config_pending_ = false;
+    uint8_t nmea_output_hz_ = 0;
+    uint8_t nmea_sentence_mask_ = 0;
+    bool nmea_config_pending_ = false;
     bool gps_time_synced_ = false;
     bool gps_powered_ = false;
     bool gps_disabled_ = false;

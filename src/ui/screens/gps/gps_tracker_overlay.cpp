@@ -142,6 +142,75 @@ bool load_gpx_points(const char* path, std::vector<GPSPageState::TrackOverlayPoi
     return !out_points.empty();
 }
 
+bool load_csv_points(const char* path, std::vector<GPSPageState::TrackOverlayPoint>& out_points)
+{
+    out_points.clear();
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+
+    File f = SD.open(path, FILE_READ);
+    if (!f)
+    {
+        return false;
+    }
+
+    bool have_last = false;
+    GPSPageState::TrackOverlayPoint last{};
+
+    while (f.available())
+    {
+        String line = f.readStringUntil('\n');
+        line.trim();
+        if (line.length() == 0)
+        {
+            continue;
+        }
+        char c0 = line[0];
+        if (!((c0 >= '0' && c0 <= '9') || c0 == '-'))
+        {
+            continue;
+        }
+
+        int comma1 = line.indexOf(',');
+        if (comma1 <= 0)
+        {
+            continue;
+        }
+        int comma2 = line.indexOf(',', comma1 + 1);
+        String lat_str = line.substring(0, comma1);
+        String lon_str = (comma2 > comma1) ? line.substring(comma1 + 1, comma2)
+                                           : line.substring(comma1 + 1);
+
+        double lat = lat_str.toDouble();
+        double lon = lon_str.toDouble();
+
+        GPSPageState::TrackOverlayPoint pt;
+        pt.lat = lat;
+        pt.lng = lon;
+
+        if (have_last)
+        {
+            const double min_d = sampling_distance_m();
+            const double d = haversine_m(last.lat, last.lng, pt.lat, pt.lng);
+            if (d < min_d)
+            {
+                continue;
+            }
+        }
+
+        out_points.push_back(pt);
+        downsample_points(out_points);
+
+        last = pt;
+        have_last = true;
+    }
+
+    f.close();
+    return !out_points.empty();
+}
+
 void compute_screen_points()
 {
     if (!is_alive())
@@ -186,9 +255,12 @@ void compute_screen_points()
             }
         }
 
+        double map_lat = 0.0;
+        double map_lon = 0.0;
+        gps_map_transform(pt.lat, pt.lng, map_lat, map_lon);
         int sx = 0;
         int sy = 0;
-        if (!gps_screen_pos(s.tile_ctx, pt.lat, pt.lng, sx, sy))
+        if (!gps_screen_pos(s.tile_ctx, map_lat, map_lon, sx, sy))
         {
             break;
         }
@@ -281,7 +353,7 @@ void build_tracker_modal()
     auto& s = g_gps_state;
 
     lv_obj_t* title = lv_label_create(s.tracker_modal.win);
-    lv_label_set_text(title, "Select GPX");
+    lv_label_set_text(title, "Select Track");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
 
     lv_obj_t* list = lv_list_create(s.tracker_modal.win);
@@ -311,7 +383,7 @@ void build_tracker_modal()
     if (s_modal_names.empty())
     {
         lv_obj_t* label = lv_label_create(list);
-        lv_label_set_text(label, "No GPX files");
+        lv_label_set_text(label, "No track files");
         return;
     }
 
@@ -342,7 +414,18 @@ bool gps_tracker_load_file(const char* path, bool show_fail_toast)
     }
 
     std::vector<GPSPageState::TrackOverlayPoint> pts;
-    if (!load_gpx_points(path, pts))
+    bool ok = false;
+    String p = String(path);
+    p.toLowerCase();
+    if (p.endsWith(".csv"))
+    {
+        ok = load_csv_points(path, pts);
+    }
+    else
+    {
+        ok = load_gpx_points(path, pts);
+    }
+    if (!ok)
     {
         if (show_fail_toast)
         {
@@ -410,30 +493,29 @@ void gps_tracker_draw_event(lv_event_t* e)
         return;
     }
 
-    lv_draw_line_dsc_t line_dsc;
-    lv_draw_line_dsc_init(&line_dsc);
-    line_dsc.color = lv_color_hex(kTrackColor);
-    line_dsc.width = 3;
-    line_dsc.opa = LV_OPA_COVER;
-
-    for (size_t i = 1; i < pts.size(); ++i)
-    {
-        line_dsc.p1.x = (lv_value_precise_t)pts[i - 1].x;
-        line_dsc.p1.y = (lv_value_precise_t)pts[i - 1].y;
-        line_dsc.p2.x = (lv_value_precise_t)pts[i].x;
-        line_dsc.p2.y = (lv_value_precise_t)pts[i].y;
-        lv_draw_line(layer, &line_dsc);
-    }
-
     lv_draw_rect_dsc_t dot_dsc;
     lv_draw_rect_dsc_init(&dot_dsc);
     dot_dsc.bg_color = lv_color_hex(kTrackColor);
-    dot_dsc.bg_opa = LV_OPA_COVER;
     dot_dsc.radius = LV_RADIUS_CIRCLE;
     dot_dsc.border_width = 0;
 
-    for (const auto& p : pts)
+    const size_t count = pts.size();
+    const uint8_t opa_min = 60;
+    const uint8_t opa_max = 255;
+
+    for (size_t i = 0; i < count; ++i)
     {
+        float t = 1.0f;
+        if (count > 1)
+        {
+            t = 1.0f - static_cast<float>(i) / static_cast<float>(count - 1);
+        }
+        int opa = static_cast<int>(opa_min + t * (opa_max - opa_min));
+        if (opa < opa_min) opa = opa_min;
+        if (opa > opa_max) opa = opa_max;
+        dot_dsc.bg_opa = static_cast<lv_opa_t>(opa);
+
+        const auto& p = pts[i];
         lv_area_t a;
         a.x1 = p.x - 3;
         a.y1 = p.y - 3;

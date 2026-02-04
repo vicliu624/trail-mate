@@ -70,6 +70,86 @@ static double approx_distance_m(double lat1, double lng1, double lat2, double ln
 
 namespace
 {
+constexpr double kCoordPi = 3.14159265358979323846;
+constexpr double kCoordA = 6378245.0;
+constexpr double kCoordEe = 0.00669342162296594323;
+
+bool coord_out_of_china(double lat, double lon)
+{
+    return (lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271);
+}
+
+double coord_transform_lat(double x, double y)
+{
+    double ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y +
+                 0.2 * std::sqrt(std::fabs(x));
+    ret += (20.0 * std::sin(6.0 * x * kCoordPi) + 20.0 * std::sin(2.0 * x * kCoordPi)) * 2.0 / 3.0;
+    ret += (20.0 * std::sin(y * kCoordPi) + 40.0 * std::sin(y / 3.0 * kCoordPi)) * 2.0 / 3.0;
+    ret += (160.0 * std::sin(y / 12.0 * kCoordPi) + 320 * std::sin(y * kCoordPi / 30.0)) * 2.0 / 3.0;
+    return ret;
+}
+
+double coord_transform_lon(double x, double y)
+{
+    double ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y +
+                 0.1 * std::sqrt(std::fabs(x));
+    ret += (20.0 * std::sin(6.0 * x * kCoordPi) + 20.0 * std::sin(2.0 * x * kCoordPi)) * 2.0 / 3.0;
+    ret += (20.0 * std::sin(x * kCoordPi) + 40.0 * std::sin(x / 3.0 * kCoordPi)) * 2.0 / 3.0;
+    ret += (150.0 * std::sin(x / 12.0 * kCoordPi) + 300.0 * std::sin(x / 30.0 * kCoordPi)) * 2.0 / 3.0;
+    return ret;
+}
+
+void wgs84_to_gcj02(double lat, double lon, double& out_lat, double& out_lon)
+{
+    if (coord_out_of_china(lat, lon))
+    {
+        out_lat = lat;
+        out_lon = lon;
+        return;
+    }
+    double dlat = coord_transform_lat(lon - 105.0, lat - 35.0);
+    double dlon = coord_transform_lon(lon - 105.0, lat - 35.0);
+    double radlat = lat / 180.0 * kCoordPi;
+    double magic = std::sin(radlat);
+    magic = 1 - kCoordEe * magic * magic;
+    double sqrt_magic = std::sqrt(magic);
+    dlat = (dlat * 180.0) / ((kCoordA * (1 - kCoordEe)) / (magic * sqrt_magic) * kCoordPi);
+    dlon = (dlon * 180.0) / (kCoordA / sqrt_magic * std::cos(radlat) * kCoordPi);
+    out_lat = lat + dlat;
+    out_lon = lon + dlon;
+}
+
+void gcj02_to_bd09(double lat, double lon, double& out_lat, double& out_lon)
+{
+    double z = std::sqrt(lon * lon + lat * lat) + 0.00002 * std::sin(lat * kCoordPi);
+    double theta = std::atan2(lat, lon) + 0.000003 * std::cos(lon * kCoordPi);
+    out_lon = z * std::cos(theta) + 0.0065;
+    out_lat = z * std::sin(theta) + 0.006;
+}
+} // namespace
+
+void gps_map_transform(double lat, double lon, double& out_lat, double& out_lon)
+{
+    uint8_t coord_system = app::AppContext::getInstance().getConfig().map_coord_system;
+    if (coord_system == 1)
+    {
+        wgs84_to_gcj02(lat, lon, out_lat, out_lon);
+        return;
+    }
+    if (coord_system == 2)
+    {
+        double gcj_lat = 0.0;
+        double gcj_lon = 0.0;
+        wgs84_to_gcj02(lat, lon, gcj_lat, gcj_lon);
+        gcj02_to_bd09(gcj_lat, gcj_lon, out_lat, out_lon);
+        return;
+    }
+    out_lat = lat;
+    out_lon = lon;
+}
+
+namespace
+{
 constexpr int kTeamMarkerSize = 10;
 constexpr int kTeamMarkerLabelWidth = 44;
 constexpr int kTeamMarkerLabelOffsetX = 6;
@@ -295,8 +375,12 @@ void update_resolution_display()
     }
 
     double lat = g_gps_state.has_fix ? g_gps_state.lat : gps_ui::kDefaultLat;
+    double lon = g_gps_state.has_fix ? g_gps_state.lng : gps_ui::kDefaultLng;
+    double map_lat = 0.0;
+    double map_lon = 0.0;
+    gps_map_transform(lat, lon, map_lat, map_lon);
 
-    double resolution_m = gps::calculate_map_resolution(g_gps_state.zoom_level, lat);
+    double resolution_m = gps::calculate_map_resolution(g_gps_state.zoom_level, map_lat);
 
     char resolution_text[32];
     if (resolution_m < 1000.0)
@@ -370,7 +454,10 @@ void update_title_and_status()
 
     if (g_gps_state.has_fix && gps_ready)
     {
-        snprintf(title_buffer, sizeof(title_buffer), "GPS - %.4f,%.4f", g_gps_state.lat, g_gps_state.lng);
+        char coord_buf[64];
+        uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
+        ui_format_coords(g_gps_state.lat, g_gps_state.lng, coord_fmt, coord_buf, sizeof(coord_buf));
+        snprintf(title_buffer, sizeof(title_buffer), "GPS - %s", coord_buf);
     }
     else if (!sd_ready)
     {
@@ -414,8 +501,11 @@ void update_map_anchor()
     {
         return;
     }
+    double map_lat = 0.0;
+    double map_lon = 0.0;
+    gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
     ::update_map_anchor(g_gps_state.tile_ctx,
-                        g_gps_state.lat, g_gps_state.lng,
+                        map_lat, map_lon,
                         g_gps_state.zoom_level,
                         g_gps_state.pan_x, g_gps_state.pan_y,
                         g_gps_state.has_fix);
@@ -428,8 +518,11 @@ void update_map_tiles(bool lightweight)
         return;
     }
 
+    double map_lat = 0.0;
+    double map_lon = 0.0;
+    gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
     ::calculate_required_tiles(g_gps_state.tile_ctx,
-                               g_gps_state.lat, g_gps_state.lng,
+                               map_lat, map_lon,
                                g_gps_state.zoom_level,
                                g_gps_state.pan_x, g_gps_state.pan_y,
                                g_gps_state.has_fix);
@@ -442,12 +535,12 @@ void update_map_tiles(bool lightweight)
     if (!lightweight)
     {
         bool zoom_changed = (g_gps_state.last_resolution_zoom != g_gps_state.zoom_level);
-        bool lat_changed = (fabs(g_gps_state.last_resolution_lat - g_gps_state.lat) > 0.001);
+        bool lat_changed = (fabs(g_gps_state.last_resolution_lat - map_lat) > 0.001);
         if (zoom_changed || lat_changed)
         {
             update_resolution_display();
             g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
-            g_gps_state.last_resolution_lat = g_gps_state.lat;
+            g_gps_state.last_resolution_lat = map_lat;
         }
 
         // Update GPS marker position after map tiles are updated
@@ -481,7 +574,10 @@ void update_gps_marker_position()
 
     // Calculate screen position for GPS coordinates
     int screen_x, screen_y;
-    if (gps_screen_pos(g_gps_state.tile_ctx, g_gps_state.lat, g_gps_state.lng, screen_x, screen_y))
+    double map_lat = 0.0;
+    double map_lon = 0.0;
+    gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
+    if (gps_screen_pos(g_gps_state.tile_ctx, map_lat, map_lon, screen_x, screen_y))
     {
         // Center marker on GPS position (marker is typically 24x24, so offset by half)
         const int marker_size = 24;
@@ -786,9 +882,12 @@ void update_team_marker_positions()
         }
         double lat = static_cast<double>(marker.lat_e7) / 1e7;
         double lng = static_cast<double>(marker.lon_e7) / 1e7;
+        double map_lat = 0.0;
+        double map_lon = 0.0;
+        gps_map_transform(lat, lng, map_lat, map_lon);
         int screen_x = 0;
         int screen_y = 0;
-        if (gps_screen_pos(g_gps_state.tile_ctx, lat, lng, screen_x, screen_y))
+        if (gps_screen_pos(g_gps_state.tile_ctx, map_lat, map_lon, screen_x, screen_y))
         {
             lv_obj_set_pos(marker.obj,
                            screen_x - kTeamMarkerSize / 2,
@@ -993,7 +1092,10 @@ void tick_gps_update(bool allow_map_refresh)
         {
             g_gps_state.zoom_level = gps_ui::kDefaultZoom;
             g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
-            g_gps_state.last_resolution_lat = g_gps_state.lat;
+            double map_lat = 0.0;
+            double map_lon = 0.0;
+            gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
+            g_gps_state.last_resolution_lat = map_lat;
             update_resolution_display();
         }
 
@@ -1019,7 +1121,10 @@ void tick_gps_update(bool allow_map_refresh)
                 g_gps_state.pan_x = 0;
                 g_gps_state.pan_y = 0;
 
-                g_gps_state.last_resolution_lat = g_gps_state.lat;
+                double map_lat = 0.0;
+                double map_lon = 0.0;
+                gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
+                g_gps_state.last_resolution_lat = map_lat;
                 update_map_tiles(false);
 
                 last_refresh_lat = new_lat;
@@ -1040,7 +1145,10 @@ void tick_gps_update(bool allow_map_refresh)
             g_gps_state.lng = gps_ui::kDefaultLng;
 
             g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
-            g_gps_state.last_resolution_lat = g_gps_state.lat;
+            double map_lat = 0.0;
+            double map_lon = 0.0;
+            gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
+            g_gps_state.last_resolution_lat = map_lat;
             update_resolution_display();
             gps_state_changed = true;
 

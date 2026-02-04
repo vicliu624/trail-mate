@@ -1,6 +1,7 @@
 #include "gps/usecase/track_recorder.h"
 
 #include <esp_system.h>
+#include <cmath>
 
 namespace gps
 {
@@ -17,6 +18,9 @@ constexpr const char* kGpxFooter =
     "</trkseg>\n"
     "</trk>\n"
     "</gpx>\n";
+
+constexpr const char* kCsvHeader = "lat,lon,ts,sat\n";
+constexpr const char kBinHeader[] = {'T', 'R', 'K', '1'};
 
 constexpr double kMinRecordDistanceM = 2.0;
 
@@ -75,7 +79,7 @@ String TrackRecorder::makeTrackPath() const
 
     const uint32_t rnd = static_cast<uint32_t>(esp_random()) & 0xFFFF;
     char path[96] = {0};
-    snprintf(path, sizeof(path), "%s/%s_%04X.gpx", kTrackDir, time_buf, (unsigned)rnd);
+    snprintf(path, sizeof(path), "%s/%s_%04X%s", kTrackDir, time_buf, (unsigned)rnd, formatExtension());
     return String(path);
 }
 
@@ -97,6 +101,49 @@ String TrackRecorder::isoTime(time_t t)
     return String("1970-01-01T00:00:00Z");
 }
 
+const char* TrackRecorder::formatExtension() const
+{
+    switch (format_)
+    {
+    case TrackFormat::CSV:
+        return ".csv";
+    case TrackFormat::Binary:
+        return ".bin";
+    case TrackFormat::GPX:
+    default:
+        return ".gpx";
+    }
+}
+
+void TrackRecorder::beginNewFile()
+{
+    current_path_ = makeTrackPath();
+    File f = SD.open(current_path_.c_str(), FILE_WRITE);
+    if (!f)
+    {
+        current_path_ = "";
+        return;
+    }
+    if (format_ == TrackFormat::CSV)
+    {
+        f.print(kCsvHeader);
+    }
+    else if (format_ == TrackFormat::Binary)
+    {
+        f.write(reinterpret_cast<const uint8_t*>(kBinHeader), sizeof(kBinHeader));
+    }
+    else
+    {
+        f.print(kGpxHeader);
+    }
+    f.flush();
+    f.close();
+    recording_ = true;
+    last_point_valid_ = false;
+    last_point_time_ = 0;
+    last_point_ms_ = 0;
+}
+
 bool TrackRecorder::start()
 {
     if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(200)) != pdTRUE)
@@ -111,25 +158,15 @@ bool TrackRecorder::start()
         {
             break;
         }
+        manual_recording_ = true;
         if (recording_)
         {
             ok = true;
             break;
         }
 
-        current_path_ = makeTrackPath();
-        File f = SD.open(current_path_.c_str(), FILE_WRITE);
-        if (!f)
-        {
-            current_path_ = "";
-            break;
-        }
-        f.print(kGpxHeader);
-        f.flush();
-        f.close();
-        recording_ = true;
-        last_point_valid_ = false;
-        ok = true;
+        beginNewFile();
+        ok = recording_;
     } while (false);
 
     if (mutex_)
@@ -147,12 +184,25 @@ void TrackRecorder::stop()
         return;
     }
 
+    manual_recording_ = false;
+    if (auto_recording_)
+    {
+        if (mutex_)
+        {
+            xSemaphoreGive(mutex_);
+        }
+        return;
+    }
+
     if (recording_ && current_path_.length() > 0)
     {
         File f = SD.open(current_path_.c_str(), FILE_APPEND);
         if (f)
         {
-            f.print(kGpxFooter);
+            if (format_ == TrackFormat::GPX)
+            {
+                f.print(kGpxFooter);
+            }
             f.flush();
             f.close();
         }
@@ -160,6 +210,118 @@ void TrackRecorder::stop()
     recording_ = false;
     current_path_ = "";
     last_point_valid_ = false;
+    last_point_time_ = 0;
+    last_point_ms_ = 0;
+
+    if (mutex_)
+    {
+        xSemaphoreGive(mutex_);
+    }
+}
+
+void TrackRecorder::setAutoRecording(bool enabled)
+{
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(200)) != pdTRUE)
+    {
+        return;
+    }
+
+    auto_recording_ = enabled;
+    if (auto_recording_ && !recording_)
+    {
+        if (ensureDir())
+        {
+            beginNewFile();
+        }
+    }
+    else if (!auto_recording_ && recording_ && !manual_recording_)
+    {
+        if (current_path_.length() > 0)
+        {
+            File f = SD.open(current_path_.c_str(), FILE_APPEND);
+            if (f)
+            {
+                if (format_ == TrackFormat::GPX)
+                {
+                    f.print(kGpxFooter);
+                }
+                f.flush();
+                f.close();
+            }
+        }
+        recording_ = false;
+        current_path_ = "";
+        last_point_valid_ = false;
+        last_point_time_ = 0;
+        last_point_ms_ = 0;
+    }
+
+    if (mutex_)
+    {
+        xSemaphoreGive(mutex_);
+    }
+}
+
+void TrackRecorder::setIntervalSeconds(uint32_t seconds)
+{
+    if (seconds > 600)
+    {
+        seconds = 600;
+    }
+    min_interval_ms_ = seconds * 1000u;
+}
+
+void TrackRecorder::setDistanceOnly(bool enabled)
+{
+    distance_only_ = enabled;
+}
+
+void TrackRecorder::setFormat(TrackFormat format)
+{
+    if (format_ == format)
+    {
+        return;
+    }
+
+    TrackFormat prev_format = format_;
+    format_ = format;
+
+    if (!recording_)
+    {
+        return;
+    }
+
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(400)) != pdTRUE)
+    {
+        return;
+    }
+
+    if (current_path_.length() > 0)
+    {
+        File f = SD.open(current_path_.c_str(), FILE_APPEND);
+        if (f)
+        {
+            if (prev_format == TrackFormat::GPX)
+            {
+                f.print(kGpxFooter);
+            }
+            f.flush();
+            f.close();
+        }
+    }
+    recording_ = false;
+    current_path_ = "";
+    last_point_valid_ = false;
+    last_point_time_ = 0;
+    last_point_ms_ = 0;
+
+    if (auto_recording_ || manual_recording_)
+    {
+        if (ensureDir())
+        {
+            beginNewFile();
+        }
+    }
 
     if (mutex_)
     {
@@ -206,24 +368,78 @@ void TrackRecorder::appendPoint(const TrackPoint& pt)
         }
     }
 
+    uint32_t now_ms = millis();
+    if (!distance_only_ && min_interval_ms_ > 0)
+    {
+        if (pt.timestamp > 0 && last_point_time_ > 0)
+        {
+            uint32_t delta_ms = static_cast<uint32_t>(pt.timestamp - last_point_time_) * 1000u;
+            if (delta_ms < min_interval_ms_)
+            {
+                if (mutex_)
+                {
+                    xSemaphoreGive(mutex_);
+                }
+                return;
+            }
+        }
+        else if (last_point_ms_ > 0 && (now_ms - last_point_ms_) < min_interval_ms_)
+        {
+            if (mutex_)
+            {
+                xSemaphoreGive(mutex_);
+            }
+            return;
+        }
+    }
+
     File f = SD.open(current_path_.c_str(), FILE_APPEND);
     if (f)
     {
-        const String time_str = isoTime(pt.timestamp);
-        f.printf("<trkpt lat=\"%.6f\" lon=\"%.6f\">\n", pt.lat, pt.lon);
-        f.printf("  <ele>%.1f</ele>\n", 0.0);
-        f.printf("  <time>%s</time>\n", time_str.c_str());
-        f.print("  <extensions>\n");
-        f.printf("    <speed>%.2f</speed>\n", 0.0);
-        f.printf("    <course>%.1f</course>\n", 0.0);
-        f.printf("    <hdop>%.1f</hdop>\n", 0.0);
-        f.printf("    <sat>%u</sat>\n", (unsigned)pt.satellites);
-        f.print("  </extensions>\n");
-        f.print("</trkpt>\n");
+        if (format_ == TrackFormat::CSV)
+        {
+            f.printf("%.7f,%.7f,%lu,%u\n",
+                     pt.lat,
+                     pt.lon,
+                     static_cast<unsigned long>(pt.timestamp),
+                     static_cast<unsigned>(pt.satellites));
+        }
+        else if (format_ == TrackFormat::Binary)
+        {
+            struct BinPoint
+            {
+                int32_t lat_e7;
+                int32_t lon_e7;
+                uint32_t ts;
+                uint8_t sat;
+            } rec{};
+
+            rec.lat_e7 = static_cast<int32_t>(lround(pt.lat * 1e7));
+            rec.lon_e7 = static_cast<int32_t>(lround(pt.lon * 1e7));
+            rec.ts = static_cast<uint32_t>(pt.timestamp);
+            rec.sat = pt.satellites;
+            f.write(reinterpret_cast<const uint8_t*>(&rec), sizeof(rec));
+        }
+        else
+        {
+            const String time_str = isoTime(pt.timestamp);
+            f.printf("<trkpt lat=\"%.6f\" lon=\"%.6f\">\n", pt.lat, pt.lon);
+            f.printf("  <ele>%.1f</ele>\n", 0.0);
+            f.printf("  <time>%s</time>\n", time_str.c_str());
+            f.print("  <extensions>\n");
+            f.printf("    <speed>%.2f</speed>\n", 0.0);
+            f.printf("    <course>%.1f</course>\n", 0.0);
+            f.printf("    <hdop>%.1f</hdop>\n", 0.0);
+            f.printf("    <sat>%u</sat>\n", (unsigned)pt.satellites);
+            f.print("  </extensions>\n");
+            f.print("</trkpt>\n");
+        }
         f.flush();
         f.close();
         last_point_ = pt;
         last_point_valid_ = true;
+        last_point_time_ = pt.timestamp;
+        last_point_ms_ = now_ms;
     }
 
     if (mutex_)

@@ -24,4 +24,7 @@ void update_resolution_display();
 void reset_title_status_cache(); // Reset cached state to force next update
 void update_zoom_btn();          // Placeholder for future zoom button updates
 
+// Coordinate system transform for map display (WGS84 -> GCJ/BD if configured)
+void gps_map_transform(double lat, double lon, double& out_lat, double& out_lon);
+
 #endif // GPS_PAGE_MAP_H

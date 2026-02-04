@@ -46,6 +46,9 @@ class MtAdapter : public chat::IMeshAdapter
     bool isPkiReady() const override;
     bool hasPkiKey(NodeId dest) const override;
     void applyConfig(const MeshConfig& config) override;
+    void setUserInfo(const char* long_name, const char* short_name) override;
+    void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
+    void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled) override;
     bool isReady() const override;
     NodeId getNodeId() const override { return node_id_; }
 
@@ -100,6 +103,8 @@ class MtAdapter : public chat::IMeshAdapter
     std::map<uint32_t, uint32_t> pending_ack_ms_;
     std::map<uint32_t, uint32_t> pending_ack_dest_;
     std::map<uint32_t, std::string> node_long_names_;
+    std::string user_long_name_;
+    std::string user_short_name_;
 
     enum class KeyVerificationState : uint8_t
     {
@@ -152,6 +157,11 @@ class MtAdapter : public chat::IMeshAdapter
     static constexpr const char* kPkiPrefsKey = "pki_nodes";
     static constexpr const char* kPkiPrefsKeyVer = "pki_nodes_ver";
     static constexpr uint8_t kPkiPrefsVersion = 2;
+
+    uint32_t min_tx_interval_ms_ = 0;
+    uint32_t last_tx_ms_ = 0;
+    uint8_t encrypt_mode_ = 1;
+    bool pki_enabled_ = false;
 
     bool sendPacket(const PendingSend& pending);
     bool sendNodeInfo();

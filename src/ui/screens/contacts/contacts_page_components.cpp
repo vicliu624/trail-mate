@@ -216,13 +216,16 @@ static std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entr
             double lat = static_cast<double>(loc.lat_e7) / 1e7;
             double lon = static_cast<double>(loc.lon_e7) / 1e7;
             char buf[128];
+            char coord_buf[64];
+            uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
+            ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
             if (!loc.label.empty())
             {
-                snprintf(buf, sizeof(buf), "Location: %s %.5f, %.5f", loc.label.c_str(), lat, lon);
+                snprintf(buf, sizeof(buf), "Location: %s %s", loc.label.c_str(), coord_buf);
             }
             else
             {
-                snprintf(buf, sizeof(buf), "Location: %.5f, %.5f", lat, lon);
+                snprintf(buf, sizeof(buf), "Location: %s", coord_buf);
             }
             return std::string(buf);
         }
@@ -237,17 +240,20 @@ static std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entr
             double lat = static_cast<double>(cmd.lat_e7) / 1e7;
             double lon = static_cast<double>(cmd.lon_e7) / 1e7;
             char buf[160];
+            char coord_buf[64];
+            uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
+            ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
             if (cmd.lat_e7 != 0 || cmd.lon_e7 != 0)
             {
                 if (!cmd.note.empty())
                 {
-                    snprintf(buf, sizeof(buf), "Command: %s %.5f, %.5f %s",
-                             name, lat, lon, cmd.note.c_str());
+                    snprintf(buf, sizeof(buf), "Command: %s %s %s",
+                             name, coord_buf, cmd.note.c_str());
                 }
                 else
                 {
-                    snprintf(buf, sizeof(buf), "Command: %s %.5f, %.5f",
-                             name, lat, lon);
+                    snprintf(buf, sizeof(buf), "Command: %s %s",
+                             name, coord_buf);
                 }
             }
             else if (!cmd.note.empty())
@@ -1327,7 +1333,10 @@ static void send_team_position()
     {
         pos.has_altitude = true;
         pos.altitude = static_cast<int32_t>(lround(gps_state.alt_m));
-        pos.altitude_source = meshtastic_Position_AltSource_ALT_INTERNAL;
+        uint8_t alt_ref = app::AppContext::getInstance().getConfig().gps_alt_ref;
+        pos.altitude_source = (alt_ref == 1)
+                                  ? meshtastic_Position_AltSource_ALT_EXTERNAL
+                                  : meshtastic_Position_AltSource_ALT_INTERNAL;
     }
     if (gps_state.has_speed)
     {

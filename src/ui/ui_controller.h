@@ -34,7 +34,7 @@ class UiController
         Compose       // Showing compose editor
     };
 
-    UiController(lv_obj_t* parent, chat::ChatService& service);
+    UiController(lv_obj_t* parent, chat::ChatService& service, chat::ChannelId initial_channel = chat::ChannelId::PRIMARY);
     ~UiController();
 
     /**

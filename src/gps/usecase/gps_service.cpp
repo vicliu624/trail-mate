@@ -160,6 +160,77 @@ void GpsService::setCollectionInterval(uint32_t interval_ms)
     }
 }
 
+void GpsService::setPowerStrategy(uint8_t strategy)
+{
+    power_strategy_ = strategy;
+
+    if (gps_disabled_ || gps_board_ == nullptr)
+    {
+        return;
+    }
+
+    if (strategy == 1)
+    {
+        setMotionConfig(motion_config_);
+        if (!motion_control_enabled_)
+        {
+            setGPSPowerState(true);
+            setCollectionInterval(gps_collection_interval_ms_);
+        }
+        return;
+    }
+
+    bool was_motion = motion_control_enabled_;
+    motion_control_enabled_ = false;
+    if (was_motion && gps_task_handle_ != nullptr)
+    {
+        vTaskResume(gps_task_handle_);
+    }
+
+    if (strategy == 2)
+    {
+        setGPSPowerState(false);
+        return;
+    }
+
+    setGPSPowerState(true);
+    setCollectionInterval(gps_collection_interval_ms_);
+}
+
+void GpsService::setGnssConfig(uint8_t mode, uint8_t sat_mask)
+{
+    gnss_mode_ = mode;
+    gnss_sat_mask_ = sat_mask;
+    gnss_config_pending_ = true;
+
+    if (gps_disabled_ || gps_board_ == nullptr)
+    {
+        return;
+    }
+
+    if (gps_powered_)
+    {
+        applyGnssConfig();
+    }
+}
+
+void GpsService::setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
+{
+    nmea_output_hz_ = output_hz;
+    nmea_sentence_mask_ = sentence_mask;
+    nmea_config_pending_ = true;
+
+    if (gps_disabled_ || gps_board_ == nullptr)
+    {
+        return;
+    }
+
+    if (gps_powered_)
+    {
+        applyNmeaConfig();
+    }
+}
+
 void GpsService::setMotionConfig(const MotionConfig& config)
 {
     if (gps_board_ == nullptr || gps_disabled_)
@@ -209,6 +280,40 @@ void GpsService::setMotionConfig(const MotionConfig& config)
         }
         setGPSPowerState(true);
     }
+}
+
+void GpsService::applyGnssConfig()
+{
+    if (!gnss_config_pending_)
+    {
+        return;
+    }
+    if (gps_disabled_ || gps_board_ == nullptr)
+    {
+        return;
+    }
+    if (!gps_adapter_.applyGnssConfig(gnss_mode_, gnss_sat_mask_))
+    {
+        return;
+    }
+    gnss_config_pending_ = false;
+}
+
+void GpsService::applyNmeaConfig()
+{
+    if (!nmea_config_pending_)
+    {
+        return;
+    }
+    if (gps_disabled_ || gps_board_ == nullptr)
+    {
+        return;
+    }
+    if (!gps_adapter_.applyNmeaConfig(nmea_output_hz_, nmea_sentence_mask_))
+    {
+        return;
+    }
+    nmea_config_pending_ = false;
 }
 
 void GpsService::setMotionIdleTimeout(uint32_t timeout_ms)
@@ -387,6 +492,8 @@ void GpsService::gpsTask(void* pvParameters)
                 if (retry_result)
                 {
                     GPS_TASK_LOG("[GPS Task] *** GPS REINITIALIZATION SUCCESSFUL *** (loop %lu)\n", loop_count);
+                    service->applyGnssConfig();
+                    service->applyNmeaConfig();
                 }
                 else
                 {
@@ -450,6 +557,8 @@ void GpsService::setGPSPowerState(bool enable)
         bool init_ok = gps_adapter_.init();
         Serial.printf("[GPS] init: %s\n", init_ok ? "OK" : "FAIL");
         setCollectionInterval(kGpsSampleIntervalMs);
+        applyGnssConfig();
+        applyNmeaConfig();
         if (gps_task_handle_ != nullptr)
         {
             vTaskResume(gps_task_handle_);

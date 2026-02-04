@@ -119,6 +119,40 @@ class AppContext
         }
     }
 
+    void applyUserInfo()
+    {
+        if (mesh_adapter_)
+        {
+            mesh_adapter_->setUserInfo(config_.node_name, config_.short_name);
+        }
+    }
+
+    void applyNetworkLimits()
+    {
+        if (mesh_adapter_)
+        {
+            mesh_adapter_->setNetworkLimits(config_.net_duty_cycle, config_.net_channel_util);
+        }
+    }
+
+    void applyPrivacyConfig()
+    {
+        if (mesh_adapter_)
+        {
+            mesh_adapter_->setPrivacyConfig(config_.privacy_encrypt_mode, config_.privacy_pki);
+        }
+    }
+
+    void applyChatDefaults()
+    {
+        if (chat_service_)
+        {
+            chat::ChannelId ch = (config_.chat_channel == 1) ? chat::ChannelId::SECONDARY
+                                                             : chat::ChannelId::PRIMARY;
+            chat_service_->switchChannel(ch);
+        }
+    }
+
     /**
      * @brief Reset mesh config to defaults and apply
      */

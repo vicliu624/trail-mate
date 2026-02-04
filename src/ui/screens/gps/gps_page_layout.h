@@ -22,7 +22,7 @@ struct Spec
     int resolution_y = -10;
 
     int control_btn_w = 80;
-    int control_btn_h = 32;
+    int control_btn_h = 28;
 };
 
 struct Widgets

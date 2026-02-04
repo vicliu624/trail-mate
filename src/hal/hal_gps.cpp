@@ -116,4 +116,27 @@ bool HalGps::syncTime(uint32_t gps_task_interval_ms)
     return board_->syncTimeFromGPS(gps_task_interval_ms);
 }
 
+bool HalGps::applyGnssConfig(uint8_t mode, uint8_t sat_mask)
+{
+    if (board_ == nullptr)
+    {
+        return false;
+    }
+
+    GPS& gps = board_->getGPS();
+    bool ok_mode = gps.setReceiverMode(mode, sat_mask);
+    bool ok_gnss = gps.configureGnss(sat_mask);
+    return ok_mode && ok_gnss;
+}
+
+bool HalGps::applyNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
+{
+    if (board_ == nullptr)
+    {
+        return false;
+    }
+
+    return board_->getGPS().configureNmeaOutput(output_hz, sentence_mask);
+}
+
 } // namespace hal

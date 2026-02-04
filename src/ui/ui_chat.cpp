@@ -63,8 +63,11 @@ void ui_chat_enter(lv_obj_t* parent)
     }
 
     // Create UI controller
+    chat::ChannelId default_channel = (ctx.getConfig().chat_channel == 1)
+                                          ? chat::ChannelId::SECONDARY
+                                          : chat::ChannelId::PRIMARY;
     ui_controller = std::unique_ptr<chat::ui::UiController>(
-        new chat::ui::UiController(chat_container, ctx.getChatService()));
+        new chat::ui::UiController(chat_container, ctx.getChatService(), default_channel));
     ui_controller->init();
 
     // Store in context (for access from main loop)

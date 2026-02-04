@@ -128,6 +128,33 @@ class IMeshAdapter
     virtual void applyConfig(const MeshConfig& config) = 0;
 
     /**
+     * @brief Update user identity (long/short name)
+     */
+    virtual void setUserInfo(const char* long_name, const char* short_name)
+    {
+        (void)long_name;
+        (void)short_name;
+    }
+
+    /**
+     * @brief Apply network utilization limits
+     */
+    virtual void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent)
+    {
+        (void)duty_cycle_enabled;
+        (void)util_percent;
+    }
+
+    /**
+     * @brief Apply privacy configuration
+     */
+    virtual void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+    {
+        (void)encrypt_mode;
+        (void)pki_enabled;
+    }
+
+    /**
      * @brief Check if adapter is ready
      */
     virtual bool isReady() const = 0;

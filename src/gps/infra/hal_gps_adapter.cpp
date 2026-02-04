@@ -89,4 +89,14 @@ bool HalGpsAdapter::syncTime(uint32_t gps_task_interval_ms)
     return hal_gps_.syncTime(gps_task_interval_ms);
 }
 
+bool HalGpsAdapter::applyGnssConfig(uint8_t mode, uint8_t sat_mask)
+{
+    return hal_gps_.applyGnssConfig(mode, sat_mask);
+}
+
+bool HalGpsAdapter::applyNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
+{
+    return hal_gps_.applyNmeaConfig(output_hz, sentence_mask);
+}
+
 } // namespace gps

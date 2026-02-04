@@ -673,8 +673,14 @@ bool MtAdapter::sendText(ChannelId channel, const std::string& text,
         return false;
     }
 
+    ChannelId out_channel = channel;
+    if (encrypt_mode_ == 0 || encrypt_mode_ == 2)
+    {
+        out_channel = ChannelId::PRIMARY;
+    }
+
     PendingSend pending;
-    pending.channel = channel;
+    pending.channel = out_channel;
     pending.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
     pending.text = text;
     pending.msg_id = next_packet_id_++;
@@ -717,6 +723,19 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         return false;
     }
 
+    uint32_t now_ms = millis();
+    if (min_tx_interval_ms_ > 0 && last_tx_ms_ > 0 &&
+        (now_ms - last_tx_ms_) < min_tx_interval_ms_)
+    {
+        return false;
+    }
+
+    ChannelId out_channel = channel;
+    if (encrypt_mode_ == 0 || encrypt_mode_ == 2)
+    {
+        out_channel = ChannelId::PRIMARY;
+    }
+
     uint8_t data_buffer[256];
     size_t data_size = sizeof(data_buffer);
     if (!encodeAppData(portnum, payload, len, want_ack, data_buffer, &data_size))
@@ -727,7 +746,6 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
     uint8_t wire_buffer[512];
     size_t wire_size = sizeof(wire_buffer);
 
-    ChannelId out_channel = channel;
     uint8_t channel_hash =
         (out_channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
     const uint8_t* psk =
@@ -741,7 +759,8 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
 
     const uint8_t* out_payload = data_buffer;
     size_t out_len = data_size;
-    if (dest_node != 0xFFFFFFFF)
+    bool use_pki = false;
+    if (dest_node != 0xFFFFFFFF && pki_enabled_)
     {
         if (!pki_ready_ || !allowPkiForPortnum(portnum) ||
             (node_public_keys_.find(dest_node) == node_public_keys_.end()))
@@ -767,6 +786,21 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         want_ack_flag = true;
         psk = nullptr;
         psk_len = 0;
+        use_pki = true;
+    }
+
+    if (!use_pki)
+    {
+        if (out_channel == ChannelId::SECONDARY)
+        {
+            psk = secondary_psk_;
+            psk_len = secondary_psk_len_;
+        }
+        else
+        {
+            psk = primary_psk_;
+            psk_len = primary_psk_len_;
+        }
     }
 
     if (!buildWirePacket(out_payload, out_len, node_id_, msg_id,
@@ -796,6 +830,7 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
              ok ? 1 : 0);
     if (ok)
     {
+        last_tx_ms_ = now_ms;
         startRadioReceive();
     }
     return ok;
@@ -838,6 +873,57 @@ void MtAdapter::applyConfig(const MeshConfig& config)
     config_ = config;
     updateChannelKeys();
     configureRadio();
+}
+
+void MtAdapter::setUserInfo(const char* long_name, const char* short_name)
+{
+    std::string new_long = (long_name && long_name[0]) ? long_name : "";
+    std::string new_short = (short_name && short_name[0]) ? short_name : "";
+    if (new_short.size() > 4)
+    {
+        new_short.resize(4);
+    }
+
+    if (new_long == user_long_name_ && new_short == user_short_name_)
+    {
+        return;
+    }
+
+    user_long_name_ = new_long;
+    user_short_name_ = new_short;
+    last_nodeinfo_ms_ = 0;
+}
+
+void MtAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent)
+{
+    if (!duty_cycle_enabled || util_percent == 0)
+    {
+        min_tx_interval_ms_ = 0;
+        return;
+    }
+
+    if (util_percent <= 25)
+    {
+        min_tx_interval_ms_ = 4000;
+    }
+    else if (util_percent <= 50)
+    {
+        min_tx_interval_ms_ = 2000;
+    }
+    else
+    {
+        min_tx_interval_ms_ = 0;
+    }
+}
+
+void MtAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+{
+    encrypt_mode_ = encrypt_mode;
+    pki_enabled_ = pki_enabled;
+    if (encrypt_mode_ == 0)
+    {
+        pki_enabled_ = false;
+    }
 }
 
 bool MtAdapter::isReady() const
@@ -1379,6 +1465,12 @@ void MtAdapter::processSendQueue()
     {
         PendingSend& pending = send_queue_.front();
 
+        if (min_tx_interval_ms_ > 0 && last_tx_ms_ > 0 &&
+            (now - last_tx_ms_) < min_tx_interval_ms_)
+        {
+            break;
+        }
+
         // Check if ready to send
         if (now - pending.last_attempt < RETRY_DELAY_MS && pending.retry_count > 0)
         {
@@ -1389,6 +1481,7 @@ void MtAdapter::processSendQueue()
         if (sendPacket(pending))
         {
             // Success, remove from queue
+            last_tx_ms_ = now;
             send_queue_.pop();
         }
         else
@@ -1462,7 +1555,8 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     size_t payload_len = data_size;
     const uint8_t* psk = nullptr;
     size_t psk_len = 0;
-    if (dest != 0xFFFFFFFF)
+    bool use_pki = false;
+    if (dest != 0xFFFFFFFF && pki_enabled_)
     {
         if (!pki_ready_ || !allowPkiForPortnum(pending.portnum) ||
             (node_public_keys_.find(dest) == node_public_keys_.end()))
@@ -1483,8 +1577,10 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
         payload_len = pki_len;
         channel_hash = 0; // PKI channel
         want_ack = true;
+        use_pki = true;
     }
-    else
+
+    if (!use_pki)
     {
         if (channel == ChannelId::SECONDARY)
         {
@@ -1581,8 +1677,24 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
     char long_name[32];
     char short_name[5];
     uint16_t suffix = static_cast<uint16_t>(node_id_ & 0x0ffff);
-    snprintf(long_name, sizeof(long_name), "lilygo-%04X", suffix);
-    snprintf(short_name, sizeof(short_name), "%04X", suffix);
+    if (!user_long_name_.empty())
+    {
+        strncpy(long_name, user_long_name_.c_str(), sizeof(long_name) - 1);
+        long_name[sizeof(long_name) - 1] = '\0';
+    }
+    else
+    {
+        snprintf(long_name, sizeof(long_name), "lilygo-%04X", suffix);
+    }
+    if (!user_short_name_.empty())
+    {
+        strncpy(short_name, user_short_name_.c_str(), sizeof(short_name) - 1);
+        short_name[sizeof(short_name) - 1] = '\0';
+    }
+    else
+    {
+        snprintf(short_name, sizeof(short_name), "%04X", suffix);
+    }
 
     if (!encodeNodeInfoMessage(
             user_id,

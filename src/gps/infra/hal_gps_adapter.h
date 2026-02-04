@@ -28,6 +28,8 @@ class HalGpsAdapter : public IGpsHardware
     double course() const override;
     uint8_t satellites() const override;
     bool syncTime(uint32_t gps_task_interval_ms) override;
+    bool applyGnssConfig(uint8_t mode, uint8_t sat_mask) override;
+    bool applyNmeaConfig(uint8_t output_hz, uint8_t sentence_mask) override;
 
   private:
     hal::HalGps hal_gps_{};

@@ -38,6 +38,9 @@ int ui_get_timezone_offset_min();
 void ui_set_timezone_offset_min(int offset_min);
 time_t ui_apply_timezone_offset(time_t utc_seconds);
 
+// Coordinate formatting helper (DD/DMS/UTM)
+void ui_format_coords(double lat, double lon, uint8_t coord_format, char* out, size_t out_len);
+
 // Screenshot helper (BMP, RGB565) saved to /sd
 bool ui_take_screenshot_to_sd();
 

@@ -12,6 +12,8 @@
 #include "../../../chat/domain/chat_types.h"
 #include "../../../chat/infra/meshtastic/generated/meshtastic/config.pb.h"
 #include "../../../chat/infra/meshtastic/mt_region.h"
+#include "../../../gps/gps_service_api.h"
+#include "../../../gps/usecase/track_recorder.h"
 #include "../../ui_common.h"
 #include "../../widgets/system_notification.h"
 #include "settings_page_components.h"
@@ -477,6 +479,24 @@ static void on_text_save_clicked(lv_event_t* e)
         g_state.editing_item->text_value[g_state.editing_item->text_max - 1] = '\0';
         prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
         update_item_value(*g_state.editing_widget);
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_user") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            strncpy(app_ctx.getConfig().node_name, g_state.editing_item->text_value,
+                    sizeof(app_ctx.getConfig().node_name) - 1);
+            app_ctx.getConfig().node_name[sizeof(app_ctx.getConfig().node_name) - 1] = '\0';
+            app_ctx.saveConfig();
+            app_ctx.applyUserInfo();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_short") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            strncpy(app_ctx.getConfig().short_name, g_state.editing_item->text_value,
+                    sizeof(app_ctx.getConfig().short_name) - 1);
+            app_ctx.getConfig().short_name[sizeof(app_ctx.getConfig().short_name) - 1] = '\0';
+            app_ctx.saveConfig();
+            app_ctx.applyUserInfo();
+        }
         if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_psk") == 0)
         {
             app::AppContext& app_ctx = app::AppContext::getInstance();
@@ -600,6 +620,120 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "screen_timeout") == 0)
     {
         setScreenSleepTimeout(static_cast<uint32_t>(payload->value));
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_interval") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        uint32_t interval_ms = static_cast<uint32_t>(payload->value) * 1000u;
+        app_ctx.getConfig().gps_interval_ms = interval_ms;
+        app_ctx.saveConfig();
+        gps::gps_set_collection_interval(interval_ms);
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_mode") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().gps_mode = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        gps::gps_set_gnss_config(app_ctx.getConfig().gps_mode, app_ctx.getConfig().gps_sat_mask);
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_sat_mask") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().gps_sat_mask = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        gps::gps_set_gnss_config(app_ctx.getConfig().gps_mode, app_ctx.getConfig().gps_sat_mask);
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_strategy") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().gps_strategy = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        gps::gps_set_power_strategy(static_cast<uint8_t>(payload->value));
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_alt_ref") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().gps_alt_ref = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_coord_fmt") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().gps_coord_format = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_coord") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().map_coord_system = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_source") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().map_source = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_track_interval") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().map_track_interval = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        auto& recorder = gps::TrackRecorder::getInstance();
+        if (payload->value == 99)
+        {
+            recorder.setDistanceOnly(true);
+            recorder.setIntervalSeconds(0);
+        }
+        else
+        {
+            recorder.setDistanceOnly(false);
+            recorder.setIntervalSeconds(static_cast<uint32_t>(payload->value));
+        }
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_track_format") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().map_track_format = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        gps::TrackRecorder::getInstance().setFormat(static_cast<gps::TrackFormat>(payload->value));
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "chat_channel") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().chat_channel = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyChatDefaults();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_util") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().net_channel_util = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyNetworkLimits();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_encrypt") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().privacy_encrypt_mode = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyPrivacyConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_nmea") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().privacy_nmea_output = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        gps::gps_set_nmea_config(app_ctx.getConfig().privacy_nmea_output,
+                                 app_ctx.getConfig().privacy_nmea_sentence);
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_nmea_sent") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().privacy_nmea_sentence = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        gps::gps_set_nmea_config(app_ctx.getConfig().privacy_nmea_output,
+                                 app_ctx.getConfig().privacy_nmea_sentence);
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0)
     {
@@ -984,6 +1118,27 @@ static void on_item_clicked(lv_event_t* e)
                 app_ctx.getConfig().mesh_config.enable_relay = *item.bool_value;
                 app_ctx.saveConfig();
                 app_ctx.applyMeshConfig();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "map_track") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().map_track_enabled = *item.bool_value;
+                app_ctx.saveConfig();
+                gps::TrackRecorder::getInstance().setAutoRecording(*item.bool_value);
+            }
+            if (item.pref_key && strcmp(item.pref_key, "net_duty_cycle") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().net_duty_cycle = *item.bool_value;
+                app_ctx.saveConfig();
+                app_ctx.applyNetworkLimits();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "privacy_pki") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().privacy_pki = *item.bool_value;
+                app_ctx.saveConfig();
+                app_ctx.applyPrivacyConfig();
             }
         }
         return;

@@ -6,6 +6,7 @@
 #include "app_context.h"
 #include "../chat/infra/protocol_factory.h"
 #include "../gps/usecase/gps_service.h"
+#include "../gps/usecase/track_recorder.h"
 #include "../sys/event_bus.h"
 #include "../team/protocol/team_chat.h"
 #include "../ui/ui_common.h"
@@ -47,6 +48,26 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
             disable_hw_init,
             config_.gps_interval_ms,
             config_.motion_config);
+        gps::GpsService::getInstance().setPowerStrategy(config_.gps_strategy);
+        gps::GpsService::getInstance().setGnssConfig(config_.gps_mode, config_.gps_sat_mask);
+        gps::GpsService::getInstance().setNmeaConfig(config_.privacy_nmea_output,
+                                                     config_.privacy_nmea_sentence);
+    }
+
+    {
+        auto& recorder = gps::TrackRecorder::getInstance();
+        recorder.setFormat(static_cast<gps::TrackFormat>(config_.map_track_format));
+        if (config_.map_track_interval == 99)
+        {
+            recorder.setDistanceOnly(true);
+            recorder.setIntervalSeconds(0);
+        }
+        else
+        {
+            recorder.setDistanceOnly(false);
+            recorder.setIntervalSeconds(static_cast<uint32_t>(config_.map_track_interval));
+        }
+        recorder.setAutoRecording(config_.map_track_enabled);
     }
 
     // Create domain model
@@ -83,6 +104,9 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
         mesh_adapter_ = std::move(adapter);
     }
     chat::IMeshAdapter* adapter_raw = mesh_adapter_.get();
+    applyUserInfo();
+    applyNetworkLimits();
+    applyPrivacyConfig();
 
     // Initialize tasks for real LoRa
     if (lora_board_)
@@ -104,6 +128,7 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
     // Create chat service
     chat_service_ = std::make_unique<chat::ChatService>(
         *chat_model_, *mesh_adapter_, *chat_store_);
+    applyChatDefaults();
 
     // Create team service (protocol-only for now)
     team_crypto_ = std::make_unique<team::infra::TeamCrypto>();

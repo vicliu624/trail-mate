@@ -84,14 +84,17 @@ std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
             double lat = static_cast<double>(loc.lat_e7) / 1e7;
             double lon = static_cast<double>(loc.lon_e7) / 1e7;
             char buf[128];
+            char coord_buf[64];
+            uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
+            ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
             if (!loc.label.empty())
             {
-                snprintf(buf, sizeof(buf), "Location: %s %.5f, %.5f",
-                         loc.label.c_str(), lat, lon);
+                snprintf(buf, sizeof(buf), "Location: %s %s",
+                         loc.label.c_str(), coord_buf);
             }
             else
             {
-                snprintf(buf, sizeof(buf), "Location: %.5f, %.5f", lat, lon);
+                snprintf(buf, sizeof(buf), "Location: %s", coord_buf);
             }
             return std::string(buf);
         }
@@ -108,17 +111,20 @@ std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
             double lat = static_cast<double>(cmd.lat_e7) / 1e7;
             double lon = static_cast<double>(cmd.lon_e7) / 1e7;
             char buf[160];
+            char coord_buf[64];
+            uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
+            ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
             if (cmd.lat_e7 != 0 || cmd.lon_e7 != 0)
             {
                 if (!cmd.note.empty())
                 {
-                    snprintf(buf, sizeof(buf), "Command: %s %.5f, %.5f %s",
-                             name, lat, lon, cmd.note.c_str());
+                    snprintf(buf, sizeof(buf), "Command: %s %s %s",
+                             name, coord_buf, cmd.note.c_str());
                 }
                 else
                 {
-                    snprintf(buf, sizeof(buf), "Command: %s %.5f, %.5f",
-                             name, lat, lon);
+                    snprintf(buf, sizeof(buf), "Command: %s %s",
+                             name, coord_buf);
                 }
             }
             else if (!cmd.note.empty())
@@ -202,10 +208,10 @@ void handle_conversation_back(void* user_data)
 }
 } // namespace
 
-UiController::UiController(lv_obj_t* parent, chat::ChatService& service)
+UiController::UiController(lv_obj_t* parent, chat::ChatService& service, chat::ChannelId initial_channel)
     : parent_(parent), service_(service), state_(State::ChannelList),
-      current_channel_(chat::ChannelId::PRIMARY),
-      current_conv_(chat::ConversationId(chat::ChannelId::PRIMARY, 0))
+      current_channel_(initial_channel),
+      current_conv_(chat::ConversationId(initial_channel, 0))
 {
 }
 

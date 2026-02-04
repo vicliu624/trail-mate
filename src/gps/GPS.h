@@ -30,6 +30,9 @@ class GPS : public TinyGPSPlus
 
     bool init(Stream* stream);
     bool factory();
+    bool configureGnss(uint8_t sat_mask);
+    bool configureNmeaOutput(uint8_t output_hz, uint8_t sentence_mask);
+    bool setReceiverMode(uint8_t mode, uint8_t sat_mask);
 
     uint32_t loop(bool debug = false)
     {
@@ -85,6 +88,8 @@ class GPS : public TinyGPSPlus
 
   private:
     int getAck(uint8_t* buffer, uint16_t size, uint8_t requestedClass, uint8_t requestedID);
+    bool sendUbx(uint8_t cls, uint8_t id, const uint8_t* payload, uint16_t len, bool wait_ack);
+    void calcUbxChecksum(const uint8_t* data, uint16_t len, uint8_t& ck_a, uint8_t& ck_b);
     Stream* _stream;
     String model;
 };

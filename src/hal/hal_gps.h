@@ -26,6 +26,8 @@ class HalGps
     double course() const;
     uint8_t satellites() const;
     bool syncTime(uint32_t gps_task_interval_ms);
+    bool applyGnssConfig(uint8_t mode, uint8_t sat_mask);
+    bool applyNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
 
   private:
     GpsBoard* board_ = nullptr;
