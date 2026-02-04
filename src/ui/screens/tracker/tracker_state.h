@@ -25,48 +25,54 @@ struct TrackerPageState
 
     lv_obj_t* root = nullptr;
     lv_obj_t* header = nullptr;
-    lv_obj_t* body = nullptr;
-    lv_obj_t* mode_panel = nullptr;
+    lv_obj_t* content = nullptr;
+    lv_obj_t* filter_panel = nullptr;
+    lv_obj_t* list_panel = nullptr;
+    lv_obj_t* list_container = nullptr;
+    lv_obj_t* bottom_bar = nullptr;
+    lv_obj_t* action_panel = nullptr;
+
     lv_obj_t* mode_record_btn = nullptr;
     lv_obj_t* mode_record_label = nullptr;
     lv_obj_t* mode_route_btn = nullptr;
     lv_obj_t* mode_route_label = nullptr;
-    lv_obj_t* main_panel = nullptr;
 
-    lv_obj_t* record_panel = nullptr;
-    lv_obj_t* record_status_label = nullptr;
+    lv_obj_t* status_label = nullptr;
+
+    std::array<lv_obj_t*, 4> list_item_btns{};
+    std::array<lv_obj_t*, 4> list_item_labels{};
+
+    lv_obj_t* list_prev_btn = nullptr;
+    lv_obj_t* list_prev_label = nullptr;
+    lv_obj_t* list_next_btn = nullptr;
+    lv_obj_t* list_next_label = nullptr;
+    lv_obj_t* list_back_btn = nullptr;
+    lv_obj_t* list_back_label = nullptr;
+
     lv_obj_t* start_stop_btn = nullptr;
     lv_obj_t* start_stop_label = nullptr;
-    lv_obj_t* record_list = nullptr;
-    std::array<lv_obj_t*, 4> record_item_btns{};
-    std::array<lv_obj_t*, 4> record_item_labels{};
-    lv_obj_t* record_prev_btn = nullptr;
-    lv_obj_t* record_prev_label = nullptr;
-    lv_obj_t* record_next_btn = nullptr;
-    lv_obj_t* record_next_label = nullptr;
-    lv_obj_t* record_back_btn = nullptr;
-    lv_obj_t* record_back_label = nullptr;
-    int record_page = 0;
-
-    lv_obj_t* route_panel = nullptr;
-    lv_obj_t* route_status_label = nullptr;
-    lv_obj_t* route_list = nullptr;
-    std::array<lv_obj_t*, 4> route_item_btns{};
-    std::array<lv_obj_t*, 4> route_item_labels{};
-    lv_obj_t* route_prev_btn = nullptr;
-    lv_obj_t* route_prev_label = nullptr;
-    lv_obj_t* route_next_btn = nullptr;
-    lv_obj_t* route_next_label = nullptr;
-    lv_obj_t* route_back_btn = nullptr;
-    lv_obj_t* route_back_label = nullptr;
-    int route_page = 0;
     lv_obj_t* load_btn = nullptr;
     lv_obj_t* load_label = nullptr;
     lv_obj_t* unload_btn = nullptr;
     lv_obj_t* unload_label = nullptr;
+    lv_obj_t* del_btn = nullptr;
+    lv_obj_t* del_label = nullptr;
+
+    lv_obj_t* del_confirm_modal = nullptr;
+    lv_group_t* modal_group = nullptr;
+    lv_group_t* prev_group = nullptr;
+    Mode pending_delete_mode = Mode::Record;
+    int pending_delete_idx = -1;
+    std::string pending_delete_name{};
+    std::string pending_delete_path{};
+
+    int record_page = 0;
+    int route_page = 0;
     ::ui::widgets::TopBar top_bar{};
     Mode mode = Mode::Record;
     FocusColumn focus_col = FocusColumn::Mode;
+    int selected_record_idx = -1;
+    std::string selected_record{};
     int selected_route_idx = -1;
     std::string selected_route{};
     std::string active_route{};
