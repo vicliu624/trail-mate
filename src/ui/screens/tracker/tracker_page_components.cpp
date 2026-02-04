@@ -1209,7 +1209,6 @@ void init_page(lv_obj_t* parent)
     lv_obj_center(state.mode_route_label);
 
     state.record_panel = layout::create_section(state.main_panel);
-    lv_obj_set_height(state.record_panel, LV_PCT(100));
     lv_obj_set_style_pad_all(state.record_panel, 2, 0);
     lv_obj_set_style_pad_row(state.record_panel, 4, 0);
     state.record_status_label = lv_label_create(state.record_panel);
@@ -1218,8 +1217,7 @@ void init_page(lv_obj_t* parent)
 
     state.record_list = lv_obj_create(state.record_panel);
     lv_obj_set_width(state.record_list, LV_PCT(100));
-    lv_obj_set_height(state.record_list, 0);
-    lv_obj_set_flex_grow(state.record_list, 1);
+    lv_obj_set_height(state.record_list, kListHeight);
     lv_obj_set_flex_flow(state.record_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(state.record_list, kListItemGap, 0);
     lv_obj_set_style_pad_all(state.record_list, 0, 0);
@@ -1273,6 +1271,15 @@ void init_page(lv_obj_t* parent)
     lv_obj_center(state.record_next_label);
     apply_action_button(state.record_next_btn, state.record_next_label);
 
+    lv_obj_t* record_spacer = lv_obj_create(state.record_panel);
+    lv_obj_set_width(record_spacer, LV_PCT(100));
+    lv_obj_set_height(record_spacer, 0);
+    lv_obj_set_flex_grow(record_spacer, 1);
+    lv_obj_set_style_border_width(record_spacer, 0, 0);
+    lv_obj_set_style_pad_all(record_spacer, 0, 0);
+    lv_obj_set_style_bg_opa(record_spacer, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(record_spacer, LV_OBJ_FLAG_SCROLLABLE);
+
     lv_obj_t* record_action_row = lv_obj_create(state.record_panel);
     lv_obj_set_width(record_action_row, LV_PCT(100));
     lv_obj_set_height(record_action_row, LV_SIZE_CONTENT);
@@ -1289,7 +1296,6 @@ void init_page(lv_obj_t* parent)
     apply_action_button(state.start_stop_btn, state.start_stop_label);
 
     state.route_panel = layout::create_section(state.main_panel);
-    lv_obj_set_height(state.route_panel, LV_PCT(100));
     lv_obj_set_style_pad_all(state.route_panel, 2, 0);
     lv_obj_set_style_pad_row(state.route_panel, 4, 0);
     state.route_status_label = lv_label_create(state.route_panel);
@@ -1298,8 +1304,7 @@ void init_page(lv_obj_t* parent)
 
     state.route_list = lv_obj_create(state.route_panel);
     lv_obj_set_width(state.route_list, LV_PCT(100));
-    lv_obj_set_height(state.route_list, 0);
-    lv_obj_set_flex_grow(state.route_list, 1);
+    lv_obj_set_height(state.route_list, kListHeight);
     lv_obj_set_flex_flow(state.route_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(state.route_list, kListItemGap, 0);
     lv_obj_set_style_pad_all(state.route_list, 0, 0);
@@ -1352,6 +1357,15 @@ void init_page(lv_obj_t* parent)
     lv_label_set_text(state.route_next_label, "Next");
     lv_obj_center(state.route_next_label);
     apply_action_button(state.route_next_btn, state.route_next_label);
+
+    lv_obj_t* route_spacer = lv_obj_create(state.route_panel);
+    lv_obj_set_width(route_spacer, LV_PCT(100));
+    lv_obj_set_height(route_spacer, 0);
+    lv_obj_set_flex_grow(route_spacer, 1);
+    lv_obj_set_style_border_width(route_spacer, 0, 0);
+    lv_obj_set_style_pad_all(route_spacer, 0, 0);
+    lv_obj_set_style_bg_opa(route_spacer, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(route_spacer, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* route_action_row = lv_obj_create(state.route_panel);
     lv_obj_set_width(route_action_row, LV_PCT(100));
