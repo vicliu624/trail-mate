@@ -30,6 +30,7 @@ constexpr int kSecondaryButtonHeight = 28;
 constexpr int kListItemHeight = 28;
 constexpr int kListItemGap = 4;
 constexpr int kListPageSize = 4;
+constexpr int kListHeight = kListItemHeight * kListPageSize + kListItemGap * (kListPageSize - 1);
 constexpr int kListLabelWidth = 390;
 constexpr const char* kRouteDir = "/routes";
 std::vector<String> s_route_names;
@@ -207,22 +208,6 @@ void bind_mode_group()
     group_add_if(group, g_tracker_state.mode_route_btn);
 
     lv_group_focus_freeze(group, false);
-
-    lv_obj_t* focused = lv_group_get_focused(group);
-    if (g_tracker_state.mode == TrackerPageState::Mode::Record && g_tracker_state.mode_record_btn)
-    {
-        if (focused != g_tracker_state.mode_record_btn)
-        {
-            lv_group_focus_obj(g_tracker_state.mode_record_btn);
-        }
-    }
-    else if (g_tracker_state.mode_route_btn)
-    {
-        if (focused != g_tracker_state.mode_route_btn)
-        {
-            lv_group_focus_obj(g_tracker_state.mode_route_btn);
-        }
-    }
 }
 
 void bind_main_group()
@@ -264,15 +249,47 @@ void bind_main_group()
     lv_group_focus_freeze(group, false);
 }
 
-void focus_mode_panel()
+void focus_mode_panel_async(void*)
 {
-    g_tracker_state.focus_col = TrackerPageState::FocusColumn::Mode;
+    if (!g_tracker_state.root)
+    {
+        return;
+    }
+    if (g_tracker_state.focus_col != TrackerPageState::FocusColumn::Mode)
+    {
+        return;
+    }
     bind_mode_group();
+    lv_group_t* group = tracker_group();
+    if (!group)
+    {
+        return;
+    }
+    lv_obj_t* target = nullptr;
+    if (g_tracker_state.mode == TrackerPageState::Mode::Record)
+    {
+        target = g_tracker_state.mode_record_btn;
+    }
+    else
+    {
+        target = g_tracker_state.mode_route_btn;
+    }
+    if (target && lv_group_get_focused(group) != target)
+    {
+        lv_group_focus_obj(target);
+    }
 }
 
-void focus_main_panel()
+void focus_main_panel_async(void*)
 {
-    g_tracker_state.focus_col = TrackerPageState::FocusColumn::Main;
+    if (!g_tracker_state.root)
+    {
+        return;
+    }
+    if (g_tracker_state.focus_col != TrackerPageState::FocusColumn::Main)
+    {
+        return;
+    }
     bind_main_group();
     if (g_tracker_state.mode == TrackerPageState::Mode::Record)
     {
@@ -288,6 +305,18 @@ void focus_main_panel()
             lv_group_focus_obj(target);
         }
     }
+}
+
+void focus_mode_panel()
+{
+    g_tracker_state.focus_col = TrackerPageState::FocusColumn::Mode;
+    lv_async_call(focus_mode_panel_async, nullptr);
+}
+
+void focus_main_panel()
+{
+    g_tracker_state.focus_col = TrackerPageState::FocusColumn::Main;
+    lv_async_call(focus_main_panel_async, nullptr);
 }
 
 void refresh_focus_group()
@@ -329,7 +358,10 @@ void set_mode(TrackerPageState::Mode mode)
         }
     }
     update_mode_buttons();
-    refresh_focus_group();
+    if (state.focus_col == TrackerPageState::FocusColumn::Main)
+    {
+        refresh_focus_group();
+    }
 }
 
 void update_record_status()
@@ -1371,6 +1403,7 @@ void init_page(lv_obj_t* parent)
 
     set_mode(TrackerPageState::Mode::Record);
     refresh_page();
+    focus_mode_panel();
     state.initialized = true;
 }
 
