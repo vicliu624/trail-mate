@@ -17,6 +17,11 @@ struct TrackerPageState
         Record = 0,
         Route = 1
     };
+    enum class FocusColumn : uint8_t
+    {
+        Mode = 0,
+        Main = 1
+    };
 
     lv_obj_t* root = nullptr;
     lv_obj_t* header = nullptr;
@@ -39,6 +44,8 @@ struct TrackerPageState
     lv_obj_t* record_prev_label = nullptr;
     lv_obj_t* record_next_btn = nullptr;
     lv_obj_t* record_next_label = nullptr;
+    lv_obj_t* record_back_btn = nullptr;
+    lv_obj_t* record_back_label = nullptr;
     int record_page = 0;
 
     lv_obj_t* route_panel = nullptr;
@@ -50,6 +57,8 @@ struct TrackerPageState
     lv_obj_t* route_prev_label = nullptr;
     lv_obj_t* route_next_btn = nullptr;
     lv_obj_t* route_next_label = nullptr;
+    lv_obj_t* route_back_btn = nullptr;
+    lv_obj_t* route_back_label = nullptr;
     int route_page = 0;
     lv_obj_t* load_btn = nullptr;
     lv_obj_t* load_label = nullptr;
@@ -57,6 +66,7 @@ struct TrackerPageState
     lv_obj_t* unload_label = nullptr;
     ::ui::widgets::TopBar top_bar{};
     Mode mode = Mode::Record;
+    FocusColumn focus_col = FocusColumn::Mode;
     int selected_route_idx = -1;
     std::string selected_route{};
     std::string active_route{};
