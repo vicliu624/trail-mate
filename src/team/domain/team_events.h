@@ -83,6 +83,12 @@ struct TeamWaypointEvent
     std::vector<uint8_t> payload;
 };
 
+struct TeamTrackEvent
+{
+    TeamEventContext ctx;
+    std::vector<uint8_t> payload;
+};
+
 struct TeamChatEvent
 {
     TeamEventContext ctx;

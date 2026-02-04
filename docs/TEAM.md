@@ -39,6 +39,7 @@
 
 * `TEAM_POSITION_APP`
 * `TEAM_WAYPOINT_APP`
+* `TEAM_TRACK_APP`
 * 管理类 `TEAM_MGMT_APP`
 
 ---
@@ -98,6 +99,7 @@
 
 * 收到某成员位置（POSITION_RX）
 * 收到航点/集合点（WAYPOINT_RX）
+* 收到轨迹批量点（TRACK_RX）
 
 这些事件用于复盘：
 
@@ -585,7 +587,32 @@ Team 外成员：
 
 ---
 
-## 8. MUST / SHOULD / MAY 总结（Conformance Checklist）
+## 8. TEAM_TRACK_APP
+
+**用途**：Team 内轨迹批量点共享（固定间隔）
+
+* 与 `TEAM_POSITION_APP` 完全一致（E2EE PosKey）
+* 明文结构为 `TeamTrackMessage`（自定义轻量编码）
+* 轨迹点不带单点时间戳，时间由 `start_ts + i * interval_s` 推导
+* `valid_mask` 用于标记每个点是否有效（无 fix 时可置 0）
+* 单包最多 20 个点
+* **发送端建议**：在队伍 keys 就绪后启动 10 分钟采样窗口；每 30 秒采样一次，共 20 点；窗口内若全部点无效则不发包
+* **接收端落盘**：`/team/<team_dir>/tracks/<member_id>.gpx`（GPX 1.1，增量追加 `<trkpt>`）
+
+### Payload（E2EE 明文结构）
+
+| 字段         | 类型                               | 级别   | 说明 |
+| ---------- | -------------------------------- | ---- | ---- |
+| version    | uint8                            | MUST | 版本 |
+| start_ts   | uint32                           | MUST | 起始时间（epoch 秒） |
+| interval_s | uint16                           | MUST | 采样间隔（秒） |
+| count      | uint8                            | MUST | 点数（<= 20） |
+| valid_mask | uint32                           | MUST | 点有效性位图（bit i 对应第 i 个点） |
+| points     | (lat_e7 int32, lon_e7 int32) * N | MUST | 经纬度（E7） |
+
+---
+
+## 9. MUST / SHOULD / MAY 总结（Conformance Checklist）
 
 ### MUST
 
@@ -678,6 +705,7 @@ Team 外成员：
 │       * TEAM_STATUS                                         │
 │       * TEAM_POSITION_APP (E2EE PosKey)                     │
 │       * TEAM_WAYPOINT_APP (E2EE WpKey)                      │
+│       * TEAM_TRACK_APP (E2EE PosKey)                        │
 │                                                             │
 │  Valid transitions:                                         │
 │   - Rotate keys                                             │
@@ -1369,6 +1397,7 @@ DangerZone
 
   * `TEAM_POSITION_APP`
   * `TEAM_WAYPOINT_APP`
+  * `TEAM_TRACK_APP`
 
 #### `ShareTeamItem`
 

@@ -19,6 +19,7 @@ class TeamEventBusSink : public team::ITeamEventSink
     void onTeamStatus(const TeamStatusEvent& event) override;
     void onTeamPosition(const TeamPositionEvent& event) override;
     void onTeamWaypoint(const TeamWaypointEvent& event) override;
+    void onTeamTrack(const TeamTrackEvent& event) override;
     void onTeamChat(const TeamChatEvent& event) override;
     void onTeamError(const TeamErrorEvent& event) override;
 };

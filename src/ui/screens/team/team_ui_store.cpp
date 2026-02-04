@@ -12,6 +12,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <ctime>
 
 namespace team
 {
@@ -34,6 +35,12 @@ constexpr const char* kKeysTmpName = "keys.tmp";
 constexpr const char* kPosringName = "posring.log";
 constexpr const char* kChatlogName = "chatlog.log";
 constexpr const char* kChatlogOldName = "chatlog.old";
+constexpr const char* kTracksDirName = "tracks";
+constexpr const char* kGpxHeader =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<gpx version=\"1.1\" creator=\"Trail-Mate\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n"
+    "<trk>\n"
+    "<trkseg>\n";
 
 constexpr uint16_t kSnapshotVersion = 1;
 constexpr uint16_t kEventVersion = 1;
@@ -54,6 +61,7 @@ constexpr uint32_t kPosMaxIntervalSec = 30;
 constexpr float kPosMinDistanceM = 20.0f;
 
 constexpr size_t kChatlogMaxBytes = 256 * 1024;
+constexpr uint32_t kMinValidEpoch = 1577836800U; // 2020-01-01
 
 uint32_t now_secs()
 {
@@ -124,6 +132,24 @@ bool ensure_dir(const char* path)
     return SD.mkdir(path);
 }
 
+std::string iso_time(time_t t)
+{
+    if (t <= 0)
+    {
+        t = time(nullptr);
+    }
+    struct tm tm_utc
+    {
+    };
+    char buf[32] = {0};
+    if (t > 0 && gmtime_r(&t, &tm_utc))
+    {
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
+        return std::string(buf);
+    }
+    return std::string("1970-01-01T00:00:00Z");
+}
+
 bool read_current_dir(std::string& out_dir)
 {
     if (SD.cardType() == CARD_NONE || !SD.exists(kCurrentPath))
@@ -189,7 +215,7 @@ bool clear_current_dir()
     return true;
 }
 
-bool ensure_team_dir_for_id(const TeamId& id, std::string& out_dir_path)
+bool ensure_team_dir_for_id_internal(const TeamId& id, std::string& out_dir_path, bool update_current)
 {
     if (SD.cardType() == CARD_NONE)
     {
@@ -205,8 +231,16 @@ bool ensure_team_dir_for_id(const TeamId& id, std::string& out_dir_path)
     {
         return false;
     }
-    write_current_dir(dir);
+    if (update_current)
+    {
+        write_current_dir(dir);
+    }
     return true;
+}
+
+bool ensure_team_dir_for_id(const TeamId& id, std::string& out_dir_path)
+{
+    return ensure_team_dir_for_id_internal(id, out_dir_path, true);
 }
 
 void write_u8(File& f, uint8_t v)
@@ -1483,6 +1517,110 @@ bool team_ui_save_keys_now(const TeamId& team_id,
     snap.team_psk = psk;
     snap.has_team_psk = true;
     return save_keys_to_path(dir_path, snap);
+}
+
+bool team_ui_get_member_track_path(const TeamId& team_id,
+                                   uint32_t member_id,
+                                   std::string& out_path)
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    std::string dir_path;
+    if (!ensure_team_dir_for_id_internal(team_id, dir_path, false))
+    {
+        return false;
+    }
+    std::string tracks_dir = dir_path + "/" + kTracksDirName;
+    if (!ensure_dir(tracks_dir.c_str()))
+    {
+        return false;
+    }
+    char name[24] = {0};
+    snprintf(name, sizeof(name), "%08lX.gpx", static_cast<unsigned long>(member_id));
+    out_path = tracks_dir + "/" + name;
+    return true;
+}
+
+bool team_ui_append_member_track(const TeamId& team_id,
+                                 uint32_t member_id,
+                                 const team::proto::TeamTrackMessage& track)
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    if (track.points.empty() || track.valid_mask == 0)
+    {
+        return false;
+    }
+    bool has_valid = false;
+    for (size_t i = 0; i < track.points.size(); ++i)
+    {
+        if ((track.valid_mask & (1u << static_cast<uint32_t>(i))) != 0)
+        {
+            has_valid = true;
+            break;
+        }
+    }
+    if (!has_valid)
+    {
+        return false;
+    }
+
+    std::string dir_path;
+    if (!ensure_team_dir_for_id_internal(team_id, dir_path, true))
+    {
+        return false;
+    }
+    std::string tracks_dir = dir_path + "/" + kTracksDirName;
+    if (!ensure_dir(tracks_dir.c_str()))
+    {
+        return false;
+    }
+    char name[24] = {0};
+    snprintf(name, sizeof(name), "%08lX.gpx", static_cast<unsigned long>(member_id));
+    std::string path = tracks_dir + "/" + name;
+
+    File f = SD.open(path.c_str(), FILE_WRITE);
+    if (!f)
+    {
+        return false;
+    }
+    if (f.size() == 0)
+    {
+        f.print(kGpxHeader);
+    }
+
+    for (size_t i = 0; i < track.points.size(); ++i)
+    {
+        if ((track.valid_mask & (1u << static_cast<uint32_t>(i))) == 0)
+        {
+            continue;
+        }
+        const auto& pt = track.points[i];
+        const double lat = static_cast<double>(pt.lat_e7) / 1e7;
+        const double lon = static_cast<double>(pt.lon_e7) / 1e7;
+        const uint32_t ts = track.start_ts + static_cast<uint32_t>(track.interval_s) * static_cast<uint32_t>(i);
+        f.printf("<trkpt lat=\"%.7f\" lon=\"%.7f\">\n", lat, lon);
+        f.printf("  <ele>%.1f</ele>\n", 0.0);
+        if (ts >= kMinValidEpoch)
+        {
+            const std::string time_str = iso_time(static_cast<time_t>(ts));
+            f.printf("  <time>%s</time>\n", time_str.c_str());
+        }
+        f.print("  <extensions>\n");
+        f.printf("    <speed>%.2f</speed>\n", 0.0);
+        f.printf("    <course>%.1f</course>\n", 0.0);
+        f.printf("    <hdop>%.1f</hdop>\n", 0.0);
+        f.printf("    <sat>%u</sat>\n", 0u);
+        f.print("  </extensions>\n");
+        f.print("</trkpt>\n");
+    }
+    f.flush();
+    f.close();
+    return true;
 }
 
 } // namespace ui

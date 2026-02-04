@@ -263,20 +263,13 @@ void on_track_selected(lv_event_t* e)
     char path[96];
     snprintf(path, sizeof(path), "/trackers/%s", name.c_str());
 
-    std::vector<GPSPageState::TrackOverlayPoint> pts;
-    if (!load_gpx_points(path, pts))
+    if (!gps_tracker_load_file(path, true))
     {
-        show_toast("Failed to load GPX", 1500);
         close_tracker_modal();
         return;
     }
 
-    g_gps_state.tracker_file = path;
-    g_gps_state.tracker_points = std::move(pts);
-    g_gps_state.tracker_overlay_active = true;
-
     close_tracker_modal();
-    apply_tracker_view_defaults();
 }
 
 void build_tracker_modal()
@@ -340,6 +333,34 @@ void build_tracker_modal()
 }
 
 } // namespace
+
+bool gps_tracker_load_file(const char* path, bool show_fail_toast)
+{
+    if (!is_alive() || !path)
+    {
+        return false;
+    }
+
+    std::vector<GPSPageState::TrackOverlayPoint> pts;
+    if (!load_gpx_points(path, pts))
+    {
+        if (show_fail_toast)
+        {
+            show_toast("No track yet", 1500);
+        }
+        g_gps_state.tracker_overlay_active = false;
+        g_gps_state.tracker_points.clear();
+        g_gps_state.tracker_screen_points.clear();
+        g_gps_state.tracker_file.clear();
+        return false;
+    }
+
+    g_gps_state.tracker_file = path;
+    g_gps_state.tracker_points = std::move(pts);
+    g_gps_state.tracker_overlay_active = true;
+    apply_tracker_view_defaults();
+    return true;
+}
 
 void gps_tracker_open_modal()
 {

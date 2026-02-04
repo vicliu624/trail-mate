@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../../../team/protocol/team_chat.h"
+#include "../../../team/protocol/team_track.h"
 #include "team_state.h"
 #include <cstddef>
 
@@ -124,6 +125,12 @@ bool team_ui_chatlog_load_recent(const TeamId& team_id,
 bool team_ui_save_keys_now(const TeamId& team_id,
                            uint32_t key_id,
                            const std::array<uint8_t, team::proto::kTeamChannelPskSize>& psk);
+bool team_ui_append_member_track(const TeamId& team_id,
+                                 uint32_t member_id,
+                                 const team::proto::TeamTrackMessage& track);
+bool team_ui_get_member_track_path(const TeamId& team_id,
+                                   uint32_t member_id,
+                                   std::string& out_path);
 
 } // namespace ui
 } // namespace team

@@ -31,6 +31,7 @@ class AppContext;
 #include "../chat/ports/i_mesh_adapter.h"
 #include "../chat/ports/i_node_store.h"
 #include "../ui/ui_controller.h"
+#include "../team/usecase/team_track_sampler.h"
 #include "app_config.h"
 #include <memory>
 
@@ -165,6 +166,7 @@ class AppContext
     std::unique_ptr<team::infra::TeamEventBusSink> team_event_sink_;
     std::unique_ptr<team::TeamService> team_service_;
     std::unique_ptr<team::TeamController> team_controller_;
+    std::unique_ptr<team::TeamTrackSampler> team_track_sampler_;
 
     // UI
     std::unique_ptr<chat::ui::UiController> ui_controller_;

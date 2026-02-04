@@ -58,12 +58,15 @@ class TeamService
                       chat::ChannelId channel);
     bool sendWaypoint(const std::vector<uint8_t>& payload,
                       chat::ChannelId channel);
+    bool sendTrack(const std::vector<uint8_t>& payload,
+                   chat::ChannelId channel);
     bool sendChat(const team::proto::TeamChatMessage& msg,
                   chat::ChannelId channel);
     bool requestNodeInfo(chat::NodeId dest, bool want_response);
     bool startPkiVerification(chat::NodeId dest);
     bool submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number);
     SendError getLastSendError() const { return last_send_error_; }
+    bool hasKeys() const { return keys_.valid; }
 
   private:
     team::ITeamCrypto& crypto_;

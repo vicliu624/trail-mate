@@ -111,6 +111,7 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
     team_service_ = std::make_unique<team::TeamService>(
         *team_crypto_, *mesh_adapter_, *team_event_sink_);
     team_controller_ = std::make_unique<team::TeamController>(*team_service_);
+    team_track_sampler_ = std::make_unique<team::TeamTrackSampler>();
 
     // Create contact infrastructure
     node_store_ = std::make_unique<chat::meshtastic::NodeStore>();
@@ -134,6 +135,11 @@ void AppContext::update()
     if (team_service_)
     {
         team_service_->processIncoming();
+    }
+    if (team_track_sampler_)
+    {
+        bool team_active = team_service_ && team_service_->hasKeys();
+        team_track_sampler_->update(team_controller_.get(), team_active);
     }
 
     // Update UI controller
@@ -363,6 +369,7 @@ void AppContext::update()
             event->type == sys::EventType::TeamStatus ||
             event->type == sys::EventType::TeamPosition ||
             event->type == sys::EventType::TeamWaypoint ||
+            event->type == sys::EventType::TeamTrack ||
             event->type == sys::EventType::TeamChat ||
             event->type == sys::EventType::TeamError ||
             event->type == sys::EventType::SystemTick)

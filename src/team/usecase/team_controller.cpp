@@ -124,6 +124,12 @@ bool TeamController::onPosition(const std::vector<uint8_t>& payload,
     return service_.sendPosition(payload, channel);
 }
 
+bool TeamController::onTrack(const std::vector<uint8_t>& payload,
+                             chat::ChannelId channel)
+{
+    return service_.sendTrack(payload, channel);
+}
+
 bool TeamController::onChat(const team::proto::TeamChatMessage& msg,
                             chat::ChannelId channel)
 {

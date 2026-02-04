@@ -8,7 +8,10 @@
 #include "../../../sys/event_bus.h"
 #include "../../../team/infra/nfc/team_nfc.h"
 #include "../../../team/protocol/team_mgmt.h"
+#include "../../../team/protocol/team_track.h"
 #include "../../../team/usecase/team_service.h"
+#include "../gps/gps_state.h"
+#include "../gps/gps_tracker_overlay.h"
 #include "../../ui_common.h"
 #include "../../widgets/system_notification.h"
 #include "meshtastic/mesh.pb.h"
@@ -1488,6 +1491,66 @@ void handle_team_waypoint(const team::TeamWaypointEvent& ev)
     if (ev.ctx.key_id != 0 && ev.ctx.from != 0)
     {
         mark_keydist_confirmed(ev.ctx.from, ev.ctx.key_id);
+    }
+    g_team_state.last_update_s = ev.ctx.timestamp;
+}
+
+void handle_team_track(const team::TeamTrackEvent& ev)
+{
+    if (g_team_state.has_team_id && ev.ctx.team_id != g_team_state.team_id)
+    {
+        return;
+    }
+    if (!g_team_state.has_team_id)
+    {
+        g_team_state.team_id = ev.ctx.team_id;
+        g_team_state.has_team_id = true;
+        update_team_name_from_id(ev.ctx.team_id);
+    }
+    touch_member(ev.ctx.from, ev.ctx.timestamp);
+    if (ev.ctx.key_id != 0 && ev.ctx.from != 0)
+    {
+        mark_keydist_confirmed(ev.ctx.from, ev.ctx.key_id);
+    }
+    if (!ev.payload.empty())
+    {
+        team::proto::TeamTrackMessage track{};
+        if (team::proto::decodeTeamTrackMessage(ev.payload.data(), ev.payload.size(), &track))
+        {
+            if (track.version == team::proto::kTeamTrackVersion)
+            {
+                uint32_t base_ts = track.start_ts != 0 ? track.start_ts : ev.ctx.timestamp;
+                if (base_ts == 0)
+                {
+                    base_ts = now_secs();
+                }
+                for (size_t i = 0; i < track.points.size(); ++i)
+                {
+                    if ((track.valid_mask & (1u << static_cast<uint32_t>(i))) == 0)
+                    {
+                        continue;
+                    }
+                    const auto& pt = track.points[i];
+                    uint32_t ts = base_ts + static_cast<uint32_t>(track.interval_s) * static_cast<uint32_t>(i);
+                    team_ui_posring_append(g_team_state.team_id,
+                                           ev.ctx.from,
+                                           pt.lat_e7,
+                                           pt.lon_e7,
+                                           0,
+                                           0,
+                                           ts);
+                }
+                team_ui_append_member_track(g_team_state.team_id, ev.ctx.from, track);
+                if (g_gps_state.selected_member_id == ev.ctx.from)
+                {
+                    std::string track_path;
+                    if (team_ui_get_member_track_path(g_team_state.team_id, ev.ctx.from, track_path))
+                    {
+                        gps_tracker_load_file(track_path.c_str(), false);
+                    }
+                }
+            }
+        }
     }
     g_team_state.last_update_s = ev.ctx.timestamp;
 }
@@ -3019,6 +3082,10 @@ bool team_page_handle_event(sys::Event* event)
         break;
     case sys::EventType::TeamWaypoint:
         handle_team_waypoint(static_cast<sys::TeamWaypointEvent*>(event)->data);
+        changed = true;
+        break;
+    case sys::EventType::TeamTrack:
+        handle_team_track(static_cast<sys::TeamTrackEvent*>(event)->data);
         changed = true;
         break;
     case sys::EventType::TeamChat:

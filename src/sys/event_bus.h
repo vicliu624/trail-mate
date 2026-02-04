@@ -42,6 +42,7 @@ enum class EventType
     TeamStatus,                   // Team status received
     TeamPosition,                 // Team position received
     TeamWaypoint,                 // Team waypoint received
+    TeamTrack,                    // Team track received
     TeamChat,                     // Team chat received
     TeamError,                    // Team protocol error
     InputEvent,                   // Input event (keyboard/rotary)
@@ -326,6 +327,17 @@ struct TeamWaypointEvent : public Event
 
     explicit TeamWaypointEvent(const team::TeamWaypointEvent& evt)
         : Event(EventType::TeamWaypoint), data(evt) {}
+};
+
+/**
+ * @brief Team track event
+ */
+struct TeamTrackEvent : public Event
+{
+    team::TeamTrackEvent data;
+
+    explicit TeamTrackEvent(const team::TeamTrackEvent& evt)
+        : Event(EventType::TeamTrack), data(evt) {}
 };
 
 /**

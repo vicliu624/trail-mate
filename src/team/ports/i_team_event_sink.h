@@ -21,6 +21,7 @@ class ITeamEventSink
     virtual void onTeamStatus(const TeamStatusEvent& event) = 0;
     virtual void onTeamPosition(const TeamPositionEvent& event) = 0;
     virtual void onTeamWaypoint(const TeamWaypointEvent& event) = 0;
+    virtual void onTeamTrack(const TeamTrackEvent& event) = 0;
     virtual void onTeamChat(const TeamChatEvent& event) = 0;
     virtual void onTeamError(const TeamErrorEvent& event) = 0;
 };

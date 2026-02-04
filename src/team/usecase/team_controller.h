@@ -51,6 +51,8 @@ class TeamController
                        chat::ChannelId channel, chat::NodeId dest = 0);
     bool onPosition(const std::vector<uint8_t>& payload,
                     chat::ChannelId channel);
+    bool onTrack(const std::vector<uint8_t>& payload,
+                 chat::ChannelId channel);
     bool onChat(const team::proto::TeamChatMessage& msg,
                 chat::ChannelId channel);
     bool requestNodeInfo(chat::NodeId dest, bool want_response);

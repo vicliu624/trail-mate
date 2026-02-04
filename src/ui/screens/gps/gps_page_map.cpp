@@ -5,6 +5,7 @@
 #include "../../widgets/map/map_tiles.h"
 #include "../team/team_state.h"
 #include "../team/team_ui_store.h"
+#include "gps_tracker_overlay.h"
 #include "gps_constants.h"
 #include "gps_page_components.h"
 #include "gps_page_lifetime.h"
@@ -633,6 +634,18 @@ static void member_btn_event_cb(lv_event_t* e)
     }
     select_member(member_id);
     refresh_team_markers_from_posring();
+
+    team::TeamId team_id{};
+    std::vector<team::ui::TeamMemberUi> members;
+    if (!load_team_data(team_id, members))
+    {
+        return;
+    }
+    std::string track_path;
+    if (team::ui::team_ui_get_member_track_path(team_id, member_id, track_path))
+    {
+        gps_tracker_load_file(track_path.c_str(), true);
+    }
 }
 
 static lv_obj_t* create_member_button(const team::ui::TeamMemberUi& member, uint32_t color)

@@ -91,6 +91,8 @@ const char* teamPortName(uint32_t portnum)
         return "TEAM_POS";
     case team::proto::TEAM_WAYPOINT_APP:
         return "TEAM_WP";
+    case team::proto::TEAM_TRACK_APP:
+        return "TEAM_TRACK";
     case team::proto::TEAM_CHAT_APP:
         return "TEAM_CHAT";
     default:
@@ -643,6 +645,25 @@ void TeamService::processIncoming()
             TeamWaypointEvent event{makeContext(data, &envelope), plain};
             sink_.onTeamWaypoint(event);
         }
+        else if (data.portnum == team::proto::TEAM_TRACK_APP)
+        {
+            std::string rx_raw_hex = toHex(data.payload.data(), data.payload.size(), data.payload.size());
+            TEAM_LOG("[TEAM] RX TEAM_TRACK raw from=%08lX len=%u hex=%s\n",
+                     static_cast<unsigned long>(data.from),
+                     static_cast<unsigned>(data.payload.size()),
+                     rx_raw_hex.c_str());
+            team::proto::TeamEncrypted envelope;
+            std::vector<uint8_t> plain;
+            if (!decodeEncryptedPayload(data, keys_.pos_key.data(), keys_.pos_key.size(),
+                                        &envelope, plain, true))
+            {
+                continue;
+            }
+
+            logTeamEncrypted("RX", data, envelope, &plain, nullptr, "decrypt-ok");
+            TeamTrackEvent event{makeContext(data, &envelope), plain};
+            sink_.onTeamTrack(event);
+        }
         else if (data.portnum == team::proto::TEAM_CHAT_APP)
         {
             std::string rx_raw_hex = toHex(data.payload.data(), data.payload.size(), data.payload.size());
@@ -924,6 +945,45 @@ bool TeamService::sendWaypoint(const std::vector<uint8_t>& payload,
                            wire.data(), wire.size(), 0, false))
     {
         TEAM_LOG("[TEAM] TX TEAM_WP send fail wire_len=%u\n",
+                 static_cast<unsigned>(wire.size()));
+        return false;
+    }
+    return true;
+}
+
+bool TeamService::sendTrack(const std::vector<uint8_t>& payload,
+                            chat::ChannelId channel)
+{
+    if (!keys_.valid)
+    {
+        TEAM_LOG("[TEAM] TX TEAM_TRACK keys not ready\n");
+        return false;
+    }
+
+    team::proto::TeamEncrypted envelope;
+    std::vector<uint8_t> wire;
+    if (!encodeEncryptedPayload(payload, keys_.pos_key.data(), keys_.pos_key.size(),
+                                &envelope, wire))
+    {
+        TEAM_LOG("[TEAM] TX TEAM_TRACK encrypt fail plain_len=%u\n",
+                 static_cast<unsigned>(payload.size()));
+        return false;
+    }
+    std::string plain_hex = toHex(payload.data(), payload.size(), payload.size());
+    TEAM_LOG("[TEAM] TX TEAM_TRACK plain_len=%u plain_hex=%s\n",
+             static_cast<unsigned>(payload.size()),
+             plain_hex.c_str());
+    std::string wire_hex = toHex(wire.data(), wire.size(), wire.size());
+    TEAM_LOG("[TEAM] TX TEAM_TRACK wire_len=%u wire_hex=%s\n",
+             static_cast<unsigned>(wire.size()),
+             wire_hex.c_str());
+    chat::MeshIncomingData dummy;
+    dummy.portnum = team::proto::TEAM_TRACK_APP;
+    logTeamEncrypted("TX", dummy, envelope, nullptr, nullptr, "encrypt-ok");
+    if (!mesh_.sendAppData(channel, team::proto::TEAM_TRACK_APP,
+                           wire.data(), wire.size(), 0, false))
+    {
+        TEAM_LOG("[TEAM] TX TEAM_TRACK send fail wire_len=%u\n",
                  static_cast<unsigned>(wire.size()));
         return false;
     }
