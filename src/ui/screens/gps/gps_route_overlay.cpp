@@ -304,7 +304,6 @@ void compute_screen_points()
         return;
     }
     auto& s = g_gps_state;
-    s.route_screen_points.clear();
 
     if (!s.route_overlay_active || s.route_points.empty())
     {
@@ -321,6 +320,35 @@ void compute_screen_points()
     {
         return;
     }
+
+    const auto* anchor = s.tile_ctx.anchor;
+    if (!anchor || !anchor->valid)
+    {
+        return;
+    }
+
+    const uint32_t point_count = static_cast<uint32_t>(s.route_points.size());
+    const bool cache_valid =
+        s.route_cache_zoom == s.zoom_level &&
+        s.route_cache_pan_x == s.pan_x &&
+        s.route_cache_pan_y == s.pan_y &&
+        s.route_cache_map_w == w &&
+        s.route_cache_map_h == h &&
+        s.route_cache_anchor_valid == anchor->valid &&
+        s.route_cache_anchor_px_x == anchor->gps_global_pixel_x &&
+        s.route_cache_anchor_px_y == anchor->gps_global_pixel_y &&
+        s.route_cache_anchor_screen_x == anchor->gps_tile_screen_x &&
+        s.route_cache_anchor_screen_y == anchor->gps_tile_screen_y &&
+        s.route_cache_offset_x == anchor->gps_offset_x &&
+        s.route_cache_offset_y == anchor->gps_offset_y &&
+        s.route_cache_point_count == point_count;
+
+    if (cache_valid && !s.route_screen_points.empty())
+    {
+        return;
+    }
+
+    s.route_screen_points.clear();
 
     const int total = static_cast<int>(s.route_points.size());
     const int stride = std::max(1, total / kMaxDrawPoints);
@@ -343,6 +371,20 @@ void compute_screen_points()
         p.y = (lv_coord_t)sy;
         s.route_screen_points.push_back(p);
     }
+
+    s.route_cache_zoom = s.zoom_level;
+    s.route_cache_pan_x = s.pan_x;
+    s.route_cache_pan_y = s.pan_y;
+    s.route_cache_map_w = w;
+    s.route_cache_map_h = h;
+    s.route_cache_anchor_valid = anchor->valid;
+    s.route_cache_anchor_px_x = anchor->gps_global_pixel_x;
+    s.route_cache_anchor_px_y = anchor->gps_global_pixel_y;
+    s.route_cache_anchor_screen_x = anchor->gps_tile_screen_x;
+    s.route_cache_anchor_screen_y = anchor->gps_tile_screen_y;
+    s.route_cache_offset_x = anchor->gps_offset_x;
+    s.route_cache_offset_y = anchor->gps_offset_y;
+    s.route_cache_point_count = point_count;
 }
 
 void clear_route_state()
@@ -356,6 +398,19 @@ void clear_route_state()
     g_gps_state.route_min_lng = 0.0;
     g_gps_state.route_max_lat = 0.0;
     g_gps_state.route_max_lng = 0.0;
+    g_gps_state.route_cache_zoom = -1;
+    g_gps_state.route_cache_pan_x = 0;
+    g_gps_state.route_cache_pan_y = 0;
+    g_gps_state.route_cache_anchor_valid = false;
+    g_gps_state.route_cache_anchor_px_x = 0;
+    g_gps_state.route_cache_anchor_px_y = 0;
+    g_gps_state.route_cache_anchor_screen_x = 0;
+    g_gps_state.route_cache_anchor_screen_y = 0;
+    g_gps_state.route_cache_offset_x = 0;
+    g_gps_state.route_cache_offset_y = 0;
+    g_gps_state.route_cache_map_w = 0;
+    g_gps_state.route_cache_map_h = 0;
+    g_gps_state.route_cache_point_count = 0;
 }
 
 void latlng_to_world_px(double lat, double lng, int zoom, double& px, double& py)
@@ -452,6 +507,9 @@ bool gps_route_sync_from_config(bool show_fail_toast)
     g_gps_state.route_min_lng = bounds.min_lng;
     g_gps_state.route_max_lat = bounds.max_lat;
     g_gps_state.route_max_lng = bounds.max_lng;
+    g_gps_state.route_cache_zoom = -1;
+    g_gps_state.route_cache_point_count = 0;
+    g_gps_state.route_cache_anchor_valid = false;
     return true;
 }
 

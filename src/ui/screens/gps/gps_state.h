@@ -107,6 +107,20 @@ struct GPSPageState
     double route_min_lng = 0.0;
     double route_max_lat = 0.0;
     double route_max_lng = 0.0;
+    // Route overlay cache (avoid recomputing screen points on every draw)
+    int route_cache_zoom = -1;
+    int route_cache_pan_x = 0;
+    int route_cache_pan_y = 0;
+    bool route_cache_anchor_valid = false;
+    int32_t route_cache_anchor_px_x = 0;
+    int32_t route_cache_anchor_px_y = 0;
+    int route_cache_anchor_screen_x = 0;
+    int route_cache_anchor_screen_y = 0;
+    int32_t route_cache_offset_x = 0;
+    int32_t route_cache_offset_y = 0;
+    int route_cache_map_w = 0;
+    int route_cache_map_h = 0;
+    uint32_t route_cache_point_count = 0;
 
     std::vector<lv_obj_t*> member_btns;
     std::vector<uint32_t> member_btn_ids;

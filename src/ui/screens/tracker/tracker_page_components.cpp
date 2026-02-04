@@ -3,6 +3,7 @@
 #include "../../../app/app_context.h"
 #include "../../../gps/usecase/track_recorder.h"
 #include "../../ui_common.h"
+#include "../../assets/fonts/fonts.h"
 #include "tracker_page_components.h"
 #include "tracker_page_input.h"
 #include "tracker_page_layout.h"
@@ -23,15 +24,87 @@ namespace components
 namespace
 {
 constexpr int kModePanelWidth = 64;
-constexpr int kModeButtonHeight = 48;
+constexpr int kModeButtonHeight = 28;
 constexpr int kPrimaryButtonHeight = 44;
 constexpr int kSecondaryButtonHeight = 34;
 constexpr const char* kRouteDir = "/routes";
 std::vector<String> s_route_names;
 
+constexpr uint32_t kPanelBtnBg = 0xF4C77A;
+constexpr uint32_t kPanelBtnBorder = 0xEBA341;
+constexpr uint32_t kPanelBtnFocused = 0xF1B65A;
+constexpr uint32_t kPanelBtnText = 0x202020;
+
+bool s_btn_styles_inited = false;
+lv_style_t s_btn_main;
+lv_style_t s_btn_focused;
+lv_style_t s_btn_disabled;
+lv_style_t s_btn_label;
+
 void on_back(void*)
 {
     ui_request_exit_to_menu();
+}
+
+void init_button_styles()
+{
+    if (s_btn_styles_inited)
+    {
+        return;
+    }
+    lv_style_init(&s_btn_main);
+    lv_style_set_bg_color(&s_btn_main, lv_color_hex(kPanelBtnBg));
+    lv_style_set_bg_opa(&s_btn_main, LV_OPA_COVER);
+    lv_style_set_border_width(&s_btn_main, 1);
+    lv_style_set_border_color(&s_btn_main, lv_color_hex(kPanelBtnBorder));
+    lv_style_set_radius(&s_btn_main, 6);
+
+    lv_style_init(&s_btn_focused);
+    lv_style_set_bg_color(&s_btn_focused, lv_color_hex(kPanelBtnFocused));
+    lv_style_set_bg_opa(&s_btn_focused, LV_OPA_COVER);
+    lv_style_set_outline_width(&s_btn_focused, 2);
+    lv_style_set_outline_color(&s_btn_focused, lv_color_hex(kPanelBtnBorder));
+
+    lv_style_init(&s_btn_disabled);
+    lv_style_set_bg_opa(&s_btn_disabled, LV_OPA_50);
+
+    lv_style_init(&s_btn_label);
+    lv_style_set_text_color(&s_btn_label, lv_color_hex(kPanelBtnText));
+    lv_style_set_text_font(&s_btn_label, &lv_font_noto_cjk_16_2bpp);
+
+    s_btn_styles_inited = true;
+}
+
+void apply_action_button(lv_obj_t* btn, lv_obj_t* label)
+{
+    if (!btn)
+    {
+        return;
+    }
+    init_button_styles();
+    lv_obj_add_style(btn, &s_btn_main, LV_PART_MAIN);
+    lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(btn, &s_btn_disabled, LV_PART_MAIN | LV_STATE_DISABLED);
+    if (label)
+    {
+        lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
+    }
+}
+
+void apply_list_button(lv_obj_t* btn)
+{
+    if (!btn)
+    {
+        return;
+    }
+    init_button_styles();
+    lv_obj_add_style(btn, &s_btn_main, LV_PART_MAIN);
+    lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(btn, &s_btn_disabled, LV_PART_MAIN | LV_STATE_DISABLED);
+    if (lv_obj_t* label = lv_obj_get_child(btn, -1))
+    {
+        lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
+    }
 }
 
 void style_mode_button(lv_obj_t* btn, lv_obj_t* label, bool active)
@@ -61,6 +134,47 @@ void update_mode_buttons()
     style_mode_button(state.mode_route_btn, state.mode_route_label, !record_active);
 }
 
+void update_focus_group_for_mode()
+{
+    lv_group_t* group = ::app_g;
+    if (!group)
+    {
+        return;
+    }
+    auto remove_if = [](lv_obj_t* obj)
+    {
+        if (obj)
+        {
+            lv_group_remove_obj(obj);
+        }
+    };
+    auto add_if = [group](lv_obj_t* obj)
+    {
+        if (obj)
+        {
+            lv_group_add_obj(group, obj);
+        }
+    };
+
+    remove_if(g_tracker_state.start_stop_btn);
+    remove_if(g_tracker_state.record_list);
+    remove_if(g_tracker_state.route_list);
+    remove_if(g_tracker_state.load_btn);
+    remove_if(g_tracker_state.unload_btn);
+
+    if (g_tracker_state.mode == TrackerPageState::Mode::Record)
+    {
+        add_if(g_tracker_state.start_stop_btn);
+        add_if(g_tracker_state.record_list);
+    }
+    else
+    {
+        add_if(g_tracker_state.route_list);
+        add_if(g_tracker_state.load_btn);
+        add_if(g_tracker_state.unload_btn);
+    }
+}
+
 void set_mode(TrackerPageState::Mode mode)
 {
     auto& state = g_tracker_state;
@@ -88,6 +202,7 @@ void set_mode(TrackerPageState::Mode mode)
         }
     }
     update_mode_buttons();
+    update_focus_group_for_mode();
 }
 
 void update_record_status()
@@ -124,6 +239,7 @@ void refresh_record_list()
     {
         lv_obj_t* label = lv_label_create(state.record_list);
         lv_label_set_text(label, "No SD Card");
+        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
         return;
     }
 
@@ -135,12 +251,18 @@ void refresh_record_list()
     {
         lv_obj_t* label = lv_label_create(state.record_list);
         lv_label_set_text(label, "No tracks yet");
+        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
         return;
     }
 
     for (size_t i = 0; i < count; ++i)
     {
         lv_obj_t* btn = lv_list_add_btn(state.record_list, LV_SYMBOL_FILE, names[i].c_str());
+        apply_list_button(btn);
+        if (lv_obj_t* label = lv_obj_get_child(btn, -1))
+        {
+            lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+        }
         lv_obj_add_event_cb(btn, [](lv_event_t*) {}, LV_EVENT_CLICKED, nullptr);
     }
 }
@@ -152,6 +274,7 @@ void update_route_status()
     {
         return;
     }
+    lv_obj_set_style_text_font(state.route_status_label, &lv_font_noto_cjk_16_2bpp, 0);
     if (!state.active_route.empty())
     {
         lv_label_set_text_fmt(state.route_status_label, "Active: %s", state.active_route.c_str());
@@ -206,6 +329,7 @@ void refresh_route_list()
     {
         lv_obj_t* label = lv_label_create(state.route_list);
         lv_label_set_text(label, "No SD Card");
+        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
         return;
     }
 
@@ -214,6 +338,7 @@ void refresh_route_list()
     {
         lv_obj_t* label = lv_label_create(state.route_list);
         lv_label_set_text(label, "No routes folder");
+        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
         return;
     }
 
@@ -237,6 +362,7 @@ void refresh_route_list()
     {
         lv_obj_t* label = lv_label_create(state.route_list);
         lv_label_set_text(label, "No KML routes");
+        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
         return;
     }
 
@@ -244,6 +370,11 @@ void refresh_route_list()
     for (size_t i = 0; i < s_route_names.size(); ++i)
     {
         lv_obj_t* btn = lv_list_add_btn(state.route_list, LV_SYMBOL_FILE, s_route_names[i].c_str());
+        apply_list_button(btn);
+        if (lv_obj_t* label = lv_obj_get_child(btn, -1))
+        {
+            lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+        }
         lv_obj_add_event_cb(
             btn,
             [](lv_event_t* e)
@@ -304,12 +435,64 @@ void on_start_stop_clicked(lv_event_t*)
 
 void on_mode_record_clicked(lv_event_t*)
 {
-    set_mode(TrackerPageState::Mode::Record);
+    if (g_tracker_state.start_stop_btn)
+    {
+        lv_group_focus_obj(g_tracker_state.start_stop_btn);
+    }
+    else if (g_tracker_state.record_list)
+    {
+        lv_group_focus_obj(g_tracker_state.record_list);
+    }
 }
 
 void on_mode_route_clicked(lv_event_t*)
 {
+    if (g_tracker_state.route_list)
+    {
+        lv_group_focus_obj(g_tracker_state.route_list);
+    }
+    else if (g_tracker_state.load_btn)
+    {
+        lv_group_focus_obj(g_tracker_state.load_btn);
+    }
+}
+
+void on_mode_record_focused(lv_event_t*)
+{
+    set_mode(TrackerPageState::Mode::Record);
+}
+
+void on_mode_route_focused(lv_event_t*)
+{
     set_mode(TrackerPageState::Mode::Route);
+}
+
+void on_mode_record_key(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_ENTER)
+    {
+        return;
+    }
+    on_mode_record_clicked(e);
+}
+
+void on_mode_route_key(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_ENTER)
+    {
+        return;
+    }
+    on_mode_route_clicked(e);
 }
 
 void on_route_load_clicked(lv_event_t*)
@@ -405,6 +588,7 @@ void init_page(lv_obj_t* parent)
     lv_obj_set_height(state.start_stop_btn, kPrimaryButtonHeight);
     state.start_stop_label = lv_label_create(state.start_stop_btn);
     lv_obj_center(state.start_stop_label);
+    apply_action_button(state.start_stop_btn, state.start_stop_label);
     state.record_list = lv_list_create(state.record_panel);
     lv_obj_set_flex_grow(state.record_list, 1);
 
@@ -429,12 +613,14 @@ void init_page(lv_obj_t* parent)
     state.load_label = lv_label_create(state.load_btn);
     lv_label_set_text(state.load_label, "Load");
     lv_obj_center(state.load_label);
+    apply_action_button(state.load_btn, state.load_label);
 
     state.unload_btn = lv_btn_create(route_btn_row);
     lv_obj_set_size(state.unload_btn, 90, kSecondaryButtonHeight);
     state.unload_label = lv_label_create(state.unload_btn);
     lv_label_set_text(state.unload_label, "Disable");
     lv_obj_center(state.unload_label);
+    apply_action_button(state.unload_btn, state.unload_label);
 
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::widgets::kTopBarHeight;
@@ -444,6 +630,10 @@ void init_page(lv_obj_t* parent)
 
     lv_obj_add_event_cb(state.mode_record_btn, on_mode_record_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.mode_route_btn, on_mode_route_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(state.mode_record_btn, on_mode_record_focused, LV_EVENT_FOCUSED, nullptr);
+    lv_obj_add_event_cb(state.mode_route_btn, on_mode_route_focused, LV_EVENT_FOCUSED, nullptr);
+    lv_obj_add_event_cb(state.mode_record_btn, on_mode_record_key, LV_EVENT_KEY, nullptr);
+    lv_obj_add_event_cb(state.mode_route_btn, on_mode_route_key, LV_EVENT_KEY, nullptr);
     lv_obj_add_event_cb(state.start_stop_btn, on_start_stop_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.load_btn, on_route_load_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.unload_btn, on_route_unload_clicked, LV_EVENT_CLICKED, nullptr);
