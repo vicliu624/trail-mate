@@ -27,8 +27,14 @@ constexpr int kModePanelWidth = 64;
 constexpr int kModeButtonHeight = 28;
 constexpr int kPrimaryButtonHeight = 44;
 constexpr int kSecondaryButtonHeight = 34;
+constexpr int kListItemHeight = 28;
+constexpr int kListItemGap = 6;
+constexpr int kListPageSize = 4;
+constexpr int kListHeight = kListItemHeight * kListPageSize + kListItemGap * (kListPageSize - 1);
+constexpr int kListLabelWidth = 390;
 constexpr const char* kRouteDir = "/routes";
 std::vector<String> s_route_names;
+std::vector<String> s_record_names;
 
 constexpr uint32_t kPanelBtnBg = 0xF4C77A;
 constexpr uint32_t kPanelBtnBorder = 0xEBA341;
@@ -100,6 +106,7 @@ void apply_list_button(lv_obj_t* btn)
     init_button_styles();
     lv_obj_add_style(btn, &s_btn_main, LV_PART_MAIN);
     lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_CHECKED);
     lv_obj_add_style(btn, &s_btn_disabled, LV_PART_MAIN | LV_STATE_DISABLED);
     if (lv_obj_t* label = lv_obj_get_child(btn, -1))
     {
@@ -150,26 +157,46 @@ void update_focus_group_for_mode()
     };
     auto add_if = [group](lv_obj_t* obj)
     {
-        if (obj)
+        if (obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN))
         {
             lv_group_add_obj(group, obj);
         }
     };
 
     remove_if(g_tracker_state.start_stop_btn);
-    remove_if(g_tracker_state.record_list);
-    remove_if(g_tracker_state.route_list);
+    for (auto* btn : g_tracker_state.record_item_btns)
+    {
+        remove_if(btn);
+    }
+    remove_if(g_tracker_state.record_prev_btn);
+    remove_if(g_tracker_state.record_next_btn);
+    for (auto* btn : g_tracker_state.route_item_btns)
+    {
+        remove_if(btn);
+    }
+    remove_if(g_tracker_state.route_prev_btn);
+    remove_if(g_tracker_state.route_next_btn);
     remove_if(g_tracker_state.load_btn);
     remove_if(g_tracker_state.unload_btn);
 
     if (g_tracker_state.mode == TrackerPageState::Mode::Record)
     {
         add_if(g_tracker_state.start_stop_btn);
-        add_if(g_tracker_state.record_list);
+        for (auto* btn : g_tracker_state.record_item_btns)
+        {
+            add_if(btn);
+        }
+        add_if(g_tracker_state.record_prev_btn);
+        add_if(g_tracker_state.record_next_btn);
     }
     else
     {
-        add_if(g_tracker_state.route_list);
+        for (auto* btn : g_tracker_state.route_item_btns)
+        {
+            add_if(btn);
+        }
+        add_if(g_tracker_state.route_prev_btn);
+        add_if(g_tracker_state.route_next_btn);
         add_if(g_tracker_state.load_btn);
         add_if(g_tracker_state.unload_btn);
     }
@@ -226,6 +253,200 @@ void update_start_stop_button()
     }
 }
 
+size_t utf8_count_chars(const String& text)
+{
+    size_t count = 0;
+    const size_t len = text.length();
+    size_t i = 0;
+    while (i < len)
+    {
+        uint8_t c = static_cast<uint8_t>(text[i]);
+        size_t advance = 1;
+        if ((c & 0x80) == 0x00)
+        {
+            advance = 1;
+        }
+        else if ((c & 0xE0) == 0xC0)
+        {
+            advance = 2;
+        }
+        else if ((c & 0xF0) == 0xE0)
+        {
+            advance = 3;
+        }
+        else if ((c & 0xF8) == 0xF0)
+        {
+            advance = 4;
+        }
+        i += advance;
+        ++count;
+    }
+    return count;
+}
+
+String utf8_truncate(const String& text, size_t max_chars)
+{
+    if (max_chars == 0)
+    {
+        return String("...");
+    }
+    size_t count = 0;
+    const size_t len = text.length();
+    size_t i = 0;
+    while (i < len)
+    {
+        uint8_t c = static_cast<uint8_t>(text[i]);
+        size_t advance = 1;
+        if ((c & 0x80) == 0x00)
+        {
+            advance = 1;
+        }
+        else if ((c & 0xE0) == 0xC0)
+        {
+            advance = 2;
+        }
+        else if ((c & 0xF0) == 0xE0)
+        {
+            advance = 3;
+        }
+        else if ((c & 0xF8) == 0xF0)
+        {
+            advance = 4;
+        }
+        if (count + 1 > max_chars)
+        {
+            break;
+        }
+        i += advance;
+        ++count;
+    }
+    if (i >= len)
+    {
+        return text;
+    }
+    String out = text.substring(0, static_cast<int>(i));
+    out += "...";
+    return out;
+}
+
+String format_list_name(const String& name)
+{
+    if (utf8_count_chars(name) <= 20)
+    {
+        return name;
+    }
+    return utf8_truncate(name, 20);
+}
+
+void set_placeholder_row(lv_obj_t* btn, lv_obj_t* label, const char* text)
+{
+    if (!btn || !label)
+    {
+        return;
+    }
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_state(btn, LV_STATE_DISABLED);
+    lv_obj_clear_state(btn, LV_STATE_CHECKED);
+    lv_obj_set_user_data(btn, nullptr);
+}
+
+void update_record_page()
+{
+    auto& state = g_tracker_state;
+    const size_t total = s_record_names.size();
+    int max_page = 0;
+    if (total > 0)
+    {
+        max_page = static_cast<int>((total - 1) / kListPageSize);
+    }
+    if (state.record_page < 0) state.record_page = 0;
+    if (state.record_page > max_page) state.record_page = max_page;
+
+    const int start = state.record_page * kListPageSize;
+    if (total == 0)
+    {
+        set_placeholder_row(state.record_item_btns[0], state.record_item_labels[0], "No tracks yet");
+        for (int i = 1; i < kListPageSize; ++i)
+        {
+            if (state.record_item_btns[i])
+            {
+                lv_obj_add_flag(state.record_item_btns[i], LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+    else
+    {
+    for (int i = 0; i < kListPageSize; ++i)
+    {
+        lv_obj_t* btn = state.record_item_btns[i];
+        lv_obj_t* label = state.record_item_labels[i];
+        if (!btn || !label)
+        {
+            continue;
+        }
+            const int idx = start + i;
+            if (idx < static_cast<int>(total))
+            {
+                String display_name = format_list_name(s_record_names[idx]);
+                lv_label_set_text(label, display_name.c_str());
+                lv_obj_clear_flag(btn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_state(btn, LV_STATE_DISABLED);
+                lv_obj_clear_state(btn, LV_STATE_CHECKED);
+                lv_obj_set_user_data(btn, reinterpret_cast<void*>((uintptr_t)idx));
+                lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+                lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+            }
+            else
+            {
+                lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+
+    const bool show_pager = total > static_cast<size_t>(kListPageSize);
+    if (state.record_prev_btn)
+    {
+        if (show_pager)
+        {
+            lv_obj_clear_flag(state.record_prev_btn, LV_OBJ_FLAG_HIDDEN);
+            if (state.record_page > 0)
+            {
+                lv_obj_clear_state(state.record_prev_btn, LV_STATE_DISABLED);
+            }
+            else
+            {
+                lv_obj_add_state(state.record_prev_btn, LV_STATE_DISABLED);
+            }
+        }
+        else
+        {
+            lv_obj_add_flag(state.record_prev_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (state.record_next_btn)
+    {
+        if (show_pager)
+        {
+            lv_obj_clear_flag(state.record_next_btn, LV_OBJ_FLAG_HIDDEN);
+            if (state.record_page < max_page)
+            {
+                lv_obj_clear_state(state.record_next_btn, LV_STATE_DISABLED);
+            }
+            else
+            {
+                lv_obj_add_state(state.record_next_btn, LV_STATE_DISABLED);
+            }
+        }
+        else
+        {
+            lv_obj_add_flag(state.record_next_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
 void refresh_record_list()
 {
     auto& state = g_tracker_state;
@@ -233,13 +454,20 @@ void refresh_record_list()
     {
         return;
     }
-    lv_obj_clean(state.record_list);
+    s_record_names.clear();
 
     if (SD.cardType() == CARD_NONE)
     {
-        lv_obj_t* label = lv_label_create(state.record_list);
-        lv_label_set_text(label, "No SD Card");
-        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+        set_placeholder_row(state.record_item_btns[0], state.record_item_labels[0], "No SD Card");
+        for (int i = 1; i < kListPageSize; ++i)
+        {
+            if (state.record_item_btns[i])
+            {
+                lv_obj_add_flag(state.record_item_btns[i], LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        if (state.record_prev_btn) lv_obj_add_flag(state.record_prev_btn, LV_OBJ_FLAG_HIDDEN);
+        if (state.record_next_btn) lv_obj_add_flag(state.record_next_btn, LV_OBJ_FLAG_HIDDEN);
         return;
     }
 
@@ -247,24 +475,11 @@ void refresh_record_list()
     String names[kMaxTracks];
     const size_t count = gps::TrackRecorder::getInstance().listTracks(names, kMaxTracks);
 
-    if (count == 0)
-    {
-        lv_obj_t* label = lv_label_create(state.record_list);
-        lv_label_set_text(label, "No tracks yet");
-        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
-        return;
-    }
-
     for (size_t i = 0; i < count; ++i)
     {
-        lv_obj_t* btn = lv_list_add_btn(state.record_list, LV_SYMBOL_FILE, names[i].c_str());
-        apply_list_button(btn);
-        if (lv_obj_t* label = lv_obj_get_child(btn, -1))
-        {
-            lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
-        }
-        lv_obj_add_event_cb(btn, [](lv_event_t*) {}, LV_EVENT_CLICKED, nullptr);
+        s_record_names.push_back(names[i]);
     }
+    update_record_page();
 }
 
 void update_route_status()
@@ -313,6 +528,107 @@ void update_route_status()
     }
 }
 
+void update_route_page()
+{
+    auto& state = g_tracker_state;
+    const size_t total = s_route_names.size();
+    int max_page = 0;
+    if (total > 0)
+    {
+        max_page = static_cast<int>((total - 1) / kListPageSize);
+    }
+    if (state.route_page < 0) state.route_page = 0;
+    if (state.route_page > max_page) state.route_page = max_page;
+
+    const int start = state.route_page * kListPageSize;
+    if (total == 0)
+    {
+        set_placeholder_row(state.route_item_btns[0], state.route_item_labels[0], "No KML routes");
+        for (int i = 1; i < kListPageSize; ++i)
+        {
+            if (state.route_item_btns[i])
+            {
+                lv_obj_add_flag(state.route_item_btns[i], LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+    else
+    {
+    for (int i = 0; i < kListPageSize; ++i)
+    {
+        lv_obj_t* btn = state.route_item_btns[i];
+        lv_obj_t* label = state.route_item_labels[i];
+        if (!btn || !label)
+        {
+            continue;
+        }
+            const int idx = start + i;
+            if (idx < static_cast<int>(total))
+            {
+                String display_name = format_list_name(s_route_names[idx]);
+                lv_label_set_text(label, display_name.c_str());
+                lv_obj_clear_flag(btn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_state(btn, LV_STATE_DISABLED);
+                if (idx == state.selected_route_idx)
+                {
+                lv_obj_add_state(btn, LV_STATE_CHECKED);
+            }
+            else
+            {
+                lv_obj_clear_state(btn, LV_STATE_CHECKED);
+                }
+                lv_obj_set_user_data(btn, reinterpret_cast<void*>((uintptr_t)idx));
+                lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+                lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+            }
+            else
+            {
+                lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+
+    const bool show_pager = total > static_cast<size_t>(kListPageSize);
+    if (state.route_prev_btn)
+    {
+        if (show_pager)
+        {
+            lv_obj_clear_flag(state.route_prev_btn, LV_OBJ_FLAG_HIDDEN);
+            if (state.route_page > 0)
+            {
+                lv_obj_clear_state(state.route_prev_btn, LV_STATE_DISABLED);
+            }
+            else
+            {
+                lv_obj_add_state(state.route_prev_btn, LV_STATE_DISABLED);
+            }
+        }
+        else
+        {
+            lv_obj_add_flag(state.route_prev_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (state.route_next_btn)
+    {
+        if (show_pager)
+        {
+            lv_obj_clear_flag(state.route_next_btn, LV_OBJ_FLAG_HIDDEN);
+            if (state.route_page < max_page)
+            {
+                lv_obj_clear_state(state.route_next_btn, LV_STATE_DISABLED);
+            }
+            else
+            {
+                lv_obj_add_state(state.route_next_btn, LV_STATE_DISABLED);
+            }
+        }
+        else
+        {
+            lv_obj_add_flag(state.route_next_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
 void refresh_route_list()
 {
     auto& state = g_tracker_state;
@@ -320,25 +636,38 @@ void refresh_route_list()
     {
         return;
     }
-    lv_obj_clean(state.route_list);
     s_route_names.clear();
     state.selected_route_idx = -1;
     state.selected_route.clear();
 
     if (SD.cardType() == CARD_NONE)
     {
-        lv_obj_t* label = lv_label_create(state.route_list);
-        lv_label_set_text(label, "No SD Card");
-        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+        set_placeholder_row(state.route_item_btns[0], state.route_item_labels[0], "No SD Card");
+        for (int i = 1; i < kListPageSize; ++i)
+        {
+            if (state.route_item_btns[i])
+            {
+                lv_obj_add_flag(state.route_item_btns[i], LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        if (state.route_prev_btn) lv_obj_add_flag(state.route_prev_btn, LV_OBJ_FLAG_HIDDEN);
+        if (state.route_next_btn) lv_obj_add_flag(state.route_next_btn, LV_OBJ_FLAG_HIDDEN);
         return;
     }
 
     File dir = SD.open(kRouteDir);
     if (!dir || !dir.isDirectory())
     {
-        lv_obj_t* label = lv_label_create(state.route_list);
-        lv_label_set_text(label, "No routes folder");
-        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+        set_placeholder_row(state.route_item_btns[0], state.route_item_labels[0], "No routes folder");
+        for (int i = 1; i < kListPageSize; ++i)
+        {
+            if (state.route_item_btns[i])
+            {
+                lv_obj_add_flag(state.route_item_btns[i], LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        if (state.route_prev_btn) lv_obj_add_flag(state.route_prev_btn, LV_OBJ_FLAG_HIDDEN);
+        if (state.route_next_btn) lv_obj_add_flag(state.route_next_btn, LV_OBJ_FLAG_HIDDEN);
         return;
     }
 
@@ -360,38 +689,12 @@ void refresh_route_list()
 
     if (s_route_names.empty())
     {
-        lv_obj_t* label = lv_label_create(state.route_list);
-        lv_label_set_text(label, "No KML routes");
-        lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+        update_route_page();
         return;
     }
 
     std::sort(s_route_names.begin(), s_route_names.end());
-    for (size_t i = 0; i < s_route_names.size(); ++i)
-    {
-        lv_obj_t* btn = lv_list_add_btn(state.route_list, LV_SYMBOL_FILE, s_route_names[i].c_str());
-        apply_list_button(btn);
-        if (lv_obj_t* label = lv_obj_get_child(btn, -1))
-        {
-            lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
-        }
-        lv_obj_add_event_cb(
-            btn,
-            [](lv_event_t* e)
-            {
-                auto& s = g_tracker_state;
-                const uintptr_t idx = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
-                if (idx >= s_route_names.size())
-                {
-                    return;
-                }
-                s.selected_route_idx = static_cast<int>(idx);
-                s.selected_route = s_route_names[idx].c_str();
-                update_route_status();
-            },
-            LV_EVENT_CLICKED,
-            reinterpret_cast<void*>(i));
-    }
+    update_route_page();
 }
 
 void sync_active_route_from_config()
@@ -439,22 +742,200 @@ void on_mode_record_clicked(lv_event_t*)
     {
         lv_group_focus_obj(g_tracker_state.start_stop_btn);
     }
-    else if (g_tracker_state.record_list)
+    else
     {
-        lv_group_focus_obj(g_tracker_state.record_list);
+        for (auto* btn : g_tracker_state.record_item_btns)
+        {
+            if (btn && !lv_obj_has_flag(btn, LV_OBJ_FLAG_HIDDEN))
+            {
+                lv_group_focus_obj(btn);
+                break;
+            }
+        }
     }
 }
 
 void on_mode_route_clicked(lv_event_t*)
 {
-    if (g_tracker_state.route_list)
+    for (auto* btn : g_tracker_state.route_item_btns)
     {
-        lv_group_focus_obj(g_tracker_state.route_list);
+        if (btn && !lv_obj_has_flag(btn, LV_OBJ_FLAG_HIDDEN))
+        {
+            lv_group_focus_obj(btn);
+            return;
+        }
     }
-    else if (g_tracker_state.load_btn)
+    if (g_tracker_state.load_btn)
     {
         lv_group_focus_obj(g_tracker_state.load_btn);
     }
+}
+
+void on_record_prev_clicked(lv_event_t*)
+{
+    auto& state = g_tracker_state;
+    if (state.record_page > 0)
+    {
+        state.record_page--;
+        update_record_page();
+        update_focus_group_for_mode();
+    }
+}
+
+void on_record_next_clicked(lv_event_t*)
+{
+    auto& state = g_tracker_state;
+    state.record_page++;
+    update_record_page();
+    update_focus_group_for_mode();
+}
+
+void on_route_prev_clicked(lv_event_t*)
+{
+    auto& state = g_tracker_state;
+    if (state.route_page > 0)
+    {
+        state.route_page--;
+        update_route_page();
+        update_focus_group_for_mode();
+    }
+}
+
+void on_route_next_clicked(lv_event_t*)
+{
+    auto& state = g_tracker_state;
+    state.route_page++;
+    update_route_page();
+    update_focus_group_for_mode();
+}
+
+void on_route_item_clicked(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    auto& state = g_tracker_state;
+    lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    uintptr_t idx = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(target));
+    if (idx >= s_route_names.size())
+    {
+        return;
+    }
+    state.selected_route_idx = static_cast<int>(idx);
+    state.selected_route = s_route_names[idx].c_str();
+    update_route_status();
+    update_route_page();
+}
+
+void on_record_item_focused(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    void* ud = lv_obj_get_user_data(target);
+    if (!ud)
+    {
+        return;
+    }
+    const size_t idx = static_cast<size_t>(reinterpret_cast<uintptr_t>(ud));
+    if (idx >= s_record_names.size())
+    {
+        return;
+    }
+    lv_obj_t* label = lv_obj_get_child(target, -1);
+    if (!label)
+    {
+        return;
+    }
+    lv_label_set_text(label, s_record_names[idx].c_str());
+    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+}
+
+void on_record_item_defocused(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    void* ud = lv_obj_get_user_data(target);
+    if (!ud)
+    {
+        return;
+    }
+    const size_t idx = static_cast<size_t>(reinterpret_cast<uintptr_t>(ud));
+    if (idx >= s_record_names.size())
+    {
+        return;
+    }
+    lv_obj_t* label = lv_obj_get_child(target, -1);
+    if (!label)
+    {
+        return;
+    }
+    String display_name = format_list_name(s_record_names[idx]);
+    lv_label_set_text(label, display_name.c_str());
+    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+}
+
+void on_route_item_focused(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    void* ud = lv_obj_get_user_data(target);
+    if (!ud)
+    {
+        return;
+    }
+    const size_t idx = static_cast<size_t>(reinterpret_cast<uintptr_t>(ud));
+    if (idx >= s_route_names.size())
+    {
+        return;
+    }
+    lv_obj_t* label = lv_obj_get_child(target, -1);
+    if (!label)
+    {
+        return;
+    }
+    lv_label_set_text(label, s_route_names[idx].c_str());
+    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+}
+
+void on_route_item_defocused(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    void* ud = lv_obj_get_user_data(target);
+    if (!ud)
+    {
+        return;
+    }
+    const size_t idx = static_cast<size_t>(reinterpret_cast<uintptr_t>(ud));
+    if (idx >= s_route_names.size())
+    {
+        return;
+    }
+    lv_obj_t* label = lv_obj_get_child(target, -1);
+    if (!label)
+    {
+        return;
+    }
+    String display_name = format_list_name(s_route_names[idx]);
+    lv_label_set_text(label, display_name.c_str());
+    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
 }
 
 void on_mode_record_focused(lv_event_t*)
@@ -545,6 +1026,7 @@ void refresh_page()
     refresh_record_list();
     refresh_route_list();
     update_route_status();
+    update_focus_group_for_mode();
     ui_update_top_bar_battery(g_tracker_state.top_bar);
 }
 
@@ -584,38 +1066,156 @@ void init_page(lv_obj_t* parent)
     state.record_panel = layout::create_section(state.main_panel);
     state.record_status_label = lv_label_create(state.record_panel);
     lv_label_set_text(state.record_status_label, "Stopped");
-    state.start_stop_btn = lv_btn_create(state.record_panel);
+    lv_obj_set_style_text_font(state.record_status_label, &lv_font_noto_cjk_16_2bpp, 0);
+
+    state.record_list = lv_obj_create(state.record_panel);
+    lv_obj_set_width(state.record_list, LV_PCT(100));
+    lv_obj_set_height(state.record_list, kListHeight);
+    lv_obj_set_flex_flow(state.record_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(state.record_list, kListItemGap, 0);
+    lv_obj_set_style_pad_all(state.record_list, 0, 0);
+    lv_obj_clear_flag(state.record_list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(state.record_list, LV_SCROLLBAR_MODE_OFF);
+
+    for (int i = 0; i < kListPageSize; ++i)
+    {
+        lv_obj_t* btn = lv_btn_create(state.record_list);
+        lv_obj_set_size(btn, LV_PCT(100), kListItemHeight);
+        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t* label = lv_label_create(btn);
+        lv_obj_align(label, LV_ALIGN_LEFT_MID, 10, 0);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(label, kListLabelWidth);
+        apply_list_button(btn);
+        state.record_item_btns[i] = btn;
+        state.record_item_labels[i] = label;
+        lv_obj_add_event_cb(btn, [](lv_event_t*) {}, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(btn, on_record_item_focused, LV_EVENT_FOCUSED, nullptr);
+        lv_obj_add_event_cb(btn, on_record_item_defocused, LV_EVENT_DEFOCUSED, nullptr);
+    }
+
+    lv_obj_t* record_pager = lv_obj_create(state.record_panel);
+    lv_obj_set_width(record_pager, LV_PCT(100));
+    lv_obj_set_height(record_pager, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(record_pager, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(record_pager, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(record_pager, 0, 0);
+    lv_obj_set_style_bg_opa(record_pager, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(record_pager, LV_OBJ_FLAG_SCROLLABLE);
+
+    state.record_prev_btn = lv_btn_create(record_pager);
+    lv_obj_set_size(state.record_prev_btn, 120, kListItemHeight);
+    state.record_prev_label = lv_label_create(state.record_prev_btn);
+    lv_label_set_text(state.record_prev_label, "Prev");
+    lv_obj_center(state.record_prev_label);
+    apply_action_button(state.record_prev_btn, state.record_prev_label);
+
+    state.record_next_btn = lv_btn_create(record_pager);
+    lv_obj_set_size(state.record_next_btn, 120, kListItemHeight);
+    state.record_next_label = lv_label_create(state.record_next_btn);
+    lv_label_set_text(state.record_next_label, "Next");
+    lv_obj_center(state.record_next_label);
+    apply_action_button(state.record_next_btn, state.record_next_label);
+
+    lv_obj_t* record_spacer = lv_obj_create(state.record_panel);
+    lv_obj_set_width(record_spacer, LV_PCT(100));
+    lv_obj_set_flex_grow(record_spacer, 1);
+    lv_obj_set_style_bg_opa(record_spacer, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(record_spacer, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* record_action_row = lv_obj_create(state.record_panel);
+    lv_obj_set_width(record_action_row, LV_PCT(100));
+    lv_obj_set_height(record_action_row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(record_action_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(record_action_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(record_action_row, 0, 0);
+    lv_obj_set_style_bg_opa(record_action_row, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(record_action_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    state.start_stop_btn = lv_btn_create(record_action_row);
     lv_obj_set_height(state.start_stop_btn, kPrimaryButtonHeight);
     state.start_stop_label = lv_label_create(state.start_stop_btn);
     lv_obj_center(state.start_stop_label);
     apply_action_button(state.start_stop_btn, state.start_stop_label);
-    state.record_list = lv_list_create(state.record_panel);
-    lv_obj_set_flex_grow(state.record_list, 1);
 
     state.route_panel = layout::create_section(state.main_panel);
     state.route_status_label = lv_label_create(state.route_panel);
     lv_label_set_text(state.route_status_label, "No route selected");
-    state.route_list = lv_list_create(state.route_panel);
-    lv_obj_set_flex_grow(state.route_list, 1);
+    lv_obj_set_style_text_font(state.route_status_label, &lv_font_noto_cjk_16_2bpp, 0);
 
-    lv_obj_t* route_btn_row = lv_obj_create(state.route_panel);
-    lv_obj_set_width(route_btn_row, LV_PCT(100));
-    lv_obj_set_height(route_btn_row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(route_btn_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(route_btn_row, LV_FLEX_ALIGN_SPACE_EVENLY,
+    state.route_list = lv_obj_create(state.route_panel);
+    lv_obj_set_width(state.route_list, LV_PCT(100));
+    lv_obj_set_height(state.route_list, kListHeight);
+    lv_obj_set_flex_flow(state.route_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(state.route_list, kListItemGap, 0);
+    lv_obj_set_style_pad_all(state.route_list, 0, 0);
+    lv_obj_clear_flag(state.route_list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(state.route_list, LV_SCROLLBAR_MODE_OFF);
+
+    for (int i = 0; i < kListPageSize; ++i)
+    {
+        lv_obj_t* btn = lv_btn_create(state.route_list);
+        lv_obj_set_size(btn, LV_PCT(100), kListItemHeight);
+        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t* label = lv_label_create(btn);
+        lv_obj_align(label, LV_ALIGN_LEFT_MID, 10, 0);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(label, kListLabelWidth);
+        apply_list_button(btn);
+        state.route_item_btns[i] = btn;
+        state.route_item_labels[i] = label;
+        lv_obj_add_event_cb(btn, on_route_item_clicked, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(btn, on_route_item_focused, LV_EVENT_FOCUSED, nullptr);
+        lv_obj_add_event_cb(btn, on_route_item_defocused, LV_EVENT_DEFOCUSED, nullptr);
+    }
+
+    lv_obj_t* route_pager = lv_obj_create(state.route_panel);
+    lv_obj_set_width(route_pager, LV_PCT(100));
+    lv_obj_set_height(route_pager, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(route_pager, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(route_pager, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(route_pager, 0, 0);
+    lv_obj_set_style_bg_opa(route_pager, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(route_pager, LV_OBJ_FLAG_SCROLLABLE);
+
+    state.route_prev_btn = lv_btn_create(route_pager);
+    lv_obj_set_size(state.route_prev_btn, 120, kListItemHeight);
+    state.route_prev_label = lv_label_create(state.route_prev_btn);
+    lv_label_set_text(state.route_prev_label, "Prev");
+    lv_obj_center(state.route_prev_label);
+    apply_action_button(state.route_prev_btn, state.route_prev_label);
+
+    state.route_next_btn = lv_btn_create(route_pager);
+    lv_obj_set_size(state.route_next_btn, 120, kListItemHeight);
+    state.route_next_label = lv_label_create(state.route_next_btn);
+    lv_label_set_text(state.route_next_label, "Next");
+    lv_obj_center(state.route_next_label);
+    apply_action_button(state.route_next_btn, state.route_next_label);
+
+    lv_obj_t* route_spacer = lv_obj_create(state.route_panel);
+    lv_obj_set_width(route_spacer, LV_PCT(100));
+    lv_obj_set_flex_grow(route_spacer, 1);
+    lv_obj_set_style_bg_opa(route_spacer, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(route_spacer, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* route_action_row = lv_obj_create(state.route_panel);
+    lv_obj_set_width(route_action_row, LV_PCT(100));
+    lv_obj_set_height(route_action_row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(route_action_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(route_action_row, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(route_btn_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(route_btn_row, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_clear_flag(route_btn_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_all(route_action_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(route_action_row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(route_action_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    state.load_btn = lv_btn_create(route_btn_row);
+    state.load_btn = lv_btn_create(route_action_row);
     lv_obj_set_size(state.load_btn, 90, kSecondaryButtonHeight);
     state.load_label = lv_label_create(state.load_btn);
     lv_label_set_text(state.load_label, "Load");
     lv_obj_center(state.load_label);
     apply_action_button(state.load_btn, state.load_label);
 
-    state.unload_btn = lv_btn_create(route_btn_row);
+    state.unload_btn = lv_btn_create(route_action_row);
     lv_obj_set_size(state.unload_btn, 90, kSecondaryButtonHeight);
     state.unload_label = lv_label_create(state.unload_btn);
     lv_label_set_text(state.unload_label, "Disable");
@@ -634,6 +1234,10 @@ void init_page(lv_obj_t* parent)
     lv_obj_add_event_cb(state.mode_route_btn, on_mode_route_focused, LV_EVENT_FOCUSED, nullptr);
     lv_obj_add_event_cb(state.mode_record_btn, on_mode_record_key, LV_EVENT_KEY, nullptr);
     lv_obj_add_event_cb(state.mode_route_btn, on_mode_route_key, LV_EVENT_KEY, nullptr);
+    lv_obj_add_event_cb(state.record_prev_btn, on_record_prev_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(state.record_next_btn, on_record_next_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(state.route_prev_btn, on_route_prev_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(state.route_next_btn, on_route_next_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.start_stop_btn, on_start_stop_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.load_btn, on_route_load_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.unload_btn, on_route_unload_clicked, LV_EVENT_CLICKED, nullptr);

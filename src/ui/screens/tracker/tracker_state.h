@@ -2,6 +2,7 @@
 
 #include "../../widgets/top_bar.h"
 #include "lvgl.h"
+#include <array>
 #include <string>
 
 namespace tracker
@@ -32,10 +33,24 @@ struct TrackerPageState
     lv_obj_t* start_stop_btn = nullptr;
     lv_obj_t* start_stop_label = nullptr;
     lv_obj_t* record_list = nullptr;
+    std::array<lv_obj_t*, 4> record_item_btns{};
+    std::array<lv_obj_t*, 4> record_item_labels{};
+    lv_obj_t* record_prev_btn = nullptr;
+    lv_obj_t* record_prev_label = nullptr;
+    lv_obj_t* record_next_btn = nullptr;
+    lv_obj_t* record_next_label = nullptr;
+    int record_page = 0;
 
     lv_obj_t* route_panel = nullptr;
     lv_obj_t* route_status_label = nullptr;
     lv_obj_t* route_list = nullptr;
+    std::array<lv_obj_t*, 4> route_item_btns{};
+    std::array<lv_obj_t*, 4> route_item_labels{};
+    lv_obj_t* route_prev_btn = nullptr;
+    lv_obj_t* route_prev_label = nullptr;
+    lv_obj_t* route_next_btn = nullptr;
+    lv_obj_t* route_next_label = nullptr;
+    int route_page = 0;
     lv_obj_t* load_btn = nullptr;
     lv_obj_t* load_label = nullptr;
     lv_obj_t* unload_btn = nullptr;
