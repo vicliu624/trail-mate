@@ -18,6 +18,27 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.5-alpha] - 2026-02-05
+### Added / 新增
+- Data Exchange (PC Link) mode with USB CDC-ACM transport and HostLink protocol (codec/service/bridge) / 数据交换（PC Link）模式：USB CDC-ACM 传输与 HostLink 协议（编解码/服务/桥接）
+- HostLink protocol spec doc with frame/command/event details and app payload coverage / HostLink 协议规范文档（帧/命令/事件与应用载荷覆盖说明）
+- HostLink EV_APP_DATA forwarding for Team apps and non-team app payloads (plaintext) / HostLink EV_APP_DATA 转发团队与非团队应用载荷（明文）
+- HostLink EV_GPS + CMD_GET_GPS support / HostLink GPS 事件与请求支持
+- Team track sampler + TEAM_TRACK_APP protocol for batched team track points / 团队轨迹采样与 TEAM_TRACK_APP 报文
+- GPS route overlay (KML) and route focus support / GPS KML 轨迹覆盖与聚焦
+- GPS altitude display at bottom center / GPS 页面底部居中高度显示
+- Tracker UI overhaul with record/route modes, list pagination, and action panel / Tracker 界面重构（记录/循迹模式、列表分页、操作面板）
+- Menu icon asset for PC Link (RF) / PC Link 菜单 RF 图标资源
+
+### Changed / 变更
+- App context wiring to forward events into HostLink bridge / AppContext 事件接入 HostLink 桥接
+- Settings wiring to AppConfig + GPS/Map/Chat/Network/Privacy hooks / 设置项接入 AppConfig 与系统功能
+- GPS service abstraction + tracker recorder improvements / GPS 服务抽象与轨迹记录改进
+- USB product name set to “TRAIL MATE” / USB 设备名设置为 “TRAIL MATE”
+
+### Fixed / 修复
+- HostLink now forwards NODEINFO_APP via EV_APP_DATA (with fallback decoding guidance) / HostLink 现在可转发 NodeInfo（含解析回退说明）
+
 ## [0.1.4-alpha] - 2026-02-02
 ### Added / 新增
 - T-Deck board support and new build env / T-Deck 板级支持与新构建环境
