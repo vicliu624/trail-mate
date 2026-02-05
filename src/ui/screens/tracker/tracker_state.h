@@ -57,6 +57,8 @@ struct TrackerPageState
     lv_obj_t* unload_label = nullptr;
     lv_obj_t* del_btn = nullptr;
     lv_obj_t* del_label = nullptr;
+    lv_obj_t* action_back_btn = nullptr;
+    lv_obj_t* action_back_label = nullptr;
 
     lv_obj_t* del_confirm_modal = nullptr;
     lv_group_t* modal_group = nullptr;

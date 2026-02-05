@@ -29,7 +29,9 @@ constexpr int kModeButtonHeight = 28;
 constexpr int kPrimaryButtonHeight = 28;
 constexpr int kSecondaryButtonHeight = 28;
 constexpr int kListItemHeight = 28;
+constexpr int kBottomBarButtonWidth = 70;
 constexpr int kListPageSize = 4;
+constexpr uintptr_t kListUserDataOffset = 1;
 constexpr const char* kRouteDir = "/routes";
 std::vector<String> s_route_names;
 std::vector<String> s_record_names;
@@ -52,6 +54,9 @@ void update_record_page();
 void update_route_status();
 void update_route_page();
 void update_del_button();
+void on_action_back_clicked(lv_event_t* e);
+lv_obj_t* action_focus_target();
+void focus_action_panel();
 
 void on_back(void*)
 {
@@ -232,6 +237,20 @@ void update_del_button()
     {
         return;
     }
+    if (state.mode == TrackerPageState::Mode::Route)
+    {
+        if (!state.active_route.empty())
+        {
+            lv_obj_add_flag(state.del_btn, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_state(state.del_btn, LV_STATE_DISABLED);
+            return;
+        }
+        lv_obj_clear_flag(state.del_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        lv_obj_clear_flag(state.del_btn, LV_OBJ_FLAG_HIDDEN);
+    }
     bool can_delete = false;
     if (state.mode == TrackerPageState::Mode::Record)
     {
@@ -271,6 +290,37 @@ void update_del_button()
 lv_group_t* tracker_group()
 {
     return ::app_g;
+}
+
+lv_obj_t* action_focus_target()
+{
+    auto& state = g_tracker_state;
+    auto visible = [](lv_obj_t* btn) {
+        return btn && !lv_obj_has_flag(btn, LV_OBJ_FLAG_HIDDEN);
+    };
+    auto enabled = [](lv_obj_t* btn) {
+        return btn && !lv_obj_has_flag(btn, LV_OBJ_FLAG_HIDDEN) &&
+               !lv_obj_has_state(btn, LV_STATE_DISABLED);
+    };
+
+    if (state.mode == TrackerPageState::Mode::Record)
+    {
+        if (enabled(state.del_btn)) return state.del_btn;
+        if (visible(state.action_back_btn)) return state.action_back_btn;
+        if (enabled(state.start_stop_btn)) return state.start_stop_btn;
+        if (visible(state.del_btn)) return state.del_btn;
+        if (visible(state.start_stop_btn)) return state.start_stop_btn;
+        return nullptr;
+    }
+
+    if (enabled(state.load_btn)) return state.load_btn;
+    if (enabled(state.unload_btn)) return state.unload_btn;
+    if (enabled(state.del_btn)) return state.del_btn;
+    if (visible(state.action_back_btn)) return state.action_back_btn;
+    if (visible(state.load_btn)) return state.load_btn;
+    if (visible(state.unload_btn)) return state.unload_btn;
+    if (visible(state.del_btn)) return state.del_btn;
+    return nullptr;
 }
 
 void group_add_if(lv_group_t* group, lv_obj_t* obj)
@@ -349,6 +399,7 @@ void bind_main_group()
         group_add_if(group, g_tracker_state.unload_btn);
     }
     group_add_if(group, g_tracker_state.del_btn);
+    group_add_if(group, g_tracker_state.action_back_btn);
 
     lv_group_focus_freeze(group, false);
 }
@@ -401,6 +452,25 @@ void focus_main_panel_async(void*)
     }
 }
 
+void focus_action_panel_async(void*)
+{
+    if (!g_tracker_state.root)
+    {
+        return;
+    }
+    g_tracker_state.focus_col = TrackerPageState::FocusColumn::Main;
+    bind_main_group();
+    lv_group_t* group = tracker_group();
+    if (!group)
+    {
+        return;
+    }
+    if (lv_obj_t* target = action_focus_target())
+    {
+        lv_group_focus_obj(target);
+    }
+}
+
 void focus_mode_panel()
 {
     g_tracker_state.focus_col = TrackerPageState::FocusColumn::Mode;
@@ -411,6 +481,12 @@ void focus_main_panel()
 {
     g_tracker_state.focus_col = TrackerPageState::FocusColumn::Main;
     lv_async_call(focus_main_panel_async, nullptr);
+}
+
+void focus_action_panel()
+{
+    g_tracker_state.focus_col = TrackerPageState::FocusColumn::Main;
+    lv_async_call(focus_action_panel_async, nullptr);
 }
 
 void refresh_focus_group()
@@ -501,7 +577,7 @@ void update_start_stop_button()
     const bool recording = gps::TrackRecorder::getInstance().isRecording();
     if (state.start_stop_label)
     {
-        lv_label_set_text(state.start_stop_label, recording ? "Stop Recording" : "Start New Track");
+        lv_label_set_text(state.start_stop_label, recording ? "Stop" : "New");
     }
 }
 
@@ -654,7 +730,8 @@ void update_record_page()
                 {
                     lv_obj_clear_state(btn, LV_STATE_CHECKED);
                 }
-                lv_obj_set_user_data(btn, reinterpret_cast<void*>((uintptr_t)idx));
+                lv_obj_set_user_data(btn,
+                                     reinterpret_cast<void*>((uintptr_t)idx + kListUserDataOffset));
                 lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
                 lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
             }
@@ -775,28 +852,40 @@ void update_route_status()
     }
     if (state.load_btn)
     {
-        const bool can_load = (state.selected_route_idx >= 0) && !state.selected_route.empty();
-        if (can_load)
+        const bool active = !state.active_route.empty();
+        if (active)
         {
-            lv_obj_clear_state(state.load_btn, LV_STATE_DISABLED);
+            lv_obj_add_flag(state.load_btn, LV_OBJ_FLAG_HIDDEN);
         }
         else
         {
-            lv_obj_add_state(state.load_btn, LV_STATE_DISABLED);
+            lv_obj_clear_flag(state.load_btn, LV_OBJ_FLAG_HIDDEN);
+            const bool can_load = (state.selected_route_idx >= 0) && !state.selected_route.empty();
+            if (can_load)
+            {
+                lv_obj_clear_state(state.load_btn, LV_STATE_DISABLED);
+            }
+            else
+            {
+                lv_obj_add_state(state.load_btn, LV_STATE_DISABLED);
+            }
         }
     }
     if (state.unload_btn)
     {
-        const bool can_unload = !state.active_route.empty();
-        if (can_unload)
+        const bool active = !state.active_route.empty();
+        if (active)
         {
+            lv_obj_clear_flag(state.unload_btn, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_state(state.unload_btn, LV_STATE_DISABLED);
         }
         else
         {
+            lv_obj_add_flag(state.unload_btn, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_state(state.unload_btn, LV_STATE_DISABLED);
         }
     }
+    update_del_button();
 }
 
 void update_route_page()
@@ -848,7 +937,8 @@ void update_route_page()
                 {
                     lv_obj_clear_state(btn, LV_STATE_CHECKED);
                 }
-                lv_obj_set_user_data(btn, reinterpret_cast<void*>((uintptr_t)idx));
+                lv_obj_set_user_data(btn,
+                                     reinterpret_cast<void*>((uintptr_t)idx + kListUserDataOffset));
                 lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
                 lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
             }
@@ -1095,7 +1185,12 @@ void on_list_item_clicked(lv_event_t* e)
     {
         return;
     }
-    uintptr_t idx = reinterpret_cast<uintptr_t>(ud);
+    uintptr_t raw = reinterpret_cast<uintptr_t>(ud);
+    if (raw < kListUserDataOffset)
+    {
+        return;
+    }
+    uintptr_t idx = raw - kListUserDataOffset;
 
     if (state.mode == TrackerPageState::Mode::Record)
     {
@@ -1120,6 +1215,12 @@ void on_list_item_clicked(lv_event_t* e)
         update_route_page();
     }
     update_del_button();
+    focus_action_panel();
+}
+
+void on_action_back_clicked(lv_event_t*)
+{
+    focus_main_panel();
 }
 
 void on_list_item_focused(lv_event_t* e)
@@ -1134,7 +1235,12 @@ void on_list_item_focused(lv_event_t* e)
     {
         return;
     }
-    const size_t idx = static_cast<size_t>(reinterpret_cast<uintptr_t>(ud));
+    uintptr_t raw = reinterpret_cast<uintptr_t>(ud);
+    if (raw < kListUserDataOffset)
+    {
+        return;
+    }
+    const size_t idx = static_cast<size_t>(raw - kListUserDataOffset);
     const auto& names =
         (g_tracker_state.mode == TrackerPageState::Mode::Record) ? s_record_names : s_route_names;
     if (idx >= names.size())
@@ -1163,7 +1269,12 @@ void on_list_item_defocused(lv_event_t* e)
     {
         return;
     }
-    const size_t idx = static_cast<size_t>(reinterpret_cast<uintptr_t>(ud));
+    uintptr_t raw = reinterpret_cast<uintptr_t>(ud);
+    if (raw < kListUserDataOffset)
+    {
+        return;
+    }
+    const size_t idx = static_cast<size_t>(raw - kListUserDataOffset);
     const auto& names =
         (g_tracker_state.mode == TrackerPageState::Mode::Record) ? s_record_names : s_route_names;
     if (idx >= names.size())
@@ -1406,7 +1517,7 @@ void open_delete_confirm_modal()
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* confirm_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(confirm_btn, 90, 32);
+    lv_obj_set_size(confirm_btn, 90, 28);
     lv_obj_t* confirm_label = lv_label_create(confirm_btn);
     lv_label_set_text(confirm_label, "Confirm");
     lv_obj_center(confirm_label);
@@ -1414,7 +1525,7 @@ void open_delete_confirm_modal()
     lv_obj_add_event_cb(confirm_btn, on_del_confirm_clicked, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 32);
+    lv_obj_set_size(cancel_btn, 90, 28);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
@@ -1505,28 +1616,28 @@ void init_page(lv_obj_t* parent)
 
     state.bottom_bar = layout::create_bottom_bar(state.list_panel);
     state.list_prev_btn = lv_btn_create(state.bottom_bar);
-    lv_obj_set_size(state.list_prev_btn, 60, kListItemHeight);
+    lv_obj_set_size(state.list_prev_btn, kBottomBarButtonWidth, kListItemHeight);
     state.list_prev_label = lv_label_create(state.list_prev_btn);
     lv_label_set_text(state.list_prev_label, "Prev");
     lv_obj_center(state.list_prev_label);
     apply_action_button(state.list_prev_btn, state.list_prev_label);
 
     state.list_next_btn = lv_btn_create(state.bottom_bar);
-    lv_obj_set_size(state.list_next_btn, 60, kListItemHeight);
+    lv_obj_set_size(state.list_next_btn, kBottomBarButtonWidth, kListItemHeight);
     state.list_next_label = lv_label_create(state.list_next_btn);
     lv_label_set_text(state.list_next_label, "Next");
     lv_obj_center(state.list_next_label);
     apply_action_button(state.list_next_btn, state.list_next_label);
 
     state.list_back_btn = lv_btn_create(state.bottom_bar);
-    lv_obj_set_size(state.list_back_btn, 60, kListItemHeight);
+    lv_obj_set_size(state.list_back_btn, kBottomBarButtonWidth, kListItemHeight);
     state.list_back_label = lv_label_create(state.list_back_btn);
     lv_label_set_text(state.list_back_label, "Back");
     lv_obj_center(state.list_back_label);
     apply_action_button(state.list_back_btn, state.list_back_label);
 
-    state.start_stop_btn = lv_btn_create(state.action_panel);
-    lv_obj_set_size(state.start_stop_btn, LV_PCT(100), kPrimaryButtonHeight);
+    state.start_stop_btn = lv_btn_create(state.bottom_bar);
+    lv_obj_set_size(state.start_stop_btn, kBottomBarButtonWidth, kPrimaryButtonHeight);
     state.start_stop_label = lv_label_create(state.start_stop_btn);
     lv_obj_set_width(state.start_stop_label, LV_PCT(100));
     lv_label_set_long_mode(state.start_stop_label, LV_LABEL_LONG_DOT);
@@ -1545,7 +1656,7 @@ void init_page(lv_obj_t* parent)
     state.unload_btn = lv_btn_create(state.action_panel);
     lv_obj_set_size(state.unload_btn, LV_PCT(100), kSecondaryButtonHeight);
     state.unload_label = lv_label_create(state.unload_btn);
-    lv_label_set_text(state.unload_label, "Disable");
+    lv_label_set_text(state.unload_label, "Off");
     lv_obj_set_width(state.unload_label, LV_PCT(100));
     lv_label_set_long_mode(state.unload_label, LV_LABEL_LONG_DOT);
     lv_obj_center(state.unload_label);
@@ -1559,6 +1670,15 @@ void init_page(lv_obj_t* parent)
     lv_label_set_long_mode(state.del_label, LV_LABEL_LONG_DOT);
     lv_obj_center(state.del_label);
     apply_action_button(state.del_btn, state.del_label);
+
+    state.action_back_btn = lv_btn_create(state.action_panel);
+    lv_obj_set_size(state.action_back_btn, LV_PCT(100), kSecondaryButtonHeight);
+    state.action_back_label = lv_label_create(state.action_back_btn);
+    lv_label_set_text(state.action_back_label, "Back");
+    lv_obj_set_width(state.action_back_label, LV_PCT(100));
+    lv_label_set_long_mode(state.action_back_label, LV_LABEL_LONG_DOT);
+    lv_obj_center(state.action_back_label);
+    apply_action_button(state.action_back_btn, state.action_back_label);
 
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::widgets::kTopBarHeight;
@@ -1580,6 +1700,7 @@ void init_page(lv_obj_t* parent)
     lv_obj_add_event_cb(state.load_btn, on_route_load_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.unload_btn, on_route_unload_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_event_cb(state.del_btn, on_del_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(state.action_back_btn, on_action_back_clicked, LV_EVENT_CLICKED, nullptr);
 
     set_mode(TrackerPageState::Mode::Record);
     refresh_page();
