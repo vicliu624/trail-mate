@@ -442,138 +442,203 @@ RotaryMsg_t TDeckBoard::getRotary()
         return msg;
     }
 
-    const uint32_t repeat_ms = 70;  // Even more responsive trackball repeat
-    const uint32_t click_ms = 110;  // Click debounce
-    const uint8_t stable_polls = 2; // Increase sensitivity on T-Deck trackball
+    const uint32_t repeat_ms = 160;  // Minimum spacing between events
+    const uint32_t click_ms = 180;   // Click debounce
+    const uint32_t debounce_ms = 28; // Require stable press/release
+    const uint32_t release_ms = 40;  // Require neutral stable time
+    const uint8_t sample_window = 6;
+    const uint8_t sample_threshold = 4;
+
+    static bool up_state = false;
+    static bool down_state = false;
+    static bool left_state = false;
+    static bool right_state = false;
+    static bool click_state = false;
+    static bool click_consumed = false;
+    static uint32_t up_change_ms = 0;
+    static uint32_t down_change_ms = 0;
+    static uint32_t left_change_ms = 0;
+    static uint32_t right_change_ms = 0;
+    static uint32_t click_change_ms = 0;
+    static bool lock_until_release = false;
+    static uint32_t release_change_ms = 0;
+    static uint8_t dir_samples[sample_window] = {0};
+    static uint8_t sample_pos = 0;
+    static uint8_t release_streak = 0;
+
+    auto update_state = [&](bool pressed, bool& state, uint32_t& change_ms)
+    {
+        if (pressed != state)
+        {
+            state = pressed;
+            change_ms = now;
+        }
+    };
 
 #if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
     const bool right_pressed = digitalRead(TRACKBALL_RIGHT) == LOW;
     const bool left_pressed = digitalRead(TRACKBALL_LEFT) == LOW;
 
-    // Treat simultaneous left+right as noise and require stable edges.
-    if (right_pressed && !left_pressed)
-    {
-        if (right_count_ < stable_polls)
-        {
-            ++right_count_;
-        }
-    }
-    else
-    {
-        right_count_ = 0;
-        right_latched_ = false;
-    }
-
-    if (left_pressed && !right_pressed)
-    {
-        if (left_count_ < stable_polls)
-        {
-            ++left_count_;
-        }
-    }
-    else
-    {
-        left_count_ = 0;
-        left_latched_ = false;
-    }
-
+    update_state(right_pressed, right_state, right_change_ms);
+    update_state(left_pressed, left_state, left_change_ms);
 #endif
 
 #if defined(TRACKBALL_UP) && defined(TRACKBALL_DOWN)
     const bool up_pressed = digitalRead(TRACKBALL_UP) == LOW;
     const bool down_pressed = digitalRead(TRACKBALL_DOWN) == LOW;
 
-    if (up_pressed && !down_pressed)
-    {
-        if (up_count_ < stable_polls)
-        {
-            ++up_count_;
-        }
-    }
-    else
-    {
-        up_count_ = 0;
-        up_latched_ = false;
-    }
-
-    if (down_pressed && !up_pressed)
-    {
-        if (down_count_ < stable_polls)
-        {
-            ++down_count_;
-        }
-    }
-    else
-    {
-        down_count_ = 0;
-        down_latched_ = false;
-    }
-
-    // Prefer vertical motion when present.
-    if (up_count_ >= stable_polls && !up_latched_ && (now - last_trackball_ms_) >= repeat_ms)
-    {
-        msg.dir = ROTARY_DIR_DOWN;
-        last_trackball_ms_ = now;
-        up_latched_ = true;
-        down_latched_ = true;
-        left_latched_ = true;
-        right_latched_ = true;
-    }
-    else if (down_count_ >= stable_polls && !down_latched_ && (now - last_trackball_ms_) >= repeat_ms)
-    {
-        msg.dir = ROTARY_DIR_UP;
-        last_trackball_ms_ = now;
-        down_latched_ = true;
-        up_latched_ = true;
-        left_latched_ = true;
-        right_latched_ = true;
-    }
+    update_state(up_pressed, up_state, up_change_ms);
+    update_state(down_pressed, down_state, down_change_ms);
 #endif
 
-#if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
-    // Horizontal fallback when no vertical event was generated.
-    if (msg.dir == ROTARY_DIR_NONE)
+    const bool up_stable = up_state && (now - up_change_ms) >= debounce_ms;
+    const bool down_stable = down_state && (now - down_change_ms) >= debounce_ms;
+    const bool left_stable = left_state && (now - left_change_ms) >= debounce_ms;
+    const bool right_stable = right_state && (now - right_change_ms) >= debounce_ms;
+
+    const bool any_pressed = up_state || down_state || left_state || right_state;
+    if (lock_until_release)
     {
-        if (right_count_ >= stable_polls && !right_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+        if (!any_pressed)
+        {
+            if (release_change_ms == 0)
+            {
+                release_change_ms = now;
+            }
+            if ((now - release_change_ms) >= release_ms)
+            {
+                lock_until_release = false;
+                release_change_ms = 0;
+            }
+        }
+        else
+        {
+            release_change_ms = 0;
+        }
+    }
+
+    uint8_t raw_dir = 0;
+    const int stable_count =
+        (up_stable ? 1 : 0) + (down_stable ? 1 : 0) + (left_stable ? 1 : 0) + (right_stable ? 1 : 0);
+    if (stable_count == 1)
+    {
+        if (up_stable)
+        {
+            raw_dir = 1;
+        }
+        else if (down_stable)
+        {
+            raw_dir = 2;
+        }
+        else if (left_stable)
+        {
+            raw_dir = 3;
+        }
+        else if (right_stable)
+        {
+            raw_dir = 4;
+        }
+    }
+
+    dir_samples[sample_pos] = raw_dir;
+    sample_pos = (sample_pos + 1) % sample_window;
+
+    uint8_t up_count = 0;
+    uint8_t down_count = 0;
+    uint8_t left_count = 0;
+    uint8_t right_count = 0;
+    for (uint8_t i = 0; i < sample_window; ++i)
+    {
+        switch (dir_samples[i])
+        {
+        case 1:
+            up_count++;
+            break;
+        case 2:
+            down_count++;
+            break;
+        case 3:
+            left_count++;
+            break;
+        case 4:
+            right_count++;
+            break;
+        default:
+            break;
+        }
+    }
+
+    uint8_t candidate = 0;
+    uint8_t max_count = 0;
+    if (up_count > max_count)
+    {
+        max_count = up_count;
+        candidate = 1;
+    }
+    if (down_count > max_count)
+    {
+        max_count = down_count;
+        candidate = 2;
+    }
+    if (left_count > max_count)
+    {
+        max_count = left_count;
+        candidate = 3;
+    }
+    if (right_count > max_count)
+    {
+        max_count = right_count;
+        candidate = 4;
+    }
+
+    if (raw_dir == 0)
+    {
+        release_streak = (release_streak < 255) ? (release_streak + 1) : release_streak;
+    }
+    else
+    {
+        release_streak = 0;
+    }
+
+    if (lock_until_release && release_streak >= 2)
+    {
+        if (release_change_ms == 0)
+        {
+            release_change_ms = now;
+        }
+        if ((now - release_change_ms) >= release_ms)
+        {
+            lock_until_release = false;
+            release_change_ms = 0;
+        }
+    }
+
+    if (!lock_until_release && candidate != 0 && max_count >= sample_threshold &&
+        (now - last_trackball_ms_) >= repeat_ms)
+    {
+        if (candidate == 1 || candidate == 4)
         {
             msg.dir = ROTARY_DIR_DOWN;
-            last_trackball_ms_ = now;
-            right_latched_ = true;
-            left_latched_ = true;
-            up_latched_ = true;
-            down_latched_ = true;
         }
-        else if (left_count_ >= stable_polls && !left_latched_ && (now - last_trackball_ms_) >= repeat_ms)
+        else if (candidate == 2 || candidate == 3)
         {
             msg.dir = ROTARY_DIR_UP;
-            last_trackball_ms_ = now;
-            left_latched_ = true;
-            right_latched_ = true;
-            up_latched_ = true;
-            down_latched_ = true;
         }
+        last_trackball_ms_ = now;
+        lock_until_release = true;
+        release_streak = 0;
+        release_change_ms = 0;
     }
-#endif
 
 #if defined(TRACKBALL_CLICK)
     const bool click_pressed = digitalRead(TRACKBALL_CLICK) == LOW;
-    if (click_pressed)
+    update_state(click_pressed, click_state, click_change_ms);
+    if (click_state && (now - click_change_ms) >= debounce_ms &&
+        !click_consumed && (now - last_click_ms_) >= click_ms)
     {
-        if (click_count_ < stable_polls)
-        {
-            ++click_count_;
-        }
-        if (click_count_ >= stable_polls && !click_latched_ && (now - last_click_ms_) >= click_ms)
-        {
-            msg.centerBtnPressed = true;
-            last_click_ms_ = now;
-            click_latched_ = true;
-        }
-    }
-    else
-    {
-        click_count_ = 0;
-        click_latched_ = false;
+        msg.centerBtnPressed = true;
+        last_click_ms_ = now;
+        click_consumed = true;
     }
 #endif
 

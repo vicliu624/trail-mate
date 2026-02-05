@@ -432,7 +432,9 @@ std::array<uint8_t, kT4tCcFileLen> s_cc_file{};
 std::vector<uint8_t> s_share_response;
 uint8_t* s_share_rx = nullptr;
 uint16_t* s_share_rx_len = nullptr;
+#ifdef USING_ST25R3916
 rfalNfcState s_last_nfc_state = RFAL_NFC_STATE_NOTINIT;
+#endif
 
 void reset_share_exchange()
 {
@@ -441,7 +443,9 @@ void reset_share_exchange()
     s_share_response.clear();
     s_share_rx = nullptr;
     s_share_rx_len = nullptr;
+#ifdef USING_ST25R3916
     s_last_nfc_state = RFAL_NFC_STATE_NOTINIT;
+#endif
 }
 
 bool build_t4t_files(const std::vector<uint8_t>& payload)
@@ -852,6 +856,7 @@ bool decrypt_payload(const Payload& payload,
 
 bool start_share(const std::vector<uint8_t>& payload)
 {
+#ifdef USING_ST25R3916
     TEAM_NFC_LOG("[NFC] start_share payload_len=%u\n", static_cast<unsigned>(payload.size()));
     s_share_payload = payload;
     s_share_active = false;
@@ -862,7 +867,6 @@ bool start_share(const std::vector<uint8_t>& payload)
         return false;
     }
 
-#ifdef USING_ST25R3916
     if (!nfc_available())
     {
         TEAM_NFC_LOG("[NFC] start_share nfc_not_available\n");
@@ -888,6 +892,9 @@ bool start_share(const std::vector<uint8_t>& payload)
 
 void stop_share()
 {
+#ifndef USING_ST25R3916
+    return;
+#endif
     TEAM_NFC_LOG("[NFC] stop_share\n");
     s_share_active = false;
     s_share_payload.clear();
@@ -903,6 +910,9 @@ void stop_share()
 
 void poll_share()
 {
+#ifndef USING_ST25R3916
+    return;
+#endif
 #ifdef USING_ST25R3916
     if (!s_share_active || !nfc_available())
     {
@@ -1005,10 +1015,10 @@ void poll_share()
 
 bool start_scan(uint16_t duration_ms)
 {
+#ifdef USING_ST25R3916
     s_scan_active = false;
     s_scan_deadline_ms = 0;
 
-#ifdef USING_ST25R3916
     TEAM_NFC_LOG("[NFC] start_scan duration_ms=%u\n", static_cast<unsigned>(duration_ms));
     if (!nfc_available())
     {
@@ -1033,6 +1043,9 @@ bool start_scan(uint16_t duration_ms)
 
 void stop_scan()
 {
+#ifndef USING_ST25R3916
+    return;
+#endif
     TEAM_NFC_LOG("[NFC] stop_scan\n");
     s_scan_active = false;
     s_scan_deadline_ms = 0;
@@ -1046,6 +1059,10 @@ void stop_scan()
 
 bool poll_scan(std::vector<uint8_t>& out_payload)
 {
+#ifndef USING_ST25R3916
+    (void)out_payload;
+    return false;
+#endif
     if (!s_scan_active)
     {
         return false;
