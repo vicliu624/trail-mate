@@ -20,6 +20,7 @@ jobs:
         run: |
           clang-format-14 --version
           git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' ':(exclude)src/chat/infra/meshtastic/generated/*' \
+            ':(exclude)src/ui/assets/**' \
             | xargs -0 clang-format-14 --dry-run --Werror
 
   build:

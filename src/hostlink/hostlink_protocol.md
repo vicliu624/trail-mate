@@ -50,6 +50,7 @@ Constraints:
 | 0x83 | EV_LOG         | Dev→PC | Optional log event (reserved) |
 | 0x84 | EV_GPS         | Dev→PC | GPS snapshot (scaled ints) |
 | 0x85 | EV_APP_DATA    | Dev→PC | App payload (decrypted), chunked |
+| 0x86 | EV_TEAM_STATE  | Dev→PC | Team state snapshot |
 
 ## Error Codes (ACK payload)
 
@@ -73,6 +74,7 @@ Bitmask (uint32):
 - bit4: `CapLogs`
 - bit5: `CapGps`
 - bit6: `CapAppData`
+- bit7: `CapTeamState`
 
 ## Handshake
 
@@ -257,6 +259,36 @@ Notes:
 - `timestamp_s` is device uptime seconds when the payload was received.
 - Max `chunk_len` is `kMaxFrameLen - header` (currently `512 - 40 = 472` bytes).
 - Team portnums: 300=MGMT, 301=POSITION, 302=WAYPOINT, 303=CHAT, 304=TRACK.
+
+### EV_TEAM_STATE (0x86)
+Payload:
+
+```
+u8  version           // 1
+u8  flags             // bit0 in_team, bit1 pending_join, bit2 kicked_out,
+                      // bit3 self_is_leader, bit4 has_team_id, bit5 has_join_target
+u16 reserved          // 0
+u32 self_id           // this device node id
+u8  team_id[8]        // 0 if not in team
+u8  join_target_id[8] // 0 if none
+u32 key_id            // team security_round (epoch)
+u32 last_event_seq
+u32 last_update_s
+u16 team_name_len
+u8[] team_name        // UTF-8
+u8  member_count
+repeat member_count:
+  u32 node_id
+  u8  role            // 0=member, 1=leader
+  u8  online          // 0/1
+  u32 last_seen_s
+  u16 name_len
+  u8[] name           // UTF-8
+```
+
+Notes:
+- Sent when the link becomes READY and whenever team events update state.
+- Use this as the authoritative team snapshot for PC UI.
 
 ## App Payload Coverage (All Messages)
 

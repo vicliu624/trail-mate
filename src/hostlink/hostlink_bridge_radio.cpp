@@ -6,6 +6,7 @@
 #include "../team/protocol/team_chat.h"
 #include "../team/protocol/team_mgmt.h"
 #include "../team/protocol/team_portnum.h"
+#include "../ui/screens/team/team_ui_store.h"
 
 #include <string>
 #include <vector>
@@ -20,6 +21,12 @@ constexpr uint8_t kAppFlagWantResponse = 1 << 1;
 constexpr uint8_t kAppFlagWasEncrypted = 1 << 2;
 constexpr uint8_t kAppFlagMoreChunks = 1 << 3;
 constexpr size_t kAppDataHeaderSize = 4 + 4 + 4 + 1 + 1 + team::proto::kTeamIdSize + 4 + 4 + 4 + 4 + 2;
+constexpr uint8_t kTeamStateVersion = 1;
+constexpr size_t kTeamNameMaxLen = 48;
+constexpr size_t kMemberNameMaxLen = 32;
+
+uint32_t s_team_state_hash = 0;
+bool s_team_state_has_hash = false;
 
 void push_u8(std::vector<uint8_t>& out, uint8_t v)
 {
@@ -52,6 +59,109 @@ void push_bytes(std::vector<uint8_t>& out, const uint8_t* data, size_t len)
 void push_zeros(std::vector<uint8_t>& out, size_t len)
 {
     out.insert(out.end(), len, 0);
+}
+
+uint32_t hash_bytes(const uint8_t* data, size_t len)
+{
+    uint32_t h = 2166136261u;
+    for (size_t i = 0; i < len; ++i)
+    {
+        h ^= data[i];
+        h *= 16777619u;
+    }
+    return h;
+}
+
+void push_string(std::vector<uint8_t>& out, const std::string& value, size_t max_len)
+{
+    size_t len = value.size();
+    if (len > max_len)
+    {
+        len = max_len;
+    }
+    push_u16(out, static_cast<uint16_t>(len));
+    if (len > 0)
+    {
+        out.insert(out.end(), value.begin(), value.begin() + static_cast<std::ptrdiff_t>(len));
+    }
+}
+
+void push_team_id(std::vector<uint8_t>& out, const team::TeamId& id, bool has_id)
+{
+    if (has_id)
+    {
+        push_bytes(out, id.data(), id.size());
+    }
+    else
+    {
+        push_zeros(out, id.size());
+    }
+}
+
+bool build_team_state_payload(std::vector<uint8_t>& out)
+{
+    team::ui::TeamUiSnapshot snap{};
+    team::ui::team_ui_get_store().load(snap);
+
+    uint8_t flags = 0;
+    if (snap.in_team) flags |= 1 << 0;
+    if (snap.pending_join) flags |= 1 << 1;
+    if (snap.kicked_out) flags |= 1 << 2;
+    if (snap.self_is_leader) flags |= 1 << 3;
+    if (snap.has_team_id) flags |= 1 << 4;
+    if (snap.has_join_target) flags |= 1 << 5;
+
+    const uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
+
+    out.clear();
+    out.reserve(128 + snap.members.size() * 32);
+    push_u8(out, kTeamStateVersion);
+    push_u8(out, flags);
+    push_u16(out, 0);
+    push_u32(out, self_id);
+    push_team_id(out, snap.team_id, snap.has_team_id);
+    push_team_id(out, snap.join_target_id, snap.has_join_target);
+    push_u32(out, snap.security_round);
+    push_u32(out, snap.last_event_seq);
+    push_u32(out, snap.last_update_s);
+    push_string(out, snap.team_name, kTeamNameMaxLen);
+
+    size_t member_count = snap.members.size();
+    if (member_count > 255)
+    {
+        member_count = 255;
+    }
+    push_u8(out, static_cast<uint8_t>(member_count));
+
+    for (size_t i = 0; i < member_count; ++i)
+    {
+        const auto& member = snap.members[i];
+        push_u32(out, member.node_id);
+        push_u8(out, member.leader ? 1 : 0);
+        push_u8(out, member.online ? 1 : 0);
+        push_u32(out, member.last_seen_s);
+        push_string(out, member.name, kMemberNameMaxLen);
+    }
+
+    return true;
+}
+
+void maybe_send_team_state(bool force)
+{
+    std::vector<uint8_t> payload;
+    if (!build_team_state_payload(payload))
+    {
+        return;
+    }
+    uint32_t hash = hash_bytes(payload.data(), payload.size());
+    if (!force && s_team_state_has_hash && hash == s_team_state_hash)
+    {
+        return;
+    }
+    s_team_state_has_hash = true;
+    s_team_state_hash = hash;
+    hostlink::enqueue_event(static_cast<uint8_t>(hostlink::FrameType::EvTeamState),
+                            payload.data(), payload.size(), false);
 }
 
 void send_app_data(uint32_t portnum,
@@ -519,6 +629,36 @@ void on_event(const sys::Event& event)
     default:
         break;
     }
+
+    switch (event.type)
+    {
+    case sys::EventType::TeamAdvertise:
+    case sys::EventType::TeamJoinRequest:
+    case sys::EventType::TeamJoinAccept:
+    case sys::EventType::TeamJoinConfirm:
+    case sys::EventType::TeamJoinDecision:
+    case sys::EventType::TeamKick:
+    case sys::EventType::TeamTransferLeader:
+    case sys::EventType::TeamKeyDist:
+    case sys::EventType::TeamStatus:
+    case sys::EventType::TeamPosition:
+    case sys::EventType::TeamWaypoint:
+    case sys::EventType::TeamTrack:
+    case sys::EventType::TeamChat:
+        maybe_send_team_state(false);
+        break;
+    default:
+        break;
+    }
+}
+
+void on_link_ready()
+{
+    if (!hostlink::is_active())
+    {
+        return;
+    }
+    maybe_send_team_state(true);
 }
 
 } // namespace hostlink::bridge

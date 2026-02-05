@@ -1,6 +1,7 @@
 #include "hostlink_service.h"
 
 #include "../usb/usb_cdc_transport.h"
+#include "hostlink_bridge_radio.h"
 #include "hostlink_codec.h"
 #include "hostlink_config_service.h"
 #include "hostlink_types.h"
@@ -109,7 +110,8 @@ void send_hello_ack(uint16_t seq)
     payload.reserve(32);
     const uint16_t proto = kProtocolVersion;
     const uint16_t max_len = static_cast<uint16_t>(kMaxFrameLen);
-    const uint32_t caps = CapTxMsg | CapConfig | CapSetTime | CapStatus | CapLogs | CapGps | CapAppData;
+    const uint32_t caps =
+        CapTxMsg | CapConfig | CapSetTime | CapStatus | CapLogs | CapGps | CapAppData | CapTeamState;
 
     payload.push_back(static_cast<uint8_t>(proto & 0xFF));
     payload.push_back(static_cast<uint8_t>((proto >> 8) & 0xFF));
@@ -372,6 +374,7 @@ void handle_frame(const Frame& frame)
     {
         send_hello_ack(frame.seq);
         set_state(LinkState::Ready);
+        hostlink::bridge::on_link_ready();
         s_handshake_deadline = 0;
         return;
     }

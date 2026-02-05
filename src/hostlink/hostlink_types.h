@@ -31,6 +31,7 @@ enum class FrameType : uint8_t
     EvLog = 0x83,
     EvGps = 0x84,
     EvAppData = 0x85,
+    EvTeamState = 0x86,
 };
 
 enum class ErrorCode : uint8_t
@@ -53,6 +54,7 @@ enum Capabilities : uint32_t
     CapLogs = 1u << 4,
     CapGps = 1u << 5,
     CapAppData = 1u << 6,
+    CapTeamState = 1u << 7,
 };
 
 enum class ConfigKey : uint8_t
