@@ -13,6 +13,7 @@ void apply_control_button(lv_obj_t* btn);
 void apply_control_button_label(lv_obj_t* label);
 
 void apply_resolution_label(lv_obj_t* label, const layout::Spec& spec);
+void apply_altitude_label(lv_obj_t* label, const layout::Spec& spec);
 void apply_panel(lv_obj_t* panel, const layout::Spec& spec);
 
 void apply_loading_box(lv_obj_t* box);

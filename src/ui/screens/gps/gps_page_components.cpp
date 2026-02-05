@@ -404,6 +404,11 @@ void fix_ui_elements_position()
         lv_obj_align(g_gps_state.resolution_label, LV_ALIGN_BOTTOM_LEFT, 10, -10);
         lv_obj_move_foreground(g_gps_state.resolution_label);
     }
+    if (g_gps_state.altitude_label != NULL)
+    {
+        lv_obj_align(g_gps_state.altitude_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_move_foreground(g_gps_state.altitude_label);
+    }
 
     if (g_gps_state.pan_h_indicator != NULL)
     {

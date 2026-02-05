@@ -109,6 +109,7 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.tracker_btn = nullptr;
     g_gps_state.route_btn = nullptr;
     g_gps_state.resolution_label = nullptr;
+    g_gps_state.altitude_label = nullptr;
 }
 
 } // namespace

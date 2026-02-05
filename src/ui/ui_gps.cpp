@@ -63,6 +63,7 @@ void assign_layout_widgets(const gps::ui::layout::Widgets& w)
     g_gps_state.page = w.content;
     g_gps_state.map = w.map;
     g_gps_state.resolution_label = w.resolution_label;
+    g_gps_state.altitude_label = w.altitude_label;
     g_gps_state.panel = w.panel;
     g_gps_state.member_panel = w.member_panel;
     g_gps_state.zoom = w.zoom_btn;
@@ -304,6 +305,10 @@ void ui_gps_enter(lv_obj_t* parent)
     }
 
     lv_label_set_text(g_gps_state.resolution_label, "");
+    if (g_gps_state.altitude_label)
+    {
+        lv_label_set_text(g_gps_state.altitude_label, "Alt: -- m");
+    }
 
     bind_controls_and_group(app_g);
 
@@ -311,6 +316,10 @@ void ui_gps_enter(lv_obj_t* parent)
     if (g_gps_state.resolution_label != NULL)
     {
         lv_obj_move_foreground(g_gps_state.resolution_label);
+    }
+    if (g_gps_state.altitude_label != NULL)
+    {
+        lv_obj_move_foreground(g_gps_state.altitude_label);
     }
 
     init_gps_state_defaults();
@@ -356,6 +365,7 @@ void ui_gps_enter(lv_obj_t* parent)
     g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
     g_gps_state.last_resolution_lat = g_gps_state.lat;
     update_resolution_display();
+    update_altitude_display(gps::gps_get_data());
 
     if (g_gps_state.map == NULL || g_gps_state.tile_ctx.map_container != g_gps_state.map)
     {

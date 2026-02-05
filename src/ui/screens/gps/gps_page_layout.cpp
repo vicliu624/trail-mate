@@ -11,6 +11,7 @@ namespace gps::ui::layout
  *   [content: grow]
  *     [map: fills content]
  *       [resolution_label: bottom-left overlay]
+ *       [altitude_label: bottom-center overlay]
  *       [panel: top-right column]
  *         [zoom_btn]
  *           [zoom_label]
@@ -32,6 +33,7 @@ namespace gps::ui::layout
  * `- content
  *    `- map
  *       |- resolution_label
+ *       |- altitude_label
  *       |- panel
  *       |  |- zoom_btn
  *       |  |- pos_btn
@@ -75,6 +77,9 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 
     w.resolution_label = lv_label_create(w.map);
     lv_obj_align(w.resolution_label, LV_ALIGN_BOTTOM_LEFT, spec.resolution_x, spec.resolution_y);
+
+    w.altitude_label = lv_label_create(w.map);
+    lv_obj_align(w.altitude_label, LV_ALIGN_BOTTOM_MID, spec.altitude_x, spec.altitude_y);
 
     w.panel = lv_obj_create(w.map);
     lv_obj_set_size(w.panel, spec.panel_width, LV_SIZE_CONTENT);

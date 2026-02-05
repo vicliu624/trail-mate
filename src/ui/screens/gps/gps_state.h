@@ -35,6 +35,7 @@ struct GPSPageState
     lv_obj_t* page = nullptr;
     lv_obj_t* map = nullptr;
     lv_obj_t* resolution_label = nullptr; // Resolution display label (bottom-left)
+    lv_obj_t* altitude_label = nullptr;   // Altitude display label (bottom-center)
     lv_obj_t* panel = nullptr;
     lv_obj_t* member_panel = nullptr;
     lv_obj_t* zoom = nullptr;

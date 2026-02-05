@@ -4,6 +4,7 @@
 #include "../protocol/team_mgmt.h"
 #include "../protocol/team_portnum.h"
 #include "../protocol/team_wire.h"
+#include "../../sys/event_bus.h"
 #include <Arduino.h>
 #include <string>
 
@@ -693,6 +694,20 @@ void TeamService::processIncoming()
             }
             TeamChatEvent event{makeContext(data, &envelope), msg};
             sink_.onTeamChat(event);
+        }
+        else
+        {
+            sys::EventBus::publish(
+                new sys::AppDataEvent(
+                    data.portnum,
+                    data.from,
+                    data.to,
+                    data.packet_id,
+                    static_cast<uint8_t>(data.channel),
+                    data.channel_hash,
+                    data.want_response,
+                    data.payload),
+                0);
         }
     }
 }

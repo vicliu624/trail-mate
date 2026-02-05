@@ -17,7 +17,6 @@
 #ifdef ARDUINO_USB_MODE
 extern const lv_image_dsc_t img_usb;
 #endif
-
 #endif // LVGL_VERSION_MAJOR == 9
 
 #endif // UI_ASSETS_IMAGES_H

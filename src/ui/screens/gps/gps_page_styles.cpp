@@ -15,6 +15,7 @@ lv_style_t s_map_black;
 lv_style_t s_panel_transparent;
 
 lv_style_t s_resolution_label;
+lv_style_t s_altitude_label;
 
 lv_style_t s_control_btn_main;
 lv_style_t s_control_btn_focused;
@@ -108,6 +109,13 @@ void init_once()
     lv_style_set_text_color(&s_resolution_label, lv_color_hex(kResolutionText));
     lv_style_set_text_font(&s_resolution_label, &lv_font_montserrat_16);
     lv_style_set_text_opa(&s_resolution_label, LV_OPA_COVER);
+
+    lv_style_init(&s_altitude_label);
+    lv_style_set_bg_opa(&s_altitude_label, LV_OPA_TRANSP);
+    lv_style_set_text_color(&s_altitude_label, lv_color_hex(kResolutionText));
+    lv_style_set_text_font(&s_altitude_label, &lv_font_montserrat_16);
+    lv_style_set_text_opa(&s_altitude_label, LV_OPA_COVER);
+    lv_style_set_text_align(&s_altitude_label, LV_TEXT_ALIGN_CENTER);
 
     lv_style_init(&s_control_btn_main);
     lv_style_set_bg_color(&s_control_btn_main, lv_color_hex(kPanelBtnBg));
@@ -250,6 +258,14 @@ void apply_resolution_label(lv_obj_t* label, const layout::Spec& spec)
     lv_obj_set_style_pad_all(label, spec.resolution_pad, 0);
 }
 
+void apply_altitude_label(lv_obj_t* label, const layout::Spec& spec)
+{
+    if (!label) return;
+    init_once();
+    lv_obj_add_style(label, &s_altitude_label, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(label, spec.altitude_pad, 0);
+}
+
 void apply_panel(lv_obj_t* panel, const layout::Spec& spec)
 {
     if (!panel) return;
@@ -366,6 +382,7 @@ void apply_all(const layout::Widgets& w, const layout::Spec& spec)
     apply_panel(w.panel, spec);
     apply_panel(w.member_panel, spec);
     apply_resolution_label(w.resolution_label, spec);
+    apply_altitude_label(w.altitude_label, spec);
 
     apply_control_button(w.zoom_btn);
     apply_control_button(w.pos_btn);

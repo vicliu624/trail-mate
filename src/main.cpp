@@ -29,6 +29,7 @@ extern "C"
     extern const lv_image_dsc_t team_icon;
     extern const lv_image_dsc_t tracker_icon;
     extern const lv_image_dsc_t shutdown;
+    extern const lv_image_dsc_t rf;
     // Note: img_usb is already declared in images.h (C++ linkage)
 }
 
@@ -49,6 +50,8 @@ void ui_tracker_enter(lv_obj_t* parent);
 void ui_tracker_exit(lv_obj_t* parent);
 void ui_setting_enter(lv_obj_t* parent);
 void ui_setting_exit(lv_obj_t* parent);
+void ui_pc_link_enter(lv_obj_t* parent);
+void ui_pc_link_exit(lv_obj_t* parent);
 #ifdef ARDUINO_USB_MODE
 void ui_usb_enter(lv_obj_t* parent);
 void ui_usb_exit(lv_obj_t* parent);
@@ -159,18 +162,20 @@ static FunctionAppScreen s_tracker_app("Tracker", &tracker_icon, ui_tracker_ente
 static FunctionAppScreen s_chat_app("Chat", &Chat, ui_chat_enter, ui_chat_exit);
 static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter, ui_contacts_exit);
 static FunctionAppScreen s_team_app("Team", &team_icon, ui_team_enter, ui_team_exit);
+static FunctionAppScreen s_pc_link_app("Data Exchange", &rf, ui_pc_link_enter, ui_pc_link_exit);
 static FunctionAppScreen s_setting_app("Setting", &Setting, ui_setting_enter, ui_setting_exit);
 static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter, nullptr);
 
 #ifdef ARDUINO_USB_MODE
 static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_usb_app, &s_setting_app, &s_shutdown_app};
-#define NUM_APPS 8
+                                   &s_team_app, &s_pc_link_app, &s_usb_app, &s_setting_app,
+                                   &s_shutdown_app};
+#define NUM_APPS 9
 #else
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_setting_app, &s_shutdown_app};
-#define NUM_APPS 7
+                                   &s_team_app, &s_pc_link_app, &s_setting_app, &s_shutdown_app};
+#define NUM_APPS 8
 #endif
 
 #if LVGL_VERSION_MAJOR == 9

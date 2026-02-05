@@ -20,6 +20,9 @@ struct Spec
     int resolution_pad = 4;
     int resolution_x = 10;
     int resolution_y = -10;
+    int altitude_pad = 4;
+    int altitude_x = 0;
+    int altitude_y = -10;
 
     int control_btn_w = 80;
     int control_btn_h = 28;
@@ -33,6 +36,7 @@ struct Widgets
     lv_obj_t* map = nullptr;
 
     lv_obj_t* resolution_label = nullptr;
+    lv_obj_t* altitude_label = nullptr;
 
     lv_obj_t* panel = nullptr;
     lv_obj_t* member_panel = nullptr;

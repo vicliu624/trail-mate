@@ -6,7 +6,7 @@
 #define USB_VID 0x303a
 #define USB_PID 0x82D4
 #define USB_MANUFACTURER "LILYGO"
-#define USB_PRODUCT "T-LoRa-Pager"
+#define USB_PRODUCT "TRAIL MATE"
 
 // ST7796
 #define DISP_WIDTH (222)

@@ -6,7 +6,7 @@
 #define USB_VID 0x303A
 #define USB_PID 0x1001
 #define USB_MANUFACTURER "LILYGO"
-#define USB_PRODUCT "T-Deck"
+#define USB_PRODUCT "TRAIL MATE"
 
 // Basic UART
 static const uint8_t TX = 43;

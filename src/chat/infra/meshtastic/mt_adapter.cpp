@@ -1371,7 +1371,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             }
         }
 
-        if (!is_text_port && !is_nodeinfo_port && decoded.payload.size > 0)
+        if (!is_text_port && decoded.payload.size > 0)
         {
             MeshIncomingData incoming;
             incoming.portnum = decoded.portnum;

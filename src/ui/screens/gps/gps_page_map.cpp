@@ -414,6 +414,25 @@ void update_resolution_display()
     lv_label_set_text(g_gps_state.resolution_label, resolution_text);
 }
 
+void update_altitude_display(const GPSData& gps_data)
+{
+    if (!is_alive() || g_gps_state.altitude_label == NULL)
+    {
+        return;
+    }
+
+    char alt_text[32];
+    if (gps_data.valid && gps_data.has_alt)
+    {
+        snprintf(alt_text, sizeof(alt_text), "Alt: %.0f m", gps_data.alt_m);
+    }
+    else
+    {
+        snprintf(alt_text, sizeof(alt_text), "Alt: -- m");
+    }
+    lv_label_set_text(g_gps_state.altitude_label, alt_text);
+}
+
 void update_title_and_status()
 {
     if (!is_alive())
@@ -1047,6 +1066,7 @@ void tick_gps_update(bool allow_map_refresh)
         return;
     }
     GPSData gps_data = gps::gps_get_data();
+    update_altitude_display(gps_data);
 
     static bool prev_has_fix = false;
     static bool prev_has_visible_map_data = false;

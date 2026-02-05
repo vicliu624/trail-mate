@@ -9,6 +9,7 @@
 #include "../gps/usecase/track_recorder.h"
 #include "../sys/event_bus.h"
 #include "../team/protocol/team_chat.h"
+#include "../hostlink/hostlink_bridge_radio.h"
 #include "../ui/ui_common.h"
 #include "../ui/ui_team.h"
 #include "../ui/widgets/system_notification.h"
@@ -381,6 +382,8 @@ void AppContext::update()
         default:
             break;
         }
+
+        hostlink::bridge::on_event(*event);
 
         // Forward event to UI controller if it exists
         if (event->type == sys::EventType::TeamAdvertise ||

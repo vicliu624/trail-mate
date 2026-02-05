@@ -31,6 +31,7 @@ enum class EventType
     KeyVerificationNumberRequest, // PKI key verification number requested
     KeyVerificationNumberInform,  // PKI key verification number provided
     KeyVerificationFinal,         // PKI key verification final confirmation
+    AppData,                      // Raw app payload (non-team)
     TeamAdvertise,                // Team advertise received
     TeamJoinRequest,              // Team join request received
     TeamJoinAccept,               // Team join accept received
@@ -156,6 +157,41 @@ struct NodeProtocolUpdateEvent : public Event
 
     NodeProtocolUpdateEvent(uint32_t id, uint32_t ts, uint8_t proto)
         : Event(EventType::NodeProtocolUpdate), node_id(id), timestamp(ts), protocol(proto) {}
+};
+
+/**
+ * @brief Raw app payload event
+ */
+struct AppDataEvent : public Event
+{
+    uint32_t portnum;
+    uint32_t from;
+    uint32_t to;
+    uint32_t packet_id;
+    uint8_t channel;
+    uint8_t channel_hash;
+    bool want_response;
+    std::vector<uint8_t> payload;
+
+    AppDataEvent(uint32_t port,
+                 uint32_t src,
+                 uint32_t dst,
+                 uint32_t pkt,
+                 uint8_t ch,
+                 uint8_t hash,
+                 bool want,
+                 const std::vector<uint8_t>& data)
+        : Event(EventType::AppData),
+          portnum(port),
+          from(src),
+          to(dst),
+          packet_id(pkt),
+          channel(ch),
+          channel_hash(hash),
+          want_response(want),
+          payload(data)
+    {
+    }
 };
 
 /**
