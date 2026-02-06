@@ -4,9 +4,9 @@
 #include "chat_compose_layout.h"
 #include "chat_compose_styles.h"
 
-#include "../ui_common.h"
 #include "../../widgets/ime/ime_widget.h"
 #include "../../widgets/toast/toast_widget.h"
+#include "../ui_common.h"
 
 #include "../../../chat/usecase/chat_service.h"
 

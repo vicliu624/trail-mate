@@ -30,8 +30,8 @@ class AppContext;
 #include "../chat/ports/i_contact_store.h"
 #include "../chat/ports/i_mesh_adapter.h"
 #include "../chat/ports/i_node_store.h"
-#include "../ui/ui_controller.h"
 #include "../team/usecase/team_track_sampler.h"
+#include "../ui/ui_controller.h"
 #include "app_config.h"
 #include <memory>
 

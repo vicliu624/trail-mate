@@ -2,8 +2,8 @@
 
 #include "../../../app/app_context.h"
 #include "../../../gps/usecase/track_recorder.h"
-#include "../../ui_common.h"
 #include "../../assets/fonts/fonts.h"
+#include "../../ui_common.h"
 #include "tracker_page_components.h"
 #include "tracker_page_input.h"
 #include "tracker_page_layout.h"
@@ -295,10 +295,12 @@ lv_group_t* tracker_group()
 lv_obj_t* action_focus_target()
 {
     auto& state = g_tracker_state;
-    auto visible = [](lv_obj_t* btn) {
+    auto visible = [](lv_obj_t* btn)
+    {
         return btn && !lv_obj_has_flag(btn, LV_OBJ_FLAG_HIDDEN);
     };
-    auto enabled = [](lv_obj_t* btn) {
+    auto enabled = [](lv_obj_t* btn)
+    {
         return btn && !lv_obj_has_flag(btn, LV_OBJ_FLAG_HIDDEN) &&
                !lv_obj_has_state(btn, LV_STATE_DISABLED);
     };

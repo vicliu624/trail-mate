@@ -5,12 +5,12 @@
 #include "../../widgets/map/map_tiles.h"
 #include "../team/team_state.h"
 #include "../team/team_ui_store.h"
-#include "gps_tracker_overlay.h"
 #include "gps_constants.h"
 #include "gps_page_components.h"
 #include "gps_page_lifetime.h"
 #include "gps_page_styles.h"
 #include "gps_state.h"
+#include "gps_tracker_overlay.h"
 #include "lvgl.h"
 #include <Arduino.h>
 #include <algorithm>

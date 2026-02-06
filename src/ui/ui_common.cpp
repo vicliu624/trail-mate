@@ -12,10 +12,10 @@ extern "C" void lv_draw_buf_destroy(lv_draw_buf_t* draw_buf);
 #endif
 #include <Preferences.h>
 #include <SD.h>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
 #include <vector>
-#include <cmath>
 
 extern BoardBase& board;
 
@@ -425,18 +425,12 @@ bool latlon_to_utm(double lat, double lon, int& zone, char& hemi, double& eastin
     double C = kEPrime2 * cos_lat * cos_lat;
     double A = cos_lat * (lon_rad - lon_origin_rad);
 
-    double M = kA * ((1.0 - kE2 / 4.0 - 3.0 * kE2 * kE2 / 64.0 - 5.0 * kE2 * kE2 * kE2 / 256.0) * lat_rad
-                     - (3.0 * kE2 / 8.0 + 3.0 * kE2 * kE2 / 32.0 + 45.0 * kE2 * kE2 * kE2 / 1024.0) * std::sin(2.0 * lat_rad)
-                     + (15.0 * kE2 * kE2 / 256.0 + 45.0 * kE2 * kE2 * kE2 / 1024.0) * std::sin(4.0 * lat_rad)
-                     - (35.0 * kE2 * kE2 * kE2 / 3072.0) * std::sin(6.0 * lat_rad));
+    double M = kA * ((1.0 - kE2 / 4.0 - 3.0 * kE2 * kE2 / 64.0 - 5.0 * kE2 * kE2 * kE2 / 256.0) * lat_rad - (3.0 * kE2 / 8.0 + 3.0 * kE2 * kE2 / 32.0 + 45.0 * kE2 * kE2 * kE2 / 1024.0) * std::sin(2.0 * lat_rad) + (15.0 * kE2 * kE2 / 256.0 + 45.0 * kE2 * kE2 * kE2 / 1024.0) * std::sin(4.0 * lat_rad) - (35.0 * kE2 * kE2 * kE2 / 3072.0) * std::sin(6.0 * lat_rad));
 
-    easting = kK0 * N * (A + (1.0 - T + C) * A * A * A / 6.0 +
-                         (5.0 - 18.0 * T + T * T + 72.0 * C - 58.0 * kEPrime2) * A * A * A * A * A / 120.0) +
+    easting = kK0 * N * (A + (1.0 - T + C) * A * A * A / 6.0 + (5.0 - 18.0 * T + T * T + 72.0 * C - 58.0 * kEPrime2) * A * A * A * A * A / 120.0) +
               500000.0;
 
-    northing = kK0 * (M + N * tan_lat * (A * A / 2.0 +
-                                         (5.0 - T + 9.0 * C + 4.0 * C * C) * A * A * A * A / 24.0 +
-                                         (61.0 - 58.0 * T + T * T + 600.0 * C - 330.0 * kEPrime2) * A * A * A * A * A * A / 720.0));
+    northing = kK0 * (M + N * tan_lat * (A * A / 2.0 + (5.0 - T + 9.0 * C + 4.0 * C * C) * A * A * A * A / 24.0 + (61.0 - 58.0 * T + T * T + 600.0 * C - 330.0 * kEPrime2) * A * A * A * A * A * A / 720.0));
 
     hemi = (lat >= 0.0) ? 'N' : 'S';
     if (lat < 0.0)

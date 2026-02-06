@@ -1,10 +1,10 @@
 #include "team_service.h"
 
+#include "../../sys/event_bus.h"
 #include "../domain/team_events.h"
 #include "../protocol/team_mgmt.h"
 #include "../protocol/team_portnum.h"
 #include "../protocol/team_wire.h"
-#include "../../sys/event_bus.h"
 #include <Arduino.h>
 #include <string>
 

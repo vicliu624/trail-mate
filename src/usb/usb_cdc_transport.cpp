@@ -1,10 +1,10 @@
 #include "usb_cdc_transport.h"
 
+#include "sdkconfig.h"
 #include <Arduino.h>
 #include <USB.h>
 #include <USBCDC.h>
 #include <esp_event.h>
-#include "sdkconfig.h"
 
 namespace usb_cdc
 {

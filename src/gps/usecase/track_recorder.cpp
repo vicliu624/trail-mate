@@ -1,7 +1,7 @@
 #include "gps/usecase/track_recorder.h"
 
-#include <esp_system.h>
 #include <cmath>
+#include <esp_system.h>
 
 namespace gps
 {
