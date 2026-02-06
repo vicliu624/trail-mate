@@ -8,6 +8,7 @@
  */
 
 #include "ui/LV_Helper.h"
+#include "walkie/walkie_service.h"
 #include <Arduino.h>
 
 #if LVGL_VERSION_MAJOR == 9
@@ -15,8 +16,8 @@
 // Test toggles (set to 0 to disable)
 #define LV_TEST_FORCE_DMA_BUF 1
 #define LV_TEST_FORCE_DMA_FULL_SIZE 0
-#define LV_TEST_FLUSH_LOG 1
-#define LV_TEST_FLUSH_SAMPLE 1
+#define LV_TEST_FLUSH_LOG 0
+#define LV_TEST_FLUSH_SAMPLE 0
 
 static lv_display_t* disp_drv;
 static lv_draw_buf_t draw_buf;
@@ -152,6 +153,32 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
         return;
     }
 
+    if (walkie::is_active())
+    {
+        if (msg.dir == ROTARY_DIR_UP)
+        {
+            walkie::adjust_volume(1);
+            updateUserActivity();
+        }
+        else if (msg.dir == ROTARY_DIR_DOWN)
+        {
+            walkie::adjust_volume(-1);
+            updateUserActivity();
+        }
+
+        if (msg.centerBtnPressed)
+        {
+            data->enc_diff = 0;
+            data->state = LV_INDEV_STATE_PRESSED;
+            plane->feedback((void*)drv);
+            return;
+        }
+
+        data->enc_diff = 0;
+        data->state = LV_INDEV_STATE_RELEASED;
+        return;
+    }
+
     // Screen is awake, process input normally
     if (msg.dir != ROTARY_DIR_NONE || msg.centerBtnPressed)
     {
@@ -201,6 +228,11 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
     }
 
     // Screen is awake, process input normally
+    if (state == KEYBOARD_PRESSED || state == KEYBOARD_RELEASED)
+    {
+        walkie::on_key_event(c, state);
+    }
+
     if (state == KEYBOARD_PRESSED)
     {
         updateUserActivity(); // Update activity timestamp

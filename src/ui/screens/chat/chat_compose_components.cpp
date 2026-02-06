@@ -4,6 +4,7 @@
 #include "chat_compose_layout.h"
 #include "chat_compose_styles.h"
 
+#include "../ui_common.h"
 #include "../../widgets/ime/ime_widget.h"
 #include "../../widgets/toast/toast_widget.h"
 
@@ -345,7 +346,7 @@ void ChatComposeScreen::init_topbar()
     }
 
     ::ui::widgets::top_bar_set_title(impl_->w.top_bar, title_buf);
-    ::ui::widgets::top_bar_set_right_text(impl_->w.top_bar, "RSSI --");
+    ui_update_top_bar_battery(impl_->w.top_bar);
     ::ui::widgets::top_bar_set_back_callback(impl_->w.top_bar, on_back, this);
 }
 
@@ -354,6 +355,7 @@ void ChatComposeScreen::setHeaderText(const char* title, const char* status)
     if (!impl_) return;
     if (title) ::ui::widgets::top_bar_set_title(impl_->w.top_bar, title);
     if (status) ::ui::widgets::top_bar_set_right_text(impl_->w.top_bar, status);
+    ui_update_top_bar_battery(impl_->w.top_bar);
 }
 
 void ChatComposeScreen::setActionLabels(const char* send_label, const char* cancel_label)

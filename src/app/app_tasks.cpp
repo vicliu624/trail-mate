@@ -31,6 +31,7 @@ TaskHandle_t AppTasks::radio_task_handle_ = nullptr;
 TaskHandle_t AppTasks::mesh_task_handle_ = nullptr;
 LoraBoard* AppTasks::board_ = nullptr;
 chat::IMeshAdapter* AppTasks::adapter_ = nullptr;
+bool AppTasks::radio_tasks_paused_ = false;
 
 bool AppTasks::init(LoraBoard& board, chat::IMeshAdapter* adapter)
 {
@@ -71,6 +72,55 @@ bool AppTasks::init(LoraBoard& board, chat::IMeshAdapter* adapter)
         &mesh_task_handle_);
 
     return (result == pdPASS);
+}
+
+void AppTasks::pauseRadioTasks()
+{
+    if (radio_tasks_paused_)
+    {
+        return;
+    }
+    radio_tasks_paused_ = true;
+
+    if (radio_task_handle_)
+    {
+        vTaskSuspend(radio_task_handle_);
+    }
+    if (mesh_task_handle_)
+    {
+        vTaskSuspend(mesh_task_handle_);
+    }
+
+    if (radio_tx_queue_)
+    {
+        xQueueReset(radio_tx_queue_);
+    }
+    if (radio_rx_queue_)
+    {
+        xQueueReset(radio_rx_queue_);
+    }
+    if (mesh_queue_)
+    {
+        xQueueReset(mesh_queue_);
+    }
+}
+
+void AppTasks::resumeRadioTasks()
+{
+    if (!radio_tasks_paused_)
+    {
+        return;
+    }
+    radio_tasks_paused_ = false;
+
+    if (radio_task_handle_)
+    {
+        vTaskResume(radio_task_handle_);
+    }
+    if (mesh_task_handle_)
+    {
+        vTaskResume(mesh_task_handle_);
+    }
 }
 
 void AppTasks::radioTask(void* pvParameters)

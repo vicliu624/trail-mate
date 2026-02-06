@@ -279,8 +279,12 @@ int LilyGoKeyboard::handleSpecialKeys(uint8_t k, bool pressed, char* c)
                  pressed ? 1 : 0);
     if (k == _config->symbol_key_value)
     {
-        symbol_key_pressed = !symbol_key_pressed; // Switch symbol mode
-        return _config->has_symbol_key ? -1 : 0;
+        if (_config->has_symbol_key)
+        {
+            symbol_key_pressed = !symbol_key_pressed; // Switch symbol mode
+            return -1;
+        }
+        return 0;
     }
     else if (k == _config->caps_key_value || k == _config->caps_b_key_value)
     {

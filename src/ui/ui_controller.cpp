@@ -569,7 +569,7 @@ void UiController::switchToCompose(chat::ConversationId conv)
         {
             title = "Team";
         }
-        compose_->setHeaderText(title.c_str(), "RSSI --");
+        compose_->setHeaderText(title.c_str(), nullptr);
         compose_->setActionLabels("Send", "Cancel");
         compose_->setPositionButton("Position", true);
         return;
@@ -597,7 +597,7 @@ void UiController::switchToCompose(chat::ConversationId conv)
             }
         }
     }
-    compose_->setHeaderText(title.c_str(), "RSSI --");
+    compose_->setHeaderText(title.c_str(), nullptr);
     compose_->setPositionButton(nullptr, false);
 }
 
