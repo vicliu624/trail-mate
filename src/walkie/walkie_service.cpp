@@ -32,8 +32,8 @@ constexpr uint8_t kJitterMaxFrames = 25;          // ~500ms buffer
 constexpr uint8_t kTxQueueMaxFrames = 20;          // ~400ms buffer
 constexpr uint8_t kHeaderMagic0 = 'W';
 constexpr uint8_t kHeaderMagic1 = 'T';
-constexpr uint8_t kHeaderVersion = 1;
-constexpr size_t kHeaderSize = 9;
+constexpr uint8_t kHeaderVersion = 2;
+constexpr size_t kHeaderSize = 14;
 
 constexpr uint8_t kDefaultVolume = 80;
 constexpr float kDefaultGainDb = 36.0f;
@@ -142,6 +142,28 @@ uint8_t compute_level(const int16_t* samples, int count, uint8_t prev)
     return static_cast<uint8_t>((prev * kStatusUpdateDecay + next) / (kStatusUpdateDecay + 1));
 }
 
+int16_t compute_peak(const int16_t* samples, int count)
+{
+    int32_t peak = 0;
+    for (int i = 0; i < count; ++i)
+    {
+        int32_t v = samples[i];
+        if (v < 0)
+        {
+            v = -v;
+        }
+        if (v > peak)
+        {
+            peak = v;
+        }
+    }
+    if (peak > 32767)
+    {
+        peak = 32767;
+    }
+    return static_cast<int16_t>(peak);
+}
+
 void write_u32_le(uint8_t* out, uint32_t val)
 {
     out[0] = static_cast<uint8_t>(val & 0xFF);
@@ -156,6 +178,18 @@ uint32_t read_u32_le(const uint8_t* in)
            (static_cast<uint32_t>(in[1]) << 8) |
            (static_cast<uint32_t>(in[2]) << 16) |
            (static_cast<uint32_t>(in[3]) << 24);
+}
+
+void write_u16_le(uint8_t* out, uint16_t val)
+{
+    out[0] = static_cast<uint8_t>(val & 0xFF);
+    out[1] = static_cast<uint8_t>((val >> 8) & 0xFF);
+}
+
+uint16_t read_u16_le(const uint8_t* in)
+{
+    return static_cast<uint16_t>(in[0]) |
+           (static_cast<uint16_t>(in[1]) << 8);
 }
 
 bool configure_fsk(TLoRaPagerBoard& board, float freq_mhz, int8_t tx_power)
@@ -289,7 +323,9 @@ void walkie_task(void*)
         return;
     }
 
-    uint8_t seq = 0;
+    uint16_t seq = 0;
+    uint16_t session_id = static_cast<uint16_t>(millis() & 0xFFFF);
+    uint16_t tx_frame_counter = 0;
     uint32_t self_id = get_self_id();
     bool tx_mode = false;
     bool rx_started = false;
@@ -299,6 +335,9 @@ void walkie_task(void*)
     uint32_t tx_read_fail = 0;
     int last_read_state = 0;
     uint32_t last_mic_log_ms = millis();
+    uint32_t last_audio_log_ms = millis();
+    int16_t last_tx_peak = 0;
+    int16_t last_rx_peak = 0;
     uint32_t rx_pkts = 0;
     uint32_t rx_bad = 0;
     int last_rx_len = 0;
@@ -316,6 +355,9 @@ void walkie_task(void*)
     size_t rx_frame_count = 0;
     size_t rx_frame_head = 0;
     size_t rx_frame_tail = 0;
+    uint32_t rx_src_id = 0;
+    uint16_t rx_session_id = 0;
+    uint16_t rx_expected_frame = 0;
     size_t tx_frame_count = 0;
     size_t tx_frame_head = 0;
     size_t tx_frame_tail = 0;
@@ -333,6 +375,9 @@ void walkie_task(void*)
             rx_frame_count = 0;
             rx_frame_head = 0;
             rx_frame_tail = 0;
+            rx_src_id = 0;
+            rx_session_id = 0;
+            rx_expected_frame = 0;
             rx_target_prebuffer = kJitterMinPrebufferFrames;
             rx_underruns = 0;
             rx_good_windows = 0;
@@ -344,6 +389,9 @@ void walkie_task(void*)
             if (tx_mode)
             {
                 board->radio_.standby();
+                session_id = static_cast<uint16_t>(session_id + 1);
+                seq = 0;
+                tx_frame_counter = 0;
             }
         }
 
@@ -365,6 +413,7 @@ void walkie_task(void*)
                     if (mix < -32768) mix = -32768;
                     pcm_in[i] = static_cast<int16_t>(mix);
                 }
+                last_tx_peak = compute_peak(pcm_in, samples_per_frame);
                 tx_level = compute_level(pcm_in, samples_per_frame, tx_level);
                 codec2_encode(codec2_state, codec_buf, pcm_in);
                 if (tx_frame_count < kTxQueueMaxFrames)
@@ -381,6 +430,7 @@ void walkie_task(void*)
                     memcpy(dst, codec_buf, bytes_per_frame);
                     tx_frame_tail = (tx_frame_tail + 1) % kTxQueueMaxFrames;
                 }
+                tx_frame_counter = static_cast<uint16_t>(tx_frame_counter + 1);
 
                 if (tx_in_flight)
                 {
@@ -399,7 +449,11 @@ void walkie_task(void*)
                     packet_buf[2] = kHeaderVersion;
                     packet_buf[3] = 0x01;
                     write_u32_le(&packet_buf[4], self_id);
-                    packet_buf[8] = seq++;
+                    write_u16_le(&packet_buf[8], session_id);
+                    write_u16_le(&packet_buf[10], seq++);
+                    uint16_t frame0_index =
+                        static_cast<uint16_t>(tx_frame_counter - tx_frame_count);
+                    write_u16_le(&packet_buf[12], frame0_index);
                     for (size_t i = 0; i < kCodecFramesPerPacket; ++i)
                     {
                         const uint8_t* src = tx_frame_buf + (tx_frame_head * bytes_per_frame);
@@ -445,6 +499,15 @@ void walkie_task(void*)
                 tx_read_fail = 0;
                 last_mic_log_ms = now_ms;
             }
+            if (now_ms - last_audio_log_ms >= 1000)
+            {
+                Serial.printf("[WALKIE] tx lvl=%u peak=%d q=%u inflight=%d\n",
+                              static_cast<unsigned>(tx_level),
+                              static_cast<int>(last_tx_peak),
+                              static_cast<unsigned>(tx_frame_count),
+                              tx_in_flight ? 1 : 0);
+                last_audio_log_ms = now_ms;
+            }
             vTaskDelay(pdMS_TO_TICKS(2));
             continue;
         }
@@ -471,8 +534,42 @@ void walkie_task(void*)
                         packet_buf[2] == kHeaderVersion)
                     {
                         uint32_t src = read_u32_le(&packet_buf[4]);
+                        uint16_t pkt_session = read_u16_le(&packet_buf[8]);
+                        uint16_t pkt_seq = read_u16_le(&packet_buf[10]);
+                        (void)pkt_seq;
+                        uint16_t pkt_frame0 = read_u16_le(&packet_buf[12]);
                         if (src != self_id)
                         {
+                            if (rx_src_id != src || rx_session_id != pkt_session)
+                            {
+                                rx_src_id = src;
+                                rx_session_id = pkt_session;
+                                rx_expected_frame = static_cast<uint16_t>(pkt_frame0 + kCodecFramesPerPacket);
+                                rx_frame_count = 0;
+                                rx_frame_head = 0;
+                                rx_frame_tail = 0;
+                                rx_play_active = false;
+                                rx_target_prebuffer = kJitterMinPrebufferFrames;
+                                rx_underruns = 0;
+                                rx_good_windows = 0;
+                                last_adapt_ms = millis();
+                            }
+                            else
+                            {
+                                uint16_t diff =
+                                    static_cast<uint16_t>(pkt_frame0 - rx_expected_frame);
+                                if (diff > 0x8000)
+                                {
+                                    rx_bad++;
+                                    goto rx_done;
+                                }
+                                if (diff > 0)
+                                {
+                                    rx_bad++;
+                                }
+                                rx_expected_frame = static_cast<uint16_t>(pkt_frame0 + kCodecFramesPerPacket);
+                            }
+
                             rx_pkts++;
                             size_t payload_len = static_cast<size_t>(len) - kHeaderSize;
                             size_t frame_count = payload_len / bytes_per_frame;
@@ -513,6 +610,7 @@ void walkie_task(void*)
             {
                 rx_bad++;
             }
+        rx_done:
             board->clearRadioIrqFlags(irq);
             board->startRadioReceive();
         }
@@ -539,6 +637,7 @@ void walkie_task(void*)
                     const uint8_t* frame = rx_frame_buf + (rx_frame_head * bytes_per_frame);
                     codec2_decode(codec2_state, pcm_out, frame);
                     memcpy(last_pcm_out, pcm_out, samples_per_frame * sizeof(int16_t));
+                    last_rx_peak = compute_peak(pcm_out, samples_per_frame);
                     rx_frame_head = (rx_frame_head + 1) % kJitterMaxFrames;
                     rx_frame_count--;
                     last_rx_frame_ms = now_ms;
@@ -611,6 +710,16 @@ void walkie_task(void*)
             last_rx_len = 0;
             last_rx_state = 0;
             last_rx_log_ms = now_ms;
+        }
+        if (now_ms - last_audio_log_ms >= 1000)
+        {
+            Serial.printf("[WALKIE] rx lvl=%u peak=%d buf=%u pre=%u underrun=%lu\n",
+                          static_cast<unsigned>(rx_level),
+                          static_cast<int>(last_rx_peak),
+                          static_cast<unsigned>(rx_frame_count),
+                          static_cast<unsigned>(rx_target_prebuffer),
+                          static_cast<unsigned long>(rx_underruns));
+            last_audio_log_ms = now_ms;
         }
 
         vTaskDelay(pdMS_TO_TICKS(2));
