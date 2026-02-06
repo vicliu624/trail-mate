@@ -41,6 +41,8 @@ constexpr uint8_t kVolumeStep = 5;
 constexpr uint32_t kMicLogIntervalMs = 1000;
 constexpr float kTxPcmGain = 1.6f;
 constexpr float kRxPcmGain = 2.0f;
+constexpr int16_t kRxSilencePeak = 600;
+constexpr uint8_t kRxQuietFramesToZero = 5;
 
 constexpr uint32_t kStatusUpdateDecay = 3;
 constexpr uint32_t kRxLogIntervalMs = 1000;
@@ -355,6 +357,7 @@ void walkie_task(void*)
     size_t rx_frame_count = 0;
     size_t rx_frame_head = 0;
     size_t rx_frame_tail = 0;
+    uint8_t rx_quiet_frames = 0;
     uint32_t rx_src_id = 0;
     uint16_t rx_session_id = 0;
     uint16_t rx_expected_frame = 0;
@@ -382,6 +385,7 @@ void walkie_task(void*)
             rx_underruns = 0;
             rx_good_windows = 0;
             last_adapt_ms = millis();
+            rx_quiet_frames = 0;
             tx_frame_count = 0;
             tx_frame_head = 0;
             tx_frame_tail = 0;
@@ -553,6 +557,7 @@ void walkie_task(void*)
                                 rx_underruns = 0;
                                 rx_good_windows = 0;
                                 last_adapt_ms = millis();
+                                rx_quiet_frames = 0;
                             }
                             else
                             {
@@ -648,8 +653,37 @@ void walkie_task(void*)
                     {
                         rx_play_active = false;
                     }
-                    memcpy(pcm_out, last_pcm_out, samples_per_frame * sizeof(int16_t));
+                    for (int j = 0; j < samples_per_frame; ++j)
+                    {
+                        int32_t sample = (static_cast<int32_t>(last_pcm_out[j]) * 4) / 5;
+                        last_pcm_out[j] = static_cast<int16_t>(sample);
+                        pcm_out[j] = last_pcm_out[j];
+                    }
+                    last_rx_peak = compute_peak(pcm_out, samples_per_frame);
                     rx_underruns++;
+                }
+
+                if (last_rx_peak < kRxSilencePeak)
+                {
+                    if (rx_quiet_frames < 255)
+                    {
+                        rx_quiet_frames++;
+                    }
+                }
+                else
+                {
+                    rx_quiet_frames = 0;
+                }
+                if (rx_quiet_frames >= kRxQuietFramesToZero)
+                {
+                    memset(pcm_out, 0, samples_per_frame * sizeof(int16_t));
+                    memset(last_pcm_out, 0, samples_per_frame * sizeof(int16_t));
+                    last_rx_peak = 0;
+                    rx_level = 0;
+                }
+                else
+                {
+                    rx_level = compute_level(pcm_out, samples_per_frame, rx_level);
                 }
 
                 for (int j = 0; j < samples_per_frame; ++j)
@@ -660,7 +694,6 @@ void walkie_task(void*)
                     pcm_out_i2s[j * 2] = static_cast<int16_t>(sample);
                     pcm_out_i2s[j * 2 + 1] = static_cast<int16_t>(sample);
                 }
-                rx_level = compute_level(pcm_out, samples_per_frame, rx_level);
                 board->codec.write(reinterpret_cast<uint8_t*>(pcm_out_i2s),
                                    i2s_samples_per_frame * sizeof(int16_t));
                 update_status_levels(tx_level, rx_level);
@@ -669,6 +702,10 @@ void walkie_task(void*)
             {
                 board->codec.write(reinterpret_cast<uint8_t*>(silence_i2s),
                                    i2s_samples_per_frame * sizeof(int16_t));
+                rx_quiet_frames = 0;
+                rx_level = static_cast<uint8_t>(
+                    (rx_level * kStatusUpdateDecay) / (kStatusUpdateDecay + 1));
+                update_status_levels(tx_level, rx_level);
             }
         }
 
