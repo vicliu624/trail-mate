@@ -342,7 +342,7 @@ bool GPS::configureGnss(uint8_t sat_mask)
 
     // Defaults for SPG 3.0x (numConfigBlocks = 7).
     GnssBlock blocks[] = {
-        {0, 8, 16, 0, make_flags(enable_gps, 0x01)},  // GPS
+        {0, 8, 16, 0, make_flags(enable_gps, 0x01)}, // GPS
         {1, 1, 3, 0, make_flags(false, 0x00)},       // SBAS
         {2, 4, 8, 0, make_flags(enable_gal, 0x01)},  // Galileo
         {3, 8, 16, 0, make_flags(enable_bds, 0x01)}, // BeiDou

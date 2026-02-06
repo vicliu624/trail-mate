@@ -18,6 +18,10 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.6-alpha] - 2026-02-06
+### Added / 新增
+- Walkie talkie feature (FSK + Codec2) / 对讲功能（FSK + Codec2）
+
 ## [0.1.5-alpha] - 2026-02-05
 ### Added / 新增
 - Data Exchange (PC Link) mode with USB CDC-ACM transport and HostLink protocol (codec/service/bridge) / 数据交换（PC Link）模式：USB CDC-ACM 传输与 HostLink 协议（编解码/服务/桥接）

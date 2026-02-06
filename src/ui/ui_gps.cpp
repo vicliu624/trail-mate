@@ -1,5 +1,5 @@
-#include "board/BoardBase.h"
 #include "../app/app_context.h"
+#include "board/BoardBase.h"
 #include "display/DisplayInterface.h"
 #include "gps/GPS.h"
 #include "screens/gps/gps_constants.h"
@@ -10,9 +10,9 @@
 #include "screens/gps/gps_page_lifetime.h"
 #include "screens/gps/gps_page_map.h"
 #include "screens/gps/gps_page_styles.h"
+#include "screens/gps/gps_route_overlay.h"
 #include "screens/gps/gps_state.h"
 #include "screens/gps/gps_tracker_overlay.h"
-#include "screens/gps/gps_route_overlay.h"
 #include "ui_common.h"
 #include "widgets/map/map_tiles.h"
 

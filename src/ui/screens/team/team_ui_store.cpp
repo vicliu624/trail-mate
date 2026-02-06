@@ -10,9 +10,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <vector>
-#include <ctime>
 
 namespace team
 {
