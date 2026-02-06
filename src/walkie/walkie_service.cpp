@@ -26,6 +26,10 @@ constexpr uint16_t kFskPreambleLen = 16;
 constexpr uint8_t kFskSyncWord[] = {0x2D, 0x01};
 
 constexpr uint8_t kCodecFramesPerPacket = 5;
+constexpr uint8_t kJitterMinPrebufferFrames = 10; // ~200ms (5 frames/packet, 20ms per frame)
+constexpr uint8_t kJitterMaxPrebufferFrames = 15; // ~300ms
+constexpr uint8_t kJitterMaxFrames = 25;          // ~500ms buffer
+constexpr uint8_t kTxQueueMaxFrames = 20;          // ~400ms buffer
 constexpr uint8_t kHeaderMagic0 = 'W';
 constexpr uint8_t kHeaderMagic1 = 'T';
 constexpr uint8_t kHeaderVersion = 1;
@@ -259,8 +263,13 @@ void walkie_task(void*)
     auto* pcm_out = static_cast<int16_t*>(malloc(samples_per_frame * sizeof(int16_t)));
     auto* codec_buf = static_cast<uint8_t*>(malloc(bytes_per_frame));
     auto* packet_buf = static_cast<uint8_t*>(malloc(packet_size));
+    auto* rx_frame_buf = static_cast<uint8_t*>(malloc(bytes_per_frame * kJitterMaxFrames));
+    auto* tx_frame_buf = static_cast<uint8_t*>(malloc(bytes_per_frame * kTxQueueMaxFrames));
+    auto* last_pcm_out = static_cast<int16_t*>(calloc(samples_per_frame, sizeof(int16_t)));
+    auto* silence_i2s = static_cast<int16_t*>(calloc(i2s_samples_per_frame, sizeof(int16_t)));
 
-    if (!pcm_in_i2s || !pcm_out_i2s || !pcm_in || !pcm_out || !codec_buf || !packet_buf)
+    if (!pcm_in_i2s || !pcm_out_i2s || !pcm_in || !pcm_out || !codec_buf || !packet_buf ||
+        !rx_frame_buf || !tx_frame_buf || !last_pcm_out || !silence_i2s)
     {
         free(pcm_in_i2s);
         free(pcm_out_i2s);
@@ -268,6 +277,10 @@ void walkie_task(void*)
         free(pcm_out);
         free(codec_buf);
         free(packet_buf);
+        free(rx_frame_buf);
+        free(tx_frame_buf);
+        free(last_pcm_out);
+        free(silence_i2s);
         codec2_destroy(codec2_state);
         update_status_active(false);
         s_active = false;
@@ -278,7 +291,6 @@ void walkie_task(void*)
 
     uint8_t seq = 0;
     uint32_t self_id = get_self_id();
-    size_t tx_fill = 0;
     bool tx_mode = false;
     bool rx_started = false;
     uint8_t tx_level = 0;
@@ -292,9 +304,22 @@ void walkie_task(void*)
     int last_rx_len = 0;
     int last_rx_state = 0;
     uint32_t last_rx_log_ms = millis();
-    bool rx_pending = false;
-    size_t rx_payload_len = 0;
-    auto* rx_payload_buf = static_cast<uint8_t*>(malloc(payload_size));
+    const uint32_t frame_interval_ms =
+        static_cast<uint32_t>((samples_per_frame * 1000u) / kSampleRate);
+    uint32_t last_play_ms = millis();
+    uint32_t last_rx_frame_ms = 0;
+    bool rx_play_active = false;
+    size_t rx_target_prebuffer = kJitterMinPrebufferFrames;
+    uint32_t rx_underruns = 0;
+    uint32_t rx_good_windows = 0;
+    uint32_t last_adapt_ms = millis();
+    size_t rx_frame_count = 0;
+    size_t rx_frame_head = 0;
+    size_t rx_frame_tail = 0;
+    size_t tx_frame_count = 0;
+    size_t tx_frame_head = 0;
+    size_t tx_frame_tail = 0;
+    bool tx_in_flight = false;
 
     while (!s_stop_requested)
     {
@@ -303,9 +328,23 @@ void walkie_task(void*)
         {
             tx_mode = want_tx;
             update_status_tx(tx_mode);
-            tx_fill = 0;
             rx_started = false;
-            rx_pending = false;
+            rx_play_active = false;
+            rx_frame_count = 0;
+            rx_frame_head = 0;
+            rx_frame_tail = 0;
+            rx_target_prebuffer = kJitterMinPrebufferFrames;
+            rx_underruns = 0;
+            rx_good_windows = 0;
+            last_adapt_ms = millis();
+            tx_frame_count = 0;
+            tx_frame_head = 0;
+            tx_frame_tail = 0;
+            tx_in_flight = false;
+            if (tx_mode)
+            {
+                board->radio_.standby();
+            }
         }
 
         if (tx_mode)
@@ -328,9 +367,32 @@ void walkie_task(void*)
                 }
                 tx_level = compute_level(pcm_in, samples_per_frame, tx_level);
                 codec2_encode(codec2_state, codec_buf, pcm_in);
-                memcpy(packet_buf + kHeaderSize + tx_fill, codec_buf, bytes_per_frame);
-                tx_fill += bytes_per_frame;
-                if (tx_fill >= payload_size)
+                if (tx_frame_count < kTxQueueMaxFrames)
+                {
+                    uint8_t* dst = tx_frame_buf + (tx_frame_tail * bytes_per_frame);
+                    memcpy(dst, codec_buf, bytes_per_frame);
+                    tx_frame_tail = (tx_frame_tail + 1) % kTxQueueMaxFrames;
+                    tx_frame_count++;
+                }
+                else
+                {
+                    tx_frame_head = (tx_frame_head + 1) % kTxQueueMaxFrames;
+                    uint8_t* dst = tx_frame_buf + (tx_frame_tail * bytes_per_frame);
+                    memcpy(dst, codec_buf, bytes_per_frame);
+                    tx_frame_tail = (tx_frame_tail + 1) % kTxQueueMaxFrames;
+                }
+
+                if (tx_in_flight)
+                {
+                    uint32_t flags = board->getRadioIrqFlags();
+                    if (flags & RADIOLIB_SX126X_IRQ_TX_DONE)
+                    {
+                        board->clearRadioIrqFlags(flags);
+                        tx_in_flight = false;
+                    }
+                }
+
+                if (!tx_in_flight && tx_frame_count >= kCodecFramesPerPacket)
                 {
                     packet_buf[0] = kHeaderMagic0;
                     packet_buf[1] = kHeaderMagic1;
@@ -338,12 +400,32 @@ void walkie_task(void*)
                     packet_buf[3] = 0x01;
                     write_u32_le(&packet_buf[4], self_id);
                     packet_buf[8] = seq++;
-                    int tx_state = board->transmitRadio(packet_buf, packet_size);
-                    if (tx_state != RADIOLIB_ERR_NONE)
+                    for (size_t i = 0; i < kCodecFramesPerPacket; ++i)
                     {
-                        Serial.printf("[WALKIE] transmit failed state=%d\n", tx_state);
+                        const uint8_t* src = tx_frame_buf + (tx_frame_head * bytes_per_frame);
+                        memcpy(packet_buf + kHeaderSize + (i * bytes_per_frame),
+                               src,
+                               bytes_per_frame);
+                        tx_frame_head = (tx_frame_head + 1) % kTxQueueMaxFrames;
+                        tx_frame_count--;
                     }
-                    tx_fill = 0;
+                    if (board->lock(pdMS_TO_TICKS(50)))
+                    {
+                        int tx_state = board->radio_.startTransmit(packet_buf, packet_size);
+                        board->unlock();
+                        if (tx_state == RADIOLIB_ERR_NONE)
+                        {
+                            tx_in_flight = true;
+                        }
+                        else
+                        {
+                            Serial.printf("[WALKIE] startTransmit failed state=%d\n", tx_state);
+                        }
+                    }
+                    else
+                    {
+                        Serial.printf("[WALKIE] startTransmit lock failed\n");
+                    }
                 }
                 update_status_levels(tx_level, rx_level);
             }
@@ -391,20 +473,25 @@ void walkie_task(void*)
                         uint32_t src = read_u32_le(&packet_buf[4]);
                         if (src != self_id)
                         {
-                            if (!rx_pending && rx_payload_buf)
+                            rx_pkts++;
+                            size_t payload_len = static_cast<size_t>(len) - kHeaderSize;
+                            size_t frame_count = payload_len / bytes_per_frame;
+                            for (size_t i = 0; i < frame_count; ++i)
                             {
-                                rx_pkts++;
-                                rx_payload_len = static_cast<size_t>(len) - kHeaderSize;
-                                if (rx_payload_len > payload_size)
+                                if (rx_frame_count < kJitterMaxFrames)
                                 {
-                                    rx_payload_len = payload_size;
+                                    uint8_t* dst = rx_frame_buf + (rx_frame_tail * bytes_per_frame);
+                                    memcpy(dst,
+                                           packet_buf + kHeaderSize + (i * bytes_per_frame),
+                                           bytes_per_frame);
+                                    rx_frame_tail = (rx_frame_tail + 1) % kJitterMaxFrames;
+                                    rx_frame_count++;
+                                    last_rx_frame_ms = millis();
                                 }
-                                memcpy(rx_payload_buf, packet_buf + kHeaderSize, rx_payload_len);
-                                rx_pending = true;
-                            }
-                            else
-                            {
-                                rx_bad++;
+                                else
+                                {
+                                    rx_bad++;
+                                }
                             }
                         }
                         else
@@ -434,13 +521,38 @@ void walkie_task(void*)
             board->clearRadioIrqFlags(irq);
         }
 
-        if (rx_pending && rx_payload_buf && rx_payload_len >= bytes_per_frame)
+        uint32_t now_ms = millis();
+        if (now_ms - last_play_ms >= frame_interval_ms)
         {
-            size_t frame_count = rx_payload_len / bytes_per_frame;
-            for (size_t i = 0; i < frame_count; ++i)
+            last_play_ms = now_ms;
+            if (!rx_play_active)
             {
-                const uint8_t* frame = rx_payload_buf + (i * bytes_per_frame);
-                codec2_decode(codec2_state, pcm_out, frame);
+                if (rx_frame_count >= rx_target_prebuffer)
+                {
+                    rx_play_active = true;
+                }
+            }
+            if (rx_play_active)
+            {
+                if (rx_frame_count > 0)
+                {
+                    const uint8_t* frame = rx_frame_buf + (rx_frame_head * bytes_per_frame);
+                    codec2_decode(codec2_state, pcm_out, frame);
+                    memcpy(last_pcm_out, pcm_out, samples_per_frame * sizeof(int16_t));
+                    rx_frame_head = (rx_frame_head + 1) % kJitterMaxFrames;
+                    rx_frame_count--;
+                    last_rx_frame_ms = now_ms;
+                }
+                else
+                {
+                    if ((now_ms - last_rx_frame_ms) > (frame_interval_ms * 3))
+                    {
+                        rx_play_active = false;
+                    }
+                    memcpy(pcm_out, last_pcm_out, samples_per_frame * sizeof(int16_t));
+                    rx_underruns++;
+                }
+
                 for (int j = 0; j < samples_per_frame; ++j)
                 {
                     int32_t sample = static_cast<int32_t>(pcm_out[j] * kRxPcmGain);
@@ -452,12 +564,38 @@ void walkie_task(void*)
                 rx_level = compute_level(pcm_out, samples_per_frame, rx_level);
                 board->codec.write(reinterpret_cast<uint8_t*>(pcm_out_i2s),
                                    i2s_samples_per_frame * sizeof(int16_t));
+                update_status_levels(tx_level, rx_level);
             }
-            update_status_levels(tx_level, rx_level);
-            rx_pending = false;
+            else
+            {
+                board->codec.write(reinterpret_cast<uint8_t*>(silence_i2s),
+                                   i2s_samples_per_frame * sizeof(int16_t));
+            }
         }
 
-        uint32_t now_ms = millis();
+        if (now_ms - last_adapt_ms >= 1000)
+        {
+            if (rx_underruns > 1)
+            {
+                rx_target_prebuffer = kJitterMaxPrebufferFrames;
+                rx_good_windows = 0;
+            }
+            else if (rx_underruns == 0)
+            {
+                rx_good_windows++;
+                if (rx_good_windows >= 3)
+                {
+                    rx_target_prebuffer = kJitterMinPrebufferFrames;
+                }
+            }
+            else
+            {
+                rx_good_windows = 0;
+            }
+            rx_underruns = 0;
+            last_adapt_ms = now_ms;
+        }
+
         if (now_ms - last_rx_log_ms >= kRxLogIntervalMs)
         {
             if (rx_pkts != 0 || rx_bad != 0)
@@ -478,7 +616,10 @@ void walkie_task(void*)
         vTaskDelay(pdMS_TO_TICKS(2));
     }
 
-    free(rx_payload_buf);
+    free(rx_frame_buf);
+    free(tx_frame_buf);
+    free(last_pcm_out);
+    free(silence_i2s);
     free(pcm_in_i2s);
     free(pcm_out_i2s);
     free(pcm_in);
