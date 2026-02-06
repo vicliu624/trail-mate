@@ -877,7 +877,7 @@ static void open_chat_compose()
         }
     }
 
-    g_contacts_state.compose_screen->setHeaderText(title.c_str(), "RSSI --");
+    g_contacts_state.compose_screen->setHeaderText(title.c_str(), nullptr);
     s_compose_peer_id = peer_id;
     s_compose_channel = channel;
     s_compose_is_team = (g_contacts_state.current_mode == ContactsMode::Team);

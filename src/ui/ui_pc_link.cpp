@@ -42,6 +42,7 @@ void refresh_status_cb(lv_timer_t* timer)
     {
         return;
     }
+    ui_update_top_bar_battery(s_top_bar);
     hostlink::Status st = hostlink::get_status();
     if (st.state == hostlink::LinkState::Error && st.last_error != 0)
     {
@@ -87,6 +88,7 @@ void ui_pc_link_enter(lv_obj_t* parent)
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
     ::ui::widgets::top_bar_set_title(s_top_bar, "Data Exchange");
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
+    ui_update_top_bar_battery(s_top_bar);
 
     lv_obj_t* content = lv_obj_create(s_root);
     lv_obj_set_size(content, LV_PCT(100), 0);

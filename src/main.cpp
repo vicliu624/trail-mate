@@ -30,6 +30,9 @@ extern "C"
     extern const lv_image_dsc_t tracker_icon;
     extern const lv_image_dsc_t shutdown;
     extern const lv_image_dsc_t rf;
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+    extern const lv_image_dsc_t walkie_talkie;
+#endif
     // Note: img_usb is already declared in images.h (C++ linkage)
 }
 
@@ -52,6 +55,10 @@ void ui_setting_enter(lv_obj_t* parent);
 void ui_setting_exit(lv_obj_t* parent);
 void ui_pc_link_enter(lv_obj_t* parent);
 void ui_pc_link_exit(lv_obj_t* parent);
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+void ui_walkie_talkie_enter(lv_obj_t* parent);
+void ui_walkie_talkie_exit(lv_obj_t* parent);
+#endif
 #ifdef ARDUINO_USB_MODE
 void ui_usb_enter(lv_obj_t* parent);
 void ui_usb_exit(lv_obj_t* parent);
@@ -163,19 +170,37 @@ static FunctionAppScreen s_chat_app("Chat", &Chat, ui_chat_enter, ui_chat_exit);
 static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter, ui_contacts_exit);
 static FunctionAppScreen s_team_app("Team", &team_icon, ui_team_enter, ui_team_exit);
 static FunctionAppScreen s_pc_link_app("Data Exchange", &rf, ui_pc_link_enter, ui_pc_link_exit);
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+static FunctionAppScreen s_walkie_app("Walkie Talkie", &walkie_talkie, ui_walkie_talkie_enter, ui_walkie_talkie_exit);
+#endif
 static FunctionAppScreen s_setting_app("Setting", &Setting, ui_setting_enter, ui_setting_exit);
 static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter, nullptr);
 
 #ifdef ARDUINO_USB_MODE
 static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_usb_app, &s_setting_app,
-                                   &s_shutdown_app};
+                                   &s_team_app, &s_pc_link_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+                                   &s_walkie_app,
+#endif
+                                   &s_usb_app, &s_setting_app, &s_shutdown_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#define NUM_APPS 10
+#else
 #define NUM_APPS 9
+#endif
 #else
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_setting_app, &s_shutdown_app};
+                                   &s_team_app, &s_pc_link_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+                                   &s_walkie_app,
+#endif
+                                   &s_setting_app, &s_shutdown_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#define NUM_APPS 9
+#else
 #define NUM_APPS 8
+#endif
 #endif
 
 #if LVGL_VERSION_MAJOR == 9
@@ -280,6 +305,60 @@ static uint8_t saved_keyboard_brightness = 127;  // Save keyboard brightness bef
 static uint32_t screen_sleep_timeout_ms = 30000; // Default 30 seconds, can be configured
 static Preferences preferences;                  // For saving/loading settings
 
+namespace
+{
+constexpr const char* kSettingsNs = "settings_v2";
+constexpr const char* kScreenTimeoutKey = "screen_timeout";
+constexpr const char* kLegacySettingsNs = "settings";
+constexpr const char* kLegacyScreenTimeoutKey = "sleep_timeout";
+constexpr uint32_t kScreenTimeoutMinMs = 10000;
+constexpr uint32_t kScreenTimeoutMaxMs = 300000;
+constexpr uint32_t kScreenTimeoutDefaultMs = 30000;
+
+static uint32_t clamp_screen_timeout(uint32_t timeout_ms)
+{
+    if (timeout_ms < kScreenTimeoutMinMs)
+    {
+        return kScreenTimeoutDefaultMs;
+    }
+    if (timeout_ms > kScreenTimeoutMaxMs)
+    {
+        return kScreenTimeoutMaxMs;
+    }
+    return timeout_ms;
+}
+
+static uint32_t read_screen_timeout_ms()
+{
+    Preferences prefs;
+    prefs.begin(kSettingsNs, true);
+    uint32_t value = prefs.getUInt(kScreenTimeoutKey, 0);
+    prefs.end();
+
+    if (value == 0)
+    {
+        prefs.begin(kLegacySettingsNs, true);
+        value = prefs.getUInt(kLegacyScreenTimeoutKey, kScreenTimeoutDefaultMs);
+        prefs.end();
+    }
+
+    return clamp_screen_timeout(value);
+}
+
+static void write_screen_timeout_ms(uint32_t timeout_ms)
+{
+    Preferences prefs;
+    prefs.begin(kSettingsNs, false);
+    prefs.putUInt(kScreenTimeoutKey, timeout_ms);
+    prefs.end();
+
+    // Keep legacy key in sync for older builds.
+    prefs.begin(kLegacySettingsNs, false);
+    prefs.putUInt(kLegacyScreenTimeoutKey, timeout_ms);
+    prefs.end();
+}
+} // namespace
+
 // Power management wrapper function for accessing preferences
 Preferences& getPreferencesInstance() { return preferences; }
 
@@ -314,18 +393,7 @@ bool isScreenSleeping()
  */
 uint32_t getScreenSleepTimeout()
 {
-    uint32_t timeout = 30000; // Default 30 seconds
-
-    // Read from persistent storage to ensure we have the latest value
-    preferences.begin("settings", true);                   // Read-only mode
-    timeout = preferences.getUInt("sleep_timeout", 30000); // Default 30 seconds
-    preferences.end();
-
-    // Ensure minimum timeout
-    if (timeout < 10000)
-    {
-        timeout = 30000;
-    }
+    uint32_t timeout = read_screen_timeout_ms();
 
     // Also update memory variable for faster access
     if (activity_mutex != NULL)
@@ -346,19 +414,16 @@ uint32_t getScreenSleepTimeout()
  */
 void setScreenSleepTimeout(uint32_t timeout_ms)
 {
-    // Minimum 10 seconds, maximum 300 seconds (5 minutes)
-    if (timeout_ms < 10000) timeout_ms = 10000;
-    if (timeout_ms > 300000) timeout_ms = 300000;
+    timeout_ms = clamp_screen_timeout(timeout_ms);
+
+    // Save to preferences (use settings_v2 key and keep legacy key in sync)
+    write_screen_timeout_ms(timeout_ms);
 
     if (activity_mutex != NULL)
     {
         if (xSemaphoreTake(activity_mutex, portMAX_DELAY) == pdTRUE)
         {
             screen_sleep_timeout_ms = timeout_ms;
-            // Save to preferences
-            preferences.begin("settings", false);
-            preferences.putUInt("sleep_timeout", timeout_ms);
-            preferences.end();
             xSemaphoreGive(activity_mutex);
         }
     }
@@ -484,15 +549,7 @@ static void screenSleepTask(void* pvParameters)
 
                 // Get current timeout from persistent storage (may have been changed in settings)
                 // Read directly from preferences to ensure we have the latest value
-                preferences.begin("settings", true); // Read-only mode
-                uint32_t current_timeout = preferences.getUInt("sleep_timeout", 30000);
-                preferences.end();
-
-                // Ensure minimum timeout
-                if (current_timeout < 10000)
-                {
-                    current_timeout = 30000;
-                }
+                uint32_t current_timeout = read_screen_timeout_ms();
 
                 // Update memory variable
                 screen_sleep_timeout_ms = current_timeout;
@@ -851,15 +908,7 @@ void setup()
         last_user_activity_time = millis();
 
         // Load screen sleep timeout from preferences
-        preferences.begin("settings", true);
-        screen_sleep_timeout_ms = preferences.getUInt("sleep_timeout", 30000); // Default 30 seconds
-        preferences.end();
-
-        // Ensure minimum timeout
-        if (screen_sleep_timeout_ms < 10000)
-        {
-            screen_sleep_timeout_ms = 30000;
-        }
+        screen_sleep_timeout_ms = read_screen_timeout_ms();
     }
 
     // Create screen sleep management task

@@ -64,6 +64,24 @@ class AppTasks
         return radio_rx_queue_;
     }
 
+    /**
+     * @brief Pause radio + mesh tasks (for exclusive radio modes like walkie-talkie)
+     */
+    static void pauseRadioTasks();
+
+    /**
+     * @brief Resume radio + mesh tasks after pause
+     */
+    static void resumeRadioTasks();
+
+    /**
+     * @brief Check if radio tasks are paused
+     */
+    static bool areRadioTasksPaused()
+    {
+        return radio_tasks_paused_;
+    }
+
   private:
     static QueueHandle_t radio_tx_queue_;
     static QueueHandle_t radio_rx_queue_;
@@ -72,6 +90,7 @@ class AppTasks
     static TaskHandle_t mesh_task_handle_;
     static LoraBoard* board_;
     static chat::IMeshAdapter* adapter_;
+    static bool radio_tasks_paused_;
 };
 
 } // namespace app
