@@ -25,6 +25,15 @@ static void on_msg_list_key(lv_event_t* e)
     if (!screen || !screen->isAlive()) return;
 
     uint32_t key = lv_event_get_key(e);
+    if (key == LV_KEY_BACKSPACE)
+    {
+        if (lv_obj_t* back_btn = screen->getBackBtn())
+        {
+            lv_obj_send_event(back_btn, LV_EVENT_CLICKED, nullptr);
+            lv_event_stop_processing(e);
+        }
+        return;
+    }
 
     if (lv_group_t* g = lv_group_get_default())
     {
@@ -57,6 +66,19 @@ static void on_msg_list_key(lv_event_t* e)
                 lv_event_stop_processing(e);
             }
         }
+    }
+}
+
+static void on_backspace_key(lv_event_t* e)
+{
+    auto* screen = static_cast<ChatConversationScreen*>(lv_event_get_user_data(e));
+    if (!screen || !screen->isAlive()) return;
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_BACKSPACE) return;
+    if (lv_obj_t* back_btn = screen->getBackBtn())
+    {
+        lv_obj_send_event(back_btn, LV_EVENT_CLICKED, nullptr);
+        lv_event_stop_processing(e);
     }
 }
 
@@ -93,10 +115,12 @@ void init(ChatConversationScreen* screen, Binding* binding)
     if (binding->reply_btn)
     {
         lv_group_add_obj(binding->group, binding->reply_btn);
+        lv_obj_add_event_cb(binding->reply_btn, on_backspace_key, LV_EVENT_KEY, screen);
     }
     if (binding->back_btn)
     {
         lv_group_add_obj(binding->group, binding->back_btn);
+        lv_obj_add_event_cb(binding->back_btn, on_backspace_key, LV_EVENT_KEY, screen);
     }
     binding->bound = true;
     CHAT_CONV_INPUT_LOG("[ChatConversationInput] init (group focus msg list)\n");

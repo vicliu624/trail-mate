@@ -43,6 +43,7 @@ static bool usb_stopped = false;
 
 // Forward declarations
 static void back_event_handler(void* user_data);
+static void root_key_event_cb(lv_event_t* e);
 static void show_loading(const char* message);
 static void stop_usb_async_cb(lv_timer_t* timer);
 static void update_status_message(const char* message);
@@ -150,6 +151,16 @@ static void update_status_message(const char* message)
         lv_label_set_text(status_label, message);
     }
     Serial.printf("[USB] %s\n", message);
+}
+
+static void root_key_event_cb(lv_event_t* e)
+{
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_BACKSPACE)
+    {
+        return;
+    }
+    back_event_handler(nullptr);
 }
 
 static void show_loading(const char* message)
@@ -345,6 +356,9 @@ void ui_usb_enter(lv_obj_t* parent)
         top_bar = {};
     }
 
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     root = lv_obj_create(parent);
     lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
@@ -353,11 +367,30 @@ void ui_usb_enter(lv_obj_t* parent)
     lv_obj_set_style_border_width(root, 0, 0);
     lv_obj_set_style_pad_all(root, 0, 0);
     lv_obj_clear_flag(root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(top_bar, root);
     ::ui::widgets::top_bar_set_title(top_bar, "USB Mass Storage");
     ::ui::widgets::top_bar_set_back_callback(top_bar, back_event_handler, nullptr);
+    if (top_bar.back_btn)
+    {
+        lv_obj_add_event_cb(top_bar.back_btn, root_key_event_cb, LV_EVENT_KEY, nullptr);
+    }
     ui_update_top_bar_battery(top_bar);
+
+    extern lv_group_t* app_g;
+    if (app_g && top_bar.back_btn)
+    {
+        lv_group_remove_all_objs(app_g);
+        lv_group_add_obj(app_g, top_bar.back_btn);
+        lv_group_focus_obj(top_bar.back_btn);
+        set_default_group(app_g);
+        lv_group_set_editing(app_g, false);
+    }
+    else
+    {
+        set_default_group(prev_group);
+    }
 
     content = lv_obj_create(root);
     lv_obj_set_size(content, LV_PCT(100), 0);

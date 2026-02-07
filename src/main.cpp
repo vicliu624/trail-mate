@@ -168,7 +168,7 @@ static void ui_shutdown_enter(lv_obj_t* parent)
     board.softwareShutdown();
 }
 
-static FunctionAppScreen s_gps_app("GPS", &gps_icon, ui_gps_enter, ui_gps_exit);
+static FunctionAppScreen s_gps_app("Map", &gps_icon, ui_gps_enter, ui_gps_exit);
 static FunctionAppScreen s_tracker_app("Tracker", &tracker_icon, ui_tracker_enter, ui_tracker_exit);
 static FunctionAppScreen s_chat_app("Chat", &Chat, ui_chat_enter, ui_chat_exit);
 static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter, ui_contacts_exit);
@@ -324,7 +324,7 @@ static void create_app(lv_obj_t* parent, AppScreen* app, size_t idx)
             return;
         }
         if (c == LV_EVENT_CLICKED) {
-            set_default_group(app_g);
+            set_default_group(nullptr);
             ui_switch_to_app(target_app, parent);
             menu_hidden();
         } },

@@ -1295,6 +1295,10 @@ void create(lv_obj_t* parent)
 {
     settings_load();
 
+    // Avoid auto-adding widgets to the current default group during creation.
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     g_state.parent = parent;
     g_state.root = layout::create_root(parent);
     layout::create_header(g_state.root, settings_back_cb, nullptr);
@@ -1320,6 +1324,9 @@ void create(lv_obj_t* parent)
 
     update_filter_styles();
     build_item_list();
+
+    // Restore previous default group before initializing input.
+    set_default_group(prev_group);
     settings::ui::input::init();
 }
 

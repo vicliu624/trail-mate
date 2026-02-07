@@ -66,6 +66,10 @@ void ui_contacts_enter(lv_obj_t* parent)
     g_contacts_state.contact_service = &app_ctx.getContactService();
     g_contacts_state.chat_service = &app_ctx.getChatService();
 
+    // Avoid auto-adding new widgets to the current default group during creation.
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     // ✅ 所有布局代码都在layout模块中
     g_contacts_state.root = contacts::ui::layout::create_root(parent);
 
@@ -84,6 +88,9 @@ void ui_contacts_enter(lv_obj_t* parent)
     create_filter_panel(content);
     create_list_panel(content);
     create_action_panel(content);
+
+    // Restore previous default group before initializing input.
+    set_default_group(prev_group);
 
     // Reset mode/focus state on every enter
     g_contacts_state.current_mode = ContactsMode::Contacts;

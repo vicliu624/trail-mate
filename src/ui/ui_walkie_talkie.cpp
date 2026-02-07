@@ -36,6 +36,16 @@ void on_back(void*)
     ui_request_exit_to_menu();
 }
 
+void root_key_event_cb(lv_event_t* e)
+{
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_BACKSPACE)
+    {
+        return;
+    }
+    on_back(nullptr);
+}
+
 void update_vu(lv_obj_t* fill, uint8_t level)
 {
     if (!fill)
@@ -126,6 +136,9 @@ void ui_walkie_talkie_enter(lv_obj_t* parent)
 {
     s_started = false;
 
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     if (s_root)
     {
         lv_obj_del(s_root);
@@ -141,11 +154,30 @@ void ui_walkie_talkie_enter(lv_obj_t* parent)
     lv_obj_set_style_pad_all(s_root, 0, 0);
     lv_obj_set_style_pad_row(s_root, 0, 0);
     lv_obj_clear_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
     ::ui::widgets::top_bar_set_title(s_top_bar, "Walkie Talkie");
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
+    if (s_top_bar.back_btn)
+    {
+        lv_obj_add_event_cb(s_top_bar.back_btn, root_key_event_cb, LV_EVENT_KEY, nullptr);
+    }
     ui_update_top_bar_battery(s_top_bar);
+
+    extern lv_group_t* app_g;
+    if (app_g && s_top_bar.back_btn)
+    {
+        lv_group_remove_all_objs(app_g);
+        lv_group_add_obj(app_g, s_top_bar.back_btn);
+        lv_group_focus_obj(s_top_bar.back_btn);
+        set_default_group(app_g);
+        lv_group_set_editing(app_g, false);
+    }
+    else
+    {
+        set_default_group(prev_group);
+    }
 
     lv_obj_t* content = lv_obj_create(s_root);
     lv_obj_set_size(content, LV_PCT(100), 0);

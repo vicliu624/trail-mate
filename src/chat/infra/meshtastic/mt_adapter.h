@@ -101,6 +101,7 @@ class MtAdapter : public chat::IMeshAdapter
     std::map<uint32_t, uint32_t> node_key_last_seen_;
     std::map<uint32_t, ChannelId> node_last_channel_;
     std::map<uint32_t, uint32_t> nodeinfo_last_seen_ms_;
+    uint32_t last_position_reply_ms_;
     std::map<uint32_t, uint32_t> pending_ack_ms_;
     std::map<uint32_t, uint32_t> pending_ack_dest_;
     std::map<uint32_t, std::string> node_long_names_;
@@ -152,6 +153,7 @@ class MtAdapter : public chat::IMeshAdapter
     static constexpr uint8_t MAX_RETRIES = 1;
     static constexpr uint32_t NODEINFO_INTERVAL_MS = 3 * 60 * 60 * 1000;
     static constexpr uint32_t NODEINFO_REPLY_SUPPRESS_MS = 12 * 60 * 60 * 1000;
+    static constexpr uint32_t POSITION_REPLY_SUPPRESS_MS = 3 * 60 * 1000;
     static constexpr uint32_t PKI_BACKOFF_MS = 5 * 60 * 1000;
     static constexpr size_t MAX_APP_QUEUE = 10;
     static constexpr uint32_t ACK_TIMEOUT_MS = 15000;
@@ -169,6 +171,7 @@ class MtAdapter : public chat::IMeshAdapter
     bool sendPacket(const PendingSend& pending);
     bool sendNodeInfo();
     bool sendNodeInfoTo(uint32_t dest, bool want_response);
+    bool sendPositionTo(uint32_t dest, ChannelId channel);
     void maybeBroadcastNodeInfo(uint32_t now_ms);
     void configureRadio();
     void initNodeIdentity();

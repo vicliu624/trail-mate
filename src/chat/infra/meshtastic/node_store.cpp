@@ -9,6 +9,8 @@
 #include <cstring>
 #include <limits>
 #include <cmath>
+#include <esp_err.h>
+#include <nvs.h>
 
 namespace chat
 {
@@ -38,6 +40,41 @@ uint32_t crc32(const uint8_t* data, size_t len)
     return ~crc;
 }
 
+void logNvsStats(const char* tag, const char* ns)
+{
+    nvs_stats_t stats{};
+    esp_err_t err = nvs_get_stats(nullptr, &stats);
+    if (err == ESP_OK)
+    {
+        Serial.printf("[NodeStore] NVS stats(%s): used=%u free=%u total=%u namespaces=%u\n",
+                      tag ? tag : "?",
+                      static_cast<unsigned>(stats.used_entries),
+                      static_cast<unsigned>(stats.free_entries),
+                      static_cast<unsigned>(stats.total_entries),
+                      static_cast<unsigned>(stats.namespace_count));
+    }
+    else
+    {
+        Serial.printf("[NodeStore] NVS stats(%s) err=%s\n",
+                      tag ? tag : "?",
+                      esp_err_to_name(err));
+    }
+    if (ns && ns[0])
+    {
+        nvs_handle_t handle;
+        err = nvs_open(ns, NVS_READONLY, &handle);
+        if (err == ESP_OK)
+        {
+            Serial.printf("[NodeStore] NVS open ns=%s ok\n", ns);
+            nvs_close(handle);
+        }
+        else
+        {
+            Serial.printf("[NodeStore] NVS open ns=%s err=%s\n", ns, esp_err_to_name(err));
+        }
+    }
+}
+
 } // namespace
 
 void NodeStore::begin()
@@ -46,6 +83,7 @@ void NodeStore::begin()
     if (!prefs.begin(kPersistNodesNs, false))
     {
         Serial.printf("[NodeStore] begin failed ns=%s\n", kPersistNodesNs);
+        logNvsStats("begin", kPersistNodesNs);
         return;
     }
     size_t len = prefs.getBytesLength(kPersistNodesKey);
@@ -264,6 +302,7 @@ void NodeStore::save()
     if (!prefs.begin(kPersistNodesNs, false))
     {
         Serial.printf("[NodeStore] save failed ns=%s\n", kPersistNodesNs);
+        logNvsStats("save-open", kPersistNodesNs);
         return;
     }
     if (!entries_.empty())
@@ -301,6 +340,7 @@ void NodeStore::save()
             Serial.printf("[NodeStore] save failed wrote=%u expected=%u\n",
                           static_cast<unsigned>(written),
                           static_cast<unsigned>(expected));
+            logNvsStats("save-write", kPersistNodesNs);
         }
         else
         {

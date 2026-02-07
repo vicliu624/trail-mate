@@ -476,19 +476,19 @@ void update_title_and_status()
         char coord_buf[64];
         uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
         ui_format_coords(g_gps_state.lat, g_gps_state.lng, coord_fmt, coord_buf, sizeof(coord_buf));
-        snprintf(title_buffer, sizeof(title_buffer), "GPS - %s", coord_buf);
+        snprintf(title_buffer, sizeof(title_buffer), "Map - %s", coord_buf);
     }
     else if (!sd_ready)
     {
-        snprintf(title_buffer, sizeof(title_buffer), "GPS - No SD Card");
+        snprintf(title_buffer, sizeof(title_buffer), "Map - No SD Card");
     }
     else if (!g_gps_state.has_visible_map_data)
     {
-        snprintf(title_buffer, sizeof(title_buffer), "GPS - No Map Data");
+        snprintf(title_buffer, sizeof(title_buffer), "Map - No Map Data");
     }
     else
     {
-        snprintf(title_buffer, sizeof(title_buffer), "GPS - no gps data");
+        snprintf(title_buffer, sizeof(title_buffer), "Map - no gps data");
     }
 
     GPS_LOG("[GPS] Setting page title to: '%s' (page=%p)\n",

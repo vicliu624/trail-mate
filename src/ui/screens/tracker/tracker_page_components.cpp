@@ -57,10 +57,30 @@ void update_del_button();
 void on_action_back_clicked(lv_event_t* e);
 lv_obj_t* action_focus_target();
 void focus_action_panel();
+void on_backspace_key(lv_event_t* e);
 
 void on_back(void*)
 {
     ui_request_exit_to_menu();
+}
+
+void on_backspace_key(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_BACKSPACE)
+    {
+        return;
+    }
+    if (g_tracker_state.top_bar.back_btn)
+    {
+        lv_obj_send_event(g_tracker_state.top_bar.back_btn, LV_EVENT_CLICKED, nullptr);
+        return;
+    }
+    on_back(nullptr);
 }
 
 void modal_prepare_group()
@@ -340,6 +360,8 @@ void group_add_if(lv_group_t* group, lv_obj_t* obj)
         return;
     }
     lv_group_add_obj(group, obj);
+    lv_obj_remove_event_cb(obj, on_backspace_key);
+    lv_obj_add_event_cb(obj, on_backspace_key, LV_EVENT_KEY, nullptr);
 }
 
 lv_obj_t* first_visible_list_item()
