@@ -93,6 +93,18 @@ std::vector<ConversationMeta> ChatService::getConversations(size_t offset,
     return store_.loadConversationPage(offset, limit, total);
 }
 
+int ChatService::getTotalUnread() const
+{
+    size_t total = 0;
+    auto convs = store_.loadConversationPage(0, 0, &total);
+    int sum = 0;
+    for (const auto& conv : convs)
+    {
+        sum += conv.unread;
+    }
+    return sum;
+}
+
 void ChatService::clearAllMessages()
 {
     model_.clearAll();

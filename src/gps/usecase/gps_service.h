@@ -33,6 +33,8 @@ class GpsService
     void setMotionIdleTimeout(uint32_t timeout_ms);
     void setMotionSensorId(uint8_t sensor_id);
     TaskHandle_t getTaskHandle() const { return gps_task_handle_; }
+    bool isEnabled() const { return !gps_disabled_ && gps_board_ != nullptr; }
+    bool isPowered() const { return gps_powered_; }
 
   private:
     GpsService() = default;

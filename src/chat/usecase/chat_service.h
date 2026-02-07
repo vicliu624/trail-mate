@@ -54,6 +54,7 @@ class ChatService
      */
     std::vector<ChatMessage> getRecentMessages(const ConversationId& conv, size_t limit) const;
     std::vector<ConversationMeta> getConversations(size_t offset, size_t limit, size_t* total) const;
+    int getTotalUnread() const;
 
     /**
      * @brief Enable/disable in-memory model updates

@@ -9,6 +9,7 @@
 #include "ui/LV_Helper.h"
 #include <Preferences.h>
 #include <cmath>
+#include <cstring>
 #include <ctime>
 #include <esp_sleep.h>
 
@@ -17,6 +18,7 @@
 #include "ui/app_screen.h"
 #include "ui/assets/images.h"
 #include "ui/ui_common.h"
+#include "ui/ui_status.h"
 #include "ui/widgets/system_notification.h"
 
 // Custom app icons generated as C images (RGB565A8)
@@ -249,11 +251,36 @@ static void create_app(lv_obj_t* parent, AppScreen* app)
     }
     lv_obj_set_user_data(btn, (void*)name);
 
+    lv_obj_t* icon = nullptr;
     if (img != NULL)
     {
-        lv_obj_t* icon = lv_image_create(btn);
+        icon = lv_image_create(btn);
         lv_image_set_src(icon, img);
         lv_obj_center(icon);
+    }
+    if (icon && name && strcmp(name, "Chat") == 0)
+    {
+        lv_obj_t* badge = lv_obj_create(btn);
+        lv_obj_set_size(badge, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_style_bg_color(badge, lv_color_hex(0xE53935), 0);
+        lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(badge, 0, 0);
+        lv_obj_set_style_radius(badge, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_pad_left(badge, 4, 0);
+        lv_obj_set_style_pad_right(badge, 4, 0);
+        lv_obj_set_style_pad_top(badge, 2, 0);
+        lv_obj_set_style_pad_bottom(badge, 2, 0);
+        lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(badge, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align_to(badge, icon, LV_ALIGN_TOP_LEFT, -4, -4);
+
+        lv_obj_t* badge_label = lv_label_create(badge);
+        lv_label_set_text(badge_label, "");
+        lv_obj_set_style_text_color(badge_label, lv_color_white(), 0);
+        lv_obj_set_style_text_font(badge_label, &lv_font_montserrat_14, 0);
+        lv_obj_center(badge_label);
+
+        ::ui::status::register_chat_badge(badge, badge_label);
     }
     /* Text change event callback */
     lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_FOCUSED, (void*)name);
@@ -725,6 +752,40 @@ void setup()
     }
     lv_label_set_text(battery_label, "?%");
 
+    /* Create menu status icons row (topbar icons only on main menu) */
+    lv_obj_t* menu_status_row = lv_obj_create(menu_panel);
+    lv_obj_set_size(menu_status_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(menu_status_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(menu_status_row, 0, 0);
+    lv_obj_set_style_pad_all(menu_status_row, 0, 0);
+    lv_obj_set_style_pad_column(menu_status_row, 2, 0);
+    lv_obj_set_style_radius(menu_status_row, 0, 0);
+    lv_obj_clear_flag(menu_status_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(menu_status_row, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(menu_status_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(menu_status_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(menu_status_row, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_align(menu_status_row, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_move_foreground(menu_status_row);
+
+    lv_obj_t* menu_route_icon = lv_image_create(menu_status_row);
+    lv_obj_t* menu_tracker_icon = lv_image_create(menu_status_row);
+    lv_obj_t* menu_gps_icon = lv_image_create(menu_status_row);
+    lv_obj_t* menu_team_icon = lv_image_create(menu_status_row);
+    lv_obj_t* menu_msg_icon = lv_image_create(menu_status_row);
+    lv_obj_add_flag(menu_route_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(menu_tracker_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(menu_gps_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(menu_team_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(menu_msg_icon, LV_OBJ_FLAG_HIDDEN);
+
+    ::ui::status::register_menu_status_row(menu_status_row,
+                                           menu_route_icon,
+                                           menu_tracker_icon,
+                                           menu_gps_icon,
+                                           menu_team_icon,
+                                           menu_msg_icon);
+
     /* Initialize the menu view - moved down to make room for time */
     lv_obj_t* panel = lv_obj_create(menu_panel);
     lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_OFF);
@@ -778,6 +839,8 @@ void setup()
 #endif
 
     lv_obj_update_snap(panel, LV_ANIM_ON);
+
+    ::ui::status::init();
 
     // Create timer to update time display (minimum resource usage)
     // Update every 60 seconds, display format: HH:MM (no seconds)
