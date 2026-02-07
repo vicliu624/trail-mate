@@ -28,6 +28,7 @@ enum class EventType
     ChatChannelSwitched,          // Channel switched
     NodeInfoUpdate,               // Node info updated (from mesh network)
     NodeProtocolUpdate,           // Node protocol update (from message)
+    NodePositionUpdate,           // Node position updated (from mesh network)
     KeyVerificationNumberRequest, // PKI key verification number requested
     KeyVerificationNumberInform,  // PKI key verification number provided
     KeyVerificationFinal,         // PKI key verification final confirmation
@@ -121,9 +122,11 @@ struct NodeInfoUpdateEvent : public Event
     float snr;
     uint32_t timestamp; // Unix timestamp (seconds)
     uint8_t protocol;
+    uint8_t role;
 
-    NodeInfoUpdateEvent(uint32_t id, const char* sname, const char* lname, float s, uint32_t ts, uint8_t proto)
-        : Event(EventType::NodeInfoUpdate), node_id(id), snr(s), timestamp(ts), protocol(proto)
+    NodeInfoUpdateEvent(uint32_t id, const char* sname, const char* lname, float s, uint32_t ts, uint8_t proto,
+                        uint8_t r)
+        : Event(EventType::NodeInfoUpdate), node_id(id), snr(s), timestamp(ts), protocol(proto), role(r)
     {
         if (sname)
         {
@@ -157,6 +160,50 @@ struct NodeProtocolUpdateEvent : public Event
 
     NodeProtocolUpdateEvent(uint32_t id, uint32_t ts, uint8_t proto)
         : Event(EventType::NodeProtocolUpdate), node_id(id), timestamp(ts), protocol(proto) {}
+};
+
+/**
+ * @brief Node position update event
+ */
+struct NodePositionUpdateEvent : public Event
+{
+    uint32_t node_id;
+    int32_t latitude_i;
+    int32_t longitude_i;
+    bool has_altitude;
+    int32_t altitude;
+    uint32_t timestamp; // Unix timestamp (seconds)
+    uint32_t precision_bits;
+    uint32_t pdop;
+    uint32_t hdop;
+    uint32_t vdop;
+    uint32_t gps_accuracy_mm;
+
+    NodePositionUpdateEvent(uint32_t id,
+                            int32_t lat_i,
+                            int32_t lon_i,
+                            bool has_alt,
+                            int32_t alt_m,
+                            uint32_t ts,
+                            uint32_t prec_bits,
+                            uint32_t p,
+                            uint32_t h,
+                            uint32_t v,
+                            uint32_t gps_mm)
+        : Event(EventType::NodePositionUpdate),
+          node_id(id),
+          latitude_i(lat_i),
+          longitude_i(lon_i),
+          has_altitude(has_alt),
+          altitude(alt_m),
+          timestamp(ts),
+          precision_bits(prec_bits),
+          pdop(p),
+          hdop(h),
+          vdop(v),
+          gps_accuracy_mm(gps_mm)
+    {
+    }
 };
 
 /**

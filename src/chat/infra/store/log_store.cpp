@@ -311,7 +311,19 @@ void LogStore::clearAll()
             const char* name = entry.name();
             if (name && strstr(name, ".log"))
             {
-                fs_->remove(name);
+                char path[96];
+                if (name[0] == '/')
+                {
+                    snprintf(path, sizeof(path), "%s", name);
+                }
+                else
+                {
+                    snprintf(path, sizeof(path), "%s/%s", kDir, name);
+                }
+                entry.close();
+                fs_->remove(path);
+                entry = dir.openNextFile();
+                continue;
             }
         }
         entry.close();

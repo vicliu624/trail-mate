@@ -152,7 +152,8 @@ static void fastPersistNodeInfo(uint32_t node_id,
                                 const char* long_name,
                                 float snr,
                                 uint32_t now_secs,
-                                uint8_t protocol)
+                                uint8_t protocol,
+                                uint8_t role)
 {
     if (node_id == 0)
     {
@@ -178,31 +179,6 @@ static void fastPersistNodeInfo(uint32_t node_id,
         entries.resize(count);
         prefs.getBytes(kPersistNodesKey, entries.data(), count * sizeof(PersistedNodeEntry));
     }
-    else if (len > 0 && (len % sizeof(chat::contacts::NodeEntry) == 0))
-    {
-        size_t count = len / sizeof(chat::contacts::NodeEntry);
-        if (count > kPersistMaxNodes)
-        {
-            count = kPersistMaxNodes;
-        }
-        std::vector<chat::contacts::NodeEntry> legacy(count);
-        prefs.getBytes(kPersistNodesKey, legacy.data(), count * sizeof(chat::contacts::NodeEntry));
-        entries.clear();
-        entries.reserve(count);
-        for (const auto& src : legacy)
-        {
-            PersistedNodeEntry dst{};
-            dst.node_id = src.node_id;
-            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
-            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
-            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
-            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
-            dst.last_seen = src.last_seen;
-            dst.snr = src.snr;
-            dst.protocol = src.protocol;
-            entries.push_back(dst);
-        }
-    }
 
     bool updated = false;
     for (auto& entry : entries)
@@ -224,6 +200,10 @@ static void fastPersistNodeInfo(uint32_t node_id,
             if (protocol != 0)
             {
                 entry.protocol = protocol;
+            }
+            if (role != chat::contacts::kNodeRoleUnknown)
+            {
+                entry.role = role;
             }
             updated = true;
             break;
@@ -251,6 +231,7 @@ static void fastPersistNodeInfo(uint32_t node_id,
         entry.last_seen = now_secs;
         entry.snr = snr;
         entry.protocol = protocol;
+        entry.role = (role != chat::contacts::kNodeRoleUnknown) ? role : chat::contacts::kNodeRoleUnknown;
         entries.push_back(entry);
     }
 
@@ -330,6 +311,37 @@ static const char* routingErrorName(meshtastic_Routing_Error err)
     default:
         return "UNKNOWN";
     }
+}
+
+static bool hasValidPosition(const meshtastic_Position& pos)
+{
+    return pos.has_latitude_i && pos.has_longitude_i;
+}
+
+static void publishPositionEvent(uint32_t node_id, const meshtastic_Position& pos)
+{
+    if (node_id == 0 || !hasValidPosition(pos))
+    {
+        return;
+    }
+
+    bool has_altitude = pos.has_altitude || pos.has_altitude_hae;
+    int32_t altitude = pos.has_altitude ? pos.altitude : (pos.has_altitude_hae ? pos.altitude_hae : 0);
+    uint32_t ts = pos.timestamp ? pos.timestamp : pos.time;
+
+    sys::NodePositionUpdateEvent* event = new sys::NodePositionUpdateEvent(
+        node_id,
+        pos.latitude_i,
+        pos.longitude_i,
+        has_altitude,
+        altitude,
+        ts,
+        pos.precision_bits,
+        pos.PDOP,
+        pos.HDOP,
+        pos.VDOP,
+        pos.gps_accuracy);
+    sys::EventBus::publish(event, 0);
 }
 
 uint8_t xorHash(const uint8_t* data, size_t len)
@@ -1139,6 +1151,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 const uint32_t node_id = header.from;
                 const char* short_name = user.short_name[0] ? user.short_name : "";
                 const char* long_name = user.long_name[0] ? user.long_name : "";
+                uint8_t role = chat::contacts::kNodeRoleUnknown;
+                if (user.role <= meshtastic_Config_DeviceConfig_Role_CLIENT_BASE)
+                {
+                    role = static_cast<uint8_t>(user.role);
+                }
                 LORA_LOG("[LORA] RX User from %08lX id='%s' short='%s' long='%s'\n",
                          (unsigned long)node_id, user.id, short_name, long_name);
                 if (long_name[0])
@@ -1162,7 +1179,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 uint32_t now_secs = time(nullptr);
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                     node_id, short_name, long_name, 0.0f, now_secs,
-                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
                 bool published = sys::EventBus::publish(event, 0);
                 if (published)
                 {
@@ -1176,7 +1193,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              static_cast<unsigned>(sys::EventBus::pendingCount()));
                 }
                 fastPersistNodeInfo(node_id, short_name, long_name, 0.0f, now_secs,
-                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
                 if (decoded.want_response)
                 {
                     uint32_t now_ms = millis();
@@ -1213,6 +1230,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     uint32_t node_id = node.num ? node.num : header.from;
                     const char* short_name = node.has_user ? node.user.short_name : "";
                     const char* long_name = node.has_user ? node.user.long_name : "";
+                    uint8_t role = chat::contacts::kNodeRoleUnknown;
+                    if (node.has_user && node.user.role <= meshtastic_Config_DeviceConfig_Role_CLIENT_BASE)
+                    {
+                        role = static_cast<uint8_t>(node.user.role);
+                    }
                     float snr = node.snr; // Get SNR from NodeInfo
                     LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
                              (unsigned long)node_id, short_name, long_name, snr);
@@ -1225,7 +1247,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     uint32_t now_secs = time(nullptr);
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                         node_id, short_name, long_name, snr, now_secs,
-                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
@@ -1239,7 +1261,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                                  static_cast<unsigned>(sys::EventBus::pendingCount()));
                     }
                     fastPersistNodeInfo(node_id, short_name, long_name, snr, now_secs,
-                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
+                    if (node.has_position)
+                    {
+                        publishPositionEvent(node_id, node.position);
+                    }
                 }
                 else
                 {
@@ -1247,6 +1273,23 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              (unsigned long)header.from,
                              PB_GET_ERROR(&nstream));
                 }
+            }
+        }
+
+        if (decoded.portnum == meshtastic_PortNum_POSITION_APP && decoded.payload.size > 0)
+        {
+            meshtastic_Position pos = meshtastic_Position_init_default;
+            pb_istream_t pstream =
+                pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+            if (pb_decode(&pstream, meshtastic_Position_fields, &pos))
+            {
+                publishPositionEvent(header.from, pos);
+            }
+            else
+            {
+                LORA_LOG("[LORA] RX Position decode fail from=%08lX err=%s\n",
+                         (unsigned long)header.from,
+                         PB_GET_ERROR(&pstream));
             }
         }
 

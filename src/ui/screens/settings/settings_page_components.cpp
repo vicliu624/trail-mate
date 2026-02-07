@@ -33,7 +33,7 @@ namespace
 
 constexpr size_t kMaxItems = 12;
 constexpr size_t kMaxOptions = 40;
-constexpr const char* kPrefsNs = "settings_v2";
+constexpr const char* kPrefsNs = "settings";
 constexpr int kNetTxPowerMin = -9;
 constexpr int kNetTxPowerMax = 22;
 
@@ -116,6 +116,51 @@ static void prefs_get_str(const char* key, char* out, size_t out_len, const char
     prefs.end();
     strncpy(out, value.c_str(), out_len - 1);
     out[out_len - 1] = '\0';
+}
+
+static void resolve_effective_node_names(app::AppContext& app_ctx,
+                                         char* out_long,
+                                         size_t long_len,
+                                         char* out_short,
+                                         size_t short_len)
+{
+    if (!out_long || long_len == 0 || !out_short || short_len == 0)
+    {
+        return;
+    }
+
+    const char* cfg_long = app_ctx.getConfig().node_name;
+    const char* cfg_short = app_ctx.getConfig().short_name;
+    uint16_t suffix = static_cast<uint16_t>(app_ctx.getSelfNodeId() & 0x0ffff);
+
+    if (cfg_long && cfg_long[0] != '\0')
+    {
+        strncpy(out_long, cfg_long, long_len - 1);
+        out_long[long_len - 1] = '\0';
+    }
+    else
+    {
+        snprintf(out_long, long_len, "lilygo-%04X", suffix);
+    }
+
+    if (cfg_short && cfg_short[0] != '\0')
+    {
+        size_t copy_len = strlen(cfg_short);
+        if (copy_len > 4)
+        {
+            copy_len = 4;
+        }
+        if (copy_len > short_len - 1)
+        {
+            copy_len = short_len - 1;
+        }
+        memcpy(out_short, cfg_short, copy_len);
+        out_short[copy_len] = '\0';
+    }
+    else
+    {
+        snprintf(out_short, short_len, "%04X", suffix);
+    }
 }
 
 static bool is_zero_key(const uint8_t* key, size_t len)
@@ -315,8 +360,11 @@ static void settings_load()
     g_settings.map_track_interval = prefs_get_int("map_track_interval", 1);
     g_settings.map_track_format = prefs_get_int("map_track_format", 0);
 
-    prefs_get_str("chat_user", g_settings.user_name, sizeof(g_settings.user_name), "TrailMate");
-    prefs_get_str("chat_short", g_settings.short_name, sizeof(g_settings.short_name), "TM");
+    resolve_effective_node_names(app_ctx,
+                                 g_settings.user_name,
+                                 sizeof(g_settings.user_name),
+                                 g_settings.short_name,
+                                 sizeof(g_settings.short_name));
     g_settings.chat_region = app_ctx.getConfig().mesh_config.region;
     g_settings.chat_channel = prefs_get_int("chat_channel", 0);
     if (is_zero_key(app_ctx.getConfig().mesh_config.secondary_key,
@@ -486,9 +534,16 @@ static void on_text_save_clicked(lv_event_t* e)
     {
         strncpy(g_state.editing_item->text_value, text, g_state.editing_item->text_max - 1);
         g_state.editing_item->text_value[g_state.editing_item->text_max - 1] = '\0';
-        prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
+        bool is_user_name = (g_state.editing_item->pref_key &&
+                             strcmp(g_state.editing_item->pref_key, "chat_user") == 0);
+        bool is_short_name = (g_state.editing_item->pref_key &&
+                              strcmp(g_state.editing_item->pref_key, "chat_short") == 0);
+        if (!is_user_name && !is_short_name)
+        {
+            prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
+        }
         update_item_value(*g_state.editing_widget);
-        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_user") == 0)
+        if (is_user_name)
         {
             app::AppContext& app_ctx = app::AppContext::getInstance();
             strncpy(app_ctx.getConfig().node_name, g_state.editing_item->text_value,
@@ -497,7 +552,7 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.saveConfig();
             app_ctx.applyUserInfo();
         }
-        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_short") == 0)
+        if (is_short_name)
         {
             app::AppContext& app_ctx = app::AppContext::getInstance();
             strncpy(app_ctx.getConfig().short_name, g_state.editing_item->text_value,

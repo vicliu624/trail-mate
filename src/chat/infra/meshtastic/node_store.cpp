@@ -35,6 +35,7 @@ uint32_t crc32(const uint8_t* data, size_t len)
     }
     return ~crc;
 }
+
 } // namespace
 
 void NodeStore::begin()
@@ -54,13 +55,18 @@ void NodeStore::begin()
                   static_cast<unsigned>(ver),
                   static_cast<unsigned long>(stored_crc),
                   has_crc ? 1U : 0U);
-    bool needs_migrate = false;
-    bool loaded = false;
     if (len == 0 && has_crc)
     {
         Serial.printf("[NodeStore] stale meta detected, clearing ver/crc\n");
         prefs.remove(kPersistNodesKeyVer);
         prefs.remove(kPersistNodesKeyCrc);
+    }
+    if (len == 0)
+    {
+        entries_.clear();
+        prefs.end();
+        Serial.printf("[NodeStore] loaded=0\n");
+        return;
     }
 
     if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
@@ -72,7 +78,25 @@ void NodeStore::begin()
         }
         std::vector<PersistedNodeEntry> persisted(count);
         prefs.getBytes(kPersistNodesKey, persisted.data(), count * sizeof(PersistedNodeEntry));
-        if (ver == kPersistVersion && has_crc)
+        if (!has_crc)
+        {
+            prefs.end();
+            Serial.printf("[NodeStore] missing crc\n");
+            clear();
+            Serial.printf("[NodeStore] loaded=0\n");
+            return;
+        }
+        if (ver != kPersistVersion)
+        {
+            prefs.end();
+            Serial.printf("[NodeStore] version mismatch stored=%u expected=%u\n",
+                          static_cast<unsigned>(ver),
+                          static_cast<unsigned>(kPersistVersion));
+            clear();
+            Serial.printf("[NodeStore] loaded=0\n");
+            return;
+        }
+        if (has_crc)
         {
             uint32_t calc_crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()),
                                       persisted.size() * sizeof(PersistedNodeEntry));
@@ -87,10 +111,6 @@ void NodeStore::begin()
                 return;
             }
         }
-        else
-        {
-            needs_migrate = true;
-        }
         entries_.clear();
         entries_.reserve(count);
         for (const auto& src : persisted)
@@ -104,35 +124,24 @@ void NodeStore::begin()
             dst.last_seen = src.last_seen;
             dst.snr = src.snr;
             dst.protocol = src.protocol;
+            dst.role = src.role;
             entries_.push_back(dst);
         }
-        loaded = true;
-    }
-    else if (len > 0 && (len % sizeof(contacts::NodeEntry) == 0))
-    {
-        size_t count = len / sizeof(contacts::NodeEntry);
-        if (count > kPersistMaxNodes)
-        {
-            count = kPersistMaxNodes;
-        }
-        entries_.resize(count);
-        prefs.getBytes(kPersistNodesKey, entries_.data(), count * sizeof(contacts::NodeEntry));
-        loaded = true;
-        needs_migrate = true;
     }
     else if (len > 0)
     {
         Serial.printf("[NodeStore] invalid blob size=%u\n", static_cast<unsigned>(len));
+        prefs.end();
+        clear();
+        Serial.printf("[NodeStore] loaded=0\n");
+        return;
     }
     prefs.end();
-    if (loaded && needs_migrate)
-    {
-        save();
-    }
     Serial.printf("[NodeStore] loaded=%u\n", static_cast<unsigned>(entries_.size()));
 }
 
-void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name, uint32_t now_secs, float snr, uint8_t protocol)
+void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
+                       uint32_t now_secs, float snr, uint8_t protocol, uint8_t role)
 {
     Serial.printf("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f\n",
                   (unsigned long)node_id,
@@ -159,6 +168,10 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
             {
                 e.protocol = protocol;
             }
+            if (role != contacts::kNodeRoleUnknown)
+            {
+                e.role = role;
+            }
             dirty_ = true;
             maybeSave();
             return;
@@ -184,6 +197,7 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
     e.last_seen = now_secs;
     e.snr = snr;
     e.protocol = protocol;
+    e.role = (role != contacts::kNodeRoleUnknown) ? role : contacts::kNodeRoleUnknown;
     entries_.push_back(e);
     dirty_ = true;
     maybeSave();

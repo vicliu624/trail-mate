@@ -98,7 +98,6 @@ struct ContactsPageState
     lv_obj_t* add_edit_textarea = nullptr;
     lv_obj_t* add_edit_error_label = nullptr;
     lv_obj_t* del_confirm_modal = nullptr;
-    lv_obj_t* info_modal = nullptr;
     lv_group_t* modal_group = nullptr;
     lv_group_t* prev_group = nullptr;
     uint32_t modal_node_id = 0;
@@ -109,6 +108,11 @@ struct ContactsPageState
     ::ui::widgets::ImeWidget* compose_ime = nullptr;
     chat::ui::ChatConversationScreen* conversation_screen = nullptr;
     lv_timer_t* conversation_timer = nullptr;
+
+    // Node info screen
+    lv_obj_t* node_info_root = nullptr;
+    lv_group_t* node_info_group = nullptr;
+    lv_group_t* node_info_prev_group = nullptr;
 
     // Services (owned by AppContext)
     chat::contacts::ContactService* contact_service = nullptr;

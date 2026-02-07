@@ -304,7 +304,8 @@ void AppContext::update()
                     node_event->long_name,
                     node_event->snr,
                     node_event->timestamp,
-                    node_event->protocol);
+                    node_event->protocol,
+                    node_event->role);
             }
             // Don't forward to UI - this is handled by ContactService
             delete event;
@@ -322,6 +323,31 @@ void AppContext::update()
                     node_event->node_id,
                     node_event->protocol,
                     node_event->timestamp);
+            }
+            delete event;
+            continue;
+        }
+        case sys::EventType::NodePositionUpdate:
+        {
+            auto* pos_event = (sys::NodePositionUpdateEvent*)event;
+            Serial.printf("[AppContext] NodePosition event consumed node=%08lX pending=%u\n",
+                          static_cast<unsigned long>(pos_event->node_id),
+                          static_cast<unsigned>(sys::EventBus::pendingCount()));
+            if (contact_service_)
+            {
+                chat::contacts::NodePosition pos{};
+                pos.valid = true;
+                pos.latitude_i = pos_event->latitude_i;
+                pos.longitude_i = pos_event->longitude_i;
+                pos.has_altitude = pos_event->has_altitude;
+                pos.altitude = pos_event->altitude;
+                pos.timestamp = pos_event->timestamp;
+                pos.precision_bits = pos_event->precision_bits;
+                pos.pdop = pos_event->pdop;
+                pos.hdop = pos_event->hdop;
+                pos.vdop = pos_event->vdop;
+                pos.gps_accuracy_mm = pos_event->gps_accuracy_mm;
+                contact_service_->updateNodePosition(pos_event->node_id, pos);
             }
             delete event;
             continue;

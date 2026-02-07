@@ -24,7 +24,10 @@ struct NodeEntry
     uint32_t last_seen; // Unix timestamp (seconds)
     float snr;          // Signal-to-Noise Ratio
     uint8_t protocol;   // NodeProtocolType
+    uint8_t role;       // NodeRoleType (Meshtastic roles)
 };
+
+static constexpr uint8_t kNodeRoleUnknown = 0xFF;
 
 /**
  * @brief Node store interface
@@ -49,7 +52,7 @@ class INodeStore
      * @param snr Signal-to-Noise Ratio
      */
     virtual void upsert(uint32_t node_id, const char* short_name, const char* long_name,
-                        uint32_t now_secs, float snr = 0.0f, uint8_t protocol = 0) = 0;
+                        uint32_t now_secs, float snr = 0.0f, uint8_t protocol = 0, uint8_t role = kNodeRoleUnknown) = 0;
 
     /**
      * @brief Update node protocol (without changing names)

@@ -73,8 +73,8 @@ struct AppConfig
         mesh_config = chat::MeshConfig();
         mesh_config.region = kDefaultRegionCode;
         mesh_protocol = chat::MeshProtocol::Meshtastic;
-        strcpy(node_name, "TrailMate");
-        strcpy(short_name, "TM");
+        node_name[0] = '\0';
+        short_name[0] = '\0';
         primary_enabled = true;
         secondary_enabled = false;
         memset(secondary_key, 0, 16);
@@ -134,9 +134,15 @@ struct AppConfig
 
         // Load device name
         size_t len = prefs.getBytes("node_name", node_name, sizeof(node_name) - 1);
-        node_name[len] = '\0';
+        if (len > 0)
+        {
+            node_name[len] = '\0';
+        }
         len = prefs.getBytes("short_name", short_name, sizeof(short_name) - 1);
-        short_name[len] = '\0';
+        if (len > 0)
+        {
+            short_name[len] = '\0';
+        }
 
         // Load channel settings
         primary_enabled = prefs.getBool("primary_enabled", true);
@@ -157,7 +163,7 @@ struct AppConfig
         motion_config.sensor_id = prefs.getUChar("motion_sensor_id", motion_config.sensor_id);
         prefs.end();
 
-        prefs.begin("settings_v2", true);
+        prefs.begin("settings", true);
         map_coord_system = prefs.getUChar("map_coord", map_coord_system);
         map_source = prefs.getUChar("map_source", map_source);
         map_track_enabled = prefs.getBool("map_track", map_track_enabled);
@@ -176,18 +182,6 @@ struct AppConfig
             String path = prefs.getString("route_path", "");
             strncpy(route_path, path.c_str(), sizeof(route_path) - 1);
             route_path[sizeof(route_path) - 1] = '\0';
-        }
-        if (prefs.isKey("chat_user"))
-        {
-            String name = prefs.getString("chat_user", node_name);
-            strncpy(node_name, name.c_str(), sizeof(node_name) - 1);
-            node_name[sizeof(node_name) - 1] = '\0';
-        }
-        if (prefs.isKey("chat_short"))
-        {
-            String short_name_pref = prefs.getString("chat_short", short_name);
-            strncpy(short_name, short_name_pref.c_str(), sizeof(short_name) - 1);
-            short_name[sizeof(short_name) - 1] = '\0';
         }
         prefs.end();
         return true;
@@ -238,7 +232,7 @@ struct AppConfig
         prefs.putUChar("motion_sensor_id", motion_config.sensor_id);
         prefs.end();
 
-        prefs.begin("settings_v2", false);
+        prefs.begin("settings", false);
         prefs.putUChar("map_coord", map_coord_system);
         prefs.putUChar("map_source", map_source);
         prefs.putBool("map_track", map_track_enabled);

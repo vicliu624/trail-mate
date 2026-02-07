@@ -34,7 +34,9 @@ class NodeStore : public contacts::INodeStore
     /**
      * @brief Update or insert a node entry and persist (best effort)
      */
-    void upsert(uint32_t node_id, const char* short_name, const char* long_name, uint32_t now_secs, float snr = 0.0f, uint8_t protocol = 0) override;
+    void upsert(uint32_t node_id, const char* short_name, const char* long_name,
+                uint32_t now_secs, float snr = 0.0f, uint8_t protocol = 0,
+                uint8_t role = contacts::kNodeRoleUnknown) override;
 
     /**
      * @brief Update protocol for an existing node (best effort)

@@ -28,19 +28,25 @@ void ContactService::begin()
 }
 
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
-                                    float snr, uint32_t now_secs, uint8_t protocol)
+                                    float snr, uint32_t now_secs, uint8_t protocol, uint8_t role)
 {
     Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f ts=%lu\n",
                   (unsigned long)node_id,
                   snr,
                   (unsigned long)now_secs);
-    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, protocol);
+    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, protocol, role);
     invalidateCache();
 }
 
 void ContactService::updateNodeProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs)
 {
     node_store_.updateProtocol(node_id, protocol, now_secs);
+    invalidateCache();
+}
+
+void ContactService::updateNodePosition(uint32_t node_id, const NodePosition& pos)
+{
+    positions_[node_id] = pos;
     invalidateCache();
 }
 
@@ -190,6 +196,12 @@ void ContactService::buildCache() const
         info.last_seen = entry.last_seen;
         info.snr = entry.snr;
         info.protocol = static_cast<NodeProtocolType>(entry.protocol);
+        info.role = static_cast<NodeRoleType>(entry.role);
+        auto pos_it = positions_.find(entry.node_id);
+        if (pos_it != positions_.end())
+        {
+            info.position = pos_it->second;
+        }
 
         // Check if this node is a contact
         info.is_contact = std::find(contact_ids.begin(), contact_ids.end(), entry.node_id) != contact_ids.end();

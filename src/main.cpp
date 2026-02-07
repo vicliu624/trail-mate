@@ -97,6 +97,15 @@ lv_group_t* app_g = nullptr;
 lv_obj_t* desc_label = nullptr;
 lv_obj_t* time_label = nullptr;    // Time display label at top left of menu
 lv_obj_t* battery_label = nullptr; // Battery display label at top right of menu
+lv_obj_t* node_id_label = nullptr; // Node ID label at bottom left of menu
+
+// Menu theming (warm palette)
+static const lv_color_t kMenuBg = lv_color_hex(0xFFF3DF);
+static const lv_color_t kMenuCardBg = lv_color_hex(0xFFF7E9);
+static const lv_color_t kMenuAccent = lv_color_hex(0xEBA341);
+static const lv_color_t kMenuBorder = lv_color_hex(0xD9B06A);
+static const lv_color_t kMenuText = lv_color_hex(0x3A2A1A);
+static const lv_color_t kMenuTextMuted = lv_color_hex(0x6A5646);
 
 namespace
 {
@@ -209,6 +218,14 @@ static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_c
 static uint32_t name_change_id;
 #endif
 
+struct MenuAppUi
+{
+    const char* name = nullptr;
+    lv_obj_t* icon = nullptr;
+};
+
+static MenuAppUi s_menu_apps[NUM_APPS];
+
 // set_default_group and menu_show are implemented in ui_common.cpp
 
 void menu_hidden()
@@ -219,7 +236,8 @@ void menu_hidden()
 static void btn_event_cb(lv_event_t* e)
 {
     lv_event_code_t c = lv_event_get_code(e);
-    const char* text = (const char*)lv_event_get_user_data(e);
+    auto* data = static_cast<MenuAppUi*>(lv_event_get_user_data(e));
+    const char* text = data ? data->name : nullptr;
     if (c == LV_EVENT_FOCUSED)
     {
 #if LVGL_VERSION_MAJOR == 9
@@ -230,7 +248,7 @@ static void btn_event_cb(lv_event_t* e)
     }
 }
 
-static void create_app(lv_obj_t* parent, AppScreen* app)
+static void create_app(lv_obj_t* parent, AppScreen* app, size_t idx)
 {
     const char* name = app ? app->name() : "";
     const lv_image_dsc_t* img = app ? app->icon() : nullptr;
@@ -240,16 +258,23 @@ static void create_app(lv_obj_t* parent, AppScreen* app)
     lv_coord_t h = LV_PCT(100);
 
     lv_obj_set_size(btn, w, h);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_0, 0);
-    lv_obj_set_style_outline_color(btn, lv_color_black(), LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_shadow_width(btn, 30, LV_PART_MAIN);
-    lv_obj_set_style_shadow_color(btn, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(btn, kMenuCardBg, 0);
+    lv_obj_set_style_border_width(btn, 2, 0);
+    lv_obj_set_style_border_color(btn, kMenuBorder, 0);
+    lv_obj_set_style_radius(btn, 10, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_outline_width(btn, 0, 0);
+
+    lv_obj_set_style_bg_color(btn, kMenuAccent, LV_STATE_FOCUSED);
+    lv_obj_set_style_border_color(btn, kMenuBorder, LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_color(btn, kMenuAccent, LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_border_color(btn, kMenuBorder, LV_STATE_FOCUS_KEY);
     uint32_t phy_hor_res = lv_display_get_physical_horizontal_resolution(NULL);
     if (phy_hor_res < 320)
     {
-        lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_radius(btn, 10, 0);
     }
-    lv_obj_set_user_data(btn, (void*)name);
 
     lv_obj_t* icon = nullptr;
     if (img != NULL)
@@ -257,6 +282,12 @@ static void create_app(lv_obj_t* parent, AppScreen* app)
         icon = lv_image_create(btn);
         lv_image_set_src(icon, img);
         lv_obj_center(icon);
+    }
+    if (idx < NUM_APPS)
+    {
+        s_menu_apps[idx].name = name;
+        s_menu_apps[idx].icon = icon;
+        lv_obj_set_user_data(btn, &s_menu_apps[idx]);
     }
     if (icon && name && strcmp(name, "Chat") == 0)
     {
@@ -283,7 +314,11 @@ static void create_app(lv_obj_t* parent, AppScreen* app)
         ::ui::status::register_chat_badge(badge, badge_label);
     }
     /* Text change event callback */
-    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_FOCUSED, (void*)name);
+    if (idx < NUM_APPS)
+    {
+        lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_FOCUSED, &s_menu_apps[idx]);
+        lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_FOCUSED, &s_menu_apps[idx]);
+    }
 
     /* Click to select event callback */
     lv_obj_add_event_cb(
@@ -334,10 +369,8 @@ static Preferences preferences;                  // For saving/loading settings
 
 namespace
 {
-constexpr const char* kSettingsNs = "settings_v2";
+constexpr const char* kSettingsNs = "settings";
 constexpr const char* kScreenTimeoutKey = "screen_timeout";
-constexpr const char* kLegacySettingsNs = "settings";
-constexpr const char* kLegacyScreenTimeoutKey = "sleep_timeout";
 constexpr uint32_t kScreenTimeoutMinMs = 10000;
 constexpr uint32_t kScreenTimeoutMaxMs = 300000;
 constexpr uint32_t kScreenTimeoutDefaultMs = 30000;
@@ -362,13 +395,6 @@ static uint32_t read_screen_timeout_ms()
     uint32_t value = prefs.getUInt(kScreenTimeoutKey, 0);
     prefs.end();
 
-    if (value == 0)
-    {
-        prefs.begin(kLegacySettingsNs, true);
-        value = prefs.getUInt(kLegacyScreenTimeoutKey, kScreenTimeoutDefaultMs);
-        prefs.end();
-    }
-
     return clamp_screen_timeout(value);
 }
 
@@ -377,11 +403,6 @@ static void write_screen_timeout_ms(uint32_t timeout_ms)
     Preferences prefs;
     prefs.begin(kSettingsNs, false);
     prefs.putUInt(kScreenTimeoutKey, timeout_ms);
-    prefs.end();
-
-    // Keep legacy key in sync for older builds.
-    prefs.begin(kLegacySettingsNs, false);
-    prefs.putUInt(kLegacyScreenTimeoutKey, timeout_ms);
     prefs.end();
 }
 } // namespace
@@ -443,7 +464,7 @@ void setScreenSleepTimeout(uint32_t timeout_ms)
 {
     timeout_ms = clamp_screen_timeout(timeout_ms);
 
-    // Save to preferences (use settings_v2 key and keep legacy key in sync)
+    // Save to preferences
     write_screen_timeout_ms(timeout_ms);
 
     if (activity_mutex != NULL)
@@ -687,9 +708,8 @@ void setup()
     lv_style_init(&style_frameless);
     lv_style_set_radius(&style_frameless, 0);
     lv_style_set_border_width(&style_frameless, 0);
-    lv_style_set_bg_color(&style_frameless, lv_color_white());
-    lv_style_set_shadow_width(&style_frameless, 55);
-    lv_style_set_shadow_color(&style_frameless, lv_color_black());
+    lv_style_set_bg_opa(&style_frameless, LV_OPA_TRANSP);
+    lv_style_set_shadow_width(&style_frameless, 0);
 
     /* Create tileview (like factory example) */
     main_screen = lv_tileview_create(lv_screen_active());
@@ -698,6 +718,8 @@ void setup()
 
     /* Create two views for switching menus and app UI */
     menu_panel = lv_tileview_add_tile(main_screen, 0, 0, LV_DIR_HOR);
+    lv_obj_set_style_bg_color(menu_panel, kMenuBg, 0);
+    lv_obj_set_style_bg_opa(menu_panel, LV_OPA_COVER, 0);
     app_panel = lv_tileview_add_tile(main_screen, 0, 1, LV_DIR_HOR);
     if (app_panel)
     {
@@ -708,15 +730,24 @@ void setup()
     lv_obj_set_scrollbar_mode(main_screen, LV_SCROLLBAR_MODE_OFF);
     lv_obj_remove_flag(main_screen, LV_OBJ_FLAG_SCROLLABLE);
 
+    /* Create top bar background */
+    lv_obj_t* menu_topbar = lv_obj_create(menu_panel);
+    lv_obj_set_size(menu_topbar, LV_PCT(100), 30);
+    lv_obj_align(menu_topbar, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_color(menu_topbar, kMenuAccent, 0);
+    lv_obj_set_style_bg_opa(menu_topbar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(menu_topbar, 0, 0);
+    lv_obj_set_style_radius(menu_topbar, 0, 0);
+    lv_obj_clear_flag(menu_topbar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(menu_topbar, LV_OBJ_FLAG_CLICKABLE);
+
     /* Create time label at top left of menu */
     time_label = lv_label_create(menu_panel);
     lv_obj_set_width(time_label, LV_SIZE_CONTENT);
     lv_obj_align(time_label, LV_ALIGN_TOP_LEFT, 5, 0); // Top left, 5px from left edge
     lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(time_label, lv_color_black(), 0); // Black text for better contrast
-    // Add light background to make black text visible
-    lv_obj_set_style_bg_color(time_label, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(time_label, LV_OPA_80, 0); // Semi-transparent white background
+    lv_obj_set_style_text_color(time_label, kMenuText, 0);
+    lv_obj_set_style_bg_opa(time_label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(time_label, 4, 0);
     // Make sure time label is on top
     lv_obj_move_foreground(time_label);
@@ -735,10 +766,8 @@ void setup()
     lv_obj_set_width(battery_label, LV_SIZE_CONTENT);
     lv_obj_align(battery_label, LV_ALIGN_TOP_RIGHT, -5, 0); // Top right, 5px from right edge
     lv_obj_set_style_text_align(battery_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_color(battery_label, lv_color_black(), 0);
-    // Add light background to make black text visible
-    lv_obj_set_style_bg_color(battery_label, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(battery_label, LV_OPA_80, 0); // Semi-transparent white background
+    lv_obj_set_style_text_color(battery_label, kMenuText, 0);
+    lv_obj_set_style_bg_opa(battery_label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(battery_label, 4, 0);
     // Make sure battery label is on top
     lv_obj_move_foreground(battery_label);
@@ -804,7 +833,7 @@ void setup()
     /* Add applications */
     for (int i = 0; i < NUM_APPS; ++i)
     {
-        create_app(panel, kAppScreens[i]);
+        create_app(panel, kAppScreens[i], static_cast<size_t>(i));
         lv_group_add_obj(menu_g, lv_obj_get_child(panel, i));
     }
 
@@ -818,15 +847,38 @@ void setup()
     lv_obj_set_width(desc_label, LV_PCT(100));
     lv_obj_align(desc_label, LV_ALIGN_BOTTOM_MID, 0, offset);
     lv_obj_set_style_text_align(desc_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(desc_label, kMenuText, 0);
+
+    node_id_label = lv_label_create(menu_panel);
+    lv_obj_set_width(node_id_label, LV_SIZE_CONTENT);
+    lv_obj_set_style_text_align(node_id_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(node_id_label, kMenuTextMuted, 0);
+    lv_obj_align(node_id_label, LV_ALIGN_BOTTOM_LEFT, 5, offset);
+
+    char node_id_buf[24];
+    uint32_t self_id = app_ctx.getSelfNodeId();
+    if (self_id != 0)
+    {
+        snprintf(node_id_buf, sizeof(node_id_buf), "ID: !%08lX",
+                 static_cast<unsigned long>(self_id));
+    }
+    else
+    {
+        snprintf(node_id_buf, sizeof(node_id_buf), "ID: -");
+    }
+    lv_label_set_text(node_id_label, node_id_buf);
 
     if (lv_display_get_physical_horizontal_resolution(NULL) < 320)
     {
         lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_16, 0);
         lv_obj_align(desc_label, LV_ALIGN_BOTTOM_MID, 0, -25);
+        lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_12, 0);
+        lv_obj_align(node_id_label, LV_ALIGN_BOTTOM_LEFT, 5, -25);
     }
     else
     {
         lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_14, 0);
     }
     lv_label_set_long_mode(desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
 

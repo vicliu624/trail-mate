@@ -15,6 +15,7 @@
 #include "../../widgets/system_notification.h"
 #include "../chat/chat_compose_components.h"
 #include "../chat/chat_conversation_components.h"
+#include "../node_info/node_info_page_components.h"
 #include "../team/team_state.h"
 #include "../team/team_ui_store.h"
 #include "contacts_page_components.h"
@@ -79,7 +80,8 @@ static const chat::contacts::NodeInfo* get_selected_node();
 static chat::ChannelId get_selected_channel();
 static void open_add_edit_modal(bool is_edit);
 static void open_delete_confirm_modal();
-static void open_info_modal();
+static void open_node_info_screen();
+static void close_node_info_screen();
 static void modal_close(lv_obj_t*& modal_obj);
 static void modal_prepare_group();
 static void modal_restore_group();
@@ -88,7 +90,7 @@ static void on_add_edit_save_clicked(lv_event_t* e);
 static void on_add_edit_cancel_clicked(lv_event_t* e);
 static void on_del_confirm_clicked(lv_event_t* e);
 static void on_del_cancel_clicked(lv_event_t* e);
-static void on_info_ok_clicked(lv_event_t* e);
+static void on_node_info_back_clicked(lv_event_t* e);
 static void open_chat_compose();
 static void close_chat_compose();
 static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, void* user_data);
@@ -716,9 +718,9 @@ static void open_delete_confirm_modal()
     lv_group_focus_obj(cancel_btn);
 }
 
-static void open_info_modal()
+static void open_node_info_screen()
 {
-    if (g_contacts_state.info_modal)
+    if (g_contacts_state.node_info_root)
     {
         return;
     }
@@ -728,60 +730,86 @@ static void open_info_modal()
         return;
     }
 
-    modal_prepare_group();
-    g_contacts_state.info_modal = create_modal_root(280, 190);
-    lv_obj_t* win = lv_obj_get_child(g_contacts_state.info_modal, 0);
-
-    lv_obj_t* title = lv_label_create(win);
-    lv_label_set_text(title, "Node Info");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
-
-    auto make_row = [&](const char* label_text, const char* value_text, lv_coord_t y)
+    lv_obj_t* parent = g_contacts_state.root
+                           ? lv_obj_get_parent(g_contacts_state.root)
+                           : lv_screen_active();
+    if (!parent)
     {
-        lv_obj_t* row = lv_obj_create(win);
-        lv_obj_set_size(row, LV_PCT(100), 20);
-        lv_obj_align(row, LV_ALIGN_TOP_MID, 0, y);
-        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
-        lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
-        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-
-        lv_obj_t* l = lv_label_create(row);
-        lv_label_set_text(l, label_text);
-        lv_obj_set_width(l, 90);
-        lv_obj_t* v = lv_label_create(row);
-        lv_label_set_text(v, value_text);
-    };
-
-    make_row("ShortName", node->short_name, 24);
-    make_row("LongName", node->long_name, 46);
-
-    char snr_buf[16];
-    if (node->snr == 0.0f)
-    {
-        snprintf(snr_buf, sizeof(snr_buf), "-");
+        return;
     }
-    else
+
+    node_info::ui::NodeInfoWidgets widgets = node_info::ui::create(parent);
+    g_contacts_state.node_info_root = widgets.root;
+
+    const chat::contacts::NodeInfo* info = node;
+    if (g_contacts_state.contact_service)
     {
-        snprintf(snr_buf, sizeof(snr_buf), "%.0f", node->snr);
+        const auto* latest = g_contacts_state.contact_service->getNodeInfo(node->node_id);
+        if (latest)
+        {
+            info = latest;
+        }
     }
-    make_row("SNR", snr_buf, 68);
-    make_row("Battery", "-", 90);
-    make_row("Hops", "-", 112);
+    node_info::ui::set_node_info(*info);
 
-    lv_obj_t* ok_btn = lv_btn_create(win);
-    lv_obj_set_size(ok_btn, 90, 32);
-    contacts::ui::style::apply_btn_basic(ok_btn);
-    lv_obj_set_style_bg_color(ok_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-    lv_obj_align(ok_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_t* ok_label = lv_label_create(ok_btn);
-    lv_label_set_text(ok_label, "OK");
-    lv_obj_center(ok_label);
-    lv_obj_add_event_cb(ok_btn, on_info_ok_clicked, LV_EVENT_CLICKED, nullptr);
+    if (!g_contacts_state.node_info_group)
+    {
+        g_contacts_state.node_info_group = lv_group_create();
+    }
+    lv_group_remove_all_objs(g_contacts_state.node_info_group);
+    g_contacts_state.node_info_prev_group = lv_group_get_default();
+    set_default_group(g_contacts_state.node_info_group);
 
-    lv_group_add_obj(g_contacts_state.modal_group, ok_btn);
-    lv_group_focus_obj(ok_btn);
+    if (widgets.back_btn)
+    {
+        lv_group_add_obj(g_contacts_state.node_info_group, widgets.back_btn);
+        lv_group_focus_obj(widgets.back_btn);
+        lv_obj_add_event_cb(widgets.back_btn, on_node_info_back_clicked, LV_EVENT_CLICKED, nullptr);
+    }
+
+    if (g_contacts_state.root)
+    {
+        lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (g_contacts_state.refresh_timer)
+    {
+        lv_timer_pause(g_contacts_state.refresh_timer);
+    }
+}
+
+static void close_node_info_screen()
+{
+    if (!g_contacts_state.node_info_root)
+    {
+        return;
+    }
+
+    node_info::ui::destroy();
+    g_contacts_state.node_info_root = nullptr;
+
+    if (g_contacts_state.node_info_group)
+    {
+        lv_group_remove_all_objs(g_contacts_state.node_info_group);
+    }
+
+    lv_group_t* restore = contacts_input_get_group();
+    if (restore)
+    {
+        set_default_group(restore);
+    }
+    g_contacts_state.node_info_prev_group = nullptr;
+
+    if (g_contacts_state.root)
+    {
+        lv_obj_clear_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (g_contacts_state.refresh_timer)
+    {
+        lv_timer_resume(g_contacts_state.refresh_timer);
+    }
+
+    refresh_ui();
+    contacts_focus_to_action();
 }
 
 static void open_chat_compose()
@@ -1499,10 +1527,9 @@ static void on_del_cancel_clicked(lv_event_t* /*e*/)
     contacts_focus_to_list();
 }
 
-static void on_info_ok_clicked(lv_event_t* /*e*/)
+static void on_node_info_back_clicked(lv_event_t* /*e*/)
 {
-    modal_close(g_contacts_state.info_modal);
-    contacts_focus_to_action();
+    close_node_info_screen();
 }
 
 static void ensure_action_buttons()
@@ -1786,7 +1813,7 @@ static void on_action_clicked(lv_event_t* e)
     }
     if (tgt == g_contacts_state.info_btn)
     {
-        open_info_modal();
+        open_node_info_screen();
         return;
     }
     if (tgt == g_contacts_state.edit_btn)
@@ -2112,11 +2139,17 @@ void cleanup_modals()
         lv_obj_del(g_contacts_state.del_confirm_modal);
         g_contacts_state.del_confirm_modal = nullptr;
     }
-    if (g_contacts_state.info_modal != nullptr)
+    if (g_contacts_state.node_info_root != nullptr)
     {
-        lv_obj_del(g_contacts_state.info_modal);
-        g_contacts_state.info_modal = nullptr;
+        node_info::ui::destroy();
+        g_contacts_state.node_info_root = nullptr;
     }
+    if (g_contacts_state.node_info_group != nullptr)
+    {
+        lv_group_del(g_contacts_state.node_info_group);
+        g_contacts_state.node_info_group = nullptr;
+    }
+    g_contacts_state.node_info_prev_group = nullptr;
     if (g_contacts_state.modal_group != nullptr)
     {
         lv_group_del(g_contacts_state.modal_group);

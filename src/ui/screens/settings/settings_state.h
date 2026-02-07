@@ -58,8 +58,8 @@ struct SettingsData
     int map_track_format = 0;
 
     // Chat
-    char user_name[32] = "TrailMate";
-    char short_name[16] = "TM";
+    char user_name[32] = "";
+    char short_name[16] = "";
     int chat_protocol = 1;
     int chat_region = 0;
     int chat_channel = 0;

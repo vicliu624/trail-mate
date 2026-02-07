@@ -13,6 +13,7 @@
 #include "../ports/i_contact_store.h"
 #include "../ports/i_node_store.h"
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace chat
@@ -49,12 +50,18 @@ class ContactService
      * @param now_secs Current timestamp (seconds)
      */
     void updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
-                        float snr, uint32_t now_secs, uint8_t protocol = 0);
+                        float snr, uint32_t now_secs, uint8_t protocol = 0,
+                        uint8_t role = kNodeRoleUnknown);
 
     /**
      * @brief Update node protocol type (without changing names)
      */
     void updateNodeProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs);
+
+    /**
+     * @brief Update node position info
+     */
+    void updateNodePosition(uint32_t node_id, const NodePosition& pos);
 
     /**
      * @brief Get display name for a node (nickname if contact, short_name otherwise)
@@ -114,6 +121,7 @@ class ContactService
     mutable std::vector<NodeInfo> cached_nodes_; // Cache for getContacts/getNearby
     mutable uint32_t cache_timestamp_;
     static constexpr uint32_t kCacheTimeoutMs = 1000; // 1 second cache
+    mutable std::unordered_map<uint32_t, NodePosition> positions_;
 
     void invalidateCache() const;
     void buildCache() const;
