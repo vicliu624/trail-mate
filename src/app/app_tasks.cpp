@@ -203,6 +203,8 @@ void AppTasks::radioTask(void* pvParameters)
                             memcpy(rx_packet.data, rx_buffer, packet_length);
                             rx_packet.size = packet_length;
                             rx_packet.is_tx = false;
+                            rx_packet.rssi = board_->getRadioRSSI();
+                            rx_packet.snr = board_->getRadioSNR();
 
                             LORA_LOG("[LORA] RX len=%d\n", packet_length);
                             // Send to mesh queue
@@ -253,6 +255,7 @@ void AppTasks::meshTask(void* pvParameters)
             if (!rx_packet.is_tx && rx_packet.data && adapter_)
             {
                 // Decode and process through configured mesh adapter
+                adapter_->setLastRxStats(rx_packet.rssi, rx_packet.snr);
                 adapter_->handleRawPacket(rx_packet.data, rx_packet.size);
 
                 // Free buffer

@@ -156,6 +156,15 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
     if (direct_btn_) chat::ui::message_list::styles::apply_filter_btn(direct_btn_);
     if (broadcast_btn_) chat::ui::message_list::styles::apply_filter_btn(broadcast_btn_);
     if (team_btn_) chat::ui::message_list::styles::apply_filter_btn(team_btn_);
+    auto apply_filter_label = [](lv_obj_t* btn)
+    {
+        if (!btn) return;
+        lv_obj_t* label = lv_obj_get_child(btn, 0);
+        if (label) chat::ui::message_list::styles::apply_label_name(label);
+    };
+    apply_filter_label(direct_btn_);
+    apply_filter_label(broadcast_btn_);
+    apply_filter_label(team_btn_);
 
     // ---------- Top bar (existing widget, unchanged) ----------
     ::ui::widgets::top_bar_init(top_bar_, container_);
@@ -430,12 +439,13 @@ void ChatMessageListScreen::rebuildList()
 
     // Append back button as the last item in list panel.
     list_back_btn_ = lv_btn_create(list_panel_);
-    lv_obj_set_size(list_back_btn_, LV_PCT(100), 36);
+    lv_obj_set_size(list_back_btn_, LV_PCT(100), 28);
     lv_obj_clear_flag(list_back_btn_, LV_OBJ_FLAG_SCROLLABLE);
     chat::ui::message_list::styles::apply_item_btn(list_back_btn_);
     lv_obj_clear_state(list_back_btn_, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY));
     lv_obj_t* back_label = lv_label_create(list_back_btn_);
     lv_label_set_text(back_label, "Back");
+    chat::ui::message_list::styles::apply_label_name(back_label);
     lv_obj_center(back_label);
     lv_obj_add_event_cb(list_back_btn_, list_back_event_cb, LV_EVENT_CLICKED, this);
 

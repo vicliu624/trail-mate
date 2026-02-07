@@ -4,6 +4,7 @@
  */
 
 #include "top_bar.h"
+#include "../ui_theme.h"
 #include <Arduino.h>
 
 namespace ui
@@ -26,7 +27,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
 {
     bar.container = lv_obj_create(parent);
     lv_obj_set_size(bar.container, LV_PCT(100), config.height);
-    lv_obj_set_style_bg_color(bar.container, lv_color_hex(0xEBA341), 0);
+    lv_obj_set_style_bg_color(bar.container, ui::theme::accent(), 0);
     lv_obj_set_style_bg_opa(bar.container, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(bar.container, 0, 0);
     lv_obj_set_style_pad_left(bar.container, 10, 0);
@@ -51,19 +52,19 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     {
         bar.back_btn = lv_btn_create(bar.container);
         lv_obj_set_size(bar.back_btn, 30, 20);
-        lv_obj_set_style_bg_color(bar.back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(bar.back_btn, ui::theme::surface(), LV_PART_MAIN);
         lv_obj_set_style_bg_opa(bar.back_btn, LV_OPA_COVER, LV_PART_MAIN);
         lv_obj_set_style_border_width(bar.back_btn, 1, LV_PART_MAIN);
-        lv_obj_set_style_border_color(bar.back_btn, lv_color_hex(0xB0B0B0), LV_PART_MAIN);
+        lv_obj_set_style_border_color(bar.back_btn, ui::theme::border(), LV_PART_MAIN);
         lv_obj_set_style_radius(bar.back_btn, 12, LV_PART_MAIN); // oval, align with GPS style
-        lv_obj_set_style_bg_color(bar.back_btn, lv_color_hex(0xE0E0E0), LV_STATE_FOCUSED);
+        lv_obj_set_style_bg_color(bar.back_btn, ui::theme::accent(), LV_STATE_FOCUSED);
         lv_obj_set_style_outline_width(bar.back_btn, 0, LV_STATE_FOCUSED);
         lv_obj_align(bar.back_btn, LV_ALIGN_LEFT_MID, 0, 0);
         lv_obj_add_event_cb(bar.back_btn, back_event_cb, LV_EVENT_CLICKED, &bar);
         lv_obj_t* back_label = lv_label_create(bar.back_btn);
         lv_label_set_text(back_label, LV_SYMBOL_LEFT);
         lv_obj_center(back_label);
-        lv_obj_set_style_text_color(back_label, lv_color_hex(0x202020), 0);
+        lv_obj_set_style_text_color(back_label, ui::theme::text(), 0);
     }
     // If an override is used, leave its styling/callbacks untouched.
 
@@ -77,7 +78,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         bar.title_label = lv_label_create(bar.container);
         lv_label_set_text(bar.title_label, "");
         lv_label_set_long_mode(bar.title_label, LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_color(bar.title_label, lv_color_hex(0x202020), 0);
+        lv_obj_set_style_text_color(bar.title_label, ui::theme::text(), 0);
     }
     lv_obj_set_flex_grow(bar.title_label, 1);
     lv_obj_set_width(bar.title_label, LV_PCT(100));
@@ -88,7 +89,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_label_set_text(bar.right_label, "");
     lv_obj_set_width(bar.right_label, 90);
     lv_label_set_long_mode(bar.right_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_color(bar.right_label, lv_color_hex(0x606060), 0);
+    lv_obj_set_style_text_color(bar.right_label, ui::theme::text_muted(), 0);
     lv_obj_set_style_text_align(bar.right_label, LV_TEXT_ALIGN_RIGHT, 0);
 }
 

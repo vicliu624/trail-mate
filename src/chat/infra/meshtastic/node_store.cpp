@@ -7,6 +7,8 @@
 #include "../../ports/i_node_store.h"
 #include "node_persist.h"
 #include <cstring>
+#include <limits>
+#include <cmath>
 
 namespace chat
 {
@@ -123,6 +125,8 @@ void NodeStore::begin()
             dst.long_name[sizeof(dst.long_name) - 1] = '\0';
             dst.last_seen = src.last_seen;
             dst.snr = src.snr;
+            dst.rssi = src.rssi;
+            dst.hops_away = src.hops_away;
             dst.protocol = src.protocol;
             dst.role = src.role;
             entries_.push_back(dst);
@@ -141,12 +145,14 @@ void NodeStore::begin()
 }
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
-                       uint32_t now_secs, float snr, uint8_t protocol, uint8_t role)
+                       uint32_t now_secs, float snr, float rssi, uint8_t protocol, uint8_t role,
+                       uint8_t hops_away)
 {
-    Serial.printf("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f\n",
+    Serial.printf("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f rssi=%.1f\n",
                   (unsigned long)node_id,
                   (unsigned long)now_secs,
-                  snr);
+                  snr,
+                  rssi);
     // find existing
     for (auto& e : entries_)
     {
@@ -163,7 +169,18 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
                 e.long_name[sizeof(e.long_name) - 1] = '\0';
             }
             e.last_seen = now_secs;
-            e.snr = snr;
+            if (!std::isnan(snr))
+            {
+                e.snr = snr;
+            }
+            if (!std::isnan(rssi))
+            {
+                e.rssi = rssi;
+            }
+            if (hops_away != 0xFF)
+            {
+                e.hops_away = hops_away;
+            }
             if (protocol != 0)
             {
                 e.protocol = protocol;
@@ -196,6 +213,8 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
     }
     e.last_seen = now_secs;
     e.snr = snr;
+    e.rssi = rssi;
+    e.hops_away = hops_away;
     e.protocol = protocol;
     e.role = (role != contacts::kNodeRoleUnknown) ? role : contacts::kNodeRoleUnknown;
     entries_.push_back(e);
@@ -230,7 +249,9 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
     e.short_name[0] = '\0';
     e.long_name[0] = '\0';
     e.last_seen = now_secs;
-    e.snr = 0.0f;
+    e.snr = std::numeric_limits<float>::quiet_NaN();
+    e.rssi = std::numeric_limits<float>::quiet_NaN();
+    e.hops_away = 0xFF;
     e.protocol = protocol;
     entries_.push_back(e);
     dirty_ = true;
@@ -259,7 +280,10 @@ void NodeStore::save()
             dst.long_name[sizeof(dst.long_name) - 1] = '\0';
             dst.last_seen = src.last_seen;
             dst.snr = src.snr;
+            dst.rssi = src.rssi;
             dst.protocol = src.protocol;
+            dst.role = src.role;
+            dst.hops_away = src.hops_away;
             persisted.push_back(dst);
         }
         size_t expected = persisted.size() * sizeof(PersistedNodeEntry);

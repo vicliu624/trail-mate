@@ -5,11 +5,11 @@ namespace chat::ui::message_list::styles
 {
 
 static constexpr uint32_t kPrimary = 0xEBA341;
-static constexpr uint32_t kPrimaryLight = 0xF1B65A;
-static constexpr uint32_t kCardBg = 0xF4C77A;
-static constexpr uint32_t kSoftBg = 0xF7DCA8;
-static constexpr uint32_t kTextMain = 0x202020;
-static constexpr uint32_t kTextMuted = 0x606060;
+static constexpr uint32_t kPrimaryLight = 0xEBA341;
+static constexpr uint32_t kCardBg = 0xFFF7E9;
+static constexpr uint32_t kSoftBg = 0xFFF3DF;
+static constexpr uint32_t kTextMain = 0x3A2A1A;
+static constexpr uint32_t kTextMuted = 0x6A5646;
 
 static bool inited = false;
 
@@ -35,7 +35,7 @@ void init_once()
 
     // Root container
     lv_style_init(&s_root);
-    lv_style_set_bg_color(&s_root, lv_color_white());
+    lv_style_set_bg_color(&s_root, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_root, LV_OPA_COVER);
     lv_style_set_border_width(&s_root, 0);
     lv_style_set_pad_all(&s_root, 0);
@@ -64,6 +64,7 @@ void init_once()
     lv_style_set_border_width(&s_item_btn, 1);
     lv_style_set_border_color(&s_item_btn, lv_color_hex(kPrimary));
     lv_style_set_radius(&s_item_btn, 6);
+    lv_style_set_text_color(&s_item_btn, lv_color_hex(kTextMain));
 
     lv_style_init(&s_item_btn_focused);
     lv_style_set_bg_opa(&s_item_btn_focused, LV_OPA_COVER);
@@ -78,6 +79,7 @@ void init_once()
     lv_style_set_border_width(&s_filter_btn, 1);
     lv_style_set_border_color(&s_filter_btn, lv_color_hex(kPrimary));
     lv_style_set_radius(&s_filter_btn, 6);
+    lv_style_set_text_color(&s_filter_btn, lv_color_hex(kTextMain));
 
     lv_style_init(&s_filter_btn_checked);
     lv_style_set_bg_opa(&s_filter_btn_checked, LV_OPA_COVER);

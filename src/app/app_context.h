@@ -33,6 +33,7 @@ class AppContext;
 #include "../team/usecase/team_track_sampler.h"
 #include "../ui/ui_controller.h"
 #include "app_config.h"
+#include <cstddef>
 #include <memory>
 
 class BoardBase;
@@ -123,9 +124,23 @@ class AppContext
     {
         if (mesh_adapter_)
         {
-            mesh_adapter_->setUserInfo(config_.node_name, config_.short_name);
+            char long_name[sizeof(config_.node_name)];
+            char short_name[sizeof(config_.short_name)];
+            getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+            mesh_adapter_->setUserInfo(long_name, short_name);
         }
     }
+
+    void broadcastNodeInfo()
+    {
+        if (mesh_adapter_)
+        {
+            mesh_adapter_->requestNodeInfo(0xFFFFFFFF, false);
+        }
+    }
+
+    void getEffectiveUserInfo(char* out_long, size_t long_len,
+                              char* out_short, size_t short_len) const;
 
     void applyNetworkLimits()
     {

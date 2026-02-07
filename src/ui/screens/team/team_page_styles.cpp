@@ -13,13 +13,13 @@ namespace style
 {
 namespace
 {
-static constexpr uint32_t kBtnBg = 0xF4C77A;
+static constexpr uint32_t kBtnBg = 0xFFF7E9;
 static constexpr uint32_t kBtnBgFoc = 0xEBA341;
-static constexpr uint32_t kBtnBorder = 0xEBA341;
-static constexpr uint32_t kTextMain = 0x202020;
-static constexpr uint32_t kTextSub = 0x4A4A4A;
-static constexpr uint32_t kListBg = 0xFFFFFF;
-static constexpr uint32_t kListBorder = 0xD2D2D2;
+static constexpr uint32_t kBtnBorder = 0xD9B06A;
+static constexpr uint32_t kTextMain = 0x3A2A1A;
+static constexpr uint32_t kTextSub = 0x6A5646;
+static constexpr uint32_t kListBg = 0xFFF7E9;
+static constexpr uint32_t kListBorder = 0xD9B06A;
 
 static lv_style_t s_root;
 static lv_style_t s_header;
@@ -43,26 +43,26 @@ void init_once()
     s_inited = true;
 
     lv_style_init(&s_root);
-    lv_style_set_bg_color(&s_root, lv_color_white());
+    lv_style_set_bg_color(&s_root, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_root, LV_OPA_COVER);
     lv_style_set_border_width(&s_root, 0);
     lv_style_set_pad_all(&s_root, 0);
 
     lv_style_init(&s_header);
-    lv_style_set_bg_color(&s_header, lv_color_white());
+    lv_style_set_bg_color(&s_header, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_header, LV_OPA_COVER);
     lv_style_set_border_width(&s_header, 0);
     lv_style_set_pad_all(&s_header, 0);
 
     lv_style_init(&s_content);
-    lv_style_set_bg_color(&s_content, lv_color_white());
+    lv_style_set_bg_color(&s_content, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_content, LV_OPA_COVER);
     lv_style_set_border_width(&s_content, 0);
     lv_style_set_pad_all(&s_content, 0);
     lv_style_set_pad_top(&s_content, 3);
 
     lv_style_init(&s_body);
-    lv_style_set_bg_color(&s_body, lv_color_white());
+    lv_style_set_bg_color(&s_body, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_body, LV_OPA_COVER);
     lv_style_set_border_width(&s_body, 0);
     lv_style_set_pad_all(&s_body, 6);
@@ -70,7 +70,7 @@ void init_once()
     lv_style_set_pad_column(&s_body, 0);
 
     lv_style_init(&s_actions);
-    lv_style_set_bg_color(&s_actions, lv_color_white());
+    lv_style_set_bg_color(&s_actions, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_actions, LV_OPA_COVER);
     lv_style_set_border_width(&s_actions, 0);
     lv_style_set_pad_all(&s_actions, 4);

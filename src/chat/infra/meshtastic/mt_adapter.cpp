@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <ctime>
 #include <string>
 #define TEST_CURVE25519_FIELD_OPS
@@ -151,9 +152,11 @@ static void fastPersistNodeInfo(uint32_t node_id,
                                 const char* short_name,
                                 const char* long_name,
                                 float snr,
+                                float rssi,
                                 uint32_t now_secs,
                                 uint8_t protocol,
-                                uint8_t role)
+                                uint8_t role,
+                                uint8_t hops_away)
 {
     if (node_id == 0)
     {
@@ -196,7 +199,14 @@ static void fastPersistNodeInfo(uint32_t node_id,
                 entry.long_name[sizeof(entry.long_name) - 1] = '\0';
             }
             entry.last_seen = now_secs;
-            entry.snr = snr;
+            if (!std::isnan(snr))
+            {
+                entry.snr = snr;
+            }
+            if (!std::isnan(rssi))
+            {
+                entry.rssi = rssi;
+            }
             if (protocol != 0)
             {
                 entry.protocol = protocol;
@@ -204,6 +214,10 @@ static void fastPersistNodeInfo(uint32_t node_id,
             if (role != chat::contacts::kNodeRoleUnknown)
             {
                 entry.role = role;
+            }
+            if (hops_away != 0xFF)
+            {
+                entry.hops_away = hops_away;
             }
             updated = true;
             break;
@@ -230,8 +244,10 @@ static void fastPersistNodeInfo(uint32_t node_id,
         }
         entry.last_seen = now_secs;
         entry.snr = snr;
+        entry.rssi = rssi;
         entry.protocol = protocol;
         entry.role = (role != chat::contacts::kNodeRoleUnknown) ? role : chat::contacts::kNodeRoleUnknown;
+        entry.hops_away = hops_away;
         entries.push_back(entry);
     }
 
@@ -654,6 +670,8 @@ MtAdapter::MtAdapter(LoraBoard& board)
       pki_ready_(false),
       pki_public_key_{},
       pki_private_key_{},
+      last_rx_rssi_(std::numeric_limits<float>::quiet_NaN()),
+      last_rx_snr_(std::numeric_limits<float>::quiet_NaN()),
       kv_state_(KeyVerificationState::Idle),
       kv_nonce_(0),
       kv_nonce_ms_(0),
@@ -938,6 +956,12 @@ void MtAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
     }
 }
 
+void MtAdapter::setLastRxStats(float rssi, float snr)
+{
+    last_rx_rssi_ = rssi;
+    last_rx_snr_ = snr;
+}
+
 bool MtAdapter::isReady() const
 {
     return ready_ && board_.isRadioOnline();
@@ -1175,11 +1199,32 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              (unsigned long)node_id);
                 }
 
-                // Publish NodeInfo update event (SNR not available in User message, use 0.0)
+                float snr = std::numeric_limits<float>::quiet_NaN();
+                float rssi = last_rx_rssi_;
+                uint8_t hops_away = 0xFF;
+                meshtastic_NodeInfo node_info = meshtastic_NodeInfo_init_default;
+                pb_istream_t nstream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+                if (pb_decode(&nstream, meshtastic_NodeInfo_fields, &node_info))
+                {
+                    bool has_extra = node_info.has_user || node_info.has_position ||
+                                     node_info.has_device_metrics || node_info.has_hops_away ||
+                                     node_info.last_heard != 0 || node_info.channel != 0;
+                    if (has_extra)
+                    {
+                        snr = node_info.snr;
+                        if (node_info.has_hops_away)
+                        {
+                            hops_away = node_info.hops_away;
+                        }
+                    }
+                }
+
+                // Publish NodeInfo update event
                 uint32_t now_secs = time(nullptr);
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
-                    node_id, short_name, long_name, 0.0f, now_secs,
-                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
+                    node_id, short_name, long_name, snr, rssi, now_secs,
+                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
+                    hops_away);
                 bool published = sys::EventBus::publish(event, 0);
                 if (published)
                 {
@@ -1192,8 +1237,9 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              (unsigned long)node_id,
                              static_cast<unsigned>(sys::EventBus::pendingCount()));
                 }
-                fastPersistNodeInfo(node_id, short_name, long_name, 0.0f, now_secs,
-                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
+                fastPersistNodeInfo(node_id, short_name, long_name, snr, rssi, now_secs,
+                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
+                                    hops_away);
                 if (decoded.want_response)
                 {
                     uint32_t now_ms = millis();
@@ -1236,6 +1282,8 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                         role = static_cast<uint8_t>(node.user.role);
                     }
                     float snr = node.snr; // Get SNR from NodeInfo
+                    float rssi = last_rx_rssi_;
+                    uint8_t hops_away = node.has_hops_away ? node.hops_away : 0xFF;
                     LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
                              (unsigned long)node_id, short_name, long_name, snr);
                     if (long_name[0])
@@ -1246,8 +1294,9 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     // Publish NodeInfo update event (including SNR)
                     uint32_t now_secs = time(nullptr);
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
-                        node_id, short_name, long_name, snr, now_secs,
-                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
+                        node_id, short_name, long_name, snr, rssi, now_secs,
+                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
+                        hops_away);
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
@@ -1260,8 +1309,9 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                                  (unsigned long)node_id,
                                  static_cast<unsigned>(sys::EventBus::pendingCount()));
                     }
-                    fastPersistNodeInfo(node_id, short_name, long_name, snr, now_secs,
-                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role);
+                    fastPersistNodeInfo(node_id, short_name, long_name, snr, rssi, now_secs,
+                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
+                                        hops_away);
                     if (node.has_position)
                     {
                         publishPositionEvent(node_id, node.position);

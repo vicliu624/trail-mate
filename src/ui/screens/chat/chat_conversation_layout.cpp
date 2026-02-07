@@ -86,7 +86,7 @@ ConversationWidgets create_conversation_base(lv_obj_t* parent)
 
     // Reply button
     w.reply_btn = lv_btn_create(w.action_bar);
-    lv_obj_set_size(w.reply_btn, 120, 24);
+    lv_obj_set_size(w.reply_btn, 120, 28);
     make_non_scrollable(w.reply_btn);
 
     w.reply_label = lv_label_create(w.reply_btn);

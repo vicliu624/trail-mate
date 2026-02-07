@@ -72,6 +72,8 @@ struct NodeInfoBase
     char long_name[32];
     uint32_t last_seen;       // Unix timestamp (seconds)
     float snr;                // Signal-to-Noise Ratio
+    float rssi;               // RSSI in dBm
+    uint8_t hops_away = 0xFF; // 0xFF = unknown
     bool is_contact;          // true if user has assigned a nickname
     std::string display_name; // nickname if contact, short_name otherwise
     NodeProtocolType protocol;

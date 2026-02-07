@@ -6,6 +6,8 @@
 #include "node_info_page_components.h"
 #include "node_info_page_layout.h"
 #include "../../ui_common.h"
+#include "../../../app/app_context.h"
+#include "../../../chat/infra/meshtastic/mt_region.h"
 #include "../../widgets/top_bar.h"
 #include <cctype>
 #include <cmath>
@@ -155,6 +157,93 @@ void format_age(const char* prefix, uint32_t ts, char* out, size_t out_len)
         return;
     }
     snprintf(out, out_len, "%s %ud", prefix, static_cast<unsigned>(age / 86400));
+}
+
+void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_len,
+                         char* bw_out, size_t bw_len)
+{
+    if (!ch_out || ch_len == 0 || !sf_out || sf_len == 0 || !bw_out || bw_len == 0)
+    {
+        return;
+    }
+
+    ch_out[0] = '\0';
+    sf_out[0] = '\0';
+    bw_out[0] = '\0';
+
+    const auto& cfg = app::AppContext::getInstance().getConfig();
+    auto region_code = static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.mesh_config.region);
+    if (region_code == meshtastic_Config_LoRaConfig_RegionCode_UNSET)
+    {
+        region_code = meshtastic_Config_LoRaConfig_RegionCode_CN;
+    }
+    const chat::meshtastic::RegionInfo* region = chat::meshtastic::findRegion(region_code);
+    if (!region)
+    {
+        snprintf(ch_out, ch_len, "Ch: -");
+        snprintf(sf_out, sf_len, "SF: -");
+        snprintf(bw_out, bw_len, "BW: -");
+        return;
+    }
+
+    float bw_khz = 250.0f;
+    uint8_t sf = 11;
+    auto preset = static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.mesh_config.modem_preset);
+    switch (preset)
+    {
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
+        bw_khz = region->wide_lora ? 1625.0f : 500.0f;
+        sf = 7;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        sf = 7;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        sf = 8;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        sf = 9;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        sf = 10;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
+        bw_khz = region->wide_lora ? 406.25f : 125.0f;
+        sf = 11;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
+        bw_khz = region->wide_lora ? 406.25f : 125.0f;
+        sf = 12;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
+    default:
+        bw_khz = region->wide_lora ? 812.5f : 250.0f;
+        sf = 11;
+        break;
+    }
+
+    const char* channel_name = chat::meshtastic::presetDisplayName(preset);
+    float freq_mhz = chat::meshtastic::computeFrequencyMhz(region, bw_khz, channel_name);
+    if (freq_mhz <= 0.0f)
+    {
+        freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f);
+    }
+
+    snprintf(ch_out, ch_len, "Ch: %.3f", static_cast<double>(freq_mhz));
+    snprintf(sf_out, sf_len, "SF: %u", static_cast<unsigned>(sf));
+    float bw_round = std::round(bw_khz);
+    if (std::fabs(bw_khz - bw_round) < 0.05f)
+    {
+        snprintf(bw_out, bw_len, "BW: %.0fk", static_cast<double>(bw_khz));
+    }
+    else
+    {
+        snprintf(bw_out, bw_len, "BW: %.1fk", static_cast<double>(bw_khz));
+    }
 }
 
 const char* role_to_text(chat::contacts::NodeRoleType role)
@@ -317,7 +406,7 @@ NodeInfoWidgets create(lv_obj_t* parent)
     apply_title_bar_style(s_widgets.location_header);
     s_widgets.location_title_label =
         create_label(s_widgets.location_header, "Location", &lv_font_montserrat_16, kColorText);
-    lv_obj_set_pos(s_widgets.location_title_label, 10, 4);
+    lv_obj_set_pos(s_widgets.location_title_label, 10, 1);
 
     apply_map_style(s_widgets.location_map);
     s_widgets.map_label =
@@ -356,19 +445,19 @@ NodeInfoWidgets create(lv_obj_t* parent)
     apply_info_bar_style(s_widgets.location_coords, 6);
     s_widgets.coords_latlon_label =
         create_label(s_widgets.location_coords, "35.65858, 139.74543", &lv_font_montserrat_14, kColorText);
-    lv_obj_set_pos(s_widgets.coords_latlon_label, 6, 2);
+    lv_obj_set_pos(s_widgets.coords_latlon_label, 6, -1);
     lv_obj_set_size(s_widgets.coords_latlon_label, 140, 14);
     lv_label_set_long_mode(s_widgets.coords_latlon_label, LV_LABEL_LONG_DOT);
 
     s_widgets.coords_acc_label =
         create_label(s_widgets.location_coords, "+/- 12 m", &lv_font_montserrat_14, kColorText);
-    lv_obj_set_pos(s_widgets.coords_acc_label, 150, 2);
+    lv_obj_set_pos(s_widgets.coords_acc_label, 150, -1);
     lv_obj_set_size(s_widgets.coords_acc_label, 45, 14);
     lv_obj_set_style_text_align(s_widgets.coords_acc_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     s_widgets.coords_alt_label =
         create_label(s_widgets.location_coords, "Alt: 43 m", &lv_font_montserrat_14, kColorText);
-    lv_obj_set_pos(s_widgets.coords_alt_label, 195, 2);
+    lv_obj_set_pos(s_widgets.coords_alt_label, 195, -1);
     lv_obj_set_size(s_widgets.coords_alt_label, 46, 14);
     lv_obj_set_style_text_align(s_widgets.coords_alt_label, LV_TEXT_ALIGN_RIGHT, 0);
 
@@ -377,14 +466,14 @@ NodeInfoWidgets create(lv_obj_t* parent)
         create_label(s_widgets.location_updated, "Updated: 2m ago", &lv_font_montserrat_14, kColorTextMuted);
     lv_obj_set_size(s_widgets.updated_label, 246, 18);
     lv_obj_set_style_text_align(s_widgets.updated_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s_widgets.updated_label, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_widgets.updated_label, LV_ALIGN_CENTER, 0, -3);
     lv_obj_add_flag(s_widgets.location_updated, LV_OBJ_FLAG_HIDDEN);
 
     // Link panel
     apply_card_style(s_widgets.link_panel);
     apply_title_bar_style(s_widgets.link_header);
     s_widgets.link_title_label = create_label(s_widgets.link_header, "Link", &lv_font_montserrat_16, kColorText);
-    lv_obj_set_pos(s_widgets.link_title_label, 10, 4);
+    lv_obj_set_pos(s_widgets.link_title_label, 10, 1);
     lv_obj_set_size(s_widgets.link_title_label, 440, 18);
     lv_label_set_long_mode(s_widgets.link_title_label, LV_LABEL_LONG_DOT);
 
@@ -392,28 +481,28 @@ NodeInfoWidgets create(lv_obj_t* parent)
     lv_obj_set_pos(s_widgets.link_row_1, 0, 22);
     s_widgets.link_rssi_label =
         create_label(s_widgets.link_row_1, "RSSI: -112 dBm", &lv_font_montserrat_12, kColorText);
-    lv_obj_set_pos(s_widgets.link_rssi_label, 10, 0);
+    lv_obj_set_pos(s_widgets.link_rssi_label, 10, -3);
     s_widgets.link_snr_label =
         create_label(s_widgets.link_row_1, "SNR: 7.5 dB", &lv_font_montserrat_12, kColorText);
-    lv_obj_set_pos(s_widgets.link_snr_label, 140, 0);
+    lv_obj_set_pos(s_widgets.link_snr_label, 140, -3);
     s_widgets.link_ch_label =
         create_label(s_widgets.link_row_1, "Ch: 478.875", &lv_font_montserrat_12, kColorText);
-    lv_obj_set_pos(s_widgets.link_ch_label, 250, 0);
+    lv_obj_set_pos(s_widgets.link_ch_label, 250, -3);
     s_widgets.link_sf_label =
         create_label(s_widgets.link_row_1, "SF: 7", &lv_font_montserrat_12, kColorText);
-    lv_obj_set_pos(s_widgets.link_sf_label, 330, 0);
+    lv_obj_set_pos(s_widgets.link_sf_label, 330, -3);
     s_widgets.link_bw_label =
         create_label(s_widgets.link_row_1, "BW: 125k", &lv_font_montserrat_12, kColorText);
-    lv_obj_set_pos(s_widgets.link_bw_label, 390, 0);
+    lv_obj_set_pos(s_widgets.link_bw_label, 390, -3);
 
     apply_row_style(s_widgets.link_row_2);
     lv_obj_set_pos(s_widgets.link_row_2, 0, 38);
     s_widgets.link_hop_label =
         create_label(s_widgets.link_row_2, "Hop: 2", &lv_font_montserrat_12, kColorTextMuted);
-    lv_obj_set_pos(s_widgets.link_hop_label, 10, 0);
+    lv_obj_set_pos(s_widgets.link_hop_label, 10, -3);
     s_widgets.link_last_heard_label =
         create_label(s_widgets.link_row_2, "Last heard: 18s", &lv_font_montserrat_12, kColorTextMuted);
-    lv_obj_set_pos(s_widgets.link_last_heard_label, 140, 0);
+    lv_obj_set_pos(s_widgets.link_last_heard_label, 140, -3);
 
     return s_widgets;
 }
@@ -514,23 +603,21 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     }
 
     uint32_t update_ts = node.position.timestamp ? node.position.timestamp : node.last_seen;
-    char updated_buf[32];
-    format_age("Updated:", update_ts, updated_buf, sizeof(updated_buf));
-    char link_title_buf[64];
-    if (update_ts == 0)
+    set_label_text(s_widgets.link_title_label, "Link");
+
+    // Link info (best-effort)
+    char rssi_buf[24];
+    if (std::isnan(node.rssi))
     {
-        snprintf(link_title_buf, sizeof(link_title_buf), "Link (%s)", updated_buf);
+        snprintf(rssi_buf, sizeof(rssi_buf), "RSSI: -");
     }
     else
     {
-        snprintf(link_title_buf, sizeof(link_title_buf), "Link (%s ago)", updated_buf);
+        snprintf(rssi_buf, sizeof(rssi_buf), "RSSI: %.0f dBm", node.rssi);
     }
-    set_label_text(s_widgets.link_title_label, link_title_buf);
-
-    // Link info (best-effort)
-    set_label_text(s_widgets.link_rssi_label, "RSSI: -");
+    set_label_text(s_widgets.link_rssi_label, rssi_buf);
     char snr_buf[24];
-    if (node.snr == 0.0f)
+    if (std::isnan(node.snr))
     {
         snprintf(snr_buf, sizeof(snr_buf), "SNR: -");
     }
@@ -539,13 +626,26 @@ void set_node_info(const chat::contacts::NodeInfo& node)
         snprintf(snr_buf, sizeof(snr_buf), "SNR: %.1f dB", node.snr);
     }
     set_label_text(s_widgets.link_snr_label, snr_buf);
-    set_label_text(s_widgets.link_ch_label, "Ch: -");
-    set_label_text(s_widgets.link_sf_label, "SF: -");
-    set_label_text(s_widgets.link_bw_label, "BW: -");
+    char ch_buf[32];
+    char sf_buf[16];
+    char bw_buf[16];
+    format_radio_params(ch_buf, sizeof(ch_buf), sf_buf, sizeof(sf_buf), bw_buf, sizeof(bw_buf));
+    set_label_text(s_widgets.link_ch_label, ch_buf);
+    set_label_text(s_widgets.link_sf_label, sf_buf);
+    set_label_text(s_widgets.link_bw_label, bw_buf);
 
     char last_heard_buf[32];
     format_age("Last heard:", node.last_seen, last_heard_buf, sizeof(last_heard_buf));
-    set_label_text(s_widgets.link_hop_label, "Hop: -");
+    char hop_buf[16];
+    if (node.hops_away != 0xFF)
+    {
+        snprintf(hop_buf, sizeof(hop_buf), "Hop: %u", static_cast<unsigned>(node.hops_away));
+        set_label_text(s_widgets.link_hop_label, hop_buf);
+    }
+    else
+    {
+        set_label_text(s_widgets.link_hop_label, "Hop: -");
+    }
     set_label_text(s_widgets.link_last_heard_label, last_heard_buf);
 }
 

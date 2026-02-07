@@ -120,13 +120,16 @@ struct NodeInfoUpdateEvent : public Event
     char short_name[10];
     char long_name[32];
     float snr;
+    float rssi;
     uint32_t timestamp; // Unix timestamp (seconds)
     uint8_t protocol;
     uint8_t role;
+    uint8_t hops_away;
 
-    NodeInfoUpdateEvent(uint32_t id, const char* sname, const char* lname, float s, uint32_t ts, uint8_t proto,
-                        uint8_t r)
-        : Event(EventType::NodeInfoUpdate), node_id(id), snr(s), timestamp(ts), protocol(proto), role(r)
+    NodeInfoUpdateEvent(uint32_t id, const char* sname, const char* lname, float s, float rssi_val,
+                        uint32_t ts, uint8_t proto, uint8_t r, uint8_t hops = 0xFF)
+        : Event(EventType::NodeInfoUpdate), node_id(id), snr(s), rssi(rssi_val), timestamp(ts), protocol(proto),
+          role(r), hops_away(hops)
     {
         if (sname)
         {

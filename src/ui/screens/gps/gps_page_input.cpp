@@ -175,6 +175,9 @@ void on_ui_event(lv_event_t* e)
         if (g_gps_state.zoom_modal.is_open()) return;
         updateUserActivity();
 
+
+
+
         // Key event: encoder rotation generates KEY events.
         if (code == LV_EVENT_KEY && g_gps_state.pan_h_editing)
         {
@@ -438,6 +441,12 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
 {
     ControlId id = ctrl_id(target);
     updateUserActivity();
+
+    if (key == LV_KEY_BACKSPACE)
+    {
+        action_back_exit();
+        return;
+    }
 
     if (id == ControlId::BackBtn)
     {

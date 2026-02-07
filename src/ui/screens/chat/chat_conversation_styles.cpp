@@ -30,9 +30,9 @@ static constexpr lv_coord_t kBubblePadX = 10;
 static constexpr lv_coord_t kBubblePadY = 6;
 static constexpr lv_coord_t kBubbleRadius = 12;
 
-static const lv_color_t kBubbleOther = lv_color_hex(0xE5F0FF);
-static const lv_color_t kBubbleSelf = lv_color_hex(0xFFF4E0);
-static const lv_color_t kTextColor = lv_color_hex(0x202020);
+static const lv_color_t kBubbleOther = lv_color_hex(0xFFF7E9);
+static const lv_color_t kBubbleSelf = lv_color_hex(0xFFF0D3);
+static const lv_color_t kTextColor = lv_color_hex(0x3A2A1A);
 
 void init_once()
 {
@@ -40,14 +40,14 @@ void init_once()
     inited = true;
 
     lv_style_init(&s_root);
-    lv_style_set_bg_color(&s_root, lv_color_white());
+    lv_style_set_bg_color(&s_root, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_root, LV_OPA_COVER);
     lv_style_set_border_width(&s_root, 0);
     lv_style_set_pad_all(&s_root, 0);
     lv_style_set_radius(&s_root, 0);
 
     lv_style_init(&s_msg_list);
-    lv_style_set_bg_color(&s_msg_list, lv_color_hex(0xF5F5F5));
+    lv_style_set_bg_color(&s_msg_list, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_msg_list, LV_OPA_COVER);
     lv_style_set_border_width(&s_msg_list, 0);
     lv_style_set_pad_left(&s_msg_list, kPadX);
@@ -58,7 +58,7 @@ void init_once()
     lv_style_set_radius(&s_msg_list, 0);
 
     lv_style_init(&s_action_bar);
-    lv_style_set_bg_color(&s_action_bar, lv_color_hex(0xFFF4E0)); // pale ginger
+    lv_style_set_bg_color(&s_action_bar, lv_color_hex(0xFFF0D3));
     lv_style_set_bg_opa(&s_action_bar, LV_OPA_COVER);
     lv_style_set_border_width(&s_action_bar, 0);
     lv_style_set_pad_left(&s_action_bar, 10);
@@ -67,18 +67,19 @@ void init_once()
     lv_style_set_pad_bottom(&s_action_bar, 4);
 
     lv_style_init(&s_reply_btn);
-    lv_style_set_bg_color(&s_reply_btn, lv_color_hex(0xF4C77A));
+    lv_style_set_bg_color(&s_reply_btn, lv_color_hex(0xFFF7E9));
     lv_style_set_bg_opa(&s_reply_btn, LV_OPA_COVER);
     lv_style_set_border_width(&s_reply_btn, 1);
-    lv_style_set_border_color(&s_reply_btn, lv_color_hex(0xEBA341));
+    lv_style_set_border_color(&s_reply_btn, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_reply_btn, 6);
+    lv_style_set_text_color(&s_reply_btn, lv_color_hex(0x3A2A1A));
 
     lv_style_init(&s_reply_btn_focused);
-    lv_style_set_bg_color(&s_reply_btn_focused, lv_color_hex(0xF1B65A));
+    lv_style_set_bg_color(&s_reply_btn_focused, lv_color_hex(0xEBA341));
     lv_style_set_outline_width(&s_reply_btn_focused, 0);
 
     lv_style_init(&s_reply_label);
-    lv_style_set_text_color(&s_reply_label, lv_color_hex(0x202020));
+    lv_style_set_text_color(&s_reply_label, lv_color_hex(0x3A2A1A));
     lv_style_set_text_font(&s_reply_label, &lv_font_noto_cjk_16_2bpp);
 
     lv_style_init(&s_row);
@@ -115,12 +116,12 @@ void init_once()
     lv_style_set_text_font(&s_bubble_text, &lv_font_noto_cjk_16_2bpp);
 
     lv_style_init(&s_bubble_time);
-    lv_style_set_text_color(&s_bubble_time, lv_color_hex(0x707070));
+    lv_style_set_text_color(&s_bubble_time, lv_color_hex(0x6A5646));
     lv_style_set_text_align(&s_bubble_time, LV_TEXT_ALIGN_LEFT);
     lv_style_set_text_font(&s_bubble_time, &lv_font_montserrat_12);
 
     lv_style_init(&s_bubble_status);
-    lv_style_set_text_color(&s_bubble_status, lv_color_hex(0xB00020));
+    lv_style_set_text_color(&s_bubble_status, lv_color_hex(0xCC0000));
     lv_style_set_text_align(&s_bubble_status, LV_TEXT_ALIGN_LEFT);
     lv_style_set_text_font(&s_bubble_status, &lv_font_montserrat_12);
 }

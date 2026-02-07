@@ -50,8 +50,8 @@ class ContactService
      * @param now_secs Current timestamp (seconds)
      */
     void updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
-                        float snr, uint32_t now_secs, uint8_t protocol = 0,
-                        uint8_t role = kNodeRoleUnknown);
+                        float snr, float rssi, uint32_t now_secs, uint8_t protocol = 0,
+                        uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF);
 
     /**
      * @brief Update node protocol type (without changing names)

@@ -20,45 +20,46 @@ void init_once()
     inited = true;
 
     lv_style_init(&s_container);
-    lv_style_set_bg_color(&s_container, lv_color_white());
+    lv_style_set_bg_color(&s_container, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_container, LV_OPA_COVER);
     lv_style_set_border_width(&s_container, 0);
     lv_style_set_pad_all(&s_container, 0);
     lv_style_set_radius(&s_container, 0);
 
     lv_style_init(&s_content);
-    lv_style_set_bg_color(&s_content, lv_color_hex(0xF5F5F5));
+    lv_style_set_bg_color(&s_content, lv_color_hex(0xFFF3DF));
     lv_style_set_bg_opa(&s_content, LV_OPA_COVER);
     lv_style_set_radius(&s_content, 0);
 
     lv_style_init(&s_textarea);
-    lv_style_set_bg_color(&s_textarea, lv_color_white());
+    lv_style_set_bg_color(&s_textarea, lv_color_hex(0xFFF7E9));
     lv_style_set_bg_opa(&s_textarea, LV_OPA_COVER);
-    lv_style_set_text_color(&s_textarea, lv_color_hex(0x202020));
+    lv_style_set_text_color(&s_textarea, lv_color_hex(0x3A2A1A));
     lv_style_set_text_font(&s_textarea, &lv_font_noto_cjk_16_2bpp);
     lv_style_set_border_width(&s_textarea, 1);
-    lv_style_set_border_color(&s_textarea, lv_color_hex(0xDDDDDD));
+    lv_style_set_border_color(&s_textarea, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_textarea, 6);
     lv_style_set_pad_all(&s_textarea, 10);
 
     lv_style_init(&s_action_bar);
-    lv_style_set_bg_color(&s_action_bar, lv_color_hex(0xFFF4E0));
+    lv_style_set_bg_color(&s_action_bar, lv_color_hex(0xFFF0D3));
     lv_style_set_bg_opa(&s_action_bar, LV_OPA_COVER);
     lv_style_set_border_width(&s_action_bar, 0);
 
     lv_style_init(&s_btn_basic);
-    lv_style_set_bg_color(&s_btn_basic, lv_color_hex(0xF4C77A));
+    lv_style_set_bg_color(&s_btn_basic, lv_color_hex(0xFFF7E9));
     lv_style_set_bg_opa(&s_btn_basic, LV_OPA_COVER);
     lv_style_set_border_width(&s_btn_basic, 1);
-    lv_style_set_border_color(&s_btn_basic, lv_color_hex(0xEBA341));
+    lv_style_set_border_color(&s_btn_basic, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_btn_basic, 6);
+    lv_style_set_text_color(&s_btn_basic, lv_color_hex(0x3A2A1A));
 
     lv_style_init(&s_btn_focused);
-    lv_style_set_bg_color(&s_btn_focused, lv_color_hex(0xF1B65A));
+    lv_style_set_bg_color(&s_btn_focused, lv_color_hex(0xEBA341));
     lv_style_set_outline_width(&s_btn_focused, 0);
 
     lv_style_init(&s_len_label);
-    lv_style_set_text_color(&s_len_label, lv_color_hex(0x606060));
+    lv_style_set_text_color(&s_len_label, lv_color_hex(0x6A5646));
 }
 
 void apply_all(const layout::Widgets& w)

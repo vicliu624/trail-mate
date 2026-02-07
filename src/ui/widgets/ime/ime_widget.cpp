@@ -78,7 +78,7 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea)
     lv_obj_set_style_pad_left(container_, 6, 0);
     lv_obj_set_style_pad_right(container_, 6, 0);
     lv_obj_set_style_pad_column(container_, 6, 0);
-    lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF4E0), 0);
+    lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF0D3), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_clear_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
@@ -86,10 +86,10 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea)
     toggle_btn_ = lv_btn_create(container_);
     lv_obj_set_size(toggle_btn_, 44, 18);
     lv_obj_set_style_radius(toggle_btn_, 4, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(toggle_btn_, lv_color_hex(0xF4C77A), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(toggle_btn_, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(toggle_btn_, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(toggle_btn_, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(toggle_btn_, lv_color_hex(0xEBA341), LV_PART_MAIN);
+    lv_obj_set_style_border_color(toggle_btn_, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_add_event_cb(toggle_btn_, on_toggle_clicked, LV_EVENT_CLICKED, this);
 
     toggle_label_ = lv_label_create(toggle_btn_);
@@ -114,7 +114,7 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea)
     candidates_label_ = lv_label_create(container_);
     lv_label_set_text(candidates_label_, "");
     lv_obj_set_style_text_font(candidates_label_, &lv_font_noto_cjk_16_2bpp, 0);
-    lv_obj_set_style_text_color(candidates_label_, lv_color_hex(0x202020), 0);
+    lv_obj_set_style_text_color(candidates_label_, lv_color_hex(0x3A2A1A), 0);
     lv_obj_set_flex_grow(candidates_label_, 1);
     lv_obj_set_style_text_align(candidates_label_, LV_TEXT_ALIGN_RIGHT, 0);
 

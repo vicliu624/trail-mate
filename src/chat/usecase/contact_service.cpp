@@ -28,13 +28,15 @@ void ContactService::begin()
 }
 
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
-                                    float snr, uint32_t now_secs, uint8_t protocol, uint8_t role)
+                                    float snr, float rssi, uint32_t now_secs, uint8_t protocol, uint8_t role,
+                                    uint8_t hops_away)
 {
-    Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f ts=%lu\n",
+    Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f rssi=%.1f ts=%lu\n",
                   (unsigned long)node_id,
                   snr,
+                  rssi,
                   (unsigned long)now_secs);
-    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, protocol, role);
+    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi, protocol, role, hops_away);
     invalidateCache();
 }
 
@@ -195,6 +197,8 @@ void ContactService::buildCache() const
         info.long_name[sizeof(info.long_name) - 1] = '\0';
         info.last_seen = entry.last_seen;
         info.snr = entry.snr;
+        info.rssi = entry.rssi;
+        info.hops_away = entry.hops_away;
         info.protocol = static_cast<NodeProtocolType>(entry.protocol);
         info.role = static_cast<NodeRoleType>(entry.role);
         auto pos_it = positions_.find(entry.node_id);

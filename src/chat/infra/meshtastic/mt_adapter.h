@@ -49,6 +49,7 @@ class MtAdapter : public chat::IMeshAdapter
     void setUserInfo(const char* long_name, const char* short_name) override;
     void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
     void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled) override;
+    void setLastRxStats(float rssi, float snr) override;
     bool isReady() const override;
     NodeId getNodeId() const override { return node_id_; }
 
@@ -105,6 +106,8 @@ class MtAdapter : public chat::IMeshAdapter
     std::map<uint32_t, std::string> node_long_names_;
     std::string user_long_name_;
     std::string user_short_name_;
+    float last_rx_rssi_;
+    float last_rx_snr_;
 
     enum class KeyVerificationState : uint8_t
     {

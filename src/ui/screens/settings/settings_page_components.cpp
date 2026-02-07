@@ -118,51 +118,6 @@ static void prefs_get_str(const char* key, char* out, size_t out_len, const char
     out[out_len - 1] = '\0';
 }
 
-static void resolve_effective_node_names(app::AppContext& app_ctx,
-                                         char* out_long,
-                                         size_t long_len,
-                                         char* out_short,
-                                         size_t short_len)
-{
-    if (!out_long || long_len == 0 || !out_short || short_len == 0)
-    {
-        return;
-    }
-
-    const char* cfg_long = app_ctx.getConfig().node_name;
-    const char* cfg_short = app_ctx.getConfig().short_name;
-    uint16_t suffix = static_cast<uint16_t>(app_ctx.getSelfNodeId() & 0x0ffff);
-
-    if (cfg_long && cfg_long[0] != '\0')
-    {
-        strncpy(out_long, cfg_long, long_len - 1);
-        out_long[long_len - 1] = '\0';
-    }
-    else
-    {
-        snprintf(out_long, long_len, "lilygo-%04X", suffix);
-    }
-
-    if (cfg_short && cfg_short[0] != '\0')
-    {
-        size_t copy_len = strlen(cfg_short);
-        if (copy_len > 4)
-        {
-            copy_len = 4;
-        }
-        if (copy_len > short_len - 1)
-        {
-            copy_len = short_len - 1;
-        }
-        memcpy(out_short, cfg_short, copy_len);
-        out_short[copy_len] = '\0';
-    }
-    else
-    {
-        snprintf(out_short, short_len, "%04X", suffix);
-    }
-}
-
 static bool is_zero_key(const uint8_t* key, size_t len)
 {
     if (!key || len == 0)
@@ -360,8 +315,7 @@ static void settings_load()
     g_settings.map_track_interval = prefs_get_int("map_track_interval", 1);
     g_settings.map_track_format = prefs_get_int("map_track_format", 0);
 
-    resolve_effective_node_names(app_ctx,
-                                 g_settings.user_name,
+    app_ctx.getEffectiveUserInfo(g_settings.user_name,
                                  sizeof(g_settings.user_name),
                                  g_settings.short_name,
                                  sizeof(g_settings.short_name));
@@ -543,6 +497,7 @@ static void on_text_save_clicked(lv_event_t* e)
             prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
         }
         update_item_value(*g_state.editing_widget);
+        bool broadcast_nodeinfo = false;
         if (is_user_name)
         {
             app::AppContext& app_ctx = app::AppContext::getInstance();
@@ -551,6 +506,7 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.getConfig().node_name[sizeof(app_ctx.getConfig().node_name) - 1] = '\0';
             app_ctx.saveConfig();
             app_ctx.applyUserInfo();
+            broadcast_nodeinfo = true;
         }
         if (is_short_name)
         {
@@ -560,6 +516,11 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.getConfig().short_name[sizeof(app_ctx.getConfig().short_name) - 1] = '\0';
             app_ctx.saveConfig();
             app_ctx.applyUserInfo();
+            broadcast_nodeinfo = true;
+        }
+        if (broadcast_nodeinfo)
+        {
+            app::AppContext::getInstance().broadcastNodeInfo();
         }
         if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_psk") == 0)
         {
@@ -626,14 +587,14 @@ static void open_text_modal(const settings::ui::SettingItem& item, settings::ui:
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* save_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(save_btn, 90, 32);
+    lv_obj_set_size(save_btn, 90, 28);
     lv_obj_t* save_label = lv_label_create(save_btn);
     lv_label_set_text(save_label, "Save");
     lv_obj_center(save_label);
     lv_obj_add_event_cb(save_btn, on_text_save_clicked, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 32);
+    lv_obj_set_size(cancel_btn, 90, 28);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
@@ -848,7 +809,7 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
     for (size_t i = 0; i < item.option_count && s_option_click_count < kMaxOptions; ++i)
     {
         lv_obj_t* btn = lv_btn_create(list);
-        lv_obj_set_size(btn, LV_PCT(100), 24);
+        lv_obj_set_size(btn, LV_PCT(100), 28);
         style::apply_btn_modal(btn);
         lv_obj_t* label = lv_label_create(btn);
         lv_label_set_text(label, item.options[i].label);
@@ -1168,7 +1129,7 @@ static void build_item_list()
         }
 
         lv_obj_t* btn = lv_btn_create(g_state.list_panel);
-        lv_obj_set_size(btn, LV_PCT(100), 22);
+        lv_obj_set_size(btn, LV_PCT(100), 28);
         lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
         lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
         lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
@@ -1189,7 +1150,7 @@ static void build_item_list()
         g_state.item_count++;
     }
     g_state.list_back_btn = lv_btn_create(g_state.list_panel);
-    lv_obj_set_size(g_state.list_back_btn, LV_PCT(100), 22);
+    lv_obj_set_size(g_state.list_back_btn, LV_PCT(100), 28);
     lv_obj_set_style_pad_left(g_state.list_back_btn, 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(g_state.list_back_btn, 10, LV_PART_MAIN);
     lv_obj_set_flex_flow(g_state.list_back_btn, LV_FLEX_FLOW_ROW);
@@ -1346,7 +1307,7 @@ void create(lv_obj_t* parent)
     for (size_t i = 0; i < g_state.filter_count; ++i)
     {
         lv_obj_t* btn = lv_btn_create(g_state.filter_panel);
-        lv_obj_set_size(btn, LV_PCT(100), 22);
+        lv_obj_set_size(btn, LV_PCT(100), 28);
         style::apply_btn_filter(btn);
         lv_obj_add_event_cb(btn, on_filter_clicked, LV_EVENT_CLICKED, reinterpret_cast<void*>(i));
         lv_obj_add_event_cb(btn, on_filter_focused, LV_EVENT_FOCUSED, reinterpret_cast<void*>(i));

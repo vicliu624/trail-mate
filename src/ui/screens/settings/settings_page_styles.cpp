@@ -9,11 +9,11 @@ namespace settings::ui::style
 {
 
 static constexpr uint32_t kPrimary = 0xEBA341;
-static constexpr uint32_t kPrimaryLight = 0xF1B65A;
-static constexpr uint32_t kCardBg = 0xF4C77A;
-static constexpr uint32_t kSoftBg = 0xF7DCA8;
-static constexpr uint32_t kTextMain = 0x202020;
-static constexpr uint32_t kTextMuted = 0x606060;
+static constexpr uint32_t kPrimaryLight = 0xEBA341;
+static constexpr uint32_t kCardBg = 0xFFF7E9;
+static constexpr uint32_t kSoftBg = 0xFFF3DF;
+static constexpr uint32_t kTextMain = 0x3A2A1A;
+static constexpr uint32_t kTextMuted = 0x6A5646;
 
 static bool s_inited = false;
 static lv_style_t s_panel_side;
@@ -49,7 +49,7 @@ void init_once()
     lv_style_set_bg_opa(&s_btn_basic, LV_OPA_COVER);
     lv_style_set_bg_color(&s_btn_basic, lv_color_hex(kCardBg));
     lv_style_set_border_width(&s_btn_basic, 1);
-    lv_style_set_border_color(&s_btn_basic, lv_color_hex(kPrimary));
+    lv_style_set_border_color(&s_btn_basic, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_btn_basic, 6);
 
     lv_style_init(&s_btn_checked);
@@ -60,14 +60,14 @@ void init_once()
     lv_style_set_bg_opa(&s_item_base, LV_OPA_COVER);
     lv_style_set_bg_color(&s_item_base, lv_color_hex(kCardBg));
     lv_style_set_border_width(&s_item_base, 1);
-    lv_style_set_border_color(&s_item_base, lv_color_hex(kPrimary));
+    lv_style_set_border_color(&s_item_base, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_item_base, 6);
 
     lv_style_init(&s_item_focused);
     lv_style_set_bg_opa(&s_item_focused, LV_OPA_COVER);
     lv_style_set_bg_color(&s_item_focused, lv_color_hex(kPrimaryLight));
     lv_style_set_outline_width(&s_item_focused, 2);
-    lv_style_set_outline_color(&s_item_focused, lv_color_hex(kPrimary));
+    lv_style_set_outline_color(&s_item_focused, lv_color_hex(0xD9B06A));
 
     lv_style_init(&s_label_primary);
     lv_style_set_text_color(&s_label_primary, lv_color_hex(kTextMain));
@@ -83,7 +83,7 @@ void init_once()
     lv_style_set_bg_opa(&s_modal_panel, LV_OPA_COVER);
     lv_style_set_bg_color(&s_modal_panel, lv_color_hex(kSoftBg));
     lv_style_set_border_width(&s_modal_panel, 2);
-    lv_style_set_border_color(&s_modal_panel, lv_color_hex(kPrimary));
+    lv_style_set_border_color(&s_modal_panel, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_modal_panel, 8);
 
     lv_style_init(&s_modal_btn_checked);

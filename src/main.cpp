@@ -19,6 +19,7 @@
 #include "ui/assets/images.h"
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
 
 // Custom app icons generated as C images (RGB565A8)
@@ -98,14 +99,6 @@ lv_obj_t* desc_label = nullptr;
 lv_obj_t* time_label = nullptr;    // Time display label at top left of menu
 lv_obj_t* battery_label = nullptr; // Battery display label at top right of menu
 lv_obj_t* node_id_label = nullptr; // Node ID label at bottom left of menu
-
-// Menu theming (warm palette)
-static const lv_color_t kMenuBg = lv_color_hex(0xFFF3DF);
-static const lv_color_t kMenuCardBg = lv_color_hex(0xFFF7E9);
-static const lv_color_t kMenuAccent = lv_color_hex(0xEBA341);
-static const lv_color_t kMenuBorder = lv_color_hex(0xD9B06A);
-static const lv_color_t kMenuText = lv_color_hex(0x3A2A1A);
-static const lv_color_t kMenuTextMuted = lv_color_hex(0x6A5646);
 
 namespace
 {
@@ -259,17 +252,17 @@ static void create_app(lv_obj_t* parent, AppScreen* app, size_t idx)
 
     lv_obj_set_size(btn, w, h);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(btn, kMenuCardBg, 0);
+    lv_obj_set_style_bg_color(btn, ui::theme::surface(), 0);
     lv_obj_set_style_border_width(btn, 2, 0);
-    lv_obj_set_style_border_color(btn, kMenuBorder, 0);
+    lv_obj_set_style_border_color(btn, ui::theme::border(), 0);
     lv_obj_set_style_radius(btn, 10, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_set_style_outline_width(btn, 0, 0);
 
-    lv_obj_set_style_bg_color(btn, kMenuAccent, LV_STATE_FOCUSED);
-    lv_obj_set_style_border_color(btn, kMenuBorder, LV_STATE_FOCUSED);
-    lv_obj_set_style_bg_color(btn, kMenuAccent, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_border_color(btn, kMenuBorder, LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_bg_color(btn, ui::theme::accent(), LV_STATE_FOCUSED);
+    lv_obj_set_style_border_color(btn, ui::theme::border(), LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_color(btn, ui::theme::accent(), LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_border_color(btn, ui::theme::border(), LV_STATE_FOCUS_KEY);
     uint32_t phy_hor_res = lv_display_get_physical_horizontal_resolution(NULL);
     if (phy_hor_res < 320)
     {
@@ -718,7 +711,7 @@ void setup()
 
     /* Create two views for switching menus and app UI */
     menu_panel = lv_tileview_add_tile(main_screen, 0, 0, LV_DIR_HOR);
-    lv_obj_set_style_bg_color(menu_panel, kMenuBg, 0);
+    lv_obj_set_style_bg_color(menu_panel, ui::theme::page_bg(), 0);
     lv_obj_set_style_bg_opa(menu_panel, LV_OPA_COVER, 0);
     app_panel = lv_tileview_add_tile(main_screen, 0, 1, LV_DIR_HOR);
     if (app_panel)
@@ -734,7 +727,7 @@ void setup()
     lv_obj_t* menu_topbar = lv_obj_create(menu_panel);
     lv_obj_set_size(menu_topbar, LV_PCT(100), 30);
     lv_obj_align(menu_topbar, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(menu_topbar, kMenuAccent, 0);
+    lv_obj_set_style_bg_color(menu_topbar, ui::theme::accent(), 0);
     lv_obj_set_style_bg_opa(menu_topbar, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(menu_topbar, 0, 0);
     lv_obj_set_style_radius(menu_topbar, 0, 0);
@@ -746,7 +739,7 @@ void setup()
     lv_obj_set_width(time_label, LV_SIZE_CONTENT);
     lv_obj_align(time_label, LV_ALIGN_TOP_LEFT, 5, 0); // Top left, 5px from left edge
     lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(time_label, kMenuText, 0);
+    lv_obj_set_style_text_color(time_label, ui::theme::text(), 0);
     lv_obj_set_style_bg_opa(time_label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(time_label, 4, 0);
     // Make sure time label is on top
@@ -766,7 +759,7 @@ void setup()
     lv_obj_set_width(battery_label, LV_SIZE_CONTENT);
     lv_obj_align(battery_label, LV_ALIGN_TOP_RIGHT, -5, 0); // Top right, 5px from right edge
     lv_obj_set_style_text_align(battery_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_color(battery_label, kMenuText, 0);
+    lv_obj_set_style_text_color(battery_label, ui::theme::text(), 0);
     lv_obj_set_style_bg_opa(battery_label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(battery_label, 4, 0);
     // Make sure battery label is on top
@@ -847,12 +840,12 @@ void setup()
     lv_obj_set_width(desc_label, LV_PCT(100));
     lv_obj_align(desc_label, LV_ALIGN_BOTTOM_MID, 0, offset);
     lv_obj_set_style_text_align(desc_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(desc_label, kMenuText, 0);
+    lv_obj_set_style_text_color(desc_label, ui::theme::text(), 0);
 
     node_id_label = lv_label_create(menu_panel);
     lv_obj_set_width(node_id_label, LV_SIZE_CONTENT);
     lv_obj_set_style_text_align(node_id_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(node_id_label, kMenuTextMuted, 0);
+    lv_obj_set_style_text_color(node_id_label, ui::theme::text_muted(), 0);
     lv_obj_align(node_id_label, LV_ALIGN_BOTTOM_LEFT, 5, offset);
 
     char node_id_buf[24];

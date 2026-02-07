@@ -17,6 +17,8 @@
 #include "../team/infra/nfc/team_nfc.h"
 #endif
 #include "app_tasks.h"
+#include <cstdio>
+#include <cstring>
 #include <SD.h>
 
 namespace app
@@ -149,6 +151,51 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
     contact_service_->begin();
 
     return true;
+}
+
+void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
+                                      char* out_short, size_t short_len) const
+{
+    if (!out_long || long_len == 0 || !out_short || short_len == 0)
+    {
+        return;
+    }
+
+    out_long[0] = '\0';
+    out_short[0] = '\0';
+
+    const char* cfg_long = config_.node_name;
+    const char* cfg_short = config_.short_name;
+    uint16_t suffix = static_cast<uint16_t>(getSelfNodeId() & 0x0ffff);
+
+    if (cfg_long && cfg_long[0] != '\0')
+    {
+        strncpy(out_long, cfg_long, long_len - 1);
+        out_long[long_len - 1] = '\0';
+    }
+    else
+    {
+        snprintf(out_long, long_len, "lilygo-%04X", suffix);
+    }
+
+    if (cfg_short && cfg_short[0] != '\0')
+    {
+        size_t copy_len = strlen(cfg_short);
+        if (copy_len > 4)
+        {
+            copy_len = 4;
+        }
+        if (copy_len > short_len - 1)
+        {
+            copy_len = short_len - 1;
+        }
+        memcpy(out_short, cfg_short, copy_len);
+        out_short[copy_len] = '\0';
+    }
+    else
+    {
+        snprintf(out_short, short_len, "%04X", suffix);
+    }
 }
 
 void AppContext::update()
@@ -303,9 +350,11 @@ void AppContext::update()
                     node_event->short_name,
                     node_event->long_name,
                     node_event->snr,
+                    node_event->rssi,
                     node_event->timestamp,
                     node_event->protocol,
-                    node_event->role);
+                    node_event->role,
+                    node_event->hops_away);
             }
             // Don't forward to UI - this is handled by ContactService
             delete event;

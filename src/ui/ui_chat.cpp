@@ -47,7 +47,7 @@ void ui_chat_enter(lv_obj_t* parent)
     // Create container
     chat_container = lv_obj_create(parent);
     lv_obj_set_size(chat_container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(chat_container, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(chat_container, lv_color_hex(0xFFF3DF), 0);
     lv_obj_set_style_bg_opa(chat_container, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(chat_container, 0, 0);
     lv_obj_set_style_pad_all(chat_container, 0, 0);

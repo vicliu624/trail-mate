@@ -169,7 +169,7 @@ static void show_loading(const char* message)
 
     loading_overlay = lv_obj_create(top_layer);
     lv_obj_set_size(loading_overlay, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(loading_overlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(loading_overlay, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(loading_overlay, LV_OPA_70, LV_PART_MAIN);
     lv_obj_set_style_border_width(loading_overlay, 0, LV_PART_MAIN);
     lv_obj_clear_flag(loading_overlay, LV_OBJ_FLAG_SCROLLABLE);
@@ -178,16 +178,16 @@ static void show_loading(const char* message)
     loading_box = lv_obj_create(loading_overlay);
     lv_obj_set_size(loading_box, 160, 80);
     lv_obj_center(loading_box);
-    lv_obj_set_style_bg_color(loading_box, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(loading_box, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(loading_box, LV_OPA_90, LV_PART_MAIN);
     lv_obj_set_style_border_width(loading_box, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(loading_box, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(loading_box, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_set_style_radius(loading_box, 8, LV_PART_MAIN);
     lv_obj_clear_flag(loading_box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* label = lv_label_create(loading_box);
     lv_label_set_text(label, message ? message : "Loading...");
-    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_center(label);
 }
@@ -348,7 +348,7 @@ void ui_usb_enter(lv_obj_t* parent)
     root = lv_obj_create(parent);
     lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(root, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(root, lv_color_hex(0xFFF3DF), 0);
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(root, 0, 0);
     lv_obj_set_style_pad_all(root, 0, 0);
@@ -375,7 +375,7 @@ void ui_usb_enter(lv_obj_t* parent)
         lv_label_set_text(error_label, "SD Card Not Found\nPlease insert SD card");
         lv_obj_center(error_label);
         lv_obj_set_style_text_font(error_label, &lv_font_montserrat_18, LV_PART_MAIN);
-        lv_obj_set_style_text_color(error_label, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        lv_obj_set_style_text_color(error_label, lv_color_hex(0xCC0000), LV_PART_MAIN);
         return;
     }
 
@@ -397,7 +397,7 @@ void ui_usb_enter(lv_obj_t* parent)
     lv_label_set_text(status_label, "Initializing...");
     lv_obj_center(status_label);
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_18, LV_PART_MAIN);
-    lv_obj_set_style_text_color(status_label, lv_color_hex(0x202020), LV_PART_MAIN);
+    lv_obj_set_style_text_color(status_label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Create info label
@@ -405,7 +405,7 @@ void ui_usb_enter(lv_obj_t* parent)
     lv_label_set_text(info_label, "Press Back to exit USB mode");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_text_font(info_label, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(info_label, lv_color_hex(0x606060), LV_PART_MAIN);
+    lv_obj_set_style_text_color(info_label, lv_color_hex(0x6A5646), LV_PART_MAIN);
     lv_obj_set_style_text_opa(info_label, LV_OPA_80, LV_PART_MAIN);
 
     // Setup USB MSC

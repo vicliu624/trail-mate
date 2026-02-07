@@ -8,6 +8,7 @@
 #include "freertos/timers.h"
 
 #include <cstring>
+#include <limits>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
 
@@ -1107,6 +1108,28 @@ void TLoRaPagerBoard::clearRadioIrqFlags(uint32_t flags)
         radio_.clearIrqFlags(flags);
         LilyGoDispArduinoSPI::unlock();
     }
+}
+
+float TLoRaPagerBoard::getRadioRSSI()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        float rssi = radio_.getRSSI();
+        LilyGoDispArduinoSPI::unlock();
+        return rssi;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+float TLoRaPagerBoard::getRadioSNR()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        float snr = radio_.getSNR();
+        LilyGoDispArduinoSPI::unlock();
+        return snr;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
 }
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262)

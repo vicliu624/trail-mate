@@ -4,6 +4,7 @@
 #include <SD.h>
 #include <Wire.h>
 #include <ctime>
+#include <limits>
 
 TDeckBoard::TDeckBoard()
     : LilyGo_Display(SPI_DRIVER, false),
@@ -411,6 +412,28 @@ void TDeckBoard::clearRadioIrqFlags(uint32_t flags)
         radio_.clearIrqFlags(flags);
         LilyGoDispArduinoSPI::unlock();
     }
+}
+
+float TDeckBoard::getRadioRSSI()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        float rssi = radio_.getRSSI();
+        LilyGoDispArduinoSPI::unlock();
+        return rssi;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+float TDeckBoard::getRadioSNR()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        float snr = radio_.getSNR();
+        LilyGoDispArduinoSPI::unlock();
+        return snr;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
 }
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262)

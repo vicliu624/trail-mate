@@ -35,10 +35,10 @@ namespace ui
 {
 namespace
 {
-constexpr int kActionBtnHeight = 32;
+constexpr int kActionBtnHeight = 28;
 constexpr int kActionBtnWidth2 = 170;
 constexpr int kActionBtnWidth3 = 140;
-constexpr int kListItemHeight = 32;
+constexpr int kListItemHeight = 28;
 constexpr int kInviteTtlSec = 9 * 60;
 constexpr uint8_t kKeyDistMaxRetries = 3;
 constexpr uint32_t kKeyDistRetryIntervalSec = 5;
@@ -363,7 +363,7 @@ lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
@@ -373,10 +373,10 @@ lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, width, height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, 8, LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
@@ -1029,7 +1029,7 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* accept_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(accept_btn, 90, 32);
+    lv_obj_set_size(accept_btn, 90, 28);
     style::apply_button_secondary(accept_btn);
     lv_obj_t* accept_label = lv_label_create(accept_btn);
     lv_label_set_text(accept_label, "Accept");
@@ -1179,7 +1179,7 @@ void handle_team_join_request(const team::TeamJoinRequestEvent& ev)
         LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* reject_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(reject_btn, 90, 32);
+    lv_obj_set_size(reject_btn, 90, 28);
     style::apply_button_secondary(reject_btn);
     lv_obj_t* reject_label = lv_label_create(reject_btn);
     lv_label_set_text(reject_label, "Reject");
@@ -1954,7 +1954,7 @@ void handle_leave(lv_event_t*)
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 32);
+    lv_obj_set_size(cancel_btn, 90, 28);
     style::apply_button_secondary(cancel_btn);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
@@ -1965,7 +1965,7 @@ void handle_leave(lv_event_t*)
         LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* leave_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(leave_btn, 90, 32);
+    lv_obj_set_size(leave_btn, 90, 28);
     style::apply_button_secondary(leave_btn);
     lv_obj_t* leave_label = lv_label_create(leave_btn);
     lv_label_set_text(leave_label, "Leave");

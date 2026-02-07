@@ -427,9 +427,9 @@ static void style_tile_obj(lv_obj_t* o)
 static void style_placeholder_label(lv_obj_t* label)
 {
     style_tile_obj(label);
-    lv_obj_set_style_bg_color(label, lv_color_hex(0x808080), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(label, lv_color_hex(0xFFF0D3), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(label, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);

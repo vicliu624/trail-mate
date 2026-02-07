@@ -44,7 +44,7 @@ using namespace contacts::ui;
 lv_obj_t* ui_chat_get_container();
 
 static constexpr int kItemsPerPage = 4;
-static constexpr int kButtonHeight = 32;
+static constexpr int kButtonHeight = 28;
 static constexpr int kButtonWidth = 80;
 
 static lv_group_t* s_compose_group = nullptr;
@@ -106,6 +106,12 @@ static void send_team_position();
 // Forward declaration - actual implementation moved to ui_contacts.cpp
 // to avoid library compilation issues with Arduino framework dependencies
 extern void refresh_contacts_data_impl();
+
+static void apply_primary_text(lv_obj_t* label)
+{
+    if (!label) return;
+    contacts::ui::style::apply_label_primary(label);
+}
 
 void refresh_contacts_data()
 {
@@ -558,7 +564,7 @@ static lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
@@ -568,10 +574,10 @@ static lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, width, height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, 8, LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
@@ -610,6 +616,7 @@ static void open_add_edit_modal(bool is_edit)
 
     lv_obj_t* title = lv_label_create(win);
     lv_label_set_text(title, is_edit ? "Edit nickname" : "Enter nickname");
+    apply_primary_text(title);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     g_contacts_state.add_edit_textarea = lv_textarea_create(win);
@@ -642,18 +649,20 @@ static void open_add_edit_modal(bool is_edit)
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* save_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(save_btn, 90, 32);
+    lv_obj_set_size(save_btn, 90, 28);
     contacts::ui::style::apply_btn_basic(save_btn);
     lv_obj_t* save_label = lv_label_create(save_btn);
     lv_label_set_text(save_label, "Save");
+    apply_primary_text(save_label);
     lv_obj_center(save_label);
     lv_obj_add_event_cb(save_btn, on_add_edit_save_clicked, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 32);
+    lv_obj_set_size(cancel_btn, 90, 28);
     contacts::ui::style::apply_btn_basic(cancel_btn);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
+    apply_primary_text(cancel_label);
     lv_obj_center(cancel_label);
     lv_obj_add_event_cb(cancel_btn, on_add_edit_cancel_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -684,6 +693,7 @@ static void open_delete_confirm_modal()
     snprintf(msg, sizeof(msg), "Delete contact %s?", node->display_name.c_str());
     lv_obj_t* label = lv_label_create(win);
     lv_label_set_text(label, msg);
+    apply_primary_text(label);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
 
     lv_obj_t* btn_row = lv_obj_create(win);
@@ -698,18 +708,20 @@ static void open_delete_confirm_modal()
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* confirm_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(confirm_btn, 90, 32);
+    lv_obj_set_size(confirm_btn, 90, 28);
     contacts::ui::style::apply_btn_basic(confirm_btn);
     lv_obj_t* confirm_label = lv_label_create(confirm_btn);
     lv_label_set_text(confirm_label, "Confirm");
+    apply_primary_text(confirm_label);
     lv_obj_center(confirm_label);
     lv_obj_add_event_cb(confirm_btn, on_del_confirm_clicked, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 32);
+    lv_obj_set_size(cancel_btn, 90, 28);
     contacts::ui::style::apply_btn_basic(cancel_btn);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
+    apply_primary_text(cancel_label);
     lv_obj_center(cancel_label);
     lv_obj_add_event_cb(cancel_btn, on_del_cancel_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1571,6 +1583,7 @@ static void ensure_action_buttons()
 
         lv_obj_t* l = lv_label_create(g_contacts_state.chat_btn);
         lv_label_set_text(l, "Chat");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1590,10 +1603,11 @@ static void ensure_action_buttons()
             kButtonWidth, kButtonHeight);
         contacts::ui::style::apply_btn_basic(
             g_contacts_state.position_btn);
-        lv_obj_set_style_bg_color(g_contacts_state.position_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.position_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
 
         lv_obj_t* l = lv_label_create(g_contacts_state.position_btn);
         lv_label_set_text(l, "Position");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1613,10 +1627,11 @@ static void ensure_action_buttons()
             kButtonWidth, kButtonHeight);
         contacts::ui::style::apply_btn_basic(
             g_contacts_state.edit_btn);
-        lv_obj_set_style_bg_color(g_contacts_state.edit_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.edit_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
 
         lv_obj_t* l = lv_label_create(g_contacts_state.edit_btn);
         lv_label_set_text(l, "Edit");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1640,6 +1655,7 @@ static void ensure_action_buttons()
 
         lv_obj_t* l = lv_label_create(g_contacts_state.del_btn);
         lv_label_set_text(l, "Del");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1659,10 +1675,11 @@ static void ensure_action_buttons()
             kButtonWidth, kButtonHeight);
         contacts::ui::style::apply_btn_basic(
             g_contacts_state.add_btn);
-        lv_obj_set_style_bg_color(g_contacts_state.add_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.add_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
 
         lv_obj_t* l = lv_label_create(g_contacts_state.add_btn);
         lv_label_set_text(l, "Add");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1682,10 +1699,11 @@ static void ensure_action_buttons()
             kButtonWidth, kButtonHeight);
         contacts::ui::style::apply_btn_basic(
             g_contacts_state.info_btn);
-        lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
 
         lv_obj_t* l = lv_label_create(g_contacts_state.info_btn);
         lv_label_set_text(l, "Info");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1710,6 +1728,7 @@ static void ensure_action_buttons()
         lv_obj_t* l = lv_label_create(
             g_contacts_state.action_back_btn);
         lv_label_set_text(l, "Back");
+        apply_primary_text(l);
         lv_obj_center(l);
 
         lv_obj_add_event_cb(
@@ -1728,9 +1747,9 @@ static void ensure_action_buttons()
         lv_obj_clear_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_contacts_state.edit_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.edit_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.del_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
     }
     else if (g_contacts_state.current_mode == ContactsMode::Nearby)
@@ -1741,9 +1760,9 @@ static void ensure_action_buttons()
         lv_obj_clear_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_contacts_state.add_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.add_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.info_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
@@ -1753,7 +1772,7 @@ static void ensure_action_buttons()
         lv_obj_add_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_contacts_state.position_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.position_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
         lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
     }
     else
@@ -1764,7 +1783,7 @@ static void ensure_action_buttons()
         lv_obj_add_flag(g_contacts_state.info_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(g_contacts_state.position_btn, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(g_contacts_state.chat_btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
-        lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.action_back_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     }
 
     /* ---------- enable / disable ---------- */
@@ -1997,7 +2016,7 @@ void refresh_ui()
         }
         else if (g_contacts_state.current_mode == ContactsMode::Nearby)
         {
-            status_text = format_snr(node.snr);
+            status_text = format_time_status(node.last_seen);
         }
         else if (g_contacts_state.current_mode == ContactsMode::Team)
         {
@@ -2031,6 +2050,7 @@ void refresh_ui()
 
         lv_obj_t* next_label = lv_label_create(g_contacts_state.next_btn);
         lv_label_set_text(next_label, "Next");
+        apply_primary_text(next_label);
         lv_obj_center(next_label);
         lv_obj_add_event_cb(g_contacts_state.next_btn, on_next_clicked, LV_EVENT_CLICKED, nullptr);
     }
@@ -2040,10 +2060,11 @@ void refresh_ui()
         g_contacts_state.prev_btn = lv_btn_create(g_contacts_state.bottom_container);
         lv_obj_set_size(g_contacts_state.prev_btn, kButtonWidth, kButtonHeight);
         contacts::ui::style::apply_btn_basic(g_contacts_state.prev_btn);
-        lv_obj_set_style_bg_color(g_contacts_state.prev_btn, lv_color_hex(0xF1B65A), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(g_contacts_state.prev_btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
 
         lv_obj_t* prev_label = lv_label_create(g_contacts_state.prev_btn);
         lv_label_set_text(prev_label, "Prev");
+        apply_primary_text(prev_label);
         lv_obj_center(prev_label);
         lv_obj_add_event_cb(g_contacts_state.prev_btn, on_prev_clicked, LV_EVENT_CLICKED, nullptr);
     }
@@ -2057,6 +2078,7 @@ void refresh_ui()
 
         lv_obj_t* back_label = lv_label_create(g_contacts_state.back_btn);
         lv_label_set_text(back_label, "Back");
+        apply_primary_text(back_label);
         lv_obj_center(back_label);
         lv_obj_add_event_cb(g_contacts_state.back_btn, on_back_clicked, LV_EVENT_CLICKED, nullptr);
     }

@@ -83,7 +83,7 @@ static void set_btn_label_white(lv_obj_t* btn)
     lv_obj_t* child = lv_obj_get_child(btn, 0);
     if (child && lv_obj_check_type(child, &lv_label_class))
     {
-        lv_obj_set_style_text_color(child, lv_color_white(), 0);
+        lv_obj_set_style_text_color(child, lv_color_hex(0x3A2A1A), 0);
     }
 }
 

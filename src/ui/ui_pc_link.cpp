@@ -78,7 +78,7 @@ void ui_pc_link_enter(lv_obj_t* parent)
     s_root = lv_obj_create(parent);
     lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(s_root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(s_root, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(s_root, lv_color_hex(0xFFF3DF), 0);
     lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_root, 0, 0);
     lv_obj_set_style_pad_all(s_root, 0, 0);

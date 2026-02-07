@@ -247,8 +247,6 @@ struct AppConfig
         prefs.putUChar("privacy_nmea_sent", privacy_nmea_sentence);
         prefs.putBool("route_enabled", route_enabled);
         prefs.putString("route_path", route_path);
-        prefs.putString("chat_user", node_name);
-        prefs.putString("chat_short", short_name);
         prefs.end();
         return true;
     }
