@@ -34,6 +34,8 @@ namespace
 constexpr size_t kMaxItems = 12;
 constexpr size_t kMaxOptions = 40;
 constexpr const char* kPrefsNs = "settings_v2";
+constexpr int kNetTxPowerMin = -9;
+constexpr int kNetTxPowerMax = 22;
 
 struct CategoryDef
 {
@@ -233,6 +235,7 @@ static void reset_mesh_settings()
     g_settings.chat_channel = 0;
     g_settings.chat_psk[0] = '\0';
     g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
+    g_settings.net_tx_power = app_ctx.getConfig().mesh_config.tx_power;
     g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
     g_settings.net_duty_cycle = true;
     g_settings.net_channel_util = 0;
@@ -245,6 +248,7 @@ static void reset_mesh_settings()
     prefs.remove("chat_channel");
     prefs.remove("chat_psk");
     prefs.remove("net_preset");
+    prefs.remove("net_tx_power");
     prefs.remove("net_relay");
     prefs.remove("net_duty_cycle");
     prefs.remove("net_util");
@@ -329,6 +333,10 @@ static void settings_load()
     }
 
     g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
+    int tx_power = app_ctx.getConfig().mesh_config.tx_power;
+    if (tx_power < kNetTxPowerMin) tx_power = kNetTxPowerMin;
+    if (tx_power > kNetTxPowerMax) tx_power = kNetTxPowerMax;
+    g_settings.net_tx_power = tx_power;
     g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
     g_settings.net_duty_cycle = prefs_get_bool("net_duty_cycle", true);
     g_settings.net_channel_util = prefs_get_int("net_util", 0);
@@ -713,6 +721,13 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.saveConfig();
         app_ctx.applyNetworkLimits();
     }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_tx_power") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().mesh_config.tx_power = static_cast<int8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_encrypt") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
@@ -880,6 +895,40 @@ static const settings::ui::SettingOption kNetPresetOptions[] = {
     {"ShortSlow", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW},
     {"ShortTurbo", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO},
 };
+static const settings::ui::SettingOption kNetTxPowerOptions[] = {
+    {"-9 dBm", -9},
+    {"-8 dBm", -8},
+    {"-7 dBm", -7},
+    {"-6 dBm", -6},
+    {"-5 dBm", -5},
+    {"-4 dBm", -4},
+    {"-3 dBm", -3},
+    {"-2 dBm", -2},
+    {"-1 dBm", -1},
+    {"0 dBm", 0},
+    {"1 dBm", 1},
+    {"2 dBm", 2},
+    {"3 dBm", 3},
+    {"4 dBm", 4},
+    {"5 dBm", 5},
+    {"6 dBm", 6},
+    {"7 dBm", 7},
+    {"8 dBm", 8},
+    {"9 dBm", 9},
+    {"10 dBm", 10},
+    {"11 dBm", 11},
+    {"12 dBm", 12},
+    {"13 dBm", 13},
+    {"14 dBm", 14},
+    {"15 dBm", 15},
+    {"16 dBm", 16},
+    {"17 dBm", 17},
+    {"18 dBm", 18},
+    {"19 dBm", 19},
+    {"20 dBm", 20},
+    {"21 dBm", 21},
+    {"22 dBm", 22},
+};
 static const settings::ui::SettingOption kNetUtilOptions[] = {
     {"Auto", 0},
     {"Limit 25%", 25},
@@ -967,6 +1016,8 @@ static settings::ui::SettingItem kChatItems[] = {
 
 static settings::ui::SettingItem kNetworkItems[] = {
     {"Modem Preset", settings::ui::SettingType::Enum, kNetPresetOptions, 8, &g_settings.net_modem_preset, nullptr, nullptr, 0, false, "net_preset"},
+    {"TX Power", settings::ui::SettingType::Enum, kNetTxPowerOptions,
+     sizeof(kNetTxPowerOptions) / sizeof(kNetTxPowerOptions[0]), &g_settings.net_tx_power, nullptr, nullptr, 0, false, "net_tx_power"},
     {"Relay / Repeater", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_relay, nullptr, 0, false, "net_relay"},
     {"Duty Cycle Limit", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_duty_cycle, nullptr, 0, false, "net_duty_cycle"},
     {"Channel Utilization", settings::ui::SettingType::Enum, kNetUtilOptions, 3, &g_settings.net_channel_util, nullptr, nullptr, 0, false, "net_util"},
@@ -1026,6 +1077,7 @@ static bool should_show_item(const settings::ui::SettingItem& item)
         if (strcmp(item.pref_key, "chat_channel") == 0) return false;
         if (strcmp(item.pref_key, "chat_psk") == 0) return false;
         if (strcmp(item.pref_key, "net_preset") == 0) return false;
+        if (strcmp(item.pref_key, "net_tx_power") == 0) return false;
         if (strcmp(item.pref_key, "net_relay") == 0) return false;
         if (strcmp(item.pref_key, "net_duty_cycle") == 0) return false;
         if (strcmp(item.pref_key, "net_util") == 0) return false;

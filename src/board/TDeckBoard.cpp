@@ -413,6 +413,30 @@ void TDeckBoard::clearRadioIrqFlags(uint32_t flags)
     }
 }
 
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+static void apply_tx_power(SX1262Access& radio, int8_t tx_power)
+{
+    constexpr int8_t kTxPowerLowMaxDbm = 14;
+    constexpr int8_t kTxPowerMinDbm = -9;
+
+    if (tx_power > kTxPowerLowMaxDbm)
+    {
+        radio.setOutputPower(tx_power);
+        return;
+    }
+
+    int8_t clipped = tx_power;
+    if (clipped < kTxPowerMinDbm) clipped = kTxPowerMinDbm;
+    if (clipped > kTxPowerLowMaxDbm) clipped = kTxPowerLowMaxDbm;
+
+    uint8_t ocp = 0;
+    radio.readRegister(RADIOLIB_SX126X_REG_OCP_CONFIGURATION, &ocp, 1);
+    radio.setPaConfig(0x04, RADIOLIB_SX126X_PA_CONFIG_SX1261, 0x00);
+    radio.setTxParams(static_cast<uint8_t>(clipped), RADIOLIB_SX126X_PA_RAMP_200U);
+    radio.writeRegister(RADIOLIB_SX126X_REG_OCP_CONFIGURATION, &ocp, 1);
+}
+#endif
+
 void TDeckBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                                     int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                                     uint8_t crc_len)
@@ -423,7 +447,11 @@ void TDeckBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, ui
         radio_.setBandwidth(bw_khz);
         radio_.setSpreadingFactor(sf);
         radio_.setCodingRate(cr_denom);
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+        apply_tx_power(radio_, tx_power);
+#else
         radio_.setOutputPower(tx_power);
+#endif
         radio_.setPreambleLength(preamble_len);
         radio_.setSyncWord(sync_word);
         radio_.setCRC(crc_len);

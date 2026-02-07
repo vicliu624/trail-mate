@@ -68,6 +68,7 @@ struct SettingsData
 
     // Network
     int net_modem_preset = 0;
+    int net_tx_power = 14;
     bool net_relay = true;
     bool net_duty_cycle = true;
     int net_channel_util = 0;
