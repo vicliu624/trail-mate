@@ -76,6 +76,8 @@ enum class ConfigKey : uint8_t
     AprsSymbolCode = 28,
     AprsPositionIntervalSec = 29,
     AprsNodeIdMap = 30,
+    AprsSelfEnable = 31,
+    AprsSelfCallsign = 32,
 };
 
 enum class StatusKey : uint8_t
@@ -100,6 +102,8 @@ enum class StatusKey : uint8_t
     AprsSymbolCode = 28,
     AprsPositionIntervalSec = 29,
     AprsNodeIdMap = 30,
+    AprsSelfEnable = 31,
+    AprsSelfCallsign = 32,
     AppRxTotal = 40,
     AppRxFromIs = 41,
     AppRxDirect = 42,
@@ -123,6 +127,10 @@ enum class AppDataMetaKey : uint8_t
     Sf = 13,
     Cr = 14,
     PacketId = 15,
+    ChannelHash = 16,
+    WireFlags = 17,
+    NextHop = 18,
+    RelayNode = 19,
 };
 
 } // namespace hostlink

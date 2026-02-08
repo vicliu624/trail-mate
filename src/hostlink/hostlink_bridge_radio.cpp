@@ -181,6 +181,24 @@ void build_rx_meta_tlvs(const chat::RxMeta& meta, uint32_t packet_id, std::vecto
         push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::FromIs),
                     meta.from_is ? 1 : 0);
     }
+    if (meta.channel_hash != 0xFF)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::ChannelHash),
+                    meta.channel_hash);
+    }
+    if (meta.wire_flags != 0xFF)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::WireFlags),
+                    meta.wire_flags);
+    }
+    if (meta.next_hop != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::NextHop), meta.next_hop);
+    }
+    if (meta.relay_node != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RelayNode), meta.relay_node);
+    }
     if (meta.rssi_dbm_x10 != std::numeric_limits<int16_t>::min())
     {
         push_tlv_i16(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RssiDbmX10),
@@ -445,7 +463,7 @@ void on_event(const sys::Event& event)
         const std::string text = msg ? msg->text : std::string(msg_evt.text);
 
         std::vector<uint8_t> meta_tlv;
-        build_rx_meta_tlvs(msg_evt.rx_meta, 0, meta_tlv);
+        build_rx_meta_tlvs(msg_evt.rx_meta, msg_id, meta_tlv);
         update_app_rx_stats(&msg_evt.rx_meta);
 
         std::vector<uint8_t> payload;

@@ -153,6 +153,8 @@ Config keys:
 - 28: AprsSymbolCode (u8, ASCII)
 - 29: AprsPositionIntervalSec (u16, seconds)
 - 30: AprsNodeIdMap (blob, see format below)
+- 31: AprsSelfEnable (u8, 0/1)
+- 32: AprsSelfCallsign (string, ASCII, CALL-SSID)
 
 AprsNodeIdMap format (value bytes):
 
@@ -193,6 +195,7 @@ Notes:
 - `timestamp` is the chat message timestamp (local receive time in current firmware).
 - For APRS/iGate mapping, prefer `rx_meta_tlv` timestamps when present.
 - Clients should ignore any extra bytes beyond `text_len` if they do not parse TLV.
+- `rx_meta_tlv` may include `PacketId` for dedupe/traceability.
 
 ### EV_TX_RESULT (0x81)
 Payload:
@@ -226,6 +229,8 @@ Status keys:
 - 28: AprsSymbolCode (u8, ASCII) *
 - 29: AprsPositionIntervalSec (u16) *
 - 30: AprsNodeIdMap (blob, see CMD_SET_CONFIG) *
+- 31: AprsSelfEnable (u8, 0/1) *
+- 32: AprsSelfCallsign (string) *
 - 40: AppRxTotal (u32)
 - 41: AppRxFromIs (u32)
 - 42: AppRxDirect (u32)
@@ -342,7 +347,11 @@ Keys:
 - 12: BwHz (u32)
 - 13: Sf (u8)
 - 14: Cr (u8, denominator in 4/x)
-- 15: PacketId (u32, Meshtastic packet id; omitted for EV_RX_MSG)
+- 15: PacketId (u32, Meshtastic packet id)
+- 16: ChannelHash (u8, Meshtastic channel hash)
+- 17: WireFlags (u8, Meshtastic packet header flags)
+- 18: NextHop (u32, Meshtastic header next_hop)
+- 19: RelayNode (u32, Meshtastic header relay_node)
 
 Notes:
 - Fields may be omitted when unavailable.
@@ -579,6 +588,8 @@ NodeInfo:
 - Payload is usually `meshtastic_User` (see `mesh.pb.h`), but some nodes send
   `meshtastic_NodeInfo`. PC should try `meshtastic_User` first, then fall back
   to `meshtastic_NodeInfo` if decode fails.
+- If `AprsSelfEnable` is set on a device, it will publish its APRS callsign in
+  `meshtastic_User.id`. Host should prefer this callsign over any local mapping.
 
 If a portnum is unknown, treat payload as opaque bytes.
 

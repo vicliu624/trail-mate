@@ -28,6 +28,8 @@ struct AprsConfig
     uint16_t position_interval_s;
     uint8_t node_map_len;
     uint8_t node_map[255];
+    bool self_enable;
+    char self_callsign[16];
 
     AprsConfig()
         : enabled(false),
@@ -37,11 +39,13 @@ struct AprsConfig
           symbol_table(0),
           symbol_code(0),
           position_interval_s(0),
-          node_map_len(0)
+          node_map_len(0),
+          self_enable(false)
     {
         igate_callsign[0] = '\0';
         tocall[0] = '\0';
         path[0] = '\0';
+        self_callsign[0] = '\0';
         memset(node_map, 0, sizeof(node_map));
     }
 };
@@ -253,6 +257,13 @@ struct AppConfig
             map_len = sizeof(aprs.node_map);
         }
         aprs.node_map_len = static_cast<uint8_t>(map_len);
+        aprs.self_enable = prefs.getBool("self_enable", aprs.self_enable);
+        if (prefs.isKey("self_call"))
+        {
+            String self_call = prefs.getString("self_call", "");
+            strncpy(aprs.self_callsign, self_call.c_str(), sizeof(aprs.self_callsign) - 1);
+            aprs.self_callsign[sizeof(aprs.self_callsign) - 1] = '\0';
+        }
         prefs.end();
         return true;
     }
@@ -338,6 +349,8 @@ struct AppConfig
         {
             prefs.remove("node_map");
         }
+        prefs.putBool("self_enable", aprs.self_enable);
+        prefs.putString("self_call", aprs.self_callsign);
         prefs.end();
         return true;
     }

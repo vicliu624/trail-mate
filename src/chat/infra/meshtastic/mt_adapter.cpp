@@ -5,6 +5,7 @@
 
 #include "mt_adapter.h"
 #include "../../../sys/event_bus.h"
+#include "../../../app/app_context.h"
 #include "../../../team/protocol/team_portnum.h"
 #include "../../../gps/gps_service_api.h"
 #include "../../domain/contact_types.h"
@@ -986,6 +987,10 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     const bool from_is = (header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
     rx_meta.from_is = from_is;
     rx_meta.origin = from_is ? chat::RxOrigin::External : chat::RxOrigin::Mesh;
+    rx_meta.channel_hash = header.channel;
+    rx_meta.wire_flags = header.flags;
+    rx_meta.next_hop = header.next_hop;
+    rx_meta.relay_node = header.relay_node;
     uint8_t hop_limit = header.flags & chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
     uint8_t hop_count = computeHopsAway(header.flags);
     rx_meta.hop_count = hop_count;
@@ -1793,6 +1798,12 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
 
     char user_id[16];
     snprintf(user_id, sizeof(user_id), "!%08lX", (unsigned long)node_id_);
+    const app::AppConfig& cfg = app::AppContext::getInstance().getConfig();
+    if (cfg.aprs.self_enable && cfg.aprs.self_callsign[0] != '\0')
+    {
+        strncpy(user_id, cfg.aprs.self_callsign, sizeof(user_id) - 1);
+        user_id[sizeof(user_id) - 1] = '\0';
+    }
 
     char long_name[32];
     char short_name[5];

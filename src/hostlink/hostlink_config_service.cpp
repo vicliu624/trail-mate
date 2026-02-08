@@ -109,6 +109,9 @@ bool build_status_payload(std::vector<uint8_t>& out, uint8_t link_state, uint32_
         {
             push_tlv(out, static_cast<uint8_t>(StatusKey::AprsNodeIdMap), aprs.node_map, aprs.node_map_len);
         }
+        uint8_t self_enable = aprs.self_enable ? 1 : 0;
+        push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsSelfEnable), self_enable);
+        push_tlv_string(out, static_cast<uint8_t>(StatusKey::AprsSelfCallsign), aprs.self_callsign);
     }
     return true;
 }
@@ -285,6 +288,26 @@ bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)
                 memcpy(cfg.aprs.node_map, &data[off], vlen);
             }
             cfg.aprs.node_map_len = vlen;
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsSelfEnable:
+            if (vlen != 1)
+            {
+                return false;
+            }
+            cfg.aprs.self_enable = (data[off] != 0);
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsSelfCallsign:
+            if (vlen >= sizeof(cfg.aprs.self_callsign))
+            {
+                return false;
+            }
+            if (vlen > 0)
+            {
+                memcpy(cfg.aprs.self_callsign, &data[off], vlen);
+            }
+            cfg.aprs.self_callsign[vlen] = '\0';
             aprs_changed = true;
             break;
         default:

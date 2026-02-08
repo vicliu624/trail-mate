@@ -69,12 +69,16 @@ struct RxMeta
     bool from_is;
     uint8_t hop_count;
     uint8_t hop_limit;
+    uint8_t channel_hash;
+    uint8_t wire_flags;
     int16_t rssi_dbm_x10;
     int16_t snr_db_x10;
     uint32_t freq_hz;
     uint32_t bw_hz;
     uint8_t sf;
     uint8_t cr;
+    uint32_t next_hop;
+    uint32_t relay_node;
 
     RxMeta()
         : rx_timestamp_s(0),
@@ -85,12 +89,16 @@ struct RxMeta
           from_is(false),
           hop_count(0xFF),
           hop_limit(0xFF),
+          channel_hash(0xFF),
+          wire_flags(0xFF),
           rssi_dbm_x10(std::numeric_limits<int16_t>::min()),
           snr_db_x10(std::numeric_limits<int16_t>::min()),
           freq_hz(0),
           bw_hz(0),
           sf(0),
-          cr(0)
+          cr(0),
+          next_hop(0),
+          relay_node(0)
     {
     }
 };
