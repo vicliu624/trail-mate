@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 
-#define GPS_DEBUG 1 // Enable debug logging
+#define GPS_DEBUG 0 // Enable debug logging
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else

@@ -24,7 +24,7 @@
 using GPSData = gps::GpsState;
 extern void updateUserActivity();
 
-#define GPS_DEBUG 1
+#define GPS_DEBUG 0
 #ifndef GPS_LOG
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
@@ -392,8 +392,8 @@ void ui_gps_enter(lv_obj_t* parent)
     }
 
     // Split timers: fast tile loading + slower GPS refresh.
-    g_gps_state.loader_timer = gps::ui::lifetime::add_timer(gps_loader_timer_cb, 50, NULL);
-    g_gps_state.timer = gps::ui::lifetime::add_timer(gps_update_timer_cb, 200, NULL);
+    g_gps_state.loader_timer = gps::ui::lifetime::add_timer(gps_loader_timer_cb, 200, NULL);
+    g_gps_state.timer = gps::ui::lifetime::add_timer(gps_update_timer_cb, 500, NULL);
     g_gps_state.title_timer = gps::ui::lifetime::add_timer(title_update_timer_cb, 30000, NULL);
 
     update_title_and_status();

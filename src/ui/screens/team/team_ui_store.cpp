@@ -371,11 +371,18 @@ void apply_key_event(TeamUiSnapshot& snap, TeamKeyEventType type, const std::vec
     else if (type == TeamKeyEventType::MemberAccepted)
     {
         uint32_t member_id = 0;
-        uint8_t role = 0;
-        if (!read_u32(payload, off, member_id) ||
-            !read_u8(payload, off, role))
+        uint8_t role = kRoleMember;
+        if (!read_u32(payload, off, member_id))
         {
             return;
+        }
+        if (off < payload.size())
+        {
+            uint8_t role_in = 0;
+            if (read_u8(payload, off, role_in))
+            {
+                role = role_in;
+            }
         }
         int idx = find_member_index(snap, member_id);
         if (idx < 0)
@@ -558,6 +565,15 @@ bool load_snapshot_from_path(const std::string& snapshot_path, TeamUiSnapshot& o
         out.members.push_back(m);
     }
 
+    uint32_t chat_unread = 0;
+    if (off + sizeof(chat_unread) <= buf.size())
+    {
+        if (read_u32(buf, off, chat_unread))
+        {
+            out.team_chat_unread = chat_unread;
+        }
+    }
+
     (void)updated_ts;
     (void)self_node_id;
     (void)leader_node_id;
@@ -639,6 +655,8 @@ bool save_snapshot_to_path(const std::string& dir_path, const TeamUiSnapshot& in
             f.write(reinterpret_cast<const uint8_t*>(name.data()), name_len);
         }
     }
+
+    write_u32(f, in.team_chat_unread);
 
     f.flush();
     f.close();
@@ -1004,7 +1022,6 @@ class TeamUiStorePersisted : public ITeamUiStore
         snap.pending_join = false;
         snap.pending_join_started_s = 0;
         snap.kicked_out = false;
-        snap.has_join_target = false;
         if (!snap.has_team_psk)
         {
             std::fill(snap.team_psk.begin(), snap.team_psk.end(), 0);
@@ -1030,7 +1047,8 @@ class TeamUiStorePersisted : public ITeamUiStore
         bool force_write = (in.in_team != last_snapshot_in_team_) ||
                            (in.self_is_leader != last_snapshot_self_is_leader_) ||
                            (in.security_round != last_snapshot_epoch_) ||
-                           (in.has_team_psk != last_snapshot_has_psk_);
+                           (in.has_team_psk != last_snapshot_has_psk_) ||
+                           (in.team_chat_unread != last_snapshot_unread_);
         bool seq_trigger = (in.last_event_seq >= last_snapshot_seq_ + 10);
         bool time_trigger = (now - last_snapshot_ts_ >= 60);
 
@@ -1054,6 +1072,7 @@ class TeamUiStorePersisted : public ITeamUiStore
             last_snapshot_self_is_leader_ = in.self_is_leader;
             last_snapshot_epoch_ = in.security_round;
             last_snapshot_has_psk_ = in.has_team_psk;
+            last_snapshot_unread_ = in.team_chat_unread;
         }
     }
 
@@ -1069,6 +1088,7 @@ class TeamUiStorePersisted : public ITeamUiStore
     bool last_snapshot_self_is_leader_ = false;
     uint32_t last_snapshot_epoch_ = 0;
     bool last_snapshot_has_psk_ = false;
+    uint32_t last_snapshot_unread_ = 0;
 };
 
 TeamUiStorePersisted s_persisted_store;

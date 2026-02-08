@@ -8,6 +8,7 @@
 #include "../../../team/protocol/team_portnum.h"
 #include "../../../gps/gps_service_api.h"
 #include "../../domain/contact_types.h"
+#include "../../time_utils.h"
 #include "../../ports/i_node_store.h"
 #include <Arduino.h>
 #include <Crypto.h>
@@ -22,12 +23,9 @@
 #include "../../../board/TLoRaPagerTypes.h"
 #include "generated/meshtastic/config.pb.h"
 #include "mt_region.h"
-#include "node_persist.h"
 #include <AES.h>
 #include <Curve25519.h>
 #include <Preferences.h>
-#include <esp_err.h>
-#include <nvs.h>
 #include <RNG.h>
 #include <RadioLib.h>
 #include <SHA256.h>
@@ -56,13 +54,6 @@ constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
-using chat::meshtastic::kPersistMaxNodes;
-using chat::meshtastic::kPersistNodesKey;
-using chat::meshtastic::kPersistNodesKeyCrc;
-using chat::meshtastic::kPersistNodesKeyVer;
-using chat::meshtastic::kPersistNodesNs;
-using chat::meshtastic::kPersistVersion;
-using chat::meshtastic::PersistedNodeEntry;
 
 bool allowPkiForPortnum(uint32_t portnum)
 {
@@ -130,201 +121,6 @@ static const char* keyVerificationStage(const meshtastic_KeyVerification& kv)
     return "UNKNOWN";
 }
 
-static uint32_t crc32(const uint8_t* data, size_t len)
-{
-    uint32_t crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < len; ++i)
-    {
-        crc ^= data[i];
-        for (int j = 0; j < 8; ++j)
-        {
-            if (crc & 1U)
-            {
-                crc = (crc >> 1) ^ 0xEDB88320U;
-            }
-            else
-            {
-                crc >>= 1;
-            }
-        }
-    }
-    return ~crc;
-}
-
-static void logNvsStats(const char* tag, const char* ns)
-{
-    nvs_stats_t stats{};
-    esp_err_t err = nvs_get_stats(nullptr, &stats);
-    if (err == ESP_OK)
-    {
-        LORA_LOG("[LORA] NVS stats(%s): used=%u free=%u total=%u namespaces=%u\n",
-                 tag ? tag : "?",
-                 static_cast<unsigned>(stats.used_entries),
-                 static_cast<unsigned>(stats.free_entries),
-                 static_cast<unsigned>(stats.total_entries),
-                 static_cast<unsigned>(stats.namespace_count));
-    }
-    else
-    {
-        LORA_LOG("[LORA] NVS stats(%s) err=%s\n",
-                 tag ? tag : "?",
-                 esp_err_to_name(err));
-    }
-    if (ns && ns[0])
-    {
-        nvs_handle_t handle;
-        err = nvs_open(ns, NVS_READONLY, &handle);
-        if (err == ESP_OK)
-        {
-            LORA_LOG("[LORA] NVS open ns=%s ok\n", ns);
-            nvs_close(handle);
-        }
-        else
-        {
-            LORA_LOG("[LORA] NVS open ns=%s err=%s\n", ns, esp_err_to_name(err));
-        }
-    }
-}
-
-static void fastPersistNodeInfo(uint32_t node_id,
-                                const char* short_name,
-                                const char* long_name,
-                                float snr,
-                                float rssi,
-                                uint32_t now_secs,
-                                uint8_t protocol,
-                                uint8_t role,
-                                uint8_t hops_away)
-{
-    if (node_id == 0)
-    {
-        return;
-    }
-
-    std::vector<PersistedNodeEntry> entries;
-    Preferences prefs;
-    if (!prefs.begin(kPersistNodesNs, false))
-    {
-        LORA_LOG("[LORA] fastPersistNodeInfo open failed ns=%s\n", kPersistNodesNs);
-        logNvsStats("fastPersistNodeInfo-open", kPersistNodesNs);
-        return;
-    }
-
-    size_t len = prefs.getBytesLength(kPersistNodesKey);
-    if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
-    {
-        size_t count = len / sizeof(PersistedNodeEntry);
-        if (count > kPersistMaxNodes)
-        {
-            count = kPersistMaxNodes;
-        }
-        entries.resize(count);
-        prefs.getBytes(kPersistNodesKey, entries.data(), count * sizeof(PersistedNodeEntry));
-    }
-
-    bool updated = false;
-    for (auto& entry : entries)
-    {
-        if (entry.node_id == node_id)
-        {
-            if (short_name && short_name[0] != '\0')
-            {
-                strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
-                entry.short_name[sizeof(entry.short_name) - 1] = '\0';
-            }
-            if (long_name && long_name[0] != '\0')
-            {
-                strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
-                entry.long_name[sizeof(entry.long_name) - 1] = '\0';
-            }
-            entry.last_seen = now_secs;
-            if (!std::isnan(snr))
-            {
-                entry.snr = snr;
-            }
-            if (!std::isnan(rssi))
-            {
-                entry.rssi = rssi;
-            }
-            if (protocol != 0)
-            {
-                entry.protocol = protocol;
-            }
-            if (role != chat::contacts::kNodeRoleUnknown)
-            {
-                entry.role = role;
-            }
-            if (hops_away != 0xFF)
-            {
-                entry.hops_away = hops_away;
-            }
-            updated = true;
-            break;
-        }
-    }
-
-    if (!updated)
-    {
-        if (entries.size() >= kPersistMaxNodes)
-        {
-            entries.erase(entries.begin());
-        }
-        PersistedNodeEntry entry{};
-        entry.node_id = node_id;
-        if (short_name && short_name[0] != '\0')
-        {
-            strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
-            entry.short_name[sizeof(entry.short_name) - 1] = '\0';
-        }
-        if (long_name && long_name[0] != '\0')
-        {
-            strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
-            entry.long_name[sizeof(entry.long_name) - 1] = '\0';
-        }
-        entry.last_seen = now_secs;
-        entry.snr = snr;
-        entry.rssi = rssi;
-        entry.protocol = protocol;
-        entry.role = (role != chat::contacts::kNodeRoleUnknown) ? role : chat::contacts::kNodeRoleUnknown;
-        entry.hops_away = hops_away;
-        entries.push_back(entry);
-    }
-
-    if (!entries.empty())
-    {
-        size_t expected = entries.size() * sizeof(PersistedNodeEntry);
-        size_t written = prefs.putBytes(kPersistNodesKey, entries.data(), expected);
-        if (written != expected)
-        {
-            prefs.remove(kPersistNodesKey);
-            written = prefs.putBytes(kPersistNodesKey, entries.data(), expected);
-        }
-        uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(entries.data()), expected);
-        prefs.putUChar(kPersistNodesKeyVer, kPersistVersion);
-        prefs.putUInt(kPersistNodesKeyCrc, crc);
-        if (written != expected)
-        {
-            LORA_LOG("[LORA] fastPersistNodeInfo write failed wrote=%u expected=%u\n",
-                     static_cast<unsigned>(written),
-                     static_cast<unsigned>(expected));
-            logNvsStats("fastPersistNodeInfo-write", kPersistNodesNs);
-        }
-        else
-        {
-            size_t verify_len = prefs.getBytesLength(kPersistNodesKey);
-            uint8_t verify_ver = prefs.getUChar(kPersistNodesKeyVer, 0);
-            uint32_t verify_crc = prefs.getUInt(kPersistNodesKeyCrc, 0);
-            LORA_LOG("[LORA] fastPersistNodeInfo write ok len=%u ver=%u crc=%08lX\n",
-                     static_cast<unsigned>(verify_len),
-                     static_cast<unsigned>(verify_ver),
-                     static_cast<unsigned long>(verify_crc));
-        }
-    }
-    prefs.end();
-    LORA_LOG("[LORA] fastPersistNodeInfo saved node=%08lX total=%u\n",
-             static_cast<unsigned long>(node_id),
-             static_cast<unsigned>(entries.size()));
-}
 
 static const char* routingErrorName(meshtastic_Routing_Error err)
 {
@@ -1174,6 +970,40 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     // Mark as seen
     dedup_.markSeen(header.from, header.id);
 
+    chat::RxMeta rx_meta;
+    rx_meta.rx_timestamp_ms = millis();
+    uint32_t epoch_s = chat::now_epoch_seconds();
+    if (chat::is_valid_epoch(epoch_s))
+    {
+        rx_meta.rx_timestamp_s = epoch_s;
+        rx_meta.time_source = chat::RxTimeSource::DeviceUtc;
+    }
+    else
+    {
+        rx_meta.time_source = chat::RxTimeSource::Uptime;
+        rx_meta.rx_timestamp_s = rx_meta.rx_timestamp_ms / 1000U;
+    }
+    const bool from_is = (header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
+    rx_meta.from_is = from_is;
+    rx_meta.origin = from_is ? chat::RxOrigin::External : chat::RxOrigin::Mesh;
+    uint8_t hop_limit = header.flags & chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
+    uint8_t hop_count = computeHopsAway(header.flags);
+    rx_meta.hop_count = hop_count;
+    rx_meta.hop_limit = (hop_count == 0xFF) ? 0xFF : hop_limit;
+    rx_meta.direct = (hop_count == 0);
+    if (!std::isnan(last_rx_rssi_))
+    {
+        rx_meta.rssi_dbm_x10 = static_cast<int16_t>(std::lround(last_rx_rssi_ * 10.0f));
+    }
+    if (!std::isnan(last_rx_snr_))
+    {
+        rx_meta.snr_db_x10 = static_cast<int16_t>(std::lround(last_rx_snr_ * 10.0f));
+    }
+    rx_meta.freq_hz = radio_freq_hz_;
+    rx_meta.bw_hz = radio_bw_hz_;
+    rx_meta.sf = radio_sf_;
+    rx_meta.cr = radio_cr_;
+
     // Decrypt payload if needed
     uint8_t plaintext[256];
     size_t plaintext_len = sizeof(plaintext);
@@ -1370,9 +1200,6 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              (unsigned long)node_id,
                              static_cast<unsigned>(sys::EventBus::pendingCount()));
                 }
-                fastPersistNodeInfo(node_id, short_name, long_name, snr, rssi, now_secs,
-                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                                    hops_away);
                 if (node.has_position)
                 {
                     publishPositionEvent(node_id, node.position);
@@ -1433,9 +1260,6 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                                  (unsigned long)node_id,
                                  static_cast<unsigned>(sys::EventBus::pendingCount()));
                     }
-                    fastPersistNodeInfo(node_id, short_name, long_name, snr, rssi, now_secs,
-                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                                        hops_away);
                     nodeinfo_decoded = true;
                 }
                 else
@@ -1677,6 +1501,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             incoming.want_response = want_response;
             incoming.payload.assign(decoded.payload.bytes,
                                     decoded.payload.bytes + decoded.payload.size);
+            incoming.rx_meta = rx_meta;
             if (app_receive_queue_.size() < MAX_APP_QUEUE)
             {
                 app_receive_queue_.push(incoming);
@@ -1711,6 +1536,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         }
         incoming.hop_limit = header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
         incoming.encrypted = (psk != nullptr && psk_len > 0);
+        incoming.rx_meta = rx_meta;
 
         receive_queue_.push(incoming);
         LORA_LOG("[LORA] RX text from=%08lX id=%08lX ch=%u len=%u\n",
@@ -2160,6 +1986,10 @@ void MtAdapter::configureRadio()
     {
         freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f);
     }
+    radio_freq_hz_ = static_cast<uint32_t>(std::lround(freq_mhz * 1000000.0f));
+    radio_bw_hz_ = static_cast<uint32_t>(std::lround(bw_khz * 1000.0f));
+    radio_sf_ = sf;
+    radio_cr_ = cr_denom;
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     board_.configureLoraRadio(freq_mhz, bw_khz, sf, cr_denom, config_.tx_power,

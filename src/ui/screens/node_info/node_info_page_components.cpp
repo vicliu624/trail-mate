@@ -36,6 +36,9 @@ static const lv_color_t kColorAvatarBg = lv_color_hex(0x5BAF4A);
 static const lv_color_t kColorMapBg = lv_color_hex(0xF6E7C8);
 static const lv_color_t kColorMapAccent = lv_color_hex(0x2F6FD6);
 
+constexpr int kNodeInfoMapZoom = 12;
+constexpr int kTileSize = 256;
+
 void apply_root_style(lv_obj_t* obj)
 {
     lv_obj_set_style_bg_color(obj, kColorPageBg, 0);
@@ -297,6 +300,106 @@ double compute_accuracy_m(const chat::contacts::NodePosition& pos)
     }
     return acc;
 }
+
+bool latlng_to_tile(double lat, double lon, int zoom, int& tile_x, int& tile_y, int& offset_x, int& offset_y)
+{
+    const double kMaxLat = 85.05112878;
+    if (lat > kMaxLat) lat = kMaxLat;
+    if (lat < -kMaxLat) lat = -kMaxLat;
+    while (lon < -180.0) lon += 360.0;
+    while (lon >= 180.0) lon -= 360.0;
+
+    double n = std::pow(2.0, zoom);
+    double lat_rad = lat * M_PI / 180.0;
+    double x = (lon + 180.0) / 360.0 * n;
+    double y = (1.0 - std::log(std::tan(lat_rad) + 1.0 / std::cos(lat_rad)) / M_PI) / 2.0 * n;
+
+    int x_int = static_cast<int>(std::floor(x));
+    int y_int = static_cast<int>(std::floor(y));
+    if (x_int < 0) x_int = 0;
+    if (y_int < 0) y_int = 0;
+    int max_tile = static_cast<int>(n) - 1;
+    if (x_int > max_tile) x_int = max_tile;
+    if (y_int > max_tile) y_int = max_tile;
+
+    tile_x = x_int;
+    tile_y = y_int;
+
+    double frac_x = x - static_cast<double>(x_int);
+    double frac_y = y - static_cast<double>(y_int);
+    offset_x = static_cast<int>(std::round(frac_x * kTileSize));
+    offset_y = static_cast<int>(std::round(frac_y * kTileSize));
+    if (offset_x < 0) offset_x = 0;
+    if (offset_x >= kTileSize) offset_x = kTileSize - 1;
+    if (offset_y < 0) offset_y = 0;
+    if (offset_y >= kTileSize) offset_y = kTileSize - 1;
+    return true;
+}
+
+void update_location_map(const chat::contacts::NodeInfo& node)
+{
+    if (!s_widgets.location_map)
+    {
+        return;
+    }
+
+    if (!s_widgets.map_image || !lv_obj_is_valid(s_widgets.map_image))
+    {
+        s_widgets.map_image = lv_image_create(s_widgets.location_map);
+        lv_obj_set_size(s_widgets.map_image, kTileSize, kTileSize);
+        lv_obj_set_style_border_width(s_widgets.map_image, 0, 0);
+        lv_obj_set_style_pad_all(s_widgets.map_image, 0, 0);
+        lv_obj_move_background(s_widgets.map_image);
+    }
+
+    if (!node.position.valid)
+    {
+        lv_obj_add_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+        set_label_text(s_widgets.map_label, "No map");
+        return;
+    }
+
+    double lat = static_cast<double>(node.position.latitude_i) * 1e-7;
+    double lon = static_cast<double>(node.position.longitude_i) * 1e-7;
+
+    int tile_x = 0;
+    int tile_y = 0;
+    int offset_x = 0;
+    int offset_y = 0;
+    if (!latlng_to_tile(lat, lon, kNodeInfoMapZoom, tile_x, tile_y, offset_x, offset_y))
+    {
+        lv_obj_add_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+        set_label_text(s_widgets.map_label, "No map");
+        return;
+    }
+
+    char path[64];
+    snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", kNodeInfoMapZoom, tile_x, tile_y);
+
+    lv_fs_file_t f;
+    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
+    if (res != LV_FS_RES_OK)
+    {
+        lv_obj_add_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+        set_label_text(s_widgets.map_label, "No map");
+        return;
+    }
+    lv_fs_close(&f);
+
+    lv_image_set_src(s_widgets.map_image, path);
+    lv_obj_set_size(s_widgets.map_image, kTileSize, kTileSize);
+
+    int map_w = lv_obj_get_width(s_widgets.location_map);
+    int map_h = lv_obj_get_height(s_widgets.location_map);
+    int center_x = map_w / 2;
+    int center_y = map_h / 2;
+    int img_x = center_x - offset_x;
+    int img_y = center_y - offset_y;
+    lv_obj_set_pos(s_widgets.map_image, img_x, img_y);
+    lv_obj_clear_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_background(s_widgets.map_image);
+    set_label_text(s_widgets.map_label, "");
+}
 }
 
 NodeInfoWidgets create(lv_obj_t* parent)
@@ -409,6 +512,17 @@ NodeInfoWidgets create(lv_obj_t* parent)
     lv_obj_set_pos(s_widgets.location_title_label, 10, 1);
 
     apply_map_style(s_widgets.location_map);
+    #ifdef LV_OBJ_FLAG_CLIP_CHILDREN
+    lv_obj_add_flag(s_widgets.location_map, LV_OBJ_FLAG_CLIP_CHILDREN);
+    #endif
+
+    s_widgets.map_image = lv_image_create(s_widgets.location_map);
+    lv_obj_set_size(s_widgets.map_image, kTileSize, kTileSize);
+    lv_obj_set_style_border_width(s_widgets.map_image, 0, 0);
+    lv_obj_set_style_pad_all(s_widgets.map_image, 0, 0);
+    lv_obj_add_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_background(s_widgets.map_image);
+
     s_widgets.map_label =
         create_label(s_widgets.location_map, "", &lv_font_montserrat_12, kColorTextMuted);
     lv_obj_center(s_widgets.map_label);
@@ -601,6 +715,8 @@ void set_node_info(const chat::contacts::NodeInfo& node)
         set_label_text(s_widgets.coords_alt_label, "Alt: -");
         set_label_text(s_widgets.map_label, "No map");
     }
+
+    update_location_map(node);
 
     uint32_t update_ts = node.position.timestamp ? node.position.timestamp : node.last_seen;
     set_label_text(s_widgets.link_title_label, "Link");

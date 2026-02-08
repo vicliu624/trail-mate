@@ -2,7 +2,7 @@
 
 > 设备：**2.33-inch 横屏 222×480**
 > 约束：**固定 TopBar（Back / Title / Battery）**
-> 原则：**Radio + NFC 并行**；NFC 只在对应页面启用（省电/避免误触）
+> 原则：**ESP‑NOW 近距建队（≤5m）**；不使用 LoRa/NFC；配对仅在对应页面启用（省电/避免误触）
 
 ---
 
@@ -39,7 +39,7 @@
 │   Create or join a team                       │
 │                                              │
 ├──────────────────────────────────────────────┤
-│  [ Create Team ]      [ Join Team ]           │
+│  [ Create (ESP?NOW) ]      [ Join (ESP?NOW) ]           │
 └──────────────────────────────────────────────┘
 ```
 
@@ -67,7 +67,7 @@
 │  ○ 1 member stale                             │
 │                                              │
 ├──────────────────────────────────────────────┤
-│  [ View Team ]     [ Invite ]     [ Leave ]  │
+│  [ View Team ]     [ Pair Member ]     [ Leave ]  │
 └──────────────────────────────────────────────┘
 ```
 
@@ -89,7 +89,7 @@
 │  Epoch: 5        Sync: OK (128)               │
 │                                              │
 ├──────────────────────────────────────────────┤
-│  Requests: 2 pending   > Open                 │  (仅 Leader 且有请求时显示)
+│                   │  (仅 Leader 且有请求时显示)
 │  ──────────────────────────────────────────  │
 │  Members                                     │
 │  ● You (Leader)        Online                 │
@@ -97,191 +97,22 @@
 │  ○ Jerry               Last seen 2m ago       │
 │                                              │
 ├──────────────────────────────────────────────┤
-│  [ Invite ]        [ Manage ]     [ Leave ]  │
+│  [ Pair Member ]        [ Manage ]     [ Leave ]  │
 └──────────────────────────────────────────────┘
 ```
 
-> **Requests 收件箱** 用来替代 “弹窗可能错过”的问题
 > 重要：户外场景下用户经常在地图/聊天页，不一定看得到 popup
 
 ---
 
-## A3b. Join Request（Leader 弹窗）
+## A3b. Pairing?ESP?NOW?
+**Title?`Pairing`**
 
-**Title：`Join request`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back          Join request             🔋 │
-├──────────────────────────────────────────────┤
-│  Tom wants to join                           │
-│                                              │
-├──────────────────────────────────────────────┤
-│ [ Accept ]              [ Reject ]           │
-└──────────────────────────────────────────────┘
-```
-
-**规则（v0.1）**
-* Leader 一次只处理 **1 个 pending join**，其余排队/稍后重试
-  （避免同时 join 导致 rotate / key_dist 混乱）
-
----
-
-## A4. Invite 页面（Leader）
-
-**Title：`Invite`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back               Invite               🔋 │
-├──────────────────────────────────────────────┤
-│   Mode: Radio                                │
-│   Team: ALPHA-7 (ID: A7K3)                    │
-│                                              │
-│   Invite Code                                 │
-│        J4K9Q2                                 │
-│   Time left: 08:45                            │
-│                                              │
-│   Nearby devices can request to join          │
-│                                              │
-├──────────────────────────────────────────────┤
-│  [ Stop Invite ]     [ Switch Mode ]          │
-└──────────────────────────────────────────────┘
-```
-
-> `Refresh Code` 属于异常处理路径，v0.1 可放在长按/菜单里，不占主按钮位
-
----
-
-### Invite Code 格式（v0.1）
-
-* 6 位连续字符（无分隔符）
-* 字符集：`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`（不含 I/O/1/0）
-* 默认有效期：9 分钟
-* **绑定规则**：Invite Code 必须和 `team_id_short (A7K3)` 一起校验
-  （Invite Code 不是全局唯一，只在 team 上下文里成立）
-
----
-
-## A4b. Invite via NFC（Leader）
-
-**Title：`Invite via NFC`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back            Invite via NFC          🔋 │
-├──────────────────────────────────────────────┤
-│   Mode: NFC                                  │
-│   Team: ALPHA-7 (ID: A7K3)                    │
-│                                              │
-│   Invite Code                                 │
-│        J4K9Q2                                 │
-│   Time left: 08:45                            │
-│                                              │
-│   Tap another device to share key             │
-│   Invite code protects the NFC key            │
-│                                              │
-├──────────────────────────────────────────────┤
-│  [ Start NFC ]      [ Stop Invite ]           │
-└──────────────────────────────────────────────┘
-```
-
-> 进入此页面才开启 NFC（轮询/卡模拟），退出即关闭以省电/避免误触。
-
----
-
-## A5. Join Team（选择方式）
-
-**Title：`Join Team`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back               Join Team            🔋 │
-├──────────────────────────────────────────────┤
-│  Nearby Teams                                │
-│  ──────────────────────────────────────────  │
-│  ALPHA-7 (A7K3)   Signal: ▮▮▮▯   [ Join ]     │
-│  BETA-3  (B3Q1)   Signal: ▮▮▯▯   [ Join ]     │
-│                                              │
-│  Other options                                │
-│  • Enter Invite Code (Radio)                  │
-│  • Tap to join (NFC, recommended)             │
-│                                              │
-├──────────────────────────────────────────────┤
-│  [ Enter Invite Code ]  [ Join via NFC ]      │
-│  [ Refresh ]                                  │
-└──────────────────────────────────────────────┘
-```
-
-> “Nearby Team + Join” 强调这是“直接申请加入该队”
-> “Enter Invite Code” 明确它是 Radio 模式的邀请码匹配
-
----
-
-## A5b. Join via NFC（Member）
-
-**Title：`Join via NFC`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back            Join via NFC            🔋 │
-├──────────────────────────────────────────────┤
-│                                              │
-│   Hold device near leader/device              │
-│   Scanning... 08s                             │
-│                                              │
-│   NFC is on only during this screen           │
-│                                              │
-├──────────────────────────────────────────────┤
-│  [ Cancel ]                                   │
-└──────────────────────────────────────────────┘
-```
-
-> NFC 读取成功后：自动跳转到 “Enter Code” 输入页（用于解密 NFC key，见协议 D2b）
-
----
-
-## A5c. Enter Invite Code（Radio/NFC 共用）
-
-**Title：`Enter Code`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back            Enter Code              🔋 │
-├──────────────────────────────────────────────┤
-│  Team ID (if known): A7K3                     │
-│                                              │
-│  Code:  _ _ _ _ _ _                           │
-│                                              │
-│  • Radio: used to request join                │
-│  • NFC: used to decrypt the shared key        │
-│                                              │
-├──────────────────────────────────────────────┤
-│  [ Cancel ]              [ Confirm ]          │
-└──────────────────────────────────────────────┘
-```
-
----
-
-## A6. Join Pending（等待批准）
-
-**Title：`Join Request`**
-
-```
-┌──────────────────────────────────────────────┐
-│ < Back           Join Request             🔋 │
-├──────────────────────────────────────────────┤
-│                                              │
-│   Request sent to ALPHA-7 (A7K3)              │
-│                                              │
-│   Waiting for approval...                     │
-│                                              │
-│   This may take a moment                      │
-│                                              │
-├──────────────────────────────────────────────┤
-│  [ Cancel ]            [ Retry ]              │
-└──────────────────────────────────────────────┘
-```
+- ??????? ESP?NOW ??????? 120s?
+- Leader?????????????????
+- Member??? beacon??? join ????? KeyDist
+- UI ???Scanning / Join sent / Waiting for keys / Completed / Failed
+- ???[Cancel] ?????[Retry] ????
 
 ---
 
@@ -401,53 +232,38 @@
      v
 [ Team Status ]
      |
-     +--> (not in team) --> [ Create Team ] -> [ Team Status (joined) ]
+     +--> (not in team) --> [ Create (ESP?NOW) ] -> [ Team Status (joined) ]
      |
      +--> (joined) -------> [ View Team ] -> [ Team Home ]
 ```
 
 ---
 
-## B2. 加入流程（Member）
-
+## B2. ?????Member?ESP?NOW?
 ```
 [ Team Status (not in team) ]
         |
         v
-    [ Join Team ]
+     [ Pairing ]
         |
-        +--> [ Join via NFC ] -> (read ok) -> [ Enter Code ] -> [ Join Pending ]
+        +-- scanning -> join sent -> waiting key -> [ Team Status (joined) ]
         |
-        +--> [ Enter Invite Code ] ---------> [ Join Pending ]
-        |
-        +--> [ Nearby Teams -> Join ] ------> [ Join Pending ]
-        |
-        v
- [ Join Pending ]
-        |
-        +-- reject/timeout --> [ Join Team ]
-        |
-        +-- accept ----------> [ Team Status (joined) ]
+        +-- timeout/cancel ----------------------> [ Team Status (not in team) ]
 ```
 
 ---
 
-## B3. 邀请流程（Leader）
-
+## B3. ?????Leader?ESP?NOW?
 ```
-[ Team Home ]
+[ Team Status (leader) ]
      |
      v
-  [ Invite ] <--> [ Invite via NFC ]
+  [ Pairing ]
      |
-     +-- member joins --> [ Requests (Inbox) ]
-                              |
-                              +-- accept --> epoch rotate --> [ Team Status ]
-                              |
-                              +-- reject
+     +-- member joins -> send keys -> [ Team Status ]
+     |
+     +-- timeout/cancel --------------> [ Team Status ]
 ```
-
-> Join Request 不依赖 popup；popup 只是“提示”，Inbox 才是可靠入口。
 
 ---
 
@@ -472,24 +288,19 @@
 
 # C. 涉及的协议（Pager Team Core v0.1）
 
-## C1. 协议消息类型（最小集）
+## C1. ???????????
+| ?? | ?? |
+| --- | --- |
+| `TEAM_KEY_DIST` | ??????? ESP?NOW? |
+| `TEAM_KICK` | ?????????? |
+| `TEAM_TRANSFER_LEADER` | ?????????? |
+| `TEAM_STATUS` | ?????????? |
+| `TEAM_POS` | ???????? |
+| `TEAM_WAYPOINT` | ???????? |
+| `TEAM_TRACK` | ???????? |
+| `TEAM_CHAT` | ?????????? |
 
-| 类型                   | 用途                                |
-| -------------------- | --------------------------------- |
-| `TEAM_INVITE`        | 广播邀请码（Plain）                      |
-| `TEAM_JOIN_REQ`      | 申请加入（Plain）                       |
-| `TEAM_JOIN_DECISION` | 同意/拒绝（Plain）                      |
-| `TEAM_KEY_DIST`      | 新密钥分发（对新成员 Plain 定向 / 对旧成员可加密或定向） |
-| `TEAM_KICK`          | 踢人事件（加密，已在 team 内的成员可读）           |
-| `TEAM_EPOCH_ROTATE`  | 宣告轮次更新（通常作为 KeyEvent 记录并可广播提示）    |
-| `TEAM_PRESENCE`      | 在线状态（加密）                          |
-| `TEAM_POS`           | 位置（加密）                            |
-| `TEAM_SYNC_REQ`      | 补齐请求（加密）                          |
-| `TEAM_SYNC_RSP`      | 补齐响应（加密）                          |
-
-> v0.1 约束：**新成员在拿到 key 前必须能完成 Join Handshake**
-> 所以 `INVITE/JOIN_REQ/JOIN_DECISION/KEY_DIST(for newcomer)` 必须是 Plain 可解。
-
+> v0.2 ?????/???? ESP?NOW ??????LoRa ???? Join Handshake?
 ---
 
 ## C2. 字段命名定稿：epoch / event_seq / msg_id
@@ -538,7 +349,7 @@ v0.1 必须记录的关键事件：
 
 # D. 协议流转（和 UI 的对应关系）
 
-## D1. Create Team
+## D1. Create (ESP?NOW)
 
 * 本地生成 `team_id`
 * `epoch = 1`
@@ -549,113 +360,26 @@ v0.1 必须记录的关键事件：
 
 ---
 
-## D2. Invite / Join（Radio）
+## D2. Pairing / Join?ESP?NOW?
 
-**Invite（Radio, Plain）**
+**Beacon?Leader?**
 
-* Leader 周期发 `TEAM_INVITE(team_id_short, invite_code, expires_at)`
+- Leader ?? Pairing ??????? Beacon
+- Beacon ?? team_id / key_id / leader_id / team_name????
 
-**Join（Radio, Plain → KeyDist）**
+**Join & KeyDist?Member?**
 
-1. Member → `TEAM_JOIN_REQ(team_id_short, invite_code, member_pub/cap...)`（Plain）
-2. Leader → `TEAM_JOIN_DECISION(ACCEPT/REJECT, team_id, leader_id)`（Plain）
-3. Leader：写入 `MemberAccepted`（event_seq++）
-4. Leader：`epoch++` 并写入 `EpochRotated`（event_seq++）
-5. Leader → `TEAM_KEY_DIST(epoch, key)` **定向给新成员（Plain）**
-6. Leader → `TEAM_KEY_DIST(epoch, key)` 分发给旧成员（可定向/可加密，策略实现）
-7. 全员进入新 epoch，开始加密 Presence/Pos/WP
+1. Member ?? Beacon ??? Join ??
+2. Leader ???? ESP?NOW ?? TEAM_KEY_DIST
+3. Member ?? key ??? Joined??? LoRa ??? Team ??
 
 ---
-
-## D2b. Invite / Join（NFC）
-
-**NFC 目标**：让新成员无需空口接收 KeyDist 也能拿到 key（更可靠/更快），同时避免明文泄露。
-
-### NFC Payload（建议以 NDEF 自定义记录承载）
-
-* `magic/version`
-* `team_id`
-* `epoch`（当前或即将生效的 epoch）
-* `team_id_short`（A7K3）
-* `expires_at`
-* `salt + nonce`
-* `ciphertext(team_key)`（用 Invite Code 派生密钥加密）
-* `tag`
-
-### 加密建议（v0.1）
-
-* KDF：PBKDF2-HMAC-SHA256（迭代 10k）
-* AEAD：AES-GCM
-
-### 流程
-
-1. Leader 在 `Invite via NFC` 页开启卡模拟（仅页面内开启）
-2. Member 在 `Join via NFC` 页轮询读取 payload
-3. Member 自动进入 `Enter Code`，输入 Invite Code 解密得到 `team_key`
-4. Member 可直接进入 `Join Pending` 发送 `TEAM_JOIN_REQ`（Plain）
-5. Leader Accept 后仍需 **记录 Key Events + epoch rotate**
-6. Leader 对旧成员分发新 epoch key（KeyDist）
-7. 对新成员：可以选择
-
-   * A) 不发 KeyDist（因为 NFC 已提供），只发 Decision
-   * B) 仍发定向 KeyDist（作为冗余保障）
-
-> v0.1 推荐：A 为主，B 可作为可选兼容/容错开关
-
----
-
-## D3. Kick
-
-1. Leader：写入 `MemberKicked(event_seq++)`
-2. Leader：`epoch++`，写入 `EpochRotated(event_seq++)`
-3. Leader → `TEAM_KICK(target)`（加密，成员可读）
-4. Leader → `TEAM_KEY_DIST(new_epoch)` 分发给剩余成员
-5. 被踢成员：后续解密失败 / 收到明确 Kick → UI 切到 A10，Reason=Revoked
-
----
-
-## D4. Presence & Health（Status 页字段来源）
-
-* 全员周期发 `TEAM_PRESENCE(team_id, epoch, last_event_seq, battery, caps...)`（加密）
-* Status 页来自：
-
-  * `last_seen_ts`（presence 更新）
-  * `leader presence`
-  * `epoch 一致性`
-  * `last_event_seq 一致性`
-  * `sync 状态`（是否落后/是否补齐）
-
----
-
-## D5. Sync（补齐 Key Events）
-
-1. 发现对方 `last_event_seq > my_last_event_seq`
-2. → `TEAM_SYNC_REQ(from_event_seq = my_last_event_seq + 1)`
-3. → `TEAM_SYNC_RSP(events...)`（携带一组 Key Events，每条含 event_seq）
-4. 本地重放事件、append events.log、刷新 snapshot
-5. 安全态从 WARN → OK
-
----
-
-# E. v0.1 额外约束（写进文档的“实现护栏”）
-
-## E1. 明文/密文边界（避免新人永远解不开）
-
-* Plain 必须包含：`INVITE / JOIN_REQ / JOIN_DECISION / KEY_DIST(for newcomer)`
-* 加密从“新 epoch 生效后”开始：`PRESENCE / POS / WP / SYNC` 等
 
 ## E2. 并发 Join 处理策略（Leader）
 
 * Leader 同时只处理 **1 个 pending join**
-* 其余排队显示在 `Requests` 页面，成员端可 Retry
 
-## E3. Invite Code 绑定 team 上下文
-
-* Invite Code 校验必须结合 `team_id_short` 或 `team_id`
-* NFC payload 也带 `team_id_short`，用于防“撞码误入队”
-
----
-
+\r\n
 # 1) 模块清单（工程内目录与职责）
 
 ## 1.1 建议目录结构
@@ -672,7 +396,7 @@ src/team/
 
   usecase/
     team_service.h/.cpp  // 入口编排：UI动作 + Radio包 + 存储
-    team_join_flow.h/.cpp
+    team_pairing_service.h/.cpp
     team_admin_flow.h/.cpp
     team_sync_flow.h/.cpp
     team_presence_flow.h/.cpp
@@ -700,7 +424,7 @@ src/team/
       team_pages.h/.cpp          // enter/exit, render
       team_input.h/.cpp          // 按键/旋钮映射为 action
       team_components.h/.cpp     // list item, modal, bottom actions
-      team_nav.h/.cpp            // 简单导航（Status/Home/Invite/Join...）
+      team_nav.h/.cpp            // 简单导航（Status/Home/Pairing...）
 ```
 
 > 你如果已经有 “screens/xxx/ layout/components/input/state” 的范式，就完全按那套套进去。
@@ -821,59 +545,12 @@ public:
 
 # 3) Usecase 编排（核心 service + flows）
 
-## 3.1 TeamService（唯一入口）
+## 3.1 TeamService / PairingService
 
-> 你可以像 ChatService 一样做一个 TeamService：UI 和 MeshAdapter 都只跟它交互。
-
-```cpp
-class TeamService {
-public:
-  TeamService(ITeamStore&, ITeamTransport&, ITeamCrypto&, IClock&, IRng&, IUiNotifier*);
-
-  // UI actions
-  void uiCreateTeam();
-  void uiOpenInvite();
-  void uiStopInvite();
-  void uiJoinByCode(std::string code);
-  void uiJoinNearby(TeamId team, std::string hint);
-  void uiCancelJoin();
-  void uiRetryJoin();
-  void uiLeaveTeam();
-  void uiKickMember(MemberId target);
-  void uiTransferLeader(MemberId target);
-
-  // Radio input
-  void onTeamPacket(const uint8_t* data, size_t len, uint32_t from_node);
-
-  // Tick (timers): presence broadcast, invite broadcast, stale detection, retry
-  void tick1s();
-
-  // UI data
-  TeamState snapshot() const;
-  TeamHealth computeHealth() const;
-
-private:
-  TeamModel model_;
-  // ports
-  ITeamStore& store_;
-  ITeamTransport& transport_;
-  ITeamCrypto& crypto_;
-  IClock& clock_;
-  IRng& rng_;
-  IUiNotifier* ui_;
-
-  // runtime: join flow state, invite state, pending requests etc.
-  JoinRuntime join_;
-  InviteRuntime invite_;
-  SyncRuntime sync_;
-
-  // helpers
-  void persistSnapshotSoon();
-  void appendEventAndApply(const TeamEvent& e);
-  void broadcastPresenceIfDue();
-  void broadcastInviteIfDue();
-};
-```
+- TeamService ?? LoRa ?? Team ???status/pos/track/chat?
+- TeamPairingService ?? ESP?NOW ?????Leader beacon / Member join / KeyDist?
+- UI ?????Create (ESP?NOW) / Start Pairing / Stop Pairing / Leave / Kick / Transfer Leader
+- Pairing ?? Pairing ????
 
 ---
 
@@ -895,9 +572,7 @@ enum class TeamPage {
   StatusNotInTeam,
   StatusInTeam,
   TeamHome,
-  Invite,
-  JoinSelect,
-  JoinPending,
+  JoinPending, // Pairing page
   Members,
   MemberDetail,
   KickConfirm,
@@ -928,27 +603,22 @@ void TeamUI::enter() {
 }
 
 // StatusNotInTeam
-onClick(CreateTeam) { teamService.uiCreateTeam(); ui.busy=true; }
-onClick(JoinTeam)   { navTo(JoinSelect); }
+onClick(CreateTeam) { teamService.uiCreateTeam(); pairing.startLeader(); navTo(JoinPending); }
+onClick(JoinTeam)   { pairing.startMember(); navTo(JoinPending); }
 
 // StatusInTeam
-onClick(ViewTeam)   { navTo(TeamHome); }
-onClick(Invite)     { if (isLeader) navTo(Invite); else toast("Only leader"); }
-onClick(Leave)      { teamService.uiLeaveTeam(); navTo(StatusNotInTeam); }
+onClick(ViewTeam)    { navTo(TeamHome); }
+onClick(PairMember) { pairing.startLeader(); navTo(JoinPending); }
+onClick(Leave)       { teamService.uiLeaveTeam(); navTo(StatusNotInTeam); }
 
 // TeamHome
-onClick(Invite)     { ... }
+onClick(PairMember) { pairing.startLeader(); navTo(JoinPending); }
 onClick(Manage)     { if (isLeader) navTo(Members); }
 onClick(Leave)      { ... }
 
-// JoinSelect
-onSelect(NearbyTeam) { teamService.uiJoinNearby(team_id, hint); navTo(JoinPending); }
-onClick(EnterCode)   { navTo(JoinSelectInputCode); } // 可用同页输入
-onClick(JoinByCode)  { teamService.uiJoinByCode(code); navTo(JoinPending); }
-
-// JoinPending
-onClick(Cancel) { teamService.uiCancelJoin(); navTo(JoinSelect); }
-onClick(Retry)  { teamService.uiRetryJoin(); }
+// JoinPending (Pairing)
+onClick(Cancel) { pairing.stop(); navTo(previous); }
+onClick(Retry)  { pairing.restart(); }
 
 // Members
 onSelect(Member) { ui.selected_member=...; navTo(MemberDetail); }
@@ -961,264 +631,34 @@ onClick(TransferLeader) { teamService.uiTransferLeader(ui.selected_member); navT
 onClick(ConfirmKick) { teamService.uiKickMember(ui.selected_member); navTo(StatusInTeam); }
 
 // KickedOut
-onClick(JoinAnother) { navTo(JoinSelect); }
+onClick(JoinAnother) { navTo(StatusNotInTeam); }
 onClick(OK) { navTo(StatusNotInTeam); }
 ```
 
-### UI 与 service 的绑定
+### UI ? service ???
 
-UI 不直接判断“安全轮次如何更新”，它只触发：
+UI ????? Join/Pair Member ???????
 
-* `uiKickMember(target)`
-* `uiJoinByCode(code)`
-  由 service 做协议与状态更新，UI只订阅 `snapshot()` 变化。
-
----
-
-## 4.2 协议/业务状态机（Join/Kick/Rotate/Sync）
-
-### 4.2.1 Join Flow Runtime
-
-```cpp
-enum class JoinPhase {
-  Idle,
-  Discovering,      // 可选：扫描附近 invite
-  Requested,        // 已发 JOIN_REQ
-  WaitingDecision,  // 等 ACCEPT/REJECT
-  WaitingKey,       // 等 KEY_DIST
-  Joined,           // 成功
-  Failed
-};
-
-struct JoinRuntime {
-  JoinPhase phase = JoinPhase::Idle;
-  TeamId target_team;
-  uint32_t started_ts = 0;
-  uint8_t retries = 0;
-  std::string invite_code;
-};
-```
-
-### 4.2.2 Invite Flow Runtime（Leader）
-
-```cpp
-struct InviteRuntime {
-  bool active = false;
-  std::string invite_code;
-  uint32_t expire_ts = 0;
-  uint32_t last_broadcast_ts = 0;
-};
-```
-
-### 4.2.3 核心伪代码：UI Create Team
-
-```cpp
-void TeamService::uiCreateTeam() {
-  // 1) domain init
-  model_.s.in_team = true;
-  model_.s.team_id = rng_.randomTeamId();
-  model_.s.epoch = 1;
-  model_.s.self_role = TeamRole::Leader;
-  model_.s.leader_id = selfNodeId();
-
-  // 2) crypto init
-  crypto_.setTeamKey(model_.s.team_id, model_.s.epoch, crypto_.randomKey());
-
-  // 3) persist snapshot (store)
-  store_.saveSnapshot(model_.s);
-  // 4) optional: append TeamCreated event (event_seq=1)
-  appendEventAndApply(makeTeamCreatedEvent());
-}
-```
+* `uiCreateTeam()`
+* `startPairingLeader()/startPairingMember()`
+* `stopPairing()`
+* `uiLeaveTeam()` / `uiKickMember()` / `uiTransferLeader()`
 
 ---
 
-## 4.2.4 Leader：Invite 广播
 
-```cpp
-void TeamService::uiOpenInvite() {
-  if (!model_.isLeader()) return;
-  invite_.active = true;
-  invite_.invite_code = makeShortCode(rng_);
-  invite_.expire_ts = clock_.now() + policy.invite_ttl_s;
-  invite_.last_broadcast_ts = 0;
-}
 
-void TeamService::broadcastInviteIfDue() {
-  if (!invite_.active) return;
-  if (clock_.now() > invite_.expire_ts) { invite_.active=false; return; }
-  if (clock_.now() - invite_.last_broadcast_ts < policy.invite_broadcast_period_s) return;
+## 4.2 ??/??????Pairing & KeyDist?
 
-  auto pkt = encodeInvite(model_.s.team_id, model_.s.epoch, invite_.invite_code, invite_.expire_ts);
-  transport_.send(pkt);
-  invite_.last_broadcast_ts = clock_.now();
-}
-```
+### 4.2.1 ESP?NOW Pairing ??
 
----
+- Leader??? Pairing ?? -> ?? Beacon -> ?? Join ??? TEAM_KEY_DIST
+- Member??? Beacon -> Join Sent -> Waiting Key -> Joined
+- ??????? / ?? -> ?? StatusNotInTeam
 
-## 4.2.5 Member：Join 请求
+### 4.2.2 KeyDist ??
 
-```cpp
-void TeamService::uiJoinByCode(std::string code) {
-  join_.phase = JoinPhase::Requested;
-  join_.invite_code = code;
-  join_.started_ts = clock_.now();
-  join_.retries = 0;
-
-  // 目标 team_id 可能未知：两种做法
-  // A) code本身编码team短码 -> 可直接得到 team_id_hint
-  // B) 先等待附近 invite 匹配 code -> 得到 team_id
-  // v0.1 推荐：code + nearby invite 匹配后再发请求
-
-  sendJoinReq();
-}
-
-void TeamService::sendJoinReq() {
-  auto req = encodeJoinReq(/*team_id*/ join_.target_team,
-                          /*code*/ join_.invite_code,
-                          /*self*/ selfNodeId(),
-                          /*nonce*/ rng_.u32());
-  transport_.send(req);
-  join_.phase = JoinPhase::WaitingDecision;
-}
-```
-
----
-
-## 4.2.6 Leader：处理 JOIN_REQ（弹窗 + Accept/Reject）
-
-```cpp
-void TeamService::onJoinReq(const JoinReq& req, uint32_t from) {
-  if (!model_.isLeader()) return;
-  if (!invite_.active) return;
-  if (clock_.now() > invite_.expire_ts) return;
-  if (req.code != invite_.invite_code) return; // v0.1：简单匹配
-
-  // 先请求 NodeInfo（获取公钥，便于定向发送）
-  transport_.requestNodeInfo(from, /*want_response*/ true);
-
-  // 让 UI 弹窗：Accept / Reject
-  ui_->promptJoinRequest(from, /*name*/ req.name);
-  // Accept 的动作走 uiAcceptJoin(from)
-}
-
-void TeamService::uiAcceptJoin(MemberId newcomer) {
-  // 1) append event: MemberAccepted (event_seq++)
-  appendEventAndApply(makeMemberAcceptedEvent(newcomer));
-
-  // 2) epoch rotate (成员集合变化)
-  rotateEpoch(); // epoch++
-
-  // 3) send decision (带 new_epoch)
-  transport_.send(encodeJoinDecisionAccept(model_.s.team_id, model_.s.epoch, newcomer));
-
-  // 4) distribute keys to all current members
-  distributeEpochKeyToMembers();
-}
-```
-
----
-
-## 4.2.7 Epoch Rotate & Key Dist（v0.1 关键）
-
-```cpp
-void TeamService::rotateEpoch() {
-  // append event: EpochRotated(new_epoch)
-  uint32_t new_epoch = model_.s.epoch + 1;
-  appendEventAndApply(makeEpochRotatedEvent(new_epoch));
-
-  // generate key for new epoch
-  auto new_key = crypto_.randomKey();
-  crypto_.setTeamKey(model_.s.team_id, new_epoch, new_key);
-}
-
-void TeamService::distributeEpochKeyToMembers() {
-  for (auto& m : model_.s.members) {
-    if (m.id == kicked_target) continue;
-    // v0.1: 用点对点封装（可以用 Meshtastic channel PSK 或你的设备预共享方式）
-    auto pkt = encodeKeyDist(model_.s.team_id, model_.s.epoch, m.id, crypto_.getTeamKey(...));
-    transport_.sendTo(m.id, pkt); // 如果 transport 支持定向，否则广播 + 目标字段
-  }
-}
-```
-
----
-
-## 4.2.8 NFC Key Exchange（Invite Code 加密 PSK）
-
-**目标**：NFC payload 不含明文 `team_psk`，读卡后需输入 Invite Code 解密，降低明文泄露风险。
-支持 **Radio / NFC 双模式**：
-
-* Radio：现有 Invite Code 广播 + Join/Accept + KeyDist（对新人）
-* NFC：NFC 传递加密 PSK + Join/Accept，**不再给新人发送 KeyDist**
-  * 仍需给**已有成员**发送 KeyDist（因为会 rotate epoch）
-
-**Payload（NDEF / TLV）**
-
-* `magic/version`
-* `team_id`
-* `key_id`
-* `expires_at`
-* `salt`（随机）
-* `nonce`
-* `ciphertext(team_psk)`
-* `tag`
-
-**加密规则**
-
-* KDF：`PBKDF2-HMAC-SHA256`，迭代 `10k`
-* 对称算法：`AES-GCM`
-* Invite Code：6 位连续字符（无分隔符）
-
-**Member 流程（复用 Enter Code UI）**
-
-1. 读取 NFC payload → 检查 `expires_at`（默认 9 分钟有效期）
-2. 弹出 Enter Code（复用现有输入）
-3. KDF → AES-GCM 解密 → 得到 `team_psk`
-4. `setKeysFromPsk(team_id, key_id, team_psk)` → 继续走 Join/Accept
-
-**Leader 侧关键点（方案 A）**
-
-* 仍执行 **Epoch Rotate**（成员变化必须记录）
-* **不再给新人发送 KeyDist**（新人已通过 NFC 获得 key）
-* **继续给已有成员发送 KeyDist**（确保他们更新到新 key）
-
-**NFC 扫描窗口**
-
-* 进入 “Join via NFC” / “Invite via NFC” 页面时才开启 NFC
-* 退出页面立即关闭 NFC（省电 & ST25R3916 无电容自检）
-
----
-
-## 4.2.9 Member：收到 ACCEPT + KEY_DIST
-
-```cpp
-void TeamService::onJoinDecision(const JoinDecision& d) {
-  if (join_.phase != JoinPhase::WaitingDecision) return;
-  if (!d.accept) { join_.phase = JoinPhase::Failed; ui_->toast("Rejected"); return; }
-
-  // 记录目标 epoch，等待 key
-  join_.phase = JoinPhase::WaitingKey;
-  join_.expected_epoch = d.new_epoch;
-}
-
-void TeamService::onKeyDist(const KeyDist& kd) {
-  if (join_.phase != JoinPhase::WaitingKey) return;
-  if (kd.epoch != join_.expected_epoch) return;
-
-  crypto_.setTeamKey(kd.team_id, kd.epoch, kd.key);
-  // 成功加入：更新本地team snapshot（可以从 decision 携带的 leader_id/成员摘要恢复）
-  model_.s.in_team = true;
-  model_.s.team_id = kd.team_id;
-  model_.s.epoch = kd.epoch;
-  model_.s.self_role = TeamRole::Member;
-  model_.s.security = TeamSecurityState::OK;
-
-  store_.saveSnapshot(model_.s);
-  join_.phase = JoinPhase::Joined;
-}
-```
+- ?? TEAM_KEY_DIST ??? key??? snapshot??? Joined
 
 ---
 
@@ -1328,14 +768,13 @@ void TeamService::onSyncRsp(const SyncRsp& rsp) {
 
 # 5) UI 与协议“对齐点清单”（你落地时最有用）
 
-## 5.1 每个页面触发的 usecase
+## 5.1 ??????? usecase
 
-* StatusNotInTeam：Create → `uiCreateTeam()`；Join → `uiJoin...()`
-* JoinSelect：选择附近队伍 → `uiJoinNearby()`；输入 code → `uiJoinByCode()`
-* JoinPending：Retry/Cancel → `uiRetryJoin()/uiCancelJoin()`
-* Invite：Refresh/Stop → `uiOpenInvite()/uiStopInvite()`
-* Members/Detail/KickConfirm：Kick/Transfer → `uiKickMember()/uiTransferLeader()`
-* KickedOut：Join Another → 回 JoinSelect
+* StatusNotInTeam?Create ? `uiCreateTeam()` + `startPairingLeader()`?Join ? `startPairingMember()`
+* JoinPending?Pairing??Cancel ? `stopPairing()`?Retry ? `startPairing...()`
+* StatusInTeam / TeamHome?Pair Member ? `startPairingLeader()`
+* Members/Detail/KickConfirm?Kick/Transfer ? `uiKickMember()/uiTransferLeader()`
+* KickedOut?Join Another ? ? StatusNotInTeam
 
 ## 5.2 页面字段来自哪里
 

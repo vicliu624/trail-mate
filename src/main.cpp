@@ -290,10 +290,12 @@ static void create_app(lv_obj_t* parent, AppScreen* app, size_t idx)
         lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(badge, 0, 0);
         lv_obj_set_style_radius(badge, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_pad_left(badge, 4, 0);
-        lv_obj_set_style_pad_right(badge, 4, 0);
+        lv_obj_set_style_pad_left(badge, 6, 0);
+        lv_obj_set_style_pad_right(badge, 6, 0);
         lv_obj_set_style_pad_top(badge, 2, 0);
         lv_obj_set_style_pad_bottom(badge, 2, 0);
+        lv_obj_set_style_min_width(badge, 20, 0);
+        lv_obj_set_style_min_height(badge, 20, 0);
         lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(badge, LV_OBJ_FLAG_HIDDEN);
         lv_obj_align_to(badge, icon, LV_ALIGN_TOP_LEFT, -4, -4);
@@ -664,7 +666,11 @@ void setup()
         Serial.printf("[Setup] Wakeup cause: %d\n", wakeup_reason);
     }
 
+#if defined(ARDUINO_T_DECK)
     board.begin();
+#else
+    board.begin(NO_HW_NFC);
+#endif
 
     // If waking from deep sleep, perform wake up initialization
     if (waking_from_sleep)

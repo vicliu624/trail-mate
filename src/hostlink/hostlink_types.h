@@ -55,6 +55,7 @@ enum Capabilities : uint32_t
     CapGps = 1u << 5,
     CapAppData = 1u << 6,
     CapTeamState = 1u << 7,
+    CapAprsGateway = 1u << 8,
 };
 
 enum class ConfigKey : uint8_t
@@ -64,6 +65,17 @@ enum class ConfigKey : uint8_t
     Channel = 3,
     DutyCycle = 4,
     ChannelUtil = 5,
+    AprsEnable = 20,
+    AprsIgateCallsign = 21,
+    AprsIgateSsid = 22,
+    AprsToCall = 23,
+    AprsPath = 24,
+    AprsTxMinIntervalSec = 25,
+    AprsDedupeWindowSec = 26,
+    AprsSymbolTable = 27,
+    AprsSymbolCode = 28,
+    AprsPositionIntervalSec = 29,
+    AprsNodeIdMap = 30,
 };
 
 enum class StatusKey : uint8_t
@@ -77,6 +89,40 @@ enum class StatusKey : uint8_t
     DutyCycle = 7,
     ChannelUtil = 8,
     LastError = 9,
+    AprsEnable = 20,
+    AprsIgateCallsign = 21,
+    AprsIgateSsid = 22,
+    AprsToCall = 23,
+    AprsPath = 24,
+    AprsTxMinIntervalSec = 25,
+    AprsDedupeWindowSec = 26,
+    AprsSymbolTable = 27,
+    AprsSymbolCode = 28,
+    AprsPositionIntervalSec = 29,
+    AprsNodeIdMap = 30,
+    AppRxTotal = 40,
+    AppRxFromIs = 41,
+    AppRxDirect = 42,
+    AppRxRelayed = 43,
+};
+
+enum class AppDataMetaKey : uint8_t
+{
+    RxTimestampS = 1,
+    RxTimestampMs = 2,
+    RxTimeSource = 3,
+    Direct = 4,
+    HopCount = 5,
+    HopLimit = 6,
+    RxOrigin = 7,
+    FromIs = 8,
+    RssiDbmX10 = 9,
+    SnrDbX10 = 10,
+    FreqHz = 11,
+    BwHz = 12,
+    Sf = 13,
+    Cr = 14,
+    PacketId = 15,
 };
 
 } // namespace hostlink

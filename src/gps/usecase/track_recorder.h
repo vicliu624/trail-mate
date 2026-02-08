@@ -34,6 +34,7 @@ class TrackRecorder
     void stop();
     bool isRecording() const { return recording_; }
     const String& currentPath() const { return current_path_; }
+    bool restoreActiveSession();
 
     void setAutoRecording(bool enabled);
     void setIntervalSeconds(uint32_t seconds);
@@ -58,6 +59,9 @@ class TrackRecorder
     static String isoTime(time_t t);
     const char* formatExtension() const;
     void beginNewFile();
+    void updateActiveStateLocked();
+    bool writeActiveStateLocked() const;
+    void clearActiveStateLocked() const;
 
     SemaphoreHandle_t mutex_ = xSemaphoreCreateMutex();
     bool recording_ = false;

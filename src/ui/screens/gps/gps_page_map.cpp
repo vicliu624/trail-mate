@@ -24,7 +24,7 @@ extern "C"
     extern const lv_image_dsc_t room_24px;
 }
 
-#define GPS_DEBUG 1
+#define GPS_DEBUG 0
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else

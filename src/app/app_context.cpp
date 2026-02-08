@@ -12,9 +12,9 @@
 #include "../team/protocol/team_chat.h"
 #include "../ui/ui_common.h"
 #include "../ui/ui_team.h"
+#include "../ui/screens/team/team_ui_store.h"
 #include "../ui/widgets/system_notification.h"
 #ifdef USING_ST25R3916
-#include "../team/infra/nfc/team_nfc.h"
 #endif
 #include "app_tasks.h"
 #include <cstdio>
@@ -69,6 +69,11 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
         {
             recorder.setDistanceOnly(false);
             recorder.setIntervalSeconds(static_cast<uint32_t>(config_.map_track_interval));
+        }
+        if (recorder.restoreActiveSession())
+        {
+            Serial.printf("[Tracker] active session restored path=%s\n",
+                          recorder.currentPath().c_str());
         }
         recorder.setAutoRecording(config_.map_track_enabled);
     }
@@ -140,6 +145,29 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
         *team_crypto_, *mesh_adapter_, *team_event_sink_);
     team_controller_ = std::make_unique<team::TeamController>(*team_service_);
     team_track_sampler_ = std::make_unique<team::TeamTrackSampler>();
+    team_pairing_service_ = std::make_unique<team::TeamPairingService>();
+
+    // Restore team keys early so tracker can resume after reboot.
+    {
+        team::ui::TeamUiSnapshot snap;
+        if (team_controller_ && team::ui::team_ui_get_store().load(snap) &&
+            snap.has_team_id && snap.has_team_psk && snap.security_round > 0)
+        {
+            if (team_controller_->setKeysFromPsk(snap.team_id,
+                                                 snap.security_round,
+                                                 snap.team_psk.data(),
+                                                 snap.team_psk.size()))
+            {
+                Serial.printf("[Team] keys restored from store key_id=%lu\n",
+                              static_cast<unsigned long>(snap.security_round));
+            }
+            else
+            {
+                Serial.printf("[Team] keys restore failed key_id=%lu\n",
+                              static_cast<unsigned long>(snap.security_round));
+            }
+        }
+    }
 
     // Create contact infrastructure
     node_store_ = std::make_unique<chat::meshtastic::NodeStore>();
@@ -209,6 +237,10 @@ void AppContext::update()
     {
         team_service_->processIncoming();
     }
+    if (team_pairing_service_)
+    {
+        team_pairing_service_->update();
+    }
     if (team_track_sampler_)
     {
         bool team_active = team_service_ && team_service_->hasKeys();
@@ -220,13 +252,6 @@ void AppContext::update()
     {
         ui_controller_->update();
     }
-
-#ifdef USING_ST25R3916
-    if (team::nfc::is_share_active())
-    {
-        team::nfc::poll_share();
-    }
-#endif
 
     // Process events
     sys::Event* event = nullptr;
@@ -461,12 +486,7 @@ void AppContext::update()
         hostlink::bridge::on_event(*event);
 
         // Forward event to UI controller if it exists
-        if (event->type == sys::EventType::TeamAdvertise ||
-            event->type == sys::EventType::TeamJoinRequest ||
-            event->type == sys::EventType::TeamJoinAccept ||
-            event->type == sys::EventType::TeamJoinConfirm ||
-            event->type == sys::EventType::TeamJoinDecision ||
-            event->type == sys::EventType::TeamKick ||
+        if (event->type == sys::EventType::TeamKick ||
             event->type == sys::EventType::TeamTransferLeader ||
             event->type == sys::EventType::TeamKeyDist ||
             event->type == sys::EventType::TeamStatus ||
@@ -474,6 +494,7 @@ void AppContext::update()
             event->type == sys::EventType::TeamWaypoint ||
             event->type == sys::EventType::TeamTrack ||
             event->type == sys::EventType::TeamChat ||
+            event->type == sys::EventType::TeamPairing ||
             event->type == sys::EventType::TeamError ||
             event->type == sys::EventType::SystemTick)
         {

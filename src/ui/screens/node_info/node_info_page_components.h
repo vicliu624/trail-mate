@@ -45,6 +45,7 @@ struct NodeInfoWidgets
     lv_obj_t* role_label = nullptr;
 
     lv_obj_t* location_title_label = nullptr;
+    lv_obj_t* map_image = nullptr;
     lv_obj_t* map_label = nullptr;
     lv_obj_t* coords_latlon_label = nullptr;
     lv_obj_t* coords_acc_label = nullptr;

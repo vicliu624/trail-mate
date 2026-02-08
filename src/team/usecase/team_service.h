@@ -32,16 +32,6 @@ class TeamService
 
     void processIncoming();
 
-    bool sendAdvertise(const team::proto::TeamAdvertise& msg,
-                       chat::ChannelId channel);
-    bool sendJoinRequest(const team::proto::TeamJoinRequest& msg,
-                         chat::ChannelId channel, chat::NodeId dest = 0);
-    bool sendJoinAccept(const team::proto::TeamJoinAccept& msg,
-                        chat::ChannelId channel, chat::NodeId dest);
-    bool sendJoinConfirm(const team::proto::TeamJoinConfirm& msg,
-                         chat::ChannelId channel, chat::NodeId dest = 0);
-    bool sendJoinDecision(const team::proto::TeamJoinDecision& msg,
-                          chat::ChannelId channel, chat::NodeId dest);
     bool sendKick(const team::proto::TeamKick& msg,
                   chat::ChannelId channel, chat::NodeId dest = 0);
     bool sendTransferLeader(const team::proto::TeamTransferLeader& msg,

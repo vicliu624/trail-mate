@@ -5,31 +5,6 @@
 namespace team::infra
 {
 
-void TeamEventBusSink::onTeamAdvertise(const TeamAdvertiseEvent& event)
-{
-    sys::EventBus::publish(new sys::TeamAdvertiseEvent(event), 0);
-}
-
-void TeamEventBusSink::onTeamJoinRequest(const TeamJoinRequestEvent& event)
-{
-    sys::EventBus::publish(new sys::TeamJoinRequestEvent(event), 0);
-}
-
-void TeamEventBusSink::onTeamJoinAccept(const TeamJoinAcceptEvent& event)
-{
-    sys::EventBus::publish(new sys::TeamJoinAcceptEvent(event), 0);
-}
-
-void TeamEventBusSink::onTeamJoinConfirm(const TeamJoinConfirmEvent& event)
-{
-    sys::EventBus::publish(new sys::TeamJoinConfirmEvent(event), 0);
-}
-
-void TeamEventBusSink::onTeamJoinDecision(const TeamJoinDecisionEvent& event)
-{
-    sys::EventBus::publish(new sys::TeamJoinDecisionEvent(event), 0);
-}
-
 void TeamEventBusSink::onTeamKick(const TeamKickEvent& event)
 {
     sys::EventBus::publish(new sys::TeamKickEvent(event), 0);

@@ -2,8 +2,10 @@
 
 #include "../app/app_context.h"
 #include "../board/BoardBase.h"
+#include "hostlink_bridge_radio.h"
 
 #include <Arduino.h>
+#include <cstring>
 #include <sys/time.h>
 
 namespace hostlink
@@ -28,12 +30,30 @@ void push_tlv_val(std::vector<uint8_t>& out, uint8_t key, const T& value)
 {
     push_tlv(out, key, &value, sizeof(value));
 }
+
+void push_tlv_string(std::vector<uint8_t>& out, uint8_t key, const char* value)
+{
+    if (!value)
+    {
+        return;
+    }
+    size_t len = strlen(value);
+    if (len == 0)
+    {
+        return;
+    }
+    if (len > 255)
+    {
+        len = 255;
+    }
+    push_tlv(out, key, value, len);
+}
 } // namespace
 
-bool build_status_payload(std::vector<uint8_t>& out, uint8_t link_state, uint32_t last_error)
+bool build_status_payload(std::vector<uint8_t>& out, uint8_t link_state, uint32_t last_error, bool include_config)
 {
     out.clear();
-    out.reserve(64);
+    out.reserve(96);
 
     int battery = board.getBatteryLevel();
     uint8_t battery_u8 = (battery < 0) ? 0xFF : static_cast<uint8_t>(battery);
@@ -58,6 +78,38 @@ bool build_status_payload(std::vector<uint8_t>& out, uint8_t link_state, uint32_
     push_tlv_val(out, static_cast<uint8_t>(StatusKey::ChannelUtil), util);
 
     push_tlv_val(out, static_cast<uint8_t>(StatusKey::LastError), last_error);
+
+    hostlink::bridge::AppRxStats stats = hostlink::bridge::get_app_rx_stats();
+    push_tlv_val(out, static_cast<uint8_t>(StatusKey::AppRxTotal), stats.total);
+    push_tlv_val(out, static_cast<uint8_t>(StatusKey::AppRxFromIs), stats.from_is);
+    push_tlv_val(out, static_cast<uint8_t>(StatusKey::AppRxDirect), stats.direct);
+    push_tlv_val(out, static_cast<uint8_t>(StatusKey::AppRxRelayed), stats.relayed);
+
+    if (include_config)
+    {
+        const app::AprsConfig& aprs = cfg.aprs;
+        uint8_t enabled = aprs.enabled ? 1 : 0;
+        push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsEnable), enabled);
+        push_tlv_string(out, static_cast<uint8_t>(StatusKey::AprsIgateCallsign), aprs.igate_callsign);
+        push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsIgateSsid), aprs.igate_ssid);
+        push_tlv_string(out, static_cast<uint8_t>(StatusKey::AprsToCall), aprs.tocall);
+        push_tlv_string(out, static_cast<uint8_t>(StatusKey::AprsPath), aprs.path);
+        push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsTxMinIntervalSec), aprs.tx_min_interval_s);
+        push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsDedupeWindowSec), aprs.dedupe_window_s);
+        if (aprs.symbol_table != 0)
+        {
+            push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsSymbolTable), aprs.symbol_table);
+        }
+        if (aprs.symbol_code != 0)
+        {
+            push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsSymbolCode), aprs.symbol_code);
+        }
+        push_tlv_val(out, static_cast<uint8_t>(StatusKey::AprsPositionIntervalSec), aprs.position_interval_s);
+        if (aprs.node_map_len > 0)
+        {
+            push_tlv(out, static_cast<uint8_t>(StatusKey::AprsNodeIdMap), aprs.node_map, aprs.node_map_len);
+        }
+    }
     return true;
 }
 
@@ -77,6 +129,7 @@ bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)
     bool mesh_changed = false;
     bool net_changed = false;
     bool chat_changed = false;
+    bool aprs_changed = false;
 
     size_t off = 0;
     while (off + 2 <= len)
@@ -130,6 +183,110 @@ bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)
             cfg.net_channel_util = data[off];
             net_changed = true;
             break;
+        case ConfigKey::AprsEnable:
+            if (vlen != 1)
+            {
+                return false;
+            }
+            cfg.aprs.enabled = (data[off] != 0);
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsIgateCallsign:
+            if (vlen >= sizeof(cfg.aprs.igate_callsign))
+            {
+                return false;
+            }
+            if (vlen > 0)
+            {
+                memcpy(cfg.aprs.igate_callsign, &data[off], vlen);
+            }
+            cfg.aprs.igate_callsign[vlen] = '\0';
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsIgateSsid:
+            if (vlen != 1)
+            {
+                return false;
+            }
+            cfg.aprs.igate_ssid = data[off];
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsToCall:
+            if (vlen >= sizeof(cfg.aprs.tocall))
+            {
+                return false;
+            }
+            if (vlen > 0)
+            {
+                memcpy(cfg.aprs.tocall, &data[off], vlen);
+            }
+            cfg.aprs.tocall[vlen] = '\0';
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsPath:
+            if (vlen >= sizeof(cfg.aprs.path))
+            {
+                return false;
+            }
+            if (vlen > 0)
+            {
+                memcpy(cfg.aprs.path, &data[off], vlen);
+            }
+            cfg.aprs.path[vlen] = '\0';
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsTxMinIntervalSec:
+            if (vlen != 2)
+            {
+                return false;
+            }
+            cfg.aprs.tx_min_interval_s = static_cast<uint16_t>(data[off] | (data[off + 1] << 8));
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsDedupeWindowSec:
+            if (vlen != 2)
+            {
+                return false;
+            }
+            cfg.aprs.dedupe_window_s = static_cast<uint16_t>(data[off] | (data[off + 1] << 8));
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsSymbolTable:
+            if (vlen != 1)
+            {
+                return false;
+            }
+            cfg.aprs.symbol_table = static_cast<char>(data[off]);
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsSymbolCode:
+            if (vlen != 1)
+            {
+                return false;
+            }
+            cfg.aprs.symbol_code = static_cast<char>(data[off]);
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsPositionIntervalSec:
+            if (vlen != 2)
+            {
+                return false;
+            }
+            cfg.aprs.position_interval_s = static_cast<uint16_t>(data[off] | (data[off + 1] << 8));
+            aprs_changed = true;
+            break;
+        case ConfigKey::AprsNodeIdMap:
+            if (vlen > sizeof(cfg.aprs.node_map))
+            {
+                return false;
+            }
+            if (vlen > 0)
+            {
+                memcpy(cfg.aprs.node_map, &data[off], vlen);
+            }
+            cfg.aprs.node_map_len = vlen;
+            aprs_changed = true;
+            break;
         default:
             return false;
         }
@@ -149,6 +306,7 @@ bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)
     {
         app_ctx.getChatService().switchChannel(static_cast<chat::ChannelId>(cfg.chat_channel));
     }
+    (void)aprs_changed;
     return true;
 }
 

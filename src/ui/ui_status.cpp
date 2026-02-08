@@ -56,7 +56,13 @@ int get_total_unread()
 {
     app::AppContext& app_ctx = app::AppContext::getInstance();
     chat::ChatService& chat = app_ctx.getChatService();
-    return chat.getTotalUnread();
+    int unread = chat.getTotalUnread();
+    team::ui::TeamUiSnapshot snap;
+    if (team::ui::team_ui_get_store().load(snap))
+    {
+        unread += static_cast<int>(snap.team_chat_unread);
+    }
+    return unread;
 }
 
 StatusSnapshot collect_status()

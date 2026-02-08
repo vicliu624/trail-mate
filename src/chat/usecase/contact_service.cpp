@@ -207,6 +207,13 @@ void ContactService::buildCache() const
             info.position = pos_it->second;
         }
 
+        // Ensure we always have a usable short name (fallback to node_id suffix).
+        if (info.short_name[0] == '\0')
+        {
+            snprintf(info.short_name, sizeof(info.short_name), "%04X",
+                     static_cast<unsigned>(info.node_id & 0xFFFF));
+        }
+
         // Check if this node is a contact
         info.is_contact = std::find(contact_ids.begin(), contact_ids.end(), entry.node_id) != contact_ids.end();
 
@@ -214,6 +221,10 @@ void ContactService::buildCache() const
         if (info.is_contact)
         {
             info.display_name = contact_store_.getNickname(entry.node_id);
+            if (info.display_name.empty())
+            {
+                info.display_name = std::string(info.short_name);
+            }
         }
         else
         {

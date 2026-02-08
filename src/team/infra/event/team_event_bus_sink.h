@@ -8,11 +8,6 @@ namespace team::infra
 class TeamEventBusSink : public team::ITeamEventSink
 {
   public:
-    void onTeamAdvertise(const TeamAdvertiseEvent& event) override;
-    void onTeamJoinRequest(const TeamJoinRequestEvent& event) override;
-    void onTeamJoinAccept(const TeamJoinAcceptEvent& event) override;
-    void onTeamJoinConfirm(const TeamJoinConfirmEvent& event) override;
-    void onTeamJoinDecision(const TeamJoinDecisionEvent& event) override;
     void onTeamKick(const TeamKickEvent& event) override;
     void onTeamTransferLeader(const TeamTransferLeaderEvent& event) override;
     void onTeamKeyDist(const TeamKeyDistEvent& event) override;

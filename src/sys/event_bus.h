@@ -12,6 +12,7 @@
 #include <cstring>
 #include <vector>
 
+#include "../chat/domain/chat_types.h"
 #include "../team/domain/team_events.h"
 
 namespace sys
@@ -33,11 +34,6 @@ enum class EventType
     KeyVerificationNumberInform,  // PKI key verification number provided
     KeyVerificationFinal,         // PKI key verification final confirmation
     AppData,                      // Raw app payload (non-team)
-    TeamAdvertise,                // Team advertise received
-    TeamJoinRequest,              // Team join request received
-    TeamJoinAccept,               // Team join accept received
-    TeamJoinConfirm,              // Team join confirm received
-    TeamJoinDecision,             // Team join decision received
     TeamKick,                     // Team kick received
     TeamTransferLeader,           // Team transfer leader received
     TeamKeyDist,                  // Team key distribution received
@@ -46,6 +42,7 @@ enum class EventType
     TeamWaypoint,                 // Team waypoint received
     TeamTrack,                    // Team track received
     TeamChat,                     // Team chat received
+    TeamPairing,                  // Team pairing state update
     TeamError,                    // Team protocol error
     InputEvent,                   // Input event (keyboard/rotary)
     SystemTick                    // System tick (for periodic tasks)
@@ -71,8 +68,10 @@ struct ChatNewMessageEvent : public Event
     uint8_t channel;
     uint32_t msg_id;
     char text[64]; // Message text (truncated if needed)
+    chat::RxMeta rx_meta;
 
-    ChatNewMessageEvent(uint8_t ch, uint32_t id, const char* msg_text = "")
+    ChatNewMessageEvent(uint8_t ch, uint32_t id, const char* msg_text = "",
+                        const chat::RxMeta* meta = nullptr)
         : Event(EventType::ChatNewMessage), channel(ch), msg_id(id)
     {
         if (msg_text)
@@ -83,6 +82,10 @@ struct ChatNewMessageEvent : public Event
         else
         {
             text[0] = '\0';
+        }
+        if (meta)
+        {
+            rx_meta = *meta;
         }
     }
 };
@@ -222,6 +225,7 @@ struct AppDataEvent : public Event
     uint8_t channel_hash;
     bool want_response;
     std::vector<uint8_t> payload;
+    chat::RxMeta rx_meta;
 
     AppDataEvent(uint32_t port,
                  uint32_t src,
@@ -230,7 +234,8 @@ struct AppDataEvent : public Event
                  uint8_t ch,
                  uint8_t hash,
                  bool want,
-                 const std::vector<uint8_t>& data)
+                 const std::vector<uint8_t>& data,
+                 const chat::RxMeta* meta = nullptr)
         : Event(EventType::AppData),
           portnum(port),
           from(src),
@@ -241,6 +246,10 @@ struct AppDataEvent : public Event
           want_response(want),
           payload(data)
     {
+        if (meta)
+        {
+            rx_meta = *meta;
+        }
     }
 };
 
@@ -292,61 +301,6 @@ struct KeyVerificationFinalEvent : public Event
             verification_code[0] = '\0';
         }
     }
-};
-
-/**
- * @brief Team advertise event
- */
-struct TeamAdvertiseEvent : public Event
-{
-    team::TeamAdvertiseEvent data;
-
-    explicit TeamAdvertiseEvent(const team::TeamAdvertiseEvent& evt)
-        : Event(EventType::TeamAdvertise), data(evt) {}
-};
-
-/**
- * @brief Team join request event
- */
-struct TeamJoinRequestEvent : public Event
-{
-    team::TeamJoinRequestEvent data;
-
-    explicit TeamJoinRequestEvent(const team::TeamJoinRequestEvent& evt)
-        : Event(EventType::TeamJoinRequest), data(evt) {}
-};
-
-/**
- * @brief Team join accept event
- */
-struct TeamJoinAcceptEvent : public Event
-{
-    team::TeamJoinAcceptEvent data;
-
-    explicit TeamJoinAcceptEvent(const team::TeamJoinAcceptEvent& evt)
-        : Event(EventType::TeamJoinAccept), data(evt) {}
-};
-
-/**
- * @brief Team join confirm event
- */
-struct TeamJoinConfirmEvent : public Event
-{
-    team::TeamJoinConfirmEvent data;
-
-    explicit TeamJoinConfirmEvent(const team::TeamJoinConfirmEvent& evt)
-        : Event(EventType::TeamJoinConfirm), data(evt) {}
-};
-
-/**
- * @brief Team join decision event
- */
-struct TeamJoinDecisionEvent : public Event
-{
-    team::TeamJoinDecisionEvent data;
-
-    explicit TeamJoinDecisionEvent(const team::TeamJoinDecisionEvent& evt)
-        : Event(EventType::TeamJoinDecision), data(evt) {}
 };
 
 /**
@@ -435,6 +389,17 @@ struct TeamChatEvent : public Event
 
     explicit TeamChatEvent(const team::TeamChatEvent& evt)
         : Event(EventType::TeamChat), data(evt) {}
+};
+
+/**
+ * @brief Team pairing event
+ */
+struct TeamPairingEvent : public Event
+{
+    team::TeamPairingEvent data;
+
+    explicit TeamPairingEvent(const team::TeamPairingEvent& evt)
+        : Event(EventType::TeamPairing), data(evt) {}
 };
 
 /**

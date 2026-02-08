@@ -14,6 +14,38 @@
 namespace app
 {
 
+struct AprsConfig
+{
+    bool enabled;
+    char igate_callsign[16];
+    uint8_t igate_ssid;
+    char tocall[16];
+    char path[64];
+    uint16_t tx_min_interval_s;
+    uint16_t dedupe_window_s;
+    char symbol_table;
+    char symbol_code;
+    uint16_t position_interval_s;
+    uint8_t node_map_len;
+    uint8_t node_map[255];
+
+    AprsConfig()
+        : enabled(false),
+          igate_ssid(0),
+          tx_min_interval_s(0),
+          dedupe_window_s(0),
+          symbol_table(0),
+          symbol_code(0),
+          position_interval_s(0),
+          node_map_len(0)
+    {
+        igate_callsign[0] = '\0';
+        tocall[0] = '\0';
+        path[0] = '\0';
+        memset(node_map, 0, sizeof(node_map));
+    }
+};
+
 /**
  * @brief Application configuration
  */
@@ -67,6 +99,9 @@ struct AppConfig
     bool route_enabled;
     char route_path[96];
 
+    // APRS/iGate settings (optional persistence for host)
+    AprsConfig aprs;
+
     AppConfig()
     {
         chat_policy = chat::ChatPolicy::outdoor();
@@ -103,6 +138,7 @@ struct AppConfig
         privacy_nmea_sentence = 0;
         route_enabled = false;
         route_path[0] = '\0';
+        aprs = AprsConfig();
     }
 
     /**
@@ -184,6 +220,40 @@ struct AppConfig
             route_path[sizeof(route_path) - 1] = '\0';
         }
         prefs.end();
+
+        prefs.begin("aprs", true);
+        aprs.enabled = prefs.getBool("enabled", aprs.enabled);
+        if (prefs.isKey("igate_call"))
+        {
+            String call = prefs.getString("igate_call", "");
+            strncpy(aprs.igate_callsign, call.c_str(), sizeof(aprs.igate_callsign) - 1);
+            aprs.igate_callsign[sizeof(aprs.igate_callsign) - 1] = '\0';
+        }
+        aprs.igate_ssid = prefs.getUChar("igate_ssid", aprs.igate_ssid);
+        if (prefs.isKey("to_call"))
+        {
+            String tocall = prefs.getString("to_call", "");
+            strncpy(aprs.tocall, tocall.c_str(), sizeof(aprs.tocall) - 1);
+            aprs.tocall[sizeof(aprs.tocall) - 1] = '\0';
+        }
+        if (prefs.isKey("path"))
+        {
+            String path = prefs.getString("path", "");
+            strncpy(aprs.path, path.c_str(), sizeof(aprs.path) - 1);
+            aprs.path[sizeof(aprs.path) - 1] = '\0';
+        }
+        aprs.tx_min_interval_s = prefs.getUShort("tx_min", aprs.tx_min_interval_s);
+        aprs.dedupe_window_s = prefs.getUShort("dedupe", aprs.dedupe_window_s);
+        aprs.symbol_table = static_cast<char>(prefs.getChar("sym_tab", aprs.symbol_table));
+        aprs.symbol_code = static_cast<char>(prefs.getChar("sym_code", aprs.symbol_code));
+        aprs.position_interval_s = prefs.getUShort("pos_interval", aprs.position_interval_s);
+        size_t map_len = prefs.getBytes("node_map", aprs.node_map, sizeof(aprs.node_map));
+        if (map_len > sizeof(aprs.node_map))
+        {
+            map_len = sizeof(aprs.node_map);
+        }
+        aprs.node_map_len = static_cast<uint8_t>(map_len);
+        prefs.end();
         return true;
     }
 
@@ -247,6 +317,27 @@ struct AppConfig
         prefs.putUChar("privacy_nmea_sent", privacy_nmea_sentence);
         prefs.putBool("route_enabled", route_enabled);
         prefs.putString("route_path", route_path);
+        prefs.end();
+
+        prefs.begin("aprs", false);
+        prefs.putBool("enabled", aprs.enabled);
+        prefs.putString("igate_call", aprs.igate_callsign);
+        prefs.putUChar("igate_ssid", aprs.igate_ssid);
+        prefs.putString("to_call", aprs.tocall);
+        prefs.putString("path", aprs.path);
+        prefs.putUShort("tx_min", aprs.tx_min_interval_s);
+        prefs.putUShort("dedupe", aprs.dedupe_window_s);
+        prefs.putChar("sym_tab", aprs.symbol_table);
+        prefs.putChar("sym_code", aprs.symbol_code);
+        prefs.putUShort("pos_interval", aprs.position_interval_s);
+        if (aprs.node_map_len > 0)
+        {
+            prefs.putBytes("node_map", aprs.node_map, aprs.node_map_len);
+        }
+        else
+        {
+            prefs.remove("node_map");
+        }
         prefs.end();
         return true;
     }

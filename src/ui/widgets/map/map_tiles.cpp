@@ -5,6 +5,8 @@
 
 #include "map_tiles.h"
 #include "../../screens/gps/gps_constants.h"
+#include "../../../display/DisplayInterface.h"
+#include "freertos/FreeRTOS.h"
 #include "lvgl.h"
 #include <Arduino.h>
 #include <SD.h>
@@ -17,7 +19,7 @@
 // This approach uses LVGL's built-in decoder, avoiding direct lodepng dependency
 
 // Debug logging control
-#define GPS_DEBUG 1
+#define GPS_DEBUG 0
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
@@ -30,6 +32,31 @@ static DecodedTileCache g_tile_decode_cache[TILE_DECODE_CACHE_SIZE];
 static bool g_tile_cache_initialized = false;
 static uint32_t g_cache_full_until_ms = 0;
 static uint32_t g_cache_full_log_ms = 0;
+
+namespace
+{
+class SpiLockGuard
+{
+  public:
+    explicit SpiLockGuard(TickType_t wait_ticks)
+        : locked_(display_spi_lock(wait_ticks))
+    {
+    }
+
+    ~SpiLockGuard()
+    {
+        if (locked_)
+        {
+            display_spi_unlock();
+        }
+    }
+
+    bool locked() const { return locked_; }
+
+  private:
+    bool locked_;
+};
+} // namespace
 
 /**
  * Initialize tile decode cache
@@ -451,6 +478,15 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     {
         tile.last_used_ms = millis();
         GPS_LOG("[GPS] load_tile_image: Tile %d/%d/%d already loaded\n", tile.z, tile.x, tile.y);
+        return;
+    }
+
+    SpiLockGuard spi_lock(pdMS_TO_TICKS(20));
+    if (!spi_lock.locked())
+    {
+        GPS_LOG("[GPS] load_tile_image: SPI lock busy, deferring tile %d/%d/%d\n",
+                tile.z, tile.x, tile.y);
+        tile.last_used_ms = millis();
         return;
     }
 

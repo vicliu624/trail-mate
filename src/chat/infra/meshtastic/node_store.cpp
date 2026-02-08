@@ -1,6 +1,6 @@
 /**
  * @file node_store.cpp
- * @brief Lightweight persisted NodeInfo store
+ * @brief Lightweight persisted NodeInfo store (SD-first, Preferences fallback)
  */
 
 #include "node_store.h"
@@ -79,107 +79,25 @@ void logNvsStats(const char* tag, const char* ns)
 
 void NodeStore::begin()
 {
-    Preferences prefs;
-    if (!prefs.begin(kPersistNodesNs, false))
+    const bool sd_available = (SD.cardType() != CARD_NONE);
+    if (sd_available && loadFromSd())
     {
-        Serial.printf("[NodeStore] begin failed ns=%s\n", kPersistNodesNs);
-        logNvsStats("begin", kPersistNodesNs);
-        return;
-    }
-    size_t len = prefs.getBytesLength(kPersistNodesKey);
-    uint8_t ver = prefs.getUChar(kPersistNodesKeyVer, 0);
-    bool has_crc = prefs.isKey(kPersistNodesKeyCrc);
-    uint32_t stored_crc = has_crc ? prefs.getUInt(kPersistNodesKeyCrc, 0) : 0;
-    Serial.printf("[NodeStore] blob len=%u ver=%u crc=%08lX has_crc=%u\n",
-                  static_cast<unsigned>(len),
-                  static_cast<unsigned>(ver),
-                  static_cast<unsigned long>(stored_crc),
-                  has_crc ? 1U : 0U);
-    if (len == 0 && has_crc)
-    {
-        Serial.printf("[NodeStore] stale meta detected, clearing ver/crc\n");
-        prefs.remove(kPersistNodesKeyVer);
-        prefs.remove(kPersistNodesKeyCrc);
-    }
-    if (len == 0)
-    {
-        entries_.clear();
-        prefs.end();
-        Serial.printf("[NodeStore] loaded=0\n");
+        use_sd_ = true;
         return;
     }
 
-    if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
+    use_sd_ = sd_available;
+    if (loadFromNvs())
     {
-        size_t count = len / sizeof(PersistedNodeEntry);
-        if (count > kPersistMaxNodes)
+        if (use_sd_)
         {
-            count = kPersistMaxNodes;
+            saveToSd();
         }
-        std::vector<PersistedNodeEntry> persisted(count);
-        prefs.getBytes(kPersistNodesKey, persisted.data(), count * sizeof(PersistedNodeEntry));
-        if (!has_crc)
-        {
-            prefs.end();
-            Serial.printf("[NodeStore] missing crc\n");
-            clear();
-            Serial.printf("[NodeStore] loaded=0\n");
-            return;
-        }
-        if (ver != kPersistVersion)
-        {
-            prefs.end();
-            Serial.printf("[NodeStore] version mismatch stored=%u expected=%u\n",
-                          static_cast<unsigned>(ver),
-                          static_cast<unsigned>(kPersistVersion));
-            clear();
-            Serial.printf("[NodeStore] loaded=0\n");
-            return;
-        }
-        if (has_crc)
-        {
-            uint32_t calc_crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()),
-                                      persisted.size() * sizeof(PersistedNodeEntry));
-            if (calc_crc != stored_crc)
-            {
-                prefs.end();
-                Serial.printf("[NodeStore] crc mismatch stored=%08lX calc=%08lX\n",
-                              static_cast<unsigned long>(stored_crc),
-                              static_cast<unsigned long>(calc_crc));
-                clear();
-                Serial.printf("[NodeStore] loaded=0\n");
-                return;
-            }
-        }
-        entries_.clear();
-        entries_.reserve(count);
-        for (const auto& src : persisted)
-        {
-            contacts::NodeEntry dst{};
-            dst.node_id = src.node_id;
-            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
-            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
-            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
-            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
-            dst.last_seen = src.last_seen;
-            dst.snr = src.snr;
-            dst.rssi = src.rssi;
-            dst.hops_away = src.hops_away;
-            dst.protocol = src.protocol;
-            dst.role = src.role;
-            entries_.push_back(dst);
-        }
-    }
-    else if (len > 0)
-    {
-        Serial.printf("[NodeStore] invalid blob size=%u\n", static_cast<unsigned>(len));
-        prefs.end();
-        clear();
-        Serial.printf("[NodeStore] loaded=0\n");
         return;
     }
-    prefs.end();
-    Serial.printf("[NodeStore] loaded=%u\n", static_cast<unsigned>(entries_.size()));
+
+    entries_.clear();
+    Serial.printf("[NodeStore] loaded=0\n");
 }
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
@@ -298,6 +216,16 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
 
 void NodeStore::save()
 {
+    if (use_sd_)
+    {
+        if (saveToSd())
+        {
+            Serial.printf("[NodeStore] save ok (SD) count=%u\n",
+                          static_cast<unsigned>(entries_.size()));
+            return;
+        }
+    }
+
     Preferences prefs;
     if (!prefs.begin(kPersistNodesNs, false))
     {
@@ -383,6 +311,13 @@ void NodeStore::clear()
     entries_.clear();
     dirty_ = false;
     last_save_ms_ = 0;
+    if (SD.cardType() != CARD_NONE)
+    {
+        if (SD.exists(kPersistNodesFile))
+        {
+            SD.remove(kPersistNodesFile);
+        }
+    }
     Preferences prefs;
     if (!prefs.begin(kPersistNodesNs, false))
     {
@@ -392,6 +327,232 @@ void NodeStore::clear()
     prefs.remove(kPersistNodesKeyVer);
     prefs.remove(kPersistNodesKeyCrc);
     prefs.end();
+}
+
+bool NodeStore::loadFromNvs()
+{
+    Preferences prefs;
+    if (!prefs.begin(kPersistNodesNs, false))
+    {
+        Serial.printf("[NodeStore] begin failed ns=%s\n", kPersistNodesNs);
+        logNvsStats("begin", kPersistNodesNs);
+        return false;
+    }
+    size_t len = prefs.getBytesLength(kPersistNodesKey);
+    uint8_t ver = prefs.getUChar(kPersistNodesKeyVer, 0);
+    bool has_crc = prefs.isKey(kPersistNodesKeyCrc);
+    uint32_t stored_crc = has_crc ? prefs.getUInt(kPersistNodesKeyCrc, 0) : 0;
+    Serial.printf("[NodeStore] blob len=%u ver=%u crc=%08lX has_crc=%u\n",
+                  static_cast<unsigned>(len),
+                  static_cast<unsigned>(ver),
+                  static_cast<unsigned long>(stored_crc),
+                  has_crc ? 1U : 0U);
+    if (len == 0 && has_crc)
+    {
+        Serial.printf("[NodeStore] stale meta detected, clearing ver/crc\n");
+        prefs.remove(kPersistNodesKeyVer);
+        prefs.remove(kPersistNodesKeyCrc);
+    }
+    if (len == 0)
+    {
+        entries_.clear();
+        prefs.end();
+        return true;
+    }
+
+    if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
+    {
+        size_t count = len / sizeof(PersistedNodeEntry);
+        if (count > kPersistMaxNodes)
+        {
+            count = kPersistMaxNodes;
+        }
+        std::vector<PersistedNodeEntry> persisted(count);
+        prefs.getBytes(kPersistNodesKey, persisted.data(), count * sizeof(PersistedNodeEntry));
+        if (!has_crc)
+        {
+            prefs.end();
+            Serial.printf("[NodeStore] missing crc\n");
+            clear();
+            return false;
+        }
+        if (ver != kPersistVersion)
+        {
+            prefs.end();
+            Serial.printf("[NodeStore] version mismatch stored=%u expected=%u\n",
+                          static_cast<unsigned>(ver),
+                          static_cast<unsigned>(kPersistVersion));
+            clear();
+            return false;
+        }
+        uint32_t calc_crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()),
+                                  persisted.size() * sizeof(PersistedNodeEntry));
+        if (calc_crc != stored_crc)
+        {
+            prefs.end();
+            Serial.printf("[NodeStore] crc mismatch stored=%08lX calc=%08lX\n",
+                          static_cast<unsigned long>(stored_crc),
+                          static_cast<unsigned long>(calc_crc));
+            clear();
+            return false;
+        }
+        entries_.clear();
+        entries_.reserve(count);
+        for (const auto& src : persisted)
+        {
+            contacts::NodeEntry dst{};
+            dst.node_id = src.node_id;
+            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
+            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
+            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
+            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
+            dst.last_seen = src.last_seen;
+            dst.snr = src.snr;
+            dst.rssi = src.rssi;
+            dst.hops_away = src.hops_away;
+            dst.protocol = src.protocol;
+            dst.role = src.role;
+            entries_.push_back(dst);
+        }
+    }
+    else if (len > 0)
+    {
+        Serial.printf("[NodeStore] invalid blob size=%u\n", static_cast<unsigned>(len));
+        prefs.end();
+        clear();
+        return false;
+    }
+    prefs.end();
+    Serial.printf("[NodeStore] loaded=%u\n", static_cast<unsigned>(entries_.size()));
+    return true;
+}
+
+bool NodeStore::loadFromSd()
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    File f = SD.open(kPersistNodesFile, FILE_READ);
+    if (!f)
+    {
+        return false;
+    }
+
+    struct Header
+    {
+        uint8_t ver = 0;
+        uint8_t reserved[3] = {0, 0, 0};
+        uint32_t crc = 0;
+        uint32_t count = 0;
+    } header{};
+
+    if (f.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header))
+    {
+        f.close();
+        return false;
+    }
+    if (header.ver != kPersistVersion || header.count > kPersistMaxNodes)
+    {
+        f.close();
+        return false;
+    }
+
+    size_t expected_bytes = header.count * sizeof(PersistedNodeEntry);
+    std::vector<PersistedNodeEntry> persisted(header.count);
+    size_t read_bytes = f.read(reinterpret_cast<uint8_t*>(persisted.data()), expected_bytes);
+    f.close();
+    if (read_bytes != expected_bytes)
+    {
+        return false;
+    }
+
+    uint32_t calc_crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()), expected_bytes);
+    if (calc_crc != header.crc)
+    {
+        return false;
+    }
+
+    entries_.clear();
+    entries_.reserve(header.count);
+    for (const auto& src : persisted)
+    {
+        contacts::NodeEntry dst{};
+        dst.node_id = src.node_id;
+        memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
+        dst.short_name[sizeof(dst.short_name) - 1] = '\0';
+        memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
+        dst.long_name[sizeof(dst.long_name) - 1] = '\0';
+        dst.last_seen = src.last_seen;
+        dst.snr = src.snr;
+        dst.rssi = src.rssi;
+        dst.hops_away = src.hops_away;
+        dst.protocol = src.protocol;
+        dst.role = src.role;
+        entries_.push_back(dst);
+    }
+    Serial.printf("[NodeStore] loaded=%u (SD)\n", static_cast<unsigned>(entries_.size()));
+    return true;
+}
+
+bool NodeStore::saveToSd() const
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+
+    if (SD.exists(kPersistNodesFile))
+    {
+        SD.remove(kPersistNodesFile);
+    }
+
+    File f = SD.open(kPersistNodesFile, FILE_WRITE);
+    if (!f)
+    {
+        return false;
+    }
+
+    struct Header
+    {
+        uint8_t ver = kPersistVersion;
+        uint8_t reserved[3] = {0, 0, 0};
+        uint32_t crc = 0;
+        uint32_t count = 0;
+    } header{};
+
+    std::vector<PersistedNodeEntry> persisted;
+    persisted.reserve(entries_.size());
+    for (const auto& src : entries_)
+    {
+        PersistedNodeEntry dst{};
+        dst.node_id = src.node_id;
+        memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
+        dst.short_name[sizeof(dst.short_name) - 1] = '\0';
+        memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
+        dst.long_name[sizeof(dst.long_name) - 1] = '\0';
+        dst.last_seen = src.last_seen;
+        dst.snr = src.snr;
+        dst.rssi = src.rssi;
+        dst.protocol = src.protocol;
+        dst.role = src.role;
+        dst.hops_away = src.hops_away;
+        persisted.push_back(dst);
+    }
+
+    header.count = static_cast<uint32_t>(persisted.size());
+    header.crc = crc32(reinterpret_cast<const uint8_t*>(persisted.data()),
+                       persisted.size() * sizeof(PersistedNodeEntry));
+
+    bool ok = true;
+    ok = (f.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header)) == sizeof(header));
+    if (ok && !persisted.empty())
+    {
+        const size_t bytes = persisted.size() * sizeof(PersistedNodeEntry);
+        ok = (f.write(reinterpret_cast<const uint8_t*>(persisted.data()), bytes) == bytes);
+    }
+    f.close();
+    return ok;
 }
 
 } // namespace meshtastic

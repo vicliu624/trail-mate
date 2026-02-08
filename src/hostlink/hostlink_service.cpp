@@ -111,7 +111,7 @@ void send_hello_ack(uint16_t seq)
     const uint16_t proto = kProtocolVersion;
     const uint16_t max_len = static_cast<uint16_t>(kMaxFrameLen);
     const uint32_t caps =
-        CapTxMsg | CapConfig | CapSetTime | CapStatus | CapLogs | CapGps | CapAppData | CapTeamState;
+        CapTxMsg | CapConfig | CapSetTime | CapStatus | CapLogs | CapGps | CapAppData | CapTeamState | CapAprsGateway;
 
     payload.push_back(static_cast<uint8_t>(proto & 0xFF));
     payload.push_back(static_cast<uint8_t>((proto >> 8) & 0xFF));
@@ -139,12 +139,13 @@ void send_hello_ack(uint16_t seq)
     }
 }
 
-bool send_status_event()
+bool send_status_event(bool include_config)
 {
     std::vector<uint8_t> payload;
     if (!build_status_payload(payload,
                               static_cast<uint8_t>(s_status.state),
-                              s_status.last_error))
+                              s_status.last_error,
+                              include_config))
     {
         return false;
     }
@@ -317,7 +318,7 @@ ErrorCode handle_cmd_tx_msg(const Frame& frame)
 
 ErrorCode handle_cmd_get_config()
 {
-    send_status_event();
+    send_status_event(true);
     return ErrorCode::Ok;
 }
 
@@ -338,7 +339,7 @@ ErrorCode handle_cmd_set_config(const Frame& frame)
         s_status.last_error = err;
         return ErrorCode::InvalidParam;
     }
-    send_status_event();
+    send_status_event(true);
     return ErrorCode::Ok;
 }
 
@@ -465,7 +466,7 @@ void hostlink_task(void* /*arg*/)
         if (s_status.state == LinkState::Ready &&
             millis() - s_last_status_ms >= kStatusIntervalMs)
         {
-            send_status_event();
+            send_status_event(false);
             s_last_status_ms = millis();
         }
         if (s_status.state == LinkState::Ready &&

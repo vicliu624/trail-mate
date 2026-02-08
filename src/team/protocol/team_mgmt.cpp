@@ -173,215 +173,6 @@ bool decodeTeamMgmtMessage(const uint8_t* data, size_t len,
     return true;
 }
 
-bool encodeTeamAdvertise(const TeamAdvertise& input, std::vector<uint8_t>& out)
-{
-    out.clear();
-    ByteWriter writer(out);
-    writer.putBytes(input.team_id.data(), input.team_id.size());
-
-    uint16_t flags = 0;
-    if (input.has_join_hint) flags |= 0x01;
-    if (input.has_channel_index) flags |= 0x02;
-    if (input.has_expires_at) flags |= 0x04;
-    writer.putU16(flags);
-
-    if (input.has_join_hint) writer.putU32(input.join_hint);
-    if (input.has_channel_index) writer.putU8(input.channel_index);
-    if (input.has_expires_at) writer.putU64(input.expires_at);
-    writer.putU64(input.nonce);
-    return true;
-}
-
-bool decodeTeamAdvertise(const uint8_t* data, size_t len, TeamAdvertise* out)
-{
-    if (!data || !out)
-    {
-        return false;
-    }
-    ByteReader reader(data, len);
-    uint16_t flags = 0;
-
-    if (!reader.getBytes(out->team_id.data(), out->team_id.size())) return false;
-    if (!reader.getU16(&flags)) return false;
-
-    out->has_join_hint = (flags & 0x01) != 0;
-    out->has_channel_index = (flags & 0x02) != 0;
-    out->has_expires_at = (flags & 0x04) != 0;
-
-    if (out->has_join_hint && !reader.getU32(&out->join_hint)) return false;
-    if (out->has_channel_index && !reader.getU8(&out->channel_index)) return false;
-    if (out->has_expires_at && !reader.getU64(&out->expires_at)) return false;
-    if (!reader.getU64(&out->nonce)) return false;
-    return true;
-}
-
-bool encodeTeamJoinRequest(const TeamJoinRequest& input, std::vector<uint8_t>& out)
-{
-    if (input.has_member_pub && input.member_pub_len > input.member_pub.size())
-    {
-        return false;
-    }
-    out.clear();
-    ByteWriter writer(out);
-    writer.putBytes(input.team_id.data(), input.team_id.size());
-
-    uint16_t flags = 0;
-    if (input.has_member_pub) flags |= 0x01;
-    if (input.has_capabilities) flags |= 0x02;
-    writer.putU16(flags);
-
-    if (input.has_member_pub)
-    {
-        writer.putU8(input.member_pub_len);
-        writer.putBytes(input.member_pub.data(), input.member_pub_len);
-    }
-    if (input.has_capabilities) writer.putU32(input.capabilities);
-    writer.putU64(input.nonce);
-    return true;
-}
-
-bool decodeTeamJoinRequest(const uint8_t* data, size_t len, TeamJoinRequest* out)
-{
-    if (!data || !out)
-    {
-        return false;
-    }
-    ByteReader reader(data, len);
-    uint16_t flags = 0;
-    if (!reader.getBytes(out->team_id.data(), out->team_id.size())) return false;
-    if (!reader.getU16(&flags)) return false;
-
-    out->has_member_pub = (flags & 0x01) != 0;
-    out->has_capabilities = (flags & 0x02) != 0;
-
-    if (out->has_member_pub)
-    {
-        uint8_t pub_len = 0;
-        if (!reader.getU8(&pub_len)) return false;
-        if (pub_len > out->member_pub.size()) return false;
-        out->member_pub_len = pub_len;
-        if (!reader.getBytes(out->member_pub.data(), pub_len)) return false;
-    }
-    if (out->has_capabilities && !reader.getU32(&out->capabilities)) return false;
-    if (!reader.getU64(&out->nonce)) return false;
-    return true;
-}
-
-bool encodeTeamJoinAccept(const TeamJoinAccept& input, std::vector<uint8_t>& out)
-{
-    if (input.channel_psk_len > input.channel_psk.size())
-    {
-        return false;
-    }
-    out.clear();
-    ByteWriter writer(out);
-    writer.putU8(input.channel_index);
-    writer.putU8(input.channel_psk_len);
-    writer.putBytes(input.channel_psk.data(), input.channel_psk_len);
-    writer.putU32(input.key_id);
-
-    uint16_t flags = 0;
-    if (input.params.has_params) flags |= 0x01;
-    if (input.has_team_id) flags |= 0x02;
-    writer.putU16(flags);
-    if (!encodeTeamParams(input.params, writer)) return false;
-    if (input.has_team_id)
-    {
-        writer.putBytes(input.team_id.data(), input.team_id.size());
-    }
-
-    return true;
-}
-
-bool decodeTeamJoinAccept(const uint8_t* data, size_t len, TeamJoinAccept* out)
-{
-    if (!data || !out)
-    {
-        return false;
-    }
-    ByteReader reader(data, len);
-    uint16_t flags = 0;
-
-    if (!reader.getU8(&out->channel_index)) return false;
-    if (!reader.getU8(&out->channel_psk_len)) return false;
-    if (out->channel_psk_len > out->channel_psk.size()) return false;
-    if (!reader.getBytes(out->channel_psk.data(), out->channel_psk_len)) return false;
-    if (!reader.getU32(&out->key_id)) return false;
-    if (!reader.getU16(&flags)) return false;
-
-    out->params.has_params = (flags & 0x01) != 0;
-    out->has_team_id = (flags & 0x02) != 0;
-    if (out->params.has_params && !decodeTeamParams(reader, &out->params)) return false;
-    if (out->has_team_id && !reader.getBytes(out->team_id.data(), out->team_id.size())) return false;
-    return true;
-}
-
-bool encodeTeamJoinConfirm(const TeamJoinConfirm& input, std::vector<uint8_t>& out)
-{
-    out.clear();
-    ByteWriter writer(out);
-    writer.putU8(input.ok ? 1 : 0);
-
-    uint16_t flags = 0;
-    if (input.has_capabilities) flags |= 0x01;
-    if (input.has_battery) flags |= 0x02;
-    writer.putU16(flags);
-
-    if (input.has_capabilities) writer.putU32(input.capabilities);
-    if (input.has_battery) writer.putU8(input.battery);
-    return true;
-}
-
-bool decodeTeamJoinConfirm(const uint8_t* data, size_t len, TeamJoinConfirm* out)
-{
-    if (!data || !out)
-    {
-        return false;
-    }
-    ByteReader reader(data, len);
-    uint16_t flags = 0;
-    uint8_t ok = 0;
-    if (!reader.getU8(&ok)) return false;
-    out->ok = (ok != 0);
-    if (!reader.getU16(&flags)) return false;
-
-    out->has_capabilities = (flags & 0x01) != 0;
-    out->has_battery = (flags & 0x02) != 0;
-
-    if (out->has_capabilities && !reader.getU32(&out->capabilities)) return false;
-    if (out->has_battery && !reader.getU8(&out->battery)) return false;
-    return true;
-}
-
-bool encodeTeamJoinDecision(const TeamJoinDecision& input, std::vector<uint8_t>& out)
-{
-    out.clear();
-    ByteWriter writer(out);
-    writer.putU8(input.accept ? 1 : 0);
-    uint16_t flags = 0;
-    if (input.has_reason) flags |= 0x01;
-    writer.putU16(flags);
-    if (input.has_reason) writer.putU32(input.reason);
-    return true;
-}
-
-bool decodeTeamJoinDecision(const uint8_t* data, size_t len, TeamJoinDecision* out)
-{
-    if (!data || !out)
-    {
-        return false;
-    }
-    ByteReader reader(data, len);
-    uint16_t flags = 0;
-    uint8_t accept = 0;
-    if (!reader.getU8(&accept)) return false;
-    out->accept = (accept != 0);
-    if (!reader.getU16(&flags)) return false;
-    out->has_reason = (flags & 0x01) != 0;
-    if (out->has_reason && !reader.getU32(&out->reason)) return false;
-    return true;
-}
-
 bool encodeTeamKick(const TeamKick& input, std::vector<uint8_t>& out)
 {
     out.clear();
@@ -459,8 +250,23 @@ bool encodeTeamStatus(const TeamStatus& input, std::vector<uint8_t>& out)
 
     uint16_t flags = 0;
     if (input.params.has_params) flags |= 0x01;
+    if (input.has_members) flags |= 0x02;
     writer.putU16(flags);
     if (!encodeTeamParams(input.params, writer)) return false;
+    if (input.has_members)
+    {
+        size_t count = input.members.size();
+        if (count > kTeamStatusMaxMembers)
+        {
+            count = kTeamStatusMaxMembers;
+        }
+        writer.putU32(input.leader_id);
+        writer.putU8(static_cast<uint8_t>(count));
+        for (size_t i = 0; i < count; ++i)
+        {
+            writer.putU32(input.members[i]);
+        }
+    }
     return true;
 }
 
@@ -478,6 +284,25 @@ bool decodeTeamStatus(const uint8_t* data, size_t len, TeamStatus* out)
 
     out->params.has_params = (flags & 0x01) != 0;
     if (out->params.has_params && !decodeTeamParams(reader, &out->params)) return false;
+    out->has_members = (flags & 0x02) != 0;
+    out->members.clear();
+    out->leader_id = 0;
+    if (out->has_members)
+    {
+        if (!reader.getU32(&out->leader_id)) return false;
+        uint8_t count = 0;
+        if (!reader.getU8(&count)) return false;
+        out->members.reserve(count);
+        for (uint8_t i = 0; i < count; ++i)
+        {
+            uint32_t id = 0;
+            if (!reader.getU32(&id)) return false;
+            if (out->members.size() < kTeamStatusMaxMembers)
+            {
+                out->members.push_back(id);
+            }
+        }
+    }
     return true;
 }
 

@@ -14,6 +14,11 @@ Text / Location / Command，并与 Team 安全域绑定，支持地图与态势�
   - Command：指令类消息，可触发队伍行动提示与地图标注。
 - 安全：仅队伍成员可解密，不依赖 Meshtastic 普通聊天频道。
 
+前置条件（v0.2 调整）：
+- **建队/入队不再通过 LoRa 或 NFC**。
+- 组队只在 5 米内的近距离场景发生，**使用 ESP‑NOW 完成建队与密钥分发**。
+- LoRa 仅用于队内日常通信（Team Chat/Position/Track），不参与组队流程。
+
 非目标：
 - 不替换现有的普通聊天/广播消息。
 - 不实现复杂可靠传输（v0.1 先做 best-effort）。
@@ -165,3 +170,43 @@ struct TeamChatCommand {
 - `TeamChatHeader.version` = 1
 - 后续扩展通过 `flags` 或新 `type` 兼容
 
+---
+
+# 附录 A：ESP‑NOW 建队与入队（v0.2）
+
+> 目标：减少步骤与不稳定环节，近距离（≤5m）快速建队。
+
+## A1. 角色与约束
+- 场景：所有人同一房间/范围 ≤5m。
+- 介质：ESP‑NOW（2.4GHz），不再使用 LoRa/NFC。
+- 结果：成员收到 **team_psk + team_id + key_id + epoch**，之后用 LoRa 收发 Team 协议。
+
+## A2. 简化流程
+
+**Leader**
+1) Create Team → 打开 “Pairing (ESP‑NOW)” 窗口（默认 120s）。
+2) 接收成员 Join 请求（可“Auto‑accept”或手动 Accept）。
+3) 发送 KeyDist（ESP‑NOW）给新成员。
+
+**Member**
+1) Join Team → Nearby Teams（ESP‑NOW 扫描）选择目标。
+2) 发送 Join 请求并等待 KeyDist。
+3) 收到 KeyDist 后进入已加入状态。
+
+## A3. ESP‑NOW 消息（建议）
+
+```
+PAIR_BEACON { team_id_short, team_id, epoch, key_id, leader_id, expires_at }
+PAIR_JOIN   { team_id, member_id, member_pub, nonce }
+PAIR_ACCEPT { team_id, member_id, ok, nonce }
+PAIR_KEY    { team_id, key_id, epoch, team_psk_encrypted, nonce }
+```
+
+说明：
+- `team_psk_encrypted` 可用临时会话密钥（由 `member_pub` + leader 私钥派生）加密。
+- `nonce` 用于关联请求与防重放。
+- 所有 ESP‑NOW 包都只在 Pairing 窗口内处理。
+
+## A4. 与 Team Chat 的关系
+- ESP‑NOW 仅负责“建队/入队/密钥分发”。
+- 完成后使用 LoRa 的 Team 协议（TEAM_CHAT / TEAM_POS / TEAM_TRACK / …）。

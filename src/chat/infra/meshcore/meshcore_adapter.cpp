@@ -290,6 +290,19 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
         incoming.text.assign(reinterpret_cast<const char*>(payload), payload_len);
         incoming.hop_limit = 0;
         incoming.encrypted = false;
+        incoming.rx_meta.rx_timestamp_ms = millis();
+        uint32_t epoch_s = now_epoch_seconds();
+        if (is_valid_epoch(epoch_s))
+        {
+            incoming.rx_meta.rx_timestamp_s = epoch_s;
+            incoming.rx_meta.time_source = RxTimeSource::DeviceUtc;
+        }
+        else
+        {
+            incoming.rx_meta.time_source = RxTimeSource::Uptime;
+            incoming.rx_meta.rx_timestamp_s = incoming.rx_meta.rx_timestamp_ms / 1000U;
+        }
+        incoming.rx_meta.origin = RxOrigin::Mesh;
         receive_queue_.push(incoming);
     }
 

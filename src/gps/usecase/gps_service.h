@@ -9,6 +9,7 @@
 #include "../infra/hal_gps_adapter.h"
 #include "../infra/hal_motion_adapter.h"
 #include "../motion_policy.h"
+#include "gps/usecase/gps_jitter_filter.h"
 #include "board/GpsBoard.h"
 #include "board/MotionBoard.h"
 
@@ -35,6 +36,7 @@ class GpsService
     TaskHandle_t getTaskHandle() const { return gps_task_handle_; }
     bool isEnabled() const { return !gps_disabled_ && gps_board_ != nullptr; }
     bool isPowered() const { return gps_powered_; }
+    uint32_t getLastMotionMs() const;
 
   private:
     GpsService() = default;
@@ -74,6 +76,7 @@ class GpsService
     MotionPolicy motion_policy_{};
     HalGpsAdapter gps_adapter_{};
     HalMotionAdapter motion_adapter_{};
+    GpsJitterFilter jitter_filter_{};
 };
 
 } // namespace gps

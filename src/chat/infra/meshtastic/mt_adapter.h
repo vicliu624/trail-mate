@@ -109,6 +109,10 @@ class MtAdapter : public chat::IMeshAdapter
     std::string user_short_name_;
     float last_rx_rssi_;
     float last_rx_snr_;
+    uint32_t radio_freq_hz_ = 0;
+    uint32_t radio_bw_hz_ = 0;
+    uint8_t radio_sf_ = 0;
+    uint8_t radio_cr_ = 0;
 
     enum class KeyVerificationState : uint8_t
     {

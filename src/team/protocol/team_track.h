@@ -13,7 +13,7 @@ namespace team::proto
 {
 
 constexpr uint8_t kTeamTrackVersion = 1;
-constexpr size_t kTeamTrackMaxPoints = 20;
+constexpr size_t kTeamTrackMaxPoints = 5;
 
 struct TeamTrackPoint
 {

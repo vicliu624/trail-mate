@@ -24,6 +24,12 @@ constexpr const char kBinHeader[] = {'T', 'R', 'K', '1'};
 
 constexpr double kMinRecordDistanceM = 2.0;
 
+constexpr uint32_t kActiveMagic = 0x5452434Bu; // 'TRCK'
+constexpr uint8_t kActiveVersion = 1;
+constexpr uint8_t kActiveFlagManual = 0x01;
+constexpr uint8_t kActiveFlagAuto = 0x02;
+constexpr const char* kActivePath = "/trackers/active.bin";
+
 double deg2rad(double deg)
 {
     return deg * 0.017453292519943295; // pi / 180
@@ -142,6 +148,7 @@ void TrackRecorder::beginNewFile()
     last_point_valid_ = false;
     last_point_time_ = 0;
     last_point_ms_ = 0;
+    updateActiveStateLocked();
 }
 
 bool TrackRecorder::start()
@@ -161,6 +168,7 @@ bool TrackRecorder::start()
         manual_recording_ = true;
         if (recording_)
         {
+            updateActiveStateLocked();
             ok = true;
             break;
         }
@@ -187,6 +195,7 @@ void TrackRecorder::stop()
     manual_recording_ = false;
     if (auto_recording_)
     {
+        updateActiveStateLocked();
         if (mutex_)
         {
             xSemaphoreGive(mutex_);
@@ -212,6 +221,7 @@ void TrackRecorder::stop()
     last_point_valid_ = false;
     last_point_time_ = 0;
     last_point_ms_ = 0;
+    updateActiveStateLocked();
 
     if (mutex_)
     {
@@ -255,6 +265,7 @@ void TrackRecorder::setAutoRecording(bool enabled)
         last_point_time_ = 0;
         last_point_ms_ = 0;
     }
+    updateActiveStateLocked();
 
     if (mutex_)
     {
@@ -445,6 +456,168 @@ void TrackRecorder::appendPoint(const TrackPoint& pt)
     if (mutex_)
     {
         xSemaphoreGive(mutex_);
+    }
+}
+
+bool TrackRecorder::restoreActiveSession()
+{
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(400)) != pdTRUE)
+    {
+        return false;
+    }
+
+    bool ok = false;
+    do
+    {
+        if (SD.cardType() == CARD_NONE)
+        {
+            break;
+        }
+        if (!SD.exists(kActivePath))
+        {
+            break;
+        }
+        File f = SD.open(kActivePath, FILE_READ);
+        if (!f)
+        {
+            break;
+        }
+
+        struct ActiveHeader
+        {
+            uint32_t magic = 0;
+            uint8_t version = 0;
+            uint8_t flags = 0;
+            uint8_t format = 0;
+            uint8_t path_len = 0;
+        } header{};
+
+        if (f.read(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header))
+        {
+            f.close();
+            break;
+        }
+        if (header.magic != kActiveMagic || header.version != kActiveVersion ||
+            header.path_len == 0 || header.path_len >= 96)
+        {
+            f.close();
+            break;
+        }
+        char path_buf[96] = {0};
+        if (f.read(reinterpret_cast<uint8_t*>(path_buf), header.path_len) != header.path_len)
+        {
+            f.close();
+            break;
+        }
+        f.close();
+
+        String path(path_buf);
+        if (path.isEmpty() || !SD.exists(path.c_str()))
+        {
+            clearActiveStateLocked();
+            break;
+        }
+
+        recording_ = true;
+        current_path_ = path;
+        last_point_valid_ = false;
+        last_point_time_ = 0;
+        last_point_ms_ = 0;
+        format_ = static_cast<TrackFormat>(header.format);
+
+        manual_recording_ = (header.flags & kActiveFlagManual) != 0;
+        auto_recording_ = (header.flags & kActiveFlagAuto) != 0;
+        if (!manual_recording_ && !auto_recording_)
+        {
+            manual_recording_ = true;
+        }
+
+        ok = true;
+    } while (false);
+
+    if (mutex_)
+    {
+        xSemaphoreGive(mutex_);
+    }
+
+    return ok;
+}
+
+void TrackRecorder::updateActiveStateLocked()
+{
+    if (recording_ && !current_path_.isEmpty())
+    {
+        writeActiveStateLocked();
+    }
+    else
+    {
+        clearActiveStateLocked();
+    }
+}
+
+bool TrackRecorder::writeActiveStateLocked() const
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return false;
+    }
+    if (!ensureDir())
+    {
+        return false;
+    }
+
+    if (SD.exists(kActivePath))
+    {
+        SD.remove(kActivePath);
+    }
+    File f = SD.open(kActivePath, FILE_WRITE);
+    if (!f)
+    {
+        return false;
+    }
+
+    struct ActiveHeader
+    {
+        uint32_t magic = kActiveMagic;
+        uint8_t version = kActiveVersion;
+        uint8_t flags = 0;
+        uint8_t format = 0;
+        uint8_t path_len = 0;
+    } header{};
+
+    header.flags = 0;
+    if (manual_recording_)
+    {
+        header.flags |= kActiveFlagManual;
+    }
+    if (auto_recording_)
+    {
+        header.flags |= kActiveFlagAuto;
+    }
+    header.format = static_cast<uint8_t>(format_);
+    header.path_len = static_cast<uint8_t>(current_path_.length());
+
+    bool ok = true;
+    ok = (f.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header)) == sizeof(header));
+    if (ok)
+    {
+        ok = (f.write(reinterpret_cast<const uint8_t*>(current_path_.c_str()),
+                      header.path_len) == header.path_len);
+    }
+    f.flush();
+    f.close();
+    return ok;
+}
+
+void TrackRecorder::clearActiveStateLocked() const
+{
+    if (SD.cardType() == CARD_NONE)
+    {
+        return;
+    }
+    if (SD.exists(kActivePath))
+    {
+        SD.remove(kActivePath);
     }
 }
 

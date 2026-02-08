@@ -11,6 +11,7 @@
 #include "../team/infra/crypto/team_crypto.h"
 #include "../team/infra/event/team_event_bus_sink.h"
 #include "../team/usecase/team_controller.h"
+#include "../team/usecase/team_pairing_service.h"
 #include "../team/usecase/team_service.h"
 
 namespace app
@@ -92,6 +93,11 @@ class AppContext
     team::TeamController* getTeamController()
     {
         return team_controller_.get();
+    }
+
+    team::TeamPairingService* getTeamPairing()
+    {
+        return team_pairing_service_.get();
     }
 
     /**
@@ -216,6 +222,7 @@ class AppContext
     std::unique_ptr<team::TeamService> team_service_;
     std::unique_ptr<team::TeamController> team_controller_;
     std::unique_ptr<team::TeamTrackSampler> team_track_sampler_;
+    std::unique_ptr<team::TeamPairingService> team_pairing_service_;
 
     // UI
     std::unique_ptr<chat::ui::UiController> ui_controller_;

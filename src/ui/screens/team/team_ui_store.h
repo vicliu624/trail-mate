@@ -23,22 +23,18 @@ struct TeamUiSnapshot
     bool kicked_out = false;
     bool self_is_leader = false;
     uint32_t last_event_seq = 0;
+    uint32_t team_chat_unread = 0;
 
     TeamId team_id{};
     bool has_team_id = false;
-    TeamId join_target_id{};
-    bool has_join_target = false;
 
     std::string team_name;
     uint32_t security_round = 0;
-    std::string invite_code;
-    uint32_t invite_expires_s = 0;
     uint32_t last_update_s = 0;
     std::array<uint8_t, team::proto::kTeamChannelPskSize> team_psk{};
     bool has_team_psk = false;
 
     std::vector<TeamMemberUi> members;
-    std::vector<NearbyTeamUi> nearby_teams;
 };
 
 enum class TeamKeyEventType : uint8_t

@@ -53,14 +53,6 @@ const char* mgmtTypeName(team::proto::TeamMgmtType type)
 {
     switch (type)
     {
-    case team::proto::TeamMgmtType::Advertise:
-        return "Advertise";
-    case team::proto::TeamMgmtType::JoinRequest:
-        return "JoinRequest";
-    case team::proto::TeamMgmtType::JoinAccept:
-        return "JoinAccept";
-    case team::proto::TeamMgmtType::JoinConfirm:
-        return "JoinConfirm";
     case team::proto::TeamMgmtType::Status:
         return "Status";
     case team::proto::TeamMgmtType::Rotate:
@@ -69,8 +61,6 @@ const char* mgmtTypeName(team::proto::TeamMgmtType type)
         return "Leave";
     case team::proto::TeamMgmtType::Disband:
         return "Disband";
-    case team::proto::TeamMgmtType::JoinDecision:
-        return "JoinDecision";
     case team::proto::TeamMgmtType::Kick:
         return "Kick";
     case team::proto::TeamMgmtType::TransferLeader:
@@ -161,71 +151,6 @@ void logTeamEncrypted(const char* dir,
     }
 }
 
-void logTeamAdvertise(const team::proto::TeamAdvertise& msg, const char* dir)
-{
-    TEAM_LOG("[TEAM] %s Advertise team_id=%s has_join_hint=%u join_hint=0x%08lX has_channel_index=%u channel_index=%u has_expires_at=%u expires_at=%llu nonce=%llu\n",
-             dir,
-             hexFromArray(msg.team_id).c_str(),
-             msg.has_join_hint ? 1 : 0,
-             static_cast<unsigned long>(msg.join_hint),
-             msg.has_channel_index ? 1 : 0,
-             static_cast<unsigned>(msg.channel_index),
-             msg.has_expires_at ? 1 : 0,
-             static_cast<unsigned long long>(msg.expires_at),
-             static_cast<unsigned long long>(msg.nonce));
-}
-
-void logTeamJoinRequest(const team::proto::TeamJoinRequest& msg, const char* dir)
-{
-    std::string pub_hex = toHex(msg.member_pub.data(), msg.member_pub_len, msg.member_pub_len);
-    TEAM_LOG("[TEAM] %s JoinRequest team_id=%s has_pub=%u pub_len=%u pub_hex=%s has_cap=%u cap=0x%08lX nonce=%llu\n",
-             dir,
-             hexFromArray(msg.team_id).c_str(),
-             msg.has_member_pub ? 1 : 0,
-             static_cast<unsigned>(msg.member_pub_len),
-             pub_hex.c_str(),
-             msg.has_capabilities ? 1 : 0,
-             static_cast<unsigned long>(msg.capabilities),
-             static_cast<unsigned long long>(msg.nonce));
-}
-
-void logTeamJoinAccept(const team::proto::TeamJoinAccept& msg, const char* dir)
-{
-    std::string psk_hex = toHex(msg.channel_psk.data(), msg.channel_psk_len, msg.channel_psk_len);
-    TEAM_LOG("[TEAM] %s JoinAccept has_team_id=%u team_id=%s channel_index=%u psk_len=%u psk_hex=%s key_id=%lu params_has=%u pos_ms=%lu precision=%u flags=0x%08lX\n",
-             dir,
-             msg.has_team_id ? 1 : 0,
-             hexFromArray(msg.team_id).c_str(),
-             static_cast<unsigned>(msg.channel_index),
-             static_cast<unsigned>(msg.channel_psk_len),
-             psk_hex.c_str(),
-             static_cast<unsigned long>(msg.key_id),
-             msg.params.has_params ? 1 : 0,
-             static_cast<unsigned long>(msg.params.position_interval_ms),
-             static_cast<unsigned>(msg.params.precision_level),
-             static_cast<unsigned long>(msg.params.flags));
-}
-
-void logTeamJoinConfirm(const team::proto::TeamJoinConfirm& msg, const char* dir)
-{
-    TEAM_LOG("[TEAM] %s JoinConfirm ok=%u has_cap=%u cap=0x%08lX has_battery=%u battery=%u\n",
-             dir,
-             msg.ok ? 1 : 0,
-             msg.has_capabilities ? 1 : 0,
-             static_cast<unsigned long>(msg.capabilities),
-             msg.has_battery ? 1 : 0,
-             static_cast<unsigned>(msg.battery));
-}
-
-void logTeamJoinDecision(const team::proto::TeamJoinDecision& msg, const char* dir)
-{
-    TEAM_LOG("[TEAM] %s JoinDecision accept=%u has_reason=%u reason=%lu\n",
-             dir,
-             msg.accept ? 1 : 0,
-             msg.has_reason ? 1 : 0,
-             static_cast<unsigned long>(msg.reason));
-}
-
 void logTeamKick(const team::proto::TeamKick& msg, const char* dir)
 {
     TEAM_LOG("[TEAM] %s Kick target=%08lX\n", dir, static_cast<unsigned long>(msg.target));
@@ -249,14 +174,16 @@ void logTeamKeyDist(const team::proto::TeamKeyDist& msg, const char* dir)
 
 void logTeamStatus(const team::proto::TeamStatus& msg, const char* dir)
 {
-    TEAM_LOG("[TEAM] %s Status key_id=%lu member_hash=%s params_has=%u pos_ms=%lu precision=%u flags=0x%08lX\n",
+    TEAM_LOG("[TEAM] %s Status key_id=%lu member_hash=%s params_has=%u pos_ms=%lu precision=%u flags=0x%08lX members=%u leader=%08lX\n",
              dir,
              static_cast<unsigned long>(msg.key_id),
              hexFromArray(msg.member_list_hash).c_str(),
              msg.params.has_params ? 1 : 0,
              static_cast<unsigned long>(msg.params.position_interval_ms),
              static_cast<unsigned>(msg.params.precision_level),
-             static_cast<unsigned long>(msg.params.flags));
+             static_cast<unsigned long>(msg.params.flags),
+             msg.has_members ? static_cast<unsigned>(msg.members.size()) : 0u,
+             static_cast<unsigned long>(msg.leader_id));
 }
 
 std::vector<uint8_t> buildAad(const team::proto::TeamEncrypted& envelope)
@@ -286,17 +213,7 @@ team::TeamEventContext makeContext(const chat::MeshIncomingData& data,
         ctx.key_id = envelope->key_id;
     }
     ctx.from = data.from;
-    ctx.timestamp = millis() / 1000;
-    return ctx;
-}
-
-team::TeamEventContext makeContext(const chat::MeshIncomingData& data,
-                                   const team::TeamId& team_id)
-{
-    team::TeamEventContext ctx;
-    ctx.team_id = team_id;
-    ctx.key_id = 0;
-    ctx.from = data.from;
+    ctx.rx_meta = data.rx_meta;
     ctx.timestamp = millis() / 1000;
     return ctx;
 }
@@ -386,7 +303,7 @@ void TeamService::processIncoming()
                                        &envelope, plain, false);
 
             uint8_t version = 0;
-            team::proto::TeamMgmtType type = team::proto::TeamMgmtType::Advertise;
+            team::proto::TeamMgmtType type = team::proto::TeamMgmtType::Status;
             std::vector<uint8_t> payload;
 
             if (decoded_encrypted)
@@ -449,91 +366,6 @@ void TeamService::processIncoming()
 
             switch (type)
             {
-            case team::proto::TeamMgmtType::Advertise:
-            {
-                team::proto::TeamAdvertise msg;
-                if (!team::proto::decodeTeamAdvertise(payload.data(), payload.size(), &msg))
-                {
-                    emitError(data, TeamProtocolError::DecodeFail,
-                              decoded_encrypted ? &envelope : nullptr);
-                    break;
-                }
-                logTeamAdvertise(msg, "RX");
-                TeamAdvertiseEvent event{makeContext(data, msg.team_id), msg};
-                sink_.onTeamAdvertise(event);
-                break;
-            }
-            case team::proto::TeamMgmtType::JoinRequest:
-            {
-                team::proto::TeamJoinRequest msg;
-                if (!team::proto::decodeTeamJoinRequest(payload.data(), payload.size(), &msg))
-                {
-                    emitError(data, TeamProtocolError::DecodeFail,
-                              decoded_encrypted ? &envelope : nullptr);
-                    break;
-                }
-                logTeamJoinRequest(msg, "RX");
-                TeamJoinRequestEvent event{makeContext(data, msg.team_id), msg};
-                sink_.onTeamJoinRequest(event);
-                break;
-            }
-            case team::proto::TeamMgmtType::JoinAccept:
-            {
-                team::proto::TeamJoinAccept msg;
-                if (!team::proto::decodeTeamJoinAccept(payload.data(), payload.size(), &msg))
-                {
-                    emitError(data, TeamProtocolError::DecodeFail,
-                              decoded_encrypted ? &envelope : nullptr);
-                    break;
-                }
-                logTeamJoinAccept(msg, "RX");
-                team::TeamEventContext ctx = makeContext(data, decoded_encrypted ? &envelope : nullptr);
-                if (msg.has_team_id)
-                {
-                    ctx.team_id = msg.team_id;
-                }
-                TeamJoinAcceptEvent event{ctx, msg};
-                sink_.onTeamJoinAccept(event);
-
-                if (msg.channel_psk_len > 0 && msg.has_team_id && msg.key_id != 0)
-                {
-                    setKeysFromPsk(msg.team_id, msg.key_id,
-                                   msg.channel_psk.data(), msg.channel_psk_len);
-                }
-                break;
-            }
-            case team::proto::TeamMgmtType::JoinConfirm:
-            {
-                if (!decoded_encrypted)
-                {
-                    break;
-                }
-                team::proto::TeamJoinConfirm msg;
-                if (!team::proto::decodeTeamJoinConfirm(payload.data(), payload.size(), &msg))
-                {
-                    emitError(data, TeamProtocolError::DecodeFail,
-                              decoded_encrypted ? &envelope : nullptr);
-                    break;
-                }
-                TeamJoinConfirmEvent event{makeContext(data, decoded_encrypted ? &envelope : nullptr), msg};
-                sink_.onTeamJoinConfirm(event);
-                logTeamJoinConfirm(msg, "RX");
-                break;
-            }
-            case team::proto::TeamMgmtType::JoinDecision:
-            {
-                team::proto::TeamJoinDecision msg;
-                if (!team::proto::decodeTeamJoinDecision(payload.data(), payload.size(), &msg))
-                {
-                    emitError(data, TeamProtocolError::DecodeFail,
-                              decoded_encrypted ? &envelope : nullptr);
-                    break;
-                }
-                logTeamJoinDecision(msg, "RX");
-                TeamJoinDecisionEvent event{makeContext(data, decoded_encrypted ? &envelope : nullptr), msg};
-                sink_.onTeamJoinDecision(event);
-                break;
-            }
             case team::proto::TeamMgmtType::Kick:
             {
                 if (!decoded_encrypted)
@@ -706,90 +538,11 @@ void TeamService::processIncoming()
                     static_cast<uint8_t>(data.channel),
                     data.channel_hash,
                     data.want_response,
-                    data.payload),
+                    data.payload,
+                    &data.rx_meta),
                 0);
         }
     }
-}
-
-bool TeamService::sendAdvertise(const team::proto::TeamAdvertise& msg,
-                                chat::ChannelId channel)
-{
-    std::vector<uint8_t> payload;
-    if (!team::proto::encodeTeamAdvertise(msg, payload))
-    {
-        return false;
-    }
-    logTeamAdvertise(msg, "TX");
-    std::string payload_hex = toHex(payload.data(), payload.size(), payload.size());
-    TEAM_LOG("[TEAM] TX TEAM_MGMT Advertise payload_len=%u payload_hex=%s\n",
-             static_cast<unsigned>(payload.size()),
-             payload_hex.c_str());
-    return sendMgmtPlain(team::proto::TeamMgmtType::Advertise, payload, channel, 0);
-}
-
-bool TeamService::sendJoinRequest(const team::proto::TeamJoinRequest& msg,
-                                  chat::ChannelId channel, chat::NodeId dest)
-{
-    std::vector<uint8_t> payload;
-    if (!team::proto::encodeTeamJoinRequest(msg, payload))
-    {
-        return false;
-    }
-    logTeamJoinRequest(msg, "TX");
-    std::string payload_hex = toHex(payload.data(), payload.size(), payload.size());
-    TEAM_LOG("[TEAM] TX TEAM_MGMT JoinRequest payload_len=%u payload_hex=%s\n",
-             static_cast<unsigned>(payload.size()),
-             payload_hex.c_str());
-    return sendMgmtPlain(team::proto::TeamMgmtType::JoinRequest, payload, channel, dest);
-}
-
-bool TeamService::sendJoinAccept(const team::proto::TeamJoinAccept& msg,
-                                 chat::ChannelId channel, chat::NodeId dest)
-{
-    std::vector<uint8_t> payload;
-    if (!team::proto::encodeTeamJoinAccept(msg, payload))
-    {
-        return false;
-    }
-    logTeamJoinAccept(msg, "TX");
-    std::string payload_hex = toHex(payload.data(), payload.size(), payload.size());
-    TEAM_LOG("[TEAM] TX TEAM_MGMT JoinAccept payload_len=%u payload_hex=%s\n",
-             static_cast<unsigned>(payload.size()),
-             payload_hex.c_str());
-    return sendMgmtPlain(team::proto::TeamMgmtType::JoinAccept, payload, channel, dest);
-}
-
-bool TeamService::sendJoinConfirm(const team::proto::TeamJoinConfirm& msg,
-                                  chat::ChannelId channel, chat::NodeId dest)
-{
-    std::vector<uint8_t> payload;
-    if (!team::proto::encodeTeamJoinConfirm(msg, payload))
-    {
-        return false;
-    }
-    logTeamJoinConfirm(msg, "TX");
-    std::string payload_hex = toHex(payload.data(), payload.size(), payload.size());
-    TEAM_LOG("[TEAM] TX TEAM_MGMT JoinConfirm payload_len=%u payload_hex=%s\n",
-             static_cast<unsigned>(payload.size()),
-             payload_hex.c_str());
-    return sendMgmtEncrypted(team::proto::TeamMgmtType::JoinConfirm, payload, channel, dest);
-}
-
-bool TeamService::sendJoinDecision(const team::proto::TeamJoinDecision& msg,
-                                   chat::ChannelId channel, chat::NodeId dest)
-{
-    std::vector<uint8_t> payload;
-    if (!team::proto::encodeTeamJoinDecision(msg, payload))
-    {
-        return false;
-    }
-    logTeamJoinDecision(msg, "TX");
-    std::string payload_hex = toHex(payload.data(), payload.size(), payload.size());
-    TEAM_LOG("[TEAM] TX TEAM_MGMT JoinDecision payload_len=%u payload_hex=%s\n",
-             static_cast<unsigned>(payload.size()),
-             payload_hex.c_str());
-    return sendMgmtPlain(team::proto::TeamMgmtType::JoinDecision, payload, channel, dest);
 }
 
 bool TeamService::sendKick(const team::proto::TeamKick& msg,

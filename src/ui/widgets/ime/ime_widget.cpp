@@ -95,6 +95,7 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea)
     toggle_label_ = lv_label_create(toggle_btn_);
     lv_label_set_text(toggle_label_, "EN");
     lv_obj_set_style_text_font(toggle_label_, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_color(toggle_label_, lv_color_hex(0x3A2A1A), 0);
     lv_obj_center(toggle_label_);
 
     focus_proxy_ = lv_btn_create(container_);

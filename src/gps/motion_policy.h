@@ -14,6 +14,8 @@ class MotionPolicy
     bool isEnabled() const { return enabled_; }
     uint32_t taskIntervalMs() const { return config_.task_interval_ms; }
     const MotionConfig& config() const { return config_; }
+    uint32_t lastMotionMs() const { return enabled_ ? last_motion_ms_ : 0; }
+    bool hasRecentMotion(uint32_t now_ms, uint32_t window_ms) const;
 
     void onSensorInterrupt();
     bool shouldUpdateSensor(uint32_t now_ms);

@@ -160,7 +160,8 @@ void ChatService::processIncoming()
         // Emit event for UI/feedback
         sys::EventBus::publish(new sys::ChatNewMessageEvent(static_cast<uint8_t>(msg.channel),
                                                             msg.msg_id,
-                                                            msg.text.c_str()));
+                                                            msg.text.c_str(),
+                                                            &incoming.rx_meta));
     }
 }
 
