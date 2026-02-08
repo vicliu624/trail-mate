@@ -192,3 +192,13 @@ bool modal_is_open(const Modal& m)
 {
     return m.open;
 }
+
+void modal_set_size(Modal& m, lv_coord_t w, lv_coord_t h)
+{
+    if (!m.is_open() || !m.win)
+    {
+        return;
+    }
+    lv_obj_set_size(m.win, w, h);
+    lv_obj_align(m.win, LV_ALIGN_CENTER, 0, 0);
+}

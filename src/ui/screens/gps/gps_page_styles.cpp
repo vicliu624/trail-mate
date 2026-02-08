@@ -174,7 +174,11 @@ void init_once()
     lv_style_set_pad_all(&s_indicator_label, 8);
 
     lv_style_init(&s_tracker_list);
-    lv_style_set_pad_top(&s_tracker_list, 32);
+    lv_style_set_pad_top(&s_tracker_list, 8);
+    lv_style_set_pad_bottom(&s_tracker_list, 6);
+    lv_style_set_pad_row(&s_tracker_list, 4);
+    lv_style_set_bg_opa(&s_tracker_list, LV_OPA_TRANSP);
+    lv_style_set_border_width(&s_tracker_list, 0);
 
     lv_style_init(&s_modal_bg);
     lv_style_set_bg_color(&s_modal_bg, lv_color_hex(kBlack));

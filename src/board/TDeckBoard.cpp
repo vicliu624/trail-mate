@@ -439,24 +439,10 @@ float TDeckBoard::getRadioSNR()
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
 static void apply_tx_power(SX1262Access& radio, int8_t tx_power)
 {
-    constexpr int8_t kTxPowerLowMaxDbm = 14;
     constexpr int8_t kTxPowerMinDbm = -9;
-
-    if (tx_power > kTxPowerLowMaxDbm)
-    {
-        radio.setOutputPower(tx_power);
-        return;
-    }
-
     int8_t clipped = tx_power;
     if (clipped < kTxPowerMinDbm) clipped = kTxPowerMinDbm;
-    if (clipped > kTxPowerLowMaxDbm) clipped = kTxPowerLowMaxDbm;
-
-    uint8_t ocp = 0;
-    radio.readRegister(RADIOLIB_SX126X_REG_OCP_CONFIGURATION, &ocp, 1);
-    radio.setPaConfig(0x04, RADIOLIB_SX126X_PA_CONFIG_SX1261, 0x00);
-    radio.setTxParams(static_cast<uint8_t>(clipped), RADIOLIB_SX126X_PA_RAMP_200U);
-    radio.writeRegister(RADIOLIB_SX126X_REG_OCP_CONFIGURATION, &ocp, 1);
+    radio.setOutputPower(clipped);
 }
 #endif
 

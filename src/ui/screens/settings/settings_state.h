@@ -73,7 +73,7 @@ struct SettingsData
     bool net_duty_cycle = true;
     int net_channel_util = 0;
 
-    // Privacy
+    // Chat/GPS (privacy-related controls)
     int privacy_encrypt_mode = 1;
     bool privacy_pki = false;
     int privacy_nmea_output = 0;

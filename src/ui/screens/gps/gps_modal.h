@@ -21,6 +21,7 @@ void bind_encoder_to_group(lv_group_t* g);
 
 bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group);
 void modal_close(Modal& m);
+void modal_set_size(Modal& m, lv_coord_t w, lv_coord_t h);
 bool modal_is_open(const Modal& m);
 
 #endif // GPS_MODAL_H
