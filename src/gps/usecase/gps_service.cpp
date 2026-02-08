@@ -3,6 +3,7 @@
 #include "board/GpsBoard.h"
 #include "board/TLoRaPagerTypes.h"
 #include "gps/usecase/track_recorder.h"
+#include <cstring>
 
 namespace
 {
@@ -131,6 +132,49 @@ GpsState GpsService::getData()
         }
     }
     return data;
+}
+
+bool GpsService::getGnssSnapshot(GnssSatInfo* out, size_t max, size_t* out_count, GnssStatus* status)
+{
+    if (!out || max == 0)
+    {
+        if (out_count)
+        {
+            *out_count = 0;
+        }
+        if (status)
+        {
+            *status = GnssStatus{};
+        }
+        return false;
+    }
+
+    if (gps_data_mutex_ != NULL)
+    {
+        if (xSemaphoreTake(gps_data_mutex_, pdMS_TO_TICKS(100)) == pdTRUE)
+        {
+            size_t copy_count = gnss_sat_count_;
+            if (copy_count > max)
+            {
+                copy_count = max;
+            }
+            if (copy_count > 0)
+            {
+                memcpy(out, gnss_sats_, sizeof(GnssSatInfo) * copy_count);
+            }
+            if (out_count)
+            {
+                *out_count = copy_count;
+            }
+            if (status)
+            {
+                *status = gnss_status_;
+            }
+            xSemaphoreGive(gps_data_mutex_);
+            return true;
+        }
+    }
+    return false;
 }
 
 uint32_t GpsService::getCollectionInterval() const
@@ -406,6 +450,13 @@ void GpsService::gpsTask(void* pvParameters)
                 bool was_valid = service->gps_state_.valid;
                 bool has_fix = service->gps_adapter_.hasFix();
                 uint8_t sat_count = service->gps_adapter_.satellites();
+                service->gnss_sat_count_ = service->gps_adapter_.getSatellites(service->gnss_sats_, kMaxGnssSats);
+                service->gnss_status_ = service->gps_adapter_.getGnssStatus();
+                if (service->gnss_status_.sats_in_view == 0)
+                {
+                    service->gnss_status_.sats_in_view =
+                        static_cast<uint8_t>(service->gnss_sat_count_);
+                }
                 gps::TrackPoint track_pt{};
                 bool have_track_point = false;
 

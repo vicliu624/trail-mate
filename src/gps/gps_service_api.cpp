@@ -10,6 +10,11 @@ GpsState gps_get_data()
     return GpsService::getInstance().getData();
 }
 
+bool gps_get_gnss_snapshot(gps::GnssSatInfo* out, size_t max, size_t* out_count, gps::GnssStatus* status)
+{
+    return GpsService::getInstance().getGnssSnapshot(out, max, out_count, status);
+}
+
 uint32_t gps_get_last_motion_ms()
 {
     return GpsService::getInstance().getLastMotionMs();

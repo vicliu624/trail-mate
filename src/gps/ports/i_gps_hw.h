@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "../domain/gnss_satellite.h"
+
 namespace gps
 {
 
@@ -24,6 +26,8 @@ class IGpsHardware
     virtual bool hasCourse() const = 0;
     virtual double course() const = 0;
     virtual uint8_t satellites() const = 0;
+    virtual size_t getSatellites(gps::GnssSatInfo* out, size_t max) const = 0;
+    virtual gps::GnssStatus getGnssStatus() const = 0;
     virtual bool syncTime(uint32_t gps_task_interval_ms) = 0;
     virtual bool applyGnssConfig(uint8_t mode, uint8_t sat_mask) = 0;
     virtual bool applyNmeaConfig(uint8_t output_hz, uint8_t sentence_mask) = 0;

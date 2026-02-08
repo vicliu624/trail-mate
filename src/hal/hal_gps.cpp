@@ -107,6 +107,16 @@ uint8_t HalGps::satellites() const
     return board_ != nullptr ? board_->getGPS().satellites.value() : 0;
 }
 
+size_t HalGps::getSatellites(gps::GnssSatInfo* out, size_t max) const
+{
+    return board_ != nullptr ? board_->getGPS().getSatellites(out, max) : 0;
+}
+
+gps::GnssStatus HalGps::getGnssStatus() const
+{
+    return board_ != nullptr ? board_->getGPS().getGnssStatus() : gps::GnssStatus{};
+}
+
 bool HalGps::syncTime(uint32_t gps_task_interval_ms)
 {
     if (board_ == nullptr)

@@ -84,6 +84,16 @@ uint8_t HalGpsAdapter::satellites() const
     return hal_gps_.satellites();
 }
 
+size_t HalGpsAdapter::getSatellites(gps::GnssSatInfo* out, size_t max) const
+{
+    return hal_gps_.getSatellites(out, max);
+}
+
+gps::GnssStatus HalGpsAdapter::getGnssStatus() const
+{
+    return hal_gps_.getGnssStatus();
+}
+
 bool HalGpsAdapter::syncTime(uint32_t gps_task_interval_ms)
 {
     return hal_gps_.syncTime(gps_task_interval_ms);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "board/GpsBoard.h"
+#include "../gps/domain/gnss_satellite.h"
 #include <Arduino.h>
 
 namespace hal
@@ -25,6 +26,8 @@ class HalGps
     bool hasCourse() const;
     double course() const;
     uint8_t satellites() const;
+    size_t getSatellites(gps::GnssSatInfo* out, size_t max) const;
+    gps::GnssStatus getGnssStatus() const;
     bool syncTime(uint32_t gps_task_interval_ms);
     bool applyGnssConfig(uint8_t mode, uint8_t sat_mask);
     bool applyNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
