@@ -1,7 +1,7 @@
 #pragma once
 
-#include "board/GpsBoard.h"
 #include "../gps/domain/gnss_satellite.h"
+#include "board/GpsBoard.h"
 #include <Arduino.h>
 
 namespace hal

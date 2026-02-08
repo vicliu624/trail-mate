@@ -21,10 +21,10 @@ struct SatInfo
         IN_VIEW
     } snr_state = IN_VIEW;
 
-    int id = 0;          // PRN/SVID
-    float azimuth = 0.0; // 0..359 deg
+    int id = 0;            // PRN/SVID
+    float azimuth = 0.0;   // 0..359 deg
     float elevation = 0.0; // 0..90 deg
-    int snr = 0;         // dB-Hz
+    int snr = 0;           // dB-Hz
     bool used = false;
 };
 

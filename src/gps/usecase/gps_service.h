@@ -4,8 +4,8 @@
 #include "freertos/task.h"
 #include <Arduino.h>
 
-#include "../domain/gps_state.h"
 #include "../domain/gnss_satellite.h"
+#include "../domain/gps_state.h"
 #include "../domain/motion_config.h"
 #include "../infra/hal_gps_adapter.h"
 #include "../infra/hal_motion_adapter.h"

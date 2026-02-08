@@ -1,7 +1,7 @@
 #pragma once
 
-#include "domain/gps_state.h"
 #include "domain/gnss_satellite.h"
+#include "domain/gps_state.h"
 #include "domain/motion_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

@@ -1,10 +1,10 @@
 #include "ui_gnss_skyplot.h"
 
-#include "ui_common.h"
 #include "../gps/gps_service_api.h"
+#include "ui_common.h"
 #include <algorithm>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace
@@ -374,7 +374,8 @@ void update_table_rows()
     {
         sorted[i] = s_cached_sats[i];
     }
-    std::sort(sorted, sorted + count_all, [](const SatInfo& a, const SatInfo& b) {
+    std::sort(sorted, sorted + count_all, [](const SatInfo& a, const SatInfo& b)
+              {
         if (a.used != b.used)
         {
             return a.used > b.used;
@@ -387,8 +388,7 @@ void update_table_rows()
         {
             return a.elevation > b.elevation;
         }
-        return a.id < b.id;
-    });
+        return a.id < b.id; });
     const int count = std::min(count_all, kTableRows);
     for (int row = 0; row < kTableRows; ++row)
     {
@@ -637,9 +637,11 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
              kColorAmberDark,
              kColorTextDim);
     ::ui::widgets::top_bar_set_title(s_ui.top_bar, title_buf);
-    ::ui::widgets::top_bar_set_back_callback(s_ui.top_bar,
-                                             [](void*) { ui_request_exit_to_menu(); },
-                                             nullptr);
+    ::ui::widgets::top_bar_set_back_callback(
+        s_ui.top_bar,
+        [](void*)
+        { ui_request_exit_to_menu(); },
+        nullptr);
     ui_update_top_bar_battery(s_ui.top_bar);
     if (s_ui.top_bar.back_btn)
     {
@@ -887,7 +889,6 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
             col_x += col_w[i];
         }
     }
-
 
     apply_cached_sats();
     if (s_cached_status_valid)
