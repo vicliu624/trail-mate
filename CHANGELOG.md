@@ -18,6 +18,22 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.7-alpha] - 2026-02-08
+### Added
+- APRS/HostLink expansions (RX metadata TLV, APRS config keys, iGate data coverage)
+- ESP-NOW team pairing flow with key distribution and status rebroadcast
+- GPS jitter filtering and improved tracker recording
+- Node Info page and status bar assets
+
+### Changed
+- Settings categories regrouped (Chat/GPS) without behavior changes
+- Team UI/UX updates and simplified pairing flow
+- Map tile loading prioritization and tracker dialog layout refinements
+
+### Fixed
+- LoRa TX power handling on SX1262 (14 dBm no longer silent)
+- NodeStore/NVS diagnostics and persistence robustness
+
 ## [0.1.6-alpha] - 2026-02-06
 ### Added / 新增
 - Walkie talkie feature (FSK + Codec2) / 对讲功能（FSK + Codec2）
