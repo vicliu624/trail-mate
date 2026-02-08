@@ -25,8 +25,8 @@ struct NodeEntry
     float snr;          // Signal-to-Noise Ratio
     float rssi;         // RSSI in dBm
     uint8_t hops_away = 0xFF;
-    uint8_t protocol;   // NodeProtocolType
-    uint8_t role;       // NodeRoleType (Meshtastic roles)
+    uint8_t protocol; // NodeProtocolType
+    uint8_t role;     // NodeRoleType (Meshtastic roles)
 };
 
 static constexpr uint8_t kNodeRoleUnknown = 0xFF;

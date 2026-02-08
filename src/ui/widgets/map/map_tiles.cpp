@@ -4,8 +4,8 @@
  */
 
 #include "map_tiles.h"
-#include "../../screens/gps/gps_constants.h"
 #include "../../../display/DisplayInterface.h"
+#include "../../screens/gps/gps_constants.h"
 #include "freertos/FreeRTOS.h"
 #include "lvgl.h"
 #include <Arduino.h>

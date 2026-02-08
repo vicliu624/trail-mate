@@ -175,9 +175,6 @@ void on_ui_event(lv_event_t* e)
         if (g_gps_state.zoom_modal.is_open()) return;
         updateUserActivity();
 
-
-
-
         // Key event: encoder rotation generates KEY events.
         if (code == LV_EVENT_KEY && g_gps_state.pan_h_editing)
         {

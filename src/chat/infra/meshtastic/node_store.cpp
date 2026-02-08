@@ -6,10 +6,10 @@
 #include "node_store.h"
 #include "../../ports/i_node_store.h"
 #include "node_persist.h"
-#include <cstring>
-#include <limits>
 #include <cmath>
+#include <cstring>
 #include <esp_err.h>
+#include <limits>
 #include <nvs.h>
 
 namespace chat

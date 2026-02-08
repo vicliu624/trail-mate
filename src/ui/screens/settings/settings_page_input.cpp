@@ -4,8 +4,8 @@
  */
 
 #include "settings_page_input.h"
-#include "settings_state.h"
 #include "../../ui_common.h"
+#include "settings_state.h"
 #include <Arduino.h>
 
 namespace settings::ui::input

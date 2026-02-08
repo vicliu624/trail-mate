@@ -8,9 +8,9 @@
 #include "freertos/timers.h"
 
 #include <cstring>
-#include <limits>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
+#include <limits>
 
 #include "display/drivers/ST7796.h"
 #include "pins_arduino.h"

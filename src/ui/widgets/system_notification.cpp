@@ -36,7 +36,7 @@ void SystemNotification::init()
     lv_coord_t screen_width = lv_display_get_physical_horizontal_resolution(NULL);
     lv_coord_t container_width = screen_width - 60; // 30px left + 30px right margin
     lv_obj_set_size(container_, container_width, 50);
-    lv_obj_set_pos(container_, 30, -60);                              // x=30 for 30px left margin, will animate to y=0
+    lv_obj_set_pos(container_, 30, -60); // x=30 for 30px left margin, will animate to y=0
     lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF0D3), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);
     // Set radius for bottom corners only
@@ -64,7 +64,7 @@ void SystemNotification::init()
     label_ = lv_label_create(container_);
     lv_label_set_text(label_, "");
     lv_obj_set_style_text_color(label_, lv_color_hex(0x3A2A1A), 0);
-    lv_obj_set_style_text_font(label_, &lv_font_montserrat_18, 0);  // Larger font (was 14, now 18)
+    lv_obj_set_style_text_font(label_, &lv_font_montserrat_18, 0); // Larger font (was 14, now 18)
     lv_obj_set_flex_grow(label_, 1);
 
     // Initially hidden

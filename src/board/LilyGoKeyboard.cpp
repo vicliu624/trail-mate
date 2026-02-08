@@ -523,8 +523,3 @@ int LilyGoKeyboard::update(char* c)
 }
 
 #endif // USING_INPUT_DEV_KEYBOARD
-
-
-
-
-

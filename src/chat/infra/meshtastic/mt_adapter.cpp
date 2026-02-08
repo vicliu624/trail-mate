@@ -4,21 +4,21 @@
  */
 
 #include "mt_adapter.h"
-#include "../../../sys/event_bus.h"
 #include "../../../app/app_context.h"
-#include "../../../team/protocol/team_portnum.h"
 #include "../../../gps/gps_service_api.h"
+#include "../../../sys/event_bus.h"
+#include "../../../team/protocol/team_portnum.h"
 #include "../../domain/contact_types.h"
-#include "../../time_utils.h"
 #include "../../ports/i_node_store.h"
+#include "../../time_utils.h"
 #include <Arduino.h>
 #include <Crypto.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <limits>
 #include <ctime>
+#include <limits>
 #include <string>
 #define TEST_CURVE25519_FIELD_OPS
 #include "../../../board/TLoRaPagerTypes.h"
@@ -121,7 +121,6 @@ static const char* keyVerificationStage(const meshtastic_KeyVerification& kv)
     }
     return "UNKNOWN";
 }
-
 
 static const char* routingErrorName(meshtastic_Routing_Error err)
 {

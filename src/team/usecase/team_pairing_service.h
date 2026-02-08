@@ -2,9 +2,9 @@
 
 #include "../domain/team_types.h"
 #include "../protocol/team_mgmt.h"
-#include <Arduino.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
+#include <Arduino.h>
 #include <array>
 #include <cstddef>
 #include <cstdint>

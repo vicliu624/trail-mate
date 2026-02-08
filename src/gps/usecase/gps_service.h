@@ -9,9 +9,9 @@
 #include "../infra/hal_gps_adapter.h"
 #include "../infra/hal_motion_adapter.h"
 #include "../motion_policy.h"
-#include "gps/usecase/gps_jitter_filter.h"
 #include "board/GpsBoard.h"
 #include "board/MotionBoard.h"
+#include "gps/usecase/gps_jitter_filter.h"
 
 namespace gps
 {

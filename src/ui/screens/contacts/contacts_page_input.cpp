@@ -4,8 +4,8 @@
  */
 
 #include "contacts_page_input.h"
-#include "contacts_state.h"
 #include "../../ui_common.h"
+#include "contacts_state.h"
 #include <Arduino.h>     // Must be first for library compilation
 #include <Preferences.h> // Required for contacts_state.h -> contact_service.h dependency chain
 

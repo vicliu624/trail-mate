@@ -4,11 +4,11 @@
  */
 
 #include "node_info_page_components.h"
-#include "node_info_page_layout.h"
-#include "../../ui_common.h"
 #include "../../../app/app_context.h"
 #include "../../../chat/infra/meshtastic/mt_region.h"
+#include "../../ui_common.h"
 #include "../../widgets/top_bar.h"
+#include "node_info_page_layout.h"
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -400,7 +400,7 @@ void update_location_map(const chat::contacts::NodeInfo& node)
     lv_obj_move_background(s_widgets.map_image);
     set_label_text(s_widgets.map_label, "");
 }
-}
+} // namespace
 
 NodeInfoWidgets create(lv_obj_t* parent)
 {
@@ -512,9 +512,9 @@ NodeInfoWidgets create(lv_obj_t* parent)
     lv_obj_set_pos(s_widgets.location_title_label, 10, 1);
 
     apply_map_style(s_widgets.location_map);
-    #ifdef LV_OBJ_FLAG_CLIP_CHILDREN
+#ifdef LV_OBJ_FLAG_CLIP_CHILDREN
     lv_obj_add_flag(s_widgets.location_map, LV_OBJ_FLAG_CLIP_CHILDREN);
-    #endif
+#endif
 
     s_widgets.map_image = lv_image_create(s_widgets.location_map);
     lv_obj_set_size(s_widgets.map_image, kTileSize, kTileSize);

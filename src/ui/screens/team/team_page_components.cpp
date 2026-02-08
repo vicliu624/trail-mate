@@ -184,7 +184,7 @@ void mark_keydist_confirmed(uint32_t node_id, uint32_t key_id)
                        {
                            return item.node_id == node_id && item.key_id == key_id;
                        }),
-    s_keydist_pending.end());
+        s_keydist_pending.end());
 }
 
 void schedule_status_broadcast(uint8_t repeats, uint32_t delay_s)
@@ -1159,7 +1159,7 @@ void handle_team_chat(const team::TeamChatEvent& ev)
     if (g_team_state.team_chat_unread != prev_unread)
     {
         sys::EventBus::publish(new sys::ChatUnreadChangedEvent(2,
-                                                              static_cast<int>(g_team_state.team_chat_unread)),
+                                                               static_cast<int>(g_team_state.team_chat_unread)),
                                0);
     }
     if (ev.msg.header.type == team::proto::TeamChatType::Location)

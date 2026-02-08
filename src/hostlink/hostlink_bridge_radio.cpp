@@ -1,11 +1,11 @@
 #include "hostlink_bridge_radio.h"
 
 #include "../app/app_context.h"
+#include "../chat/domain/chat_types.h"
 #include "../team/protocol/team_chat.h"
 #include "../team/protocol/team_mgmt.h"
 #include "../team/protocol/team_portnum.h"
 #include "../ui/screens/team/team_ui_store.h"
-#include "../chat/domain/chat_types.h"
 #include "hostlink_service.h"
 #include "hostlink_types.h"
 

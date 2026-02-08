@@ -50,15 +50,15 @@ enum class NodeRoleType : uint8_t
 struct NodePosition
 {
     bool valid = false;
-    int32_t latitude_i = 0;   // 1e-7 degrees
-    int32_t longitude_i = 0;  // 1e-7 degrees
+    int32_t latitude_i = 0;  // 1e-7 degrees
+    int32_t longitude_i = 0; // 1e-7 degrees
     bool has_altitude = false;
-    int32_t altitude = 0;     // meters
-    uint32_t timestamp = 0;   // Unix timestamp (seconds)
+    int32_t altitude = 0;   // meters
+    uint32_t timestamp = 0; // Unix timestamp (seconds)
     uint32_t precision_bits = 0;
-    uint32_t pdop = 0;        // 1/100 units
-    uint32_t hdop = 0;        // 1/100 units
-    uint32_t vdop = 0;        // 1/100 units
+    uint32_t pdop = 0; // 1/100 units
+    uint32_t hdop = 0; // 1/100 units
+    uint32_t vdop = 0; // 1/100 units
     uint32_t gps_accuracy_mm = 0;
 };
 
