@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include <Arduino.h>
 
+#include "../domain/gnss_satellite.h"
 #include "../domain/gps_state.h"
 #include "../domain/motion_config.h"
 #include "../infra/hal_gps_adapter.h"
@@ -24,6 +25,7 @@ class GpsService
     void begin(GpsBoard& gps_board, MotionBoard& motion_board, uint32_t disable_hw_init,
                uint32_t gps_interval_ms, const MotionConfig& motion_config);
     GpsState getData();
+    bool getGnssSnapshot(GnssSatInfo* out, size_t max, size_t* out_count, GnssStatus* status);
     uint32_t getCollectionInterval() const;
     void setCollectionInterval(uint32_t interval_ms);
     void setPowerStrategy(uint8_t strategy);
@@ -54,6 +56,9 @@ class GpsService
     GpsBoard* gps_board_ = nullptr;
     MotionBoard* motion_board_ = nullptr;
     GpsState gps_state_{};
+    GnssSatInfo gnss_sats_[kMaxGnssSats]{};
+    size_t gnss_sat_count_ = 0;
+    GnssStatus gnss_status_{};
     SemaphoreHandle_t gps_data_mutex_ = nullptr;
     TaskHandle_t gps_task_handle_ = nullptr;
     TaskHandle_t motion_task_handle_ = nullptr;

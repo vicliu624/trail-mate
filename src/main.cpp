@@ -26,6 +26,7 @@
 extern "C"
 {
     extern const lv_image_dsc_t gps_icon;
+    extern const lv_image_dsc_t Satellite;
     extern const lv_image_dsc_t Chat;
     extern const lv_image_dsc_t Setting;
     extern const lv_image_dsc_t contact;
@@ -46,6 +47,8 @@ extern "C"
 // Forward declarations for app entry functions (implemented in ui_*.cpp)
 void ui_gps_enter(lv_obj_t* parent);
 void ui_gps_exit(lv_obj_t* parent);
+void ui_gnss_skyplot_enter(lv_obj_t* parent);
+void ui_gnss_skyplot_exit(lv_obj_t* parent);
 void ui_chat_enter(lv_obj_t* parent);
 void ui_chat_exit(lv_obj_t* parent);
 void ui_contacts_enter(lv_obj_t* parent);
@@ -169,6 +172,7 @@ static void ui_shutdown_enter(lv_obj_t* parent)
 }
 
 static FunctionAppScreen s_gps_app("Map", &gps_icon, ui_gps_enter, ui_gps_exit);
+static FunctionAppScreen s_skyplot_app("Sky Plot", &Satellite, ui_gnss_skyplot_enter, ui_gnss_skyplot_exit);
 static FunctionAppScreen s_tracker_app("Tracker", &tracker_icon, ui_tracker_enter, ui_tracker_exit);
 static FunctionAppScreen s_chat_app("Chat", &Chat, ui_chat_enter, ui_chat_exit);
 static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter, ui_contacts_exit);
@@ -182,28 +186,28 @@ static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter
 
 #ifdef ARDUINO_USB_MODE
 static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
-static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
+static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
                                    &s_team_app, &s_pc_link_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
                                    &s_walkie_app,
 #endif
                                    &s_usb_app, &s_setting_app, &s_shutdown_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
-#define NUM_APPS 10
+#define NUM_APPS 11
 #else
-#define NUM_APPS 9
+#define NUM_APPS 10
 #endif
 #else
-static AppScreen* kAppScreens[] = {&s_gps_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
+static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
                                    &s_team_app, &s_pc_link_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
                                    &s_walkie_app,
 #endif
                                    &s_setting_app, &s_shutdown_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
-#define NUM_APPS 9
+#define NUM_APPS 10
 #else
-#define NUM_APPS 8
+#define NUM_APPS 9
 #endif
 #endif
 

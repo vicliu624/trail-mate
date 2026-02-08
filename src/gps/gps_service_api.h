@@ -1,5 +1,6 @@
 #pragma once
 
+#include "domain/gnss_satellite.h"
 #include "domain/gps_state.h"
 #include "domain/motion_config.h"
 #include "freertos/FreeRTOS.h"
@@ -9,6 +10,7 @@ namespace gps
 {
 
 GpsState gps_get_data();
+bool gps_get_gnss_snapshot(gps::GnssSatInfo* out, size_t max, size_t* out_count, gps::GnssStatus* status);
 uint32_t gps_get_last_motion_ms();
 void gps_set_collection_interval(uint32_t interval_ms);
 void gps_set_power_strategy(uint8_t strategy);

@@ -8,6 +8,12 @@
  */
 #include "GPS.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+
 struct uBloxGnssModelInfo
 { // Structure to hold the module info (uses 341 bytes of RAM)
     char softVersion[30];
@@ -430,4 +436,372 @@ bool GPS::configureNmeaOutput(uint8_t output_hz, uint8_t sentence_mask)
     ok = ok && set_msg_rate(0x03, enable_gsv ? output_hz : 0); // GSV
     GPS_LOG("[GPS] CFG-MSG nmea_rate=%u mask=%u ok=%d\n", output_hz, sentence_mask, ok ? 1 : 0);
     return ok;
+}
+
+size_t GPS::getSatellites(gps::GnssSatInfo* out, size_t max) const
+{
+    if (!out || max == 0)
+    {
+        return 0;
+    }
+    size_t count = 0;
+    for (size_t i = 0; i < gps::kMaxGnssSats && count < max; ++i)
+    {
+        const SatEntry& entry = sats_[i];
+        if (!entry.valid)
+        {
+            continue;
+        }
+        gps::GnssSatInfo sat{};
+        sat.id = entry.id;
+        sat.sys = entry.sys;
+        sat.azimuth = entry.azimuth;
+        sat.elevation = entry.elevation;
+        sat.snr = entry.snr;
+        sat.used = entry.used;
+        out[count++] = sat;
+    }
+    return count;
+}
+
+gps::GnssStatus GPS::getGnssStatus() const
+{
+    gps::GnssStatus st{};
+    st.sats_in_use = sats_in_use_;
+    st.sats_in_view = sats_in_view_;
+    st.hdop = hdop_;
+    st.fix = fix_type_;
+    return st;
+}
+
+void GPS::handleNmeaChar(char c)
+{
+    if (c == '$')
+    {
+        nmea_collecting_ = true;
+        nmea_len_ = 0;
+        nmea_buf_[nmea_len_++] = c;
+        return;
+    }
+
+    if (!nmea_collecting_)
+    {
+        return;
+    }
+
+    if (nmea_len_ < (sizeof(nmea_buf_) - 1))
+    {
+        nmea_buf_[nmea_len_++] = c;
+    }
+
+    if (c == '\n')
+    {
+        nmea_buf_[nmea_len_] = '\0';
+        nmea_collecting_ = false;
+        parseNmeaSentence(nmea_buf_);
+    }
+}
+
+void GPS::parseNmeaSentence(char* sentence)
+{
+    if (!sentence || sentence[0] != '$')
+    {
+        return;
+    }
+
+    char* start = sentence + 1;
+    char* checksum = strchr(start, '*');
+    if (checksum)
+    {
+        *checksum = '\0';
+    }
+
+    for (char* p = start; *p; ++p)
+    {
+        if (*p == '\r' || *p == '\n')
+        {
+            *p = '\0';
+            break;
+        }
+    }
+
+    char* fields[32]{};
+    int field_count = 0;
+    fields[field_count++] = start;
+    for (char* p = start; *p && field_count < 32; ++p)
+    {
+        if (*p == ',')
+        {
+            *p = '\0';
+            fields[field_count++] = p + 1;
+        }
+    }
+
+    if (field_count <= 0 || strlen(fields[0]) < 5)
+    {
+        return;
+    }
+
+    const char* talker = fields[0];
+    const char* type = fields[0] + 2;
+    if (strncmp(type, "GSV", 3) == 0)
+    {
+        parseGsv(talker, fields, field_count);
+    }
+    else if (strncmp(type, "GSA", 3) == 0)
+    {
+        parseGsa(talker, fields, field_count);
+    }
+}
+
+void GPS::parseGsv(const char* talker, char** fields, int field_count)
+{
+    if (!talker || field_count < 4)
+    {
+        return;
+    }
+
+    const int msg_num = atoi(fields[2]);
+    if (msg_num == 1)
+    {
+        if (strncmp(talker, "GN", 2) == 0)
+        {
+            for (size_t i = 0; i < gps::kMaxGnssSats; ++i)
+            {
+                sats_[i] = SatEntry{};
+            }
+        }
+        else
+        {
+            gps::GnssSystem sys_hint = sysFromTalker(talker, 0);
+            if (sys_hint != gps::GnssSystem::UNKNOWN)
+            {
+                clearSatellitesForSystem(sys_hint);
+            }
+        }
+    }
+
+    for (int i = 4; i + 3 < field_count; i += 4)
+    {
+        int id = atoi(fields[i]);
+        if (id <= 0)
+        {
+            continue;
+        }
+        int elev = atoi(fields[i + 1]);
+        int azim = atoi(fields[i + 2]);
+        int snr = (fields[i + 3] && fields[i + 3][0] != '\0') ? atoi(fields[i + 3]) : -1;
+
+        gps::GnssSystem sys = sysFromTalker(talker, id);
+        int idx = findSatellite(sys, id);
+        if (idx < 0)
+        {
+            idx = allocSatellite();
+        }
+        if (idx < 0)
+        {
+            continue;
+        }
+
+        SatEntry& entry = sats_[idx];
+        entry.valid = true;
+        entry.sys = sys;
+        entry.id = static_cast<uint16_t>(id);
+        entry.elevation = static_cast<uint8_t>(std::max(0, std::min(90, elev)));
+        if (azim < 0) azim = 0;
+        if (azim > 359) azim = 359;
+        entry.azimuth = static_cast<uint16_t>(azim);
+        entry.snr = static_cast<int8_t>(snr);
+    }
+
+    recalcCounts();
+}
+
+void GPS::parseGsa(const char* talker, char** fields, int field_count)
+{
+    if (!talker || field_count < 3)
+    {
+        return;
+    }
+
+    int fix = atoi(fields[2]);
+    if (fix <= 1)
+    {
+        fix_type_ = gps::GnssFix::NOFIX;
+    }
+    else if (fix == 2)
+    {
+        fix_type_ = gps::GnssFix::FIX2D;
+    }
+    else
+    {
+        fix_type_ = gps::GnssFix::FIX3D;
+    }
+
+    gps::GnssSystem sys_hint = sysFromTalker(talker, 0);
+    clearUsedForSystem(sys_hint);
+
+    int start = 3;
+    int end = std::min(field_count, 15);
+    for (int i = start; i < end; ++i)
+    {
+        int id = atoi(fields[i]);
+        if (id <= 0)
+        {
+            continue;
+        }
+        gps::GnssSystem sys = sysFromTalker(talker, id);
+        int idx = findSatellite(sys, id);
+        if (idx < 0)
+        {
+            idx = allocSatellite();
+        }
+        if (idx < 0)
+        {
+            continue;
+        }
+        SatEntry& entry = sats_[idx];
+        entry.valid = true;
+        entry.sys = sys;
+        entry.id = static_cast<uint16_t>(id);
+        entry.used = true;
+    }
+
+    if (field_count >= 17 && fields[16] && fields[16][0] != '\0')
+    {
+        hdop_ = static_cast<float>(atof(fields[16]));
+    }
+    else
+    {
+        hdop_ = 0.0f;
+    }
+
+    recalcCounts();
+}
+
+gps::GnssSystem GPS::sysFromTalker(const char* talker, int sat_id) const
+{
+    if (!talker || strlen(talker) < 2)
+    {
+        return gps::GnssSystem::UNKNOWN;
+    }
+
+    if (strncmp(talker, "GP", 2) == 0)
+    {
+        return gps::GnssSystem::GPS;
+    }
+    if (strncmp(talker, "GL", 2) == 0)
+    {
+        return gps::GnssSystem::GLN;
+    }
+    if (strncmp(talker, "GA", 2) == 0)
+    {
+        return gps::GnssSystem::GAL;
+    }
+    if (strncmp(talker, "BD", 2) == 0 || strncmp(talker, "GB", 2) == 0)
+    {
+        return gps::GnssSystem::BD;
+    }
+    if (strncmp(talker, "GN", 2) == 0)
+    {
+        if (sat_id <= 0)
+        {
+            return gps::GnssSystem::UNKNOWN;
+        }
+        if (sat_id >= 201 && sat_id <= 237)
+        {
+            return gps::GnssSystem::BD;
+        }
+        if (sat_id >= 301 && sat_id <= 336)
+        {
+            return gps::GnssSystem::GAL;
+        }
+        if (sat_id >= 65 && sat_id <= 96)
+        {
+            return gps::GnssSystem::GLN;
+        }
+        return gps::GnssSystem::GPS;
+    }
+
+    return gps::GnssSystem::UNKNOWN;
+}
+
+void GPS::clearSatellitesForSystem(gps::GnssSystem sys)
+{
+    if (sys == gps::GnssSystem::UNKNOWN)
+    {
+        return;
+    }
+    for (size_t i = 0; i < gps::kMaxGnssSats; ++i)
+    {
+        if (sats_[i].valid && sats_[i].sys == sys)
+        {
+            sats_[i] = SatEntry{};
+        }
+    }
+}
+
+void GPS::clearUsedForSystem(gps::GnssSystem sys)
+{
+    for (size_t i = 0; i < gps::kMaxGnssSats; ++i)
+    {
+        if (!sats_[i].valid)
+        {
+            continue;
+        }
+        if (sys == gps::GnssSystem::UNKNOWN || sats_[i].sys == sys)
+        {
+            sats_[i].used = false;
+        }
+    }
+}
+
+int GPS::findSatellite(gps::GnssSystem sys, int id) const
+{
+    for (size_t i = 0; i < gps::kMaxGnssSats; ++i)
+    {
+        const SatEntry& entry = sats_[i];
+        if (!entry.valid)
+        {
+            continue;
+        }
+        if (entry.id == id &&
+            (sys == gps::GnssSystem::UNKNOWN || entry.sys == sys || entry.sys == gps::GnssSystem::UNKNOWN))
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int GPS::allocSatellite()
+{
+    for (size_t i = 0; i < gps::kMaxGnssSats; ++i)
+    {
+        if (!sats_[i].valid)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return 0;
+}
+
+void GPS::recalcCounts()
+{
+    uint8_t in_view = 0;
+    uint8_t in_use = 0;
+    for (size_t i = 0; i < gps::kMaxGnssSats; ++i)
+    {
+        if (!sats_[i].valid)
+        {
+            continue;
+        }
+        in_view++;
+        if (sats_[i].used)
+        {
+            in_use++;
+        }
+    }
+    sats_in_view_ = in_view;
+    sats_in_use_ = in_use;
 }
