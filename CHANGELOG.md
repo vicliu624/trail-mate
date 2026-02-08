@@ -18,6 +18,18 @@ versions.
 - Meshtastic encryption (AES/PSK) and broader protocol compatibility / Meshtastic 加密（AES/PSK）与更完整协议兼容
 - Real LoRa field tests, performance, and power tuning / 实机 LoRa 测试、性能与功耗调优
 
+## [0.1.8-alpha] - 2026-02-08
+### Added
+- GNSS Sky Plot page with satellite sky view, status table, and SNR/constellation legends
+- GNSS satellite parsing (GSV/GSA) and snapshot API for UI consumption
+
+### Changed
+- Sky Plot UI layout refinements and status table sorting
+- Sky Plot top bar now shows USE/HDOP/FIX summary
+
+### Fixed
+- Sky Plot backspace behavior now follows TopBar back action
+
 ## [0.1.7-alpha] - 2026-02-08
 ### Added
 - APRS/HostLink expansions (RX metadata TLV, APRS config keys, iGate data coverage)
