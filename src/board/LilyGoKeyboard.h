@@ -223,6 +223,8 @@ class LilyGoKeyboard : public Adafruit_TCA8418
     bool cap_key_pressed = false;
     // Flag indicating if the alt key is pressed.
     bool alt_key_pressed = false;
+    // Flag indicating if ALT was used with another key before release.
+    bool alt_combo_used = false;
     // Flag indicating if the key repeat function is enabled.
     bool repeat_function = true;
     // The last state of the key press.

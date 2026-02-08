@@ -10,14 +10,16 @@
 #include "../hostlink/hostlink_bridge_radio.h"
 #include "../sys/event_bus.h"
 #include "../team/protocol/team_chat.h"
+#include "../ui/screens/team/team_ui_store.h"
 #include "../ui/ui_common.h"
 #include "../ui/ui_team.h"
 #include "../ui/widgets/system_notification.h"
 #ifdef USING_ST25R3916
-#include "../team/infra/nfc/team_nfc.h"
 #endif
 #include "app_tasks.h"
 #include <SD.h>
+#include <cstdio>
+#include <cstring>
 
 namespace app
 {
@@ -67,6 +69,11 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
         {
             recorder.setDistanceOnly(false);
             recorder.setIntervalSeconds(static_cast<uint32_t>(config_.map_track_interval));
+        }
+        if (recorder.restoreActiveSession())
+        {
+            Serial.printf("[Tracker] active session restored path=%s\n",
+                          recorder.currentPath().c_str());
         }
         recorder.setAutoRecording(config_.map_track_enabled);
     }
@@ -138,6 +145,29 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
         *team_crypto_, *mesh_adapter_, *team_event_sink_);
     team_controller_ = std::make_unique<team::TeamController>(*team_service_);
     team_track_sampler_ = std::make_unique<team::TeamTrackSampler>();
+    team_pairing_service_ = std::make_unique<team::TeamPairingService>();
+
+    // Restore team keys early so tracker can resume after reboot.
+    {
+        team::ui::TeamUiSnapshot snap;
+        if (team_controller_ && team::ui::team_ui_get_store().load(snap) &&
+            snap.has_team_id && snap.has_team_psk && snap.security_round > 0)
+        {
+            if (team_controller_->setKeysFromPsk(snap.team_id,
+                                                 snap.security_round,
+                                                 snap.team_psk.data(),
+                                                 snap.team_psk.size()))
+            {
+                Serial.printf("[Team] keys restored from store key_id=%lu\n",
+                              static_cast<unsigned long>(snap.security_round));
+            }
+            else
+            {
+                Serial.printf("[Team] keys restore failed key_id=%lu\n",
+                              static_cast<unsigned long>(snap.security_round));
+            }
+        }
+    }
 
     // Create contact infrastructure
     node_store_ = std::make_unique<chat::meshtastic::NodeStore>();
@@ -151,6 +181,51 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
     return true;
 }
 
+void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
+                                      char* out_short, size_t short_len) const
+{
+    if (!out_long || long_len == 0 || !out_short || short_len == 0)
+    {
+        return;
+    }
+
+    out_long[0] = '\0';
+    out_short[0] = '\0';
+
+    const char* cfg_long = config_.node_name;
+    const char* cfg_short = config_.short_name;
+    uint16_t suffix = static_cast<uint16_t>(getSelfNodeId() & 0x0ffff);
+
+    if (cfg_long && cfg_long[0] != '\0')
+    {
+        strncpy(out_long, cfg_long, long_len - 1);
+        out_long[long_len - 1] = '\0';
+    }
+    else
+    {
+        snprintf(out_long, long_len, "lilygo-%04X", suffix);
+    }
+
+    if (cfg_short && cfg_short[0] != '\0')
+    {
+        size_t copy_len = strlen(cfg_short);
+        if (copy_len > 4)
+        {
+            copy_len = 4;
+        }
+        if (copy_len > short_len - 1)
+        {
+            copy_len = short_len - 1;
+        }
+        memcpy(out_short, cfg_short, copy_len);
+        out_short[copy_len] = '\0';
+    }
+    else
+    {
+        snprintf(out_short, short_len, "%04X", suffix);
+    }
+}
+
 void AppContext::update()
 {
     // Update chat service (process incoming messages)
@@ -161,6 +236,10 @@ void AppContext::update()
     if (team_service_)
     {
         team_service_->processIncoming();
+    }
+    if (team_pairing_service_)
+    {
+        team_pairing_service_->update();
     }
     if (team_track_sampler_)
     {
@@ -173,13 +252,6 @@ void AppContext::update()
     {
         ui_controller_->update();
     }
-
-#ifdef USING_ST25R3916
-    if (team::nfc::is_share_active())
-    {
-        team::nfc::poll_share();
-    }
-#endif
 
     // Process events
     sys::Event* event = nullptr;
@@ -303,8 +375,11 @@ void AppContext::update()
                     node_event->short_name,
                     node_event->long_name,
                     node_event->snr,
+                    node_event->rssi,
                     node_event->timestamp,
-                    node_event->protocol);
+                    node_event->protocol,
+                    node_event->role,
+                    node_event->hops_away);
             }
             // Don't forward to UI - this is handled by ContactService
             delete event;
@@ -322,6 +397,31 @@ void AppContext::update()
                     node_event->node_id,
                     node_event->protocol,
                     node_event->timestamp);
+            }
+            delete event;
+            continue;
+        }
+        case sys::EventType::NodePositionUpdate:
+        {
+            auto* pos_event = (sys::NodePositionUpdateEvent*)event;
+            Serial.printf("[AppContext] NodePosition event consumed node=%08lX pending=%u\n",
+                          static_cast<unsigned long>(pos_event->node_id),
+                          static_cast<unsigned>(sys::EventBus::pendingCount()));
+            if (contact_service_)
+            {
+                chat::contacts::NodePosition pos{};
+                pos.valid = true;
+                pos.latitude_i = pos_event->latitude_i;
+                pos.longitude_i = pos_event->longitude_i;
+                pos.has_altitude = pos_event->has_altitude;
+                pos.altitude = pos_event->altitude;
+                pos.timestamp = pos_event->timestamp;
+                pos.precision_bits = pos_event->precision_bits;
+                pos.pdop = pos_event->pdop;
+                pos.hdop = pos_event->hdop;
+                pos.vdop = pos_event->vdop;
+                pos.gps_accuracy_mm = pos_event->gps_accuracy_mm;
+                contact_service_->updateNodePosition(pos_event->node_id, pos);
             }
             delete event;
             continue;
@@ -386,12 +486,7 @@ void AppContext::update()
         hostlink::bridge::on_event(*event);
 
         // Forward event to UI controller if it exists
-        if (event->type == sys::EventType::TeamAdvertise ||
-            event->type == sys::EventType::TeamJoinRequest ||
-            event->type == sys::EventType::TeamJoinAccept ||
-            event->type == sys::EventType::TeamJoinConfirm ||
-            event->type == sys::EventType::TeamJoinDecision ||
-            event->type == sys::EventType::TeamKick ||
+        if (event->type == sys::EventType::TeamKick ||
             event->type == sys::EventType::TeamTransferLeader ||
             event->type == sys::EventType::TeamKeyDist ||
             event->type == sys::EventType::TeamStatus ||
@@ -399,6 +494,7 @@ void AppContext::update()
             event->type == sys::EventType::TeamWaypoint ||
             event->type == sys::EventType::TeamTrack ||
             event->type == sys::EventType::TeamChat ||
+            event->type == sys::EventType::TeamPairing ||
             event->type == sys::EventType::TeamError ||
             event->type == sys::EventType::SystemTick)
         {

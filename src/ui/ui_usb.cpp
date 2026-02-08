@@ -43,6 +43,7 @@ static bool usb_stopped = false;
 
 // Forward declarations
 static void back_event_handler(void* user_data);
+static void root_key_event_cb(lv_event_t* e);
 static void show_loading(const char* message);
 static void stop_usb_async_cb(lv_timer_t* timer);
 static void update_status_message(const char* message);
@@ -152,6 +153,16 @@ static void update_status_message(const char* message)
     Serial.printf("[USB] %s\n", message);
 }
 
+static void root_key_event_cb(lv_event_t* e)
+{
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_BACKSPACE)
+    {
+        return;
+    }
+    back_event_handler(nullptr);
+}
+
 static void show_loading(const char* message)
 {
     lv_obj_t* top_layer = lv_layer_top();
@@ -169,7 +180,7 @@ static void show_loading(const char* message)
 
     loading_overlay = lv_obj_create(top_layer);
     lv_obj_set_size(loading_overlay, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(loading_overlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(loading_overlay, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(loading_overlay, LV_OPA_70, LV_PART_MAIN);
     lv_obj_set_style_border_width(loading_overlay, 0, LV_PART_MAIN);
     lv_obj_clear_flag(loading_overlay, LV_OBJ_FLAG_SCROLLABLE);
@@ -178,16 +189,16 @@ static void show_loading(const char* message)
     loading_box = lv_obj_create(loading_overlay);
     lv_obj_set_size(loading_box, 160, 80);
     lv_obj_center(loading_box);
-    lv_obj_set_style_bg_color(loading_box, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(loading_box, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(loading_box, LV_OPA_90, LV_PART_MAIN);
     lv_obj_set_style_border_width(loading_box, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(loading_box, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(loading_box, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_set_style_radius(loading_box, 8, LV_PART_MAIN);
     lv_obj_clear_flag(loading_box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* label = lv_label_create(loading_box);
     lv_label_set_text(label, message ? message : "Loading...");
-    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_center(label);
 }
@@ -345,19 +356,41 @@ void ui_usb_enter(lv_obj_t* parent)
         top_bar = {};
     }
 
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     root = lv_obj_create(parent);
     lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(root, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(root, lv_color_hex(0xFFF3DF), 0);
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(root, 0, 0);
     lv_obj_set_style_pad_all(root, 0, 0);
     lv_obj_clear_flag(root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(top_bar, root);
     ::ui::widgets::top_bar_set_title(top_bar, "USB Mass Storage");
     ::ui::widgets::top_bar_set_back_callback(top_bar, back_event_handler, nullptr);
+    if (top_bar.back_btn)
+    {
+        lv_obj_add_event_cb(top_bar.back_btn, root_key_event_cb, LV_EVENT_KEY, nullptr);
+    }
     ui_update_top_bar_battery(top_bar);
+
+    extern lv_group_t* app_g;
+    if (app_g && top_bar.back_btn)
+    {
+        lv_group_remove_all_objs(app_g);
+        lv_group_add_obj(app_g, top_bar.back_btn);
+        lv_group_focus_obj(top_bar.back_btn);
+        set_default_group(app_g);
+        lv_group_set_editing(app_g, false);
+    }
+    else
+    {
+        set_default_group(prev_group);
+    }
 
     content = lv_obj_create(root);
     lv_obj_set_size(content, LV_PCT(100), 0);
@@ -375,7 +408,7 @@ void ui_usb_enter(lv_obj_t* parent)
         lv_label_set_text(error_label, "SD Card Not Found\nPlease insert SD card");
         lv_obj_center(error_label);
         lv_obj_set_style_text_font(error_label, &lv_font_montserrat_18, LV_PART_MAIN);
-        lv_obj_set_style_text_color(error_label, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        lv_obj_set_style_text_color(error_label, lv_color_hex(0xCC0000), LV_PART_MAIN);
         return;
     }
 
@@ -397,7 +430,7 @@ void ui_usb_enter(lv_obj_t* parent)
     lv_label_set_text(status_label, "Initializing...");
     lv_obj_center(status_label);
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_18, LV_PART_MAIN);
-    lv_obj_set_style_text_color(status_label, lv_color_hex(0x202020), LV_PART_MAIN);
+    lv_obj_set_style_text_color(status_label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Create info label
@@ -405,7 +438,7 @@ void ui_usb_enter(lv_obj_t* parent)
     lv_label_set_text(info_label, "Press Back to exit USB mode");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_text_font(info_label, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(info_label, lv_color_hex(0x606060), LV_PART_MAIN);
+    lv_obj_set_style_text_color(info_label, lv_color_hex(0x6A5646), LV_PART_MAIN);
     lv_obj_set_style_text_opa(info_label, LV_OPA_80, LV_PART_MAIN);
 
     // Setup USB MSC

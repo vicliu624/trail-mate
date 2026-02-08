@@ -452,7 +452,8 @@ void UiController::switchToConversation(chat::ConversationId conv)
     {
         team::ui::TeamUiSnapshot snap;
         std::string title = "Team";
-        if (team::ui::team_ui_get_store().load(snap))
+        bool loaded = team::ui::team_ui_get_store().load(snap);
+        if (loaded)
         {
             title = team_title_from_snapshot(snap);
         }
@@ -460,6 +461,12 @@ void UiController::switchToConversation(chat::ConversationId conv)
         conversation_->updateBatteryFromBoard();
         refreshTeamConversation();
         startTeamConversationTimer();
+        if (loaded && snap.team_chat_unread != 0)
+        {
+            snap.team_chat_unread = 0;
+            team::ui::team_ui_get_store().save(snap);
+            sys::EventBus::publish(new sys::ChatUnreadChangedEvent(kTeamChatChannelRaw, 0), 0);
+        }
         return;
     }
 
@@ -656,7 +663,7 @@ void UiController::refreshUnreadCounts()
         team_conv.name = team_title_from_snapshot(team_snap);
         team_conv.preview.clear();
         team_conv.last_timestamp = 0;
-        team_conv.unread = 0;
+        team_conv.unread = static_cast<int>(team_snap.team_chat_unread);
 
         std::vector<team::ui::TeamChatLogEntry> entries;
         if (team::ui::team_ui_chatlog_load_recent(team_snap.team_id, 1, entries))

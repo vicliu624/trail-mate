@@ -180,6 +180,15 @@ class IMeshAdapter
     }
 
     /**
+     * @brief Update last RX signal stats (optional)
+     */
+    virtual void setLastRxStats(float rssi, float snr)
+    {
+        (void)rssi;
+        (void)snr;
+    }
+
+    /**
      * @brief Process any pending send queue work
      */
     virtual void processSendQueue() {}

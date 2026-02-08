@@ -28,19 +28,27 @@ void ContactService::begin()
 }
 
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
-                                    float snr, uint32_t now_secs, uint8_t protocol)
+                                    float snr, float rssi, uint32_t now_secs, uint8_t protocol, uint8_t role,
+                                    uint8_t hops_away)
 {
-    Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f ts=%lu\n",
+    Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f rssi=%.1f ts=%lu\n",
                   (unsigned long)node_id,
                   snr,
+                  rssi,
                   (unsigned long)now_secs);
-    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, protocol);
+    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi, protocol, role, hops_away);
     invalidateCache();
 }
 
 void ContactService::updateNodeProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs)
 {
     node_store_.updateProtocol(node_id, protocol, now_secs);
+    invalidateCache();
+}
+
+void ContactService::updateNodePosition(uint32_t node_id, const NodePosition& pos)
+{
+    positions_[node_id] = pos;
     invalidateCache();
 }
 
@@ -189,7 +197,22 @@ void ContactService::buildCache() const
         info.long_name[sizeof(info.long_name) - 1] = '\0';
         info.last_seen = entry.last_seen;
         info.snr = entry.snr;
+        info.rssi = entry.rssi;
+        info.hops_away = entry.hops_away;
         info.protocol = static_cast<NodeProtocolType>(entry.protocol);
+        info.role = static_cast<NodeRoleType>(entry.role);
+        auto pos_it = positions_.find(entry.node_id);
+        if (pos_it != positions_.end())
+        {
+            info.position = pos_it->second;
+        }
+
+        // Ensure we always have a usable short name (fallback to node_id suffix).
+        if (info.short_name[0] == '\0')
+        {
+            snprintf(info.short_name, sizeof(info.short_name), "%04X",
+                     static_cast<unsigned>(info.node_id & 0xFFFF));
+        }
 
         // Check if this node is a contact
         info.is_contact = std::find(contact_ids.begin(), contact_ids.end(), entry.node_id) != contact_ids.end();
@@ -198,6 +221,10 @@ void ContactService::buildCache() const
         if (info.is_contact)
         {
             info.display_name = contact_store_.getNickname(entry.node_id);
+            if (info.display_name.empty())
+            {
+                info.display_name = std::string(info.short_name);
+            }
         }
         else
         {

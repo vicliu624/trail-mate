@@ -24,7 +24,7 @@
 using GPSData = gps::GpsState;
 extern void updateUserActivity();
 
-#define GPS_DEBUG 1
+#define GPS_DEBUG 0
 #ifndef GPS_LOG
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
@@ -263,6 +263,9 @@ void ui_gps_enter(lv_obj_t* parent)
     reset_control_tags();
     g_gps_state = GPSPageState{};
 
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     extern lv_group_t* app_g;
 
     gps::ui::layout::Spec spec{};
@@ -279,7 +282,7 @@ void ui_gps_enter(lv_obj_t* parent)
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::widgets::kTopBarHeight;
     ::ui::widgets::top_bar_init(g_gps_state.top_bar, g_gps_state.header, cfg);
-    ::ui::widgets::top_bar_set_title(g_gps_state.top_bar, "GPS");
+    ::ui::widgets::top_bar_set_title(g_gps_state.top_bar, "Map");
     ::ui::widgets::top_bar_set_back_callback(g_gps_state.top_bar, gps_top_bar_back, nullptr);
 
     // Ensure layout sizes are finalized before any tile calculations.
@@ -378,12 +381,19 @@ void ui_gps_enter(lv_obj_t* parent)
         lv_async_call(gps_initial_tiles_async, nullptr);
     }
 
-    set_default_group(app_g);
-    lv_group_set_editing(app_g, false);
+    if (app_g)
+    {
+        set_default_group(app_g);
+        lv_group_set_editing(app_g, false);
+    }
+    else
+    {
+        set_default_group(prev_group);
+    }
 
     // Split timers: fast tile loading + slower GPS refresh.
-    g_gps_state.loader_timer = gps::ui::lifetime::add_timer(gps_loader_timer_cb, 50, NULL);
-    g_gps_state.timer = gps::ui::lifetime::add_timer(gps_update_timer_cb, 200, NULL);
+    g_gps_state.loader_timer = gps::ui::lifetime::add_timer(gps_loader_timer_cb, 200, NULL);
+    g_gps_state.timer = gps::ui::lifetime::add_timer(gps_update_timer_cb, 500, NULL);
     g_gps_state.title_timer = gps::ui::lifetime::add_timer(title_update_timer_cb, 30000, NULL);
 
     update_title_and_status();

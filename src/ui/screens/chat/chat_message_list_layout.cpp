@@ -15,7 +15,7 @@
  * │                                                                   │
  * │  Panel (COLUMN, flex-grow = 1, light gray background)              │
  * │  ┌─────────────────────────────────────────────────────────────┐  │
- * │  │  Message Item (Button, height=36)                            │  │
+ * │  │  Message Item (Button, height=28)                            │  │
  * │  │  ┌────────────────────────────────────────────────────────┐ │  │
  * │  │  │ Name (x=10)   Preview (x=120, w=130, DOT)        12:34 │ │  │
  * │  │  │                                        Unread (x=-42)  │ │  │
@@ -43,7 +43,7 @@
  *
  * Key layout constraints:
  * - Panel: pad_all=3, pad_left/right=5, pad_row=2, non-scrollable
- * - ItemBtn: height=36, full width
+ * - ItemBtn: height=28, full width
  * - NameLabel:   ALIGN_LEFT_MID  x=+10
  * - PreviewLabel:ALIGN_LEFT_MID  x=+120, width=130, LONG_DOT
  * - TimeLabel:   ALIGN_RIGHT_MID x=-10
@@ -70,7 +70,7 @@ static void make_non_scrollable(lv_obj_t* obj)
 namespace
 {
 constexpr int kFilterPanelWidth = 80;
-constexpr int kButtonHeight = 32;
+constexpr int kButtonHeight = 28;
 constexpr int kPanelGap = 0;
 constexpr int kScreenEdgePadding = 0;
 } // namespace
@@ -175,7 +175,7 @@ MessageItemWidgets create_message_item(lv_obj_t* parent)
 {
     MessageItemWidgets w{};
     w.btn = lv_btn_create(parent);
-    lv_obj_set_size(w.btn, LV_PCT(100), 36);
+    lv_obj_set_size(w.btn, LV_PCT(100), 28);
     make_non_scrollable(w.btn);
 
     w.name_label = lv_label_create(w.btn);

@@ -4,7 +4,9 @@
  */
 
 #include "map_tiles.h"
+#include "../../../display/DisplayInterface.h"
 #include "../../screens/gps/gps_constants.h"
+#include "freertos/FreeRTOS.h"
 #include "lvgl.h"
 #include <Arduino.h>
 #include <SD.h>
@@ -17,7 +19,7 @@
 // This approach uses LVGL's built-in decoder, avoiding direct lodepng dependency
 
 // Debug logging control
-#define GPS_DEBUG 1
+#define GPS_DEBUG 0
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
@@ -30,6 +32,31 @@ static DecodedTileCache g_tile_decode_cache[TILE_DECODE_CACHE_SIZE];
 static bool g_tile_cache_initialized = false;
 static uint32_t g_cache_full_until_ms = 0;
 static uint32_t g_cache_full_log_ms = 0;
+
+namespace
+{
+class SpiLockGuard
+{
+  public:
+    explicit SpiLockGuard(TickType_t wait_ticks)
+        : locked_(display_spi_lock(wait_ticks))
+    {
+    }
+
+    ~SpiLockGuard()
+    {
+        if (locked_)
+        {
+            display_spi_unlock();
+        }
+    }
+
+    bool locked() const { return locked_; }
+
+  private:
+    bool locked_;
+};
+} // namespace
 
 /**
  * Initialize tile decode cache
@@ -427,9 +454,9 @@ static void style_tile_obj(lv_obj_t* o)
 static void style_placeholder_label(lv_obj_t* label)
 {
     style_tile_obj(label);
-    lv_obj_set_style_bg_color(label, lv_color_hex(0x808080), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(label, lv_color_hex(0xFFF0D3), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(label, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
@@ -451,6 +478,15 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     {
         tile.last_used_ms = millis();
         GPS_LOG("[GPS] load_tile_image: Tile %d/%d/%d already loaded\n", tile.z, tile.x, tile.y);
+        return;
+    }
+
+    SpiLockGuard spi_lock(pdMS_TO_TICKS(20));
+    if (!spi_lock.locked())
+    {
+        GPS_LOG("[GPS] load_tile_image: SPI lock busy, deferring tile %d/%d/%d\n",
+                tile.z, tile.x, tile.y);
+        tile.last_used_ms = millis();
         return;
     }
 
@@ -836,14 +872,8 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
     ensure_tile(ctx, gps_tile_x, gps_tile_y, zoom, 0); // Priority 0 = center
 
     // Dynamic tile collection based on screen viewport
-    // Calculate which tiles are needed to cover the entire screen (with buffer for preloading)
+    // Calculate which tiles are needed to cover the entire screen (no preloading)
     // Start from screen corners and work inward to find all tiles that intersect the viewport
-
-    // Calculate screen bounds with buffer (TILE_SIZE buffer for preloading)
-    int screen_left = -TILE_SIZE;
-    int screen_right = screen_width + TILE_SIZE;
-    int screen_top = -TILE_SIZE;
-    int screen_bottom = screen_height + TILE_SIZE;
 
     // Calculate tile range needed to cover screen
     // Convert screen coordinates to tile coordinates
@@ -871,11 +901,19 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
                 continue; // Skip if position calculation fails
             }
 
-            // Check if tile intersects viewport (with buffer for preloading)
-            if (tile_in_rect(screen_x, screen_y, screen_width, screen_height, TILE_SIZE))
+            // Check if tile intersects viewport (no preloading)
+            if (tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0))
             {
-                // Calculate priority (Manhattan distance from GPS tile)
-                int priority = abs(dx) + abs(dy);
+                // Calculate priority based on screen center (pixels)
+                int center_x = screen_width / 2;
+                int center_y = screen_height / 2;
+                int tile_center_x = screen_x + (TILE_SIZE / 2);
+                int tile_center_y = screen_y + (TILE_SIZE / 2);
+                int dx_px = tile_center_x - center_x;
+                int dy_px = tile_center_y - center_y;
+                if (dx_px < 0) dx_px = -dx_px;
+                if (dy_px < 0) dy_px = -dy_px;
+                int priority = dx_px + dy_px;
                 ensure_tile(ctx, tile_x, tile_y, zoom, priority);
             }
         }
@@ -1178,7 +1216,7 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
 }
 
 /**
- * Load one tile (called by timer, not in calculate_required_tiles)
+ * Load a few tiles (called by timer, not in calculate_required_tiles)
  */
 void tile_loader_step(TileContext& ctx)
 {
@@ -1195,47 +1233,74 @@ void tile_loader_step(TileContext& ctx)
         }
     }
 
-    // Find visible unloaded tiles with minimum priority
-    // Look for tiles that are visible but don't have PNG loaded yet
-    // (they may have a placeholder label, but not the actual image)
-    MapTile* best = nullptr;
-    for (auto& tile : *ctx.tiles)
+    const uint32_t start_ms = millis();
+    const uint32_t budget_ms = 12;
+    const int max_tiles_per_step = 3;
+    MapTile* attempted[max_tiles_per_step] = {NULL};
+    int attempted_count = 0;
+
+    while (attempted_count < max_tiles_per_step)
     {
-        if (tile.visible && !tile.has_png_file)
+        // Find visible unloaded tiles with minimum priority
+        // Look for tiles that are visible but don't have PNG loaded yet
+        // (they may have a placeholder label, but not the actual image)
+        MapTile* best = nullptr;
+        for (auto& tile : *ctx.tiles)
         {
-            // If tile already has a placeholder, quickly check if file exists
-            // to avoid repeatedly trying to load missing files
-            if (tile.img_obj != NULL)
+            if (tile.visible && !tile.has_png_file)
             {
-                // Has placeholder - check if file exists before selecting
-                char path[64];
-                snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", tile.z, tile.x, tile.y);
-                lv_fs_file_t f;
-                lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-                bool file_exists = (res == LV_FS_RES_OK);
-                if (file_exists)
+                bool already_attempted = false;
+                for (int i = 0; i < attempted_count; i++)
                 {
-                    lv_fs_close(&f);
-                    // File exists - this tile can be upgraded from placeholder to image
+                    if (attempted[i] == &tile)
+                    {
+                        already_attempted = true;
+                        break;
+                    }
                 }
-                else
+                if (already_attempted)
                 {
-                    // File doesn't exist - skip this tile to avoid repeated attempts
                     continue;
                 }
-            }
 
-            if (best == nullptr ||
-                tile.priority < best->priority ||
-                (tile.priority == best->priority && tile.last_used_ms < best->last_used_ms))
-            {
-                best = &tile;
+                // If tile already has a placeholder, quickly check if file exists
+                // to avoid repeatedly trying to load missing files
+                if (tile.img_obj != NULL)
+                {
+                    // Has placeholder - check if file exists before selecting
+                    char path[64];
+                    snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", tile.z, tile.x, tile.y);
+                    lv_fs_file_t f;
+                    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
+                    bool file_exists = (res == LV_FS_RES_OK);
+                    if (file_exists)
+                    {
+                        lv_fs_close(&f);
+                        // File exists - this tile can be upgraded from placeholder to image
+                    }
+                    else
+                    {
+                        // File doesn't exist - skip this tile to avoid repeated attempts
+                        continue;
+                    }
+                }
+
+                if (best == nullptr ||
+                    tile.priority < best->priority ||
+                    (tile.priority == best->priority && tile.last_used_ms < best->last_used_ms))
+                {
+                    best = &tile;
+                }
             }
         }
-    }
 
-    if (best != nullptr)
-    {
+        if (best == nullptr)
+        {
+            break;
+        }
+
+        attempted[attempted_count++] = best;
+
         // Save old object position for invalidation
         lv_obj_t* old_obj = best->img_obj;
         int old_screen_x = 0, old_screen_y = 0;
@@ -1288,6 +1353,11 @@ void tile_loader_step(TileContext& ctx)
                 GPS_LOG("[GPS] tile_loader_step: has_visible_map_data changed: %d -> %d\n",
                         old_value, visible_png_found);
             }
+        }
+
+        if ((int32_t)(millis() - start_ms) >= (int32_t)budget_ms)
+        {
+            break;
         }
     }
 }

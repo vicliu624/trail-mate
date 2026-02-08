@@ -58,8 +58,8 @@ struct SettingsData
     int map_track_format = 0;
 
     // Chat
-    char user_name[32] = "TrailMate";
-    char short_name[16] = "TM";
+    char user_name[32] = "";
+    char short_name[16] = "";
     int chat_protocol = 1;
     int chat_region = 0;
     int chat_channel = 0;
@@ -68,11 +68,12 @@ struct SettingsData
 
     // Network
     int net_modem_preset = 0;
+    int net_tx_power = 14;
     bool net_relay = true;
     bool net_duty_cycle = true;
     int net_channel_util = 0;
 
-    // Privacy
+    // Chat/GPS (privacy-related controls)
     int privacy_encrypt_mode = 1;
     bool privacy_pki = false;
     int privacy_nmea_output = 0;

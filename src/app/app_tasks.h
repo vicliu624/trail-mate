@@ -29,6 +29,8 @@ class AppTasks
         uint8_t* data;
         size_t size;
         bool is_tx; // true for TX, false for RX
+        float rssi = 0.0f;
+        float snr = 0.0f;
     };
 
     /**

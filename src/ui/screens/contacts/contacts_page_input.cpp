@@ -4,6 +4,7 @@
  */
 
 #include "contacts_page_input.h"
+#include "../../ui_common.h"
 #include "contacts_state.h"
 #include <Arduino.h>     // Must be first for library compilation
 #include <Preferences.h> // Required for contacts_state.h -> contact_service.h dependency chain
@@ -28,6 +29,7 @@ enum class FocusColumn
 };
 
 static lv_group_t* s_group = nullptr;
+static lv_group_t* s_prev_group = nullptr;
 static FocusColumn s_col = FocusColumn::Filter;
 static lv_indev_t* s_encoder = nullptr;
 
@@ -59,23 +61,44 @@ static void group_clear_all(lv_group_t* g)
 static void clear_action_focus_states()
 {
     lv_state_t clear_mask = (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY | LV_STATE_EDITED);
-    if (g_contacts_state.action_back_btn) lv_obj_clear_state(g_contacts_state.action_back_btn, clear_mask);
-    if (g_contacts_state.chat_btn) lv_obj_clear_state(g_contacts_state.chat_btn, clear_mask);
-    if (g_contacts_state.position_btn) lv_obj_clear_state(g_contacts_state.position_btn, clear_mask);
-    if (g_contacts_state.edit_btn) lv_obj_clear_state(g_contacts_state.edit_btn, clear_mask);
-    if (g_contacts_state.del_btn) lv_obj_clear_state(g_contacts_state.del_btn, clear_mask);
-    if (g_contacts_state.add_btn) lv_obj_clear_state(g_contacts_state.add_btn, clear_mask);
-    if (g_contacts_state.info_btn) lv_obj_clear_state(g_contacts_state.info_btn, clear_mask);
+    if (g_contacts_state.action_back_btn && lv_obj_is_valid(g_contacts_state.action_back_btn))
+        lv_obj_clear_state(g_contacts_state.action_back_btn, clear_mask);
+    if (g_contacts_state.chat_btn && lv_obj_is_valid(g_contacts_state.chat_btn))
+        lv_obj_clear_state(g_contacts_state.chat_btn, clear_mask);
+    if (g_contacts_state.position_btn && lv_obj_is_valid(g_contacts_state.position_btn))
+        lv_obj_clear_state(g_contacts_state.position_btn, clear_mask);
+    if (g_contacts_state.edit_btn && lv_obj_is_valid(g_contacts_state.edit_btn))
+        lv_obj_clear_state(g_contacts_state.edit_btn, clear_mask);
+    if (g_contacts_state.del_btn && lv_obj_is_valid(g_contacts_state.del_btn))
+        lv_obj_clear_state(g_contacts_state.del_btn, clear_mask);
+    if (g_contacts_state.add_btn && lv_obj_is_valid(g_contacts_state.add_btn))
+        lv_obj_clear_state(g_contacts_state.add_btn, clear_mask);
+    if (g_contacts_state.info_btn && lv_obj_is_valid(g_contacts_state.info_btn))
+        lv_obj_clear_state(g_contacts_state.info_btn, clear_mask);
+}
+
+static bool is_valid(lv_obj_t* obj)
+{
+    return obj && lv_obj_is_valid(obj);
 }
 
 static bool is_visible(lv_obj_t* obj)
 {
-    return obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    return is_valid(obj) && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void root_key_event_cb(lv_event_t* e);
+
+static void attach_key_handler(lv_obj_t* obj)
+{
+    if (!obj || !lv_obj_is_valid(obj)) return;
+    lv_obj_remove_event_cb(obj, root_key_event_cb);
+    lv_obj_add_event_cb(obj, root_key_event_cb, LV_EVENT_KEY, nullptr);
 }
 
 static void focus_first_valid(lv_obj_t* obj)
 {
-    if (!s_group || !obj) return;
+    if (!s_group || !is_valid(obj)) return;
     lv_group_focus_obj(obj);
 }
 
@@ -86,16 +109,33 @@ static void bind_filter_column(bool keep_mode_focus)
     clear_action_focus_states();
 
     // ① TopBar Back —— 第一列“出口”，必须可达
-    if (g_contacts_state.top_bar.back_btn)
+    if (is_valid(g_contacts_state.top_bar.back_btn))
     {
         lv_group_add_obj(s_group, g_contacts_state.top_bar.back_btn);
+        attach_key_handler(g_contacts_state.top_bar.back_btn);
     }
 
     // ② Filter buttons
-    if (is_visible(g_contacts_state.contacts_btn)) lv_group_add_obj(s_group, g_contacts_state.contacts_btn);
-    if (is_visible(g_contacts_state.nearby_btn)) lv_group_add_obj(s_group, g_contacts_state.nearby_btn);
-    if (is_visible(g_contacts_state.broadcast_btn)) lv_group_add_obj(s_group, g_contacts_state.broadcast_btn);
-    if (is_visible(g_contacts_state.team_btn)) lv_group_add_obj(s_group, g_contacts_state.team_btn);
+    if (is_visible(g_contacts_state.contacts_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.contacts_btn);
+        attach_key_handler(g_contacts_state.contacts_btn);
+    }
+    if (is_visible(g_contacts_state.nearby_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.nearby_btn);
+        attach_key_handler(g_contacts_state.nearby_btn);
+    }
+    if (is_visible(g_contacts_state.broadcast_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.broadcast_btn);
+        attach_key_handler(g_contacts_state.broadcast_btn);
+    }
+    if (is_visible(g_contacts_state.team_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.team_btn);
+        attach_key_handler(g_contacts_state.team_btn);
+    }
 
     // Focus preference:
     // - keep_mode_focus: focus current mode button (better for rotate-to-switch-mode UX)
@@ -189,26 +229,42 @@ static void bind_list_column()
 
     for (auto* item : g_contacts_state.list_items)
     {
-        if (item) lv_group_add_obj(s_group, item);
+        if (is_visible(item))
+        {
+            lv_group_add_obj(s_group, item);
+            attach_key_handler(item);
+        }
     }
 
-    if (g_contacts_state.prev_btn) lv_group_add_obj(s_group, g_contacts_state.prev_btn);
-    if (g_contacts_state.next_btn) lv_group_add_obj(s_group, g_contacts_state.next_btn);
-    if (g_contacts_state.back_btn) lv_group_add_obj(s_group, g_contacts_state.back_btn);
+    if (is_valid(g_contacts_state.prev_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.prev_btn);
+        attach_key_handler(g_contacts_state.prev_btn);
+    }
+    if (is_valid(g_contacts_state.next_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.next_btn);
+        attach_key_handler(g_contacts_state.next_btn);
+    }
+    if (is_valid(g_contacts_state.back_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.back_btn);
+        attach_key_handler(g_contacts_state.back_btn);
+    }
 
-    if (!g_contacts_state.list_items.empty() && g_contacts_state.list_items[0])
+    if (!g_contacts_state.list_items.empty() && is_valid(g_contacts_state.list_items[0]))
     {
         focus_first_valid(g_contacts_state.list_items[0]);
     }
-    else if (g_contacts_state.back_btn)
+    else if (is_valid(g_contacts_state.back_btn))
     {
         focus_first_valid(g_contacts_state.back_btn);
     }
-    else if (g_contacts_state.prev_btn)
+    else if (is_valid(g_contacts_state.prev_btn))
     {
         focus_first_valid(g_contacts_state.prev_btn);
     }
-    else if (g_contacts_state.next_btn)
+    else if (is_valid(g_contacts_state.next_btn))
     {
         focus_first_valid(g_contacts_state.next_btn);
     }
@@ -225,38 +281,43 @@ static void bind_action_column()
     bool any = false;
 
     // ① Actions
-    if (g_contacts_state.chat_btn)
+    if (is_visible(g_contacts_state.chat_btn))
     {
         lv_group_add_obj(s_group, g_contacts_state.chat_btn);
+        attach_key_handler(g_contacts_state.chat_btn);
         any = true;
     }
 
     if (g_contacts_state.current_mode == ContactsMode::Contacts)
     {
-        if (g_contacts_state.edit_btn)
+        if (is_visible(g_contacts_state.edit_btn))
         {
             lv_group_add_obj(s_group, g_contacts_state.edit_btn);
+            attach_key_handler(g_contacts_state.edit_btn);
             any = true;
         }
-        if (g_contacts_state.del_btn)
+        if (is_visible(g_contacts_state.del_btn))
         {
             lv_group_add_obj(s_group, g_contacts_state.del_btn);
+            attach_key_handler(g_contacts_state.del_btn);
             any = true;
         }
     }
     else if (g_contacts_state.current_mode == ContactsMode::Nearby)
     {
-        if (g_contacts_state.add_btn)
+        if (is_visible(g_contacts_state.add_btn))
         {
             lv_group_add_obj(s_group, g_contacts_state.add_btn);
+            attach_key_handler(g_contacts_state.add_btn);
             any = true;
         }
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
-        if (g_contacts_state.position_btn)
+        if (is_visible(g_contacts_state.position_btn))
         {
             lv_group_add_obj(s_group, g_contacts_state.position_btn);
+            attach_key_handler(g_contacts_state.position_btn);
             any = true;
         }
     }
@@ -264,17 +325,19 @@ static void bind_action_column()
     if (g_contacts_state.current_mode != ContactsMode::Broadcast &&
         g_contacts_state.current_mode != ContactsMode::Team)
     {
-        if (g_contacts_state.info_btn)
+        if (is_visible(g_contacts_state.info_btn))
         {
             lv_group_add_obj(s_group, g_contacts_state.info_btn);
+            attach_key_handler(g_contacts_state.info_btn);
             any = true;
         }
     }
 
     // ② Back (added last, not the default focus)
-    if (g_contacts_state.action_back_btn)
+    if (is_visible(g_contacts_state.action_back_btn))
     {
         lv_group_add_obj(s_group, g_contacts_state.action_back_btn);
+        attach_key_handler(g_contacts_state.action_back_btn);
         any = true;
     }
 
@@ -295,19 +358,19 @@ static void bind_action_column()
     }
 
     // Default focus to the first action button (Chat) instead of Back
-    if (g_contacts_state.chat_btn)
+    if (is_valid(g_contacts_state.chat_btn))
     {
         focus_first_valid(g_contacts_state.chat_btn);
     }
-    else if (g_contacts_state.position_btn)
+    else if (is_valid(g_contacts_state.position_btn))
     {
         focus_first_valid(g_contacts_state.position_btn);
     }
-    else if (g_contacts_state.info_btn)
+    else if (is_valid(g_contacts_state.info_btn))
     {
         focus_first_valid(g_contacts_state.info_btn);
     }
-    else if (g_contacts_state.action_back_btn)
+    else if (is_valid(g_contacts_state.action_back_btn))
     {
         focus_first_valid(g_contacts_state.action_back_btn);
     }
@@ -342,12 +405,21 @@ static void rebind_by_column()
  */
 static void root_key_event_cb(lv_event_t* e)
 {
-    if (!is_encoder_active()) return;
-
     uint32_t key = lv_event_get_key(e);
 
+    if (key == LV_KEY_BACKSPACE)
+    {
+        if (is_valid(g_contacts_state.top_bar.back_btn))
+        {
+            lv_obj_send_event(g_contacts_state.top_bar.back_btn, LV_EVENT_CLICKED, nullptr);
+        }
+        return;
+    }
+
+    if (!is_encoder_active()) return;
+
     // Back one column
-    if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE)
+    if (key == LV_KEY_ESC)
     {
         if (s_col == FocusColumn::Action) s_col = FocusColumn::List;
         else if (s_col == FocusColumn::List) s_col = FocusColumn::Filter;
@@ -369,20 +441,20 @@ static void root_key_event_cb(lv_event_t* e)
 
     if (s_col == FocusColumn::List)
     {
-        if (focused == g_contacts_state.back_btn)
+        if (focused == g_contacts_state.back_btn && is_valid(g_contacts_state.back_btn))
         {
             s_col = FocusColumn::Filter;
             rebind_by_column();
             return;
         }
 
-        if (focused == g_contacts_state.prev_btn)
+        if (focused == g_contacts_state.prev_btn && is_valid(g_contacts_state.prev_btn))
         {
             if (g_contacts_state.prev_btn) lv_obj_send_event(g_contacts_state.prev_btn, LV_EVENT_CLICKED, nullptr);
             if (g_contacts_state.prev_btn) focus_first_valid(g_contacts_state.prev_btn);
             return;
         }
-        if (focused == g_contacts_state.next_btn)
+        if (focused == g_contacts_state.next_btn && is_valid(g_contacts_state.next_btn))
         {
             if (g_contacts_state.next_btn) lv_obj_send_event(g_contacts_state.next_btn, LV_EVENT_CLICKED, nullptr);
             if (g_contacts_state.next_btn) focus_first_valid(g_contacts_state.next_btn);
@@ -422,6 +494,9 @@ void init_contacts_input()
         cleanup_contacts_input();
     }
     s_group = lv_group_create();
+    s_prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+    set_default_group(s_group);
 
     s_encoder = find_encoder_indev();
     if (s_encoder)
@@ -440,7 +515,7 @@ void init_contacts_input()
                                : (g_contacts_state.list_panel ? g_contacts_state.list_panel
                                                               : g_contacts_state.filter_panel);
 
-    if (key_target)
+    if (is_valid(key_target))
     {
         lv_obj_add_event_cb(key_target, root_key_event_cb, LV_EVENT_KEY, nullptr);
     }
@@ -459,11 +534,17 @@ void cleanup_contacts_input()
             lv_indev_set_group(s_encoder, nullptr);
         }
 
+        set_default_group(nullptr);
         lv_group_del(s_group);
         s_group = nullptr;
     }
 
     s_encoder = nullptr;
+    if (s_prev_group)
+    {
+        set_default_group(s_prev_group);
+        s_prev_group = nullptr;
+    }
 
     CONTACTS_LOG("[Contacts][Input] cleaned up\n");
 }

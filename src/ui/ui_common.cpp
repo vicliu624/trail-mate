@@ -21,7 +21,7 @@ extern BoardBase& board;
 
 namespace
 {
-constexpr const char* kPrefsNs = "settings_v2";
+constexpr const char* kPrefsNs = "settings";
 constexpr const char* kTimezoneKey = "timezone_offset";
 
 static bool s_tz_loaded = false;

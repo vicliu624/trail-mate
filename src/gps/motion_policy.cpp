@@ -59,6 +59,15 @@ bool MotionPolicy::shouldUpdateSensor(uint32_t now_ms)
     return (now_ms - last_sensor_poll_ms_) >= config_.poll_interval_ms;
 }
 
+bool MotionPolicy::hasRecentMotion(uint32_t now_ms, uint32_t window_ms) const
+{
+    if (!enabled_ || last_motion_ms_ == 0)
+    {
+        return false;
+    }
+    return (now_ms - last_motion_ms_) <= window_ms;
+}
+
 void MotionPolicy::markSensorUpdated(uint32_t now_ms)
 {
     last_sensor_poll_ms_ = now_ms;

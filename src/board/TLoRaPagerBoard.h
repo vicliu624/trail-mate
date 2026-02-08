@@ -59,6 +59,17 @@ class AppContext;
 #include "input/rotary/Rotary.h"
 #include "pins_arduino.h"
 
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+class SX1262Access : public SX1262
+{
+  public:
+    using SX1262::SX1262;
+    using SX126x::readRegister;
+    using SX126x::setTxParams;
+    using SX126x::writeRegister;
+};
+#endif
+
 #define newModule() new Module(LORA_CS, LORA_IRQ, LORA_RST, LORA_BUSY)
 
 /**
@@ -280,6 +291,8 @@ class TLoRaPagerBoard : public BoardBase,
     int getRadioPacketLength(bool update) override;
     int readRadioData(uint8_t* buf, size_t len) override;
     void clearRadioIrqFlags(uint32_t flags) override;
+    float getRadioRSSI() override;
+    float getRadioSNR() override;
     void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                             int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                             uint8_t crc_len) override;
@@ -395,7 +408,7 @@ class TLoRaPagerBoard : public BoardBase,
 #endif
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
-    SX1262 radio_ = newModule();
+    SX1262Access radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SX1280)
     SX1280 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_CC1101)

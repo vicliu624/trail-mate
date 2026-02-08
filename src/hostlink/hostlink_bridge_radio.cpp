@@ -1,6 +1,7 @@
 #include "hostlink_bridge_radio.h"
 
 #include "../app/app_context.h"
+#include "../chat/domain/chat_types.h"
 #include "../team/protocol/team_chat.h"
 #include "../team/protocol/team_mgmt.h"
 #include "../team/protocol/team_portnum.h"
@@ -8,6 +9,7 @@
 #include "hostlink_service.h"
 #include "hostlink_types.h"
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -27,6 +29,7 @@ constexpr size_t kMemberNameMaxLen = 32;
 
 uint32_t s_team_state_hash = 0;
 bool s_team_state_has_hash = false;
+AppRxStats s_app_rx_stats{};
 
 void push_u8(std::vector<uint8_t>& out, uint8_t v)
 {
@@ -45,6 +48,51 @@ void push_u32(std::vector<uint8_t>& out, uint32_t v)
     out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
     out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
     out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void push_i16(std::vector<uint8_t>& out, int16_t v)
+{
+    push_u16(out, static_cast<uint16_t>(v));
+}
+
+void push_tlv(std::vector<uint8_t>& out, uint8_t key, const void* data, size_t len)
+{
+    if (!data || len == 0 || len > 255)
+    {
+        return;
+    }
+    out.push_back(key);
+    out.push_back(static_cast<uint8_t>(len));
+    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+    out.insert(out.end(), bytes, bytes + len);
+}
+
+void push_tlv_u8(std::vector<uint8_t>& out, uint8_t key, uint8_t value)
+{
+    push_tlv(out, key, &value, sizeof(value));
+}
+
+void push_tlv_u16(std::vector<uint8_t>& out, uint8_t key, uint16_t value)
+{
+    uint8_t buf[2] = {static_cast<uint8_t>(value & 0xFF),
+                      static_cast<uint8_t>((value >> 8) & 0xFF)};
+    push_tlv(out, key, buf, sizeof(buf));
+}
+
+void push_tlv_u32(std::vector<uint8_t>& out, uint8_t key, uint32_t value)
+{
+    uint8_t buf[4] = {static_cast<uint8_t>(value & 0xFF),
+                      static_cast<uint8_t>((value >> 8) & 0xFF),
+                      static_cast<uint8_t>((value >> 16) & 0xFF),
+                      static_cast<uint8_t>((value >> 24) & 0xFF)};
+    push_tlv(out, key, buf, sizeof(buf));
+}
+
+void push_tlv_i16(std::vector<uint8_t>& out, uint8_t key, int16_t value)
+{
+    uint8_t buf[2] = {static_cast<uint8_t>(value & 0xFF),
+                      static_cast<uint8_t>((value >> 8) & 0xFF)};
+    push_tlv(out, key, buf, sizeof(buf));
 }
 
 void push_bytes(std::vector<uint8_t>& out, const uint8_t* data, size_t len)
@@ -98,6 +146,115 @@ void push_team_id(std::vector<uint8_t>& out, const team::TeamId& id, bool has_id
     }
 }
 
+void build_rx_meta_tlvs(const chat::RxMeta& meta, uint32_t packet_id, std::vector<uint8_t>& out)
+{
+    out.clear();
+    if (meta.rx_timestamp_s != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RxTimestampS),
+                     meta.rx_timestamp_s);
+    }
+    if (meta.rx_timestamp_ms != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RxTimestampMs),
+                     meta.rx_timestamp_ms);
+    }
+    if (meta.time_source != chat::RxTimeSource::Unknown)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RxTimeSource),
+                    static_cast<uint8_t>(meta.time_source));
+    }
+    if (meta.hop_count != 0xFF)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::HopCount), meta.hop_count);
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::Direct),
+                    meta.direct ? 1 : 0);
+    }
+    if (meta.hop_limit != 0xFF)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::HopLimit), meta.hop_limit);
+    }
+    if (meta.origin != chat::RxOrigin::Unknown)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RxOrigin),
+                    static_cast<uint8_t>(meta.origin));
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::FromIs),
+                    meta.from_is ? 1 : 0);
+    }
+    if (meta.channel_hash != 0xFF)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::ChannelHash),
+                    meta.channel_hash);
+    }
+    if (meta.wire_flags != 0xFF)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::WireFlags),
+                    meta.wire_flags);
+    }
+    if (meta.next_hop != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::NextHop), meta.next_hop);
+    }
+    if (meta.relay_node != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RelayNode), meta.relay_node);
+    }
+    if (meta.rssi_dbm_x10 != std::numeric_limits<int16_t>::min())
+    {
+        push_tlv_i16(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::RssiDbmX10),
+                     meta.rssi_dbm_x10);
+    }
+    if (meta.snr_db_x10 != std::numeric_limits<int16_t>::min())
+    {
+        push_tlv_i16(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::SnrDbX10),
+                     meta.snr_db_x10);
+    }
+    if (meta.freq_hz != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::FreqHz), meta.freq_hz);
+    }
+    if (meta.bw_hz != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::BwHz), meta.bw_hz);
+    }
+    if (meta.sf != 0)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::Sf), meta.sf);
+    }
+    if (meta.cr != 0)
+    {
+        push_tlv_u8(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::Cr), meta.cr);
+    }
+    if (packet_id != 0)
+    {
+        push_tlv_u32(out, static_cast<uint8_t>(hostlink::AppDataMetaKey::PacketId), packet_id);
+    }
+}
+
+void update_app_rx_stats(const chat::RxMeta* rx_meta)
+{
+    s_app_rx_stats.total++;
+    if (!rx_meta)
+    {
+        return;
+    }
+    if (rx_meta->from_is)
+    {
+        s_app_rx_stats.from_is++;
+    }
+    if (rx_meta->hop_count != 0xFF)
+    {
+        if (rx_meta->direct)
+        {
+            s_app_rx_stats.direct++;
+        }
+        else
+        {
+            s_app_rx_stats.relayed++;
+        }
+    }
+}
+
 bool build_team_state_payload(std::vector<uint8_t>& out)
 {
     team::ui::TeamUiSnapshot snap{};
@@ -109,7 +266,6 @@ bool build_team_state_payload(std::vector<uint8_t>& out)
     if (snap.kicked_out) flags |= 1 << 2;
     if (snap.self_is_leader) flags |= 1 << 3;
     if (snap.has_team_id) flags |= 1 << 4;
-    if (snap.has_join_target) flags |= 1 << 5;
 
     const uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
 
@@ -120,7 +276,7 @@ bool build_team_state_payload(std::vector<uint8_t>& out)
     push_u16(out, 0);
     push_u32(out, self_id);
     push_team_id(out, snap.team_id, snap.has_team_id);
-    push_team_id(out, snap.join_target_id, snap.has_join_target);
+    push_zeros(out, team::proto::kTeamIdSize);
     push_u32(out, snap.security_round);
     push_u32(out, snap.last_event_seq);
     push_u32(out, snap.last_update_s);
@@ -172,19 +328,29 @@ void send_app_data(uint32_t portnum,
                    const uint8_t* team_id,
                    uint32_t team_key_id,
                    uint32_t timestamp_s,
+                   uint32_t packet_id,
+                   const chat::RxMeta* rx_meta,
                    const uint8_t* payload,
                    size_t payload_len)
 {
-    if (kMaxFrameLen <= kAppDataHeaderSize)
+    std::vector<uint8_t> meta_tlv;
+    if (rx_meta)
+    {
+        build_rx_meta_tlvs(*rx_meta, packet_id, meta_tlv);
+    }
+    const size_t meta_len = meta_tlv.size();
+
+    if (kMaxFrameLen <= kAppDataHeaderSize + meta_len)
     {
         return;
     }
-    const size_t max_chunk = kMaxFrameLen - kAppDataHeaderSize;
+    update_app_rx_stats(rx_meta);
+    const size_t max_chunk = kMaxFrameLen - kAppDataHeaderSize - meta_len;
     size_t offset = 0;
     if (payload_len == 0)
     {
         std::vector<uint8_t> out;
-        out.reserve(kAppDataHeaderSize);
+        out.reserve(kAppDataHeaderSize + meta_len);
         push_u32(out, portnum);
         push_u32(out, from);
         push_u32(out, to);
@@ -203,6 +369,10 @@ void send_app_data(uint32_t portnum,
         push_u32(out, 0);
         push_u32(out, 0);
         push_u16(out, 0);
+        if (!meta_tlv.empty())
+        {
+            push_bytes(out, meta_tlv.data(), meta_tlv.size());
+        }
         hostlink::enqueue_event(static_cast<uint8_t>(hostlink::FrameType::EvAppData),
                                 out.data(), out.size(), false);
         return;
@@ -222,7 +392,7 @@ void send_app_data(uint32_t portnum,
         }
 
         std::vector<uint8_t> out;
-        out.reserve(kAppDataHeaderSize + chunk_len);
+        out.reserve(kAppDataHeaderSize + chunk_len + meta_len);
         push_u32(out, portnum);
         push_u32(out, from);
         push_u32(out, to);
@@ -242,6 +412,10 @@ void send_app_data(uint32_t portnum,
         push_u32(out, static_cast<uint32_t>(offset));
         push_u16(out, static_cast<uint16_t>(chunk_len));
         push_bytes(out, payload + offset, chunk_len);
+        if (!meta_tlv.empty())
+        {
+            push_bytes(out, meta_tlv.data(), meta_tlv.size());
+        }
 
         hostlink::enqueue_event(static_cast<uint8_t>(hostlink::FrameType::EvAppData),
                                 out.data(), out.size(), false);
@@ -288,8 +462,12 @@ void on_event(const sys::Event& event)
         uint32_t ts = msg ? msg->timestamp : 0;
         const std::string text = msg ? msg->text : std::string(msg_evt.text);
 
+        std::vector<uint8_t> meta_tlv;
+        build_rx_meta_tlvs(msg_evt.rx_meta, msg_id, meta_tlv);
+        update_app_rx_stats(&msg_evt.rx_meta);
+
         std::vector<uint8_t> payload;
-        payload.reserve(16 + text.size());
+        payload.reserve(16 + text.size() + meta_tlv.size());
         push_u32(payload, msg_id);
         push_u32(payload, from);
         push_u32(payload, to);
@@ -297,6 +475,10 @@ void on_event(const sys::Event& event)
         push_u32(payload, ts);
         push_u16(payload, static_cast<uint16_t>(text.size()));
         payload.insert(payload.end(), text.begin(), text.end());
+        if (!meta_tlv.empty())
+        {
+            push_bytes(payload, meta_tlv.data(), meta_tlv.size());
+        }
 
         hostlink::enqueue_event(static_cast<uint8_t>(hostlink::FrameType::EvRxMsg),
                                 payload.data(), payload.size(), false);
@@ -329,133 +511,10 @@ void on_event(const sys::Event& event)
                       nullptr,
                       0,
                       event.timestamp / 1000,
+                      data_evt.packet_id,
+                      &data_evt.rx_meta,
                       data_evt.payload.data(),
                       data_evt.payload.size());
-        break;
-    }
-    case sys::EventType::TeamAdvertise:
-    {
-        const auto& team_evt = static_cast<const sys::TeamAdvertiseEvent&>(event);
-        std::vector<uint8_t> wire;
-        if (encode_team_mgmt_wire<team::proto::TeamAdvertise, team::proto::encodeTeamAdvertise>(
-                team::proto::TeamMgmtType::Advertise, team_evt.data.msg, wire))
-        {
-            uint8_t flags = kAppFlagTeamMeta;
-            if (team_evt.data.ctx.key_id != 0)
-            {
-                flags |= kAppFlagWasEncrypted;
-            }
-            send_app_data(team::proto::TEAM_MGMT_APP,
-                          team_evt.data.ctx.from,
-                          0,
-                          0,
-                          flags,
-                          team_evt.data.ctx.team_id.data(),
-                          team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
-                          wire.data(),
-                          wire.size());
-        }
-        break;
-    }
-    case sys::EventType::TeamJoinRequest:
-    {
-        const auto& team_evt = static_cast<const sys::TeamJoinRequestEvent&>(event);
-        std::vector<uint8_t> wire;
-        if (encode_team_mgmt_wire<team::proto::TeamJoinRequest, team::proto::encodeTeamJoinRequest>(
-                team::proto::TeamMgmtType::JoinRequest, team_evt.data.msg, wire))
-        {
-            uint8_t flags = kAppFlagTeamMeta;
-            if (team_evt.data.ctx.key_id != 0)
-            {
-                flags |= kAppFlagWasEncrypted;
-            }
-            send_app_data(team::proto::TEAM_MGMT_APP,
-                          team_evt.data.ctx.from,
-                          0,
-                          0,
-                          flags,
-                          team_evt.data.ctx.team_id.data(),
-                          team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
-                          wire.data(),
-                          wire.size());
-        }
-        break;
-    }
-    case sys::EventType::TeamJoinAccept:
-    {
-        const auto& team_evt = static_cast<const sys::TeamJoinAcceptEvent&>(event);
-        std::vector<uint8_t> wire;
-        if (encode_team_mgmt_wire<team::proto::TeamJoinAccept, team::proto::encodeTeamJoinAccept>(
-                team::proto::TeamMgmtType::JoinAccept, team_evt.data.msg, wire))
-        {
-            uint8_t flags = kAppFlagTeamMeta;
-            if (team_evt.data.ctx.key_id != 0)
-            {
-                flags |= kAppFlagWasEncrypted;
-            }
-            send_app_data(team::proto::TEAM_MGMT_APP,
-                          team_evt.data.ctx.from,
-                          0,
-                          0,
-                          flags,
-                          team_evt.data.ctx.team_id.data(),
-                          team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
-                          wire.data(),
-                          wire.size());
-        }
-        break;
-    }
-    case sys::EventType::TeamJoinConfirm:
-    {
-        const auto& team_evt = static_cast<const sys::TeamJoinConfirmEvent&>(event);
-        std::vector<uint8_t> wire;
-        if (encode_team_mgmt_wire<team::proto::TeamJoinConfirm, team::proto::encodeTeamJoinConfirm>(
-                team::proto::TeamMgmtType::JoinConfirm, team_evt.data.msg, wire))
-        {
-            uint8_t flags = kAppFlagTeamMeta;
-            if (team_evt.data.ctx.key_id != 0)
-            {
-                flags |= kAppFlagWasEncrypted;
-            }
-            send_app_data(team::proto::TEAM_MGMT_APP,
-                          team_evt.data.ctx.from,
-                          0,
-                          0,
-                          flags,
-                          team_evt.data.ctx.team_id.data(),
-                          team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
-                          wire.data(),
-                          wire.size());
-        }
-        break;
-    }
-    case sys::EventType::TeamJoinDecision:
-    {
-        const auto& team_evt = static_cast<const sys::TeamJoinDecisionEvent&>(event);
-        std::vector<uint8_t> wire;
-        if (encode_team_mgmt_wire<team::proto::TeamJoinDecision, team::proto::encodeTeamJoinDecision>(
-                team::proto::TeamMgmtType::JoinDecision, team_evt.data.msg, wire))
-        {
-            uint8_t flags = kAppFlagTeamMeta;
-            if (team_evt.data.ctx.key_id != 0)
-            {
-                flags |= kAppFlagWasEncrypted;
-            }
-            send_app_data(team::proto::TEAM_MGMT_APP,
-                          team_evt.data.ctx.from,
-                          0,
-                          0,
-                          flags,
-                          team_evt.data.ctx.team_id.data(),
-                          team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
-                          wire.data(),
-                          wire.size());
-        }
         break;
     }
     case sys::EventType::TeamKick:
@@ -477,7 +536,9 @@ void on_event(const sys::Event& event)
                           flags,
                           team_evt.data.ctx.team_id.data(),
                           team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
+                          event.timestamp / 1000,
+                          0,
+                          &team_evt.data.ctx.rx_meta,
                           wire.data(),
                           wire.size());
         }
@@ -502,7 +563,9 @@ void on_event(const sys::Event& event)
                           flags,
                           team_evt.data.ctx.team_id.data(),
                           team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
+                          event.timestamp / 1000,
+                          0,
+                          &team_evt.data.ctx.rx_meta,
                           wire.data(),
                           wire.size());
         }
@@ -527,7 +590,9 @@ void on_event(const sys::Event& event)
                           flags,
                           team_evt.data.ctx.team_id.data(),
                           team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
+                          event.timestamp / 1000,
+                          0,
+                          &team_evt.data.ctx.rx_meta,
                           wire.data(),
                           wire.size());
         }
@@ -552,7 +617,9 @@ void on_event(const sys::Event& event)
                           flags,
                           team_evt.data.ctx.team_id.data(),
                           team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
+                          event.timestamp / 1000,
+                          0,
+                          &team_evt.data.ctx.rx_meta,
                           wire.data(),
                           wire.size());
         }
@@ -569,7 +636,9 @@ void on_event(const sys::Event& event)
                       flags,
                       team_evt.data.ctx.team_id.data(),
                       team_evt.data.ctx.key_id,
-                      team_evt.data.ctx.timestamp,
+                      event.timestamp / 1000,
+                      0,
+                      &team_evt.data.ctx.rx_meta,
                       team_evt.data.payload.data(),
                       team_evt.data.payload.size());
         break;
@@ -585,7 +654,9 @@ void on_event(const sys::Event& event)
                       flags,
                       team_evt.data.ctx.team_id.data(),
                       team_evt.data.ctx.key_id,
-                      team_evt.data.ctx.timestamp,
+                      event.timestamp / 1000,
+                      0,
+                      &team_evt.data.ctx.rx_meta,
                       team_evt.data.payload.data(),
                       team_evt.data.payload.size());
         break;
@@ -601,7 +672,9 @@ void on_event(const sys::Event& event)
                       flags,
                       team_evt.data.ctx.team_id.data(),
                       team_evt.data.ctx.key_id,
-                      team_evt.data.ctx.timestamp,
+                      event.timestamp / 1000,
+                      0,
+                      &team_evt.data.ctx.rx_meta,
                       team_evt.data.payload.data(),
                       team_evt.data.payload.size());
         break;
@@ -620,7 +693,9 @@ void on_event(const sys::Event& event)
                           flags,
                           team_evt.data.ctx.team_id.data(),
                           team_evt.data.ctx.key_id,
-                          team_evt.data.ctx.timestamp,
+                          event.timestamp / 1000,
+                          0,
+                          &team_evt.data.ctx.rx_meta,
                           wire.data(),
                           wire.size());
         }
@@ -632,11 +707,6 @@ void on_event(const sys::Event& event)
 
     switch (event.type)
     {
-    case sys::EventType::TeamAdvertise:
-    case sys::EventType::TeamJoinRequest:
-    case sys::EventType::TeamJoinAccept:
-    case sys::EventType::TeamJoinConfirm:
-    case sys::EventType::TeamJoinDecision:
     case sys::EventType::TeamKick:
     case sys::EventType::TeamTransferLeader:
     case sys::EventType::TeamKeyDist:
@@ -659,6 +729,11 @@ void on_link_ready()
         return;
     }
     maybe_send_team_state(true);
+}
+
+AppRxStats get_app_rx_stats()
+{
+    return s_app_rx_stats;
 }
 
 } // namespace hostlink::bridge

@@ -63,7 +63,7 @@ namespace layout
 // 布局常量
 static constexpr int kFilterPanelWidth = 80;
 static constexpr int kActionPanelWidth = 80;
-static constexpr int kButtonHeight = 32;
+static constexpr int kButtonHeight = 28;
 static constexpr int kButtonSpacing = 3;
 static constexpr int kPanelGap = 3;          // 三列之间的间距
 static constexpr int kScreenEdgePadding = 3; // 屏幕边缘的padding
@@ -138,7 +138,7 @@ lv_obj_t* create_header(lv_obj_t* root,
     lv_obj_set_size(header, LV_PCT(100), ::ui::widgets::kTopBarHeight);
 
     // 样式
-    lv_obj_set_style_bg_color(header, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(header, lv_color_hex(0xFFF3DF), 0);
     apply_base_container_style(header);
     lv_obj_set_style_pad_all(header, 0, 0);
 
@@ -209,6 +209,7 @@ void create_filter_panel(lv_obj_t* parent)
     lv_obj_set_size(g_contacts_state.contacts_btn, LV_PCT(100), kButtonHeight);
     lv_obj_t* contacts_label = lv_label_create(g_contacts_state.contacts_btn);
     lv_label_set_text(contacts_label, "Contacts");
+    style::apply_label_primary(contacts_label);
     lv_obj_center(contacts_label);
 
     g_contacts_state.nearby_btn = lv_btn_create(g_contacts_state.filter_panel);
@@ -217,6 +218,7 @@ void create_filter_panel(lv_obj_t* parent)
     lv_obj_set_size(g_contacts_state.nearby_btn, LV_PCT(100), kButtonHeight);
     lv_obj_t* nearby_label = lv_label_create(g_contacts_state.nearby_btn);
     lv_label_set_text(nearby_label, "Nearby");
+    style::apply_label_primary(nearby_label);
     lv_obj_center(nearby_label);
 
     g_contacts_state.broadcast_btn = lv_btn_create(g_contacts_state.filter_panel);
@@ -225,6 +227,7 @@ void create_filter_panel(lv_obj_t* parent)
     lv_obj_set_size(g_contacts_state.broadcast_btn, LV_PCT(100), kButtonHeight);
     lv_obj_t* broadcast_label = lv_label_create(g_contacts_state.broadcast_btn);
     lv_label_set_text(broadcast_label, "Broadcast");
+    style::apply_label_primary(broadcast_label);
     lv_obj_center(broadcast_label);
 
     g_contacts_state.team_btn = lv_btn_create(g_contacts_state.filter_panel);
@@ -233,6 +236,7 @@ void create_filter_panel(lv_obj_t* parent)
     lv_obj_set_size(g_contacts_state.team_btn, LV_PCT(100), kButtonHeight);
     lv_obj_t* team_label = lv_label_create(g_contacts_state.team_btn);
     lv_label_set_text(team_label, "Team");
+    style::apply_label_primary(team_label);
     lv_obj_center(team_label);
     lv_obj_add_flag(g_contacts_state.team_btn, LV_OBJ_FLAG_HIDDEN);
 }
@@ -321,15 +325,29 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
                            const char* status_text)
 {
     lv_obj_t* item = lv_obj_create(parent);
-    lv_obj_set_size(item, LV_PCT(100), 32);
+    lv_obj_set_size(item, LV_PCT(100), 28);
 
     lv_obj_add_flag(item, LV_OBJ_FLAG_CLICKABLE);
     make_non_scrollable(item);
 
     style::apply_list_item(item);
 
+    std::string display_name;
+    if (node.long_name[0] != '\0')
+    {
+        display_name = node.long_name;
+    }
+    else if (!node.display_name.empty())
+    {
+        display_name = node.display_name;
+    }
+    else
+    {
+        display_name = node.short_name;
+    }
+
     lv_obj_t* name_label = lv_label_create(item);
-    lv_label_set_text(name_label, node.display_name.c_str());
+    lv_label_set_text(name_label, display_name.c_str());
     lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 10, 0);
     style::apply_label_primary(name_label);
 

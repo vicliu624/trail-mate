@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../chat/domain/chat_types.h"
 #include "../protocol/team_chat.h"
 #include "../protocol/team_mgmt.h"
 #include "team_types.h"
@@ -15,36 +16,7 @@ struct TeamEventContext
     uint32_t key_id = 0;
     uint32_t from = 0;
     uint32_t timestamp = 0;
-};
-
-struct TeamAdvertiseEvent
-{
-    TeamEventContext ctx;
-    team::proto::TeamAdvertise msg;
-};
-
-struct TeamJoinRequestEvent
-{
-    TeamEventContext ctx;
-    team::proto::TeamJoinRequest msg;
-};
-
-struct TeamJoinAcceptEvent
-{
-    TeamEventContext ctx;
-    team::proto::TeamJoinAccept msg;
-};
-
-struct TeamJoinConfirmEvent
-{
-    TeamEventContext ctx;
-    team::proto::TeamJoinConfirm msg;
-};
-
-struct TeamJoinDecisionEvent
-{
-    TeamEventContext ctx;
-    team::proto::TeamJoinDecision msg;
+    chat::RxMeta rx_meta;
 };
 
 struct TeamKickEvent
@@ -93,6 +65,18 @@ struct TeamChatEvent
 {
     TeamEventContext ctx;
     team::proto::TeamChatMessage msg;
+};
+
+struct TeamPairingEvent
+{
+    TeamPairingRole role = TeamPairingRole::None;
+    TeamPairingState state = TeamPairingState::Idle;
+    TeamId team_id{};
+    bool has_team_id = false;
+    uint32_t key_id = 0;
+    uint32_t peer_id = 0;
+    char team_name[16] = {0};
+    bool has_team_name = false;
 };
 
 enum class TeamProtocolError

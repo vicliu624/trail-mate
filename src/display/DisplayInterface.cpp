@@ -9,6 +9,21 @@
 #define DISP_CMD_SLPIN (0x10)
 #define DISP_CMD_SLPOUT (0x11)
 
+static LilyGoDispArduinoSPI* g_display_spi = nullptr;
+
+bool display_spi_lock(TickType_t xTicksToWait)
+{
+    return g_display_spi && g_display_spi->lock(xTicksToWait);
+}
+
+void display_spi_unlock()
+{
+    if (g_display_spi)
+    {
+        g_display_spi->unlock();
+    }
+}
+
 bool LilyGoDispArduinoSPI::lock(TickType_t xTicksToWait)
 {
     return xSemaphoreTake(_lock, xTicksToWait) == pdTRUE;
@@ -36,6 +51,7 @@ bool LilyGoDispArduinoSPI::init(int sck,
 {
     _lock = xSemaphoreCreateMutex();
     _spi = &spi;
+    g_display_spi = this;
 
     if (rst != -1)
     {

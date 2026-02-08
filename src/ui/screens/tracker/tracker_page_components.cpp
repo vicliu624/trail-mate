@@ -36,10 +36,10 @@ constexpr const char* kRouteDir = "/routes";
 std::vector<String> s_route_names;
 std::vector<String> s_record_names;
 
-constexpr uint32_t kPanelBtnBg = 0xF4C77A;
-constexpr uint32_t kPanelBtnBorder = 0xEBA341;
-constexpr uint32_t kPanelBtnFocused = 0xF1B65A;
-constexpr uint32_t kPanelBtnText = 0x202020;
+constexpr uint32_t kPanelBtnBg = 0xFFF7E9;
+constexpr uint32_t kPanelBtnBorder = 0xD9B06A;
+constexpr uint32_t kPanelBtnFocused = 0xEBA341;
+constexpr uint32_t kPanelBtnText = 0x3A2A1A;
 
 bool s_btn_styles_inited = false;
 lv_style_t s_btn_main;
@@ -57,10 +57,30 @@ void update_del_button();
 void on_action_back_clicked(lv_event_t* e);
 lv_obj_t* action_focus_target();
 void focus_action_panel();
+void on_backspace_key(lv_event_t* e);
 
 void on_back(void*)
 {
     ui_request_exit_to_menu();
+}
+
+void on_backspace_key(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_BACKSPACE)
+    {
+        return;
+    }
+    if (g_tracker_state.top_bar.back_btn)
+    {
+        lv_obj_send_event(g_tracker_state.top_bar.back_btn, LV_EVENT_CLICKED, nullptr);
+        return;
+    }
+    on_back(nullptr);
 }
 
 void modal_prepare_group()
@@ -100,7 +120,7 @@ lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
@@ -110,10 +130,10 @@ lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, width, height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, 8, LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
@@ -199,12 +219,12 @@ void style_mode_button(lv_obj_t* btn, lv_obj_t* label, bool active)
     {
         return;
     }
-    lv_color_t bg = active ? lv_color_hex(0xEBA341) : lv_color_hex(0xF4C77A);
-    lv_color_t fg = lv_color_hex(0x202020);
+    lv_color_t bg = active ? lv_color_hex(0xEBA341) : lv_color_hex(0xFFF7E9);
+    lv_color_t fg = lv_color_hex(0x3A2A1A);
     lv_obj_set_style_bg_color(btn, bg, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(btn, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0xEBA341), LV_PART_MAIN);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0xD9B06A), LV_PART_MAIN);
     lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
     if (label)
     {
@@ -340,6 +360,8 @@ void group_add_if(lv_group_t* group, lv_obj_t* obj)
         return;
     }
     lv_group_add_obj(group, obj);
+    lv_obj_remove_event_cb(obj, on_backspace_key);
+    lv_obj_add_event_cb(obj, on_backspace_key, LV_EVENT_KEY, nullptr);
 }
 
 lv_obj_t* first_visible_list_item()

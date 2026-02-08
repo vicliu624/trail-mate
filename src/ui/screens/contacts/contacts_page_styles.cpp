@@ -4,19 +4,19 @@ namespace contacts::ui::style
 {
 
 // ---------- Colors (keep all visual tokens here) ----------
-static constexpr uint32_t kGrayPanel = 0xF5F5F5;
-static constexpr uint32_t kWhite = 0xFFFFFF;
+static constexpr uint32_t kGrayPanel = 0xFFF3DF;
+static constexpr uint32_t kWhite = 0xFFF7E9;
 
-static constexpr uint32_t kBtnBg = 0xF4C77A;
+static constexpr uint32_t kBtnBg = 0xFFF7E9;
 static constexpr uint32_t kBtnBgSel = 0xEBA341;
-static constexpr uint32_t kBtnBorder = 0xEBA341;
+static constexpr uint32_t kBtnBorder = 0xD9B06A;
 
-static constexpr uint32_t kItemBg = 0xF7DCA8;
-static constexpr uint32_t kItemBgFoc = 0xF1B65A;
-static constexpr uint32_t kItemBorder = 0xEBA341;
+static constexpr uint32_t kItemBg = 0xFFF7E9;
+static constexpr uint32_t kItemBgFoc = 0xEBA341;
+static constexpr uint32_t kItemBorder = 0xD9B06A;
 
-static constexpr uint32_t kTextMain = 0x202020;
-static constexpr uint32_t kTextMuted = 0x606060;
+static constexpr uint32_t kTextMain = 0x3A2A1A;
+static constexpr uint32_t kTextMuted = 0x6A5646;
 
 // ---------- Styles ----------
 static bool s_inited = false;
@@ -70,6 +70,7 @@ void init_once()
     lv_style_set_border_width(&s_btn_basic, 1);
     lv_style_set_border_color(&s_btn_basic, lv_color_hex(kBtnBorder));
     lv_style_set_radius(&s_btn_basic, 12);
+    lv_style_set_text_color(&s_btn_basic, lv_color_hex(kTextMain));
 
     // ---- Filter selected state: when CHECKED, use darker bg ----
     lv_style_init(&s_btn_filter_checked);

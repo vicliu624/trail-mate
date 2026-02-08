@@ -7,6 +7,7 @@
 
 #include <Arduino.h>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,74 @@ using NodeId = uint32_t;
  * @brief Message identifier (32-bit)
  */
 using MessageId = uint32_t;
+
+/**
+ * @brief RX time source for received packets
+ */
+enum class RxTimeSource : uint8_t
+{
+    Unknown = 0,
+    Uptime = 1,
+    DeviceUtc = 2,
+    GpsUtc = 3
+};
+
+/**
+ * @brief RX origin classification
+ */
+enum class RxOrigin : uint8_t
+{
+    Unknown = 0,
+    Mesh = 1,
+    External = 2
+};
+
+/**
+ * @brief RX metadata for mesh packets
+ */
+struct RxMeta
+{
+    uint32_t rx_timestamp_s;
+    uint32_t rx_timestamp_ms;
+    RxTimeSource time_source;
+    RxOrigin origin;
+    bool direct;
+    bool from_is;
+    uint8_t hop_count;
+    uint8_t hop_limit;
+    uint8_t channel_hash;
+    uint8_t wire_flags;
+    int16_t rssi_dbm_x10;
+    int16_t snr_db_x10;
+    uint32_t freq_hz;
+    uint32_t bw_hz;
+    uint8_t sf;
+    uint8_t cr;
+    uint32_t next_hop;
+    uint32_t relay_node;
+
+    RxMeta()
+        : rx_timestamp_s(0),
+          rx_timestamp_ms(0),
+          time_source(RxTimeSource::Unknown),
+          origin(RxOrigin::Unknown),
+          direct(false),
+          from_is(false),
+          hop_count(0xFF),
+          hop_limit(0xFF),
+          channel_hash(0xFF),
+          wire_flags(0xFF),
+          rssi_dbm_x10(std::numeric_limits<int16_t>::min()),
+          snr_db_x10(std::numeric_limits<int16_t>::min()),
+          freq_hz(0),
+          bw_hz(0),
+          sf(0),
+          cr(0),
+          next_hop(0),
+          relay_node(0)
+    {
+    }
+};
 
 /**
  * @brief Conversation identifier (channel + peer)
@@ -115,6 +184,7 @@ struct MeshIncomingText
     std::string text;
     uint8_t hop_limit; // Remaining hops
     bool encrypted;    // Whether message was encrypted
+    RxMeta rx_meta;
 };
 
 /**
@@ -130,6 +200,7 @@ struct MeshIncomingData
     uint8_t channel_hash;
     bool want_response;
     std::vector<uint8_t> payload;
+    RxMeta rx_meta;
 
     MeshIncomingData()
         : portnum(0), from(0), to(0), packet_id(0),

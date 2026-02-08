@@ -50,10 +50,14 @@ static void focus_first_valid(Binding* binding, lv_obj_t* obj)
     lv_group_focus_obj(obj);
 }
 
+static void root_key_event_cb(lv_event_t* e);
+
 static void group_add_if_valid(Binding* binding, lv_obj_t* obj)
 {
     if (!binding || !binding->group || !obj || !lv_obj_is_valid(obj)) return;
     lv_group_add_obj(binding->group, obj);
+    lv_obj_remove_event_cb(obj, root_key_event_cb);
+    lv_obj_add_event_cb(obj, root_key_event_cb, LV_EVENT_KEY, binding);
 }
 
 static bool is_visible(lv_obj_t* obj)
@@ -219,12 +223,20 @@ static void rebind_by_column(Binding* binding)
 
 static void root_key_event_cb(lv_event_t* e)
 {
-    if (!is_encoder_active()) return;
     auto* binding = static_cast<Binding*>(lv_event_get_user_data(e));
     if (!screen_alive(binding)) return;
 
     uint32_t key = lv_event_get_key(e);
-    if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE)
+    if (key == LV_KEY_BACKSPACE)
+    {
+        if (binding->screen && binding->screen->getBackButton())
+        {
+            lv_obj_send_event(binding->screen->getBackButton(), LV_EVENT_CLICKED, nullptr);
+        }
+        return;
+    }
+    if (!is_encoder_active()) return;
+    if (key == LV_KEY_ESC)
     {
         binding->col = FocusColumn::Filter;
         rebind_by_column(binding);

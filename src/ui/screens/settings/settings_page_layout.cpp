@@ -43,7 +43,7 @@ lv_obj_t* create_header(lv_obj_t* root, void (*back_callback)(void*), void* user
 {
     lv_obj_t* header = lv_obj_create(root);
     lv_obj_set_size(header, LV_PCT(100), ::ui::widgets::kTopBarHeight);
-    lv_obj_set_style_bg_color(header, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(header, lv_color_hex(0xFFF3DF), 0);
     apply_base_container_style(header);
     lv_obj_set_style_pad_all(header, 0, 0);
 

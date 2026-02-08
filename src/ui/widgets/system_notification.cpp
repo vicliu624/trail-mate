@@ -36,8 +36,8 @@ void SystemNotification::init()
     lv_coord_t screen_width = lv_display_get_physical_horizontal_resolution(NULL);
     lv_coord_t container_width = screen_width - 60; // 30px left + 30px right margin
     lv_obj_set_size(container_, container_width, 50);
-    lv_obj_set_pos(container_, 30, -60);                              // x=30 for 30px left margin, will animate to y=0
-    lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF8DC), 0); // Light beige color
+    lv_obj_set_pos(container_, 30, -60); // x=30 for 30px left margin, will animate to y=0
+    lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF0D3), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);
     // Set radius for bottom corners only
     // Since LVGL doesn't support per-corner radius, we'll set a larger radius (20)
@@ -46,7 +46,7 @@ void SystemNotification::init()
     lv_obj_set_style_pad_all(container_, 8, 0);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_shadow_width(container_, 10, 0);
-    lv_obj_set_style_shadow_color(container_, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_shadow_color(container_, lv_color_hex(0xD9B06A), 0);
     lv_obj_set_style_shadow_opa(container_, LV_OPA_50, 0);
 
     // Create flex layout
@@ -63,8 +63,8 @@ void SystemNotification::init()
     // Create label with larger font
     label_ = lv_label_create(container_);
     lv_label_set_text(label_, "");
-    lv_obj_set_style_text_color(label_, lv_color_hex(0x333333), 0); // Dark gray text for better contrast on light background
-    lv_obj_set_style_text_font(label_, &lv_font_montserrat_18, 0);  // Larger font (was 14, now 18)
+    lv_obj_set_style_text_color(label_, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_font(label_, &lv_font_montserrat_18, 0); // Larger font (was 14, now 18)
     lv_obj_set_flex_grow(label_, 1);
 
     // Initially hidden

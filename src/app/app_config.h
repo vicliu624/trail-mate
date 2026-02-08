@@ -14,6 +14,42 @@
 namespace app
 {
 
+struct AprsConfig
+{
+    bool enabled;
+    char igate_callsign[16];
+    uint8_t igate_ssid;
+    char tocall[16];
+    char path[64];
+    uint16_t tx_min_interval_s;
+    uint16_t dedupe_window_s;
+    char symbol_table;
+    char symbol_code;
+    uint16_t position_interval_s;
+    uint8_t node_map_len;
+    uint8_t node_map[255];
+    bool self_enable;
+    char self_callsign[16];
+
+    AprsConfig()
+        : enabled(false),
+          igate_ssid(0),
+          tx_min_interval_s(0),
+          dedupe_window_s(0),
+          symbol_table(0),
+          symbol_code(0),
+          position_interval_s(0),
+          node_map_len(0),
+          self_enable(false)
+    {
+        igate_callsign[0] = '\0';
+        tocall[0] = '\0';
+        path[0] = '\0';
+        self_callsign[0] = '\0';
+        memset(node_map, 0, sizeof(node_map));
+    }
+};
+
 /**
  * @brief Application configuration
  */
@@ -67,14 +103,17 @@ struct AppConfig
     bool route_enabled;
     char route_path[96];
 
+    // APRS/iGate settings (optional persistence for host)
+    AprsConfig aprs;
+
     AppConfig()
     {
         chat_policy = chat::ChatPolicy::outdoor();
         mesh_config = chat::MeshConfig();
         mesh_config.region = kDefaultRegionCode;
         mesh_protocol = chat::MeshProtocol::Meshtastic;
-        strcpy(node_name, "TrailMate");
-        strcpy(short_name, "TM");
+        node_name[0] = '\0';
+        short_name[0] = '\0';
         primary_enabled = true;
         secondary_enabled = false;
         memset(secondary_key, 0, 16);
@@ -103,6 +142,7 @@ struct AppConfig
         privacy_nmea_sentence = 0;
         route_enabled = false;
         route_path[0] = '\0';
+        aprs = AprsConfig();
     }
 
     /**
@@ -134,9 +174,15 @@ struct AppConfig
 
         // Load device name
         size_t len = prefs.getBytes("node_name", node_name, sizeof(node_name) - 1);
-        node_name[len] = '\0';
+        if (len > 0)
+        {
+            node_name[len] = '\0';
+        }
         len = prefs.getBytes("short_name", short_name, sizeof(short_name) - 1);
-        short_name[len] = '\0';
+        if (len > 0)
+        {
+            short_name[len] = '\0';
+        }
 
         // Load channel settings
         primary_enabled = prefs.getBool("primary_enabled", true);
@@ -157,7 +203,7 @@ struct AppConfig
         motion_config.sensor_id = prefs.getUChar("motion_sensor_id", motion_config.sensor_id);
         prefs.end();
 
-        prefs.begin("settings_v2", true);
+        prefs.begin("settings", true);
         map_coord_system = prefs.getUChar("map_coord", map_coord_system);
         map_source = prefs.getUChar("map_source", map_source);
         map_track_enabled = prefs.getBool("map_track", map_track_enabled);
@@ -177,17 +223,46 @@ struct AppConfig
             strncpy(route_path, path.c_str(), sizeof(route_path) - 1);
             route_path[sizeof(route_path) - 1] = '\0';
         }
-        if (prefs.isKey("chat_user"))
+        prefs.end();
+
+        prefs.begin("aprs", true);
+        aprs.enabled = prefs.getBool("enabled", aprs.enabled);
+        if (prefs.isKey("igate_call"))
         {
-            String name = prefs.getString("chat_user", node_name);
-            strncpy(node_name, name.c_str(), sizeof(node_name) - 1);
-            node_name[sizeof(node_name) - 1] = '\0';
+            String call = prefs.getString("igate_call", "");
+            strncpy(aprs.igate_callsign, call.c_str(), sizeof(aprs.igate_callsign) - 1);
+            aprs.igate_callsign[sizeof(aprs.igate_callsign) - 1] = '\0';
         }
-        if (prefs.isKey("chat_short"))
+        aprs.igate_ssid = prefs.getUChar("igate_ssid", aprs.igate_ssid);
+        if (prefs.isKey("to_call"))
         {
-            String short_name_pref = prefs.getString("chat_short", short_name);
-            strncpy(short_name, short_name_pref.c_str(), sizeof(short_name) - 1);
-            short_name[sizeof(short_name) - 1] = '\0';
+            String tocall = prefs.getString("to_call", "");
+            strncpy(aprs.tocall, tocall.c_str(), sizeof(aprs.tocall) - 1);
+            aprs.tocall[sizeof(aprs.tocall) - 1] = '\0';
+        }
+        if (prefs.isKey("path"))
+        {
+            String path = prefs.getString("path", "");
+            strncpy(aprs.path, path.c_str(), sizeof(aprs.path) - 1);
+            aprs.path[sizeof(aprs.path) - 1] = '\0';
+        }
+        aprs.tx_min_interval_s = prefs.getUShort("tx_min", aprs.tx_min_interval_s);
+        aprs.dedupe_window_s = prefs.getUShort("dedupe", aprs.dedupe_window_s);
+        aprs.symbol_table = static_cast<char>(prefs.getChar("sym_tab", aprs.symbol_table));
+        aprs.symbol_code = static_cast<char>(prefs.getChar("sym_code", aprs.symbol_code));
+        aprs.position_interval_s = prefs.getUShort("pos_interval", aprs.position_interval_s);
+        size_t map_len = prefs.getBytes("node_map", aprs.node_map, sizeof(aprs.node_map));
+        if (map_len > sizeof(aprs.node_map))
+        {
+            map_len = sizeof(aprs.node_map);
+        }
+        aprs.node_map_len = static_cast<uint8_t>(map_len);
+        aprs.self_enable = prefs.getBool("self_enable", aprs.self_enable);
+        if (prefs.isKey("self_call"))
+        {
+            String self_call = prefs.getString("self_call", "");
+            strncpy(aprs.self_callsign, self_call.c_str(), sizeof(aprs.self_callsign) - 1);
+            aprs.self_callsign[sizeof(aprs.self_callsign) - 1] = '\0';
         }
         prefs.end();
         return true;
@@ -238,7 +313,7 @@ struct AppConfig
         prefs.putUChar("motion_sensor_id", motion_config.sensor_id);
         prefs.end();
 
-        prefs.begin("settings_v2", false);
+        prefs.begin("settings", false);
         prefs.putUChar("map_coord", map_coord_system);
         prefs.putUChar("map_source", map_source);
         prefs.putBool("map_track", map_track_enabled);
@@ -253,8 +328,29 @@ struct AppConfig
         prefs.putUChar("privacy_nmea_sent", privacy_nmea_sentence);
         prefs.putBool("route_enabled", route_enabled);
         prefs.putString("route_path", route_path);
-        prefs.putString("chat_user", node_name);
-        prefs.putString("chat_short", short_name);
+        prefs.end();
+
+        prefs.begin("aprs", false);
+        prefs.putBool("enabled", aprs.enabled);
+        prefs.putString("igate_call", aprs.igate_callsign);
+        prefs.putUChar("igate_ssid", aprs.igate_ssid);
+        prefs.putString("to_call", aprs.tocall);
+        prefs.putString("path", aprs.path);
+        prefs.putUShort("tx_min", aprs.tx_min_interval_s);
+        prefs.putUShort("dedupe", aprs.dedupe_window_s);
+        prefs.putChar("sym_tab", aprs.symbol_table);
+        prefs.putChar("sym_code", aprs.symbol_code);
+        prefs.putUShort("pos_interval", aprs.position_interval_s);
+        if (aprs.node_map_len > 0)
+        {
+            prefs.putBytes("node_map", aprs.node_map, aprs.node_map_len);
+        }
+        else
+        {
+            prefs.remove("node_map");
+        }
+        prefs.putBool("self_enable", aprs.self_enable);
+        prefs.putString("self_call", aprs.self_callsign);
         prefs.end();
         return true;
     }

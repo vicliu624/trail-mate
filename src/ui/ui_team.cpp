@@ -20,7 +20,13 @@ TeamPageState g_team_state;
 
 void ui_team_enter(lv_obj_t* parent)
 {
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
     team_page_create(parent);
+    if (lv_group_get_default() == nullptr)
+    {
+        set_default_group(prev_group);
+    }
 }
 
 void ui_team_exit(lv_obj_t* parent)

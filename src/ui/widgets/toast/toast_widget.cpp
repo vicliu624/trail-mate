@@ -63,7 +63,7 @@ void Toast::show(lv_obj_t* parent, const char* text, Type type, const Options& o
     impl->label = lv_label_create(impl->root);
     lv_label_set_text(impl->label, text);
     lv_label_set_long_mode(impl->label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_color(impl->label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(impl->label, lv_color_hex(0x3A2A1A), 0);
 
     // 计算最大宽度：基于屏幕宽度（更稳定）
     // 注意：这里用 screen_active 的宽度更符合“设备屏幕”的语义
@@ -152,12 +152,12 @@ lv_color_t Toast::bgColor(Type type)
     switch (type)
     {
     case Type::Success:
-        return lv_palette_main(LV_PALETTE_GREEN);
+        return lv_color_hex(0xE3F3D8);
     case Type::Error:
-        return lv_palette_main(LV_PALETTE_RED);
+        return lv_color_hex(0xF5D6D6);
     case Type::Info:
     default:
-        return lv_palette_main(LV_PALETTE_GREY);
+        return lv_color_hex(0xFFF0D3);
     }
 }
 

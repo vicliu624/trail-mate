@@ -46,7 +46,7 @@ static void keyboard_isr()
 LilyGoKeyboard::LilyGoKeyboard()
     : _backlight(-1), _brightness(0), _irq(0), cb(nullptr),
       repeat_function(false), symbol_key_pressed(false),
-      cap_key_pressed(false), alt_key_pressed(false),
+      cap_key_pressed(false), alt_key_pressed(false), alt_combo_used(false),
       lastState(false), lastKeyVal('\0'), lastPressedTime(0)
 {
 }
@@ -110,6 +110,7 @@ bool LilyGoKeyboard::begin(const LilyGoKeyboardConfigure_t& config, TwoWire& w, 
     symbol_key_pressed = false;
     cap_key_pressed = false;
     alt_key_pressed = false;
+    alt_combo_used = false;
     lastState = false;
     lastKeyVal = '\0';
     lastPressedTime = 0;
@@ -301,17 +302,22 @@ int LilyGoKeyboard::handleSpecialKeys(uint8_t k, bool pressed, char* c)
             {
                 ui_take_screenshot_to_sd();
                 last_alt_press_ms = 0;
+                alt_key_pressed = false;
+                alt_combo_used = true;
                 return -1;
             }
             last_alt_press_ms = now;
-            if (ui_ime_is_active())
+            alt_key_pressed = true;
+            alt_combo_used = false;
+        }
+        else
+        {
+            alt_key_pressed = false;
+            if (ui_ime_is_active() && !alt_combo_used)
             {
                 ui_ime_toggle_mode();
             }
-            else
-            {
-                alt_key_pressed = !alt_key_pressed; // Switch ALT mode
-            }
+            alt_combo_used = false;
         }
         return -1;
     }
@@ -379,7 +385,7 @@ char LilyGoKeyboard::getKeyChar(uint8_t k)
     }
 
     char keyVal;
-    if (symbol_key_pressed)
+    if (symbol_key_pressed || alt_key_pressed)
     {
         // Symbol mode: access the current symbol map (first address + offset)
         keyVal = *(_config->current_symbol_map + row * _config->kb_cols + col);
@@ -399,50 +405,28 @@ char LilyGoKeyboard::getKeyChar(uint8_t k)
 
 char LilyGoKeyboard::handleSpaceAndNullChar(char keyVal, char& lastKeyVal, bool& pressed)
 {
+    // In symbol/alt mode, space is invalid.
+    if ((symbol_key_pressed || alt_key_pressed) && keyVal == ' ')
+    {
+        return '\0';
+    }
 
-#if 0
-    if (_config->has_symbol_key) {
-        if (symbol_key_pressed) {
-            if (keyVal == ' ') {
-                keyVal = '\0'; // Spaces are invalid in symbolic mode
-            }
-        } else {
-            if (keyVal == '\0' && lastKeyVal == '\0' && pressed) {
-                keyVal = ' '; // In character mode, consecutive empty characters are considered spaces
-            }
-        }
-    } else {
-        if (symbol_key_pressed && keyVal == ' ') {
-            keyVal = '\0';
-        } else if (!symbol_key_pressed && lastKeyVal == '\0') {
-            keyVal = ' ';
-            pressed = true;
-        }
-    }
-#else
-    // 符号模式下空格无效，统一转换为'\0'
-    if (symbol_key_pressed && keyVal == ' ')
+    // In normal mode, convert consecutive nulls into a space.
+    if (!symbol_key_pressed && !alt_key_pressed)
     {
-        keyVal = '\0';
-    }
-    // 非符号模式下处理空格逻辑
-    else if (!symbol_key_pressed)
-    {
-        // 有符号键的配置：连续空字符视为空格
         if (_config->has_symbol_key)
         {
             if (keyVal == '\0' && lastKeyVal == '\0' && pressed)
             {
-                keyVal = ' ';
+                return ' ';
             }
         }
-        // 无符号键的配置：上一个键为空字符则当前转换为空格
         else if (lastKeyVal == '\0' && keyVal == '\0' && pressed)
         {
-            keyVal = ' ';
+            return ' ';
         }
     }
-#endif
+
     return keyVal;
 }
 
@@ -495,6 +479,11 @@ int LilyGoKeyboard::update(char* c)
     {
         log_e("Key values out of range are ignored,current  row:%d k:%d , _config->kb_cols:%d\n", row, k, _config->kb_cols);
         return -1;
+    }
+
+    if (alt_key_pressed && pressed && k != _config->alt_key_value)
+    {
+        alt_combo_used = true;
     }
 
     // Handling special keys

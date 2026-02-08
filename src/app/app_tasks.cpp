@@ -23,6 +23,83 @@
 namespace app
 {
 
+namespace
+{
+void append_irq_flag(char* buf, size_t len, const char* name, bool set)
+{
+    if (!set || !buf || len == 0)
+    {
+        return;
+    }
+    size_t used = strlen(buf);
+    if (used >= len - 1)
+    {
+        return;
+    }
+    if (used > 0)
+    {
+        strncat(buf, "|", len - used - 1);
+        used = strlen(buf);
+        if (used >= len - 1)
+        {
+            return;
+        }
+    }
+    strncat(buf, name, len - used - 1);
+}
+
+const char* describe_irq_flags(uint32_t flags, char* buf, size_t len)
+{
+    if (!buf || len == 0)
+    {
+        return "";
+    }
+    buf[0] = '\0';
+#if defined(RADIOLIB_SX126X_IRQ_RX_DONE)
+    append_irq_flag(buf, len, "RX_DONE", (flags & RADIOLIB_SX126X_IRQ_RX_DONE) != 0);
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_CRC_ERR)
+    append_irq_flag(buf, len, "CRC_ERR", (flags & RADIOLIB_SX126X_IRQ_CRC_ERR) != 0);
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_HEADER_ERR)
+    append_irq_flag(buf, len, "HEADER_ERR", (flags & RADIOLIB_SX126X_IRQ_HEADER_ERR) != 0);
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_TIMEOUT)
+    append_irq_flag(buf, len, "TIMEOUT", (flags & RADIOLIB_SX126X_IRQ_TIMEOUT) != 0);
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_SYNC_WORD_VALID)
+    append_irq_flag(buf, len, "SYNCWORD", (flags & RADIOLIB_SX126X_IRQ_SYNC_WORD_VALID) != 0);
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED)
+    append_irq_flag(buf, len, "PREAMBLE", (flags & RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED) != 0);
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_RX_DONE)
+    append_irq_flag(buf, len, "RX_DONE", (flags & RADIOLIB_SX128X_IRQ_RX_DONE) != 0);
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_CRC_ERR)
+    append_irq_flag(buf, len, "CRC_ERR", (flags & RADIOLIB_SX128X_IRQ_CRC_ERR) != 0);
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_HEADER_ERR)
+    append_irq_flag(buf, len, "HEADER_ERR", (flags & RADIOLIB_SX128X_IRQ_HEADER_ERR) != 0);
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_TIMEOUT)
+    append_irq_flag(buf, len, "TIMEOUT", (flags & RADIOLIB_SX128X_IRQ_TIMEOUT) != 0);
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_SYNC_WORD_VALID)
+    append_irq_flag(buf, len, "SYNCWORD", (flags & RADIOLIB_SX128X_IRQ_SYNC_WORD_VALID) != 0);
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_PREAMBLE_DETECTED)
+    append_irq_flag(buf, len, "PREAMBLE", (flags & RADIOLIB_SX128X_IRQ_PREAMBLE_DETECTED) != 0);
+#endif
+    if (buf[0] == '\0')
+    {
+        strncpy(buf, "-", len - 1);
+        buf[len - 1] = '\0';
+    }
+    return buf;
+}
+} // namespace
+
 // Static members
 QueueHandle_t AppTasks::radio_tx_queue_ = nullptr;
 QueueHandle_t AppTasks::radio_rx_queue_ = nullptr;
@@ -203,6 +280,8 @@ void AppTasks::radioTask(void* pvParameters)
                             memcpy(rx_packet.data, rx_buffer, packet_length);
                             rx_packet.size = packet_length;
                             rx_packet.is_tx = false;
+                            rx_packet.rssi = board_->getRadioRSSI();
+                            rx_packet.snr = board_->getRadioSNR();
 
                             LORA_LOG("[LORA] RX len=%d\n", packet_length);
                             // Send to mesh queue
@@ -211,7 +290,14 @@ void AppTasks::radioTask(void* pvParameters)
                     }
                     else
                     {
-                        LORA_LOG("[LORA] RX read fail len=%d state=%d\n", packet_length, state);
+                        char irq_desc[96];
+                        const char* flags = describe_irq_flags(irq, irq_desc, sizeof(irq_desc));
+                        LORA_LOG("[LORA] RX read fail len=%d state=%d irq=0x%08lX flags=%s\n",
+                                 packet_length,
+                                 state,
+                                 static_cast<unsigned long>(irq),
+                                 flags);
+                        board_->clearRadioIrqFlags(irq);
                     }
                 }
             }
@@ -253,6 +339,7 @@ void AppTasks::meshTask(void* pvParameters)
             if (!rx_packet.is_tx && rx_packet.data && adapter_)
             {
                 // Decode and process through configured mesh adapter
+                adapter_->setLastRxStats(rx_packet.rssi, rx_packet.snr);
                 adapter_->handleRawPacket(rx_packet.data, rx_packet.size);
 
                 // Free buffer

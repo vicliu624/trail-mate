@@ -6,7 +6,7 @@
 
 namespace
 {
-constexpr uint32_t kGpsSampleIntervalMs = 5000;
+constexpr uint32_t kGpsSampleIntervalMs = 1000;
 }
 
 #ifndef GPS_TASK_LOG_ENABLE
@@ -143,6 +143,11 @@ uint32_t GpsService::getCollectionInterval() const
     }
 
     return interval;
+}
+
+uint32_t GpsService::getLastMotionMs() const
+{
+    return motion_policy_.lastMotionMs();
 }
 
 void GpsService::setCollectionInterval(uint32_t interval_ms)
@@ -354,6 +359,15 @@ void GpsService::gpsTask(void* pvParameters)
         uint32_t now_ms = millis();
         bool gps_ready = service->gps_adapter_.isReady();
 
+        if (service->motion_adapter_.isReady() && service->motion_policy_.isEnabled())
+        {
+            if (service->motion_policy_.shouldUpdateSensor(now_ms))
+            {
+                service->motion_adapter_.update();
+                service->motion_policy_.markSensorUpdated(now_ms);
+            }
+        }
+
         bool should_log = (loop_count <= 10) ||
                           (loop_count % 10 == 0) ||
                           ((now_ms - last_log_ms) >= 5000);
@@ -408,35 +422,57 @@ void GpsService::gpsTask(void* pvParameters)
 
                 if (has_fix)
                 {
-                    service->gps_state_.lat = service->gps_adapter_.latitude();
-                    service->gps_state_.lng = service->gps_adapter_.longitude();
-                    service->gps_state_.has_alt = service->gps_adapter_.hasAltitude();
-                    service->gps_state_.alt_m = service->gps_state_.has_alt
-                                                    ? service->gps_adapter_.altitude()
-                                                    : 0.0;
-                    service->gps_state_.has_speed = service->gps_adapter_.hasSpeed();
-                    service->gps_state_.speed_mps = service->gps_state_.has_speed
-                                                        ? service->gps_adapter_.speed()
-                                                        : 0.0;
-                    service->gps_state_.has_course = service->gps_adapter_.hasCourse();
-                    service->gps_state_.course_deg = service->gps_state_.has_course
-                                                         ? service->gps_adapter_.course()
-                                                         : 0.0;
-                    service->gps_state_.satellites = sat_count;
-                    service->gps_state_.valid = true;
-                    service->gps_last_update_time_ = millis();
-                    service->gps_state_.age = 0;
-                    track_pt.lat = service->gps_state_.lat;
-                    track_pt.lon = service->gps_state_.lng;
-                    track_pt.satellites = sat_count;
-                    track_pt.timestamp = time(nullptr);
-                    have_track_point = true;
+                    const double raw_lat = service->gps_adapter_.latitude();
+                    const double raw_lon = service->gps_adapter_.longitude();
+                    uint32_t last_motion_ms = service->motion_policy_.lastMotionMs();
+                    auto decision = service->jitter_filter_.update(raw_lat, raw_lon, now_ms, last_motion_ms);
 
-                    if (!was_valid || should_log)
+                    if (decision.accepted)
                     {
-                        GPS_TASK_LOG("[GPS Task] *** FIX ACQUIRED *** lat=%.6f, lng=%.6f, sat=%d (loop %lu)\n",
-                                     service->gps_state_.lat, service->gps_state_.lng,
-                                     service->gps_state_.satellites, loop_count);
+                        service->gps_state_.lat = raw_lat;
+                        service->gps_state_.lng = raw_lon;
+                        service->gps_state_.has_alt = service->gps_adapter_.hasAltitude();
+                        service->gps_state_.alt_m = service->gps_state_.has_alt
+                                                        ? service->gps_adapter_.altitude()
+                                                        : 0.0;
+                        service->gps_state_.has_speed = service->gps_adapter_.hasSpeed();
+                        service->gps_state_.speed_mps = service->gps_state_.has_speed
+                                                            ? service->gps_adapter_.speed()
+                                                            : 0.0;
+                        service->gps_state_.has_course = service->gps_adapter_.hasCourse();
+                        service->gps_state_.course_deg = service->gps_state_.has_course
+                                                             ? service->gps_adapter_.course()
+                                                             : 0.0;
+                        service->gps_state_.satellites = sat_count;
+                        service->gps_state_.valid = true;
+                        service->gps_last_update_time_ = millis();
+                        service->gps_state_.age = 0;
+                        track_pt.lat = service->gps_state_.lat;
+                        track_pt.lon = service->gps_state_.lng;
+                        track_pt.satellites = sat_count;
+                        track_pt.timestamp = time(nullptr);
+                        have_track_point = true;
+
+                        if (decision.forced)
+                        {
+                            log_w("[TRACK] force-accept dt=%.1fs d=%.1fm v=%.2f vmax=%.2f stationary=%d",
+                                  decision.dt_s, decision.distance_m, decision.v_gps,
+                                  decision.v_max, decision.stationary ? 1 : 0);
+                        }
+
+                        if (!was_valid || should_log)
+                        {
+                            GPS_TASK_LOG("[GPS Task] *** FIX ACQUIRED *** lat=%.6f, lng=%.6f, sat=%d (loop %lu)\n",
+                                         service->gps_state_.lat, service->gps_state_.lng,
+                                         service->gps_state_.satellites, loop_count);
+                        }
+                    }
+                    else
+                    {
+                        log_w("[TRACK] reject dt=%.1fs d=%.1fm v=%.2f vmax=%.2f stationary=%d rejects=%u",
+                              decision.dt_s, decision.distance_m, decision.v_gps,
+                              decision.v_max, decision.stationary ? 1 : 0,
+                              decision.reject_count);
                     }
                 }
                 else

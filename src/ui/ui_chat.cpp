@@ -31,10 +31,8 @@ void ui_chat_enter(lv_obj_t* parent)
     app::AppContext& ctx = app::AppContext::getInstance();
 
     extern lv_group_t* app_g;
-    if (app_g != NULL)
-    {
-        set_default_group(app_g);
-    }
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
 
     Serial.printf("[UI Chat] enter: parent=%p active=%p\n",
                   parent, lv_screen_active());
@@ -47,11 +45,20 @@ void ui_chat_enter(lv_obj_t* parent)
     // Create container
     chat_container = lv_obj_create(parent);
     lv_obj_set_size(chat_container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(chat_container, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(chat_container, lv_color_hex(0xFFF3DF), 0);
     lv_obj_set_style_bg_opa(chat_container, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(chat_container, 0, 0);
     lv_obj_set_style_pad_all(chat_container, 0, 0);
     lv_obj_set_style_radius(chat_container, 0, 0);
+
+    if (app_g != NULL)
+    {
+        set_default_group(app_g);
+    }
+    else
+    {
+        set_default_group(prev_group);
+    }
 
     Serial.printf("[UI Chat] container=%p valid=%d\n",
                   chat_container,

@@ -33,7 +33,9 @@ namespace
 
 constexpr size_t kMaxItems = 12;
 constexpr size_t kMaxOptions = 40;
-constexpr const char* kPrefsNs = "settings_v2";
+constexpr const char* kPrefsNs = "settings";
+constexpr int kNetTxPowerMin = -9;
+constexpr int kNetTxPowerMax = 22;
 
 struct CategoryDef
 {
@@ -233,6 +235,7 @@ static void reset_mesh_settings()
     g_settings.chat_channel = 0;
     g_settings.chat_psk[0] = '\0';
     g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
+    g_settings.net_tx_power = app_ctx.getConfig().mesh_config.tx_power;
     g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
     g_settings.net_duty_cycle = true;
     g_settings.net_channel_util = 0;
@@ -245,6 +248,7 @@ static void reset_mesh_settings()
     prefs.remove("chat_channel");
     prefs.remove("chat_psk");
     prefs.remove("net_preset");
+    prefs.remove("net_tx_power");
     prefs.remove("net_relay");
     prefs.remove("net_duty_cycle");
     prefs.remove("net_util");
@@ -311,8 +315,10 @@ static void settings_load()
     g_settings.map_track_interval = prefs_get_int("map_track_interval", 1);
     g_settings.map_track_format = prefs_get_int("map_track_format", 0);
 
-    prefs_get_str("chat_user", g_settings.user_name, sizeof(g_settings.user_name), "TrailMate");
-    prefs_get_str("chat_short", g_settings.short_name, sizeof(g_settings.short_name), "TM");
+    app_ctx.getEffectiveUserInfo(g_settings.user_name,
+                                 sizeof(g_settings.user_name),
+                                 g_settings.short_name,
+                                 sizeof(g_settings.short_name));
     g_settings.chat_region = app_ctx.getConfig().mesh_config.region;
     g_settings.chat_channel = prefs_get_int("chat_channel", 0);
     if (is_zero_key(app_ctx.getConfig().mesh_config.secondary_key,
@@ -329,6 +335,10 @@ static void settings_load()
     }
 
     g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
+    int tx_power = app_ctx.getConfig().mesh_config.tx_power;
+    if (tx_power < kNetTxPowerMin) tx_power = kNetTxPowerMin;
+    if (tx_power > kNetTxPowerMax) tx_power = kNetTxPowerMax;
+    g_settings.net_tx_power = tx_power;
     g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
     g_settings.net_duty_cycle = prefs_get_bool("net_duty_cycle", true);
     g_settings.net_channel_util = prefs_get_int("net_util", 0);
@@ -478,9 +488,17 @@ static void on_text_save_clicked(lv_event_t* e)
     {
         strncpy(g_state.editing_item->text_value, text, g_state.editing_item->text_max - 1);
         g_state.editing_item->text_value[g_state.editing_item->text_max - 1] = '\0';
-        prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
+        bool is_user_name = (g_state.editing_item->pref_key &&
+                             strcmp(g_state.editing_item->pref_key, "chat_user") == 0);
+        bool is_short_name = (g_state.editing_item->pref_key &&
+                              strcmp(g_state.editing_item->pref_key, "chat_short") == 0);
+        if (!is_user_name && !is_short_name)
+        {
+            prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
+        }
         update_item_value(*g_state.editing_widget);
-        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_user") == 0)
+        bool broadcast_nodeinfo = false;
+        if (is_user_name)
         {
             app::AppContext& app_ctx = app::AppContext::getInstance();
             strncpy(app_ctx.getConfig().node_name, g_state.editing_item->text_value,
@@ -488,8 +506,9 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.getConfig().node_name[sizeof(app_ctx.getConfig().node_name) - 1] = '\0';
             app_ctx.saveConfig();
             app_ctx.applyUserInfo();
+            broadcast_nodeinfo = true;
         }
-        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_short") == 0)
+        if (is_short_name)
         {
             app::AppContext& app_ctx = app::AppContext::getInstance();
             strncpy(app_ctx.getConfig().short_name, g_state.editing_item->text_value,
@@ -497,6 +516,11 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.getConfig().short_name[sizeof(app_ctx.getConfig().short_name) - 1] = '\0';
             app_ctx.saveConfig();
             app_ctx.applyUserInfo();
+            broadcast_nodeinfo = true;
+        }
+        if (broadcast_nodeinfo)
+        {
+            app::AppContext::getInstance().broadcastNodeInfo();
         }
         if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_psk") == 0)
         {
@@ -563,14 +587,14 @@ static void open_text_modal(const settings::ui::SettingItem& item, settings::ui:
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* save_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(save_btn, 90, 32);
+    lv_obj_set_size(save_btn, 90, 28);
     lv_obj_t* save_label = lv_label_create(save_btn);
     lv_label_set_text(save_label, "Save");
     lv_obj_center(save_label);
     lv_obj_add_event_cb(save_btn, on_text_save_clicked, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 32);
+    lv_obj_set_size(cancel_btn, 90, 28);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     lv_label_set_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
@@ -713,6 +737,13 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.saveConfig();
         app_ctx.applyNetworkLimits();
     }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_tx_power") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().mesh_config.tx_power = static_cast<int8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_encrypt") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
@@ -778,7 +809,7 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
     for (size_t i = 0; i < item.option_count && s_option_click_count < kMaxOptions; ++i)
     {
         lv_obj_t* btn = lv_btn_create(list);
-        lv_obj_set_size(btn, LV_PCT(100), 24);
+        lv_obj_set_size(btn, LV_PCT(100), 28);
         style::apply_btn_modal(btn);
         lv_obj_t* label = lv_label_create(btn);
         lv_label_set_text(label, item.options[i].label);
@@ -880,6 +911,40 @@ static const settings::ui::SettingOption kNetPresetOptions[] = {
     {"ShortSlow", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW},
     {"ShortTurbo", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO},
 };
+static const settings::ui::SettingOption kNetTxPowerOptions[] = {
+    {"-9 dBm", -9},
+    {"-8 dBm", -8},
+    {"-7 dBm", -7},
+    {"-6 dBm", -6},
+    {"-5 dBm", -5},
+    {"-4 dBm", -4},
+    {"-3 dBm", -3},
+    {"-2 dBm", -2},
+    {"-1 dBm", -1},
+    {"0 dBm", 0},
+    {"1 dBm", 1},
+    {"2 dBm", 2},
+    {"3 dBm", 3},
+    {"4 dBm", 4},
+    {"5 dBm", 5},
+    {"6 dBm", 6},
+    {"7 dBm", 7},
+    {"8 dBm", 8},
+    {"9 dBm", 9},
+    {"10 dBm", 10},
+    {"11 dBm", 11},
+    {"12 dBm", 12},
+    {"13 dBm", 13},
+    {"14 dBm", 14},
+    {"15 dBm", 15},
+    {"16 dBm", 16},
+    {"17 dBm", 17},
+    {"18 dBm", 18},
+    {"19 dBm", 19},
+    {"20 dBm", 20},
+    {"21 dBm", 21},
+    {"22 dBm", 22},
+};
 static const settings::ui::SettingOption kNetUtilOptions[] = {
     {"Auto", 0},
     {"Limit 25%", 25},
@@ -943,6 +1008,8 @@ static settings::ui::SettingItem kGpsItems[] = {
     {"Update Interval", settings::ui::SettingType::Enum, kGpsIntervalOptions, 4, &g_settings.gps_interval, nullptr, nullptr, 0, false, "gps_interval"},
     {"Altitude Reference", settings::ui::SettingType::Enum, kGpsAltOptions, 2, &g_settings.gps_alt_ref, nullptr, nullptr, 0, false, "gps_alt_ref"},
     {"Coordinate Format", settings::ui::SettingType::Enum, kGpsCoordOptions, 3, &g_settings.gps_coord_format, nullptr, nullptr, 0, false, "gps_coord_fmt"},
+    {"NMEA Output", settings::ui::SettingType::Enum, kPrivacyNmeaOptions, 3, &g_settings.privacy_nmea_output, nullptr, nullptr, 0, false, "privacy_nmea"},
+    {"NMEA Sentences", settings::ui::SettingType::Enum, kPrivacyNmeaSentenceOptions, 3, &g_settings.privacy_nmea_sentence, nullptr, nullptr, 0, false, "privacy_nmea_sent"},
 };
 
 static settings::ui::SettingItem kMapItems[] = {
@@ -960,6 +1027,8 @@ static settings::ui::SettingItem kChatItems[] = {
     {"Region", settings::ui::SettingType::Enum, kChatRegionOptions, 0, &g_settings.chat_region, nullptr, nullptr, 0, false, "chat_region"},
     {"Channel", settings::ui::SettingType::Enum, kChatChannelOptions, 2, &g_settings.chat_channel, nullptr, nullptr, 0, false, "chat_channel"},
     {"Channel Key / PSK", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.chat_psk, sizeof(g_settings.chat_psk), true, "chat_psk"},
+    {"Encryption Mode", settings::ui::SettingType::Enum, kPrivacyEncryptOptions, 3, &g_settings.privacy_encrypt_mode, nullptr, nullptr, 0, false, "privacy_encrypt"},
+    {"PKI", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.privacy_pki, nullptr, 0, false, "privacy_pki"},
     {"Reset Mesh Params", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_mesh"},
     {"Reset Node DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_nodes"},
     {"Clear Message DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_clear_messages"},
@@ -967,16 +1036,11 @@ static settings::ui::SettingItem kChatItems[] = {
 
 static settings::ui::SettingItem kNetworkItems[] = {
     {"Modem Preset", settings::ui::SettingType::Enum, kNetPresetOptions, 8, &g_settings.net_modem_preset, nullptr, nullptr, 0, false, "net_preset"},
+    {"TX Power", settings::ui::SettingType::Enum, kNetTxPowerOptions,
+     sizeof(kNetTxPowerOptions) / sizeof(kNetTxPowerOptions[0]), &g_settings.net_tx_power, nullptr, nullptr, 0, false, "net_tx_power"},
     {"Relay / Repeater", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_relay, nullptr, 0, false, "net_relay"},
     {"Duty Cycle Limit", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_duty_cycle, nullptr, 0, false, "net_duty_cycle"},
     {"Channel Utilization", settings::ui::SettingType::Enum, kNetUtilOptions, 3, &g_settings.net_channel_util, nullptr, nullptr, 0, false, "net_util"},
-};
-
-static settings::ui::SettingItem kPrivacyItems[] = {
-    {"Encryption Mode", settings::ui::SettingType::Enum, kPrivacyEncryptOptions, 3, &g_settings.privacy_encrypt_mode, nullptr, nullptr, 0, false, "privacy_encrypt"},
-    {"PKI", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.privacy_pki, nullptr, 0, false, "privacy_pki"},
-    {"NMEA Output", settings::ui::SettingType::Enum, kPrivacyNmeaOptions, 3, &g_settings.privacy_nmea_output, nullptr, nullptr, 0, false, "privacy_nmea"},
-    {"NMEA Sentences", settings::ui::SettingType::Enum, kPrivacyNmeaSentenceOptions, 3, &g_settings.privacy_nmea_sentence, nullptr, nullptr, 0, false, "privacy_nmea_sent"},
 };
 
 static settings::ui::SettingItem kScreenItems[] = {
@@ -993,7 +1057,6 @@ static const CategoryDef kCategories[] = {
     {"Map", kMapItems, sizeof(kMapItems) / sizeof(kMapItems[0])},
     {"Chat", kChatItems, sizeof(kChatItems) / sizeof(kChatItems[0])},
     {"Network", kNetworkItems, sizeof(kNetworkItems) / sizeof(kNetworkItems[0])},
-    {"Privacy", kPrivacyItems, sizeof(kPrivacyItems) / sizeof(kPrivacyItems[0])},
     {"System", kScreenItems, sizeof(kScreenItems) / sizeof(kScreenItems[0])},
     {"Advanced", kAdvancedItems, sizeof(kAdvancedItems) / sizeof(kAdvancedItems[0])},
 };
@@ -1026,6 +1089,7 @@ static bool should_show_item(const settings::ui::SettingItem& item)
         if (strcmp(item.pref_key, "chat_channel") == 0) return false;
         if (strcmp(item.pref_key, "chat_psk") == 0) return false;
         if (strcmp(item.pref_key, "net_preset") == 0) return false;
+        if (strcmp(item.pref_key, "net_tx_power") == 0) return false;
         if (strcmp(item.pref_key, "net_relay") == 0) return false;
         if (strcmp(item.pref_key, "net_duty_cycle") == 0) return false;
         if (strcmp(item.pref_key, "net_util") == 0) return false;
@@ -1061,7 +1125,7 @@ static void build_item_list()
         }
 
         lv_obj_t* btn = lv_btn_create(g_state.list_panel);
-        lv_obj_set_size(btn, LV_PCT(100), 22);
+        lv_obj_set_size(btn, LV_PCT(100), 28);
         lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
         lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
         lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
@@ -1082,7 +1146,7 @@ static void build_item_list()
         g_state.item_count++;
     }
     g_state.list_back_btn = lv_btn_create(g_state.list_panel);
-    lv_obj_set_size(g_state.list_back_btn, LV_PCT(100), 22);
+    lv_obj_set_size(g_state.list_back_btn, LV_PCT(100), 28);
     lv_obj_set_style_pad_left(g_state.list_back_btn, 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(g_state.list_back_btn, 10, LV_PART_MAIN);
     lv_obj_set_flex_flow(g_state.list_back_btn, LV_FLEX_FLOW_ROW);
@@ -1227,6 +1291,10 @@ void create(lv_obj_t* parent)
 {
     settings_load();
 
+    // Avoid auto-adding widgets to the current default group during creation.
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
     g_state.parent = parent;
     g_state.root = layout::create_root(parent);
     layout::create_header(g_state.root, settings_back_cb, nullptr);
@@ -1239,7 +1307,7 @@ void create(lv_obj_t* parent)
     for (size_t i = 0; i < g_state.filter_count; ++i)
     {
         lv_obj_t* btn = lv_btn_create(g_state.filter_panel);
-        lv_obj_set_size(btn, LV_PCT(100), 22);
+        lv_obj_set_size(btn, LV_PCT(100), 28);
         style::apply_btn_filter(btn);
         lv_obj_add_event_cb(btn, on_filter_clicked, LV_EVENT_CLICKED, reinterpret_cast<void*>(i));
         lv_obj_add_event_cb(btn, on_filter_focused, LV_EVENT_FOCUSED, reinterpret_cast<void*>(i));
@@ -1252,6 +1320,9 @@ void create(lv_obj_t* parent)
 
     update_filter_styles();
     build_item_list();
+
+    // Restore previous default group before initializing input.
+    set_default_group(prev_group);
     settings::ui::input::init();
 }
 

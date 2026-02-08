@@ -41,22 +41,22 @@ lv_style_t s_zoom_content_area;
 lv_style_t s_zoom_value_label;
 lv_style_t s_zoom_value_label_focused;
 
-constexpr uint32_t kBlack = 0x000000;
-constexpr uint32_t kWhite = 0xFFFFFF;
-constexpr uint32_t kPanelBtnBg = 0xF4C77A;
-constexpr uint32_t kPanelBtnBorder = 0xEBA341;
+constexpr uint32_t kBlack = 0xFFF3DF;
+constexpr uint32_t kWhite = 0xFFF7E9;
+constexpr uint32_t kPanelBtnBg = 0xFFF7E9;
+constexpr uint32_t kPanelBtnBorder = 0xD9B06A;
 constexpr uint32_t kPanelBtnFocused = 0xEBA341;
-constexpr uint32_t kPanelBtnPressed = 0xF1B65A;
-constexpr uint32_t kPanelBtnText = 0x202020;
-constexpr uint32_t kResolutionText = 0x808080;
-constexpr uint32_t kIndicatorText = 0x00AAFF;
-constexpr uint32_t kToastBg = 0x333333;
-constexpr uint32_t kToastBorder = 0x666666;
-constexpr uint32_t kModalWinBorder = 0x333333;
-constexpr uint32_t kZoomWinBg = 0x222222;
-constexpr uint32_t kZoomTitleBarBg = 0x2C2C2C;
-constexpr uint32_t kZoomValueText = 0x000000;
-constexpr uint32_t kZoomValueFocusedBg = 0xF0F0F0;
+constexpr uint32_t kPanelBtnPressed = 0xEBA341;
+constexpr uint32_t kPanelBtnText = 0x3A2A1A;
+constexpr uint32_t kResolutionText = 0x6A5646;
+constexpr uint32_t kIndicatorText = 0x2F6FD6;
+constexpr uint32_t kToastBg = 0xFFF0D3;
+constexpr uint32_t kToastBorder = 0xD9B06A;
+constexpr uint32_t kModalWinBorder = 0xD9B06A;
+constexpr uint32_t kZoomWinBg = 0xFFF7E9;
+constexpr uint32_t kZoomTitleBarBg = 0xEBA341;
+constexpr uint32_t kZoomValueText = 0x3A2A1A;
+constexpr uint32_t kZoomValueFocusedBg = 0xFFF0D3;
 
 } // namespace
 
@@ -150,7 +150,7 @@ void init_once()
     lv_style_set_pad_all(&s_loading_box, 20);
 
     lv_style_init(&s_loading_label);
-    lv_style_set_text_color(&s_loading_label, lv_color_hex(kWhite));
+    lv_style_set_text_color(&s_loading_label, lv_color_hex(0x3A2A1A));
     lv_style_set_text_font(&s_loading_label, &lv_font_montserrat_16);
 
     lv_style_init(&s_toast_box);
@@ -162,7 +162,7 @@ void init_once()
     lv_style_set_pad_all(&s_toast_box, 12);
 
     lv_style_init(&s_toast_label);
-    lv_style_set_text_color(&s_toast_label, lv_color_hex(kWhite));
+    lv_style_set_text_color(&s_toast_label, lv_color_hex(0x3A2A1A));
     lv_style_set_text_font(&s_toast_label, &lv_font_montserrat_16);
     lv_style_set_text_align(&s_toast_label, LV_TEXT_ALIGN_CENTER);
 
@@ -174,7 +174,11 @@ void init_once()
     lv_style_set_pad_all(&s_indicator_label, 8);
 
     lv_style_init(&s_tracker_list);
-    lv_style_set_pad_top(&s_tracker_list, 32);
+    lv_style_set_pad_top(&s_tracker_list, 8);
+    lv_style_set_pad_bottom(&s_tracker_list, 6);
+    lv_style_set_pad_row(&s_tracker_list, 4);
+    lv_style_set_bg_opa(&s_tracker_list, LV_OPA_TRANSP);
+    lv_style_set_border_width(&s_tracker_list, 0);
 
     lv_style_init(&s_modal_bg);
     lv_style_set_bg_color(&s_modal_bg, lv_color_hex(kBlack));
@@ -208,7 +212,7 @@ void init_once()
     lv_style_set_radius(&s_zoom_title_bar, 0);
 
     lv_style_init(&s_zoom_title_label);
-    lv_style_set_text_color(&s_zoom_title_label, lv_color_hex(kWhite));
+    lv_style_set_text_color(&s_zoom_title_label, lv_color_hex(0x3A2A1A));
     lv_style_set_text_font(&s_zoom_title_label, &lv_font_montserrat_18);
 
     lv_style_init(&s_zoom_content_area);

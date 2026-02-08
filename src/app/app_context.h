@@ -11,6 +11,7 @@
 #include "../team/infra/crypto/team_crypto.h"
 #include "../team/infra/event/team_event_bus_sink.h"
 #include "../team/usecase/team_controller.h"
+#include "../team/usecase/team_pairing_service.h"
 #include "../team/usecase/team_service.h"
 
 namespace app
@@ -33,6 +34,7 @@ class AppContext;
 #include "../team/usecase/team_track_sampler.h"
 #include "../ui/ui_controller.h"
 #include "app_config.h"
+#include <cstddef>
 #include <memory>
 
 class BoardBase;
@@ -93,6 +95,11 @@ class AppContext
         return team_controller_.get();
     }
 
+    team::TeamPairingService* getTeamPairing()
+    {
+        return team_pairing_service_.get();
+    }
+
     /**
      * @brief Get configuration
      */
@@ -123,9 +130,23 @@ class AppContext
     {
         if (mesh_adapter_)
         {
-            mesh_adapter_->setUserInfo(config_.node_name, config_.short_name);
+            char long_name[sizeof(config_.node_name)];
+            char short_name[sizeof(config_.short_name)];
+            getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+            mesh_adapter_->setUserInfo(long_name, short_name);
         }
     }
+
+    void broadcastNodeInfo()
+    {
+        if (mesh_adapter_)
+        {
+            mesh_adapter_->requestNodeInfo(0xFFFFFFFF, false);
+        }
+    }
+
+    void getEffectiveUserInfo(char* out_long, size_t long_len,
+                              char* out_short, size_t short_len) const;
 
     void applyNetworkLimits()
     {
@@ -201,6 +222,7 @@ class AppContext
     std::unique_ptr<team::TeamService> team_service_;
     std::unique_ptr<team::TeamController> team_controller_;
     std::unique_ptr<team::TeamTrackSampler> team_track_sampler_;
+    std::unique_ptr<team::TeamPairingService> team_pairing_service_;
 
     // UI
     std::unique_ptr<chat::ui::UiController> ui_controller_;

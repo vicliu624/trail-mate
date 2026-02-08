@@ -7,14 +7,14 @@ namespace chat::ui::compose::layout
 
 struct Spec
 {
-    int action_bar_h = 30;
+    int action_bar_h = 32;
     int action_pad_lr = 10;
-    int action_pad_tb = 4;
+    int action_pad_tb = 2;
 
     int content_pad = 8;
     int content_row_pad = 4;
 
-    int btn_h = 22;
+    int btn_h = 28;
     int send_w = 70;
     int position_w = 80;
     int cancel_w = 80;

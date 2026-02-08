@@ -86,6 +86,14 @@ class UiController
     }
 
     /**
+     * @brief Check if team conversation is active
+     */
+    bool isTeamConversationActive() const
+    {
+        return team_conv_active_;
+    }
+
+    /**
      * @brief Get parent object
      */
     lv_obj_t* getParent() const

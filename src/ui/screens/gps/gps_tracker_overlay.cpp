@@ -319,6 +319,11 @@ void close_tracker_modal()
     bind_encoder_to_group(app_g);
 }
 
+void on_tracker_close_clicked(lv_event_t* /*e*/)
+{
+    close_tracker_modal();
+}
+
 void on_track_selected(lv_event_t* e)
 {
     if (!is_alive())
@@ -357,14 +362,30 @@ void build_tracker_modal()
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
 
     lv_obj_t* list = lv_list_create(s.tracker_modal.win);
-    lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_size(list, LV_PCT(100), 90);
+    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 28);
     gps::ui::styles::apply_tracker_modal_list(list);
+
+    lv_obj_t* close_btn = lv_btn_create(s.tracker_modal.win);
+    lv_obj_set_size(close_btn, 100, 24);
+    lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -4);
+    gps::ui::styles::apply_control_button(close_btn);
+    lv_obj_t* close_label = lv_label_create(close_btn);
+    lv_label_set_text(close_label, "Close");
+    gps::ui::styles::apply_control_button_label(close_label);
+    lv_obj_center(close_label);
+    lv_obj_add_event_cb(close_btn, on_tracker_close_clicked, LV_EVENT_CLICKED, nullptr);
 
     File dir = SD.open("/trackers");
     if (!dir || !dir.isDirectory())
     {
         lv_obj_t* label = lv_label_create(list);
         lv_label_set_text(label, "No trackers folder");
+        lv_group_remove_all_objs(s.tracker_modal.group);
+        lv_group_add_obj(s.tracker_modal.group, close_btn);
+        set_default_group(s.tracker_modal.group);
+        bind_encoder_to_group(s.tracker_modal.group);
+        lv_group_focus_obj(close_btn);
         return;
     }
 
@@ -384,6 +405,11 @@ void build_tracker_modal()
     {
         lv_obj_t* label = lv_label_create(list);
         lv_label_set_text(label, "No track files");
+        lv_group_remove_all_objs(s.tracker_modal.group);
+        lv_group_add_obj(s.tracker_modal.group, close_btn);
+        set_default_group(s.tracker_modal.group);
+        bind_encoder_to_group(s.tracker_modal.group);
+        lv_group_focus_obj(close_btn);
         return;
     }
 
@@ -392,9 +418,23 @@ void build_tracker_modal()
     {
         const String& n = s_modal_names[i];
         lv_obj_t* btn = lv_list_add_btn(list, LV_SYMBOL_FILE, n.c_str());
+        lv_obj_set_height(btn, 26);
+        lv_obj_set_style_pad_ver(btn, 2, LV_PART_MAIN);
+        lv_obj_set_style_pad_hor(btn, 6, LV_PART_MAIN);
+        gps::ui::styles::apply_control_button(btn);
+        const uint32_t child_count = lv_obj_get_child_cnt(btn);
+        for (uint32_t c = 0; c < child_count; ++c)
+        {
+            lv_obj_t* child = lv_obj_get_child(btn, c);
+            if (child && lv_obj_check_type(child, &lv_label_class))
+            {
+                gps::ui::styles::apply_control_button_label(child);
+            }
+        }
         lv_obj_add_event_cb(btn, on_track_selected, LV_EVENT_CLICKED, (void*)i);
         lv_group_add_obj(s.tracker_modal.group, btn);
     }
+    lv_group_add_obj(s.tracker_modal.group, close_btn);
 
     set_default_group(s.tracker_modal.group);
     bind_encoder_to_group(s.tracker_modal.group);
@@ -462,6 +502,7 @@ void gps_tracker_open_modal()
         return;
     }
 
+    modal_set_size(g_gps_state.tracker_modal, 280, 190);
     build_tracker_modal();
 }
 

@@ -83,7 +83,7 @@ static void set_btn_label_white(lv_obj_t* btn)
     lv_obj_t* child = lv_obj_get_child(btn, 0);
     if (child && lv_obj_check_type(child, &lv_label_class))
     {
-        lv_obj_set_style_text_color(child, lv_color_white(), 0);
+        lv_obj_set_style_text_color(child, lv_color_hex(0x3A2A1A), 0);
     }
 }
 
@@ -291,6 +291,9 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     lv_obj_add_event_cb(impl_->w.send_btn, on_action_click, LV_EVENT_CLICKED, &impl_->send_ctx);
     lv_obj_add_event_cb(impl_->w.position_btn, on_action_click, LV_EVENT_CLICKED, &impl_->position_ctx);
     lv_obj_add_event_cb(impl_->w.cancel_btn, on_action_click, LV_EVENT_CLICKED, &impl_->cancel_ctx);
+    lv_obj_add_event_cb(impl_->w.send_btn, on_key, LV_EVENT_KEY, this);
+    lv_obj_add_event_cb(impl_->w.position_btn, on_key, LV_EVENT_KEY, this);
+    lv_obj_add_event_cb(impl_->w.cancel_btn, on_key, LV_EVENT_KEY, this);
 
     set_btn_label_white(impl_->w.send_btn);
     set_btn_label_white(impl_->w.position_btn);
@@ -574,12 +577,18 @@ void ChatComposeScreen::on_key(lv_event_t* e)
         return;
     }
 
+    uint32_t key = lv_event_get_key(e);
+    if (key == LV_KEY_BACKSPACE)
+    {
+        on_back(screen);
+        return;
+    }
+
     if (screen->ime_widget_ && screen->ime_widget_->handle_key(e))
     {
         return;
     }
 
-    uint32_t key = lv_event_get_key(e);
     CHAT_COMPOSE_LOG("[ChatCompose] key=%lu\n", static_cast<unsigned long>(key));
 
     lv_indev_t* indev = lv_indev_get_act();

@@ -1,6 +1,6 @@
 /**
  * @file team_track_sampler.h
- * @brief Periodic Team track sampler (fixed interval, max 20 points)
+ * @brief Periodic Team track sampler (fixed interval, max 5 points)
  */
 
 #pragma once
@@ -24,7 +24,7 @@ class TeamTrackSampler
     void samplePoint(uint32_t now_ms);
     void flushWindow(TeamController* controller);
 
-    static constexpr uint32_t kSampleIntervalMs = 30000;
+    static constexpr uint32_t kSampleIntervalMs = 120000;
 
     uint32_t next_sample_ms_ = 0;
     uint32_t start_ts_ = 0;

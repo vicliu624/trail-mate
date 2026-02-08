@@ -11,6 +11,7 @@
 #include "../motion_policy.h"
 #include "board/GpsBoard.h"
 #include "board/MotionBoard.h"
+#include "gps/usecase/gps_jitter_filter.h"
 
 namespace gps
 {
@@ -33,6 +34,9 @@ class GpsService
     void setMotionIdleTimeout(uint32_t timeout_ms);
     void setMotionSensorId(uint8_t sensor_id);
     TaskHandle_t getTaskHandle() const { return gps_task_handle_; }
+    bool isEnabled() const { return !gps_disabled_ && gps_board_ != nullptr; }
+    bool isPowered() const { return gps_powered_; }
+    uint32_t getLastMotionMs() const;
 
   private:
     GpsService() = default;
@@ -72,6 +76,7 @@ class GpsService
     MotionPolicy motion_policy_{};
     HalGpsAdapter gps_adapter_{};
     HalMotionAdapter motion_adapter_{};
+    GpsJitterFilter jitter_filter_{};
 };
 
 } // namespace gps

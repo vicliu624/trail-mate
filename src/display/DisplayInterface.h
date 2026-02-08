@@ -123,3 +123,7 @@ class LilyGoDispArduinoSPI
     bool lock(TickType_t xTicksToWait = portMAX_DELAY);
     void unlock();
 };
+
+// Global display SPI lock helpers (set by LilyGoDispArduinoSPI::init)
+bool display_spi_lock(TickType_t xTicksToWait = portMAX_DELAY);
+void display_spi_unlock();

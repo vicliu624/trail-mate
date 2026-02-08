@@ -25,63 +25,6 @@ bool TeamController::setKeysFromPsk(const TeamId& team_id, uint32_t key_id,
     return service_.setKeysFromPsk(team_id, key_id, psk, psk_len);
 }
 
-bool TeamController::onCreateTeam(const team::proto::TeamAdvertise& advertise,
-                                  chat::ChannelId channel)
-{
-    bool ok = service_.sendAdvertise(advertise, channel);
-    if (ok)
-    {
-        state_ = TeamUiState::Active;
-    }
-    return ok;
-}
-
-bool TeamController::onAdvertise(const team::proto::TeamAdvertise& advertise,
-                                 chat::ChannelId channel, chat::NodeId dest)
-{
-    (void)dest;
-    return service_.sendAdvertise(advertise, channel);
-}
-
-bool TeamController::onJoinTeam(const team::proto::TeamJoinRequest& join_request,
-                                chat::ChannelId channel, chat::NodeId dest)
-{
-    bool ok = service_.sendJoinRequest(join_request, channel, dest);
-    if (ok)
-    {
-        state_ = TeamUiState::PendingJoin;
-    }
-    return ok;
-}
-
-bool TeamController::onAcceptJoin(const team::proto::TeamJoinAccept& accept,
-                                  chat::ChannelId channel, chat::NodeId dest)
-{
-    bool ok = service_.sendJoinAccept(accept, channel, dest);
-    if (ok)
-    {
-        state_ = TeamUiState::Active;
-    }
-    return ok;
-}
-
-bool TeamController::onConfirmJoin(const team::proto::TeamJoinConfirm& confirm,
-                                   chat::ChannelId channel, chat::NodeId dest)
-{
-    bool ok = service_.sendJoinConfirm(confirm, channel, dest);
-    if (ok)
-    {
-        state_ = TeamUiState::Active;
-    }
-    return ok;
-}
-
-bool TeamController::onJoinDecision(const team::proto::TeamJoinDecision& decision,
-                                    chat::ChannelId channel, chat::NodeId dest)
-{
-    return service_.sendJoinDecision(decision, channel, dest);
-}
-
 bool TeamController::onKick(const team::proto::TeamKick& kick,
                             chat::ChannelId channel, chat::NodeId dest)
 {

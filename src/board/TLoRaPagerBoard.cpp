@@ -10,6 +10,7 @@
 #include <cstring>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
+#include <limits>
 
 #include "display/drivers/ST7796.h"
 #include "pins_arduino.h"
@@ -1109,6 +1110,38 @@ void TLoRaPagerBoard::clearRadioIrqFlags(uint32_t flags)
     }
 }
 
+float TLoRaPagerBoard::getRadioRSSI()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        float rssi = radio_.getRSSI();
+        LilyGoDispArduinoSPI::unlock();
+        return rssi;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+float TLoRaPagerBoard::getRadioSNR()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        float snr = radio_.getSNR();
+        LilyGoDispArduinoSPI::unlock();
+        return snr;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+static void apply_tx_power(SX1262Access& radio, int8_t tx_power)
+{
+    constexpr int8_t kTxPowerMinDbm = -9;
+    int8_t clipped = tx_power;
+    if (clipped < kTxPowerMinDbm) clipped = kTxPowerMinDbm;
+    radio.setOutputPower(clipped);
+}
+#endif
+
 void TLoRaPagerBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                                          int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                                          uint8_t crc_len)
@@ -1119,7 +1152,11 @@ void TLoRaPagerBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t s
         radio_.setBandwidth(bw_khz);
         radio_.setSpreadingFactor(sf);
         radio_.setCodingRate(cr_denom);
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+        apply_tx_power(radio_, tx_power);
+#else
         radio_.setOutputPower(tx_power);
+#endif
         radio_.setPreambleLength(preamble_len);
         radio_.setSyncWord(sync_word);
         radio_.setCRC(crc_len);

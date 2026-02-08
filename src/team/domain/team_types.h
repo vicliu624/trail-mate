@@ -22,4 +22,22 @@ struct TeamKeys
     bool valid = false;
 };
 
+enum class TeamPairingRole : uint8_t
+{
+    None = 0,
+    Leader = 1,
+    Member = 2
+};
+
+enum class TeamPairingState : uint8_t
+{
+    Idle = 0,
+    LeaderBeacon = 1,
+    MemberScanning = 2,
+    JoinSent = 3,
+    WaitingKey = 4,
+    Completed = 5,
+    Failed = 6
+};
+
 } // namespace team

@@ -4,10 +4,13 @@
  */
 
 #include "mt_adapter.h"
+#include "../../../app/app_context.h"
+#include "../../../gps/gps_service_api.h"
 #include "../../../sys/event_bus.h"
 #include "../../../team/protocol/team_portnum.h"
 #include "../../domain/contact_types.h"
 #include "../../ports/i_node_store.h"
+#include "../../time_utils.h"
 #include <Arduino.h>
 #include <Crypto.h>
 #include <algorithm>
@@ -15,12 +18,12 @@
 #include <cmath>
 #include <cstring>
 #include <ctime>
+#include <limits>
 #include <string>
 #define TEST_CURVE25519_FIELD_OPS
 #include "../../../board/TLoRaPagerTypes.h"
 #include "generated/meshtastic/config.pb.h"
 #include "mt_region.h"
-#include "node_persist.h"
 #include <AES.h>
 #include <Curve25519.h>
 #include <Preferences.h>
@@ -52,13 +55,6 @@ constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
-using chat::meshtastic::kPersistMaxNodes;
-using chat::meshtastic::kPersistNodesKey;
-using chat::meshtastic::kPersistNodesKeyCrc;
-using chat::meshtastic::kPersistNodesKeyVer;
-using chat::meshtastic::kPersistNodesNs;
-using chat::meshtastic::kPersistVersion;
-using chat::meshtastic::PersistedNodeEntry;
 
 bool allowPkiForPortnum(uint32_t portnum)
 {
@@ -126,169 +122,6 @@ static const char* keyVerificationStage(const meshtastic_KeyVerification& kv)
     return "UNKNOWN";
 }
 
-static uint32_t crc32(const uint8_t* data, size_t len)
-{
-    uint32_t crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < len; ++i)
-    {
-        crc ^= data[i];
-        for (int j = 0; j < 8; ++j)
-        {
-            if (crc & 1U)
-            {
-                crc = (crc >> 1) ^ 0xEDB88320U;
-            }
-            else
-            {
-                crc >>= 1;
-            }
-        }
-    }
-    return ~crc;
-}
-
-static void fastPersistNodeInfo(uint32_t node_id,
-                                const char* short_name,
-                                const char* long_name,
-                                float snr,
-                                uint32_t now_secs,
-                                uint8_t protocol)
-{
-    if (node_id == 0)
-    {
-        return;
-    }
-
-    std::vector<PersistedNodeEntry> entries;
-    Preferences prefs;
-    if (!prefs.begin(kPersistNodesNs, false))
-    {
-        LORA_LOG("[LORA] fastPersistNodeInfo open failed ns=%s\n", kPersistNodesNs);
-        return;
-    }
-
-    size_t len = prefs.getBytesLength(kPersistNodesKey);
-    if (len > 0 && (len % sizeof(PersistedNodeEntry) == 0))
-    {
-        size_t count = len / sizeof(PersistedNodeEntry);
-        if (count > kPersistMaxNodes)
-        {
-            count = kPersistMaxNodes;
-        }
-        entries.resize(count);
-        prefs.getBytes(kPersistNodesKey, entries.data(), count * sizeof(PersistedNodeEntry));
-    }
-    else if (len > 0 && (len % sizeof(chat::contacts::NodeEntry) == 0))
-    {
-        size_t count = len / sizeof(chat::contacts::NodeEntry);
-        if (count > kPersistMaxNodes)
-        {
-            count = kPersistMaxNodes;
-        }
-        std::vector<chat::contacts::NodeEntry> legacy(count);
-        prefs.getBytes(kPersistNodesKey, legacy.data(), count * sizeof(chat::contacts::NodeEntry));
-        entries.clear();
-        entries.reserve(count);
-        for (const auto& src : legacy)
-        {
-            PersistedNodeEntry dst{};
-            dst.node_id = src.node_id;
-            memcpy(dst.short_name, src.short_name, sizeof(dst.short_name));
-            dst.short_name[sizeof(dst.short_name) - 1] = '\0';
-            memcpy(dst.long_name, src.long_name, sizeof(dst.long_name));
-            dst.long_name[sizeof(dst.long_name) - 1] = '\0';
-            dst.last_seen = src.last_seen;
-            dst.snr = src.snr;
-            dst.protocol = src.protocol;
-            entries.push_back(dst);
-        }
-    }
-
-    bool updated = false;
-    for (auto& entry : entries)
-    {
-        if (entry.node_id == node_id)
-        {
-            if (short_name && short_name[0] != '\0')
-            {
-                strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
-                entry.short_name[sizeof(entry.short_name) - 1] = '\0';
-            }
-            if (long_name && long_name[0] != '\0')
-            {
-                strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
-                entry.long_name[sizeof(entry.long_name) - 1] = '\0';
-            }
-            entry.last_seen = now_secs;
-            entry.snr = snr;
-            if (protocol != 0)
-            {
-                entry.protocol = protocol;
-            }
-            updated = true;
-            break;
-        }
-    }
-
-    if (!updated)
-    {
-        if (entries.size() >= kPersistMaxNodes)
-        {
-            entries.erase(entries.begin());
-        }
-        PersistedNodeEntry entry{};
-        entry.node_id = node_id;
-        if (short_name && short_name[0] != '\0')
-        {
-            strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
-            entry.short_name[sizeof(entry.short_name) - 1] = '\0';
-        }
-        if (long_name && long_name[0] != '\0')
-        {
-            strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
-            entry.long_name[sizeof(entry.long_name) - 1] = '\0';
-        }
-        entry.last_seen = now_secs;
-        entry.snr = snr;
-        entry.protocol = protocol;
-        entries.push_back(entry);
-    }
-
-    if (!entries.empty())
-    {
-        size_t expected = entries.size() * sizeof(PersistedNodeEntry);
-        size_t written = prefs.putBytes(kPersistNodesKey, entries.data(), expected);
-        if (written != expected)
-        {
-            prefs.remove(kPersistNodesKey);
-            written = prefs.putBytes(kPersistNodesKey, entries.data(), expected);
-        }
-        uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(entries.data()), expected);
-        prefs.putUChar(kPersistNodesKeyVer, kPersistVersion);
-        prefs.putUInt(kPersistNodesKeyCrc, crc);
-        if (written != expected)
-        {
-            LORA_LOG("[LORA] fastPersistNodeInfo write failed wrote=%u expected=%u\n",
-                     static_cast<unsigned>(written),
-                     static_cast<unsigned>(expected));
-        }
-        else
-        {
-            size_t verify_len = prefs.getBytesLength(kPersistNodesKey);
-            uint8_t verify_ver = prefs.getUChar(kPersistNodesKeyVer, 0);
-            uint32_t verify_crc = prefs.getUInt(kPersistNodesKeyCrc, 0);
-            LORA_LOG("[LORA] fastPersistNodeInfo write ok len=%u ver=%u crc=%08lX\n",
-                     static_cast<unsigned>(verify_len),
-                     static_cast<unsigned>(verify_ver),
-                     static_cast<unsigned long>(verify_crc));
-        }
-    }
-    prefs.end();
-    LORA_LOG("[LORA] fastPersistNodeInfo saved node=%08lX total=%u\n",
-             static_cast<unsigned long>(node_id),
-             static_cast<unsigned>(entries.size()));
-}
-
 static const char* routingErrorName(meshtastic_Routing_Error err)
 {
     switch (err)
@@ -330,6 +163,98 @@ static const char* routingErrorName(meshtastic_Routing_Error err)
     default:
         return "UNKNOWN";
     }
+}
+
+static bool hasValidPosition(const meshtastic_Position& pos)
+{
+    return pos.has_latitude_i && pos.has_longitude_i;
+}
+
+static bool build_self_position_payload(uint8_t* out_buf, size_t* out_len)
+{
+    if (!out_buf || !out_len || *out_len == 0)
+    {
+        return false;
+    }
+
+    gps::GpsState gps_state = gps::gps_get_data();
+    if (!gps_state.valid)
+    {
+        return false;
+    }
+
+    meshtastic_Position pos = meshtastic_Position_init_zero;
+    pos.has_latitude_i = true;
+    pos.latitude_i = static_cast<int32_t>(gps_state.lat * 1e7);
+    pos.has_longitude_i = true;
+    pos.longitude_i = static_cast<int32_t>(gps_state.lng * 1e7);
+    pos.location_source = meshtastic_Position_LocSource_LOC_INTERNAL;
+
+    if (gps_state.has_alt)
+    {
+        pos.has_altitude = true;
+        pos.altitude = static_cast<int32_t>(lround(gps_state.alt_m));
+        pos.altitude_source = meshtastic_Position_AltSource_ALT_INTERNAL;
+    }
+    if (gps_state.has_speed)
+    {
+        pos.has_ground_speed = true;
+        pos.ground_speed = static_cast<uint32_t>(lround(gps_state.speed_mps));
+    }
+    if (gps_state.has_course)
+    {
+        double course = gps_state.course_deg;
+        if (course < 0.0) course = 0.0;
+        uint32_t cdeg = static_cast<uint32_t>(lround(course * 100.0));
+        if (cdeg >= 36000U) cdeg = 35999U;
+        pos.has_ground_track = true;
+        pos.ground_track = cdeg;
+    }
+    if (gps_state.satellites > 0)
+    {
+        pos.sats_in_view = gps_state.satellites;
+    }
+
+    uint32_t ts = static_cast<uint32_t>(time(nullptr));
+    if (ts >= 1577836800U)
+    {
+        pos.timestamp = ts;
+    }
+
+    pb_ostream_t stream = pb_ostream_from_buffer(out_buf, *out_len);
+    if (!pb_encode(&stream, meshtastic_Position_fields, &pos))
+    {
+        return false;
+    }
+
+    *out_len = stream.bytes_written;
+    return true;
+}
+
+static void publishPositionEvent(uint32_t node_id, const meshtastic_Position& pos)
+{
+    if (node_id == 0 || !hasValidPosition(pos))
+    {
+        return;
+    }
+
+    bool has_altitude = pos.has_altitude || pos.has_altitude_hae;
+    int32_t altitude = pos.has_altitude ? pos.altitude : (pos.has_altitude_hae ? pos.altitude_hae : 0);
+    uint32_t ts = pos.timestamp ? pos.timestamp : pos.time;
+
+    sys::NodePositionUpdateEvent* event = new sys::NodePositionUpdateEvent(
+        node_id,
+        pos.latitude_i,
+        pos.longitude_i,
+        has_altitude,
+        altitude,
+        ts,
+        pos.precision_bits,
+        pos.PDOP,
+        pos.HDOP,
+        pos.VDOP,
+        pos.gps_accuracy);
+    sys::EventBus::publish(event, 0);
 }
 
 uint8_t xorHash(const uint8_t* data, size_t len)
@@ -376,6 +301,18 @@ uint8_t computeChannelHash(const char* name, const uint8_t* key, size_t key_len)
         h ^= xorHash(key, key_len);
     }
     return h;
+}
+
+uint8_t computeHopsAway(uint8_t flags)
+{
+    uint8_t hop_limit = flags & chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
+    uint8_t hop_start = (flags & chat::meshtastic::PACKET_FLAGS_HOP_START_MASK) >>
+                        chat::meshtastic::PACKET_FLAGS_HOP_START_SHIFT;
+    if (hop_start == 0 && hop_limit == 0)
+    {
+        return 0xFF;
+    }
+    return (hop_start >= hop_limit) ? static_cast<uint8_t>(hop_start - hop_limit) : 0;
 }
 
 std::string toHex(const uint8_t* data, size_t len, size_t max_len = 64)
@@ -642,6 +579,9 @@ MtAdapter::MtAdapter(LoraBoard& board)
       pki_ready_(false),
       pki_public_key_{},
       pki_private_key_{},
+      last_position_reply_ms_(0),
+      last_rx_rssi_(std::numeric_limits<float>::quiet_NaN()),
+      last_rx_snr_(std::numeric_limits<float>::quiet_NaN()),
       kv_state_(KeyVerificationState::Idle),
       kv_nonce_(0),
       kv_nonce_ms_(0),
@@ -926,6 +866,12 @@ void MtAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
     }
 }
 
+void MtAdapter::setLastRxStats(float rssi, float snr)
+{
+    last_rx_rssi_ = rssi;
+    last_rx_snr_ = snr;
+}
+
 bool MtAdapter::isReady() const
 {
     return ready_ && board_.isRadioOnline();
@@ -1024,6 +970,44 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     // Mark as seen
     dedup_.markSeen(header.from, header.id);
 
+    chat::RxMeta rx_meta;
+    rx_meta.rx_timestamp_ms = millis();
+    uint32_t epoch_s = chat::now_epoch_seconds();
+    if (chat::is_valid_epoch(epoch_s))
+    {
+        rx_meta.rx_timestamp_s = epoch_s;
+        rx_meta.time_source = chat::RxTimeSource::DeviceUtc;
+    }
+    else
+    {
+        rx_meta.time_source = chat::RxTimeSource::Uptime;
+        rx_meta.rx_timestamp_s = rx_meta.rx_timestamp_ms / 1000U;
+    }
+    const bool from_is = (header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
+    rx_meta.from_is = from_is;
+    rx_meta.origin = from_is ? chat::RxOrigin::External : chat::RxOrigin::Mesh;
+    rx_meta.channel_hash = header.channel;
+    rx_meta.wire_flags = header.flags;
+    rx_meta.next_hop = header.next_hop;
+    rx_meta.relay_node = header.relay_node;
+    uint8_t hop_limit = header.flags & chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
+    uint8_t hop_count = computeHopsAway(header.flags);
+    rx_meta.hop_count = hop_count;
+    rx_meta.hop_limit = (hop_count == 0xFF) ? 0xFF : hop_limit;
+    rx_meta.direct = (hop_count == 0);
+    if (!std::isnan(last_rx_rssi_))
+    {
+        rx_meta.rssi_dbm_x10 = static_cast<int16_t>(std::lround(last_rx_rssi_ * 10.0f));
+    }
+    if (!std::isnan(last_rx_snr_))
+    {
+        rx_meta.snr_db_x10 = static_cast<int16_t>(std::lround(last_rx_snr_ * 10.0f));
+    }
+    rx_meta.freq_hz = radio_freq_hz_;
+    rx_meta.bw_hz = radio_bw_hz_;
+    rx_meta.sf = radio_sf_;
+    rx_meta.cr = radio_cr_;
+
     // Decrypt payload if needed
     uint8_t plaintext[256];
     size_t plaintext_len = sizeof(plaintext);
@@ -1035,8 +1019,20 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
 
     if (header.channel == 0)
     {
-        if (header.to != node_id_ || header.to == 0xFFFFFFFF || payload_size <= 12 || !pki_ready_)
+        if (header.to != node_id_ || header.to == 0xFFFFFFFF || payload_size <= 12)
         {
+            return;
+        }
+        if (!pki_ready_)
+        {
+            LORA_LOG("[LORA] RX PKI drop (not ready) from=%08lX id=%08lX len=%u\n",
+                     (unsigned long)header.from,
+                     (unsigned long)header.id,
+                     (unsigned)payload_size);
+            sendNodeInfoTo(header.from, true);
+            sendRoutingError(header.from, header.id, primary_channel_hash_,
+                             primary_psk_, primary_psk_len_,
+                             meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
             return;
         }
         if (!decryptPkiPayload(header.from, header.id, payload, payload_size, plaintext, &plaintext_len))
@@ -1130,25 +1126,58 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             LORA_LOG("[LORA] RX data payload hex: %s\n", payload_hex.c_str());
         }
 
+        bool nodeinfo_decoded = false;
+        auto publish_link_stats = [&](uint32_t node_id)
+        {
+            float snr = last_rx_snr_;
+            float rssi = last_rx_rssi_;
+            uint8_t hops_away = computeHopsAway(header.flags);
+            if (std::isnan(snr) && std::isnan(rssi) && hops_away == 0xFF)
+            {
+                return;
+            }
+            uint32_t now_secs = time(nullptr);
+            sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
+                node_id, "", "", snr, rssi, now_secs, 0,
+                chat::contacts::kNodeRoleUnknown,
+                hops_away);
+            sys::EventBus::publish(event, 0);
+        };
+
         if (decoded.portnum == meshtastic_PortNum_NODEINFO_APP && decoded.payload.size > 0)
         {
-            meshtastic_User user = meshtastic_User_init_default;
-            pb_istream_t ustream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
-            if (pb_decode(&ustream, meshtastic_User_fields, &user))
+            meshtastic_NodeInfo node = meshtastic_NodeInfo_init_default;
+            pb_istream_t nstream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+            if (pb_decode(&nstream, meshtastic_NodeInfo_fields, &node))
             {
-                const uint32_t node_id = header.from;
-                const char* short_name = user.short_name[0] ? user.short_name : "";
-                const char* long_name = user.long_name[0] ? user.long_name : "";
-                LORA_LOG("[LORA] RX User from %08lX id='%s' short='%s' long='%s'\n",
-                         (unsigned long)node_id, user.id, short_name, long_name);
+                uint32_t node_id = node.num ? node.num : header.from;
+                const char* short_name = node.has_user ? node.user.short_name : "";
+                const char* long_name = node.has_user ? node.user.long_name : "";
+                uint8_t role = chat::contacts::kNodeRoleUnknown;
+                if (node.has_user && node.user.role <= meshtastic_Config_DeviceConfig_Role_CLIENT_BASE)
+                {
+                    role = static_cast<uint8_t>(node.user.role);
+                }
+
+                float snr = last_rx_snr_;
+                if (std::isnan(snr))
+                {
+                    snr = node.snr;
+                }
+                float rssi = last_rx_rssi_;
+                uint8_t hops_away = node.has_hops_away ? node.hops_away : computeHopsAway(header.flags);
+
+                LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
+                         (unsigned long)node_id, short_name, long_name, snr);
+
                 if (long_name[0])
                 {
                     node_long_names_[node_id] = long_name;
                 }
-                if (user.public_key.size == 32)
+                if (node.has_user && node.user.public_key.size == 32)
                 {
                     std::array<uint8_t, 32> key{};
-                    memcpy(key.data(), user.public_key.bytes, 32);
+                    memcpy(key.data(), node.user.public_key.bytes, 32);
                     node_public_keys_[node_id] = key;
                     savePkiNodeKey(node_id, key.data(), key.size());
                     std::string key_fp = toHex(key.data(), key.size(), 8);
@@ -1158,11 +1187,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              (unsigned long)node_id);
                 }
 
-                // Publish NodeInfo update event (SNR not available in User message, use 0.0)
                 uint32_t now_secs = time(nullptr);
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
-                    node_id, short_name, long_name, 0.0f, now_secs,
-                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                    node_id, short_name, long_name, snr, rssi, now_secs,
+                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
+                    hops_away);
                 bool published = sys::EventBus::publish(event, 0);
                 if (published)
                 {
@@ -1175,57 +1204,54 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                              (unsigned long)node_id,
                              static_cast<unsigned>(sys::EventBus::pendingCount()));
                 }
-                fastPersistNodeInfo(node_id, short_name, long_name, 0.0f, now_secs,
-                                    static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
-                if (decoded.want_response)
+                if (node.has_position)
                 {
-                    uint32_t now_ms = millis();
-                    auto it = nodeinfo_last_seen_ms_.find(node_id);
-                    bool allow_reply = true;
-                    // 直连 NodeInfo 总是允许回复（不受时间抑制）
-                    if (header.to == 0xFFFFFFFF)
-                    { // 只有广播 NodeInfo 才检查时间抑制
-                        if (it != nodeinfo_last_seen_ms_.end())
-                        {
-                            uint32_t since = now_ms - it->second;
-                            if (since < NODEINFO_REPLY_SUPPRESS_MS)
-                            {
-                                allow_reply = false;
-                            }
-                        }
-                    }
-                    nodeinfo_last_seen_ms_[node_id] = now_ms;
-                    if (allow_reply && node_id != node_id_)
-                    {
-                        sendNodeInfoTo(node_id, false);
-                    }
+                    publishPositionEvent(node_id, node.position);
                 }
+                nodeinfo_decoded = true;
             }
             else
             {
-                LORA_LOG("[LORA] RX User decode fail from=%08lX err=%s\n",
-                         (unsigned long)header.from,
-                         PB_GET_ERROR(&ustream));
-                meshtastic_NodeInfo node = meshtastic_NodeInfo_init_default;
-                pb_istream_t nstream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
-                if (pb_decode(&nstream, meshtastic_NodeInfo_fields, &node))
+                meshtastic_User user = meshtastic_User_init_default;
+                pb_istream_t ustream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+                if (pb_decode(&ustream, meshtastic_User_fields, &user))
                 {
-                    uint32_t node_id = node.num ? node.num : header.from;
-                    const char* short_name = node.has_user ? node.user.short_name : "";
-                    const char* long_name = node.has_user ? node.user.long_name : "";
-                    float snr = node.snr; // Get SNR from NodeInfo
-                    LORA_LOG("[LORA] RX NodeInfo from %08lX short='%s' long='%s' snr=%.1f\n",
-                             (unsigned long)node_id, short_name, long_name, snr);
+                    const uint32_t node_id = header.from;
+                    const char* short_name = user.short_name[0] ? user.short_name : "";
+                    const char* long_name = user.long_name[0] ? user.long_name : "";
+                    uint8_t role = chat::contacts::kNodeRoleUnknown;
+                    if (user.role <= meshtastic_Config_DeviceConfig_Role_CLIENT_BASE)
+                    {
+                        role = static_cast<uint8_t>(user.role);
+                    }
+                    LORA_LOG("[LORA] RX User from %08lX id='%s' short='%s' long='%s'\n",
+                             (unsigned long)node_id, user.id, short_name, long_name);
                     if (long_name[0])
                     {
                         node_long_names_[node_id] = long_name;
                     }
+                    if (user.public_key.size == 32)
+                    {
+                        std::array<uint8_t, 32> key{};
+                        memcpy(key.data(), user.public_key.bytes, 32);
+                        node_public_keys_[node_id] = key;
+                        savePkiNodeKey(node_id, key.data(), key.size());
+                        std::string key_fp = toHex(key.data(), key.size(), 8);
+                        LORA_LOG("[LORA] PKI key stored for %08lX fp=%s\n",
+                                 (unsigned long)node_id, key_fp.c_str());
+                        LORA_LOG("[LORA] PKI key updated for %08lX\n",
+                                 (unsigned long)node_id);
+                    }
 
-                    // Publish NodeInfo update event (including SNR)
+                    float snr = last_rx_snr_;
+                    float rssi = last_rx_rssi_;
+                    uint8_t hops_away = computeHopsAway(header.flags);
+
                     uint32_t now_secs = time(nullptr);
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
-                        node_id, short_name, long_name, snr, now_secs,
-                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                        node_id, short_name, long_name, snr, rssi, now_secs,
+                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
+                        hops_away);
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
@@ -1238,15 +1264,39 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                                  (unsigned long)node_id,
                                  static_cast<unsigned>(sys::EventBus::pendingCount()));
                     }
-                    fastPersistNodeInfo(node_id, short_name, long_name, snr, now_secs,
-                                        static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic));
+                    nodeinfo_decoded = true;
                 }
                 else
                 {
                     LORA_LOG("[LORA] RX NodeInfo decode fail from=%08lX err=%s\n",
                              (unsigned long)header.from,
                              PB_GET_ERROR(&nstream));
+                    LORA_LOG("[LORA] RX User decode fail from=%08lX err=%s\n",
+                             (unsigned long)header.from,
+                             PB_GET_ERROR(&ustream));
                 }
+            }
+        }
+
+        if (!nodeinfo_decoded)
+        {
+            publish_link_stats(header.from);
+        }
+
+        if (decoded.portnum == meshtastic_PortNum_POSITION_APP && decoded.payload.size > 0)
+        {
+            meshtastic_Position pos = meshtastic_Position_init_default;
+            pb_istream_t pstream =
+                pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+            if (pb_decode(&pstream, meshtastic_Position_fields, &pos))
+            {
+                publishPositionEvent(header.from, pos);
+            }
+            else
+            {
+                LORA_LOG("[LORA] RX Position decode fail from=%08lX err=%s\n",
+                         (unsigned long)header.from,
+                         PB_GET_ERROR(&pstream));
             }
         }
 
@@ -1345,10 +1395,13 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         bool want_ack_flag = (header.flags & PACKET_FLAGS_WANT_ACK_MASK) != 0;
         bool want_response = decoded.want_response ||
                              (decoded.has_bitfield && ((decoded.bitfield & kBitfieldWantResponseMask) != 0));
+        bool is_broadcast = (header.to == 0xFFFFFFFF);
         bool to_us = (header.to == node_id_);
+        bool to_us_or_broadcast = to_us || is_broadcast;
         bool is_text_port = (decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
                              decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP);
         bool is_nodeinfo_port = (decoded.portnum == meshtastic_PortNum_NODEINFO_APP);
+        bool is_position_port = (decoded.portnum == meshtastic_PortNum_POSITION_APP);
         ChannelId channel_id =
             (header.channel == secondary_channel_hash_) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
         if (header.channel != 0 && header.from != node_id_)
@@ -1371,6 +1424,75 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             }
         }
 
+        if (want_response && to_us_or_broadcast)
+        {
+            if (is_nodeinfo_port)
+            {
+                uint32_t now_ms = millis();
+                bool allow_reply = true;
+                auto it = nodeinfo_last_seen_ms_.find(header.from);
+                if (it != nodeinfo_last_seen_ms_.end())
+                {
+                    uint32_t since = now_ms - it->second;
+                    if (since < NODEINFO_REPLY_SUPPRESS_MS)
+                    {
+                        allow_reply = false;
+                    }
+                }
+                nodeinfo_last_seen_ms_[header.from] = now_ms;
+                if (allow_reply)
+                {
+                    if (sendNodeInfoTo(header.from, false))
+                    {
+                        LORA_LOG("[LORA] TX nodeinfo reply to=%08lX\n",
+                                 (unsigned long)header.from);
+                    }
+                    else
+                    {
+                        LORA_LOG("[LORA] TX nodeinfo reply fail to=%08lX\n",
+                                 (unsigned long)header.from);
+                    }
+                }
+                else
+                {
+                    LORA_LOG("[LORA] TX nodeinfo reply suppressed to=%08lX\n",
+                             (unsigned long)header.from);
+                }
+            }
+            else if (is_position_port)
+            {
+                uint32_t now_ms = millis();
+                bool allow_reply = true;
+                if (last_position_reply_ms_ != 0)
+                {
+                    uint32_t since = now_ms - last_position_reply_ms_;
+                    if (since < POSITION_REPLY_SUPPRESS_MS)
+                    {
+                        allow_reply = false;
+                    }
+                }
+                if (allow_reply)
+                {
+                    if (sendPositionTo(header.from, channel_id))
+                    {
+                        last_position_reply_ms_ = now_ms;
+                        LORA_LOG("[LORA] TX position reply to=%08lX\n",
+                                 (unsigned long)header.from);
+                    }
+                    else
+                    {
+                        LORA_LOG("[LORA] TX position reply skip/fail to=%08lX\n",
+                                 (unsigned long)header.from);
+                    }
+                }
+                else
+                {
+                    LORA_LOG("[LORA] TX position reply suppressed to=%08lX\n",
+                             (unsigned long)header.from);
+                }
+            }
+        }
+
         if (!is_text_port && decoded.payload.size > 0)
         {
             MeshIncomingData incoming;
@@ -1383,6 +1505,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             incoming.want_response = want_response;
             incoming.payload.assign(decoded.payload.bytes,
                                     decoded.payload.bytes + decoded.payload.size);
+            incoming.rx_meta = rx_meta;
             if (app_receive_queue_.size() < MAX_APP_QUEUE)
             {
                 app_receive_queue_.push(incoming);
@@ -1417,6 +1540,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         }
         incoming.hop_limit = header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
         incoming.encrypted = (psk != nullptr && psk_len > 0);
+        incoming.rx_meta = rx_meta;
 
         receive_queue_.push(incoming);
         LORA_LOG("[LORA] RX text from=%08lX id=%08lX ch=%u len=%u\n",
@@ -1673,6 +1797,12 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
 
     char user_id[16];
     snprintf(user_id, sizeof(user_id), "!%08lX", (unsigned long)node_id_);
+    const app::AppConfig& cfg = app::AppContext::getInstance().getConfig();
+    if (cfg.aprs.self_enable && cfg.aprs.self_callsign[0] != '\0')
+    {
+        strncpy(user_id, cfg.aprs.self_callsign, sizeof(user_id) - 1);
+        user_id[sizeof(user_id) - 1] = '\0';
+    }
 
     char long_name[32];
     char short_name[5];
@@ -1754,6 +1884,23 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
         startRadioReceive();
     }
     return ok;
+}
+
+bool MtAdapter::sendPositionTo(uint32_t dest, ChannelId channel)
+{
+    uint8_t payload[128];
+    size_t payload_len = sizeof(payload);
+    if (!build_self_position_payload(payload, &payload_len))
+    {
+        return false;
+    }
+
+    return sendAppData(channel,
+                       meshtastic_PortNum_POSITION_APP,
+                       payload,
+                       payload_len,
+                       dest,
+                       false);
 }
 
 void MtAdapter::maybeBroadcastNodeInfo(uint32_t now_ms)
@@ -1849,6 +1996,10 @@ void MtAdapter::configureRadio()
     {
         freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f);
     }
+    radio_freq_hz_ = static_cast<uint32_t>(std::lround(freq_mhz * 1000000.0f));
+    radio_bw_hz_ = static_cast<uint32_t>(std::lround(bw_khz * 1000.0f));
+    radio_sf_ = sf;
+    radio_cr_ = cr_denom;
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
     board_.configureLoraRadio(freq_mhz, bw_khz, sf, cr_denom, config_.tx_power,
@@ -2257,7 +2408,8 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     {
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)from);
         sendNodeInfoTo(from, true);
-        sendRoutingError(from, packet_id, 0, nullptr, 0,
+        sendRoutingError(from, packet_id, primary_channel_hash_,
+                         primary_psk_, primary_psk_len_,
                          meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
         LORA_LOG("[LORA] PKI unknown for %08lX, sent nodeinfo\n",
                  (unsigned long)from);
@@ -2752,7 +2904,7 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
 
         uint8_t wire_buffer[256];
         size_t wire_size = sizeof(wire_buffer);
-        uint8_t hop_limit = 0;
+        uint8_t hop_limit = config_.hop_limit;
         bool want_ack = false;
         if (!buildWirePacket(pki_buf, pki_len, node_id_, msg_id,
                              dest, channel_hash, hop_limit, want_ack,
@@ -2779,7 +2931,7 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
 
     uint8_t wire_buffer[256];
     size_t wire_size = sizeof(wire_buffer);
-    uint8_t hop_limit = 0;
+    uint8_t hop_limit = config_.hop_limit;
     bool want_ack = false;
     if (!buildWirePacket(data_buf, dstream.bytes_written, node_id_, next_packet_id_++,
                          dest, channel_hash, hop_limit, want_ack,
@@ -2863,7 +3015,7 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
 
         uint8_t wire_buffer[256];
         size_t wire_size = sizeof(wire_buffer);
-        uint8_t hop_limit = 0;
+        uint8_t hop_limit = config_.hop_limit;
         bool want_ack = false;
         if (!buildWirePacket(pki_buf, pki_len, node_id_, msg_id,
                              dest, channel_hash, hop_limit, want_ack,
@@ -2890,7 +3042,7 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
 
     uint8_t wire_buffer[256];
     size_t wire_size = sizeof(wire_buffer);
-    uint8_t hop_limit = 0;
+    uint8_t hop_limit = config_.hop_limit;
     bool want_ack = false;
     if (!buildWirePacket(data_buf, dstream.bytes_written, node_id_, next_packet_id_++,
                          dest, channel_hash, hop_limit, want_ack,

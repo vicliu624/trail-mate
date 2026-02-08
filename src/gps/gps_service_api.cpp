@@ -10,6 +10,11 @@ GpsState gps_get_data()
     return GpsService::getInstance().getData();
 }
 
+uint32_t gps_get_last_motion_ms()
+{
+    return GpsService::getInstance().getLastMotionMs();
+}
+
 void gps_set_collection_interval(uint32_t interval_ms)
 {
     GpsService::getInstance().setCollectionInterval(interval_ms);

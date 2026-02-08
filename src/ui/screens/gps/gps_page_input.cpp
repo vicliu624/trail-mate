@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 
-#define GPS_DEBUG 1 // Enable debug logging
+#define GPS_DEBUG 0 // Enable debug logging
 #if GPS_DEBUG
 #define GPS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
@@ -438,6 +438,12 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
 {
     ControlId id = ctrl_id(target);
     updateUserActivity();
+
+    if (key == LV_KEY_BACKSPACE)
+    {
+        action_back_exit();
+        return;
+    }
 
     if (id == ControlId::BackBtn)
     {

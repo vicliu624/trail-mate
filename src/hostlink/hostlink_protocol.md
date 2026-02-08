@@ -75,6 +75,10 @@ Bitmask (uint32):
 - bit5: `CapGps`
 - bit6: `CapAppData`
 - bit7: `CapTeamState`
+- bit8: `CapAprsGateway`
+
+`CapAprsGateway` indicates EV_APP_DATA/EV_RX_MSG carry RX metadata TLV and
+the APRS config keys are supported.
 
 ## Handshake
 
@@ -123,7 +127,7 @@ u8[] text (UTF-8)
 ```
 
 ### CMD_GET_CONFIG (0x11)
-Payload: empty. Device replies with EV_STATUS.
+Payload: empty. Device replies with EV_STATUS (including extended config keys).
 
 ### CMD_SET_CONFIG (0x12)
 Payload is a TLV list:
@@ -138,6 +142,28 @@ Config keys:
 - 3: Channel (u8)
 - 4: DutyCycle (u8, 0/1)
 - 5: ChannelUtil (u8)
+- 20: AprsEnable (u8, 0/1)
+- 21: AprsIgateCallsign (string, ASCII, no SSID)
+- 22: AprsIgateSsid (u8, 0-15)
+- 23: AprsToCall (string, ASCII)
+- 24: AprsPath (string, ASCII, e.g. `WIDE1-1,WIDE2-1`)
+- 25: AprsTxMinIntervalSec (u16, seconds)
+- 26: AprsDedupeWindowSec (u16, seconds)
+- 27: AprsSymbolTable (u8, ASCII `/` or `\\`)
+- 28: AprsSymbolCode (u8, ASCII)
+- 29: AprsPositionIntervalSec (u16, seconds)
+- 30: AprsNodeIdMap (blob, see format below)
+- 31: AprsSelfEnable (u8, 0/1)
+- 32: AprsSelfCallsign (string, ASCII, CALL-SSID)
+
+AprsNodeIdMap format (value bytes):
+
+```
+repeat entries:
+  u32 node_id
+  u8  callsign_len
+  u8[] callsign (ASCII, may include "-SSID")
+```
 
 ### CMD_SET_TIME (0x13)
 Payload:
@@ -162,7 +188,14 @@ u8  channel
 u32 timestamp
 u16 text_len
 u8[] text (UTF-8)
+u8[] rx_meta_tlv (optional, see "AppData RX Metadata TLV")
 ```
+
+Notes:
+- `timestamp` is the chat message timestamp (local receive time in current firmware).
+- For APRS/iGate mapping, prefer `rx_meta_tlv` timestamps when present.
+- Clients should ignore any extra bytes beyond `text_len` if they do not parse TLV.
+- `rx_meta_tlv` may include `PacketId` for dedupe/traceability.
 
 ### EV_TX_RESULT (0x81)
 Payload:
@@ -185,6 +218,28 @@ Status keys:
 - 7: DutyCycle (u8, 0/1)
 - 8: ChannelUtil (u8)
 - 9: LastError (u32)
+- 20: AprsEnable (u8, 0/1) *
+- 21: AprsIgateCallsign (string) *
+- 22: AprsIgateSsid (u8) *
+- 23: AprsToCall (string) *
+- 24: AprsPath (string) *
+- 25: AprsTxMinIntervalSec (u16) *
+- 26: AprsDedupeWindowSec (u16) *
+- 27: AprsSymbolTable (u8, ASCII) *
+- 28: AprsSymbolCode (u8, ASCII) *
+- 29: AprsPositionIntervalSec (u16) *
+- 30: AprsNodeIdMap (blob, see CMD_SET_CONFIG) *
+- 31: AprsSelfEnable (u8, 0/1) *
+- 32: AprsSelfCallsign (string) *
+- 40: AppRxTotal (u32)
+- 41: AppRxFromIs (u32)
+- 42: AppRxDirect (u32)
+- 43: AppRxRelayed (u32)
+
+`*` keys are only included in response to CMD_GET_CONFIG/CMD_SET_CONFIG.
+
+AppRx counters include EV_APP_DATA and EV_RX_MSG deliveries.
+Counters are cumulative since boot.
 
 LinkState values:
 - 0: Stopped
@@ -241,6 +296,7 @@ u32 total_len
 u32 offset
 u16 chunk_len
 u8[] chunk
+u8[] rx_meta_tlv (optional, see "AppData RX Metadata TLV")
 ```
 
 Flags:
@@ -257,8 +313,50 @@ Notes:
 - For non-team apps, `team_id`/`team_key_id` are zero.
 - Chunking is used when payload size exceeds a single HostLink frame.
 - `timestamp_s` is device uptime seconds when the payload was received.
-- Max `chunk_len` is `kMaxFrameLen - header` (currently `512 - 40 = 472` bytes).
+- For APRS mapping, prefer `RxTimestampS` from `rx_meta_tlv` when present.
+- If `rx_meta_tlv` is present, it appears after `chunk` and extends to end of frame.
+- Max `chunk_len` is `kMaxFrameLen - header - meta_tlv_len` (meta TLV size
+  depends on available RX fields).
 - Team portnums: 300=MGMT, 301=POSITION, 302=WAYPOINT, 303=CHAT, 304=TRACK.
+
+### AppData RX Metadata TLV
+
+`rx_meta_tlv` is a TLV list appended to EV_APP_DATA chunks and (optionally)
+to EV_RX_MSG. It provides RX metadata required for APRS/iGate mapping.
+
+TLV format:
+
+```
+u8 key
+u8 len
+u8[len] value
+```
+
+Keys:
+- 1: RxTimestampS (u32, epoch seconds, UTC/GPS preferred)
+- 2: RxTimestampMs (u32, device uptime ms)
+- 3: RxTimeSource (u8: 0=Unknown, 1=Uptime, 2=DeviceUtc, 3=GpsUtc)
+- 4: Direct (u8, 0/1)
+- 5: HopCount (u8, hops already used)
+- 6: HopLimit (u8, remaining hops)
+- 7: RxOrigin (u8: 0=Unknown, 1=Mesh/RF, 2=External/IS)
+- 8: FromIs (u8, 0/1, set when source is IS/MQTT)
+- 9: RssiDbmX10 (i16, dBm * 10)
+- 10: SnrDbX10 (i16, dB * 10)
+- 11: FreqHz (u32)
+- 12: BwHz (u32)
+- 13: Sf (u8)
+- 14: Cr (u8, denominator in 4/x)
+- 15: PacketId (u32, Meshtastic packet id)
+- 16: ChannelHash (u8, Meshtastic channel hash)
+- 17: WireFlags (u8, Meshtastic packet header flags)
+- 18: NextHop (u32, Meshtastic header next_hop)
+- 19: RelayNode (u32, Meshtastic header relay_node)
+
+Notes:
+- Fields may be omitted when unavailable.
+- Host should treat missing `Direct`/`HopCount` as unknown.
+- Use `RxOrigin`/`FromIs` to prevent RF↔IS loop injection.
 
 ### EV_TEAM_STATE (0x86)
 Payload:
@@ -266,11 +364,10 @@ Payload:
 ```
 u8  version           // 1
 u8  flags             // bit0 in_team, bit1 pending_join, bit2 kicked_out,
-                      // bit3 self_is_leader, bit4 has_team_id, bit5 has_join_target
+                      // bit3 self_is_leader, bit4 has_team_id
 u16 reserved          // 0
 u32 self_id           // this device node id
 u8  team_id[8]        // 0 if not in team
-u8  join_target_id[8] // 0 if none
 u32 key_id            // team security_round (epoch)
 u32 last_event_seq
 u32 last_update_s
@@ -303,7 +400,7 @@ Team MGMT/CHAT/TRACK are custom binary. Team POSITION/WAYPOINT use protobuf.
 
 #### TEAM_MGMT_APP (portnum 300)
 
-Scenario: team formation, join, key distribution, status sync.
+Scenario: team control, key distribution, status sync.
 
 Payload is **TeamMgmt wire format**:
 
@@ -317,15 +414,10 @@ u8[] payload         // type-specific
 
 TeamMgmtType:
 ```
-1  Advertise
-2  JoinRequest
-3  JoinAccept
-4  JoinConfirm
 5  Status
 6  Rotate (reserved, not used)
 7  Leave  (reserved, not used)
 8  Disband (reserved, not used)
-9  JoinDecision
 10 Kick
 11 TransferLeader
 12 KeyDist
@@ -333,57 +425,11 @@ TeamMgmtType:
 
 Type-specific payloads (little-endian):
 
-Advertise:
-```
-u8  team_id[8]
-u16 flags (bit0 join_hint, bit1 channel_index, bit2 expires_at)
-u32 join_hint       // if flag
-u8  channel_index   // if flag
-u64 expires_at      // if flag
-u64 nonce
-```
-
-JoinRequest:
-```
-u8  team_id[8]
-u16 flags (bit0 member_pub, bit1 capabilities)
-u8  pub_len         // if member_pub
-u8  pub[pub_len]    // if member_pub
-u32 capabilities    // if capabilities
-u64 nonce
-```
-
-JoinAccept:
-```
-u8  channel_index
-u8  channel_psk_len
-u8  channel_psk[channel_psk_len]
-u32 key_id
-u16 flags (bit0 has_params, bit1 has_team_id)
-TeamParams          // if has_params
-u8  team_id[8]      // if has_team_id
-```
-
 TeamParams:
 ```
 u32 position_interval_ms
 u8  precision_level
 u32 flags
-```
-
-JoinConfirm:
-```
-u8  ok
-u16 flags (bit0 capabilities, bit1 battery)
-u32 capabilities    // if capabilities
-u8  battery         // if battery (0-100)
-```
-
-JoinDecision:
-```
-u8  accept
-u16 flags (bit0 reason)
-u32 reason          // if reason
 ```
 
 Kick:
@@ -415,8 +461,7 @@ TeamParams          // if has_params
 How PC should respond:
 - EV_APP_DATA itself requires no ACK.
 - Mesh-level response is by sending the corresponding Team mgmt message
-  (not implemented in HostLink yet). Typical flow:
-  Advertise -> JoinRequest -> JoinAccept -> JoinConfirm -> Status.
+  (not implemented in HostLink yet).
 
 #### TEAM_POSITION_APP (portnum 301)
 
@@ -535,12 +580,16 @@ Protobuf note:
 Exceptions:
 - TEXT_MESSAGE_APP (1) and TEXT_MESSAGE_COMPRESSED_APP (7) are delivered as
   EV_RX_MSG instead of EV_APP_DATA (the device already decompresses them).
+  For APRS mapping, treat EV_RX_MSG as the TEXT_MESSAGE_APP payload and use
+  `rx_meta_tlv` when present.
 
 NodeInfo:
 - NODEINFO_APP (4) is forwarded as EV_APP_DATA.
 - Payload is usually `meshtastic_User` (see `mesh.pb.h`), but some nodes send
   `meshtastic_NodeInfo`. PC should try `meshtastic_User` first, then fall back
   to `meshtastic_NodeInfo` if decode fails.
+- If `AprsSelfEnable` is set on a device, it will publish its APRS callsign in
+  `meshtastic_User.id`. Host should prefer this callsign over any local mapping.
 
 If a portnum is unknown, treat payload as opaque bytes.
 
