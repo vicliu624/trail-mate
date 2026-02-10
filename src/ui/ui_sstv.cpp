@@ -14,7 +14,7 @@ namespace
 {
 constexpr lv_coord_t kScreenW = 480;
 constexpr lv_coord_t kScreenH = 222;
-constexpr lv_coord_t kTopBarHeight = 30;
+constexpr lv_coord_t kTopBarHeight = ::ui::widgets::kTopBarHeight;
 constexpr lv_coord_t kMainHeight = 192;
 constexpr lv_coord_t kPadding = 8;
 
@@ -39,17 +39,6 @@ constexpr lv_coord_t kMeterSegH = 8;
 constexpr lv_coord_t kMeterSegGap = 2;
 constexpr int kMeterSegments = 12;
 
-constexpr lv_coord_t kTopBackX = 8;
-constexpr lv_coord_t kTopBackY = 4;
-constexpr lv_coord_t kTopBackW = 22;
-constexpr lv_coord_t kTopBackH = 22;
-constexpr lv_coord_t kBatteryIconX = 420;
-constexpr lv_coord_t kBatteryIconY = 6;
-constexpr lv_coord_t kBatteryTextX = 446;
-constexpr lv_coord_t kBatteryTextY = 5;
-
-constexpr uint32_t kColorAmber = 0xEBA341;
-constexpr uint32_t kColorAmberDark = 0xC98118;
 constexpr uint32_t kColorWarmBg = 0xF6E6C6;
 constexpr uint32_t kColorPanelBg = 0xFAF0D8;
 constexpr uint32_t kColorLine = 0xE7C98F;
@@ -63,9 +52,7 @@ constexpr uint32_t kColorMeterMid = 0xC18B2C;
 struct SstvUi
 {
     lv_obj_t* root = nullptr;
-    lv_obj_t* back_btn = nullptr;
-    lv_obj_t* battery_icon = nullptr;
-    lv_obj_t* battery_text = nullptr;
+    ui::widgets::TopBar top_bar = {};
     lv_obj_t* img_box = nullptr;
     lv_obj_t* img = nullptr;
     lv_obj_t* img_placeholder = nullptr;
@@ -127,47 +114,11 @@ void root_key_event_cb(lv_event_t* e)
 
 void update_battery_labels()
 {
-    if (!s_ui.battery_text || !s_ui.battery_icon)
+    if (!s_ui.top_bar.right_label)
     {
         return;
     }
-
-    int level = board.getBatteryLevel();
-    bool charging = board.isCharging();
-    const char* symbol = LV_SYMBOL_BATTERY_EMPTY;
-    if (charging)
-    {
-        symbol = LV_SYMBOL_CHARGE;
-    }
-    else if (level >= 90)
-    {
-        symbol = LV_SYMBOL_BATTERY_FULL;
-    }
-    else if (level >= 60)
-    {
-        symbol = LV_SYMBOL_BATTERY_3;
-    }
-    else if (level >= 30)
-    {
-        symbol = LV_SYMBOL_BATTERY_2;
-    }
-    else if (level >= 10)
-    {
-        symbol = LV_SYMBOL_BATTERY_1;
-    }
-
-    char percent[12];
-    if (level < 0)
-    {
-        snprintf(percent, sizeof(percent), "?%%");
-    }
-    else
-    {
-        snprintf(percent, sizeof(percent), "%d%%", level);
-    }
-
-    lv_label_set_text(s_ui.battery_icon, symbol);
-    lv_label_set_text(s_ui.battery_text, percent);
+    ui_update_top_bar_battery(s_ui.top_bar);
 }
 
 void refresh_cb(lv_timer_t*)
@@ -271,48 +222,23 @@ void apply_label_style(lv_obj_t* label, const lv_font_t* font, uint32_t color)
 
 void build_top_bar(lv_obj_t* parent)
 {
-    lv_obj_t* topbar = lv_obj_create(parent);
-    lv_obj_set_size(topbar, kScreenW, kTopBarHeight);
-    lv_obj_set_pos(topbar, 0, 0);
-    lv_obj_set_style_bg_color(topbar, lv_color_hex(kColorAmber), 0);
-    lv_obj_set_style_bg_opa(topbar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(topbar, 0, 0);
-    lv_obj_set_style_radius(topbar, 0, 0);
-    lv_obj_set_style_pad_all(topbar, 0, 0);
-    lv_obj_clear_flag(topbar, LV_OBJ_FLAG_SCROLLABLE);
-
-    s_ui.back_btn = lv_btn_create(topbar);
-    lv_obj_set_size(s_ui.back_btn, kTopBackW, kTopBackH);
-    lv_obj_set_pos(s_ui.back_btn, kTopBackX, kTopBackY);
-    lv_obj_set_style_bg_color(s_ui.back_btn, lv_color_hex(kColorAmberDark), 0);
-    lv_obj_set_style_bg_opa(s_ui.back_btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_ui.back_btn, 0, 0);
-    lv_obj_set_style_radius(s_ui.back_btn, 11, 0);
-    lv_obj_add_event_cb(
-        s_ui.back_btn, [](lv_event_t* e)
-        { on_back(lv_event_get_user_data(e)); },
-        LV_EVENT_CLICKED, nullptr);
-    lv_obj_add_event_cb(s_ui.back_btn, root_key_event_cb, LV_EVENT_KEY, nullptr);
-
-    lv_obj_t* back_label = lv_label_create(s_ui.back_btn);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT);
-    lv_obj_center(back_label);
-    apply_label_style(back_label, &lv_font_montserrat_16, kColorTextDim);
-
-    lv_obj_t* title = lv_label_create(topbar);
-    lv_label_set_text(title, "SSTV RECEIVER");
-    lv_obj_set_width(title, kScreenW);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
-    apply_label_style(title, &lv_font_montserrat_20, kColorText);
-
-    s_ui.battery_icon = lv_label_create(topbar);
-    lv_obj_set_pos(s_ui.battery_icon, kBatteryIconX, kBatteryIconY);
-    apply_label_style(s_ui.battery_icon, &lv_font_montserrat_16, kColorTextDim);
-
-    s_ui.battery_text = lv_label_create(topbar);
-    lv_obj_set_pos(s_ui.battery_text, kBatteryTextX, kBatteryTextY);
-    apply_label_style(s_ui.battery_text, &lv_font_montserrat_16, kColorTextDim);
+    ::ui::widgets::TopBarConfig cfg;
+    cfg.height = ::ui::widgets::kTopBarHeight;
+    ::ui::widgets::top_bar_init(s_ui.top_bar, parent, cfg);
+    ::ui::widgets::top_bar_set_title(s_ui.top_bar, "SSTV RECEIVER");
+    ::ui::widgets::top_bar_set_back_callback(
+        s_ui.top_bar, [](void*)
+        { on_back(nullptr); },
+        nullptr);
+    if (s_ui.top_bar.container)
+    {
+        lv_obj_set_pos(s_ui.top_bar.container, 0, 0);
+    }
+    if (s_ui.top_bar.back_btn)
+    {
+        lv_obj_add_event_cb(s_ui.top_bar.back_btn, root_key_event_cb, LV_EVENT_KEY, nullptr);
+    }
+    update_battery_labels();
 }
 
 void build_main_area(lv_obj_t* parent)
@@ -473,11 +399,11 @@ void ui_sstv_enter(lv_obj_t* parent)
     ui_sstv_create(parent);
 
     extern lv_group_t* app_g;
-    if (app_g && s_ui.back_btn)
+    if (app_g && s_ui.top_bar.back_btn)
     {
         lv_group_remove_all_objs(app_g);
-        lv_group_add_obj(app_g, s_ui.back_btn);
-        lv_group_focus_obj(s_ui.back_btn);
+        lv_group_add_obj(app_g, s_ui.top_bar.back_btn);
+        lv_group_focus_obj(s_ui.top_bar.back_btn);
         set_default_group(app_g);
         lv_group_set_editing(app_g, false);
     }
