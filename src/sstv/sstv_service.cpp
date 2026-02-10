@@ -20,10 +20,12 @@ constexpr float kMicGainDb = 36.0f;
 constexpr uint32_t kTaskStack = 8192;
 constexpr uint32_t kTaskDelayMs = 2;
 
-constexpr float kSyncMinMs = 7.0f;
-constexpr float kSyncMaxMs = 13.0f;
 constexpr float kPorchMs = 1.5f;
 constexpr float kColorMs = 138.24f;
+constexpr float kLeaderMs = 300.0f;
+constexpr float kBreakMs = 10.0f;
+constexpr float kVisBitMs = 30.0f;
+constexpr uint8_t kVisScottie1 = 60;
 
 constexpr int kInWidth = 320;
 constexpr int kInHeight = 256;
@@ -34,13 +36,19 @@ constexpr int kPadX = (kOutWidth - kOutImageWidth) / 2;
 
 constexpr uint32_t kPanelBg = 0xFAF0D8;
 
-constexpr float kSyncFreqMin = 1100.0f;
-constexpr float kSyncFreqMax = 1300.0f;
 constexpr float kFreqMin = 1500.0f;
 constexpr float kFreqMax = 2300.0f;
 constexpr float kFreqSpan = kFreqMax - kFreqMin;
 
 constexpr float kMinSyncGapMs = 100.0f;
+constexpr float kToneDetectRatio = 1.6f;
+constexpr int kHeaderWindowSamples = 256;
+constexpr int kHeaderHopSamples = 128;
+constexpr int kSyncWindowSamples = 400;
+constexpr int kSyncHopSamples = 80;
+constexpr float kPixelBinStep = 25.0f;
+constexpr int kPixelBinCount = static_cast<int>((kFreqMax - kFreqMin) / kPixelBinStep) + 1;
+constexpr int kMaxPixelSamples = 32;
 
 enum class Phase : uint8_t
 {
@@ -49,6 +57,32 @@ enum class Phase : uint8_t
     Green,
     Blue,
     Red,
+};
+
+enum class HeaderState : uint8_t
+{
+    SeekLeader1 = 0,
+    SeekBreak,
+    SeekLeader2,
+    SeekVisStart,
+    ReadVisBits,
+};
+
+enum class Tone : uint8_t
+{
+    None = 0,
+    Tone1100,
+    Tone1200,
+    Tone1300,
+    Tone1900,
+};
+
+struct GoertzelBin
+{
+    float freq = 0.0f;
+    float coeff = 0.0f;
+    float cos_w = 0.0f;
+    float sin_w = 0.0f;
 };
 
 portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -68,6 +102,12 @@ int s_last_output_y = -1;
 uint32_t s_accum[3][kInWidth];
 uint16_t s_count[3][kInWidth];
 
+GoertzelBin s_bin_1100 = {};
+GoertzelBin s_bin_1200 = {};
+GoertzelBin s_bin_1300 = {};
+GoertzelBin s_bin_1900 = {};
+GoertzelBin s_pixel_bins[kPixelBinCount] = {};
+
 uint16_t rgb_to_565(uint8_t r, uint8_t g, uint8_t b)
 {
     uint16_t r5 = static_cast<uint16_t>(r >> 3);
@@ -82,6 +122,129 @@ uint16_t panel_rgb565()
     uint8_t g = static_cast<uint8_t>((kPanelBg >> 8) & 0xFF);
     uint8_t b = static_cast<uint8_t>(kPanelBg & 0xFF);
     return rgb_to_565(r, g, b);
+}
+
+GoertzelBin make_bin(float freq)
+{
+    GoertzelBin bin;
+    bin.freq = freq;
+    float w = 2.0f * static_cast<float>(M_PI) * freq / static_cast<float>(kSampleRate);
+    bin.cos_w = cosf(w);
+    bin.sin_w = sinf(w);
+    bin.coeff = 2.0f * bin.cos_w;
+    return bin;
+}
+
+float goertzel_power(const int16_t* data, int count, const GoertzelBin& bin)
+{
+    float q0 = 0.0f;
+    float q1 = 0.0f;
+    float q2 = 0.0f;
+    for (int i = 0; i < count; ++i)
+    {
+        q0 = bin.coeff * q1 - q2 + static_cast<float>(data[i]);
+        q2 = q1;
+        q1 = q0;
+    }
+    float real = q1 - q2 * bin.cos_w;
+    float imag = q2 * bin.sin_w;
+    return real * real + imag * imag;
+}
+
+float estimate_freq_from_bins(const int16_t* data, int count, const GoertzelBin* bins, int bin_count)
+{
+    if (!bins || bin_count <= 0)
+    {
+        return kFreqMin;
+    }
+
+    float max_val = 0.0f;
+    int max_idx = 0;
+    float mags[kPixelBinCount];
+    for (int i = 0; i < bin_count; ++i)
+    {
+        mags[i] = goertzel_power(data, count, bins[i]);
+        if (mags[i] > max_val)
+        {
+            max_val = mags[i];
+            max_idx = i;
+        }
+    }
+
+    int left = max_idx > 0 ? max_idx - 1 : max_idx;
+    int right = max_idx + 1 < bin_count ? max_idx + 1 : max_idx;
+    float y1 = mags[left];
+    float y2 = mags[max_idx];
+    float y3 = mags[right];
+    float denom = y1 + y2 + y3;
+    float peak = static_cast<float>(max_idx);
+    if (denom > 0.0f)
+    {
+        peak = peak + (y3 - y1) / denom;
+    }
+
+    float freq = kFreqMin + peak * kPixelBinStep;
+    if (freq < kFreqMin)
+    {
+        freq = kFreqMin;
+    }
+    if (freq > kFreqMax)
+    {
+        freq = kFreqMax;
+    }
+    return freq;
+}
+
+Tone detect_tone(float p1100, float p1200, float p1300, float p1900)
+{
+    float total = p1100 + p1200 + p1300 + p1900;
+    if (total <= 0.0f)
+    {
+        return Tone::None;
+    }
+
+    float max_val = p1100;
+    Tone tone = Tone::Tone1100;
+    if (p1200 > max_val)
+    {
+        max_val = p1200;
+        tone = Tone::Tone1200;
+    }
+    if (p1300 > max_val)
+    {
+        max_val = p1300;
+        tone = Tone::Tone1300;
+    }
+    if (p1900 > max_val)
+    {
+        max_val = p1900;
+        tone = Tone::Tone1900;
+    }
+
+    float other_max = 0.0f;
+    if (tone != Tone::Tone1100 && p1100 > other_max)
+    {
+        other_max = p1100;
+    }
+    if (tone != Tone::Tone1200 && p1200 > other_max)
+    {
+        other_max = p1200;
+    }
+    if (tone != Tone::Tone1300 && p1300 > other_max)
+    {
+        other_max = p1300;
+    }
+    if (tone != Tone::Tone1900 && p1900 > other_max)
+    {
+        other_max = p1900;
+    }
+
+    if (max_val > other_max * kToneDetectRatio && max_val > total * 0.55f)
+    {
+        return tone;
+    }
+
+    return Tone::None;
 }
 
 void set_error(const char* msg)
@@ -428,23 +591,99 @@ void sstv_task(void*)
         return;
     }
 
-    const int sync_min_samples = static_cast<int>(kSampleRate * (kSyncMinMs / 1000.0f));
-    const int sync_max_samples = static_cast<int>(kSampleRate * (kSyncMaxMs / 1000.0f));
+    s_bin_1100 = make_bin(1100.0f);
+    s_bin_1200 = make_bin(1200.0f);
+    s_bin_1300 = make_bin(1300.0f);
+    s_bin_1900 = make_bin(1900.0f);
+    for (int i = 0; i < kPixelBinCount; ++i)
+    {
+        float freq = kFreqMin + static_cast<float>(i) * kPixelBinStep;
+        s_pixel_bins[i] = make_bin(freq);
+    }
+
     const int porch_samples = static_cast<int>(kSampleRate * (kPorchMs / 1000.0f));
     const int color_samples = static_cast<int>(kSampleRate * (kColorMs / 1000.0f));
     const int min_sync_gap = static_cast<int>(kSampleRate * (kMinSyncGapMs / 1000.0f));
+    const float header_window_ms =
+        1000.0f * static_cast<float>(kHeaderHopSamples) / static_cast<float>(kSampleRate);
+    int leader_windows = static_cast<int>(kLeaderMs / header_window_ms + 0.5f);
+    if (leader_windows < 1)
+    {
+        leader_windows = 1;
+    }
+    int break_windows = static_cast<int>(kBreakMs / header_window_ms + 0.5f);
+    if (break_windows < 1)
+    {
+        break_windows = 1;
+    }
+    int vis_windows_per_bit = static_cast<int>(kVisBitMs / header_window_ms + 0.5f);
+    if (vis_windows_per_bit < 1)
+    {
+        vis_windows_per_bit = 1;
+    }
+    int pixel_window_samples = color_samples / kInWidth;
+    if (pixel_window_samples < 8)
+    {
+        pixel_window_samples = 8;
+    }
+    if (pixel_window_samples > kMaxPixelSamples)
+    {
+        pixel_window_samples = kMaxPixelSamples;
+    }
 
     int line_index = 0;
     Phase phase = Phase::Idle;
     int phase_samples = 0;
+    int last_pixel = -1;
+    int pixel_pos = 0;
+    int pixel_fill = 0;
 
-    float current_freq = 1500.0f;
-    int16_t prev_sample = 0;
-    int64_t last_cross = -1;
+    HeaderState header_state = HeaderState::SeekLeader1;
+    int header_count = 0;
+    bool header_ok = false;
+    int vis_bit_index = 0;
+    uint8_t vis_value = 0;
+    int vis_ones = 0;
+    int vis_window_count = 0;
+    int vis_1100_count = 0;
+    int vis_1300_count = 0;
+    int vis_skip_windows = 0;
+
+    int16_t header_buf[kHeaderWindowSamples] = {0};
+    int header_pos = 0;
+    int header_fill = 0;
+    int header_hop = 0;
+    int16_t sync_buf[kSyncWindowSamples] = {0};
+    int sync_pos = 0;
+    int sync_fill = 0;
+    int sync_hop = 0;
+    int16_t pixel_buf[kMaxPixelSamples] = {0};
+    int16_t header_window[kHeaderWindowSamples];
+    int16_t sync_window[kSyncWindowSamples];
+    int16_t pixel_window[kMaxPixelSamples];
+
     int64_t sample_index = 0;
-    int sync_samples = 0;
-    bool sync_active = false;
     int64_t last_sync_index = -1000000;
+
+    auto reset_header_state = [&]()
+    {
+        header_state = HeaderState::SeekLeader1;
+        header_count = 0;
+        vis_bit_index = 0;
+        vis_value = 0;
+        vis_ones = 0;
+        vis_window_count = 0;
+        vis_1100_count = 0;
+        vis_1300_count = 0;
+        vis_skip_windows = 0;
+    };
+
+    auto reset_pixel_state = [&]()
+    {
+        last_pixel = -1;
+        pixel_pos = 0;
+        pixel_fill = 0;
+    };
 
     float audio_level = 0.0f;
     clear_frame();
@@ -476,54 +715,243 @@ void sstv_task(void*)
                 block_peak = static_cast<int16_t>(-mono);
             }
 
-            if (prev_sample <= 0 && mono > 0)
+            header_buf[header_pos] = static_cast<int16_t>(mono);
+            header_pos++;
+            if (header_pos >= kHeaderWindowSamples)
             {
-                if (last_cross >= 0)
+                header_pos = 0;
+            }
+            if (header_fill < kHeaderWindowSamples)
+            {
+                header_fill++;
+            }
+
+            sync_buf[sync_pos] = static_cast<int16_t>(mono);
+            sync_pos++;
+            if (sync_pos >= kSyncWindowSamples)
+            {
+                sync_pos = 0;
+            }
+            if (sync_fill < kSyncWindowSamples)
+            {
+                sync_fill++;
+            }
+
+            if (!header_ok && header_fill == kHeaderWindowSamples)
+            {
+                header_hop++;
+                if (header_hop >= kHeaderHopSamples)
                 {
-                    int64_t period = sample_index - last_cross;
-                    if (period > 0)
+                    header_hop = 0;
+                    for (int j = 0; j < kHeaderWindowSamples; ++j)
                     {
-                        float freq = static_cast<float>(kSampleRate) / static_cast<float>(period);
-                        if (freq > 800.0f && freq < 3000.0f)
+                        int idx = header_pos + j;
+                        if (idx >= kHeaderWindowSamples)
                         {
-                            current_freq = (current_freq * 0.7f) + (freq * 0.3f);
+                            idx -= kHeaderWindowSamples;
+                        }
+                        header_window[j] = header_buf[idx];
+                    }
+
+                    float p1100 = goertzel_power(header_window, kHeaderWindowSamples, s_bin_1100);
+                    float p1200 = goertzel_power(header_window, kHeaderWindowSamples, s_bin_1200);
+                    float p1300 = goertzel_power(header_window, kHeaderWindowSamples, s_bin_1300);
+                    float p1900 = goertzel_power(header_window, kHeaderWindowSamples, s_bin_1900);
+                    Tone tone = detect_tone(p1100, p1200, p1300, p1900);
+
+                    if (header_state == HeaderState::ReadVisBits)
+                    {
+                        if (vis_skip_windows > 0)
+                        {
+                            vis_skip_windows--;
+                        }
+                        else
+                        {
+                            if (tone == Tone::Tone1100)
+                            {
+                                vis_1100_count++;
+                            }
+                            else if (tone == Tone::Tone1300)
+                            {
+                                vis_1300_count++;
+                            }
+                            vis_window_count++;
+
+                            if (vis_window_count >= vis_windows_per_bit)
+                            {
+                                int bit = -1;
+                                if (vis_1100_count > vis_1300_count)
+                                {
+                                    bit = 1;
+                                }
+                                else if (vis_1300_count > vis_1100_count)
+                                {
+                                    bit = 0;
+                                }
+
+                                if (bit < 0)
+                                {
+                                    reset_header_state();
+                                }
+                                else
+                                {
+                                    if (vis_bit_index < 7)
+                                    {
+                                        if (bit)
+                                        {
+                                            vis_value |= static_cast<uint8_t>(1u << vis_bit_index);
+                                            vis_ones++;
+                                        }
+                                        vis_bit_index++;
+                                    }
+                                    else
+                                    {
+                                        int total_ones = vis_ones + (bit ? 1 : 0);
+                                        bool parity_ok = (total_ones % 2) == 0;
+                                        if (parity_ok && vis_value == kVisScottie1)
+                                        {
+                                            header_ok = true;
+                                        }
+                                        reset_header_state();
+                                    }
+                                }
+
+                                vis_window_count = 0;
+                                vis_1100_count = 0;
+                                vis_1300_count = 0;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        switch (header_state)
+                        {
+                        case HeaderState::SeekLeader1:
+                            if (tone == Tone::Tone1900)
+                            {
+                                header_count++;
+                                if (header_count >= leader_windows)
+                                {
+                                    header_state = HeaderState::SeekBreak;
+                                    header_count = 0;
+                                }
+                            }
+                            else
+                            {
+                                header_count = 0;
+                            }
+                            break;
+                        case HeaderState::SeekBreak:
+                            if (tone == Tone::Tone1200)
+                            {
+                                header_count++;
+                                if (header_count >= break_windows)
+                                {
+                                    header_state = HeaderState::SeekLeader2;
+                                    header_count = 0;
+                                }
+                            }
+                            else if (tone == Tone::Tone1900)
+                            {
+                                header_state = HeaderState::SeekLeader1;
+                                header_count = 1;
+                            }
+                            else
+                            {
+                                header_state = HeaderState::SeekLeader1;
+                                header_count = 0;
+                            }
+                            break;
+                        case HeaderState::SeekLeader2:
+                            if (tone == Tone::Tone1900)
+                            {
+                                header_count++;
+                                if (header_count >= leader_windows)
+                                {
+                                    header_state = HeaderState::SeekVisStart;
+                                    header_count = 0;
+                                }
+                            }
+                            else
+                            {
+                                header_state = HeaderState::SeekLeader1;
+                                header_count = 0;
+                            }
+                            break;
+                        case HeaderState::SeekVisStart:
+                            if (tone == Tone::Tone1200)
+                            {
+                                header_state = HeaderState::ReadVisBits;
+                                vis_skip_windows = vis_windows_per_bit;
+                                vis_bit_index = 0;
+                                vis_value = 0;
+                                vis_ones = 0;
+                                vis_window_count = 0;
+                                vis_1100_count = 0;
+                                vis_1300_count = 0;
+                            }
+                            else if (tone == Tone::Tone1900)
+                            {
+                                header_state = HeaderState::SeekLeader2;
+                                header_count = 1;
+                            }
+                            else
+                            {
+                                header_state = HeaderState::SeekLeader1;
+                                header_count = 0;
+                            }
+                            break;
+                        case HeaderState::ReadVisBits:
+                            break;
                         }
                     }
                 }
-                last_cross = sample_index;
             }
-            prev_sample = static_cast<int16_t>(mono);
 
-            bool in_sync = (current_freq >= kSyncFreqMin && current_freq <= kSyncFreqMax);
-            if (in_sync)
+            bool can_sync = header_ok || s_status.state == sstv::State::Receiving;
+            if (can_sync && sync_fill == kSyncWindowSamples)
             {
-                sync_samples++;
-                sync_active = true;
-            }
-            else if (sync_active)
-            {
-                if (sync_samples >= sync_min_samples && sync_samples <= sync_max_samples)
+                sync_hop++;
+                if (sync_hop >= kSyncHopSamples)
                 {
-                    if (sample_index - last_sync_index > min_sync_gap)
+                    sync_hop = 0;
+                    for (int j = 0; j < kSyncWindowSamples; ++j)
+                    {
+                        int idx = sync_pos + j;
+                        if (idx >= kSyncWindowSamples)
+                        {
+                            idx -= kSyncWindowSamples;
+                        }
+                        sync_window[j] = sync_buf[idx];
+                    }
+
+                    float p1100 = goertzel_power(sync_window, kSyncWindowSamples, s_bin_1100);
+                    float p1200 = goertzel_power(sync_window, kSyncWindowSamples, s_bin_1200);
+                    float p1300 = goertzel_power(sync_window, kSyncWindowSamples, s_bin_1300);
+                    float total = p1100 + p1200 + p1300;
+                    float other_max = p1100 > p1300 ? p1100 : p1300;
+                    bool sync_hit =
+                        (p1200 > other_max * kToneDetectRatio && p1200 > total * 0.55f);
+
+                    if (sync_hit && sample_index - last_sync_index > min_sync_gap)
                     {
                         last_sync_index = sample_index;
                         if (s_status.state != sstv::State::Receiving)
                         {
                             line_index = 0;
                             clear_frame();
+                            clear_saved_path();
+                            s_pending_save = false;
                         }
                         clear_accum();
-                        clear_saved_path();
-                        s_pending_save = false;
                         phase = Phase::Porch;
                         phase_samples = 0;
+                        reset_pixel_state();
                         set_status(sstv::State::Receiving, static_cast<uint16_t>(line_index),
                                    static_cast<float>(line_index) / kInHeight,
                                    audio_level, true);
                     }
                 }
-                sync_samples = 0;
-                sync_active = false;
             }
 
             if (s_status.state == sstv::State::Receiving && phase != Phase::Idle)
@@ -535,6 +963,7 @@ void sstv_task(void*)
                     {
                         phase = Phase::Green;
                         phase_samples = 0;
+                        reset_pixel_state();
                     }
                 }
                 else
@@ -542,22 +971,49 @@ void sstv_task(void*)
                     int pixel = (phase_samples * kInWidth) / color_samples;
                     if (pixel >= 0 && pixel < kInWidth)
                     {
-                        uint8_t intensity = freq_to_intensity(current_freq);
-                        int channel = 0;
-                        if (phase == Phase::Green)
+                        pixel_buf[pixel_pos] = static_cast<int16_t>(mono);
+                        pixel_pos++;
+                        if (pixel_pos >= pixel_window_samples)
                         {
-                            channel = 0;
+                            pixel_pos = 0;
                         }
-                        else if (phase == Phase::Blue)
+                        if (pixel_fill < pixel_window_samples)
                         {
-                            channel = 1;
+                            pixel_fill++;
                         }
-                        else if (phase == Phase::Red)
+
+                        if (pixel != last_pixel && pixel_fill == pixel_window_samples)
                         {
-                            channel = 2;
+                            last_pixel = pixel;
+                            for (int j = 0; j < pixel_window_samples; ++j)
+                            {
+                                int idx = pixel_pos + j;
+                                if (idx >= pixel_window_samples)
+                                {
+                                    idx -= pixel_window_samples;
+                                }
+                                pixel_window[j] = pixel_buf[idx];
+                            }
+
+                            float freq = estimate_freq_from_bins(pixel_window, pixel_window_samples,
+                                                                 s_pixel_bins, kPixelBinCount);
+                            uint8_t intensity = freq_to_intensity(freq);
+                            int channel = 0;
+                            if (phase == Phase::Green)
+                            {
+                                channel = 0;
+                            }
+                            else if (phase == Phase::Blue)
+                            {
+                                channel = 1;
+                            }
+                            else if (phase == Phase::Red)
+                            {
+                                channel = 2;
+                            }
+                            s_accum[channel][pixel] += intensity;
+                            s_count[channel][pixel] += 1;
                         }
-                        s_accum[channel][pixel] += intensity;
-                        s_count[channel][pixel] += 1;
                     }
                     phase_samples++;
                     if (phase_samples >= color_samples)
@@ -566,10 +1022,12 @@ void sstv_task(void*)
                         if (phase == Phase::Green)
                         {
                             phase = Phase::Blue;
+                            reset_pixel_state();
                         }
                         else if (phase == Phase::Blue)
                         {
                             phase = Phase::Red;
+                            reset_pixel_state();
                         }
                         else if (phase == Phase::Red)
                         {
@@ -582,6 +1040,8 @@ void sstv_task(void*)
                                            1.0f, audio_level, true);
                                 s_pending_save = true;
                                 phase = Phase::Idle;
+                                header_ok = false;
+                                reset_header_state();
                             }
                             else
                             {
