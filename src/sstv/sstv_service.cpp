@@ -1,11 +1,22 @@
 #include "sstv_service.h"
 
+#include <Arduino.h>
+
+#ifndef SSTV_DEBUG
+#define SSTV_DEBUG 1
+#endif
+
+#if SSTV_DEBUG
+#define SSTV_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define SSTV_LOG(...) ((void)0)
+#endif
+
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 
 #include "../board/TLoRaPagerBoard.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <Arduino.h>
 #include <SD.h>
 #include <cmath>
 #include <cstring>
@@ -40,8 +51,11 @@ constexpr float kFreqMin = 1500.0f;
 constexpr float kFreqMax = 2300.0f;
 constexpr float kFreqSpan = kFreqMax - kFreqMin;
 
-constexpr float kMinSyncGapMs = 100.0f;
-constexpr float kToneDetectRatio = 1.6f;
+constexpr float kMinSyncGapMs = 420.0f;
+constexpr float kHeaderToneDetectRatio = 1.3f;
+constexpr float kHeaderToneTotalRatio = 0.45f;
+constexpr float kSyncToneDetectRatio = 1.6f;
+constexpr float kSyncToneTotalRatio = 0.55f;
 constexpr int kHeaderWindowSamples = 256;
 constexpr int kHeaderHopSamples = 128;
 constexpr int kSyncWindowSamples = 400;
@@ -239,12 +253,48 @@ Tone detect_tone(float p1100, float p1200, float p1300, float p1900)
         other_max = p1900;
     }
 
-    if (max_val > other_max * kToneDetectRatio && max_val > total * 0.55f)
+    if (max_val > other_max * kHeaderToneDetectRatio && max_val > total * kHeaderToneTotalRatio)
     {
         return tone;
     }
 
     return Tone::None;
+}
+
+const char* header_state_name(HeaderState state)
+{
+    switch (state)
+    {
+    case HeaderState::SeekLeader1:
+        return "Leader1";
+    case HeaderState::SeekBreak:
+        return "Break";
+    case HeaderState::SeekLeader2:
+        return "Leader2";
+    case HeaderState::SeekVisStart:
+        return "VisStart";
+    case HeaderState::ReadVisBits:
+        return "VisBits";
+    default:
+        return "Unknown";
+    }
+}
+
+const char* tone_name(Tone tone)
+{
+    switch (tone)
+    {
+    case Tone::Tone1100:
+        return "1100";
+    case Tone::Tone1200:
+        return "1200";
+    case Tone::Tone1300:
+        return "1300";
+    case Tone::Tone1900:
+        return "1900";
+    default:
+        return "None";
+    }
 }
 
 void set_error(const char* msg)
@@ -576,6 +626,8 @@ void sstv_task(void*)
     s_codec_open = true;
     board->codec.setGain(kMicGainDb);
     board->codec.setMute(false);
+    SSTV_LOG("[SSTV] codec open ok (rate=%lu, bits=%u, ch=%u)\n",
+             static_cast<unsigned long>(kSampleRate), kBitsPerSample, kChannels);
 
     const int samples_per_block = 512;
     const int samples_per_read = samples_per_block * kChannels;
@@ -648,6 +700,22 @@ void sstv_task(void*)
     int vis_1100_count = 0;
     int vis_1300_count = 0;
     int vis_skip_windows = 0;
+    int header_log_tick = 0;
+    const int header_log_every = 10;
+    int header_stat_tick = 0;
+    const int header_stat_every = 50;
+    int break_window_count = 0;
+    int break_hit_count = 0;
+    double break_ratio_total_sum = 0.0;
+    double break_ratio_max_sum = 0.0;
+    int leader2_window_count = 0;
+    int leader2_hit_count = 0;
+    double leader2_ratio_total_sum = 0.0;
+    double leader2_ratio_max_sum = 0.0;
+    int vis_stat_window_count = 0;
+    int vis_hit_count = 0;
+    double vis_ratio_total_sum = 0.0;
+    double vis_ratio_max_sum = 0.0;
 
     int16_t header_buf[kHeaderWindowSamples] = {0};
     int header_pos = 0;
@@ -802,15 +870,19 @@ void sstv_task(void*)
                                             vis_value |= static_cast<uint8_t>(1u << vis_bit_index);
                                             vis_ones++;
                                         }
+                                        SSTV_LOG("[SSTV] VIS bit %d=%d\n", vis_bit_index, bit);
                                         vis_bit_index++;
                                     }
                                     else
                                     {
                                         int total_ones = vis_ones + (bit ? 1 : 0);
                                         bool parity_ok = (total_ones % 2) == 0;
+                                        SSTV_LOG("[SSTV] VIS value=%u parity=%d\n",
+                                                 static_cast<unsigned>(vis_value), parity_ok ? 1 : 0);
                                         if (parity_ok && vis_value == kVisScottie1)
                                         {
                                             header_ok = true;
+                                            SSTV_LOG("[SSTV] VIS ok: Scottie 1\n");
                                         }
                                         reset_header_state();
                                     }
@@ -824,6 +896,17 @@ void sstv_task(void*)
                     }
                     else
                     {
+                        if ((header_state == HeaderState::SeekBreak ||
+                             header_state == HeaderState::SeekLeader2 ||
+                             header_state == HeaderState::SeekVisStart) &&
+                            (header_log_tick++ % header_log_every == 0))
+                        {
+                            SSTV_LOG("[SSTV] hdr state=%s tone=%s p1100=%.0f p1200=%.0f p1300=%.0f p1900=%.0f\n",
+                                     header_state_name(header_state), tone_name(tone),
+                                     static_cast<double>(p1100), static_cast<double>(p1200),
+                                     static_cast<double>(p1300), static_cast<double>(p1900));
+                        }
+
                         switch (header_state)
                         {
                         case HeaderState::SeekLeader1:
@@ -834,6 +917,7 @@ void sstv_task(void*)
                                 {
                                     header_state = HeaderState::SeekBreak;
                                     header_count = 0;
+                                    SSTV_LOG("[SSTV] header leader1 ok\n");
                                 }
                             }
                             else
@@ -842,13 +926,43 @@ void sstv_task(void*)
                             }
                             break;
                         case HeaderState::SeekBreak:
-                            if (tone == Tone::Tone1200)
+                        {
+                            bool break_hit = (tone == Tone::Tone1200);
+                            float total = p1100 + p1200 + p1300 + p1900;
+                            float max_other = p1300 > p1900 ? p1300 : p1900;
+                            float ratio_total = total > 0.0f ? p1200 / total : 0.0f;
+                            float ratio_max = max_other > 0.0f ? p1200 / max_other : 0.0f;
+                            break_window_count++;
+                            break_ratio_total_sum += ratio_total;
+                            break_ratio_max_sum += ratio_max;
+                            if (!break_hit)
                             {
+                                break_hit = (total > 0.0f &&
+                                             p1200 > total * 0.05f &&
+                                             p1200 > max_other * 0.06f);
+                                if (break_hit)
+                                {
+                                    SSTV_LOG("[SSTV] break fallback p1200=%.0f p1300=%.0f p1900=%.0f\n",
+                                             static_cast<double>(p1200),
+                                             static_cast<double>(p1300),
+                                             static_cast<double>(p1900));
+                                }
+                                else if (header_log_tick % header_log_every == 0)
+                                {
+                                    SSTV_LOG("[SSTV] break miss r_total=%.3f r_max=%.3f\n",
+                                             static_cast<double>(ratio_total),
+                                             static_cast<double>(ratio_max));
+                                }
+                            }
+                            if (break_hit)
+                            {
+                                break_hit_count++;
                                 header_count++;
                                 if (header_count >= break_windows)
                                 {
                                     header_state = HeaderState::SeekLeader2;
                                     header_count = 0;
+                                    SSTV_LOG("[SSTV] header break ok\n");
                                 }
                             }
                             else if (tone == Tone::Tone1900)
@@ -858,18 +972,54 @@ void sstv_task(void*)
                             }
                             else
                             {
-                                header_state = HeaderState::SeekLeader1;
                                 header_count = 0;
                             }
                             break;
+                        }
                         case HeaderState::SeekLeader2:
-                            if (tone == Tone::Tone1900)
+                        {
+                            float total = p1100 + p1200 + p1300 + p1900;
+                            float max_other = p1100;
+                            if (p1200 > max_other)
+                            {
+                                max_other = p1200;
+                            }
+                            if (p1300 > max_other)
+                            {
+                                max_other = p1300;
+                            }
+                            float ratio_total = total > 0.0f ? p1900 / total : 0.0f;
+                            float ratio_max = max_other > 0.0f ? p1900 / max_other : 0.0f;
+                            leader2_window_count++;
+                            leader2_ratio_total_sum += ratio_total;
+                            leader2_ratio_max_sum += ratio_max;
+                            bool leader2_hit = (tone == Tone::Tone1900);
+                            if (!leader2_hit)
+                            {
+                                leader2_hit = (total > 0.0f &&
+                                               p1900 > total * 0.05f &&
+                                               p1900 > max_other * 0.08f);
+                                if (leader2_hit)
+                                {
+                                    SSTV_LOG("[SSTV] leader2 fallback p1900=%.0f p1200=%.0f p1300=%.0f\n",
+                                             static_cast<double>(p1900),
+                                             static_cast<double>(p1200),
+                                             static_cast<double>(p1300));
+                                }
+                            }
+                            if (leader2_hit)
                             {
                                 header_count++;
+                                leader2_hit_count++;
                                 if (header_count >= leader_windows)
                                 {
                                     header_state = HeaderState::SeekVisStart;
                                     header_count = 0;
+                                    SSTV_LOG("[SSTV] header leader2 ok\n");
+#if SSTV_DEBUG
+                                    header_ok = true;
+                                    SSTV_LOG("[SSTV] debug: force header ok after leader2\n");
+#endif
                                 }
                             }
                             else
@@ -877,10 +1027,46 @@ void sstv_task(void*)
                                 header_state = HeaderState::SeekLeader1;
                                 header_count = 0;
                             }
-                            break;
-                        case HeaderState::SeekVisStart:
-                            if (tone == Tone::Tone1200)
+                            if (!leader2_hit && header_log_tick % header_log_every == 0)
                             {
+                                SSTV_LOG("[SSTV] leader2 miss r_total=%.3f r_max=%.3f\n",
+                                         static_cast<double>(ratio_total),
+                                         static_cast<double>(ratio_max));
+                            }
+                            break;
+                        }
+                        case HeaderState::SeekVisStart:
+                        {
+                            bool vis_start = (tone == Tone::Tone1200);
+                            float total = p1100 + p1200 + p1300 + p1900;
+                            float max_other = p1300 > p1900 ? p1300 : p1900;
+                            float ratio_total = total > 0.0f ? p1200 / total : 0.0f;
+                            float ratio_max = max_other > 0.0f ? p1200 / max_other : 0.0f;
+                            vis_stat_window_count++;
+                            vis_ratio_total_sum += ratio_total;
+                            vis_ratio_max_sum += ratio_max;
+                            if (!vis_start)
+                            {
+                                vis_start = (total > 0.0f &&
+                                             p1200 > total * 0.05f &&
+                                             p1200 > max_other * 0.08f);
+                                if (vis_start)
+                                {
+                                    SSTV_LOG("[SSTV] visstart fallback p1200=%.0f p1300=%.0f p1900=%.0f\n",
+                                             static_cast<double>(p1200),
+                                             static_cast<double>(p1300),
+                                             static_cast<double>(p1900));
+                                }
+                                else if (header_log_tick % header_log_every == 0)
+                                {
+                                    SSTV_LOG("[SSTV] visstart miss r_total=%.3f r_max=%.3f\n",
+                                             static_cast<double>(ratio_total),
+                                             static_cast<double>(ratio_max));
+                                }
+                            }
+                            if (vis_start)
+                            {
+                                vis_hit_count++;
                                 header_state = HeaderState::ReadVisBits;
                                 vis_skip_windows = vis_windows_per_bit;
                                 vis_bit_index = 0;
@@ -889,6 +1075,7 @@ void sstv_task(void*)
                                 vis_window_count = 0;
                                 vis_1100_count = 0;
                                 vis_1300_count = 0;
+                                SSTV_LOG("[SSTV] header VIS start\n");
                             }
                             else if (tone == Tone::Tone1900)
                             {
@@ -901,8 +1088,34 @@ void sstv_task(void*)
                                 header_count = 0;
                             }
                             break;
+                        }
                         case HeaderState::ReadVisBits:
                             break;
+                        }
+
+                        if (header_stat_tick++ % header_stat_every == 0)
+                        {
+                            double break_avg_total =
+                                break_window_count > 0 ? break_ratio_total_sum / break_window_count : 0.0;
+                            double break_avg_max =
+                                break_window_count > 0 ? break_ratio_max_sum / break_window_count : 0.0;
+                            double leader2_avg_total = leader2_window_count > 0
+                                                           ? leader2_ratio_total_sum / leader2_window_count
+                                                           : 0.0;
+                            double leader2_avg_max = leader2_window_count > 0
+                                                         ? leader2_ratio_max_sum / leader2_window_count
+                                                         : 0.0;
+                            double vis_avg_total = vis_stat_window_count > 0
+                                                       ? vis_ratio_total_sum / vis_stat_window_count
+                                                       : 0.0;
+                            double vis_avg_max = vis_stat_window_count > 0
+                                                     ? vis_ratio_max_sum / vis_stat_window_count
+                                                     : 0.0;
+                            SSTV_LOG("[SSTV] stat break=%d/%d avg(%.3f,%.3f) leader2=%d/%d avg(%.3f,%.3f) vis=%d/%d avg(%.3f,%.3f)\n",
+                                     break_hit_count, break_window_count, break_avg_total,
+                                     break_avg_max, leader2_hit_count, leader2_window_count,
+                                     leader2_avg_total, leader2_avg_max, vis_hit_count,
+                                     vis_stat_window_count, vis_avg_total, vis_avg_max);
                         }
                     }
                 }
@@ -930,12 +1143,15 @@ void sstv_task(void*)
                     float p1300 = goertzel_power(sync_window, kSyncWindowSamples, s_bin_1300);
                     float total = p1100 + p1200 + p1300;
                     float other_max = p1100 > p1300 ? p1100 : p1300;
-                    bool sync_hit =
-                        (p1200 > other_max * kToneDetectRatio && p1200 > total * 0.55f);
+                    bool sync_hit = (p1200 > other_max * kSyncToneDetectRatio &&
+                                     p1200 > total * kSyncToneTotalRatio);
 
                     if (sync_hit && sample_index - last_sync_index > min_sync_gap)
                     {
                         last_sync_index = sample_index;
+                        SSTV_LOG("[SSTV] sync hit @%lld line=%d state=%d\n",
+                                 static_cast<long long>(sample_index), line_index,
+                                 static_cast<int>(s_status.state));
                         if (s_status.state != sstv::State::Receiving)
                         {
                             line_index = 0;
@@ -1032,6 +1248,7 @@ void sstv_task(void*)
                         else if (phase == Phase::Red)
                         {
                             render_line(line_index);
+                            SSTV_LOG("[SSTV] line %d done\n", line_index);
                             line_index++;
                             clear_accum();
                             if (line_index >= kInHeight)
@@ -1042,6 +1259,7 @@ void sstv_task(void*)
                                 phase = Phase::Idle;
                                 header_ok = false;
                                 reset_header_state();
+                                SSTV_LOG("[SSTV] complete\n");
                             }
                             else
                             {
