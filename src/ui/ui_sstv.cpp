@@ -29,7 +29,7 @@ constexpr lv_coord_t kInfoH = 192;
 
 constexpr lv_coord_t kProgressH = 8;
 constexpr lv_coord_t kProgressY = kMainHeight - 14;
-constexpr lv_coord_t kProgressW = 464;
+constexpr lv_coord_t kProgressW = kInfoW;
 
 constexpr lv_coord_t kMeterX = 136;
 constexpr lv_coord_t kMeterY = 34;
@@ -40,6 +40,7 @@ constexpr lv_coord_t kMeterSegGap = 2;
 constexpr int kMeterSegments = 12;
 
 constexpr uint32_t kColorWarmBg = 0xF6E6C6;
+constexpr uint32_t kColorAccent = 0xEBA341;
 constexpr uint32_t kColorPanelBg = 0xFAF0D8;
 constexpr uint32_t kColorLine = 0xE7C98F;
 constexpr uint32_t kColorText = 0x6B4A1E;
@@ -253,13 +254,13 @@ void build_main_area(lv_obj_t* parent)
 
     s_ui.progress = lv_bar_create(main);
     lv_obj_set_size(s_ui.progress, kProgressW, kProgressH);
-    lv_obj_set_pos(s_ui.progress, kPadding, kProgressY);
+    lv_obj_set_pos(s_ui.progress, kInfoX, kProgressY);
     lv_bar_set_range(s_ui.progress, 0, 100);
     lv_bar_set_value(s_ui.progress, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(s_ui.progress, lv_color_hex(kColorLine), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(s_ui.progress, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(s_ui.progress, 4, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_ui.progress, lv_color_hex(kColorAmber), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_ui.progress, lv_color_hex(kColorAccent), LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(s_ui.progress, LV_OPA_COVER, LV_PART_INDICATOR);
     lv_obj_set_style_radius(s_ui.progress, 4, LV_PART_INDICATOR);
 
@@ -293,29 +294,31 @@ void build_main_area(lv_obj_t* parent)
 
     s_ui.label_state_big = lv_label_create(s_ui.info_area);
     lv_obj_set_pos(s_ui.label_state_big, 0, 6);
-    lv_obj_set_size(s_ui.label_state_big, kInfoW, 24);
+    lv_obj_set_width(s_ui.label_state_big, 130);
     lv_obj_set_style_text_align(s_ui.label_state_big, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_long_mode(s_ui.label_state_big, LV_LABEL_LONG_DOT);
-    apply_label_style(s_ui.label_state_big, &lv_font_montserrat_18, kColorText);
+    lv_label_set_long_mode(s_ui.label_state_big, LV_LABEL_LONG_WRAP);
+    apply_label_style(s_ui.label_state_big, &lv_font_montserrat_14, kColorText);
 
     s_ui.label_state_sub = lv_label_create(s_ui.info_area);
     lv_obj_set_pos(s_ui.label_state_sub, 0, 34);
-    lv_obj_set_size(s_ui.label_state_sub, kInfoW, 20);
+    lv_obj_set_width(s_ui.label_state_sub, 130);
     lv_obj_set_style_text_align(s_ui.label_state_sub, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_long_mode(s_ui.label_state_sub, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(s_ui.label_state_sub, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_state_sub, &lv_font_montserrat_14, kColorTextDim);
 
     s_ui.label_mode = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_mode, 0, 156);
-    lv_obj_set_size(s_ui.label_mode, 120, 18);
+    lv_obj_set_pos(s_ui.label_mode, 0, 106);
+    lv_obj_set_width(s_ui.label_mode, 100);
     lv_obj_set_style_text_align(s_ui.label_mode, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_ui.label_mode, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_mode, &lv_font_montserrat_14, kColorTextDim);
 
     s_ui.label_ready = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_ready, 0, 172);
-    lv_obj_set_size(s_ui.label_ready, kInfoW, 20);
-    lv_obj_set_style_text_align(s_ui.label_ready, LV_TEXT_ALIGN_RIGHT, 0);
-    apply_label_style(s_ui.label_ready, &lv_font_montserrat_16, kColorText);
+    lv_obj_set_pos(s_ui.label_ready, 0, 142);
+    lv_obj_set_width(s_ui.label_ready, 100);
+    lv_obj_set_style_text_align(s_ui.label_ready, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_ui.label_ready, LV_LABEL_LONG_WRAP);
+    apply_label_style(s_ui.label_ready, &lv_font_montserrat_14, kColorText);
 
     s_ui.meter_box = lv_obj_create(s_ui.info_area);
     lv_obj_set_size(s_ui.meter_box, kMeterW, kMeterH);
