@@ -22,6 +22,16 @@
 #define SSTV_LOG_V(...) ((void)0)
 #endif
 
+#ifndef SSTV_VIS_DIAG
+#define SSTV_VIS_DIAG 1
+#endif
+
+#if SSTV_VIS_DIAG
+#define SSTV_LOG_VIS(...) SSTV_LOG(__VA_ARGS__)
+#else
+#define SSTV_LOG_VIS(...) ((void)0)
+#endif
+
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 
 #include "../board/TLoRaPagerBoard.h"
@@ -637,6 +647,8 @@ struct ModeContext
     float& vis_1300_sum;
     int& vis_skip_windows;
     int& vis_start_count;
+    int& vis_start_samples;
+    int& vis_bit_samples;
     float& color_ms;
 };
 
@@ -665,6 +677,8 @@ void reset_header_state(ModeContext& ctx)
     ctx.vis_1300_sum = 0.0f;
     ctx.vis_skip_windows = 0;
     ctx.vis_start_count = 0;
+    ctx.vis_start_samples = 0;
+    ctx.vis_bit_samples = 0;
     ctx.vis_mode = VisMode::Unknown;
     s_vis_mode = VisMode::Unknown;
     ctx.line_count = kInHeightScottie;
@@ -1171,6 +1185,8 @@ void sstv_task(void*)
     const int min_sync_gap = static_cast<int>(kSampleRate * (kMinSyncGapMs / 1000.0f));
     const float header_window_ms =
         1000.0f * static_cast<float>(kHeaderHopSamples) / static_cast<float>(kSampleRate);
+    const int vis_samples_per_bit =
+        static_cast<int>(kSampleRate * (kVisBitMs / 1000.0f) + 0.5f);
     int leader_windows = static_cast<int>(kLeaderMs / header_window_ms + 0.5f);
     if (leader_windows < 1)
     {
@@ -1211,6 +1227,8 @@ void sstv_task(void*)
     float vis_1300_sum = 0.0f;
     int vis_skip_windows = 0;
     int vis_start_count = 0;
+    int vis_start_samples = 0;
+    int vis_bit_samples = 0;
     int header_log_tick = 0;
     const int header_log_every = 10;
     int header_stat_tick = 0;
@@ -1227,6 +1245,12 @@ void sstv_task(void*)
     int vis_hit_count = 0;
     double vis_ratio_total_sum = 0.0;
     double vis_ratio_max_sum = 0.0;
+    int64_t vis_start_sample = -1;
+    int64_t vis_last_bit_sample = -1;
+    int vis_diag_bits = 0;
+    double vis_diag_valid_sum = 0.0;
+    double vis_diag_valid_min = 1.0;
+    double vis_diag_valid_max = 0.0;
     float audio_level = 0.0f;
 
     int16_t header_buf[kHeaderWindowSamples] = {0};
@@ -1296,6 +1320,8 @@ void sstv_task(void*)
         vis_1300_sum,
         vis_skip_windows,
         vis_start_count,
+        vis_start_samples,
+        vis_bit_samples,
         color_ms,
     };
 
@@ -1398,10 +1424,38 @@ void sstv_task(void*)
                                 }
                             }
                             vis_window_count++;
+                            vis_bit_samples += kHeaderHopSamples;
 
-                            if (vis_window_count >= vis_windows_per_bit)
+                            if (vis_bit_samples >= vis_samples_per_bit)
                             {
                                 int bit = (vis_1100_sum >= vis_1300_sum) ? 1 : 0;
+                                double valid_ratio = 0.0;
+                                if (vis_window_count > 0)
+                                {
+                                    valid_ratio = static_cast<double>(vis_valid_windows) /
+                                                  static_cast<double>(vis_window_count);
+                                }
+                                vis_diag_bits++;
+                                vis_diag_valid_sum += valid_ratio;
+                                if (valid_ratio < vis_diag_valid_min)
+                                {
+                                    vis_diag_valid_min = valid_ratio;
+                                }
+                                if (valid_ratio > vis_diag_valid_max)
+                                {
+                                    vis_diag_valid_max = valid_ratio;
+                                }
+                                const int64_t bit_sample = sample_index;
+                                if (vis_last_bit_sample >= 0)
+                                {
+                                    const int64_t bit_len_samples = bit_sample - vis_last_bit_sample;
+                                    const double bit_len_ms =
+                                        static_cast<double>(bit_len_samples) * 1000.0 /
+                                        static_cast<double>(kSampleRate);
+                                    SSTV_LOG_VIS("[SSTV] VIS bit %d len=%.2fms valid=%.2f\n",
+                                                 vis_bit_index, bit_len_ms, valid_ratio);
+                                }
+                                vis_last_bit_sample = bit_sample;
                                 if (vis_1100_sum == 0.0f && vis_1300_sum == 0.0f)
                                 {
                                     reset_header_state(ctx);
@@ -1426,6 +1480,23 @@ void sstv_task(void*)
                                     {
                                         int total_ones = vis_ones + (bit ? 1 : 0);
                                         bool parity_ok = (total_ones % 2) == 0;
+                                        if (vis_start_sample >= 0 && vis_diag_bits > 0)
+                                        {
+                                            const double elapsed_ms =
+                                                static_cast<double>(bit_sample - vis_start_sample) *
+                                                1000.0 / static_cast<double>(kSampleRate);
+                                            const double bit_ms = elapsed_ms / vis_diag_bits;
+                                            const double drift_ppm =
+                                                (bit_ms / kVisBitMs - 1.0) * 1000000.0;
+                                            const double valid_avg =
+                                                vis_diag_valid_sum / vis_diag_bits;
+                                            SSTV_LOG_VIS("[SSTV] VIS timing bits=%d elapsed=%.2fms "
+                                                         "bit=%.3fms drift=%.1fppm "
+                                                         "valid(min/avg/max)=%.2f/%.2f/%.2f\n",
+                                                         vis_diag_bits, elapsed_ms, bit_ms,
+                                                         drift_ppm, vis_diag_valid_min,
+                                                         valid_avg, vis_diag_valid_max);
+                                        }
                                         SSTV_LOG("[SSTV] VIS value=%u parity=%d\n",
                                                  static_cast<unsigned>(vis_value), parity_ok ? 1 : 0);
                                         auto apply_vis_config = [&](const VisConfig* config,
@@ -1520,6 +1591,10 @@ void sstv_task(void*)
                                     }
                                 }
 
+                                if (vis_bit_samples >= vis_samples_per_bit)
+                                {
+                                    vis_bit_samples -= vis_samples_per_bit;
+                                }
                                 vis_window_count = 0;
                                 vis_1100_count = 0;
                                 vis_1300_count = 0;
@@ -1726,7 +1801,8 @@ void sstv_task(void*)
                             if (vis_start)
                             {
                                 vis_start_count++;
-                                if (vis_start_count >= vis_windows_per_bit)
+                                vis_start_samples += kHeaderHopSamples;
+                                if (vis_start_samples >= vis_samples_per_bit)
                                 {
                                     vis_hit_count++;
                                     header_state = HeaderState::ReadVisBits;
@@ -1741,18 +1817,46 @@ void sstv_task(void*)
                                     vis_1100_sum = 0.0f;
                                     vis_1300_sum = 0.0f;
                                     vis_start_count = 0;
+                                    vis_start_samples = 0;
+                                    vis_bit_samples = 0;
+                                    vis_start_sample = sample_index;
+                                    vis_last_bit_sample = -1;
+                                    vis_diag_bits = 0;
+                                    vis_diag_valid_sum = 0.0;
+                                    vis_diag_valid_min = 1.0;
+                                    vis_diag_valid_max = 0.0;
                                     SSTV_LOG("[SSTV] header VIS start\n");
+                                    if (vis_samples_per_bit > 0)
+                                    {
+                                        const int start_phase =
+                                            static_cast<int>(vis_start_sample % vis_samples_per_bit);
+                                        const double start_phase_ms =
+                                            static_cast<double>(start_phase) * 1000.0 /
+                                            static_cast<double>(kSampleRate);
+                                        const double window_bit_ms =
+                                            static_cast<double>(vis_samples_per_bit) * 1000.0 /
+                                            static_cast<double>(kSampleRate);
+                                        SSTV_LOG_VIS("[SSTV] VIS align sample=%lld phase=%.2fms "
+                                                     "hop=%.3fms bit=%.3fms windows/bit=%d "
+                                                     "window_bit=%.3fms err=%.3fms\n",
+                                                     static_cast<long long>(vis_start_sample),
+                                                     start_phase_ms, header_window_ms, kVisBitMs,
+                                                     vis_windows_per_bit, window_bit_ms,
+                                                     window_bit_ms - kVisBitMs);
+                                    }
                                 }
                             }
                             else if (tone == Tone::Tone1900)
                             {
                                 vis_start_count = 0;
+                                vis_start_samples = 0;
                                 header_state = HeaderState::SeekLeader2;
                                 header_count = 1;
                             }
                             else
                             {
                                 vis_start_count = 0;
+                                vis_start_samples = 0;
                             }
                             break;
                         }
