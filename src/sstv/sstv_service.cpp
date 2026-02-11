@@ -32,6 +32,16 @@
 #define SSTV_LOG_VIS(...) ((void)0)
 #endif
 
+#ifndef SSTV_TONE_TEST
+#define SSTV_TONE_TEST 0
+#endif
+
+#if SSTV_TONE_TEST
+#define SSTV_LOG_TONE(...) SSTV_LOG(__VA_ARGS__)
+#else
+#define SSTV_LOG_TONE(...) ((void)0)
+#endif
+
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 
 #include "../board/TLoRaPagerBoard.h"
@@ -47,7 +57,7 @@ namespace
 constexpr uint32_t kSampleRate = 44100;
 constexpr uint8_t kBitsPerSample = 16;
 constexpr uint8_t kChannels = 1;
-constexpr float kMicGainDb = 24.0f;
+constexpr float kMicGainDb = 30.0f;
 constexpr uint32_t kTaskStack = 8192;
 constexpr uint32_t kTaskDelayMs = 2;
 
@@ -90,6 +100,11 @@ constexpr float kLeaderMs = 300.0f;
 constexpr float kBreakMs = 10.0f;
 constexpr float kVisBitMs = 30.0f;
 constexpr float kVisPairRatio = 0.08f;
+constexpr int kToneWindowSamples = (kSampleRate * 30 + 500) / 1000;
+constexpr float kVisAcceptAvgValid = 0.60f;
+constexpr float kVisAcceptMinValid = 0.20f;
+constexpr float kVisFallbackAvgValid = 0.70f;
+constexpr float kVisFallbackMinValid = 0.30f;
 constexpr uint8_t kVisScottie1 = 60;
 constexpr uint8_t kVisScottie2 = 56;
 constexpr uint8_t kVisScottieDX = 76;
@@ -263,7 +278,12 @@ GoertzelBin s_bin_1100 = {};
 GoertzelBin s_bin_1200 = {};
 GoertzelBin s_bin_1300 = {};
 GoertzelBin s_bin_1900 = {};
+GoertzelBin s_bin_1500 = {};
 GoertzelBin s_pixel_bins[kPixelBinCount] = {};
+#if SSTV_TONE_TEST
+int16_t s_tone_buf[kToneWindowSamples] = {0};
+int16_t s_tone_window[kToneWindowSamples] = {0};
+#endif
 
 uint16_t rgb_to_565(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -303,6 +323,20 @@ float goertzel_power(const int16_t* data, int count, const GoertzelBin& bin)
         q2 = q1;
         q1 = q0;
     }
+    float real = q1 - q2 * bin.cos_w;
+    float imag = q2 * bin.sin_w;
+    return real * real + imag * imag;
+}
+
+inline void goertzel_update(float& q1, float& q2, float sample, const GoertzelBin& bin)
+{
+    float q0 = bin.coeff * q1 - q2 + sample;
+    q2 = q1;
+    q1 = q0;
+}
+
+inline float goertzel_power_state(float q1, float q2, const GoertzelBin& bin)
+{
     float real = q1 - q2 * bin.cos_w;
     float imag = q2 * bin.sin_w;
     return real * real + imag * imag;
@@ -649,6 +683,10 @@ struct ModeContext
     int& vis_start_count;
     int& vis_start_samples;
     int& vis_bit_samples;
+    float& vis_g_q1_1100;
+    float& vis_g_q2_1100;
+    float& vis_g_q1_1300;
+    float& vis_g_q2_1300;
     float& color_ms;
 };
 
@@ -679,6 +717,10 @@ void reset_header_state(ModeContext& ctx)
     ctx.vis_start_count = 0;
     ctx.vis_start_samples = 0;
     ctx.vis_bit_samples = 0;
+    ctx.vis_g_q1_1100 = 0.0f;
+    ctx.vis_g_q2_1100 = 0.0f;
+    ctx.vis_g_q1_1300 = 0.0f;
+    ctx.vis_g_q2_1300 = 0.0f;
     ctx.vis_mode = VisMode::Unknown;
     s_vis_mode = VisMode::Unknown;
     ctx.line_count = kInHeightScottie;
@@ -1146,6 +1188,7 @@ void sstv_task(void*)
     s_bin_1100 = make_bin(1100.0f);
     s_bin_1200 = make_bin(1200.0f);
     s_bin_1300 = make_bin(1300.0f);
+    s_bin_1500 = make_bin(1500.0f);
     s_bin_1900 = make_bin(1900.0f);
     for (int i = 0; i < kPixelBinCount; ++i)
     {
@@ -1229,6 +1272,10 @@ void sstv_task(void*)
     int vis_start_count = 0;
     int vis_start_samples = 0;
     int vis_bit_samples = 0;
+    float vis_g_q1_1100 = 0.0f;
+    float vis_g_q2_1100 = 0.0f;
+    float vis_g_q1_1300 = 0.0f;
+    float vis_g_q2_1300 = 0.0f;
     int header_log_tick = 0;
     const int header_log_every = 10;
     int header_stat_tick = 0;
@@ -1257,12 +1304,18 @@ void sstv_task(void*)
     int header_pos = 0;
     int header_fill = 0;
     int header_hop = 0;
+#if SSTV_TONE_TEST
+    int tone_pos = 0;
+    int tone_fill = 0;
+#endif
     int16_t sync_buf[kSyncWindowSamples] = {0};
     int sync_pos = 0;
     int sync_fill = 0;
     int sync_hop = 0;
     int16_t pixel_buf[kMaxPixelSamples] = {0};
     int16_t header_window[kHeaderWindowSamples];
+#if SSTV_TONE_TEST
+#endif
     int16_t sync_window[kSyncWindowSamples];
     int16_t pixel_window[kMaxPixelSamples];
 
@@ -1322,12 +1375,28 @@ void sstv_task(void*)
         vis_start_count,
         vis_start_samples,
         vis_bit_samples,
+        vis_g_q1_1100,
+        vis_g_q2_1100,
+        vis_g_q1_1300,
+        vis_g_q2_1300,
         color_ms,
     };
 
     int64_t sample_index = 0;
     int64_t last_sync_index = -1000000;
     int64_t low_audio_samples = 0;
+#if SSTV_TONE_TEST
+    int tone_sample_accum = 0;
+    int tone_blocks = 0;
+    double tone_peak_sum = 0.0;
+    int tone_peak_max = 0;
+    double tone_p1200_sum = 0.0;
+    double tone_p1200_max = 0.0;
+    double tone_p1500_sum = 0.0;
+    double tone_p1500_max = 0.0;
+    double tone_p1100_sum = 0.0;
+    double tone_p1300_sum = 0.0;
+#endif
 
     clear_frame();
     clear_accum();
@@ -1359,7 +1428,6 @@ void sstv_task(void*)
             {
                 block_peak = static_cast<int16_t>(-mono);
             }
-
             header_buf[header_pos] = static_cast<int16_t>(mono);
             header_pos++;
             if (header_pos >= kHeaderWindowSamples)
@@ -1370,6 +1438,18 @@ void sstv_task(void*)
             {
                 header_fill++;
             }
+#if SSTV_TONE_TEST
+            s_tone_buf[tone_pos] = static_cast<int16_t>(mono);
+            tone_pos++;
+            if (tone_pos >= kToneWindowSamples)
+            {
+                tone_pos = 0;
+            }
+            if (tone_fill < kToneWindowSamples)
+            {
+                tone_fill++;
+            }
+#endif
 
             sync_buf[sync_pos] = static_cast<int16_t>(mono);
             sync_pos++;
@@ -1380,6 +1460,206 @@ void sstv_task(void*)
             if (sync_fill < kSyncWindowSamples)
             {
                 sync_fill++;
+            }
+
+            if (!header_ok && header_state == HeaderState::ReadVisBits)
+            {
+                if (vis_skip_windows > 0)
+                {
+                    vis_skip_windows--;
+                }
+                else
+                {
+                    goertzel_update(vis_g_q1_1100, vis_g_q2_1100, static_cast<float>(mono),
+                                    s_bin_1100);
+                    goertzel_update(vis_g_q1_1300, vis_g_q2_1300, static_cast<float>(mono),
+                                    s_bin_1300);
+                    vis_bit_samples++;
+
+                    if (vis_bit_samples >= vis_samples_per_bit)
+                    {
+                        float p1100 =
+                            goertzel_power_state(vis_g_q1_1100, vis_g_q2_1100, s_bin_1100);
+                        float p1300 =
+                            goertzel_power_state(vis_g_q1_1300, vis_g_q2_1300, s_bin_1300);
+                        float pair = p1100 + p1300;
+                        float max_pair = p1100 > p1300 ? p1100 : p1300;
+                        int bit = (p1100 >= p1300) ? 1 : 0;
+
+                        vis_1100_sum = p1100;
+                        vis_1300_sum = p1300;
+                        vis_window_count = vis_samples_per_bit;
+                        vis_valid_windows =
+                            (pair > 0.0f)
+                                ? static_cast<int>((max_pair / pair) *
+                                                   static_cast<float>(vis_window_count) + 0.5f)
+                                : 0;
+                        double valid_ratio = (vis_window_count > 0)
+                                                 ? static_cast<double>(vis_valid_windows) /
+                                                       static_cast<double>(vis_window_count)
+                                                 : 0.0;
+                        vis_diag_bits++;
+                        vis_diag_valid_sum += valid_ratio;
+                        if (valid_ratio < vis_diag_valid_min)
+                        {
+                            vis_diag_valid_min = valid_ratio;
+                        }
+                        if (valid_ratio > vis_diag_valid_max)
+                        {
+                            vis_diag_valid_max = valid_ratio;
+                        }
+                        const int64_t bit_sample = sample_index;
+                        if (vis_last_bit_sample >= 0)
+                        {
+                            const int64_t bit_len_samples = bit_sample - vis_last_bit_sample;
+                            const double bit_len_ms =
+                                static_cast<double>(bit_len_samples) * 1000.0 /
+                                static_cast<double>(kSampleRate);
+                            SSTV_LOG_VIS("[SSTV] VIS bit %d len=%.2fms valid=%.2f\n",
+                                         vis_bit_index, bit_len_ms, valid_ratio);
+                        }
+                        vis_last_bit_sample = bit_sample;
+
+                        if (vis_bit_index < 7)
+                        {
+                            if (bit)
+                            {
+                                vis_value |= static_cast<uint8_t>(1u << vis_bit_index);
+                                vis_ones++;
+                            }
+                            SSTV_LOG_VIS("[SSTV] VIS bit %d=%d\n", vis_bit_index, bit);
+                            vis_bit_index++;
+                        }
+                        else
+                        {
+                            int total_ones = vis_ones + (bit ? 1 : 0);
+                            bool parity_ok = (total_ones % 2) == 0;
+                            if (vis_start_sample >= 0 && vis_diag_bits > 0)
+                            {
+                                const double elapsed_ms =
+                                    static_cast<double>(bit_sample - vis_start_sample) * 1000.0 /
+                                    static_cast<double>(kSampleRate);
+                                const double bit_ms = elapsed_ms / vis_diag_bits;
+                                const double drift_ppm =
+                                    (bit_ms / kVisBitMs - 1.0) * 1000000.0;
+                                SSTV_LOG_VIS("[SSTV] VIS timing bits=%d elapsed=%.2fms "
+                                             "bit=%.3fms drift=%.1fppm "
+                                             "valid(min/avg/max)=%.2f/%.2f/%.2f\n",
+                                             vis_diag_bits, elapsed_ms, bit_ms, drift_ppm,
+                                             vis_diag_valid_min,
+                                             vis_diag_valid_sum / vis_diag_bits,
+                                             vis_diag_valid_max);
+                            }
+                            const double valid_avg = vis_diag_bits > 0
+                                                         ? vis_diag_valid_sum / vis_diag_bits
+                                                         : 0.0;
+                            const bool valid_ok =
+                                (vis_diag_bits >= 8 && valid_avg >= kVisAcceptAvgValid &&
+                                 vis_diag_valid_min >= kVisAcceptMinValid);
+                            const bool fallback_ok =
+                                (vis_diag_bits >= 8 && valid_avg >= kVisFallbackAvgValid &&
+                                 vis_diag_valid_min >= kVisFallbackMinValid);
+                            SSTV_LOG("[SSTV] VIS value=%u parity=%d\n",
+                                     static_cast<unsigned>(vis_value), parity_ok ? 1 : 0);
+                            auto apply_vis_config = [&](const VisConfig* config, const char* label)
+                            {
+                                if (!config)
+                                {
+                                    return false;
+                                }
+                                vis_mode = config->mode;
+                                color_ms = config->color_ms;
+                                if (config->pd_scan_ms > 0.0f)
+                                {
+                                    update_pd_timing(config->pd_scan_ms, pd_scan_samples,
+                                                     pd_pixel_window_samples);
+                                }
+                                if (config->p_sync_ms > 0.0f)
+                                {
+                                    update_p_timing(config->p_sync_ms, config->p_porch_ms,
+                                                    config->p_color_ms, p_sync_samples,
+                                                    p_porch_samples, p_color_samples,
+                                                    p_pixel_window_samples);
+                                }
+                                update_color_timing(color_ms, color_samples, pixel_window_samples);
+                                line_count = config->line_count;
+                                s_line_count = line_count;
+                                s_vis_mode = vis_mode;
+                                header_ok = true;
+                                SSTV_LOG("[SSTV] VIS ok: %s (%s, color=%.3f ms)\n",
+                                         vis_mode_name(vis_mode), label,
+                                         static_cast<double>(color_ms));
+                                return true;
+                            };
+
+                            bool accepted = false;
+                            if (parity_ok && valid_ok)
+                            {
+                                accepted =
+                                    apply_vis_config(find_vis_config(vis_value), "normal");
+                            }
+                            else if (!valid_ok)
+                            {
+                                SSTV_LOG("[SSTV] VIS reject: low confidence avg=%.2f min=%.2f\n",
+                                         valid_avg, vis_diag_valid_min);
+                            }
+
+                            if (!accepted)
+                            {
+                                uint8_t inv_value = static_cast<uint8_t>(~vis_value) & 0x7F;
+                                int inv_bit = bit ? 0 : 1;
+                                int inv_ones = 7 - vis_ones;
+                                int inv_total = inv_ones + (inv_bit ? 1 : 0);
+                                if (fallback_ok && (inv_total % 2) == 0)
+                                {
+                                    accepted =
+                                        apply_vis_config(find_vis_config(inv_value), "inv");
+                                }
+                            }
+
+                            if (!accepted)
+                            {
+                                uint8_t rev_value = reverse_vis_bits(vis_value);
+                                if (fallback_ok && parity_ok)
+                                {
+                                    accepted =
+                                        apply_vis_config(find_vis_config(rev_value), "rev");
+                                }
+                            }
+
+                            if (!accepted)
+                            {
+                                uint8_t rev_inv_value =
+                                    reverse_vis_bits(static_cast<uint8_t>(~vis_value) & 0x7F);
+                                int inv_bit = bit ? 0 : 1;
+                                int inv_ones = 7 - vis_ones;
+                                int inv_total = inv_ones + (inv_bit ? 1 : 0);
+                                if (fallback_ok && (inv_total % 2) == 0)
+                                {
+                                    accepted = apply_vis_config(find_vis_config(rev_inv_value),
+                                                                "rev+inv");
+                                }
+                            }
+
+                            if (!accepted)
+                            {
+                                SSTV_LOG_V("[SSTV] VIS unsupported value=%u\n",
+                                           static_cast<unsigned>(vis_value));
+                            }
+                            reset_header_state(ctx);
+                        }
+
+                        vis_bit_samples = 0;
+                        vis_g_q1_1100 = 0.0f;
+                        vis_g_q2_1100 = 0.0f;
+                        vis_g_q1_1300 = 0.0f;
+                        vis_g_q2_1300 = 0.0f;
+                        vis_window_count = 0;
+                        vis_valid_windows = 0;
+                        vis_1100_sum = 0.0f;
+                        vis_1300_sum = 0.0f;
+                    }
+                }
             }
 
             if (!header_ok && header_fill == kHeaderWindowSamples)
@@ -1404,207 +1684,7 @@ void sstv_task(void*)
                     float p1900 = goertzel_power(header_window, kHeaderWindowSamples, s_bin_1900);
                     Tone tone = detect_tone(p1100, p1200, p1300, p1900);
 
-                    if (header_state == HeaderState::ReadVisBits)
-                    {
-                        if (vis_skip_windows > 0)
-                        {
-                            vis_skip_windows--;
-                        }
-                        else
-                        {
-                            float total = p1100 + p1200 + p1300 + p1900;
-                            float pair = p1100 + p1300;
-                            if (total > 0.0f)
-                            {
-                                vis_1100_sum += p1100;
-                                vis_1300_sum += p1300;
-                                if (pair >= total * kVisPairRatio)
-                                {
-                                    vis_valid_windows++;
-                                }
-                            }
-                            vis_window_count++;
-                            vis_bit_samples += kHeaderHopSamples;
-
-                            if (vis_bit_samples >= vis_samples_per_bit)
-                            {
-                                int bit = (vis_1100_sum >= vis_1300_sum) ? 1 : 0;
-                                double valid_ratio = 0.0;
-                                if (vis_window_count > 0)
-                                {
-                                    valid_ratio = static_cast<double>(vis_valid_windows) /
-                                                  static_cast<double>(vis_window_count);
-                                }
-                                vis_diag_bits++;
-                                vis_diag_valid_sum += valid_ratio;
-                                if (valid_ratio < vis_diag_valid_min)
-                                {
-                                    vis_diag_valid_min = valid_ratio;
-                                }
-                                if (valid_ratio > vis_diag_valid_max)
-                                {
-                                    vis_diag_valid_max = valid_ratio;
-                                }
-                                const int64_t bit_sample = sample_index;
-                                if (vis_last_bit_sample >= 0)
-                                {
-                                    const int64_t bit_len_samples = bit_sample - vis_last_bit_sample;
-                                    const double bit_len_ms =
-                                        static_cast<double>(bit_len_samples) * 1000.0 /
-                                        static_cast<double>(kSampleRate);
-                                    SSTV_LOG_VIS("[SSTV] VIS bit %d len=%.2fms valid=%.2f\n",
-                                                 vis_bit_index, bit_len_ms, valid_ratio);
-                                }
-                                vis_last_bit_sample = bit_sample;
-                                if (vis_1100_sum == 0.0f && vis_1300_sum == 0.0f)
-                                {
-                                    reset_header_state(ctx);
-                                }
-                                else
-                                {
-                                    SSTV_LOG_V("[SSTV] VIS window valid=%d total(1100=%.0f 1300=%.0f)\n",
-                                               vis_valid_windows,
-                                               static_cast<double>(vis_1100_sum),
-                                               static_cast<double>(vis_1300_sum));
-                                    if (vis_bit_index < 7)
-                                    {
-                                        if (bit)
-                                        {
-                                            vis_value |= static_cast<uint8_t>(1u << vis_bit_index);
-                                            vis_ones++;
-                                        }
-                                        SSTV_LOG_V("[SSTV] VIS bit %d=%d\n", vis_bit_index, bit);
-                                        vis_bit_index++;
-                                    }
-                                    else
-                                    {
-                                        int total_ones = vis_ones + (bit ? 1 : 0);
-                                        bool parity_ok = (total_ones % 2) == 0;
-                                        if (vis_start_sample >= 0 && vis_diag_bits > 0)
-                                        {
-                                            const double elapsed_ms =
-                                                static_cast<double>(bit_sample - vis_start_sample) *
-                                                1000.0 / static_cast<double>(kSampleRate);
-                                            const double bit_ms = elapsed_ms / vis_diag_bits;
-                                            const double drift_ppm =
-                                                (bit_ms / kVisBitMs - 1.0) * 1000000.0;
-                                            const double valid_avg =
-                                                vis_diag_valid_sum / vis_diag_bits;
-                                            SSTV_LOG_VIS("[SSTV] VIS timing bits=%d elapsed=%.2fms "
-                                                         "bit=%.3fms drift=%.1fppm "
-                                                         "valid(min/avg/max)=%.2f/%.2f/%.2f\n",
-                                                         vis_diag_bits, elapsed_ms, bit_ms,
-                                                         drift_ppm, vis_diag_valid_min,
-                                                         valid_avg, vis_diag_valid_max);
-                                        }
-                                        SSTV_LOG("[SSTV] VIS value=%u parity=%d\n",
-                                                 static_cast<unsigned>(vis_value), parity_ok ? 1 : 0);
-                                        auto apply_vis_config = [&](const VisConfig* config,
-                                                                    const char* label)
-                                        {
-                                            if (!config)
-                                            {
-                                                return false;
-                                            }
-                                            vis_mode = config->mode;
-                                            color_ms = config->color_ms;
-                                                if (config->pd_scan_ms > 0.0f)
-                                                {
-                                                    update_pd_timing(config->pd_scan_ms,
-                                                                     pd_scan_samples,
-                                                                     pd_pixel_window_samples);
-                                                }
-                                                if (config->p_sync_ms > 0.0f)
-                                                {
-                                                    update_p_timing(config->p_sync_ms,
-                                                                    config->p_porch_ms,
-                                                                    config->p_color_ms,
-                                                                    p_sync_samples,
-                                                                    p_porch_samples,
-                                                                    p_color_samples,
-                                                                    p_pixel_window_samples);
-                                                }
-                                                update_color_timing(color_ms, color_samples,
-                                                                    pixel_window_samples);
-                                            line_count = config->line_count;
-                                            s_line_count = line_count;
-                                            s_vis_mode = vis_mode;
-                                            header_ok = true;
-                                                SSTV_LOG("[SSTV] VIS ok: %s (%s, color=%.3f ms)\n",
-                                                         vis_mode_name(vis_mode), label,
-                                                         static_cast<double>(color_ms));
-                                            return true;
-                                        };
-
-                                        bool accepted = false;
-                                        if (parity_ok)
-                                        {
-                                            accepted = apply_vis_config(find_vis_config(vis_value),
-                                                                        "normal");
-                                        }
-
-                                        if (!accepted)
-                                        {
-                                            uint8_t inv_value =
-                                                static_cast<uint8_t>(~vis_value) & 0x7F;
-                                            int inv_bit = bit ? 0 : 1;
-                                            int inv_ones = 7 - vis_ones;
-                                            int inv_total = inv_ones + (inv_bit ? 1 : 0);
-                                            if ((inv_total % 2) == 0)
-                                            {
-                                                accepted = apply_vis_config(
-                                                    find_vis_config(inv_value), "inv");
-                                            }
-                                        }
-
-                                        if (!accepted)
-                                        {
-                                            uint8_t rev_value = reverse_vis_bits(vis_value);
-                                            if (parity_ok)
-                                            {
-                                                accepted = apply_vis_config(
-                                                    find_vis_config(rev_value), "rev");
-                                            }
-                                        }
-
-                                        if (!accepted)
-                                        {
-                                            uint8_t rev_inv_value =
-                                                reverse_vis_bits(static_cast<uint8_t>(~vis_value) &
-                                                                 0x7F);
-                                            int inv_bit = bit ? 0 : 1;
-                                            int inv_ones = 7 - vis_ones;
-                                            int inv_total = inv_ones + (inv_bit ? 1 : 0);
-                                            if ((inv_total % 2) == 0)
-                                            {
-                                                accepted = apply_vis_config(
-                                                    find_vis_config(rev_inv_value), "rev+inv");
-                                            }
-                                        }
-
-                                        if (!accepted)
-                                        {
-                                            SSTV_LOG_V("[SSTV] VIS unsupported value=%u\n",
-                                                       static_cast<unsigned>(vis_value));
-                                        }
-                                        reset_header_state(ctx);
-                                    }
-                                }
-
-                                if (vis_bit_samples >= vis_samples_per_bit)
-                                {
-                                    vis_bit_samples -= vis_samples_per_bit;
-                                }
-                                vis_window_count = 0;
-                                vis_1100_count = 0;
-                                vis_1300_count = 0;
-                                vis_valid_windows = 0;
-                                vis_1100_sum = 0.0f;
-                                vis_1300_sum = 0.0f;
-                            }
-                        }
-                    }
-                    else
+                    if (header_state != HeaderState::ReadVisBits)
                     {
                         if ((header_state == HeaderState::SeekBreak ||
                              header_state == HeaderState::SeekLeader2 ||
@@ -1806,7 +1886,7 @@ void sstv_task(void*)
                                 {
                                     vis_hit_count++;
                                     header_state = HeaderState::ReadVisBits;
-                                    vis_skip_windows = 0;
+                                    vis_skip_windows = kHeaderHopSamples;
                                     vis_bit_index = 0;
                                     vis_value = 0;
                                     vis_ones = 0;
@@ -1819,6 +1899,10 @@ void sstv_task(void*)
                                     vis_start_count = 0;
                                     vis_start_samples = 0;
                                     vis_bit_samples = 0;
+                                    vis_g_q1_1100 = 0.0f;
+                                    vis_g_q2_1100 = 0.0f;
+                                    vis_g_q1_1300 = 0.0f;
+                                    vis_g_q2_1300 = 0.0f;
                                     vis_start_sample = sample_index;
                                     vis_last_bit_sample = -1;
                                     vis_diag_bits = 0;
@@ -2012,6 +2096,74 @@ void sstv_task(void*)
 
             sample_index++;
         }
+
+#if SSTV_TONE_TEST
+        if (tone_fill >= kToneWindowSamples)
+        {
+            tone_blocks++;
+            double p1100 = 0.0;
+            double p1200 = 0.0;
+            double p1300 = 0.0;
+            double p1500 = 0.0;
+            for (int j = 0; j < kToneWindowSamples; ++j)
+            {
+                int idx = tone_pos + j;
+                if (idx >= kToneWindowSamples)
+                {
+                    idx -= kToneWindowSamples;
+                }
+                s_tone_window[j] = s_tone_buf[idx];
+            }
+            p1100 = goertzel_power(s_tone_window, kToneWindowSamples, s_bin_1100);
+            p1200 = goertzel_power(s_tone_window, kToneWindowSamples, s_bin_1200);
+            p1300 = goertzel_power(s_tone_window, kToneWindowSamples, s_bin_1300);
+            p1500 = goertzel_power(s_tone_window, kToneWindowSamples, s_bin_1500);
+            tone_p1100_sum += p1100;
+            tone_p1300_sum += p1300;
+            tone_p1200_sum += p1200;
+            if (p1200 > tone_p1200_max)
+            {
+                tone_p1200_max = p1200;
+            }
+            tone_p1500_sum += p1500;
+            if (p1500 > tone_p1500_max)
+            {
+                tone_p1500_max = p1500;
+            }
+            tone_peak_sum += static_cast<double>(block_peak);
+            if (block_peak > tone_peak_max)
+            {
+                tone_peak_max = block_peak;
+            }
+            tone_sample_accum += samples_per_block;
+            if (tone_sample_accum >= static_cast<int>(kSampleRate))
+            {
+                const double peak_avg = tone_blocks > 0 ? tone_peak_sum / tone_blocks : 0.0;
+                const double p1100_avg = tone_blocks > 0 ? tone_p1100_sum / tone_blocks : 0.0;
+                const double p1200_avg = tone_blocks > 0 ? tone_p1200_sum / tone_blocks : 0.0;
+                const double p1300_avg = tone_blocks > 0 ? tone_p1300_sum / tone_blocks : 0.0;
+                const double p1500_avg = tone_blocks > 0 ? tone_p1500_sum / tone_blocks : 0.0;
+                SSTV_LOG_TONE("[SSTV] tone_test p1200(cur=%.0f avg=%.0f max=%.0f) "
+                              "p1500(cur=%.0f avg=%.0f max=%.0f) "
+                              "p1100(avg=%.0f) p1300(avg=%.0f) "
+                              "peak(cur=%d avg=%.0f max=%d)\n",
+                              p1200, p1200_avg, tone_p1200_max,
+                              p1500, p1500_avg, tone_p1500_max,
+                              p1100_avg, p1300_avg,
+                              static_cast<int>(block_peak), peak_avg, tone_peak_max);
+                tone_sample_accum = 0;
+                tone_blocks = 0;
+                tone_peak_sum = 0.0;
+                tone_peak_max = 0;
+                tone_p1200_sum = 0.0;
+                tone_p1200_max = 0.0;
+                tone_p1500_sum = 0.0;
+                tone_p1500_max = 0.0;
+                tone_p1100_sum = 0.0;
+                tone_p1300_sum = 0.0;
+            }
+        }
+#endif
 
         audio_level = (audio_level * 0.8f) +
                       (static_cast<float>(block_peak) / 32767.0f) * 0.2f;
