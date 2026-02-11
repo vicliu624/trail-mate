@@ -176,201 +176,209 @@ ERROR：
 - 代码可编译，不要伪代码
 
 ============================================================
-9) Scottie Modes (Protocol Notes)
+9) Scottie 模式（协议说明）
 ============================================================
-VIS codes:
-- Scottie 1: 60 (decimal)
-- Scottie 2: 56 (decimal)
-- Scottie DX: 76 (decimal)
+VIS 码：
+- Scottie 1：60（十进制）
+- Scottie 2：56（十进制）
+- Scottie DX：76（十进制）
 
-Color scan order: Green, Blue, Red (RGB)
-Luminance range: 1500-2300 Hz
-Lines: 256 (Scottie 1/2)
-Normal display: 320x256 (includes 16-line header)
+颜色扫描顺序：绿、蓝、红（RGB）
+亮度频率范围：1500–2300 Hz
+行数：256（Scottie 1/2）
+标准显示：320x256（包含 16 行头）
 
-Scottie 1 timing sequence:
-- Starting sync (first line only): 9.0 ms @ 1200 Hz
-- Separator / porch: 1.5 ms @ 1500 Hz
-- Green scan: 138.240 ms
-- Separator / porch: 1.5 ms @ 1500 Hz
-- Blue scan: 138.240 ms
-- Sync pulse: 9.0 ms @ 1200 Hz (between Blue and Red)
-- Sync porch: 1.5 ms @ 1500 Hz
-- Red scan: 138.240 ms
+Scottie 1 时序：
+- 起始同步（仅首行）：9.0 ms @ 1200 Hz
+- 分隔/porch：1.5 ms @ 1500 Hz
+- 绿扫描：138.240 ms
+- 分隔/porch：1.5 ms @ 1500 Hz
+- 蓝扫描：138.240 ms
+- 同步脉冲：9.0 ms @ 1200 Hz（位于蓝与红之间）
+- 同步 porch：1.5 ms @ 1500 Hz
+- 红扫描：138.240 ms
 
-After the first line, repeat from the separator before Green (no starting sync).
-Note: Scottie sync is mid-line (between Blue and Red), not at line start.
-Scottie 2 timing difference:
-- Green/Blue/Red scan: 88.064 ms (0.2752 ms/pixel @ 320 px)
-Scottie DX timing difference:
-- Green/Blue/Red scan: 345.6 ms (1.0800 ms/pixel @ 320 px)
-Other timing (sync/porch) is the same as Scottie 1.
-
-============================================================
-10) VIS Header (JL Barber proposal)
-============================================================
-Source: "Proposal for SSTV Mode Specifications" (Dayton SSTV forum, 20 May 2000).
-This description is useful for VIS decode alignment and parity checks.
-
-VIS / calibration header sequence:
-- 300 ms @ 1900 Hz (leader)
-- 10 ms @ 1200 Hz (break)
-- 300 ms @ 1900 Hz (leader)
-- 30 ms @ 1200 Hz (VIS start bit)
-- 7 data bits, LSB first, 30 ms each
-  - 1100 Hz = "1"
-  - 1300 Hz = "0"
-- 30 ms parity bit
-  - even parity = 1300 Hz
-  - odd parity = 1100 Hz
-- 30 ms @ 1200 Hz (VIS stop bit)
-
-Note: mode-specific timing begins immediately after the VIS stop bit.
+首行之后，从“绿之前的分隔/porch”开始重复（不再有起始同步）。
+注意：Scottie 的同步位于行中（蓝与红之间），不是行起始。
+Scottie 2 时序差异：
+- 绿/蓝/红扫描：88.064 ms（320 px 时 0.2752 ms/像素）
+Scottie DX 时序差异：
+- 绿/蓝/红扫描：345.6 ms（320 px 时 1.0800 ms/像素）
+其他时序（同步/porch）与 Scottie 1 相同。
 
 ============================================================
-11) Robot 72 Color (Mode Notes)
+10) VIS 头（JL Barber 提案）
 ============================================================
-VIS code: 12 (decimal)
-Color mode: Y, R-Y, B-Y
-Scan sequence: Y, R-Y, B-Y
-Lines: 240
+来源："Proposal for SSTV Mode Specifications"（Dayton SSTV forum，2000-05-20）。
+该描述用于 VIS 解码对齐与奇偶校验的参考。
 
-Timing sequence (one line):
-- Sync pulse: 9.0 ms @ 1200 Hz
-- Sync porch: 3.0 ms @ 1500 Hz
-- Y scan: 138 ms
-- Separator pulse: 4.5 ms @ 1500 Hz
-- Porch: 1.5 ms @ 1900 Hz
-- R-Y scan: 69 ms
-- Separator pulse: 4.5 ms @ 2300 Hz
-- Porch: 1.5 ms @ 1500 Hz
-- B-Y scan: 69 ms
+VIS / 校准头序列：
+- 300 ms @ 1900 Hz（leader）
+- 10 ms @ 1200 Hz（break）
+- 300 ms @ 1900 Hz（leader）
+- 30 ms @ 1200 Hz（VIS 起始位）
+- 7 个数据位，LSB 先行，每位 30 ms
+  - 1100 Hz = “1”
+  - 1300 Hz = “0”
+- 30 ms 奇偶校验位
+  - 偶校验 = 1300 Hz
+  - 奇校验 = 1100 Hz
+- 30 ms @ 1200 Hz（VIS 停止位）
 
-Repeat the above sequence for 240 lines.
-
-============================================================
-12) Robot 36 Color (Mode Notes)
-============================================================
-VIS code: 8 (decimal)
-Color mode: Y, R-Y, B-Y
-Scan sequence: Y, R-Y (even lines), Y, B-Y (odd lines)
-Lines: 240
-
-Timing sequence (two lines shown):
-Even line:
-- Sync pulse: 9.0 ms @ 1200 Hz
-- Sync porch: 3.0 ms @ 1500 Hz
-- Y scan: 88.0 ms
-- "Even" separator pulse: 4.5 ms @ 1500 Hz
-- Porch: 1.5 ms @ 1900 Hz
-- R-Y scan: 44.0 ms
-
-Odd line:
-- Sync pulse: 9.0 ms @ 1200 Hz
-- Sync porch: 3.0 ms @ 1500 Hz
-- Y scan: 88.0 ms
-- "Odd" separator pulse: 4.5 ms @ 2300 Hz
-- Porch: 1.5 ms @ 1900 Hz
-- B-Y scan: 44.0 ms
-
-Repeat the above sequence for 240 lines.
-Note: R-Y is transmitted on even lines, B-Y on odd lines.
+注意：模式时序在 VIS 停止位之后立即开始。
 
 ============================================================
-13) Martin Modes (Mode Notes)
+11) Robot 72 彩色（模式说明）
 ============================================================
-VIS codes:
-- Martin 1: 44 (decimal)
-- Martin 2: 40 (decimal)
+VIS 码：12（十进制）
+颜色模式：Y, R-Y, B-Y
+扫描顺序：Y, R-Y, B-Y
+行数：240
 
-Color mode: RGB (1500-2300 Hz)
-Scan sequence: Green, Blue, Red
-Lines: 256
+单行时序：
+- 同步脉冲：9.0 ms @ 1200 Hz
+- 同步 porch：3.0 ms @ 1500 Hz
+- Y 扫描：138 ms
+- 分隔脉冲：4.5 ms @ 1500 Hz
+- Porch：1.5 ms @ 1900 Hz
+- R-Y 扫描：69 ms
+- 分隔脉冲：4.5 ms @ 2300 Hz
+- Porch：1.5 ms @ 1500 Hz
+- B-Y 扫描：69 ms
 
-Color scan time:
-- Martin 1: 146.432 ms (0.4576 ms/pixel @ 320 px)
-- Martin 2: 73.216 ms (0.2288 ms/pixel @ 320 px)
-
-Timing sequence (per line):
-- Sync pulse: 4.862 ms @ 1200 Hz
-- Sync porch: 0.572 ms @ 1500 Hz
-- Green scan
-- Separator pulse: 0.572 ms @ 1500 Hz
-- Blue scan
-- Separator pulse: 0.572 ms @ 1500 Hz
-- Red scan
-- Separator pulse: 0.572 ms @ 1500 Hz
-
-Repeat the above sequence for 256 lines.
+重复以上序列共 240 行。
 
 ============================================================
-14) PD Modes (Mode Notes)
+12) Robot 36 彩色（模式说明）
 ============================================================
-VIS codes:
-- PD50: 93 (decimal)
-- PD90: 99 (decimal)
-- PD120: 95 (decimal)
-- PD160: 98 (decimal)
-- PD180: 96 (decimal)
-- PD240: 97 (decimal)
-- PD290: 94 (decimal)
+VIS 码：8（十进制）
+颜色模式：Y, R-Y, B-Y
+扫描顺序：Y, R-Y（偶数行），Y, B-Y（奇数行）
+行数：240
 
-Color mode: Y, R-Y, B-Y
-Scan sequence: Y (odd line), R-Y (avg 2 lines), B-Y (avg 2 lines), Y (even line)
-Sync pulse: 20.0 ms @ 1200 Hz
-Porch: 2.080 ms @ 1500 Hz
+两行示例时序：
+偶数行：
+- 同步脉冲：9.0 ms @ 1200 Hz
+- 同步 porch：3.0 ms @ 1500 Hz
+- Y 扫描：88.0 ms
+- “偶数”分隔脉冲：4.5 ms @ 1500 Hz
+- Porch：1.5 ms @ 1900 Hz
+- R-Y 扫描：44.0 ms
 
-Color scan times (Y, R-Y, B-Y):
-- PD50: 91.520 ms
-- PD90: 170.240 ms
-- PD120: 121.600 ms
-- PD160: 195.584 ms
-- PD180: 183.040 ms
-- PD240: 244.480 ms
-- PD290: 228.800 ms
+奇数行：
+- 同步脉冲：9.0 ms @ 1200 Hz
+- 同步 porch：3.0 ms @ 1500 Hz
+- Y 扫描：88.0 ms
+- “奇数”分隔脉冲：4.5 ms @ 2300 Hz
+- Porch：1.5 ms @ 1900 Hz
+- B-Y 扫描：44.0 ms
 
-Nominal resolutions (all include 16-line header):
-- PD50: 320x256
-- PD90: 320x256
-- PD120: 640x496
-- PD160: 512x400
-- PD180: 640x496
-- PD240: 640x496
-- PD290: 800x616
-
-Note: This receiver decodes to 320px width and scales vertical lines to the display height.
+重复以上序列共 240 行。
+注意：R-Y 在偶数行发送，B-Y 在奇数行发送。
 
 ============================================================
-15) Pasokon "P" Modes (Mode Notes)
+13) Martin 模式（模式说明）
 ============================================================
-VIS codes:
-- P3: 113 (decimal)
-- P5: 114 (decimal)
-- P7: 115 (decimal)
+VIS 码：
+- Martin 1：44（十进制）
+- Martin 2：40（十进制）
 
-Color mode: RGB (1500-2300 Hz)
-Scan sequence: Red, Green, Blue
-Lines: 496 (includes 16-line header)
+颜色模式：RGB（1500–2300 Hz）
+扫描顺序：绿、蓝、红
+行数：256
 
-Color scan times:
-- P3: 133.333 ms
-- P5: 200.000 ms
-- P7: 266.666 ms
+颜色扫描时间：
+- Martin 1：146.432 ms（320 px 时 0.4576 ms/像素）
+- Martin 2：73.216 ms（320 px 时 0.2288 ms/像素）
 
-Sync/porch periods:
-- P3: sync 5.208 ms, porch 1.042 ms
-- P5: sync 7.813 ms, porch 1.563 ms
-- P7: sync 10.417 ms, porch 2.083 ms
+每行时序：
+- 同步脉冲：4.862 ms @ 1200 Hz
+- 同步 porch：0.572 ms @ 1500 Hz
+- 绿扫描
+- 分隔脉冲：0.572 ms @ 1500 Hz
+- 蓝扫描
+- 分隔脉冲：0.572 ms @ 1500 Hz
+- 红扫描
+- 分隔脉冲：0.572 ms @ 1500 Hz
 
-Timing sequence (per line):
-- Sync pulse
+重复以上序列共 256 行。
+
+============================================================
+14) PD 模式（模式说明）
+============================================================
+VIS 码：
+- PD50：93（十进制）
+- PD90：99（十进制）
+- PD120：95（十进制）
+- PD160：98（十进制）
+- PD180：96（十进制）
+- PD240：97（十进制）
+- PD290：94（十进制）
+
+颜色模式：Y, R-Y, B-Y
+扫描顺序：Y（奇数行）、R-Y（两行平均）、B-Y（两行平均）、Y（偶数行）
+同步脉冲：20.0 ms @ 1200 Hz
+Porch：2.080 ms @ 1500 Hz
+
+颜色扫描时间（Y、R-Y、B-Y）：
+- PD50：91.520 ms
+- PD90：170.240 ms
+- PD120：121.600 ms
+- PD160：195.584 ms
+- PD180：183.040 ms
+- PD240：244.480 ms
+- PD290：228.800 ms
+
+标称分辨率（均包含 16 行头）：
+- PD50：320x256
+- PD90：320x256
+- PD120：640x496
+- PD160：512x400
+- PD180：640x496
+- PD240：640x496
+- PD290：800x616
+
+注意：本接收端以 320 像素宽解码，并在垂直方向缩放到显示高度。
+
+============================================================
+15) Pasokon “P” 模式（模式说明）
+============================================================
+VIS 码：
+- P3：113（十进制）
+- P5：114（十进制）
+- P7：115（十进制）
+
+颜色模式：RGB（1500–2300 Hz）
+扫描顺序：红、绿、蓝
+行数：496（包含 16 行头）
+
+颜色扫描时间：
+- P3：133.333 ms
+- P5：200.000 ms
+- P7：266.666 ms
+
+同步/porch 时长：
+- P3：同步 5.208 ms，porch 1.042 ms
+- P5：同步 7.813 ms，porch 1.563 ms
+- P7：同步 10.417 ms，porch 2.083 ms
+
+每行时序：
+- 同步脉冲
 - Porch
-- Red scan
+- 红扫描
 - Porch
-- Green scan
+- 绿扫描
 - Porch
-- Blue scan
+- 蓝扫描
 - Porch
 
-Repeat the above sequence for 496 lines.
-Note: This receiver decodes to 320px width and scales vertical lines to the display height.
+重复以上序列共 496 行。
+注意：本接收端以 320 像素宽解码，并在垂直方向缩放到显示高度。
+
+============================================================
+16) TODO
+============================================================
+- 补齐 VIS/同步检测的单元测试与录音回放回归。
+- 抽象频率估计接口，支持 FFT/Goertzel 可切换。
+- 增加斜率校正与行对齐（slant/line skew）。
+- 记录更多诊断指标（SNR/峰值/同步置信度）并输出到 UI。
