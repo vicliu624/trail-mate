@@ -29,6 +29,7 @@ bool is_active();
 Status get_status();
 const char* get_last_error();
 const char* get_last_saved_path();
+const char* get_mode_name();
 
 const uint16_t* get_framebuffer();
 uint16_t frame_width();

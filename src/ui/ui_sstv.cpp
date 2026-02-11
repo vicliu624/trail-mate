@@ -5,6 +5,7 @@
 #include "ui_common.h"
 #include <Arduino.h>
 #include <cmath>
+#include <cstring>
 
 // Forward declarations from main.cpp
 extern void disableScreenSleep();
@@ -26,6 +27,7 @@ constexpr lv_coord_t kImgY = 0;
 constexpr lv_coord_t kInfoX = kImgX + kImgW + kPadding;
 constexpr lv_coord_t kInfoW = 168;
 constexpr lv_coord_t kInfoH = 192;
+constexpr lv_coord_t kInfoTextW = 140;
 
 constexpr lv_coord_t kProgressH = 8;
 constexpr lv_coord_t kProgressY = kMainHeight - 14;
@@ -38,6 +40,9 @@ constexpr lv_coord_t kMeterH = 120;
 constexpr lv_coord_t kMeterSegH = 8;
 constexpr lv_coord_t kMeterSegGap = 2;
 constexpr int kMeterSegments = 12;
+constexpr lv_coord_t kMetricsX = 0;
+constexpr lv_coord_t kMetricsY = 34;
+constexpr lv_coord_t kMetricsLineGap = 20;
 
 constexpr uint32_t kColorWarmBg = 0xF6E6C6;
 constexpr uint32_t kColorAccent = 0xEBA341;
@@ -58,8 +63,10 @@ struct SstvUi
     lv_obj_t* img = nullptr;
     lv_obj_t* img_placeholder = nullptr;
     lv_obj_t* info_area = nullptr;
-    lv_obj_t* label_state_big = nullptr;
     lv_obj_t* label_state_sub = nullptr;
+    lv_obj_t* label_metric_sync = nullptr;
+    lv_obj_t* label_metric_slant = nullptr;
+    lv_obj_t* label_metric_level = nullptr;
     lv_obj_t* label_mode = nullptr;
     lv_obj_t* label_ready = nullptr;
     lv_obj_t* progress = nullptr;
@@ -72,6 +79,9 @@ lv_timer_t* s_refresh_timer = nullptr;
 int s_last_meter_active = -1;
 sstv::State s_last_state = sstv::State::Idle;
 uint16_t s_last_line = 0;
+bool s_last_sync_lock = false;
+int s_last_level_pct = -1;
+char s_last_mode[24] = "";
 lv_image_dsc_t s_frame_dsc = {};
 bool s_frame_ready = false;
 
@@ -128,6 +138,35 @@ void refresh_cb(lv_timer_t*)
     sstv::Status st = sstv::get_status();
     ui_sstv_set_audio_level(st.audio_level);
 
+    bool sync_lock = (st.state == sstv::State::Receiving);
+    if (s_ui.label_metric_sync && sync_lock != s_last_sync_lock)
+    {
+        lv_label_set_text(s_ui.label_metric_sync, sync_lock ? "SYNC: LOCK" : "SYNC: --");
+        s_last_sync_lock = sync_lock;
+    }
+    if (s_ui.label_metric_level)
+    {
+        int level_pct = static_cast<int>(st.audio_level * 100.0f + 0.5f);
+        if (level_pct != s_last_level_pct)
+        {
+            char buf[20];
+            snprintf(buf, sizeof(buf), "LEVEL: %d%%", level_pct);
+            lv_label_set_text(s_ui.label_metric_level, buf);
+            s_last_level_pct = level_pct;
+        }
+    }
+
+    const char* mode = sstv::get_mode_name();
+    if (!mode || mode[0] == '\0' || strcmp(mode, "Unknown") == 0 || st.state == sstv::State::Waiting)
+    {
+        mode = "Auto";
+    }
+    if (s_ui.label_mode && strcmp(mode, s_last_mode) != 0)
+    {
+        ui_sstv_set_mode(mode);
+        snprintf(s_last_mode, sizeof(s_last_mode), "%s", mode);
+    }
+
     if (st.state != s_last_state)
     {
         s_last_state = st.state;
@@ -145,14 +184,15 @@ void refresh_cb(lv_timer_t*)
         }
         else if (st.state == sstv::State::Error)
         {
-            if (s_ui.label_state_big)
-            {
-                lv_label_set_text(s_ui.label_state_big, "SSTV ERROR");
-            }
             if (s_ui.label_state_sub)
             {
                 const char* err = sstv::get_last_error();
                 lv_label_set_text(s_ui.label_state_sub, err ? err : "Decoder error");
+            }
+            if (s_ui.label_ready)
+            {
+                lv_label_set_text(s_ui.label_ready, "ERROR");
+                lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorWarn), 0);
             }
         }
     }
@@ -292,30 +332,47 @@ void build_main_area(lv_obj_t* parent)
     lv_obj_set_style_pad_all(s_ui.info_area, 0, 0);
     lv_obj_clear_flag(s_ui.info_area, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_ui.label_state_big = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_state_big, 0, 6);
-    lv_obj_set_width(s_ui.label_state_big, 130);
-    lv_obj_set_style_text_align(s_ui.label_state_big, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_long_mode(s_ui.label_state_big, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_state_big, &lv_font_montserrat_14, kColorText);
-
     s_ui.label_state_sub = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_state_sub, 0, 34);
-    lv_obj_set_width(s_ui.label_state_sub, 130);
+    lv_obj_set_pos(s_ui.label_state_sub, 0, 6);
+    lv_obj_set_width(s_ui.label_state_sub, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_state_sub, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_state_sub, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_state_sub, &lv_font_montserrat_14, kColorTextDim);
 
+    s_ui.label_metric_sync = lv_label_create(s_ui.info_area);
+    lv_obj_set_pos(s_ui.label_metric_sync, kMetricsX, kMetricsY);
+    lv_obj_set_width(s_ui.label_metric_sync, kInfoTextW);
+    lv_obj_set_style_text_align(s_ui.label_metric_sync, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_ui.label_metric_sync, LV_LABEL_LONG_WRAP);
+    apply_label_style(s_ui.label_metric_sync, &lv_font_montserrat_14, kColorTextDim);
+    lv_label_set_text(s_ui.label_metric_sync, "SYNC: --");
+
+    s_ui.label_metric_slant = lv_label_create(s_ui.info_area);
+    lv_obj_set_pos(s_ui.label_metric_slant, kMetricsX, kMetricsY + kMetricsLineGap);
+    lv_obj_set_width(s_ui.label_metric_slant, kInfoTextW);
+    lv_obj_set_style_text_align(s_ui.label_metric_slant, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_ui.label_metric_slant, LV_LABEL_LONG_WRAP);
+    apply_label_style(s_ui.label_metric_slant, &lv_font_montserrat_14, kColorTextDim);
+    lv_label_set_text(s_ui.label_metric_slant, "SLANT: --");
+
+    s_ui.label_metric_level = lv_label_create(s_ui.info_area);
+    lv_obj_set_pos(s_ui.label_metric_level, kMetricsX, kMetricsY + 2 * kMetricsLineGap);
+    lv_obj_set_width(s_ui.label_metric_level, kInfoTextW);
+    lv_obj_set_style_text_align(s_ui.label_metric_level, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(s_ui.label_metric_level, LV_LABEL_LONG_WRAP);
+    apply_label_style(s_ui.label_metric_level, &lv_font_montserrat_14, kColorTextDim);
+    lv_label_set_text(s_ui.label_metric_level, "LEVEL: 0%");
+
     s_ui.label_mode = lv_label_create(s_ui.info_area);
     lv_obj_set_pos(s_ui.label_mode, 0, 106);
-    lv_obj_set_width(s_ui.label_mode, 100);
+    lv_obj_set_width(s_ui.label_mode, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_mode, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_mode, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_mode, &lv_font_montserrat_14, kColorTextDim);
 
     s_ui.label_ready = lv_label_create(s_ui.info_area);
     lv_obj_set_pos(s_ui.label_ready, 0, 142);
-    lv_obj_set_width(s_ui.label_ready, 100);
+    lv_obj_set_width(s_ui.label_ready, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_ready, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_ready, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_ready, &lv_font_montserrat_14, kColorText);
@@ -356,6 +413,9 @@ void reset_ui_pointers()
     s_last_meter_active = -1;
     s_last_state = sstv::State::Idle;
     s_last_line = 0;
+    s_last_sync_lock = false;
+    s_last_level_pct = -1;
+    s_last_mode[0] = '\0';
     s_frame_ready = false;
 }
 
@@ -386,7 +446,7 @@ lv_obj_t* ui_sstv_create(lv_obj_t* parent)
     build_main_area(s_ui.root);
 
     ui_sstv_set_state(SSTV_STATE_WAITING);
-    ui_sstv_set_mode("Scottie 1");
+    ui_sstv_set_mode("Auto");
     ui_sstv_set_progress(0.0f);
     ui_sstv_set_audio_level(0.0f);
 
@@ -451,7 +511,7 @@ void ui_sstv_exit(lv_obj_t* parent)
 
 void ui_sstv_set_state(SstvState state)
 {
-    if (!s_ui.label_state_big || !s_ui.label_state_sub || !s_ui.label_ready)
+    if (!s_ui.label_state_sub || !s_ui.label_ready)
     {
         return;
     }
@@ -459,7 +519,6 @@ void ui_sstv_set_state(SstvState state)
     switch (state)
     {
     case SSTV_STATE_WAITING:
-        lv_label_set_text(s_ui.label_state_big, "WAITING FOR SIGNAL...");
         lv_label_set_text(s_ui.label_state_sub, "Listening for SSTV signal...");
         lv_label_set_text(s_ui.label_ready, "SSTV RX READY");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorText), 0);
@@ -467,13 +526,11 @@ void ui_sstv_set_state(SstvState state)
         ui_sstv_set_progress(0.0f);
         break;
     case SSTV_STATE_RECEIVING:
-        lv_label_set_text(s_ui.label_state_big, "RECEIVING...");
         lv_label_set_text(s_ui.label_state_sub, "Decoding line: 0/256");
         lv_label_set_text(s_ui.label_ready, "RECEIVING");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
         break;
     case SSTV_STATE_COMPLETE:
-        lv_label_set_text(s_ui.label_state_big, "COMPLETE");
         lv_label_set_text(s_ui.label_state_sub, "Image received");
         lv_label_set_text(s_ui.label_ready, "COMPLETE");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
@@ -493,7 +550,7 @@ void ui_sstv_set_mode(const char* mode_str)
     char buf[48];
     if (!mode_str || mode_str[0] == '\0')
     {
-        snprintf(buf, sizeof(buf), "MODE: Scottie 1");
+        snprintf(buf, sizeof(buf), "MODE: Auto");
     }
     else
     {

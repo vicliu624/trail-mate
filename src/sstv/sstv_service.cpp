@@ -12,6 +12,16 @@
 #define SSTV_LOG(...) ((void)0)
 #endif
 
+#ifndef SSTV_VERBOSE
+#define SSTV_VERBOSE 0
+#endif
+
+#if SSTV_VERBOSE
+#define SSTV_LOG_V(...) SSTV_LOG(__VA_ARGS__)
+#else
+#define SSTV_LOG_V(...) ((void)0)
+#endif
+
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 
 #include "../board/TLoRaPagerBoard.h"
@@ -26,20 +36,75 @@ namespace
 {
 constexpr uint32_t kSampleRate = 44100;
 constexpr uint8_t kBitsPerSample = 16;
-constexpr uint8_t kChannels = 2;
-constexpr float kMicGainDb = 36.0f;
+constexpr uint8_t kChannels = 1;
+constexpr float kMicGainDb = 24.0f;
 constexpr uint32_t kTaskStack = 8192;
 constexpr uint32_t kTaskDelayMs = 2;
 
 constexpr float kPorchMs = 1.5f;
-constexpr float kColorMs = 138.24f;
+constexpr float kSyncPulseMs = 9.0f;
+constexpr float kColorMsScottie1 = 138.24f;
+constexpr float kColorMsScottie2 = 88.064f;
+constexpr float kColorMsScottieDX = 345.6f;
+constexpr float kRobotSyncPulseMs = 9.0f;
+constexpr float kRobotSyncPorchMs = 3.0f;
+constexpr float kRobotSepMs = 4.5f;
+constexpr float kRobotPorchMs = 1.5f;
+constexpr float kRobotYMs = 138.0f;
+constexpr float kRobotChromaMs = 69.0f;
+constexpr float kRobot36YMs = 88.0f;
+constexpr float kRobot36ChromaMs = 44.0f;
+constexpr float kMartinSyncMs = 4.862f;
+constexpr float kMartinPorchMs = 0.572f;
+constexpr float kColorMsMartin1 = 146.432f;
+constexpr float kColorMsMartin2 = 73.216f;
+constexpr float kPdSyncMs = 20.0f;
+constexpr float kPdPorchMs = 2.080f;
+constexpr float kPd50ScanMs = 91.520f;
+constexpr float kPd90ScanMs = 170.240f;
+constexpr float kPd120ScanMs = 121.600f;
+constexpr float kPd160ScanMs = 195.584f;
+constexpr float kPd180ScanMs = 183.040f;
+constexpr float kPd240ScanMs = 244.480f;
+constexpr float kPd290ScanMs = 228.800f;
+constexpr float kP3SyncMs = 5.208f;
+constexpr float kP5SyncMs = 7.813f;
+constexpr float kP7SyncMs = 10.417f;
+constexpr float kP3PorchMs = 1.042f;
+constexpr float kP5PorchMs = 1.563f;
+constexpr float kP7PorchMs = 2.083f;
+constexpr float kP3ColorMs = 133.333f;
+constexpr float kP5ColorMs = 200.000f;
+constexpr float kP7ColorMs = 266.666f;
 constexpr float kLeaderMs = 300.0f;
 constexpr float kBreakMs = 10.0f;
 constexpr float kVisBitMs = 30.0f;
+constexpr float kVisPairRatio = 0.08f;
 constexpr uint8_t kVisScottie1 = 60;
+constexpr uint8_t kVisScottie2 = 56;
+constexpr uint8_t kVisScottieDX = 76;
+constexpr uint8_t kVisRobot72 = 12;
+constexpr uint8_t kVisRobot36 = 8;
+constexpr uint8_t kVisMartin1 = 44;
+constexpr uint8_t kVisMartin2 = 40;
+constexpr uint8_t kVisPd50 = 93;
+constexpr uint8_t kVisPd90 = 99;
+constexpr uint8_t kVisPd120 = 95;
+constexpr uint8_t kVisPd160 = 98;
+constexpr uint8_t kVisPd180 = 96;
+constexpr uint8_t kVisPd240 = 97;
+constexpr uint8_t kVisPd290 = 94;
+constexpr uint8_t kVisP3 = 113;
+constexpr uint8_t kVisP5 = 114;
+constexpr uint8_t kVisP7 = 115;
 
 constexpr int kInWidth = 320;
-constexpr int kInHeight = 256;
+constexpr int kInHeightScottie = 256;
+constexpr int kInHeightRobot72 = 240;
+constexpr int kInHeightPd120 = 496;
+constexpr int kInHeightPd160 = 400;
+constexpr int kInHeightPd290 = 616;
+constexpr int kInHeightPasokon = 496;
 constexpr int kOutWidth = 288;
 constexpr int kOutHeight = 192;
 constexpr int kOutImageWidth = 240;
@@ -52,6 +117,9 @@ constexpr float kFreqMax = 2300.0f;
 constexpr float kFreqSpan = kFreqMax - kFreqMin;
 
 constexpr float kMinSyncGapMs = 420.0f;
+constexpr float kSyncTimeoutMs = 2000.0f;
+constexpr float kAudioResetLevel = 0.03f;
+constexpr float kAudioResetHoldMs = 1500.0f;
 constexpr float kHeaderToneDetectRatio = 1.3f;
 constexpr float kHeaderToneTotalRatio = 0.45f;
 constexpr float kSyncToneDetectRatio = 1.6f;
@@ -62,15 +130,49 @@ constexpr int kSyncWindowSamples = 400;
 constexpr int kSyncHopSamples = 80;
 constexpr float kPixelBinStep = 25.0f;
 constexpr int kPixelBinCount = static_cast<int>((kFreqMax - kFreqMin) / kPixelBinStep) + 1;
-constexpr int kMaxPixelSamples = 32;
+constexpr int kMaxPixelSamples = 64;
 
 enum class Phase : uint8_t
 {
     Idle = 0,
-    Porch,
+    Porch1,
     Green,
+    Porch2,
     Blue,
+    Sync,
+    Porch3,
     Red,
+    RobotSync,
+    RobotPorch1,
+    RobotY,
+    RobotSep1,
+    RobotPorch2,
+    RobotRY,
+    RobotSep2,
+    RobotPorch3,
+    RobotBY,
+    MartinSync,
+    MartinPorch,
+    MartinGreen,
+    MartinSep1,
+    MartinBlue,
+    MartinSep2,
+    MartinRed,
+    MartinSep3,
+    PdSync,
+    PdPorch,
+    PdY1,
+    PdRY,
+    PdBY,
+    PdY2,
+    PSync,
+    PPorch1,
+    PRed,
+    PPorch2,
+    PGreen,
+    PPorch3,
+    PBlue,
+    PPorch4,
 };
 
 enum class HeaderState : uint8_t
@@ -91,6 +193,28 @@ enum class Tone : uint8_t
     Tone1900,
 };
 
+enum class VisMode : uint8_t
+{
+    Unknown = 0,
+    Scottie1,
+    Scottie2,
+    ScottieDX,
+    Robot72,
+    Robot36,
+    Martin1,
+    Martin2,
+    Pd50,
+    Pd90,
+    Pd120,
+    Pd160,
+    Pd180,
+    Pd240,
+    Pd290,
+    P3,
+    P5,
+    P7,
+};
+
 struct GoertzelBin
 {
     float freq = 0.0f;
@@ -109,12 +233,21 @@ sstv::Status s_status;
 char s_last_error[96] = {0};
 char s_saved_path[64] = {0};
 bool s_pending_save = false;
+VisMode s_vis_mode = VisMode::Unknown;
+int s_line_count = kInHeightScottie;
 
 uint16_t* s_frame = nullptr;
 int s_last_output_y = -1;
 
 uint32_t s_accum[3][kInWidth];
 uint16_t s_count[3][kInWidth];
+uint8_t s_last_ry[kInWidth];
+uint8_t s_last_by[kInWidth];
+bool s_has_ry = false;
+bool s_has_by = false;
+uint8_t s_pd_y1[kInWidth];
+bool s_pd_has_y1 = false;
+bool s_pd_use_y1 = false;
 
 GoertzelBin s_bin_1100 = {};
 GoertzelBin s_bin_1200 = {};
@@ -294,6 +427,296 @@ const char* tone_name(Tone tone)
         return "1900";
     default:
         return "None";
+    }
+}
+
+const char* vis_mode_name(VisMode mode)
+{
+    switch (mode)
+    {
+    case VisMode::Scottie1:
+        return "Scottie 1";
+    case VisMode::Scottie2:
+        return "Scottie 2";
+    case VisMode::ScottieDX:
+        return "Scottie DX";
+    case VisMode::Robot72:
+        return "Robot 72";
+    case VisMode::Robot36:
+        return "Robot 36";
+    case VisMode::Martin1:
+        return "Martin 1";
+    case VisMode::Martin2:
+        return "Martin 2";
+    case VisMode::Pd50:
+        return "PD50";
+    case VisMode::Pd90:
+        return "PD90";
+    case VisMode::Pd120:
+        return "PD120";
+    case VisMode::Pd160:
+        return "PD160";
+    case VisMode::Pd180:
+        return "PD180";
+    case VisMode::Pd240:
+        return "PD240";
+    case VisMode::Pd290:
+        return "PD290";
+    case VisMode::P3:
+        return "P3";
+    case VisMode::P5:
+        return "P5";
+    case VisMode::P7:
+        return "P7";
+    default:
+        return "Unknown";
+    }
+}
+
+uint8_t reverse_vis_bits(uint8_t value)
+{
+    uint8_t out = 0;
+    for (int i = 0; i < 7; ++i)
+    {
+        out <<= 1;
+        out |= static_cast<uint8_t>((value >> i) & 0x01);
+    }
+    return out;
+}
+
+constexpr float kVisNoTiming = -1.0f;
+
+struct VisConfig
+{
+    uint8_t vis;
+    VisMode mode;
+    float color_ms;
+    float pd_scan_ms;
+    float p_sync_ms;
+    float p_porch_ms;
+    float p_color_ms;
+    int line_count;
+};
+
+constexpr VisConfig kVisConfigs[] = {
+    {kVisScottie1, VisMode::Scottie1, kColorMsScottie1, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisScottie2, VisMode::Scottie2, kColorMsScottie2, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisScottieDX, VisMode::ScottieDX, kColorMsScottieDX, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisRobot72, VisMode::Robot72, kColorMsScottie1, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightRobot72},
+    {kVisRobot36, VisMode::Robot36, kColorMsScottie1, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightRobot72},
+    {kVisMartin1, VisMode::Martin1, kColorMsMartin1, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisMartin2, VisMode::Martin2, kColorMsMartin2, kVisNoTiming, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisPd50, VisMode::Pd50, kColorMsScottie1, kPd50ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisPd90, VisMode::Pd90, kColorMsScottie1, kPd90ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightScottie},
+    {kVisPd120, VisMode::Pd120, kColorMsScottie1, kPd120ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightPd120},
+    {kVisPd160, VisMode::Pd160, kColorMsScottie1, kPd160ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightPd160},
+    {kVisPd180, VisMode::Pd180, kColorMsScottie1, kPd180ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightPd120},
+    {kVisPd240, VisMode::Pd240, kColorMsScottie1, kPd240ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightPd120},
+    {kVisPd290, VisMode::Pd290, kColorMsScottie1, kPd290ScanMs, kVisNoTiming, kVisNoTiming,
+     kVisNoTiming, kInHeightPd290},
+    {kVisP3, VisMode::P3, kColorMsScottie1, kVisNoTiming, kP3SyncMs, kP3PorchMs, kP3ColorMs,
+     kInHeightPasokon},
+    {kVisP5, VisMode::P5, kColorMsScottie1, kVisNoTiming, kP5SyncMs, kP5PorchMs, kP5ColorMs,
+     kInHeightPasokon},
+    {kVisP7, VisMode::P7, kColorMsScottie1, kVisNoTiming, kP7SyncMs, kP7PorchMs, kP7ColorMs,
+     kInHeightPasokon},
+};
+
+const VisConfig* find_vis_config(uint8_t vis)
+{
+    for (const auto& cfg : kVisConfigs)
+    {
+        if (cfg.vis == vis)
+        {
+            return &cfg;
+        }
+    }
+    return nullptr;
+}
+
+int calc_pixel_window_samples(int color_samples_in)
+{
+    int samples = color_samples_in / kInWidth;
+    if (samples < 8)
+    {
+        samples = 8;
+    }
+    if (samples > kMaxPixelSamples)
+    {
+        samples = kMaxPixelSamples;
+    }
+    return samples;
+}
+
+void update_color_timing(float color_ms, int& color_samples, int& pixel_window_samples)
+{
+    color_samples = static_cast<int>(kSampleRate * (color_ms / 1000.0f));
+    pixel_window_samples = calc_pixel_window_samples(color_samples);
+}
+
+void update_pd_timing(float scan_ms, int& pd_scan_samples, int& pd_pixel_window_samples)
+{
+    pd_scan_samples = static_cast<int>(kSampleRate * (scan_ms / 1000.0f));
+    pd_pixel_window_samples = calc_pixel_window_samples(pd_scan_samples);
+}
+
+void update_p_timing(float sync_ms, float porch_ms, float color_ms_in,
+                     int& p_sync_samples, int& p_porch_samples, int& p_color_samples,
+                     int& p_pixel_window_samples)
+{
+    p_sync_samples = static_cast<int>(kSampleRate * (sync_ms / 1000.0f));
+    p_porch_samples = static_cast<int>(kSampleRate * (porch_ms / 1000.0f));
+    p_color_samples = static_cast<int>(kSampleRate * (color_ms_in / 1000.0f));
+    p_pixel_window_samples = calc_pixel_window_samples(p_color_samples);
+}
+
+struct ModeContext
+{
+    VisMode& vis_mode;
+    Phase& phase;
+    int& phase_samples;
+    int& line_index;
+    int& line_count;
+    int& last_pixel;
+    int& pixel_pos;
+    int& pixel_fill;
+    int32_t& mono;
+    float& audio_level;
+    bool& header_ok;
+    int16_t* pixel_buf;
+    int16_t* pixel_window;
+    const int& porch_samples;
+    const int& sync_samples;
+    int& color_samples;
+    int& pixel_window_samples;
+    const int& robot_sync_samples;
+    const int& robot_sync_porch_samples;
+    const int& robot_sep_samples;
+    const int& robot_porch_samples;
+    int& robot_y_samples;
+    int& robot_chroma_samples;
+    int& robot36_y_samples;
+    int& robot36_chroma_samples;
+    int& robot_pixel_window_y;
+    int& robot_pixel_window_c;
+    int& robot36_pixel_window_y;
+    int& robot36_pixel_window_c;
+    const int& martin_sync_samples;
+    const int& martin_porch_samples;
+    const int& pd_sync_samples;
+    const int& pd_porch_samples;
+    int& pd_scan_samples;
+    int& pd_pixel_window_samples;
+    int& p_sync_samples;
+    int& p_porch_samples;
+    int& p_color_samples;
+    int& p_pixel_window_samples;
+    HeaderState& header_state;
+    int& header_count;
+    int& vis_bit_index;
+    uint8_t& vis_value;
+    int& vis_ones;
+    int& vis_window_count;
+    int& vis_1100_count;
+    int& vis_1300_count;
+    int& vis_valid_windows;
+    float& vis_1100_sum;
+    float& vis_1300_sum;
+    int& vis_skip_windows;
+    int& vis_start_count;
+    float& color_ms;
+};
+
+void clear_robot_chroma();
+void clear_pd_state();
+
+void reset_pixel_state(ModeContext& ctx)
+{
+    ctx.last_pixel = -1;
+    ctx.pixel_pos = 0;
+    ctx.pixel_fill = 0;
+}
+
+void reset_header_state(ModeContext& ctx)
+{
+    ctx.header_state = HeaderState::SeekLeader1;
+    ctx.header_count = 0;
+    ctx.vis_bit_index = 0;
+    ctx.vis_value = 0;
+    ctx.vis_ones = 0;
+    ctx.vis_window_count = 0;
+    ctx.vis_1100_count = 0;
+    ctx.vis_1300_count = 0;
+    ctx.vis_valid_windows = 0;
+    ctx.vis_1100_sum = 0.0f;
+    ctx.vis_1300_sum = 0.0f;
+    ctx.vis_skip_windows = 0;
+    ctx.vis_start_count = 0;
+    ctx.vis_mode = VisMode::Unknown;
+    s_vis_mode = VisMode::Unknown;
+    ctx.line_count = kInHeightScottie;
+    s_line_count = ctx.line_count;
+    ctx.color_ms = kColorMsScottie1;
+    update_color_timing(ctx.color_ms, ctx.color_samples, ctx.pixel_window_samples);
+    clear_robot_chroma();
+    clear_pd_state();
+}
+
+struct ModeStrategy
+{
+    const char* name;
+    void (*step)(ModeContext&);
+};
+
+void step_robot_mode(ModeContext& ctx);
+void step_martin_mode(ModeContext& ctx);
+void step_pd_mode(ModeContext& ctx);
+void step_p_mode(ModeContext& ctx);
+void step_scottie_mode(ModeContext& ctx);
+
+const ModeStrategy& select_mode_strategy(VisMode mode)
+{
+    static const ModeStrategy kRobot = {"robot", step_robot_mode};
+    static const ModeStrategy kMartin = {"martin", step_martin_mode};
+    static const ModeStrategy kPd = {"pd", step_pd_mode};
+    static const ModeStrategy kP = {"p", step_p_mode};
+    static const ModeStrategy kScottie = {"scottie", step_scottie_mode};
+
+    switch (mode)
+    {
+    case VisMode::Robot72:
+    case VisMode::Robot36:
+        return kRobot;
+    case VisMode::Martin1:
+    case VisMode::Martin2:
+        return kMartin;
+    case VisMode::Pd50:
+    case VisMode::Pd90:
+    case VisMode::Pd120:
+    case VisMode::Pd160:
+    case VisMode::Pd180:
+    case VisMode::Pd240:
+    case VisMode::Pd290:
+        return kPd;
+    case VisMode::P3:
+    case VisMode::P5:
+    case VisMode::P7:
+        return kP;
+    default:
+        return kScottie;
     }
 }
 
@@ -497,6 +920,21 @@ void clear_accum()
     memset(s_count, 0, sizeof(s_count));
 }
 
+void clear_robot_chroma()
+{
+    memset(s_last_ry, 128, sizeof(s_last_ry));
+    memset(s_last_by, 128, sizeof(s_last_by));
+    s_has_ry = false;
+    s_has_by = false;
+}
+
+void clear_pd_state()
+{
+    memset(s_pd_y1, 0, sizeof(s_pd_y1));
+    s_pd_has_y1 = false;
+    s_pd_use_y1 = false;
+}
+
 void clear_frame()
 {
     if (!s_frame)
@@ -549,7 +987,7 @@ void render_line(int line)
     {
         return;
     }
-    int out_y = (line * kOutHeight) / kInHeight;
+    int out_y = (line * kOutHeight) / s_line_count;
     if (out_y == s_last_output_y || out_y < 0 || out_y >= kOutHeight)
     {
         return;
@@ -578,17 +1016,65 @@ void render_line(int line)
         uint8_t g = 0;
         uint8_t b = 0;
         uint8_t r = 0;
-        if (s_count[0][in_x])
+    if (s_vis_mode == VisMode::Robot72 || s_vis_mode == VisMode::Robot36 ||
+        s_vis_mode == VisMode::Pd50 || s_vis_mode == VisMode::Pd90 ||
+        s_vis_mode == VisMode::Pd120 || s_vis_mode == VisMode::Pd160 ||
+        s_vis_mode == VisMode::Pd180 || s_vis_mode == VisMode::Pd240 ||
+        s_vis_mode == VisMode::Pd290)
+    {
+        int y = 0;
+        if (s_vis_mode == VisMode::Pd50 || s_vis_mode == VisMode::Pd90 ||
+            s_vis_mode == VisMode::Pd120 || s_vis_mode == VisMode::Pd160 ||
+            s_vis_mode == VisMode::Pd180 || s_vis_mode == VisMode::Pd240 ||
+            s_vis_mode == VisMode::Pd290)
         {
-            g = static_cast<uint8_t>(s_accum[0][in_x] / s_count[0][in_x]);
+            if (s_pd_use_y1 && s_pd_has_y1)
+            {
+                y = s_pd_y1[in_x];
+            }
+            else
+            {
+                y = s_count[0][in_x] ? static_cast<int>(s_accum[0][in_x] / s_count[0][in_x]) : 0;
+            }
         }
-        if (s_count[1][in_x])
+        else
         {
-            b = static_cast<uint8_t>(s_accum[1][in_x] / s_count[1][in_x]);
+            y = s_count[0][in_x] ? static_cast<int>(s_accum[0][in_x] / s_count[0][in_x]) : 0;
         }
-        if (s_count[2][in_x])
+        int ry = 128;
+        int by = 128;
+        if (s_vis_mode == VisMode::Robot72)
         {
-            r = static_cast<uint8_t>(s_accum[2][in_x] / s_count[2][in_x]);
+            ry = s_count[1][in_x] ? static_cast<int>(s_accum[1][in_x] / s_count[1][in_x]) : 128;
+            by = s_count[2][in_x] ? static_cast<int>(s_accum[2][in_x] / s_count[2][in_x]) : 128;
+        }
+        else
+        {
+            ry = s_has_ry ? s_last_ry[in_x] : 128;
+            by = s_has_by ? s_last_by[in_x] : 128;
+        }
+        int r_val = y + (ry - 128);
+        int b_val = y + (by - 128);
+        float g_val_f = (static_cast<float>(y) - 0.299f * r_val - 0.114f * b_val) / 0.587f;
+        int g_val = static_cast<int>(g_val_f + 0.5f);
+        r = clamp_u8(r_val);
+            g = clamp_u8(g_val);
+            b = clamp_u8(b_val);
+        }
+        else
+        {
+            if (s_count[0][in_x])
+            {
+                g = static_cast<uint8_t>(s_accum[0][in_x] / s_count[0][in_x]);
+            }
+            if (s_count[1][in_x])
+            {
+                b = static_cast<uint8_t>(s_accum[1][in_x] / s_count[1][in_x]);
+            }
+            if (s_count[2][in_x])
+            {
+                r = static_cast<uint8_t>(s_accum[2][in_x] / s_count[2][in_x]);
+            }
         }
 
         row[kPadX + out_x] = rgb_to_565(r, g, b);
@@ -654,7 +1140,34 @@ void sstv_task(void*)
     }
 
     const int porch_samples = static_cast<int>(kSampleRate * (kPorchMs / 1000.0f));
-    const int color_samples = static_cast<int>(kSampleRate * (kColorMs / 1000.0f));
+    const int sync_samples = static_cast<int>(kSampleRate * (kSyncPulseMs / 1000.0f));
+    const int robot_sync_samples = static_cast<int>(kSampleRate * (kRobotSyncPulseMs / 1000.0f));
+    const int robot_sync_porch_samples =
+        static_cast<int>(kSampleRate * (kRobotSyncPorchMs / 1000.0f));
+    const int robot_sep_samples = static_cast<int>(kSampleRate * (kRobotSepMs / 1000.0f));
+    const int robot_porch_samples = static_cast<int>(kSampleRate * (kRobotPorchMs / 1000.0f));
+    const int martin_sync_samples = static_cast<int>(kSampleRate * (kMartinSyncMs / 1000.0f));
+    const int martin_porch_samples = static_cast<int>(kSampleRate * (kMartinPorchMs / 1000.0f));
+    const int pd_sync_samples = static_cast<int>(kSampleRate * (kPdSyncMs / 1000.0f));
+    const int pd_porch_samples = static_cast<int>(kSampleRate * (kPdPorchMs / 1000.0f));
+    int color_samples = 0;
+    int pixel_window_samples = 0;
+    float color_ms = kColorMsScottie1;
+    update_color_timing(color_ms, color_samples, pixel_window_samples);
+    int robot_y_samples = static_cast<int>(kSampleRate * (kRobotYMs / 1000.0f));
+    int robot_chroma_samples = static_cast<int>(kSampleRate * (kRobotChromaMs / 1000.0f));
+    int robot_pixel_window_y = calc_pixel_window_samples(robot_y_samples);
+    int robot_pixel_window_c = calc_pixel_window_samples(robot_chroma_samples);
+    int robot36_y_samples = static_cast<int>(kSampleRate * (kRobot36YMs / 1000.0f));
+    int robot36_chroma_samples = static_cast<int>(kSampleRate * (kRobot36ChromaMs / 1000.0f));
+    int robot36_pixel_window_y = calc_pixel_window_samples(robot36_y_samples);
+    int robot36_pixel_window_c = calc_pixel_window_samples(robot36_chroma_samples);
+    int pd_scan_samples = 0;
+    int pd_pixel_window_samples = 0;
+    int p_sync_samples = 0;
+    int p_porch_samples = 0;
+    int p_color_samples = 0;
+    int p_pixel_window_samples = 0;
     const int min_sync_gap = static_cast<int>(kSampleRate * (kMinSyncGapMs / 1000.0f));
     const float header_window_ms =
         1000.0f * static_cast<float>(kHeaderHopSamples) / static_cast<float>(kSampleRate);
@@ -673,17 +1186,10 @@ void sstv_task(void*)
     {
         vis_windows_per_bit = 1;
     }
-    int pixel_window_samples = color_samples / kInWidth;
-    if (pixel_window_samples < 8)
-    {
-        pixel_window_samples = 8;
-    }
-    if (pixel_window_samples > kMaxPixelSamples)
-    {
-        pixel_window_samples = kMaxPixelSamples;
-    }
 
     int line_index = 0;
+    int line_count = kInHeightScottie;
+    s_line_count = line_count;
     Phase phase = Phase::Idle;
     int phase_samples = 0;
     int last_pixel = -1;
@@ -691,6 +1197,7 @@ void sstv_task(void*)
     int pixel_fill = 0;
 
     HeaderState header_state = HeaderState::SeekLeader1;
+    VisMode vis_mode = VisMode::Unknown;
     int header_count = 0;
     bool header_ok = false;
     int vis_bit_index = 0;
@@ -699,7 +1206,11 @@ void sstv_task(void*)
     int vis_window_count = 0;
     int vis_1100_count = 0;
     int vis_1300_count = 0;
+    int vis_valid_windows = 0;
+    float vis_1100_sum = 0.0f;
+    float vis_1300_sum = 0.0f;
     int vis_skip_windows = 0;
+    int vis_start_count = 0;
     int header_log_tick = 0;
     const int header_log_every = 10;
     int header_stat_tick = 0;
@@ -716,6 +1227,7 @@ void sstv_task(void*)
     int vis_hit_count = 0;
     double vis_ratio_total_sum = 0.0;
     double vis_ratio_max_sum = 0.0;
+    float audio_level = 0.0f;
 
     int16_t header_buf[kHeaderWindowSamples] = {0};
     int header_pos = 0;
@@ -730,32 +1242,71 @@ void sstv_task(void*)
     int16_t sync_window[kSyncWindowSamples];
     int16_t pixel_window[kMaxPixelSamples];
 
+    int32_t mono = 0;
+    ModeContext ctx = {
+        vis_mode,
+        phase,
+        phase_samples,
+        line_index,
+        line_count,
+        last_pixel,
+        pixel_pos,
+        pixel_fill,
+        mono,
+        audio_level,
+        header_ok,
+        pixel_buf,
+        pixel_window,
+        porch_samples,
+        sync_samples,
+        color_samples,
+        pixel_window_samples,
+        robot_sync_samples,
+        robot_sync_porch_samples,
+        robot_sep_samples,
+        robot_porch_samples,
+        robot_y_samples,
+        robot_chroma_samples,
+        robot36_y_samples,
+        robot36_chroma_samples,
+        robot_pixel_window_y,
+        robot_pixel_window_c,
+        robot36_pixel_window_y,
+        robot36_pixel_window_c,
+        martin_sync_samples,
+        martin_porch_samples,
+        pd_sync_samples,
+        pd_porch_samples,
+        pd_scan_samples,
+        pd_pixel_window_samples,
+        p_sync_samples,
+        p_porch_samples,
+        p_color_samples,
+        p_pixel_window_samples,
+        header_state,
+        header_count,
+        vis_bit_index,
+        vis_value,
+        vis_ones,
+        vis_window_count,
+        vis_1100_count,
+        vis_1300_count,
+        vis_valid_windows,
+        vis_1100_sum,
+        vis_1300_sum,
+        vis_skip_windows,
+        vis_start_count,
+        color_ms,
+    };
+
     int64_t sample_index = 0;
     int64_t last_sync_index = -1000000;
+    int64_t low_audio_samples = 0;
 
-    auto reset_header_state = [&]()
-    {
-        header_state = HeaderState::SeekLeader1;
-        header_count = 0;
-        vis_bit_index = 0;
-        vis_value = 0;
-        vis_ones = 0;
-        vis_window_count = 0;
-        vis_1100_count = 0;
-        vis_1300_count = 0;
-        vis_skip_windows = 0;
-    };
-
-    auto reset_pixel_state = [&]()
-    {
-        last_pixel = -1;
-        pixel_pos = 0;
-        pixel_fill = 0;
-    };
-
-    float audio_level = 0.0f;
     clear_frame();
     clear_accum();
+    clear_robot_chroma();
+    clear_pd_state();
     set_status(sstv::State::Waiting, 0, 0.0f, 0.0f, false);
 
     while (!s_stop)
@@ -771,9 +1322,9 @@ void sstv_task(void*)
         int16_t block_peak = 0;
         for (int i = 0; i < samples_per_block; ++i)
         {
-            int32_t l = buffer[i * 2];
-            int32_t r = buffer[i * 2 + 1];
-            int32_t mono = (l + r) / 2;
+            int32_t l = buffer[i * kChannels];
+            int32_t r = (kChannels > 1) ? buffer[i * kChannels + 1] : l;
+            mono = (l + r) / 2;
             if (mono > block_peak)
             {
                 block_peak = mono;
@@ -835,34 +1386,32 @@ void sstv_task(void*)
                         }
                         else
                         {
-                            if (tone == Tone::Tone1100)
+                            float total = p1100 + p1200 + p1300 + p1900;
+                            float pair = p1100 + p1300;
+                            if (total > 0.0f)
                             {
-                                vis_1100_count++;
-                            }
-                            else if (tone == Tone::Tone1300)
-                            {
-                                vis_1300_count++;
+                                vis_1100_sum += p1100;
+                                vis_1300_sum += p1300;
+                                if (pair >= total * kVisPairRatio)
+                                {
+                                    vis_valid_windows++;
+                                }
                             }
                             vis_window_count++;
 
                             if (vis_window_count >= vis_windows_per_bit)
                             {
-                                int bit = -1;
-                                if (vis_1100_count > vis_1300_count)
+                                int bit = (vis_1100_sum >= vis_1300_sum) ? 1 : 0;
+                                if (vis_1100_sum == 0.0f && vis_1300_sum == 0.0f)
                                 {
-                                    bit = 1;
-                                }
-                                else if (vis_1300_count > vis_1100_count)
-                                {
-                                    bit = 0;
-                                }
-
-                                if (bit < 0)
-                                {
-                                    reset_header_state();
+                                    reset_header_state(ctx);
                                 }
                                 else
                                 {
+                                    SSTV_LOG_V("[SSTV] VIS window valid=%d total(1100=%.0f 1300=%.0f)\n",
+                                               vis_valid_windows,
+                                               static_cast<double>(vis_1100_sum),
+                                               static_cast<double>(vis_1300_sum));
                                     if (vis_bit_index < 7)
                                     {
                                         if (bit)
@@ -870,7 +1419,7 @@ void sstv_task(void*)
                                             vis_value |= static_cast<uint8_t>(1u << vis_bit_index);
                                             vis_ones++;
                                         }
-                                        SSTV_LOG("[SSTV] VIS bit %d=%d\n", vis_bit_index, bit);
+                                        SSTV_LOG_V("[SSTV] VIS bit %d=%d\n", vis_bit_index, bit);
                                         vis_bit_index++;
                                     }
                                     else
@@ -879,18 +1428,104 @@ void sstv_task(void*)
                                         bool parity_ok = (total_ones % 2) == 0;
                                         SSTV_LOG("[SSTV] VIS value=%u parity=%d\n",
                                                  static_cast<unsigned>(vis_value), parity_ok ? 1 : 0);
-                                        if (parity_ok && vis_value == kVisScottie1)
+                                        auto apply_vis_config = [&](const VisConfig* config,
+                                                                    const char* label)
                                         {
+                                            if (!config)
+                                            {
+                                                return false;
+                                            }
+                                            vis_mode = config->mode;
+                                            color_ms = config->color_ms;
+                                                if (config->pd_scan_ms > 0.0f)
+                                                {
+                                                    update_pd_timing(config->pd_scan_ms,
+                                                                     pd_scan_samples,
+                                                                     pd_pixel_window_samples);
+                                                }
+                                                if (config->p_sync_ms > 0.0f)
+                                                {
+                                                    update_p_timing(config->p_sync_ms,
+                                                                    config->p_porch_ms,
+                                                                    config->p_color_ms,
+                                                                    p_sync_samples,
+                                                                    p_porch_samples,
+                                                                    p_color_samples,
+                                                                    p_pixel_window_samples);
+                                                }
+                                                update_color_timing(color_ms, color_samples,
+                                                                    pixel_window_samples);
+                                            line_count = config->line_count;
+                                            s_line_count = line_count;
+                                            s_vis_mode = vis_mode;
                                             header_ok = true;
-                                            SSTV_LOG("[SSTV] VIS ok: Scottie 1\n");
+                                                SSTV_LOG("[SSTV] VIS ok: %s (%s, color=%.3f ms)\n",
+                                                         vis_mode_name(vis_mode), label,
+                                                         static_cast<double>(color_ms));
+                                            return true;
+                                        };
+
+                                        bool accepted = false;
+                                        if (parity_ok)
+                                        {
+                                            accepted = apply_vis_config(find_vis_config(vis_value),
+                                                                        "normal");
                                         }
-                                        reset_header_state();
+
+                                        if (!accepted)
+                                        {
+                                            uint8_t inv_value =
+                                                static_cast<uint8_t>(~vis_value) & 0x7F;
+                                            int inv_bit = bit ? 0 : 1;
+                                            int inv_ones = 7 - vis_ones;
+                                            int inv_total = inv_ones + (inv_bit ? 1 : 0);
+                                            if ((inv_total % 2) == 0)
+                                            {
+                                                accepted = apply_vis_config(
+                                                    find_vis_config(inv_value), "inv");
+                                            }
+                                        }
+
+                                        if (!accepted)
+                                        {
+                                            uint8_t rev_value = reverse_vis_bits(vis_value);
+                                            if (parity_ok)
+                                            {
+                                                accepted = apply_vis_config(
+                                                    find_vis_config(rev_value), "rev");
+                                            }
+                                        }
+
+                                        if (!accepted)
+                                        {
+                                            uint8_t rev_inv_value =
+                                                reverse_vis_bits(static_cast<uint8_t>(~vis_value) &
+                                                                 0x7F);
+                                            int inv_bit = bit ? 0 : 1;
+                                            int inv_ones = 7 - vis_ones;
+                                            int inv_total = inv_ones + (inv_bit ? 1 : 0);
+                                            if ((inv_total % 2) == 0)
+                                            {
+                                                accepted = apply_vis_config(
+                                                    find_vis_config(rev_inv_value), "rev+inv");
+                                            }
+                                        }
+
+                                        if (!accepted)
+                                        {
+                                            SSTV_LOG_V("[SSTV] VIS unsupported value=%u\n",
+                                                       static_cast<unsigned>(vis_value));
+                                        }
+                                        reset_header_state(ctx);
                                     }
                                 }
 
                                 vis_window_count = 0;
                                 vis_1100_count = 0;
                                 vis_1300_count = 0;
+                                vis_valid_windows = 0;
+                                vis_1100_sum = 0.0f;
+                                vis_1300_sum = 0.0f;
                             }
                         }
                     }
@@ -901,16 +1536,42 @@ void sstv_task(void*)
                              header_state == HeaderState::SeekVisStart) &&
                             (header_log_tick++ % header_log_every == 0))
                         {
-                            SSTV_LOG("[SSTV] hdr state=%s tone=%s p1100=%.0f p1200=%.0f p1300=%.0f p1900=%.0f\n",
-                                     header_state_name(header_state), tone_name(tone),
-                                     static_cast<double>(p1100), static_cast<double>(p1200),
-                                     static_cast<double>(p1300), static_cast<double>(p1900));
+                            SSTV_LOG_V("[SSTV] hdr state=%s tone=%s p1100=%.0f p1200=%.0f p1300=%.0f p1900=%.0f\n",
+                                       header_state_name(header_state), tone_name(tone),
+                                       static_cast<double>(p1100), static_cast<double>(p1200),
+                                       static_cast<double>(p1300), static_cast<double>(p1900));
                         }
 
                         switch (header_state)
                         {
                         case HeaderState::SeekLeader1:
-                            if (tone == Tone::Tone1900)
+                        {
+                            bool leader1_hit = (tone == Tone::Tone1900);
+                            float total = p1100 + p1200 + p1300 + p1900;
+                            float max_other = p1100;
+                            if (p1200 > max_other)
+                            {
+                                max_other = p1200;
+                            }
+                            if (p1300 > max_other)
+                            {
+                                max_other = p1300;
+                            }
+                            if (!leader1_hit)
+                            {
+                                leader1_hit = (total > 0.0f &&
+                                               p1900 > total * 0.02f &&
+                                               p1900 > max_other * 0.03f);
+                                if (leader1_hit)
+                                {
+                                    SSTV_LOG_V("[SSTV] leader1 fallback p1900=%.0f p1100=%.0f p1200=%.0f p1300=%.0f\n",
+                                               static_cast<double>(p1900),
+                                               static_cast<double>(p1100),
+                                               static_cast<double>(p1200),
+                                               static_cast<double>(p1300));
+                                }
+                            }
+                            if (leader1_hit)
                             {
                                 header_count++;
                                 if (header_count >= leader_windows)
@@ -925,6 +1586,7 @@ void sstv_task(void*)
                                 header_count = 0;
                             }
                             break;
+                        }
                         case HeaderState::SeekBreak:
                         {
                             bool break_hit = (tone == Tone::Tone1200);
@@ -938,20 +1600,20 @@ void sstv_task(void*)
                             if (!break_hit)
                             {
                                 break_hit = (total > 0.0f &&
-                                             p1200 > total * 0.05f &&
-                                             p1200 > max_other * 0.06f);
+                                             p1200 > total * 0.0005f &&
+                                             p1200 > max_other * 0.001f);
                                 if (break_hit)
                                 {
-                                    SSTV_LOG("[SSTV] break fallback p1200=%.0f p1300=%.0f p1900=%.0f\n",
-                                             static_cast<double>(p1200),
-                                             static_cast<double>(p1300),
-                                             static_cast<double>(p1900));
+                                    SSTV_LOG_V("[SSTV] break fallback p1200=%.0f p1300=%.0f p1900=%.0f\n",
+                                               static_cast<double>(p1200),
+                                               static_cast<double>(p1300),
+                                               static_cast<double>(p1900));
                                 }
                                 else if (header_log_tick % header_log_every == 0)
                                 {
-                                    SSTV_LOG("[SSTV] break miss r_total=%.3f r_max=%.3f\n",
-                                             static_cast<double>(ratio_total),
-                                             static_cast<double>(ratio_max));
+                                    SSTV_LOG_V("[SSTV] break miss r_total=%.3f r_max=%.3f\n",
+                                               static_cast<double>(ratio_total),
+                                               static_cast<double>(ratio_max));
                                 }
                             }
                             if (break_hit)
@@ -997,14 +1659,14 @@ void sstv_task(void*)
                             if (!leader2_hit)
                             {
                                 leader2_hit = (total > 0.0f &&
-                                               p1900 > total * 0.05f &&
-                                               p1900 > max_other * 0.08f);
+                                               p1900 > total * 0.0005f &&
+                                               p1900 > max_other * 0.001f);
                                 if (leader2_hit)
                                 {
-                                    SSTV_LOG("[SSTV] leader2 fallback p1900=%.0f p1200=%.0f p1300=%.0f\n",
-                                             static_cast<double>(p1900),
-                                             static_cast<double>(p1200),
-                                             static_cast<double>(p1300));
+                                    SSTV_LOG_V("[SSTV] leader2 fallback p1900=%.0f p1200=%.0f p1300=%.0f\n",
+                                               static_cast<double>(p1900),
+                                               static_cast<double>(p1200),
+                                               static_cast<double>(p1300));
                                 }
                             }
                             if (leader2_hit)
@@ -1015,11 +1677,8 @@ void sstv_task(void*)
                                 {
                                     header_state = HeaderState::SeekVisStart;
                                     header_count = 0;
+                                    vis_start_count = 0;
                                     SSTV_LOG("[SSTV] header leader2 ok\n");
-#if SSTV_DEBUG
-                                    header_ok = true;
-                                    SSTV_LOG("[SSTV] debug: force header ok after leader2\n");
-#endif
                                 }
                             }
                             else
@@ -1029,9 +1688,9 @@ void sstv_task(void*)
                             }
                             if (!leader2_hit && header_log_tick % header_log_every == 0)
                             {
-                                SSTV_LOG("[SSTV] leader2 miss r_total=%.3f r_max=%.3f\n",
-                                         static_cast<double>(ratio_total),
-                                         static_cast<double>(ratio_max));
+                                SSTV_LOG_V("[SSTV] leader2 miss r_total=%.3f r_max=%.3f\n",
+                                           static_cast<double>(ratio_total),
+                                           static_cast<double>(ratio_max));
                             }
                             break;
                         }
@@ -1048,44 +1707,52 @@ void sstv_task(void*)
                             if (!vis_start)
                             {
                                 vis_start = (total > 0.0f &&
-                                             p1200 > total * 0.05f &&
-                                             p1200 > max_other * 0.08f);
+                                             p1200 > total * 0.0002f &&
+                                             p1200 > max_other * 0.0004f);
                                 if (vis_start)
                                 {
-                                    SSTV_LOG("[SSTV] visstart fallback p1200=%.0f p1300=%.0f p1900=%.0f\n",
-                                             static_cast<double>(p1200),
-                                             static_cast<double>(p1300),
-                                             static_cast<double>(p1900));
+                                    SSTV_LOG_V("[SSTV] visstart fallback p1200=%.0f p1300=%.0f p1900=%.0f\n",
+                                               static_cast<double>(p1200),
+                                               static_cast<double>(p1300),
+                                               static_cast<double>(p1900));
                                 }
                                 else if (header_log_tick % header_log_every == 0)
                                 {
-                                    SSTV_LOG("[SSTV] visstart miss r_total=%.3f r_max=%.3f\n",
-                                             static_cast<double>(ratio_total),
-                                             static_cast<double>(ratio_max));
+                                    SSTV_LOG_V("[SSTV] visstart miss r_total=%.3f r_max=%.3f\n",
+                                               static_cast<double>(ratio_total),
+                                               static_cast<double>(ratio_max));
                                 }
                             }
                             if (vis_start)
                             {
-                                vis_hit_count++;
-                                header_state = HeaderState::ReadVisBits;
-                                vis_skip_windows = vis_windows_per_bit;
-                                vis_bit_index = 0;
-                                vis_value = 0;
-                                vis_ones = 0;
-                                vis_window_count = 0;
-                                vis_1100_count = 0;
-                                vis_1300_count = 0;
-                                SSTV_LOG("[SSTV] header VIS start\n");
+                                vis_start_count++;
+                                if (vis_start_count >= vis_windows_per_bit)
+                                {
+                                    vis_hit_count++;
+                                    header_state = HeaderState::ReadVisBits;
+                                    vis_skip_windows = 0;
+                                    vis_bit_index = 0;
+                                    vis_value = 0;
+                                    vis_ones = 0;
+                                    vis_window_count = 0;
+                                    vis_1100_count = 0;
+                                    vis_1300_count = 0;
+                                    vis_valid_windows = 0;
+                                    vis_1100_sum = 0.0f;
+                                    vis_1300_sum = 0.0f;
+                                    vis_start_count = 0;
+                                    SSTV_LOG("[SSTV] header VIS start\n");
+                                }
                             }
                             else if (tone == Tone::Tone1900)
                             {
+                                vis_start_count = 0;
                                 header_state = HeaderState::SeekLeader2;
                                 header_count = 1;
                             }
                             else
                             {
-                                header_state = HeaderState::SeekLeader1;
-                                header_count = 0;
+                                vis_start_count = 0;
                             }
                             break;
                         }
@@ -1111,11 +1778,11 @@ void sstv_task(void*)
                             double vis_avg_max = vis_stat_window_count > 0
                                                      ? vis_ratio_max_sum / vis_stat_window_count
                                                      : 0.0;
-                            SSTV_LOG("[SSTV] stat break=%d/%d avg(%.3f,%.3f) leader2=%d/%d avg(%.3f,%.3f) vis=%d/%d avg(%.3f,%.3f)\n",
-                                     break_hit_count, break_window_count, break_avg_total,
-                                     break_avg_max, leader2_hit_count, leader2_window_count,
-                                     leader2_avg_total, leader2_avg_max, vis_hit_count,
-                                     vis_stat_window_count, vis_avg_total, vis_avg_max);
+                            SSTV_LOG_V("[SSTV] stat break=%d/%d avg(%.3f,%.3f) leader2=%d/%d avg(%.3f,%.3f) vis=%d/%d avg(%.3f,%.3f)\n",
+                                       break_hit_count, break_window_count, break_avg_total,
+                                       break_avg_max, leader2_hit_count, leader2_window_count,
+                                       leader2_avg_total, leader2_avg_max, vis_hit_count,
+                                       vis_stat_window_count, vis_avg_total, vis_avg_max);
                         }
                     }
                 }
@@ -1149,9 +1816,9 @@ void sstv_task(void*)
                     if (sync_hit && sample_index - last_sync_index > min_sync_gap)
                     {
                         last_sync_index = sample_index;
-                        SSTV_LOG("[SSTV] sync hit @%lld line=%d state=%d\n",
-                                 static_cast<long long>(sample_index), line_index,
-                                 static_cast<int>(s_status.state));
+                        SSTV_LOG_V("[SSTV] sync hit @%lld line=%d state=%d\n",
+                                   static_cast<long long>(sample_index), line_index,
+                                   static_cast<int>(s_status.state));
                         if (s_status.state != sstv::State::Receiving)
                         {
                             line_index = 0;
@@ -1159,119 +1826,84 @@ void sstv_task(void*)
                             clear_saved_path();
                             s_pending_save = false;
                         }
-                        clear_accum();
-                        phase = Phase::Porch;
-                        phase_samples = 0;
-                        reset_pixel_state();
-                        set_status(sstv::State::Receiving, static_cast<uint16_t>(line_index),
-                                   static_cast<float>(line_index) / kInHeight,
-                                   audio_level, true);
+                        const bool robot_mode = (vis_mode == VisMode::Robot72 ||
+                                                 vis_mode == VisMode::Robot36);
+                        const bool martin_mode = (vis_mode == VisMode::Martin1 ||
+                                                  vis_mode == VisMode::Martin2);
+                        const bool pd_mode = (vis_mode == VisMode::Pd50 ||
+                                              vis_mode == VisMode::Pd90 ||
+                                              vis_mode == VisMode::Pd120 ||
+                                              vis_mode == VisMode::Pd160 ||
+                                              vis_mode == VisMode::Pd180 ||
+                                              vis_mode == VisMode::Pd240 ||
+                                              vis_mode == VisMode::Pd290);
+                        const bool p_mode = (vis_mode == VisMode::P3 ||
+                                             vis_mode == VisMode::P5 ||
+                                             vis_mode == VisMode::P7);
+                        if (s_status.state != sstv::State::Receiving)
+                        {
+                            clear_accum();
+                            if (robot_mode)
+                            {
+                                phase = Phase::RobotSync;
+                            }
+                            else if (martin_mode)
+                            {
+                                phase = Phase::MartinSync;
+                            }
+                            else if (pd_mode)
+                            {
+                                phase = Phase::PdSync;
+                            }
+                            else if (p_mode)
+                            {
+                                phase = Phase::PSync;
+                            }
+                            else
+                            {
+                                phase = Phase::Porch1;
+                            }
+                            phase_samples = 0;
+                            reset_pixel_state(ctx);
+                            clear_pd_state();
+                            set_status(sstv::State::Receiving, static_cast<uint16_t>(line_index),
+                                       static_cast<float>(line_index) / line_count,
+                                       audio_level, true);
+                        }
+                        else if (martin_mode)
+                        {
+                            clear_accum();
+                            phase = Phase::MartinSync;
+                            phase_samples = 0;
+                            reset_pixel_state(ctx);
+                        }
+                        else if (pd_mode)
+                        {
+                            if (phase == Phase::PdSync)
+                            {
+                                last_sync_index = sample_index;
+                            }
+                        }
+                        else if (p_mode)
+                        {
+                            clear_accum();
+                            phase = Phase::PSync;
+                            phase_samples = 0;
+                            reset_pixel_state(ctx);
+                        }
+                        else if (!robot_mode && phase == Phase::Blue)
+                        {
+                            phase = Phase::Sync;
+                            phase_samples = 0;
+                        }
                     }
                 }
             }
 
             if (s_status.state == sstv::State::Receiving && phase != Phase::Idle)
             {
-                if (phase == Phase::Porch)
-                {
-                    phase_samples++;
-                    if (phase_samples >= porch_samples)
-                    {
-                        phase = Phase::Green;
-                        phase_samples = 0;
-                        reset_pixel_state();
-                    }
-                }
-                else
-                {
-                    int pixel = (phase_samples * kInWidth) / color_samples;
-                    if (pixel >= 0 && pixel < kInWidth)
-                    {
-                        pixel_buf[pixel_pos] = static_cast<int16_t>(mono);
-                        pixel_pos++;
-                        if (pixel_pos >= pixel_window_samples)
-                        {
-                            pixel_pos = 0;
-                        }
-                        if (pixel_fill < pixel_window_samples)
-                        {
-                            pixel_fill++;
-                        }
-
-                        if (pixel != last_pixel && pixel_fill == pixel_window_samples)
-                        {
-                            last_pixel = pixel;
-                            for (int j = 0; j < pixel_window_samples; ++j)
-                            {
-                                int idx = pixel_pos + j;
-                                if (idx >= pixel_window_samples)
-                                {
-                                    idx -= pixel_window_samples;
-                                }
-                                pixel_window[j] = pixel_buf[idx];
-                            }
-
-                            float freq = estimate_freq_from_bins(pixel_window, pixel_window_samples,
-                                                                 s_pixel_bins, kPixelBinCount);
-                            uint8_t intensity = freq_to_intensity(freq);
-                            int channel = 0;
-                            if (phase == Phase::Green)
-                            {
-                                channel = 0;
-                            }
-                            else if (phase == Phase::Blue)
-                            {
-                                channel = 1;
-                            }
-                            else if (phase == Phase::Red)
-                            {
-                                channel = 2;
-                            }
-                            s_accum[channel][pixel] += intensity;
-                            s_count[channel][pixel] += 1;
-                        }
-                    }
-                    phase_samples++;
-                    if (phase_samples >= color_samples)
-                    {
-                        phase_samples = 0;
-                        if (phase == Phase::Green)
-                        {
-                            phase = Phase::Blue;
-                            reset_pixel_state();
-                        }
-                        else if (phase == Phase::Blue)
-                        {
-                            phase = Phase::Red;
-                            reset_pixel_state();
-                        }
-                        else if (phase == Phase::Red)
-                        {
-                            render_line(line_index);
-                            SSTV_LOG("[SSTV] line %d done\n", line_index);
-                            line_index++;
-                            clear_accum();
-                            if (line_index >= kInHeight)
-                            {
-                                set_status(sstv::State::Complete, kInHeight,
-                                           1.0f, audio_level, true);
-                                s_pending_save = true;
-                                phase = Phase::Idle;
-                                header_ok = false;
-                                reset_header_state();
-                                SSTV_LOG("[SSTV] complete\n");
-                            }
-                            else
-                            {
-                                set_status(sstv::State::Receiving,
-                                           static_cast<uint16_t>(line_index),
-                                           static_cast<float>(line_index) / kInHeight,
-                                           audio_level, true);
-                                phase = Phase::Idle;
-                            }
-                        }
-                    }
-                }
+                const ModeStrategy& strategy = select_mode_strategy(vis_mode);
+                strategy.step(ctx);
             }
 
             sample_index++;
@@ -1293,6 +1925,52 @@ void sstv_task(void*)
             s_pending_save = false;
         }
 
+        if (audio_level < kAudioResetLevel)
+        {
+            low_audio_samples += samples_per_block;
+        }
+        else
+        {
+            low_audio_samples = 0;
+        }
+
+        if (s_status.state == sstv::State::Receiving)
+        {
+            const int64_t sync_timeout_samples =
+                static_cast<int64_t>(kSampleRate * (kSyncTimeoutMs / 1000.0f));
+            const int64_t audio_timeout_samples =
+                static_cast<int64_t>(kSampleRate * (kAudioResetHoldMs / 1000.0f));
+            bool should_reset = false;
+            if (sample_index - last_sync_index > sync_timeout_samples)
+            {
+                SSTV_LOG("[SSTV] reset: sync timeout %.0f ms\n",
+                         static_cast<double>((sample_index - last_sync_index) * 1000.0 /
+                                             static_cast<double>(kSampleRate)));
+                should_reset = true;
+            }
+            else if (low_audio_samples > audio_timeout_samples)
+            {
+                SSTV_LOG("[SSTV] reset: low audio %.0f ms (level=%.3f)\n",
+                         static_cast<double>(low_audio_samples * 1000.0 /
+                                             static_cast<double>(kSampleRate)),
+                         static_cast<double>(audio_level));
+                should_reset = true;
+            }
+
+            if (should_reset)
+            {
+                header_ok = false;
+                reset_header_state(ctx);
+                reset_pixel_state(ctx);
+                phase = Phase::Idle;
+                phase_samples = 0;
+                line_index = 0;
+                clear_accum();
+                s_pending_save = false;
+                set_status(sstv::State::Waiting, 0, 0.0f, audio_level, s_frame != nullptr);
+            }
+        }
+
         if (s_status.state == sstv::State::Waiting)
         {
             set_status(sstv::State::Waiting, 0, 0.0f, audio_level, s_frame != nullptr);
@@ -1300,11 +1978,12 @@ void sstv_task(void*)
         else if (s_status.state == sstv::State::Receiving)
         {
             set_status(sstv::State::Receiving, static_cast<uint16_t>(line_index),
-                       static_cast<float>(line_index) / kInHeight, audio_level, true);
+                       static_cast<float>(line_index) / line_count, audio_level, true);
         }
         else if (s_status.state == sstv::State::Complete)
         {
-            set_status(sstv::State::Complete, kInHeight, 1.0f, audio_level, true);
+            set_status(sstv::State::Complete, static_cast<uint16_t>(line_count),
+                       1.0f, audio_level, true);
         }
     }
 
@@ -1317,6 +1996,799 @@ void sstv_task(void*)
     }
     set_status(sstv::State::Idle, 0, 0.0f, 0.0f, s_frame != nullptr);
     vTaskDelete(nullptr);
+}
+
+void step_robot_mode(ModeContext& ctx)
+{
+    const bool robot36 = (ctx.vis_mode == VisMode::Robot36);
+    const bool even_line = (ctx.line_index % 2) == 0;
+    if (ctx.phase == Phase::RobotSync)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.robot_sync_samples)
+        {
+            ctx.phase = Phase::RobotPorch1;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (ctx.phase == Phase::RobotPorch1)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.robot_sync_porch_samples)
+        {
+            ctx.phase = Phase::RobotY;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::RobotSep1)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.robot_sep_samples)
+        {
+            ctx.phase = Phase::RobotPorch2;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (ctx.phase == Phase::RobotPorch2)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.robot_porch_samples)
+        {
+            if (robot36)
+            {
+                ctx.phase = even_line ? Phase::RobotRY : Phase::RobotBY;
+            }
+            else
+            {
+                ctx.phase = Phase::RobotRY;
+            }
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (!robot36 && ctx.phase == Phase::RobotSep2)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.robot_sep_samples)
+        {
+            ctx.phase = Phase::RobotPorch3;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (!robot36 && ctx.phase == Phase::RobotPorch3)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.robot_porch_samples)
+        {
+            ctx.phase = Phase::RobotBY;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else
+    {
+        const bool y_phase = (ctx.phase == Phase::RobotY);
+        const int active_color_samples =
+            y_phase ? (robot36 ? ctx.robot36_y_samples : ctx.robot_y_samples)
+                    : (robot36 ? ctx.robot36_chroma_samples : ctx.robot_chroma_samples);
+        const int active_pixel_window =
+            y_phase ? (robot36 ? ctx.robot36_pixel_window_y : ctx.robot_pixel_window_y)
+                    : (robot36 ? ctx.robot36_pixel_window_c : ctx.robot_pixel_window_c);
+        int pixel = (ctx.phase_samples * kInWidth) / active_color_samples;
+        if (pixel >= 0 && pixel < kInWidth)
+        {
+            ctx.pixel_buf[ctx.pixel_pos] = static_cast<int16_t>(ctx.mono);
+            ctx.pixel_pos++;
+            if (ctx.pixel_pos >= active_pixel_window)
+            {
+                ctx.pixel_pos = 0;
+            }
+            if (ctx.pixel_fill < active_pixel_window)
+            {
+                ctx.pixel_fill++;
+            }
+
+            if (pixel != ctx.last_pixel && ctx.pixel_fill == active_pixel_window)
+            {
+                ctx.last_pixel = pixel;
+                for (int j = 0; j < active_pixel_window; ++j)
+                {
+                    int idx = ctx.pixel_pos + j;
+                    if (idx >= active_pixel_window)
+                    {
+                        idx -= active_pixel_window;
+                    }
+                    ctx.pixel_window[j] = ctx.pixel_buf[idx];
+                }
+
+                float freq = estimate_freq_from_bins(ctx.pixel_window, active_pixel_window,
+                                                     s_pixel_bins, kPixelBinCount);
+                uint8_t intensity = freq_to_intensity(freq);
+                int channel = 0;
+                if (ctx.phase == Phase::RobotY)
+                {
+                    channel = 0;
+                }
+                else if (ctx.phase == Phase::RobotRY)
+                {
+                    channel = 1;
+                }
+                else if (ctx.phase == Phase::RobotBY)
+                {
+                    channel = 2;
+                }
+                s_accum[channel][pixel] += intensity;
+                s_count[channel][pixel] += 1;
+            }
+        }
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= active_color_samples)
+        {
+            ctx.phase_samples = 0;
+            if (ctx.phase == Phase::RobotY)
+            {
+                ctx.phase = Phase::RobotSep1;
+            }
+            else if (ctx.phase == Phase::RobotRY)
+            {
+                if (robot36)
+                {
+                    for (int x = 0; x < kInWidth; ++x)
+                    {
+                        if (s_count[1][x])
+                        {
+                            s_last_ry[x] = static_cast<uint8_t>(s_accum[1][x] / s_count[1][x]);
+                        }
+                    }
+                    s_has_ry = true;
+                    render_line(ctx.line_index);
+                    SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+                    ctx.line_index++;
+                    clear_accum();
+                    if (ctx.line_index >= ctx.line_count)
+                    {
+                        set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count),
+                                   1.0f, ctx.audio_level, true);
+                        s_pending_save = true;
+                        ctx.phase = Phase::Idle;
+                        ctx.header_ok = false;
+                        reset_header_state(ctx);
+                        SSTV_LOG("[SSTV] complete\n");
+                    }
+                    else
+                    {
+                        set_status(sstv::State::Receiving, static_cast<uint16_t>(ctx.line_index),
+                                   static_cast<float>(ctx.line_index) / ctx.line_count,
+                                   ctx.audio_level, true);
+                        ctx.phase = Phase::RobotSync;
+                        ctx.phase_samples = 0;
+                        reset_pixel_state(ctx);
+                    }
+                }
+                else
+                {
+                    ctx.phase = Phase::RobotSep2;
+                }
+            }
+            else if (ctx.phase == Phase::RobotBY)
+            {
+                if (robot36)
+                {
+                    for (int x = 0; x < kInWidth; ++x)
+                    {
+                        if (s_count[2][x])
+                        {
+                            s_last_by[x] = static_cast<uint8_t>(s_accum[2][x] / s_count[2][x]);
+                        }
+                    }
+                    s_has_by = true;
+                }
+                render_line(ctx.line_index);
+                SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+                ctx.line_index++;
+                clear_accum();
+                if (ctx.line_index >= ctx.line_count)
+                {
+                    set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count), 1.0f,
+                               ctx.audio_level, true);
+                    s_pending_save = true;
+                    ctx.phase = Phase::Idle;
+                    ctx.header_ok = false;
+                    reset_header_state(ctx);
+                    SSTV_LOG("[SSTV] complete\n");
+                }
+                else
+                {
+                    set_status(sstv::State::Receiving, static_cast<uint16_t>(ctx.line_index),
+                               static_cast<float>(ctx.line_index) / ctx.line_count,
+                               ctx.audio_level, true);
+                    ctx.phase = Phase::RobotSync;
+                    ctx.phase_samples = 0;
+                    reset_pixel_state(ctx);
+                }
+            }
+        }
+    }
+}
+
+void step_martin_mode(ModeContext& ctx)
+{
+    if (ctx.phase == Phase::MartinSync)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.martin_sync_samples)
+        {
+            ctx.phase = Phase::MartinPorch;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (ctx.phase == Phase::MartinPorch)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.martin_porch_samples)
+        {
+            ctx.phase = Phase::MartinGreen;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::MartinSep1)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.martin_porch_samples)
+        {
+            ctx.phase = Phase::MartinBlue;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::MartinSep2)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.martin_porch_samples)
+        {
+            ctx.phase = Phase::MartinRed;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::MartinSep3)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.martin_porch_samples)
+        {
+            ctx.phase = Phase::MartinSync;
+            ctx.phase_samples = 0;
+        }
+    }
+    else
+    {
+        int pixel = (ctx.phase_samples * kInWidth) / ctx.color_samples;
+        if (pixel >= 0 && pixel < kInWidth)
+        {
+            ctx.pixel_buf[ctx.pixel_pos] = static_cast<int16_t>(ctx.mono);
+            ctx.pixel_pos++;
+            if (ctx.pixel_pos >= ctx.pixel_window_samples)
+            {
+                ctx.pixel_pos = 0;
+            }
+            if (ctx.pixel_fill < ctx.pixel_window_samples)
+            {
+                ctx.pixel_fill++;
+            }
+
+            if (pixel != ctx.last_pixel && ctx.pixel_fill == ctx.pixel_window_samples)
+            {
+                ctx.last_pixel = pixel;
+                for (int j = 0; j < ctx.pixel_window_samples; ++j)
+                {
+                    int idx = ctx.pixel_pos + j;
+                    if (idx >= ctx.pixel_window_samples)
+                    {
+                        idx -= ctx.pixel_window_samples;
+                    }
+                    ctx.pixel_window[j] = ctx.pixel_buf[idx];
+                }
+
+                float freq = estimate_freq_from_bins(ctx.pixel_window, ctx.pixel_window_samples,
+                                                     s_pixel_bins, kPixelBinCount);
+                uint8_t intensity = freq_to_intensity(freq);
+                int channel = 0;
+                if (ctx.phase == Phase::MartinGreen)
+                {
+                    channel = 0;
+                }
+                else if (ctx.phase == Phase::MartinBlue)
+                {
+                    channel = 1;
+                }
+                else if (ctx.phase == Phase::MartinRed)
+                {
+                    channel = 2;
+                }
+                s_accum[channel][pixel] += intensity;
+                s_count[channel][pixel] += 1;
+            }
+        }
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.color_samples)
+        {
+            ctx.phase_samples = 0;
+            if (ctx.phase == Phase::MartinGreen)
+            {
+                ctx.phase = Phase::MartinSep1;
+            }
+            else if (ctx.phase == Phase::MartinBlue)
+            {
+                ctx.phase = Phase::MartinSep2;
+            }
+            else if (ctx.phase == Phase::MartinRed)
+            {
+                render_line(ctx.line_index);
+                SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+                ctx.line_index++;
+                clear_accum();
+                if (ctx.line_index >= ctx.line_count)
+                {
+                    set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count), 1.0f,
+                               ctx.audio_level, true);
+                    s_pending_save = true;
+                    ctx.phase = Phase::Idle;
+                    ctx.header_ok = false;
+                    reset_header_state(ctx);
+                    SSTV_LOG("[SSTV] complete\n");
+                }
+                else
+                {
+                    set_status(sstv::State::Receiving, static_cast<uint16_t>(ctx.line_index),
+                               static_cast<float>(ctx.line_index) / ctx.line_count,
+                               ctx.audio_level, true);
+                    ctx.phase = Phase::MartinSep3;
+                    ctx.phase_samples = 0;
+                    reset_pixel_state(ctx);
+                }
+            }
+        }
+    }
+}
+
+void step_pd_mode(ModeContext& ctx)
+{
+    if (ctx.phase == Phase::PdSync)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.pd_sync_samples)
+        {
+            ctx.phase = Phase::PdPorch;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (ctx.phase == Phase::PdPorch)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.pd_porch_samples)
+        {
+            ctx.phase = Phase::PdY1;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else
+    {
+        const bool y_phase = (ctx.phase == Phase::PdY1 || ctx.phase == Phase::PdY2);
+        int pixel = (ctx.phase_samples * kInWidth) / ctx.pd_scan_samples;
+        if (pixel >= 0 && pixel < kInWidth)
+        {
+            ctx.pixel_buf[ctx.pixel_pos] = static_cast<int16_t>(ctx.mono);
+            ctx.pixel_pos++;
+            if (ctx.pixel_pos >= ctx.pd_pixel_window_samples)
+            {
+                ctx.pixel_pos = 0;
+            }
+            if (ctx.pixel_fill < ctx.pd_pixel_window_samples)
+            {
+                ctx.pixel_fill++;
+            }
+
+            if (pixel != ctx.last_pixel && ctx.pixel_fill == ctx.pd_pixel_window_samples)
+            {
+                ctx.last_pixel = pixel;
+                for (int j = 0; j < ctx.pd_pixel_window_samples; ++j)
+                {
+                    int idx = ctx.pixel_pos + j;
+                    if (idx >= ctx.pd_pixel_window_samples)
+                    {
+                        idx -= ctx.pd_pixel_window_samples;
+                    }
+                    ctx.pixel_window[j] = ctx.pixel_buf[idx];
+                }
+
+                float freq = estimate_freq_from_bins(ctx.pixel_window, ctx.pd_pixel_window_samples,
+                                                     s_pixel_bins, kPixelBinCount);
+                uint8_t intensity = freq_to_intensity(freq);
+                int channel = 0;
+                if (y_phase)
+                {
+                    channel = 0;
+                }
+                else if (ctx.phase == Phase::PdRY)
+                {
+                    channel = 1;
+                }
+                else if (ctx.phase == Phase::PdBY)
+                {
+                    channel = 2;
+                }
+                s_accum[channel][pixel] += intensity;
+                s_count[channel][pixel] += 1;
+            }
+        }
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.pd_scan_samples)
+        {
+            ctx.phase_samples = 0;
+            if (ctx.phase == Phase::PdY1)
+            {
+                for (int x = 0; x < kInWidth; ++x)
+                {
+                    s_pd_y1[x] = s_count[0][x]
+                                     ? static_cast<uint8_t>(s_accum[0][x] / s_count[0][x])
+                                     : 0;
+                }
+                s_pd_has_y1 = true;
+                clear_accum();
+                ctx.phase = Phase::PdRY;
+                reset_pixel_state(ctx);
+            }
+            else if (ctx.phase == Phase::PdRY)
+            {
+                for (int x = 0; x < kInWidth; ++x)
+                {
+                    s_last_ry[x] = s_count[1][x]
+                                       ? static_cast<uint8_t>(s_accum[1][x] / s_count[1][x])
+                                       : 128;
+                }
+                s_has_ry = true;
+                clear_accum();
+                ctx.phase = Phase::PdBY;
+                reset_pixel_state(ctx);
+            }
+            else if (ctx.phase == Phase::PdBY)
+            {
+                for (int x = 0; x < kInWidth; ++x)
+                {
+                    s_last_by[x] = s_count[2][x]
+                                       ? static_cast<uint8_t>(s_accum[2][x] / s_count[2][x])
+                                       : 128;
+                }
+                s_has_by = true;
+                clear_accum();
+
+                if (s_pd_has_y1)
+                {
+                    s_pd_use_y1 = true;
+                    render_line(ctx.line_index);
+                    SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+                    ctx.line_index++;
+                    if (ctx.line_index >= ctx.line_count)
+                    {
+                        set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count),
+                                   1.0f, ctx.audio_level, true);
+                        s_pending_save = true;
+                        ctx.phase = Phase::Idle;
+                        ctx.header_ok = false;
+                        reset_header_state(ctx);
+                        SSTV_LOG("[SSTV] complete\n");
+                        return;
+                    }
+                }
+
+                ctx.phase = Phase::PdY2;
+                reset_pixel_state(ctx);
+            }
+            else if (ctx.phase == Phase::PdY2)
+            {
+                s_pd_use_y1 = false;
+                render_line(ctx.line_index);
+                SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+                ctx.line_index++;
+                clear_accum();
+                s_pd_has_y1 = false;
+                if (ctx.line_index >= ctx.line_count)
+                {
+                    set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count), 1.0f,
+                               ctx.audio_level, true);
+                    s_pending_save = true;
+                    ctx.phase = Phase::Idle;
+                    ctx.header_ok = false;
+                    reset_header_state(ctx);
+                    SSTV_LOG("[SSTV] complete\n");
+                }
+                else
+                {
+                    set_status(sstv::State::Receiving, static_cast<uint16_t>(ctx.line_index),
+                               static_cast<float>(ctx.line_index) / ctx.line_count,
+                               ctx.audio_level, true);
+                    ctx.phase = Phase::PdSync;
+                    ctx.phase_samples = 0;
+                    reset_pixel_state(ctx);
+                }
+            }
+        }
+    }
+}
+
+void step_p_mode(ModeContext& ctx)
+{
+    if (ctx.phase == Phase::PSync)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.p_sync_samples)
+        {
+            ctx.phase = Phase::PPorch1;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (ctx.phase == Phase::PPorch1)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.p_porch_samples)
+        {
+            ctx.phase = Phase::PRed;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::PPorch2)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.p_porch_samples)
+        {
+            ctx.phase = Phase::PGreen;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::PPorch3)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.p_porch_samples)
+        {
+            ctx.phase = Phase::PBlue;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::PPorch4)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.p_porch_samples)
+        {
+            render_line(ctx.line_index);
+            SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+            ctx.line_index++;
+            clear_accum();
+            if (ctx.line_index >= ctx.line_count)
+            {
+                set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count), 1.0f,
+                           ctx.audio_level, true);
+                s_pending_save = true;
+                ctx.phase = Phase::Idle;
+                ctx.header_ok = false;
+                reset_header_state(ctx);
+                SSTV_LOG("[SSTV] complete\n");
+            }
+            else
+            {
+                set_status(sstv::State::Receiving, static_cast<uint16_t>(ctx.line_index),
+                           static_cast<float>(ctx.line_index) / ctx.line_count, ctx.audio_level,
+                           true);
+                ctx.phase = Phase::PSync;
+                ctx.phase_samples = 0;
+                reset_pixel_state(ctx);
+            }
+        }
+    }
+    else
+    {
+        int pixel = (ctx.phase_samples * kInWidth) / ctx.p_color_samples;
+        if (pixel >= 0 && pixel < kInWidth)
+        {
+            ctx.pixel_buf[ctx.pixel_pos] = static_cast<int16_t>(ctx.mono);
+            ctx.pixel_pos++;
+            if (ctx.pixel_pos >= ctx.p_pixel_window_samples)
+            {
+                ctx.pixel_pos = 0;
+            }
+            if (ctx.pixel_fill < ctx.p_pixel_window_samples)
+            {
+                ctx.pixel_fill++;
+            }
+
+            if (pixel != ctx.last_pixel && ctx.pixel_fill == ctx.p_pixel_window_samples)
+            {
+                ctx.last_pixel = pixel;
+                for (int j = 0; j < ctx.p_pixel_window_samples; ++j)
+                {
+                    int idx = ctx.pixel_pos + j;
+                    if (idx >= ctx.p_pixel_window_samples)
+                    {
+                        idx -= ctx.p_pixel_window_samples;
+                    }
+                    ctx.pixel_window[j] = ctx.pixel_buf[idx];
+                }
+
+                float freq = estimate_freq_from_bins(ctx.pixel_window, ctx.p_pixel_window_samples,
+                                                     s_pixel_bins, kPixelBinCount);
+                uint8_t intensity = freq_to_intensity(freq);
+                int channel = 0;
+                if (ctx.phase == Phase::PRed)
+                {
+                    channel = 2;
+                }
+                else if (ctx.phase == Phase::PGreen)
+                {
+                    channel = 0;
+                }
+                else if (ctx.phase == Phase::PBlue)
+                {
+                    channel = 1;
+                }
+                s_accum[channel][pixel] += intensity;
+                s_count[channel][pixel] += 1;
+            }
+        }
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.p_color_samples)
+        {
+            ctx.phase_samples = 0;
+            if (ctx.phase == Phase::PRed)
+            {
+                ctx.phase = Phase::PPorch2;
+            }
+            else if (ctx.phase == Phase::PGreen)
+            {
+                ctx.phase = Phase::PPorch3;
+            }
+            else if (ctx.phase == Phase::PBlue)
+            {
+                ctx.phase = Phase::PPorch4;
+            }
+        }
+    }
+}
+
+void step_scottie_mode(ModeContext& ctx)
+{
+    if (ctx.phase == Phase::Porch1)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.porch_samples)
+        {
+            ctx.phase = Phase::Green;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::Porch2)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.porch_samples)
+        {
+            ctx.phase = Phase::Blue;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else if (ctx.phase == Phase::Sync)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.sync_samples)
+        {
+            ctx.phase = Phase::Porch3;
+            ctx.phase_samples = 0;
+        }
+    }
+    else if (ctx.phase == Phase::Porch3)
+    {
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.porch_samples)
+        {
+            ctx.phase = Phase::Red;
+            ctx.phase_samples = 0;
+            reset_pixel_state(ctx);
+        }
+    }
+    else
+    {
+        int pixel = (ctx.phase_samples * kInWidth) / ctx.color_samples;
+        if (pixel >= 0 && pixel < kInWidth)
+        {
+            ctx.pixel_buf[ctx.pixel_pos] = static_cast<int16_t>(ctx.mono);
+            ctx.pixel_pos++;
+            if (ctx.pixel_pos >= ctx.pixel_window_samples)
+            {
+                ctx.pixel_pos = 0;
+            }
+            if (ctx.pixel_fill < ctx.pixel_window_samples)
+            {
+                ctx.pixel_fill++;
+            }
+
+            if (pixel != ctx.last_pixel && ctx.pixel_fill == ctx.pixel_window_samples)
+            {
+                ctx.last_pixel = pixel;
+                for (int j = 0; j < ctx.pixel_window_samples; ++j)
+                {
+                    int idx = ctx.pixel_pos + j;
+                    if (idx >= ctx.pixel_window_samples)
+                    {
+                        idx -= ctx.pixel_window_samples;
+                    }
+                    ctx.pixel_window[j] = ctx.pixel_buf[idx];
+                }
+
+                float freq = estimate_freq_from_bins(ctx.pixel_window, ctx.pixel_window_samples,
+                                                     s_pixel_bins, kPixelBinCount);
+                uint8_t intensity = freq_to_intensity(freq);
+                int channel = 0;
+                if (ctx.phase == Phase::Green)
+                {
+                    channel = 0;
+                }
+                else if (ctx.phase == Phase::Blue)
+                {
+                    channel = 1;
+                }
+                else if (ctx.phase == Phase::Red)
+                {
+                    channel = 2;
+                }
+                s_accum[channel][pixel] += intensity;
+                s_count[channel][pixel] += 1;
+            }
+        }
+        ctx.phase_samples++;
+        if (ctx.phase_samples >= ctx.color_samples)
+        {
+            ctx.phase_samples = 0;
+            if (ctx.phase == Phase::Green)
+            {
+                ctx.phase = Phase::Porch2;
+            }
+            else if (ctx.phase == Phase::Blue)
+            {
+                ctx.phase = Phase::Sync;
+            }
+            else if (ctx.phase == Phase::Red)
+            {
+                render_line(ctx.line_index);
+                SSTV_LOG_V("[SSTV] line %d done\n", ctx.line_index);
+                ctx.line_index++;
+                clear_accum();
+                if (ctx.line_index >= ctx.line_count)
+                {
+                    set_status(sstv::State::Complete, static_cast<uint16_t>(ctx.line_count), 1.0f,
+                               ctx.audio_level, true);
+                    s_pending_save = true;
+                    ctx.phase = Phase::Idle;
+                    ctx.header_ok = false;
+                    reset_header_state(ctx);
+                    SSTV_LOG("[SSTV] complete\n");
+                }
+                else
+                {
+                    set_status(sstv::State::Receiving, static_cast<uint16_t>(ctx.line_index),
+                               static_cast<float>(ctx.line_index) / ctx.line_count,
+                               ctx.audio_level, true);
+                    ctx.phase = Phase::Porch1;
+                    ctx.phase_samples = 0;
+                    reset_pixel_state(ctx);
+                }
+            }
+        }
+    }
 }
 } // namespace
 
@@ -1409,6 +2881,11 @@ const char* get_last_error()
 const char* get_last_saved_path()
 {
     return get_saved_path();
+}
+
+const char* get_mode_name()
+{
+    return vis_mode_name(s_vis_mode);
 }
 
 const uint16_t* get_framebuffer()
