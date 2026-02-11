@@ -50,8 +50,17 @@ constexpr float kVisStartHoldRatio = 1.25f;
 constexpr bool kVisUseHopDecode = true;
 constexpr int kVisBits = 8;
 constexpr int kVisMaxHops = 160;
-constexpr int kVisStartWindowSamples = 1024;
 constexpr float kVisStartTotalRatio = 0.35f;
+constexpr int kVisBitSamples =
+    static_cast<int>(kSampleRate * (kVisBitMs / 1000.0f) + 0.5f);
+constexpr int kHeaderWindowSamples = 512;
+constexpr int kHeaderHopSamples = 256;
+constexpr int kVisStartHoldSamples = kVisBitSamples;
+constexpr int kVisStartWindowSamples = kVisBitSamples;
+constexpr int kVisSearchMarginSamples = kVisBitSamples + kHeaderHopSamples;
+constexpr int kVisPrerollSamples = kVisStartHoldSamples + kVisSearchMarginSamples;
+constexpr int kVisRawSamples =
+    kVisPrerollSamples + kVisSearchMarginSamples + kVisBitSamples * (kVisBits + 2);
 constexpr int kToneWindowSamples = (kSampleRate * 30 + 500) / 1000;
 constexpr float kVisAcceptAvgValid = 0.60f;
 constexpr float kVisAcceptMinValid = 0.20f;
@@ -101,9 +110,7 @@ constexpr float kHeaderToneDetectRatio = 1.3f;
 constexpr float kHeaderToneTotalRatio = 0.45f;
 constexpr float kSyncToneDetectRatio = 1.6f;
 constexpr float kSyncToneTotalRatio = 0.55f;
-constexpr int kHeaderWindowSamples = 512;
-constexpr int kHeaderHopSamples = 256;
-constexpr int kVisStartHoldSamples = kHeaderWindowSamples;
+// Header window/hop and VIS start are defined above for VIS timing alignment.
 constexpr int kSyncWindowSamples = 400;
 constexpr int kSyncHopSamples = 80;
 constexpr float kPixelBinStep = 25.0f;

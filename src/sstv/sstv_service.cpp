@@ -44,6 +44,11 @@ SyncDetector s_sync = {};
 
 // TODO: add WAV replay regression tests for header/VIS/sync gating.
 
+int16_t s_vis_preroll[kVisPrerollSamples] = {0};
+int16_t s_vis_preroll_linear[kVisPrerollSamples] = {0};
+int s_vis_preroll_pos = 0;
+int s_vis_preroll_fill = 0;
+
 #if SSTV_TONE_TEST
 GoertzelBin s_tone_bin_1100 = {};
 GoertzelBin s_tone_bin_1200 = {};
@@ -333,8 +338,8 @@ void sstv_task(void*)
     vis_decoder_reset(s_vis);
 
     bool header_ok = false;
-    bool vis_collect_logged = false;
-    int64_t vis_collect_start_sample = -1;
+    s_vis_preroll_pos = 0;
+    s_vis_preroll_fill = 0;
     const int64_t min_sync_gap =
         static_cast<int64_t>(kSampleRate * (kMinSyncGapMs / 1000.0f));
     int64_t last_sync_index = -min_sync_gap;
@@ -384,6 +389,17 @@ void sstv_task(void*)
                 block_peak = sample_mag;
             }
 
+            s_vis_preroll[s_vis_preroll_pos] = mono;
+            s_vis_preroll_pos++;
+            if (s_vis_preroll_pos >= kVisPrerollSamples)
+            {
+                s_vis_preroll_pos = 0;
+            }
+            if (s_vis_preroll_fill < kVisPrerollSamples)
+            {
+                s_vis_preroll_fill++;
+            }
+
 #if SSTV_TONE_TEST
             s_tone_buf[tone_pos] = mono;
             tone_pos++;
@@ -402,52 +418,49 @@ void sstv_task(void*)
             {
                 HeaderResult header_result;
                 bool hop_ready = header_detector_push_sample(s_header, mono, header_result);
-                if (hop_ready)
+                if (hop_ready && header_result.vis_start)
                 {
-                    if (header_result.vis_start)
+                    for (int j = 0; j < s_vis_preroll_fill; ++j)
                     {
-                        vis_collect_start_sample = sample_index;
-                        vis_collect_logged = false;
-                        vis_decoder_reset(s_vis);
+                        int idx = s_vis_preroll_pos + j;
+                        if (idx >= kVisPrerollSamples)
+                        {
+                            idx -= kVisPrerollSamples;
+                        }
+                        s_vis_preroll_linear[j] = s_vis_preroll[idx];
                     }
+                    vis_decoder_start_raw(s_vis, s_vis_preroll_linear, s_vis_preroll_fill,
+                                          kVisStartHoldSamples);
+                    SSTV_LOG_VIS("[SSTV] VIS raw collect=%d samples (bit=%.2fms)\n",
+                                 s_vis.raw_needed,
+                                 static_cast<double>(kVisBitSamples) * 1000.0 / kSampleRate);
+                }
 
-                    if (kVisUseHopDecode && header_result.in_vis_bits)
+                if (vis_decoder_is_collecting(s_vis))
+                {
+                    VisDecodeResult vis_result;
+                    if (vis_decoder_push_raw(s_vis, mono, vis_result) && vis_result.done)
                     {
-                        if (!vis_collect_logged)
+                        if (vis_result.accepted && vis_result.info.mode != VisMode::Unknown)
                         {
-                            SSTV_LOG_VIS("[SSTV] VIS collect target=%d hop=%.2fms\n",
-                                         s_vis.hop_target, header_window_ms);
-                            vis_collect_logged = true;
+                            pixel_decoder_set_mode(vis_result.info);
+                            header_ok = true;
+                            SSTV_LOG("[SSTV] VIS ok: %s (%s, color=%.3f ms)\n",
+                                     vis_mode_name(vis_result.info.mode),
+                                     vis_result.label ? vis_result.label : "?",
+                                     static_cast<double>(vis_result.info.color_ms));
                         }
-                        if (vis_collect_start_sample >= 0 &&
-                            sample_index - vis_collect_start_sample >
-                                static_cast<int64_t>(kSampleRate))
+                        else
                         {
-                            SSTV_LOG("[SSTV] VIS timeout, reset header\n");
-                            header_detector_reset(s_header);
-                            vis_decoder_reset(s_vis);
-                            vis_collect_start_sample = -1;
+                            SSTV_LOG("[SSTV] VIS reject (raw) value=%u parity=%d avg=%.2f min=%.2f\n",
+                                     static_cast<unsigned>(vis_result.value),
+                                     vis_result.parity_ok ? 1 : 0,
+                                     vis_result.valid_avg,
+                                     vis_result.valid_min);
                         }
 
-                        VisDecodeResult vis_result;
-                        if (vis_decoder_push_hop(s_vis, header_result.p1100, header_result.p1300,
-                                                 vis_result) &&
-                            vis_result.done)
-                        {
-                            if (vis_result.accepted)
-                            {
-                                pixel_decoder_set_mode(vis_result.info);
-                                header_ok = true;
-                                SSTV_LOG("[SSTV] VIS ok: %s (%s, color=%.3f ms)\n",
-                                         vis_mode_name(vis_result.info.mode),
-                                         vis_result.label ? vis_result.label : "?",
-                                         static_cast<double>(vis_result.info.color_ms));
-                            }
-
-                            header_detector_reset(s_header);
-                            vis_collect_start_sample = -1;
-                            vis_collect_logged = false;
-                        }
+                        header_detector_reset(s_header);
+                        vis_decoder_reset(s_vis);
                     }
                 }
             }
@@ -607,8 +620,6 @@ void sstv_task(void*)
                 header_detector_reset(s_header);
                 vis_decoder_reset(s_vis);
                 pixel_decoder_reset();
-                vis_collect_start_sample = -1;
-                vis_collect_logged = false;
                 s_pending_save = false;
                 set_status(sstv::State::Waiting, 0, 0.0f, audio_level,
                            pixel_decoder_framebuffer() != nullptr);

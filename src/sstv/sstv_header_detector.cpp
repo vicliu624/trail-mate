@@ -221,7 +221,9 @@ bool header_detector_push_sample(HeaderDetector& detector, int16_t mono, HeaderR
                 {
                     detector.state = HeaderState::SeekBreak;
                     detector.header_count = 0;
-                    SSTV_LOG("[SSTV] header leader1 ok\n");
+                    SSTV_LOG("[SSTV] header leader1 ok (%.1fms@1900, expect %.0fms)\n",
+                             static_cast<double>(detector.leader_windows) * detector.header_window_ms,
+                             static_cast<double>(kLeaderMs));
                 }
             }
             else
@@ -267,7 +269,9 @@ bool header_detector_push_sample(HeaderDetector& detector, int16_t mono, HeaderR
                 {
                     detector.state = HeaderState::SeekLeader2;
                     detector.header_count = 0;
-                    SSTV_LOG("[SSTV] header break ok\n");
+                    SSTV_LOG("[SSTV] header break ok (%.1fms@1200, expect %.0fms)\n",
+                             static_cast<double>(detector.break_windows) * detector.header_window_ms,
+                             static_cast<double>(kBreakMs));
                 }
             }
             else if (tone == Tone::Tone1900)
@@ -321,7 +325,9 @@ bool header_detector_push_sample(HeaderDetector& detector, int16_t mono, HeaderR
                     detector.state = HeaderState::SeekVisStart;
                     detector.header_count = 0;
                     detector.vis_start_count = 0;
-                    SSTV_LOG("[SSTV] header leader2 ok\n");
+                    SSTV_LOG("[SSTV] header leader2 ok (%.1fms@1900, expect %.0fms)\n",
+                             static_cast<double>(detector.leader_windows) * detector.header_window_ms,
+                             static_cast<double>(kLeaderMs));
                 }
             }
             else
@@ -380,30 +386,27 @@ bool header_detector_push_sample(HeaderDetector& detector, int16_t mono, HeaderR
             }
             if (vis_start)
             {
-                detector.vis_start_count++;
-                detector.vis_start_samples += kHeaderHopSamples;
-                if (detector.vis_start_samples >= kVisStartHoldSamples)
-                {
-                    detector.vis_hit_count++;
-                    detector.state = HeaderState::ReadVisBits;
-                    detector.vis_start_count = 0;
-                    detector.vis_start_samples = 0;
-                    SSTV_LOG("[SSTV] header VIS start\n");
-                    out.vis_start = true;
-                    out.in_vis_bits = true;
-                }
-            }
-            else if (tone == Tone::Tone1900)
-            {
+                detector.vis_hit_count++;
+                detector.state = HeaderState::ReadVisBits;
                 detector.vis_start_count = 0;
                 detector.vis_start_samples = 0;
-                detector.state = HeaderState::SeekLeader2;
-                detector.header_count = 1;
+                SSTV_LOG("[SSTV] header VIS start (>=%.1fms@1200, expect %.0fms)\n",
+                         static_cast<double>(kVisStartHoldSamples) * 1000.0 / kSampleRate,
+                         static_cast<double>(kVisBitMs));
+                out.vis_start = true;
+                out.in_vis_bits = true;
             }
             else
             {
                 detector.vis_start_count = 0;
                 detector.vis_start_samples = 0;
+                if (detector.vis_stat_window_count >
+                    static_cast<int>(detector.leader_windows * 2))
+                {
+                    detector.state = HeaderState::SeekLeader1;
+                    detector.header_count = 0;
+                    detector.vis_stat_window_count = 0;
+                }
             }
             break;
         }
