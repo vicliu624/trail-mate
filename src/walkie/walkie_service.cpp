@@ -1,6 +1,8 @@
 #include "walkie_service.h"
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#include <Arduino.h>
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 
 #include "../app/app_context.h"
 #include "../app/app_tasks.h"
@@ -8,7 +10,6 @@
 #include "../chat/infra/meshtastic/mt_region.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <Arduino.h>
 #include <RadioLib.h>
 #include <codec2.h>
 #include <cstring>
@@ -997,6 +998,15 @@ bool is_active()
 
 void set_ptt(bool)
 {
+}
+
+void adjust_volume(int)
+{
+}
+
+int get_volume()
+{
+    return 0;
 }
 
 void on_key_event(char, int)

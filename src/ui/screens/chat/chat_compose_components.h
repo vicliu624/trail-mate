@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(ARDUINO_T_WATCH_S3)
+#include "../chat_watch/chat_compose_components_watch.h"
+#else
+
 #include "../../chat/domain/chat_types.h"
 #include "../../widgets/top_bar.h"
 #include "lvgl.h"
@@ -97,3 +101,5 @@ class ChatComposeScreen
 };
 
 } // namespace chat::ui
+
+#endif

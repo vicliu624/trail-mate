@@ -28,7 +28,7 @@ static lv_indev_t* indev_keyboard;
 static lv_color16_t* buf = nullptr;
 static lv_color16_t* buf1 = nullptr;
 
-#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(ARDUINO_T_WATCH_S3)
 #define _SWAP_COLORS
 #endif
 
@@ -105,6 +105,10 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
 }
 
 #ifdef USING_INPUT_DEV_TOUCHPAD
+// Forward declaration from main.cpp
+extern bool isScreenSleeping();
+extern void updateUserActivity();
+
 static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
 {
     static int16_t x, y;
@@ -112,6 +116,13 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
     uint8_t touched = plane->getPoint(&x, &y, 1);
     if (touched)
     {
+        if (isScreenSleeping())
+        {
+            updateUserActivity();
+            data->state = LV_INDEV_STATE_REL;
+            return;
+        }
+        updateUserActivity();
         data->point.x = x;
         data->point.y = y;
         data->state = LV_INDEV_STATE_PR;
@@ -273,7 +284,9 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
     log_d("Using color swap function");
 #endif
 
+    Serial.println("[LVGL] init");
     lv_init();
+    Serial.println("[LVGL] init done");
 
 #if LV_USE_LOG
     if (debug)
@@ -288,34 +301,75 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
 #if LV_TEST_FORCE_DMA_BUF
     useDMA = true;
 #endif
+    Serial.printf("[LVGL] buffer alloc start (useDMA=%d)\n", useDMA ? 1 : 0);
     size_t lv_buffer_size = board.width() * board.height() * sizeof(lv_color16_t);
 
     if (useDMA)
     {
-        // For DMA, use smaller buffer (1/6 of screen size) and DMA-capable memory
+        // For DMA, use smaller buffer (1/2 of screen size) and DMA-capable memory
 #if LV_TEST_FORCE_DMA_FULL_SIZE
         // keep full size for testing if memory allows
 #else
-        lv_buffer_size = (board.width() * board.height() / 6) * sizeof(lv_color16_t);
+        lv_buffer_size = (board.width() * board.height() / 2) * sizeof(lv_color16_t);
 #endif
         buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
         buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
         log_d("Using DMA buffers, size: %d bytes each", lv_buffer_size);
+
+        if (!buf || !buf1)
+        {
+            Serial.println("[LVGL] DMA buffer alloc failed, fallback to PSRAM");
+            if (buf)
+            {
+                free(buf);
+            }
+            if (buf1)
+            {
+                free(buf1);
+            }
+            buf = nullptr;
+            buf1 = nullptr;
+            useDMA = false;
+        }
     }
-    else
+    if (!useDMA)
     {
+        lv_buffer_size = board.width() * board.height() * sizeof(lv_color16_t);
+#if HAS_PSRAM
         // For non-DMA, use full screen buffer in PSRAM
         buf = (lv_color16_t*)ps_malloc(lv_buffer_size);
         buf1 = (lv_color16_t*)ps_malloc(lv_buffer_size);
         log_d("Using PSRAM buffers, size: %d bytes each", lv_buffer_size);
+        if (!buf || !buf1)
+        {
+            if (buf)
+            {
+                free(buf);
+            }
+            if (buf1)
+            {
+                free(buf1);
+            }
+            buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
+            buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
+            Serial.println("[LVGL] PSRAM buffer alloc failed, fallback to heap");
+        }
+#else
+        // For boards without PSRAM, use heap
+        buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
+        buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
+        Serial.println("[LVGL] PSRAM disabled, using heap buffers");
+#endif
     }
 
     if (!buf || !buf1)
     {
+        Serial.println("[LVGL] Failed to allocate display buffers");
         log_e("Failed to allocate LVGL display buffers!");
         return;
     }
 
+    Serial.printf("[LVGL] buffers ready (size=%u)\n", static_cast<unsigned>(lv_buffer_size));
     disp_drv = lv_display_create(board.width(), board.height());
 
     if (board.needFullRefresh())
@@ -327,6 +381,7 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
         lv_display_set_buffers(disp_drv, buf, buf1, lv_buffer_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
         lv_display_add_event_cb(disp_drv, lv_rounder_cb, LV_EVENT_INVALIDATE_AREA, NULL);
     }
+    Serial.println("[LVGL] display buffers set");
     lv_display_set_color_format(disp_drv, LV_COLOR_FORMAT_RGB565);
     lv_display_set_flush_cb(disp_drv, disp_flush);
     lv_display_set_user_data(disp_drv, &board);
@@ -419,8 +474,8 @@ lv_indev_t* lv_get_encoder_indev()
     return indev_encoder;
 }
 
+#if LV_USE_STDLIB_MALLOC == LV_STDLIB_CUSTOM
 // LVGL 9.x custom memory management functions
-// These are required when LV_USE_STDLIB_MALLOC is set to LV_STDLIB_CUSTOM
 extern "C" void lv_mem_init(void)
 {
     return; /*Nothing to init*/
@@ -448,12 +503,20 @@ extern "C" void lv_mem_remove_pool(lv_mem_pool_t pool)
 
 extern "C" void* lv_malloc_core(size_t size)
 {
+#if HAS_PSRAM
     return ps_malloc(size);
+#else
+    return malloc(size);
+#endif
 }
 
 extern "C" void* lv_realloc_core(void* p, size_t new_size)
 {
+#if HAS_PSRAM
     return ps_realloc(p, new_size);
+#else
+    return realloc(p, new_size);
+#endif
 }
 
 extern "C" void lv_free_core(void* p)
@@ -473,5 +536,6 @@ lv_result_t lv_mem_test_core(void)
     /*Not supported*/
     return LV_RESULT_OK;
 }
+#endif
 
 #endif

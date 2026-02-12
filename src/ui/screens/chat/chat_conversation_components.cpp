@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 /**
  * @file chat_conversation.cpp
  * @brief Chat conversation screen implementation
@@ -565,3 +566,6 @@ void ChatConversationScreen::schedule_back_async()
 
 } // namespace ui
 } // namespace chat
+
+#endif
+

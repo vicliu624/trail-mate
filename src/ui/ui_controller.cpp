@@ -441,6 +441,18 @@ void UiController::switchToConversation(chat::ConversationId conv)
         compose_.reset();
     }
 
+#if defined(ARDUINO_T_WATCH_S3)
+    if (!team_conv_active_ && conv.peer == 0 && conv.channel == chat::ChannelId::PRIMARY)
+    {
+        auto recent = service_.getRecentMessages(conv, 1);
+        if (recent.empty())
+        {
+            switchToCompose(conv);
+            return;
+        }
+    }
+#endif
+
     if (!conversation_)
     {
         conversation_.reset(new ChatConversationScreen(parent_, conv));

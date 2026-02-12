@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 #include "chat_conversation_input.h"
 #include "chat_conversation_components.h"
 #include <Arduino.h>
@@ -156,3 +157,6 @@ void cleanup(Binding* binding)
 }
 
 } // namespace chat::ui::conversation::input
+
+#endif
+

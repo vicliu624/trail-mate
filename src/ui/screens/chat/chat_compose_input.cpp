@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 #include "chat_compose_input.h"
 
 namespace chat::ui::compose::input
@@ -27,3 +28,6 @@ void bind_textarea_events(const layout::Widgets& w, void* user_data,
 }
 
 } // namespace chat::ui::compose::input
+
+#endif
+

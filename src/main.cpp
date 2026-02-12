@@ -1,5 +1,7 @@
 #if defined(ARDUINO_T_DECK)
 #include "board/TDeckBoard.h"
+#elif defined(ARDUINO_T_WATCH_S3)
+#include "board/TWatchS3Board.h"
 #else
 #include "board/TLoRaPagerBoard.h"
 #endif
@@ -20,6 +22,7 @@
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
 #include "ui/ui_theme.h"
+#include "ui/watch_face.h"
 #include "ui/widgets/system_notification.h"
 
 // Custom app icons generated as C images (RGB565A8)
@@ -35,7 +38,7 @@ extern "C"
     extern const lv_image_dsc_t shutdown;
     extern const lv_image_dsc_t rf;
     extern const lv_image_dsc_t sstv;
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
     extern const lv_image_dsc_t walkie_talkie;
 #endif
     // Note: img_usb is already declared in images.h (C++ linkage)
@@ -44,6 +47,16 @@ extern "C"
 // Debug switch for performance timing logs
 // Set to 1 to enable [MAIN] timing logs, 0 to disable
 #define MAIN_TIMING_DEBUG 0
+
+#ifndef HAS_GPS
+#define HAS_GPS 1
+#endif
+#ifndef HAS_SD
+#define HAS_SD 1
+#endif
+#ifndef HAS_PSRAM
+#define HAS_PSRAM 1
+#endif
 
 // Forward declarations for app entry functions (implemented in ui_*.cpp)
 void ui_gps_enter(lv_obj_t* parent);
@@ -64,7 +77,7 @@ void ui_pc_link_enter(lv_obj_t* parent);
 void ui_pc_link_exit(lv_obj_t* parent);
 void ui_sstv_enter(lv_obj_t* parent);
 void ui_sstv_exit(lv_obj_t* parent);
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 void ui_walkie_talkie_enter(lv_obj_t* parent);
 void ui_walkie_talkie_exit(lv_obj_t* parent);
 #endif
@@ -129,6 +142,70 @@ bool format_menu_time(char* out, size_t out_len)
     return true;
 }
 
+#if defined(ARDUINO_T_WATCH_S3)
+int s_watch_face_battery = -1;
+
+void update_watch_face_time()
+{
+    if (!watch_face_is_ready())
+    {
+        return;
+    }
+    uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
+    watch_face_set_node_id(self_id);
+    int battery = s_watch_face_battery >= 0 ? s_watch_face_battery : -1;
+    if (!board.isRTCReady())
+    {
+        watch_face_set_time(-1, -1, -1, -1, nullptr, battery);
+        return;
+    }
+    time_t now = time(nullptr);
+    if (now <= 0)
+    {
+        watch_face_set_time(-1, -1, -1, -1, nullptr, battery);
+        return;
+    }
+    time_t local = ui_apply_timezone_offset(now);
+    struct tm* info = gmtime(&local);
+    if (!info)
+    {
+        watch_face_set_time(-1, -1, -1, -1, nullptr, battery);
+        return;
+    }
+    char weekday[8] = "---";
+    strftime(weekday, sizeof(weekday), "%a", info);
+    watch_face_set_time(info->tm_hour, info->tm_min, info->tm_mon + 1, info->tm_mday, weekday, battery);
+}
+
+void show_watch_face()
+{
+    if (!watch_face_is_ready() || main_screen == nullptr)
+    {
+        return;
+    }
+    menu_show();
+    lv_obj_clear_flag(main_screen, LV_OBJ_FLAG_HIDDEN);
+    watch_face_show(true);
+    update_watch_face_time();
+}
+
+void hide_watch_face()
+{
+    if (!watch_face_is_ready() || main_screen == nullptr)
+    {
+        return;
+    }
+    watch_face_show(false);
+    lv_obj_clear_flag(main_screen, LV_OBJ_FLAG_HIDDEN);
+}
+
+void watch_face_unlock()
+{
+    hide_watch_face();
+    menu_show();
+}
+#endif
+
 // App function types (like factory example)
 class FunctionAppScreen : public AppScreen
 {
@@ -182,7 +259,7 @@ static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter,
 static FunctionAppScreen s_team_app("Team", &team_icon, ui_team_enter, ui_team_exit);
 static FunctionAppScreen s_pc_link_app("Data Exchange", &rf, ui_pc_link_enter, ui_pc_link_exit);
 static FunctionAppScreen s_sstv_app("SSTV", &sstv, ui_sstv_enter, ui_sstv_exit);
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 static FunctionAppScreen s_walkie_app("Walkie Talkie", &walkie_talkie, ui_walkie_talkie_enter, ui_walkie_talkie_exit);
 #endif
 static FunctionAppScreen s_setting_app("Setting", &Setting, ui_setting_enter, ui_setting_exit);
@@ -190,28 +267,76 @@ static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter
 
 #ifdef ARDUINO_USB_MODE
 static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
+#if HAS_GPS
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
                                    &s_team_app, &s_pc_link_app, &s_sstv_app,
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
 #endif
-                                   &s_usb_app, &s_setting_app, &s_shutdown_app};
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if HAS_SD
+                                   &s_usb_app,
+#endif
+                                   &s_setting_app, &s_shutdown_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#if HAS_SD
 #define NUM_APPS 12
 #else
 #define NUM_APPS 11
 #endif
 #else
-static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_sstv_app,
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
-                                   &s_walkie_app,
-#endif
-                                   &s_setting_app, &s_shutdown_app};
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if HAS_SD
 #define NUM_APPS 11
 #else
 #define NUM_APPS 10
+#endif
+#endif
+#else
+static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app, &s_sstv_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+                                   &s_walkie_app,
+#endif
+#if HAS_SD
+                                   &s_usb_app,
+#endif
+                                   &s_setting_app, &s_shutdown_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#if HAS_SD
+#define NUM_APPS 9
+#else
+#define NUM_APPS 8
+#endif
+#else
+#if HAS_SD
+#define NUM_APPS 8
+#else
+#define NUM_APPS 7
+#endif
+#endif
+#endif
+#else
+#if HAS_GPS
+static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
+                                   &s_team_app, &s_pc_link_app, &s_sstv_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+                                   &s_walkie_app,
+#endif
+                                   &s_setting_app, &s_shutdown_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#define NUM_APPS 11
+#else
+#define NUM_APPS 10
+#endif
+#else
+static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app, &s_sstv_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+                                   &s_walkie_app,
+#endif
+                                   &s_setting_app, &s_shutdown_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#define NUM_APPS 8
+#else
+#define NUM_APPS 7
+#endif
 #endif
 #endif
 
@@ -551,6 +676,7 @@ bool isScreenSleepDisabled()
  */
 void updateUserActivity()
 {
+    bool woke_from_sleep = false;
     if (activity_mutex != NULL)
     {
         if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
@@ -566,10 +692,17 @@ void updateUserActivity()
                 {
                     board.keyboardSetBrightness(saved_keyboard_brightness);
                 }
+                woke_from_sleep = true;
             }
             xSemaphoreGive(activity_mutex);
         }
     }
+#if defined(ARDUINO_T_WATCH_S3)
+    if (woke_from_sleep)
+    {
+        show_watch_face();
+    }
+#endif
 }
 
 /**
@@ -675,9 +808,23 @@ void setup()
     }
 
 #if defined(ARDUINO_T_DECK)
+#if HAS_GPS
     board.begin();
 #else
+    board.begin(NO_HW_GPS);
+#endif
+#elif defined(ARDUINO_T_WATCH_S3)
+#if HAS_GPS
+    board.begin(NO_HW_SD | NO_HW_NFC);
+#else
+    board.begin(NO_HW_GPS | NO_HW_SD | NO_HW_NFC);
+#endif
+#else
+#if HAS_GPS
     board.begin(NO_HW_NFC);
+#else
+    board.begin(NO_HW_GPS | NO_HW_NFC);
+#endif
 #endif
 
     // If waking from deep sleep, perform wake up initialization
@@ -685,7 +832,10 @@ void setup()
     {
         board.wakeUp();
     }
+    Serial.printf("[Setup] heap=%u psram=%u\n", ESP.getFreeHeap(), ESP.getFreePsram());
+    Serial.println("[Setup] LVGL init begin");
     beginLvglHelper(static_cast<LilyGo_Display&>(instance));
+    Serial.println("[Setup] LVGL init done");
 
     // Initialize system notification component
     ui::SystemNotification::init();
@@ -693,7 +843,15 @@ void setup()
     // Initialize chat application context
     app::AppContext& app_ctx = app::AppContext::getInstance();
     bool use_mock = false; // Enable real LoRa adapter for logging and radio tests
+#if HAS_GPS
+#if defined(ARDUINO_T_WATCH_S3)
+    if (app_ctx.init(board, &instance, nullptr, nullptr, use_mock))
+#else
     if (app_ctx.init(board, &instance, &instance, &instance, use_mock))
+#endif
+#else
+    if (app_ctx.init(board, &instance, nullptr, nullptr, use_mock))
+#endif
     {
         Serial.printf("[Setup] Chat application context initialized\n");
     }
@@ -856,6 +1014,7 @@ void setup()
     lv_obj_set_style_text_align(desc_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(desc_label, ui::theme::text(), 0);
 
+    #if !defined(ARDUINO_T_WATCH_S3)
     node_id_label = lv_label_create(menu_panel);
     lv_obj_set_width(node_id_label, LV_SIZE_CONTENT);
     lv_obj_set_style_text_align(node_id_label, LV_TEXT_ALIGN_LEFT, 0);
@@ -874,18 +1033,23 @@ void setup()
         snprintf(node_id_buf, sizeof(node_id_buf), "ID: -");
     }
     lv_label_set_text(node_id_label, node_id_buf);
+    #endif
 
     if (lv_display_get_physical_horizontal_resolution(NULL) < 320)
     {
         lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_16, 0);
         lv_obj_align(desc_label, LV_ALIGN_BOTTOM_MID, 0, -25);
+        #if !defined(ARDUINO_T_WATCH_S3)
         lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_12, 0);
         lv_obj_align(node_id_label, LV_ALIGN_BOTTOM_LEFT, 5, -25);
+        #endif
     }
     else
     {
         lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_20, 0);
+        #if !defined(ARDUINO_T_WATCH_S3)
         lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_14, 0);
+        #endif
     }
     lv_label_set_long_mode(desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
@@ -901,6 +1065,12 @@ void setup()
 
     ::ui::status::init();
 
+#if defined(ARDUINO_T_WATCH_S3)
+    watch_face_create(lv_screen_active());
+    watch_face_set_unlock_cb(watch_face_unlock);
+    watch_face_show(false);
+#endif
+
     // Create timer to update time display (minimum resource usage)
     // Update every 60 seconds, display format: HH:MM (no seconds)
     // This minimizes I2C communication and UI updates
@@ -909,12 +1079,18 @@ void setup()
     lv_timer_t* time_timer = lv_timer_create([](lv_timer_t* timer)
                                              {
         if (time_label == nullptr) {
+#if defined(ARDUINO_T_WATCH_S3)
+            update_watch_face_time();
+#endif
             return;
         }
         
         // Check if RTC is ready
         if (!board.isRTCReady()) {
             lv_label_set_text(time_label, "--:--");
+#if defined(ARDUINO_T_WATCH_S3)
+            update_watch_face_time();
+#endif
             return;
         }
         
@@ -931,7 +1107,11 @@ void setup()
         } else {
             // If RTC read fails, show error indicator
             lv_label_set_text(time_label, "??:??");
-        } },
+        }
+#if defined(ARDUINO_T_WATCH_S3)
+        update_watch_face_time();
+#endif
+        },
                                              time_update_interval_ms, NULL);
     lv_timer_set_repeat_count(time_timer, -1); // Repeat indefinitely
 
@@ -954,6 +1134,10 @@ void setup()
             lv_label_set_text(battery_label, "?%");
             return;
         }
+
+#if defined(ARDUINO_T_WATCH_S3)
+        s_watch_face_battery = level;
+#endif
         
         // Format battery display with shared helper
         ui_format_battery(level, charging, battery_str, sizeof(battery_str));
@@ -964,7 +1148,11 @@ void setup()
             lv_label_set_text(battery_label, battery_str);
             strncpy(last_battery_str, battery_str, sizeof(last_battery_str) - 1);
             last_battery_str[sizeof(last_battery_str) - 1] = '\0';
-        } },
+        }
+#if defined(ARDUINO_T_WATCH_S3)
+        update_watch_face_time();
+#endif
+        },
                                                 battery_update_interval_ms, NULL);
     lv_timer_set_repeat_count(battery_timer, -1); // Repeat indefinitely
 
@@ -1014,7 +1202,16 @@ void setup()
         lv_label_set_text(battery_label, battery_str);
     }
 
+#if defined(ARDUINO_T_WATCH_S3)
+    s_watch_face_battery = level;
+    update_watch_face_time();
+#endif
+
     board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+
+#if defined(ARDUINO_T_WATCH_S3)
+    show_watch_face();
+#endif
 
     // GPS data collection task is now created in TLoRaPagerBoard::begin()
 

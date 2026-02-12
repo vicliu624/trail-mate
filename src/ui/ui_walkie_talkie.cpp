@@ -1,12 +1,12 @@
 #include "ui_walkie_talkie.h"
 
+#include <Arduino.h>
 #include "../walkie/walkie_service.h"
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 #include "../board/TLoRaPagerBoard.h"
 #endif
 #include "ui_common.h"
 #include "widgets/top_bar.h"
-#include <Arduino.h>
 
 // Forward declarations from main.cpp
 extern void disableScreenSleep();
@@ -280,7 +280,7 @@ void ui_walkie_talkie_enter(lv_obj_t* parent)
     }
 
     const char* error = nullptr;
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
     TLoRaPagerBoard* board = TLoRaPagerBoard::getInstance();
     if (!board)
     {

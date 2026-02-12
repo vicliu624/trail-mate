@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 #include "chat_conversation_styles.h"
 #include "../../assets/fonts/fonts.h"
 
@@ -189,3 +190,6 @@ void apply_bubble_status(lv_obj_t* label)
 }
 
 } // namespace chat::ui::conversation::styles
+
+#endif
+
