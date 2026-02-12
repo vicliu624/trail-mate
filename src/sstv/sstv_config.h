@@ -1,0 +1,133 @@
+#pragma once
+
+#include <cstdint>
+
+#ifndef SSTV_ENABLE_WAV_RECORD
+#define SSTV_ENABLE_WAV_RECORD 0
+#endif
+
+constexpr uint32_t kSampleRate = 15000;
+constexpr uint32_t kCodecSampleRate = 8000;
+constexpr uint8_t kBitsPerSample = 16;
+constexpr uint8_t kChannels = 1;
+constexpr float kMicGainDb = 6.0f;
+constexpr float kInputPcmGain = 1.0f;
+
+constexpr float kPorchMs = 1.5f;
+constexpr float kSyncPulseMs = 9.0f;
+constexpr float kColorMsScottie1 = 138.24f;
+constexpr float kColorMsScottie2 = 88.064f;
+constexpr float kColorMsScottieDX = 345.6f;
+constexpr float kRobotSyncPulseMs = 9.0f;
+constexpr float kRobotSyncPorchMs = 3.0f;
+constexpr float kRobotSepMs = 4.5f;
+constexpr float kRobotPorchMs = 1.5f;
+constexpr float kRobotYMs = 138.0f;
+constexpr float kRobotChromaMs = 69.0f;
+constexpr float kRobot36YMs = 88.0f;
+constexpr float kRobot36ChromaMs = 44.0f;
+constexpr float kMartinSyncMs = 4.862f;
+constexpr float kMartinPorchMs = 0.572f;
+constexpr float kColorMsMartin1 = 146.432f;
+constexpr float kColorMsMartin2 = 73.216f;
+constexpr float kPdSyncMs = 20.0f;
+constexpr float kPdPorchMs = 2.080f;
+constexpr float kPd50ScanMs = 91.520f;
+constexpr float kPd90ScanMs = 170.240f;
+constexpr float kPd120ScanMs = 121.600f;
+constexpr float kPd160ScanMs = 195.584f;
+constexpr float kPd180ScanMs = 183.040f;
+constexpr float kPd240ScanMs = 244.480f;
+constexpr float kPd290ScanMs = 228.800f;
+constexpr float kP3SyncMs = 5.208f;
+constexpr float kP5SyncMs = 7.813f;
+constexpr float kP7SyncMs = 10.417f;
+constexpr float kP3PorchMs = 1.042f;
+constexpr float kP5PorchMs = 1.563f;
+constexpr float kP7PorchMs = 2.083f;
+constexpr float kP3ColorMs = 133.333f;
+constexpr float kP5ColorMs = 200.000f;
+constexpr float kP7ColorMs = 266.666f;
+constexpr float kLeaderMs = 300.0f;
+constexpr float kBreakMs = 10.0f;
+constexpr float kVisBitMs = 30.0f;
+constexpr float kVisPairRatio = 0.08f;
+constexpr float kVisStartHoldRatio = 1.25f;
+constexpr bool kVisUseHopDecode = true;
+constexpr int kVisBits = 8;
+constexpr int kVisMaxHops = 160;
+constexpr float kVisStartTotalRatio = 0.35f;
+constexpr int kVisBitSamples =
+    static_cast<int>(kSampleRate * (kVisBitMs / 1000.0f) + 0.5f);
+constexpr int kHeaderWindowSamples = 512;
+constexpr int kHeaderHopSamples = 256;
+constexpr int kVisStartHoldSamples = kVisBitSamples;
+constexpr int kVisStartWindowSamples = kVisBitSamples;
+constexpr int kVisSearchMarginSamples = kVisBitSamples + kHeaderHopSamples;
+constexpr int kVisPrerollSamples = kVisStartHoldSamples + kVisSearchMarginSamples;
+constexpr int kVisRawSamples =
+    kVisPrerollSamples + kVisSearchMarginSamples + kVisBitSamples * (kVisBits + 2);
+constexpr int kVisSlowrxHopSamples = static_cast<int>(kSampleRate / 100);
+constexpr int kVisSlowrxWindowSamples = kVisSlowrxHopSamples * 2;
+constexpr int kVisSlowrxToneCount = 45;
+constexpr float kVisSlowrxMinHz = 900.0f;
+constexpr float kVisSlowrxMaxHz = 2100.0f;
+constexpr float kVisSlowrxStepHz = 25.0f;
+constexpr int kVisSlowrxBinCount =
+    static_cast<int>((kVisSlowrxMaxHz - kVisSlowrxMinHz) / kVisSlowrxStepHz) + 1;
+constexpr int kVisSlowrxLogEvery = 1;
+constexpr int kToneWindowSamples = (kSampleRate * 30 + 500) / 1000;
+constexpr float kVisAcceptAvgValid = 0.60f;
+constexpr float kVisAcceptMinValid = 0.20f;
+constexpr float kVisFallbackAvgValid = 0.70f;
+constexpr float kVisFallbackMinValid = 0.30f;
+constexpr uint8_t kVisScottie1 = 60;
+constexpr uint8_t kVisScottie2 = 56;
+constexpr uint8_t kVisScottieDX = 76;
+constexpr uint8_t kVisRobot72 = 12;
+constexpr uint8_t kVisRobot36 = 8;
+constexpr uint8_t kVisMartin1 = 44;
+constexpr uint8_t kVisMartin2 = 40;
+constexpr uint8_t kVisPd50 = 93;
+constexpr uint8_t kVisPd90 = 99;
+constexpr uint8_t kVisPd120 = 95;
+constexpr uint8_t kVisPd160 = 98;
+constexpr uint8_t kVisPd180 = 96;
+constexpr uint8_t kVisPd240 = 97;
+constexpr uint8_t kVisPd290 = 94;
+constexpr uint8_t kVisP3 = 113;
+constexpr uint8_t kVisP5 = 114;
+constexpr uint8_t kVisP7 = 115;
+
+constexpr int kInWidth = 320;
+constexpr int kInHeightScottie = 256;
+constexpr int kInHeightRobot72 = 240;
+constexpr int kInHeightPd120 = 496;
+constexpr int kInHeightPd160 = 400;
+constexpr int kInHeightPd290 = 616;
+constexpr int kInHeightPasokon = 496;
+constexpr int kOutWidth = 288;
+constexpr int kOutHeight = 192;
+constexpr int kOutImageWidth = 240;
+constexpr int kPadX = (kOutWidth - kOutImageWidth) / 2;
+
+constexpr uint32_t kPanelBg = 0xFAF0D8;
+
+constexpr float kFreqMin = 1500.0f;
+constexpr float kFreqMax = 2300.0f;
+constexpr float kFreqSpan = kFreqMax - kFreqMin;
+
+constexpr float kMinSyncGapMs = 420.0f;
+constexpr float kSyncTimeoutMs = 2000.0f;
+constexpr float kAudioResetLevel = 0.03f;
+constexpr float kAudioResetHoldMs = 1500.0f;
+constexpr float kHeaderToneDetectRatio = 1.3f;
+constexpr float kHeaderToneTotalRatio = 0.45f;
+constexpr float kSyncToneDetectRatio = 1.6f;
+constexpr float kSyncToneTotalRatio = 0.55f;
+// Header window/hop and VIS start are defined above for VIS timing alignment.
+constexpr int kSyncWindowSamples = 400;
+constexpr int kSyncHopSamples = 80;
+constexpr float kPixelBinStep = 25.0f;
+constexpr int kPixelBinCount = static_cast<int>((kFreqMax - kFreqMin) / kPixelBinStep) + 1;
+constexpr int kMaxPixelSamples = 64;

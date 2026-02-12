@@ -207,6 +207,18 @@ bool EspCodec::getMute()
     return isMute;
 }
 
+void EspCodec::setOutMute(bool enable)
+{
+    esp_codec_dev_set_out_mute(codec_dev, enable);
+}
+
+bool EspCodec::getOutMute()
+{
+    bool isMute = false;
+    esp_codec_dev_get_out_mute(codec_dev, &isMute);
+    return isMute;
+}
+
 void EspCodec::setVolume(uint8_t level)
 {
     esp_codec_dev_set_out_vol(codec_dev, level);

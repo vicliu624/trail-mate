@@ -1282,7 +1282,7 @@ bool TLoRaPagerBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
     uint32_t total_delay_ms = base_delay_ms + task_interval_compensation_ms + processing_delay_ms;
 
     // Log original GPS time before compensation for debugging
-    Serial.printf("[TLoRaPagerBoard::syncTimeFromGPS] Original GPS time: %04d-%02d-%02d %02d:%02d:%02d\n",
+    GPS_BOARD_LOG("[TLoRaPagerBoard::syncTimeFromGPS] Original GPS time: %04d-%02d-%02d %02d:%02d:%02d\n",
                   year, month, day, hour, minute, second);
 
     // Add delay compensation to seconds (round to nearest second)
@@ -1329,7 +1329,7 @@ bool TLoRaPagerBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
 
     // Note: GPS time can be valid even without location fix
     // Time information requires fewer satellites than location fix (typically 1-2 vs 4+)
-    Serial.printf("[TLoRaPagerBoard::syncTimeFromGPS] Time synced: %04d-%02d-%02d %02d:%02d:%02d (sat=%d, has_fix=%d, base_delay=%lums, task_comp=%lums, proc_delay=%lums, total_delay=%lums, op_time=%lums)\n",
+    GPS_BOARD_LOG("[TLoRaPagerBoard::syncTimeFromGPS] Time synced: %04d-%02d-%02d %02d:%02d:%02d (sat=%d, has_fix=%d, base_delay=%lums, task_comp=%lums, proc_delay=%lums, total_delay=%lums, op_time=%lums)\n",
                   year, month, day, hour, minute, second, sat_count, has_fix,
                   base_delay_ms, task_interval_compensation_ms, processing_delay_ms, total_delay_ms, total_operation_ms);
     return true;

@@ -31,6 +31,7 @@ class ImeWidget
     void cycleMode();
 
     bool handle_key(lv_event_t* e);
+    void setText(const char* text);
 
     lv_obj_t* container() const { return container_; }
     lv_obj_t* toggle_btn() const { return toggle_btn_; }

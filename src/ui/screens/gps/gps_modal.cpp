@@ -62,7 +62,7 @@ void bind_encoder_to_group(lv_group_t* g)
  */
 bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group)
 {
-    if (!is_alive())
+    if (!is_alive() && !content_root)
     {
         return false;
     }
