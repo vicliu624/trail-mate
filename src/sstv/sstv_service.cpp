@@ -9,15 +9,15 @@
 #include "freertos/task.h"
 #include <SD.h>
 #include <cmath>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <esp_heap_caps.h>
 
-#include "sstv_config.h"
 #include "decode_sstv.h"
-#include "sstv_log.h"
 #include "display/DisplayInterface.h"
+#include "sstv_config.h"
+#include "sstv_log.h"
 
 namespace
 {
@@ -472,60 +472,60 @@ void update_mode_name(e_mode mode, const s_sstv_mode* modes, uint16_t line_y)
     const uint16_t height = static_cast<uint16_t>(line_y + 1);
     switch (mode)
     {
-        case martin_m1:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Martin M1: %ux%u", width, height);
-            break;
-        case martin_m2:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Martin M2: %ux%u", width, height);
-            break;
-        case scottie_s1:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Scottie S1: %ux%u", width, height);
-            break;
-        case scottie_s2:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Scottie S2: %ux%u", width, height);
-            break;
-        case scottie_dx:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Scottie DX: %ux%u", width, height);
-            break;
-        case sc2_60:
-            snprintf(s_mode_name, sizeof(s_mode_name), "SC2 60: %ux%u", width, height);
-            break;
-        case sc2_120:
-            snprintf(s_mode_name, sizeof(s_mode_name), "SC2 120: %ux%u", width, height);
-            break;
-        case sc2_180:
-            snprintf(s_mode_name, sizeof(s_mode_name), "SC2 180: %ux%u", width, height);
-            break;
-        case pd_50:
-            snprintf(s_mode_name, sizeof(s_mode_name), "PD 50: %ux%u", width, height);
-            break;
-        case pd_90:
-            snprintf(s_mode_name, sizeof(s_mode_name), "PD 90: %ux%u", width, height);
-            break;
-        case pd_120:
-            snprintf(s_mode_name, sizeof(s_mode_name), "PD 120: %ux%u", width, height);
-            break;
-        case pd_180:
-            snprintf(s_mode_name, sizeof(s_mode_name), "PD 180: %ux%u", width, height);
-            break;
-        case robot24:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Robot24: %ux%u", width, height);
-            break;
-        case robot36:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Robot36: %ux%u", width, height);
-            break;
-        case robot72:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Robot72: %ux%u", width, height);
-            break;
-        case bw8:
-            snprintf(s_mode_name, sizeof(s_mode_name), "bw8: %ux%u", width, height);
-            break;
-        case bw12:
-            snprintf(s_mode_name, sizeof(s_mode_name), "bw12: %ux%u", width, height);
-            break;
-        default:
-            snprintf(s_mode_name, sizeof(s_mode_name), "Auto");
-            break;
+    case martin_m1:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Martin M1: %ux%u", width, height);
+        break;
+    case martin_m2:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Martin M2: %ux%u", width, height);
+        break;
+    case scottie_s1:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Scottie S1: %ux%u", width, height);
+        break;
+    case scottie_s2:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Scottie S2: %ux%u", width, height);
+        break;
+    case scottie_dx:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Scottie DX: %ux%u", width, height);
+        break;
+    case sc2_60:
+        snprintf(s_mode_name, sizeof(s_mode_name), "SC2 60: %ux%u", width, height);
+        break;
+    case sc2_120:
+        snprintf(s_mode_name, sizeof(s_mode_name), "SC2 120: %ux%u", width, height);
+        break;
+    case sc2_180:
+        snprintf(s_mode_name, sizeof(s_mode_name), "SC2 180: %ux%u", width, height);
+        break;
+    case pd_50:
+        snprintf(s_mode_name, sizeof(s_mode_name), "PD 50: %ux%u", width, height);
+        break;
+    case pd_90:
+        snprintf(s_mode_name, sizeof(s_mode_name), "PD 90: %ux%u", width, height);
+        break;
+    case pd_120:
+        snprintf(s_mode_name, sizeof(s_mode_name), "PD 120: %ux%u", width, height);
+        break;
+    case pd_180:
+        snprintf(s_mode_name, sizeof(s_mode_name), "PD 180: %ux%u", width, height);
+        break;
+    case robot24:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Robot24: %ux%u", width, height);
+        break;
+    case robot36:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Robot36: %ux%u", width, height);
+        break;
+    case robot72:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Robot72: %ux%u", width, height);
+        break;
+    case bw8:
+        snprintf(s_mode_name, sizeof(s_mode_name), "bw8: %ux%u", width, height);
+        break;
+    case bw12:
+        snprintf(s_mode_name, sizeof(s_mode_name), "bw12: %ux%u", width, height);
+        break;
+    default:
+        snprintf(s_mode_name, sizeof(s_mode_name), "Auto");
+        break;
     }
 }
 
