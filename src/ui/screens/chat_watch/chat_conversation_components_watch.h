@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../../chat/domain/chat_types.h"
-#include "../../widgets/top_bar.h"
 #include "lvgl.h"
 #include <vector>
 
@@ -29,7 +28,7 @@ class ChatConversationScreen
     lv_obj_t* getObj() const { return container_; }
     lv_obj_t* getMsgList() const { return msg_list_; }
     lv_obj_t* getReplyBtn() const { return reply_btn_; }
-    lv_obj_t* getBackBtn() const { return top_bar_.back_btn; }
+    lv_obj_t* getBackBtn() const { return back_btn_; }
 
     chat::ChannelId getChannel() const { return conv_.channel; }
 
@@ -66,10 +65,10 @@ class ChatConversationScreen
     };
 
     lv_obj_t* container_ = nullptr;
-    ::ui::widgets::TopBar top_bar_{};
     lv_obj_t* msg_list_ = nullptr;
     lv_obj_t* action_bar_ = nullptr;
     lv_obj_t* reply_btn_ = nullptr;
+    lv_obj_t* back_btn_ = nullptr;
     chat::ConversationId conv_{};
 
     void (*action_cb_)(ActionIntent intent, void*) = nullptr;
@@ -87,6 +86,7 @@ class ChatConversationScreen
     void schedule_back_async();
 
     static void action_event_cb(lv_event_t* e);
+    static void back_event_cb(lv_event_t* e);
     static void async_action_cb(void* user_data);
     static void async_back_cb(void* user_data);
     static void handle_back(void* user_data);

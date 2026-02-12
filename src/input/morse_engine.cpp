@@ -1,6 +1,7 @@
 #include "morse_engine.h"
 
 #include "freertos/task.h"
+#include <Arduino.h>
 #include <algorithm>
 
 namespace
@@ -35,6 +36,20 @@ char decode_morse(const std::string& symbol)
         }
     }
     return '?';
+}
+
+static volatile uint32_t g_touch_suppress_until_ms = 0;
+static volatile uint32_t g_touch_suppress_ms = 150;
+
+static bool is_touch_suppressed()
+{
+    uint32_t until = g_touch_suppress_until_ms;
+    if (until == 0)
+    {
+        return false;
+    }
+    uint32_t now = millis();
+    return static_cast<int32_t>(until - now) > 0;
 }
 } // namespace
 
@@ -71,6 +86,23 @@ bool MorseEngine::start(const Config& config)
     {
         config_.dot_calib_target = 1;
     }
+    if (config_.touch_suppress_ms == 0)
+    {
+        config_.touch_suppress_ms = 150;
+    }
+    g_touch_suppress_ms = config_.touch_suppress_ms;
+    if (config_.dc_shift < 4)
+    {
+        config_.dc_shift = 4;
+    }
+    if (config_.dc_shift > 12)
+    {
+        config_.dc_shift = 12;
+    }
+    if (config_.input_gain < 1)
+    {
+        config_.input_gain = 1;
+    }
     if (config_.dash_max_mult < config_.dash_min_mult)
     {
         config_.dash_max_mult = config_.dash_min_mult;
@@ -90,12 +122,12 @@ bool MorseEngine::start(const Config& config)
     cfg.mode = static_cast<i2s_mode_t>(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM);
     cfg.sample_rate = config_.sample_rate;
     cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
+    cfg.channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT;
+    cfg.communication_format = I2S_COMM_FORMAT_STAND_PCM_SHORT;
     cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
     cfg.dma_buf_count = config_.dma_buf_count;
     cfg.dma_buf_len = config_.dma_buf_len;
-    cfg.use_apll = false;
+    cfg.use_apll = true;
     cfg.tx_desc_auto_clear = false;
     cfg.fixed_mclk = 0;
 
@@ -106,8 +138,8 @@ bool MorseEngine::start(const Config& config)
 
     i2s_pin_config_t pins = {};
     pins.mck_io_num = I2S_PIN_NO_CHANGE;
-    pins.bck_io_num = config_.pin_sck;
-    pins.ws_io_num = I2S_PIN_NO_CHANGE;
+    pins.bck_io_num = I2S_PIN_NO_CHANGE;
+    pins.ws_io_num = config_.pin_sck;
     pins.data_out_num = I2S_PIN_NO_CHANGE;
     pins.data_in_num = config_.pin_data;
     if (i2s_set_pin(config_.i2s_port, &pins) != ESP_OK)
@@ -233,11 +265,30 @@ void MorseEngine::taskLoop()
     }
 }
 
+void MorseEngine::notifyTouch(uint32_t suppress_ms)
+{
+    if (suppress_ms == 0)
+    {
+        suppress_ms = g_touch_suppress_ms;
+    }
+    if (suppress_ms == 0)
+    {
+        return;
+    }
+    uint32_t until = millis() + suppress_ms;
+    uint32_t prev = g_touch_suppress_until_ms;
+    if (static_cast<int32_t>(until - prev) > 0)
+    {
+        g_touch_suppress_until_ms = until;
+    }
+}
+
 void MorseEngine::reset_state()
 {
     sample_cursor_ = 0;
     env_ = 0;
     noise_ = 0;
+    dc_ = 0;
     max_env_ = 1;
     level_ = 0;
     signal_on_ = false;
@@ -253,7 +304,18 @@ void MorseEngine::reset_state()
     dash_min_samples_ = 0;
     dash_max_samples_ = 0;
     refractory_samples_ = (config_.sample_rate * config_.refractory_ms) / 1000;
+    release_samples_ = (config_.sample_rate * config_.release_ms) / 1000;
+    if (release_samples_ < 1)
+    {
+        release_samples_ = 1;
+    }
+    low_run_samples_ = 0;
     idle_samples_ = (config_.sample_rate * config_.idle_send_ms) / 1000;
+    log_interval_samples_ = (config_.sample_rate * config_.log_interval_ms) / 1000;
+    next_log_sample_ = log_interval_samples_;
+    log_peak_ = 0;
+    log_raw_min_ = 32767;
+    log_raw_max_ = -32768;
     calib_phase_ = CalibPhase::Dot;
     calib_count_ = 0;
     dot_calib_samples_.assign(config_.dot_calib_target, 0);
@@ -288,19 +350,37 @@ void MorseEngine::setStatus(const char* status)
 
 void MorseEngine::update_level(int32_t env)
 {
-    if (env > max_env_)
+    int32_t signal = env - noise_;
+    if (signal < 0)
     {
-        max_env_ = env;
+        signal = 0;
+    }
+    int32_t floor = config_.level_gate;
+    if (floor <= 0)
+    {
+        floor = config_.min_low / 2;
+        if (floor < 10)
+        {
+            floor = 10;
+        }
+    }
+    if (signal < floor)
+    {
+        signal = 0;
+    }
+    if (signal > max_env_)
+    {
+        max_env_ = signal;
     }
     else
     {
         max_env_ -= max_env_ >> 6;
-        if (max_env_ < 500)
+        if (max_env_ < 100)
         {
-            max_env_ = 500;
+            max_env_ = 100;
         }
     }
-    int lvl = static_cast<int>((env * 100) / max_env_);
+    int lvl = static_cast<int>((signal * 100) / max_env_);
     if (lvl > 100)
     {
         lvl = 100;
@@ -314,18 +394,60 @@ void MorseEngine::update_level(int32_t env)
 
 void MorseEngine::processSamples(const int16_t* samples, size_t count)
 {
+    int32_t last_th_high = 0;
+    int32_t last_th_low = 0;
+    bool suppressed = is_touch_suppressed();
     for (size_t i = 0; i < count; ++i)
     {
         ++sample_cursor_;
-        int32_t v = samples[i];
+        int32_t raw = samples[i];
+        dc_ += (raw - dc_) >> config_.dc_shift;
+        int32_t v = raw - dc_;
+        if (v < log_raw_min_)
+        {
+            log_raw_min_ = v;
+        }
+        if (v > log_raw_max_)
+        {
+            log_raw_max_ = v;
+        }
         if (v < 0)
         {
             v = -v;
         }
+        if (config_.input_gain > 1)
+        {
+            v *= config_.input_gain;
+            if (v > 32767)
+            {
+                v = 32767;
+            }
+        }
+        if (v > log_peak_)
+        {
+            log_peak_ = v;
+        }
         env_ += (v - env_) >> 7;
-        if (!signal_on_)
+        if (suppressed)
+        {
+            if (signal_on_)
+            {
+                signal_on_ = false;
+                in_pulse_ = false;
+                last_off_start_ = sample_cursor_;
+                ignore_until_ = sample_cursor_ + refractory_samples_;
+                low_run_samples_ = 0;
+            }
+            noise_ += (env_ - noise_) >> 6;
+            continue;
+        }
+        if (signal_on_)
         {
             noise_ += (env_ - noise_) >> 10;
+        }
+        else
+        {
+            noise_ += (env_ - noise_) >> 7;
         }
 
         int32_t high_offset = config_.min_high;
@@ -353,6 +475,8 @@ void MorseEngine::processSamples(const int16_t* samples, size_t count)
         {
             th_low = noise_ + (noise_ >> 2);
         }
+        last_th_high = th_high;
+        last_th_low = th_low;
 
         if (!signal_on_)
         {
@@ -367,24 +491,39 @@ void MorseEngine::processSamples(const int16_t* samples, size_t count)
                     setStatus("ON");
                 }
                 last_on_start_ = sample_cursor_;
-                last_activity_ = sample_cursor_;
+                // Only update activity on accepted pulses to allow symbol finalization.
             }
         }
         else
         {
             if (env_ <= th_low)
             {
-                signal_on_ = false;
-                in_pulse_ = false;
-                uint32_t on_dur = static_cast<uint32_t>(sample_cursor_ - last_on_start_);
-                handlePulseEnd(on_dur);
-                last_off_start_ = sample_cursor_;
-                ignore_until_ = sample_cursor_ + refractory_samples_;
-                last_activity_ = sample_cursor_;
-                if (calibrated_)
+                if (low_run_samples_ < release_samples_)
                 {
-                    setStatus("GAP");
+                    low_run_samples_++;
                 }
+                if (low_run_samples_ >= release_samples_)
+                {
+                    signal_on_ = false;
+                    in_pulse_ = false;
+                    uint32_t on_dur = static_cast<uint32_t>(sample_cursor_ - last_on_start_);
+                    bool accepted = handlePulseEnd(on_dur);
+                    last_off_start_ = sample_cursor_;
+                    ignore_until_ = sample_cursor_ + refractory_samples_;
+                    if (accepted)
+                    {
+                        last_activity_ = sample_cursor_;
+                    }
+                    low_run_samples_ = 0;
+                    if (calibrated_)
+                    {
+                        setStatus("GAP");
+                    }
+                }
+            }
+            else
+            {
+                low_run_samples_ = 0;
             }
         }
 
@@ -406,11 +545,51 @@ void MorseEngine::processSamples(const int16_t* samples, size_t count)
                 last_activity_ = sample_cursor_;
             }
         }
+
+        if (log_interval_samples_ > 0 && sample_cursor_ >= next_log_sample_)
+        {
+            if (!config_.log_calib_only || !calibrated_)
+            {
+                const char* phase = "DONE";
+                if (calib_phase_ == CalibPhase::Dot)
+                {
+                    phase = "DOT";
+                }
+                else if (calib_phase_ == CalibPhase::Dash)
+                {
+                    phase = "DASH";
+                }
+                Serial.printf("[Morse] env=%ld noise=%ld th_hi=%ld th_lo=%ld lvl=%d peak=%ld raw_min=%ld raw_max=%ld gain=%ld on=%d cal=%d phase=%s\n",
+                              static_cast<long>(env_),
+                              static_cast<long>(noise_),
+                              static_cast<long>(last_th_high),
+                              static_cast<long>(last_th_low),
+                              level_,
+                              static_cast<long>(log_peak_),
+                              static_cast<long>(log_raw_min_),
+                              static_cast<long>(log_raw_max_),
+                              static_cast<long>(config_.input_gain),
+                              signal_on_ ? 1 : 0,
+                              calibrated_ ? 1 : 0,
+                              phase);
+            }
+            next_log_sample_ = sample_cursor_ + log_interval_samples_;
+            log_peak_ = 0;
+            log_raw_min_ = 32767;
+            log_raw_max_ = -32768;
+        }
     }
-    update_level(env_);
+    if (suppressed)
+    {
+        level_ = 0;
+    }
+    else
+    {
+        update_level(env_);
+    }
 }
 
-void MorseEngine::handlePulseEnd(uint32_t on_samples)
+bool MorseEngine::handlePulseEnd(uint32_t on_samples)
 {
     if (!calibrated_)
     {
@@ -422,6 +601,13 @@ void MorseEngine::handlePulseEnd(uint32_t on_samples)
                 calib_count_ < dot_calib_samples_.size())
             {
                 dot_calib_samples_[calib_count_++] = on_samples;
+                if (config_.log_interval_ms > 0)
+                {
+                    uint32_t ms = (on_samples * 1000U) / config_.sample_rate;
+                    Serial.printf("[Morse] calib dot: %lu samples (%lu ms)\n",
+                                  static_cast<unsigned long>(on_samples),
+                                  static_cast<unsigned long>(ms));
+                }
                 if (lock_ && xSemaphoreTake(lock_, 0) == pdTRUE)
                 {
                     status_ = std::string("CALIB DOT ") + std::to_string(calib_count_) + "/" +
@@ -442,6 +628,13 @@ void MorseEngine::handlePulseEnd(uint32_t on_samples)
                         calib_phase_ = CalibPhase::Done;
                         setStatus("LISTEN");
                         last_off_start_ = sample_cursor_;
+                        if (config_.log_interval_ms > 0)
+                        {
+                            Serial.printf("[Morse] calib done: dot=%lu samples (%lu ms) dash_th=%lu samples\n",
+                                          static_cast<unsigned long>(dot_len_samples_),
+                                          static_cast<unsigned long>((dot_len_samples_ * 1000U) / config_.sample_rate),
+                                          static_cast<unsigned long>(dash_threshold_samples_));
+                        }
                     }
                     else
                     {
@@ -468,6 +661,13 @@ void MorseEngine::handlePulseEnd(uint32_t on_samples)
                 calib_count_ < dash_calib_samples_.size())
             {
                 dash_calib_samples_[calib_count_++] = on_samples;
+                if (config_.log_interval_ms > 0)
+                {
+                    uint32_t ms = (on_samples * 1000U) / config_.sample_rate;
+                    Serial.printf("[Morse] calib dash: %lu samples (%lu ms)\n",
+                                  static_cast<unsigned long>(on_samples),
+                                  static_cast<unsigned long>(ms));
+                }
                 if (lock_ && xSemaphoreTake(lock_, 0) == pdTRUE)
                 {
                     status_ = std::string("CALIB DASH ") + std::to_string(calib_count_) + "/" +
@@ -484,15 +684,38 @@ void MorseEngine::handlePulseEnd(uint32_t on_samples)
                     calib_phase_ = CalibPhase::Done;
                     setStatus("LISTEN");
                     last_off_start_ = sample_cursor_;
+                    if (config_.log_interval_ms > 0)
+                    {
+                        Serial.printf("[Morse] calib done: dot=%lu samples (%lu ms) dash=%lu samples (%lu ms) th=%lu samples\n",
+                                      static_cast<unsigned long>(dot_len_samples_),
+                                      static_cast<unsigned long>((dot_len_samples_ * 1000U) / config_.sample_rate),
+                                      static_cast<unsigned long>(dash_len_samples_),
+                                      static_cast<unsigned long>((dash_len_samples_ * 1000U) / config_.sample_rate),
+                                      static_cast<unsigned long>(dash_threshold_samples_));
+                    }
                 }
             }
         }
-        return;
+        return true;
     }
 
     if (dot_len_samples_ == 0)
     {
-        return;
+        return false;
+    }
+    uint32_t min_floor = (config_.sample_rate * config_.min_dot_ms) / 2000;
+    if (min_floor < 5)
+    {
+        min_floor = 5;
+    }
+    uint32_t min_valid = (dot_len_samples_ * 4) / 10;
+    if (min_valid < min_floor)
+    {
+        min_valid = min_floor;
+    }
+    if (on_samples < min_valid)
+    {
+        return false;
     }
     uint32_t threshold = dash_threshold_samples_ ? dash_threshold_samples_ : (dot_len_samples_ * 2);
     bool is_dash = on_samples >= threshold;
@@ -504,6 +727,7 @@ void MorseEngine::handlePulseEnd(uint32_t on_samples)
         }
         xSemaphoreGive(lock_);
     }
+    return true;
 }
 
 void MorseEngine::handleGap(uint32_t gap_samples)
@@ -512,8 +736,8 @@ void MorseEngine::handleGap(uint32_t gap_samples)
     {
         return;
     }
-    uint32_t char_gap = dot_len_samples_ * 2;
-    uint32_t word_gap = dot_len_samples_ * 5;
+    uint32_t char_gap = dot_len_samples_ * config_.char_gap_mult;
+    uint32_t word_gap = dot_len_samples_ * config_.word_gap_mult;
     if (gap_samples >= word_gap)
     {
         finalizeSymbol(true);

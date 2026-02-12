@@ -9,6 +9,7 @@
 
 #include "ui/LV_Helper.h"
 #include "walkie/walkie_service.h"
+#include "input/morse_engine.h"
 #include <Arduino.h>
 
 #if LVGL_VERSION_MAJOR == 9
@@ -116,13 +117,15 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
     uint8_t touched = plane->getPoint(&x, &y, 1);
     if (touched)
     {
+        input::MorseEngine::notifyTouch();
         if (isScreenSleeping())
         {
             updateUserActivity();
-            data->state = LV_INDEV_STATE_REL;
-            return;
         }
-        updateUserActivity();
+        else
+        {
+            updateUserActivity();
+        }
         data->point.x = x;
         data->point.y = y;
         data->state = LV_INDEV_STATE_PR;

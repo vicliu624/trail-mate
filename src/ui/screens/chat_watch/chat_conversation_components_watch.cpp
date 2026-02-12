@@ -2,12 +2,12 @@
 
 #include "chat_conversation_components_watch.h"
 
-#include "../../ui_common.h"
 #include "../../ui_theme.h"
 
 namespace
 {
 constexpr lv_coord_t kActionBarHeight = 36;
+constexpr lv_coord_t kActionButtonHeight = 26;
 } // namespace
 
 namespace chat::ui
@@ -26,12 +26,6 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_clear_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
 
-    ::ui::widgets::TopBarConfig cfg;
-    cfg.height = ::ui::widgets::kTopBarHeight;
-    ::ui::widgets::top_bar_init(top_bar_, container_, cfg);
-    ::ui::widgets::top_bar_set_title(top_bar_, "Chat");
-    ::ui::widgets::top_bar_set_back_callback(top_bar_, handle_back, this);
-
     msg_list_ = lv_obj_create(container_);
     lv_obj_set_size(msg_list_, LV_PCT(100), LV_PCT(100));
     lv_obj_align(msg_list_, LV_ALIGN_TOP_MID, 0, 0);
@@ -39,7 +33,7 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     lv_obj_set_style_border_width(msg_list_, 0, 0);
     lv_obj_set_style_pad_left(msg_list_, 8, 0);
     lv_obj_set_style_pad_right(msg_list_, 8, 0);
-    lv_obj_set_style_pad_top(msg_list_, ::ui::widgets::kTopBarHeight + 6, 0);
+    lv_obj_set_style_pad_top(msg_list_, 6, 0);
     lv_obj_set_style_pad_bottom(msg_list_, kActionBarHeight + 6, 0);
     lv_obj_set_flex_flow(msg_list_, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(msg_list_, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
@@ -54,10 +48,11 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     lv_obj_set_style_border_width(action_bar_, 0, 0);
     lv_obj_set_style_pad_all(action_bar_, 4, 0);
     lv_obj_clear_flag(action_bar_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(action_bar_, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(action_bar_, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     reply_btn_ = lv_btn_create(action_bar_);
-    lv_obj_set_size(reply_btn_, 100, 26);
-    lv_obj_center(reply_btn_);
+    lv_obj_set_size(reply_btn_, 100, kActionButtonHeight);
     lv_obj_set_style_bg_color(reply_btn_, ::ui::theme::accent(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(reply_btn_, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(reply_btn_, 0, LV_PART_MAIN);
@@ -68,7 +63,18 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     lv_obj_center(reply_label);
     lv_obj_set_style_text_color(reply_label, ::ui::theme::white(), 0);
 
-    updateBatteryFromBoard();
+    back_btn_ = lv_btn_create(action_bar_);
+    lv_obj_set_size(back_btn_, 100, kActionButtonHeight);
+    lv_obj_set_style_bg_color(back_btn_, ::ui::theme::surface(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(back_btn_, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(back_btn_, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(back_btn_, ::ui::theme::border(), LV_PART_MAIN);
+    lv_obj_set_style_radius(back_btn_, 8, LV_PART_MAIN);
+    lv_obj_add_event_cb(back_btn_, back_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_t* back_label = lv_label_create(back_btn_);
+    lv_label_set_text(back_label, "Back");
+    lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, ::ui::theme::text(), 0);
 }
 
 ChatConversationScreen::~ChatConversationScreen()
@@ -159,12 +165,11 @@ void ChatConversationScreen::setActionCallback(void (*cb)(ActionIntent intent, v
 
 void ChatConversationScreen::setHeaderText(const char* title, const char*)
 {
-    ::ui::widgets::top_bar_set_title(top_bar_, title ? title : "");
+    (void)title;
 }
 
 void ChatConversationScreen::updateBatteryFromBoard()
 {
-    ui_update_top_bar_battery(top_bar_);
 }
 
 void ChatConversationScreen::setBackCallback(void (*cb)(void*), void* user_data)
@@ -212,6 +217,20 @@ void ChatConversationScreen::action_event_cb(lv_event_t* e)
         return;
     }
     screen->schedule_action_async(ActionIntent::Reply);
+}
+
+void ChatConversationScreen::back_event_cb(lv_event_t* e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED)
+    {
+        return;
+    }
+    auto* screen = static_cast<ChatConversationScreen*>(lv_event_get_user_data(e));
+    if (!screen)
+    {
+        return;
+    }
+    screen->schedule_back_async();
 }
 
 void ChatConversationScreen::async_action_cb(void* user_data)

@@ -492,7 +492,7 @@ static TaskHandle_t screen_sleep_task_handle = NULL;
 static bool screen_sleeping = false;
 static bool screen_sleep_disabled = false;       // Flag to disable screen sleep (e.g., during USB mode)
 static uint8_t saved_keyboard_brightness = 127;  // Save keyboard brightness before sleep (default 127)
-static uint32_t screen_sleep_timeout_ms = 30000; // Default 30 seconds, can be configured
+static uint32_t screen_sleep_timeout_ms = 60000; // Default 60 seconds, can be configured
 static Preferences preferences;                  // For saving/loading settings
 
 namespace
@@ -501,7 +501,7 @@ constexpr const char* kSettingsNs = "settings";
 constexpr const char* kScreenTimeoutKey = "screen_timeout";
 constexpr uint32_t kScreenTimeoutMinMs = 10000;
 constexpr uint32_t kScreenTimeoutMaxMs = 300000;
-constexpr uint32_t kScreenTimeoutDefaultMs = 30000;
+constexpr uint32_t kScreenTimeoutDefaultMs = 60000;
 
 static uint32_t clamp_screen_timeout(uint32_t timeout_ms)
 {
@@ -707,7 +707,7 @@ void updateUserActivity()
 
 /**
  * Screen sleep management task
- * Monitors user activity and puts screen to sleep after 30 seconds of inactivity
+ * Monitors user activity and puts screen to sleep after 60 seconds of inactivity
  * Wakes up screen when user input is detected
  */
 static void screenSleepTask(void* pvParameters)

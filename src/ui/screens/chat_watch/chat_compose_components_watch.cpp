@@ -308,6 +308,20 @@ void ChatComposeScreen::showMorse()
     input::MorseEngine::Config cfg;
     cfg.pin_sck = PDM_SCK;
     cfg.pin_data = PDM_DATA;
+    cfg.input_gain = 3;
+    cfg.min_high = 90;
+    cfg.min_low = 45;
+    cfg.level_gate = 35;
+    cfg.dc_shift = 6;
+    cfg.touch_suppress_ms = 180;
+    cfg.dash_min_mult = 3;
+    cfg.dash_max_mult = 10;
+    cfg.release_ms = 30;
+    cfg.char_gap_mult = 3;
+    cfg.word_gap_mult = 7;
+    cfg.release_ms = 25;
+    cfg.log_interval_ms = 500;
+    cfg.log_calib_only = true;
     if (!morse_ || !morse_->start(cfg))
     {
         delete morse_;
@@ -391,24 +405,24 @@ void ChatComposeScreen::updateMorseUi()
             if (snap.calib_total > 0)
             {
                 std::string hint =
-                    std::string("Step 2/2: Scratch ") + std::to_string(snap.calib_total) + " dashes";
+                    std::string("Step 2/2: Tap ") + std::to_string(snap.calib_total) + " long dashes";
                 lv_label_set_text(morse_hint_label_, hint.c_str());
             }
             else
             {
-                lv_label_set_text(morse_hint_label_, "Step 2/2: Scratch dashes");
+                lv_label_set_text(morse_hint_label_, "Step 2/2: Tap long dashes");
             }
         }
         else
         {
             if (snap.calib_total > 0)
             {
-                std::string hint = std::string("Step 1/2: Tap ") + std::to_string(snap.calib_total) + " dots";
+                std::string hint = std::string("Step 1/2: Tap ") + std::to_string(snap.calib_total) + " short dots";
                 lv_label_set_text(morse_hint_label_, hint.c_str());
             }
             else
             {
-                lv_label_set_text(morse_hint_label_, "Step 1/2: Tap dots");
+                lv_label_set_text(morse_hint_label_, "Step 1/2: Tap short dots");
             }
         }
     }
