@@ -3,6 +3,7 @@
 #include "../board/BoardBase.h"
 #include "../sstv/sstv_service.h"
 #include "ui_common.h"
+#include "LV_Helper.h"
 #include <Arduino.h>
 #include <cmath>
 #include <cstring>
@@ -10,6 +11,7 @@
 // Forward declarations from main.cpp
 extern void disableScreenSleep();
 extern void enableScreenSleep();
+extern lv_group_t* app_g;
 
 namespace
 {
@@ -72,6 +74,8 @@ struct SstvUi
     lv_obj_t* progress = nullptr;
     lv_obj_t* meter_box = nullptr;
     lv_obj_t* meter_segments[kMeterSegments] = {};
+    lv_obj_t* btn_rx = nullptr;
+    lv_obj_t* btn_rx_label = nullptr;
 };
 
 SstvUi s_ui;
@@ -85,30 +89,9 @@ char s_last_mode[24] = "";
 lv_image_dsc_t s_frame_dsc = {};
 bool s_frame_ready = false;
 
-void ensure_frame_dsc()
-{
-    if (s_frame_ready)
-    {
-        return;
-    }
-    const uint16_t* frame = sstv::get_framebuffer();
-    if (!frame)
-    {
-        return;
-    }
-    s_frame_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    s_frame_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
-    s_frame_dsc.header.flags = 0;
-    s_frame_dsc.header.w = sstv::frame_width();
-    s_frame_dsc.header.h = sstv::frame_height();
-    s_frame_dsc.header.stride = static_cast<uint32_t>(s_frame_dsc.header.w) * 2;
-    s_frame_dsc.data_size =
-        static_cast<uint32_t>(s_frame_dsc.header.w) * static_cast<uint32_t>(s_frame_dsc.header.h) * 2;
-    s_frame_dsc.data = reinterpret_cast<const uint8_t*>(frame);
-    s_frame_ready = true;
-}
+void ensure_frame_dsc();
 
-void on_back(void*)
+void on_back(lv_event_t*)
 {
     ui_request_exit_to_menu();
 }
@@ -130,6 +113,47 @@ void update_battery_labels()
         return;
     }
     ui_update_top_bar_battery(s_ui.top_bar);
+}
+
+void update_rx_button_label()
+{
+    if (!s_ui.btn_rx_label)
+    {
+        return;
+    }
+    lv_label_set_text(s_ui.btn_rx_label, sstv::is_active() ? "STOP" : "RX");
+}
+
+void on_rx_btn_clicked(lv_event_t*)
+{
+    if (sstv::is_active())
+    {
+        sstv::stop();
+    }
+    else
+    {
+        bool ok = sstv::start();
+        if (!ok && s_ui.label_state_sub)
+        {
+            const char* err = sstv::get_last_error();
+            lv_label_set_text(s_ui.label_state_sub, err ? err : "SSTV start failed");
+        }
+    }
+    update_rx_button_label();
+}
+
+void on_rx_btn_key(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+    uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_ENTER)
+    {
+        return;
+    }
+    on_rx_btn_clicked(nullptr);
 }
 
 void refresh_cb(lv_timer_t*)
@@ -157,7 +181,8 @@ void refresh_cb(lv_timer_t*)
     }
 
     const char* mode = sstv::get_mode_name();
-    if (!mode || mode[0] == '\0' || strcmp(mode, "Unknown") == 0 || st.state == sstv::State::Waiting)
+    if (!mode || mode[0] == '\0' || strcmp(mode, "Unknown") == 0 ||
+        st.state == sstv::State::Waiting)
     {
         mode = "Auto";
     }
@@ -199,11 +224,11 @@ void refresh_cb(lv_timer_t*)
 
     if (st.state == sstv::State::Receiving)
     {
-        if (st.line != s_last_line && s_ui.label_state_sub)
+        if (s_ui.label_state_sub)
         {
+            int pct = static_cast<int>(st.progress * 100.0f + 0.5f);
             char buf[32];
-            snprintf(buf, sizeof(buf), "Decoding line: %u/256",
-                     static_cast<unsigned>(st.line));
+            snprintf(buf, sizeof(buf), "Decoding: %d%%", pct);
             lv_label_set_text(s_ui.label_state_sub, buf);
         }
         ui_sstv_set_progress(st.progress);
@@ -242,10 +267,41 @@ void refresh_cb(lv_timer_t*)
     {
         ui_sstv_set_image(nullptr);
     }
+
     if (st.line != s_last_line)
     {
         s_last_line = st.line;
     }
+    update_rx_button_label();
+}
+
+void ensure_frame_dsc()
+{
+    if (s_frame_ready)
+    {
+        return;
+    }
+    const uint16_t* frame = sstv::get_framebuffer();
+    if (!frame)
+    {
+        s_frame_ready = false;
+        return;
+    }
+
+    const uint16_t w = sstv::frame_width();
+    const uint16_t h = sstv::frame_height();
+    if (w == 0 || h == 0)
+    {
+        s_frame_ready = false;
+        return;
+    }
+
+    s_frame_dsc.header.w = w;
+    s_frame_dsc.header.h = h;
+    s_frame_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+    s_frame_dsc.data = reinterpret_cast<const uint8_t*>(frame);
+    s_frame_dsc.data_size = static_cast<uint32_t>(w) * h * 2;
+    s_frame_ready = true;
 }
 
 void apply_label_style(lv_obj_t* label, const lv_font_t* font, uint32_t color)
@@ -371,11 +427,27 @@ void build_main_area(lv_obj_t* parent)
     apply_label_style(s_ui.label_mode, &lv_font_montserrat_14, kColorTextDim);
 
     s_ui.label_ready = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_ready, 0, 142);
+    lv_obj_set_pos(s_ui.label_ready, 0, 128);
     lv_obj_set_width(s_ui.label_ready, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_ready, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_ready, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_ready, &lv_font_montserrat_14, kColorText);
+
+    s_ui.btn_rx = lv_btn_create(s_ui.info_area);
+    lv_obj_set_size(s_ui.btn_rx, 72, 22);
+    lv_obj_set_pos(s_ui.btn_rx, 0, 150);
+    lv_obj_set_style_bg_color(s_ui.btn_rx, lv_color_hex(kColorPanelBg), 0);
+    lv_obj_set_style_bg_opa(s_ui.btn_rx, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_ui.btn_rx, 1, 0);
+    lv_obj_set_style_border_color(s_ui.btn_rx, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_radius(s_ui.btn_rx, 6, 0);
+    lv_obj_t* rx_label = lv_label_create(s_ui.btn_rx);
+    lv_label_set_text(rx_label, "RX");
+    apply_label_style(rx_label, &lv_font_montserrat_16, kColorText);
+    lv_obj_center(rx_label);
+    s_ui.btn_rx_label = rx_label;
+    lv_obj_add_event_cb(s_ui.btn_rx, on_rx_btn_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(s_ui.btn_rx, on_rx_btn_key, LV_EVENT_KEY, nullptr);
 
     s_ui.meter_box = lv_obj_create(s_ui.info_area);
     lv_obj_set_size(s_ui.meter_box, kMeterW, kMeterH);
@@ -449,6 +521,7 @@ lv_obj_t* ui_sstv_create(lv_obj_t* parent)
     ui_sstv_set_mode("Auto");
     ui_sstv_set_progress(0.0f);
     ui_sstv_set_audio_level(0.0f);
+    update_rx_button_label();
 
     update_battery_labels();
     return s_ui.root;
@@ -461,26 +534,28 @@ void ui_sstv_enter(lv_obj_t* parent)
 
     ui_sstv_create(parent);
 
-    extern lv_group_t* app_g;
-    if (app_g && s_ui.top_bar.back_btn)
+    if (::app_g && s_ui.top_bar.back_btn)
     {
-        lv_group_remove_all_objs(app_g);
-        lv_group_add_obj(app_g, s_ui.top_bar.back_btn);
+        lv_group_remove_all_objs(::app_g);
+        lv_group_add_obj(::app_g, s_ui.top_bar.back_btn);
+        if (s_ui.btn_rx)
+        {
+            lv_group_add_obj(::app_g, s_ui.btn_rx);
+        }
         lv_group_focus_obj(s_ui.top_bar.back_btn);
-        set_default_group(app_g);
-        lv_group_set_editing(app_g, false);
+        set_default_group(::app_g);
+        lv_group_set_editing(::app_g, false);
     }
     else
     {
         set_default_group(prev_group);
     }
 
-    bool start_ok = sstv::start();
-    if (!start_ok && s_ui.label_state_sub)
+    if (s_ui.label_state_sub)
     {
-        const char* err = sstv::get_last_error();
-        lv_label_set_text(s_ui.label_state_sub, err ? err : "SSTV start failed");
+        lv_label_set_text(s_ui.label_state_sub, "Press RX to start");
     }
+    update_rx_button_label();
 
     disableScreenSleep();
 
@@ -526,7 +601,7 @@ void ui_sstv_set_state(SstvState state)
         ui_sstv_set_progress(0.0f);
         break;
     case SSTV_STATE_RECEIVING:
-        lv_label_set_text(s_ui.label_state_sub, "Decoding line: 0/256");
+        lv_label_set_text(s_ui.label_state_sub, "Decoding: 0%");
         lv_label_set_text(s_ui.label_ready, "RECEIVING");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
         break;
@@ -665,3 +740,5 @@ void ui_sstv_set_image(const void* img_src_or_lv_img_dsc)
         }
     }
 }
+
+

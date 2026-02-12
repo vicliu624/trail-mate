@@ -139,6 +139,18 @@ class EspCodec
     bool getMute();
 
     /**
+     * @brief Enable or disable output mute.
+     * @param enable True to mute output, false to unmute.
+     */
+    void setOutMute(bool enable);
+
+    /**
+     * @brief Check if output is muted.
+     * @return True if muted, false otherwise.
+     */
+    bool getOutMute();
+
+    /**
      * @brief Set the audio gain in decibels (dB).
      * @param db_value Gain value in dB (e.g., 6.0, -3.0).
      */

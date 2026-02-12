@@ -2,10 +2,16 @@
 
 #include <cstdint>
 
-constexpr uint32_t kSampleRate = 44100;
+#ifndef SSTV_ENABLE_WAV_RECORD
+#define SSTV_ENABLE_WAV_RECORD 0
+#endif
+
+constexpr uint32_t kSampleRate = 15000;
+constexpr uint32_t kCodecSampleRate = 8000;
 constexpr uint8_t kBitsPerSample = 16;
 constexpr uint8_t kChannels = 1;
-constexpr float kMicGainDb = 30.0f;
+constexpr float kMicGainDb = 6.0f;
+constexpr float kInputPcmGain = 1.0f;
 
 constexpr float kPorchMs = 1.5f;
 constexpr float kSyncPulseMs = 9.0f;
@@ -61,6 +67,15 @@ constexpr int kVisSearchMarginSamples = kVisBitSamples + kHeaderHopSamples;
 constexpr int kVisPrerollSamples = kVisStartHoldSamples + kVisSearchMarginSamples;
 constexpr int kVisRawSamples =
     kVisPrerollSamples + kVisSearchMarginSamples + kVisBitSamples * (kVisBits + 2);
+constexpr int kVisSlowrxHopSamples = static_cast<int>(kSampleRate / 100);
+constexpr int kVisSlowrxWindowSamples = kVisSlowrxHopSamples * 2;
+constexpr int kVisSlowrxToneCount = 45;
+constexpr float kVisSlowrxMinHz = 900.0f;
+constexpr float kVisSlowrxMaxHz = 2100.0f;
+constexpr float kVisSlowrxStepHz = 25.0f;
+constexpr int kVisSlowrxBinCount =
+    static_cast<int>((kVisSlowrxMaxHz - kVisSlowrxMinHz) / kVisSlowrxStepHz) + 1;
+constexpr int kVisSlowrxLogEvery = 1;
 constexpr int kToneWindowSamples = (kSampleRate * 30 + 500) / 1000;
 constexpr float kVisAcceptAvgValid = 0.60f;
 constexpr float kVisAcceptMinValid = 0.20f;
