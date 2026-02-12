@@ -68,6 +68,11 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea)
     ime_.setEnabled(false);
     mode_ = Mode::EN;
     committed_text_.clear();
+    if (textarea_)
+    {
+        const char* cur = lv_textarea_get_text(textarea_);
+        committed_text_ = cur ? std::string(cur) : std::string();
+    }
     s_active_ime = this;
 
     container_ = lv_obj_create(parent);
@@ -142,10 +147,11 @@ void ImeWidget::setMode(Mode mode)
     ime_.setEnabled(mode_ == Mode::CN);
     if (textarea_)
     {
+        const char* cur = lv_textarea_get_text(textarea_);
+        committed_text_ = cur ? std::string(cur) : std::string();
         if (mode_ == Mode::CN)
         {
-            const char* cur = lv_textarea_get_text(textarea_);
-            committed_text_ = cur ? std::string(cur) : std::string();
+            ime_.reset();
             lv_textarea_set_accepted_chars(textarea_, "");
         }
         else
@@ -179,93 +185,186 @@ void ImeWidget::cycleMode()
 
 bool ImeWidget::handle_key(lv_event_t* e)
 {
-    if (mode_ != Mode::CN || !textarea_) return false;
+    if (!textarea_) return false;
 
     uint32_t key = lv_event_get_key(e);
     bool consumed = false;
-    bool committed = false;
-    std::string committed_text;
+    bool update_text = false;
 
-    if (key == LV_KEY_BACKSPACE)
+    if (mode_ == Mode::CN)
     {
-        if (ime_.hasBuffer())
+        if (key == LV_KEY_BACKSPACE)
         {
-            ime_.backspace();
-            consumed = true;
-        }
-    }
-    else if (key == LV_KEY_UP || key == LV_KEY_LEFT)
-    {
-        if (ime_.hasBuffer())
-        {
-            ime_.moveCandidate(-1);
-            consumed = true;
-        }
-    }
-    else if (key == LV_KEY_DOWN || key == LV_KEY_RIGHT)
-    {
-        if (ime_.hasBuffer())
-        {
-            ime_.moveCandidate(1);
-            consumed = true;
-        }
-    }
-    else if (key == LV_KEY_ENTER)
-    {
-        if (ime_.hasBuffer())
-        {
-            std::string out;
-            if (ime_.commitActive(out))
+            if (ime_.hasBuffer())
             {
-                committed = true;
-                committed_text = out;
-            }
-            consumed = true;
-        }
-    }
-    else if (key == ' ')
-    {
-        if (ime_.hasBuffer())
-        {
-            ime_.reset();
-        }
-        committed = true;
-        committed_text = " ";
-        consumed = true;
-    }
-    else if (key >= 32 && key <= 126)
-    {
-        char c = static_cast<char>(key);
-        if (c >= 'A' && c <= 'Z')
-        {
-            c = static_cast<char>(c - 'A' + 'a');
-        }
-        if (c >= 'a' && c <= 'z')
-        {
-            if (ime_.appendLetter(c))
-            {
+                ime_.backspace();
                 consumed = true;
             }
+            else
+            {
+                if (!committed_text_.empty())
+                {
+                    size_t pos = committed_text_.size() - 1;
+                    while (pos > 0)
+                    {
+                        uint8_t c = static_cast<uint8_t>(committed_text_[pos]);
+                        if ((c & 0xC0) != 0x80)
+                        {
+                            break;
+                        }
+                        --pos;
+                    }
+                    committed_text_.erase(pos);
+                    update_text = true;
+                    consumed = true;
+                }
+                else
+                {
+                    consumed = true;
+                }
+            }
+        }
+        else if (key == LV_KEY_UP || key == LV_KEY_LEFT)
+        {
+            if (ime_.hasBuffer())
+            {
+                ime_.moveCandidate(-1);
+                consumed = true;
+            }
+        }
+        else if (key == LV_KEY_DOWN || key == LV_KEY_RIGHT)
+        {
+            if (ime_.hasBuffer())
+            {
+                ime_.moveCandidate(1);
+                consumed = true;
+            }
+        }
+        else if (key == LV_KEY_ENTER)
+        {
+            if (ime_.hasBuffer())
+            {
+                std::string out;
+                if (ime_.commitActive(out))
+                {
+                    committed_text_ += out;
+                    update_text = true;
+                }
+                consumed = true;
+            }
+            else
+            {
+                committed_text_ += "\n";
+                update_text = true;
+                consumed = true;
+            }
+        }
+        else if (key == ' ')
+        {
+            if (ime_.hasBuffer())
+            {
+                ime_.reset();
+            }
+            committed_text_ += " ";
+            update_text = true;
+            consumed = true;
+        }
+        else if (key >= 32 && key <= 126)
+        {
+            char c = static_cast<char>(key);
+            if (c >= 'A' && c <= 'Z')
+            {
+                c = static_cast<char>(c - 'A' + 'a');
+            }
+            if (c >= 'a' && c <= 'z')
+            {
+                ime_.appendLetter(c);
+                consumed = true;
+            }
+            else
+            {
+                if (ime_.hasBuffer())
+                {
+                    std::string out;
+                    if (ime_.commitActive(out))
+                    {
+                        committed_text_ += out;
+                    }
+                }
+                committed_text_.push_back(c);
+                update_text = true;
+                consumed = true;
+            }
+        }
+    }
+    else
+    {
+        if (key == LV_KEY_BACKSPACE)
+        {
+            if (!committed_text_.empty())
+            {
+                size_t pos = committed_text_.size() - 1;
+                while (pos > 0)
+                {
+                    uint8_t c = static_cast<uint8_t>(committed_text_[pos]);
+                    if ((c & 0xC0) != 0x80)
+                    {
+                        break;
+                    }
+                    --pos;
+                }
+                committed_text_.erase(pos);
+            }
+            update_text = true;
+            consumed = true;
+        }
+        else if (key == LV_KEY_ENTER)
+        {
+            committed_text_ += "\n";
+            update_text = true;
+            consumed = true;
+        }
+        else if (key == ' ')
+        {
+            committed_text_ += " ";
+            update_text = true;
+            consumed = true;
+        }
+        else if (key >= 32 && key <= 126)
+        {
+            committed_text_.push_back(static_cast<char>(key));
+            update_text = true;
+            consumed = true;
         }
     }
 
     if (consumed)
     {
-        if (committed)
-        {
-            committed_text_ += committed_text;
-            lv_textarea_set_text(textarea_, committed_text_.c_str());
-            lv_textarea_set_cursor_pos(textarea_, LV_TEXTAREA_CURSOR_LAST);
-        }
-        else
+        if (update_text)
         {
             lv_textarea_set_text(textarea_, committed_text_.c_str());
             lv_textarea_set_cursor_pos(textarea_, LV_TEXTAREA_CURSOR_LAST);
         }
-        refresh_labels();
+        if (mode_ == Mode::CN)
+        {
+            refresh_labels();
+        }
         lv_event_stop_processing(e);
     }
     return consumed;
+}
+
+void ImeWidget::setText(const char* text)
+{
+    if (!textarea_) return;
+    committed_text_ = text ? std::string(text) : std::string();
+    lv_textarea_set_text(textarea_, committed_text_.c_str());
+    lv_textarea_set_cursor_pos(textarea_, LV_TEXTAREA_CURSOR_LAST);
+    if (mode_ == Mode::CN)
+    {
+        ime_.reset();
+        refresh_labels();
+    }
 }
 
 void ImeWidget::refresh_labels()

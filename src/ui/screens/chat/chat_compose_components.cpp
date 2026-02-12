@@ -416,7 +416,14 @@ std::string ChatComposeScreen::getText() const
 void ChatComposeScreen::clearText()
 {
     if (!impl_) return;
-    lv_textarea_set_text(impl_->w.textarea, "");
+    if (ime_widget_)
+    {
+        ime_widget_->setText("");
+    }
+    else
+    {
+        lv_textarea_set_text(impl_->w.textarea, "");
+    }
     refresh_len();
 }
 
@@ -578,12 +585,6 @@ void ChatComposeScreen::on_key(lv_event_t* e)
     }
 
     uint32_t key = lv_event_get_key(e);
-    if (key == LV_KEY_BACKSPACE)
-    {
-        on_back(screen);
-        return;
-    }
-
     if (screen->ime_widget_ && screen->ime_widget_->handle_key(e))
     {
         return;

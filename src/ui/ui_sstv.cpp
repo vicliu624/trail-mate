@@ -2,8 +2,8 @@
 
 #include "../board/BoardBase.h"
 #include "../sstv/sstv_service.h"
-#include "ui_common.h"
 #include "LV_Helper.h"
+#include "ui_common.h"
 #include <Arduino.h>
 #include <cmath>
 #include <cstring>
@@ -42,10 +42,6 @@ constexpr lv_coord_t kMeterH = 120;
 constexpr lv_coord_t kMeterSegH = 8;
 constexpr lv_coord_t kMeterSegGap = 2;
 constexpr int kMeterSegments = 12;
-constexpr lv_coord_t kMetricsX = 0;
-constexpr lv_coord_t kMetricsY = 34;
-constexpr lv_coord_t kMetricsLineGap = 20;
-
 constexpr uint32_t kColorWarmBg = 0xF6E6C6;
 constexpr uint32_t kColorAccent = 0xEBA341;
 constexpr uint32_t kColorPanelBg = 0xFAF0D8;
@@ -66,9 +62,6 @@ struct SstvUi
     lv_obj_t* img_placeholder = nullptr;
     lv_obj_t* info_area = nullptr;
     lv_obj_t* label_state_sub = nullptr;
-    lv_obj_t* label_metric_sync = nullptr;
-    lv_obj_t* label_metric_slant = nullptr;
-    lv_obj_t* label_metric_level = nullptr;
     lv_obj_t* label_mode = nullptr;
     lv_obj_t* label_ready = nullptr;
     lv_obj_t* progress = nullptr;
@@ -83,8 +76,6 @@ lv_timer_t* s_refresh_timer = nullptr;
 int s_last_meter_active = -1;
 sstv::State s_last_state = sstv::State::Idle;
 uint16_t s_last_line = 0;
-bool s_last_sync_lock = false;
-int s_last_level_pct = -1;
 char s_last_mode[24] = "";
 lv_image_dsc_t s_frame_dsc = {};
 bool s_frame_ready = false;
@@ -161,24 +152,6 @@ void refresh_cb(lv_timer_t*)
     update_battery_labels();
     sstv::Status st = sstv::get_status();
     ui_sstv_set_audio_level(st.audio_level);
-
-    bool sync_lock = (st.state == sstv::State::Receiving);
-    if (s_ui.label_metric_sync && sync_lock != s_last_sync_lock)
-    {
-        lv_label_set_text(s_ui.label_metric_sync, sync_lock ? "SYNC: LOCK" : "SYNC: --");
-        s_last_sync_lock = sync_lock;
-    }
-    if (s_ui.label_metric_level)
-    {
-        int level_pct = static_cast<int>(st.audio_level * 100.0f + 0.5f);
-        if (level_pct != s_last_level_pct)
-        {
-            char buf[20];
-            snprintf(buf, sizeof(buf), "LEVEL: %d%%", level_pct);
-            lv_label_set_text(s_ui.label_metric_level, buf);
-            s_last_level_pct = level_pct;
-        }
-    }
 
     const char* mode = sstv::get_mode_name();
     if (!mode || mode[0] == '\0' || strcmp(mode, "Unknown") == 0 ||
@@ -395,32 +368,8 @@ void build_main_area(lv_obj_t* parent)
     lv_label_set_long_mode(s_ui.label_state_sub, LV_LABEL_LONG_WRAP);
     apply_label_style(s_ui.label_state_sub, &lv_font_montserrat_14, kColorTextDim);
 
-    s_ui.label_metric_sync = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_metric_sync, kMetricsX, kMetricsY);
-    lv_obj_set_width(s_ui.label_metric_sync, kInfoTextW);
-    lv_obj_set_style_text_align(s_ui.label_metric_sync, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_long_mode(s_ui.label_metric_sync, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_metric_sync, &lv_font_montserrat_14, kColorTextDim);
-    lv_label_set_text(s_ui.label_metric_sync, "SYNC: --");
-
-    s_ui.label_metric_slant = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_metric_slant, kMetricsX, kMetricsY + kMetricsLineGap);
-    lv_obj_set_width(s_ui.label_metric_slant, kInfoTextW);
-    lv_obj_set_style_text_align(s_ui.label_metric_slant, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_long_mode(s_ui.label_metric_slant, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_metric_slant, &lv_font_montserrat_14, kColorTextDim);
-    lv_label_set_text(s_ui.label_metric_slant, "SLANT: --");
-
-    s_ui.label_metric_level = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_metric_level, kMetricsX, kMetricsY + 2 * kMetricsLineGap);
-    lv_obj_set_width(s_ui.label_metric_level, kInfoTextW);
-    lv_obj_set_style_text_align(s_ui.label_metric_level, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_long_mode(s_ui.label_metric_level, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_metric_level, &lv_font_montserrat_14, kColorTextDim);
-    lv_label_set_text(s_ui.label_metric_level, "LEVEL: 0%");
-
     s_ui.label_mode = lv_label_create(s_ui.info_area);
-    lv_obj_set_pos(s_ui.label_mode, 0, 106);
+    lv_obj_set_pos(s_ui.label_mode, 0, 56);
     lv_obj_set_width(s_ui.label_mode, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_mode, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_mode, LV_LABEL_LONG_WRAP);
@@ -485,8 +434,6 @@ void reset_ui_pointers()
     s_last_meter_active = -1;
     s_last_state = sstv::State::Idle;
     s_last_line = 0;
-    s_last_sync_lock = false;
-    s_last_level_pct = -1;
     s_last_mode[0] = '\0';
     s_frame_ready = false;
 }
@@ -740,5 +687,3 @@ void ui_sstv_set_image(const void* img_src_or_lv_img_dsc)
         }
     }
 }
-
-

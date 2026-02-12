@@ -376,9 +376,48 @@ VIS 码：
 注意：本接收端以 320 像素宽解码，并在垂直方向缩放到显示高度。
 
 ============================================================
-16) TODO
+16) PicoSSTV 解码算法概述
 ============================================================
-- 补齐 VIS/同步检测的单元测试与录音回放回归。
-- 抽象频率估计接口，支持 FFT/Goertzel 可切换。
-- 增加斜率校正与行对齐（slant/line skew）。
-- 记录更多诊断指标（SNR/峰值/同步置信度）并输出到 UI。
+算法描述参考：
+- https://101-things.readthedocs.io/en/latest/sstv_decoder.html
+
+核心实现（PicoSSTV）基于以下流程：
+1) 音频采集与预处理
+   - ADC 以 15000 Hz 采样
+   - 直流偏置去除：dc = dc + (sample - dc) / 2
+   - 使用去直流后的 sample 进入解码
+
+2) SSB/IQ 解调（decode_audio）
+   - 4 相移的 Fs/4 频移：audio -> (I,Q) 旋转
+   - 半带滤波（half_band_filter2）低通去镜像
+   - 再次旋转回基带得到 sample_i/sample_q
+
+3) 频率估计与平滑（decode_iq）
+   - CORDIC 计算相位
+   - 频率 = last_phase - phase
+   - 频率缩放：sample = (frequency * 15000) >> 16
+   - IIR 平滑：smoothed = (smoothed*7 + sample) / 8
+   - 夹紧到 1000..2500 Hz
+
+4) 行同步检测 + 模式识别（decode）
+   - 同步条件：频率从 >=1300 跳到 <1300
+   - confirm 累积 10 个低于 1300 的采样点判定有效 hsync
+   - 计算 line_length = sample_number - last_hsync_sample
+   - Auto 模式：与各模式 samples_per_line 做 +/-1% 匹配，取误差最小模式
+   - 二次确认：下一条 sync 仍满足阈值才进入 decode_line
+   - 注意：不依赖 VIS 头，仅靠行同步长度识别模式
+
+5) 像素映射与输出
+   - sample_to_pixel 将 image_sample 映射到 (x,y,colour)
+   - 亮度：1500..2300 Hz -> 0..255
+   - 同一像素多次采样累积平均
+   - 行结束或 y 达到 max_height 后结束图像，回到 detect_sync
+
+6) 自动斜率校正（Auto Slant）
+   - 每次有效 sync 后，用实际 line_length 更新 mean_samples_per_line
+   - 通过 IIR 降低整图倾斜
+
+7) 颜色与模式渲染
+   - Martin/Scottie：RGB 顺序映射
+   - Robot/PD：Y/Cr/Cb 转 RGB
+   - BW：灰度直映射
