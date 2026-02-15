@@ -11,11 +11,12 @@
 #include "walkie/walkie_service.h"
 #include "input/morse_engine.h"
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 
 #if LVGL_VERSION_MAJOR == 9
 
 // Test toggles (set to 0 to disable)
-#define LV_TEST_FORCE_DMA_BUF 1
+#define LV_TEST_FORCE_DMA_BUF 0
 #define LV_TEST_FORCE_DMA_FULL_SIZE 0
 #define LV_TEST_FLUSH_LOG 0
 #define LV_TEST_FLUSH_SAMPLE 0
@@ -305,15 +306,20 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
     useDMA = true;
 #endif
     Serial.printf("[LVGL] buffer alloc start (useDMA=%d)\n", useDMA ? 1 : 0);
+    Serial.printf("[LVGL] free heap internal=%u dma=%u psram=%u\n",
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                  (unsigned)ESP.getFreePsram());
     size_t lv_buffer_size = board.width() * board.height() * sizeof(lv_color16_t);
+    size_t full_screen_size = lv_buffer_size;
 
     if (useDMA)
     {
-        // For DMA, use smaller buffer (1/2 of screen size) and DMA-capable memory
+        // For DMA, keep internal RAM pressure low to avoid starving other subsystems.
 #if LV_TEST_FORCE_DMA_FULL_SIZE
         // keep full size for testing if memory allows
 #else
-        lv_buffer_size = (board.width() * board.height() / 2) * sizeof(lv_color16_t);
+        lv_buffer_size = (board.width() * board.height() / 6) * sizeof(lv_color16_t);
 #endif
         buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
         buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
@@ -353,9 +359,32 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
             {
                 free(buf1);
             }
-            buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
-            buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
-            Serial.println("[LVGL] PSRAM buffer alloc failed, fallback to heap");
+            buf = nullptr;
+            buf1 = nullptr;
+
+            // Avoid grabbing huge internal buffers if PSRAM is unavailable.
+            lv_buffer_size = (board.width() * board.height() / 8) * sizeof(lv_color16_t);
+            if (lv_buffer_size < (board.width() * 20U * sizeof(lv_color16_t)))
+            {
+                lv_buffer_size = board.width() * 20U * sizeof(lv_color16_t);
+            }
+            buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
+            buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DMA);
+            if (!buf || !buf1)
+            {
+                if (buf)
+                {
+                    free(buf);
+                }
+                if (buf1)
+                {
+                    free(buf1);
+                }
+                buf = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
+                buf1 = (lv_color16_t*)heap_caps_malloc(lv_buffer_size, MALLOC_CAP_DEFAULT);
+            }
+            Serial.printf("[LVGL] PSRAM alloc failed, fallback to small internal buffers (size=%u)\n",
+                          (unsigned)lv_buffer_size);
         }
 #else
         // For boards without PSRAM, use heap
@@ -377,7 +406,13 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
 
     if (board.needFullRefresh())
     {
-        lv_display_set_buffers(disp_drv, buf, buf1, lv_buffer_size, LV_DISPLAY_RENDER_MODE_FULL);
+        lv_display_render_mode_t mode = LV_DISPLAY_RENDER_MODE_FULL;
+        if (lv_buffer_size < full_screen_size)
+        {
+            mode = LV_DISPLAY_RENDER_MODE_PARTIAL;
+            Serial.println("[LVGL] full-refresh downgraded to partial due buffer size");
+        }
+        lv_display_set_buffers(disp_drv, buf, buf1, lv_buffer_size, mode);
     }
     else
     {
@@ -385,6 +420,10 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
         lv_display_add_event_cb(disp_drv, lv_rounder_cb, LV_EVENT_INVALIDATE_AREA, NULL);
     }
     Serial.println("[LVGL] display buffers set");
+    Serial.printf("[LVGL] free heap after alloc internal=%u dma=%u psram=%u\n",
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                  (unsigned)ESP.getFreePsram());
     lv_display_set_color_format(disp_drv, LV_COLOR_FORMAT_RGB565);
     lv_display_set_flush_cb(disp_drv, disp_flush);
     lv_display_set_user_data(disp_drv, &board);
