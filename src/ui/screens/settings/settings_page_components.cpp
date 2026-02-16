@@ -311,6 +311,11 @@ static void settings_load()
 
     g_settings.map_coord_system = prefs_get_int("map_coord", 0);
     g_settings.map_source = prefs_get_int("map_source", 0);
+    if (g_settings.map_source < 0 || g_settings.map_source > 2)
+    {
+        g_settings.map_source = 0;
+    }
+    g_settings.map_contour_enabled = prefs_get_bool("map_contour", false);
     g_settings.map_track_enabled = prefs_get_bool("map_track", false);
     g_settings.map_track_interval = prefs_get_int("map_track_interval", 1);
     g_settings.map_track_format = prefs_get_int("map_track_format", 0);
@@ -696,7 +701,12 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_source") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
-        app_ctx.getConfig().map_source = static_cast<uint8_t>(payload->value);
+        int source = payload->value;
+        if (source < 0 || source > 2)
+        {
+            source = 0;
+        }
+        app_ctx.getConfig().map_source = static_cast<uint8_t>(source);
         app_ctx.saveConfig();
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_track_interval") == 0)
@@ -878,7 +888,9 @@ static const settings::ui::SettingOption kMapCoordOptions[] = {
     {"BD-09", 2},
 };
 static const settings::ui::SettingOption kMapSourceOptions[] = {
-    {"Offline Tiles", 0},
+    {"OSM", 0},
+    {"Terrain", 1},
+    {"Satellite", 2},
 };
 static const settings::ui::SettingOption kMapTrackIntervalOptions[] = {
     {"1s", 1},
@@ -1014,7 +1026,8 @@ static settings::ui::SettingItem kGpsItems[] = {
 
 static settings::ui::SettingItem kMapItems[] = {
     {"Coordinate System", settings::ui::SettingType::Enum, kMapCoordOptions, 3, &g_settings.map_coord_system, nullptr, nullptr, 0, false, "map_coord"},
-    {"Map Source", settings::ui::SettingType::Enum, kMapSourceOptions, 1, &g_settings.map_source, nullptr, nullptr, 0, false, "map_source"},
+    {"Map Source", settings::ui::SettingType::Enum, kMapSourceOptions, 3, &g_settings.map_source, nullptr, nullptr, 0, false, "map_source"},
+    {"Contour Overlay", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.map_contour_enabled, nullptr, 0, false, "map_contour"},
     {"Track Recording", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.map_track_enabled, nullptr, 0, false, "map_track"},
     {"Track Interval", settings::ui::SettingType::Enum, kMapTrackIntervalOptions, 4, &g_settings.map_track_interval, nullptr, nullptr, 0, false, "map_track_interval"},
     {"Track Format", settings::ui::SettingType::Enum, kMapTrackFormatOptions, 3, &g_settings.map_track_format, nullptr, nullptr, 0, false, "map_track_format"},
@@ -1190,6 +1203,12 @@ static void on_item_clicked(lv_event_t* e)
                 app_ctx.getConfig().map_track_enabled = *item.bool_value;
                 app_ctx.saveConfig();
                 gps::TrackRecorder::getInstance().setAutoRecording(*item.bool_value);
+            }
+            if (item.pref_key && strcmp(item.pref_key, "map_contour") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().map_contour_enabled = *item.bool_value;
+                app_ctx.saveConfig();
             }
             if (item.pref_key && strcmp(item.pref_key, "net_duty_cycle") == 0)
             {

@@ -82,6 +82,7 @@ struct AppConfig
     // Map settings
     uint8_t map_coord_system;
     uint8_t map_source;
+    bool map_contour_enabled;
     bool map_track_enabled;
     uint8_t map_track_interval;
     uint8_t map_track_format;
@@ -127,6 +128,7 @@ struct AppConfig
 
         map_coord_system = 0;
         map_source = 0;
+        map_contour_enabled = false;
         map_track_enabled = false;
         map_track_interval = 1;
         map_track_format = 0;
@@ -206,6 +208,11 @@ struct AppConfig
         prefs.begin("settings", true);
         map_coord_system = prefs.getUChar("map_coord", map_coord_system);
         map_source = prefs.getUChar("map_source", map_source);
+        if (map_source > 2)
+        {
+            map_source = 0;
+        }
+        map_contour_enabled = prefs.getBool("map_contour", map_contour_enabled);
         map_track_enabled = prefs.getBool("map_track", map_track_enabled);
         map_track_interval = prefs.getUChar("map_track_interval", map_track_interval);
         map_track_format = prefs.getUChar("map_track_format", map_track_format);
@@ -316,6 +323,7 @@ struct AppConfig
         prefs.begin("settings", false);
         prefs.putUChar("map_coord", map_coord_system);
         prefs.putUChar("map_source", map_source);
+        prefs.putBool("map_contour", map_contour_enabled);
         prefs.putBool("map_track", map_track_enabled);
         prefs.putUChar("map_track_interval", map_track_interval);
         prefs.putUChar("map_track_format", map_track_format);

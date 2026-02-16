@@ -7,6 +7,7 @@
 #include "../../../app/app_context.h"
 #include "../../../chat/infra/meshtastic/mt_region.h"
 #include "../../ui_common.h"
+#include "../../widgets/map/map_tiles.h"
 #include "../../widgets/top_bar.h"
 #include "node_info_page_layout.h"
 #include <cctype>
@@ -373,8 +374,14 @@ void update_location_map(const chat::contacts::NodeInfo& node)
         return;
     }
 
-    char path[64];
-    snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", kNodeInfoMapZoom, tile_x, tile_y);
+    char path[96];
+    uint8_t map_source = sanitize_map_source(app::AppContext::getInstance().getConfig().map_source);
+    if (!build_base_tile_path(kNodeInfoMapZoom, tile_x, tile_y, map_source, path, sizeof(path)))
+    {
+        lv_obj_add_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+        set_label_text(s_widgets.map_label, "No map");
+        return;
+    }
 
     lv_fs_file_t f;
     lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);

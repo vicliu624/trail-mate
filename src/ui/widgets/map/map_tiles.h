@@ -7,6 +7,7 @@
 #define MAP_TILES_H
 
 #include "lvgl.h"
+#include <cstddef>
 #include <cstdint> // For int32_t
 #include <vector>
 
@@ -41,6 +42,7 @@ struct MapAnchor
 struct DecodedTileCache
 {
     int32_t x, y, z;         // Tile coordinates
+    uint8_t map_source;      // Base map source (OSM/Terrain/Satellite)
     lv_image_dsc_t* img_dsc; // Decoded image descriptor (RGB565 data in RAM)
     uint32_t last_used_ms;   // For LRU eviction
     bool in_use;             // True if currently used by a visible tile
@@ -52,14 +54,18 @@ struct MapTile
     int32_t x;         // Tile X coordinate (wrapped, max 262,143 at zoom 18)
     int32_t y;         // Tile Y coordinate (clamped, max 262,143 at zoom 18)
     int z;             // Zoom level (0-18)
+    uint8_t map_source;       // Base map source used for this tile record
     lv_obj_t* img_obj; // NULL = not loaded, non-NULL = loaded (image or label placeholder)
+    lv_obj_t* contour_obj; // Optional contour overlay object (child of img_obj)
     bool visible;
     bool ever_visible;            // Track if tile was ever visible (for eviction priority)
     uint32_t last_used_ms;        // For LRU cache eviction
     uint32_t obj_evicted_ms;      // Timestamp when object was evicted (0 = not evicted)
     bool record_evicted;          // Record should be removed from vector
     int priority;                 // Loading priority (distance from screen center, lower = higher priority)
-    bool has_png_file;            // True if tile has PNG file (not placeholder)
+    bool has_png_file;            // True if tile has loaded base image file (PNG/JPG)
+    bool contour_checked;         // True if contour file lookup was attempted for this tile
+    bool contour_loaded;          // True if contour overlay object is present
     DecodedTileCache* cached_img; // Pointer to decoded image cache entry (NULL if not cached)
 };
 
@@ -132,6 +138,50 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
  * Load one tile (called by timer, not in calculate_required_tiles)
  */
 void tile_loader_step(TileContext& ctx);
+
+/**
+ * Normalize map source configuration value.
+ * 0 = OSM, 1 = Terrain, 2 = Satellite.
+ */
+uint8_t sanitize_map_source(uint8_t map_source);
+
+/**
+ * Human-readable map source label.
+ */
+const char* map_source_label(uint8_t map_source);
+
+/**
+ * Build base tile path for the selected source.
+ * Returns false when output buffer is invalid.
+ */
+bool build_base_tile_path(int z, int x, int y, uint8_t map_source, char* out_path, size_t out_size);
+
+/**
+ * Build contour tile path for current zoom (major contour profile only).
+ * Returns false when contour should not be shown at this zoom.
+ */
+bool build_contour_tile_path(int z, int x, int y, char* out_path, size_t out_size);
+
+/**
+ * Check whether the selected base map source directory exists on SD card.
+ */
+bool map_source_directory_available(uint8_t map_source);
+
+/**
+ * Check whether any supported contour directory exists on SD card.
+ */
+bool contour_directory_available();
+
+/**
+ * Consume one-shot notice when base tiles are missing in current view.
+ * Returns true once per map source switch when first missing tile is encountered.
+ */
+bool take_missing_tile_notice(uint8_t* out_map_source);
+
+/**
+ * Update runtime render options for map tile loader.
+ */
+void set_map_render_options(uint8_t map_source, bool contour_enabled);
 
 /**
  * Initialize tile context

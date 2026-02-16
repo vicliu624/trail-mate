@@ -26,6 +26,11 @@ void clear_modal_groups()
         lv_group_del(g_gps_state.tracker_modal.group);
         g_gps_state.tracker_modal.group = nullptr;
     }
+    if (g_gps_state.layer_modal.group)
+    {
+        lv_group_del(g_gps_state.layer_modal.group);
+        g_gps_state.layer_modal.group = nullptr;
+    }
 }
 
 void detach_group_objs()
@@ -50,6 +55,7 @@ void detach_group_objs()
     remove_if(g_gps_state.pan_h);
     remove_if(g_gps_state.pan_v);
     remove_if(g_gps_state.tracker_btn);
+    remove_if(g_gps_state.layer_btn);
     remove_if(g_gps_state.route_btn);
     remove_if(g_gps_state.pan_h_indicator);
     remove_if(g_gps_state.pan_v_indicator);
@@ -88,6 +94,10 @@ void on_root_deleted(lv_event_t* e)
     {
         modal_close(g_gps_state.zoom_modal);
     }
+    if (g_gps_state.layer_modal.is_open())
+    {
+        modal_close(g_gps_state.layer_modal);
+    }
     gps_tracker_cleanup();
     gps_route_cleanup();
     clear_modal_groups();
@@ -107,6 +117,7 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.pan_h = nullptr;
     g_gps_state.pan_v = nullptr;
     g_gps_state.tracker_btn = nullptr;
+    g_gps_state.layer_btn = nullptr;
     g_gps_state.route_btn = nullptr;
     g_gps_state.resolution_label = nullptr;
     g_gps_state.altitude_label = nullptr;

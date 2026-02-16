@@ -50,6 +50,8 @@ struct Widgets
     lv_obj_t* pan_v_label = nullptr;
     lv_obj_t* tracker_btn = nullptr;
     lv_obj_t* tracker_label = nullptr;
+    lv_obj_t* layer_btn = nullptr;
+    lv_obj_t* layer_label = nullptr;
     lv_obj_t* route_btn = nullptr;
     lv_obj_t* route_label = nullptr;
 

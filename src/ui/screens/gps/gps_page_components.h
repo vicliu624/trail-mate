@@ -21,6 +21,10 @@ void hide_pan_v_indicator();
 void show_zoom_popup();
 void hide_zoom_popup();
 
+// Map layer modal
+void show_layer_popup();
+void hide_layer_popup();
+
 // UI layout helper
 void fix_ui_elements_position();
 

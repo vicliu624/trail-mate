@@ -53,6 +53,7 @@ struct SettingsData
     // Map
     int map_coord_system = 0;
     int map_source = 0;
+    bool map_contour_enabled = false;
     bool map_track_enabled = false;
     int map_track_interval = 1;
     int map_track_format = 0;
