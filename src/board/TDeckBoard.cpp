@@ -312,6 +312,24 @@ int TDeckBoard::getBatteryLevel()
     return percent;
 }
 
+void TDeckBoard::setBrightness(uint8_t level)
+{
+    brightness_ = level;
+    if (!display_ready_)
+    {
+        return;
+    }
+
+    LilyGoDispArduinoSPI::setBrightness(level);
+#if defined(DISP_BL)
+    if (DISP_BL >= 0)
+    {
+        pinMode(DISP_BL, OUTPUT);
+        digitalWrite(DISP_BL, (level > 0) ? HIGH : LOW);
+    }
+#endif
+}
+
 bool TDeckBoard::isCardReady()
 {
     bool ready = false;
@@ -479,12 +497,13 @@ RotaryMsg_t TDeckBoard::getRotary()
         return msg;
     }
 
-    const uint32_t repeat_ms = 160;  // Minimum spacing between events
-    const uint32_t click_ms = 180;   // Click debounce
-    const uint32_t debounce_ms = 28; // Require stable press/release
-    const uint32_t release_ms = 40;  // Require neutral stable time
-    const uint8_t sample_window = 6;
-    const uint8_t sample_threshold = 4;
+    // T-Deck trackball tuning:
+    // - Use press-edge pulse detection to avoid mixed/sticky level states.
+    // - Direction mapping follows physical intuition:
+    //   up/left => ROTARY_DIR_UP, down/right => ROTARY_DIR_DOWN.
+    const uint32_t repeat_ms = 75;   // Minimum spacing between direction events
+    const uint32_t click_ms = 150;   // Click debounce
+    const uint32_t debounce_ms = 16; // Require stable press/release
 
     static bool up_state = false;
     static bool down_state = false;
@@ -497,179 +516,71 @@ RotaryMsg_t TDeckBoard::getRotary()
     static uint32_t left_change_ms = 0;
     static uint32_t right_change_ms = 0;
     static uint32_t click_change_ms = 0;
-    static bool lock_until_release = false;
-    static uint32_t release_change_ms = 0;
-    static uint8_t dir_samples[sample_window] = {0};
-    static uint8_t sample_pos = 0;
-    static uint8_t release_streak = 0;
+    bool up_pressed = false;
+    bool down_pressed = false;
+    bool left_pressed = false;
+    bool right_pressed = false;
+#if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
+    right_pressed = (digitalRead(TRACKBALL_RIGHT) == LOW);
+    left_pressed = (digitalRead(TRACKBALL_LEFT) == LOW);
+#endif
+#if defined(TRACKBALL_UP) && defined(TRACKBALL_DOWN)
+    up_pressed = (digitalRead(TRACKBALL_UP) == LOW);
+    down_pressed = (digitalRead(TRACKBALL_DOWN) == LOW);
+#endif
 
-    auto update_state = [&](bool pressed, bool& state, uint32_t& change_ms)
+    auto detect_press_edge = [&](bool pressed, bool& state, uint32_t& change_ms) -> bool
     {
         if (pressed != state)
         {
             state = pressed;
+            if (pressed && (now - change_ms) >= debounce_ms)
+            {
+                change_ms = now;
+                return true;
+            }
             change_ms = now;
         }
+        return false;
     };
 
-#if defined(TRACKBALL_RIGHT) && defined(TRACKBALL_LEFT)
-    const bool right_pressed = digitalRead(TRACKBALL_RIGHT) == LOW;
-    const bool left_pressed = digitalRead(TRACKBALL_LEFT) == LOW;
+    const bool up_edge = detect_press_edge(up_pressed, up_state, up_change_ms);
+    const bool down_edge = detect_press_edge(down_pressed, down_state, down_change_ms);
+    const bool left_edge = detect_press_edge(left_pressed, left_state, left_change_ms);
+    const bool right_edge = detect_press_edge(right_pressed, right_state, right_change_ms);
 
-    update_state(right_pressed, right_state, right_change_ms);
-    update_state(left_pressed, left_state, left_change_ms);
-#endif
+    const uint8_t up_score = (up_edge ? 1U : 0U) + (left_edge ? 1U : 0U);
+    const uint8_t down_score = (down_edge ? 1U : 0U) + (right_edge ? 1U : 0U);
 
-#if defined(TRACKBALL_UP) && defined(TRACKBALL_DOWN)
-    const bool up_pressed = digitalRead(TRACKBALL_UP) == LOW;
-    const bool down_pressed = digitalRead(TRACKBALL_DOWN) == LOW;
-
-    update_state(up_pressed, up_state, up_change_ms);
-    update_state(down_pressed, down_state, down_change_ms);
-#endif
-
-    const bool up_stable = up_state && (now - up_change_ms) >= debounce_ms;
-    const bool down_stable = down_state && (now - down_change_ms) >= debounce_ms;
-    const bool left_stable = left_state && (now - left_change_ms) >= debounce_ms;
-    const bool right_stable = right_state && (now - right_change_ms) >= debounce_ms;
-
-    const bool any_pressed = up_state || down_state || left_state || right_state;
-    if (lock_until_release)
-    {
-        if (!any_pressed)
-        {
-            if (release_change_ms == 0)
-            {
-                release_change_ms = now;
-            }
-            if ((now - release_change_ms) >= release_ms)
-            {
-                lock_until_release = false;
-                release_change_ms = 0;
-            }
-        }
-        else
-        {
-            release_change_ms = 0;
-        }
-    }
-
-    uint8_t raw_dir = 0;
-    const int stable_count =
-        (up_stable ? 1 : 0) + (down_stable ? 1 : 0) + (left_stable ? 1 : 0) + (right_stable ? 1 : 0);
-    if (stable_count == 1)
-    {
-        if (up_stable)
-        {
-            raw_dir = 1;
-        }
-        else if (down_stable)
-        {
-            raw_dir = 2;
-        }
-        else if (left_stable)
-        {
-            raw_dir = 3;
-        }
-        else if (right_stable)
-        {
-            raw_dir = 4;
-        }
-    }
-
-    dir_samples[sample_pos] = raw_dir;
-    sample_pos = (sample_pos + 1) % sample_window;
-
-    uint8_t up_count = 0;
-    uint8_t down_count = 0;
-    uint8_t left_count = 0;
-    uint8_t right_count = 0;
-    for (uint8_t i = 0; i < sample_window; ++i)
-    {
-        switch (dir_samples[i])
-        {
-        case 1:
-            up_count++;
-            break;
-        case 2:
-            down_count++;
-            break;
-        case 3:
-            left_count++;
-            break;
-        case 4:
-            right_count++;
-            break;
-        default:
-            break;
-        }
-    }
-
-    uint8_t candidate = 0;
-    uint8_t max_count = 0;
-    if (up_count > max_count)
-    {
-        max_count = up_count;
-        candidate = 1;
-    }
-    if (down_count > max_count)
-    {
-        max_count = down_count;
-        candidate = 2;
-    }
-    if (left_count > max_count)
-    {
-        max_count = left_count;
-        candidate = 3;
-    }
-    if (right_count > max_count)
-    {
-        max_count = right_count;
-        candidate = 4;
-    }
-
-    if (raw_dir == 0)
-    {
-        release_streak = (release_streak < 255) ? (release_streak + 1) : release_streak;
-    }
-    else
-    {
-        release_streak = 0;
-    }
-
-    if (lock_until_release && release_streak >= 2)
-    {
-        if (release_change_ms == 0)
-        {
-            release_change_ms = now;
-        }
-        if ((now - release_change_ms) >= release_ms)
-        {
-            lock_until_release = false;
-            release_change_ms = 0;
-        }
-    }
-
-    if (!lock_until_release && candidate != 0 && max_count >= sample_threshold &&
+    if ((up_score > 0 || down_score > 0) &&
         (now - last_trackball_ms_) >= repeat_ms)
     {
-        if (candidate == 1 || candidate == 4)
-        {
-            msg.dir = ROTARY_DIR_DOWN;
-        }
-        else if (candidate == 2 || candidate == 3)
+        if (up_score > down_score)
         {
             msg.dir = ROTARY_DIR_UP;
+            last_trackball_ms_ = now;
         }
-        last_trackball_ms_ = now;
-        lock_until_release = true;
-        release_streak = 0;
-        release_change_ms = 0;
+        else if (down_score > up_score)
+        {
+            msg.dir = ROTARY_DIR_DOWN;
+            last_trackball_ms_ = now;
+        }
     }
 
 #if defined(TRACKBALL_CLICK)
     const bool click_pressed = digitalRead(TRACKBALL_CLICK) == LOW;
-    update_state(click_pressed, click_state, click_change_ms);
+    if (click_pressed != click_state)
+    {
+        click_state = click_pressed;
+        click_change_ms = now;
+    }
+
+    // Re-arm click detection after a stable release, so every press can emit one event.
+    if (!click_state && (now - click_change_ms) >= debounce_ms)
+    {
+        click_consumed = false;
+    }
+
     if (click_state && (now - click_change_ms) >= debounce_ms &&
         !click_consumed && (now - last_click_ms_) >= click_ms)
     {

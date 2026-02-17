@@ -47,7 +47,7 @@ class TDeckBoard : public BoardBase,
     void handlePowerButton() override {}
     void softwareShutdown() override {}
 
-    void setBrightness(uint8_t level) override { brightness_ = level; }
+    void setBrightness(uint8_t level) override;
     uint8_t getBrightness() override { return brightness_; }
 
     bool hasKeyboard() override { return false; }
