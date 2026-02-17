@@ -26,23 +26,25 @@ class TeamController
                         const uint8_t* psk, size_t psk_len);
 
     bool onKick(const team::proto::TeamKick& kick,
-                chat::ChannelId channel, chat::NodeId dest = 0);
+                chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onTransferLeader(const team::proto::TeamTransferLeader& transfer,
-                          chat::ChannelId channel, chat::NodeId dest = 0);
+                          chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onKeyDist(const team::proto::TeamKeyDist& msg,
-                   chat::ChannelId channel, chat::NodeId dest);
+                   chat::ChannelId channel, chat::NodeId dest, bool want_ack = false);
     bool onKeyDistPlain(const team::proto::TeamKeyDist& msg,
-                        chat::ChannelId channel, chat::NodeId dest);
+                        chat::ChannelId channel, chat::NodeId dest, bool want_ack = false);
     bool onStatus(const team::proto::TeamStatus& status,
-                  chat::ChannelId channel, chat::NodeId dest = 0);
+                  chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onStatusPlain(const team::proto::TeamStatus& status,
-                       chat::ChannelId channel, chat::NodeId dest = 0);
+                       chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onPosition(const std::vector<uint8_t>& payload,
-                    chat::ChannelId channel);
+                    chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+    bool onWaypoint(const std::vector<uint8_t>& payload,
+                    chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onTrack(const std::vector<uint8_t>& payload,
-                 chat::ChannelId channel);
+                 chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onChat(const team::proto::TeamChatMessage& msg,
-                chat::ChannelId channel);
+                chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool requestNodeInfo(chat::NodeId dest, bool want_response);
     bool startPkiVerification(chat::NodeId dest);
     bool submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number);

@@ -8,6 +8,7 @@
 #include "../gps/usecase/gps_service.h"
 #include "../gps/usecase/track_recorder.h"
 #include "../hostlink/hostlink_bridge_radio.h"
+#include "../hostlink/hostlink_service.h"
 #include "../sys/event_bus.h"
 #include "../team/protocol/team_chat.h"
 #include "../ui/screens/team/team_ui_store.h"
@@ -229,6 +230,8 @@ void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
 
 void AppContext::update()
 {
+    hostlink::process_pending_commands();
+
     // Update chat service (process incoming messages)
     if (chat_service_)
     {

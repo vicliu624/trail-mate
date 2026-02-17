@@ -24,6 +24,7 @@ enum class FrameType : uint8_t
     CmdSetConfig = 0x12,
     CmdSetTime = 0x13,
     CmdGetGps = 0x14,
+    CmdTxAppData = 0x15,
 
     EvRxMsg = 0x80,
     EvTxResult = 0x81,
@@ -56,6 +57,7 @@ enum Capabilities : uint32_t
     CapAppData = 1u << 6,
     CapTeamState = 1u << 7,
     CapAprsGateway = 1u << 8,
+    CapTxAppData = 1u << 9,
 };
 
 enum class ConfigKey : uint8_t

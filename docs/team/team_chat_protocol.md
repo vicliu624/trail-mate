@@ -74,10 +74,19 @@ struct TeamChatLocation {
   int16_t alt_m;       // optional, 0=unknown
   uint16_t acc_m;      // optional, 0=unknown
   uint32_t ts;         // optional, 0=use header.ts
-  uint8_t  source;     // 0=GPS 1=Manual 2=CommandTarget
+  uint8_t  source;     // 位置语义图标，见下方映射
   bytes    label;      // optional short label
 };
 ```
+
+`source` 映射（与当前固件实现一致）：
+
+- `0`：None / 普通位置（无语义图标）
+- `1`：AreaCleared
+- `2`：BaseCamp
+- `3`：GoodFind
+- `4`：Rally
+- `5`：Sos
 
 ### 3.4 Command
 
@@ -156,6 +165,10 @@ struct TeamChatCommand {
 - Team Chat 作为独立通道：
   - 不影响普通聊天历史与通知
   - 可以逐步替换 Team 页的会话来源
+- `Location.source` 兼容建议（PC/上位机）：
+  - 若收到未知 `source`（不在 `0..5`），按普通 `Location` 渲染，不得丢弃整条消息
+  - 继续使用坐标与时间字段，`label` 存在时可用于展示
+  - 建议保留原始 `source` 值，便于前向兼容
 
 ---
 

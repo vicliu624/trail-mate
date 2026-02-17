@@ -147,6 +147,10 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
 {
     auto* plane = (LilyGo_Display*)lv_indev_get_user_data(drv);
     RotaryMsg_t msg = plane->getRotary();
+#if defined(ARDUINO_T_DECK)
+    data->enc_diff = 0;
+    data->state = LV_INDEV_STATE_RELEASED;
+#endif
 
     // If screen is sleeping, only wake it up, don't pass input to UI
     if (isScreenSleeping())
@@ -155,16 +159,22 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
         {
             updateUserActivity(); // Wake up screen
         }
+#if defined(ARDUINO_T_DECK)
+        // T-Deck path already reset above.
+#else
         data->enc_diff = 0;
         data->state = LV_INDEV_STATE_RELEASED; // Don't pass input to UI
+#endif
         return;
     }
 
     // If GPS is loading tiles, ignore input
     if (isGPSLoadingTiles())
     {
+#if !defined(ARDUINO_T_DECK)
         data->enc_diff = 0;
         data->state = LV_INDEV_STATE_RELEASED;
+#endif
         return;
     }
 
@@ -189,8 +199,10 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
             return;
         }
 
+#if !defined(ARDUINO_T_DECK)
         data->enc_diff = 0;
         data->state = LV_INDEV_STATE_RELEASED;
+#endif
         return;
     }
 
@@ -209,7 +221,9 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
         data->enc_diff = -1;
         break;
     default:
+#if !defined(ARDUINO_T_DECK)
         data->state = LV_INDEV_STATE_RELEASED;
+#endif
         break;
     }
     if (msg.centerBtnPressed)

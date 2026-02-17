@@ -14,6 +14,7 @@
 #include "screens/chat/chat_message_list_components.h"
 #include "widgets/ime/ime_widget.h"
 #include <memory>
+#include <vector>
 
 namespace chat
 {
@@ -133,6 +134,29 @@ class UiController
     void refreshTeamConversation();
     void startTeamConversationTimer();
     void stopTeamConversationTimer();
+    bool sendTeamLocationWithIcon(uint8_t icon_id);
+    void openTeamPositionPicker();
+    void closeTeamPositionPicker(bool restore_group);
+    void updateTeamPositionPickerHint(uint8_t icon_id);
+    void onTeamPositionIconSelected(uint8_t icon_id);
+    void onTeamPositionCancel();
+    bool isTeamPositionPickerOpen() const;
+
+    struct TeamPositionIconEventCtx
+    {
+        UiController* controller = nullptr;
+        uint8_t icon_id = 0;
+    };
+
+    std::vector<TeamPositionIconEventCtx*> team_position_icon_ctxs_;
+    lv_obj_t* team_position_picker_overlay_ = nullptr;
+    lv_obj_t* team_position_picker_panel_ = nullptr;
+    lv_obj_t* team_position_picker_desc_ = nullptr;
+    lv_group_t* team_position_picker_group_ = nullptr;
+    lv_group_t* team_position_prev_group_ = nullptr;
+
+    static void team_position_icon_event_cb(lv_event_t* e);
+    static void team_position_cancel_event_cb(lv_event_t* e);
 };
 
 } // namespace ui

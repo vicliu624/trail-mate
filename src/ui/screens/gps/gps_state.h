@@ -145,6 +145,19 @@ struct GPSPageState
     std::vector<TeamMarker> team_markers;
     uint32_t team_marker_last_ms = 0;
 
+    struct TeamSignalMarker
+    {
+        uint32_t member_id = 0;
+        int32_t lat_e7 = 0;
+        int32_t lon_e7 = 0;
+        uint32_t ts = 0;
+        uint8_t icon_id = 0;
+        lv_obj_t* obj = nullptr;
+        lv_obj_t* label = nullptr;
+    };
+    std::vector<TeamSignalMarker> team_signal_markers;
+    uint32_t team_signal_marker_last_ms = 0;
+
     // pan button editing state (for toggle behavior) - DEPRECATED, use edit_mode instead
     bool pan_h_editing = false; // Horizontal pan button in editing mode (rotary scrolls map)
     bool pan_v_editing = false; // Vertical pan button in editing mode (rotary scrolls map)

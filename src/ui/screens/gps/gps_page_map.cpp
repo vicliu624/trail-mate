@@ -1,5 +1,6 @@
 #include "gps_page_map.h"
 #include "../../../app/app_context.h"
+#include "../../../team/protocol/team_location_marker.h"
 #include "../../gps/gps_hw_status.h"
 #include "../../ui_common.h"
 #include "../../widgets/map/map_tiles.h"
@@ -17,11 +18,17 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 
 // GPS marker icon (room-24px), defined in C image file
 extern "C"
 {
     extern const lv_image_dsc_t room_24px;
+    extern const lv_image_dsc_t AreaCleared;
+    extern const lv_image_dsc_t BaseCamp;
+    extern const lv_image_dsc_t GoodFind;
+    extern const lv_image_dsc_t rally;
+    extern const lv_image_dsc_t sos;
 }
 
 #define GPS_DEBUG 0
@@ -163,6 +170,13 @@ constexpr int kTeamMarkerLabelOffsetY = 0;
 constexpr uint32_t kTeamMarkerColor = 0x00AEEF;
 constexpr uint32_t kTeamMarkerBorder = 0xFFFFFF;
 constexpr uint32_t kTeamMarkerRefreshMs = 1000;
+constexpr int kTeamSignalMarkerSize = 22;
+constexpr int kTeamSignalLabelWidth = 108;
+constexpr int kTeamSignalLabelOffsetX = 8;
+constexpr int kTeamSignalLabelOffsetY = -2;
+constexpr uint32_t kTeamSignalRefreshMs = 1000;
+constexpr size_t kTeamSignalLoadCount = 80;
+constexpr size_t kTeamSignalMaxVisible = 12;
 constexpr uint32_t kMemberPanelRefreshMs = 2000;
 constexpr uint32_t kInvalidMemberId = 0xFFFFFFFFu;
 
@@ -365,6 +379,102 @@ int find_team_marker_index(uint32_t member_id)
     for (size_t i = 0; i < g_gps_state.team_markers.size(); ++i)
     {
         if (g_gps_state.team_markers[i].member_id == member_id)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+const lv_image_dsc_t* team_signal_icon_src(uint8_t icon_id)
+{
+    switch (static_cast<team::proto::TeamLocationMarkerIcon>(icon_id))
+    {
+    case team::proto::TeamLocationMarkerIcon::AreaCleared:
+        return &AreaCleared;
+    case team::proto::TeamLocationMarkerIcon::BaseCamp:
+        return &BaseCamp;
+    case team::proto::TeamLocationMarkerIcon::GoodFind:
+        return &GoodFind;
+    case team::proto::TeamLocationMarkerIcon::Rally:
+        return &rally;
+    case team::proto::TeamLocationMarkerIcon::Sos:
+        return &sos;
+    default:
+        return nullptr;
+    }
+}
+
+std::string format_signal_time(uint32_t ts)
+{
+    if (ts < 1577836800U)
+    {
+        return "--:--";
+    }
+    time_t t = ui_apply_timezone_offset(static_cast<time_t>(ts));
+    struct tm* info = gmtime(&t);
+    if (!info)
+    {
+        return "--:--";
+    }
+    char buf[8] = {0};
+    strftime(buf, sizeof(buf), "%H:%M", info);
+    return std::string(buf);
+}
+
+lv_obj_t* create_team_signal_marker_obj(uint8_t icon_id)
+{
+    if (!g_gps_state.map)
+    {
+        return nullptr;
+    }
+    const lv_image_dsc_t* src = team_signal_icon_src(icon_id);
+    if (!src)
+    {
+        return nullptr;
+    }
+    lv_obj_t* img = lv_image_create(g_gps_state.map);
+    lv_image_set_src(img, src);
+    lv_obj_set_size(img, kTeamSignalMarkerSize, kTeamSignalMarkerSize);
+    lv_obj_clear_flag(img, LV_OBJ_FLAG_SCROLLABLE);
+    return img;
+}
+
+lv_obj_t* create_team_signal_marker_label(const std::string& text)
+{
+    if (!g_gps_state.map)
+    {
+        return nullptr;
+    }
+    lv_obj_t* label = lv_label_create(g_gps_state.map);
+    lv_label_set_text(label, text.c_str());
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(label, kTeamSignalLabelWidth);
+    lv_obj_set_style_bg_opa(label, LV_OPA_70, 0);
+    lv_obj_set_style_bg_color(label, lv_color_hex(0x1F1F1F), 0);
+    lv_obj_set_style_border_width(label, 0, 0);
+    lv_obj_set_style_pad_hor(label, 3, 0);
+    lv_obj_set_style_pad_ver(label, 1, 0);
+    lv_obj_set_style_radius(label, 4, 0);
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_SCROLLABLE);
+    return label;
+}
+
+void update_team_signal_marker_label(lv_obj_t* label, const std::string& text)
+{
+    if (!label)
+    {
+        return;
+    }
+    lv_label_set_text(label, text.c_str());
+}
+
+int find_team_signal_marker_index(uint32_t member_id)
+{
+    for (size_t i = 0; i < g_gps_state.team_signal_markers.size(); ++i)
+    {
+        if (g_gps_state.team_signal_markers[i].member_id == member_id)
         {
             return static_cast<int>(i);
         }
@@ -585,6 +695,7 @@ void update_map_tiles(bool lightweight)
             update_gps_marker_position();
         }
         update_team_marker_positions();
+        update_team_signal_marker_positions();
     }
 
     lv_obj_invalidate(g_gps_state.map);
@@ -688,6 +799,24 @@ void clear_team_markers()
         }
     }
     g_gps_state.team_markers.clear();
+}
+
+void clear_team_signal_markers()
+{
+    for (auto& marker : g_gps_state.team_signal_markers)
+    {
+        if (marker.obj)
+        {
+            lv_obj_del(marker.obj);
+            marker.obj = nullptr;
+        }
+        if (marker.label)
+        {
+            lv_obj_del(marker.label);
+            marker.label = nullptr;
+        }
+    }
+    g_gps_state.team_signal_markers.clear();
 }
 
 static void clear_member_panel_buttons()
@@ -849,6 +978,7 @@ void refresh_member_panel(bool force)
             g_gps_state.selected_member_id = kInvalidMemberId;
             clear_team_markers();
         }
+        clear_team_signal_markers();
         return;
     }
     (void)team_id;
@@ -956,6 +1086,237 @@ void update_team_marker_positions()
             }
         }
     }
+}
+
+void update_team_signal_marker_positions()
+{
+    if (!is_alive() || g_gps_state.map == NULL)
+    {
+        return;
+    }
+    if (!g_gps_state.tile_ctx.anchor || !g_gps_state.tile_ctx.anchor->valid)
+    {
+        for (auto& marker : g_gps_state.team_signal_markers)
+        {
+            if (marker.obj)
+            {
+                lv_obj_add_flag(marker.obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (marker.label)
+            {
+                lv_obj_add_flag(marker.label, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        return;
+    }
+
+    for (auto& marker : g_gps_state.team_signal_markers)
+    {
+        if (!marker.obj)
+        {
+            continue;
+        }
+
+        double lat = static_cast<double>(marker.lat_e7) / 1e7;
+        double lng = static_cast<double>(marker.lon_e7) / 1e7;
+        double map_lat = 0.0;
+        double map_lon = 0.0;
+        gps_map_transform(lat, lng, map_lat, map_lon);
+        int screen_x = 0;
+        int screen_y = 0;
+        if (gps_screen_pos(g_gps_state.tile_ctx, map_lat, map_lon, screen_x, screen_y))
+        {
+            lv_obj_set_pos(marker.obj,
+                           screen_x - kTeamSignalMarkerSize / 2,
+                           screen_y - kTeamSignalMarkerSize / 2);
+            lv_obj_clear_flag(marker.obj, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(marker.obj);
+
+            if (marker.label)
+            {
+                lv_obj_update_layout(marker.label);
+                int label_h = lv_obj_get_height(marker.label);
+                int label_x = screen_x + kTeamSignalMarkerSize / 2 + kTeamSignalLabelOffsetX;
+                int label_y = screen_y - (label_h / 2) + kTeamSignalLabelOffsetY;
+                lv_obj_set_pos(marker.label, label_x, label_y);
+                lv_obj_clear_flag(marker.label, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_move_foreground(marker.label);
+            }
+        }
+        else
+        {
+            lv_obj_add_flag(marker.obj, LV_OBJ_FLAG_HIDDEN);
+            if (marker.label)
+            {
+                lv_obj_add_flag(marker.label, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+}
+
+void refresh_team_signal_markers_from_chatlog()
+{
+    if (!is_alive() || g_gps_state.map == NULL)
+    {
+        return;
+    }
+
+    uint32_t now_ms = millis();
+    if (now_ms - g_gps_state.team_signal_marker_last_ms < kTeamSignalRefreshMs)
+    {
+        return;
+    }
+    g_gps_state.team_signal_marker_last_ms = now_ms;
+
+    team::TeamId team_id{};
+    std::vector<team::ui::TeamMemberUi> members;
+    if (!load_team_data(team_id, members))
+    {
+        clear_team_signal_markers();
+        return;
+    }
+
+    std::vector<team::ui::TeamChatLogEntry> entries;
+    if (!team::ui::team_ui_chatlog_load_recent(team_id, kTeamSignalLoadCount, entries))
+    {
+        clear_team_signal_markers();
+        return;
+    }
+
+    struct SignalSample
+    {
+        uint32_t member_id = 0;
+        int32_t lat_e7 = 0;
+        int32_t lon_e7 = 0;
+        uint32_t ts = 0;
+        uint8_t icon_id = 0;
+        std::string label;
+    };
+
+    std::vector<SignalSample> samples;
+    samples.reserve(kTeamSignalMaxVisible);
+    uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
+
+    for (auto it = entries.rbegin(); it != entries.rend(); ++it)
+    {
+        if (it->type != team::proto::TeamChatType::Location)
+        {
+            continue;
+        }
+        team::proto::TeamChatLocation loc;
+        if (!team::proto::decodeTeamChatLocation(it->payload.data(), it->payload.size(), &loc))
+        {
+            continue;
+        }
+        if (!team::proto::team_location_marker_icon_is_valid(loc.source))
+        {
+            continue;
+        }
+
+        uint32_t member_id = it->incoming ? it->peer_id : self_id;
+        if (member_id == 0)
+        {
+            member_id = self_id;
+        }
+
+        auto exists = std::find_if(samples.begin(), samples.end(),
+                                   [&](const SignalSample& sample)
+                                   { return sample.member_id == member_id; });
+        if (exists != samples.end())
+        {
+            continue;
+        }
+
+        SignalSample sample;
+        sample.member_id = member_id;
+        sample.lat_e7 = loc.lat_e7;
+        sample.lon_e7 = loc.lon_e7;
+        sample.ts = (loc.ts != 0) ? loc.ts : it->ts;
+        sample.icon_id = loc.source;
+        sample.label = resolve_member_label(members, member_id) + " " + format_signal_time(sample.ts);
+        samples.push_back(sample);
+
+        if (samples.size() >= kTeamSignalMaxVisible)
+        {
+            break;
+        }
+    }
+
+    if (samples.empty())
+    {
+        clear_team_signal_markers();
+        return;
+    }
+
+    for (auto it = g_gps_state.team_signal_markers.begin(); it != g_gps_state.team_signal_markers.end();)
+    {
+        auto keep = std::find_if(samples.begin(), samples.end(),
+                                 [&](const SignalSample& sample)
+                                 { return sample.member_id == it->member_id; });
+        if (keep == samples.end())
+        {
+            if (it->obj)
+            {
+                lv_obj_del(it->obj);
+            }
+            if (it->label)
+            {
+                lv_obj_del(it->label);
+            }
+            it = g_gps_state.team_signal_markers.erase(it);
+            continue;
+        }
+        ++it;
+    }
+
+    for (const auto& sample : samples)
+    {
+        int idx = find_team_signal_marker_index(sample.member_id);
+        if (idx < 0)
+        {
+            GPSPageState::TeamSignalMarker marker;
+            marker.member_id = sample.member_id;
+            marker.lat_e7 = sample.lat_e7;
+            marker.lon_e7 = sample.lon_e7;
+            marker.ts = sample.ts;
+            marker.icon_id = sample.icon_id;
+            marker.obj = create_team_signal_marker_obj(sample.icon_id);
+            marker.label = create_team_signal_marker_label(sample.label);
+            g_gps_state.team_signal_markers.push_back(marker);
+            continue;
+        }
+
+        auto& marker = g_gps_state.team_signal_markers[idx];
+        marker.lat_e7 = sample.lat_e7;
+        marker.lon_e7 = sample.lon_e7;
+        marker.ts = sample.ts;
+        if (marker.icon_id != sample.icon_id)
+        {
+            if (marker.obj)
+            {
+                const lv_image_dsc_t* src = team_signal_icon_src(sample.icon_id);
+                if (src)
+                {
+                    lv_image_set_src(marker.obj, src);
+                }
+            }
+            marker.icon_id = sample.icon_id;
+        }
+        if (!marker.obj)
+        {
+            marker.obj = create_team_signal_marker_obj(sample.icon_id);
+        }
+        if (!marker.label)
+        {
+            marker.label = create_team_signal_marker_label(sample.label);
+        }
+        else
+        {
+            update_team_signal_marker_label(marker.label, sample.label);
+        }
+    }
+
+    update_team_signal_marker_positions();
 }
 
 void refresh_team_markers_from_posring()

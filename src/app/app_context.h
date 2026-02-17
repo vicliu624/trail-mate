@@ -113,6 +113,16 @@ class AppContext
         return mesh_adapter_ ? mesh_adapter_->getNodeId() : 0;
     }
 
+    chat::IMeshAdapter* getMeshAdapter()
+    {
+        return mesh_adapter_.get();
+    }
+
+    const chat::IMeshAdapter* getMeshAdapter() const
+    {
+        return mesh_adapter_.get();
+    }
+
     void saveConfig()
     {
         config_.save(preferences_);

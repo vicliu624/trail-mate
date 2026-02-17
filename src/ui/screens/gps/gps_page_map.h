@@ -21,6 +21,9 @@ void hide_gps_marker();
 void refresh_team_markers_from_posring();
 void update_team_marker_positions();
 void clear_team_markers();
+void refresh_team_signal_markers_from_chatlog();
+void update_team_signal_marker_positions();
+void clear_team_signal_markers();
 void refresh_member_panel(bool force = false);
 
 // UI status and title updates (moved from presenter)

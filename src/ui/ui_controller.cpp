@@ -7,12 +7,22 @@
 #include "../../app/app_context.h"
 #include "../gps/gps_service_api.h"
 #include "../sys/event_bus.h"
+#include "../team/protocol/team_location_marker.h"
 #include "screens/team/team_ui_store.h"
 #include "ui_common.h"
 #include "widgets/system_notification.h"
 #include <Arduino.h>
 #include <cmath>
 #include <ctime>
+
+extern "C"
+{
+    extern const lv_image_dsc_t AreaCleared;
+    extern const lv_image_dsc_t BaseCamp;
+    extern const lv_image_dsc_t GoodFind;
+    extern const lv_image_dsc_t rally;
+    extern const lv_image_dsc_t sos;
+}
 
 extern bool isScreenSleeping();
 
@@ -28,6 +38,38 @@ constexpr chat::ChannelId kTeamChatChannel =
     static_cast<chat::ChannelId>(kTeamChatChannelRaw);
 constexpr uint32_t kTeamComposeMsgIdStart = 1;
 uint32_t s_team_msg_id = kTeamComposeMsgIdStart;
+constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
+
+struct TeamPositionIconOption
+{
+    uint8_t icon_id;
+    const char* meaning;
+    const lv_image_dsc_t* image;
+};
+
+const TeamPositionIconOption kTeamPositionIconOptions[] = {
+    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::AreaCleared),
+     "Area Cleared", &AreaCleared},
+    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::BaseCamp),
+     "Base Camp", &BaseCamp},
+    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::GoodFind),
+     "Good Find", &GoodFind},
+    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::Rally),
+     "Rally Point", &rally},
+    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::Sos),
+     "Emergency SOS", &sos}};
+
+const TeamPositionIconOption* find_team_position_icon_option(uint8_t icon_id)
+{
+    for (const auto& item : kTeamPositionIconOptions)
+    {
+        if (item.icon_id == icon_id)
+        {
+            return &item;
+        }
+    }
+    return nullptr;
+}
 
 chat::ConversationId teamConversationId()
 {
@@ -87,7 +129,13 @@ std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
             char coord_buf[64];
             uint8_t coord_fmt = app::AppContext::getInstance().getConfig().gps_coord_format;
             ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
-            if (!loc.label.empty())
+            const bool has_marker_icon = team::proto::team_location_marker_icon_is_valid(loc.source);
+            const char* marker_name = team::proto::team_location_marker_icon_name(loc.source);
+            if (has_marker_icon)
+            {
+                snprintf(buf, sizeof(buf), "%s: %s", marker_name, coord_buf);
+            }
+            else if (!loc.label.empty())
             {
                 snprintf(buf, sizeof(buf), "Location: %s %s",
                          loc.label.c_str(), coord_buf);
@@ -217,6 +265,7 @@ UiController::UiController(lv_obj_t* parent, chat::ChatService& service, chat::C
 
 UiController::~UiController()
 {
+    closeTeamPositionPicker(false);
     stopTeamConversationTimer();
     service_.setModelEnabled(false);
     channel_list_.reset();
@@ -374,6 +423,7 @@ void UiController::onChatEvent(sys::Event* event)
 
 void UiController::switchToChannelList()
 {
+    closeTeamPositionPicker(false);
     state_ = State::ChannelList;
     stopTeamConversationTimer();
     team_conv_active_ = false;
@@ -412,6 +462,7 @@ void UiController::switchToChannelList()
 
 void UiController::switchToConversation(chat::ConversationId conv)
 {
+    closeTeamPositionPicker(false);
     state_ = State::Conversation;
     current_channel_ = conv.channel;
     current_conv_ = conv;
@@ -521,6 +572,7 @@ void UiController::switchToConversation(chat::ConversationId conv)
 
 void UiController::switchToCompose(chat::ConversationId conv)
 {
+    closeTeamPositionPicker(false);
     state_ = State::Compose;
     current_channel_ = conv.channel;
     current_conv_ = conv;
@@ -727,6 +779,22 @@ void UiController::refreshTeamConversation()
             msg.from = entry.incoming ? entry.peer_id : 0;
             msg.timestamp = entry.ts;
             msg.text = format_team_chat_entry(entry);
+            if (entry.type == team::proto::TeamChatType::Location)
+            {
+                team::proto::TeamChatLocation loc;
+                if (team::proto::decodeTeamChatLocation(entry.payload.data(),
+                                                        entry.payload.size(),
+                                                        &loc))
+                {
+                    if (team::proto::team_location_marker_icon_is_valid(loc.source))
+                    {
+                        msg.team_location_icon = loc.source;
+                    }
+                    msg.has_geo = true;
+                    msg.geo_lat_e7 = loc.lat_e7;
+                    msg.geo_lon_e7 = loc.lon_e7;
+                }
+            }
             msg.status = entry.incoming ? chat::MessageStatus::Incoming : chat::MessageStatus::Sent;
             conversation_->addMessage(msg);
         }
@@ -765,6 +833,365 @@ void UiController::stopTeamConversationTimer()
     team_conv_timer_ = nullptr;
 }
 
+bool UiController::isTeamPositionPickerOpen() const
+{
+    return team_position_picker_overlay_ != nullptr;
+}
+
+void UiController::updateTeamPositionPickerHint(uint8_t icon_id)
+{
+    if (!team_position_picker_desc_)
+    {
+        return;
+    }
+    if (icon_id == 0)
+    {
+        lv_label_set_text(team_position_picker_desc_, "Cancel");
+        return;
+    }
+    const TeamPositionIconOption* option = find_team_position_icon_option(icon_id);
+    if (option)
+    {
+        lv_label_set_text(team_position_picker_desc_, option->meaning);
+    }
+    else
+    {
+        lv_label_set_text(team_position_picker_desc_, "Select marker");
+    }
+}
+
+void UiController::team_position_icon_event_cb(lv_event_t* e)
+{
+    auto* ctx = static_cast<TeamPositionIconEventCtx*>(lv_event_get_user_data(e));
+    if (!ctx || !ctx->controller)
+    {
+        return;
+    }
+    UiController* controller = ctx->controller;
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_FOCUSED)
+    {
+        controller->updateTeamPositionPickerHint(ctx->icon_id);
+        lv_obj_scroll_to_view(lv_event_get_target_obj(e), LV_ANIM_ON);
+        return;
+    }
+    if (code == LV_EVENT_KEY)
+    {
+        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
+        if (key != LV_KEY_ENTER)
+        {
+            return;
+        }
+    }
+    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
+    {
+        controller->onTeamPositionIconSelected(ctx->icon_id);
+    }
+}
+
+void UiController::team_position_cancel_event_cb(lv_event_t* e)
+{
+    auto* controller = static_cast<UiController*>(lv_event_get_user_data(e));
+    if (!controller)
+    {
+        return;
+    }
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_FOCUSED)
+    {
+        controller->updateTeamPositionPickerHint(0);
+        return;
+    }
+    if (code == LV_EVENT_KEY)
+    {
+        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
+        if (key != LV_KEY_ENTER)
+        {
+            return;
+        }
+    }
+    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
+    {
+        controller->onTeamPositionCancel();
+    }
+}
+
+void UiController::openTeamPositionPicker()
+{
+    if (!team_conv_active_ || !compose_ || isTeamPositionPickerOpen() || !parent_)
+    {
+        return;
+    }
+
+    team_position_prev_group_ = lv_group_get_default();
+    team_position_picker_group_ = lv_group_create();
+    set_default_group(team_position_picker_group_);
+
+    team_position_picker_overlay_ = lv_obj_create(parent_);
+    lv_obj_set_size(team_position_picker_overlay_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(team_position_picker_overlay_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(team_position_picker_overlay_, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(team_position_picker_overlay_, 0, 0);
+    lv_obj_set_style_pad_all(team_position_picker_overlay_, 0, 0);
+    lv_obj_set_style_radius(team_position_picker_overlay_, 0, 0);
+    lv_obj_clear_flag(team_position_picker_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+
+    team_position_picker_panel_ = lv_obj_create(team_position_picker_overlay_);
+    lv_obj_set_size(team_position_picker_panel_, LV_PCT(92), 186);
+    lv_obj_center(team_position_picker_panel_);
+    lv_obj_set_style_bg_color(team_position_picker_panel_, lv_color_hex(0xFAF0D8), 0);
+    lv_obj_set_style_bg_opa(team_position_picker_panel_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(team_position_picker_panel_, 1, 0);
+    lv_obj_set_style_border_color(team_position_picker_panel_, lv_color_hex(0xE7C98F), 0);
+    lv_obj_set_style_radius(team_position_picker_panel_, 10, 0);
+    lv_obj_set_style_pad_all(team_position_picker_panel_, 10, 0);
+    lv_obj_clear_flag(team_position_picker_panel_, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* title_bar = lv_obj_create(team_position_picker_panel_);
+    lv_obj_set_size(title_bar, LV_PCT(100), 28);
+    lv_obj_set_style_bg_color(title_bar, lv_color_hex(0xEBA341), 0);
+    lv_obj_set_style_bg_opa(title_bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(title_bar, 0, 0);
+    lv_obj_set_style_radius(title_bar, 6, 0);
+    lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, -4);
+    lv_obj_clear_flag(title_bar, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* title = lv_label_create(title_bar);
+    lv_label_set_text(title, "Share Position Marker");
+    lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_center(title);
+
+    lv_obj_t* icon_row = lv_obj_create(team_position_picker_panel_);
+    lv_obj_set_size(icon_row, LV_PCT(100), 72);
+    lv_obj_set_style_bg_opa(icon_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(icon_row, 0, 0);
+    lv_obj_set_style_pad_all(icon_row, 0, 0);
+    lv_obj_set_style_pad_column(icon_row, 6, 0);
+    lv_obj_set_flex_flow(icon_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(icon_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_align(icon_row, LV_ALIGN_TOP_MID, 0, 24);
+    lv_obj_set_scroll_dir(icon_row, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(icon_row, LV_SCROLLBAR_MODE_OFF);
+
+    for (const auto& option : kTeamPositionIconOptions)
+    {
+        lv_obj_t* btn = lv_btn_create(icon_row);
+        lv_obj_set_size(btn, 60, 60);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(0xF6E6C6), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_width(btn, 1, LV_PART_MAIN);
+        lv_obj_set_style_border_color(btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
+        lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
+        lv_obj_set_style_outline_width(btn, 2, LV_PART_MAIN | LV_STATE_FOCUSED);
+        lv_obj_set_style_outline_color(btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_FOCUSED);
+        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t* img = lv_image_create(btn);
+        lv_image_set_src(img, option.image);
+        lv_obj_center(img);
+
+        auto* ctx = new TeamPositionIconEventCtx();
+        ctx->controller = this;
+        ctx->icon_id = option.icon_id;
+        team_position_icon_ctxs_.push_back(ctx);
+
+        lv_obj_add_event_cb(btn, team_position_icon_event_cb, LV_EVENT_CLICKED, ctx);
+        lv_obj_add_event_cb(btn, team_position_icon_event_cb, LV_EVENT_KEY, ctx);
+        lv_obj_add_event_cb(btn, team_position_icon_event_cb, LV_EVENT_FOCUSED, ctx);
+
+        lv_group_add_obj(team_position_picker_group_, btn);
+    }
+
+    team_position_picker_desc_ = lv_label_create(team_position_picker_panel_);
+    lv_label_set_text(team_position_picker_desc_, "Select marker");
+    lv_obj_set_width(team_position_picker_desc_, LV_PCT(100));
+    lv_obj_set_style_text_align(team_position_picker_desc_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(team_position_picker_desc_, lv_color_hex(0x8A6A3A), 0);
+    lv_obj_align(team_position_picker_desc_, LV_ALIGN_TOP_MID, 0, 104);
+
+    lv_obj_t* cancel_btn = lv_btn_create(team_position_picker_panel_);
+    lv_obj_set_size(cancel_btn, 96, 28);
+    lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0xF6E6C6), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cancel_btn, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(cancel_btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
+    lv_obj_set_style_radius(cancel_btn, 6, LV_PART_MAIN);
+    lv_obj_set_style_outline_width(cancel_btn, 2, LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_set_style_outline_color(cancel_btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -6);
+    lv_obj_clear_flag(cancel_btn, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
+    lv_label_set_text(cancel_label, "Cancel");
+    lv_obj_set_style_text_color(cancel_label, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_center(cancel_label);
+
+    lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_KEY, this);
+    lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_FOCUSED, this);
+    lv_group_add_obj(team_position_picker_group_, cancel_btn);
+
+    if (!team_position_icon_ctxs_.empty() && team_position_picker_group_)
+    {
+        lv_obj_t* first_btn = lv_group_get_focused(team_position_picker_group_);
+        if (!first_btn)
+        {
+            first_btn = lv_obj_get_child(icon_row, 0);
+        }
+        if (first_btn)
+        {
+            lv_group_focus_obj(first_btn);
+        }
+        updateTeamPositionPickerHint(team_position_icon_ctxs_.front()->icon_id);
+    }
+    lv_obj_move_foreground(team_position_picker_overlay_);
+}
+
+void UiController::closeTeamPositionPicker(bool restore_group)
+{
+    for (auto* ctx : team_position_icon_ctxs_)
+    {
+        delete ctx;
+    }
+    team_position_icon_ctxs_.clear();
+
+    if (team_position_picker_group_ && lv_group_get_default() == team_position_picker_group_)
+    {
+        if (restore_group && team_position_prev_group_)
+        {
+            set_default_group(team_position_prev_group_);
+        }
+        else
+        {
+            set_default_group(nullptr);
+        }
+    }
+
+    if (team_position_picker_overlay_ && lv_obj_is_valid(team_position_picker_overlay_))
+    {
+        lv_obj_del(team_position_picker_overlay_);
+    }
+
+    if (team_position_picker_group_)
+    {
+        lv_group_del(team_position_picker_group_);
+    }
+
+    team_position_picker_overlay_ = nullptr;
+    team_position_picker_panel_ = nullptr;
+    team_position_picker_desc_ = nullptr;
+    team_position_picker_group_ = nullptr;
+    team_position_prev_group_ = nullptr;
+}
+
+void UiController::onTeamPositionCancel()
+{
+    closeTeamPositionPicker(true);
+}
+
+bool UiController::sendTeamLocationWithIcon(uint8_t icon_id)
+{
+    if (!team::proto::team_location_marker_icon_is_valid(icon_id))
+    {
+        ::ui::SystemNotification::show("Invalid marker", 1500);
+        return false;
+    }
+
+    team::ui::TeamUiSnapshot snap;
+    if (!team::ui::team_ui_get_store().load(snap) || !snap.has_team_id)
+    {
+        ::ui::SystemNotification::show("Team chat send failed", 2000);
+        return false;
+    }
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    team::TeamController* controller = app_ctx.getTeamController();
+    if (!controller)
+    {
+        ::ui::SystemNotification::show("Team chat send failed", 2000);
+        return false;
+    }
+    if (!snap.has_team_psk)
+    {
+        ::ui::SystemNotification::show("Team keys not ready", 2000);
+        return false;
+    }
+    if (!controller->setKeysFromPsk(snap.team_id,
+                                    snap.security_round,
+                                    snap.team_psk.data(),
+                                    snap.team_psk.size()))
+    {
+        ::ui::SystemNotification::show("Team keys not ready", 2000);
+        return false;
+    }
+
+    gps::GpsState gps_state = gps::gps_get_data();
+    if (!gps_state.valid)
+    {
+        ::ui::SystemNotification::show("No GPS fix", 2000);
+        return false;
+    }
+
+    uint32_t ts = static_cast<uint32_t>(time(nullptr));
+    if (ts < kMinValidEpochSeconds)
+    {
+        ts = static_cast<uint32_t>(millis() / 1000);
+    }
+
+    team::proto::TeamChatLocation loc;
+    loc.lat_e7 = static_cast<int32_t>(gps_state.lat * 1e7);
+    loc.lon_e7 = static_cast<int32_t>(gps_state.lng * 1e7);
+    if (gps_state.has_alt)
+    {
+        double alt = gps_state.alt_m;
+        if (alt > 32767.0) alt = 32767.0;
+        if (alt < -32768.0) alt = -32768.0;
+        loc.alt_m = static_cast<int16_t>(lround(alt));
+    }
+    loc.ts = ts;
+    loc.source = icon_id;
+    loc.label = team::proto::team_location_marker_icon_name(icon_id);
+
+    std::vector<uint8_t> payload;
+    if (!team::proto::encodeTeamChatLocation(loc, payload))
+    {
+        ::ui::SystemNotification::show("Team location encode failed", 2000);
+        return false;
+    }
+
+    team::proto::TeamChatMessage msg;
+    msg.header.type = team::proto::TeamChatType::Location;
+    msg.header.ts = ts;
+    msg.header.msg_id = s_team_msg_id++;
+    if (s_team_msg_id == 0)
+    {
+        s_team_msg_id = kTeamComposeMsgIdStart;
+    }
+    msg.payload = payload;
+
+    bool ok = controller->onChat(msg, chat::ChannelId::PRIMARY);
+    if (ok)
+    {
+        team::ui::team_ui_chatlog_append_structured(snap.team_id,
+                                                    0,
+                                                    false,
+                                                    ts,
+                                                    team::proto::TeamChatType::Location,
+                                                    payload);
+    }
+    else
+    {
+        ::ui::SystemNotification::show("Team chat send failed", 2000);
+    }
+    return ok;
+}
+
+void UiController::onTeamPositionIconSelected(uint8_t icon_id)
+{
+    closeTeamPositionPicker(false);
+    sendTeamLocationWithIcon(icon_id);
+    switchToConversation(current_conv_);
+}
+
 void UiController::handleConversationAction(ChatConversationScreen::ActionIntent intent)
 {
     if (intent == ChatConversationScreen::ActionIntent::Reply)
@@ -777,6 +1204,14 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
 {
     if (!compose_)
     {
+        return;
+    }
+    if (isTeamPositionPickerOpen())
+    {
+        if (intent == ChatComposeScreen::ActionIntent::Cancel)
+        {
+            onTeamPositionCancel();
+        }
         return;
     }
     if (intent == ChatComposeScreen::ActionIntent::Cancel)
@@ -818,72 +1253,16 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
             return;
         }
 
-        uint32_t ts = static_cast<uint32_t>(time(nullptr));
-        if (ts < 1577836800U)
-        {
-            ts = static_cast<uint32_t>(millis() / 1000);
-        }
-
         if (intent == ChatComposeScreen::ActionIntent::Position)
         {
-            std::string label = compose_->getText();
-            gps::GpsState gps_state = gps::gps_get_data();
-            if (!gps_state.valid)
-            {
-                ::ui::SystemNotification::show("No GPS fix", 2000);
-                return;
-            }
-
-            team::proto::TeamChatLocation loc;
-            loc.lat_e7 = static_cast<int32_t>(gps_state.lat * 1e7);
-            loc.lon_e7 = static_cast<int32_t>(gps_state.lng * 1e7);
-            if (gps_state.has_alt)
-            {
-                double alt = gps_state.alt_m;
-                if (alt > 32767.0) alt = 32767.0;
-                if (alt < -32768.0) alt = -32768.0;
-                loc.alt_m = static_cast<int16_t>(lround(alt));
-            }
-            loc.ts = ts;
-            if (!label.empty())
-            {
-                loc.label = label;
-            }
-
-            std::vector<uint8_t> payload;
-            if (!team::proto::encodeTeamChatLocation(loc, payload))
-            {
-                ::ui::SystemNotification::show("Team location encode failed", 2000);
-                switchToConversation(current_conv_);
-                return;
-            }
-
-            team::proto::TeamChatMessage msg;
-            msg.header.type = team::proto::TeamChatType::Location;
-            msg.header.ts = ts;
-            msg.header.msg_id = s_team_msg_id++;
-            if (s_team_msg_id == 0)
-            {
-                s_team_msg_id = kTeamComposeMsgIdStart;
-            }
-            msg.payload = payload;
-
-            bool ok = controller->onChat(msg, chat::ChannelId::PRIMARY);
-            if (ok)
-            {
-                team::ui::team_ui_chatlog_append_structured(snap.team_id,
-                                                            0,
-                                                            false,
-                                                            ts,
-                                                            team::proto::TeamChatType::Location,
-                                                            payload);
-            }
-            else
-            {
-                ::ui::SystemNotification::show("Team chat send failed", 2000);
-            }
-            switchToConversation(current_conv_);
+            openTeamPositionPicker();
             return;
+        }
+
+        uint32_t ts = static_cast<uint32_t>(time(nullptr));
+        if (ts < kMinValidEpochSeconds)
+        {
+            ts = static_cast<uint32_t>(millis() / 1000);
         }
 
         std::string text = compose_->getText();
@@ -937,6 +1316,7 @@ void UiController::exitToMenu()
     {
         return;
     }
+    closeTeamPositionPicker(false);
     exiting_ = true;
     stopTeamConversationTimer();
     team_conv_active_ = false;

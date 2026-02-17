@@ -44,6 +44,7 @@ Constraints:
 | 0x12 | CMD_SET_CONFIG | PC→Dev | Set config values (TLV) |
 | 0x13 | CMD_SET_TIME   | PC→Dev | Set device epoch time |
 | 0x14 | CMD_GET_GPS    | PC→Dev | Request current GPS snapshot |
+| 0x15 | CMD_TX_APP_DATA | PC→Dev | Send app payload (raw or Team-routed) |
 | 0x80 | EV_RX_MSG      | Dev→PC | Device received a message |
 | 0x81 | EV_TX_RESULT   | Dev→PC | Send result for CMD_TX_MSG |
 | 0x82 | EV_STATUS      | Dev→PC | Device status/config (TLV) |
@@ -73,9 +74,10 @@ Bitmask (uint32):
 - bit3: `CapStatus`
 - bit4: `CapLogs`
 - bit5: `CapGps`
-- bit6: `CapAppData`
+- bit6: `CapAppData` (uplink `EV_APP_DATA`)
 - bit7: `CapTeamState`
 - bit8: `CapAprsGateway`
+- bit9: `CapTxAppData` (downlink `CMD_TX_APP_DATA`)
 
 `CapAprsGateway` indicates EV_APP_DATA/EV_RX_MSG carry RX metadata TLV and
 the APRS config keys are supported.
@@ -174,6 +176,33 @@ u64 epoch_seconds
 
 ### CMD_GET_GPS (0x14)
 Payload: empty. Device replies with EV_GPS.
+
+### CMD_TX_APP_DATA (0x15)
+Payload:
+
+```
+u32  portnum
+u32  to
+u8   channel
+u8   flags
+u16  payload_len
+u8[] payload
+```
+
+Flags:
+- bit0: `want_response` (forwarded to mesh adapter `want_ack`)
+- bit1: `team_mgmt_plain` (only for Team mgmt `portnum=300`; forces plain mgmt send path)
+
+Behavior:
+- Non-Team `portnum`: device forwards payload via mesh adapter `sendAppData(...)`.
+- Team `portnum` (300..304): device decodes/reroutes to Team send path so Team crypto and wire
+  semantics stay consistent with on-device behavior.
+  - 300 (MGMT): payload must be TeamMgmt wire (`version/type/payload`), then routed to
+    Kick/TransferLeader/KeyDist/Status send handlers.
+  - 301 (POSITION): payload is Team position plaintext, encrypted and sent by Team service.
+  - 302 (WAYPOINT): payload is Team waypoint plaintext, encrypted and sent by Team service.
+  - 303 (CHAT): payload must be TeamChatMessage wire, then encrypted and sent by Team service.
+  - 304 (TRACK): payload is Team track plaintext, encrypted and sent by Team service.
 
 ## Event Payloads
 
@@ -460,8 +489,8 @@ TeamParams          // if has_params
 
 How PC should respond:
 - EV_APP_DATA itself requires no ACK.
-- Mesh-level response is by sending the corresponding Team mgmt message
-  (not implemented in HostLink yet).
+- Mesh-level response is by sending the corresponding Team mgmt message with
+  `CMD_TX_APP_DATA(portnum=300)`.
 
 #### TEAM_POSITION_APP (portnum 301)
 
@@ -545,6 +574,20 @@ u8  source
 u16 label_len
 u8  label[label_len]
 ```
+
+`source` mapping (Team location marker icon):
+- 0: None / generic location
+- 1: AreaCleared
+- 2: BaseCamp
+- 3: GoodFind
+- 4: Rally
+- 5: Sos
+
+PC compatibility recommendation:
+- If `source` is unknown (not in 0..5), treat it as a normal `Location` message.
+- Keep rendering coordinates/time, and use `label` if present.
+- Do not fail decode or drop the whole TEAM_CHAT payload because of unknown `source`.
+- For forward compatibility, preserve raw `source` value in logs/telemetry.
 
 Command:
 ```

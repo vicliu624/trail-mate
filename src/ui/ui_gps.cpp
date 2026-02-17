@@ -213,6 +213,7 @@ static void gps_update_timer_cb(lv_timer_t* timer)
 
     refresh_member_panel(false);
     refresh_team_markers_from_posring();
+    refresh_team_signal_markers_from_chatlog();
 
     if (g_gps_state.zoom_modal.is_open())
     {

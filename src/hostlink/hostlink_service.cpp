@@ -9,6 +9,10 @@
 #include "../app/app_context.h"
 #include "../board/BoardBase.h"
 #include "../gps/gps_service_api.h"
+#include "../team/protocol/team_chat.h"
+#include "../team/protocol/team_mgmt.h"
+#include "../team/protocol/team_portnum.h"
+#include "../team/usecase/team_controller.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -29,6 +33,9 @@ constexpr uint32_t kHandshakeTimeoutMs = 5000;
 constexpr uint32_t kStatusIntervalMs = 1500;
 constexpr uint32_t kGpsIntervalMs = 1000;
 constexpr size_t kTxQueueSize = 12;
+constexpr size_t kCmdQueueSize = 12;
+constexpr uint8_t kCmdTxAppFlagWantResponse = 1 << 0;
+constexpr uint8_t kCmdTxAppFlagTeamMgmtPlain = 1 << 1;
 
 struct TxItem
 {
@@ -36,8 +43,26 @@ struct TxItem
     size_t len = 0;
 };
 
+enum class PendingCommandType : uint8_t
+{
+    TxMsg = 1,
+    TxAppData = 2,
+};
+
+struct PendingCommand
+{
+    PendingCommandType type = PendingCommandType::TxMsg;
+    uint32_t to = 0;
+    uint32_t portnum = 0;
+    uint8_t channel = 0;
+    uint8_t flags = 0;
+    uint16_t payload_len = 0;
+    uint8_t payload[kMaxFrameLen] = {};
+};
+
 TaskHandle_t s_task = nullptr;
 QueueHandle_t s_tx_queue = nullptr;
+QueueHandle_t s_cmd_queue = nullptr;
 volatile bool s_stop = false;
 Status s_status{};
 uint16_t s_tx_seq = 1;
@@ -111,7 +136,8 @@ void send_hello_ack(uint16_t seq)
     const uint16_t proto = kProtocolVersion;
     const uint16_t max_len = static_cast<uint16_t>(kMaxFrameLen);
     const uint32_t caps =
-        CapTxMsg | CapConfig | CapSetTime | CapStatus | CapLogs | CapGps | CapAppData | CapTeamState | CapAprsGateway;
+        CapTxMsg | CapConfig | CapSetTime | CapStatus | CapLogs | CapGps |
+        CapAppData | CapTeamState | CapAprsGateway | CapTxAppData;
 
     payload.push_back(static_cast<uint8_t>(proto & 0xFF));
     payload.push_back(static_cast<uint8_t>((proto >> 8) & 0xFF));
@@ -275,6 +301,211 @@ bool parse_u64(const uint8_t* data, size_t len, size_t& off, uint64_t& out)
     return true;
 }
 
+ErrorCode map_team_send_error(team::TeamService::SendError err)
+{
+    switch (err)
+    {
+    case team::TeamService::SendError::None:
+        return ErrorCode::Ok;
+    case team::TeamService::SendError::KeysNotReady:
+        return ErrorCode::NotInMode;
+    case team::TeamService::SendError::MeshSendFail:
+        return ErrorCode::Busy;
+    case team::TeamService::SendError::EncodeFail:
+    case team::TeamService::SendError::EncryptFail:
+    default:
+        return ErrorCode::Internal;
+    }
+}
+
+ErrorCode map_team_send_result(bool ok, team::TeamController* controller)
+{
+    if (ok)
+    {
+        return ErrorCode::Ok;
+    }
+    if (!controller)
+    {
+        return ErrorCode::Internal;
+    }
+    return map_team_send_error(controller->getLastSendError());
+}
+
+ErrorCode send_team_mgmt_wire(team::TeamController* controller,
+                              const uint8_t* payload, size_t payload_len,
+                              chat::ChannelId channel, chat::NodeId to,
+                              bool want_response, bool prefer_plain)
+{
+    if (!controller || !payload)
+    {
+        return ErrorCode::Internal;
+    }
+
+    uint8_t version = 0;
+    team::proto::TeamMgmtType type = team::proto::TeamMgmtType::Status;
+    std::vector<uint8_t> mgmt_payload;
+    if (!team::proto::decodeTeamMgmtMessage(payload, payload_len,
+                                            &version, &type, mgmt_payload))
+    {
+        return ErrorCode::InvalidParam;
+    }
+    if (version != team::proto::kTeamMgmtVersion)
+    {
+        return ErrorCode::InvalidParam;
+    }
+
+    bool ok = false;
+    switch (type)
+    {
+    case team::proto::TeamMgmtType::Kick:
+    {
+        team::proto::TeamKick msg;
+        if (!team::proto::decodeTeamKick(mgmt_payload.data(), mgmt_payload.size(), &msg))
+        {
+            return ErrorCode::InvalidParam;
+        }
+        ok = controller->onKick(msg, channel, to, want_response);
+        break;
+    }
+    case team::proto::TeamMgmtType::TransferLeader:
+    {
+        team::proto::TeamTransferLeader msg;
+        if (!team::proto::decodeTeamTransferLeader(mgmt_payload.data(), mgmt_payload.size(), &msg))
+        {
+            return ErrorCode::InvalidParam;
+        }
+        ok = controller->onTransferLeader(msg, channel, to, want_response);
+        break;
+    }
+    case team::proto::TeamMgmtType::KeyDist:
+    {
+        team::proto::TeamKeyDist msg;
+        if (!team::proto::decodeTeamKeyDist(mgmt_payload.data(), mgmt_payload.size(), &msg))
+        {
+            return ErrorCode::InvalidParam;
+        }
+        ok = prefer_plain
+                 ? controller->onKeyDistPlain(msg, channel, to, want_response)
+                 : controller->onKeyDist(msg, channel, to, want_response);
+        break;
+    }
+    case team::proto::TeamMgmtType::Status:
+    {
+        team::proto::TeamStatus msg;
+        if (!team::proto::decodeTeamStatus(mgmt_payload.data(), mgmt_payload.size(), &msg))
+        {
+            return ErrorCode::InvalidParam;
+        }
+        ok = prefer_plain
+                 ? controller->onStatusPlain(msg, channel, to, want_response)
+                 : controller->onStatus(msg, channel, to, want_response);
+        break;
+    }
+    default:
+        return ErrorCode::Unsupported;
+    }
+
+    return map_team_send_result(ok, controller);
+}
+
+bool enqueue_pending_command(const PendingCommand& command)
+{
+    if (!s_cmd_queue)
+    {
+        return false;
+    }
+    PendingCommand copy = command;
+    return xQueueSend(s_cmd_queue, &copy, 0) == pdPASS;
+}
+
+ErrorCode execute_cmd_tx_msg(const PendingCommand& command)
+{
+    auto& app = app::AppContext::getInstance();
+    chat::ChannelId ch = static_cast<chat::ChannelId>(command.channel);
+    std::string text(reinterpret_cast<const char*>(command.payload), command.payload_len);
+    chat::MessageId msg_id = app.getChatService().sendText(ch, text, command.to);
+    if (msg_id == 0)
+    {
+        return ErrorCode::Busy;
+    }
+    return ErrorCode::Ok;
+}
+
+ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
+{
+    const bool want_response = (command.flags & kCmdTxAppFlagWantResponse) != 0;
+    const bool prefer_plain_mgmt = (command.flags & kCmdTxAppFlagTeamMgmtPlain) != 0;
+    chat::ChannelId ch = static_cast<chat::ChannelId>(command.channel);
+    const uint8_t* payload = command.payload;
+    const uint16_t payload_len = command.payload_len;
+
+    auto& app = app::AppContext::getInstance();
+    team::TeamController* controller = app.getTeamController();
+    switch (command.portnum)
+    {
+    case team::proto::TEAM_MGMT_APP:
+        return send_team_mgmt_wire(controller, payload, payload_len, ch, command.to,
+                                   want_response, prefer_plain_mgmt);
+    case team::proto::TEAM_POSITION_APP:
+    {
+        if (!controller)
+        {
+            return ErrorCode::Internal;
+        }
+        std::vector<uint8_t> app_payload(payload, payload + payload_len);
+        return map_team_send_result(controller->onPosition(app_payload, ch, command.to, want_response),
+                                    controller);
+    }
+    case team::proto::TEAM_WAYPOINT_APP:
+    {
+        if (!controller)
+        {
+            return ErrorCode::Internal;
+        }
+        std::vector<uint8_t> app_payload(payload, payload + payload_len);
+        return map_team_send_result(controller->onWaypoint(app_payload, ch, command.to, want_response),
+                                    controller);
+    }
+    case team::proto::TEAM_TRACK_APP:
+    {
+        if (!controller)
+        {
+            return ErrorCode::Internal;
+        }
+        std::vector<uint8_t> app_payload(payload, payload + payload_len);
+        return map_team_send_result(controller->onTrack(app_payload, ch, command.to, want_response),
+                                    controller);
+    }
+    case team::proto::TEAM_CHAT_APP:
+    {
+        if (!controller)
+        {
+            return ErrorCode::Internal;
+        }
+        team::proto::TeamChatMessage msg;
+        if (!team::proto::decodeTeamChatMessage(payload, payload_len, &msg) ||
+            msg.header.version != team::proto::kTeamChatVersion)
+        {
+            return ErrorCode::InvalidParam;
+        }
+        return map_team_send_result(controller->onChat(msg, ch, command.to, want_response), controller);
+    }
+    default:
+        break;
+    }
+
+    chat::IMeshAdapter* mesh = app.getMeshAdapter();
+    if (!mesh)
+    {
+        return ErrorCode::Internal;
+    }
+    if (!mesh->sendAppData(ch, command.portnum, payload, payload_len, command.to, want_response))
+    {
+        return ErrorCode::Busy;
+    }
+    return ErrorCode::Ok;
+}
+
 ErrorCode handle_cmd_tx_msg(const Frame& frame)
 {
     size_t off = 0;
@@ -304,12 +535,73 @@ ErrorCode handle_cmd_tx_msg(const Frame& frame)
     {
         return ErrorCode::InvalidParam;
     }
+    if (channel >= static_cast<uint8_t>(chat::ChannelId::MAX_CHANNELS))
+    {
+        return ErrorCode::InvalidParam;
+    }
 
-    std::string text(reinterpret_cast<const char*>(frame.payload.data() + off), text_len);
-    auto& app = app::AppContext::getInstance();
-    chat::ChannelId ch = static_cast<chat::ChannelId>(channel);
-    chat::MessageId msg_id = app.getChatService().sendText(ch, text, to);
-    if (msg_id == 0)
+    PendingCommand command{};
+    command.type = PendingCommandType::TxMsg;
+    command.to = to;
+    command.channel = channel;
+    command.flags = flags;
+    command.payload_len = text_len;
+    memcpy(command.payload, frame.payload.data() + off, text_len);
+
+    if (!enqueue_pending_command(command))
+    {
+        return ErrorCode::Busy;
+    }
+    return ErrorCode::Ok;
+}
+
+ErrorCode handle_cmd_tx_app_data(const Frame& frame)
+{
+    size_t off = 0;
+    uint32_t portnum = 0;
+    uint32_t to = 0;
+    uint16_t payload_len = 0;
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, portnum))
+    {
+        return ErrorCode::InvalidParam;
+    }
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, to))
+    {
+        return ErrorCode::InvalidParam;
+    }
+    if (off + 2 > frame.payload.size())
+    {
+        return ErrorCode::InvalidParam;
+    }
+    uint8_t channel = frame.payload[off++];
+    uint8_t flags = frame.payload[off++];
+    if (!parse_u16(frame.payload.data(), frame.payload.size(), off, payload_len))
+    {
+        return ErrorCode::InvalidParam;
+    }
+    if (off + payload_len != frame.payload.size())
+    {
+        return ErrorCode::InvalidParam;
+    }
+
+    if (channel >= static_cast<uint8_t>(chat::ChannelId::MAX_CHANNELS))
+    {
+        return ErrorCode::InvalidParam;
+    }
+
+    PendingCommand command{};
+    command.type = PendingCommandType::TxAppData;
+    command.to = to;
+    command.portnum = portnum;
+    command.channel = channel;
+    command.flags = flags;
+    command.payload_len = payload_len;
+    if (payload_len > 0)
+    {
+        memcpy(command.payload, frame.payload.data() + off, payload_len);
+    }
+
+    if (!enqueue_pending_command(command))
     {
         return ErrorCode::Busy;
     }
@@ -398,6 +690,9 @@ void handle_frame(const Frame& frame)
     case FrameType::CmdGetGps:
         result = handle_cmd_get_gps();
         break;
+    case FrameType::CmdTxAppData:
+        result = handle_cmd_tx_app_data(frame);
+        break;
     default:
         result = ErrorCode::Unsupported;
         break;
@@ -431,6 +726,10 @@ void hostlink_task(void* /*arg*/)
             set_state(LinkState::Waiting);
             s_handshake_deadline = 0;
             s_decoder.reset();
+            if (s_cmd_queue)
+            {
+                xQueueReset(s_cmd_queue);
+            }
         }
         else
         {
@@ -513,6 +812,10 @@ void start()
     {
         s_tx_queue = xQueueCreate(kTxQueueSize, sizeof(TxItem));
     }
+    if (!s_cmd_queue)
+    {
+        s_cmd_queue = xQueueCreate(kCmdQueueSize, sizeof(PendingCommand));
+    }
     xTaskCreate(hostlink_task, "hostlink", 6 * 1024, nullptr, 5, &s_task);
 }
 
@@ -537,8 +840,49 @@ void stop()
         vQueueDelete(s_tx_queue);
         s_tx_queue = nullptr;
     }
+    if (s_cmd_queue)
+    {
+        xQueueReset(s_cmd_queue);
+        vQueueDelete(s_cmd_queue);
+        s_cmd_queue = nullptr;
+    }
     usb_cdc::stop();
     set_state(LinkState::Stopped);
+}
+
+void process_pending_commands()
+{
+    if (!s_cmd_queue)
+    {
+        return;
+    }
+    if (s_status.state != LinkState::Ready)
+    {
+        xQueueReset(s_cmd_queue);
+        return;
+    }
+
+    PendingCommand command{};
+    while (xQueueReceive(s_cmd_queue, &command, 0) == pdPASS)
+    {
+        ErrorCode result = ErrorCode::Unsupported;
+        switch (command.type)
+        {
+        case PendingCommandType::TxMsg:
+            result = execute_cmd_tx_msg(command);
+            break;
+        case PendingCommandType::TxAppData:
+            result = execute_cmd_tx_app_data(command);
+            break;
+        default:
+            result = ErrorCode::Unsupported;
+            break;
+        }
+        if (result != ErrorCode::Ok)
+        {
+            s_status.last_error = static_cast<uint32_t>(result);
+        }
+    }
 }
 
 bool is_active()

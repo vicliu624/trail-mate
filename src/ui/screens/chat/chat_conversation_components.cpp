@@ -11,10 +11,21 @@
 #include "chat_conversation_layout.h"
 #include "chat_conversation_styles.h"
 
+#include "../../../team/protocol/team_location_marker.h"
+
 #include <Arduino.h>
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+
+extern "C"
+{
+    extern const lv_image_dsc_t AreaCleared;
+    extern const lv_image_dsc_t BaseCamp;
+    extern const lv_image_dsc_t GoodFind;
+    extern const lv_image_dsc_t rally;
+    extern const lv_image_dsc_t sos;
+}
 
 namespace chat
 {
@@ -30,6 +41,25 @@ constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
 constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
 constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
 } // namespace
+
+static const lv_image_dsc_t* team_location_icon_src(uint8_t icon_id)
+{
+    switch (static_cast<team::proto::TeamLocationMarkerIcon>(icon_id))
+    {
+    case team::proto::TeamLocationMarkerIcon::AreaCleared:
+        return &AreaCleared;
+    case team::proto::TeamLocationMarkerIcon::BaseCamp:
+        return &BaseCamp;
+    case team::proto::TeamLocationMarkerIcon::GoodFind:
+        return &GoodFind;
+    case team::proto::TeamLocationMarkerIcon::Rally:
+        return &rally;
+    case team::proto::TeamLocationMarkerIcon::Sos:
+        return &sos;
+    default:
+        return nullptr;
+    }
+}
 
 static bool is_valid_epoch_ts(uint32_t ts)
 {
@@ -343,6 +373,18 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     else
     {
         lv_label_set_text(item.time_label, time_buf);
+    }
+
+    if (team::proto::team_location_marker_icon_is_valid(msg.team_location_icon))
+    {
+        const lv_image_dsc_t* icon = team_location_icon_src(msg.team_location_icon);
+        if (icon)
+        {
+            lv_obj_t* marker_icon = lv_image_create(bubble);
+            lv_image_set_src(marker_icon, icon);
+            lv_obj_set_size(marker_icon, 20, 20);
+            lv_obj_set_style_pad_bottom(marker_icon, 2, 0);
+        }
     }
 
     item.text_label = chat::ui::layout::create_bubble_text(bubble);

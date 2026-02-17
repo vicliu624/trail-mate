@@ -151,10 +151,19 @@ struct ChatMessage
     MessageId msg_id;
     uint32_t timestamp; // Unix timestamp (seconds)
     std::string text;
+    uint8_t team_location_icon; // Team location semantic icon id (0 = none)
+    bool has_geo;
+    int32_t geo_lat_e7;
+    int32_t geo_lon_e7;
     MessageStatus status;
 
     ChatMessage() : channel(ChannelId::PRIMARY), from(0), peer(0), msg_id(0),
-                    timestamp(0), status(MessageStatus::Incoming) {}
+                    timestamp(0),
+                    team_location_icon(0),
+                    has_geo(false),
+                    geo_lat_e7(0),
+                    geo_lon_e7(0),
+                    status(MessageStatus::Incoming) {}
 };
 
 /**
