@@ -1,9 +1,9 @@
 #if defined(ARDUINO_T_WATCH_S3)
 #include "ui/watch_face.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstdint>
 
 namespace
 {

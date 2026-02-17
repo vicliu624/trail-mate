@@ -91,4 +91,3 @@ void apply_all(const layout::Widgets& w)
 } // namespace chat::ui::compose::styles
 
 #endif
-

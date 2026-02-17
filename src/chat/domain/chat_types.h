@@ -214,20 +214,20 @@ struct MeshIncomingData
 struct MeshConfig
 {
     // Meshtastic radio configuration
-    uint8_t region;        // LoRa region (0=US, 1=EU, etc.)
-    bool use_preset;       // true: use modem_preset, false: use manual params
-    uint8_t modem_preset;  // Modem preset index
-    float bandwidth_khz;   // Manual bandwidth when use_preset=false
-    uint8_t spread_factor; // Manual SF when use_preset=false
-    uint8_t coding_rate;   // Manual CR denominator (5..8) when use_preset=false
-    int8_t tx_power;       // TX power in dBm
-    uint8_t hop_limit;     // Maximum hop limit (1-7)
-    bool tx_enabled;       // Disable TX when false
+    uint8_t region;           // LoRa region (0=US, 1=EU, etc.)
+    bool use_preset;          // true: use modem_preset, false: use manual params
+    uint8_t modem_preset;     // Modem preset index
+    float bandwidth_khz;      // Manual bandwidth when use_preset=false
+    uint8_t spread_factor;    // Manual SF when use_preset=false
+    uint8_t coding_rate;      // Manual CR denominator (5..8) when use_preset=false
+    int8_t tx_power;          // TX power in dBm
+    uint8_t hop_limit;        // Maximum hop limit (1-7)
+    bool tx_enabled;          // Disable TX when false
     bool override_duty_cycle; // Ignore duty cycle based throttling when true
-    uint16_t channel_num;      // 0 = auto hash, otherwise 1..N channel slot
+    uint16_t channel_num;     // 0 = auto hash, otherwise 1..N channel slot
     float frequency_offset_mhz;
     float override_frequency_mhz; // 0 = disabled
-    bool enable_relay;          // Reserved relay switch (not currently routed)
+    bool enable_relay;            // Reserved relay switch (not currently routed)
 
     // Channel encryption keys (PSK for encrypted channels)
     uint8_t primary_key[16];   // Primary channel key (usually empty for public)

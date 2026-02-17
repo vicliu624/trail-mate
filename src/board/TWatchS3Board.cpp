@@ -2,10 +2,10 @@
 
 #include "display/drivers/ST7789WatchS3.h"
 #include <Wire.h>
+#include <ctime>
 #include <esp_idf_version.h>
 #include <esp_sleep.h>
 #include <limits>
-#include <ctime>
 
 namespace
 {
@@ -47,7 +47,7 @@ void apply_tx_power(SX1262Access& radio, int8_t tx_power)
     radio.setOutputPower(clipped);
 }
 #endif
-}
+} // namespace
 
 TWatchS3Board::TWatchS3Board()
     : LilyGo_Display(SPI_DRIVER, false),

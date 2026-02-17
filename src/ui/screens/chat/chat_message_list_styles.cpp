@@ -169,4 +169,3 @@ void apply_label_placeholder(lv_obj_t* label)
 } // namespace chat::ui::message_list::styles
 
 #endif
-

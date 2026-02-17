@@ -65,4 +65,3 @@ bool isValidRegionPresetId(uint8_t id)
 
 } // namespace meshcore
 } // namespace chat
-

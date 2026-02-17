@@ -51,11 +51,11 @@ struct DecodedTileCache
 // Map tile structure
 struct MapTile
 {
-    int32_t x;         // Tile X coordinate (wrapped, max 262,143 at zoom 18)
-    int32_t y;         // Tile Y coordinate (clamped, max 262,143 at zoom 18)
-    int z;             // Zoom level (0-18)
-    uint8_t map_source;       // Base map source used for this tile record
-    lv_obj_t* img_obj; // NULL = not loaded, non-NULL = loaded (image or label placeholder)
+    int32_t x;             // Tile X coordinate (wrapped, max 262,143 at zoom 18)
+    int32_t y;             // Tile Y coordinate (clamped, max 262,143 at zoom 18)
+    int z;                 // Zoom level (0-18)
+    uint8_t map_source;    // Base map source used for this tile record
+    lv_obj_t* img_obj;     // NULL = not loaded, non-NULL = loaded (image or label placeholder)
     lv_obj_t* contour_obj; // Optional contour overlay object (child of img_obj)
     bool visible;
     bool ever_visible;            // Track if tile was ever visible (for eviction priority)

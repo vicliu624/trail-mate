@@ -150,4 +150,3 @@ lv_coord_t get_msg_list_content_width(lv_obj_t* msg_list)
 } // namespace chat::ui::layout
 
 #endif
-

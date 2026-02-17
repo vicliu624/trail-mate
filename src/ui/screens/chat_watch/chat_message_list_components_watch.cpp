@@ -105,8 +105,8 @@ chat::ConversationId ChatMessageListScreen::getSelectedConversation() const
 }
 
 void ChatMessageListScreen::setActionCallback(void (*cb)(ActionIntent intent,
-                                                        const chat::ConversationId& conv,
-                                                        void*),
+                                                         const chat::ConversationId& conv,
+                                                         void*),
                                               void* user_data)
 {
     action_cb_ = cb;
@@ -134,7 +134,8 @@ void ChatMessageListScreen::showMenu()
     lv_obj_clean(menu_panel_);
     list_items_.clear();
 
-    auto make_btn = [&](lv_obj_t** btn_out, lv_obj_t** label_out, const char* text) {
+    auto make_btn = [&](lv_obj_t** btn_out, lv_obj_t** label_out, const char* text)
+    {
         lv_obj_t* btn = lv_btn_create(menu_panel_);
         lv_obj_set_width(btn, LV_PCT(100));
         lv_obj_set_height(btn, kMenuButtonHeight);

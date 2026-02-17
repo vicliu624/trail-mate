@@ -192,4 +192,3 @@ void apply_bubble_status(lv_obj_t* label)
 } // namespace chat::ui::conversation::styles
 
 #endif
-

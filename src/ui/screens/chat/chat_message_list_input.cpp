@@ -347,4 +347,3 @@ void focus_list(Binding* binding)
 } // namespace chat::ui::message_list::input
 
 #endif
-

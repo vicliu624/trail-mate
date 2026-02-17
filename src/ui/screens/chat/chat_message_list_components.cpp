@@ -731,4 +731,3 @@ void ChatMessageListScreen::clear_all_timers()
 } // namespace chat
 
 #endif
-

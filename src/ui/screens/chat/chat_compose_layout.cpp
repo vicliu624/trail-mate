@@ -86,4 +86,3 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 } // namespace chat::ui::compose::layout
 
 #endif
-

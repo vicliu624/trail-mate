@@ -30,4 +30,3 @@ void bind_textarea_events(const layout::Widgets& w, void* user_data,
 } // namespace chat::ui::compose::input
 
 #endif
-

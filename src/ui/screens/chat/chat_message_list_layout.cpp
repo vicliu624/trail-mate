@@ -185,4 +185,3 @@ lv_obj_t* create_placeholder(lv_obj_t* parent)
 } // namespace chat::ui::layout
 
 #endif
-

@@ -1014,7 +1014,7 @@ void setup()
     lv_obj_set_style_text_align(desc_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(desc_label, ui::theme::text(), 0);
 
-    #if !defined(ARDUINO_T_WATCH_S3)
+#if !defined(ARDUINO_T_WATCH_S3)
     node_id_label = lv_label_create(menu_panel);
     lv_obj_set_width(node_id_label, LV_SIZE_CONTENT);
     lv_obj_set_style_text_align(node_id_label, LV_TEXT_ALIGN_LEFT, 0);
@@ -1033,23 +1033,23 @@ void setup()
         snprintf(node_id_buf, sizeof(node_id_buf), "ID: -");
     }
     lv_label_set_text(node_id_label, node_id_buf);
-    #endif
+#endif
 
     if (lv_display_get_physical_horizontal_resolution(NULL) < 320)
     {
         lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_16, 0);
         lv_obj_align(desc_label, LV_ALIGN_BOTTOM_MID, 0, -25);
-        #if !defined(ARDUINO_T_WATCH_S3)
+#if !defined(ARDUINO_T_WATCH_S3)
         lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_12, 0);
         lv_obj_align(node_id_label, LV_ALIGN_BOTTOM_LEFT, 5, -25);
-        #endif
+#endif
     }
     else
     {
         lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_20, 0);
-        #if !defined(ARDUINO_T_WATCH_S3)
+#if !defined(ARDUINO_T_WATCH_S3)
         lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_14, 0);
-        #endif
+#endif
     }
     lv_label_set_long_mode(desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
@@ -1078,40 +1078,46 @@ void setup()
 
     lv_timer_t* time_timer = lv_timer_create([](lv_timer_t* timer)
                                              {
-        if (time_label == nullptr) {
+                                                 if (time_label == nullptr)
+                                                 {
 #if defined(ARDUINO_T_WATCH_S3)
-            update_watch_face_time();
+                                                     update_watch_face_time();
 #endif
-            return;
-        }
-        
-        // Check if RTC is ready
-        if (!board.isRTCReady()) {
-            lv_label_set_text(time_label, "--:--");
+                                                     return;
+                                                 }
+
+                                                 // Check if RTC is ready
+                                                 if (!board.isRTCReady())
+                                                 {
+                                                     lv_label_set_text(time_label, "--:--");
 #if defined(ARDUINO_T_WATCH_S3)
-            update_watch_face_time();
+                                                     update_watch_face_time();
 #endif
-            return;
-        }
-        
-        // Get current time with timezone offset (HH:MM format, no seconds)
-        char time_str[16];
-        if (format_menu_time(time_str, sizeof(time_str))) {
-            // Only update if text actually changed (saves UI redraw)
-            static char last_time_str[16] = "";
-            if (strcmp(time_str, last_time_str) != 0) {
-                lv_label_set_text(time_label, time_str);
-                strncpy(last_time_str, time_str, sizeof(last_time_str) - 1);
-                last_time_str[sizeof(last_time_str) - 1] = '\0';
-            }
-        } else {
-            // If RTC read fails, show error indicator
-            lv_label_set_text(time_label, "??:??");
-        }
+                                                     return;
+                                                 }
+
+                                                 // Get current time with timezone offset (HH:MM format, no seconds)
+                                                 char time_str[16];
+                                                 if (format_menu_time(time_str, sizeof(time_str)))
+                                                 {
+                                                     // Only update if text actually changed (saves UI redraw)
+                                                     static char last_time_str[16] = "";
+                                                     if (strcmp(time_str, last_time_str) != 0)
+                                                     {
+                                                         lv_label_set_text(time_label, time_str);
+                                                         strncpy(last_time_str, time_str, sizeof(last_time_str) - 1);
+                                                         last_time_str[sizeof(last_time_str) - 1] = '\0';
+                                                     }
+                                                 }
+                                                 else
+                                                 {
+                                                     // If RTC read fails, show error indicator
+                                                     lv_label_set_text(time_label, "??:??");
+                                                 }
 #if defined(ARDUINO_T_WATCH_S3)
-        update_watch_face_time();
+                                                 update_watch_face_time();
 #endif
-        },
+                                             },
                                              time_update_interval_ms, NULL);
     lv_timer_set_repeat_count(time_timer, -1); // Repeat indefinitely
 
@@ -1121,38 +1127,41 @@ void setup()
 
     lv_timer_t* battery_timer = lv_timer_create([](lv_timer_t* timer)
                                                 {
-        if (battery_label == nullptr) {
-            return;
-        }
-        
-        char battery_str[32];
-        bool charging = board.isCharging();
-        int level = board.getBatteryLevel();
-        
-        if (level < 0) {
-            // Battery gauge not available
-            lv_label_set_text(battery_label, "?%");
-            return;
-        }
+                                                    if (battery_label == nullptr)
+                                                    {
+                                                        return;
+                                                    }
+
+                                                    char battery_str[32];
+                                                    bool charging = board.isCharging();
+                                                    int level = board.getBatteryLevel();
+
+                                                    if (level < 0)
+                                                    {
+                                                        // Battery gauge not available
+                                                        lv_label_set_text(battery_label, "?%");
+                                                        return;
+                                                    }
 
 #if defined(ARDUINO_T_WATCH_S3)
-        s_watch_face_battery = level;
+                                                    s_watch_face_battery = level;
 #endif
-        
-        // Format battery display with shared helper
-        ui_format_battery(level, charging, battery_str, sizeof(battery_str));
-        
-        // Only update if text actually changed (saves UI redraw)
-        static char last_battery_str[32] = "";
-        if (strcmp(battery_str, last_battery_str) != 0) {
-            lv_label_set_text(battery_label, battery_str);
-            strncpy(last_battery_str, battery_str, sizeof(last_battery_str) - 1);
-            last_battery_str[sizeof(last_battery_str) - 1] = '\0';
-        }
+
+                                                    // Format battery display with shared helper
+                                                    ui_format_battery(level, charging, battery_str, sizeof(battery_str));
+
+                                                    // Only update if text actually changed (saves UI redraw)
+                                                    static char last_battery_str[32] = "";
+                                                    if (strcmp(battery_str, last_battery_str) != 0)
+                                                    {
+                                                        lv_label_set_text(battery_label, battery_str);
+                                                        strncpy(last_battery_str, battery_str, sizeof(last_battery_str) - 1);
+                                                        last_battery_str[sizeof(last_battery_str) - 1] = '\0';
+                                                    }
 #if defined(ARDUINO_T_WATCH_S3)
-        update_watch_face_time();
+                                                    update_watch_face_time();
 #endif
-        },
+                                                },
                                                 battery_update_interval_ms, NULL);
     lv_timer_set_repeat_count(battery_timer, -1); // Repeat indefinitely
 

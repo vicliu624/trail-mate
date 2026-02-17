@@ -7,9 +7,9 @@
  * custom memory management for LVGL v9.x.
  */
 
+#include "input/morse_engine.h"
 #include "ui/LV_Helper.h"
 #include "walkie/walkie_service.h"
-#include "input/morse_engine.h"
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 

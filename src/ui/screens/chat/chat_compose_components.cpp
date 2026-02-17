@@ -647,4 +647,3 @@ void ChatComposeScreen::on_send_timer(lv_timer_t* timer)
 } // namespace chat::ui
 
 #endif
-

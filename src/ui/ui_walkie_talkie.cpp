@@ -1,7 +1,7 @@
 #include "ui_walkie_talkie.h"
 
-#include <Arduino.h>
 #include "../walkie/walkie_service.h"
+#include <Arduino.h>
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 #include "../board/TLoRaPagerBoard.h"
 #endif

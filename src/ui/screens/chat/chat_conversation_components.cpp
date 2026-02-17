@@ -568,4 +568,3 @@ void ChatConversationScreen::schedule_back_async()
 } // namespace chat
 
 #endif
-

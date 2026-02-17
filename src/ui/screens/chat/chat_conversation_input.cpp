@@ -159,4 +159,3 @@ void cleanup(Binding* binding)
 } // namespace chat::ui::conversation::input
 
 #endif
-

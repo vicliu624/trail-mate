@@ -9,7 +9,7 @@ namespace
 {
 constexpr uint32_t kGpsSampleIntervalMs = 1000;
 constexpr uint32_t kMotionIdleTimeoutMinMs = 5 * 60 * 1000;
-}
+} // namespace
 
 #ifndef GPS_TASK_LOG_ENABLE
 #define GPS_TASK_LOG_ENABLE 0

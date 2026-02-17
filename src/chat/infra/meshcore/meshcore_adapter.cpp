@@ -220,8 +220,8 @@ float estimateLoRaAirtimeMs(size_t frame_len, float bw_khz, uint8_t sf, uint8_t 
     const float bw_hz = bw_khz * 1000.0f;
     const float tsym = std::pow(2.0f, static_cast<float>(sf)) / bw_hz;
     const float de = (sf >= 11 && bw_khz <= 125.0f) ? 1.0f : 0.0f;
-    const float ih = 0.0f;   // explicit header
-    const float crc = 1.0f;  // CRC enabled
+    const float ih = 0.0f;  // explicit header
+    const float crc = 1.0f; // CRC enabled
     const float cr = static_cast<float>(cr_denom);
     const float payload_bits = (8.0f * static_cast<float>(frame_len)) - (4.0f * sf) + 28.0f + (16.0f * crc) - (20.0f * ih);
     const float denom = 4.0f * (static_cast<float>(sf) - (2.0f * de));
@@ -1532,7 +1532,8 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
         }
     }
 
-    auto fill_rx_meta = [&](RxMeta& meta, bool direct) {
+    auto fill_rx_meta = [&](RxMeta& meta, bool direct)
+    {
         meta.rx_timestamp_ms = now_ms;
         uint32_t epoch_s = now_epoch_seconds();
         if (is_valid_epoch(epoch_s))
@@ -1568,7 +1569,8 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
     auto sendPeerDatagram = [&](uint8_t payload_type, uint8_t dest_hash, ChannelId channel,
                                 const uint8_t* plain, size_t plain_len,
                                 uint8_t route_type, const uint8_t* route_path, size_t route_path_len,
-                                uint32_t delay_ms) -> bool {
+                                uint32_t delay_ms) -> bool
+    {
         if (!config_.tx_enabled || !plain || plain_len == 0)
         {
             return false;
@@ -1618,7 +1620,8 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
                               const uint8_t* return_path, size_t return_path_len,
                               uint8_t route_type, const uint8_t* route_path, size_t route_path_len,
                               uint8_t extra_type, const uint8_t* extra, size_t extra_len,
-                              uint32_t delay_ms) -> bool {
+                              uint32_t delay_ms) -> bool
+    {
         uint8_t plain[kMeshcoreMaxPayloadSize];
         size_t plain_len = 0;
         if (!buildPathPlain(return_path, return_path_len,

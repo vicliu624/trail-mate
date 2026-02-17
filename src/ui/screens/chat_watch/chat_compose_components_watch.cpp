@@ -2,9 +2,9 @@
 
 #include "chat_compose_components_watch.h"
 
+#include "../../../input/morse_engine.h"
 #include "../../ui_theme.h"
 #include "../../widgets/system_notification.h"
-#include "../../../input/morse_engine.h"
 #include <Arduino.h>
 
 namespace
@@ -147,7 +147,8 @@ void ChatComposeScreen::showMain()
     lv_obj_clear_flag(content_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(content_, LV_SCROLLBAR_MODE_OFF);
 
-    auto make_btn = [&](lv_obj_t** btn_out, const char* text) {
+    auto make_btn = [&](lv_obj_t** btn_out, const char* text)
+    {
         lv_obj_t* btn = lv_btn_create(content_);
         lv_obj_set_width(btn, LV_PCT(100));
         lv_obj_set_height(btn, kButtonHeight);
