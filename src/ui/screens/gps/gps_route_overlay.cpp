@@ -557,6 +557,7 @@ bool gps_route_focus(bool show_fail_toast)
     g_gps_state.zoom_level = fit_zoom;
     g_gps_state.pan_x = 0;
     g_gps_state.pan_y = 0;
+    g_gps_state.follow_position = false;
     g_gps_state.lat = center_lat;
     g_gps_state.lng = center_lng;
 

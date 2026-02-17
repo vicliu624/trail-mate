@@ -155,6 +155,7 @@ void init_gps_state_defaults()
 
     g_gps_state.pan_x = 0;
     g_gps_state.pan_y = 0;
+    g_gps_state.follow_position = true;
 
     g_gps_state.pan_h_editing = false;
     g_gps_state.pan_v_editing = false;

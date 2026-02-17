@@ -61,6 +61,7 @@ struct GPSPageState
     bool has_fix = false;
     int pan_x = 0;
     int pan_y = 0;
+    bool follow_position = true; // Auto-follow GPS center; disabled by manual pan, re-enabled by [P]osition
 
     // tile/cache (actual storage, not pointers)
     MapAnchor anchor = {0};

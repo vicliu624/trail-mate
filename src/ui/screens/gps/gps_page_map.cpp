@@ -1155,35 +1155,39 @@ void tick_gps_update(bool allow_map_refresh)
         // 只对“地图刷新”加抖动过滤
         if (allow_map_refresh)
         {
-            bool moved_enough = false;
-            if (!last_refresh_valid)
+            // Manual pan mode disables GPS auto-follow until user explicitly re-centers with [P]osition.
+            if (g_gps_state.follow_position)
             {
-                moved_enough = true;
-            }
-            else
-            {
-                double dist_m = approx_distance_m(
-                    last_refresh_lat, last_refresh_lng, new_lat, new_lng);
-                moved_enough = dist_m >= MOVE_THRESHOLD_M;
-            }
+                bool moved_enough = false;
+                if (!last_refresh_valid)
+                {
+                    moved_enough = true;
+                }
+                else
+                {
+                    double dist_m = approx_distance_m(
+                        last_refresh_lat, last_refresh_lng, new_lat, new_lng);
+                    moved_enough = dist_m >= MOVE_THRESHOLD_M;
+                }
 
-            bool time_due = (now_ms - last_refresh_ms) >= REFRESH_INTERVAL_MS;
+                bool time_due = (now_ms - last_refresh_ms) >= REFRESH_INTERVAL_MS;
 
-            if (just_got_fix || moved_enough || time_due)
-            {
-                g_gps_state.pan_x = 0;
-                g_gps_state.pan_y = 0;
+                if (just_got_fix || moved_enough || time_due)
+                {
+                    g_gps_state.pan_x = 0;
+                    g_gps_state.pan_y = 0;
 
-                double map_lat = 0.0;
-                double map_lon = 0.0;
-                gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
-                g_gps_state.last_resolution_lat = map_lat;
-                update_map_tiles(false);
+                    double map_lat = 0.0;
+                    double map_lon = 0.0;
+                    gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
+                    g_gps_state.last_resolution_lat = map_lat;
+                    update_map_tiles(false);
 
-                last_refresh_lat = new_lat;
-                last_refresh_lng = new_lng;
-                last_refresh_ms = now_ms;
-                last_refresh_valid = true;
+                    last_refresh_lat = new_lat;
+                    last_refresh_lng = new_lng;
+                    last_refresh_ms = now_ms;
+                    last_refresh_valid = true;
+                }
             }
         }
     }

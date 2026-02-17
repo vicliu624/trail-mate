@@ -291,6 +291,7 @@ void apply_tracker_view_defaults()
     s.zoom_level = kDefaultTrackerZoom;
     s.pan_x = 0;
     s.pan_y = 0;
+    s.follow_position = false;
     s.lat = last.lat;
     s.lng = last.lng;
 

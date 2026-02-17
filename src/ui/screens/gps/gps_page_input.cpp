@@ -198,6 +198,7 @@ void on_ui_event(lv_event_t* e)
             }
 
             g_gps_state.pan_x += step * gps_ui::kMapPanStep;
+            g_gps_state.follow_position = false;
             g_gps_state.pending_refresh = true;
             if (g_gps_state.map != NULL)
             {
@@ -239,6 +240,7 @@ void on_ui_event(lv_event_t* e)
             GPS_LOG("[GPS] PanV KEY: key=%d, step=%d, pan_y: %d -> %d\n",
                     key, step, g_gps_state.pan_y, g_gps_state.pan_y + step * gps_ui::kMapPanStep);
             g_gps_state.pan_y += step * gps_ui::kMapPanStep;
+            g_gps_state.follow_position = false;
             g_gps_state.pending_refresh = true;
             if (g_gps_state.map != NULL)
             {
@@ -683,6 +685,7 @@ static void action_position_center()
     // Reset pan to center the GPS position
     g_gps_state.pan_x = 0;
     g_gps_state.pan_y = 0;
+    g_gps_state.follow_position = true;
 
     // Create or update GPS marker
     create_gps_marker();
@@ -812,10 +815,12 @@ static void action_pan_step(ControlId axis_id, int32_t step)
     if (axis_id == ControlId::PanHIndicator)
     {
         g_gps_state.pan_x += step * gps_ui::kMapPanStep;
+        g_gps_state.follow_position = false;
     }
     else if (axis_id == ControlId::PanVIndicator)
     {
         g_gps_state.pan_y += step * gps_ui::kMapPanStep;
+        g_gps_state.follow_position = false;
     }
 
     g_gps_state.pending_refresh = true;
