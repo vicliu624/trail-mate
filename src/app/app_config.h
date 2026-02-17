@@ -58,7 +58,8 @@ struct AppConfig
     static constexpr uint8_t kDefaultRegionCode = 4; // Meshtastic CN
     // Chat settings
     chat::ChatPolicy chat_policy;
-    chat::MeshConfig mesh_config;
+    chat::MeshConfig meshtastic_config;
+    chat::MeshConfig meshcore_config;
     chat::MeshProtocol mesh_protocol;
 
     // Device settings
@@ -110,8 +111,36 @@ struct AppConfig
     AppConfig()
     {
         chat_policy = chat::ChatPolicy::outdoor();
-        mesh_config = chat::MeshConfig();
-        mesh_config.region = kDefaultRegionCode;
+        meshtastic_config = chat::MeshConfig();
+        meshtastic_config.region = kDefaultRegionCode;
+        meshtastic_config.use_preset = true;
+        meshtastic_config.modem_preset = 0;
+        meshtastic_config.bandwidth_khz = 250.0f;
+        meshtastic_config.spread_factor = 11;
+        meshtastic_config.coding_rate = 5;
+        meshtastic_config.tx_power = 14;
+        meshtastic_config.hop_limit = 2;
+        meshtastic_config.tx_enabled = true;
+        meshtastic_config.override_duty_cycle = false;
+        meshtastic_config.channel_num = 0;
+        meshtastic_config.frequency_offset_mhz = 0.0f;
+        meshtastic_config.override_frequency_mhz = 0.0f;
+
+        meshcore_config = chat::MeshConfig();
+        meshcore_config.meshcore_region_preset = 0;
+        meshcore_config.meshcore_freq_mhz = 915.0f;
+        meshcore_config.meshcore_bw_khz = 125.0f;
+        meshcore_config.meshcore_sf = 9;
+        meshcore_config.meshcore_cr = 5;
+        meshcore_config.meshcore_client_repeat = false;
+        meshcore_config.meshcore_rx_delay_base = 0.0f;
+        meshcore_config.meshcore_airtime_factor = 1.0f;
+        meshcore_config.meshcore_flood_max = 16;
+        meshcore_config.meshcore_multi_acks = false;
+        meshcore_config.meshcore_channel_slot = 0;
+        strncpy(meshcore_config.meshcore_channel_name, "Public",
+                sizeof(meshcore_config.meshcore_channel_name) - 1);
+        meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
         mesh_protocol = chat::MeshProtocol::Meshtastic;
         node_name[0] = '\0';
         short_name[0] = '\0';
@@ -147,6 +176,16 @@ struct AppConfig
         aprs = AprsConfig();
     }
 
+    chat::MeshConfig& activeMeshConfig()
+    {
+        return (mesh_protocol == chat::MeshProtocol::MeshCore) ? meshcore_config : meshtastic_config;
+    }
+
+    const chat::MeshConfig& activeMeshConfig() const
+    {
+        return (mesh_protocol == chat::MeshProtocol::MeshCore) ? meshcore_config : meshtastic_config;
+    }
+
     /**
      * @brief Load from Preferences
      */
@@ -161,16 +200,47 @@ struct AppConfig
         chat_policy.ack_for_squad = prefs.getBool("ack_squad", true);
         chat_policy.max_tx_retries = prefs.getUChar("max_retries", 1);
 
-        // Load mesh config
-        mesh_config.region = prefs.getUChar("region", 0);
-        if (mesh_config.region == 0)
+        // Load meshtastic config (legacy-compatible keys)
+        meshtastic_config.region = prefs.getUChar("region", 0);
+        if (meshtastic_config.region == 0)
         {
-            mesh_config.region = kDefaultRegionCode;
+            meshtastic_config.region = kDefaultRegionCode;
         }
-        mesh_config.modem_preset = prefs.getUChar("modem_preset", 0);
-        mesh_config.tx_power = prefs.getChar("tx_power", 14);
-        mesh_config.hop_limit = prefs.getUChar("mesh_hop_limit", 2);
-        mesh_config.enable_relay = prefs.getBool("mesh_relay", true);
+        meshtastic_config.modem_preset = prefs.getUChar("modem_preset", 0);
+        meshtastic_config.tx_power = prefs.getChar("tx_power", 14);
+        meshtastic_config.hop_limit = prefs.getUChar("mesh_hop_limit", 2);
+        meshtastic_config.enable_relay = prefs.getBool("mesh_relay", true);
+        meshtastic_config.use_preset = prefs.getBool("use_preset", true);
+        meshtastic_config.bandwidth_khz = prefs.getFloat("mesh_bw_khz", meshtastic_config.bandwidth_khz);
+        meshtastic_config.spread_factor = prefs.getUChar("mesh_sf", meshtastic_config.spread_factor);
+        meshtastic_config.coding_rate = prefs.getUChar("mesh_cr", meshtastic_config.coding_rate);
+        meshtastic_config.tx_enabled = prefs.getBool("mesh_tx_en", true);
+        meshtastic_config.override_duty_cycle = prefs.getBool("mesh_override_dc", false);
+        meshtastic_config.channel_num = prefs.getUShort("mesh_ch_num", 0);
+        meshtastic_config.frequency_offset_mhz = prefs.getFloat("mesh_freq_off", 0.0f);
+        meshtastic_config.override_frequency_mhz = prefs.getFloat("mesh_freq_override", 0.0f);
+
+        // Load meshcore profile (protocol-specific keys)
+        meshcore_config.meshcore_freq_mhz = prefs.getFloat("mc_freq", meshcore_config.meshcore_freq_mhz);
+        meshcore_config.meshcore_bw_khz = prefs.getFloat("mc_bw", meshcore_config.meshcore_bw_khz);
+        meshcore_config.meshcore_sf = prefs.getUChar("mc_sf", meshcore_config.meshcore_sf);
+        meshcore_config.meshcore_cr = prefs.getUChar("mc_cr", meshcore_config.meshcore_cr);
+        meshcore_config.meshcore_region_preset = prefs.getUChar("mc_region_preset",
+                                                                meshcore_config.meshcore_region_preset);
+        meshcore_config.tx_power = prefs.getChar("mc_tx", meshcore_config.tx_power);
+        meshcore_config.meshcore_client_repeat = prefs.getBool("mc_repeat", false);
+        meshcore_config.meshcore_rx_delay_base = prefs.getFloat("mc_rx_delay", meshcore_config.meshcore_rx_delay_base);
+        meshcore_config.meshcore_airtime_factor = prefs.getFloat("mc_airtime", meshcore_config.meshcore_airtime_factor);
+        meshcore_config.meshcore_flood_max = prefs.getUChar("mc_flood_max", meshcore_config.meshcore_flood_max);
+        meshcore_config.meshcore_multi_acks = prefs.getBool("mc_multi_acks", false);
+        meshcore_config.meshcore_channel_slot = prefs.getUChar("mc_ch_slot", 0);
+        meshcore_config.tx_enabled = prefs.getBool("mc_tx_en", meshcore_config.tx_enabled);
+        String mc_name = prefs.getString("mc_ch_name", meshcore_config.meshcore_channel_name);
+        strncpy(meshcore_config.meshcore_channel_name, mc_name.c_str(),
+                sizeof(meshcore_config.meshcore_channel_name) - 1);
+        meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
+        prefs.getBytes("mc_ch_key", meshcore_config.secondary_key, sizeof(meshcore_config.secondary_key));
+
         mesh_protocol = static_cast<chat::MeshProtocol>(
             prefs.getUChar("mesh_protocol", static_cast<uint8_t>(chat::MeshProtocol::Meshtastic)));
 
@@ -190,7 +260,7 @@ struct AppConfig
         primary_enabled = prefs.getBool("primary_enabled", true);
         secondary_enabled = prefs.getBool("secondary_enabled", false);
         prefs.getBytes("secondary_key", secondary_key, 16);
-        memcpy(mesh_config.secondary_key, secondary_key, sizeof(mesh_config.secondary_key));
+        memcpy(meshtastic_config.secondary_key, secondary_key, sizeof(meshtastic_config.secondary_key));
 
         prefs.end();
 
@@ -289,12 +359,38 @@ struct AppConfig
         prefs.putBool("ack_squad", chat_policy.ack_for_squad);
         prefs.putUChar("max_retries", chat_policy.max_tx_retries);
 
-        // Save mesh config
-        prefs.putUChar("region", mesh_config.region);
-        prefs.putUChar("modem_preset", mesh_config.modem_preset);
-        prefs.putChar("tx_power", mesh_config.tx_power);
-        prefs.putUChar("mesh_hop_limit", mesh_config.hop_limit);
-        prefs.putBool("mesh_relay", mesh_config.enable_relay);
+        // Save meshtastic profile (legacy-compatible keys)
+        prefs.putUChar("region", meshtastic_config.region);
+        prefs.putUChar("modem_preset", meshtastic_config.modem_preset);
+        prefs.putChar("tx_power", meshtastic_config.tx_power);
+        prefs.putUChar("mesh_hop_limit", meshtastic_config.hop_limit);
+        prefs.putBool("mesh_relay", meshtastic_config.enable_relay);
+        prefs.putBool("use_preset", meshtastic_config.use_preset);
+        prefs.putFloat("mesh_bw_khz", meshtastic_config.bandwidth_khz);
+        prefs.putUChar("mesh_sf", meshtastic_config.spread_factor);
+        prefs.putUChar("mesh_cr", meshtastic_config.coding_rate);
+        prefs.putBool("mesh_tx_en", meshtastic_config.tx_enabled);
+        prefs.putBool("mesh_override_dc", meshtastic_config.override_duty_cycle);
+        prefs.putUShort("mesh_ch_num", meshtastic_config.channel_num);
+        prefs.putFloat("mesh_freq_off", meshtastic_config.frequency_offset_mhz);
+        prefs.putFloat("mesh_freq_override", meshtastic_config.override_frequency_mhz);
+
+        // Save meshcore profile
+        prefs.putFloat("mc_freq", meshcore_config.meshcore_freq_mhz);
+        prefs.putFloat("mc_bw", meshcore_config.meshcore_bw_khz);
+        prefs.putUChar("mc_sf", meshcore_config.meshcore_sf);
+        prefs.putUChar("mc_cr", meshcore_config.meshcore_cr);
+        prefs.putUChar("mc_region_preset", meshcore_config.meshcore_region_preset);
+        prefs.putChar("mc_tx", meshcore_config.tx_power);
+        prefs.putBool("mc_repeat", meshcore_config.meshcore_client_repeat);
+        prefs.putFloat("mc_rx_delay", meshcore_config.meshcore_rx_delay_base);
+        prefs.putFloat("mc_airtime", meshcore_config.meshcore_airtime_factor);
+        prefs.putUChar("mc_flood_max", meshcore_config.meshcore_flood_max);
+        prefs.putBool("mc_multi_acks", meshcore_config.meshcore_multi_acks);
+        prefs.putUChar("mc_ch_slot", meshcore_config.meshcore_channel_slot);
+        prefs.putBool("mc_tx_en", meshcore_config.tx_enabled);
+        prefs.putString("mc_ch_name", meshcore_config.meshcore_channel_name);
+        prefs.putBytes("mc_ch_key", meshcore_config.secondary_key, sizeof(meshcore_config.secondary_key));
         prefs.putUChar("mesh_protocol", static_cast<uint8_t>(mesh_protocol));
 
         // Save device name
@@ -304,7 +400,7 @@ struct AppConfig
         // Save channel settings
         prefs.putBool("primary_enabled", primary_enabled);
         prefs.putBool("secondary_enabled", secondary_enabled);
-        memcpy(secondary_key, mesh_config.secondary_key, sizeof(secondary_key));
+        memcpy(secondary_key, meshtastic_config.secondary_key, sizeof(secondary_key));
         prefs.putBytes("secondary_key", secondary_key, 16);
 
         prefs.end();

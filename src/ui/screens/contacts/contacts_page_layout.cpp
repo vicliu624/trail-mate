@@ -94,7 +94,7 @@ void format_contacts_title(char* out, size_t out_len)
         return;
     }
     app::AppContext& app_ctx = app::AppContext::getInstance();
-    const chat::MeshConfig& config = app_ctx.getConfig().mesh_config;
+    const chat::MeshConfig& config = app_ctx.getConfig().meshtastic_config;
     chat::MeshProtocol protocol = app_ctx.getConfig().mesh_protocol;
     if (protocol == chat::MeshProtocol::Meshtastic)
     {

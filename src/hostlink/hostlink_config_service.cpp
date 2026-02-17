@@ -66,7 +66,7 @@ bool build_status_payload(std::vector<uint8_t>& out, uint8_t link_state, uint32_
     app::AppContext& app_ctx = app::AppContext::getInstance();
     app::AppConfig& cfg = app_ctx.getConfig();
     uint8_t protocol = static_cast<uint8_t>(cfg.mesh_protocol);
-    uint8_t region = cfg.mesh_config.region;
+    uint8_t region = cfg.meshtastic_config.region;
     uint8_t channel = cfg.chat_channel;
     uint8_t duty_cycle = cfg.net_duty_cycle ? 1 : 0;
     uint8_t util = cfg.net_channel_util;
@@ -159,7 +159,7 @@ bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)
             {
                 return false;
             }
-            cfg.mesh_config.region = data[off];
+            cfg.meshtastic_config.region = data[off];
             mesh_changed = true;
             break;
         case ConfigKey::Channel:

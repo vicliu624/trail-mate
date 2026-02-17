@@ -64,6 +64,71 @@ bool allowPkiForPortnum(uint32_t portnum)
            portnum != meshtastic_PortNum_TRACEROUTE_APP;
 }
 
+uint32_t djb2HashText(const char* text)
+{
+    if (!text)
+    {
+        return 0;
+    }
+    uint32_t hash = 5381;
+    int c = 0;
+    while ((c = *text++) != 0)
+    {
+        hash = ((hash << 5) + hash) + static_cast<uint8_t>(c);
+    }
+    return hash;
+}
+
+void modemPresetToParams(meshtastic_Config_LoRaConfig_ModemPreset preset, bool wide_lora,
+                         float& bw_khz, uint8_t& sf, uint8_t& cr_denom)
+{
+    switch (preset)
+    {
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
+        bw_khz = wide_lora ? 1625.0f : 500.0f;
+        cr_denom = 5;
+        sf = 7;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
+        bw_khz = wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 7;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
+        bw_khz = wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 8;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
+        bw_khz = wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 9;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
+        bw_khz = wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 10;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
+        bw_khz = wide_lora ? 406.25f : 125.0f;
+        cr_denom = 8;
+        sf = 11;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
+    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
+        bw_khz = wide_lora ? 406.25f : 125.0f;
+        cr_denom = 8;
+        sf = 12;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
+    default:
+        bw_khz = wide_lora ? 812.5f : 250.0f;
+        cr_denom = 5;
+        sf = 11;
+        break;
+    }
+}
+
 static const char* portName(uint32_t portnum)
 {
     switch (portnum)
@@ -608,7 +673,7 @@ MtAdapter::~MtAdapter()
 bool MtAdapter::sendText(ChannelId channel, const std::string& text,
                          MessageId* out_msg_id, NodeId peer)
 {
-    if (!ready_ || text.empty())
+    if (!ready_ || text.empty() || !config_.tx_enabled)
     {
         return false;
     }
@@ -658,7 +723,7 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                             const uint8_t* payload, size_t len,
                             NodeId dest, bool want_ack)
 {
-    if (!ready_)
+    if (!ready_ || !config_.tx_enabled)
     {
         return false;
     }
@@ -836,6 +901,25 @@ void MtAdapter::setUserInfo(const char* long_name, const char* short_name)
 
 void MtAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent)
 {
+    if (config_.override_duty_cycle)
+    {
+        min_tx_interval_ms_ = 0;
+        return;
+    }
+
+    meshtastic_Config_LoRaConfig_RegionCode region_code =
+        static_cast<meshtastic_Config_LoRaConfig_RegionCode>(config_.region);
+    if (region_code == meshtastic_Config_LoRaConfig_RegionCode_UNSET)
+    {
+        region_code = meshtastic_Config_LoRaConfig_RegionCode_CN;
+    }
+    const chat::meshtastic::RegionInfo* region = chat::meshtastic::findRegion(region_code);
+    if (!region || region->duty_cycle_percent >= 100.0f)
+    {
+        min_tx_interval_ms_ = 0;
+        return;
+    }
+
     if (!duty_cycle_enabled || util_percent == 0)
     {
         min_tx_interval_ms_ = 0;
@@ -1630,6 +1714,11 @@ void MtAdapter::processSendQueue()
 
 bool MtAdapter::sendPacket(const PendingSend& pending)
 {
+    if (!config_.tx_enabled)
+    {
+        return false;
+    }
+
     // Create Data message payload
     uint8_t data_buffer[256];
     size_t data_size = sizeof(data_buffer);
@@ -1921,10 +2010,6 @@ void MtAdapter::maybeBroadcastNodeInfo(uint32_t now_ms)
 
 void MtAdapter::configureRadio()
 {
-    // Configure LoRa radio based on config_
-    // This is a placeholder - actual configuration depends on RadioLib API
-    // and Meshtastic region/preset settings
-
     if (!board_.isRadioOnline())
     {
         ready_ = false;
@@ -1945,64 +2030,107 @@ void MtAdapter::configureRadio()
     float bw_khz = 250.0f;
     uint8_t sf = 11;
     uint8_t cr_denom = 5;
-    switch (preset)
+    bool using_preset = config_.use_preset;
+    if (using_preset)
     {
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
-        bw_khz = region->wide_lora ? 1625.0f : 500.0f;
-        cr_denom = 5;
-        sf = 7;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST:
-        bw_khz = region->wide_lora ? 812.5f : 250.0f;
-        cr_denom = 5;
-        sf = 7;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-        bw_khz = region->wide_lora ? 812.5f : 250.0f;
-        cr_denom = 5;
-        sf = 8;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-        bw_khz = region->wide_lora ? 812.5f : 250.0f;
-        cr_denom = 5;
-        sf = 9;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-        bw_khz = region->wide_lora ? 812.5f : 250.0f;
-        cr_denom = 5;
-        sf = 10;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-        bw_khz = region->wide_lora ? 406.25f : 125.0f;
-        cr_denom = 8;
-        sf = 11;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-        bw_khz = region->wide_lora ? 406.25f : 125.0f;
-        cr_denom = 8;
-        sf = 12;
-        break;
-    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
-    default:
-        bw_khz = region->wide_lora ? 812.5f : 250.0f;
-        cr_denom = 5;
-        sf = 11;
-        break;
+        modemPresetToParams(preset, region->wide_lora, bw_khz, sf, cr_denom);
+    }
+    else
+    {
+        bw_khz = config_.bandwidth_khz;
+        sf = config_.spread_factor;
+        cr_denom = config_.coding_rate;
+
+        if (bw_khz < 7.0f) bw_khz = 7.8f;
+        if (!region->wide_lora && bw_khz > 500.0f) bw_khz = 500.0f;
+        if (region->wide_lora && bw_khz > 1625.0f) bw_khz = 1625.0f;
+        if (sf < 5) sf = 5;
+        if (sf > 12) sf = 12;
+        if (cr_denom < 5) cr_denom = 5;
+        if (cr_denom > 8) cr_denom = 8;
     }
 
-    const char* channel_name = chat::meshtastic::presetDisplayName(preset);
-    float freq_mhz = chat::meshtastic::computeFrequencyMhz(region, bw_khz, channel_name);
-    if (freq_mhz <= 0.0f)
+    const float region_span_khz = (region->freq_end_mhz - region->freq_start_mhz) * 1000.0f;
+    if (region_span_khz < bw_khz)
     {
-        freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f);
+        using_preset = true;
+        preset = meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST;
+        modemPresetToParams(preset, region->wide_lora, bw_khz, sf, cr_denom);
+        config_.use_preset = true;
+        config_.modem_preset = static_cast<uint8_t>(preset);
     }
+
+    const char* channel_name =
+        using_preset ? chat::meshtastic::presetDisplayName(preset) : kPrimaryChannelName;
+
+    float span_mhz = region->freq_end_mhz - region->freq_start_mhz;
+    float spacing_mhz = region->spacing_khz / 1000.0f;
+    float bw_mhz = bw_khz / 1000.0f;
+    uint32_t num_channels = static_cast<uint32_t>(floor(span_mhz / (spacing_mhz + bw_mhz)));
+    if (num_channels < 1)
+    {
+        num_channels = 1;
+    }
+
+    uint32_t channel_slot = 0;
+    if (config_.channel_num > 0)
+    {
+        channel_slot = static_cast<uint32_t>((config_.channel_num - 1) % num_channels);
+    }
+    else
+    {
+        channel_slot = djb2HashText(channel_name) % num_channels;
+    }
+
+    float freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f) + (channel_slot * bw_mhz);
+    if (config_.override_frequency_mhz > 0.0f)
+    {
+        freq_mhz = config_.override_frequency_mhz;
+    }
+    freq_mhz += config_.frequency_offset_mhz;
+
+    if (config_.override_frequency_mhz <= 0.0f)
+    {
+        float min_center = region->freq_start_mhz + (bw_khz / 2000.0f);
+        float max_center = region->freq_end_mhz - (bw_khz / 2000.0f);
+        if (min_center > max_center)
+        {
+            min_center = region->freq_start_mhz;
+            max_center = region->freq_end_mhz;
+        }
+        if (freq_mhz < min_center) freq_mhz = min_center;
+        if (freq_mhz > max_center) freq_mhz = max_center;
+    }
+
+    int8_t tx_power = config_.tx_power;
+    if (region->power_limit_dbm > 0)
+    {
+        if (tx_power == 0)
+        {
+            tx_power = static_cast<int8_t>(region->power_limit_dbm);
+        }
+        if (tx_power > static_cast<int8_t>(region->power_limit_dbm))
+        {
+            tx_power = static_cast<int8_t>(region->power_limit_dbm);
+        }
+    }
+    if (tx_power == 0)
+    {
+        tx_power = 17;
+    }
+    if (tx_power < -9)
+    {
+        tx_power = -9;
+    }
+    config_.tx_power = tx_power;
+
     radio_freq_hz_ = static_cast<uint32_t>(std::lround(freq_mhz * 1000000.0f));
     radio_bw_hz_ = static_cast<uint32_t>(std::lround(bw_khz * 1000.0f));
     radio_sf_ = sf;
     radio_cr_ = cr_denom;
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    board_.configureLoraRadio(freq_mhz, bw_khz, sf, cr_denom, config_.tx_power,
+    board_.configureLoraRadio(freq_mhz, bw_khz, sf, cr_denom, tx_power,
                               kLoraPreambleLen, kLoraSyncWord, 2);
 #endif
 
@@ -2010,15 +2138,19 @@ void MtAdapter::configureRadio()
     // Suppress auto NodeInfo broadcast at boot; wait for interval to elapse.
     last_nodeinfo_ms_ = millis();
     LORA_LOG("[LORA] adapter ready, node_id=%08lX\n", (unsigned long)node_id_);
-    LORA_LOG("[LORA] radio config region=%u preset=%u freq=%.3fMHz sf=%u bw=%.1f cr=4/%u sync=0x%02X preamble=%u\n",
+    LORA_LOG("[LORA] radio config region=%u preset=%u use_preset=%u freq=%.3fMHz sf=%u bw=%.1f cr=4/%u tx=%d ch=%lu sync=0x%02X preamble=%u tx_en=%u\n",
              static_cast<unsigned>(region_code),
              static_cast<unsigned>(preset),
+             using_preset ? 1U : 0U,
              freq_mhz,
              sf,
              bw_khz,
              cr_denom,
+             static_cast<int>(tx_power),
+             static_cast<unsigned long>(channel_slot),
              kLoraSyncWord,
-             kLoraPreambleLen);
+             kLoraPreambleLen,
+             config_.tx_enabled ? 1U : 0U);
     startRadioReceive();
 }
 

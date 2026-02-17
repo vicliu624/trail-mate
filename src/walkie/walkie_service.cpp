@@ -814,8 +814,8 @@ bool start()
     app::AppTasks::pauseRadioTasks();
 
     auto& config = app::AppContext::getInstance().getConfig();
-    float freq_mhz = chat::meshtastic::estimateFrequencyMhz(config.mesh_config.region,
-                                                            config.mesh_config.modem_preset);
+    float freq_mhz = chat::meshtastic::estimateFrequencyMhz(config.meshtastic_config.region,
+                                                            config.meshtastic_config.modem_preset);
     if (freq_mhz <= 0.0f)
     {
         freq_mhz = 915.0f;
@@ -824,9 +824,9 @@ bool start()
 
     Serial.printf("[WALKIE] config freq=%.3f br=%.1f dev=%.1f rxBw=%.1f preamble=%u pwr=%d\n",
                   freq_mhz, kFskBitRateKbps, kFskFreqDevKHz, kFskRxBwKHz,
-                  kFskPreambleLen, config.mesh_config.tx_power);
+                  kFskPreambleLen, config.meshtastic_config.tx_power);
 
-    if (!configure_fsk(*board, freq_mhz, config.mesh_config.tx_power))
+    if (!configure_fsk(*board, freq_mhz, config.meshtastic_config.tx_power))
     {
         app::AppContext::getInstance().applyMeshConfig();
         app::AppTasks::resumeRadioTasks();

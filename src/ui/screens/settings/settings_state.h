@@ -68,11 +68,37 @@ struct SettingsData
     bool needs_restart = false;
 
     // Network
+    int net_use_preset = 1;
     int net_modem_preset = 0;
+    int net_manual_bw = 250;
+    int net_manual_sf = 11;
+    int net_manual_cr = 5;
     int net_tx_power = 14;
+    int net_hop_limit = 2;
+    bool net_tx_enabled = true;
+    bool net_override_duty_cycle = false;
+    int net_channel_num = 0;
+    char net_freq_offset[16] = "0";
+    char net_override_freq[16] = "0";
     bool net_relay = true;
     bool net_duty_cycle = true;
     int net_channel_util = 0;
+
+    // MeshCore
+    int mc_region_preset = 0;
+    char mc_freq[16] = "915.0";
+    char mc_bw[16] = "125.0";
+    int mc_sf = 9;
+    int mc_cr = 5;
+    int mc_tx_power = 14;
+    bool mc_client_repeat = false;
+    char mc_rx_delay[16] = "0";
+    char mc_airtime[16] = "1";
+    int mc_flood_max = 16;
+    bool mc_multi_acks = false;
+    int mc_channel_slot = 0;
+    char mc_channel_name[32] = "Public";
+    char mc_channel_key[65] = {};
 
     // Chat/GPS (privacy-related controls)
     int privacy_encrypt_mode = 1;
@@ -106,7 +132,7 @@ struct UiState
     ::ui::widgets::TopBar top_bar;
     lv_obj_t* filter_buttons[8]{};
     size_t filter_count = 0;
-    ItemWidget item_widgets[12]{};
+    ItemWidget item_widgets[32]{};
     size_t item_count = 0;
     int current_category = 0;
 

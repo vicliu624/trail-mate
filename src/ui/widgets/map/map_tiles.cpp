@@ -683,11 +683,15 @@ static void reset_tile_runtime(MapTile& tile)
         lv_obj_del(tile.img_obj);
         tile.img_obj = NULL;
     }
+    if (tile.cached_img != NULL)
+    {
+        tile.cached_img->in_use = false;
+        tile.cached_img = NULL;
+    }
     tile.contour_obj = NULL; // contour object is a child of img_obj and is deleted with it
     tile.has_png_file = false;
     tile.contour_checked = false;
     tile.contour_loaded = false;
-    tile.cached_img = NULL;
 }
 
 static void reset_all_tiles_for_render_change(TileContext& ctx)
@@ -736,6 +740,7 @@ static void sync_render_settings(TileContext& ctx)
 
     if (source_changed)
     {
+        lv_image_cache_drop(NULL);
         clear_tile_decode_cache();
     }
 }
@@ -768,16 +773,21 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
         return;
     }
 
+    char path[96];
+    build_base_tile_path(tile.z, tile.x, tile.y, g_active_map_source, path, sizeof(path));
+
+    bool file_exists = false;
+    bool file_exists_checked = false;
+
     // If tile already has a placeholder label, check if file exists before recreating
     // This prevents repeatedly creating placeholders for missing tiles
     if (tile.img_obj != NULL && !tile.has_png_file)
     {
         // Already has placeholder - check if file now exists
-        char path[96];
-        build_base_tile_path(tile.z, tile.x, tile.y, g_active_map_source, path, sizeof(path));
         lv_fs_file_t f;
         lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-        bool file_exists = (res == LV_FS_RES_OK);
+        file_exists = (res == LV_FS_RES_OK);
+        file_exists_checked = true;
         if (file_exists)
         {
             lv_fs_close(&f);
@@ -795,8 +805,6 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
         }
     }
 
-    char path[96];
-    build_base_tile_path(tile.z, tile.x, tile.y, g_active_map_source, path, sizeof(path));
     GPS_LOG("[GPS] load_tile_image: Loading tile %d/%d/%d, path=%s\n", tile.z, tile.x, tile.y, path);
 
     // Always recalculate screen position (don't use old placeholder position)
@@ -814,17 +822,21 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     tile.visible = tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0);
 
     // Check if tile file exists
-    lv_fs_file_t f;
-    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-    bool file_exists = (res == LV_FS_RES_OK);
-    if (file_exists)
+    if (!file_exists_checked)
     {
-        lv_fs_close(&f);
-        GPS_LOG("[GPS] Tile file EXISTS: %s (res=%d)\n", path, res);
-    }
-    else
-    {
-        GPS_LOG("[GPS] Tile file NOT found: %s (res=%d)\n", path, res);
+        lv_fs_file_t f;
+        lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
+        file_exists = (res == LV_FS_RES_OK);
+        file_exists_checked = true;
+        if (file_exists)
+        {
+            lv_fs_close(&f);
+            GPS_LOG("[GPS] Tile file EXISTS: %s (res=%d)\n", path, res);
+        }
+        else
+        {
+            GPS_LOG("[GPS] Tile file NOT found: %s (res=%d)\n", path, res);
+        }
     }
 
     if (file_exists)
@@ -1655,28 +1667,6 @@ void tile_loader_step(TileContext& ctx)
                     continue;
                 }
 
-                // If tile already has a placeholder, quickly check if file exists
-                // to avoid repeatedly trying to load missing files
-                if (tile.img_obj != NULL)
-                {
-                    // Has placeholder - check if file exists before selecting
-                    char path[96];
-                    build_base_tile_path(tile.z, tile.x, tile.y, g_active_map_source, path, sizeof(path));
-                    lv_fs_file_t f;
-                    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-                    bool file_exists = (res == LV_FS_RES_OK);
-                    if (file_exists)
-                    {
-                        lv_fs_close(&f);
-                        // File exists - this tile can be upgraded from placeholder to image
-                    }
-                    else
-                    {
-                        // File doesn't exist - skip this tile to avoid repeated attempts
-                        continue;
-                    }
-                }
-
                 if (best == nullptr ||
                     tile.priority < best->priority ||
                     (tile.priority == best->priority && tile.last_used_ms < best->last_used_ms))
@@ -1810,6 +1800,7 @@ void cleanup_tiles(TileContext& ctx)
     }
     ctx.tiles->clear();
     ctx.tiles->shrink_to_fit();
+    lv_image_cache_drop(NULL);
     clear_tile_decode_cache();
     g_active_map_source = 0xFF;
     g_active_contour_enabled = false;

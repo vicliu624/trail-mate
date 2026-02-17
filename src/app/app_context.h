@@ -122,7 +122,7 @@ class AppContext
     {
         if (mesh_adapter_)
         {
-            mesh_adapter_->applyConfig(config_.mesh_config);
+            mesh_adapter_->applyConfig(config_.activeMeshConfig());
         }
     }
 
@@ -179,7 +179,15 @@ class AppContext
      */
     void resetMeshConfig()
     {
-        config_.mesh_config = chat::MeshConfig();
+        if (config_.mesh_protocol == chat::MeshProtocol::MeshCore)
+        {
+            config_.meshcore_config = chat::MeshConfig();
+        }
+        else
+        {
+            config_.meshtastic_config = chat::MeshConfig();
+            config_.meshtastic_config.region = AppConfig::kDefaultRegionCode;
+        }
         saveConfig();
         applyMeshConfig();
     }

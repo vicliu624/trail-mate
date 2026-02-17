@@ -108,7 +108,7 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
     }
     if (adapter)
     {
-        adapter->applyConfig(config_.mesh_config);
+        adapter->applyConfig(config_.activeMeshConfig());
         mesh_adapter_ = std::move(adapter);
     }
     chat::IMeshAdapter* adapter_raw = mesh_adapter_.get();
@@ -168,6 +168,7 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
             }
         }
     }
+    gps::GpsService::getInstance().setTeamModeActive(team_service_ && team_service_->hasKeys());
 
     // Create contact infrastructure
     node_store_ = std::make_unique<chat::meshtastic::NodeStore>();
@@ -241,9 +242,10 @@ void AppContext::update()
     {
         team_pairing_service_->update();
     }
+    bool team_active = team_service_ && team_service_->hasKeys();
+    gps::GpsService::getInstance().setTeamModeActive(team_active);
     if (team_track_sampler_)
     {
-        bool team_active = team_service_ && team_service_->hasKeys();
         team_track_sampler_->update(team_controller_.get(), team_active);
     }
 
