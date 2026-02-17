@@ -5,11 +5,13 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
 #include "../../../app/app_context.h"
 #include "../../../chat/domain/chat_types.h"
+#include "../../../chat/infra/meshcore/mc_region_presets.h"
 #include "../../../chat/infra/meshtastic/generated/meshtastic/config.pb.h"
 #include "../../../chat/infra/meshtastic/mt_region.h"
 #include "../../../gps/gps_service_api.h"
@@ -31,11 +33,11 @@ namespace settings::ui::components
 namespace
 {
 
-constexpr size_t kMaxItems = 12;
+constexpr size_t kMaxItems = 32;
 constexpr size_t kMaxOptions = 40;
 constexpr const char* kPrefsNs = "settings";
 constexpr int kNetTxPowerMin = -9;
-constexpr int kNetTxPowerMax = 22;
+constexpr int kNetTxPowerMax = 30;
 
 struct CategoryDef
 {
@@ -59,6 +61,8 @@ static bool s_category_update_scheduled = false;
 static bool s_building_list = false;
 static settings::ui::SettingOption kChatRegionOptions[32] = {};
 static size_t kChatRegionOptionCount = 0;
+static settings::ui::SettingOption kMeshCoreRegionPresetOptions[32] = {};
+static size_t kMeshCoreRegionPresetOptionCount = 0;
 
 static void build_item_list();
 
@@ -75,14 +79,6 @@ static void prefs_put_bool(const char* key, bool value)
     Preferences prefs;
     prefs.begin(kPrefsNs, false);
     prefs.putBool(key, value);
-    prefs.end();
-}
-
-static void prefs_put_str(const char* key, const char* value)
-{
-    Preferences prefs;
-    prefs.begin(kPrefsNs, false);
-    prefs.putString(key, value ? value : "");
     prefs.end();
 }
 
@@ -214,6 +210,33 @@ static bool parse_psk(const char* text, uint8_t* out, size_t out_len)
     return false;
 }
 
+static void float_to_text(float value, char* out, size_t out_len, uint8_t decimals = 2)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    char fmt[16];
+    snprintf(fmt, sizeof(fmt), "%%.%uf", static_cast<unsigned>(decimals));
+    snprintf(out, out_len, fmt, static_cast<double>(value));
+}
+
+static bool parse_float_text(const char* text, float* out_value)
+{
+    if (!text || !out_value)
+    {
+        return false;
+    }
+    char* end = nullptr;
+    float value = strtof(text, &end);
+    if (end == text || (end && *end != '\0') || !std::isfinite(value))
+    {
+        return false;
+    }
+    *out_value = value;
+    return true;
+}
+
 static void mark_restart_required()
 {
     g_settings.needs_restart = true;
@@ -224,21 +247,32 @@ static void mark_restart_required()
 static void reset_mesh_settings()
 {
     app::AppContext& app_ctx = app::AppContext::getInstance();
-    app_ctx.getConfig().mesh_config = chat::MeshConfig();
-    app_ctx.getConfig().mesh_config.region = app::AppConfig::kDefaultRegionCode;
-    app_ctx.getConfig().mesh_protocol = chat::MeshProtocol::Meshtastic;
+    app_ctx.getConfig().meshtastic_config = chat::MeshConfig();
+    app_ctx.getConfig().meshtastic_config.region = app::AppConfig::kDefaultRegionCode;
+    app_ctx.getConfig().meshcore_config = chat::MeshConfig();
+    strncpy(app_ctx.getConfig().meshcore_config.meshcore_channel_name, "Public",
+            sizeof(app_ctx.getConfig().meshcore_config.meshcore_channel_name) - 1);
+    app_ctx.getConfig().meshcore_config.meshcore_channel_name[sizeof(app_ctx.getConfig().meshcore_config.meshcore_channel_name) - 1] = '\0';
     app_ctx.saveConfig();
     app_ctx.applyMeshConfig();
 
     g_settings.chat_protocol = static_cast<int>(app_ctx.getConfig().mesh_protocol);
-    g_settings.chat_region = app_ctx.getConfig().mesh_config.region;
+    g_settings.chat_region = app_ctx.getConfig().meshtastic_config.region;
     g_settings.chat_channel = 0;
     g_settings.chat_psk[0] = '\0';
-    g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
-    g_settings.net_tx_power = app_ctx.getConfig().mesh_config.tx_power;
-    g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
+    g_settings.net_use_preset = app_ctx.getConfig().meshtastic_config.use_preset;
+    g_settings.net_modem_preset = app_ctx.getConfig().meshtastic_config.modem_preset;
+    g_settings.net_tx_power = app_ctx.getConfig().meshtastic_config.tx_power;
+    g_settings.net_hop_limit = app_ctx.getConfig().meshtastic_config.hop_limit;
+    const chat::MeshConfig& active_cfg =
+        (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
+            ? app_ctx.getConfig().meshcore_config
+            : app_ctx.getConfig().meshtastic_config;
+    g_settings.net_tx_enabled = active_cfg.tx_enabled;
+    g_settings.net_relay = app_ctx.getConfig().meshtastic_config.enable_relay;
     g_settings.net_duty_cycle = true;
     g_settings.net_channel_util = 0;
+    g_settings.mc_region_preset = app_ctx.getConfig().meshcore_config.meshcore_region_preset;
     g_settings.needs_restart = false;
 
     Preferences prefs;
@@ -247,11 +281,39 @@ static void reset_mesh_settings()
     prefs.remove("chat_region");
     prefs.remove("chat_channel");
     prefs.remove("chat_psk");
+    prefs.remove("mc_channel_name");
+    prefs.remove("mc_channel_key");
+    prefs.remove("mc_ch_name");
+    prefs.remove("mc_ch_key");
     prefs.remove("net_preset");
+    prefs.remove("net_use_preset");
+    prefs.remove("net_bw");
+    prefs.remove("net_sf");
+    prefs.remove("net_cr");
     prefs.remove("net_tx_power");
+    prefs.remove("net_hop_limit");
+    prefs.remove("net_tx_enabled");
+    prefs.remove("net_override_duty");
+    prefs.remove("net_channel_num");
+    prefs.remove("net_freq_offset");
+    prefs.remove("net_override_freq");
     prefs.remove("net_relay");
     prefs.remove("net_duty_cycle");
     prefs.remove("net_util");
+    prefs.remove("mc_freq");
+    prefs.remove("mc_bw");
+    prefs.remove("mc_sf");
+    prefs.remove("mc_cr");
+    prefs.remove("mc_region_preset");
+    prefs.remove("mc_tx_power");
+    prefs.remove("mc_tx");
+    prefs.remove("mc_repeat");
+    prefs.remove("mc_rx_delay");
+    prefs.remove("mc_airtime");
+    prefs.remove("mc_flood_max");
+    prefs.remove("mc_multi_acks");
+    prefs.remove("mc_channel_slot");
+    prefs.remove("mc_ch_slot");
     prefs.remove("needs_restart");
     prefs.end();
 
@@ -301,6 +363,29 @@ static void settings_load()
             kChatRegionOptions[i].value = regions[i].code;
         }
     }
+    if (kMeshCoreRegionPresetOptionCount == 0)
+    {
+        size_t preset_count = 0;
+        const chat::meshcore::RegionPreset* presets =
+            chat::meshcore::getRegionPresetTable(&preset_count);
+        size_t limit = sizeof(kMeshCoreRegionPresetOptions) / sizeof(kMeshCoreRegionPresetOptions[0]);
+        if (limit > 0)
+        {
+            kMeshCoreRegionPresetOptions[0].label = "Custom";
+            kMeshCoreRegionPresetOptions[0].value = 0;
+            size_t copy_count = preset_count;
+            if (copy_count > (limit - 1))
+            {
+                copy_count = limit - 1;
+            }
+            for (size_t i = 0; i < copy_count; ++i)
+            {
+                kMeshCoreRegionPresetOptions[i + 1].label = presets[i].title;
+                kMeshCoreRegionPresetOptions[i + 1].value = presets[i].id;
+            }
+            kMeshCoreRegionPresetOptionCount = copy_count + 1;
+        }
+    }
 
     g_settings.gps_mode = prefs_get_int("gps_mode", 0);
     g_settings.gps_sat_mask = prefs_get_int("gps_sat_mask", 0x1 | 0x8 | 0x4);
@@ -311,6 +396,11 @@ static void settings_load()
 
     g_settings.map_coord_system = prefs_get_int("map_coord", 0);
     g_settings.map_source = prefs_get_int("map_source", 0);
+    if (g_settings.map_source < 0 || g_settings.map_source > 2)
+    {
+        g_settings.map_source = 0;
+    }
+    g_settings.map_contour_enabled = prefs_get_bool("map_contour", false);
     g_settings.map_track_enabled = prefs_get_bool("map_track", false);
     g_settings.map_track_interval = prefs_get_int("map_track_interval", 1);
     g_settings.map_track_format = prefs_get_int("map_track_format", 0);
@@ -319,34 +409,82 @@ static void settings_load()
                                  sizeof(g_settings.user_name),
                                  g_settings.short_name,
                                  sizeof(g_settings.short_name));
-    g_settings.chat_region = app_ctx.getConfig().mesh_config.region;
-    g_settings.chat_channel = prefs_get_int("chat_channel", 0);
-    if (is_zero_key(app_ctx.getConfig().mesh_config.secondary_key,
-                    sizeof(app_ctx.getConfig().mesh_config.secondary_key)))
+    const app::AppConfig& cfg = app_ctx.getConfig();
+    const chat::MeshConfig& mt_cfg = cfg.meshtastic_config;
+    const chat::MeshConfig& mc_cfg = cfg.meshcore_config;
+
+    g_settings.chat_region = mt_cfg.region;
+    g_settings.chat_channel = cfg.chat_channel;
+    const uint8_t* active_psk =
+        (cfg.mesh_protocol == chat::MeshProtocol::MeshCore) ? mc_cfg.secondary_key : mt_cfg.secondary_key;
+    if (is_zero_key(active_psk, sizeof(mt_cfg.secondary_key)))
     {
         g_settings.chat_psk[0] = '\0';
     }
     else
     {
-        bytes_to_hex(app_ctx.getConfig().mesh_config.secondary_key,
-                     sizeof(app_ctx.getConfig().mesh_config.secondary_key),
+        bytes_to_hex(active_psk,
+                     sizeof(mt_cfg.secondary_key),
                      g_settings.chat_psk,
                      sizeof(g_settings.chat_psk));
     }
 
-    g_settings.net_modem_preset = app_ctx.getConfig().mesh_config.modem_preset;
-    int tx_power = app_ctx.getConfig().mesh_config.tx_power;
+    g_settings.net_use_preset = mt_cfg.use_preset;
+    g_settings.net_modem_preset = mt_cfg.modem_preset;
+    g_settings.net_manual_bw = static_cast<int>(std::lround(mt_cfg.bandwidth_khz));
+    g_settings.net_manual_sf = mt_cfg.spread_factor;
+    g_settings.net_manual_cr = mt_cfg.coding_rate;
+    int tx_power = mt_cfg.tx_power;
     if (tx_power < kNetTxPowerMin) tx_power = kNetTxPowerMin;
     if (tx_power > kNetTxPowerMax) tx_power = kNetTxPowerMax;
     g_settings.net_tx_power = tx_power;
-    g_settings.net_relay = app_ctx.getConfig().mesh_config.enable_relay;
-    g_settings.net_duty_cycle = prefs_get_bool("net_duty_cycle", true);
-    g_settings.net_channel_util = prefs_get_int("net_util", 0);
+    g_settings.net_hop_limit = mt_cfg.hop_limit;
+    g_settings.net_tx_enabled = (cfg.mesh_protocol == chat::MeshProtocol::MeshCore)
+                                    ? mc_cfg.tx_enabled
+                                    : mt_cfg.tx_enabled;
+    g_settings.net_override_duty_cycle = mt_cfg.override_duty_cycle;
+    g_settings.net_channel_num = mt_cfg.channel_num;
+    g_settings.net_relay = mt_cfg.enable_relay;
+    float_to_text(mt_cfg.frequency_offset_mhz, g_settings.net_freq_offset, sizeof(g_settings.net_freq_offset), 3);
+    float_to_text(mt_cfg.override_frequency_mhz, g_settings.net_override_freq, sizeof(g_settings.net_override_freq), 3);
+    g_settings.net_duty_cycle = cfg.net_duty_cycle;
+    g_settings.net_channel_util = cfg.net_channel_util;
 
-    g_settings.privacy_encrypt_mode = prefs_get_int("privacy_encrypt", 1);
-    g_settings.privacy_pki = prefs_get_bool("privacy_pki", false);
-    g_settings.privacy_nmea_output = prefs_get_int("privacy_nmea", 0);
-    g_settings.privacy_nmea_sentence = prefs_get_int("privacy_nmea_sent", 0);
+    if (chat::meshcore::isValidRegionPresetId(mc_cfg.meshcore_region_preset))
+    {
+        g_settings.mc_region_preset = mc_cfg.meshcore_region_preset;
+    }
+    else
+    {
+        g_settings.mc_region_preset = 0;
+    }
+    float_to_text(mc_cfg.meshcore_freq_mhz, g_settings.mc_freq, sizeof(g_settings.mc_freq), 3);
+    float_to_text(mc_cfg.meshcore_bw_khz, g_settings.mc_bw, sizeof(g_settings.mc_bw), 3);
+    g_settings.mc_sf = mc_cfg.meshcore_sf;
+    g_settings.mc_cr = mc_cfg.meshcore_cr;
+    g_settings.mc_tx_power = mc_cfg.tx_power;
+    g_settings.mc_client_repeat = mc_cfg.meshcore_client_repeat;
+    float_to_text(mc_cfg.meshcore_rx_delay_base, g_settings.mc_rx_delay, sizeof(g_settings.mc_rx_delay), 3);
+    float_to_text(mc_cfg.meshcore_airtime_factor, g_settings.mc_airtime, sizeof(g_settings.mc_airtime), 3);
+    g_settings.mc_flood_max = mc_cfg.meshcore_flood_max;
+    g_settings.mc_multi_acks = mc_cfg.meshcore_multi_acks;
+    g_settings.mc_channel_slot = mc_cfg.meshcore_channel_slot;
+    strncpy(g_settings.mc_channel_name, mc_cfg.meshcore_channel_name, sizeof(g_settings.mc_channel_name) - 1);
+    g_settings.mc_channel_name[sizeof(g_settings.mc_channel_name) - 1] = '\0';
+    if (is_zero_key(mc_cfg.secondary_key, sizeof(mc_cfg.secondary_key)))
+    {
+        g_settings.mc_channel_key[0] = '\0';
+    }
+    else
+    {
+        bytes_to_hex(mc_cfg.secondary_key, sizeof(mc_cfg.secondary_key),
+                     g_settings.mc_channel_key, sizeof(g_settings.mc_channel_key));
+    }
+
+    g_settings.privacy_encrypt_mode = cfg.privacy_encrypt_mode;
+    g_settings.privacy_pki = cfg.privacy_pki;
+    g_settings.privacy_nmea_output = cfg.privacy_nmea_output;
+    g_settings.privacy_nmea_sentence = cfg.privacy_nmea_sentence;
 
     g_settings.screen_timeout_ms = prefs_get_int("screen_timeout", static_cast<int>(getScreenSleepTimeout()));
     g_settings.timezone_offset_min = prefs_get_int("timezone_offset", 0);
@@ -492,10 +630,6 @@ static void on_text_save_clicked(lv_event_t* e)
                              strcmp(g_state.editing_item->pref_key, "chat_user") == 0);
         bool is_short_name = (g_state.editing_item->pref_key &&
                               strcmp(g_state.editing_item->pref_key, "chat_short") == 0);
-        if (!is_user_name && !is_short_name)
-        {
-            prefs_put_str(g_state.editing_item->pref_key, g_state.editing_item->text_value);
-        }
         update_item_value(*g_state.editing_widget);
         bool broadcast_nodeinfo = false;
         if (is_user_name)
@@ -532,7 +666,128 @@ static void on_text_save_clicked(lv_event_t* e)
                 modal_close();
                 return;
             }
-            memcpy(app_ctx.getConfig().mesh_config.secondary_key, key, sizeof(key));
+            if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
+            {
+                memcpy(app_ctx.getConfig().meshcore_config.secondary_key, key, sizeof(key));
+            }
+            else
+            {
+                memcpy(app_ctx.getConfig().meshtastic_config.secondary_key, key, sizeof(key));
+            }
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "net_freq_offset") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            float value = 0.0f;
+            if (!parse_float_text(g_state.editing_item->text_value, &value))
+            {
+                ::ui::SystemNotification::show("Invalid frequency offset", 3000);
+                modal_close();
+                return;
+            }
+            app_ctx.getConfig().meshtastic_config.frequency_offset_mhz = value;
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "net_override_freq") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            float value = 0.0f;
+            if (!parse_float_text(g_state.editing_item->text_value, &value))
+            {
+                ::ui::SystemNotification::show("Invalid frequency value", 3000);
+                modal_close();
+                return;
+            }
+            app_ctx.getConfig().meshtastic_config.override_frequency_mhz = value;
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "mc_freq") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            float value = 0.0f;
+            if (!parse_float_text(g_state.editing_item->text_value, &value))
+            {
+                ::ui::SystemNotification::show("Invalid MeshCore frequency", 3000);
+                modal_close();
+                return;
+            }
+            app_ctx.getConfig().meshcore_config.meshcore_freq_mhz = value;
+            app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
+            g_settings.mc_region_preset = 0;
+            prefs_put_int("mc_region_preset", 0);
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "mc_bw") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            float value = 0.0f;
+            if (!parse_float_text(g_state.editing_item->text_value, &value))
+            {
+                ::ui::SystemNotification::show("Invalid MeshCore bandwidth", 3000);
+                modal_close();
+                return;
+            }
+            app_ctx.getConfig().meshcore_config.meshcore_bw_khz = value;
+            app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
+            g_settings.mc_region_preset = 0;
+            prefs_put_int("mc_region_preset", 0);
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "mc_rx_delay") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            float value = 0.0f;
+            if (!parse_float_text(g_state.editing_item->text_value, &value))
+            {
+                ::ui::SystemNotification::show("Invalid RX delay", 3000);
+                modal_close();
+                return;
+            }
+            app_ctx.getConfig().meshcore_config.meshcore_rx_delay_base = value;
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "mc_airtime") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            float value = 0.0f;
+            if (!parse_float_text(g_state.editing_item->text_value, &value))
+            {
+                ::ui::SystemNotification::show("Invalid airtime factor", 3000);
+                modal_close();
+                return;
+            }
+            app_ctx.getConfig().meshcore_config.meshcore_airtime_factor = value;
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "mc_channel_name") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            strncpy(app_ctx.getConfig().meshcore_config.meshcore_channel_name,
+                    g_state.editing_item->text_value,
+                    sizeof(app_ctx.getConfig().meshcore_config.meshcore_channel_name) - 1);
+            app_ctx.getConfig().meshcore_config.meshcore_channel_name[sizeof(app_ctx.getConfig().meshcore_config.meshcore_channel_name) - 1] = '\0';
+            app_ctx.saveConfig();
+            app_ctx.applyMeshConfig();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "mc_channel_key") == 0)
+        {
+            app::AppContext& app_ctx = app::AppContext::getInstance();
+            uint8_t key[16] = {};
+            if (!parse_psk(g_state.editing_item->text_value, key, sizeof(key)))
+            {
+                ::ui::SystemNotification::show("Key must be 32 hex or 16 chars", 3000);
+                modal_close();
+                return;
+            }
+            memcpy(app_ctx.getConfig().meshcore_config.secondary_key, key, sizeof(key));
             app_ctx.saveConfig();
             app_ctx.applyMeshConfig();
         }
@@ -617,6 +872,7 @@ static void on_option_clicked(lv_event_t* e)
         return;
     }
     bool restart_now = false;
+    bool rebuild_list = false;
     int previous_value = *payload->item->enum_value;
     *payload->item->enum_value = payload->value;
     prefs_put_int(payload->item->pref_key, payload->value);
@@ -631,14 +887,89 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "chat_region") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
-        app_ctx.getConfig().mesh_config.region = static_cast<uint8_t>(payload->value);
+        chat::MeshConfig& mt_cfg = app_ctx.getConfig().meshtastic_config;
+        mt_cfg.region = static_cast<uint8_t>(payload->value);
+        const auto* region = chat::meshtastic::findRegion(
+            static_cast<meshtastic_Config_LoRaConfig_RegionCode>(mt_cfg.region));
+        if (region && region->power_limit_dbm > 0)
+        {
+            int8_t limit = static_cast<int8_t>(region->power_limit_dbm);
+            if (mt_cfg.tx_power == 0 || mt_cfg.tx_power > limit)
+            {
+                mt_cfg.tx_power = limit;
+            }
+            if (g_settings.net_tx_power > limit)
+            {
+                g_settings.net_tx_power = limit;
+            }
+        }
         app_ctx.saveConfig();
-        restart_now = true;
+        app_ctx.applyMeshConfig();
+        app_ctx.applyNetworkLimits();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_use_preset") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshtastic_config.use_preset = (payload->value != 0);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+        rebuild_list = true;
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_preset") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
-        app_ctx.getConfig().mesh_config.modem_preset = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().meshtastic_config.modem_preset = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().meshtastic_config.use_preset = true;
+        g_settings.net_use_preset = true;
+        prefs_put_int("net_use_preset", 1);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+        rebuild_list = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_bw") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshtastic_config.bandwidth_khz = static_cast<float>(payload->value);
+        app_ctx.getConfig().meshtastic_config.use_preset = false;
+        g_settings.net_use_preset = false;
+        prefs_put_int("net_use_preset", 0);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+        rebuild_list = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_sf") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshtastic_config.spread_factor = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().meshtastic_config.use_preset = false;
+        g_settings.net_use_preset = false;
+        prefs_put_int("net_use_preset", 0);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+        rebuild_list = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_cr") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshtastic_config.coding_rate = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().meshtastic_config.use_preset = false;
+        g_settings.net_use_preset = false;
+        prefs_put_int("net_use_preset", 0);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+        rebuild_list = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_hop_limit") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshtastic_config.hop_limit = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_channel_num") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshtastic_config.channel_num = static_cast<uint16_t>(payload->value);
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
     }
@@ -696,7 +1027,12 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_source") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
-        app_ctx.getConfig().map_source = static_cast<uint8_t>(payload->value);
+        int source = payload->value;
+        if (source < 0 || source > 2)
+        {
+            source = 0;
+        }
+        app_ctx.getConfig().map_source = static_cast<uint8_t>(source);
         app_ctx.saveConfig();
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "map_track_interval") == 0)
@@ -740,7 +1076,79 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_tx_power") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
-        app_ctx.getConfig().mesh_config.tx_power = static_cast<int8_t>(payload->value);
+        app_ctx.getConfig().meshtastic_config.tx_power = static_cast<int8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mc_region_preset") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        chat::MeshConfig& mc_cfg = app_ctx.getConfig().meshcore_config;
+        uint8_t preset_id = static_cast<uint8_t>(payload->value);
+        if (!chat::meshcore::isValidRegionPresetId(preset_id))
+        {
+            preset_id = 0;
+        }
+        mc_cfg.meshcore_region_preset = preset_id;
+        g_settings.mc_region_preset = preset_id;
+        prefs_put_int("mc_region_preset", preset_id);
+        if (preset_id > 0)
+        {
+            const chat::meshcore::RegionPreset* preset = chat::meshcore::findRegionPresetById(preset_id);
+            if (preset)
+            {
+                mc_cfg.meshcore_freq_mhz = preset->freq_mhz;
+                mc_cfg.meshcore_bw_khz = preset->bw_khz;
+                mc_cfg.meshcore_sf = preset->sf;
+                mc_cfg.meshcore_cr = preset->cr;
+                float_to_text(mc_cfg.meshcore_freq_mhz, g_settings.mc_freq, sizeof(g_settings.mc_freq), 3);
+                float_to_text(mc_cfg.meshcore_bw_khz, g_settings.mc_bw, sizeof(g_settings.mc_bw), 3);
+                g_settings.mc_sf = mc_cfg.meshcore_sf;
+                g_settings.mc_cr = mc_cfg.meshcore_cr;
+            }
+        }
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+        rebuild_list = true;
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mc_sf") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshcore_config.meshcore_sf = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
+        g_settings.mc_region_preset = 0;
+        prefs_put_int("mc_region_preset", 0);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mc_cr") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshcore_config.meshcore_cr = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
+        g_settings.mc_region_preset = 0;
+        prefs_put_int("mc_region_preset", 0);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mc_tx_power") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshcore_config.tx_power = static_cast<int8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mc_flood_max") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshcore_config.meshcore_flood_max = static_cast<uint8_t>(payload->value);
+        app_ctx.saveConfig();
+        app_ctx.applyMeshConfig();
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "mc_channel_slot") == 0)
+    {
+        app::AppContext& app_ctx = app::AppContext::getInstance();
+        app_ctx.getConfig().meshcore_config.meshcore_channel_slot = static_cast<uint8_t>(payload->value);
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
     }
@@ -774,6 +1182,10 @@ static void on_option_clicked(lv_event_t* e)
         restart_now = true;
     }
     modal_close();
+    if (rebuild_list)
+    {
+        build_item_list();
+    }
     if (restart_now)
     {
         ::ui::SystemNotification::show("Restarting...", 1500);
@@ -878,7 +1290,9 @@ static const settings::ui::SettingOption kMapCoordOptions[] = {
     {"BD-09", 2},
 };
 static const settings::ui::SettingOption kMapSourceOptions[] = {
-    {"Offline Tiles", 0},
+    {"OSM", 0},
+    {"Terrain", 1},
+    {"Satellite", 2},
 };
 static const settings::ui::SettingOption kMapTrackIntervalOptions[] = {
     {"1s", 1},
@@ -905,11 +1319,94 @@ static const settings::ui::SettingOption kNetPresetOptions[] = {
     {"LongFast", meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST},
     {"LongModerate", meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE},
     {"LongSlow", meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW},
+    {"VeryLongSlow", meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW},
     {"MediumFast", meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST},
     {"MediumSlow", meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW},
     {"ShortFast", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST},
     {"ShortSlow", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_SLOW},
     {"ShortTurbo", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO},
+};
+static const settings::ui::SettingOption kBoolOptions[] = {
+    {"OFF", 0},
+    {"ON", 1},
+};
+static const settings::ui::SettingOption kNetManualBwOptions[] = {
+    {"125 kHz", 125},
+    {"250 kHz", 250},
+    {"406 kHz", 406},
+    {"500 kHz", 500},
+    {"813 kHz", 813},
+    {"1625 kHz", 1625},
+};
+static const settings::ui::SettingOption kSfOptions[] = {
+    {"SF5", 5},
+    {"SF6", 6},
+    {"SF7", 7},
+    {"SF8", 8},
+    {"SF9", 9},
+    {"SF10", 10},
+    {"SF11", 11},
+    {"SF12", 12},
+};
+static const settings::ui::SettingOption kCrOptions[] = {
+    {"4/5", 5},
+    {"4/6", 6},
+    {"4/7", 7},
+    {"4/8", 8},
+};
+static const settings::ui::SettingOption kHopLimitOptions[] = {
+    {"1 hop", 1},
+    {"2 hops", 2},
+    {"3 hops", 3},
+    {"4 hops", 4},
+    {"5 hops", 5},
+    {"6 hops", 6},
+    {"7 hops", 7},
+};
+static const settings::ui::SettingOption kChannelNumOptions[] = {
+    {"Auto", 0},
+    {"1", 1},
+    {"2", 2},
+    {"3", 3},
+    {"4", 4},
+    {"5", 5},
+    {"6", 6},
+    {"7", 7},
+    {"8", 8},
+    {"9", 9},
+    {"10", 10},
+    {"11", 11},
+    {"12", 12},
+    {"13", 13},
+    {"14", 14},
+    {"15", 15},
+    {"16", 16},
+};
+static const settings::ui::SettingOption kMeshCoreChannelSlotOptions[] = {
+    {"Auto", 0},
+    {"1", 1},
+    {"2", 2},
+    {"3", 3},
+    {"4", 4},
+    {"5", 5},
+    {"6", 6},
+    {"7", 7},
+    {"8", 8},
+    {"9", 9},
+    {"10", 10},
+    {"11", 11},
+    {"12", 12},
+    {"13", 13},
+    {"14", 14},
+};
+static const settings::ui::SettingOption kMeshCoreFloodOptions[] = {
+    {"0", 0},
+    {"8", 8},
+    {"16", 16},
+    {"24", 24},
+    {"32", 32},
+    {"48", 48},
+    {"64", 64},
 };
 static const settings::ui::SettingOption kNetTxPowerOptions[] = {
     {"-9 dBm", -9},
@@ -944,6 +1441,14 @@ static const settings::ui::SettingOption kNetTxPowerOptions[] = {
     {"20 dBm", 20},
     {"21 dBm", 21},
     {"22 dBm", 22},
+    {"23 dBm", 23},
+    {"24 dBm", 24},
+    {"25 dBm", 25},
+    {"26 dBm", 26},
+    {"27 dBm", 27},
+    {"28 dBm", 28},
+    {"29 dBm", 29},
+    {"30 dBm", 30},
 };
 static const settings::ui::SettingOption kNetUtilOptions[] = {
     {"Auto", 0},
@@ -1014,7 +1519,8 @@ static settings::ui::SettingItem kGpsItems[] = {
 
 static settings::ui::SettingItem kMapItems[] = {
     {"Coordinate System", settings::ui::SettingType::Enum, kMapCoordOptions, 3, &g_settings.map_coord_system, nullptr, nullptr, 0, false, "map_coord"},
-    {"Map Source", settings::ui::SettingType::Enum, kMapSourceOptions, 1, &g_settings.map_source, nullptr, nullptr, 0, false, "map_source"},
+    {"Map Source", settings::ui::SettingType::Enum, kMapSourceOptions, 3, &g_settings.map_source, nullptr, nullptr, 0, false, "map_source"},
+    {"Contour Overlay", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.map_contour_enabled, nullptr, 0, false, "map_contour"},
     {"Track Recording", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.map_track_enabled, nullptr, 0, false, "map_track"},
     {"Track Interval", settings::ui::SettingType::Enum, kMapTrackIntervalOptions, 4, &g_settings.map_track_interval, nullptr, nullptr, 0, false, "map_track_interval"},
     {"Track Format", settings::ui::SettingType::Enum, kMapTrackFormatOptions, 3, &g_settings.map_track_format, nullptr, nullptr, 0, false, "map_track_format"},
@@ -1029,16 +1535,39 @@ static settings::ui::SettingItem kChatItems[] = {
     {"Channel Key / PSK", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.chat_psk, sizeof(g_settings.chat_psk), true, "chat_psk"},
     {"Encryption Mode", settings::ui::SettingType::Enum, kPrivacyEncryptOptions, 3, &g_settings.privacy_encrypt_mode, nullptr, nullptr, 0, false, "privacy_encrypt"},
     {"PKI", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.privacy_pki, nullptr, 0, false, "privacy_pki"},
-    {"Reset Mesh Params", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_mesh"},
+    {"Reset Mesh Profiles", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_mesh"},
     {"Reset Node DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_nodes"},
     {"Clear Message DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_clear_messages"},
 };
 
 static settings::ui::SettingItem kNetworkItems[] = {
-    {"Modem Preset", settings::ui::SettingType::Enum, kNetPresetOptions, 8, &g_settings.net_modem_preset, nullptr, nullptr, 0, false, "net_preset"},
+    {"Use Preset", settings::ui::SettingType::Enum, kBoolOptions, sizeof(kBoolOptions) / sizeof(kBoolOptions[0]), &g_settings.net_use_preset, nullptr, nullptr, 0, false, "net_use_preset"},
+    {"Modem Preset", settings::ui::SettingType::Enum, kNetPresetOptions, sizeof(kNetPresetOptions) / sizeof(kNetPresetOptions[0]), &g_settings.net_modem_preset, nullptr, nullptr, 0, false, "net_preset"},
+    {"Manual BW", settings::ui::SettingType::Enum, kNetManualBwOptions, sizeof(kNetManualBwOptions) / sizeof(kNetManualBwOptions[0]), &g_settings.net_manual_bw, nullptr, nullptr, 0, false, "net_bw"},
+    {"Manual SF", settings::ui::SettingType::Enum, kSfOptions, sizeof(kSfOptions) / sizeof(kSfOptions[0]), &g_settings.net_manual_sf, nullptr, nullptr, 0, false, "net_sf"},
+    {"Manual CR", settings::ui::SettingType::Enum, kCrOptions, sizeof(kCrOptions) / sizeof(kCrOptions[0]), &g_settings.net_manual_cr, nullptr, nullptr, 0, false, "net_cr"},
     {"TX Power", settings::ui::SettingType::Enum, kNetTxPowerOptions,
      sizeof(kNetTxPowerOptions) / sizeof(kNetTxPowerOptions[0]), &g_settings.net_tx_power, nullptr, nullptr, 0, false, "net_tx_power"},
-    {"Relay / Repeater", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_relay, nullptr, 0, false, "net_relay"},
+    {"Hop Limit", settings::ui::SettingType::Enum, kHopLimitOptions, sizeof(kHopLimitOptions) / sizeof(kHopLimitOptions[0]), &g_settings.net_hop_limit, nullptr, nullptr, 0, false, "net_hop_limit"},
+    {"TX Enabled", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_tx_enabled, nullptr, 0, false, "net_tx_enabled"},
+    {"Override Duty Cycle", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_override_duty_cycle, nullptr, 0, false, "net_override_duty"},
+    {"Channel Slot", settings::ui::SettingType::Enum, kChannelNumOptions, sizeof(kChannelNumOptions) / sizeof(kChannelNumOptions[0]), &g_settings.net_channel_num, nullptr, nullptr, 0, false, "net_channel_num"},
+    {"Freq Offset (MHz)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.net_freq_offset, sizeof(g_settings.net_freq_offset), false, "net_freq_offset"},
+    {"Override Freq (MHz)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.net_override_freq, sizeof(g_settings.net_override_freq), false, "net_override_freq"},
+    {"MC Region Preset", settings::ui::SettingType::Enum, kMeshCoreRegionPresetOptions, 0, &g_settings.mc_region_preset, nullptr, nullptr, 0, false, "mc_region_preset"},
+    {"MC Frequency (MHz)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_freq, sizeof(g_settings.mc_freq), false, "mc_freq"},
+    {"MC Bandwidth (kHz)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_bw, sizeof(g_settings.mc_bw), false, "mc_bw"},
+    {"MC Spread Factor", settings::ui::SettingType::Enum, kSfOptions, sizeof(kSfOptions) / sizeof(kSfOptions[0]), &g_settings.mc_sf, nullptr, nullptr, 0, false, "mc_sf"},
+    {"MC Coding Rate", settings::ui::SettingType::Enum, kCrOptions, sizeof(kCrOptions) / sizeof(kCrOptions[0]), &g_settings.mc_cr, nullptr, nullptr, 0, false, "mc_cr"},
+    {"MC TX Power", settings::ui::SettingType::Enum, kNetTxPowerOptions, sizeof(kNetTxPowerOptions) / sizeof(kNetTxPowerOptions[0]), &g_settings.mc_tx_power, nullptr, nullptr, 0, false, "mc_tx_power"},
+    {"MC Repeat", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.mc_client_repeat, nullptr, 0, false, "mc_repeat"},
+    {"MC RX Delay Base", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_rx_delay, sizeof(g_settings.mc_rx_delay), false, "mc_rx_delay"},
+    {"MC Airtime Factor", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_airtime, sizeof(g_settings.mc_airtime), false, "mc_airtime"},
+    {"MC Flood Max", settings::ui::SettingType::Enum, kMeshCoreFloodOptions, sizeof(kMeshCoreFloodOptions) / sizeof(kMeshCoreFloodOptions[0]), &g_settings.mc_flood_max, nullptr, nullptr, 0, false, "mc_flood_max"},
+    {"MC Multi ACKs", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.mc_multi_acks, nullptr, 0, false, "mc_multi_acks"},
+    {"MC Channel Slot", settings::ui::SettingType::Enum, kMeshCoreChannelSlotOptions, sizeof(kMeshCoreChannelSlotOptions) / sizeof(kMeshCoreChannelSlotOptions[0]), &g_settings.mc_channel_slot, nullptr, nullptr, 0, false, "mc_channel_slot"},
+    {"MC Channel Name", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_channel_name, sizeof(g_settings.mc_channel_name), false, "mc_channel_name"},
+    {"MC Channel Key", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_channel_key, sizeof(g_settings.mc_channel_key), true, "mc_channel_key"},
     {"Duty Cycle Limit", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_duty_cycle, nullptr, 0, false, "net_duty_cycle"},
     {"Channel Utilization", settings::ui::SettingType::Enum, kNetUtilOptions, 3, &g_settings.net_channel_util, nullptr, nullptr, 0, false, "net_util"},
 };
@@ -1077,23 +1606,72 @@ static void update_filter_styles()
     }
 }
 
+static bool has_pref_key(const settings::ui::SettingItem& item, const char* key)
+{
+    return item.pref_key && key && strcmp(item.pref_key, key) == 0;
+}
+
 static bool should_show_item(const settings::ui::SettingItem& item)
 {
     if (!item.pref_key)
     {
         return true;
     }
-    if (g_settings.chat_protocol == static_cast<int>(chat::MeshProtocol::MeshCore))
+
+    const bool meshcore = (g_settings.chat_protocol == static_cast<int>(chat::MeshProtocol::MeshCore));
+
+    // Relay is currently not implemented as real forwarding in Meshtastic path.
+    if (has_pref_key(item, "net_relay"))
     {
-        if (strcmp(item.pref_key, "chat_region") == 0) return false;
-        if (strcmp(item.pref_key, "chat_channel") == 0) return false;
-        if (strcmp(item.pref_key, "chat_psk") == 0) return false;
-        if (strcmp(item.pref_key, "net_preset") == 0) return false;
-        if (strcmp(item.pref_key, "net_tx_power") == 0) return false;
-        if (strcmp(item.pref_key, "net_relay") == 0) return false;
-        if (strcmp(item.pref_key, "net_duty_cycle") == 0) return false;
-        if (strcmp(item.pref_key, "net_util") == 0) return false;
+        return false;
     }
+
+    if (meshcore)
+    {
+        if (has_pref_key(item, "chat_region")) return false;
+        if (has_pref_key(item, "chat_channel")) return false;
+        if (has_pref_key(item, "chat_psk")) return false;
+        if (has_pref_key(item, "privacy_pki")) return false;
+
+        if (has_pref_key(item, "net_use_preset")) return false;
+        if (has_pref_key(item, "net_preset")) return false;
+        if (has_pref_key(item, "net_bw")) return false;
+        if (has_pref_key(item, "net_sf")) return false;
+        if (has_pref_key(item, "net_cr")) return false;
+        if (has_pref_key(item, "net_tx_power")) return false;
+        if (has_pref_key(item, "net_hop_limit")) return false;
+        if (has_pref_key(item, "net_override_duty")) return false;
+        if (has_pref_key(item, "net_channel_num")) return false;
+        if (has_pref_key(item, "net_freq_offset")) return false;
+        if (has_pref_key(item, "net_override_freq")) return false;
+    }
+    else
+    {
+        if (has_pref_key(item, "mc_region_preset")) return false;
+        if (has_pref_key(item, "mc_freq")) return false;
+        if (has_pref_key(item, "mc_bw")) return false;
+        if (has_pref_key(item, "mc_sf")) return false;
+        if (has_pref_key(item, "mc_cr")) return false;
+        if (has_pref_key(item, "mc_tx_power")) return false;
+        if (has_pref_key(item, "mc_repeat")) return false;
+        if (has_pref_key(item, "mc_rx_delay")) return false;
+        if (has_pref_key(item, "mc_airtime")) return false;
+        if (has_pref_key(item, "mc_flood_max")) return false;
+        if (has_pref_key(item, "mc_multi_acks")) return false;
+        if (has_pref_key(item, "mc_channel_slot")) return false;
+        if (has_pref_key(item, "mc_channel_name")) return false;
+        if (has_pref_key(item, "mc_channel_key")) return false;
+
+        if (has_pref_key(item, "net_preset"))
+        {
+            return g_settings.net_use_preset;
+        }
+        if (has_pref_key(item, "net_bw") || has_pref_key(item, "net_sf") || has_pref_key(item, "net_cr"))
+        {
+            return !g_settings.net_use_preset;
+        }
+    }
+
     return true;
 }
 
@@ -1115,9 +1693,13 @@ static void build_item_list()
     {
         settings::ui::ItemWidget& widget = g_state.item_widgets[g_state.item_count];
         widget.def = &cat.items[i];
-        if (widget.def == &kChatItems[3])
+        if (widget.def && widget.def->pref_key && strcmp(widget.def->pref_key, "chat_region") == 0)
         {
-            kChatItems[3].option_count = kChatRegionOptionCount;
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kChatRegionOptionCount;
+        }
+        if (widget.def && widget.def->pref_key && strcmp(widget.def->pref_key, "mc_region_preset") == 0)
+        {
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kMeshCoreRegionPresetOptionCount;
         }
         if (!should_show_item(*widget.def))
         {
@@ -1180,7 +1762,7 @@ static void on_item_clicked(lv_event_t* e)
             if (item.pref_key && strcmp(item.pref_key, "net_relay") == 0)
             {
                 app::AppContext& app_ctx = app::AppContext::getInstance();
-                app_ctx.getConfig().mesh_config.enable_relay = *item.bool_value;
+                app_ctx.getConfig().meshtastic_config.enable_relay = *item.bool_value;
                 app_ctx.saveConfig();
                 app_ctx.applyMeshConfig();
             }
@@ -1191,12 +1773,54 @@ static void on_item_clicked(lv_event_t* e)
                 app_ctx.saveConfig();
                 gps::TrackRecorder::getInstance().setAutoRecording(*item.bool_value);
             }
+            if (item.pref_key && strcmp(item.pref_key, "map_contour") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().map_contour_enabled = *item.bool_value;
+                app_ctx.saveConfig();
+            }
             if (item.pref_key && strcmp(item.pref_key, "net_duty_cycle") == 0)
             {
                 app::AppContext& app_ctx = app::AppContext::getInstance();
                 app_ctx.getConfig().net_duty_cycle = *item.bool_value;
                 app_ctx.saveConfig();
                 app_ctx.applyNetworkLimits();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "net_tx_enabled") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
+                {
+                    app_ctx.getConfig().meshcore_config.tx_enabled = *item.bool_value;
+                }
+                else
+                {
+                    app_ctx.getConfig().meshtastic_config.tx_enabled = *item.bool_value;
+                }
+                app_ctx.saveConfig();
+                app_ctx.applyMeshConfig();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "net_override_duty") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().meshtastic_config.override_duty_cycle = *item.bool_value;
+                app_ctx.saveConfig();
+                app_ctx.applyMeshConfig();
+                app_ctx.applyNetworkLimits();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "mc_repeat") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().meshcore_config.meshcore_client_repeat = *item.bool_value;
+                app_ctx.saveConfig();
+                app_ctx.applyMeshConfig();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "mc_multi_acks") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.getConfig().meshcore_config.meshcore_multi_acks = *item.bool_value;
+                app_ctx.saveConfig();
+                app_ctx.applyMeshConfig();
             }
             if (item.pref_key && strcmp(item.pref_key, "privacy_pki") == 0)
             {

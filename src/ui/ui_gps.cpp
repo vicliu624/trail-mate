@@ -71,6 +71,7 @@ void assign_layout_widgets(const gps::ui::layout::Widgets& w)
     g_gps_state.pan_h = w.pan_h_btn;
     g_gps_state.pan_v = w.pan_v_btn;
     g_gps_state.tracker_btn = w.tracker_btn;
+    g_gps_state.layer_btn = w.layer_btn;
     g_gps_state.route_btn = w.route_btn;
     g_gps_state.top_bar = w.top_bar;
 }
@@ -84,6 +85,7 @@ void bind_controls_and_group(lv_group_t* app_g)
     set_control_id(g_gps_state.pan_h, ControlId::PanHBtn);
     set_control_id(g_gps_state.pan_v, ControlId::PanVBtn);
     set_control_id(g_gps_state.tracker_btn, ControlId::TrackerBtn);
+    set_control_id(g_gps_state.layer_btn, ControlId::LayerBtn);
     set_control_id(g_gps_state.route_btn, ControlId::RouteBtn);
 
     auto bind_btn_events = [](lv_obj_t* obj, bool include_rotary)
@@ -102,6 +104,7 @@ void bind_controls_and_group(lv_group_t* app_g)
     bind_btn_events(g_gps_state.pan_h, true);
     bind_btn_events(g_gps_state.pan_v, true);
     bind_btn_events(g_gps_state.tracker_btn, false);
+    bind_btn_events(g_gps_state.layer_btn, false);
     bind_btn_events(g_gps_state.route_btn, false);
 
     if (g_gps_state.top_bar.back_btn)
@@ -121,6 +124,7 @@ void bind_controls_and_group(lv_group_t* app_g)
         lv_group_add_obj(app_g, g_gps_state.pan_h);
         lv_group_add_obj(app_g, g_gps_state.pan_v);
         lv_group_add_obj(app_g, g_gps_state.tracker_btn);
+        lv_group_add_obj(app_g, g_gps_state.layer_btn);
         lv_group_add_obj(app_g, g_gps_state.route_btn);
     }
 
@@ -216,6 +220,11 @@ static void gps_update_timer_cb(lv_timer_t* timer)
     }
 
     if (modal_is_open(g_gps_state.tracker_modal))
+    {
+        tick_gps_update(false);
+        return;
+    }
+    if (modal_is_open(g_gps_state.layer_modal))
     {
         tick_gps_update(false);
         return;
@@ -436,6 +445,7 @@ void ui_gps_exit(lv_obj_t* parent)
         remove_if(g_gps_state.pan_h);
         remove_if(g_gps_state.pan_v);
         remove_if(g_gps_state.tracker_btn);
+        remove_if(g_gps_state.layer_btn);
         remove_if(g_gps_state.route_btn);
         remove_if(g_gps_state.pan_h_indicator);
         remove_if(g_gps_state.pan_v_indicator);
@@ -451,6 +461,11 @@ void ui_gps_exit(lv_obj_t* parent)
         GPS_LOG("[GPS][EXIT] closing zoom modal\n");
         modal_close(g_gps_state.zoom_modal);
     }
+    if (g_gps_state.layer_modal.is_open())
+    {
+        GPS_LOG("[GPS][EXIT] closing layer modal\n");
+        modal_close(g_gps_state.layer_modal);
+    }
     GPS_LOG("[GPS][EXIT] cleaning tracker overlay\n");
     gps_tracker_cleanup();
     gps_route_cleanup();
@@ -465,6 +480,12 @@ void ui_gps_exit(lv_obj_t* parent)
         GPS_LOG("[GPS][EXIT] deleting tracker modal group\n");
         lv_group_del(g_gps_state.tracker_modal.group);
         g_gps_state.tracker_modal.group = nullptr;
+    }
+    if (g_gps_state.layer_modal.group)
+    {
+        GPS_LOG("[GPS][EXIT] deleting layer modal group\n");
+        lv_group_del(g_gps_state.layer_modal.group);
+        g_gps_state.layer_modal.group = nullptr;
     }
 
     GPS_LOG("[GPS][EXIT] cleanup tiles\n");

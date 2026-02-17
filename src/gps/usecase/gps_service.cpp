@@ -8,7 +8,8 @@
 namespace
 {
 constexpr uint32_t kGpsSampleIntervalMs = 1000;
-}
+constexpr uint32_t kMotionIdleTimeoutMinMs = 5 * 60 * 1000;
+} // namespace
 
 #ifndef GPS_TASK_LOG_ENABLE
 #define GPS_TASK_LOG_ENABLE 0
@@ -57,9 +58,9 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
     {
         gps_collection_interval_ms_ = kGpsSampleIntervalMs;
     }
-    if (motion_config_.idle_timeout_ms < 60000)
+    if (motion_config_.idle_timeout_ms < kMotionIdleTimeoutMinMs)
     {
-        motion_config_.idle_timeout_ms = 60000;
+        motion_config_.idle_timeout_ms = kMotionIdleTimeoutMinMs;
     }
 
     BaseType_t task_result = xTaskCreate(
@@ -79,12 +80,11 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
     }
 
     motion_control_enabled_ = motion_policy_.begin(motion_adapter_, motion_config_);
-    // Force GPS always-on: do not suspend or gate by motion policy.
-    motion_control_enabled_ = false;
-
-    if (motion_control_enabled_ && gps_task_handle_ != nullptr)
+    if (motion_control_enabled_)
     {
-        vTaskSuspend(gps_task_handle_);
+        // Treat service start as "recent motion" baseline so GPS won't be shut down immediately
+        // before IMU has delivered the first motion interrupt.
+        motion_control_armed_ms_ = millis();
     }
 
     if (motion_control_enabled_ && motion_task_handle_ == nullptr)
@@ -106,10 +106,7 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
         }
     }
 
-    if (!motion_control_enabled_)
-    {
-        setGPSPowerState(true);
-    }
+    updateMotionState(millis());
 }
 
 GpsState GpsService::getData()
@@ -218,32 +215,29 @@ void GpsService::setPowerStrategy(uint8_t strategy)
         return;
     }
 
-    if (strategy == 1)
+    if ((strategy == 0 || strategy == 1) && !motion_control_enabled_)
     {
         setMotionConfig(motion_config_);
-        if (!motion_control_enabled_)
-        {
-            setGPSPowerState(true);
-            setCollectionInterval(gps_collection_interval_ms_);
-        }
         return;
     }
 
-    bool was_motion = motion_control_enabled_;
-    motion_control_enabled_ = false;
-    if (was_motion && gps_task_handle_ != nullptr)
-    {
-        vTaskResume(gps_task_handle_);
-    }
+    updateMotionState(millis());
+}
 
-    if (strategy == 2)
+void GpsService::setTeamModeActive(bool active)
+{
+    if (team_mode_active_ == active)
     {
-        setGPSPowerState(false);
+        return;
+    }
+    team_mode_active_ = active;
+
+    if (gps_disabled_ || gps_board_ == nullptr)
+    {
         return;
     }
 
-    setGPSPowerState(true);
-    setCollectionInterval(gps_collection_interval_ms_);
+    updateMotionState(millis());
 }
 
 void GpsService::setGnssConfig(uint8_t mode, uint8_t sat_mask)
@@ -288,9 +282,9 @@ void GpsService::setMotionConfig(const MotionConfig& config)
     }
 
     motion_config_ = config;
-    if (motion_config_.idle_timeout_ms < 60000)
+    if (motion_config_.idle_timeout_ms < kMotionIdleTimeoutMinMs)
     {
-        motion_config_.idle_timeout_ms = 60000;
+        motion_config_.idle_timeout_ms = kMotionIdleTimeoutMinMs;
     }
 
     bool was_enabled = motion_control_enabled_;
@@ -298,10 +292,7 @@ void GpsService::setMotionConfig(const MotionConfig& config)
 
     if (motion_control_enabled_)
     {
-        if (gps_task_handle_ != nullptr)
-        {
-            vTaskSuspend(gps_task_handle_);
-        }
+        motion_control_armed_ms_ = millis();
         if (motion_task_handle_ == nullptr)
         {
             BaseType_t task_result = xTaskCreate(
@@ -323,12 +314,10 @@ void GpsService::setMotionConfig(const MotionConfig& config)
     }
     else if (was_enabled)
     {
-        if (gps_task_handle_ != nullptr)
-        {
-            vTaskResume(gps_task_handle_);
-        }
-        setGPSPowerState(true);
+        motion_control_armed_ms_ = 0;
     }
+
+    updateMotionState(millis());
 }
 
 void GpsService::applyGnssConfig()
@@ -668,16 +657,41 @@ void GpsService::setGPSPowerState(bool enable)
 
 void GpsService::updateMotionState(uint32_t now_ms)
 {
-    if (!motion_control_enabled_ || !motion_policy_.isEnabled())
+    if (gps_disabled_ || gps_board_ == nullptr)
     {
         return;
     }
 
-    bool should_enable_gps = motion_policy_.shouldEnableGps(now_ms);
+    bool should_enable_gps = true;
+
+    // Low Power Off strategy has highest priority.
+    if (power_strategy_ == 2)
+    {
+        should_enable_gps = false;
+    }
+    // Team mode keeps GPS available regardless of motion idle timeout.
+    else if (team_mode_active_)
+    {
+        should_enable_gps = true;
+    }
+    else if (motion_control_enabled_ && motion_policy_.isEnabled())
+    {
+        uint32_t last_motion_ms = motion_policy_.lastMotionMs();
+        if (last_motion_ms == 0)
+        {
+            if (motion_control_armed_ms_ == 0)
+            {
+                motion_control_armed_ms_ = now_ms;
+            }
+            last_motion_ms = motion_control_armed_ms_;
+        }
+        should_enable_gps = (now_ms - last_motion_ms) < motion_config_.idle_timeout_ms;
+    }
 
     if (should_enable_gps && !gps_powered_)
     {
         setGPSPowerState(true);
+        setCollectionInterval(gps_collection_interval_ms_);
     }
     else if (!should_enable_gps && gps_powered_)
     {

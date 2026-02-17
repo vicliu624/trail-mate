@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 /**
  * @file chat_message_list_components.cpp
  * @brief Chat message list screen implementation (explicit architecture version)
@@ -728,3 +729,5 @@ void ChatMessageListScreen::clear_all_timers()
 
 } // namespace ui
 } // namespace chat
+
+#endif

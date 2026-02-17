@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 #include "chat_message_list_styles.h"
 #include "../../assets/fonts/fonts.h"
 
@@ -166,3 +167,5 @@ void apply_label_placeholder(lv_obj_t* label)
 }
 
 } // namespace chat::ui::message_list::styles
+
+#endif

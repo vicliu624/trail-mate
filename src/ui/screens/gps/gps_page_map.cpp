@@ -148,6 +148,12 @@ void gps_map_transform(double lat, double lon, double& out_lat, double& out_lon)
     out_lon = lon;
 }
 
+static inline void sync_map_render_options_from_config()
+{
+    const auto& cfg = app::AppContext::getInstance().getConfig();
+    set_map_render_options(cfg.map_source, cfg.map_contour_enabled);
+}
+
 namespace
 {
 constexpr int kTeamMarkerSize = 10;
@@ -484,7 +490,15 @@ void update_title_and_status()
     }
     else if (!g_gps_state.has_visible_map_data)
     {
-        snprintf(title_buffer, sizeof(title_buffer), "Map - No Map Data");
+        uint8_t source = sanitize_map_source(app::AppContext::getInstance().getConfig().map_source);
+        if (map_source_directory_available(source))
+        {
+            snprintf(title_buffer, sizeof(title_buffer), "Map - No Map Data");
+        }
+        else
+        {
+            snprintf(title_buffer, sizeof(title_buffer), "Map - %s Missing", map_source_label(source));
+        }
     }
     else
     {
@@ -520,6 +534,7 @@ void update_map_anchor()
     {
         return;
     }
+    sync_map_render_options_from_config();
     double map_lat = 0.0;
     double map_lon = 0.0;
     gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
@@ -536,6 +551,7 @@ void update_map_tiles(bool lightweight)
     {
         return;
     }
+    sync_map_render_options_from_config();
 
     double map_lat = 0.0;
     double map_lon = 0.0;
@@ -676,22 +692,20 @@ void clear_team_markers()
 
 static void clear_member_panel_buttons()
 {
-    if (g_gps_state.app_group)
+    for (auto* btn : g_gps_state.member_btns)
     {
-        for (auto* btn : g_gps_state.member_btns)
+        if (!btn)
         {
-            if (btn)
-            {
-                lv_group_remove_obj(btn);
-            }
+            continue;
         }
+        if (g_gps_state.app_group)
+        {
+            lv_group_remove_obj(btn);
+        }
+        lv_obj_del(btn);
     }
     g_gps_state.member_btns.clear();
     g_gps_state.member_btn_ids.clear();
-    if (g_gps_state.member_panel)
-    {
-        lv_obj_clean(g_gps_state.member_panel);
-    }
 }
 
 static void update_member_button_states()
@@ -813,11 +827,20 @@ void refresh_member_panel(bool force)
 
     team::TeamId team_id{};
     std::vector<team::ui::TeamMemberUi> members;
+    bool route_visible = (g_gps_state.route_btn != nullptr) &&
+                         !lv_obj_has_flag(g_gps_state.route_btn, LV_OBJ_FLAG_HIDDEN);
     if (!load_team_data(team_id, members) || members.empty())
     {
         if (g_gps_state.member_panel)
         {
-            lv_obj_add_flag(g_gps_state.member_panel, LV_OBJ_FLAG_HIDDEN);
+            if (route_visible)
+            {
+                lv_obj_clear_flag(g_gps_state.member_panel, LV_OBJ_FLAG_HIDDEN);
+            }
+            else
+            {
+                lv_obj_add_flag(g_gps_state.member_panel, LV_OBJ_FLAG_HIDDEN);
+            }
         }
         if (!g_gps_state.member_btns.empty() || g_gps_state.member_list_hash != 0)
         {
@@ -1047,6 +1070,7 @@ void tick_loader()
     {
         return;
     }
+    sync_map_render_options_from_config();
     static bool prev_has_visible_map_data = false;
 
     if (!g_gps_state.initial_tiles_loaded && g_gps_state.map != NULL)
@@ -1057,6 +1081,15 @@ void tick_loader()
     }
 
     ::tile_loader_step(g_gps_state.tile_ctx);
+
+    uint8_t missing_source = 0;
+    if (take_missing_tile_notice(&missing_source))
+    {
+        if (sd_hw_is_ready() && map_source_directory_available(missing_source))
+        {
+            show_toast("No tile in this area", 1500);
+        }
+    }
 }
 
 void tick_gps_update(bool allow_map_refresh)

@@ -7,6 +7,7 @@
 #include "../../../app/app_context.h"
 #include "../../../chat/infra/meshtastic/mt_region.h"
 #include "../../ui_common.h"
+#include "../../widgets/map/map_tiles.h"
 #include "../../widgets/top_bar.h"
 #include "node_info_page_layout.h"
 #include <cctype>
@@ -175,7 +176,7 @@ void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_le
     bw_out[0] = '\0';
 
     const auto& cfg = app::AppContext::getInstance().getConfig();
-    auto region_code = static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.mesh_config.region);
+    auto region_code = static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.meshtastic_config.region);
     if (region_code == meshtastic_Config_LoRaConfig_RegionCode_UNSET)
     {
         region_code = meshtastic_Config_LoRaConfig_RegionCode_CN;
@@ -191,7 +192,7 @@ void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_le
 
     float bw_khz = 250.0f;
     uint8_t sf = 11;
-    auto preset = static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.mesh_config.modem_preset);
+    auto preset = static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset);
     switch (preset)
     {
     case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
@@ -373,8 +374,14 @@ void update_location_map(const chat::contacts::NodeInfo& node)
         return;
     }
 
-    char path[64];
-    snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", kNodeInfoMapZoom, tile_x, tile_y);
+    char path[96];
+    uint8_t map_source = sanitize_map_source(app::AppContext::getInstance().getConfig().map_source);
+    if (!build_base_tile_path(kNodeInfoMapZoom, tile_x, tile_y, map_source, path, sizeof(path)))
+    {
+        lv_obj_add_flag(s_widgets.map_image, LV_OBJ_FLAG_HIDDEN);
+        set_label_text(s_widgets.map_label, "No map");
+        return;
+    }
 
     lv_fs_file_t f;
     lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);

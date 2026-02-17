@@ -12,6 +12,7 @@
 #include <SD.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring> // For memcpy
 
 // Use LVGL's decoder API to decode PNG images
@@ -32,9 +33,68 @@ static DecodedTileCache g_tile_decode_cache[TILE_DECODE_CACHE_SIZE];
 static bool g_tile_cache_initialized = false;
 static uint32_t g_cache_full_until_ms = 0;
 static uint32_t g_cache_full_log_ms = 0;
+static uint8_t g_requested_map_source = 0;
+static bool g_requested_contour_enabled = false;
+static uint8_t g_active_map_source = 0xFF;
+static bool g_active_contour_enabled = false;
+static bool g_missing_tile_notice_pending = false;
+static bool g_missing_tile_notice_emitted = false;
+static uint8_t g_missing_tile_notice_source = 0;
 
 namespace
 {
+const char* base_source_dir(uint8_t map_source)
+{
+    switch (sanitize_map_source(map_source))
+    {
+    case 1:
+        return "terrain";
+    case 2:
+        return "satellite";
+    case 0:
+    default:
+        return "osm";
+    }
+}
+
+const char* base_source_ext(uint8_t map_source)
+{
+    return sanitize_map_source(map_source) == 2 ? "jpg" : "png";
+}
+
+const char* major_contour_profile_for_zoom(int z)
+{
+    if (z <= 7)
+    {
+        return nullptr;
+    }
+    if (z == 8)
+    {
+        return "major-500";
+    }
+    if (z == 9)
+    {
+        return "major-200";
+    }
+    if (z == 10)
+    {
+        return "major-500";
+    }
+    if (z == 11)
+    {
+        return "major-200";
+    }
+    if (z <= 14)
+    {
+        return "major-100";
+    }
+    if (z <= 16)
+    {
+        return "major-50";
+    }
+    return "major-25";
+}
+
 class SpiLockGuard
 {
   public:
@@ -58,6 +118,106 @@ class SpiLockGuard
 };
 } // namespace
 
+uint8_t sanitize_map_source(uint8_t map_source)
+{
+    return map_source <= 2 ? map_source : 0;
+}
+
+const char* map_source_label(uint8_t map_source)
+{
+    switch (sanitize_map_source(map_source))
+    {
+    case 1:
+        return "Terrain";
+    case 2:
+        return "Satellite";
+    case 0:
+    default:
+        return "OSM";
+    }
+}
+
+bool build_base_tile_path(int z, int x, int y, uint8_t map_source, char* out_path, size_t out_size)
+{
+    if (out_path == NULL || out_size == 0)
+    {
+        return false;
+    }
+    const char* source_dir = base_source_dir(map_source);
+    const char* ext = base_source_ext(map_source);
+    snprintf(out_path, out_size, "A:/maps/base/%s/%d/%d/%d.%s", source_dir, z, x, y, ext);
+    out_path[out_size - 1] = '\0';
+    return true;
+}
+
+bool build_contour_tile_path(int z, int x, int y, char* out_path, size_t out_size)
+{
+    if (out_path == NULL || out_size == 0)
+    {
+        return false;
+    }
+    const char* profile = major_contour_profile_for_zoom(z);
+    if (profile == nullptr)
+    {
+        return false;
+    }
+    snprintf(out_path, out_size, "A:/maps/contour/%s/%d/%d/%d.png", profile, z, x, y);
+    out_path[out_size - 1] = '\0';
+    return true;
+}
+
+bool map_source_directory_available(uint8_t map_source)
+{
+    char path[48];
+    snprintf(path, sizeof(path), "/maps/base/%s", base_source_dir(map_source));
+    path[sizeof(path) - 1] = '\0';
+    return SD.exists(path);
+}
+
+bool contour_directory_available()
+{
+    static const char* kMajorProfiles[] = {
+        "major-500",
+        "major-200",
+        "major-100",
+        "major-50",
+        "major-25",
+    };
+
+    for (const char* profile : kMajorProfiles)
+    {
+        char path[64];
+        snprintf(path, sizeof(path), "/maps/contour/%s", profile);
+        path[sizeof(path) - 1] = '\0';
+        if (SD.exists(path))
+        {
+            return true;
+        }
+    }
+
+    return SD.exists("/maps/contour");
+}
+
+bool take_missing_tile_notice(uint8_t* out_map_source)
+{
+    if (!g_missing_tile_notice_pending)
+    {
+        return false;
+    }
+    g_missing_tile_notice_pending = false;
+    if (out_map_source != NULL)
+    {
+        *out_map_source = g_missing_tile_notice_source;
+    }
+    return true;
+}
+
+void set_map_render_options(uint8_t map_source, bool contour_enabled)
+{
+    g_requested_map_source = sanitize_map_source(map_source);
+    g_requested_contour_enabled = contour_enabled;
+}
+
 /**
  * Initialize tile decode cache
  */
@@ -69,6 +229,7 @@ static void init_tile_decode_cache()
         g_tile_decode_cache[i].x = -1;
         g_tile_decode_cache[i].y = -1;
         g_tile_decode_cache[i].z = -1;
+        g_tile_decode_cache[i].map_source = 0;
         g_tile_decode_cache[i].img_dsc = NULL;
         g_tile_decode_cache[i].last_used_ms = 0;
         g_tile_decode_cache[i].in_use = false;
@@ -77,18 +238,47 @@ static void init_tile_decode_cache()
     GPS_LOG("[GPS] Tile decode cache initialized (size=%d)\n", TILE_DECODE_CACHE_SIZE);
 }
 
+static void clear_tile_decode_cache()
+{
+    if (!g_tile_cache_initialized)
+    {
+        return;
+    }
+    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
+    {
+        if (g_tile_decode_cache[i].img_dsc != NULL)
+        {
+            if (g_tile_decode_cache[i].img_dsc->data != NULL)
+            {
+                lv_free((void*)g_tile_decode_cache[i].img_dsc->data);
+            }
+            lv_free(g_tile_decode_cache[i].img_dsc);
+            g_tile_decode_cache[i].img_dsc = NULL;
+        }
+        g_tile_decode_cache[i].x = -1;
+        g_tile_decode_cache[i].y = -1;
+        g_tile_decode_cache[i].z = -1;
+        g_tile_decode_cache[i].map_source = 0;
+        g_tile_decode_cache[i].last_used_ms = 0;
+        g_tile_decode_cache[i].in_use = false;
+    }
+    g_cache_full_until_ms = 0;
+}
+
 /**
  * Find cached decoded tile image
  */
-static DecodedTileCache* find_cached_tile(int x, int y, int z)
+static DecodedTileCache* find_cached_tile(int x, int y, int z, uint8_t map_source)
 {
     if (!g_tile_cache_initialized) init_tile_decode_cache();
+    map_source = sanitize_map_source(map_source);
 
     for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
     {
         if (g_tile_decode_cache[i].x == x &&
             g_tile_decode_cache[i].y == y &&
             g_tile_decode_cache[i].z == z &&
+            g_tile_decode_cache[i].map_source == map_source &&
             g_tile_decode_cache[i].img_dsc != NULL)
         {
             g_tile_decode_cache[i].last_used_ms = millis();
@@ -155,6 +345,13 @@ static DecodedTileCache* get_lru_cache_slot()
         lv_free(g_tile_decode_cache[lru_idx].img_dsc);
         g_tile_decode_cache[lru_idx].img_dsc = NULL;
     }
+
+    g_tile_decode_cache[lru_idx].x = -1;
+    g_tile_decode_cache[lru_idx].y = -1;
+    g_tile_decode_cache[lru_idx].z = -1;
+    g_tile_decode_cache[lru_idx].map_source = 0;
+    g_tile_decode_cache[lru_idx].last_used_ms = 0;
+    g_tile_decode_cache[lru_idx].in_use = false;
 
     return &g_tile_decode_cache[lru_idx];
 }
@@ -419,6 +616,7 @@ static MapTile& ensure_tile(TileContext& ctx, int x, int y, int z, int priority)
         existing->ever_visible = true;
         existing->last_used_ms = millis();
         existing->priority = priority;
+        existing->map_source = g_active_map_source;
         return *existing;
     }
 
@@ -427,7 +625,9 @@ static MapTile& ensure_tile(TileContext& ctx, int x, int y, int z, int priority)
     t.x = x;
     t.y = y;
     t.z = z;
+    t.map_source = g_active_map_source;
     t.img_obj = NULL;
+    t.contour_obj = NULL;
     t.visible = true;
     t.ever_visible = true;
     t.last_used_ms = millis();
@@ -435,6 +635,8 @@ static MapTile& ensure_tile(TileContext& ctx, int x, int y, int z, int priority)
     t.record_evicted = false;
     t.priority = priority;
     t.has_png_file = false;
+    t.contour_checked = false;
+    t.contour_loaded = false;
     t.cached_img = NULL; // No cached image initially
     ctx.tiles->push_back(t);
     return ctx.tiles->back();
@@ -451,15 +653,96 @@ static void style_tile_obj(lv_obj_t* o)
     lv_obj_set_style_margin_all(o, 0, LV_PART_MAIN);
 }
 
-static void style_placeholder_label(lv_obj_t* label)
+static void style_placeholder_card(lv_obj_t* card)
 {
-    style_tile_obj(label);
-    lv_obj_set_style_bg_color(label, lv_color_hex(0xFFF0D3), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(label, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN);
+    style_tile_obj(card);
+    lv_obj_set_style_bg_color(card, lv_color_hex(0xFFF9F3), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(card, LV_OPA_60, LV_PART_MAIN);
+    lv_obj_set_style_border_width(card, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(card, lv_color_hex(0xEADFCF), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(card, LV_OPA_50, LV_PART_MAIN);
+    lv_obj_set_style_radius(card, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(card, 4, LV_PART_MAIN);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+static void style_placeholder_text(lv_obj_t* label)
+{
+    lv_obj_set_style_text_color(label, lv_color_hex(0x8A7A68), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(label, LV_OPA_70, LV_PART_MAIN);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label, LV_PCT(100));
+}
+
+static void reset_tile_runtime(MapTile& tile)
+{
+    if (tile.img_obj != NULL)
+    {
+        lv_obj_del(tile.img_obj);
+        tile.img_obj = NULL;
+    }
+    if (tile.cached_img != NULL)
+    {
+        tile.cached_img->in_use = false;
+        tile.cached_img = NULL;
+    }
+    tile.contour_obj = NULL; // contour object is a child of img_obj and is deleted with it
+    tile.has_png_file = false;
+    tile.contour_checked = false;
+    tile.contour_loaded = false;
+}
+
+static void reset_all_tiles_for_render_change(TileContext& ctx)
+{
+    if (!ctx.tiles)
+    {
+        return;
+    }
+    for (auto& tile : *ctx.tiles)
+    {
+        reset_tile_runtime(tile);
+        tile.visible = false;
+    }
+    ctx.tiles->clear();
+    if (ctx.has_map_data)
+    {
+        *ctx.has_map_data = false;
+    }
+    if (ctx.has_visible_map_data)
+    {
+        *ctx.has_visible_map_data = false;
+    }
+}
+
+static void sync_render_settings(TileContext& ctx)
+{
+    uint8_t map_source = sanitize_map_source(g_requested_map_source);
+    bool contour_enabled = g_requested_contour_enabled;
+
+    if (map_source == g_active_map_source && contour_enabled == g_active_contour_enabled)
+    {
+        return;
+    }
+
+    bool source_changed = (map_source != g_active_map_source);
+    g_active_map_source = map_source;
+    g_active_contour_enabled = contour_enabled;
+
+    reset_all_tiles_for_render_change(ctx);
+    if (source_changed)
+    {
+        g_missing_tile_notice_pending = false;
+        g_missing_tile_notice_emitted = false;
+        g_missing_tile_notice_source = map_source;
+    }
+
+    if (source_changed)
+    {
+        lv_image_cache_drop(NULL);
+        clear_tile_decode_cache();
+    }
 }
 
 /**
@@ -490,16 +773,21 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
         return;
     }
 
+    char path[96];
+    build_base_tile_path(tile.z, tile.x, tile.y, g_active_map_source, path, sizeof(path));
+
+    bool file_exists = false;
+    bool file_exists_checked = false;
+
     // If tile already has a placeholder label, check if file exists before recreating
     // This prevents repeatedly creating placeholders for missing tiles
     if (tile.img_obj != NULL && !tile.has_png_file)
     {
         // Already has placeholder - check if file now exists
-        char path[64];
-        snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", tile.z, tile.x, tile.y);
         lv_fs_file_t f;
         lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-        bool file_exists = (res == LV_FS_RES_OK);
+        file_exists = (res == LV_FS_RES_OK);
+        file_exists_checked = true;
         if (file_exists)
         {
             lv_fs_close(&f);
@@ -517,8 +805,6 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
         }
     }
 
-    char path[64];
-    snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", tile.z, tile.x, tile.y);
     GPS_LOG("[GPS] load_tile_image: Loading tile %d/%d/%d, path=%s\n", tile.z, tile.x, tile.y, path);
 
     // Always recalculate screen position (don't use old placeholder position)
@@ -536,23 +822,27 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     tile.visible = tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0);
 
     // Check if tile file exists
-    lv_fs_file_t f;
-    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-    bool file_exists = (res == LV_FS_RES_OK);
-    if (file_exists)
+    if (!file_exists_checked)
     {
-        lv_fs_close(&f);
-        GPS_LOG("[GPS] Tile file EXISTS: %s (res=%d)\n", path, res);
-    }
-    else
-    {
-        GPS_LOG("[GPS] Tile file NOT found: %s (res=%d)\n", path, res);
+        lv_fs_file_t f;
+        lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
+        file_exists = (res == LV_FS_RES_OK);
+        file_exists_checked = true;
+        if (file_exists)
+        {
+            lv_fs_close(&f);
+            GPS_LOG("[GPS] Tile file EXISTS: %s (res=%d)\n", path, res);
+        }
+        else
+        {
+            GPS_LOG("[GPS] Tile file NOT found: %s (res=%d)\n", path, res);
+        }
     }
 
     if (file_exists)
     {
         // Check cache first
-        DecodedTileCache* cached = find_cached_tile(tile.x, tile.y, tile.z);
+        DecodedTileCache* cached = find_cached_tile(tile.x, tile.y, tile.z, g_active_map_source);
         DecodedTileCache* cache_slot = nullptr;
         if (cached == NULL)
         {
@@ -574,6 +864,9 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
             // Delete placeholder label before creating image
             lv_obj_del(old_obj);
             tile.img_obj = NULL;
+            tile.contour_obj = NULL;
+            tile.contour_checked = false;
+            tile.contour_loaded = false;
         }
 
         // File exists: use lv_image
@@ -582,6 +875,7 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
         lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
         style_tile_obj(tile.img_obj);
         lv_obj_move_background(tile.img_obj);
+        tile.map_source = g_active_map_source;
 
         if (cached && cached->img_dsc != NULL)
         {
@@ -660,6 +954,7 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
                         cache_slot->x = tile.x;
                         cache_slot->y = tile.y;
                         cache_slot->z = tile.z;
+                        cache_slot->map_source = g_active_map_source;
                         cache_slot->last_used_ms = millis();
                         cache_slot->in_use = true;
                         tile.cached_img = cache_slot;
@@ -684,6 +979,7 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
                 cache_slot->x = tile.x;
                 cache_slot->y = tile.y;
                 cache_slot->z = tile.z;
+                cache_slot->map_source = g_active_map_source;
                 cache_slot->last_used_ms = millis();
                 cache_slot->in_use = false;
                 tile.cached_img = cache_slot;
@@ -693,30 +989,101 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
         }
 
         tile.has_png_file = true;
+        tile.contour_checked = false;
+        tile.contour_loaded = false;
         *ctx.has_map_data = true; // Global flag - any tile ever loaded
         GPS_LOG("[GPS] Tile %d/%d/%d image loaded successfully\n", tile.z, tile.x, tile.y);
     }
     else
     {
-        // File missing: use lv_label directly as tile object
-        GPS_LOG("[GPS] Creating placeholder label for missing tile %d/%d/%d\n", tile.z, tile.x, tile.y);
+        // File missing: use unified placeholder card
+        GPS_LOG("[GPS] Creating placeholder card for missing tile %d/%d/%d\n", tile.z, tile.x, tile.y);
         tile.has_png_file = false;
-        tile.img_obj = lv_label_create(ctx.map_container);
+        tile.contour_obj = NULL;
+        tile.contour_checked = false;
+        tile.contour_loaded = false;
+        tile.img_obj = lv_obj_create(ctx.map_container);
         lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
         lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
-        style_placeholder_label(tile.img_obj);
+        style_placeholder_card(tile.img_obj);
 
-        // Set text content: z/x/y format
-        char coord_text[32];
-        snprintf(coord_text, sizeof(coord_text), "%d/%d/%d", tile.z, tile.x, tile.y);
-        lv_label_set_text(tile.img_obj, coord_text);
-        GPS_LOG("[GPS] Created placeholder label for tile %d/%d/%d\n", tile.z, tile.x, tile.y);
+        lv_obj_t* placeholder_label = lv_label_create(tile.img_obj);
+        lv_label_set_text(placeholder_label, "No tile");
+        style_placeholder_text(placeholder_label);
+        lv_obj_center(placeholder_label);
+
+        if (!g_missing_tile_notice_emitted)
+        {
+            g_missing_tile_notice_emitted = true;
+            g_missing_tile_notice_pending = true;
+            g_missing_tile_notice_source = g_active_map_source;
+        }
+        GPS_LOG("[GPS] Created placeholder card for tile %d/%d/%d\n", tile.z, tile.x, tile.y);
     }
 
     tile.last_used_ms = millis();
     tile.obj_evicted_ms = 0;
     tile.record_evicted = false;
     GPS_LOG("[GPS] Tile %d/%d/%d loaded, visible=%d\n", tile.z, tile.x, tile.y, tile.visible);
+}
+
+static void load_contour_overlay(MapTile& tile)
+{
+    if (!g_active_contour_enabled)
+    {
+        tile.contour_checked = false;
+        tile.contour_loaded = false;
+        if (tile.contour_obj != NULL)
+        {
+            lv_obj_del(tile.contour_obj);
+            tile.contour_obj = NULL;
+        }
+        return;
+    }
+
+    if (tile.contour_obj != NULL)
+    {
+        tile.contour_checked = true;
+        tile.contour_loaded = true;
+        lv_obj_clear_flag(tile.contour_obj, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    if (tile.contour_checked)
+    {
+        return;
+    }
+
+    if (tile.img_obj == NULL || !tile.visible)
+    {
+        return;
+    }
+
+    char contour_path[96];
+    if (!build_contour_tile_path(tile.z, tile.x, tile.y, contour_path, sizeof(contour_path)))
+    {
+        tile.contour_checked = true;
+        tile.contour_loaded = false;
+        return;
+    }
+
+    lv_fs_file_t f;
+    lv_fs_res_t res = lv_fs_open(&f, contour_path, LV_FS_MODE_RD);
+    if (res != LV_FS_RES_OK)
+    {
+        tile.contour_checked = true;
+        tile.contour_loaded = false;
+        return;
+    }
+    lv_fs_close(&f);
+
+    tile.contour_obj = lv_image_create(tile.img_obj);
+    lv_obj_set_size(tile.contour_obj, TILE_SIZE, TILE_SIZE);
+    lv_obj_set_pos(tile.contour_obj, 0, 0);
+    style_tile_obj(tile.contour_obj);
+    lv_image_set_src(tile.contour_obj, contour_path);
+    tile.contour_checked = true;
+    tile.contour_loaded = true;
 }
 
 /**
@@ -818,7 +1185,10 @@ static void mark_all_invisible(TileContext& ctx, int target_zoom)
         {
             lv_obj_del(tile.img_obj);
             tile.img_obj = NULL;
+            tile.contour_obj = NULL;
             tile.has_png_file = false;
+            tile.contour_checked = false;
+            tile.contour_loaded = false;
             tile.cached_img = NULL;         // Clear cache reference
             tile.obj_evicted_ms = millis(); // Mark as evicted for record cleanup protection
         }
@@ -933,12 +1303,16 @@ static void layout_loaded_tile_objects(TileContext& ctx)
 
     for (auto& tile : *ctx.tiles)
     {
-        // CRITICAL: Skip tiles from different zoom levels
-        if (tile.z != current_zoom)
+        // CRITICAL: Skip tiles from different zoom levels or stale source records
+        if (tile.z != current_zoom || tile.map_source != g_active_map_source)
         {
             if (tile.img_obj != NULL)
             {
                 lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (tile.contour_obj != NULL)
+            {
+                lv_obj_add_flag(tile.contour_obj, LV_OBJ_FLAG_HIDDEN);
             }
             tile.visible = false;
             continue;
@@ -952,6 +1326,10 @@ static void layout_loaded_tile_objects(TileContext& ctx)
             if (tile.img_obj != NULL)
             {
                 lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (tile.contour_obj != NULL)
+            {
+                lv_obj_add_flag(tile.contour_obj, LV_OBJ_FLAG_HIDDEN);
             }
             tile.visible = false;
             continue;
@@ -977,26 +1355,40 @@ static void layout_loaded_tile_objects(TileContext& ctx)
             // Actual loading (I/O + decode) will be done asynchronously by tile_loader_step()
             if (tile.img_obj == NULL)
             {
-                // Create lightweight placeholder label (no I/O, no decode, no blocking)
-                tile.img_obj = lv_label_create(ctx.map_container);
+                // Create lightweight placeholder card (no I/O, no decode, no blocking)
+                tile.img_obj = lv_obj_create(ctx.map_container);
                 lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
                 lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
-                style_placeholder_label(tile.img_obj);
+                style_placeholder_card(tile.img_obj);
                 lv_obj_move_background(tile.img_obj);
 
-                // Set text content: z/x/y format
-                char coord_text[32];
-                snprintf(coord_text, sizeof(coord_text), "%d/%d/%d", tile.z, tile.x, tile.y);
-                lv_label_set_text(tile.img_obj, coord_text);
+                lv_obj_t* placeholder_label = lv_label_create(tile.img_obj);
+                lv_label_set_text(placeholder_label, "No tile");
+                style_placeholder_text(placeholder_label);
+                lv_obj_center(placeholder_label);
 
                 // Mark that this tile needs loading (will be done by tile_loader_step)
                 tile.has_png_file = false; // Will be set to true when actually loaded
+                tile.contour_obj = NULL;
+                tile.contour_checked = false;
+                tile.contour_loaded = false;
             }
             else
             {
                 // Update position for existing objects
                 lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
                 lv_obj_clear_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (tile.contour_obj != NULL)
+            {
+                if (g_active_contour_enabled)
+                {
+                    lv_obj_clear_flag(tile.contour_obj, LV_OBJ_FLAG_HIDDEN);
+                }
+                else
+                {
+                    lv_obj_add_flag(tile.contour_obj, LV_OBJ_FLAG_HIDDEN);
+                }
             }
             tile.last_used_ms = millis();
         }
@@ -1006,6 +1398,10 @@ static void layout_loaded_tile_objects(TileContext& ctx)
             if (tile.img_obj != NULL)
             {
                 lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (tile.contour_obj != NULL)
+            {
+                lv_obj_add_flag(tile.contour_obj, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }
@@ -1092,8 +1488,11 @@ static void evict_cache(TileContext& ctx)
                 }
                 lv_obj_del((*ctx.tiles)[idx].img_obj);
                 (*ctx.tiles)[idx].img_obj = NULL;
+                (*ctx.tiles)[idx].contour_obj = NULL;
                 (*ctx.tiles)[idx].cached_img = NULL; // Clear cache reference
                 (*ctx.tiles)[idx].has_png_file = false;
+                (*ctx.tiles)[idx].contour_checked = false;
+                (*ctx.tiles)[idx].contour_loaded = false;
                 (*ctx.tiles)[idx].obj_evicted_ms = millis();
             }
         }
@@ -1178,6 +1577,8 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
         return;
     }
 
+    sync_render_settings(ctx);
+
     GPS_LOG("[GPS] calculate_required_tiles: has_fix=%d, zoom=%d, lat=%.6f, lng=%.6f\n",
             has_fix, zoom, lat, lng);
 
@@ -1224,6 +1625,9 @@ void tile_loader_step(TileContext& ctx)
     {
         return;
     }
+
+    sync_render_settings(ctx);
+
     if (g_cache_full_until_ms != 0)
     {
         uint32_t now_ms = millis();
@@ -1247,7 +1651,7 @@ void tile_loader_step(TileContext& ctx)
         MapTile* best = nullptr;
         for (auto& tile : *ctx.tiles)
         {
-            if (tile.visible && !tile.has_png_file)
+            if (tile.visible && tile.map_source == g_active_map_source && !tile.has_png_file)
             {
                 bool already_attempted = false;
                 for (int i = 0; i < attempted_count; i++)
@@ -1261,28 +1665,6 @@ void tile_loader_step(TileContext& ctx)
                 if (already_attempted)
                 {
                     continue;
-                }
-
-                // If tile already has a placeholder, quickly check if file exists
-                // to avoid repeatedly trying to load missing files
-                if (tile.img_obj != NULL)
-                {
-                    // Has placeholder - check if file exists before selecting
-                    char path[64];
-                    snprintf(path, sizeof(path), "A:/maps/%d/%d/%d.png", tile.z, tile.x, tile.y);
-                    lv_fs_file_t f;
-                    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-                    bool file_exists = (res == LV_FS_RES_OK);
-                    if (file_exists)
-                    {
-                        lv_fs_close(&f);
-                        // File exists - this tile can be upgraded from placeholder to image
-                    }
-                    else
-                    {
-                        // File doesn't exist - skip this tile to avoid repeated attempts
-                        continue;
-                    }
                 }
 
                 if (best == nullptr ||
@@ -1360,6 +1742,36 @@ void tile_loader_step(TileContext& ctx)
             break;
         }
     }
+
+    if (g_active_contour_enabled && (int32_t)(millis() - start_ms) < (int32_t)budget_ms)
+    {
+        MapTile* contour_target = nullptr;
+        for (auto& tile : *ctx.tiles)
+        {
+            if (!tile.visible || !tile.has_png_file || tile.map_source != g_active_map_source)
+            {
+                continue;
+            }
+            if (tile.contour_checked)
+            {
+                continue;
+            }
+            if (contour_target == nullptr ||
+                tile.priority < contour_target->priority ||
+                (tile.priority == contour_target->priority && tile.last_used_ms < contour_target->last_used_ms))
+            {
+                contour_target = &tile;
+            }
+        }
+        if (contour_target != nullptr)
+        {
+            load_contour_overlay(*contour_target);
+            if (contour_target->contour_obj != NULL)
+            {
+                lv_obj_invalidate(contour_target->contour_obj);
+            }
+        }
+    }
 }
 
 /**
@@ -1384,12 +1796,23 @@ void cleanup_tiles(TileContext& ctx)
 
     for (auto& tile : *ctx.tiles)
     {
-        if (tile.img_obj != NULL)
-        {
-            lv_obj_del(tile.img_obj);
-            tile.img_obj = NULL;
-        }
+        reset_tile_runtime(tile);
     }
     ctx.tiles->clear();
     ctx.tiles->shrink_to_fit();
+    lv_image_cache_drop(NULL);
+    clear_tile_decode_cache();
+    g_active_map_source = 0xFF;
+    g_active_contour_enabled = false;
+    g_missing_tile_notice_pending = false;
+    g_missing_tile_notice_emitted = false;
+    g_missing_tile_notice_source = 0;
+    if (ctx.has_map_data)
+    {
+        *ctx.has_map_data = false;
+    }
+    if (ctx.has_visible_map_data)
+    {
+        *ctx.has_visible_map_data = false;
+    }
 }

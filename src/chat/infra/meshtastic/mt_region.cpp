@@ -15,33 +15,33 @@ namespace
 {
 
 const RegionInfo kRegions[] = {
-    {meshtastic_Config_LoRaConfig_RegionCode_UNSET, "UNSET", 902.0f, 928.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_US, "US", 902.0f, 928.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_EU_433, "EU_433", 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_EU_868, "EU_868", 869.4f, 869.65f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_CN, "CN", 470.0f, 510.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_JP, "JP", 920.5f, 923.5f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_ANZ, "ANZ", 915.0f, 928.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_KR, "KR", 920.0f, 923.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_TW, "TW", 920.0f, 925.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_RU, "RU", 868.7f, 869.2f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_IN, "IN", 865.0f, 867.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_NZ_865, "NZ_865", 865.0f, 867.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_TH, "TH", 920.0f, 925.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_LORA_24, "LORA_24", 2400.0f, 2483.5f, 0.0f, true},
-    {meshtastic_Config_LoRaConfig_RegionCode_UA_433, "UA_433", 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_UA_868, "UA_868", 868.0f, 868.6f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_MY_433, "MY_433", 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_MY_919, "MY_919", 919.0f, 923.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_SG_923, "SG_923", 920.0f, 925.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_PH_433, "PH_433", 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_PH_868, "PH_868", 868.0f, 869.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_PH_915, "PH_915", 915.0f, 918.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_ANZ_433, "ANZ_433", 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_KZ_433, "KZ_433", 433.0f, 434.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_KZ_863, "KZ_863", 863.0f, 870.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_NP_865, "NP_865", 865.0f, 867.0f, 0.0f, false},
-    {meshtastic_Config_LoRaConfig_RegionCode_BR_902, "BR_902", 902.0f, 928.0f, 0.0f, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_UNSET, "UNSET", 902.0f, 928.0f, 100.0f, 0.0f, 30, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_US, "US", 902.0f, 928.0f, 100.0f, 0.0f, 30, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_EU_433, "EU_433", 433.0f, 434.0f, 10.0f, 0.0f, 10, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_EU_868, "EU_868", 869.4f, 869.65f, 10.0f, 0.0f, 27, false, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_CN, "CN", 470.0f, 510.0f, 100.0f, 0.0f, 19, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_JP, "JP", 920.5f, 923.5f, 100.0f, 0.0f, 13, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_ANZ, "ANZ", 915.0f, 928.0f, 100.0f, 0.0f, 30, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_KR, "KR", 920.0f, 923.0f, 100.0f, 0.0f, 23, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_TW, "TW", 920.0f, 925.0f, 100.0f, 0.0f, 27, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_RU, "RU", 868.7f, 869.2f, 100.0f, 0.0f, 20, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_IN, "IN", 865.0f, 867.0f, 100.0f, 0.0f, 30, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_NZ_865, "NZ_865", 864.0f, 868.0f, 100.0f, 0.0f, 36, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_TH, "TH", 920.0f, 925.0f, 100.0f, 0.0f, 16, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_LORA_24, "LORA_24", 2400.0f, 2483.5f, 100.0f, 0.0f, 10, true, false, true},
+    {meshtastic_Config_LoRaConfig_RegionCode_UA_433, "UA_433", 433.0f, 434.7f, 10.0f, 0.0f, 10, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_UA_868, "UA_868", 868.0f, 868.6f, 1.0f, 0.0f, 14, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_MY_433, "MY_433", 433.0f, 435.0f, 100.0f, 0.0f, 20, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_MY_919, "MY_919", 919.0f, 924.0f, 100.0f, 0.0f, 27, true, true, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_SG_923, "SG_923", 917.0f, 925.0f, 100.0f, 0.0f, 20, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_PH_433, "PH_433", 433.0f, 434.7f, 100.0f, 0.0f, 10, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_PH_868, "PH_868", 868.0f, 869.4f, 100.0f, 0.0f, 14, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_PH_915, "PH_915", 915.0f, 918.0f, 100.0f, 0.0f, 24, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_ANZ_433, "ANZ_433", 433.05f, 434.79f, 100.0f, 0.0f, 14, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_KZ_433, "KZ_433", 433.075f, 434.775f, 100.0f, 0.0f, 10, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_KZ_863, "KZ_863", 863.0f, 868.0f, 100.0f, 0.0f, 30, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_NP_865, "NP_865", 865.0f, 868.0f, 100.0f, 0.0f, 30, true, false, false},
+    {meshtastic_Config_LoRaConfig_RegionCode_BR_902, "BR_902", 902.0f, 907.5f, 100.0f, 0.0f, 30, true, false, false},
 };
 uint32_t djb2Hash(const char* str)
 {
@@ -87,6 +87,8 @@ const char* presetDisplayName(meshtastic_Config_LoRaConfig_ModemPreset preset)
         return "LongModerate";
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
         return "LongSlow";
+    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
+        return "VeryLongSlow";
     case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
         return "MediumSlow";
     case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
@@ -155,6 +157,7 @@ float estimateFrequencyMhz(uint8_t region_code, uint8_t modem_preset)
         bw_khz = info->wide_lora ? 406.25f : 125.0f;
         break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
+    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
         bw_khz = info->wide_lora ? 406.25f : 125.0f;
         break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:

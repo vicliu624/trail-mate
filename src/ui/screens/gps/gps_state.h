@@ -43,6 +43,7 @@ struct GPSPageState
     lv_obj_t* pan_h = nullptr;           // Horizontal pan button
     lv_obj_t* pan_v = nullptr;           // Vertical pan button
     lv_obj_t* tracker_btn = nullptr;     // Tracker button
+    lv_obj_t* layer_btn = nullptr;       // Map layer button
     lv_obj_t* route_btn = nullptr;       // Route focus button
     lv_obj_t* pan_h_indicator = nullptr; // Horizontal pan indicator (line with arrows at bottom)
     lv_obj_t* pan_v_indicator = nullptr; // Vertical pan indicator (line with arrows on right)
@@ -72,6 +73,7 @@ struct GPSPageState
     // popup
     Modal zoom_modal;
     Modal tracker_modal;
+    Modal layer_modal;
     int popup_zoom = gps_ui::kDefaultZoom;
     bool zoom_win_cb_bound = false;
 

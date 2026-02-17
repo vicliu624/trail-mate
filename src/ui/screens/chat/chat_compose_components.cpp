@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 #include "chat_compose_components.h"
 
 #include "chat_compose_input.h"
@@ -644,3 +645,5 @@ void ChatComposeScreen::on_send_timer(lv_timer_t* timer)
 }
 
 } // namespace chat::ui
+
+#endif

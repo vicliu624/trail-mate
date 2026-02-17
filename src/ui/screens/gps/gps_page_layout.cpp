@@ -23,9 +23,11 @@ namespace gps::ui::layout
  *           [pan_v_label]
  *         [tracker_btn]
  *           [tracker_label]
+ *         [layer_btn]
+ *           [layer_label]
+ *       [member_panel: top-left column]
  *         [route_btn]
  *           [route_label]
- *       [member_panel: top-left column]
  *
  * Tree View
  * root
@@ -40,8 +42,9 @@ namespace gps::ui::layout
  *       |  |- pan_h_btn
  *       |  |- pan_v_btn
  *       |  |- tracker_btn
- *       |  `- route_btn
+ *       |  |- layer_btn
  *       `- member_panel
+ *          `- route_btn
  */
 void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 {
@@ -111,7 +114,14 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     create_control(w.pan_h_btn, w.pan_h_label, "[H]oriz");
     create_control(w.pan_v_btn, w.pan_v_label, "[V]ert");
     create_control(w.tracker_btn, w.tracker_label, "[T]racker");
-    create_control(w.route_btn, w.route_label, "[R]oute");
+    create_control(w.layer_btn, w.layer_label, "[L]ayer");
+
+    w.route_btn = lv_btn_create(w.member_panel);
+    lv_obj_set_width(w.route_btn, LV_PCT(100));
+    lv_obj_set_height(w.route_btn, spec.control_btn_h);
+    w.route_label = lv_label_create(w.route_btn);
+    lv_label_set_text(w.route_label, "[R]oute");
+    lv_obj_center(w.route_label);
 }
 
 } // namespace gps::ui::layout

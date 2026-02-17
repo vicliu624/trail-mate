@@ -4,6 +4,10 @@
  */
 #pragma once
 
+#if defined(ARDUINO_T_WATCH_S3)
+#include "../chat_watch/chat_conversation_components_watch.h"
+#else
+
 #include "../../chat/domain/chat_types.h"
 #include "../../widgets/top_bar.h"
 #include "chat_conversation_input.h"
@@ -134,3 +138,5 @@ class ChatConversationScreen
 
 } // namespace ui
 } // namespace chat
+
+#endif

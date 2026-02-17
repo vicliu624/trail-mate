@@ -19,7 +19,11 @@ struct RegionInfo
     const char* label;
     float freq_start_mhz;
     float freq_end_mhz;
+    float duty_cycle_percent;
     float spacing_khz;
+    uint8_t power_limit_dbm; // 0 means unspecified
+    bool audio_permitted;
+    bool frequency_switching;
     bool wide_lora;
 };
 

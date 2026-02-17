@@ -213,21 +213,70 @@ struct MeshIncomingData
  */
 struct MeshConfig
 {
-    uint8_t region;       // LoRa region (0=US, 1=EU, etc.)
-    uint8_t modem_preset; // Modem preset index
-    int8_t tx_power;      // TX power in dBm
-    uint8_t hop_limit;    // Maximum hop limit (1-3)
-    bool enable_relay;    // Enable message relay/forwarding
+    // Meshtastic radio configuration
+    uint8_t region;           // LoRa region (0=US, 1=EU, etc.)
+    bool use_preset;          // true: use modem_preset, false: use manual params
+    uint8_t modem_preset;     // Modem preset index
+    float bandwidth_khz;      // Manual bandwidth when use_preset=false
+    uint8_t spread_factor;    // Manual SF when use_preset=false
+    uint8_t coding_rate;      // Manual CR denominator (5..8) when use_preset=false
+    int8_t tx_power;          // TX power in dBm
+    uint8_t hop_limit;        // Maximum hop limit (1-7)
+    bool tx_enabled;          // Disable TX when false
+    bool override_duty_cycle; // Ignore duty cycle based throttling when true
+    uint16_t channel_num;     // 0 = auto hash, otherwise 1..N channel slot
+    float frequency_offset_mhz;
+    float override_frequency_mhz; // 0 = disabled
+    bool enable_relay;            // Reserved relay switch (not currently routed)
 
     // Channel encryption keys (PSK for encrypted channels)
     uint8_t primary_key[16];   // Primary channel key (usually empty for public)
     uint8_t secondary_key[16]; // Secondary channel key (Squad PSK)
 
-    MeshConfig() : region(0), modem_preset(0), tx_power(14),
-                   hop_limit(2), enable_relay(true)
+    // MeshCore radio/channel tuning
+    uint8_t meshcore_region_preset; // 0=Custom, >0 preset id
+    float meshcore_freq_mhz;
+    float meshcore_bw_khz;
+    uint8_t meshcore_sf;
+    uint8_t meshcore_cr;
+    bool meshcore_client_repeat;
+    float meshcore_rx_delay_base;
+    float meshcore_airtime_factor;
+    uint8_t meshcore_flood_max;
+    bool meshcore_multi_acks;
+    uint8_t meshcore_channel_slot;
+    char meshcore_channel_name[32];
+
+    MeshConfig()
+        : region(0),
+          use_preset(true),
+          modem_preset(0),
+          bandwidth_khz(250.0f),
+          spread_factor(11),
+          coding_rate(5),
+          tx_power(14),
+          hop_limit(2),
+          tx_enabled(true),
+          override_duty_cycle(false),
+          channel_num(0),
+          frequency_offset_mhz(0.0f),
+          override_frequency_mhz(0.0f),
+          enable_relay(true),
+          meshcore_region_preset(0),
+          meshcore_freq_mhz(915.0f),
+          meshcore_bw_khz(125.0f),
+          meshcore_sf(9),
+          meshcore_cr(5),
+          meshcore_client_repeat(false),
+          meshcore_rx_delay_base(0.0f),
+          meshcore_airtime_factor(1.0f),
+          meshcore_flood_max(16),
+          meshcore_multi_acks(false),
+          meshcore_channel_slot(0)
     {
         memset(primary_key, 0, 16);
         memset(secondary_key, 0, 16);
+        meshcore_channel_name[0] = '\0';
     }
 };
 

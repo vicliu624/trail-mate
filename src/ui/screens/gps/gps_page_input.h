@@ -17,6 +17,7 @@ enum class ControlId : uint8_t
     PanHBtn,
     PanVBtn,
     TrackerBtn,
+    LayerBtn,
     RouteBtn,
     PanHIndicator,
     PanVIndicator,

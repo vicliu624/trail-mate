@@ -1,6 +1,8 @@
 #include "walkie_service.h"
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#include <Arduino.h>
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 
 #include "../app/app_context.h"
 #include "../app/app_tasks.h"
@@ -8,7 +10,6 @@
 #include "../chat/infra/meshtastic/mt_region.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <Arduino.h>
 #include <RadioLib.h>
 #include <codec2.h>
 #include <cstring>
@@ -813,8 +814,8 @@ bool start()
     app::AppTasks::pauseRadioTasks();
 
     auto& config = app::AppContext::getInstance().getConfig();
-    float freq_mhz = chat::meshtastic::estimateFrequencyMhz(config.mesh_config.region,
-                                                            config.mesh_config.modem_preset);
+    float freq_mhz = chat::meshtastic::estimateFrequencyMhz(config.meshtastic_config.region,
+                                                            config.meshtastic_config.modem_preset);
     if (freq_mhz <= 0.0f)
     {
         freq_mhz = 915.0f;
@@ -823,9 +824,9 @@ bool start()
 
     Serial.printf("[WALKIE] config freq=%.3f br=%.1f dev=%.1f rxBw=%.1f preamble=%u pwr=%d\n",
                   freq_mhz, kFskBitRateKbps, kFskFreqDevKHz, kFskRxBwKHz,
-                  kFskPreambleLen, config.mesh_config.tx_power);
+                  kFskPreambleLen, config.meshtastic_config.tx_power);
 
-    if (!configure_fsk(*board, freq_mhz, config.mesh_config.tx_power))
+    if (!configure_fsk(*board, freq_mhz, config.meshtastic_config.tx_power))
     {
         app::AppContext::getInstance().applyMeshConfig();
         app::AppTasks::resumeRadioTasks();
@@ -997,6 +998,15 @@ bool is_active()
 
 void set_ptt(bool)
 {
+}
+
+void adjust_volume(int)
+{
+}
+
+int get_volume()
+{
+    return 0;
 }
 
 void on_key_event(char, int)

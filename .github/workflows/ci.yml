@@ -24,11 +24,27 @@ jobs:
             | xargs -0 clang-format-14 --dry-run --Werror
 
   build:
-    name: PlatformIO Build
+    name: PlatformIO Build (${{ matrix.env }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - tlora_pager_sx1262
+          - tdeck
+          - lilygo_twatch_s3
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(awk -F'[][]' '/^## \\[[0-9]/ {print $2; exit}' CHANGELOG.md)
+          if [ -z "$VERSION" ]; then
+            VERSION="unknown"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,5 +61,16 @@ jobs:
       - name: Install PlatformIO
         run: python -m pip install --upgrade platformio
 
-      - name: Build (default env)
-        run: pio run -e tlora_pager_sx1262
+      - name: Build (${{ matrix.env }})
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Collect firmware
+        run: |
+          mkdir -p dist
+          cp .pio/build/${{ matrix.env }}/firmware.bin dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.bin
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}
+          path: dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.bin

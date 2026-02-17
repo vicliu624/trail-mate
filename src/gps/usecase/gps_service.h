@@ -29,6 +29,7 @@ class GpsService
     uint32_t getCollectionInterval() const;
     void setCollectionInterval(uint32_t interval_ms);
     void setPowerStrategy(uint8_t strategy);
+    void setTeamModeActive(bool active);
     void setGnssConfig(uint8_t mode, uint8_t sat_mask);
     void setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
     MotionConfig getMotionConfig() const { return motion_config_; }
@@ -76,6 +77,8 @@ class GpsService
     bool gps_powered_ = false;
     bool gps_disabled_ = false;
     bool motion_control_enabled_ = false;
+    bool team_mode_active_ = false;
+    uint32_t motion_control_armed_ms_ = 0;
 
     MotionConfig motion_config_{};
     MotionPolicy motion_policy_{};

@@ -78,6 +78,7 @@ static void action_position_center();
 static void action_pan_enter(ControlId axis_id);
 static void action_pan_exit();
 static void action_pan_step(ControlId axis_id, int32_t step);
+static void action_layer_open_popup();
 static void action_route_focus();
 
 void zoom_popup_handle_rotary(int32_t diff);
@@ -121,7 +122,7 @@ static void exit_pan_v_mode()
     GPS_LOG("[GPS] exit_pan_v_mode: exited vertical pan editing mode\n");
 }
 
-// 注意：边沿检测已移到 poll_encoder_for_pan() 中，这里不再需�?
+// Edge detection is handled in poll_encoder_for_pan().
 void on_ui_event(lv_event_t* e)
 {
     if (!is_alive())
@@ -132,7 +133,7 @@ void on_ui_event(lv_event_t* e)
     auto* target = (lv_obj_t*)lv_event_get_target(e);
 
     // ============================================================================
-    // DEBUG: 详细日志，抓取真实事件类型和参数
+    // DEBUG: detailed event trace
     // ============================================================================
     extern lv_group_t* app_g;
     lv_obj_t* focused = app_g ? lv_group_get_focused(app_g) : nullptr;
@@ -266,13 +267,17 @@ void on_ui_event(lv_event_t* e)
     {
         return;
     }
+    if (modal_is_open(g_gps_state.layer_modal) && !is_back_btn)
+    {
+        return;
+    }
 
     switch (code)
     {
     case LV_EVENT_CLICKED:
         handle_click(target);
         break;
-    // LV_EVENT_ROTARY 从未收到，实际收到的�?LV_EVENT_KEY (keycode 19/20)
+    // Rotary input arrives as LV_EVENT_KEY (keycode 19/20) on this target.
     // case LV_EVENT_ROTARY:
     //     handle_rotary(target, lv_event_get_rotary_diff(e));
     //     break;
@@ -352,6 +357,12 @@ static void handle_click(lv_obj_t* target)
     switch (id)
     {
     case ControlId::BackBtn:
+        if (modal_is_open(g_gps_state.layer_modal))
+        {
+            extern void hide_layer_popup();
+            hide_layer_popup();
+            break;
+        }
         action_back_exit();
         break;
     case ControlId::ZoomBtn:
@@ -386,6 +397,10 @@ static void handle_click(lv_obj_t* target)
 
     case ControlId::TrackerBtn:
         gps_tracker_open_modal();
+        break;
+
+    case ControlId::LayerBtn:
+        action_layer_open_popup();
         break;
 
     case ControlId::RouteBtn:
@@ -439,6 +454,14 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
     ControlId id = ctrl_id(target);
     updateUserActivity();
 
+    if (modal_is_open(g_gps_state.layer_modal) &&
+        (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE))
+    {
+        extern void hide_layer_popup();
+        hide_layer_popup();
+        return;
+    }
+
     if (key == LV_KEY_BACKSPACE)
     {
         action_back_exit();
@@ -465,6 +488,10 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
     }
 
     if (modal_is_open(g_gps_state.tracker_modal))
+    {
+        return;
+    }
+    if (modal_is_open(g_gps_state.layer_modal))
     {
         return;
     }
@@ -515,6 +542,11 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
             gps_tracker_open_modal();
             return;
         }
+        if (id == ControlId::LayerBtn)
+        {
+            action_layer_open_popup();
+            return;
+        }
         if (id == ControlId::RouteBtn)
         {
             action_route_focus();
@@ -563,6 +595,12 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
     if (key == 't' || key == 'T')
     {
         gps_tracker_open_modal();
+        return;
+    }
+
+    if (key == 'l' || key == 'L')
+    {
+        action_layer_open_popup();
         return;
     }
 
@@ -668,6 +706,25 @@ static void action_route_focus()
     }
 }
 
+static void action_layer_open_popup()
+{
+    if (!is_alive())
+    {
+        return;
+    }
+    extern void show_layer_popup();
+    uint32_t now = millis();
+    if (g_gps_state.layer_modal.close_ms > 0 &&
+        (now - g_gps_state.layer_modal.close_ms) < 300)
+    {
+        return;
+    }
+    if (!g_gps_state.layer_modal.is_open())
+    {
+        show_layer_popup();
+    }
+}
+
 static void action_pan_enter(ControlId axis_id)
 {
     if (!is_alive())
@@ -693,7 +750,7 @@ static void action_pan_enter(ControlId axis_id)
             set_default_group(app_g);
             bind_encoder_to_group(app_g);
 
-            // CRITICAL: 确保 indicator �?group 中且可聚�?            // 如果 focus 失败，说�?indicator 没在 group 里或不可聚焦
+            // Ensure indicator is focused in group editing mode.
             lv_group_focus_obj(g_gps_state.pan_h_indicator);
             lv_group_set_editing(app_g, true);
 
@@ -871,7 +928,7 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e)
         return;
     }
 
-    // 只处理实际的 encoder keycode
+    // Handle encoder keycodes only.
     int32_t diff = 0;
     if (key == ENCODER_KEY_ROTATE_DOWN)
     {

@@ -1,3 +1,4 @@
+#if !defined(ARDUINO_T_WATCH_S3)
 /**
  * @file chat_message_list_input.cpp
  * @brief Input handling for ChatMessageListScreen (explicit layer)
@@ -344,3 +345,5 @@ void focus_list(Binding* binding)
 }
 
 } // namespace chat::ui::message_list::input
+
+#endif
