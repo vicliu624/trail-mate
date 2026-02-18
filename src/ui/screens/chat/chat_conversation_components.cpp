@@ -36,6 +36,7 @@ namespace ui
 namespace
 {
 constexpr lv_coord_t kBubbleMaxWidth = 322; // same as original
+constexpr lv_coord_t kTeamLocationIconSize = 24;
 constexpr uint32_t kSecondsPerDay = 24U * 60U * 60U;
 constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
 constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
@@ -382,7 +383,8 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
         {
             lv_obj_t* marker_icon = lv_image_create(bubble);
             lv_image_set_src(marker_icon, icon);
-            lv_obj_set_size(marker_icon, 20, 20);
+            lv_obj_set_size(marker_icon, kTeamLocationIconSize, kTeamLocationIconSize);
+            lv_image_set_inner_align(marker_icon, LV_IMAGE_ALIGN_CONTAIN);
             lv_obj_set_style_pad_bottom(marker_icon, 2, 0);
         }
     }

@@ -423,7 +423,7 @@ void UiController::onChatEvent(sys::Event* event)
 
 void UiController::switchToChannelList()
 {
-    closeTeamPositionPicker(false);
+    closeTeamPositionPicker(true);
     state_ = State::ChannelList;
     stopTeamConversationTimer();
     team_conv_active_ = false;
@@ -462,7 +462,7 @@ void UiController::switchToChannelList()
 
 void UiController::switchToConversation(chat::ConversationId conv)
 {
-    closeTeamPositionPicker(false);
+    closeTeamPositionPicker(true);
     state_ = State::Conversation;
     current_channel_ = conv.channel;
     current_conv_ = conv;
@@ -572,7 +572,7 @@ void UiController::switchToConversation(chat::ConversationId conv)
 
 void UiController::switchToCompose(chat::ConversationId conv)
 {
-    closeTeamPositionPicker(false);
+    closeTeamPositionPicker(true);
     state_ = State::Compose;
     current_channel_ = conv.channel;
     current_conv_ = conv;
@@ -1057,9 +1057,10 @@ void UiController::closeTeamPositionPicker(bool restore_group)
 
     if (team_position_picker_group_ && lv_group_get_default() == team_position_picker_group_)
     {
-        if (restore_group && team_position_prev_group_)
+        if (restore_group)
         {
-            set_default_group(team_position_prev_group_);
+            lv_group_t* restore_target = team_position_prev_group_ ? team_position_prev_group_ : app_g;
+            set_default_group(restore_target);
         }
         else
         {
@@ -1187,7 +1188,7 @@ bool UiController::sendTeamLocationWithIcon(uint8_t icon_id)
 
 void UiController::onTeamPositionIconSelected(uint8_t icon_id)
 {
-    closeTeamPositionPicker(false);
+    closeTeamPositionPicker(true);
     sendTeamLocationWithIcon(icon_id);
     switchToConversation(current_conv_);
 }

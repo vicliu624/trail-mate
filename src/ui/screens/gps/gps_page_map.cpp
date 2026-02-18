@@ -170,7 +170,7 @@ constexpr int kTeamMarkerLabelOffsetY = 0;
 constexpr uint32_t kTeamMarkerColor = 0x00AEEF;
 constexpr uint32_t kTeamMarkerBorder = 0xFFFFFF;
 constexpr uint32_t kTeamMarkerRefreshMs = 1000;
-constexpr int kTeamSignalMarkerSize = 22;
+constexpr int kTeamSignalMarkerSize = 24;
 constexpr int kTeamSignalLabelWidth = 108;
 constexpr int kTeamSignalLabelOffsetX = 8;
 constexpr int kTeamSignalLabelOffsetY = -2;
@@ -436,6 +436,7 @@ lv_obj_t* create_team_signal_marker_obj(uint8_t icon_id)
     lv_obj_t* img = lv_image_create(g_gps_state.map);
     lv_image_set_src(img, src);
     lv_obj_set_size(img, kTeamSignalMarkerSize, kTeamSignalMarkerSize);
+    lv_image_set_inner_align(img, LV_IMAGE_ALIGN_CONTAIN);
     lv_obj_clear_flag(img, LV_OBJ_FLAG_SCROLLABLE);
     return img;
 }
@@ -1302,6 +1303,8 @@ void refresh_team_signal_markers_from_chatlog()
                 if (src)
                 {
                     lv_image_set_src(marker.obj, src);
+                    lv_obj_set_size(marker.obj, kTeamSignalMarkerSize, kTeamSignalMarkerSize);
+                    lv_image_set_inner_align(marker.obj, LV_IMAGE_ALIGN_CONTAIN);
                 }
             }
             marker.icon_id = sample.icon_id;
