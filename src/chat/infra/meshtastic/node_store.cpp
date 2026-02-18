@@ -17,6 +17,16 @@ namespace chat
 namespace meshtastic
 {
 
+#ifndef NODE_STORE_LOG_ENABLE
+#define NODE_STORE_LOG_ENABLE 0
+#endif
+
+#if NODE_STORE_LOG_ENABLE
+#define NODE_STORE_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define NODE_STORE_LOG(...)
+#endif
+
 namespace
 {
 uint32_t crc32(const uint8_t* data, size_t len)
@@ -46,18 +56,18 @@ void logNvsStats(const char* tag, const char* ns)
     esp_err_t err = nvs_get_stats(nullptr, &stats);
     if (err == ESP_OK)
     {
-        Serial.printf("[NodeStore] NVS stats(%s): used=%u free=%u total=%u namespaces=%u\n",
-                      tag ? tag : "?",
-                      static_cast<unsigned>(stats.used_entries),
-                      static_cast<unsigned>(stats.free_entries),
-                      static_cast<unsigned>(stats.total_entries),
-                      static_cast<unsigned>(stats.namespace_count));
+        NODE_STORE_LOG("[NodeStore] NVS stats(%s): used=%u free=%u total=%u namespaces=%u\n",
+                       tag ? tag : "?",
+                       static_cast<unsigned>(stats.used_entries),
+                       static_cast<unsigned>(stats.free_entries),
+                       static_cast<unsigned>(stats.total_entries),
+                       static_cast<unsigned>(stats.namespace_count));
     }
     else
     {
-        Serial.printf("[NodeStore] NVS stats(%s) err=%s\n",
-                      tag ? tag : "?",
-                      esp_err_to_name(err));
+        NODE_STORE_LOG("[NodeStore] NVS stats(%s) err=%s\n",
+                       tag ? tag : "?",
+                       esp_err_to_name(err));
     }
     if (ns && ns[0])
     {
@@ -65,12 +75,12 @@ void logNvsStats(const char* tag, const char* ns)
         err = nvs_open(ns, NVS_READONLY, &handle);
         if (err == ESP_OK)
         {
-            Serial.printf("[NodeStore] NVS open ns=%s ok\n", ns);
+            NODE_STORE_LOG("[NodeStore] NVS open ns=%s ok\n", ns);
             nvs_close(handle);
         }
         else
         {
-            Serial.printf("[NodeStore] NVS open ns=%s err=%s\n", ns, esp_err_to_name(err));
+            NODE_STORE_LOG("[NodeStore] NVS open ns=%s err=%s\n", ns, esp_err_to_name(err));
         }
     }
 }
@@ -97,18 +107,18 @@ void NodeStore::begin()
     }
 
     entries_.clear();
-    Serial.printf("[NodeStore] loaded=0\n");
+    NODE_STORE_LOG("[NodeStore] loaded=0\n");
 }
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
                        uint32_t now_secs, float snr, float rssi, uint8_t protocol, uint8_t role,
                        uint8_t hops_away)
 {
-    Serial.printf("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f rssi=%.1f\n",
-                  (unsigned long)node_id,
-                  (unsigned long)now_secs,
-                  snr,
-                  rssi);
+    NODE_STORE_LOG("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f rssi=%.1f\n",
+                   (unsigned long)node_id,
+                   (unsigned long)now_secs,
+                   snr,
+                   rssi);
     // find existing
     for (auto& e : entries_)
     {
@@ -220,8 +230,8 @@ void NodeStore::save()
     {
         if (saveToSd())
         {
-            Serial.printf("[NodeStore] save ok (SD) count=%u\n",
-                          static_cast<unsigned>(entries_.size()));
+            NODE_STORE_LOG("[NodeStore] save ok (SD) count=%u\n",
+                           static_cast<unsigned>(entries_.size()));
             return;
         }
     }
@@ -229,7 +239,7 @@ void NodeStore::save()
     Preferences prefs;
     if (!prefs.begin(kPersistNodesNs, false))
     {
-        Serial.printf("[NodeStore] save failed ns=%s\n", kPersistNodesNs);
+        NODE_STORE_LOG("[NodeStore] save failed ns=%s\n", kPersistNodesNs);
         logNvsStats("save-open", kPersistNodesNs);
         return;
     }
@@ -265,9 +275,9 @@ void NodeStore::save()
         prefs.putUInt(kPersistNodesKeyCrc, crc);
         if (written != expected)
         {
-            Serial.printf("[NodeStore] save failed wrote=%u expected=%u\n",
-                          static_cast<unsigned>(written),
-                          static_cast<unsigned>(expected));
+            NODE_STORE_LOG("[NodeStore] save failed wrote=%u expected=%u\n",
+                           static_cast<unsigned>(written),
+                           static_cast<unsigned>(expected));
             logNvsStats("save-write", kPersistNodesNs);
         }
         else
@@ -275,10 +285,10 @@ void NodeStore::save()
             size_t verify_len = prefs.getBytesLength(kPersistNodesKey);
             uint8_t verify_ver = prefs.getUChar(kPersistNodesKeyVer, 0);
             uint32_t verify_crc = prefs.getUInt(kPersistNodesKeyCrc, 0);
-            Serial.printf("[NodeStore] save ok len=%u ver=%u crc=%08lX\n",
-                          static_cast<unsigned>(verify_len),
-                          static_cast<unsigned>(verify_ver),
-                          static_cast<unsigned long>(verify_crc));
+            NODE_STORE_LOG("[NodeStore] save ok len=%u ver=%u crc=%08lX\n",
+                           static_cast<unsigned>(verify_len),
+                           static_cast<unsigned>(verify_ver),
+                           static_cast<unsigned long>(verify_crc));
         }
     }
     else
@@ -288,7 +298,7 @@ void NodeStore::save()
         prefs.remove(kPersistNodesKeyCrc);
     }
     prefs.end();
-    Serial.printf("[NodeStore] saved=%u\n", static_cast<unsigned>(entries_.size()));
+    NODE_STORE_LOG("[NodeStore] saved=%u\n", static_cast<unsigned>(entries_.size()));
 }
 
 void NodeStore::maybeSave()
@@ -334,7 +344,7 @@ bool NodeStore::loadFromNvs()
     Preferences prefs;
     if (!prefs.begin(kPersistNodesNs, false))
     {
-        Serial.printf("[NodeStore] begin failed ns=%s\n", kPersistNodesNs);
+        NODE_STORE_LOG("[NodeStore] begin failed ns=%s\n", kPersistNodesNs);
         logNvsStats("begin", kPersistNodesNs);
         return false;
     }
@@ -342,14 +352,14 @@ bool NodeStore::loadFromNvs()
     uint8_t ver = prefs.getUChar(kPersistNodesKeyVer, 0);
     bool has_crc = prefs.isKey(kPersistNodesKeyCrc);
     uint32_t stored_crc = has_crc ? prefs.getUInt(kPersistNodesKeyCrc, 0) : 0;
-    Serial.printf("[NodeStore] blob len=%u ver=%u crc=%08lX has_crc=%u\n",
-                  static_cast<unsigned>(len),
-                  static_cast<unsigned>(ver),
-                  static_cast<unsigned long>(stored_crc),
-                  has_crc ? 1U : 0U);
+    NODE_STORE_LOG("[NodeStore] blob len=%u ver=%u crc=%08lX has_crc=%u\n",
+                   static_cast<unsigned>(len),
+                   static_cast<unsigned>(ver),
+                   static_cast<unsigned long>(stored_crc),
+                   has_crc ? 1U : 0U);
     if (len == 0 && has_crc)
     {
-        Serial.printf("[NodeStore] stale meta detected, clearing ver/crc\n");
+        NODE_STORE_LOG("[NodeStore] stale meta detected, clearing ver/crc\n");
         prefs.remove(kPersistNodesKeyVer);
         prefs.remove(kPersistNodesKeyCrc);
     }
@@ -372,16 +382,16 @@ bool NodeStore::loadFromNvs()
         if (!has_crc)
         {
             prefs.end();
-            Serial.printf("[NodeStore] missing crc\n");
+            NODE_STORE_LOG("[NodeStore] missing crc\n");
             clear();
             return false;
         }
         if (ver != kPersistVersion)
         {
             prefs.end();
-            Serial.printf("[NodeStore] version mismatch stored=%u expected=%u\n",
-                          static_cast<unsigned>(ver),
-                          static_cast<unsigned>(kPersistVersion));
+            NODE_STORE_LOG("[NodeStore] version mismatch stored=%u expected=%u\n",
+                           static_cast<unsigned>(ver),
+                           static_cast<unsigned>(kPersistVersion));
             clear();
             return false;
         }
@@ -390,9 +400,9 @@ bool NodeStore::loadFromNvs()
         if (calc_crc != stored_crc)
         {
             prefs.end();
-            Serial.printf("[NodeStore] crc mismatch stored=%08lX calc=%08lX\n",
-                          static_cast<unsigned long>(stored_crc),
-                          static_cast<unsigned long>(calc_crc));
+            NODE_STORE_LOG("[NodeStore] crc mismatch stored=%08lX calc=%08lX\n",
+                           static_cast<unsigned long>(stored_crc),
+                           static_cast<unsigned long>(calc_crc));
             clear();
             return false;
         }
@@ -417,13 +427,13 @@ bool NodeStore::loadFromNvs()
     }
     else if (len > 0)
     {
-        Serial.printf("[NodeStore] invalid blob size=%u\n", static_cast<unsigned>(len));
+        NODE_STORE_LOG("[NodeStore] invalid blob size=%u\n", static_cast<unsigned>(len));
         prefs.end();
         clear();
         return false;
     }
     prefs.end();
-    Serial.printf("[NodeStore] loaded=%u\n", static_cast<unsigned>(entries_.size()));
+    NODE_STORE_LOG("[NodeStore] loaded=%u\n", static_cast<unsigned>(entries_.size()));
     return true;
 }
 
@@ -491,7 +501,7 @@ bool NodeStore::loadFromSd()
         dst.role = src.role;
         entries_.push_back(dst);
     }
-    Serial.printf("[NodeStore] loaded=%u (SD)\n", static_cast<unsigned>(entries_.size()));
+    NODE_STORE_LOG("[NodeStore] loaded=%u (SD)\n", static_cast<unsigned>(entries_.size()));
     return true;
 }
 

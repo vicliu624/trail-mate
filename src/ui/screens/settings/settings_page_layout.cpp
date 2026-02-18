@@ -11,7 +11,8 @@
 namespace settings::ui::layout
 {
 
-static constexpr int kFilterPanelWidth = 120;
+// Keep filter column just wide enough for the longest category label ("Advanced").
+static constexpr int kFilterPanelWidth = 92;
 static constexpr int kTopBarContentGap = 3;
 
 static void make_non_scrollable(lv_obj_t* obj)
@@ -87,6 +88,8 @@ void create_filter_panel(lv_obj_t* parent)
     lv_obj_set_height(g_state.filter_panel, LV_PCT(100));
     lv_obj_set_flex_flow(g_state.filter_panel, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(g_state.filter_panel, 2, LV_PART_MAIN);
+    // Keep the seam to the list panel tight so the list gains more usable width.
+    lv_obj_set_style_pad_right(g_state.filter_panel, 1, LV_PART_MAIN);
     lv_obj_set_style_margin_left(g_state.filter_panel, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_right(g_state.filter_panel, 0, LV_PART_MAIN);
 }
@@ -102,9 +105,13 @@ void create_list_panel(lv_obj_t* parent)
     lv_obj_set_flex_grow(g_state.list_panel, 1);
 
     lv_obj_set_flex_flow(g_state.list_panel, LV_FLEX_FLOW_COLUMN);
+    // Pull list content closer to the category column and free horizontal room.
+    lv_obj_set_style_pad_left(g_state.list_panel, 1, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(g_state.list_panel, 2, LV_PART_MAIN);
     lv_obj_set_style_pad_row(g_state.list_panel, 6, LV_PART_MAIN);
     lv_obj_set_style_margin_left(g_state.list_panel, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_right(g_state.list_panel, 3, LV_PART_MAIN);
+    // Consume all horizontal space released from the filter panel.
+    lv_obj_set_style_margin_right(g_state.list_panel, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_bottom(g_state.list_panel, 3, LV_PART_MAIN);
 }
 

@@ -601,7 +601,11 @@ void update_title_and_status()
     else if (!g_gps_state.has_visible_map_data)
     {
         uint8_t source = sanitize_map_source(app::AppContext::getInstance().getConfig().map_source);
-        if (map_source_directory_available(source))
+        if (!g_gps_state.has_fix)
+        {
+            snprintf(title_buffer, sizeof(title_buffer), "Map - no gps data");
+        }
+        else if (map_source_directory_available(source))
         {
             snprintf(title_buffer, sizeof(title_buffer), "Map - No Map Data");
         }
@@ -1557,25 +1561,12 @@ void tick_gps_update(bool allow_map_refresh)
         if (g_gps_state.has_fix)
         {
             g_gps_state.has_fix = false;
-            g_gps_state.zoom_level = 0;
-
-            g_gps_state.lat = gps_ui::kDefaultLat;
-            g_gps_state.lng = gps_ui::kDefaultLng;
-
-            g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
-            double map_lat = 0.0;
-            double map_lon = 0.0;
-            gps_map_transform(g_gps_state.lat, g_gps_state.lng, map_lat, map_lon);
-            g_gps_state.last_resolution_lat = map_lat;
-            update_resolution_display();
             gps_state_changed = true;
 
             last_refresh_valid = false;
 
             if (allow_map_refresh)
             {
-                g_gps_state.pan_x = 0;
-                g_gps_state.pan_y = 0;
                 update_map_tiles(false);
             }
         }

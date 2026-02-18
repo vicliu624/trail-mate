@@ -10,6 +10,16 @@
 namespace chat
 {
 
+#ifndef CHAT_SERVICE_LOG_ENABLE
+#define CHAT_SERVICE_LOG_ENABLE 0
+#endif
+
+#if CHAT_SERVICE_LOG_ENABLE
+#define CHAT_SERVICE_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define CHAT_SERVICE_LOG(...)
+#endif
+
 ChatService::ChatService(ChatModel& model, IMeshAdapter& adapter, IChatStore& store)
     : model_(model), adapter_(adapter), store_(store),
       current_channel_(ChannelId::PRIMARY)
@@ -140,13 +150,13 @@ void ChatService::processIncoming()
         msg.text = incoming.text;
         msg.status = MessageStatus::Incoming;
 
-        Serial.printf("[ChatService] incoming ch=%u from=%08lX to=%08lX peer=%08lX ts=%lu len=%u\n",
-                      static_cast<unsigned>(msg.channel),
-                      static_cast<unsigned long>(msg.from),
-                      static_cast<unsigned long>(incoming.to),
-                      static_cast<unsigned long>(msg.peer),
-                      static_cast<unsigned long>(msg.timestamp),
-                      static_cast<unsigned>(msg.text.size()));
+        CHAT_SERVICE_LOG("[ChatService] incoming ch=%u from=%08lX to=%08lX peer=%08lX ts=%lu len=%u\n",
+                         static_cast<unsigned>(msg.channel),
+                         static_cast<unsigned long>(msg.from),
+                         static_cast<unsigned long>(incoming.to),
+                         static_cast<unsigned long>(msg.peer),
+                         static_cast<unsigned long>(msg.timestamp),
+                         static_cast<unsigned>(msg.text.size()));
 
         // Add to model (if enabled)
         if (model_enabled_)

@@ -15,6 +15,16 @@ namespace chat
 namespace contacts
 {
 
+#ifndef CONTACT_SERVICE_LOG_ENABLE
+#define CONTACT_SERVICE_LOG_ENABLE 0
+#endif
+
+#if CONTACT_SERVICE_LOG_ENABLE
+#define CONTACT_SERVICE_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define CONTACT_SERVICE_LOG(...)
+#endif
+
 ContactService::ContactService(INodeStore& node_store, IContactStore& contact_store)
     : node_store_(node_store), contact_store_(contact_store), cache_timestamp_(0)
 {
@@ -31,11 +41,11 @@ void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, co
                                     float snr, float rssi, uint32_t now_secs, uint8_t protocol, uint8_t role,
                                     uint8_t hops_away)
 {
-    Serial.printf("[ContactService] updateNodeInfo node=%08lX snr=%.1f rssi=%.1f ts=%lu\n",
-                  (unsigned long)node_id,
-                  snr,
-                  rssi,
-                  (unsigned long)now_secs);
+    CONTACT_SERVICE_LOG("[ContactService] updateNodeInfo node=%08lX snr=%.1f rssi=%.1f ts=%lu\n",
+                        (unsigned long)node_id,
+                        snr,
+                        rssi,
+                        (unsigned long)now_secs);
     node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi, protocol, role, hops_away);
     invalidateCache();
 }

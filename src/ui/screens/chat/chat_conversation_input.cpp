@@ -3,7 +3,7 @@
 #include "chat_conversation_components.h"
 #include <Arduino.h>
 
-#define CHAT_CONV_INPUT_DEBUG 1
+#define CHAT_CONV_INPUT_DEBUG 0
 #if CHAT_CONV_INPUT_DEBUG
 #define CHAT_CONV_INPUT_LOG(...) Serial.printf(__VA_ARGS__)
 #else

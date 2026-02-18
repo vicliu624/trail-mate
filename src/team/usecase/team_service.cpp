@@ -13,7 +13,7 @@ namespace team
 namespace
 {
 
-#define TEAM_LOG_ENABLE 1
+#define TEAM_LOG_ENABLE 0
 #if TEAM_LOG_ENABLE
 #define TEAM_LOG(...) Serial.printf(__VA_ARGS__)
 #else

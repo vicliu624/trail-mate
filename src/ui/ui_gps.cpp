@@ -136,6 +136,11 @@ void init_gps_state_defaults()
 {
     g_gps_state.exiting = false;
     GPSData gps_data = gps::gps_get_data();
+    constexpr double kCoordEps = 1e-6;
+    const bool has_cached_coord = std::isfinite(gps_data.lat) &&
+                                  std::isfinite(gps_data.lng) &&
+                                  (std::fabs(gps_data.lat) > kCoordEps || std::fabs(gps_data.lng) > kCoordEps);
+
     if (gps_data.valid)
     {
         g_gps_state.lat = gps_data.lat;
@@ -144,9 +149,18 @@ void init_gps_state_defaults()
     }
     else
     {
-        g_gps_state.zoom_level = 0;
-        g_gps_state.lat = gps_ui::kDefaultLat;
-        g_gps_state.lng = gps_ui::kDefaultLng;
+        g_gps_state.zoom_level = gps_ui::kDefaultZoom;
+        if (has_cached_coord)
+        {
+            // Keep last known location so offline maps remain useful before reacquiring fix.
+            g_gps_state.lat = gps_data.lat;
+            g_gps_state.lng = gps_data.lng;
+        }
+        else
+        {
+            g_gps_state.lat = gps_ui::kDefaultLat;
+            g_gps_state.lng = gps_ui::kDefaultLng;
+        }
         g_gps_state.has_fix = false;
     }
 

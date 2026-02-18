@@ -25,6 +25,16 @@
 namespace app
 {
 
+#ifndef APP_EVENT_LOG_ENABLE
+#define APP_EVENT_LOG_ENABLE 0
+#endif
+
+#if APP_EVENT_LOG_ENABLE
+#define APP_EVENT_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define APP_EVENT_LOG(...)
+#endif
+
 bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_board, MotionBoard* motion_board,
                       bool use_mock_adapter, uint32_t disable_hw_init)
 {
@@ -230,6 +240,8 @@ void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
 
 void AppContext::update()
 {
+    constexpr size_t kMaxEventsPerUpdate = 32;
+
     hostlink::process_pending_commands();
 
     // Update chat service (process incoming messages)
@@ -258,14 +270,16 @@ void AppContext::update()
         ui_controller_->update();
     }
 
-    // Process events
+    // Process events with a budget to avoid starving UI under burst traffic.
     sys::Event* event = nullptr;
-    while (sys::EventBus::subscribe(&event, 0))
+    for (size_t processed = 0;
+         processed < kMaxEventsPerUpdate && sys::EventBus::subscribe(&event, 0);)
     {
         if (!event)
         {
             continue;
         }
+        ++processed;
 
         // Handle global events (like haptic feedback) before UI-specific handling
         switch (event->type)
@@ -273,18 +287,18 @@ void AppContext::update()
         case sys::EventType::ChatNewMessage:
         {
             sys::ChatNewMessageEvent* msg_event = (sys::ChatNewMessageEvent*)event;
-            Serial.printf("[AppContext::update] ChatNewMessage received: channel=%d\n", msg_event->channel);
+            APP_EVENT_LOG("[AppContext::update] ChatNewMessage received: channel=%d\n", msg_event->channel);
 
             // Global haptic feedback on incoming messages (works regardless of UI state)
             if (board_)
             {
-                Serial.printf("[AppContext::update] Triggering haptic feedback...\n");
+                APP_EVENT_LOG("[AppContext::update] Triggering haptic feedback...\n");
                 board_->vibrator();
-                Serial.printf("[AppContext::update] Haptic feedback triggered\n");
+                APP_EVENT_LOG("[AppContext::update] Haptic feedback triggered\n");
             }
             else
             {
-                Serial.printf("[AppContext::update] WARNING: board_ is nullptr, cannot trigger vibration\n");
+                APP_EVENT_LOG("[AppContext::update] WARNING: board_ is nullptr, cannot trigger vibration\n");
             }
 
             // Show system notification
@@ -369,7 +383,7 @@ void AppContext::update()
         case sys::EventType::NodeInfoUpdate:
         {
             sys::NodeInfoUpdateEvent* node_event = (sys::NodeInfoUpdateEvent*)event;
-            Serial.printf("[AppContext] NodeInfo event consumed node=%08lX pending=%u\n",
+            APP_EVENT_LOG("[AppContext] NodeInfo event consumed node=%08lX pending=%u\n",
                           static_cast<unsigned long>(node_event->node_id),
                           static_cast<unsigned>(sys::EventBus::pendingCount()));
             // Update ContactService with node info from event
@@ -393,7 +407,7 @@ void AppContext::update()
         case sys::EventType::NodeProtocolUpdate:
         {
             sys::NodeProtocolUpdateEvent* node_event = (sys::NodeProtocolUpdateEvent*)event;
-            Serial.printf("[AppContext] NodeProtocol event consumed node=%08lX pending=%u\n",
+            APP_EVENT_LOG("[AppContext] NodeProtocol event consumed node=%08lX pending=%u\n",
                           static_cast<unsigned long>(node_event->node_id),
                           static_cast<unsigned>(sys::EventBus::pendingCount()));
             if (contact_service_)
@@ -409,7 +423,7 @@ void AppContext::update()
         case sys::EventType::NodePositionUpdate:
         {
             auto* pos_event = (sys::NodePositionUpdateEvent*)event;
-            Serial.printf("[AppContext] NodePosition event consumed node=%08lX pending=%u\n",
+            APP_EVENT_LOG("[AppContext] NodePosition event consumed node=%08lX pending=%u\n",
                           static_cast<unsigned long>(pos_event->node_id),
                           static_cast<unsigned>(sys::EventBus::pendingCount()));
             if (contact_service_)

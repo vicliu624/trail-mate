@@ -12,6 +12,7 @@ namespace
 constexpr int kScreenW = 480;
 constexpr int kScreenH = 222;
 constexpr int kTopBarH = 30;
+constexpr int kCompactMaxWidth = 320;
 
 constexpr int kSkyPanelX = 8;
 constexpr int kSkyPanelY = 38;
@@ -22,6 +23,10 @@ constexpr int kStatusPanelX = 293;
 constexpr int kStatusPanelY = 38;
 constexpr int kStatusPanelW = 179;
 constexpr int kStatusPanelH = 176;
+constexpr int kStatusPanelRightMargin = 8;
+constexpr int kStatusToggleBtnW = 82;
+constexpr int kStatusToggleBtnH = 24;
+constexpr int kStatusToggleBtnBottomMargin = 6;
 
 constexpr int kSkyAreaX = 10;
 constexpr int kSkyAreaY = 2;
@@ -77,6 +82,10 @@ struct SkyPlotUi
     lv_obj_t* root = nullptr;
     lv_obj_t* header = nullptr;
     ::ui::widgets::TopBar top_bar{};
+    bool compact_layout = false;
+    bool status_overlay_visible = false;
+    lv_obj_t* status_toggle_btn = nullptr;
+    lv_obj_t* status_toggle_label = nullptr;
 
     lv_obj_t* panel_sky = nullptr;
     lv_obj_t* sky_area = nullptr;
@@ -482,11 +491,51 @@ void apply_status(const GnssStatus& st)
     apply_topbar_summary(st);
 }
 
+void set_status_overlay_visible(bool visible)
+{
+    if (!s_ui.compact_layout || !s_ui.panel_status)
+    {
+        return;
+    }
+
+    s_ui.status_overlay_visible = visible;
+    if (visible)
+    {
+        lv_obj_clear_flag(s_ui.panel_status, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(s_ui.panel_status);
+    }
+    else
+    {
+        lv_obj_add_flag(s_ui.panel_status, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    if (s_ui.status_toggle_label)
+    {
+        lv_label_set_text(s_ui.status_toggle_label, visible ? "Hide" : "Status");
+        lv_obj_center(s_ui.status_toggle_label);
+    }
+    if (s_ui.status_toggle_btn)
+    {
+        lv_obj_move_foreground(s_ui.status_toggle_btn);
+    }
+}
+
+void on_status_toggle_clicked(lv_event_t* e)
+{
+    (void)e;
+    set_status_overlay_visible(!s_ui.status_overlay_visible);
+}
+
 void root_key_event_cb(lv_event_t* e)
 {
     uint32_t key = lv_event_get_key(e);
     if (key != LV_KEY_BACKSPACE)
     {
+        return;
+    }
+    if (s_ui.compact_layout && s_ui.status_overlay_visible)
+    {
+        set_status_overlay_visible(false);
         return;
     }
     if (s_ui.top_bar.back_cb)
@@ -600,9 +649,22 @@ void refresh_timer_cb(lv_timer_t* timer)
 lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 {
     s_ui = {};
+    if (parent)
+    {
+        lv_obj_update_layout(parent);
+    }
+    lv_coord_t parent_w = parent ? lv_obj_get_width(parent) : 0;
+    lv_coord_t parent_h = parent ? lv_obj_get_height(parent) : 0;
+    const bool compact_layout = (parent_w > 0 && parent_w <= kCompactMaxWidth);
+    const lv_coord_t screen_w = compact_layout ? (parent_w > 0 ? parent_w : kCompactMaxWidth) : kScreenW;
+    const lv_coord_t screen_h = compact_layout ? (parent_h > 0 ? parent_h : 240) : kScreenH;
+    const lv_coord_t status_panel_x = compact_layout
+                                          ? std::max<lv_coord_t>(0, screen_w - kStatusPanelW - kStatusPanelRightMargin)
+                                          : kStatusPanelX;
+    s_ui.compact_layout = compact_layout;
 
     s_ui.root = lv_obj_create(parent);
-    lv_obj_set_size(s_ui.root, kScreenW, kScreenH);
+    lv_obj_set_size(s_ui.root, screen_w, screen_h);
     lv_obj_set_style_bg_color(s_ui.root, lv_color_hex(kColorWarmBg), 0);
     lv_obj_set_style_bg_opa(s_ui.root, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.root, 0, 0);
@@ -614,7 +676,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
     s_ui.header = lv_obj_create(s_ui.root);
     lv_obj_set_pos(s_ui.header, 0, 0);
-    lv_obj_set_size(s_ui.header, kScreenW, kTopBarH);
+    lv_obj_set_size(s_ui.header, screen_w, kTopBarH);
     lv_obj_set_style_bg_opa(s_ui.header, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ui.header, 0, 0);
     lv_obj_set_style_pad_all(s_ui.header, 0, 0);
@@ -813,7 +875,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     }
 
     s_ui.panel_status = lv_obj_create(s_ui.root);
-    lv_obj_set_pos(s_ui.panel_status, kStatusPanelX, kStatusPanelY);
+    lv_obj_set_pos(s_ui.panel_status, status_panel_x, kStatusPanelY);
     lv_obj_set_size(s_ui.panel_status, kStatusPanelW, kStatusPanelH);
     apply_common_container_style(s_ui.panel_status,
                                  lv_color_hex(kColorPanelBg),
@@ -896,6 +958,29 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         apply_status(s_cached_status);
     }
 
+    if (s_ui.compact_layout)
+    {
+        s_ui.status_toggle_btn = lv_btn_create(s_ui.root);
+        lv_obj_set_size(s_ui.status_toggle_btn, kStatusToggleBtnW, kStatusToggleBtnH);
+        lv_obj_set_pos(s_ui.status_toggle_btn,
+                       screen_w - kStatusToggleBtnW - kStatusPanelRightMargin,
+                       screen_h - kStatusToggleBtnH - kStatusToggleBtnBottomMargin);
+        lv_obj_set_style_bg_color(s_ui.status_toggle_btn, lv_color_hex(kColorAmber), 0);
+        lv_obj_set_style_bg_opa(s_ui.status_toggle_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(s_ui.status_toggle_btn, 1, 0);
+        lv_obj_set_style_border_color(s_ui.status_toggle_btn, lv_color_hex(kColorAmberDark), 0);
+        lv_obj_set_style_radius(s_ui.status_toggle_btn, 6, 0);
+        lv_obj_set_style_pad_all(s_ui.status_toggle_btn, 0, 0);
+        lv_obj_clear_flag(s_ui.status_toggle_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(s_ui.status_toggle_btn, on_status_toggle_clicked, LV_EVENT_CLICKED, nullptr);
+
+        s_ui.status_toggle_label = lv_label_create(s_ui.status_toggle_btn);
+        lv_obj_set_style_text_color(s_ui.status_toggle_label, lv_color_hex(0x2A1A05), 0);
+        lv_obj_set_style_text_font(s_ui.status_toggle_label, &lv_font_montserrat_14, 0);
+
+        set_status_overlay_visible(false);
+    }
+
     return s_ui.root;
 }
 
@@ -956,6 +1041,10 @@ void ui_gnss_skyplot_enter(lv_obj_t* parent)
     {
         lv_group_remove_all_objs(app_g);
         lv_group_add_obj(app_g, s_ui.top_bar.back_btn);
+        if (s_ui.status_toggle_btn)
+        {
+            lv_group_add_obj(app_g, s_ui.status_toggle_btn);
+        }
         lv_group_focus_obj(s_ui.top_bar.back_btn);
         set_default_group(app_g);
         lv_group_set_editing(app_g, false);

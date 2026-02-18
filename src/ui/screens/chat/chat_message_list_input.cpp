@@ -15,7 +15,7 @@
 #include "chat_message_list_components.h"
 #include <Arduino.h> // keep Arduino first if your build requires it
 
-#define CHAT_INPUT_DEBUG 1
+#define CHAT_INPUT_DEBUG 0
 #if CHAT_INPUT_DEBUG
 #define CHAT_INPUT_LOG(...) Serial.printf(__VA_ARGS__)
 #else

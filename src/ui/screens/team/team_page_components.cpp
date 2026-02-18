@@ -35,8 +35,8 @@ namespace ui
 namespace
 {
 constexpr int kActionBtnHeight = 28;
-constexpr int kActionBtnWidth2 = 170;
-constexpr int kActionBtnWidth3 = 140;
+constexpr int kActionBtnMinWidth = 56;
+constexpr int kActionBtnPadH = 10;
 constexpr int kListItemHeight = 28;
 constexpr uint8_t kKeyDistMaxRetries = 3;
 constexpr uint32_t kKeyDistRetryIntervalSec = 5;
@@ -505,15 +505,32 @@ lv_obj_t* add_label(lv_obj_t* parent, const char* text, bool section = false, bo
     return label;
 }
 
-lv_obj_t* create_action_button(const char* text, int width, lv_event_cb_t cb)
+lv_obj_t* create_fitted_button(lv_obj_t* parent, const char* text, lv_event_cb_t cb)
 {
-    lv_obj_t* btn = lv_btn_create(g_team_state.actions);
-    lv_obj_set_size(btn, width, kActionBtnHeight);
+    lv_obj_t* btn = lv_btn_create(parent);
+    lv_obj_set_height(btn, kActionBtnHeight);
     style::apply_button_secondary(btn);
+    lv_obj_set_style_pad_hor(btn, kActionBtnPadH, LV_PART_MAIN);
     lv_obj_t* label = lv_label_create(btn);
     lv_label_set_text(label, text);
+    lv_obj_update_layout(label);
+    lv_coord_t width = lv_obj_get_width(label) + (kActionBtnPadH * 2);
+    if (width < kActionBtnMinWidth)
+    {
+        width = kActionBtnMinWidth;
+    }
+    lv_obj_set_width(btn, width);
     lv_obj_center(label);
-    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
+    if (cb)
+    {
+        lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
+    }
+    return btn;
+}
+
+lv_obj_t* create_action_button(const char* text, lv_event_cb_t cb)
+{
+    lv_obj_t* btn = create_fitted_button(g_team_state.actions, text, cb);
     return btn;
 }
 
@@ -1713,23 +1730,13 @@ void handle_leave(lv_event_t*)
     lv_obj_set_style_border_width(btn_row, 0, LV_PART_MAIN);
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t* cancel_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(cancel_btn, 90, 28);
-    style::apply_button_secondary(cancel_btn);
-    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, "Cancel");
-    lv_obj_center(cancel_label);
+    lv_obj_t* cancel_btn = create_fitted_button(btn_row, "Cancel", nullptr);
     lv_obj_add_event_cb(
         cancel_btn, [](lv_event_t*)
         { close_leave_confirm_modal(); },
         LV_EVENT_CLICKED, nullptr);
 
-    lv_obj_t* leave_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(leave_btn, 90, 28);
-    style::apply_button_secondary(leave_btn);
-    lv_obj_t* leave_label = lv_label_create(leave_btn);
-    lv_label_set_text(leave_label, "Leave");
-    lv_obj_center(leave_label);
+    lv_obj_t* leave_btn = create_fitted_button(btn_row, "Leave", nullptr);
     lv_obj_add_event_cb(
         leave_btn, [](lv_event_t*)
         {
@@ -1956,9 +1963,8 @@ void render_status_not_in_team()
     add_label(g_team_state.body, "• No shared map\n• No team awareness", false, true);
     add_label(g_team_state.body, "Keep devices within 5m", false, false);
 
-    int btn_width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Create Team", btn_width, handle_create);
-    g_team_state.action_btns[1] = create_action_button("Join Team", btn_width, handle_join);
+    g_team_state.action_btns[0] = create_action_button("Create Team", handle_create);
+    g_team_state.action_btns[1] = create_action_button("Join Team", handle_join);
     register_focus(g_team_state.action_btns[0], true);
     register_focus(g_team_state.action_btns[1]);
 }
@@ -2007,17 +2013,16 @@ void render_status_in_team()
                          "○ 1 member stale";
     add_label(g_team_state.body, health.c_str(), false, true);
 
-    int width = kActionBtnWidth3;
-    g_team_state.action_btns[0] = create_action_button("View Team", width, handle_view_team);
+    g_team_state.action_btns[0] = create_action_button("View Team", handle_view_team);
     if (g_team_state.self_is_leader)
     {
-        g_team_state.action_btns[1] = create_action_button("Pair Member", width, handle_invite);
+        g_team_state.action_btns[1] = create_action_button("Pair Member", handle_invite);
     }
     else
     {
-        g_team_state.action_btns[1] = create_action_button("Request Keys", width, handle_request_keydist);
+        g_team_state.action_btns[1] = create_action_button("Request Keys", handle_request_keydist);
     }
-    g_team_state.action_btns[2] = create_action_button("Leave", width, handle_leave);
+    g_team_state.action_btns[2] = create_action_button("Leave", handle_leave);
     register_focus(g_team_state.action_btns[0], true);
     register_focus(g_team_state.action_btns[1]);
     register_focus(g_team_state.action_btns[2]);
@@ -2086,10 +2091,9 @@ void render_team_home()
         }
     }
 
-    int width = kActionBtnWidth3;
-    g_team_state.action_btns[0] = create_action_button("Pair Member", width, handle_invite);
-    g_team_state.action_btns[1] = create_action_button("Manage", width, handle_manage);
-    g_team_state.action_btns[2] = create_action_button("Leave", width, handle_leave);
+    g_team_state.action_btns[0] = create_action_button("Pair Member", handle_invite);
+    g_team_state.action_btns[1] = create_action_button("Manage", handle_manage);
+    g_team_state.action_btns[2] = create_action_button("Leave", handle_leave);
     register_focus(g_team_state.action_btns[0], g_team_state.default_focus == nullptr);
     register_focus(g_team_state.action_btns[1]);
     register_focus(g_team_state.action_btns[2]);
@@ -2197,9 +2201,8 @@ void render_join_pending()
     }
     add_label(g_team_state.body, state_line, false, true);
 
-    int width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Cancel", width, handle_join_cancel);
-    g_team_state.action_btns[1] = create_action_button("Retry", width, handle_join_retry);
+    g_team_state.action_btns[0] = create_action_button("Cancel", handle_join_cancel);
+    g_team_state.action_btns[1] = create_action_button("Retry", handle_join_retry);
     register_focus(g_team_state.action_btns[0], true);
     register_focus(g_team_state.action_btns[1]);
 }
@@ -2252,9 +2255,8 @@ void render_member_detail()
     add_label(g_team_state.body, "Capability:", true, false);
     add_label(g_team_state.body, "- Position\n- Waypoint", false, true);
 
-    int width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Kick", width, handle_kick);
-    g_team_state.action_btns[1] = create_action_button("Transfer Leader", width, handle_transfer_leader);
+    g_team_state.action_btns[0] = create_action_button("Kick", handle_kick);
+    g_team_state.action_btns[1] = create_action_button("Transfer Leader", handle_transfer_leader);
     bool keys_ready = g_team_state.has_team_psk && g_team_state.has_team_id && g_team_state.security_round > 0;
     if (!keys_ready || g_team_state.waiting_new_keys)
     {
@@ -2284,9 +2286,8 @@ void render_kick_confirm()
               "team messages or waypoints.",
               false, true);
 
-    int width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Cancel", width, handle_kick_cancel);
-    g_team_state.action_btns[1] = create_action_button("Confirm Kick", width, handle_kick_confirm);
+    g_team_state.action_btns[0] = create_action_button("Cancel", handle_kick_cancel);
+    g_team_state.action_btns[1] = create_action_button("Confirm Kick", handle_kick_confirm);
     register_focus(g_team_state.action_btns[0], true);
     register_focus(g_team_state.action_btns[1]);
 }
@@ -2298,9 +2299,8 @@ void render_kicked_out()
     add_label(g_team_state.body, "You are no longer in this team", true, false);
     add_label(g_team_state.body, "Access to team data revoked", false, true);
 
-    int width = kActionBtnWidth2;
-    g_team_state.action_btns[0] = create_action_button("Pair Again", width, handle_kicked_join);
-    g_team_state.action_btns[1] = create_action_button("OK", width, handle_kicked_ok);
+    g_team_state.action_btns[0] = create_action_button("Pair Again", handle_kicked_join);
+    g_team_state.action_btns[1] = create_action_button("OK", handle_kicked_ok);
     register_focus(g_team_state.action_btns[0], true);
     register_focus(g_team_state.action_btns[1]);
 }

@@ -16,7 +16,7 @@
 #include <Arduino.h>
 #include <algorithm>
 
-#define CONTACTS_DEBUG 1
+#define CONTACTS_DEBUG 0
 #if CONTACTS_DEBUG
 #define CONTACTS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
@@ -84,10 +84,17 @@ void ui_contacts_enter(lv_obj_t* parent)
     // 更新电池显示
     ui_update_top_bar_battery(g_contacts_state.top_bar);
 
-    // 创建三个面板
+    // 仅创建两列：Filter + List（移除常驻 Action Panel）
     create_filter_panel(content);
     create_list_panel(content);
-    create_action_panel(content);
+    g_contacts_state.action_panel = nullptr;
+    g_contacts_state.chat_btn = nullptr;
+    g_contacts_state.position_btn = nullptr;
+    g_contacts_state.edit_btn = nullptr;
+    g_contacts_state.del_btn = nullptr;
+    g_contacts_state.add_btn = nullptr;
+    g_contacts_state.info_btn = nullptr;
+    g_contacts_state.action_back_btn = nullptr;
 
     // Restore previous default group before initializing input.
     set_default_group(prev_group);

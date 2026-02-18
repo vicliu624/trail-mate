@@ -1,4 +1,5 @@
 #include "gps/usecase/track_recorder.h"
+#include "display/DisplayInterface.h"
 
 #include <cmath>
 #include <esp_system.h>
@@ -46,6 +47,26 @@ double haversine_m(double lat1, double lon1, double lat2, double lon2)
     const double c = 2 * std::atan2(std::sqrt(a), std::sqrt(1 - a));
     return R * c;
 }
+
+class DisplaySpiGuard
+{
+  public:
+    explicit DisplaySpiGuard(TickType_t wait_ticks = pdMS_TO_TICKS(20))
+        : locked_(display_spi_lock(wait_ticks))
+    {
+    }
+    ~DisplaySpiGuard()
+    {
+        if (locked_)
+        {
+            display_spi_unlock();
+        }
+    }
+    bool locked() const { return locked_; }
+
+  private:
+    bool locked_ = false;
+};
 } // namespace
 
 TrackRecorder& TrackRecorder::getInstance()
@@ -346,13 +367,29 @@ void TrackRecorder::appendPoint(const TrackPoint& pt)
     {
         return;
     }
-    if (SD.cardType() == CARD_NONE)
+
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(200)) != pdTRUE)
     {
         return;
     }
 
-    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(200)) != pdTRUE)
+    // SD and display share SPI on T-Deck/Pager. Use the display SPI lock as bus arbiter.
+    DisplaySpiGuard spi_guard(pdMS_TO_TICKS(20));
+    if (!spi_guard.locked())
     {
+        if (mutex_)
+        {
+            xSemaphoreGive(mutex_);
+        }
+        return;
+    }
+
+    if (SD.cardType() == CARD_NONE)
+    {
+        if (mutex_)
+        {
+            xSemaphoreGive(mutex_);
+        }
         return;
     }
 

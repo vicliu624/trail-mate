@@ -33,7 +33,7 @@
 #include <vector>
 
 #ifndef LORA_LOG_ENABLE
-#define LORA_LOG_ENABLE 1
+#define LORA_LOG_ENABLE 0
 #endif
 
 #if LORA_LOG_ENABLE

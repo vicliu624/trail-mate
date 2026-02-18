@@ -9,6 +9,7 @@
 #include "hostlink_service.h"
 #include "hostlink_types.h"
 
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <vector>
@@ -30,6 +31,8 @@ constexpr size_t kMemberNameMaxLen = 32;
 uint32_t s_team_state_hash = 0;
 bool s_team_state_has_hash = false;
 AppRxStats s_app_rx_stats{};
+bool s_runtime_team_state_inited = false;
+team::ui::TeamUiSnapshot s_runtime_team_state{};
 
 void push_u8(std::vector<uint8_t>& out, uint8_t v)
 {
@@ -146,6 +149,84 @@ void push_team_id(std::vector<uint8_t>& out, const team::TeamId& id, bool has_id
     }
 }
 
+bool team_id_has_value(const team::TeamId& id)
+{
+    for (uint8_t b : id)
+    {
+        if (b != 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ensure_runtime_team_state_loaded()
+{
+    if (s_runtime_team_state_inited)
+    {
+        return;
+    }
+    s_runtime_team_state_inited = true;
+}
+
+int find_runtime_member_index(uint32_t node_id)
+{
+    for (size_t i = 0; i < s_runtime_team_state.members.size(); ++i)
+    {
+        if (s_runtime_team_state.members[i].node_id == node_id)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void touch_runtime_member(uint32_t node_id, bool leader, uint32_t last_seen_s)
+{
+    if (node_id == 0)
+    {
+        return;
+    }
+
+    int idx = find_runtime_member_index(node_id);
+    if (idx < 0)
+    {
+        team::ui::TeamMemberUi member{};
+        member.node_id = node_id;
+        member.online = true;
+        member.leader = leader;
+        member.last_seen_s = last_seen_s;
+        s_runtime_team_state.members.push_back(member);
+        return;
+    }
+
+    auto& member = s_runtime_team_state.members[static_cast<size_t>(idx)];
+    member.online = true;
+    member.leader = leader;
+    member.last_seen_s = last_seen_s;
+}
+
+void update_runtime_team_context(const team::TeamEventContext& ctx, uint32_t timestamp_s)
+{
+    ensure_runtime_team_state_loaded();
+
+    if (team_id_has_value(ctx.team_id))
+    {
+        s_runtime_team_state.team_id = ctx.team_id;
+        s_runtime_team_state.has_team_id = true;
+        s_runtime_team_state.in_team = true;
+    }
+    if (ctx.key_id != 0)
+    {
+        s_runtime_team_state.security_round = ctx.key_id;
+    }
+    if (timestamp_s != 0)
+    {
+        s_runtime_team_state.last_update_s = timestamp_s;
+    }
+}
+
 void build_rx_meta_tlvs(const chat::RxMeta& meta, uint32_t packet_id, std::vector<uint8_t>& out)
 {
     out.clear();
@@ -257,8 +338,8 @@ void update_app_rx_stats(const chat::RxMeta* rx_meta)
 
 bool build_team_state_payload(std::vector<uint8_t>& out)
 {
-    team::ui::TeamUiSnapshot snap{};
-    team::ui::team_ui_get_store().load(snap);
+    ensure_runtime_team_state_loaded();
+    const team::ui::TeamUiSnapshot& snap = s_runtime_team_state;
 
     uint8_t flags = 0;
     if (snap.in_team) flags |= 1 << 0;
@@ -520,6 +601,25 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamKick:
     {
         const auto& team_evt = static_cast<const sys::TeamKickEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        if (team_evt.data.msg.target != 0)
+        {
+            int idx = find_runtime_member_index(team_evt.data.msg.target);
+            if (idx >= 0)
+            {
+                s_runtime_team_state.members.erase(s_runtime_team_state.members.begin() + idx);
+            }
+            uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
+            if (self_id != 0 && team_evt.data.msg.target == self_id)
+            {
+                s_runtime_team_state.in_team = false;
+                s_runtime_team_state.pending_join = false;
+                s_runtime_team_state.kicked_out = true;
+                s_runtime_team_state.members.clear();
+            }
+        }
+
         std::vector<uint8_t> wire;
         if (encode_team_mgmt_wire<team::proto::TeamKick, team::proto::encodeTeamKick>(
                 team::proto::TeamMgmtType::Kick, team_evt.data.msg, wire))
@@ -547,6 +647,19 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamTransferLeader:
     {
         const auto& team_evt = static_cast<const sys::TeamTransferLeaderEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        for (auto& member : s_runtime_team_state.members)
+        {
+            member.leader = false;
+        }
+        if (team_evt.data.msg.target != 0)
+        {
+            touch_runtime_member(team_evt.data.msg.target, true, ts_s);
+        }
+        uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
+        s_runtime_team_state.self_is_leader = (self_id != 0 && team_evt.data.msg.target == self_id);
+
         std::vector<uint8_t> wire;
         if (encode_team_mgmt_wire<team::proto::TeamTransferLeader, team::proto::encodeTeamTransferLeader>(
                 team::proto::TeamMgmtType::TransferLeader, team_evt.data.msg, wire))
@@ -574,6 +687,12 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamKeyDist:
     {
         const auto& team_evt = static_cast<const sys::TeamKeyDistEvent&>(event);
+        update_runtime_team_context(team_evt.data.ctx, event.timestamp / 1000);
+        if (team_evt.data.msg.key_id != 0)
+        {
+            s_runtime_team_state.security_round = team_evt.data.msg.key_id;
+        }
+
         std::vector<uint8_t> wire;
         if (encode_team_mgmt_wire<team::proto::TeamKeyDist, team::proto::encodeTeamKeyDist>(
                 team::proto::TeamMgmtType::KeyDist, team_evt.data.msg, wire))
@@ -601,6 +720,36 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamStatus:
     {
         const auto& team_evt = static_cast<const sys::TeamStatusEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        if (team_evt.data.msg.key_id != 0)
+        {
+            s_runtime_team_state.security_round = team_evt.data.msg.key_id;
+        }
+        if (team_evt.data.msg.has_members)
+        {
+            s_runtime_team_state.members.clear();
+            for (uint32_t member_id : team_evt.data.msg.members)
+            {
+                if (member_id == 0)
+                {
+                    continue;
+                }
+                bool leader = (team_evt.data.msg.leader_id != 0 && member_id == team_evt.data.msg.leader_id);
+                touch_runtime_member(member_id, leader, ts_s);
+            }
+        }
+        if (team_evt.data.ctx.from != 0)
+        {
+            bool from_is_leader = (team_evt.data.msg.leader_id != 0 && team_evt.data.ctx.from == team_evt.data.msg.leader_id);
+            touch_runtime_member(team_evt.data.ctx.from, from_is_leader, ts_s);
+        }
+        uint32_t self_id = app::AppContext::getInstance().getSelfNodeId();
+        if (self_id != 0 && team_evt.data.msg.leader_id != 0)
+        {
+            s_runtime_team_state.self_is_leader = (team_evt.data.msg.leader_id == self_id);
+        }
+
         std::vector<uint8_t> wire;
         if (encode_team_mgmt_wire<team::proto::TeamStatus, team::proto::encodeTeamStatus>(
                 team::proto::TeamMgmtType::Status, team_evt.data.msg, wire))
@@ -628,6 +777,10 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamPosition:
     {
         const auto& team_evt = static_cast<const sys::TeamPositionEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        touch_runtime_member(team_evt.data.ctx.from, false, ts_s);
+
         uint8_t flags = kAppFlagTeamMeta | kAppFlagWasEncrypted;
         send_app_data(team::proto::TEAM_POSITION_APP,
                       team_evt.data.ctx.from,
@@ -646,6 +799,10 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamWaypoint:
     {
         const auto& team_evt = static_cast<const sys::TeamWaypointEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        touch_runtime_member(team_evt.data.ctx.from, false, ts_s);
+
         uint8_t flags = kAppFlagTeamMeta | kAppFlagWasEncrypted;
         send_app_data(team::proto::TEAM_WAYPOINT_APP,
                       team_evt.data.ctx.from,
@@ -664,6 +821,10 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamTrack:
     {
         const auto& team_evt = static_cast<const sys::TeamTrackEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        touch_runtime_member(team_evt.data.ctx.from, false, ts_s);
+
         uint8_t flags = kAppFlagTeamMeta | kAppFlagWasEncrypted;
         send_app_data(team::proto::TEAM_TRACK_APP,
                       team_evt.data.ctx.from,
@@ -682,6 +843,10 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamChat:
     {
         const auto& team_evt = static_cast<const sys::TeamChatEvent&>(event);
+        uint32_t ts_s = event.timestamp / 1000;
+        update_runtime_team_context(team_evt.data.ctx, ts_s);
+        touch_runtime_member(team_evt.data.ctx.from, false, ts_s);
+
         std::vector<uint8_t> wire;
         if (team::proto::encodeTeamChatMessage(team_evt.data.msg, wire))
         {
@@ -701,6 +866,32 @@ void on_event(const sys::Event& event)
         }
         break;
     }
+    case sys::EventType::TeamPairing:
+    {
+        const auto& pair_evt = static_cast<const sys::TeamPairingEvent&>(event);
+        ensure_runtime_team_state_loaded();
+        if (pair_evt.data.has_team_id)
+        {
+            s_runtime_team_state.team_id = pair_evt.data.team_id;
+            s_runtime_team_state.has_team_id = true;
+            s_runtime_team_state.in_team = true;
+        }
+        if (pair_evt.data.key_id != 0)
+        {
+            s_runtime_team_state.security_round = pair_evt.data.key_id;
+        }
+        if (pair_evt.data.has_team_name && pair_evt.data.team_name[0] != '\0')
+        {
+            s_runtime_team_state.team_name = pair_evt.data.team_name;
+        }
+        if (pair_evt.data.state == team::TeamPairingState::Completed)
+        {
+            s_runtime_team_state.in_team = true;
+            s_runtime_team_state.pending_join = false;
+            s_runtime_team_state.kicked_out = false;
+        }
+        break;
+    }
     default:
         break;
     }
@@ -715,6 +906,7 @@ void on_event(const sys::Event& event)
     case sys::EventType::TeamWaypoint:
     case sys::EventType::TeamTrack:
     case sys::EventType::TeamChat:
+    case sys::EventType::TeamPairing:
         maybe_send_team_state(false);
         break;
     default:

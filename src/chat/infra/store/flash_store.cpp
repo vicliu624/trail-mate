@@ -11,20 +11,30 @@
 namespace chat
 {
 
+#ifndef FLASH_STORE_LOG_ENABLE
+#define FLASH_STORE_LOG_ENABLE 0
+#endif
+
+#if FLASH_STORE_LOG_ENABLE
+#define FLASH_STORE_LOG(...) Serial.printf(__VA_ARGS__)
+#else
+#define FLASH_STORE_LOG(...)
+#endif
+
 FlashStore::FlashStore()
 {
     ready_ = prefs_.begin(kPrefsNs, false);
     records_.resize(kMaxMessages);
     if (!ready_)
     {
-        Serial.printf("[FlashStore] open failed ns=%s\n", kPrefsNs);
+        FLASH_STORE_LOG("[FlashStore] open failed ns=%s\n", kPrefsNs);
         return;
     }
     loadFromPrefs();
-    Serial.printf("[FlashStore] ready=%d count=%u head=%u\n",
-                  ready_ ? 1 : 0,
-                  static_cast<unsigned>(count_),
-                  static_cast<unsigned>(head_));
+    FLASH_STORE_LOG("[FlashStore] ready=%d count=%u head=%u\n",
+                    ready_ ? 1 : 0,
+                    static_cast<unsigned>(count_),
+                    static_cast<unsigned>(head_));
 }
 
 FlashStore::~FlashStore()
@@ -52,13 +62,13 @@ void FlashStore::append(const ChatMessage& msg)
         memcpy(rec.text, msg.text.data(), rec.text_len);
     }
 
-    Serial.printf("[FlashStore] append ch=%u status=%u from=%08lX peer=%08lX ts=%lu len=%u\n",
-                  static_cast<unsigned>(rec.channel),
-                  static_cast<unsigned>(rec.status),
-                  static_cast<unsigned long>(rec.from),
-                  static_cast<unsigned long>(rec.peer),
-                  static_cast<unsigned long>(rec.timestamp),
-                  static_cast<unsigned>(rec.text_len));
+    FLASH_STORE_LOG("[FlashStore] append ch=%u status=%u from=%08lX peer=%08lX ts=%lu len=%u\n",
+                    static_cast<unsigned>(rec.channel),
+                    static_cast<unsigned>(rec.status),
+                    static_cast<unsigned long>(rec.from),
+                    static_cast<unsigned long>(rec.peer),
+                    static_cast<unsigned long>(rec.timestamp),
+                    static_cast<unsigned>(rec.text_len));
     records_[head_] = rec;
     persistRecord(head_);
     head_ = static_cast<uint16_t>((head_ + 1) % kMaxMessages);
@@ -297,10 +307,10 @@ void FlashStore::persistMeta()
     size_t count_written = prefs_.putUShort(kKeyCount, count_);
     if (ver_written == 0 || head_written == 0 || count_written == 0)
     {
-        Serial.printf("[FlashStore] persistMeta failed ver=%u head=%u count=%u\n",
-                      static_cast<unsigned>(ver_written),
-                      static_cast<unsigned>(head_written),
-                      static_cast<unsigned>(count_written));
+        FLASH_STORE_LOG("[FlashStore] persistMeta failed ver=%u head=%u count=%u\n",
+                        static_cast<unsigned>(ver_written),
+                        static_cast<unsigned>(head_written),
+                        static_cast<unsigned>(count_written));
     }
 }
 
@@ -313,20 +323,20 @@ void FlashStore::persistRecord(uint16_t idx)
     size_t written = prefs_.putBytes(key, &records_[idx], expected);
     if (written != expected)
     {
-        Serial.printf("[FlashStore] persistRecord failed idx=%u wrote=%u expected=%u\n",
-                      static_cast<unsigned>(idx),
-                      static_cast<unsigned>(written),
-                      static_cast<unsigned>(expected));
+        FLASH_STORE_LOG("[FlashStore] persistRecord failed idx=%u wrote=%u expected=%u\n",
+                        static_cast<unsigned>(idx),
+                        static_cast<unsigned>(written),
+                        static_cast<unsigned>(expected));
     }
     else
     {
         size_t actual = prefs_.getBytesLength(key);
         if (actual != expected)
         {
-            Serial.printf("[FlashStore] persistRecord size mismatch idx=%u len=%u expected=%u\n",
-                          static_cast<unsigned>(idx),
-                          static_cast<unsigned>(actual),
-                          static_cast<unsigned>(expected));
+            FLASH_STORE_LOG("[FlashStore] persistRecord size mismatch idx=%u len=%u expected=%u\n",
+                            static_cast<unsigned>(idx),
+                            static_cast<unsigned>(actual),
+                            static_cast<unsigned>(expected));
         }
     }
 }

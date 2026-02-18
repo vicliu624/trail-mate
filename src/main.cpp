@@ -1051,6 +1051,12 @@ void setup()
         lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_14, 0);
 #endif
     }
+
+#if defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_WATCH_S3)
+    // T-Deck (320x240): keep node ID lighter and lower to reduce visual crowding.
+    lv_obj_set_style_text_font(node_id_label, &lv_font_montserrat_12, 0);
+    lv_obj_align(node_id_label, LV_ALIGN_BOTTOM_LEFT, 4, -4);
+#endif
     lv_label_set_long_mode(desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
 #if LVGL_VERSION_MAJOR == 9

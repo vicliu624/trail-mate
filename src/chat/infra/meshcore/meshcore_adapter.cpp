@@ -75,7 +75,7 @@ T clampValue(T value, T min_value, T max_value)
 }
 
 #ifndef MESHCORE_LOG_ENABLE
-#define MESHCORE_LOG_ENABLE 1
+#define MESHCORE_LOG_ENABLE 0
 #endif
 
 #if MESHCORE_LOG_ENABLE

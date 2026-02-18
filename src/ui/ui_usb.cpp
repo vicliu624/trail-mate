@@ -11,8 +11,11 @@
  */
 
 #include "ui_usb.h"
+#include "../app/app_context.h"
 #include "../gps/gps_service_api.h"
 #include "board/BoardBase.h"
+#include "esp_err.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "ui_common.h"
@@ -50,6 +53,27 @@ static void update_status_message(const char* message);
 static int32_t usbReadCallback(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
 static int32_t usbWriteCallback(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize);
 static bool usbStartStopCallback(uint8_t power_condition, bool start, bool load_eject);
+static void stop_wifi_for_usb_mode();
+
+static void stop_wifi_for_usb_mode()
+{
+    // Keep pairing state and radio resources consistent before forcing Wi-Fi off.
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    if (team::TeamPairingService* pairing = app_ctx.getTeamPairing())
+    {
+        pairing->stop();
+    }
+
+    esp_err_t stop_err = esp_wifi_stop();
+    if (stop_err != ESP_OK &&
+        stop_err != ESP_ERR_WIFI_NOT_INIT &&
+        stop_err != ESP_ERR_WIFI_NOT_STARTED)
+    {
+        Serial.printf("[USB] wifi stop err=%d (%s)\n",
+                      static_cast<int>(stop_err),
+                      esp_err_to_name(stop_err));
+    }
+}
 
 /**
  * @brief USB read callback - reads data from SD card
@@ -335,6 +359,10 @@ void ui_usb_enter(lv_obj_t* parent)
 {
     usb_exit_started = false;
     usb_stopped = false;
+
+    // USB data exchange should not keep Wi-Fi active.
+    stop_wifi_for_usb_mode();
+
     if (exit_timer)
     {
         lv_timer_del(exit_timer);

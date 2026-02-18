@@ -27,10 +27,10 @@ void contacts_input_on_ui_refreshed();
  * @brief Switch focus column according to Contacts UI spec.
  * - Filter: only Contacts/Nearby buttons
  * - List: list items + Prev/Next/Back
- * - Action: action buttons (Chat/Edit/Del/Info or Chat/Add/Info)
  */
 void contacts_focus_to_filter();
 void contacts_focus_to_list();
+// Kept for compatibility with existing callers; currently maps to list focus.
 void contacts_focus_to_action();
 
 /**

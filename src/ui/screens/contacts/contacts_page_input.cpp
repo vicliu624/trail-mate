@@ -9,7 +9,7 @@
 #include <Arduino.h>     // Must be first for library compilation
 #include <Preferences.h> // Required for contacts_state.h -> contact_service.h dependency chain
 
-#define CONTACTS_DEBUG 1
+#define CONTACTS_DEBUG 0
 #if CONTACTS_DEBUG
 #define CONTACTS_LOG(...) Serial.printf(__VA_ARGS__)
 #else
@@ -25,7 +25,6 @@ enum class FocusColumn
 {
     Filter = 0,
     List = 1,
-    Action = 2,
 };
 
 static lv_group_t* s_group = nullptr;
@@ -60,21 +59,7 @@ static void group_clear_all(lv_group_t* g)
 
 static void clear_action_focus_states()
 {
-    lv_state_t clear_mask = (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY | LV_STATE_EDITED);
-    if (g_contacts_state.action_back_btn && lv_obj_is_valid(g_contacts_state.action_back_btn))
-        lv_obj_clear_state(g_contacts_state.action_back_btn, clear_mask);
-    if (g_contacts_state.chat_btn && lv_obj_is_valid(g_contacts_state.chat_btn))
-        lv_obj_clear_state(g_contacts_state.chat_btn, clear_mask);
-    if (g_contacts_state.position_btn && lv_obj_is_valid(g_contacts_state.position_btn))
-        lv_obj_clear_state(g_contacts_state.position_btn, clear_mask);
-    if (g_contacts_state.edit_btn && lv_obj_is_valid(g_contacts_state.edit_btn))
-        lv_obj_clear_state(g_contacts_state.edit_btn, clear_mask);
-    if (g_contacts_state.del_btn && lv_obj_is_valid(g_contacts_state.del_btn))
-        lv_obj_clear_state(g_contacts_state.del_btn, clear_mask);
-    if (g_contacts_state.add_btn && lv_obj_is_valid(g_contacts_state.add_btn))
-        lv_obj_clear_state(g_contacts_state.add_btn, clear_mask);
-    if (g_contacts_state.info_btn && lv_obj_is_valid(g_contacts_state.info_btn))
-        lv_obj_clear_state(g_contacts_state.info_btn, clear_mask);
+    // Action panel removed. Keep function as no-op to preserve call sites.
 }
 
 static bool is_valid(lv_obj_t* obj)
@@ -273,111 +258,6 @@ static void bind_list_column()
                  (unsigned)g_contacts_state.list_items.size());
 }
 
-static void bind_action_column()
-{
-    if (!s_group) return;
-    group_clear_all(s_group);
-
-    bool any = false;
-
-    // ① Actions
-    if (is_visible(g_contacts_state.chat_btn))
-    {
-        lv_group_add_obj(s_group, g_contacts_state.chat_btn);
-        attach_key_handler(g_contacts_state.chat_btn);
-        any = true;
-    }
-
-    if (g_contacts_state.current_mode == ContactsMode::Contacts)
-    {
-        if (is_visible(g_contacts_state.edit_btn))
-        {
-            lv_group_add_obj(s_group, g_contacts_state.edit_btn);
-            attach_key_handler(g_contacts_state.edit_btn);
-            any = true;
-        }
-        if (is_visible(g_contacts_state.del_btn))
-        {
-            lv_group_add_obj(s_group, g_contacts_state.del_btn);
-            attach_key_handler(g_contacts_state.del_btn);
-            any = true;
-        }
-    }
-    else if (g_contacts_state.current_mode == ContactsMode::Nearby)
-    {
-        if (is_visible(g_contacts_state.add_btn))
-        {
-            lv_group_add_obj(s_group, g_contacts_state.add_btn);
-            attach_key_handler(g_contacts_state.add_btn);
-            any = true;
-        }
-    }
-    else if (g_contacts_state.current_mode == ContactsMode::Team)
-    {
-        if (is_visible(g_contacts_state.position_btn))
-        {
-            lv_group_add_obj(s_group, g_contacts_state.position_btn);
-            attach_key_handler(g_contacts_state.position_btn);
-            any = true;
-        }
-    }
-
-    if (g_contacts_state.current_mode != ContactsMode::Broadcast &&
-        g_contacts_state.current_mode != ContactsMode::Team)
-    {
-        if (is_visible(g_contacts_state.info_btn))
-        {
-            lv_group_add_obj(s_group, g_contacts_state.info_btn);
-            attach_key_handler(g_contacts_state.info_btn);
-            any = true;
-        }
-    }
-
-    // ② Back (added last, not the default focus)
-    if (is_visible(g_contacts_state.action_back_btn))
-    {
-        lv_group_add_obj(s_group, g_contacts_state.action_back_btn);
-        attach_key_handler(g_contacts_state.action_back_btn);
-        any = true;
-    }
-
-    if (!any)
-    {
-        s_col = FocusColumn::List;
-        bind_list_column();
-        return;
-    }
-
-    // Only allow action focus when a list item is selected
-    if (g_contacts_state.selected_index < 0)
-    {
-        clear_action_focus_states();
-        s_col = FocusColumn::List;
-        bind_list_column();
-        return;
-    }
-
-    // Default focus to the first action button (Chat) instead of Back
-    if (is_valid(g_contacts_state.chat_btn))
-    {
-        focus_first_valid(g_contacts_state.chat_btn);
-    }
-    else if (is_valid(g_contacts_state.position_btn))
-    {
-        focus_first_valid(g_contacts_state.position_btn);
-    }
-    else if (is_valid(g_contacts_state.info_btn))
-    {
-        focus_first_valid(g_contacts_state.info_btn);
-    }
-    else if (is_valid(g_contacts_state.action_back_btn))
-    {
-        focus_first_valid(g_contacts_state.action_back_btn);
-    }
-
-    CONTACTS_LOG("[Contacts][Input] bind_action_column\n");
-}
-
 static void rebind_by_column()
 {
     switch (s_col)
@@ -388,20 +268,16 @@ static void rebind_by_column()
     case FocusColumn::List:
         bind_list_column();
         break;
-    case FocusColumn::Action:
-        bind_action_column();
-        break;
     }
 }
 
 /**
  * Encoder key handler (SPEC):
  * - Filter: ENTER -> List
- * - List:   ENTER on item -> Action
+ * - List:   ENTER on item -> open action popup
  *           ENTER on Prev/Next -> click (stay List)
  *           ENTER on Back -> Filter
- * - Action: ENTER -> click focused action button
- * - ESC/BACKSPACE: Action -> List -> Filter
+ * - ESC/BACKSPACE: List -> Filter
  */
 static void root_key_event_cb(lv_event_t* e)
 {
@@ -421,8 +297,7 @@ static void root_key_event_cb(lv_event_t* e)
     // Back one column
     if (key == LV_KEY_ESC)
     {
-        if (s_col == FocusColumn::Action) s_col = FocusColumn::List;
-        else if (s_col == FocusColumn::List) s_col = FocusColumn::Filter;
+        if (s_col == FocusColumn::List) s_col = FocusColumn::Filter;
         else s_col = FocusColumn::Filter;
         rebind_by_column();
         return;
@@ -465,21 +340,9 @@ static void root_key_event_cb(lv_event_t* e)
         {
             if (focused == g_contacts_state.list_items[i])
             {
-                // selected_index stored in user_data by refresh_ui()
-                g_contacts_state.selected_index = (int)(intptr_t)lv_obj_get_user_data(focused);
-                s_col = FocusColumn::Action;
-                rebind_by_column();
+                lv_obj_send_event(focused, LV_EVENT_CLICKED, nullptr);
                 return;
             }
-        }
-        return;
-    }
-
-    if (s_col == FocusColumn::Action)
-    {
-        if (focused)
-        {
-            lv_obj_send_event(focused, LV_EVENT_CLICKED, nullptr);
         }
         return;
     }
@@ -574,7 +437,8 @@ void contacts_focus_to_list()
 void contacts_focus_to_action()
 {
     if (!s_group) return;
-    s_col = FocusColumn::Action;
+    // Action panel removed; keep API compatibility by mapping to list.
+    s_col = FocusColumn::List;
     rebind_by_column();
 }
 

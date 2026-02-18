@@ -98,6 +98,7 @@ struct ContactsPageState
     lv_obj_t* add_edit_textarea = nullptr;
     lv_obj_t* add_edit_error_label = nullptr;
     lv_obj_t* del_confirm_modal = nullptr;
+    lv_obj_t* action_menu_modal = nullptr;
     lv_group_t* modal_group = nullptr;
     lv_group_t* prev_group = nullptr;
     uint32_t modal_node_id = 0;
