@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <RadioLib.h>
 #include <SensorBHI260AP.hpp>
+#include <TouchDrvGT911.hpp>
 #include <XPowersAXP2101.tpp>
 
 #include "BoardBase.h"
@@ -72,6 +73,8 @@ class TDeckBoard : public BoardBase,
     uint16_t width() override;
     uint16_t height() override;
     bool useDMA() override { return true; }
+    bool hasTouch() override { return touch_ready_; }
+    uint8_t getPoint(int16_t* x, int16_t* y, uint8_t get_point) override;
     bool hasEncoder() override { return true; }
     RotaryMsg_t getRotary() override;
 
@@ -104,7 +107,7 @@ class TDeckBoard : public BoardBase,
     }
     GPS& getGPS() override { return gps_; }
     void powerControl(PowerCtrlChannel_t, bool) override {}
-    bool syncTimeFromGPS(uint32_t = 0) override { return false; }
+    bool syncTimeFromGPS(uint32_t gps_task_interval_ms = 0) override;
 
     // MotionBoard
     SensorBHI260AP& getMotionSensor() override { return sensor_; }
@@ -113,6 +116,7 @@ class TDeckBoard : public BoardBase,
   private:
     TDeckBoard();
     bool initPMU();
+    bool initTouch();
     bool installSD();
     void uninstallSD();
 
@@ -125,6 +129,9 @@ class TDeckBoard : public BoardBase,
     bool rtc_ready_ = false;
     bool sd_ready_ = false;
     bool display_ready_ = false;
+    bool touch_ready_ = false;
+    int last_battery_level_ = -1;
+    uint8_t battery_zero_streak_ = 0;
     uint32_t boot_ms_ = 0;
     uint32_t last_trackball_ms_ = 0;
     uint32_t last_click_ms_ = 0;
@@ -143,6 +150,7 @@ class TDeckBoard : public BoardBase,
     GPS gps_;
     SensorBHI260AP sensor_;
     XPowersAXP2101 pmu_;
+    TouchDrvGT911 touch_;
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
     SX1262Access radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_SX1280)

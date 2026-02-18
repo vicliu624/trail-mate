@@ -5,6 +5,117 @@
 #include <Wire.h>
 #include <ctime>
 #include <limits>
+#include <sys/time.h>
+
+namespace
+{
+constexpr time_t kMinValidEpochSeconds = 1577836800; // 2020-01-01 00:00:00 UTC
+
+// Civil date to UNIX epoch days (UTC), based on Howard Hinnant's algorithm.
+int64_t days_from_civil(int year, unsigned month, unsigned day)
+{
+    year -= month <= 2;
+    const int era = (year >= 0 ? year : year - 399) / 400;
+    const unsigned yoe = static_cast<unsigned>(year - era * 400);
+    const unsigned doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(doe) - 719468;
+}
+
+bool is_leap_year(int year)
+{
+    return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
+}
+
+uint8_t days_in_month(int year, uint8_t month)
+{
+    static constexpr uint8_t kDays[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (month < 1 || month > 12)
+    {
+        return 0;
+    }
+    if (month == 2 && is_leap_year(year))
+    {
+        return 29;
+    }
+    return kDays[month - 1];
+}
+
+bool gps_datetime_valid(int year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
+{
+    if (year < 2020 || year > 2100)
+    {
+        return false;
+    }
+    if (month < 1 || month > 12)
+    {
+        return false;
+    }
+    const uint8_t max_day = days_in_month(year, month);
+    if (day < 1 || day > max_day)
+    {
+        return false;
+    }
+    if (hour >= 24 || minute >= 60 || second >= 60)
+    {
+        return false;
+    }
+    return true;
+}
+
+time_t gps_datetime_to_epoch_utc(int year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
+{
+    const int64_t days = days_from_civil(year, month, day);
+    const int64_t sec_of_day = static_cast<int64_t>(hour) * 3600 +
+                               static_cast<int64_t>(minute) * 60 +
+                               static_cast<int64_t>(second);
+    const int64_t epoch64 = days * 86400 + sec_of_day;
+    if (epoch64 < 0 || epoch64 > static_cast<int64_t>(std::numeric_limits<time_t>::max()))
+    {
+        return static_cast<time_t>(-1);
+    }
+    return static_cast<time_t>(epoch64);
+}
+
+int read_battery_mv_adc_fallback()
+{
+#ifdef BOARD_BAT_ADC
+    analogSetPinAttenuation(BOARD_BAT_ADC, ADC_11db);
+    // LilyGo T-Deck reference code uses analogReadMilliVolts(BOARD_BAT_ADC) * 2.
+    int mv = analogReadMilliVolts(BOARD_BAT_ADC);
+    if (mv <= 0)
+    {
+        return -1;
+    }
+    return mv * 2;
+#else
+    return -1;
+#endif
+}
+
+int battery_percent_from_mv(int mv)
+{
+    if (mv <= 0)
+    {
+        return -1;
+    }
+    int pct = static_cast<int>(((mv - 3300) / 900.0f) * 100.0f);
+    if (pct < 0)
+    {
+        pct = 0;
+    }
+    if (pct > 100)
+    {
+        pct = 100;
+    }
+    return pct;
+}
+
+int read_battery_percent_adc_fallback()
+{
+    return battery_percent_from_mv(read_battery_mv_adc_fallback());
+}
+} // namespace
 
 TDeckBoard::TDeckBoard()
     : LilyGo_Display(SPI_DRIVER, false),
@@ -106,6 +217,7 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     // Initialize radio minimally; only mark online on success.
     devices_probe_ = 0;
     pmu_ready_ = initPMU();
+    touch_ready_ = initTouch();
     rtc_ready_ = (time(nullptr) > 0);
 
     // Initialize display (ST7789) before SD so the SPI lock exists (pager-style ordering).
@@ -193,8 +305,45 @@ bool TDeckBoard::initPMU()
         Wire.begin(SDA, SCL);
         delay(5);
     }
+
+    if (ok)
+    {
+        // Ensure PMU battery metrics are enabled; otherwise SOC can report stale 0.
+        pmu_.enableBattDetection();
+        pmu_.enableVbusVoltageMeasure();
+        pmu_.enableBattVoltageMeasure();
+        pmu_.enableSystemVoltageMeasure();
+        pmu_.enableTemperatureMeasure();
+    }
     Serial.printf("[TDeckBoard] PMU init: %s\n", ok ? "OK" : "FAIL");
     return ok;
+}
+
+bool TDeckBoard::initTouch()
+{
+#if defined(BOARD_TOUCH_INT)
+    touch_.setPins(-1, BOARD_TOUCH_INT);
+#else
+    touch_.setPins(-1, -1);
+#endif
+
+    bool ok = touch_.begin(Wire, GT911_SLAVE_ADDRESS_H, SDA, SCL);
+    if (!ok)
+    {
+        ok = touch_.begin(Wire, GT911_SLAVE_ADDRESS_L, SDA, SCL);
+    }
+    if (!ok)
+    {
+        Serial.println("[TDeckBoard] touch init failed");
+        return false;
+    }
+
+    // Align with LilyGo T-Deck reference touch mapping.
+    touch_.setMaxCoordinates(SCREEN_WIDTH, SCREEN_HEIGHT);
+    touch_.setSwapXY(true);
+    touch_.setMirrorXY(false, true);
+    Serial.println("[TDeckBoard] touch init OK");
+    return true;
 }
 
 bool TDeckBoard::installSD()
@@ -218,8 +367,8 @@ bool TDeckBoard::installSD()
 
     uint8_t cardType = CARD_NONE;
     uint32_t cardSizeMB = 0;
-    // T-Deck reference example uses a conservative 800 kHz SPI speed.
-    bool ok = sdutil::installSpiSd(*this, SD_CS, 800000U, "/sd",
+    // Prefer a practical default speed; fallback ladder inside sd_utils preserves compatibility.
+    bool ok = sdutil::installSpiSd(*this, SD_CS, 4000000U, "/sd",
                                    extra_cs, extra_cs_count,
                                    &cardType, &cardSizeMB,
                                    display_ready_);
@@ -253,8 +402,10 @@ void TDeckBoard::uninstallSD()
 
 bool TDeckBoard::isRTCReady() const
 {
-    // T-Deck has no guaranteed external RTC; treat system time as RTC readiness.
-    return rtc_ready_ || (time(nullptr) > 0);
+    // T-Deck has no dedicated external RTC chip in this project. We treat
+    // "RTC ready" as "system epoch has been set to a sane value".
+    const time_t now = time(nullptr);
+    return rtc_ready_ || (now >= kMinValidEpochSeconds);
 }
 
 bool TDeckBoard::isCharging()
@@ -268,47 +419,77 @@ bool TDeckBoard::isCharging()
 
 int TDeckBoard::getBatteryLevel()
 {
-    if (!pmu_ready_)
+    int percent = -1;
+    if (pmu_ready_)
     {
-        // Fallback: approximate via ADC if PMU is not reachable.
-#ifdef BOARD_BAT_ADC
-        int raw = analogRead(BOARD_BAT_ADC);
-        if (raw <= 0)
-        {
-            return -1;
-        }
-        // Configure attenuation for full-scale ~3.3V before converting.
-        analogSetPinAttenuation(BOARD_BAT_ADC, ADC_11db);
-#ifndef BAT_ADC_MULTIPLIER
-#define BAT_ADC_MULTIPLIER 2.0f
-#endif
-        // Account for the board's voltage divider via BAT_ADC_MULTIPLIER.
-        float v = (raw / 4095.0f) * 3.3f * BAT_ADC_MULTIPLIER;
-        int pct = static_cast<int>(((v - 3.3f) / (4.2f - 3.3f)) * 100.0f);
-        if (pct < 0) pct = 0;
-        if (pct > 100) pct = 100;
-        static bool logged_once = false;
-        if (!logged_once)
-        {
-            logged_once = true;
-            Serial.printf("[TDeckBoard] BAT adc raw=%d v=%.3f pct=%d (mult=%.2f)\n",
-                          raw, (double)v, pct, (double)BAT_ADC_MULTIPLIER);
-        }
-        return pct;
-#else
-        return -1;
-#endif
+        percent = pmu_.getBatteryPercent();
     }
 
-    int percent = pmu_.getBatteryPercent();
+    int adc_percent = -1;
+    auto ensure_adc_percent = [&adc_percent]()
+    {
+        if (adc_percent < 0)
+        {
+            adc_percent = read_battery_percent_adc_fallback();
+        }
+    };
+
+    // PMU can transiently return invalid values on noisy buses.
+    if (percent < 0 || percent > 100)
+    {
+        ensure_adc_percent();
+        if (adc_percent >= 0)
+        {
+            percent = adc_percent;
+        }
+    }
+
+    // Guard against fake PMU 0% (common when PMU state is stale/not actually wired).
+    if (percent == 0)
+    {
+        ensure_adc_percent();
+        if (adc_percent >= 10)
+        {
+            percent = adc_percent;
+        }
+    }
+
+    // Guard against unrealistic sudden drops; re-check with ADC before accepting.
+    if (last_battery_level_ >= 0 && percent >= 0 && percent + 40 < last_battery_level_)
+    {
+        ensure_adc_percent();
+        if (adc_percent >= 0)
+        {
+            percent = adc_percent;
+        }
+    }
+
     if (percent < 0)
     {
-        return -1;
+        return last_battery_level_;
     }
+
     if (percent > 100)
     {
         percent = 100;
     }
+
+    // Suppress sudden fake drops to 0% while battery is clearly not empty.
+    bool charging = isCharging();
+    if (!charging && percent == 0 && last_battery_level_ >= 15)
+    {
+        if (battery_zero_streak_ < 3)
+        {
+            battery_zero_streak_++;
+            return last_battery_level_;
+        }
+    }
+    else
+    {
+        battery_zero_streak_ = 0;
+    }
+
+    last_battery_level_ = percent;
     return percent;
 }
 
@@ -365,6 +546,104 @@ uint16_t TDeckBoard::width()
 uint16_t TDeckBoard::height()
 {
     return LilyGoDispArduinoSPI::_height;
+}
+
+uint8_t TDeckBoard::getPoint(int16_t* x, int16_t* y, uint8_t get_point)
+{
+    if (!touch_ready_)
+    {
+        return 0;
+    }
+
+    uint8_t touched = touch_.getPoint(x, y, get_point);
+    if (!touched || !x || !y)
+    {
+        return touched;
+    }
+
+    int16_t tx = *x;
+    int16_t ty = *y;
+    const int16_t w = static_cast<int16_t>(SCREEN_WIDTH);
+    const int16_t h = static_cast<int16_t>(SCREEN_HEIGHT);
+    if (tx < 0)
+    {
+        tx = 0;
+    }
+    else if (tx >= w)
+    {
+        tx = static_cast<int16_t>(w - 1);
+    }
+    if (ty < 0)
+    {
+        ty = 0;
+    }
+    else if (ty >= h)
+    {
+        ty = static_cast<int16_t>(h - 1);
+    }
+
+    *x = tx;
+    *y = ty;
+    return touched;
+}
+
+bool TDeckBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
+{
+    if (!gps_.date.isValid() || !gps_.time.isValid())
+    {
+        return false;
+    }
+
+    uint16_t year = gps_.date.year();
+    uint8_t month = gps_.date.month();
+    uint8_t day = gps_.date.day();
+    uint8_t hour = gps_.time.hour();
+    uint8_t minute = gps_.time.minute();
+    uint8_t second = gps_.time.second();
+
+    if (!gps_datetime_valid(year, month, day, hour, minute, second))
+    {
+        Serial.printf("[TDeckBoard] GPS time rejected: %04u-%02u-%02u %02u:%02u:%02u\n",
+                      year, month, day, hour, minute, second);
+        return false;
+    }
+
+    // NMEA timestamps are typically not "now"; apply a conservative compensation.
+    const uint32_t read_start_ms = millis();
+    uint32_t task_interval_comp_ms = 0;
+    if (gps_task_interval_ms > 5000)
+    {
+        task_interval_comp_ms = gps_task_interval_ms / 2;
+        if (task_interval_comp_ms > 5000)
+        {
+            task_interval_comp_ms = 5000;
+        }
+    }
+    const uint32_t processing_delay_ms = millis() - read_start_ms;
+    const uint32_t total_delay_ms = 2000 + task_interval_comp_ms + processing_delay_ms;
+
+    time_t epoch = gps_datetime_to_epoch_utc(year, month, day, hour, minute, second);
+    if (epoch < kMinValidEpochSeconds)
+    {
+        return false;
+    }
+    epoch += static_cast<time_t>((total_delay_ms + 500) / 1000);
+
+    timeval tv{};
+    tv.tv_sec = epoch;
+    tv.tv_usec = 0;
+    if (settimeofday(&tv, nullptr) != 0)
+    {
+        Serial.println("[TDeckBoard] settimeofday() failed");
+        return false;
+    }
+
+    rtc_ready_ = true;
+    Serial.printf("[TDeckBoard] Time synced from GPS: %04u-%02u-%02u %02u:%02u:%02u (sat=%u fix=%d)\n",
+                  year, month, day, hour, minute, second,
+                  static_cast<unsigned>(gps_.satellites.value()),
+                  gps_.location.isValid() ? 1 : 0);
+    return true;
 }
 
 int TDeckBoard::transmitRadio(const uint8_t* data, size_t len)
@@ -501,9 +780,9 @@ RotaryMsg_t TDeckBoard::getRotary()
     // - Use press-edge pulse detection to avoid mixed/sticky level states.
     // - Direction mapping follows physical intuition:
     //   up/left => ROTARY_DIR_UP, down/right => ROTARY_DIR_DOWN.
-    const uint32_t repeat_ms = 75;   // Minimum spacing between direction events
+    const uint32_t repeat_ms = 110;  // Minimum spacing between direction events
     const uint32_t click_ms = 150;   // Click debounce
-    const uint32_t debounce_ms = 16; // Require stable press/release
+    const uint32_t debounce_ms = 22; // Require stable press/release
 
     static bool up_state = false;
     static bool down_state = false;

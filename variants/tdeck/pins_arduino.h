@@ -68,6 +68,8 @@ static const uint8_t SCK = 40;
 #define NFC_INT (-1)
 #define SENSOR_INT (-1)
 #define NFC_CS (-1)
+// T-Deck Plus touch panel (GT911 in LilyGo reference examples)
+#define BOARD_TOUCH_INT (16)
 
 // Power key
 #define POWER_KEY (0)

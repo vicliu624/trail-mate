@@ -37,6 +37,14 @@ struct StatusSnapshot
     int unread = 0;
 };
 
+struct TeamSnapshotCache
+{
+    bool valid = false;
+    uint32_t last_refresh_ms = 0;
+    bool team_active = false;
+    int team_unread = 0;
+};
+
 lv_timer_t* s_status_timer = nullptr;
 lv_obj_t* s_menu_status_row = nullptr;
 lv_obj_t* s_menu_route_icon = nullptr;
@@ -46,10 +54,35 @@ lv_obj_t* s_menu_team_icon = nullptr;
 lv_obj_t* s_menu_msg_icon = nullptr;
 lv_obj_t* s_chat_badge = nullptr;
 lv_obj_t* s_chat_badge_label = nullptr;
+TeamSnapshotCache s_team_cache;
+constexpr uint32_t kTeamSnapshotRefreshMs = 5000;
 
 bool obj_valid(lv_obj_t* obj)
 {
     return obj && lv_obj_is_valid(obj);
+}
+
+void refresh_team_cache(bool force = false)
+{
+    const uint32_t now = millis();
+    if (!force && s_team_cache.valid && (now - s_team_cache.last_refresh_ms) < kTeamSnapshotRefreshMs)
+    {
+        return;
+    }
+
+    team::ui::TeamUiSnapshot snap;
+    if (team::ui::team_ui_get_store().load(snap))
+    {
+        s_team_cache.team_active = snap.in_team;
+        s_team_cache.team_unread = static_cast<int>(snap.team_chat_unread);
+    }
+    else
+    {
+        s_team_cache.team_active = false;
+        s_team_cache.team_unread = 0;
+    }
+    s_team_cache.valid = true;
+    s_team_cache.last_refresh_ms = now;
 }
 
 int get_total_unread()
@@ -57,12 +90,8 @@ int get_total_unread()
     app::AppContext& app_ctx = app::AppContext::getInstance();
     chat::ChatService& chat = app_ctx.getChatService();
     int unread = chat.getTotalUnread();
-    team::ui::TeamUiSnapshot snap;
-    if (team::ui::team_ui_get_store().load(snap))
-    {
-        unread += static_cast<int>(snap.team_chat_unread);
-    }
-    return unread;
+    refresh_team_cache();
+    return unread + s_team_cache.team_unread;
 }
 
 StatusSnapshot collect_status()
@@ -75,11 +104,8 @@ StatusSnapshot collect_status()
     snap.track_recording = gps::TrackRecorder::getInstance().isRecording();
     snap.gps_enabled = gps::GpsService::getInstance().isEnabled();
 
-    team::ui::TeamUiSnapshot team_snap;
-    if (team::ui::team_ui_get_store().load(team_snap))
-    {
-        snap.team_active = team_snap.in_team;
-    }
+    refresh_team_cache();
+    snap.team_active = s_team_cache.team_active;
 
     snap.unread = get_total_unread();
     return snap;
@@ -196,6 +222,7 @@ void register_chat_badge(lv_obj_t* badge_bg, lv_obj_t* badge_label)
 
 void force_update()
 {
+    refresh_team_cache(true);
     status_timer_cb(nullptr);
 }
 
