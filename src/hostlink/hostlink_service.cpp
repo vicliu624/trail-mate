@@ -301,6 +301,152 @@ bool parse_u64(const uint8_t* data, size_t len, size_t& off, uint64_t& out)
     return true;
 }
 
+bool try_parse_cmd_tx_app_data_legacy(const Frame& frame, PendingCommand* command)
+{
+    if (!command)
+    {
+        return false;
+    }
+
+    size_t off = 0;
+    uint32_t portnum = 0;
+    uint32_t to = 0;
+    uint16_t payload_len = 0;
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, portnum))
+    {
+        return false;
+    }
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, to))
+    {
+        return false;
+    }
+    if (off + 2 > frame.payload.size())
+    {
+        return false;
+    }
+    uint8_t channel = frame.payload[off++];
+    uint8_t flags = frame.payload[off++];
+    if (!parse_u16(frame.payload.data(), frame.payload.size(), off, payload_len))
+    {
+        return false;
+    }
+    if (off + payload_len != frame.payload.size())
+    {
+        return false;
+    }
+    if (channel >= static_cast<uint8_t>(chat::ChannelId::MAX_CHANNELS))
+    {
+        return false;
+    }
+    if (payload_len > kMaxFrameLen)
+    {
+        return false;
+    }
+
+    command->type = PendingCommandType::TxAppData;
+    command->to = to;
+    command->portnum = portnum;
+    command->channel = channel;
+    command->flags = flags;
+    command->payload_len = payload_len;
+    if (payload_len > 0)
+    {
+        memcpy(command->payload, frame.payload.data() + off, payload_len);
+    }
+    return true;
+}
+
+bool try_parse_cmd_tx_app_data_extended(const Frame& frame,
+                                        bool include_timestamp_field,
+                                        PendingCommand* command)
+{
+    if (!command)
+    {
+        return false;
+    }
+
+    size_t off = 0;
+    uint32_t portnum = 0;
+    uint32_t from = 0;
+    uint32_t to = 0;
+    uint32_t team_key_id = 0;
+    uint32_t timestamp_s = 0;
+    uint32_t total_len = 0;
+    uint32_t chunk_offset = 0;
+    uint16_t chunk_len = 0;
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, portnum))
+    {
+        return false;
+    }
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, from))
+    {
+        return false;
+    }
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, to))
+    {
+        return false;
+    }
+    if (off + 2 > frame.payload.size())
+    {
+        return false;
+    }
+    uint8_t channel = frame.payload[off++];
+    uint8_t flags = frame.payload[off++];
+    if (off + team::proto::kTeamIdSize > frame.payload.size())
+    {
+        return false;
+    }
+    off += team::proto::kTeamIdSize;
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, team_key_id))
+    {
+        return false;
+    }
+    if (include_timestamp_field &&
+        !parse_u32(frame.payload.data(), frame.payload.size(), off, timestamp_s))
+    {
+        return false;
+    }
+    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, total_len) ||
+        !parse_u32(frame.payload.data(), frame.payload.size(), off, chunk_offset) ||
+        !parse_u16(frame.payload.data(), frame.payload.size(), off, chunk_len))
+    {
+        return false;
+    }
+    if (off + chunk_len != frame.payload.size())
+    {
+        return false;
+    }
+    if (channel >= static_cast<uint8_t>(chat::ChannelId::MAX_CHANNELS))
+    {
+        return false;
+    }
+    if (chunk_len > kMaxFrameLen)
+    {
+        return false;
+    }
+    // Current command queue carries one payload per command; require full payload in one frame.
+    if (chunk_offset != 0 || total_len != chunk_len)
+    {
+        return false;
+    }
+
+    (void)from;
+    (void)team_key_id;
+    (void)timestamp_s;
+
+    command->type = PendingCommandType::TxAppData;
+    command->to = to;
+    command->portnum = portnum;
+    command->channel = channel;
+    command->flags = flags;
+    command->payload_len = chunk_len;
+    if (chunk_len > 0)
+    {
+        memcpy(command->payload, frame.payload.data() + off, chunk_len);
+    }
+    return true;
+}
+
 ErrorCode map_team_send_error(team::TeamService::SendError err)
 {
     switch (err)
@@ -557,48 +703,12 @@ ErrorCode handle_cmd_tx_msg(const Frame& frame)
 
 ErrorCode handle_cmd_tx_app_data(const Frame& frame)
 {
-    size_t off = 0;
-    uint32_t portnum = 0;
-    uint32_t to = 0;
-    uint16_t payload_len = 0;
-    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, portnum))
-    {
-        return ErrorCode::InvalidParam;
-    }
-    if (!parse_u32(frame.payload.data(), frame.payload.size(), off, to))
-    {
-        return ErrorCode::InvalidParam;
-    }
-    if (off + 2 > frame.payload.size())
-    {
-        return ErrorCode::InvalidParam;
-    }
-    uint8_t channel = frame.payload[off++];
-    uint8_t flags = frame.payload[off++];
-    if (!parse_u16(frame.payload.data(), frame.payload.size(), off, payload_len))
-    {
-        return ErrorCode::InvalidParam;
-    }
-    if (off + payload_len != frame.payload.size())
-    {
-        return ErrorCode::InvalidParam;
-    }
-
-    if (channel >= static_cast<uint8_t>(chat::ChannelId::MAX_CHANNELS))
-    {
-        return ErrorCode::InvalidParam;
-    }
-
     PendingCommand command{};
-    command.type = PendingCommandType::TxAppData;
-    command.to = to;
-    command.portnum = portnum;
-    command.channel = channel;
-    command.flags = flags;
-    command.payload_len = payload_len;
-    if (payload_len > 0)
+    if (!try_parse_cmd_tx_app_data_legacy(frame, &command) &&
+        !try_parse_cmd_tx_app_data_extended(frame, false, &command) &&
+        !try_parse_cmd_tx_app_data_extended(frame, true, &command))
     {
-        memcpy(command.payload, frame.payload.data() + off, payload_len);
+        return ErrorCode::InvalidParam;
     }
 
     if (!enqueue_pending_command(command))

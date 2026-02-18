@@ -189,6 +189,12 @@ u16  payload_len
 u8[] payload
 ```
 
+Compatibility:
+- Device also accepts an extended compatibility layout used by newer PC clients:
+  `portnum, from, to, channel, flags, team_id[8], team_key_id, [timestamp_s], total_len, offset, chunk_len, chunk`.
+- `timestamp_s` is optional in this compatibility layout.
+- Current firmware requires a full payload in one frame (`offset=0` and `chunk_len=total_len`) when using the compatibility layout.
+
 Flags:
 - bit0: `want_response` (forwarded to mesh adapter `want_ack`)
 - bit1: `team_mgmt_plain` (only for Team mgmt `portnum=300`; forces plain mgmt send path)
