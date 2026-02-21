@@ -38,6 +38,7 @@ extern "C"
     extern const lv_image_dsc_t shutdown;
     extern const lv_image_dsc_t rf;
     extern const lv_image_dsc_t sstv;
+    extern const lv_image_dsc_t Spectrum;
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
     extern const lv_image_dsc_t walkie_talkie;
 #endif
@@ -77,6 +78,8 @@ void ui_pc_link_enter(lv_obj_t* parent);
 void ui_pc_link_exit(lv_obj_t* parent);
 void ui_sstv_enter(lv_obj_t* parent);
 void ui_sstv_exit(lv_obj_t* parent);
+void ui_energy_sweep_enter(lv_obj_t* parent);
+void ui_energy_sweep_exit(lv_obj_t* parent);
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 void ui_walkie_talkie_enter(lv_obj_t* parent);
 void ui_walkie_talkie_exit(lv_obj_t* parent);
@@ -259,6 +262,7 @@ static FunctionAppScreen s_contacts_app("Contacts", &contact, ui_contacts_enter,
 static FunctionAppScreen s_team_app("Team", &team_icon, ui_team_enter, ui_team_exit);
 static FunctionAppScreen s_pc_link_app("Data Exchange", &rf, ui_pc_link_enter, ui_pc_link_exit);
 static FunctionAppScreen s_sstv_app("SSTV", &sstv, ui_sstv_enter, ui_sstv_exit);
+static FunctionAppScreen s_energy_sweep_app("Energy Sweep", &Spectrum, ui_energy_sweep_enter, ui_energy_sweep_exit);
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 static FunctionAppScreen s_walkie_app("Walkie Talkie", &walkie_talkie, ui_walkie_talkie_enter, ui_walkie_talkie_exit);
 #endif
@@ -269,7 +273,7 @@ static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter
 static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
 #if HAS_GPS
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_sstv_app,
+                                   &s_team_app, &s_pc_link_app, &s_sstv_app, &s_energy_sweep_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
 #endif
@@ -278,20 +282,21 @@ static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &
 #endif
                                    &s_setting_app, &s_shutdown_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#if HAS_SD
+#define NUM_APPS 13
+#else
+#define NUM_APPS 12
+#endif
+#else
 #if HAS_SD
 #define NUM_APPS 12
 #else
 #define NUM_APPS 11
 #endif
-#else
-#if HAS_SD
-#define NUM_APPS 11
-#else
-#define NUM_APPS 10
-#endif
 #endif
 #else
 static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app, &s_sstv_app,
+                                   &s_energy_sweep_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
 #endif
@@ -301,41 +306,42 @@ static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s
                                    &s_setting_app, &s_shutdown_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 #if HAS_SD
-#define NUM_APPS 9
+#define NUM_APPS 10
 #else
-#define NUM_APPS 8
+#define NUM_APPS 9
 #endif
 #else
 #if HAS_SD
-#define NUM_APPS 8
+#define NUM_APPS 9
 #else
-#define NUM_APPS 7
+#define NUM_APPS 8
 #endif
 #endif
 #endif
 #else
 #if HAS_GPS
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_sstv_app,
+                                   &s_team_app, &s_pc_link_app, &s_sstv_app, &s_energy_sweep_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
 #endif
                                    &s_setting_app, &s_shutdown_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-#define NUM_APPS 11
+#define NUM_APPS 12
 #else
-#define NUM_APPS 10
+#define NUM_APPS 11
 #endif
 #else
 static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app, &s_sstv_app,
+                                   &s_energy_sweep_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
 #endif
                                    &s_setting_app, &s_shutdown_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-#define NUM_APPS 8
+#define NUM_APPS 9
 #else
-#define NUM_APPS 7
+#define NUM_APPS 8
 #endif
 #endif
 #endif

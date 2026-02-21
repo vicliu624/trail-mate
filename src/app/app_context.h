@@ -123,6 +123,16 @@ class AppContext
         return mesh_adapter_.get();
     }
 
+    LoraBoard* getLoraBoard()
+    {
+        return lora_board_;
+    }
+
+    const LoraBoard* getLoraBoard() const
+    {
+        return lora_board_;
+    }
+
     void saveConfig()
     {
         config_.save(preferences_);
