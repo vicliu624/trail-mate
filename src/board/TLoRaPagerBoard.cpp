@@ -1953,8 +1953,7 @@ void TLoRaPagerBoard::shutdown(bool save_data)
         LORA_CS,
         LORA_RST,
         LORA_BUSY,
-        LORA_IRQ
-    };
+        LORA_IRQ};
 
     for (auto pin : pins)
     {

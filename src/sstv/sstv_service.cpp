@@ -703,7 +703,7 @@ void sstv_task(void*)
     }
     auto* mono_buf = static_cast<int16_t*>(malloc(kSamplesPerBlock * sizeof(int16_t)));
     auto* resampled = static_cast<int16_t*>(malloc(kResampleMaxOut * sizeof(int16_t)));
-    auto* line_rgb = static_cast<uint8_t(*)[4]>(malloc(320 * 4));
+    auto* line_rgb = static_cast<uint8_t (*)[4]>(malloc(320 * 4));
     if (!mono_buf || !resampled || !line_rgb)
     {
         free(line_rgb);

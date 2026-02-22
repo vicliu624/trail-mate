@@ -138,9 +138,7 @@ std::string iso_time(time_t t)
     {
         t = time(nullptr);
     }
-    struct tm tm_utc
-    {
-    };
+    struct tm tm_utc{};
     char buf[32] = {0};
     if (t > 0 && gmtime_r(&t, &tm_utc))
     {

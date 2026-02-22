@@ -91,9 +91,7 @@ bool TrackRecorder::ensureDir() const
 String TrackRecorder::makeTrackPath() const
 {
     time_t now = time(nullptr);
-    struct tm tm_utc
-    {
-    };
+    struct tm tm_utc{};
     char time_buf[32] = {0};
     if (now > 0 && gmtime_r(&now, &tm_utc))
     {
@@ -116,9 +114,7 @@ String TrackRecorder::isoTime(time_t t)
     {
         t = time(nullptr);
     }
-    struct tm tm_utc
-    {
-    };
+    struct tm tm_utc{};
     char buf[32] = {0};
     if (t > 0 && gmtime_r(&t, &tm_utc))
     {
