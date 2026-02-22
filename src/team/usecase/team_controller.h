@@ -39,7 +39,7 @@ class TeamController
                        chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onPosition(const std::vector<uint8_t>& payload,
                     chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
-    bool onWaypoint(const std::vector<uint8_t>& payload,
+    bool onWaypoint(const team::proto::TeamWaypointMessage& msg,
                     chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool onTrack(const std::vector<uint8_t>& payload,
                  chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);

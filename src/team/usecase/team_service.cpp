@@ -120,13 +120,14 @@ void logTeamEncrypted(const char* dir,
     std::string cipher_hex = toHex(envelope.ciphertext.data(),
                                    envelope.ciphertext.size(),
                                    envelope.ciphertext.size());
-    TEAM_LOG("[TEAM] %s %s %s ver=%u flags=0x%02X key_id=%lu team_id=%s nonce=%s cipher_len=%u cipher_hex=%s\n",
+    TEAM_LOG("[TEAM] %s %s %s ver=%u flags=0x%02X key_id=%lu sender=%08lX team_id=%s nonce=%s cipher_len=%u cipher_hex=%s\n",
              dir,
              teamPortName(data.portnum),
              result ? result : "result",
              envelope.version,
              envelope.aad_flags,
              static_cast<unsigned long>(envelope.key_id),
+             static_cast<unsigned long>(envelope.sender_id),
              team_id_hex.c_str(),
              nonce_hex.c_str(),
              static_cast<unsigned>(envelope.ciphertext.size()),
@@ -189,7 +190,7 @@ void logTeamStatus(const team::proto::TeamStatus& msg, const char* dir)
 std::vector<uint8_t> buildAad(const team::proto::TeamEncrypted& envelope)
 {
     std::vector<uint8_t> aad;
-    aad.reserve(1 + 1 + 4 + envelope.team_id.size());
+    aad.reserve(1 + 1 + 4 + 4 + envelope.team_id.size());
     aad.push_back(envelope.version);
     aad.push_back(envelope.aad_flags);
 
@@ -197,6 +198,12 @@ std::vector<uint8_t> buildAad(const team::proto::TeamEncrypted& envelope)
     for (int i = 0; i < 4; ++i)
     {
         aad.push_back(static_cast<uint8_t>((key_id >> (8 * i)) & 0xFF));
+    }
+
+    const uint32_t sender_id = envelope.sender_id;
+    for (int i = 0; i < 4; ++i)
+    {
+        aad.push_back(static_cast<uint8_t>((sender_id >> (8 * i)) & 0xFF));
     }
 
     aad.insert(aad.end(), envelope.team_id.begin(), envelope.team_id.end());
@@ -211,8 +218,15 @@ team::TeamEventContext makeContext(const chat::MeshIncomingData& data,
     {
         ctx.team_id = envelope->team_id;
         ctx.key_id = envelope->key_id;
+        if (envelope->sender_id != 0)
+        {
+            ctx.from = envelope->sender_id;
+        }
     }
-    ctx.from = data.from;
+    if (ctx.from == 0)
+    {
+        ctx.from = data.from;
+    }
     ctx.rx_meta = data.rx_meta;
     ctx.timestamp = millis() / 1000;
     return ctx;
@@ -475,7 +489,13 @@ void TeamService::processIncoming()
             }
 
             logTeamEncrypted("RX", data, envelope, &plain, nullptr, "decrypt-ok");
-            TeamWaypointEvent event{makeContext(data, &envelope), plain};
+            team::proto::TeamWaypointMessage msg;
+            if (!team::proto::decodeTeamWaypointMessage(plain.data(), plain.size(), &msg))
+            {
+                emitError(data, TeamProtocolError::DecodeFail, &envelope);
+                continue;
+            }
+            TeamWaypointEvent event{makeContext(data, &envelope), msg};
             sink_.onTeamWaypoint(event);
         }
         else if (data.portnum == team::proto::TEAM_TRACK_APP)
@@ -678,6 +698,10 @@ bool TeamService::sendPosition(const std::vector<uint8_t>& payload,
     chat::MeshIncomingData dummy;
     dummy.portnum = team::proto::TEAM_POSITION_APP;
     logTeamEncrypted("TX", dummy, envelope, nullptr, nullptr, "encrypt-ok");
+    if (!validateSendCapabilities(dest, want_ack))
+    {
+        return false;
+    }
     if (!mesh_.sendAppData(channel, team::proto::TEAM_POSITION_APP,
                            wire.data(), wire.size(), dest, want_ack))
     {
@@ -690,13 +714,21 @@ bool TeamService::sendPosition(const std::vector<uint8_t>& payload,
     return true;
 }
 
-bool TeamService::sendWaypoint(const std::vector<uint8_t>& payload,
+bool TeamService::sendWaypoint(const team::proto::TeamWaypointMessage& msg,
                                chat::ChannelId channel, chat::NodeId dest, bool want_ack)
 {
     if (!keys_.valid)
     {
         last_send_error_ = SendError::KeysNotReady;
         TEAM_LOG("[TEAM] TX TEAM_WP keys not ready\n");
+        return false;
+    }
+
+    std::vector<uint8_t> payload;
+    if (!team::proto::encodeTeamWaypointMessage(msg, payload))
+    {
+        last_send_error_ = SendError::EncodeFail;
+        TEAM_LOG("[TEAM] TX TEAM_WP encode fail\n");
         return false;
     }
 
@@ -721,6 +753,10 @@ bool TeamService::sendWaypoint(const std::vector<uint8_t>& payload,
     chat::MeshIncomingData dummy;
     dummy.portnum = team::proto::TEAM_WAYPOINT_APP;
     logTeamEncrypted("TX", dummy, envelope, nullptr, nullptr, "encrypt-ok");
+    if (!validateSendCapabilities(dest, want_ack))
+    {
+        return false;
+    }
     if (!mesh_.sendAppData(channel, team::proto::TEAM_WAYPOINT_APP,
                            wire.data(), wire.size(), dest, want_ack))
     {
@@ -764,6 +800,10 @@ bool TeamService::sendTrack(const std::vector<uint8_t>& payload,
     chat::MeshIncomingData dummy;
     dummy.portnum = team::proto::TEAM_TRACK_APP;
     logTeamEncrypted("TX", dummy, envelope, nullptr, nullptr, "encrypt-ok");
+    if (!validateSendCapabilities(dest, want_ack))
+    {
+        return false;
+    }
     if (!mesh_.sendAppData(channel, team::proto::TEAM_TRACK_APP,
                            wire.data(), wire.size(), dest, want_ack))
     {
@@ -786,8 +826,14 @@ bool TeamService::sendChat(const team::proto::TeamChatMessage& msg,
         return false;
     }
 
+    team::proto::TeamChatMessage out_msg = msg;
+    if (out_msg.header.from == 0)
+    {
+        out_msg.header.from = mesh_.getNodeId();
+    }
+
     std::vector<uint8_t> plain;
-    if (!team::proto::encodeTeamChatMessage(msg, plain))
+    if (!team::proto::encodeTeamChatMessage(out_msg, plain))
     {
         last_send_error_ = SendError::EncodeFail;
         TEAM_LOG("[TEAM] TX TEAM_CHAT encode fail\n");
@@ -816,6 +862,10 @@ bool TeamService::sendChat(const team::proto::TeamChatMessage& msg,
     chat::MeshIncomingData dummy;
     dummy.portnum = team::proto::TEAM_CHAT_APP;
     logTeamEncrypted("TX", dummy, envelope, nullptr, nullptr, "encrypt-ok");
+    if (!validateSendCapabilities(dest, want_ack))
+    {
+        return false;
+    }
     if (!mesh_.sendAppData(channel, team::proto::TEAM_CHAT_APP,
                            wire.data(), wire.size(), dest, want_ack))
     {
@@ -930,6 +980,7 @@ bool TeamService::encodeEncryptedPayload(const std::vector<uint8_t>& plain,
     envelope->aad_flags = 0;
     envelope->team_id = keys_.team_id;
     envelope->key_id = keys_.key_id;
+    envelope->sender_id = mesh_.getNodeId();
     fillNonce(envelope->nonce);
 
     std::vector<uint8_t> aad = buildAad(*envelope);
@@ -943,6 +994,26 @@ bool TeamService::encodeEncryptedPayload(const std::vector<uint8_t>& plain,
     }
 
     return team::proto::encodeTeamEncrypted(*envelope, out_wire);
+}
+
+bool TeamService::validateSendCapabilities(chat::NodeId dest, bool want_ack)
+{
+    const chat::MeshCapabilities caps = mesh_.getCapabilities();
+    if (dest != 0 && !caps.supports_unicast_appdata)
+    {
+        last_send_error_ = SendError::UnsupportedByProtocol;
+        TEAM_LOG("[TEAM] TX unsupported: unicast app-data unavailable dest=%08lX\n",
+                 static_cast<unsigned long>(dest));
+        return false;
+    }
+    if (dest != 0 && want_ack && !caps.supports_appdata_ack)
+    {
+        last_send_error_ = SendError::UnsupportedByProtocol;
+        TEAM_LOG("[TEAM] TX unsupported: app-data ack unavailable dest=%08lX\n",
+                 static_cast<unsigned long>(dest));
+        return false;
+    }
+    return true;
 }
 
 bool TeamService::sendMgmtPlain(const team::proto::TeamMgmtType type,
@@ -965,6 +1036,10 @@ bool TeamService::sendMgmtPlain(const team::proto::TeamMgmtType type,
              static_cast<unsigned long>(dest),
              static_cast<unsigned>(wire.size()),
              wire_hex.c_str());
+    if (!validateSendCapabilities(dest, want_ack))
+    {
+        return false;
+    }
     if (!mesh_.sendAppData(channel, team::proto::TEAM_MGMT_APP,
                            wire.data(), wire.size(), dest, want_ack))
     {
@@ -1018,6 +1093,10 @@ bool TeamService::sendMgmtEncrypted(const team::proto::TeamMgmtType type,
     dummy.portnum = team::proto::TEAM_MGMT_APP;
     logTeamEncrypted("TX", dummy, envelope, &mgmt_wire, &wire, "encrypt-ok");
 
+    if (!validateSendCapabilities(dest, want_ack))
+    {
+        return false;
+    }
     if (!mesh_.sendAppData(channel, team::proto::TEAM_MGMT_APP,
                            wire.data(), wire.size(), dest, want_ack))
     {

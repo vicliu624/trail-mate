@@ -118,7 +118,7 @@ void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
     lv_obj_set_style_pad_top(item.container, 2, 0);
     lv_obj_set_style_pad_bottom(item.container, 2, 0);
     lv_obj_set_flex_flow(item.container, LV_FLEX_FLOW_ROW);
-    bool is_self = msg.status == chat::MessageStatus::Sent;
+    bool is_self = msg.status != chat::MessageStatus::Incoming;
     lv_obj_set_flex_align(item.container,
                           is_self ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_START,
@@ -178,6 +178,23 @@ void ChatConversationScreen::setBackCallback(void (*cb)(void*), void* user_data)
     back_cb_user_data_ = user_data;
 }
 
+void ChatConversationScreen::setReplyEnabled(bool enabled)
+{
+    reply_enabled_ = enabled;
+    if (!reply_btn_)
+    {
+        return;
+    }
+    if (enabled)
+    {
+        lv_obj_clear_state(reply_btn_, LV_STATE_DISABLED);
+    }
+    else
+    {
+        lv_obj_add_state(reply_btn_, LV_STATE_DISABLED);
+    }
+}
+
 void ChatConversationScreen::schedule_action_async(ActionIntent intent)
 {
     if (!action_cb_)
@@ -213,6 +230,10 @@ void ChatConversationScreen::action_event_cb(lv_event_t* e)
     }
     auto* screen = static_cast<ChatConversationScreen*>(lv_event_get_user_data(e));
     if (!screen)
+    {
+        return;
+    }
+    if (!screen->reply_enabled_)
     {
         return;
     }

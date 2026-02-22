@@ -3,6 +3,7 @@
 #include "../../chat/domain/chat_types.h"
 #include "../protocol/team_chat.h"
 #include "../protocol/team_mgmt.h"
+#include "../protocol/team_waypoint.h"
 #include "team_types.h"
 #include <cstdint>
 #include <vector>
@@ -52,7 +53,7 @@ struct TeamPositionEvent
 struct TeamWaypointEvent
 {
     TeamEventContext ctx;
-    std::vector<uint8_t> payload;
+    team::proto::TeamWaypointMessage msg;
 };
 
 struct TeamTrackEvent

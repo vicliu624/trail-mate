@@ -144,6 +144,10 @@ class AppContext
         {
             mesh_adapter_->applyConfig(config_.activeMeshConfig());
         }
+        if (chat_service_)
+        {
+            chat_service_->setActiveProtocol(config_.mesh_protocol);
+        }
     }
 
     void applyUserInfo()
@@ -202,6 +206,7 @@ class AppContext
         if (config_.mesh_protocol == chat::MeshProtocol::MeshCore)
         {
             config_.meshcore_config = chat::MeshConfig();
+            config_.applyMeshCoreFactoryDefaults();
         }
         else
         {

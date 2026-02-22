@@ -110,6 +110,11 @@ static bool is_team_conversation(const chat::ConversationId& conv)
     return conv.channel == kTeamChatChannel && conv.peer == 0;
 }
 
+static const char* protocol_short_label(chat::MeshProtocol protocol)
+{
+    return (protocol == chat::MeshProtocol::MeshCore) ? "MC" : "MT";
+}
+
 // ------------------------------------------------
 
 ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
@@ -405,7 +410,8 @@ void ChatMessageListScreen::rebuildList()
         lv_obj_clear_state(item.btn, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY));
 
         // ----- Content -----
-        lv_label_set_text(item.name_label, conv.name.c_str());
+        std::string title = "[" + std::string(protocol_short_label(conv.id.protocol)) + "] " + conv.name;
+        lv_label_set_text(item.name_label, title.c_str());
         std::string preview = truncate_preview(conv.preview);
         lv_label_set_text(item.preview_label, preview.c_str());
 

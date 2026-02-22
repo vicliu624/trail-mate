@@ -10,6 +10,17 @@
 namespace chat
 {
 
+struct MeshCapabilities
+{
+    bool supports_unicast_text = false;
+    bool supports_unicast_appdata = false;
+    bool supports_appdata_ack = false;
+    bool provides_appdata_sender = false;
+    bool supports_node_info = false;
+    bool supports_pki = false;
+    bool supports_discovery_actions = false;
+};
+
 /**
  * @brief Mesh adapter interface
  * Abstracts mesh protocol implementation (Meshtastic, custom, etc.)
@@ -18,6 +29,14 @@ class IMeshAdapter
 {
   public:
     virtual ~IMeshAdapter() = default;
+
+    /**
+     * @brief Get adapter capabilities
+     */
+    virtual MeshCapabilities getCapabilities() const
+    {
+        return MeshCapabilities{};
+    }
 
     /**
      * @brief Send text message
@@ -118,6 +137,15 @@ class IMeshAdapter
     virtual bool hasPkiKey(NodeId dest) const
     {
         (void)dest;
+        return false;
+    }
+
+    /**
+     * @brief Trigger protocol-specific discovery action (if supported)
+     */
+    virtual bool triggerDiscoveryAction(MeshDiscoveryAction action)
+    {
+        (void)action;
         return false;
     }
 

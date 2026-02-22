@@ -36,6 +36,25 @@ using NodeId = uint32_t;
 using MessageId = uint32_t;
 
 /**
+ * @brief Mesh protocol selection
+ */
+enum class MeshProtocol : uint8_t
+{
+    Meshtastic = 1,
+    MeshCore = 2
+};
+
+/**
+ * @brief Active discovery actions (protocol-specific)
+ */
+enum class MeshDiscoveryAction : uint8_t
+{
+    ScanLocal = 1,
+    SendIdLocal = 2,
+    SendIdBroadcast = 3
+};
+
+/**
  * @brief RX time source for received packets
  */
 enum class RxTimeSource : uint8_t
@@ -109,14 +128,21 @@ struct RxMeta
  */
 struct ConversationId
 {
+    MeshProtocol protocol;
     ChannelId channel;
     NodeId peer; // 0 for broadcast/channel thread
 
-    ConversationId(ChannelId ch = ChannelId::PRIMARY, NodeId p = 0)
-        : channel(ch), peer(p) {}
+    ConversationId(ChannelId ch = ChannelId::PRIMARY,
+                   NodeId p = 0,
+                   MeshProtocol proto = MeshProtocol::Meshtastic)
+        : protocol(proto), channel(ch), peer(p) {}
 
     bool operator<(const ConversationId& other) const
     {
+        if (protocol != other.protocol)
+        {
+            return static_cast<uint8_t>(protocol) < static_cast<uint8_t>(other.protocol);
+        }
         if (channel != other.channel)
         {
             return static_cast<uint8_t>(channel) < static_cast<uint8_t>(other.channel);
@@ -125,7 +151,9 @@ struct ConversationId
     }
     bool operator==(const ConversationId& other) const
     {
-        return channel == other.channel && peer == other.peer;
+        return protocol == other.protocol &&
+               channel == other.channel &&
+               peer == other.peer;
     }
 };
 
@@ -145,6 +173,7 @@ enum class MessageStatus
  */
 struct ChatMessage
 {
+    MeshProtocol protocol;
     ChannelId channel;
     NodeId from; // 0 for local messages
     NodeId peer; // conversation peer (0 for broadcast)
@@ -157,7 +186,8 @@ struct ChatMessage
     int32_t geo_lon_e7;
     MessageStatus status;
 
-    ChatMessage() : channel(ChannelId::PRIMARY), from(0), peer(0), msg_id(0),
+    ChatMessage() : protocol(MeshProtocol::Meshtastic),
+                    channel(ChannelId::PRIMARY), from(0), peer(0), msg_id(0),
                     timestamp(0),
                     team_location_icon(0),
                     has_geo(false),
@@ -287,15 +317,6 @@ struct MeshConfig
         memset(secondary_key, 0, 16);
         meshcore_channel_name[0] = '\0';
     }
-};
-
-/**
- * @brief Mesh protocol selection
- */
-enum class MeshProtocol : uint8_t
-{
-    Meshtastic = 1,
-    MeshCore = 2
 };
 
 } // namespace chat

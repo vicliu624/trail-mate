@@ -47,6 +47,8 @@ class ChatConversationScreen
     void setHeaderText(const char* title, const char* status = nullptr);
     void updateBatteryFromBoard();
     void setBackCallback(void (*cb)(void*), void* user_data);
+    void setReplyEnabled(bool enabled);
+    bool isReplyEnabled() const { return reply_enabled_; }
 
   private:
     enum class TimerDomain
@@ -118,6 +120,7 @@ class ChatConversationScreen
     std::vector<TimerEntry> timers_;
     conversation::input::Binding input_binding_{};
     ActionContext reply_ctx_{};
+    bool reply_enabled_ = true;
 
     void createMessageItem(const chat::ChatMessage& msg);
 

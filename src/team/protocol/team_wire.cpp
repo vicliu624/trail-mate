@@ -95,6 +95,10 @@ bool encodeTeamEncrypted(const TeamEncrypted& input, std::vector<uint8_t>& out)
     {
         return false;
     }
+    if (input.version != kTeamEnvelopeVersion)
+    {
+        return false;
+    }
 
     out.clear();
     ByteWriter writer(out);
@@ -102,6 +106,7 @@ bool encodeTeamEncrypted(const TeamEncrypted& input, std::vector<uint8_t>& out)
     writer.putU8(input.aad_flags);
     writer.putU16(0); // reserved
     writer.putU32(input.key_id);
+    writer.putU32(input.sender_id);
     writer.putBytes(input.team_id.data(), input.team_id.size());
     writer.putBytes(input.nonce.data(), input.nonce.size());
     writer.putU16(static_cast<uint16_t>(input.ciphertext.size()));
@@ -125,9 +130,14 @@ bool decodeTeamEncrypted(const uint8_t* data, size_t len, TeamEncrypted* out)
     uint16_t cipher_len = 0;
 
     if (!reader.getU8(&out->version)) return false;
+    if (out->version != kTeamEnvelopeVersion)
+    {
+        return false;
+    }
     if (!reader.getU8(&out->aad_flags)) return false;
     if (!reader.getU16(&reserved)) return false;
     if (!reader.getU32(&out->key_id)) return false;
+    if (!reader.getU32(&out->sender_id)) return false;
     if (!reader.getBytes(out->team_id.data(), out->team_id.size())) return false;
     if (!reader.getBytes(out->nonce.data(), out->nonce.size())) return false;
     if (!reader.getU16(&cipher_len)) return false;

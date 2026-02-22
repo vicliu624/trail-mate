@@ -2,6 +2,7 @@
 
 #include "chat_message_list_components_watch.h"
 
+#include "../../../app/app_context.h"
 #include "../../ui_common.h"
 #include "../../ui_theme.h"
 #include <cstdio>
@@ -9,6 +10,16 @@
 namespace
 {
 constexpr lv_coord_t kMenuButtonHeight = 46;
+
+const char* protocol_short_label(chat::MeshProtocol protocol)
+{
+    return (protocol == chat::MeshProtocol::MeshCore) ? "MC" : "MT";
+}
+
+chat::MeshProtocol active_mesh_protocol()
+{
+    return app::AppContext::getInstance().getConfig().mesh_protocol;
+}
 } // namespace
 
 namespace chat::ui
@@ -181,15 +192,21 @@ void ChatMessageListScreen::showList(ViewMode mode)
 void ChatMessageListScreen::refreshTargets()
 {
     has_direct_ = false;
-    has_broadcast_ = true;
+    has_broadcast_ = false;
     direct_unread_ = 0;
     broadcast_unread_ = 0;
-    broadcast_conv_ = chat::ConversationId(chat::ChannelId::PRIMARY, 0);
+    broadcast_conv_ = chat::ConversationId(chat::ChannelId::PRIMARY, 0,
+                                           active_mesh_protocol());
 
     for (const auto& conv : convs_)
     {
         if (conv.id.peer == 0)
         {
+            if (!has_broadcast_)
+            {
+                broadcast_conv_ = conv.id;
+                has_broadcast_ = true;
+            }
             broadcast_unread_ += conv.unread;
             continue;
         }
@@ -296,6 +313,7 @@ void ChatMessageListScreen::rebuildList()
         lv_obj_t* label = lv_label_create(btn);
         item.label = label;
         std::string name = conv.name.empty() ? std::string("Chat") : conv.name;
+        name = "[" + std::string(protocol_short_label(conv.id.protocol)) + "] " + name;
         if (conv.unread > 0)
         {
             char unread_buf[16];

@@ -71,9 +71,19 @@ const TeamPositionIconOption* find_team_position_icon_option(uint8_t icon_id)
     return nullptr;
 }
 
+chat::MeshProtocol active_mesh_protocol()
+{
+    return app::AppContext::getInstance().getConfig().mesh_protocol;
+}
+
+const char* protocol_short_label(chat::MeshProtocol protocol)
+{
+    return (protocol == chat::MeshProtocol::MeshCore) ? "MC" : "MT";
+}
+
 chat::ConversationId teamConversationId()
 {
-    return chat::ConversationId(kTeamChatChannel, 0);
+    return chat::ConversationId(kTeamChatChannel, 0, active_mesh_protocol());
 }
 
 bool isTeamConversationId(const chat::ConversationId& conv)
@@ -259,7 +269,7 @@ void handle_conversation_back(void* user_data)
 UiController::UiController(lv_obj_t* parent, chat::ChatService& service, chat::ChannelId initial_channel)
     : parent_(parent), service_(service), state_(State::ChannelList),
       current_channel_(initial_channel),
-      current_conv_(chat::ConversationId(initial_channel, 0))
+      current_conv_(chat::ConversationId(initial_channel, 0, active_mesh_protocol()))
 {
 }
 
@@ -510,6 +520,8 @@ void UiController::switchToConversation(chat::ConversationId conv)
         conversation_->setActionCallback(handle_conversation_action, this);
         conversation_->setBackCallback(handle_conversation_back, this);
     }
+    const bool can_reply = team_conv_active_ || (conv.protocol == active_mesh_protocol());
+    conversation_->setReplyEnabled(can_reply);
 
     if (team_conv_active_)
     {
@@ -557,8 +569,9 @@ void UiController::switchToConversation(chat::ConversationId conv)
             }
         }
     }
-    conversation_->setHeaderText(title.c_str(), nullptr);
     conversation_->updateBatteryFromBoard();
+    std::string header = "[" + std::string(protocol_short_label(conv.protocol)) + "] " + title;
+    conversation_->setHeaderText(header.c_str(), nullptr);
 
     auto messages = service_.getRecentMessages(conv, 50);
     conversation_->clearMessages();
@@ -573,10 +586,18 @@ void UiController::switchToConversation(chat::ConversationId conv)
 void UiController::switchToCompose(chat::ConversationId conv)
 {
     closeTeamPositionPicker(true);
+    const bool is_team_conv = isTeamConversation(conv);
+    if (!is_team_conv && conv.protocol != active_mesh_protocol())
+    {
+        ::ui::SystemNotification::show("Conversation protocol mismatch", 2000);
+        return;
+    }
+
     state_ = State::Compose;
     current_channel_ = conv.channel;
     current_conv_ = conv;
-    team_conv_active_ = isTeamConversation(conv);
+    team_conv_active_ = is_team_conv;
+
     stopTeamConversationTimer();
     Serial.printf("[UiController] switchToCompose: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
                   parent_, lv_screen_active(), isScreenSleeping() ? 1 : 0,
@@ -668,7 +689,8 @@ void UiController::switchToCompose(chat::ConversationId conv)
             }
         }
     }
-    compose_->setHeaderText(title.c_str(), nullptr);
+    std::string header = "[" + std::string(protocol_short_label(conv.protocol)) + "] " + title;
+    compose_->setHeaderText(header.c_str(), nullptr);
     compose_->setPositionButton(nullptr, false);
 }
 
@@ -774,6 +796,7 @@ void UiController::refreshTeamConversation()
         for (const auto& entry : entries)
         {
             chat::ChatMessage msg;
+            msg.protocol = active_mesh_protocol();
             msg.channel = chat::ChannelId::PRIMARY;
             msg.peer = 0;
             msg.from = entry.incoming ? entry.peer_id : 0;
@@ -1197,6 +1220,11 @@ void UiController::handleConversationAction(ChatConversationScreen::ActionIntent
 {
     if (intent == ChatConversationScreen::ActionIntent::Reply)
     {
+        if (!team_conv_active_ && current_conv_.protocol != active_mesh_protocol())
+        {
+            ::ui::SystemNotification::show("Reply disabled for this protocol", 2000);
+            return;
+        }
         switchToCompose(current_conv_);
     }
 }

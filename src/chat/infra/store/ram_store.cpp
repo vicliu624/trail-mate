@@ -20,7 +20,7 @@ RamStore::~RamStore()
 
 void RamStore::append(const ChatMessage& msg)
 {
-    ConversationId conv(msg.channel, msg.peer);
+    ConversationId conv(msg.channel, msg.peer, msg.protocol);
     ConversationStorage& storage = getConversationStorage(conv);
     storage.messages.append(msg);
     if (msg.status == MessageStatus::Incoming)

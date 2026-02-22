@@ -3,20 +3,20 @@
 namespace contacts::ui::style
 {
 
-// ---------- Colors (keep all visual tokens here) ----------
-static constexpr uint32_t kGrayPanel = 0xFFF3DF;
-static constexpr uint32_t kWhite = 0xFFF7E9;
+// ---------- Colors (must align with docs/skyplot.md tokens) ----------
+static constexpr uint32_t kGrayPanel = 0xF6E6C6; // WarmBG
+static constexpr uint32_t kWhite = 0xFAF0D8;     // PanelBG
 
-static constexpr uint32_t kBtnBg = 0xFFF7E9;
+static constexpr uint32_t kBtnBg = 0xFAF0D8; // PanelBG
 static constexpr uint32_t kBtnBgSel = 0xEBA341;
-static constexpr uint32_t kBtnBorder = 0xD9B06A;
+static constexpr uint32_t kBtnBorder = 0xE7C98F; // Line
 
-static constexpr uint32_t kItemBg = 0xFFF7E9;
+static constexpr uint32_t kItemBg = 0xFAF0D8;
 static constexpr uint32_t kItemBgFoc = 0xEBA341;
-static constexpr uint32_t kItemBorder = 0xD9B06A;
+static constexpr uint32_t kItemBorder = 0xE7C98F;
 
-static constexpr uint32_t kTextMain = 0x3A2A1A;
-static constexpr uint32_t kTextMuted = 0x6A5646;
+static constexpr uint32_t kTextMain = 0x6B4A1E;  // Text
+static constexpr uint32_t kTextMuted = 0x8A6A3A; // TextDim
 
 // ---------- Styles ----------
 static bool s_inited = false;
@@ -27,6 +27,7 @@ static lv_style_t s_container_white;
 
 static lv_style_t s_btn_basic;
 static lv_style_t s_btn_filter_checked; // applied via LV_STATE_CHECKED
+static lv_style_t s_btn_filter_focused; // applied via LV_STATE_FOCUSED/FOCUS_KEY
 
 static lv_style_t s_item_base;
 static lv_style_t s_item_focused; // applied via LV_STATE_FOCUSED
@@ -76,6 +77,13 @@ void init_once()
     lv_style_init(&s_btn_filter_checked);
     lv_style_set_bg_opa(&s_btn_filter_checked, LV_OPA_COVER);
     lv_style_set_bg_color(&s_btn_filter_checked, lv_color_hex(kBtnBgSel));
+
+    // ---- Filter focused state: encoder/keyboard focus highlight ----
+    // Keep same token direction as CHECKED so Discover (non-mode button) also
+    // gets visible highlight when focus moves onto it.
+    lv_style_init(&s_btn_filter_focused);
+    lv_style_set_bg_opa(&s_btn_filter_focused, LV_OPA_COVER);
+    lv_style_set_bg_color(&s_btn_filter_focused, lv_color_hex(kBtnBgSel));
 
     // ---- List item base ----
     lv_style_init(&s_item_base);
@@ -132,6 +140,9 @@ void apply_btn_filter(lv_obj_t* btn)
     lv_obj_add_style(btn, &s_btn_basic, LV_PART_MAIN);
     // checked highlight
     lv_obj_add_style(btn, &s_btn_filter_checked, LV_PART_MAIN | LV_STATE_CHECKED);
+    // focus highlight (for non-checkable action buttons like Discover)
+    lv_obj_add_style(btn, &s_btn_filter_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(btn, &s_btn_filter_focused, LV_PART_MAIN | LV_STATE_FOCUS_KEY);
 
     // Optional: make it behave like a checkable item when you toggle state in refresh_ui
     // (doesn't change behavior unless you set/clear LV_STATE_CHECKED)

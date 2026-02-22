@@ -20,9 +20,13 @@ namespace chat
 #define CHAT_SERVICE_LOG(...)
 #endif
 
-ChatService::ChatService(ChatModel& model, IMeshAdapter& adapter, IChatStore& store)
+ChatService::ChatService(ChatModel& model,
+                         IMeshAdapter& adapter,
+                         IChatStore& store,
+                         MeshProtocol active_protocol)
     : model_(model), adapter_(adapter), store_(store),
-      current_channel_(ChannelId::PRIMARY)
+      current_channel_(ChannelId::PRIMARY),
+      active_protocol_(active_protocol)
 {
 }
 
@@ -38,6 +42,7 @@ MessageId ChatService::sendText(ChannelId channel, const std::string& text, Node
     bool queued = adapter_.sendText(channel, text, &msg_id, peer);
 
     ChatMessage msg;
+    msg.protocol = active_protocol_;
     msg.channel = channel;
     msg.from = 0; // Local message
     msg.peer = peer;
@@ -60,6 +65,11 @@ MessageId ChatService::sendText(ChannelId channel, const std::string& text, Node
     store_.append(msg);
 
     return msg.msg_id;
+}
+
+bool ChatService::triggerDiscoveryAction(MeshDiscoveryAction action)
+{
+    return adapter_.triggerDiscoveryAction(action);
 }
 
 void ChatService::switchChannel(ChannelId channel)
@@ -134,6 +144,7 @@ void ChatService::processIncoming()
     {
         // Convert to ChatMessage
         ChatMessage msg;
+        msg.protocol = active_protocol_;
         msg.channel = incoming.channel;
         msg.from = incoming.from;
         if (incoming.to == 0xFFFFFFFF)

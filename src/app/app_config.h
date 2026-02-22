@@ -56,6 +56,11 @@ struct AprsConfig
 struct AppConfig
 {
     static constexpr uint8_t kDefaultRegionCode = 4; // Meshtastic CN
+    static constexpr float kMeshCoreDefaultFreqMHz = 869.525f;
+    static constexpr float kMeshCoreDefaultBwKHz = 250.0f;
+    static constexpr uint8_t kMeshCoreDefaultSf = 11;
+    static constexpr uint8_t kMeshCoreDefaultCr = 5;
+    static constexpr int8_t kMeshCoreDefaultTxPowerDbm = 20;
     // Chat settings
     chat::ChatPolicy chat_policy;
     chat::MeshConfig meshtastic_config;
@@ -127,20 +132,7 @@ struct AppConfig
         meshtastic_config.override_frequency_mhz = 0.0f;
 
         meshcore_config = chat::MeshConfig();
-        meshcore_config.meshcore_region_preset = 0;
-        meshcore_config.meshcore_freq_mhz = 915.0f;
-        meshcore_config.meshcore_bw_khz = 125.0f;
-        meshcore_config.meshcore_sf = 9;
-        meshcore_config.meshcore_cr = 5;
-        meshcore_config.meshcore_client_repeat = false;
-        meshcore_config.meshcore_rx_delay_base = 0.0f;
-        meshcore_config.meshcore_airtime_factor = 1.0f;
-        meshcore_config.meshcore_flood_max = 16;
-        meshcore_config.meshcore_multi_acks = false;
-        meshcore_config.meshcore_channel_slot = 0;
-        strncpy(meshcore_config.meshcore_channel_name, "Public",
-                sizeof(meshcore_config.meshcore_channel_name) - 1);
-        meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
+        applyMeshCoreFactoryDefaults();
         mesh_protocol = chat::MeshProtocol::Meshtastic;
         node_name[0] = '\0';
         short_name[0] = '\0';
@@ -174,6 +166,25 @@ struct AppConfig
         route_enabled = false;
         route_path[0] = '\0';
         aprs = AprsConfig();
+    }
+
+    void applyMeshCoreFactoryDefaults()
+    {
+        meshcore_config.meshcore_region_preset = 0;
+        meshcore_config.meshcore_freq_mhz = kMeshCoreDefaultFreqMHz;
+        meshcore_config.meshcore_bw_khz = kMeshCoreDefaultBwKHz;
+        meshcore_config.meshcore_sf = kMeshCoreDefaultSf;
+        meshcore_config.meshcore_cr = kMeshCoreDefaultCr;
+        meshcore_config.tx_power = kMeshCoreDefaultTxPowerDbm;
+        meshcore_config.meshcore_client_repeat = false;
+        meshcore_config.meshcore_rx_delay_base = 0.0f;
+        meshcore_config.meshcore_airtime_factor = 1.0f;
+        meshcore_config.meshcore_flood_max = 16;
+        meshcore_config.meshcore_multi_acks = false;
+        meshcore_config.meshcore_channel_slot = 0;
+        strncpy(meshcore_config.meshcore_channel_name, "Public",
+                sizeof(meshcore_config.meshcore_channel_name) - 1);
+        meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
     }
 
     chat::MeshConfig& activeMeshConfig()

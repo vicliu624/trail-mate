@@ -65,6 +65,7 @@ class LogStore : public IChatStore
 
     struct Record
     {
+        uint8_t protocol;
         uint8_t channel;
         uint8_t status;
         uint16_t text_len;
@@ -84,6 +85,7 @@ class LogStore : public IChatStore
 
     struct IndexEntry
     {
+        uint8_t protocol;
         uint8_t channel;
         uint8_t status;
         uint16_t unread;
@@ -97,7 +99,7 @@ class LogStore : public IChatStore
 
     static constexpr uint32_t kFileMagic = 0x474F4C43;  // "CLOG"
     static constexpr uint32_t kIndexMagic = 0x54414843; // "CHAT"
-    static constexpr uint16_t kVersion = 1;
+    static constexpr uint16_t kVersion = 2;
 
     bool ensureDir();
     bool ensureIndex(std::vector<IndexEntry>& entries);

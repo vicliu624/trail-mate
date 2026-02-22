@@ -502,30 +502,41 @@ How PC should respond:
 
 Scenario: team member live position updates.
 
-Payload is **meshtastic_Position protobuf** (Meshtastic schema).
-See `mesh.pb.h` in `src/chat/infra/meshtastic/generated/meshtastic/`.
-Key fields:
-- latitude_i / longitude_i: degrees * 1e7
-- altitude: meters
-- timestamp: epoch seconds
-- ground_speed: m/s
-- ground_track: 0.01 degrees
-- sats_in_view, fix_quality, fix_type, etc.
+Payload is **TeamPositionMessage** (custom binary):
+
+```
+u8  version            // kTeamPositionVersion = 1
+u16 flags              // bit0 alt, bit1 speed, bit2 course, bit3 satellites
+i32 lat_e7
+i32 lon_e7
+i16 alt_m
+u16 speed_dmps         // decimeter per second
+u16 course_cdeg        // centi-degree
+u8  sats_in_view
+u32 ts                 // epoch seconds
+```
 
 #### TEAM_WAYPOINT_APP (portnum 302)
 
 Scenario: team waypoint sharing.
 
-Payload is **meshtastic_Waypoint protobuf** (Meshtastic schema).
-See `mesh.pb.h`.
-Key fields:
-- id
-- latitude_i / longitude_i: degrees * 1e7 (optional)
-- expire (epoch seconds)
-- locked_to
-- name (max 30 chars)
-- description (max 100 chars)
-- icon
+Payload is **TeamWaypointMessage** (custom binary):
+
+```
+u8  version            // kTeamWaypointVersion = 1
+u16 flags              // bit0 has_location
+u32 id
+i32 lat_e7
+i32 lon_e7
+u32 expire_ts          // epoch seconds
+u32 locked_to
+u16 name_len
+u8  name[name_len]     // <= 30 bytes
+u16 desc_len
+u8  desc[desc_len]     // <= 100 bytes
+u16 icon_len
+u8  icon[icon_len]     // <= 24 bytes
+```
 
 #### TEAM_TRACK_APP (portnum 304)
 

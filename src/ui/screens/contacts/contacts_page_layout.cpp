@@ -69,6 +69,9 @@ static constexpr int kPanelGap = 3;          // 三列之间的间距
 static constexpr int kScreenEdgePadding = 3; // 屏幕边缘的padding
 static constexpr int kTopBarContentGap = 3;  // TopBar与Content之间的间距
 
+// UI color tokens (must align with docs/skyplot.md)
+static constexpr uint32_t kColorWarmBg = 0xF6E6C6;
+
 // 工具函数
 static void make_non_scrollable(lv_obj_t* obj)
 {
@@ -138,7 +141,7 @@ lv_obj_t* create_header(lv_obj_t* root,
     lv_obj_set_size(header, LV_PCT(100), ::ui::widgets::kTopBarHeight);
 
     // 样式
-    lv_obj_set_style_bg_color(header, lv_color_hex(0xFFF3DF), 0);
+    lv_obj_set_style_bg_color(header, lv_color_hex(kColorWarmBg), 0);
     apply_base_container_style(header);
     lv_obj_set_style_pad_all(header, 0, 0);
 
@@ -239,6 +242,19 @@ void create_filter_panel(lv_obj_t* parent)
     style::apply_label_primary(team_label);
     lv_obj_center(team_label);
     lv_obj_add_flag(g_contacts_state.team_btn, LV_OBJ_FLAG_HIDDEN);
+
+    g_contacts_state.discover_btn = lv_btn_create(g_contacts_state.filter_panel);
+    make_non_scrollable(g_contacts_state.discover_btn);
+    style::apply_btn_filter(g_contacts_state.discover_btn);
+    lv_obj_set_size(g_contacts_state.discover_btn, LV_PCT(100), kButtonHeight);
+    lv_obj_t* discover_label = lv_label_create(g_contacts_state.discover_btn);
+    lv_label_set_text(discover_label, "Discover");
+    style::apply_label_primary(discover_label);
+    lv_obj_center(discover_label);
+    if (app::AppContext::getInstance().getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    {
+        lv_obj_add_flag(g_contacts_state.discover_btn, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void create_list_panel(lv_obj_t* parent)

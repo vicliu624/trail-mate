@@ -15,6 +15,7 @@
 
 #include <Arduino.h>
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <ctime>
 
@@ -41,6 +42,7 @@ constexpr uint32_t kSecondsPerDay = 24U * 60U * 60U;
 constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
 constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
 constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
+constexpr size_t kMaxPrefixedSenderLen = 20;
 } // namespace
 
 static const lv_image_dsc_t* team_location_icon_src(uint8_t icon_id)
@@ -139,6 +141,63 @@ static void format_message_time(char* out, size_t out_len, uint32_t ts)
     {
         snprintf(out, out_len, "--");
     }
+}
+
+static bool sender_token_is_valid(const std::string& sender)
+{
+    if (sender.empty() || sender.size() > kMaxPrefixedSenderLen)
+    {
+        return false;
+    }
+    for (char c : sender)
+    {
+        const unsigned char uc = static_cast<unsigned char>(c);
+        if (!(std::isalnum(uc) || c == '_' || c == '-' || c == '.'))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool split_prefixed_sender_text(const std::string& text,
+                                       std::string* out_sender,
+                                       std::string* out_body)
+{
+    if (!out_sender || !out_body || text.empty())
+    {
+        return false;
+    }
+
+    const size_t sep = text.find(':');
+    if (sep == std::string::npos || sep == 0 || sep > kMaxPrefixedSenderLen)
+    {
+        return false;
+    }
+
+    std::string sender = text.substr(0, sep);
+    while (!sender.empty() && sender.back() == ' ')
+    {
+        sender.pop_back();
+    }
+    if (!sender_token_is_valid(sender))
+    {
+        return false;
+    }
+
+    size_t body_start = sep + 1;
+    while (body_start < text.size() && text[body_start] == ' ')
+    {
+        ++body_start;
+    }
+    if (body_start >= text.size())
+    {
+        return false;
+    }
+
+    *out_sender = sender;
+    *out_body = text.substr(body_start);
+    return true;
 }
 
 ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::ConversationId conv)
@@ -312,6 +371,23 @@ void ChatConversationScreen::setBackCallback(void (*cb)(void*), void* user_data)
     back_cb_user_data_ = user_data;
 }
 
+void ChatConversationScreen::setReplyEnabled(bool enabled)
+{
+    if (!guard_ || !guard_->alive || !reply_btn_)
+    {
+        return;
+    }
+    reply_enabled_ = enabled;
+    if (enabled)
+    {
+        lv_obj_clear_state(reply_btn_, LV_STATE_DISABLED);
+    }
+    else
+    {
+        lv_obj_add_state(reply_btn_, LV_STATE_DISABLED);
+    }
+}
+
 void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
 {
     if (!guard_ || !guard_->alive || !msg_list_)
@@ -325,7 +401,22 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     item.container = chat::ui::layout::create_message_row(msg_list_);
     chat::ui::conversation::styles::apply_message_row(item.container);
 
-    const bool is_self = (msg.from == 0);
+    const bool is_self = (msg.status != MessageStatus::Incoming);
+    std::string display_text = msg.text;
+    std::string inferred_sender;
+    if (!is_self &&
+        msg.protocol == chat::MeshProtocol::MeshCore &&
+        conv_.peer == 0 &&
+        msg.from == 0)
+    {
+        std::string parsed_sender;
+        std::string parsed_body;
+        if (split_prefixed_sender_text(msg.text, &parsed_sender, &parsed_body))
+        {
+            inferred_sender = parsed_sender;
+            display_text = parsed_body;
+        }
+    }
 
     // Compute bubble max width (same logic as original)
     lv_coord_t max_bubble_w = kBubbleMaxWidth;
@@ -353,9 +444,13 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     if (conv_.peer == 0)
     {
         std::string sender;
-        if (msg.from == 0)
+        if (is_self)
         {
             sender = app::AppContext::getInstance().getConfig().short_name;
+        }
+        else if (msg.from == 0)
+        {
+            sender = inferred_sender.empty() ? "Unknown" : inferred_sender;
         }
         else
         {
@@ -390,7 +485,7 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     }
 
     item.text_label = chat::ui::layout::create_bubble_text(bubble);
-    lv_label_set_text(item.text_label, msg.text.c_str());
+    lv_label_set_text(item.text_label, display_text.c_str());
     chat::ui::conversation::styles::apply_bubble_text(item.text_label);
 
     item.status_label = chat::ui::layout::create_bubble_status(bubble);
@@ -421,6 +516,10 @@ void ChatConversationScreen::action_event_cb(lv_event_t* e)
     }
     ChatConversationScreen* screen = ctx->screen;
     if (!screen->guard_ || !screen->guard_->alive)
+    {
+        return;
+    }
+    if (!screen->reply_enabled_)
     {
         return;
     }

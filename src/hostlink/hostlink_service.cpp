@@ -12,6 +12,7 @@
 #include "../team/protocol/team_chat.h"
 #include "../team/protocol/team_mgmt.h"
 #include "../team/protocol/team_portnum.h"
+#include "../team/protocol/team_waypoint.h"
 #include "../team/usecase/team_controller.h"
 
 #include "freertos/FreeRTOS.h"
@@ -457,6 +458,8 @@ ErrorCode map_team_send_error(team::TeamService::SendError err)
         return ErrorCode::NotInMode;
     case team::TeamService::SendError::MeshSendFail:
         return ErrorCode::Busy;
+    case team::TeamService::SendError::UnsupportedByProtocol:
+        return ErrorCode::Unsupported;
     case team::TeamService::SendError::EncodeFail:
     case team::TeamService::SendError::EncryptFail:
     default:
@@ -608,8 +611,12 @@ ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
         {
             return ErrorCode::Internal;
         }
-        std::vector<uint8_t> app_payload(payload, payload + payload_len);
-        return map_team_send_result(controller->onWaypoint(app_payload, ch, command.to, want_response),
+        team::proto::TeamWaypointMessage msg;
+        if (!team::proto::decodeTeamWaypointMessage(payload, payload_len, &msg))
+        {
+            return ErrorCode::InvalidParam;
+        }
+        return map_team_send_result(controller->onWaypoint(msg, ch, command.to, want_response),
                                     controller);
     }
     case team::proto::TEAM_TRACK_APP:

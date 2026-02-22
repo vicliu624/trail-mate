@@ -42,6 +42,11 @@ static void contacts_top_bar_back(void* /*user_data*/)
         lv_timer_del(g_contacts_state.conversation_timer);
         g_contacts_state.conversation_timer = nullptr;
     }
+    if (g_contacts_state.discover_scan_timer != nullptr)
+    {
+        lv_timer_del(g_contacts_state.discover_scan_timer);
+        g_contacts_state.discover_scan_timer = nullptr;
+    }
     if (g_contacts_state.root)
     {
         lv_obj_add_flag(g_contacts_state.root, LV_OBJ_FLAG_HIDDEN);
@@ -142,6 +147,11 @@ void ui_contacts_exit(lv_obj_t* parent)
         lv_timer_del(g_contacts_state.conversation_timer);
         g_contacts_state.conversation_timer = nullptr;
     }
+    if (g_contacts_state.discover_scan_timer != nullptr)
+    {
+        lv_timer_del(g_contacts_state.discover_scan_timer);
+        g_contacts_state.discover_scan_timer = nullptr;
+    }
 
     if (g_contacts_state.refresh_timer != nullptr)
     {
@@ -167,43 +177,8 @@ void refresh_contacts_data_impl()
 {
     app::AppContext& app_ctx = app::AppContext::getInstance();
     chat::contacts::ContactService& contact_service = app_ctx.getContactService();
-
-    auto should_keep = [](const chat::contacts::NodeInfo& node, chat::MeshProtocol protocol)
-    {
-        if (protocol == chat::MeshProtocol::Meshtastic)
-        {
-            return node.protocol != chat::contacts::NodeProtocolType::MeshCore;
-        }
-        if (protocol == chat::MeshProtocol::MeshCore)
-        {
-            return node.protocol != chat::contacts::NodeProtocolType::Meshtastic;
-        }
-        return true;
-    };
-
-    chat::MeshProtocol protocol = app_ctx.getConfig().mesh_protocol;
-
     g_contacts_state.contacts_list = contact_service.getContacts();
-    g_contacts_state.contacts_list.erase(
-        std::remove_if(
-            g_contacts_state.contacts_list.begin(),
-            g_contacts_state.contacts_list.end(),
-            [protocol, &should_keep](const chat::contacts::NodeInfo& node)
-            {
-                return !should_keep(node, protocol);
-            }),
-        g_contacts_state.contacts_list.end());
-
     g_contacts_state.nearby_list = contact_service.getNearby();
-    g_contacts_state.nearby_list.erase(
-        std::remove_if(
-            g_contacts_state.nearby_list.begin(),
-            g_contacts_state.nearby_list.end(),
-            [protocol, &should_keep](const chat::contacts::NodeInfo& node)
-            {
-                return !should_keep(node, protocol);
-            }),
-        g_contacts_state.nearby_list.end());
 
     CONTACTS_LOG("[Contacts] Data refreshed: %zu contacts, %zu nearby\n",
                  g_contacts_state.contacts_list.size(),

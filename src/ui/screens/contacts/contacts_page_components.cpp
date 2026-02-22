@@ -10,6 +10,7 @@
 #include "../../../chat/usecase/contact_service.h"
 #include "../../../gps/gps_service_api.h"
 #include "../../../team/protocol/team_chat.h"
+#include "../../../team/protocol/team_position.h"
 #include "../../ui_common.h"
 #include "../../widgets/ime/ime_widget.h"
 #include "../../widgets/system_notification.h"
@@ -23,8 +24,6 @@
 #include "contacts_page_layout.h"
 #include "contacts_page_styles.h"
 #include "contacts_state.h"
-#include "meshtastic/mesh.pb.h"
-#include "pb_encode.h"
 
 #include <cmath>
 #include <cstdint>
@@ -49,10 +48,19 @@ static constexpr int kButtonHeight = 28;
 static constexpr int kBottomBtnMinWidth = 50;
 static constexpr int kBottomBtnPadH = 8;
 
+// UI color tokens (must align with docs/skyplot.md)
+static constexpr uint32_t kColorAmber = 0xEBA341;
+static constexpr uint32_t kColorAmberDark = 0xC98118;
+static constexpr uint32_t kColorPanelBg = 0xFAF0D8;
+static constexpr uint32_t kColorLine = 0xE7C98F;
+static constexpr uint32_t kColorText = 0x6B4A1E;
+static constexpr uint32_t kColorWarn = 0xB94A2C;
+
 static lv_group_t* s_compose_group = nullptr;
 static lv_group_t* s_compose_prev_group = nullptr;
 static uint32_t s_compose_peer_id = 0;
 static chat::ChannelId s_compose_channel = chat::ChannelId::PRIMARY;
+static chat::MeshProtocol s_compose_protocol = chat::MeshProtocol::Meshtastic;
 static bool s_refreshing_ui = false;
 static lv_group_t* s_conv_group = nullptr;
 static lv_group_t* s_conv_prev_group = nullptr;
@@ -77,8 +85,11 @@ static void on_back_clicked(lv_event_t* e);
 static void open_action_menu_modal();
 static void on_action_menu_item_clicked(lv_event_t* e);
 static void on_action_menu_key(lv_event_t* e);
+static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text);
 static const chat::contacts::NodeInfo* get_selected_node();
-static chat::ChannelId get_selected_channel();
+static bool get_selected_broadcast_target(chat::MeshProtocol* out_protocol,
+                                          chat::ChannelId* out_channel,
+                                          const char** out_title);
 static void open_add_edit_modal(bool is_edit);
 static void open_delete_confirm_modal();
 static void open_node_info_screen();
@@ -87,10 +98,13 @@ static void modal_close(lv_obj_t*& modal_obj);
 static void modal_prepare_group();
 static void modal_restore_group();
 static lv_obj_t* create_modal_root(int width, int height);
+static bool is_any_modal_open();
 static void on_add_edit_save_clicked(lv_event_t* e);
 static void on_add_edit_cancel_clicked(lv_event_t* e);
 static void on_del_confirm_clicked(lv_event_t* e);
 static void on_del_cancel_clicked(lv_event_t* e);
+static void on_discovery_scan_done(lv_timer_t* timer);
+static void execute_discovery_command(uint8_t command_index);
 static void on_node_info_back_clicked(lv_event_t* e);
 static void open_chat_compose();
 static void close_chat_compose();
@@ -103,6 +117,7 @@ static void refresh_team_conversation();
 static void on_team_conversation_action(chat::ui::ChatConversationScreen::ActionIntent intent, void* user_data);
 static void on_team_conversation_back(void* user_data);
 static void send_team_position();
+static void refresh_filter_checked_state();
 
 // Forward declaration - actual implementation moved to ui_contacts.cpp
 // to avoid library compilation issues with Arduino framework dependencies
@@ -112,6 +127,49 @@ static void apply_primary_text(lv_obj_t* label)
 {
     if (!label) return;
     contacts::ui::style::apply_label_primary(label);
+}
+
+static void refresh_filter_checked_state()
+{
+    if (g_contacts_state.contacts_btn == nullptr ||
+        g_contacts_state.nearby_btn == nullptr ||
+        g_contacts_state.broadcast_btn == nullptr)
+    {
+        return;
+    }
+
+    lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
+    lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+    lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
+    if (g_contacts_state.team_btn)
+    {
+        lv_obj_clear_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
+    }
+    if (g_contacts_state.discover_btn)
+    {
+        lv_obj_clear_state(g_contacts_state.discover_btn, LV_STATE_CHECKED);
+    }
+
+    if (g_contacts_state.current_mode == ContactsMode::Contacts)
+    {
+        lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
+    }
+    else if (g_contacts_state.current_mode == ContactsMode::Nearby)
+    {
+        lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+    }
+    else if (g_contacts_state.current_mode == ContactsMode::Broadcast)
+    {
+        lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
+    }
+    else if (g_contacts_state.current_mode == ContactsMode::Team && g_contacts_state.team_btn)
+    {
+        lv_obj_add_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
+    }
+    else if (g_contacts_state.current_mode == ContactsMode::Discover && g_contacts_state.discover_btn)
+    {
+        lv_obj_add_state(g_contacts_state.discover_btn, LV_STATE_CHECKED);
+    }
 }
 
 static lv_obj_t* create_bottom_bar_button(lv_obj_t* parent,
@@ -210,6 +268,116 @@ static std::string format_snr(float snr)
     char buf[16];
     snprintf(buf, sizeof(buf), "SNR %.0f", snr);
     return std::string(buf);
+}
+
+static chat::MeshProtocol active_mesh_protocol()
+{
+    return app::AppContext::getInstance().getConfig().mesh_protocol;
+}
+
+static const char* mesh_protocol_short_label(chat::MeshProtocol protocol)
+{
+    return (protocol == chat::MeshProtocol::MeshCore) ? "MC" : "MT";
+}
+
+static const char* node_protocol_short_label(chat::contacts::NodeProtocolType protocol)
+{
+    switch (protocol)
+    {
+    case chat::contacts::NodeProtocolType::MeshCore:
+        return "MC";
+    case chat::contacts::NodeProtocolType::Meshtastic:
+        return "MT";
+    default:
+        return "";
+    }
+}
+
+static bool node_protocol_to_mesh(chat::contacts::NodeProtocolType protocol, chat::MeshProtocol* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+    switch (protocol)
+    {
+    case chat::contacts::NodeProtocolType::MeshCore:
+        *out = chat::MeshProtocol::MeshCore;
+        return true;
+    case chat::contacts::NodeProtocolType::Meshtastic:
+        *out = chat::MeshProtocol::Meshtastic;
+        return true;
+    default:
+        return false;
+    }
+}
+
+struct BroadcastTargetSpec
+{
+    chat::MeshProtocol protocol;
+    chat::ChannelId channel;
+    const char* label;
+};
+
+enum class DiscoveryActionCommand : uint8_t
+{
+    ScanLocal = 0,
+    SendIdLocal = 1,
+    SendIdBroadcast = 2,
+    Cancel = 3,
+};
+
+struct DiscoveryActionSpec
+{
+    const char* label;
+    const char* status;
+    DiscoveryActionCommand command;
+};
+
+static constexpr DiscoveryActionSpec kDiscoveryActionSpecs[] = {
+    {"Scan Local", "5s", DiscoveryActionCommand::ScanLocal},
+    {"Send ID Local", "Local", DiscoveryActionCommand::SendIdLocal},
+    {"Send ID Broadcast", "Bcast", DiscoveryActionCommand::SendIdBroadcast},
+    {"Cancel", "Back", DiscoveryActionCommand::Cancel},
+};
+
+static bool get_broadcast_target_spec(int index, BroadcastTargetSpec* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+    switch (index)
+    {
+    case 0:
+        *out = {chat::MeshProtocol::Meshtastic, chat::ChannelId::PRIMARY, "[MT] Primary"};
+        return true;
+    case 1:
+        *out = {chat::MeshProtocol::Meshtastic, chat::ChannelId::SECONDARY, "[MT] Secondary"};
+        return true;
+    case 2:
+        *out = {chat::MeshProtocol::MeshCore, chat::ChannelId::PRIMARY, "[MC] Primary"};
+        return true;
+    case 3:
+        *out = {chat::MeshProtocol::MeshCore, chat::ChannelId::SECONDARY, "[MC] Secondary"};
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool get_discovery_action_spec(int index, DiscoveryActionSpec* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+    if (index < 0 || index >= static_cast<int>(sizeof(kDiscoveryActionSpecs) / sizeof(kDiscoveryActionSpecs[0])))
+    {
+        return false;
+    }
+    *out = kDiscoveryActionSpecs[index];
+    return true;
 }
 
 static const char* team_command_name(team::proto::TeamCommandType type)
@@ -373,36 +541,15 @@ void create_filter_panel(lv_obj_t* parent)
         lv_obj_add_event_cb(g_contacts_state.team_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
         lv_obj_add_event_cb(g_contacts_state.team_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
     }
+    if (g_contacts_state.discover_btn)
+    {
+        lv_obj_add_event_cb(g_contacts_state.discover_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
+        lv_obj_add_event_cb(g_contacts_state.discover_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
+    }
 
     // Keep highlight consistent with mode using CHECKED state
     // (visual-only; does not change behavior)
-    if (g_contacts_state.contacts_btn && g_contacts_state.nearby_btn && g_contacts_state.broadcast_btn)
-    {
-        lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
-        lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
-        lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
-        if (g_contacts_state.team_btn)
-        {
-            lv_obj_clear_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
-        }
-
-        if (g_contacts_state.current_mode == ContactsMode::Contacts)
-        {
-            lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
-        }
-        else if (g_contacts_state.current_mode == ContactsMode::Nearby)
-        {
-            lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
-        }
-        else if (g_contacts_state.current_mode == ContactsMode::Broadcast)
-        {
-            lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
-        }
-        else if (g_contacts_state.team_btn)
-        {
-            lv_obj_add_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
-        }
-    }
+    refresh_filter_checked_state();
 }
 
 void create_list_panel(lv_obj_t* parent)
@@ -450,23 +597,42 @@ static void on_filter_focused(lv_event_t* e)
     else if (tgt == g_contacts_state.nearby_btn) new_mode = ContactsMode::Nearby;
     else if (tgt == g_contacts_state.broadcast_btn) new_mode = ContactsMode::Broadcast;
     else if (tgt == g_contacts_state.team_btn) new_mode = ContactsMode::Team;
+    else if (tgt == g_contacts_state.discover_btn) new_mode = ContactsMode::Discover;
     else return;
 
     if (new_mode != g_contacts_state.current_mode)
     {
+        if (new_mode == ContactsMode::Discover &&
+            g_contacts_state.current_mode != ContactsMode::Discover)
+        {
+            g_contacts_state.last_action_mode = g_contacts_state.current_mode;
+        }
         g_contacts_state.current_mode = new_mode;
         g_contacts_state.current_page = 0;
         g_contacts_state.selected_index = -1;
         refresh_contacts_data();
         refresh_ui(); // 旋转到另一个按钮，就刷新第二列
+        return;
     }
+
+    refresh_filter_checked_state();
 }
 
 static void on_filter_clicked(lv_event_t* e)
 {
     lv_obj_t* tgt = (lv_obj_t*)lv_event_get_target(e);
+    if (tgt == g_contacts_state.discover_btn &&
+        g_contacts_state.current_mode != ContactsMode::Discover)
+    {
+        g_contacts_state.last_action_mode = g_contacts_state.current_mode;
+        g_contacts_state.current_mode = ContactsMode::Discover;
+        g_contacts_state.current_page = 0;
+        g_contacts_state.selected_index = -1;
+        refresh_contacts_data();
+        refresh_ui();
+    }
 
-    // Press on Contacts/Nearby: move focus to List column
+    // Press on filter mode button: move focus to List column
     contacts_focus_to_list();
 }
 
@@ -474,6 +640,11 @@ static void on_list_item_clicked(lv_event_t* e)
 {
     lv_obj_t* item = (lv_obj_t*)lv_event_get_target(e);
     g_contacts_state.selected_index = (int)(intptr_t)lv_obj_get_user_data(item);
+    if (g_contacts_state.current_mode == ContactsMode::Discover)
+    {
+        execute_discovery_command(static_cast<uint8_t>(g_contacts_state.selected_index));
+        return;
+    }
     open_action_menu_modal();
 }
 
@@ -518,7 +689,8 @@ static void on_back_clicked(lv_event_t* /*e*/)
 static const chat::contacts::NodeInfo* get_selected_node()
 {
     if (g_contacts_state.current_mode == ContactsMode::Broadcast ||
-        g_contacts_state.current_mode == ContactsMode::Team)
+        g_contacts_state.current_mode == ContactsMode::Team ||
+        g_contacts_state.current_mode == ContactsMode::Discover)
     {
         return nullptr;
     }
@@ -536,21 +708,24 @@ static const chat::contacts::NodeInfo* get_selected_node()
     return &list[g_contacts_state.selected_index];
 }
 
-static chat::ChannelId get_selected_channel()
+static bool get_selected_broadcast_target(chat::MeshProtocol* out_protocol,
+                                          chat::ChannelId* out_channel,
+                                          const char** out_title)
 {
-    if (g_contacts_state.current_mode != ContactsMode::Broadcast)
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast ||
+        !out_protocol || !out_channel || !out_title)
     {
-        return chat::ChannelId::PRIMARY;
+        return false;
     }
-    if (g_contacts_state.selected_index < 0)
+    BroadcastTargetSpec spec{};
+    if (!get_broadcast_target_spec(g_contacts_state.selected_index, &spec))
     {
-        return chat::ChannelId::PRIMARY;
+        return false;
     }
-    if (g_contacts_state.selected_index == 1)
-    {
-        return chat::ChannelId::SECONDARY;
-    }
-    return chat::ChannelId::PRIMARY;
+    *out_protocol = spec.protocol;
+    *out_channel = spec.channel;
+    *out_title = spec.label;
+    return true;
 }
 
 static void modal_prepare_group()
@@ -593,7 +768,7 @@ static lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, lv_color_hex(kColorText), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
@@ -603,10 +778,10 @@ static lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, width, height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, lv_color_hex(kColorPanelBg), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, lv_color_hex(kColorLine), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, 8, LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
@@ -622,6 +797,14 @@ static void modal_close(lv_obj_t*& modal_obj)
         modal_obj = nullptr;
     }
     modal_restore_group();
+}
+
+static bool is_any_modal_open()
+{
+    return g_contacts_state.add_edit_modal != nullptr ||
+           g_contacts_state.del_confirm_modal != nullptr ||
+           g_contacts_state.action_menu_modal != nullptr ||
+           g_contacts_state.discover_modal != nullptr;
 }
 
 static void open_add_edit_modal(bool is_edit)
@@ -662,7 +845,7 @@ static void open_add_edit_modal(bool is_edit)
 
     g_contacts_state.add_edit_error_label = lv_label_create(win);
     lv_label_set_text(g_contacts_state.add_edit_error_label, "");
-    lv_obj_set_style_text_color(g_contacts_state.add_edit_error_label, lv_color_hex(0xCC0000), 0);
+    lv_obj_set_style_text_color(g_contacts_state.add_edit_error_label, lv_color_hex(kColorWarn), 0);
     lv_obj_align(g_contacts_state.add_edit_error_label, LV_ALIGN_TOP_MID, 0, 52);
     lv_obj_add_flag(g_contacts_state.add_edit_error_label, LV_OBJ_FLAG_HIDDEN);
 
@@ -886,22 +1069,31 @@ static void open_chat_compose()
         }
     }
 
-    s_compose_prev_group = lv_group_get_default();
-    if (!s_compose_group)
-    {
-        s_compose_group = lv_group_create();
-    }
-    lv_group_remove_all_objs(s_compose_group);
-    set_default_group(s_compose_group);
-
     chat::ChannelId channel = chat::ChannelId::PRIMARY;
     uint32_t peer_id = 0;
+    chat::MeshProtocol protocol = active_mesh_protocol();
     std::string title;
     if (g_contacts_state.current_mode == ContactsMode::Broadcast)
     {
-        channel = get_selected_channel();
+        chat::MeshProtocol target_protocol = protocol;
+        chat::ChannelId target_channel = chat::ChannelId::PRIMARY;
+        const char* target_title = nullptr;
+        if (!get_selected_broadcast_target(&target_protocol, &target_channel, &target_title))
+        {
+            return;
+        }
+        if (target_protocol != active_mesh_protocol())
+        {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Switch to %s to chat",
+                     (target_protocol == chat::MeshProtocol::MeshCore) ? "MeshCore" : "Meshtastic");
+            ::ui::SystemNotification::show(buf, 2200);
+            return;
+        }
+        protocol = target_protocol;
+        channel = target_channel;
         peer_id = 0;
-        title = "Broadcast";
+        title = target_title ? target_title : "Broadcast";
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
@@ -915,6 +1107,16 @@ static void open_chat_compose()
     {
         channel = chat::ChannelId::PRIMARY;
         peer_id = node->node_id;
+        chat::MeshProtocol node_protocol = protocol;
+        if (node_protocol_to_mesh(node->protocol, &node_protocol) &&
+            node_protocol != protocol)
+        {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Switch to %s to chat",
+                     (node_protocol == chat::MeshProtocol::MeshCore) ? "MeshCore" : "Meshtastic");
+            ::ui::SystemNotification::show(buf, 2200);
+            return;
+        }
         if (g_contacts_state.contact_service)
         {
             title = g_contacts_state.contact_service->getContactName(node->node_id);
@@ -925,7 +1127,15 @@ static void open_chat_compose()
         }
     }
 
-    chat::ConversationId conv(channel, peer_id);
+    s_compose_prev_group = lv_group_get_default();
+    if (!s_compose_group)
+    {
+        s_compose_group = lv_group_create();
+    }
+    lv_group_remove_all_objs(s_compose_group);
+    set_default_group(s_compose_group);
+
+    chat::ConversationId conv(channel, peer_id, protocol);
     g_contacts_state.compose_screen = new chat::ui::ChatComposeScreen(parent, conv);
     g_contacts_state.compose_screen->setActionCallback(on_compose_action, nullptr);
     g_contacts_state.compose_screen->setBackCallback(on_compose_back, nullptr);
@@ -946,9 +1156,11 @@ static void open_chat_compose()
         }
     }
 
-    g_contacts_state.compose_screen->setHeaderText(title.c_str(), nullptr);
+    std::string header = "[" + std::string(mesh_protocol_short_label(protocol)) + "] " + title;
+    g_contacts_state.compose_screen->setHeaderText(header.c_str(), nullptr);
     s_compose_peer_id = peer_id;
     s_compose_channel = channel;
+    s_compose_protocol = protocol;
     s_compose_is_team = (g_contacts_state.current_mode == ContactsMode::Team);
     if (s_compose_is_team)
     {
@@ -997,6 +1209,7 @@ static void close_chat_compose()
     g_contacts_state.compose_screen = nullptr;
     s_compose_peer_id = 0;
     s_compose_channel = chat::ChannelId::PRIMARY;
+    s_compose_protocol = chat::MeshProtocol::Meshtastic;
     s_compose_is_team = false;
 
     if (s_compose_from_conversation && g_contacts_state.conversation_screen)
@@ -1177,6 +1390,13 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
             return;
         }
 
+        if (s_compose_protocol != active_mesh_protocol())
+        {
+            ::ui::SystemNotification::show("Conversation protocol mismatch", 2000);
+            close_chat_compose();
+            return;
+        }
+
         std::string text = g_contacts_state.compose_screen->getText();
         if (!text.empty())
         {
@@ -1243,6 +1463,7 @@ static void refresh_team_conversation()
         for (const auto& entry : entries)
         {
             chat::ChatMessage msg;
+            msg.protocol = app::AppContext::getInstance().getConfig().mesh_protocol;
             msg.channel = chat::ChannelId::PRIMARY;
             msg.peer = 0;
             msg.from = entry.incoming ? entry.peer_id : 0;
@@ -1299,7 +1520,8 @@ static void open_team_conversation()
     lv_group_remove_all_objs(s_conv_group);
     set_default_group(s_conv_group);
 
-    chat::ConversationId conv(chat::ChannelId::PRIMARY, 0);
+    const chat::MeshProtocol protocol = app::AppContext::getInstance().getConfig().mesh_protocol;
+    chat::ConversationId conv(chat::ChannelId::PRIMARY, 0, protocol);
     g_contacts_state.conversation_screen = new chat::ui::ChatConversationScreen(parent, conv);
     g_contacts_state.conversation_screen->setActionCallback(on_team_conversation_action, nullptr);
     g_contacts_state.conversation_screen->setBackCallback(on_team_conversation_back, nullptr);
@@ -1391,26 +1613,30 @@ static void send_team_position()
     int32_t lat_e7 = static_cast<int32_t>(gps_state.lat * 1e7);
     int32_t lon_e7 = static_cast<int32_t>(gps_state.lng * 1e7);
     uint32_t ts = static_cast<uint32_t>(time(nullptr));
+    if (ts < 1577836800U)
+    {
+        ts = static_cast<uint32_t>(millis() / 1000);
+    }
 
-    meshtastic_Position pos = meshtastic_Position_init_zero;
-    pos.has_latitude_i = true;
-    pos.latitude_i = lat_e7;
-    pos.has_longitude_i = true;
-    pos.longitude_i = lon_e7;
-    pos.location_source = meshtastic_Position_LocSource_LOC_INTERNAL;
+    team::proto::TeamPositionMessage pos{};
+    pos.lat_e7 = lat_e7;
+    pos.lon_e7 = lon_e7;
+    pos.ts = ts;
     if (gps_state.has_alt)
     {
-        pos.has_altitude = true;
-        pos.altitude = static_cast<int32_t>(lround(gps_state.alt_m));
-        uint8_t alt_ref = app::AppContext::getInstance().getConfig().gps_alt_ref;
-        pos.altitude_source = (alt_ref == 1)
-                                  ? meshtastic_Position_AltSource_ALT_EXTERNAL
-                                  : meshtastic_Position_AltSource_ALT_INTERNAL;
+        double alt = gps_state.alt_m;
+        if (alt > 32767.0) alt = 32767.0;
+        else if (alt < -32768.0) alt = -32768.0;
+        pos.alt_m = static_cast<int16_t>(lround(alt));
+        pos.flags |= team::proto::kTeamPosHasAltitude;
     }
     if (gps_state.has_speed)
     {
-        pos.has_ground_speed = true;
-        pos.ground_speed = static_cast<uint32_t>(lround(gps_state.speed_mps));
+        double dmps = gps_state.speed_mps * 10.0;
+        if (dmps < 0.0) dmps = 0.0;
+        if (dmps > 65535.0) dmps = 65535.0;
+        pos.speed_dmps = static_cast<uint16_t>(lround(dmps));
+        pos.flags |= team::proto::kTeamPosHasSpeed;
     }
     if (gps_state.has_course)
     {
@@ -1418,26 +1644,22 @@ static void send_team_position()
         if (course < 0.0) course = 0.0;
         uint32_t cdeg = static_cast<uint32_t>(lround(course * 100.0));
         if (cdeg >= 36000U) cdeg = 35999U;
-        pos.has_ground_track = true;
-        pos.ground_track = cdeg;
+        pos.course_cdeg = static_cast<uint16_t>(cdeg);
+        pos.flags |= team::proto::kTeamPosHasCourse;
     }
     if (gps_state.satellites > 0)
     {
-        pos.sats_in_view = gps_state.satellites;
-    }
-    if (ts >= 1577836800U)
-    {
-        pos.timestamp = ts;
+        pos.sats_in_view = static_cast<uint8_t>(
+            gps_state.satellites > 255 ? 255 : gps_state.satellites);
+        pos.flags |= team::proto::kTeamPosHasSatellites;
     }
 
-    uint8_t buf[128];
-    pb_ostream_t stream = pb_ostream_from_buffer(buf, sizeof(buf));
-    if (!pb_encode(&stream, meshtastic_Position_fields, &pos))
+    std::vector<uint8_t> payload;
+    if (!team::proto::encodeTeamPositionMessage(pos, payload))
     {
         CONTACTS_LOG("[Contacts] team position: encode fail\n");
         return;
     }
-    std::vector<uint8_t> payload(buf, buf + stream.bytes_written);
 
     bool ok = controller->onPosition(payload, chat::ChannelId::PRIMARY);
     if (ok)
@@ -1573,6 +1795,99 @@ static void on_node_info_back_clicked(lv_event_t* /*e*/)
     close_node_info_screen();
 }
 
+static void execute_discovery_command(uint8_t command_index)
+{
+    DiscoveryActionSpec spec{};
+    if (!get_discovery_action_spec(static_cast<int>(command_index), &spec))
+    {
+        return;
+    }
+
+    if (spec.command == DiscoveryActionCommand::Cancel)
+    {
+        ContactsMode fallback = g_contacts_state.last_action_mode;
+        if (fallback == ContactsMode::Discover)
+        {
+            fallback = ContactsMode::Contacts;
+        }
+        g_contacts_state.current_mode = fallback;
+        g_contacts_state.current_page = 0;
+        g_contacts_state.selected_index = -1;
+        refresh_ui();
+        contacts_focus_to_filter();
+        return;
+    }
+
+    if (active_mesh_protocol() != chat::MeshProtocol::MeshCore || !g_contacts_state.chat_service)
+    {
+        ::ui::SystemNotification::show("MeshCore only", 2000);
+        return;
+    }
+
+    if (spec.command == DiscoveryActionCommand::ScanLocal)
+    {
+        refresh_contacts_data();
+        g_contacts_state.discover_scan_start_nearby = g_contacts_state.nearby_list.size();
+        if (g_contacts_state.discover_scan_timer)
+        {
+            lv_timer_del(g_contacts_state.discover_scan_timer);
+            g_contacts_state.discover_scan_timer = nullptr;
+        }
+        const bool ok = g_contacts_state.chat_service->triggerDiscoveryAction(chat::MeshDiscoveryAction::ScanLocal);
+        if (!ok)
+        {
+            ::ui::SystemNotification::show("Scan failed", 2000);
+            return;
+        }
+        ::ui::SystemNotification::show("Scanning 5s...", 1800);
+        g_contacts_state.discover_scan_timer = lv_timer_create(on_discovery_scan_done, 5000, nullptr);
+        lv_timer_set_repeat_count(g_contacts_state.discover_scan_timer, 1);
+        return;
+    }
+
+    const chat::MeshDiscoveryAction action =
+        (spec.command == DiscoveryActionCommand::SendIdLocal)
+            ? chat::MeshDiscoveryAction::SendIdLocal
+            : chat::MeshDiscoveryAction::SendIdBroadcast;
+    const bool ok = g_contacts_state.chat_service->triggerDiscoveryAction(action);
+    if (ok)
+    {
+        ::ui::SystemNotification::show(
+            (spec.command == DiscoveryActionCommand::SendIdLocal) ? "ID local sent" : "ID bcast sent",
+            2000);
+    }
+    else
+    {
+        ::ui::SystemNotification::show(
+            (spec.command == DiscoveryActionCommand::SendIdLocal) ? "ID local fail" : "ID bcast fail",
+            2000);
+    }
+}
+
+static void on_discovery_scan_done(lv_timer_t* timer)
+{
+    const size_t start_count = g_contacts_state.discover_scan_start_nearby;
+    refresh_contacts_data();
+    refresh_ui();
+    const size_t total = g_contacts_state.nearby_list.size();
+    const size_t gained = (total > start_count) ? (total - start_count) : 0;
+
+    char msg[24] = {};
+    snprintf(msg, sizeof(msg), "Scan +%u/%u",
+             static_cast<unsigned>(gained),
+             static_cast<unsigned>(total));
+    ::ui::SystemNotification::show(msg, 2200);
+
+    if (timer)
+    {
+        lv_timer_del(timer);
+    }
+    if (timer == g_contacts_state.discover_scan_timer)
+    {
+        g_contacts_state.discover_scan_timer = nullptr;
+    }
+}
+
 enum class ActionMenuCommand : uint8_t
 {
     Chat = 1,
@@ -1590,10 +1905,10 @@ static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text)
     lv_obj_set_size(btn, LV_PCT(100), kButtonHeight);
     contacts::ui::style::apply_btn_basic(btn);
     // Keep default neutral background and highlight strictly by focus state.
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xFFF7E9), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xEBA341), LV_PART_MAIN | LV_STATE_FOCUSED);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xEBA341), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorPanelBg), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmber), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmber), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmberDark), LV_PART_MAIN | LV_STATE_PRESSED);
 
     lv_obj_t* label = lv_label_create(btn);
     lv_label_set_text(label, text);
@@ -1648,7 +1963,11 @@ static void on_action_menu_item_clicked(lv_event_t* e)
 
 static void open_action_menu_modal()
 {
-    if (g_contacts_state.action_menu_modal)
+    if (is_any_modal_open())
+    {
+        return;
+    }
+    if (g_contacts_state.current_mode == ContactsMode::Discover)
     {
         return;
     }
@@ -1816,6 +2135,7 @@ void refresh_ui()
     }
 
     bool team_available = is_team_available();
+    const bool meshcore_mode = (active_mesh_protocol() == chat::MeshProtocol::MeshCore);
     if (g_contacts_state.team_btn)
     {
         if (team_available)
@@ -1827,7 +2147,24 @@ void refresh_ui()
             lv_obj_add_flag(g_contacts_state.team_btn, LV_OBJ_FLAG_HIDDEN);
         }
     }
+    if (g_contacts_state.discover_btn)
+    {
+        if (meshcore_mode)
+        {
+            lv_obj_clear_flag(g_contacts_state.discover_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+        else
+        {
+            lv_obj_add_flag(g_contacts_state.discover_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
     if (!team_available && g_contacts_state.current_mode == ContactsMode::Team)
+    {
+        g_contacts_state.current_mode = ContactsMode::Contacts;
+        g_contacts_state.current_page = 0;
+        g_contacts_state.selected_index = -1;
+    }
+    if (!meshcore_mode && g_contacts_state.current_mode == ContactsMode::Discover)
     {
         g_contacts_state.current_mode = ContactsMode::Contacts;
         g_contacts_state.current_page = 0;
@@ -1862,6 +2199,7 @@ void refresh_ui()
     // Choose list by mode (unchanged)
     std::vector<chat::contacts::NodeInfo> broadcast_list;
     std::vector<chat::contacts::NodeInfo> team_list;
+    std::vector<chat::contacts::NodeInfo> discover_list;
     const std::vector<chat::contacts::NodeInfo>* current_list = nullptr;
     if (g_contacts_state.current_mode == ContactsMode::Contacts)
     {
@@ -1885,14 +2223,34 @@ void refresh_ui()
         team_list.push_back(team_node);
         current_list = &team_list;
     }
+    else if (g_contacts_state.current_mode == ContactsMode::Discover)
+    {
+        for (size_t i = 0; i < (sizeof(kDiscoveryActionSpecs) / sizeof(kDiscoveryActionSpecs[0])); ++i)
+        {
+            chat::contacts::NodeInfo item{};
+            item.node_id = static_cast<uint32_t>(i + 1);
+            item.display_name = kDiscoveryActionSpecs[i].label;
+            item.protocol = chat::contacts::NodeProtocolType::MeshCore;
+            discover_list.push_back(item);
+        }
+        current_list = &discover_list;
+    }
     else
     {
-        chat::contacts::NodeInfo primary{};
-        primary.display_name = "Primary";
-        chat::contacts::NodeInfo secondary{};
-        secondary.display_name = "Secondary";
-        broadcast_list.push_back(primary);
-        broadcast_list.push_back(secondary);
+        for (int i = 0; i < 4; ++i)
+        {
+            BroadcastTargetSpec spec{};
+            if (!get_broadcast_target_spec(i, &spec))
+            {
+                continue;
+            }
+            chat::contacts::NodeInfo target{};
+            target.display_name = spec.label;
+            target.protocol = (spec.protocol == chat::MeshProtocol::MeshCore)
+                                  ? chat::contacts::NodeProtocolType::MeshCore
+                                  : chat::contacts::NodeProtocolType::Meshtastic;
+            broadcast_list.push_back(target);
+        }
         current_list = &broadcast_list;
     }
 
@@ -1932,18 +2290,50 @@ void refresh_ui()
         if (g_contacts_state.current_mode == ContactsMode::Contacts)
         {
             status_text = format_time_status(node.last_seen);
+            const char* proto = node_protocol_short_label(node.protocol);
+            if (proto[0] != '\0')
+            {
+                status_text += " ";
+                status_text += proto;
+            }
         }
         else if (g_contacts_state.current_mode == ContactsMode::Nearby)
         {
             status_text = format_time_status(node.last_seen);
+            const char* proto = node_protocol_short_label(node.protocol);
+            if (proto[0] != '\0')
+            {
+                status_text += " ";
+                status_text += proto;
+            }
         }
         else if (g_contacts_state.current_mode == ContactsMode::Team)
         {
             status_text = "Team";
         }
+        else if (g_contacts_state.current_mode == ContactsMode::Discover)
+        {
+            DiscoveryActionSpec spec{};
+            if (get_discovery_action_spec(i, &spec))
+            {
+                status_text = spec.status;
+            }
+            else
+            {
+                status_text = "Action";
+            }
+        }
         else
         {
-            status_text = "Channel";
+            BroadcastTargetSpec spec{};
+            if (get_broadcast_target_spec(i, &spec))
+            {
+                status_text = (spec.protocol == active_mesh_protocol()) ? "Ready" : "Switch";
+            }
+            else
+            {
+                status_text = "Channel";
+            }
         }
 
         lv_obj_t* item = contacts::ui::layout::create_list_item(
@@ -1965,7 +2355,7 @@ void refresh_ui()
         g_contacts_state.next_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Next",
-            0xEBA341,
+            kColorAmber,
             on_next_clicked);
     }
 
@@ -1974,7 +2364,7 @@ void refresh_ui()
         g_contacts_state.prev_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Prev",
-            0xFFF7E9,
+            kColorPanelBg,
             on_prev_clicked);
     }
 
@@ -1983,7 +2373,7 @@ void refresh_ui()
         g_contacts_state.back_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Back",
-            0xEBA341,
+            kColorAmber,
             on_back_clicked);
     }
 
@@ -2000,36 +2390,8 @@ void refresh_ui()
     }
     lv_obj_clear_state(g_contacts_state.back_btn, LV_STATE_DISABLED);
 
-    // Update filter highlights (visual-only, using CHECKED state)
-    if (g_contacts_state.contacts_btn != nullptr &&
-        g_contacts_state.nearby_btn != nullptr &&
-        g_contacts_state.broadcast_btn != nullptr)
-    {
-        lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
-        lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
-        lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
-        if (g_contacts_state.team_btn)
-        {
-            lv_obj_clear_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
-        }
-
-        if (g_contacts_state.current_mode == ContactsMode::Contacts)
-        {
-            lv_obj_add_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
-        }
-        else if (g_contacts_state.current_mode == ContactsMode::Nearby)
-        {
-            lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
-        }
-        else if (g_contacts_state.current_mode == ContactsMode::Broadcast)
-        {
-            lv_obj_add_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
-        }
-        else if (g_contacts_state.team_btn)
-        {
-            lv_obj_add_state(g_contacts_state.team_btn, LV_STATE_CHECKED);
-        }
-    }
+    // Update filter highlights (visual-only, using CHECKED state).
+    refresh_filter_checked_state();
 
     if (g_contacts_state.list_panel)
     {
@@ -2067,6 +2429,16 @@ void cleanup_modals()
     {
         lv_obj_del(g_contacts_state.action_menu_modal);
         g_contacts_state.action_menu_modal = nullptr;
+    }
+    if (g_contacts_state.discover_modal != nullptr)
+    {
+        lv_obj_del(g_contacts_state.discover_modal);
+        g_contacts_state.discover_modal = nullptr;
+    }
+    if (g_contacts_state.discover_scan_timer != nullptr)
+    {
+        lv_timer_del(g_contacts_state.discover_scan_timer);
+        g_contacts_state.discover_scan_timer = nullptr;
     }
     if (g_contacts_state.node_info_root != nullptr)
     {

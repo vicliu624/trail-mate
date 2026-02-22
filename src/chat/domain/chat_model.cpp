@@ -18,7 +18,7 @@ ChatModel::~ChatModel()
 
 void ChatModel::onIncoming(const ChatMessage& msg)
 {
-    ConversationId conv(msg.channel, msg.peer);
+    ConversationId conv(msg.channel, msg.peer, msg.protocol);
     ConversationData& data = getConvData(conv);
 
     data.messages.append(msg);
@@ -33,7 +33,7 @@ void ChatModel::onIncoming(const ChatMessage& msg)
 
 void ChatModel::onSendQueued(const ChatMessage& msg)
 {
-    ConversationId conv(msg.channel, msg.peer);
+    ConversationId conv(msg.channel, msg.peer, msg.protocol);
     ConversationData& data = getConvData(conv);
 
     ChatMessage copy = msg;

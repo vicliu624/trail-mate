@@ -32,6 +32,7 @@ class MtAdapter : public chat::IMeshAdapter
   public:
     MtAdapter(LoraBoard& board);
     virtual ~MtAdapter();
+    MeshCapabilities getCapabilities() const override;
 
     bool sendText(ChannelId channel, const std::string& text,
                   MessageId* out_msg_id, NodeId peer = 0) override;

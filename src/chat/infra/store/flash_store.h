@@ -39,6 +39,7 @@ class FlashStore : public IChatStore
   private:
     struct Record
     {
+        uint8_t protocol;
         uint8_t channel;
         uint8_t status;
         uint16_t text_len;
@@ -54,7 +55,7 @@ class FlashStore : public IChatStore
     static constexpr const char* kKeyHead = "head";
     static constexpr const char* kKeyCount = "count";
     static constexpr const char* kKeyRecords = "records";
-    static constexpr uint8_t kVersion = 1;
+    static constexpr uint8_t kVersion = 2;
 
     mutable Preferences prefs_;
     bool ready_ = false;

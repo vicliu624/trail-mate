@@ -7,14 +7,14 @@
 #include "../../../app/app_context.h"
 #include "../../../sys/event_bus.h"
 #include "../../../team/protocol/team_mgmt.h"
+#include "../../../team/protocol/team_position.h"
 #include "../../../team/protocol/team_track.h"
+#include "../../../team/protocol/team_waypoint.h"
 #include "../../../team/usecase/team_service.h"
 #include "../../ui_common.h"
 #include "../../widgets/system_notification.h"
 #include "../gps/gps_state.h"
 #include "../gps/gps_tracker_overlay.h"
-#include "meshtastic/mesh.pb.h"
-#include "pb_decode.h"
 #include "team_page_input.h"
 #include "team_page_layout.h"
 #include "team_page_styles.h"
@@ -132,6 +132,9 @@ void notify_send_failed_detail(const char* action, team::TeamService::SendError 
         break;
     case team::TeamService::SendError::MeshSendFail:
         reason = "queue full";
+        break;
+    case team::TeamService::SendError::UnsupportedByProtocol:
+        reason = "unsupported protocol";
         break;
     default:
         break;
@@ -1009,42 +1012,23 @@ void handle_team_position(const team::TeamPositionEvent& ev)
     }
     if (!ev.payload.empty())
     {
-        meshtastic_Position pos = meshtastic_Position_init_zero;
-        pb_istream_t stream = pb_istream_from_buffer(ev.payload.data(), ev.payload.size());
-        if (pb_decode(&stream, meshtastic_Position_fields, &pos))
+        team::proto::TeamPositionMessage pos{};
+        if (team::proto::decodeTeamPositionMessage(ev.payload.data(), ev.payload.size(), &pos))
         {
-            if (pos.has_latitude_i && pos.has_longitude_i)
+            const int16_t alt_m = team::proto::teamPositionHasAltitude(pos) ? pos.alt_m : 0;
+            const uint16_t speed_dmps = team::proto::teamPositionHasSpeed(pos) ? pos.speed_dmps : 0;
+            uint32_t ts = pos.ts != 0 ? pos.ts : ev.ctx.timestamp;
+            if (ts == 0)
             {
-                int32_t lat_e7 = pos.latitude_i;
-                int32_t lon_e7 = pos.longitude_i;
-                int16_t alt_m = 0;
-                if (pos.has_altitude)
-                {
-                    if (pos.altitude > 32767) alt_m = 32767;
-                    else if (pos.altitude < -32768) alt_m = -32768;
-                    else alt_m = static_cast<int16_t>(pos.altitude);
-                }
-                uint16_t speed_dmps = 0;
-                if (pos.has_ground_speed)
-                {
-                    double dmps = static_cast<double>(pos.ground_speed) * 10.0;
-                    if (dmps < 0.0) dmps = 0.0;
-                    if (dmps > 65535.0) dmps = 65535.0;
-                    speed_dmps = static_cast<uint16_t>(lround(dmps));
-                }
-                uint32_t ts = pos.timestamp != 0 ? pos.timestamp : ev.ctx.timestamp;
-                if (ts == 0)
-                {
-                    ts = now_secs();
-                }
-                team_ui_posring_append(g_team_state.team_id,
-                                       ev.ctx.from,
-                                       lat_e7,
-                                       lon_e7,
-                                       alt_m,
-                                       speed_dmps,
-                                       ts);
+                ts = now_secs();
             }
+            team_ui_posring_append(g_team_state.team_id,
+                                   ev.ctx.from,
+                                   pos.lat_e7,
+                                   pos.lon_e7,
+                                   alt_m,
+                                   speed_dmps,
+                                   ts);
         }
     }
     g_team_state.last_update_s = ev.ctx.timestamp;
@@ -1066,6 +1050,21 @@ void handle_team_waypoint(const team::TeamWaypointEvent& ev)
     if (ev.ctx.key_id != 0 && ev.ctx.from != 0)
     {
         mark_keydist_confirmed(ev.ctx.from, ev.ctx.key_id);
+    }
+    if (team::proto::teamWaypointHasLocation(ev.msg))
+    {
+        uint32_t ts = ev.ctx.timestamp;
+        if (ts == 0)
+        {
+            ts = now_secs();
+        }
+        team_ui_posring_append(g_team_state.team_id,
+                               ev.ctx.from,
+                               ev.msg.lat_e7,
+                               ev.msg.lon_e7,
+                               0,
+                               0,
+                               ts);
     }
     g_team_state.last_update_s = ev.ctx.timestamp;
 }

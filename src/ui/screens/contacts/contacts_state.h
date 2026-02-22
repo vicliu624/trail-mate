@@ -43,7 +43,8 @@ enum class ContactsMode
     Contacts,  // Show contacts (nodes with nicknames)
     Nearby,    // Show nearby nodes (nodes without nicknames)
     Broadcast, // Show broadcast channels
-    Team       // Show team (if joined)
+    Team,      // Show team (if joined)
+    Discover   // Show MeshCore discover actions
 };
 
 struct ContactsPageState
@@ -59,6 +60,7 @@ struct ContactsPageState
     lv_obj_t* nearby_btn = nullptr;
     lv_obj_t* broadcast_btn = nullptr;
     lv_obj_t* team_btn = nullptr;
+    lv_obj_t* discover_btn = nullptr;
 
     // Second column: Node list
     lv_obj_t* list_panel = nullptr;
@@ -99,10 +101,13 @@ struct ContactsPageState
     lv_obj_t* add_edit_error_label = nullptr;
     lv_obj_t* del_confirm_modal = nullptr;
     lv_obj_t* action_menu_modal = nullptr;
+    lv_obj_t* discover_modal = nullptr;
     lv_group_t* modal_group = nullptr;
     lv_group_t* prev_group = nullptr;
     uint32_t modal_node_id = 0;
     bool modal_is_edit = false;
+    lv_timer_t* discover_scan_timer = nullptr;
+    size_t discover_scan_start_nearby = 0;
 
     // Compose screen (Chat button)
     chat::ui::ChatComposeScreen* compose_screen = nullptr;

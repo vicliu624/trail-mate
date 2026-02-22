@@ -10,6 +10,13 @@
 
 namespace chat
 {
+namespace
+{
+const char* protocolTag(MeshProtocol protocol)
+{
+    return (protocol == MeshProtocol::MeshCore) ? "mc" : "mt";
+}
+} // namespace
 
 bool LogStore::begin(fs::FS& fs)
 {
@@ -32,7 +39,7 @@ void LogStore::append(const ChatMessage& msg)
     if (!fs_) return;
     if (!ensureDir()) return;
 
-    ConversationId conv(msg.channel, msg.peer);
+    ConversationId conv(msg.channel, msg.peer, msg.protocol);
     char path[64];
     buildConversationPath(conv, path, sizeof(path));
 
@@ -64,6 +71,7 @@ void LogStore::append(const ChatMessage& msg)
     }
 
     Record rec{};
+    rec.protocol = static_cast<uint8_t>(msg.protocol);
     rec.channel = static_cast<uint8_t>(msg.channel);
     rec.status = static_cast<uint8_t>(msg.status);
     rec.text_len = static_cast<uint16_t>(std::min<size_t>(msg.text.size(), kMaxTextLen));
@@ -152,6 +160,7 @@ std::vector<ChatMessage> LogStore::loadRecent(const ConversationId& conv, size_t
             continue;
         }
         ChatMessage msg;
+        msg.protocol = static_cast<MeshProtocol>(rec.protocol);
         msg.channel = static_cast<ChannelId>(rec.channel);
         msg.from = rec.from;
         msg.peer = rec.peer;
@@ -208,6 +217,7 @@ std::vector<ConversationMeta> LogStore::loadConversationPage(size_t offset,
     {
         const IndexEntry& entry = entries[i];
         ConversationMeta meta;
+        meta.id.protocol = static_cast<MeshProtocol>(entry.protocol);
         meta.id.channel = static_cast<ChannelId>(entry.channel);
         meta.id.peer = entry.peer;
         meta.preview.assign(entry.preview, entry.preview_len);
@@ -256,7 +266,8 @@ int LogStore::getUnread(const ConversationId& conv) const
     for (const auto& entry : entries)
     {
         if (entry.peer == conv.peer &&
-            entry.channel == static_cast<uint8_t>(conv.channel))
+            entry.channel == static_cast<uint8_t>(conv.channel) &&
+            entry.protocol == static_cast<uint8_t>(conv.protocol))
         {
             return entry.unread;
         }
@@ -284,7 +295,8 @@ void LogStore::clearConversation(const ConversationId& conv)
                                  [&](const IndexEntry& entry)
                                  {
                                      return entry.peer == conv.peer &&
-                                            entry.channel == static_cast<uint8_t>(conv.channel);
+                                            entry.channel == static_cast<uint8_t>(conv.channel) &&
+                                            entry.protocol == static_cast<uint8_t>(conv.protocol);
                                  }),
                   entries.end());
     writeIndex(entries);
@@ -348,7 +360,9 @@ bool LogStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
     bool updated = false;
     for (auto& entry : entries)
     {
-        ConversationId conv(static_cast<ChannelId>(entry.channel), entry.peer);
+        ConversationId conv(static_cast<ChannelId>(entry.channel),
+                            entry.peer,
+                            static_cast<MeshProtocol>(entry.protocol));
         char path[64];
         buildConversationPath(conv, path, sizeof(path));
         if (!fs_->exists(path))
@@ -501,7 +515,8 @@ bool LogStore::findIndexEntry(const ConversationId& conv,
     for (size_t i = 0; i < entries.size(); ++i)
     {
         if (entries[i].peer == conv.peer &&
-            entries[i].channel == static_cast<uint8_t>(conv.channel))
+            entries[i].channel == static_cast<uint8_t>(conv.channel) &&
+            entries[i].protocol == static_cast<uint8_t>(conv.protocol))
         {
             if (out_idx)
             {
@@ -521,11 +536,12 @@ void LogStore::updateIndexForMessage(const ChatMessage& msg)
         return;
     }
 
-    ConversationId conv(msg.channel, msg.peer);
+    ConversationId conv(msg.channel, msg.peer, msg.protocol);
     size_t idx = 0;
     if (!findIndexEntry(conv, entries, &idx))
     {
         IndexEntry entry{};
+        entry.protocol = static_cast<uint8_t>(msg.protocol);
         entry.channel = static_cast<uint8_t>(msg.channel);
         entry.peer = msg.peer;
         entries.push_back(entry);
@@ -533,6 +549,7 @@ void LogStore::updateIndexForMessage(const ChatMessage& msg)
     }
 
     IndexEntry& entry = entries[idx];
+    entry.protocol = static_cast<uint8_t>(msg.protocol);
     entry.channel = static_cast<uint8_t>(msg.channel);
     entry.status = static_cast<uint8_t>(msg.status);
     entry.peer = msg.peer;
@@ -595,6 +612,7 @@ void LogStore::rebuildIndex()
                         continue;
                     }
                     ChatMessage msg;
+                    msg.protocol = static_cast<MeshProtocol>(rec.protocol);
                     msg.channel = static_cast<ChannelId>(rec.channel);
                     msg.from = rec.from;
                     msg.peer = rec.peer;
@@ -612,6 +630,7 @@ void LogStore::rebuildIndex()
                 if (have_last)
                 {
                     IndexEntry idx{};
+                    idx.protocol = static_cast<uint8_t>(last_msg.protocol);
                     idx.channel = static_cast<uint8_t>(last_msg.channel);
                     idx.status = static_cast<uint8_t>(last_msg.status);
                     idx.unread = 0;
@@ -699,11 +718,11 @@ void LogStore::buildConversationPath(const ConversationId& conv,
     if (conv.peer == 0)
     {
         const char* name = channelName(conv.channel);
-        snprintf(out, out_len, "%s/broadcast_%s.log", kDir, name);
+        snprintf(out, out_len, "%s/%s_broadcast_%s.log", kDir, protocolTag(conv.protocol), name);
     }
     else
     {
-        snprintf(out, out_len, "%s/n_%08lX.log", kDir,
+        snprintf(out, out_len, "%s/%s_n_%08lX.log", kDir, protocolTag(conv.protocol),
                  static_cast<unsigned long>(conv.peer));
     }
 }

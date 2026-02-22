@@ -231,6 +231,7 @@ void AppTasks::radioTask(void* pvParameters)
                         }
                         else
                         {
+                            rx_started = false;
                             LORA_LOG("[LORA] RX start fail state=%d\n", rx_state);
                         }
                     }
@@ -267,6 +268,11 @@ void AppTasks::radioTask(void* pvParameters)
             uint32_t irq = board_->getRadioIrqFlags();
             if (irq & (RADIOLIB_SX126X_IRQ_RX_DONE | RADIOLIB_SX128X_IRQ_RX_DONE))
             {
+                char irq_desc[96];
+                const char* flags = describe_irq_flags(irq, irq_desc, sizeof(irq_desc));
+                LORA_LOG("[LORA] IRQ RX_DONE irq=0x%08lX flags=%s\n",
+                         static_cast<unsigned long>(irq),
+                         flags);
                 packet_length = static_cast<int>(board_->getRadioPacketLength(true));
                 if (packet_length > 0 && packet_length <= 255)
                 {
@@ -303,6 +309,11 @@ void AppTasks::radioTask(void* pvParameters)
             }
             else if (irq)
             {
+                char irq_desc[96];
+                const char* flags = describe_irq_flags(irq, irq_desc, sizeof(irq_desc));
+                LORA_LOG("[LORA] IRQ other irq=0x%08lX flags=%s\n",
+                         static_cast<unsigned long>(irq),
+                         flags);
                 board_->clearRadioIrqFlags(irq);
             }
             if (packet_length > 0)

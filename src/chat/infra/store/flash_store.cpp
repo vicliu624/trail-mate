@@ -50,6 +50,7 @@ void FlashStore::append(const ChatMessage& msg)
     if (!ready_) return;
 
     Record rec{};
+    rec.protocol = static_cast<uint8_t>(msg.protocol);
     rec.channel = static_cast<uint8_t>(msg.channel);
     rec.status = static_cast<uint8_t>(msg.status);
     rec.text_len = static_cast<uint16_t>(std::min<size_t>(msg.text.size(), kMaxTextLen));
@@ -62,7 +63,8 @@ void FlashStore::append(const ChatMessage& msg)
         memcpy(rec.text, msg.text.data(), rec.text_len);
     }
 
-    FLASH_STORE_LOG("[FlashStore] append ch=%u status=%u from=%08lX peer=%08lX ts=%lu len=%u\n",
+    FLASH_STORE_LOG("[FlashStore] append proto=%u ch=%u status=%u from=%08lX peer=%08lX ts=%lu len=%u\n",
+                    static_cast<unsigned>(rec.protocol),
                     static_cast<unsigned>(rec.channel),
                     static_cast<unsigned>(rec.status),
                     static_cast<unsigned long>(rec.from),
@@ -77,7 +79,7 @@ void FlashStore::append(const ChatMessage& msg)
     persistMeta();
     if (msg.status == MessageStatus::Incoming)
     {
-        ConversationId conv(msg.channel, msg.peer);
+        ConversationId conv(msg.channel, msg.peer, msg.protocol);
         unread_[conv] = unread_[conv] + 1;
     }
 }
@@ -102,11 +104,16 @@ std::vector<ChatMessage> FlashStore::loadRecent(const ConversationId& conv, size
         {
             continue;
         }
+        if (static_cast<MeshProtocol>(rec.protocol) != conv.protocol)
+        {
+            continue;
+        }
         if (rec.peer != conv.peer)
         {
             continue;
         }
         ChatMessage msg;
+        msg.protocol = static_cast<MeshProtocol>(rec.protocol);
         msg.channel = static_cast<ChannelId>(rec.channel);
         msg.from = rec.from;
         msg.peer = rec.peer;
@@ -147,6 +154,7 @@ std::vector<ConversationMeta> FlashStore::loadConversationPage(size_t offset,
             continue;
         }
         ChatMessage msg;
+        msg.protocol = static_cast<MeshProtocol>(rec.protocol);
         msg.channel = static_cast<ChannelId>(rec.channel);
         msg.from = rec.from;
         msg.peer = rec.peer;
@@ -154,7 +162,7 @@ std::vector<ConversationMeta> FlashStore::loadConversationPage(size_t offset,
         msg.timestamp = rec.timestamp;
         msg.text.assign(rec.text, rec.text_len);
         msg.status = static_cast<MessageStatus>(rec.status);
-        ConversationId conv(msg.channel, msg.peer);
+        ConversationId conv(msg.channel, msg.peer, msg.protocol);
         auto it = last.find(conv);
         if (it == last.end() || it->second.timestamp <= msg.timestamp)
         {
@@ -238,7 +246,9 @@ void FlashStore::clearConversation(const ConversationId& conv)
     for (size_t i = 0; i < kMaxMessages; ++i)
     {
         Record& rec = records_[i];
-        if (static_cast<ChannelId>(rec.channel) == conv.channel && rec.peer == conv.peer)
+        if (static_cast<ChannelId>(rec.channel) == conv.channel &&
+            static_cast<MeshProtocol>(rec.protocol) == conv.protocol &&
+            rec.peer == conv.peer)
         {
             rec = {};
             persistRecord(static_cast<uint16_t>(i));

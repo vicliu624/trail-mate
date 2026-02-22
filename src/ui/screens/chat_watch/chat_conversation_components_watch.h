@@ -35,6 +35,8 @@ class ChatConversationScreen
     void setHeaderText(const char* title, const char* status = nullptr);
     void updateBatteryFromBoard();
     void setBackCallback(void (*cb)(void*), void* user_data);
+    void setReplyEnabled(bool enabled);
+    bool isReplyEnabled() const { return reply_enabled_; }
 
   private:
     struct LifetimeGuard
@@ -81,6 +83,7 @@ class ChatConversationScreen
     static constexpr size_t MAX_DISPLAY_MESSAGES = 100;
 
     LifetimeGuard* guard_ = nullptr;
+    bool reply_enabled_ = true;
 
     void schedule_action_async(ActionIntent intent);
     void schedule_back_async();

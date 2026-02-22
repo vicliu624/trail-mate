@@ -121,6 +121,11 @@ static void bind_filter_column(bool keep_mode_focus)
         lv_group_add_obj(s_group, g_contacts_state.team_btn);
         attach_key_handler(g_contacts_state.team_btn);
     }
+    if (is_visible(g_contacts_state.discover_btn))
+    {
+        lv_group_add_obj(s_group, g_contacts_state.discover_btn);
+        attach_key_handler(g_contacts_state.discover_btn);
+    }
 
     // Focus preference:
     // - keep_mode_focus: focus current mode button (better for rotate-to-switch-mode UX)
@@ -143,6 +148,10 @@ static void bind_filter_column(bool keep_mode_focus)
         {
             focus_first_valid(g_contacts_state.team_btn);
         }
+        else if (g_contacts_state.current_mode == ContactsMode::Discover && is_visible(g_contacts_state.discover_btn))
+        {
+            focus_first_valid(g_contacts_state.discover_btn);
+        }
         else if (g_contacts_state.top_bar.back_btn)
         {
             focus_first_valid(g_contacts_state.top_bar.back_btn);
@@ -162,6 +171,10 @@ static void bind_filter_column(bool keep_mode_focus)
         else if (is_visible(g_contacts_state.team_btn))
         {
             focus_first_valid(g_contacts_state.team_btn);
+        }
+        else if (is_visible(g_contacts_state.discover_btn))
+        {
+            focus_first_valid(g_contacts_state.discover_btn);
         }
     }
     else
@@ -183,6 +196,10 @@ static void bind_filter_column(bool keep_mode_focus)
         {
             focus_first_valid(g_contacts_state.team_btn);
         }
+        else if (g_contacts_state.current_mode == ContactsMode::Discover && is_visible(g_contacts_state.discover_btn))
+        {
+            focus_first_valid(g_contacts_state.discover_btn);
+        }
         else if (is_visible(g_contacts_state.contacts_btn))
         {
             focus_first_valid(g_contacts_state.contacts_btn);
@@ -198,6 +215,10 @@ static void bind_filter_column(bool keep_mode_focus)
         else if (is_visible(g_contacts_state.team_btn))
         {
             focus_first_valid(g_contacts_state.team_btn);
+        }
+        else if (is_visible(g_contacts_state.discover_btn))
+        {
+            focus_first_valid(g_contacts_state.discover_btn);
         }
         else if (g_contacts_state.top_bar.back_btn)
         {
@@ -274,7 +295,7 @@ static void rebind_by_column()
 /**
  * Encoder key handler (SPEC):
  * - Filter: ENTER -> List
- * - List:   ENTER on item -> open action popup
+ * - List:   ENTER on item -> open action popup (or execute Discover action row)
  *           ENTER on Prev/Next -> click (stay List)
  *           ENTER on Back -> Filter
  * - ESC/BACKSPACE: List -> Filter

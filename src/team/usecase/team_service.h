@@ -5,6 +5,7 @@
 #include "../ports/i_team_crypto.h"
 #include "../ports/i_team_event_sink.h"
 #include "../protocol/team_chat.h"
+#include "../protocol/team_waypoint.h"
 #include <vector>
 
 namespace team
@@ -19,7 +20,8 @@ class TeamService
         KeysNotReady,
         EncodeFail,
         EncryptFail,
-        MeshSendFail
+        MeshSendFail,
+        UnsupportedByProtocol
     };
     TeamService(team::ITeamCrypto& crypto,
                 chat::IMeshAdapter& mesh,
@@ -46,7 +48,7 @@ class TeamService
                          chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool sendPosition(const std::vector<uint8_t>& payload,
                       chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
-    bool sendWaypoint(const std::vector<uint8_t>& payload,
+    bool sendWaypoint(const team::proto::TeamWaypointMessage& msg,
                       chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
     bool sendTrack(const std::vector<uint8_t>& payload,
                    chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
@@ -82,6 +84,7 @@ class TeamService
     bool sendMgmtEncrypted(const team::proto::TeamMgmtType type,
                            const std::vector<uint8_t>& payload,
                            chat::ChannelId channel, chat::NodeId dest, bool want_ack);
+    bool validateSendCapabilities(chat::NodeId dest, bool want_ack);
 
     void emitError(const chat::MeshIncomingData& data,
                    team::TeamProtocolError error,

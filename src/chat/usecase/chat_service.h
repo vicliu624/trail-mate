@@ -20,7 +20,10 @@ namespace chat
 class ChatService
 {
   public:
-    ChatService(ChatModel& model, IMeshAdapter& adapter, IChatStore& store);
+    ChatService(ChatModel& model,
+                IMeshAdapter& adapter,
+                IChatStore& store,
+                MeshProtocol active_protocol = MeshProtocol::Meshtastic);
 
     /**
      * @brief Send text message
@@ -29,6 +32,11 @@ class ChatService
      * @return Message ID if queued successfully, 0 on failure
      */
     MessageId sendText(ChannelId channel, const std::string& text, NodeId peer = 0);
+
+    /**
+     * @brief Trigger protocol discovery action (if supported by active adapter)
+     */
+    bool triggerDiscoveryAction(MeshDiscoveryAction action);
 
     /**
      * @brief Switch to channel
@@ -84,6 +92,16 @@ class ChatService
      */
     const ChatMessage* getMessage(MessageId msg_id) const;
 
+    void setActiveProtocol(MeshProtocol protocol)
+    {
+        active_protocol_ = protocol;
+    }
+
+    MeshProtocol getActiveProtocol() const
+    {
+        return active_protocol_;
+    }
+
     /**
      * @brief Get current channel
      */
@@ -98,6 +116,7 @@ class ChatService
     IChatStore& store_;
     ChannelId current_channel_;
     bool model_enabled_ = true;
+    MeshProtocol active_protocol_ = MeshProtocol::Meshtastic;
 };
 
 } // namespace chat

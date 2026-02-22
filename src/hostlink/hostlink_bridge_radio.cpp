@@ -5,6 +5,7 @@
 #include "../team/protocol/team_chat.h"
 #include "../team/protocol/team_mgmt.h"
 #include "../team/protocol/team_portnum.h"
+#include "../team/protocol/team_waypoint.h"
 #include "../ui/screens/team/team_ui_store.h"
 #include "hostlink_service.h"
 #include "hostlink_types.h"
@@ -803,6 +804,11 @@ void on_event(const sys::Event& event)
         update_runtime_team_context(team_evt.data.ctx, ts_s);
         touch_runtime_member(team_evt.data.ctx.from, false, ts_s);
 
+        std::vector<uint8_t> payload;
+        if (!team::proto::encodeTeamWaypointMessage(team_evt.data.msg, payload))
+        {
+            break;
+        }
         uint8_t flags = kAppFlagTeamMeta | kAppFlagWasEncrypted;
         send_app_data(team::proto::TEAM_WAYPOINT_APP,
                       team_evt.data.ctx.from,
@@ -814,8 +820,8 @@ void on_event(const sys::Event& event)
                       event.timestamp / 1000,
                       0,
                       &team_evt.data.ctx.rx_meta,
-                      team_evt.data.payload.data(),
-                      team_evt.data.payload.size());
+                      payload.data(),
+                      payload.size());
         break;
     }
     case sys::EventType::TeamTrack:

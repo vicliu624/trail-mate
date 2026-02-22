@@ -67,10 +67,10 @@ bool TeamController::onPosition(const std::vector<uint8_t>& payload,
     return service_.sendPosition(payload, channel, dest, want_ack);
 }
 
-bool TeamController::onWaypoint(const std::vector<uint8_t>& payload,
+bool TeamController::onWaypoint(const team::proto::TeamWaypointMessage& msg,
                                 chat::ChannelId channel, chat::NodeId dest, bool want_ack)
 {
-    return service_.sendWaypoint(payload, channel, dest, want_ack);
+    return service_.sendWaypoint(msg, channel, dest, want_ack);
 }
 
 bool TeamController::onTrack(const std::vector<uint8_t>& payload,

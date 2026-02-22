@@ -146,7 +146,7 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
 
     // Create chat service
     chat_service_ = std::make_unique<chat::ChatService>(
-        *chat_model_, *mesh_adapter_, *chat_store_);
+        *chat_model_, *mesh_adapter_, *chat_store_, config_.mesh_protocol);
     applyChatDefaults();
 
     // Create team service (protocol-only for now)
