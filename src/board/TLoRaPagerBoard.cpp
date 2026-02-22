@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 
+#include <cmath>
 #include <cstring>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
@@ -857,6 +858,119 @@ void TLoRaPagerBoard::stopVibrator()
     log_d("[stopVibrator] Disabling power...");
     powerControl(POWER_HAPTIC_DRIVER, false);
     log_d("[stopVibrator] Power disabled, function completed");
+}
+
+void TLoRaPagerBoard::playMessageTone()
+{
+#ifndef USING_AUDIO_CODEC
+    return;
+#else
+    if (!(devices_probe & HW_CODEC_ONLINE))
+    {
+        return;
+    }
+
+    static bool s_playing = false;
+    static uint32_t s_last_play_ms = 0;
+
+    if (s_playing)
+    {
+        return;
+    }
+
+    const uint32_t now = millis();
+    if ((now - s_last_play_ms) < 240)
+    {
+        return;
+    }
+
+    s_playing = true;
+    s_last_play_ms = now;
+
+    struct ToneStep
+    {
+        uint16_t freq_hz;
+        uint16_t duration_ms;
+    };
+
+    static constexpr ToneStep kTone[] = {
+        {1319, 55},
+        {1568, 55},
+        {1976, 90},
+    };
+    static constexpr uint16_t kGapMs = 18;
+    static constexpr uint32_t kSampleRate = 16000;
+    static constexpr uint8_t kChannels = 2;
+    static constexpr size_t kFramesPerChunk = 128;
+    static constexpr float kAmplitude = 0.16f;
+    static constexpr float kTwoPi = 6.28318530718f;
+
+    int prev_volume = codec.getVolume();
+    if (prev_volume < 0 || prev_volume > 100)
+    {
+        prev_volume = 50;
+    }
+    bool prev_out_mute = codec.getOutMute();
+
+    bool opened = (codec.open(16, kChannels, kSampleRate) == 0);
+    if (!opened)
+    {
+        s_playing = false;
+        return;
+    }
+
+    codec.setOutMute(false);
+    codec.setVolume(static_cast<uint8_t>(prev_volume < 45 ? 45 : prev_volume));
+
+    int16_t pcm[kFramesPerChunk * kChannels];
+    auto write_silence = [&](uint32_t ms)
+    {
+        uint32_t remaining = (kSampleRate * ms) / 1000;
+        while (remaining > 0)
+        {
+            size_t frames = remaining > kFramesPerChunk ? kFramesPerChunk : static_cast<size_t>(remaining);
+            memset(pcm, 0, frames * kChannels * sizeof(int16_t));
+            codec.write(reinterpret_cast<uint8_t*>(pcm), frames * kChannels * sizeof(int16_t));
+            remaining -= static_cast<uint32_t>(frames);
+        }
+    };
+
+    for (size_t i = 0; i < (sizeof(kTone) / sizeof(kTone[0])); ++i)
+    {
+        const ToneStep& step = kTone[i];
+        uint32_t remaining = (kSampleRate * step.duration_ms) / 1000;
+        float phase = 0.0f;
+        const float phase_step = (kTwoPi * static_cast<float>(step.freq_hz)) / static_cast<float>(kSampleRate);
+
+        while (remaining > 0)
+        {
+            size_t frames = remaining > kFramesPerChunk ? kFramesPerChunk : static_cast<size_t>(remaining);
+            for (size_t n = 0; n < frames; ++n)
+            {
+                int16_t sample = static_cast<int16_t>(sinf(phase) * (32767.0f * kAmplitude));
+                pcm[n * 2] = sample;
+                pcm[n * 2 + 1] = sample;
+                phase += phase_step;
+                if (phase >= kTwoPi)
+                {
+                    phase -= kTwoPi;
+                }
+            }
+            codec.write(reinterpret_cast<uint8_t*>(pcm), frames * kChannels * sizeof(int16_t));
+            remaining -= static_cast<uint32_t>(frames);
+        }
+
+        if (i + 1 < (sizeof(kTone) / sizeof(kTone[0])))
+        {
+            write_silence(kGapMs);
+        }
+    }
+
+    codec.setVolume(static_cast<uint8_t>(prev_volume));
+    codec.setOutMute(prev_out_mute);
+    codec.close();
+    s_playing = false;
+#endif
 }
 
 void TLoRaPagerBoard::setHapticEffects(uint8_t effects)

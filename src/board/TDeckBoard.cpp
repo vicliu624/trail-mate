@@ -1,6 +1,9 @@
 #include "board/TDeckBoard.h"
 #include "board/sd_utils.h"
 #include "display/drivers/ST7789TDeck.h"
+#include <AudioFileSourcePROGMEM.h>
+#include <AudioGeneratorRTTTL.h>
+#include <AudioOutputI2S.h>
 #include <SD.h>
 #include <Wire.h>
 #include <ctime>
@@ -870,6 +873,57 @@ RotaryMsg_t TDeckBoard::getRotary()
 #endif
 
     return msg;
+}
+
+void TDeckBoard::playMessageTone()
+{
+#if defined(DAC_I2S_BCK) && defined(DAC_I2S_WS) && defined(DAC_I2S_DOUT)
+    static bool s_playing = false;
+    static uint32_t s_last_play_ms = 0;
+
+    if (s_playing)
+    {
+        return;
+    }
+
+    const uint32_t now = millis();
+    if ((now - s_last_play_ms) < 240)
+    {
+        return;
+    }
+
+    s_playing = true;
+    s_last_play_ms = now;
+
+    static const char kMessageToneRtttl[] = "MsgRcv:d=4,o=6,b=200:32e,32g,32b,16c7";
+
+    AudioOutputI2S audio_out(1, AudioOutputI2S::EXTERNAL_I2S);
+#if defined(DAC_I2S_MCLK)
+    audio_out.SetPinout(DAC_I2S_BCK, DAC_I2S_WS, DAC_I2S_DOUT, DAC_I2S_MCLK);
+#else
+    audio_out.SetPinout(DAC_I2S_BCK, DAC_I2S_WS, DAC_I2S_DOUT);
+#endif
+    audio_out.SetGain(0.18f);
+
+    AudioFileSourcePROGMEM song(kMessageToneRtttl, sizeof(kMessageToneRtttl) - 1);
+    AudioGeneratorRTTTL generator;
+
+    if (generator.begin(&song, &audio_out))
+    {
+        const uint32_t deadline = millis() + 1600;
+        while (generator.isRunning() && millis() < deadline)
+        {
+            if (!generator.loop())
+            {
+                break;
+            }
+            delay(1);
+        }
+        generator.stop();
+    }
+    audio_out.stop();
+    s_playing = false;
+#endif
 }
 
 namespace

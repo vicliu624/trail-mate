@@ -29,6 +29,12 @@ static const uint8_t SCK = 40;
 // Board power enable (required very early on T-Deck)
 #define BOARD_POWERON (10)
 
+// T-Deck I2S speaker/amp pins (aligned with Meshtastic T-Deck reference).
+#define DAC_I2S_BCK (7)
+#define DAC_I2S_WS (5)
+#define DAC_I2S_DOUT (6)
+#define DAC_I2S_MCLK (21)
+
 // Display pins (aligned with LilyGo T-Deck examples)
 #define DISP_MOSI (MOSI)
 #define DISP_MISO (MISO)

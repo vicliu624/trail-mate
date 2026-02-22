@@ -294,6 +294,7 @@ void AppContext::update()
             {
                 APP_EVENT_LOG("[AppContext::update] Triggering haptic feedback...\n");
                 board_->vibrator();
+                board_->playMessageTone();
                 APP_EVENT_LOG("[AppContext::update] Haptic feedback triggered\n");
             }
             else
@@ -311,6 +312,7 @@ void AppContext::update()
             if (board_)
             {
                 board_->vibrator();
+                board_->playMessageTone();
             }
             std::string notice = "Team: ";
             const auto& msg = team_event->data.msg;

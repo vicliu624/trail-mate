@@ -37,6 +37,9 @@ class BoardBase
     // 触觉反馈
     virtual void vibrator() = 0;
     virtual void stopVibrator() = 0;
+
+    // 收到消息提示音（默认空实现，具体板级按需覆盖）
+    virtual void playMessageTone() {}
 };
 
 // 全局板实例（与原来的 instance 等价，用于解耦调用方类型）

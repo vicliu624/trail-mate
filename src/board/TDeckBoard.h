@@ -65,6 +65,7 @@ class TDeckBoard : public BoardBase,
 
     void vibrator() override {}
     void stopVibrator() override {}
+    void playMessageTone() override;
 
     // LilyGo_Display
     void setRotation(uint8_t rotation) override;

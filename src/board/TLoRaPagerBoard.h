@@ -217,6 +217,11 @@ class TLoRaPagerBoard : public BoardBase,
     void stopVibrator() override;
 
     /**
+     * @brief Play incoming-message prompt tone
+     */
+    void playMessageTone() override;
+
+    /**
      * @brief Set haptic effect waveform
      * @param effects Effect number (0-127, see DRV2605 documentation)
      */
