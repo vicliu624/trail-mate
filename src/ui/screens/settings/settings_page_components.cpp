@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "../../../app/app_context.h"
+#include "../../../board/BoardBase.h"
 #include "../../../chat/domain/chat_types.h"
 #include "../../../chat/infra/meshcore/mc_region_presets.h"
 #include "../../../chat/infra/meshtastic/generated/meshtastic/config.pb.h"
@@ -488,6 +489,17 @@ static void settings_load()
 
     g_settings.screen_timeout_ms = prefs_get_int("screen_timeout", static_cast<int>(getScreenSleepTimeout()));
     g_settings.timezone_offset_min = prefs_get_int("timezone_offset", 0);
+    g_settings.speaker_volume = prefs_get_int("speaker_volume",
+                                              static_cast<int>(board.getMessageToneVolume()));
+    if (g_settings.speaker_volume < 0)
+    {
+        g_settings.speaker_volume = 0;
+    }
+    if (g_settings.speaker_volume > 100)
+    {
+        g_settings.speaker_volume = 100;
+    }
+    board.setMessageToneVolume(static_cast<uint8_t>(g_settings.speaker_volume));
 
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
 }
@@ -976,6 +988,16 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "screen_timeout") == 0)
     {
         setScreenSleepTimeout(static_cast<uint32_t>(payload->value));
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "speaker_volume") == 0)
+    {
+        const uint8_t volume = static_cast<uint8_t>(payload->value);
+        board.setMessageToneVolume(volume);
+        if (volume > 0)
+        {
+            // Immediate audible feedback so user can tune the level interactively.
+            board.playMessageTone();
+        }
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "gps_interval") == 0)
     {
@@ -1479,6 +1501,16 @@ static const settings::ui::SettingOption kScreenTimeoutOptions[] = {
     {"Always", 300000},
 };
 
+static const settings::ui::SettingOption kSpeakerVolumeOptions[] = {
+    {"OFF", 0},
+    {"30%", 30},
+    {"45%", 45},
+    {"60%", 60},
+    {"75%", 75},
+    {"90%", 90},
+    {"100%", 100},
+};
+
 static const settings::ui::SettingOption kTimeZoneOptions[] = {
     {"UTC", 0},
     {"Beijing (UTC+8)", 480},
@@ -1574,6 +1606,8 @@ static settings::ui::SettingItem kNetworkItems[] = {
 
 static settings::ui::SettingItem kScreenItems[] = {
     {"Screen Timeout", settings::ui::SettingType::Enum, kScreenTimeoutOptions, 4, &g_settings.screen_timeout_ms, nullptr, nullptr, 0, false, "screen_timeout"},
+    {"Speaker Volume", settings::ui::SettingType::Enum, kSpeakerVolumeOptions,
+     sizeof(kSpeakerVolumeOptions) / sizeof(kSpeakerVolumeOptions[0]), &g_settings.speaker_volume, nullptr, nullptr, 0, false, "speaker_volume"},
     {"Time Zone", settings::ui::SettingType::Enum, kTimeZoneOptions, sizeof(kTimeZoneOptions) / sizeof(kTimeZoneOptions[0]), &g_settings.timezone_offset_min, nullptr, nullptr, 0, false, "timezone_offset"},
 };
 

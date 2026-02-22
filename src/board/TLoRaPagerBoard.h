@@ -220,6 +220,8 @@ class TLoRaPagerBoard : public BoardBase,
      * @brief Play incoming-message prompt tone
      */
     void playMessageTone() override;
+    void setMessageToneVolume(uint8_t volume_percent) override;
+    uint8_t getMessageToneVolume() const override;
 
     /**
      * @brief Set haptic effect waveform
@@ -448,6 +450,7 @@ class TLoRaPagerBoard : public BoardBase,
 
     uint32_t devices_probe = 0;   ///< Hardware detection status bitmask
     uint8_t _haptic_effects = 15; ///< Default haptic effect (strong buzz for message notification)
+    uint8_t _message_tone_volume = 45;
 };
 
 extern TLoRaPagerBoard& instance;

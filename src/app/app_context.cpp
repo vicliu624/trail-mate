@@ -35,6 +35,29 @@ namespace app
 #define APP_EVENT_LOG(...)
 #endif
 
+namespace
+{
+uint8_t load_message_tone_volume()
+{
+    Preferences prefs;
+    if (!prefs.begin("settings", true))
+    {
+        return 45;
+    }
+    int value = prefs.getInt("speaker_volume", 45);
+    prefs.end();
+    if (value < 0)
+    {
+        value = 0;
+    }
+    if (value > 100)
+    {
+        value = 100;
+    }
+    return static_cast<uint8_t>(value);
+}
+} // namespace
+
 bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_board, MotionBoard* motion_board,
                       bool use_mock_adapter, uint32_t disable_hw_init)
 {
@@ -43,6 +66,7 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
     lora_board_ = lora_board;
     gps_board_ = gps_board;
     motion_board_ = motion_board;
+    board_->setMessageToneVolume(load_message_tone_volume());
 
     // Initialize event bus
     if (!sys::EventBus::init())

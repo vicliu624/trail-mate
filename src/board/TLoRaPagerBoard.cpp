@@ -865,6 +865,10 @@ void TLoRaPagerBoard::playMessageTone()
 #ifndef USING_AUDIO_CODEC
     return;
 #else
+    if (_message_tone_volume == 0)
+    {
+        return;
+    }
     if (!(devices_probe & HW_CODEC_ONLINE))
     {
         return;
@@ -920,7 +924,7 @@ void TLoRaPagerBoard::playMessageTone()
     }
 
     codec.setOutMute(false);
-    codec.setVolume(static_cast<uint8_t>(prev_volume < 45 ? 45 : prev_volume));
+    codec.setVolume(_message_tone_volume);
 
     int16_t pcm[kFramesPerChunk * kChannels];
     auto write_silence = [&](uint32_t ms)
@@ -971,6 +975,20 @@ void TLoRaPagerBoard::playMessageTone()
     codec.close();
     s_playing = false;
 #endif
+}
+
+void TLoRaPagerBoard::setMessageToneVolume(uint8_t volume_percent)
+{
+    if (volume_percent > 100)
+    {
+        volume_percent = 100;
+    }
+    _message_tone_volume = volume_percent;
+}
+
+uint8_t TLoRaPagerBoard::getMessageToneVolume() const
+{
+    return _message_tone_volume;
 }
 
 void TLoRaPagerBoard::setHapticEffects(uint8_t effects)
@@ -2067,7 +2085,7 @@ void TLoRaPagerBoard::shutdown(bool save_data)
         LORA_CS,
         LORA_RST,
         LORA_BUSY,
-        LORA_IRQ
+        LORA_IRQ,
     };
 
     for (auto pin : pins)

@@ -66,6 +66,8 @@ class TDeckBoard : public BoardBase,
     void vibrator() override {}
     void stopVibrator() override {}
     void playMessageTone() override;
+    void setMessageToneVolume(uint8_t volume_percent) override;
+    uint8_t getMessageToneVolume() const override;
 
     // LilyGo_Display
     void setRotation(uint8_t rotation) override;
@@ -141,6 +143,7 @@ class TDeckBoard : public BoardBase,
     uint8_t up_count_ = 0;
     uint8_t down_count_ = 0;
     uint8_t click_count_ = 0;
+    uint8_t message_tone_volume_ = 45;
     bool left_latched_ = false;
     bool right_latched_ = false;
     bool up_latched_ = false;

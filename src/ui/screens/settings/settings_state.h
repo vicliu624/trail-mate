@@ -109,6 +109,7 @@ struct SettingsData
     // Screen
     int screen_timeout_ms = 30000;
     int timezone_offset_min = 0;
+    int speaker_volume = 45;
 
     // Advanced
     bool advanced_debug_logs = false;

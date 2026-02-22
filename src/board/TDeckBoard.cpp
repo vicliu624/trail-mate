@@ -878,6 +878,11 @@ RotaryMsg_t TDeckBoard::getRotary()
 void TDeckBoard::playMessageTone()
 {
 #if defined(DAC_I2S_BCK) && defined(DAC_I2S_WS) && defined(DAC_I2S_DOUT)
+    if (message_tone_volume_ == 0)
+    {
+        return;
+    }
+
     static bool s_playing = false;
     static uint32_t s_last_play_ms = 0;
 
@@ -903,7 +908,16 @@ void TDeckBoard::playMessageTone()
 #else
     audio_out.SetPinout(DAC_I2S_BCK, DAC_I2S_WS, DAC_I2S_DOUT);
 #endif
-    audio_out.SetGain(0.18f);
+    float gain = static_cast<float>(message_tone_volume_) / 250.0f;
+    if (gain < 0.0f)
+    {
+        gain = 0.0f;
+    }
+    if (gain > 0.40f)
+    {
+        gain = 0.40f;
+    }
+    audio_out.SetGain(gain);
 
     AudioFileSourcePROGMEM song(kMessageToneRtttl, sizeof(kMessageToneRtttl) - 1);
     AudioGeneratorRTTTL generator;
@@ -924,6 +938,20 @@ void TDeckBoard::playMessageTone()
     audio_out.stop();
     s_playing = false;
 #endif
+}
+
+void TDeckBoard::setMessageToneVolume(uint8_t volume_percent)
+{
+    if (volume_percent > 100)
+    {
+        volume_percent = 100;
+    }
+    message_tone_volume_ = volume_percent;
+}
+
+uint8_t TDeckBoard::getMessageToneVolume() const
+{
+    return message_tone_volume_;
 }
 
 namespace

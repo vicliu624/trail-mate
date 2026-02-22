@@ -40,6 +40,16 @@ class BoardBase
 
     // 收到消息提示音（默认空实现，具体板级按需覆盖）
     virtual void playMessageTone() {}
+
+    // 系统提示音音量（0-100，默认45）
+    virtual void setMessageToneVolume(uint8_t volume_percent)
+    {
+        (void)volume_percent;
+    }
+    virtual uint8_t getMessageToneVolume() const
+    {
+        return 45;
+    }
 };
 
 // 全局板实例（与原来的 instance 等价，用于解耦调用方类型）
