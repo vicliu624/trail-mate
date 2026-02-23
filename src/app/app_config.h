@@ -252,8 +252,25 @@ struct AppConfig
         meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
         prefs.getBytes("mc_ch_key", meshcore_config.secondary_key, sizeof(meshcore_config.secondary_key));
 
-        mesh_protocol = static_cast<chat::MeshProtocol>(
-            prefs.getUChar("mesh_protocol", static_cast<uint8_t>(chat::MeshProtocol::Meshtastic)));
+        uint8_t mesh_protocol_raw = prefs.getUChar("mesh_protocol", 0xFF);
+        if (mesh_protocol_raw == static_cast<uint8_t>(chat::MeshProtocol::Meshtastic) ||
+            mesh_protocol_raw == static_cast<uint8_t>(chat::MeshProtocol::MeshCore))
+        {
+            mesh_protocol = static_cast<chat::MeshProtocol>(mesh_protocol_raw);
+        }
+        else
+        {
+            int legacy_protocol = prefs.getInt("mesh_protocol",
+                                               static_cast<int>(chat::MeshProtocol::Meshtastic));
+            if (legacy_protocol == static_cast<int>(chat::MeshProtocol::MeshCore))
+            {
+                mesh_protocol = chat::MeshProtocol::MeshCore;
+            }
+            else
+            {
+                mesh_protocol = chat::MeshProtocol::Meshtastic;
+            }
+        }
 
         // Load device name
         size_t len = prefs.getBytes("node_name", node_name, sizeof(node_name) - 1);
@@ -402,6 +419,8 @@ struct AppConfig
         prefs.putBool("mc_tx_en", meshcore_config.tx_enabled);
         prefs.putString("mc_ch_name", meshcore_config.meshcore_channel_name);
         prefs.putBytes("mc_ch_key", meshcore_config.secondary_key, sizeof(meshcore_config.secondary_key));
+        // Remove first so legacy key type mismatches cannot block updating this value.
+        prefs.remove("mesh_protocol");
         prefs.putUChar("mesh_protocol", static_cast<uint8_t>(mesh_protocol));
 
         // Save device name

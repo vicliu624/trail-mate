@@ -892,9 +892,20 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "mesh_protocol") == 0)
     {
         app::AppContext& app_ctx = app::AppContext::getInstance();
-        app_ctx.getConfig().mesh_protocol = static_cast<chat::MeshProtocol>(payload->value);
-        app_ctx.saveConfig();
-        restart_now = true;
+        chat::MeshProtocol target = static_cast<chat::MeshProtocol>(payload->value);
+        if (!app_ctx.switchMeshProtocol(target, true))
+        {
+            *payload->item->enum_value = previous_value;
+            prefs_put_int(payload->item->pref_key, previous_value);
+            update_item_value(*payload->widget);
+            ::ui::SystemNotification::show("Protocol switch failed", 3000);
+        }
+        else
+        {
+            rebuild_list = true;
+            ::ui::SystemNotification::show("Protocol switched", 2000);
+            restart_now = true;
+        }
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "chat_region") == 0)
     {
