@@ -60,19 +60,19 @@ namespace ui
 namespace layout
 {
 
-// 布局常量
+// Layout constants
 static constexpr int kFilterPanelWidth = 80;
 static constexpr int kActionPanelWidth = 80;
 static constexpr int kButtonHeight = 28;
 static constexpr int kButtonSpacing = 3;
-static constexpr int kPanelGap = 3;          // 三列之间的间距
-static constexpr int kScreenEdgePadding = 3; // 屏幕边缘的padding
-static constexpr int kTopBarContentGap = 3;  // TopBar与Content之间的间距
+static constexpr int kPanelGap = 3;          // Gap between the three main columns
+static constexpr int kScreenEdgePadding = 3; // Padding at the screen edge
+static constexpr int kTopBarContentGap = 3;  // Vertical gap between TopBar and content
 
 // UI color tokens (must align with docs/skyplot.md)
 static constexpr uint32_t kColorWarmBg = 0xF6E6C6;
 
-// 工具函数
+// Helper functions
 static void make_non_scrollable(lv_obj_t* obj)
 {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
@@ -122,11 +122,11 @@ lv_obj_t* create_root(lv_obj_t* parent)
     lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
 
-    // 样式：背景透明，让子元素控制自己的背景色
+    // Style: transparent background so children control their own background color.
     lv_obj_set_style_bg_opa(root, LV_OPA_TRANSP, 0);
     apply_base_container_style(root);
 
-    // TopBar与Content之间的间距
+    // Gap between TopBar and content row.
     lv_obj_set_style_pad_row(root, kTopBarContentGap, 0);
     lv_obj_set_style_pad_all(root, 0, 0);
 
@@ -140,12 +140,12 @@ lv_obj_t* create_header(lv_obj_t* root,
     lv_obj_t* header = lv_obj_create(root);
     lv_obj_set_size(header, LV_PCT(100), ::ui::widgets::kTopBarHeight);
 
-    // 样式
+    // Style for header / TopBar container.
     lv_obj_set_style_bg_color(header, lv_color_hex(kColorWarmBg), 0);
     apply_base_container_style(header);
     lv_obj_set_style_pad_all(header, 0, 0);
 
-    // 初始化 TopBar
+    // Initialize shared TopBar widget.
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::widgets::kTopBarHeight;
     ::ui::widgets::top_bar_init(g_contacts_state.top_bar, header, cfg);
@@ -161,7 +161,7 @@ lv_obj_t* create_content(lv_obj_t* root)
 {
     lv_obj_t* content = lv_obj_create(root);
 
-    // 尺寸和flex
+    // Size and flex setup for main content row.
     lv_obj_set_width(content, LV_PCT(100));
     lv_obj_set_height(content, 0);
     lv_obj_set_flex_grow(content, 1);
@@ -171,12 +171,12 @@ lv_obj_t* create_content(lv_obj_t* root)
                           LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_START);
 
-    // 样式
+    // Style
     lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
     apply_base_container_style(content);
 
-    // ✅ 统一间距控制：只设置屏幕边缘的padding
-    // 列之间的间距由panel的margin控制
+    // Use only outer padding to control spacing to screen edges.
+    // Horizontal gaps between columns are controlled via panel margins.
     lv_obj_set_style_pad_left(content, kScreenEdgePadding, 0);
     lv_obj_set_style_pad_right(content, kScreenEdgePadding, 0);
     lv_obj_set_style_pad_top(content, 0, 0);
@@ -190,18 +190,18 @@ void create_filter_panel(lv_obj_t* parent)
     g_contacts_state.filter_panel = lv_obj_create(parent);
     make_non_scrollable(g_contacts_state.filter_panel);
 
-    // 先应用风格（避免它覆盖我们后面尺寸/边距）
+    // Apply style first so it does not override later size/margin tweaks.
     style::apply_panel_side(g_contacts_state.filter_panel);
 
-    // ✅ 固定宽度
+    // Fixed width for filter panel.
     lv_obj_set_width(g_contacts_state.filter_panel, kFilterPanelWidth);
     lv_obj_set_height(g_contacts_state.filter_panel, LV_PCT(100));
     lv_obj_set_flex_flow(g_contacts_state.filter_panel, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(g_contacts_state.filter_panel, 3, LV_PART_MAIN);
 
-    // ✅ 统一间距：使用margin，移除负margin
-    // Filter是左边缘第一个，所以margin_left=0（屏幕边缘padding由content控制）
-    // Filter右侧需要与List保持间距
+    // Use margins for inter-panel spacing instead of negative margins.
+    // Filter is the left-most panel, so margin_left=0 (screen-edge padding is on content).
+    // Filter's right margin creates the gap to the List panel.
     lv_obj_set_style_margin_left(g_contacts_state.filter_panel, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_right(g_contacts_state.filter_panel, kPanelGap, LV_PART_MAIN);
 
@@ -262,10 +262,10 @@ void create_list_panel(lv_obj_t* parent)
     g_contacts_state.list_panel = lv_obj_create(parent);
     make_non_scrollable(g_contacts_state.list_panel);
 
-    // 先 apply，避免覆盖 grow/width
+    // Apply style first so it does not override our grow/width settings.
     style::apply_panel_main(g_contacts_state.list_panel);
 
-    // ✅ ROW flex 中间列：必须 width=0 + flex_grow=1 才能“吃掉剩余空间”
+    // In a ROW flex layout, the middle column must have width=0 + flex_grow=1 to consume remaining space.
     lv_obj_set_height(g_contacts_state.list_panel, LV_PCT(100));
     lv_obj_set_width(g_contacts_state.list_panel, 0);
     lv_obj_set_flex_grow(g_contacts_state.list_panel, 1);
@@ -273,7 +273,7 @@ void create_list_panel(lv_obj_t* parent)
     lv_obj_set_flex_flow(g_contacts_state.list_panel, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(g_contacts_state.list_panel, 2, LV_PART_MAIN);
 
-    // ✅ 统一间距：中间列不需要margin，两侧的间距由filter/action控制
+    // Middle column itself has no horizontal margins; spacing is controlled by filter/action panels.
     lv_obj_set_style_margin_left(g_contacts_state.list_panel, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_right(g_contacts_state.list_panel, 0, LV_PART_MAIN);
 }
@@ -283,17 +283,16 @@ void create_action_panel(lv_obj_t* parent)
     g_contacts_state.action_panel = lv_obj_create(parent);
     make_non_scrollable(g_contacts_state.action_panel);
 
-    // 先 apply，避免覆盖尺寸
+    // Apply style first so it does not override size configuration.
     style::apply_panel_side(g_contacts_state.action_panel);
 
-    // ✅ 固定宽度
+    // Fixed width for action panel.
     lv_obj_set_width(g_contacts_state.action_panel, kActionPanelWidth);
     lv_obj_set_height(g_contacts_state.action_panel, LV_PCT(100));
     lv_obj_set_flex_flow(g_contacts_state.action_panel, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(g_contacts_state.action_panel, kButtonSpacing, LV_PART_MAIN);
 
-    // ✅ 统一间距：Action左侧需要与List保持间距
-    // Action右侧margin=0（屏幕边缘padding由content控制）
+    // Horizontal spacing: left margin creates the gap to the List panel; right edge uses content padding.
     lv_obj_set_style_margin_left(g_contacts_state.action_panel, kPanelGap, LV_PART_MAIN);
     lv_obj_set_style_margin_right(g_contacts_state.action_panel, 0, LV_PART_MAIN);
 }
@@ -309,7 +308,7 @@ void ensure_list_subcontainers()
 
         style::apply_container_white(g_contacts_state.sub_container);
 
-        // ✅ sub_container 吃掉剩余高度，bottom_container 才能在下方
+        // Let sub_container consume remaining height so bottom_container can sit below it.
         lv_obj_set_width(g_contacts_state.sub_container, LV_PCT(100));
         lv_obj_set_height(g_contacts_state.sub_container, 0);
         lv_obj_set_flex_grow(g_contacts_state.sub_container, 1);

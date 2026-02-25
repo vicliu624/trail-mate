@@ -265,6 +265,22 @@ bool configure_fsk(TLoRaPagerBoard& board, float freq_mhz, int8_t tx_power)
     return true;
 }
 
+bool restore_lora_mode(TLoRaPagerBoard& board)
+{
+    if (!board.lock(pdMS_TO_TICKS(200)))
+    {
+        return false;
+    }
+    int state = board.radio_.begin();
+    board.unlock();
+    if (state != RADIOLIB_ERR_NONE)
+    {
+        Serial.printf("[WALKIE] restore LoRa failed state=%d\n", state);
+        return false;
+    }
+    return true;
+}
+
 void walkie_task(void*)
 {
     TLoRaPagerBoard* board = TLoRaPagerBoard::getInstance();
@@ -828,6 +844,7 @@ bool start()
 
     if (!configure_fsk(*board, freq_mhz, config.meshtastic_config.tx_power))
     {
+        restore_lora_mode(*board);
         app::AppContext::getInstance().applyMeshConfig();
         app::AppTasks::resumeRadioTasks();
         if (s_last_error[0] == '\0')
@@ -900,6 +917,11 @@ void stop()
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 
+    TLoRaPagerBoard* board = TLoRaPagerBoard::getInstance();
+    if (board)
+    {
+        restore_lora_mode(*board);
+    }
     app::AppContext::getInstance().applyMeshConfig();
     app::AppTasks::resumeRadioTasks();
 }

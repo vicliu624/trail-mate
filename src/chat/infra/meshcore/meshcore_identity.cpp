@@ -211,5 +211,36 @@ bool MeshCoreIdentity::deriveSharedSecret(const uint8_t peer_pubkey[kPubKeySize]
     return !isZeroBytes(out_secret, kPubKeySize);
 }
 
+bool MeshCoreIdentity::exportPrivateKey(uint8_t out_priv[kPrivKeySize]) const
+{
+    if (!ready_ || !out_priv)
+    {
+        return false;
+    }
+    memcpy(out_priv, priv_.data(), priv_.size());
+    return true;
+}
+
+bool MeshCoreIdentity::importPrivateKey(const uint8_t in_priv[kPrivKeySize])
+{
+    if (!in_priv)
+    {
+        return false;
+    }
+
+    uint8_t derived_pub[kPubKeySize] = {};
+    ed25519_derive_pub(derived_pub, in_priv);
+    if (isZeroBytes(derived_pub, sizeof(derived_pub)) || !isValidPublicHash(derived_pub[0]))
+    {
+        return false;
+    }
+
+    memcpy(priv_.data(), in_priv, priv_.size());
+    memcpy(pub_.data(), derived_pub, sizeof(derived_pub));
+    ready_ = true;
+
+    return saveToPrefs();
+}
+
 } // namespace meshcore
 } // namespace chat

@@ -116,6 +116,7 @@
 > * The PWR button can only be used to wake up the device by pressing it for one second when the device is turned off. It cannot be used for programming.
 > * ST25R3916 (NFC) does not have an integrated capacitive sensor, which means that to read a card, the reader must be turned on, and the presence of a card cannot be detected by turning on the capacitive sensor.
 > * ESP32-S3 uses an external QSPI Flash and PSRAM solution, not a built-in PSRAM or Flash solution
+> * USB/charging state is detected via the BQ25896 PMU (VBUS/charge status), so UI charging indicators and software shutdown checks rely on PMU detection.
 
 [1]: https://www.espressif.com.cn/en/products/socs/esp32-s3 "ESP32-S3"
 [2]: https://www.u-blox.com/en/product/mia-m10-series "UBlox MIA-M10Q"

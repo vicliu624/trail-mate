@@ -93,7 +93,7 @@ static void bind_filter_column(bool keep_mode_focus)
     group_clear_all(s_group);
     clear_action_focus_states();
 
-    // ① TopBar Back —— 第一列“出口”，必须可达
+    // 1) TopBar Back — first escape route in the focus order; must always be reachable.
     if (is_valid(g_contacts_state.top_bar.back_btn))
     {
         lv_group_add_obj(s_group, g_contacts_state.top_bar.back_btn);
@@ -412,7 +412,7 @@ void cleanup_contacts_input()
     if (s_group)
     {
 
-        // 只解绑我们自己绑定过的 encoder
+        // Only detach the encoder we attached to this group.
         if (s_encoder && lv_indev_get_group(s_encoder) == s_group)
         {
             lv_indev_set_group(s_encoder, nullptr);

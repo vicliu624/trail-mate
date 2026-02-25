@@ -302,6 +302,14 @@ void TeamService::processIncoming()
     chat::MeshIncomingData data;
     while (mesh_.pollIncomingData(&data))
     {
+        for (auto* observer : incoming_data_observers_)
+        {
+            if (observer)
+            {
+                observer->onIncomingData(data);
+            }
+        }
+
         if (data.portnum == team::proto::TEAM_MGMT_APP)
         {
             std::string rx_raw_hex = toHex(data.payload.data(), data.payload.size(), data.payload.size());
@@ -561,6 +569,38 @@ void TeamService::processIncoming()
                     data.payload,
                     &data.rx_meta),
                 0);
+        }
+    }
+}
+
+void TeamService::addIncomingDataObserver(IncomingDataObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto* existing : incoming_data_observers_)
+    {
+        if (existing == observer)
+        {
+            return;
+        }
+    }
+    incoming_data_observers_.push_back(observer);
+}
+
+void TeamService::removeIncomingDataObserver(IncomingDataObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto it = incoming_data_observers_.begin(); it != incoming_data_observers_.end(); ++it)
+    {
+        if (*it == observer)
+        {
+            incoming_data_observers_.erase(it);
+            return;
         }
     }
 }

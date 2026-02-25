@@ -1476,15 +1476,15 @@ void tick_gps_update(bool allow_map_refresh)
     static uint8_t prev_satellites = 0;
     static uint32_t last_title_update_ms = 0;
 
-    // 新增：地图刷新节流状态
+    // Additional state for throttling map refreshes.
     static double last_refresh_lat = 0.0;
     static double last_refresh_lng = 0.0;
     static bool last_refresh_valid = false;
     static uint32_t last_refresh_ms = 0;
 
     const uint32_t TITLE_UPDATE_INTERVAL_MS = 30000;
-    const double MOVE_THRESHOLD_M = 15.0;      // 忽略小抖动（可调 10~30m）
-    const uint32_t REFRESH_INTERVAL_MS = 2000; // 即使移动很慢也定期刷新
+    const double MOVE_THRESHOLD_M = 15.0;      // Ignore small jitter; can tune to ~10–30m.
+    const uint32_t REFRESH_INTERVAL_MS = 2000; // Even if movement is slow, refresh at this interval.
 
     bool gps_ready = gps_hw_is_ready();
     bool sd_ready = sd_hw_is_ready();
@@ -1498,7 +1498,7 @@ void tick_gps_update(bool allow_map_refresh)
 
         bool just_got_fix = !g_gps_state.has_fix;
 
-        // 始终更新坐标，让状态显示保持最新
+        // Always update coordinates so status stays accurate.
         if (just_got_fix ||
             fabs(new_lat - g_gps_state.lat) > 0.0001 ||
             fabs(new_lng - g_gps_state.lng) > 0.0001)
@@ -1520,7 +1520,7 @@ void tick_gps_update(bool allow_map_refresh)
             update_resolution_display();
         }
 
-        // 只对“地图刷新”加抖动过滤
+        // Apply jitter filtering only to the expensive map refresh, not to the state snapshot.
         if (allow_map_refresh)
         {
             // Manual pan mode disables GPS auto-follow until user explicitly re-centers with [P]osition.

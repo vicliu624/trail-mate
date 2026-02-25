@@ -19,6 +19,7 @@
 #include "../../../gps/usecase/track_recorder.h"
 #include "../../ui_common.h"
 #include "../../widgets/system_notification.h"
+#include "../../widgets/top_bar.h"
 #include "settings_page_components.h"
 #include "settings_page_input.h"
 #include "settings_page_layout.h"
@@ -37,8 +38,8 @@ namespace
 constexpr size_t kMaxItems = 32;
 constexpr size_t kMaxOptions = 40;
 constexpr const char* kPrefsNs = "settings";
-constexpr int kNetTxPowerMin = -9;
-constexpr int kNetTxPowerMax = 30;
+constexpr int kNetTxPowerMin = app::AppConfig::kTxPowerMinDbm;
+constexpr int kNetTxPowerMax = app::AppConfig::kTxPowerMaxDbm;
 
 struct CategoryDef
 {
@@ -64,6 +65,9 @@ static settings::ui::SettingOption kChatRegionOptions[32] = {};
 static size_t kChatRegionOptionCount = 0;
 static settings::ui::SettingOption kMeshCoreRegionPresetOptions[32] = {};
 static size_t kMeshCoreRegionPresetOptionCount = 0;
+static settings::ui::SettingOption kTxPowerOptions[64] = {};
+static size_t kTxPowerOptionCount = 0;
+static char kTxPowerLabels[64][12] = {};
 
 static void build_item_list();
 
@@ -387,6 +391,22 @@ static void settings_load()
             kMeshCoreRegionPresetOptionCount = copy_count + 1;
         }
     }
+    if (kTxPowerOptionCount == 0)
+    {
+        size_t limit = sizeof(kTxPowerOptions) / sizeof(kTxPowerOptions[0]);
+        int value = kNetTxPowerMin;
+        while (value <= kNetTxPowerMax && kTxPowerOptionCount < limit)
+        {
+            snprintf(kTxPowerLabels[kTxPowerOptionCount],
+                     sizeof(kTxPowerLabels[kTxPowerOptionCount]),
+                     "%d dBm",
+                     value);
+            kTxPowerOptions[kTxPowerOptionCount].label = kTxPowerLabels[kTxPowerOptionCount];
+            kTxPowerOptions[kTxPowerOptionCount].value = value;
+            kTxPowerOptionCount++;
+            value++;
+        }
+    }
 
     g_settings.gps_mode = prefs_get_int("gps_mode", 0);
     g_settings.gps_sat_mask = prefs_get_int("gps_sat_mask", 0x1 | 0x8 | 0x4);
@@ -463,7 +483,10 @@ static void settings_load()
     float_to_text(mc_cfg.meshcore_bw_khz, g_settings.mc_bw, sizeof(g_settings.mc_bw), 3);
     g_settings.mc_sf = mc_cfg.meshcore_sf;
     g_settings.mc_cr = mc_cfg.meshcore_cr;
-    g_settings.mc_tx_power = mc_cfg.tx_power;
+    int mc_tx_power = mc_cfg.tx_power;
+    if (mc_tx_power < kNetTxPowerMin) mc_tx_power = kNetTxPowerMin;
+    if (mc_tx_power > kNetTxPowerMax) mc_tx_power = kNetTxPowerMax;
+    g_settings.mc_tx_power = mc_tx_power;
     g_settings.mc_client_repeat = mc_cfg.meshcore_client_repeat;
     float_to_text(mc_cfg.meshcore_rx_delay_base, g_settings.mc_rx_delay, sizeof(g_settings.mc_rx_delay), 3);
     float_to_text(mc_cfg.meshcore_airtime_factor, g_settings.mc_airtime, sizeof(g_settings.mc_airtime), 3);
@@ -502,6 +525,21 @@ static void settings_load()
     board.setMessageToneVolume(static_cast<uint8_t>(g_settings.speaker_volume));
 
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
+
+    // Gauge capacities (for System > Power settings). Load values from NVS \"power\" into text fields.
+    {
+        Preferences prefs;
+        prefs.begin("power", true);
+        uint32_t d = prefs.getUInt("gauge_design_mah", 1500);
+        uint32_t f = prefs.getUInt("gauge_full_mah", 1500);
+        prefs.end();
+        if (d == 0) d = 1500;
+        if (f == 0) f = 1500;
+        snprintf(g_settings.gauge_design_mah, sizeof(g_settings.gauge_design_mah), "%lu",
+                 static_cast<unsigned long>(d));
+        snprintf(g_settings.gauge_full_mah, sizeof(g_settings.gauge_full_mah), "%lu",
+                 static_cast<unsigned long>(f));
+    }
 }
 
 static void format_value(const settings::ui::SettingItem& item, char* out, size_t out_len)
@@ -803,6 +841,38 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.saveConfig();
             app_ctx.applyMeshConfig();
         }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "gauge_design_mah") == 0)
+        {
+            // Update gauge design capacity (mAh) and persist to NVS \"power\".
+            char* end = nullptr;
+            long value = strtol(g_state.editing_item->text_value, &end, 10);
+            if (end == g_state.editing_item->text_value || (end && *end != '\0') || value <= 0 || value > 10000)
+            {
+                ::ui::SystemNotification::show("Invalid design capacity (mAh)", 3000);
+                modal_close();
+                return;
+            }
+            Preferences prefs;
+            prefs.begin("power", false);
+            prefs.putUInt("gauge_design_mah", static_cast<uint32_t>(value));
+            prefs.end();
+        }
+        if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "gauge_full_mah") == 0)
+        {
+            // Update gauge full-charge capacity (mAh) that shares the same profile with design capacity.
+            char* end = nullptr;
+            long value = strtol(g_state.editing_item->text_value, &end, 10);
+            if (end == g_state.editing_item->text_value || (end && *end != '\0') || value <= 0 || value > 10000)
+            {
+                ::ui::SystemNotification::show("Invalid full capacity (mAh)", 3000);
+                modal_close();
+                return;
+            }
+            Preferences prefs;
+            prefs.begin("power", false);
+            prefs.putUInt("gauge_full_mah", static_cast<uint32_t>(value));
+            prefs.end();
+        }
     }
     modal_close();
 }
@@ -917,6 +987,10 @@ static void on_option_clicked(lv_event_t* e)
         if (region && region->power_limit_dbm > 0)
         {
             int8_t limit = static_cast<int8_t>(region->power_limit_dbm);
+            if (limit > kNetTxPowerMax)
+            {
+                limit = static_cast<int8_t>(kNetTxPowerMax);
+            }
             if (mt_cfg.tx_power == 0 || mt_cfg.tx_power > limit)
             {
                 mt_cfg.tx_power = limit;
@@ -1227,6 +1301,22 @@ static void on_option_clicked(lv_event_t* e)
     }
 }
 
+static void on_option_modal_back_clicked(lv_event_t* e)
+{
+    (void)e;
+    modal_close();
+}
+
+static void option_modal_focused_cb(lv_event_t* e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_FOCUSED) return;
+    lv_obj_t* target = lv_event_get_target_obj(e);
+    if (target && lv_obj_is_valid(target))
+    {
+        lv_obj_scroll_to_view(target, LV_ANIM_ON);
+    }
+}
+
 static void open_option_modal(const settings::ui::SettingItem& item, settings::ui::ItemWidget& widget)
 {
     if (g_state.modal_root)
@@ -1234,21 +1324,33 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
         return;
     }
     modal_prepare_group();
-    g_state.modal_root = create_modal_root(280, 200);
-    lv_obj_t* win = lv_obj_get_child(g_state.modal_root, 0);
 
-    lv_obj_t* title = lv_label_create(win);
-    lv_label_set_text(title, item.label);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+    // Overlay only below top bar; list starts 3px under top bar, no title
+    const lv_coord_t kTopBarH = static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
+    const lv_coord_t kGapFromTopBar = 3;
 
-    lv_obj_t* list = lv_obj_create(win);
-    lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
+    lv_coord_t content_h = lv_obj_get_height(g_state.root) - kTopBarH;
+    g_state.modal_root = lv_obj_create(g_state.root);
+    lv_obj_set_size(g_state.modal_root, LV_PCT(100), content_h);
+    lv_obj_set_pos(g_state.modal_root, 0, kTopBarH);
+    style::apply_modal_bg(g_state.modal_root);
+    style::apply_modal_panel(g_state.modal_root);
+    lv_obj_set_style_border_width(g_state.modal_root, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(g_state.modal_root, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(g_state.modal_root, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(g_state.modal_root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(g_state.modal_root, LV_OBJ_FLAG_CLICKABLE);
+
+    // Single scrollable list: options + Back as last item, 3px from top bar
+    lv_obj_t* list = lv_obj_create(g_state.modal_root);
+    lv_obj_set_size(list, LV_PCT(100), content_h - kGapFromTopBar);
+    lv_obj_set_pos(list, 0, kGapFromTopBar);
     lv_obj_set_style_pad_all(list, 0, LV_PART_MAIN);
     lv_obj_set_style_border_width(list, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-    lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
 
     s_option_click_count = 0;
     for (size_t i = 0; i < item.option_count && s_option_click_count < kMaxOptions; ++i)
@@ -1268,12 +1370,30 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
         {
             lv_obj_add_state(btn, LV_STATE_CHECKED);
         }
+        lv_obj_add_event_cb(btn, option_modal_focused_cb, LV_EVENT_FOCUSED, nullptr);
         lv_group_add_obj(g_state.modal_group, btn);
         s_option_click_count++;
     }
+
+    // Back as last item inside the list
+    lv_obj_t* back_btn = lv_btn_create(list);
+    lv_obj_set_size(back_btn, LV_PCT(100), 28);
+    style::apply_btn_modal(back_btn);
+    lv_obj_t* back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    style::apply_label_primary(back_label);
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back_btn, on_option_modal_back_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(back_btn, option_modal_focused_cb, LV_EVENT_FOCUSED, nullptr);
+    lv_group_add_obj(g_state.modal_group, back_btn);
+
     if (s_option_click_count > 0)
     {
         lv_group_focus_obj(lv_obj_get_child(list, 0));
+    }
+    else
+    {
+        lv_group_focus_obj(back_btn);
     }
 }
 
@@ -1350,9 +1470,10 @@ static const settings::ui::SettingOption kChatProtocolOptions[] = {
 
 static const settings::ui::SettingOption kNetPresetOptions[] = {
     {"LongFast", meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST},
-    {"LongModerate", meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE},
+    {"LongTurbo", meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO},
+    {"LongMod", meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE},
     {"LongSlow", meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW},
-    {"VeryLongSlow", meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW},
+    {"Invalid", meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW},
     {"MediumFast", meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST},
     {"MediumSlow", meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW},
     {"ShortFast", meshtastic_Config_LoRaConfig_ModemPreset_SHORT_FAST},
@@ -1441,48 +1562,7 @@ static const settings::ui::SettingOption kMeshCoreFloodOptions[] = {
     {"48", 48},
     {"64", 64},
 };
-static const settings::ui::SettingOption kNetTxPowerOptions[] = {
-    {"-9 dBm", -9},
-    {"-8 dBm", -8},
-    {"-7 dBm", -7},
-    {"-6 dBm", -6},
-    {"-5 dBm", -5},
-    {"-4 dBm", -4},
-    {"-3 dBm", -3},
-    {"-2 dBm", -2},
-    {"-1 dBm", -1},
-    {"0 dBm", 0},
-    {"1 dBm", 1},
-    {"2 dBm", 2},
-    {"3 dBm", 3},
-    {"4 dBm", 4},
-    {"5 dBm", 5},
-    {"6 dBm", 6},
-    {"7 dBm", 7},
-    {"8 dBm", 8},
-    {"9 dBm", 9},
-    {"10 dBm", 10},
-    {"11 dBm", 11},
-    {"12 dBm", 12},
-    {"13 dBm", 13},
-    {"14 dBm", 14},
-    {"15 dBm", 15},
-    {"16 dBm", 16},
-    {"17 dBm", 17},
-    {"18 dBm", 18},
-    {"19 dBm", 19},
-    {"20 dBm", 20},
-    {"21 dBm", 21},
-    {"22 dBm", 22},
-    {"23 dBm", 23},
-    {"24 dBm", 24},
-    {"25 dBm", 25},
-    {"26 dBm", 26},
-    {"27 dBm", 27},
-    {"28 dBm", 28},
-    {"29 dBm", 29},
-    {"30 dBm", 30},
-};
+// Tx power options are populated dynamically based on board limits.
 static const settings::ui::SettingOption kNetUtilOptions[] = {
     {"Auto", 0},
     {"Limit 25%", 25},
@@ -1589,8 +1669,8 @@ static settings::ui::SettingItem kNetworkItems[] = {
     {"Manual BW", settings::ui::SettingType::Enum, kNetManualBwOptions, sizeof(kNetManualBwOptions) / sizeof(kNetManualBwOptions[0]), &g_settings.net_manual_bw, nullptr, nullptr, 0, false, "net_bw"},
     {"Manual SF", settings::ui::SettingType::Enum, kSfOptions, sizeof(kSfOptions) / sizeof(kSfOptions[0]), &g_settings.net_manual_sf, nullptr, nullptr, 0, false, "net_sf"},
     {"Manual CR", settings::ui::SettingType::Enum, kCrOptions, sizeof(kCrOptions) / sizeof(kCrOptions[0]), &g_settings.net_manual_cr, nullptr, nullptr, 0, false, "net_cr"},
-    {"TX Power", settings::ui::SettingType::Enum, kNetTxPowerOptions,
-     sizeof(kNetTxPowerOptions) / sizeof(kNetTxPowerOptions[0]), &g_settings.net_tx_power, nullptr, nullptr, 0, false, "net_tx_power"},
+    {"TX Power", settings::ui::SettingType::Enum, kTxPowerOptions,
+     0, &g_settings.net_tx_power, nullptr, nullptr, 0, false, "net_tx_power"},
     {"Hop Limit", settings::ui::SettingType::Enum, kHopLimitOptions, sizeof(kHopLimitOptions) / sizeof(kHopLimitOptions[0]), &g_settings.net_hop_limit, nullptr, nullptr, 0, false, "net_hop_limit"},
     {"TX Enabled", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_tx_enabled, nullptr, 0, false, "net_tx_enabled"},
     {"Override Duty Cycle", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.net_override_duty_cycle, nullptr, 0, false, "net_override_duty"},
@@ -1602,7 +1682,7 @@ static settings::ui::SettingItem kNetworkItems[] = {
     {"MC Bandwidth (kHz)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_bw, sizeof(g_settings.mc_bw), false, "mc_bw"},
     {"MC Spread Factor", settings::ui::SettingType::Enum, kSfOptions, sizeof(kSfOptions) / sizeof(kSfOptions[0]), &g_settings.mc_sf, nullptr, nullptr, 0, false, "mc_sf"},
     {"MC Coding Rate", settings::ui::SettingType::Enum, kCrOptions, sizeof(kCrOptions) / sizeof(kCrOptions[0]), &g_settings.mc_cr, nullptr, nullptr, 0, false, "mc_cr"},
-    {"MC TX Power", settings::ui::SettingType::Enum, kNetTxPowerOptions, sizeof(kNetTxPowerOptions) / sizeof(kNetTxPowerOptions[0]), &g_settings.mc_tx_power, nullptr, nullptr, 0, false, "mc_tx_power"},
+    {"MC TX Power", settings::ui::SettingType::Enum, kTxPowerOptions, 0, &g_settings.mc_tx_power, nullptr, nullptr, 0, false, "mc_tx_power"},
     {"MC Repeat", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.mc_client_repeat, nullptr, 0, false, "mc_repeat"},
     {"MC RX Delay Base", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_rx_delay, sizeof(g_settings.mc_rx_delay), false, "mc_rx_delay"},
     {"MC Airtime Factor", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_airtime, sizeof(g_settings.mc_airtime), false, "mc_airtime"},
@@ -1620,6 +1700,10 @@ static settings::ui::SettingItem kScreenItems[] = {
     {"Speaker Volume", settings::ui::SettingType::Enum, kSpeakerVolumeOptions,
      sizeof(kSpeakerVolumeOptions) / sizeof(kSpeakerVolumeOptions[0]), &g_settings.speaker_volume, nullptr, nullptr, 0, false, "speaker_volume"},
     {"Time Zone", settings::ui::SettingType::Enum, kTimeZoneOptions, sizeof(kTimeZoneOptions) / sizeof(kTimeZoneOptions[0]), &g_settings.timezone_offset_min, nullptr, nullptr, 0, false, "timezone_offset"},
+    {"Gauge Design (mAh)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr,
+     g_settings.gauge_design_mah, sizeof(g_settings.gauge_design_mah), false, "gauge_design_mah"},
+    {"Gauge Full (mAh)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr,
+     g_settings.gauge_full_mah, sizeof(g_settings.gauge_full_mah), false, "gauge_full_mah"},
 };
 
 static settings::ui::SettingItem kAdvancedItems[] = {
@@ -1720,6 +1804,16 @@ static bool should_show_item(const settings::ui::SettingItem& item)
     return true;
 }
 
+static void list_item_focused_cb(lv_event_t* e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_FOCUSED) return;
+    lv_obj_t* target = lv_event_get_target_obj(e);
+    if (target && lv_obj_is_valid(target))
+    {
+        lv_obj_scroll_to_view(target, LV_ANIM_ON);
+    }
+}
+
 static void build_item_list()
 {
     if (!g_state.list_panel) return;
@@ -1746,6 +1840,11 @@ static void build_item_list()
         {
             const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kMeshCoreRegionPresetOptionCount;
         }
+        if (widget.def && widget.def->pref_key &&
+            (strcmp(widget.def->pref_key, "net_tx_power") == 0 || strcmp(widget.def->pref_key, "mc_tx_power") == 0))
+        {
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kTxPowerOptionCount;
+        }
         if (!should_show_item(*widget.def))
         {
             continue;
@@ -1770,6 +1869,7 @@ static void build_item_list()
 
         widget.btn = btn;
         lv_obj_add_event_cb(btn, on_item_clicked, LV_EVENT_CLICKED, &widget);
+        lv_obj_add_event_cb(btn, list_item_focused_cb, LV_EVENT_FOCUSED, nullptr);
         g_state.item_count++;
     }
     g_state.list_back_btn = lv_btn_create(g_state.list_panel);
@@ -1784,6 +1884,7 @@ static void build_item_list()
     lv_label_set_text(back_label, "Back");
     style::apply_label_primary(back_label);
     lv_obj_add_event_cb(g_state.list_back_btn, on_list_back_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(g_state.list_back_btn, list_item_focused_cb, LV_EVENT_FOCUSED, nullptr);
     settings::ui::input::on_ui_refreshed();
     lv_obj_scroll_to_y(g_state.list_panel, 0, LV_ANIM_OFF);
     lv_obj_invalidate(g_state.list_panel);

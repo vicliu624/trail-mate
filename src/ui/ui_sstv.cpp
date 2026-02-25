@@ -1,9 +1,11 @@
 #include "ui_sstv.h"
 
+#include "../app/power_tier.h"
 #include "../board/BoardBase.h"
 #include "../sstv/sstv_service.h"
 #include "LV_Helper.h"
 #include "ui_common.h"
+#include "widgets/system_notification.h"
 #include <Arduino.h>
 #include <cmath>
 #include <cstring>
@@ -476,6 +478,11 @@ lv_obj_t* ui_sstv_create(lv_obj_t* parent)
 
 void ui_sstv_enter(lv_obj_t* parent)
 {
+    if (getPowerTier() >= 1)
+    {
+        ui::SystemNotification::show("Low battery - audio disabled", 3000);
+    }
+
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
 

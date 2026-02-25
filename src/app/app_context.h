@@ -34,6 +34,7 @@ class AppContext;
 #include "../chat/ports/i_node_store.h"
 #include "../team/usecase/team_track_sampler.h"
 #include "../ui/ui_controller.h"
+#include "../ble/ble_manager.h"
 #include "app_config.h"
 #include <cstddef>
 #include <memory>
@@ -101,6 +102,16 @@ class AppContext
         return team_pairing_service_.get();
     }
 
+    team::TeamService* getTeamService()
+    {
+        return team_service_.get();
+    }
+
+    const team::TeamService* getTeamService() const
+    {
+        return team_service_.get();
+    }
+
     /**
      * @brief Get configuration
      */
@@ -132,6 +143,36 @@ class AppContext
     const LoraBoard* getLoraBoard() const
     {
         return lora_board_;
+    }
+
+    BoardBase* getBoard()
+    {
+        return board_;
+    }
+
+    const BoardBase* getBoard() const
+    {
+        return board_;
+    }
+
+    chat::meshtastic::NodeStore* getNodeStore()
+    {
+        return node_store_.get();
+    }
+
+    const chat::meshtastic::NodeStore* getNodeStore() const
+    {
+        return node_store_.get();
+    }
+
+    chat::contacts::ContactStore* getContactStore()
+    {
+        return contact_store_.get();
+    }
+
+    const chat::contacts::ContactStore* getContactStore() const
+    {
+        return contact_store_.get();
     }
 
     void saveConfig()
@@ -275,6 +316,9 @@ class AppContext
 
     // UI
     std::unique_ptr<chat::ui::UiController> ui_controller_;
+
+    // BLE
+    std::unique_ptr<ble::BleManager> ble_manager_;
 
     // Power management
 

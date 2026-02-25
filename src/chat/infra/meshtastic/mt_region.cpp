@@ -83,12 +83,12 @@ const char* presetDisplayName(meshtastic_Config_LoRaConfig_ModemPreset preset)
     {
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
         return "LongFast";
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
+        return "LongTurbo";
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-        return "LongModerate";
+        return "LongMod";
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
         return "LongSlow";
-    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-        return "VeryLongSlow";
     case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
         return "MediumSlow";
     case meshtastic_Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
@@ -100,7 +100,7 @@ const char* presetDisplayName(meshtastic_Config_LoRaConfig_ModemPreset preset)
     case meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO:
         return "ShortTurbo";
     default:
-        return "LongFast";
+        return "Invalid";
     }
 }
 
@@ -157,8 +157,10 @@ float estimateFrequencyMhz(uint8_t region_code, uint8_t modem_preset)
         bw_khz = info->wide_lora ? 406.25f : 125.0f;
         break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
         bw_khz = info->wide_lora ? 406.25f : 125.0f;
+        break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
+        bw_khz = info->wide_lora ? 1625.0f : 500.0f;
         break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
     default:

@@ -59,7 +59,7 @@ class UiController
     void onChatEvent(sys::Event* event);
 
     /**
-     * @brief 从会话返回消息列表
+     * @brief Navigate back from conversation view to the message list
      */
     void backToList();
 

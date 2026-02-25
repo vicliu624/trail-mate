@@ -110,6 +110,9 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
 // Forward declaration from main.cpp
 extern bool isScreenSleeping();
 extern void updateUserActivity();
+extern bool isScreenSaverActive();
+extern void wakeScreenSaver();
+extern void enterFromScreenSaver();
 
 static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
 {
@@ -119,18 +122,43 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
     if (touched)
     {
         input::MorseEngine::notifyTouch();
-        if (isScreenSleeping())
+#if defined(ARDUINO_T_DECK)
+        // T-Deck: a tap既要负责唤醒/退出屏保，也要被传递给当前 UI。
+        if (isScreenSaverActive())
         {
-            updateUserActivity();
+            enterFromScreenSaver();
         }
-        else
+        else if (isScreenSleeping())
         {
-            updateUserActivity();
+            wakeScreenSaver();
         }
+        updateUserActivity();
         data->point.x = x;
         data->point.y = y;
         data->state = LV_INDEV_STATE_PR;
         return;
+#else
+        // 其他设备仍然保持“先唤醒、不传给 UI”的逻辑。
+        // Priority: if screen saver is visible, consume the touch to exit it.
+        if (isScreenSaverActive())
+        {
+            enterFromScreenSaver();
+            data->state = LV_INDEV_STATE_REL;
+            return;
+        }
+        // Otherwise, if the screen is sleeping, first touch only wakes it and shows the screen saver.
+        if (isScreenSleeping())
+        {
+            wakeScreenSaver();
+            data->state = LV_INDEV_STATE_REL;
+            return;
+        }
+        updateUserActivity();
+        data->point.x = x;
+        data->point.y = y;
+        data->state = LV_INDEV_STATE_PR;
+        return;
+#endif
     }
     data->state = LV_INDEV_STATE_REL;
 }
@@ -140,6 +168,8 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
 // Forward declaration from main.cpp
 extern bool isScreenSleeping();
 extern void updateUserActivity();
+extern bool isScreenSaverActive();
+extern void wakeScreenSaver();
 // Forward declaration from ui_gps.cpp
 extern bool isGPSLoadingTiles();
 
@@ -153,11 +183,11 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
 #endif
 
     // If screen is sleeping, only wake it up, don't pass input to UI
-    if (isScreenSleeping())
+    if (isScreenSleeping() || isScreenSaverActive())
     {
         if (msg.dir != ROTARY_DIR_NONE || msg.centerBtnPressed)
         {
-            updateUserActivity(); // Wake up screen
+            wakeScreenSaver();
         }
 #if defined(ARDUINO_T_DECK)
         // T-Deck path already reset above.
@@ -238,6 +268,9 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
 // Forward declaration from main.cpp
 extern bool isScreenSleeping();
 extern void updateUserActivity();
+extern bool isScreenSaverActive();
+extern void wakeScreenSaver();
+extern void enterFromScreenSaver();
 
 static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
 {
@@ -245,13 +278,17 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
     auto* plane = (LilyGo_Display*)lv_indev_get_user_data(drv);
     int state = plane->getKeyChar(&c);
 
-    // If screen is sleeping, only wake it up, don't pass input to UI
-    if (isScreenSleeping())
+    // If screen is sleeping or screen saver is active, handle wake/enter logic and don't pass input to UI.
+    // Some keyboard drivers may not report a clean press/release sequence in this state,
+    // so we don't gate on KeyboardState here.
+    if (isScreenSleeping() || isScreenSaverActive())
     {
-        if (state == KEYBOARD_PRESSED)
-        {
-            updateUserActivity(); // Wake up screen
-        }
+        // When the screen saver is visible, any key will enter from the screen saver.
+        // When the screen is fully sleeping, the first key press shows the screen saver.
+        if (isScreenSaverActive())
+            enterFromScreenSaver();
+        else
+            wakeScreenSaver();
         data->state = LV_INDEV_STATE_REL; // Don't pass key to UI
         return;
     }

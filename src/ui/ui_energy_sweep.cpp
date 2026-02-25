@@ -208,8 +208,9 @@ float preset_to_bw_khz(uint8_t modem_preset, bool wide_lora)
         return wide_lora ? 812.5f : 250.0f;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
         return wide_lora ? 406.25f : 125.0f;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
+        return wide_lora ? 1625.0f : 500.0f;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
     default:
         return wide_lora ? 812.5f : 250.0f;

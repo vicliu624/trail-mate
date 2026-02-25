@@ -39,6 +39,10 @@ class MeshCoreAdapter : public IMeshAdapter
     // IMeshAdapter interface implementation
     bool sendText(ChannelId channel, const std::string& text,
                   MessageId* out_msg_id, NodeId peer = 0) override;
+    bool sendDirectTextDetailed(ChannelId channel, const std::string& text,
+                                NodeId peer, uint8_t txt_type,
+                                uint32_t* out_ack, uint32_t* out_timeout,
+                                bool* out_sent_flood);
 
     bool pollIncomingText(MeshIncomingText* out) override;
 
@@ -84,8 +88,99 @@ class MeshCoreAdapter : public IMeshAdapter
      */
     void processSendQueue() override;
 
-  private:
     static constexpr size_t kMaxPeerPathLen = 64;
+
+    struct PeerInfo
+    {
+        uint8_t peer_hash = 0;
+        NodeId node_id = 0;
+        bool has_pubkey = false;
+        bool pubkey_verified = false;
+        uint8_t pubkey[MeshCoreIdentity::kPubKeySize] = {};
+        uint8_t out_path_len = 0;
+        uint8_t out_path[kMaxPeerPathLen] = {};
+        uint32_t last_seen_ms = 0;
+        ChannelId preferred_channel = ChannelId::PRIMARY;
+    };
+
+    bool getPeerInfos(std::vector<PeerInfo>& out) const;
+    bool lookupPeerByHash(uint8_t hash, PeerInfo* out) const;
+    bool lookupPeerByNodeId(NodeId node_id, PeerInfo* out) const;
+
+    bool exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentity::kPubKeySize]) const;
+    bool exportIdentityPrivateKey(uint8_t out_priv[MeshCoreIdentity::kPrivKeySize]) const;
+    bool importIdentityPrivateKey(const uint8_t* in_priv, size_t len);
+    bool signPayload(const uint8_t* data, size_t len,
+                     uint8_t out_sig[MeshCoreIdentity::kSignatureSize]) const;
+    uint8_t getSelfHash() const { return self_hash_; }
+
+    bool clearPeerPath(uint8_t peer_hash);
+
+    struct Event
+    {
+        enum class Type : uint8_t
+        {
+            Response,
+            PathResponse,
+            ControlData,
+            RawData,
+            TraceData,
+            Advert,
+            PathUpdated,
+            SendConfirmed
+        };
+
+        Type type = Type::Response;
+        uint8_t peer_hash = 0;
+        NodeId peer_node = 0;
+        int8_t snr_qdb = 0;
+        int8_t rssi_dbm = 0;
+        uint8_t flags = 0;
+        uint32_t tag = 0;
+        uint32_t auth = 0;
+        uint32_t trip_ms = 0;
+        std::vector<uint8_t> payload;
+        std::vector<uint8_t> in_path;
+        std::vector<uint8_t> out_path;
+        std::vector<uint8_t> trace_hashes;
+        std::vector<uint8_t> trace_snrs;
+        bool advert_is_new = false;
+    };
+
+    bool pollEvent(Event* out);
+
+    bool ensurePeerPublicKey(const uint8_t* pubkey, size_t len, bool verified);
+
+    bool sendPeerRequestType(const uint8_t* pubkey, size_t len, uint8_t req_type,
+                             uint32_t* out_tag, uint32_t* out_est_timeout,
+                             bool* out_sent_flood);
+    bool sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
+                                const uint8_t* payload, size_t payload_len,
+                                bool force_flood,
+                                uint32_t* out_tag, uint32_t* out_est_timeout,
+                                bool* out_sent_flood);
+    bool sendAnonRequestPayload(const uint8_t* pubkey, size_t len,
+                                const uint8_t* payload, size_t payload_len,
+                                uint32_t* out_est_timeout,
+                                bool* out_sent_flood);
+    bool sendRawData(const uint8_t* path, size_t path_len,
+                     const uint8_t* payload, size_t payload_len,
+                     uint32_t* out_est_timeout);
+    bool sendTracePath(const uint8_t* path, size_t path_len,
+                       uint32_t tag, uint32_t auth, uint8_t flags,
+                       uint32_t* out_est_timeout);
+    bool sendControlData(const uint8_t* payload, size_t payload_len);
+    void setFloodScopeKey(const uint8_t* key, size_t len);
+    bool sendStoredAdvert(const uint8_t* pubkey, size_t len);
+    bool sendIdentityAdvertWithLocation(bool broadcast, bool include_location,
+                                        int32_t lat_i6, int32_t lon_i6);
+    bool exportAdvertFrame(const uint8_t* pubkey, size_t len,
+                           std::vector<uint8_t>& out_frame,
+                           bool include_location,
+                           int32_t lat_i6, int32_t lon_i6) const;
+    bool importAdvertFrame(const uint8_t* frame, size_t len);
+
+  private:
     static constexpr size_t kMaxPeerRouteCandidates = 4;
     static constexpr size_t kMaxPersistedPeerPubKeys = 64;
     static constexpr const char* kPeerPubKeyPrefsNs = "mc_peers";
@@ -93,6 +188,7 @@ class MeshCoreAdapter : public IMeshAdapter
     static constexpr const char* kPeerPubKeyPrefsKeyVer = "peer_ver";
     static constexpr uint8_t kPeerPubKeyPrefsVersion = 1;
     static constexpr uint32_t kAutoDiscoverCooldownMs = 8000;
+    static constexpr size_t kMaxEventQueue = 32;
 
     struct ScheduledFrame
     {
@@ -129,6 +225,9 @@ class MeshCoreAdapter : public IMeshAdapter
         bool pubkey_verified = false;
         uint8_t pubkey[MeshCoreIdentity::kPubKeySize] = {};
         uint32_t pubkey_seen_ms = 0;
+        uint8_t last_advert[184] = {};
+        uint16_t last_advert_len = 0;
+        uint32_t last_advert_ts = 0;
         ChannelId preferred_channel = ChannelId::PRIMARY;
         uint32_t last_seen_ms = 0;
         uint32_t route_blackout_until_ms = 0;
@@ -198,11 +297,13 @@ class MeshCoreAdapter : public IMeshAdapter
     std::deque<ScheduledFrame> scheduled_tx_;
     std::deque<SeenEntry> seen_recent_;
     std::deque<PendingAppAck> pending_app_acks_;
+    std::deque<Event> events_;
     std::vector<PeerRouteEntry> peer_routes_;
     std::vector<NodeId> verified_peers_;
     KeyVerifySession key_verify_session_;
 
     MessageId next_msg_id_;
+    std::array<uint8_t, 16> flood_scope_key_ = {};
 
     TxGateReason checkTxGate(uint32_t now_ms) const;
     static const char* txGateReasonName(TxGateReason reason);
@@ -247,12 +348,16 @@ class MeshCoreAdapter : public IMeshAdapter
                           ChannelId channel, uint32_t now_ms);
     void pruneSeen(uint32_t now_ms);
     bool hasSeenSignature(uint32_t signature, uint32_t now_ms);
+    void handleRawPacketInternal(const uint8_t* data, size_t size, bool allow_duplicate);
     void prunePendingAppAcks(uint32_t now_ms);
     void trackPendingAppAck(uint32_t signature, NodeId dest, uint32_t portnum, uint32_t now_ms);
     bool consumePendingAppAck(uint32_t signature, uint32_t now_ms);
+    void pushEvent(Event&& ev);
     bool sendNodeInfoFrame(NodeId dest, bool is_query, bool request_reply);
     bool sendDiscoverRequestLocal();
     bool sendIdentityAdvert(bool broadcast);
+    bool sendIdentityAdvert(bool broadcast, bool include_location,
+                            int32_t lat_i6, int32_t lon_i6);
     bool handleControlAppData(const MeshIncomingData& incoming);
     bool handleNodeInfoControl(const MeshIncomingData& incoming);
     bool handleKeyVerifyControl(const MeshIncomingData& incoming);

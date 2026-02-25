@@ -39,50 +39,50 @@ void Toast::show(lv_obj_t* parent, const char* text, Type type, const Options& o
 {
     if (!parent || !text || text[0] == '\0') return;
 
-    // 保证不叠加：同一时刻只显示一个 toast
+    // Ensure we never stack multiple toasts: only one active at a time.
     hide();
 
     auto* impl = new Impl();
     impl->opt = opt;
     impl->start_ms = millis();
 
-    // root：尺寸由内容决定
+    // Root container: size driven by content.
     impl->root = lv_obj_create(parent);
     lv_obj_remove_style_all(impl->root);
     lv_obj_clear_flag(impl->root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(impl->root, LV_OBJ_FLAG_IGNORE_LAYOUT);
 
-    // 样式
+    // Style
     lv_obj_set_style_radius(impl->root, 8, 0);
     lv_obj_set_style_bg_color(impl->root, bgColor(type), 0);
-    lv_obj_set_style_bg_opa(impl->root, LV_OPA_0, 0); // 从 0 淡入
+    lv_obj_set_style_bg_opa(impl->root, LV_OPA_0, 0); // start fully transparent and fade in
     lv_obj_set_style_pad_hor(impl->root, impl->opt.pad_h, 0);
     lv_obj_set_style_pad_ver(impl->root, impl->opt.pad_v, 0);
 
-    // label：最大宽度用“像素”限制（不要用 lv_pct）
+    // Label: limit width in pixels (do not use lv_pct for this).
     impl->label = lv_label_create(impl->root);
     lv_label_set_text(impl->label, text);
     lv_label_set_long_mode(impl->label, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_color(impl->label, lv_color_hex(0x3A2A1A), 0);
 
-    // 计算最大宽度：基于屏幕宽度（更稳定）
-    // 注意：这里用 screen_active 的宽度更符合“设备屏幕”的语义
+    // Compute max width based on screen width (more stable across layouts).
+    // Use the active screen width as the device-screen reference.
     lv_obj_t* scr = lv_screen_active();
     int scr_w = scr ? (int)lv_obj_get_width(scr) : 240;
     int max_w = (scr_w * (int)impl->opt.max_width_pct) / 100;
-    max_w = clamp_int(max_w, 60, scr_w - 10); // 给一个合理下限/上限
+    max_w = clamp_int(max_w, 60, scr_w - 10); // clamp to a reasonable min/max
     lv_obj_set_width(impl->label, max_w);
 
-    // 让 root 根据 label 尺寸自动收缩
+    // Let root size itself based on the label.
     lv_obj_set_size(impl->root, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 
-    // ✅ 先让 LVGL 计算一次尺寸（很关键：否则 align 用的宽高可能是旧值）
+    // Make LVGL compute size/layout once before aligning, otherwise width/height may be stale.
     lv_obj_update_layout(impl->root);
 
-    // ✅ 定位：底部居中 + y_offset
+    // Position: bottom center + custom y_offset.
     lv_obj_align(impl->root, LV_ALIGN_BOTTOM_MID, 0, impl->opt.y_offset);
 
-    // 淡入动画
+    // Fade‑in animation.
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, impl->root);
@@ -112,7 +112,7 @@ void Toast::timer_cb(lv_timer_t* t)
     uint32_t now = millis();
     if (now - impl->start_ms < impl->opt.duration_ms) return;
 
-    // 到时间：淡出
+    // Time reached: start fade‑out animation.
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, impl->root);
@@ -120,12 +120,12 @@ void Toast::timer_cb(lv_timer_t* t)
     lv_anim_set_time(&a, impl->opt.fade_ms);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)set_bg_opa);
 
-    // 动画结束后 hide（注意：hide 会 destroy 并清 active）
+    // When the animation completes, hide() will destroy and clear the active toast.
     lv_anim_set_ready_cb(&a, [](lv_anim_t*)
                          { Toast::hide(); });
     lv_anim_start(&a);
 
-    // timer 只负责触发一次淡出
+    // The timer only needs to fire once to trigger fade‑out.
     lv_timer_del(t);
     impl->timer = nullptr;
 }

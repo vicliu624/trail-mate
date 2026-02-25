@@ -183,6 +183,14 @@ void ChatService::processIncoming()
                                                             msg.msg_id,
                                                             msg.text.c_str(),
                                                             &incoming.rx_meta));
+
+        for (auto* observer : incoming_text_observers_)
+        {
+            if (observer)
+            {
+                observer->onIncomingText(incoming);
+            }
+        }
     }
 }
 
@@ -211,6 +219,38 @@ void ChatService::setModelEnabled(bool enabled)
     if (!model_enabled_)
     {
         model_.clearAll();
+    }
+}
+
+void ChatService::addIncomingTextObserver(IncomingTextObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto* existing : incoming_text_observers_)
+    {
+        if (existing == observer)
+        {
+            return;
+        }
+    }
+    incoming_text_observers_.push_back(observer);
+}
+
+void ChatService::removeIncomingTextObserver(IncomingTextObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto it = incoming_text_observers_.begin(); it != incoming_text_observers_.end(); ++it)
+    {
+        if (*it == observer)
+        {
+            incoming_text_observers_.erase(it);
+            return;
+        }
     }
 }
 

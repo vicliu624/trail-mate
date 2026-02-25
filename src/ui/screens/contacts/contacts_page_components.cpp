@@ -611,7 +611,7 @@ static void on_filter_focused(lv_event_t* e)
         g_contacts_state.current_page = 0;
         g_contacts_state.selected_index = -1;
         refresh_contacts_data();
-        refresh_ui(); // 旋转到另一个按钮，就刷新第二列
+        refresh_ui(); // When switching filter mode, refresh the list column.
         return;
     }
 
@@ -654,7 +654,7 @@ static void on_prev_clicked(lv_event_t* /*e*/)
     g_contacts_state.current_page--;
     if (g_contacts_state.current_page < 0)
     {
-        // 循环：跳到最后一页
+        // Wrap-around: jump to the last page.
         int total_pages = (g_contacts_state.total_items + kItemsPerPage - 1) / kItemsPerPage;
         if (total_pages <= 0) total_pages = 1;
         g_contacts_state.current_page = total_pages - 1;
@@ -673,7 +673,7 @@ static void on_next_clicked(lv_event_t* /*e*/)
     g_contacts_state.current_page++;
     if (g_contacts_state.current_page >= total_pages)
     {
-        // 循环：回到第一页
+        // Wrap-around: go back to the first page.
         g_contacts_state.current_page = 0;
     }
     g_contacts_state.selected_index = -1;
@@ -2342,10 +2342,10 @@ void refresh_ui()
             g_contacts_state.current_mode,
             status_text.c_str());
 
-        // 让 item 记录它对应的全局 index，按压时能知道选中了谁
+        // Store the global index on the item so click handlers know which entry was selected.
         lv_obj_set_user_data(item, (void*)(intptr_t)i);
 
-        // 按压列表行：弹出动作菜单
+        // Clicking a list row opens the action menu.
         lv_obj_add_event_cb(item, on_list_item_clicked, LV_EVENT_CLICKED, nullptr);
     }
 

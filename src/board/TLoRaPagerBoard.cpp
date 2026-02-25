@@ -34,8 +34,42 @@
 static constexpr uint8_t I2C_XL9555 = 0x20;
 static constexpr uint8_t I2C_BQ25896 = 0x6B;
 
-// Forward declarations for power management wrapper functions
-Preferences& getPreferencesInstance();
+// ------------------------------
+// I2C bus mutex (Gauge, PMU, RTC, XL9555 share Wire)
+// ------------------------------
+static SemaphoreHandle_t s_i2c_mutex = nullptr;
+
+struct I2CGuard
+{
+    I2CGuard()
+    {
+        if (s_i2c_mutex != nullptr)
+        {
+            xSemaphoreTake(s_i2c_mutex, portMAX_DELAY);
+        }
+    }
+    ~I2CGuard()
+    {
+        if (s_i2c_mutex != nullptr)
+        {
+            xSemaphoreGive(s_i2c_mutex);
+        }
+    }
+};
+
+// ------------------------------
+// Gauge health tracking (BQ27220)
+// ------------------------------
+static int s_gauge_error_streak = 0;
+static int s_gauge_reinit_count = 0;
+
+// Temperature state (from BQ27220), used for safety / UI hints / brightness caps.
+static float s_last_temp_c = NAN;
+static bool s_temp_valid = false;
+static bool s_temp_hot = false;
+static bool s_temp_cold = false;
+static uint32_t s_last_temp_notice_hot_ms = 0;
+static uint32_t s_last_temp_notice_cold_ms = 0;
 
 #ifdef USING_ST25R3916
 #include <rfal_rfst25r3916.h>
@@ -225,6 +259,10 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     devices_probe |= HW_PSRAM_ONLINE;
 
     Wire.begin(SDA, SCL);
+    if (s_i2c_mutex == nullptr)
+    {
+        s_i2c_mutex = xSemaphoreCreateMutex();
+    }
 
     // Initialize battery gauge (BQ27220)
     if (!gauge.begin(Wire, SDA, SCL))
@@ -234,12 +272,28 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     else
     {
         log_d("Battery gauge initialized successfully");
-        devices_probe |= HW_GAUGE_ONLINE;
-        // Configure battery capacity (1500mAh for T-LoRa-Pager)
-        const uint16_t designCapacity = 1500;
-        const uint16_t fullChargeCapacity = 1500;
+    devices_probe |= HW_GAUGE_ONLINE;
+
+    // Configure battery capacity (mAh) for BQ27220.
+    // Default 1500mAh, but allow overrides from NVS (for production tuning or advanced settings).
+        uint16_t designCapacity = 1500;
+        uint16_t fullChargeCapacity = 1500;
+        Preferences prefs;
+        prefs.begin("power", true);
+        uint32_t d = prefs.getUInt("gauge_design_mah", designCapacity);
+        uint32_t f = prefs.getUInt("gauge_full_mah", fullChargeCapacity);
+        prefs.end();
+        if (d > 0 && d <= 10000)
+        {
+            designCapacity = static_cast<uint16_t>(d);
+        }
+        if (f > 0 && f <= 10000)
+        {
+            fullChargeCapacity = static_cast<uint16_t>(f);
+        }
+
         gauge.setNewCapacity(designCapacity, fullChargeCapacity);
-        log_d("Battery capacity set to %dmAh", designCapacity);
+        log_d("Battery capacity set to design=%umAh full=%umAh", designCapacity, fullChargeCapacity);
     }
 
     // Initialize PMU (BQ25896 power management)
@@ -495,6 +549,10 @@ bool TLoRaPagerBoard::initPMU()
     // The charging current should not be greater than half of the battery capacity.
     pmu.setChargerConstantCurr(704);
 
+    // Configure system power-down (SYS VOFF) voltage to protect battery from over-discharge.
+    // 3200mV is a conservative and commonly used under-voltage shutdown threshold.
+    pmu.setSysPowerDownVoltage(3200);
+
     // Enable measure
     pmu.enableMeasure();
 
@@ -566,7 +624,7 @@ bool TLoRaPagerBoard::initDrv()
         drv.selectLibrary(1);
         drv.setMode(SensorDRV2605::MODE_INTTRIG);
         drv.useERM();
-        // 不在上电时震动，效果在需要时?vibrator() 触发
+        // Do not vibrate during power-on; vibration is triggered later via vibrator() when needed.
         drv.setWaveform(0, 0);
         drv.setWaveform(1, 0);
         powerControl(POWER_HAPTIC_DRIVER, false);
@@ -711,6 +769,7 @@ bool TLoRaPagerBoard::isCardReady()
 
 void TLoRaPagerBoard::powerControl(PowerCtrlChannel_t ch, bool enable)
 {
+    I2CGuard i2c; // XL9555 io uses I2C
     switch (ch)
     {
     case POWER_DISPLAY_BACKLIGHT:
@@ -1145,6 +1204,30 @@ bool TLoRaPagerBoard::initGPS()
 
 void TLoRaPagerBoard::setBrightness(uint8_t level)
 {
+    // Low-battery cap: tier 1 = 70% max, tier 2 = 50% max (of DEVICE_MAX_BRIGHTNESS_LEVEL 16)
+    uint8_t max_level = DEVICE_MAX_BRIGHTNESS_LEVEL;
+    if (power_tier_ >= 2)
+    {
+        max_level = (DEVICE_MAX_BRIGHTNESS_LEVEL * 50) / 100; // 8
+    }
+    else if (power_tier_ >= 1)
+    {
+        max_level = (DEVICE_MAX_BRIGHTNESS_LEVEL * 70) / 100; // 11
+    }
+
+    // Over-temperature cap: when battery temperature is high, further clamp brightness to 50%.
+    if (s_temp_hot)
+    {
+        uint8_t hot_cap = (DEVICE_MAX_BRIGHTNESS_LEVEL * 50) / 100;
+        if (max_level > hot_cap)
+        {
+            max_level = hot_cap;
+        }
+    }
+    if (level > max_level)
+    {
+        level = max_level;
+    }
     backlight.setBrightness(level);
 }
 
@@ -1486,14 +1569,9 @@ bool TLoRaPagerBoard::getRTCTimeString(char* buffer, size_t buffer_size, bool sh
 
     // Read the time registers directly via I2C
     // PCF85063 time registers (I2C address 0x51, registers 0x04-0x06)
-    // Register 0x04: Seconds (BCD format)
-    // Register 0x05: Minutes (BCD format)
-    // Register 0x06: Hours (BCD format)
-
+    I2CGuard i2c;
     uint8_t hour, minute, second = 0;
 
-    // Use the same Wire instance that RTC uses
-    // For minimum resource usage, start reading from minutes register (0x05) if not showing seconds
     uint8_t start_register = show_seconds ? 0x04 : 0x05; // Start at seconds or minutes
     uint8_t bytes_to_read = show_seconds ? 3 : 2;        // Read 3 bytes (sec,min,hour) or 2 bytes (min,hour)
 
@@ -1603,32 +1681,35 @@ bool TLoRaPagerBoard::adjustRTCByOffsetMinutes(int offset_minutes)
     uint8_t bytes_to_read = 7; // sec, min, hour, day, weekday, month, year
     uint8_t buf[7] = {0};
 
-    Wire.beginTransmission(0x51);
-    Wire.write(start_register);
-    uint8_t error = Wire.endTransmission();
-    if (error != 0)
     {
-        Wire.beginTransmission(0x68);
+        I2CGuard i2c;
+        Wire.beginTransmission(0x51);
         Wire.write(start_register);
-        error = Wire.endTransmission();
+        uint8_t error = Wire.endTransmission();
         if (error != 0)
+        {
+            Wire.beginTransmission(0x68);
+            Wire.write(start_register);
+            error = Wire.endTransmission();
+            if (error != 0)
+            {
+                return false;
+            }
+            Wire.requestFrom((uint8_t)0x68, bytes_to_read);
+        }
+        else
+        {
+            Wire.requestFrom((uint8_t)0x51, bytes_to_read);
+        }
+
+        if (Wire.available() < bytes_to_read)
         {
             return false;
         }
-        Wire.requestFrom((uint8_t)0x68, bytes_to_read);
-    }
-    else
-    {
-        Wire.requestFrom((uint8_t)0x51, bytes_to_read);
-    }
-
-    if (Wire.available() < bytes_to_read)
-    {
-        return false;
-    }
-    for (uint8_t i = 0; i < bytes_to_read; ++i)
-    {
-        buf[i] = Wire.read();
+        for (uint8_t i = 0; i < bytes_to_read; ++i)
+        {
+            buf[i] = Wire.read();
+        }
     }
 
     int second = bcdToDec(buf[0] & 0x7F);
@@ -1685,81 +1766,310 @@ bool board_adjust_rtc_by_offset_minutes(int offset_minutes)
 
 int TLoRaPagerBoard::getBatteryLevel()
 {
-    if (!isGaugeReady())
+    static int s_last_level = -1;
+    static int s_last_voltage_mv = -1;
+    static uint8_t s_zero_streak = 0;
+    static uint32_t s_last_read_ms = 0;
+
+    constexpr uint32_t kMinReadIntervalMs = 5000;
+    constexpr int kVoltageMinMv = 3000;
+    constexpr int kVoltageMaxMv = 4300;
+    constexpr int kDropGuardPct = 30;
+    constexpr int kZeroGuardMinPct = 15;
+    constexpr uint8_t kZeroGuardCount = 3;
+    constexpr int kSocMismatchGuardPct = 35;
+    constexpr int kQuietCurrentMa = 300;
+
+    const uint32_t now_ms = millis();
+    if (s_last_level >= 0 && (now_ms - s_last_read_ms) < kMinReadIntervalMs)
     {
-        return -1;
+        return s_last_level;
     }
 
-    // Get battery state of charge (percentage) from BQ27220
-    // Try library methods first, then fallback to direct I2C read
-
-    int level = -1;
-
-    // Attempt 1: Try common library methods (uncomment if library supports):
-    // level = gauge.getSOC();
-    // level = gauge.getPercentage();
-    // level = gauge.stateOfCharge();
-    // level = gauge.getStateOfCharge();
-    // level = gauge.readSOC();
-
-    // Attempt 2: Direct I2C read if library methods don't work
-    // BQ27220 I2C address: 0x55 (7-bit address)
-    // SOC (State of Charge) register: 0x2C (according to BQ27220 datasheet)
-    // Note: BQ27220 uses 16-bit registers, so we need to read 2 bytes
-
-    if (level < 0)
+    auto battery_percent_from_mv = [](int mv) -> int
     {
-        // Try direct I2C read
-        // BQ27220 SOC register is at 0x2C (16-bit value, percentage 0-100)
-        uint8_t i2c_addr = 0x55; // BQ27220 default I2C address (7-bit)
+        if (mv <= 0)
+        {
+            return -1;
+        }
+        static constexpr int kCurve[][2] = {
+            {4200, 100},
+            {4100, 90},
+            {4000, 80},
+            {3900, 60},
+            {3800, 40},
+            {3700, 20},
+            {3600, 10},
+            {3300, 0},
+        };
+        if (mv >= kCurve[0][0])
+        {
+            return 100;
+        }
+        if (mv <= kCurve[7][0])
+        {
+            return 0;
+        }
+        for (size_t i = 0; i + 1 < (sizeof(kCurve) / sizeof(kCurve[0])); ++i)
+        {
+            const int v1 = kCurve[i][0];
+            const int p1 = kCurve[i][1];
+            const int v2 = kCurve[i + 1][0];
+            const int p2 = kCurve[i + 1][1];
+            if (mv <= v1 && mv >= v2)
+            {
+                return p2 + (mv - v2) * (p1 - p2) / (v1 - v2);
+            }
+        }
+        return -1;
+    };
 
+    auto read_bq27220_soc_direct = []() -> int
+    {
+        // Caller must hold I2C mutex (used inside getBatteryLevel's I2CGuard block)
+        constexpr uint8_t i2c_addr = 0x55;
         Wire.beginTransmission(i2c_addr);
-        Wire.write(0x2C); // SOC register (0x2C = StateOfCharge)
+        Wire.write(0x2C);
         uint8_t error = Wire.endTransmission();
         if (error != 0)
         {
-            // I2C communication failed
             return -1;
         }
-
-        // BQ27220 registers are 16-bit, read 2 bytes
         Wire.requestFrom(i2c_addr, (uint8_t)2);
         if (Wire.available() < 2)
         {
             return -1;
         }
-
-        // Read 16-bit value (little-endian: LSB first, then MSB)
-        uint8_t lsb = Wire.read();
-        uint8_t msb = Wire.read();
-        uint16_t soc_raw = (uint16_t)msb << 8 | lsb;
-
-        // BQ27220 SOC register (0x2C) format:
-        // Returns percentage directly (0-100) as 16-bit value
-        // Value represents remaining capacity as percentage of full charge capacity
-
+        const uint8_t lsb = Wire.read();
+        const uint8_t msb = Wire.read();
+        const uint16_t soc_raw = (uint16_t)msb << 8 | lsb;
         if (soc_raw <= 100)
         {
-            level = (int)soc_raw; // Already in percentage (0-100)
+            return (int)soc_raw;
         }
-        else if (soc_raw <= 1000)
+        if (soc_raw <= 1000)
         {
-            level = (int)(soc_raw / 10); // Convert from 0.1% units (0-1000 -> 0-100)
+            return (int)(soc_raw / 10);
         }
-        else
-        {
-            // If value is very large, it might be capacity in mAh, not percentage
-            // Try to convert: if it's around 1500 (battery capacity), it's not percentage
-            return -1; // Invalid value for percentage
-        }
+        return -1;
+    };
 
-        // Validate final value
-        if (level < 0 || level > 100)
+    auto read_battery_mv_from_adc = []() -> int
+    {
+#ifdef BOARD_BAT_ADC
+        analogSetPinAttenuation(BOARD_BAT_ADC, ADC_11db);
+        int mv = analogReadMilliVolts(BOARD_BAT_ADC);
+        if (mv <= 0)
         {
             return -1;
         }
+        return mv * 2;
+#else
+        return -1;
+#endif
+    };
+
+    int soc = -1;
+    int voltage_mv = -1;
+    int current_ma = 0;
+    int voltage_percent = -1;
+    float temp_c = NAN;
+    bool gauge_ok = false;
+    bool temp_ok = false;
+
+    {
+        I2CGuard i2c;
+        if (isGaugeReady())
+        {
+            bool refresh_ok = gauge.refresh();
+            if (refresh_ok)
+            {
+                soc = static_cast<int>(gauge.getStateOfCharge());
+                voltage_mv = static_cast<int>(gauge.getVoltage());
+                current_ma = static_cast<int>(gauge.getCurrent());
+                temp_c = gauge.getTemperature();
+                temp_ok = std::isfinite(temp_c) && temp_c > -20.0f && temp_c < 80.0f;
+                if (temp_ok)
+                {
+                    s_last_temp_c = temp_c;
+                    s_temp_valid = true;
+
+                    // Temperature bands: Hot / Cold with a small hysteresis window.
+                    if (temp_c > 45.0f)
+                    {
+                        s_temp_hot = true;
+                    }
+                    else if (temp_c < 40.0f)
+                    {
+                        s_temp_hot = false;
+                    }
+                    if (temp_c < 5.0f)
+                    {
+                        s_temp_cold = true;
+                    }
+                    else if (temp_c > 8.0f)
+                    {
+                        s_temp_cold = false;
+                    }
+                }
+                if (soc >= 0 && soc <= 100)
+                {
+                    gauge_ok = true;
+                    s_gauge_error_streak = 0;
+                }
+            }
+
+            if (!gauge_ok)
+            {
+                // Gauge read failed: increase error counter and attempt re-init after several consecutive failures.
+                s_gauge_error_streak++;
+                if (s_gauge_error_streak >= 3)
+                {
+                    log_w("Gauge SOC read failed %d times, attempting BQ27220 reinit", s_gauge_error_streak);
+                    if (gauge.begin(Wire, SDA, SCL))
+                    {
+                        s_gauge_error_streak = 0;
+                        s_gauge_reinit_count++;
+                        log_w("Gauge reinit successful (count=%d)", s_gauge_reinit_count);
+                    }
+                    else
+                    {
+                        log_w("Gauge reinit failed");
+                    }
+                }
+            }
+        }
+
+        if (!gauge_ok)
+        {
+            soc = read_bq27220_soc_direct();
+            if (soc >= 0 && soc <= 100)
+            {
+                gauge_ok = true;
+                // Direct register read succeeded; treat gauge as recovered and clear error counter.
+                s_gauge_error_streak = 0;
+            }
+        }
+
+        if (voltage_mv < kVoltageMinMv || voltage_mv > kVoltageMaxMv)
+        {
+            voltage_mv = -1;
+        }
+
+        voltage_percent = voltage_mv > 0 ? battery_percent_from_mv(voltage_mv) : -1;
+        if (voltage_percent < 0 && isPMUReady())
+        {
+            const uint16_t pmu_mv = pmu.getBattVoltage();
+            if (pmu_mv >= kVoltageMinMv && pmu_mv <= kVoltageMaxMv)
+            {
+                voltage_mv = static_cast<int>(pmu_mv);
+                voltage_percent = battery_percent_from_mv(voltage_mv);
+            }
+        }
     }
 
+    if (voltage_percent < 0)
+    {
+        const int adc_mv = read_battery_mv_from_adc();
+        if (adc_mv >= kVoltageMinMv && adc_mv <= kVoltageMaxMv)
+        {
+            voltage_mv = adc_mv;
+            voltage_percent = battery_percent_from_mv(voltage_mv);
+        }
+    }
+
+    int level = gauge_ok ? soc : -1;
+    if (level < 0 || level > 100)
+    {
+        level = -1;
+    }
+    if (level < 0 && voltage_percent >= 0)
+    {
+        level = voltage_percent;
+    }
+
+    if (level >= 0 && voltage_percent >= 0)
+    {
+        const int diff = std::abs(level - voltage_percent);
+        const int current_abs = current_ma >= 0 ? current_ma : -current_ma;
+        const bool current_quiet = current_abs <= kQuietCurrentMa;
+        if (diff >= kSocMismatchGuardPct && current_quiet)
+        {
+            level = voltage_percent;
+        }
+        if (level <= 3 && voltage_percent >= 15)
+        {
+            level = voltage_percent;
+        }
+        if (level >= 95 && voltage_percent <= 80)
+        {
+            level = voltage_percent;
+        }
+        if (gauge_ok && !temp_ok)
+        {
+            level = voltage_percent;
+        }
+    }
+
+    // Temperature notifications: only when we have a valid reading, with cooldowns to avoid spam.
+    if (s_temp_valid)
+    {
+        const uint32_t now_ms = millis();
+        if (s_temp_hot && (now_ms - s_last_temp_notice_hot_ms) > 60000)
+        {
+            ::ui::SystemNotification::show("Device hot - limiting brightness", 3000);
+            s_last_temp_notice_hot_ms = now_ms;
+        }
+        if (s_temp_cold && (now_ms - s_last_temp_notice_cold_ms) > 600000)
+        {
+            ::ui::SystemNotification::show("Low temp - battery may read wrong", 3000);
+            s_last_temp_notice_cold_ms = now_ms;
+        }
+    }
+
+    if (level < 0)
+    {
+        s_last_read_ms = now_ms;
+        return s_last_level;
+    }
+
+    if (level > 100)
+    {
+        level = 100;
+    }
+
+    const bool charging = isCharging();
+
+    if (!charging && s_last_level >= 0 && level + kDropGuardPct < s_last_level)
+    {
+        if (voltage_percent >= 0 && voltage_percent + 10 >= s_last_level)
+        {
+            level = voltage_percent;
+        }
+        else
+        {
+            level = s_last_level;
+        }
+    }
+
+    if (!charging && level == 0 && s_last_level >= kZeroGuardMinPct)
+    {
+        if (s_zero_streak < kZeroGuardCount)
+        {
+            s_zero_streak++;
+            s_last_read_ms = now_ms;
+            return s_last_level;
+        }
+    }
+    else
+    {
+        s_zero_streak = 0;
+    }
+
+    s_last_level = level;
+    s_last_voltage_mv = voltage_mv;
+    s_last_read_ms = now_ms;
+    (void)s_last_voltage_mv;
     return level;
 }
 
@@ -1769,7 +2079,72 @@ bool TLoRaPagerBoard::isCharging()
     {
         return false;
     }
-    return false;
+    I2CGuard i2c;
+    return pmu.isCharging();
+}
+
+int TLoRaPagerBoard::getUsbVoltageMv_bestEffort() const
+{
+    // Only available when PMU is online; returns 0 when VBUS is not present or read fails.
+    TLoRaPagerBoard* self = const_cast<TLoRaPagerBoard*>(this);
+    if (!self->isPMUReady())
+    {
+        return 0;
+    }
+    I2CGuard i2c;
+    return self->pmu.getVbusVoltage();
+}
+
+int TLoRaPagerBoard::getChargeCurrentMa_bestEffort() const
+{
+    // Only meaningful while charging; returns 0 when not charging or on read failure.
+    TLoRaPagerBoard* self = const_cast<TLoRaPagerBoard*>(this);
+    if (!self->isPMUReady())
+    {
+        return 0;
+    }
+    I2CGuard i2c;
+    return self->pmu.getChargeCurrent();
+}
+
+float TLoRaPagerBoard::getBatteryTemperatureC_bestEffort() const
+{
+    if (!s_temp_valid)
+    {
+        return NAN;
+    }
+    return s_last_temp_c;
+}
+
+void TLoRaPagerBoard::reloadGaugeCapacityFromPrefs()
+{
+    if (!isGaugeReady())
+    {
+        return;
+    }
+
+    uint16_t designCapacity = 1500;
+    uint16_t fullChargeCapacity = 1500;
+    Preferences prefs;
+    prefs.begin("power", true);
+    uint32_t d = prefs.getUInt("gauge_design_mah", designCapacity);
+    uint32_t f = prefs.getUInt("gauge_full_mah", fullChargeCapacity);
+    prefs.end();
+    if (d > 0 && d <= 10000)
+    {
+        designCapacity = static_cast<uint16_t>(d);
+    }
+    if (f > 0 && f <= 10000)
+    {
+        fullChargeCapacity = static_cast<uint16_t>(f);
+    }
+
+    {
+        I2CGuard i2c;
+        gauge.setNewCapacity(designCapacity, fullChargeCapacity);
+    }
+    log_d("Battery gauge capacity reapplied from prefs: design=%umAh full=%umAh",
+          designCapacity, fullChargeCapacity);
 }
 
 int TLoRaPagerBoard::readADC(uint8_t pin, uint8_t samples)
@@ -1919,7 +2294,7 @@ bool TLoRaPagerBoard::initPowerButton()
 
 void TLoRaPagerBoard::handlePowerButton()
 {
-    // 根据LilyGo文档：POWER键只负责从Power OFF状态唤醒，不负责关?    // "The power button is only valid when the device is turned off"
+    // According to LilyGo docs: POWER key only wakes the device from Power OFF; it does not force shutdown by itself.
 
     if (power_button_event)
     {
@@ -1927,9 +2302,10 @@ void TLoRaPagerBoard::handlePowerButton()
 
         if (power_button_state)
         {
-            // POWER键按?- 这是一个唤醒信?            log_d("POWER button pressed - wake up signal");
+            // POWER key pressed: this is a wake-up signal.
+            log_d("POWER button pressed - wake up signal");
 
-            // 检查是否从deep sleep唤醒
+            // Check if we are waking from deep sleep.
             esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
             if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0)
             {
@@ -1938,13 +2314,19 @@ void TLoRaPagerBoard::handlePowerButton()
             }
             else
             {
-                // 设备已经在运行状?- POWER键按下可能用于其他功?                log_d("POWER button pressed while device is running");
-                // 可以在这里添加屏幕开关或其他功能
+                // Device is already running; POWER press can be repurposed for other features (screen toggle, etc.).
+                log_d("POWER button pressed while device is running");
             }
         }
         else
         {
-            // POWER键释?            log_d("POWER button released");
+            // POWER key released: long-press (>= 3s) triggers shutdown
+            uint32_t press_duration_ms = millis() - power_button_press_start;
+            if (press_duration_ms >= POWER_BUTTON_LONG_PRESS_MS)
+            {
+                log_i("POWER key long-press (%lu ms) -> shutdown", (unsigned long)press_duration_ms);
+                softwareShutdown();
+            }
         }
     }
 }
@@ -2130,7 +2512,7 @@ void TLoRaPagerBoard::softwareShutdown()
     if (isUsbPresent_bestEffort())
     {
         log_w("Cannot shutdown: USB is connected (PMIC will maintain power)");
-        ui::SystemNotification::show("???? USB ?????");
+        ui::SystemNotification::show("Unplug USB to power off", 3500);
         return;
     }
 
@@ -2142,6 +2524,34 @@ void TLoRaPagerBoard::wakeUp()
 {
     // Re-initialize power button interrupt after wake up
     initPowerButton();
+}
+
+void TLoRaPagerBoard::enterScreenSleep()
+{
+    // Turn off peripheral power to save current; LoRa stays on for mesh.
+    powerControl(POWER_GPS, false);
+    powerControl(POWER_NFC, false);
+    powerControl(POWER_SENSOR, false);
+}
+
+void TLoRaPagerBoard::exitScreenSleep()
+{
+    powerControl(POWER_GPS, true);
+    powerControl(POWER_NFC, true);
+    powerControl(POWER_SENSOR, true);
+}
+
+void TLoRaPagerBoard::setPowerTier(int tier)
+{
+    if (tier < 0)
+    {
+        tier = 0;
+    }
+    if (tier > 2)
+    {
+        tier = 2;
+    }
+    power_tier_ = tier;
 }
 
 void TLoRaPagerBoard::rotaryTask(void* p)
@@ -2181,16 +2591,13 @@ void TLoRaPagerBoard::rotaryTask(void* p)
 // ------------------------------
 bool TLoRaPagerBoard::isUsbPresent_bestEffort()
 {
-    // Try to detect USB by checking PMU status if available
     TLoRaPagerBoard* board = TLoRaPagerBoard::getInstance();
     if (board && board->isPMUReady())
     {
-        // Check if PMU reports VBUS present
-        // Note: XPowersLib may have methods to check this
-        // For now, assume we can check via PMU status
-        return false; // TODO: Implement proper USB detection
+        I2CGuard i2c;
+        return board->pmu.isVbusIn();
     }
-    return false; // Default: assume no USB
+    return false;
 }
 
 // ------------------------------

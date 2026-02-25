@@ -445,7 +445,7 @@ void ChatComposeScreen::beginSend(chat::ChatService* service,
 
     setEnabled(false);
 
-    // 轻提示（可选）
+    // Optional lightweight toast hint while sending.
     ::ui::widgets::Toast::show(toastHost(), "Sending...", ::ui::widgets::Toast::Type::Info);
 
     if (impl_->send_timer)

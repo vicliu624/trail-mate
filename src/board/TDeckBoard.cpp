@@ -585,8 +585,37 @@ uint8_t TDeckBoard::getPoint(int16_t* x, int16_t* y, uint8_t get_point)
         ty = static_cast<int16_t>(h - 1);
     }
 
-    *x = tx;
-    *y = ty;
+    // Map raw touch coordinates into the current display rotation.
+    // This keeps the logical LVGL coordinates aligned with what the user sees.
+    int16_t lx = tx;
+    int16_t ly = ty;
+    switch (rotation_)
+    {
+    case 0:
+        // No rotation: direct mapping.
+        break;
+    case 1:
+        // Rotated 90 degrees (T-Deck default: landscape with USB on the right).
+        // Raw touch uses panel's native axes; map to LVGL's rotated axes.
+        lx = ty;
+        ly = static_cast<int16_t>(w - 1 - tx);
+        break;
+    case 2:
+        // Rotated 180 degrees.
+        lx = static_cast<int16_t>(w - 1 - tx);
+        ly = static_cast<int16_t>(h - 1 - ty);
+        break;
+    case 3:
+        // Rotated 270 degrees.
+        lx = static_cast<int16_t>(h - 1 - ty);
+        ly = tx;
+        break;
+    default:
+        break;
+    }
+
+    *x = lx;
+    *y = ly;
     return touched;
 }
 

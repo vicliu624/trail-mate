@@ -1,5 +1,6 @@
 #include "gps/usecase/gps_service.h"
 
+#include "app/power_tier.h"
 #include "board/GpsBoard.h"
 #include "board/TLoRaPagerTypes.h"
 #include "gps/usecase/track_recorder.h"
@@ -181,6 +182,17 @@ uint32_t GpsService::getCollectionInterval() const
     if (interval < kGpsSampleIntervalMs)
     {
         interval = kGpsSampleIntervalMs;
+    }
+
+    // Low-battery floor: tier 1 = min 30s, tier 2 = min 60s
+    int tier = getPowerTier();
+    if (tier >= 2 && interval < 60000)
+    {
+        interval = 60000;
+    }
+    else if (tier >= 1 && interval < 30000)
+    {
+        interval = 30000;
     }
 
     return interval;

@@ -36,6 +36,9 @@ class MeshCoreIdentity
     bool deriveSharedSecret(const uint8_t peer_pubkey[kPubKeySize],
                             uint8_t out_secret[kPubKeySize]) const;
 
+    bool exportPrivateKey(uint8_t out_priv[kPrivKeySize]) const;
+    bool importPrivateKey(const uint8_t in_priv[kPrivKeySize]);
+
   private:
     bool loadFromPrefs();
     bool saveToPrefs() const;

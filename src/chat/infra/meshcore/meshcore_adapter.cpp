@@ -74,6 +74,10 @@ constexpr NodeId kSyntheticNodePrefix = 0x4D430000UL;
 constexpr uint32_t kAppAckTimeoutMs = 15000;
 constexpr size_t kMaxPendingAppAcks = 32;
 constexpr uint32_t kKeyVerifySessionTtlMs = 60000;
+constexpr uint32_t kSendTimeoutBaseMs = 500;
+constexpr float kFloodSendTimeoutFactor = 16.0f;
+constexpr float kDirectSendPerhopFactor = 6.0f;
+constexpr uint32_t kDirectSendPerhopExtraMs = 250;
 
 constexpr uint8_t kPublicGroupPsk[16] = {
     0x8b, 0x33, 0x87, 0xe9, 0xc5, 0xcd, 0xea, 0x6a,
@@ -353,6 +357,24 @@ float estimateLoRaAirtimeMs(size_t frame_len, float bw_khz, uint8_t sf, uint8_t 
     const float preamble_sym = 8.0f + 4.25f;
     const float total_sec = (preamble_sym + payload_sym) * tsym;
     return total_sec * 1000.0f;
+}
+
+uint32_t estimateSendTimeoutMs(size_t frame_len, size_t path_len, bool flood,
+                               float bw_khz, uint8_t sf, uint8_t cr_denom)
+{
+    float air_ms_f = estimateLoRaAirtimeMs(frame_len, bw_khz, sf, cr_denom);
+    uint32_t air_ms = (air_ms_f > 0.0f && std::isfinite(air_ms_f))
+                          ? static_cast<uint32_t>(std::lround(air_ms_f))
+                          : 0U;
+    if (flood)
+    {
+        return kSendTimeoutBaseMs +
+               static_cast<uint32_t>(kFloodSendTimeoutFactor * static_cast<float>(air_ms));
+    }
+    const float perhop = static_cast<float>(air_ms) * kDirectSendPerhopFactor +
+                         static_cast<float>(kDirectSendPerhopExtraMs);
+    return kSendTimeoutBaseMs +
+           static_cast<uint32_t>(perhop * static_cast<float>(path_len + 1));
 }
 
 float scoreFromSnr(float snr, uint8_t sf, size_t packet_len)
@@ -1115,6 +1137,430 @@ MeshCapabilities MeshCoreAdapter::getCapabilities() const
     return caps;
 }
 
+bool MeshCoreAdapter::pollEvent(Event* out)
+{
+    if (!out || events_.empty())
+    {
+        return false;
+    }
+    *out = std::move(events_.front());
+    events_.pop_front();
+    return true;
+}
+
+bool MeshCoreAdapter::ensurePeerPublicKey(const uint8_t* pubkey, size_t len, bool verified)
+{
+    if (!pubkey || len != MeshCoreIdentity::kPubKeySize)
+    {
+        return false;
+    }
+    const uint32_t now_ms = millis();
+    rememberPeerPubKey(pubkey, now_ms, verified);
+    const NodeId node = deriveNodeIdFromPubkey(pubkey, len);
+    if (node != 0)
+    {
+        rememberPeerNodeId(pubkey[0], node, now_ms);
+    }
+    return true;
+}
+
+bool MeshCoreAdapter::sendPeerRequestType(const uint8_t* pubkey, size_t len, uint8_t req_type,
+                                          uint32_t* out_tag, uint32_t* out_est_timeout,
+                                          bool* out_sent_flood)
+{
+    uint8_t payload[9] = {};
+    payload[0] = req_type;
+    memset(payload + 1, 0, 4);
+    uint32_t nonce = static_cast<uint32_t>(esp_random());
+    memcpy(payload + 5, &nonce, sizeof(nonce));
+    return sendPeerRequestPayload(pubkey, len, payload, sizeof(payload), false,
+                                  out_tag, out_est_timeout, out_sent_flood);
+}
+
+bool MeshCoreAdapter::sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
+                                             const uint8_t* payload, size_t payload_len,
+                                             bool force_flood,
+                                             uint32_t* out_tag, uint32_t* out_est_timeout,
+                                             bool* out_sent_flood)
+{
+    if (!pubkey || len != MeshCoreIdentity::kPubKeySize || !payload || payload_len == 0)
+    {
+        return false;
+    }
+    if (!identity_.isReady())
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    prunePeerRoutes(now_ms);
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    ensurePeerPublicKey(pubkey, len, false);
+    const uint8_t peer_hash = pubkey[0];
+
+    uint8_t shared_secret[kCipherHmacKeySize] = {};
+    if (!identity_.deriveSharedSecret(pubkey, shared_secret))
+    {
+        return false;
+    }
+
+    uint8_t key16[kCipherKeySize] = {};
+    uint8_t key32[kCipherHmacKeySize] = {};
+    sharedSecretToKeys(shared_secret, key16, key32);
+
+    uint8_t plain[kMeshcoreMaxPayloadSize] = {};
+    size_t plain_len = 0;
+    const uint32_t tag = now_message_timestamp();
+    memcpy(plain + plain_len, &tag, sizeof(tag));
+    plain_len += sizeof(tag);
+    if (plain_len + payload_len > sizeof(plain))
+    {
+        return false;
+    }
+    memcpy(plain + plain_len, payload, payload_len);
+    plain_len += payload_len;
+
+    uint8_t datagram[kMeshcoreMaxPayloadSize] = {};
+    size_t datagram_len = 0;
+    if (!buildPeerDatagramPayload(peer_hash, self_hash_,
+                                  key16, key32,
+                                  plain, plain_len,
+                                  datagram, sizeof(datagram), &datagram_len))
+    {
+        return false;
+    }
+
+    const PeerRouteEntry* route = selectPeerRouteByHash(peer_hash, now_ms);
+    uint8_t route_type = kRouteTypeFlood;
+    const uint8_t* out_path = nullptr;
+    size_t out_path_len = 0;
+    if (!force_flood && route && route->has_out_path)
+    {
+        route_type = kRouteTypeDirect;
+        out_path = route->out_path;
+        out_path_len = route->out_path_len;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(route_type, kPayloadTypeReq,
+                               out_path, out_path_len,
+                               datagram, datagram_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+
+    if (out_tag)
+    {
+        *out_tag = tag;
+    }
+    if (out_sent_flood)
+    {
+        *out_sent_flood = (route_type == kRouteTypeFlood);
+    }
+    if (out_est_timeout)
+    {
+        *out_est_timeout = estimateSendTimeoutMs(frame_len,
+                                                (route_type == kRouteTypeDirect) ? out_path_len : 0,
+                                                route_type == kRouteTypeFlood,
+                                                config_.meshcore_bw_khz,
+                                                config_.meshcore_sf,
+                                                config_.meshcore_cr);
+    }
+    return ok;
+}
+
+bool MeshCoreAdapter::sendAnonRequestPayload(const uint8_t* pubkey, size_t len,
+                                             const uint8_t* payload, size_t payload_len,
+                                             uint32_t* out_est_timeout,
+                                             bool* out_sent_flood)
+{
+    if (!pubkey || len != MeshCoreIdentity::kPubKeySize || !payload || payload_len == 0)
+    {
+        return false;
+    }
+    if (!identity_.isReady())
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    prunePeerRoutes(now_ms);
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    ensurePeerPublicKey(pubkey, len, false);
+    const uint8_t peer_hash = pubkey[0];
+
+    uint8_t shared_secret[kCipherHmacKeySize] = {};
+    if (!identity_.deriveSharedSecret(pubkey, shared_secret))
+    {
+        return false;
+    }
+
+    uint8_t key16[kCipherKeySize] = {};
+    uint8_t key32[kCipherHmacKeySize] = {};
+    sharedSecretToKeys(shared_secret, key16, key32);
+
+    uint8_t cipher[kMeshcoreMaxPayloadSize] = {};
+    size_t cipher_len = encryptThenMac(key16, key32,
+                                       cipher, sizeof(cipher),
+                                       payload, payload_len);
+    if (cipher_len == 0)
+    {
+        return false;
+    }
+
+    uint8_t datagram[kMeshcoreMaxPayloadSize] = {};
+    size_t datagram_len = 0;
+    if (1 + kMeshcorePubKeySize + cipher_len > sizeof(datagram))
+    {
+        return false;
+    }
+    datagram[datagram_len++] = peer_hash;
+    memcpy(datagram + datagram_len, identity_.publicKey(), kMeshcorePubKeySize);
+    datagram_len += kMeshcorePubKeySize;
+    memcpy(datagram + datagram_len, cipher, cipher_len);
+    datagram_len += cipher_len;
+
+    const PeerRouteEntry* route = selectPeerRouteByHash(peer_hash, now_ms);
+    uint8_t route_type = kRouteTypeFlood;
+    const uint8_t* out_path = nullptr;
+    size_t out_path_len = 0;
+    if (route && route->has_out_path)
+    {
+        route_type = kRouteTypeDirect;
+        out_path = route->out_path;
+        out_path_len = route->out_path_len;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(route_type, kPayloadTypeAnonReq,
+                               out_path, out_path_len,
+                               datagram, datagram_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+
+    if (out_sent_flood)
+    {
+        *out_sent_flood = (route_type == kRouteTypeFlood);
+    }
+    if (out_est_timeout)
+    {
+        *out_est_timeout = estimateSendTimeoutMs(frame_len,
+                                                (route_type == kRouteTypeDirect) ? out_path_len : 0,
+                                                route_type == kRouteTypeFlood,
+                                                config_.meshcore_bw_khz,
+                                                config_.meshcore_sf,
+                                                config_.meshcore_cr);
+    }
+    return ok;
+}
+
+bool MeshCoreAdapter::sendRawData(const uint8_t* path, size_t path_len,
+                                  const uint8_t* payload, size_t payload_len,
+                                  uint32_t* out_est_timeout)
+{
+    if (!payload || payload_len == 0 || path_len > kMeshcoreMaxPathSize ||
+        (path_len > 0 && !path))
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(kRouteTypeDirect, kPayloadTypeRawCustom,
+                               path, path_len,
+                               payload, payload_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+    if (out_est_timeout)
+    {
+        *out_est_timeout = estimateSendTimeoutMs(frame_len, path_len, false,
+                                                config_.meshcore_bw_khz,
+                                                config_.meshcore_sf,
+                                                config_.meshcore_cr);
+    }
+    return ok;
+}
+
+bool MeshCoreAdapter::sendTracePath(const uint8_t* path, size_t path_len,
+                                    uint32_t tag, uint32_t auth, uint8_t flags,
+                                    uint32_t* out_est_timeout)
+{
+    if (!path || path_len == 0 || path_len > kMeshcoreMaxPathSize)
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    uint8_t payload[9] = {};
+    memcpy(payload, &tag, sizeof(tag));
+    memcpy(payload + 4, &auth, sizeof(auth));
+    payload[8] = flags;
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(kRouteTypeDirect, kPayloadTypeTrace,
+                               path, path_len,
+                               payload, sizeof(payload),
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+    if (out_est_timeout)
+    {
+        *out_est_timeout = estimateSendTimeoutMs(frame_len, path_len, false,
+                                                config_.meshcore_bw_khz,
+                                                config_.meshcore_sf,
+                                                config_.meshcore_cr);
+    }
+    return ok;
+}
+
+bool MeshCoreAdapter::sendControlData(const uint8_t* payload, size_t payload_len)
+{
+    if (!payload || payload_len == 0 || payload_len > kMeshcoreMaxPayloadSize)
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(kRouteTypeDirect, kPayloadTypeControl,
+                               nullptr, 0,
+                               payload, payload_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+    return ok;
+}
+
+void MeshCoreAdapter::setFloodScopeKey(const uint8_t* key, size_t len)
+{
+    flood_scope_key_.fill(0);
+    if (!key || len == 0)
+    {
+        return;
+    }
+    memcpy(flood_scope_key_.data(), key, std::min(len, flood_scope_key_.size()));
+}
+
+bool MeshCoreAdapter::sendStoredAdvert(const uint8_t* pubkey, size_t len)
+{
+    if (!pubkey || len != MeshCoreIdentity::kPubKeySize)
+    {
+        return false;
+    }
+    if (identity_.isReady() &&
+        memcmp(pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize) == 0)
+    {
+        return sendIdentityAdvert(true);
+    }
+
+    const uint8_t peer_hash = pubkey[0];
+    const PeerRouteEntry* entry = findPeerRouteByHash(peer_hash);
+    if (!entry || entry->last_advert_len == 0)
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(kRouteTypeDirect, kPayloadTypeAdvert,
+                               nullptr, 0,
+                               entry->last_advert, entry->last_advert_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+    return ok;
+}
+
+bool MeshCoreAdapter::sendIdentityAdvertWithLocation(bool broadcast, bool include_location,
+                                                     int32_t lat_i6, int32_t lon_i6)
+{
+    return sendIdentityAdvert(broadcast, include_location, lat_i6, lon_i6);
+}
+
 bool MeshCoreAdapter::resolveGroupSecret(ChannelId channel, uint8_t out_key16[16],
                                          uint8_t out_key32[32], uint8_t* out_hash) const
 {
@@ -1552,10 +1998,30 @@ void MeshCoreAdapter::rememberPeerPath(uint8_t peer_hash, const uint8_t* path, s
         return;
     }
     PeerRouteEntry& entry = upsertPeerRoute(peer_hash, now_ms);
+    uint8_t prev_path[kMaxPeerPathLen] = {};
+    const uint8_t prev_len = entry.has_out_path ? entry.out_path_len : 0;
+    const bool had_path = entry.has_out_path;
+    if (had_path && prev_len > 0)
+    {
+        memcpy(prev_path, entry.out_path, prev_len);
+    }
     const int16_t snr_x10 = std::isfinite(last_rx_snr_)
                                 ? static_cast<int16_t>(std::lround(last_rx_snr_ * 10.0f))
                                 : std::numeric_limits<int16_t>::min();
     rememberPeerPathCandidate(entry, path, path_len, channel, snr_x10, now_ms);
+    const bool has_path = entry.has_out_path;
+    const uint8_t new_len = entry.out_path_len;
+    const bool changed = (had_path != has_path) ||
+                         (new_len != prev_len) ||
+                         (new_len > 0 && memcmp(entry.out_path, prev_path, new_len) != 0);
+    if (changed)
+    {
+        Event ev{};
+        ev.type = Event::Type::PathUpdated;
+        ev.peer_hash = peer_hash;
+        ev.peer_node = resolvePeerNodeId(peer_hash);
+        pushEvent(std::move(ev));
+    }
 }
 
 bool MeshCoreAdapter::lookupPeerPubKey(uint8_t peer_hash,
@@ -2138,10 +2604,24 @@ bool MeshCoreAdapter::consumePendingAppAck(uint32_t signature, uint32_t now_ms)
                      static_cast<unsigned long>(it->dest),
                      static_cast<unsigned>(it->portnum),
                      static_cast<unsigned long>(now_ms - it->created_ms));
+        Event ev{};
+        ev.type = Event::Type::SendConfirmed;
+        ev.tag = signature;
+        ev.trip_ms = now_ms - it->created_ms;
+        pushEvent(std::move(ev));
         pending_app_acks_.erase(it);
         return true;
     }
     return false;
+}
+
+void MeshCoreAdapter::pushEvent(Event&& ev)
+{
+    if (events_.size() >= kMaxEventQueue)
+    {
+        events_.pop_front();
+    }
+    events_.push_back(std::move(ev));
 }
 
 bool MeshCoreAdapter::isPeerVerified(NodeId peer) const
@@ -2366,6 +2846,12 @@ bool MeshCoreAdapter::sendDiscoverRequestLocal()
 
 bool MeshCoreAdapter::sendIdentityAdvert(bool broadcast)
 {
+    return sendIdentityAdvert(broadcast, false, 0, 0);
+}
+
+bool MeshCoreAdapter::sendIdentityAdvert(bool broadcast, bool include_location,
+                                         int32_t lat_i6, int32_t lon_i6)
+{
     if (!identity_.isReady())
     {
         MESHCORE_LOG("[MESHCORE] TX ADVERT dropped (identity unavailable)\n");
@@ -2390,14 +2876,25 @@ bool MeshCoreAdapter::sendIdentityAdvert(bool broadcast)
     }
 
     const uint8_t node_type = config_.meshcore_client_repeat ? kAdvertTypeRepeater : kAdvertTypeChat;
-    uint8_t app_data[1 + sizeof(name)] = {};
+    uint8_t app_data[1 + 8 + sizeof(name)] = {};
     size_t app_data_len = 0;
     uint8_t flags = static_cast<uint8_t>(node_type & 0x0F);
+    if (include_location)
+    {
+        flags = static_cast<uint8_t>(flags | kAdvertFlagHasLocation);
+    }
     if (name_len > 0)
     {
         flags = static_cast<uint8_t>(flags | kAdvertFlagHasName);
     }
     app_data[app_data_len++] = flags;
+    if (include_location)
+    {
+        memcpy(app_data + app_data_len, &lat_i6, sizeof(lat_i6));
+        app_data_len += sizeof(lat_i6);
+        memcpy(app_data + app_data_len, &lon_i6, sizeof(lon_i6));
+        app_data_len += sizeof(lon_i6);
+    }
     if (name_len > 0)
     {
         memcpy(app_data + app_data_len, name, name_len);
@@ -2449,7 +2946,11 @@ bool MeshCoreAdapter::sendIdentityAdvert(bool broadcast)
         return false;
     }
 
-    const bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
     MESHCORE_LOG("[MESHCORE] TX ADVERT mode=%s node_type=%u name_len=%u len=%u ok=%u\n",
                  broadcast ? "broadcast" : "local",
                  static_cast<unsigned>(node_type),
@@ -2457,6 +2958,147 @@ bool MeshCoreAdapter::sendIdentityAdvert(bool broadcast)
                  static_cast<unsigned>(frame_len),
                  ok ? 1U : 0U);
     return ok;
+}
+
+bool MeshCoreAdapter::exportAdvertFrame(const uint8_t* pubkey, size_t len,
+                                        std::vector<uint8_t>& out_frame,
+                                        bool include_location,
+                                        int32_t lat_i6, int32_t lon_i6) const
+{
+    out_frame.clear();
+    const bool wants_self = (pubkey == nullptr || len == 0 ||
+                             (len == MeshCoreIdentity::kPubKeySize &&
+                              identity_.isReady() &&
+                              memcmp(pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize) == 0));
+    if (wants_self)
+    {
+        if (!identity_.isReady())
+        {
+            return false;
+        }
+
+        char name[32] = {};
+        size_t name_len = copyPrintableAscii(user_short_name_, name, sizeof(name));
+        if (name_len == 0)
+        {
+            name_len = copyPrintableAscii(user_long_name_, name, sizeof(name));
+        }
+
+        const uint8_t node_type = config_.meshcore_client_repeat ? kAdvertTypeRepeater : kAdvertTypeChat;
+        uint8_t app_data[1 + 8 + sizeof(name)] = {};
+        size_t app_data_len = 0;
+        uint8_t flags = static_cast<uint8_t>(node_type & 0x0F);
+        if (include_location)
+        {
+            flags = static_cast<uint8_t>(flags | kAdvertFlagHasLocation);
+        }
+        if (name_len > 0)
+        {
+            flags = static_cast<uint8_t>(flags | kAdvertFlagHasName);
+        }
+        app_data[app_data_len++] = flags;
+        if (include_location)
+        {
+            memcpy(app_data + app_data_len, &lat_i6, sizeof(lat_i6));
+            app_data_len += sizeof(lat_i6);
+            memcpy(app_data + app_data_len, &lon_i6, sizeof(lon_i6));
+            app_data_len += sizeof(lon_i6);
+        }
+        if (name_len > 0)
+        {
+            memcpy(app_data + app_data_len, name, name_len);
+            app_data_len += name_len;
+        }
+
+        const uint8_t* self_pubkey = identity_.publicKey();
+        const uint32_t ts = now_message_timestamp();
+        std::array<uint8_t, kMeshcorePubKeySize + sizeof(ts) + sizeof(app_data)> signed_message = {};
+        size_t signed_len = 0;
+        memcpy(signed_message.data() + signed_len, self_pubkey, kMeshcorePubKeySize);
+        signed_len += kMeshcorePubKeySize;
+        memcpy(signed_message.data() + signed_len, &ts, sizeof(ts));
+        signed_len += sizeof(ts);
+        if (app_data_len > 0)
+        {
+            memcpy(signed_message.data() + signed_len, app_data, app_data_len);
+            signed_len += app_data_len;
+        }
+
+        uint8_t signature[MeshCoreIdentity::kSignatureSize] = {};
+        if (!identity_.sign(signed_message.data(), signed_len, signature))
+        {
+            return false;
+        }
+
+        uint8_t payload[kMeshcoreMaxPayloadSize] = {};
+        size_t payload_len = 0;
+        memcpy(payload + payload_len, self_pubkey, kMeshcorePubKeySize);
+        payload_len += kMeshcorePubKeySize;
+        memcpy(payload + payload_len, &ts, sizeof(ts));
+        payload_len += sizeof(ts);
+        memcpy(payload + payload_len, signature, sizeof(signature));
+        payload_len += sizeof(signature);
+        if (app_data_len > 0)
+        {
+            memcpy(payload + payload_len, app_data, app_data_len);
+            payload_len += app_data_len;
+        }
+
+        uint8_t frame[kMeshcoreMaxFrameSize] = {};
+        size_t frame_len = 0;
+        if (!buildFrameNoTransport(kRouteTypeFlood, kPayloadTypeAdvert,
+                                   nullptr, 0,
+                                   payload, payload_len,
+                                   frame, sizeof(frame), &frame_len))
+        {
+            return false;
+        }
+        out_frame.assign(frame, frame + frame_len);
+        return true;
+    }
+
+    if (!pubkey || len != MeshCoreIdentity::kPubKeySize)
+    {
+        return false;
+    }
+    const PeerRouteEntry* entry = findPeerRouteByHash(pubkey[0]);
+    if (!entry || entry->last_advert_len == 0)
+    {
+        return false;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize] = {};
+    size_t frame_len = 0;
+    if (!buildFrameNoTransport(kRouteTypeFlood, kPayloadTypeAdvert,
+                               nullptr, 0,
+                               entry->last_advert, entry->last_advert_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+    out_frame.assign(frame, frame + frame_len);
+    return true;
+}
+
+bool MeshCoreAdapter::importAdvertFrame(const uint8_t* frame, size_t len)
+{
+    if (!frame || len < 2 || len > kMeshcoreMaxFrameSize)
+    {
+        return false;
+    }
+    ParsedPacket parsed{};
+    if (!parsePacket(frame, len, &parsed))
+    {
+        return false;
+    }
+    if (parsed.payload_ver != kPayloadVer1 ||
+        parsed.payload_type != kPayloadTypeAdvert ||
+        parsed.payload_len < kAdvertMinPayloadSize)
+    {
+        return false;
+    }
+    handleRawPacketInternal(frame, len, true);
+    return true;
 }
 
 bool MeshCoreAdapter::startKeyVerification(NodeId dest)
@@ -2826,116 +3468,7 @@ bool MeshCoreAdapter::sendText(ChannelId channel, const std::string& text,
 
     if (peer != 0)
     {
-        const uint8_t peer_hash = static_cast<uint8_t>(peer & 0xFFU);
-        rememberPeerNodeId(peer_hash, peer, now_ms);
-
-        // Upstream MeshCore direct payloads are ECDH-based and require full peer pubkey.
-        // If the peer key has not been discovered yet, do not "fake succeed" with fallback
-        // secrets; trigger a local discovery sweep instead.
-        if (identity_.isReady())
-        {
-            const PeerRouteEntry* peer_route = findPeerRouteByHash(peer_hash);
-            if (!peer_route || !peer_route->has_pubkey)
-            {
-                MESHCORE_LOG("[MESHCORE] TX direct text dropped (missing peer pubkey) peer=%08lX hash=%02X -> discover\n",
-                             static_cast<unsigned long>(peer),
-                             static_cast<unsigned>(peer_hash));
-                sendDiscoverRequestLocal();
-                return false;
-            }
-        }
-
-        uint8_t route_type = kRouteTypeFlood;
-        const uint8_t* out_path = nullptr;
-        size_t out_path_len = 0;
-        ChannelId tx_channel = channel;
-        if (const PeerRouteEntry* route = selectPeerRouteByHash(peer_hash, now_ms))
-        {
-            route_type = kRouteTypeDirect;
-            out_path = route->out_path;
-            out_path_len = route->out_path_len;
-            tx_channel = route->preferred_channel;
-        }
-
-        uint8_t peer_key16[16];
-        uint8_t peer_key32[32];
-        if (!deriveDirectSecret(tx_channel, peer_hash, peer_key16, peer_key32))
-        {
-            // Allow legacy/manual channel selection fallback when learned route channel fails.
-            if (tx_channel == channel ||
-                !deriveDirectSecret(channel, peer_hash, peer_key16, peer_key32))
-            {
-                MESHCORE_LOG("[MESHCORE] TX direct text dropped (no peer secret) peer=%08lX\n",
-                             static_cast<unsigned long>(peer));
-                return false;
-            }
-        }
-
-        constexpr size_t kDirectPlainPrefixSize = 5; // ts(4) + flags(1)
-        constexpr size_t kDirectCipherBudget =
-            ((kMeshcoreMaxPayloadSize - 2 - kCipherMacSize) / kCipherBlockSize) * kCipherBlockSize;
-        constexpr size_t kDirectTextBudget = (kDirectCipherBudget > kDirectPlainPrefixSize)
-                                                 ? (kDirectCipherBudget - kDirectPlainPrefixSize)
-                                                 : 0;
-
-        std::string body = text;
-        if (body.size() > kDirectTextBudget)
-        {
-            body.resize(kDirectTextBudget);
-        }
-
-        uint8_t plain[kDirectCipherBudget];
-        size_t plain_len = 0;
-        uint32_t msg_ts = now_message_timestamp();
-        memcpy(&plain[plain_len], &msg_ts, sizeof(msg_ts));
-        plain_len += sizeof(msg_ts);
-        plain[plain_len++] = static_cast<uint8_t>(kTxtTypePlain << 2);
-        memcpy(&plain[plain_len], body.data(), body.size());
-        plain_len += body.size();
-
-        uint8_t payload[kMeshcoreMaxPayloadSize];
-        size_t payload_len = 0;
-        if (!buildPeerDatagramPayload(peer_hash, self_hash_,
-                                      peer_key16, peer_key32,
-                                      plain, plain_len,
-                                      payload, sizeof(payload), &payload_len))
-        {
-            MESHCORE_LOG("[MESHCORE] TX direct text dropped (build payload fail) peer=%08lX plain_len=%u\n",
-                         static_cast<unsigned long>(peer),
-                         static_cast<unsigned>(plain_len));
-            return false;
-        }
-
-        uint8_t frame[kMeshcoreMaxFrameSize];
-        size_t frame_len = 0;
-
-        if (!buildFrameNoTransport(route_type, kPayloadTypeTxtMsg,
-                                   out_path, out_path_len,
-                                   payload, payload_len,
-                                   frame, sizeof(frame), &frame_len))
-        {
-            MESHCORE_LOG("[MESHCORE] TX direct text dropped (build frame fail) peer=%08lX route=%s path_len=%u payload_len=%u\n",
-                         static_cast<unsigned long>(peer),
-                         (route_type == kRouteTypeDirect) ? "direct" : "flood",
-                         static_cast<unsigned>(out_path_len),
-                         static_cast<unsigned>(payload_len));
-            return false;
-        }
-
-        bool ok = transmitFrameNow(frame, frame_len, now_ms);
-        MESHCORE_LOG("[MESHCORE] TX direct text peer=%08lX hash=%02X route=%s path_len=%u len=%u ok=%u\n",
-                     static_cast<unsigned long>(peer),
-                     static_cast<unsigned>(peer_hash),
-                     (route_type == kRouteTypeDirect) ? "direct" : "flood",
-                     static_cast<unsigned>(out_path_len),
-                     static_cast<unsigned>(frame_len),
-                     ok ? 1U : 0U);
-
-        if (ok && out_msg_id)
-        {
-            *out_msg_id = next_msg_id_++;
-        }
-        return ok;
+        return sendDirectTextDetailed(channel, text, peer, kTxtTypePlain, nullptr, nullptr, nullptr);
     }
 
     uint8_t channel_key16[16];
@@ -3012,6 +3545,143 @@ bool MeshCoreAdapter::sendText(ChannelId channel, const std::string& text,
         }
     }
 
+    return ok;
+}
+
+bool MeshCoreAdapter::sendDirectTextDetailed(ChannelId channel, const std::string& text,
+                                             NodeId peer, uint8_t txt_type,
+                                             uint32_t* out_ack, uint32_t* out_timeout,
+                                             bool* out_sent_flood)
+{
+    if (text.empty() || peer == 0)
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    prunePeerRoutes(now_ms);
+    const TxGateReason tx_gate = checkTxGate(now_ms);
+    if (tx_gate != TxGateReason::Ok)
+    {
+        return false;
+    }
+
+    const uint8_t peer_hash = static_cast<uint8_t>(peer & 0xFFU);
+    rememberPeerNodeId(peer_hash, peer, now_ms);
+
+    if (identity_.isReady())
+    {
+        const PeerRouteEntry* peer_route = findPeerRouteByHash(peer_hash);
+        if (!peer_route || !peer_route->has_pubkey)
+        {
+            sendDiscoverRequestLocal();
+            return false;
+        }
+    }
+
+    uint8_t route_type = kRouteTypeFlood;
+    const uint8_t* out_path = nullptr;
+    size_t out_path_len = 0;
+    ChannelId tx_channel = channel;
+    if (const PeerRouteEntry* route = selectPeerRouteByHash(peer_hash, now_ms))
+    {
+        route_type = kRouteTypeDirect;
+        out_path = route->out_path;
+        out_path_len = route->out_path_len;
+        tx_channel = route->preferred_channel;
+    }
+
+    uint8_t peer_key16[16];
+    uint8_t peer_key32[32];
+    if (!deriveDirectSecret(tx_channel, peer_hash, peer_key16, peer_key32))
+    {
+        if (tx_channel == channel ||
+            !deriveDirectSecret(channel, peer_hash, peer_key16, peer_key32))
+        {
+            return false;
+        }
+    }
+
+    constexpr size_t kDirectPlainPrefixSize = 5; // ts(4) + flags(1)
+    constexpr size_t kDirectCipherBudget =
+        ((kMeshcoreMaxPayloadSize - 2 - kCipherMacSize) / kCipherBlockSize) * kCipherBlockSize;
+    constexpr size_t kDirectTextBudget = (kDirectCipherBudget > kDirectPlainPrefixSize)
+                                             ? (kDirectCipherBudget - kDirectPlainPrefixSize)
+                                             : 0;
+
+    std::string body = text;
+    if (body.size() > kDirectTextBudget)
+    {
+        body.resize(kDirectTextBudget);
+    }
+
+    uint8_t plain[kDirectCipherBudget];
+    size_t plain_len = 0;
+    uint32_t msg_ts = now_message_timestamp();
+    memcpy(&plain[plain_len], &msg_ts, sizeof(msg_ts));
+    plain_len += sizeof(msg_ts);
+    plain[plain_len++] = static_cast<uint8_t>(txt_type << 2);
+    memcpy(&plain[plain_len], body.data(), body.size());
+    plain_len += body.size();
+
+    uint32_t ack_value = 0;
+    if (identity_.isReady() && txt_type == kTxtTypePlain)
+    {
+        SHA256 sha;
+        sha.update(plain, plain_len);
+        sha.update(identity_.publicKey(), kMeshcorePubKeySize);
+        sha.finalize(reinterpret_cast<uint8_t*>(&ack_value), sizeof(ack_value));
+    }
+
+    uint8_t payload[kMeshcoreMaxPayloadSize];
+    size_t payload_len = 0;
+    if (!buildPeerDatagramPayload(peer_hash, self_hash_,
+                                  peer_key16, peer_key32,
+                                  plain, plain_len,
+                                  payload, sizeof(payload), &payload_len))
+    {
+        return false;
+    }
+
+    uint8_t frame[kMeshcoreMaxFrameSize];
+    size_t frame_len = 0;
+
+    if (!buildFrameNoTransport(route_type, kPayloadTypeTxtMsg,
+                               out_path, out_path_len,
+                               payload, payload_len,
+                               frame, sizeof(frame), &frame_len))
+    {
+        return false;
+    }
+
+    bool ok = transmitFrameNow(frame, frame_len, now_ms);
+    if (!ok)
+    {
+        ok = enqueueScheduled(frame, frame_len, 50);
+    }
+
+    if (ok && ack_value != 0)
+    {
+        trackPendingAppAck(ack_value, peer, 0, now_ms);
+    }
+
+    if (out_ack)
+    {
+        *out_ack = ack_value;
+    }
+    if (out_timeout)
+    {
+        *out_timeout = estimateSendTimeoutMs(frame_len,
+                                            (route_type == kRouteTypeDirect) ? out_path_len : 0,
+                                            route_type == kRouteTypeFlood,
+                                            config_.meshcore_bw_khz,
+                                            config_.meshcore_sf,
+                                            config_.meshcore_cr);
+    }
+    if (out_sent_flood)
+    {
+        *out_sent_flood = (route_type == kRouteTypeFlood);
+    }
     return ok;
 }
 
@@ -3259,11 +3929,11 @@ bool MeshCoreAdapter::pollIncomingData(MeshIncomingData* out)
 void MeshCoreAdapter::applyConfig(const MeshConfig& config)
 {
     config_ = config;
-    config_.meshcore_freq_mhz = clampValue<float>(config_.meshcore_freq_mhz, 300.0f, 2500.0f);
-    config_.meshcore_bw_khz = clampValue<float>(config_.meshcore_bw_khz, 7.0f, 500.0f);
+    config_.meshcore_freq_mhz = clampValue<float>(config_.meshcore_freq_mhz, 400.0f, 2500.0f);
+    config_.meshcore_bw_khz = clampValue<float>(config_.meshcore_bw_khz, 7.8f, 500.0f);
     config_.meshcore_sf = clampValue<uint8_t>(config_.meshcore_sf, 5, 12);
     config_.meshcore_cr = clampValue<uint8_t>(config_.meshcore_cr, 5, 8);
-    config_.tx_power = clampValue<int8_t>(config_.tx_power, -9, 30);
+    config_.tx_power = clampValue<int8_t>(config_.tx_power, 1, 30);
     config_.meshcore_rx_delay_base = clampValue<float>(config_.meshcore_rx_delay_base, 0.0f, 20.0f);
     config_.meshcore_airtime_factor = clampValue<float>(config_.meshcore_airtime_factor, 0.0f, 9.0f);
     config_.meshcore_flood_max = clampValue<uint8_t>(config_.meshcore_flood_max, 0, 64);
@@ -3421,6 +4091,11 @@ bool MeshCoreAdapter::pollIncomingRawPacket(uint8_t* out_data, size_t& out_len, 
 
 void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
 {
+    handleRawPacketInternal(data, size, false);
+}
+
+void MeshCoreAdapter::handleRawPacketInternal(const uint8_t* data, size_t size, bool allow_duplicate)
+{
     if (!data || size < 2 || size > kMeshcoreMaxFrameSize)
     {
         MESHCORE_LOG("[MESHCORE] RX drop invalid frame len=%u\n",
@@ -3469,7 +4144,8 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
 
     const uint32_t packet_sig = packetSignature(parsed.payload_type, parsed.path_len,
                                                 parsed.payload, parsed.payload_len);
-    if (hasSeenSignature(packet_sig, now_ms))
+    const bool seen = hasSeenSignature(packet_sig, now_ms);
+    if (seen && !allow_duplicate)
     {
         MESHCORE_LOG("[MESHCORE] RX dedup pkt_sig=%08lX len=%u type=%u route=%u\n",
                      static_cast<unsigned long>(packet_sig),
@@ -3827,6 +4503,21 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
         if (parsed.path_len == 0)
         {
             handleZeroHopDiscoverControl();
+            Event ev{};
+            ev.type = Event::Type::ControlData;
+            ev.peer_hash = parsed.payload_len > 0 ? parsed.payload[0] : 0;
+            ev.peer_node = 0;
+            ev.flags = static_cast<uint8_t>(parsed.path_len);
+            if (std::isfinite(last_rx_snr_))
+            {
+                ev.snr_qdb = static_cast<int8_t>(std::lround(last_rx_snr_ * 4.0f));
+            }
+            if (std::isfinite(last_rx_rssi_))
+            {
+                ev.rssi_dbm = static_cast<int8_t>(std::lround(last_rx_rssi_));
+            }
+            ev.payload.assign(parsed.payload, parsed.payload + parsed.payload_len);
+            pushEvent(std::move(ev));
         }
         return;
     }
@@ -4448,6 +5139,12 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
                          static_cast<unsigned>(src_hash),
                          static_cast<unsigned>(plain_len),
                          is_flood_route ? "flood" : "direct");
+            Event ev{};
+            ev.type = Event::Type::Response;
+            ev.peer_hash = src_hash;
+            ev.peer_node = from_node;
+            ev.payload.assign(plain, plain + plain_len);
+            pushEvent(std::move(ev));
             return;
         }
 
@@ -4484,6 +5181,21 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
                     MESHCORE_LOG("[MESHCORE] RX PATH/RESPONSE src=%02X len=%u\n",
                                  static_cast<unsigned>(src_hash),
                                  static_cast<unsigned>(extra_len));
+                    Event ev{};
+                    ev.type = Event::Type::PathResponse;
+                    ev.peer_hash = src_hash;
+                    ev.peer_node = from_node;
+                    if (extra_len >= sizeof(uint32_t))
+                    {
+                        memcpy(&ev.tag, extra, sizeof(uint32_t));
+                    }
+                    ev.payload.assign(extra, extra + extra_len);
+                    ev.in_path.assign(parsed.path, parsed.path + parsed.path_len);
+                    if (out_path_len > 0)
+                    {
+                        ev.out_path.assign(out_path, out_path + out_path_len);
+                    }
+                    pushEvent(std::move(ev));
                 }
 
                 if (is_flood_route)
@@ -4713,13 +5425,34 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
         const char* name = advert.has_name ? advert.name : "";
         const uint8_t role = mapAdvertTypeToRole(advert.node_type);
 
+        bool is_new_peer = true;
+        if (const PeerRouteEntry* existing = findPeerRouteByHash(peer_hash))
+        {
+            is_new_peer = !existing->has_pubkey;
+        }
         rememberPeerPubKey(pubkey, now_ms, true);
         rememberPeerNodeId(peer_hash, node, now_ms);
+        if (PeerRouteEntry* entry = findPeerRouteByHash(peer_hash))
+        {
+            entry->last_advert_len = static_cast<uint16_t>(
+                std::min(parsed.payload_len, sizeof(entry->last_advert)));
+            if (entry->last_advert_len > 0)
+            {
+                memcpy(entry->last_advert, parsed.payload, entry->last_advert_len);
+            }
+            entry->last_advert_ts = ts;
+        }
         publishMeshcoreNodeInfo(node, name, name, role, hops, snr, rssi, ts);
         if (advert.has_location)
         {
             publishMeshcorePosition(node, advert.latitude_i6, advert.longitude_i6, ts);
         }
+        Event ev{};
+        ev.type = Event::Type::Advert;
+        ev.peer_hash = peer_hash;
+        ev.peer_node = node;
+        ev.advert_is_new = is_new_peer;
+        pushEvent(std::move(ev));
 
         MESHCORE_LOG("[MESHCORE] RX ADVERT node=%08lX hash=%02X type=%u hops=%u name='%s' loc=%u app=%u sig=verified\n",
                      static_cast<unsigned long>(node),
@@ -4753,6 +5486,19 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
     }
     else if (is_raw_payload)
     {
+        Event ev{};
+        ev.type = Event::Type::RawData;
+        if (std::isfinite(last_rx_snr_))
+        {
+            ev.snr_qdb = static_cast<int8_t>(std::lround(last_rx_snr_ * 4.0f));
+        }
+        if (std::isfinite(last_rx_rssi_))
+        {
+            ev.rssi_dbm = static_cast<int8_t>(std::lround(last_rx_rssi_));
+        }
+        ev.payload.assign(parsed.payload, parsed.payload + parsed.payload_len);
+        pushEvent(std::move(ev));
+
         MeshIncomingData incoming;
         memcpy(&incoming.portnum, parsed.payload, sizeof(uint32_t));
         incoming.from = 0;
@@ -4815,6 +5561,21 @@ void MeshCoreAdapter::handleRawPacket(const uint8_t* data, size_t size)
                          static_cast<unsigned long>(auth),
                          static_cast<unsigned>(parsed.path_len),
                          is_flood_route ? "flood" : "direct");
+            Event ev{};
+            ev.type = Event::Type::TraceData;
+            ev.tag = tag;
+            ev.auth = auth;
+            ev.flags = flags;
+            ev.trace_hashes.assign(parsed.payload + 9, parsed.payload + parsed.payload_len);
+            if (parsed.path_len > 0)
+            {
+                ev.trace_snrs.assign(parsed.path, parsed.path + parsed.path_len);
+            }
+            if (std::isfinite(last_rx_snr_))
+            {
+                ev.snr_qdb = static_cast<int8_t>(std::lround(last_rx_snr_ * 4.0f));
+            }
+            pushEvent(std::move(ev));
         }
     }
 }
@@ -4851,6 +5612,163 @@ void MeshCoreAdapter::processSendQueue()
             break;
         }
     }
+}
+
+bool MeshCoreAdapter::getPeerInfos(std::vector<PeerInfo>& out) const
+{
+    out.clear();
+    out.reserve(peer_routes_.size());
+    for (const auto& entry : peer_routes_)
+    {
+        PeerInfo info;
+        info.peer_hash = entry.peer_hash;
+        info.node_id = entry.node_id_guess;
+        info.has_pubkey = entry.has_pubkey;
+        info.pubkey_verified = entry.pubkey_verified;
+        if (entry.has_pubkey)
+        {
+            memcpy(info.pubkey, entry.pubkey, sizeof(info.pubkey));
+        }
+        info.out_path_len = entry.has_out_path ? entry.out_path_len : 0;
+        if (info.out_path_len > 0)
+        {
+            memcpy(info.out_path, entry.out_path, info.out_path_len);
+        }
+        info.last_seen_ms = entry.last_seen_ms;
+        info.preferred_channel = entry.preferred_channel;
+        out.push_back(info);
+    }
+    return true;
+}
+
+bool MeshCoreAdapter::lookupPeerByHash(uint8_t hash, PeerInfo* out) const
+{
+    if (!out)
+    {
+        return false;
+    }
+    const PeerRouteEntry* entry = findPeerRouteByHash(hash);
+    if (!entry)
+    {
+        return false;
+    }
+    PeerInfo info;
+    info.peer_hash = entry->peer_hash;
+    info.node_id = entry->node_id_guess;
+    info.has_pubkey = entry->has_pubkey;
+    info.pubkey_verified = entry->pubkey_verified;
+    if (entry->has_pubkey)
+    {
+        memcpy(info.pubkey, entry->pubkey, sizeof(info.pubkey));
+    }
+    info.out_path_len = entry->has_out_path ? entry->out_path_len : 0;
+    if (info.out_path_len > 0)
+    {
+        memcpy(info.out_path, entry->out_path, info.out_path_len);
+    }
+    info.last_seen_ms = entry->last_seen_ms;
+    info.preferred_channel = entry->preferred_channel;
+    *out = info;
+    return true;
+}
+
+bool MeshCoreAdapter::lookupPeerByNodeId(NodeId node_id, PeerInfo* out) const
+{
+    if (!out)
+    {
+        return false;
+    }
+    for (const auto& entry : peer_routes_)
+    {
+        if (entry.node_id_guess != 0 && entry.node_id_guess == node_id)
+        {
+            PeerInfo info;
+            info.peer_hash = entry.peer_hash;
+            info.node_id = entry.node_id_guess;
+            info.has_pubkey = entry.has_pubkey;
+            info.pubkey_verified = entry.pubkey_verified;
+            if (entry.has_pubkey)
+            {
+                memcpy(info.pubkey, entry.pubkey, sizeof(info.pubkey));
+            }
+            info.out_path_len = entry.has_out_path ? entry.out_path_len : 0;
+            if (info.out_path_len > 0)
+            {
+                memcpy(info.out_path, entry.out_path, info.out_path_len);
+            }
+            info.last_seen_ms = entry.last_seen_ms;
+            info.preferred_channel = entry.preferred_channel;
+            *out = info;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool MeshCoreAdapter::exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentity::kPubKeySize]) const
+{
+    if (!out_pubkey || !identity_.isReady())
+    {
+        return false;
+    }
+    memcpy(out_pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize);
+    return true;
+}
+
+bool MeshCoreAdapter::exportIdentityPrivateKey(uint8_t out_priv[MeshCoreIdentity::kPrivKeySize]) const
+{
+    if (!out_priv)
+    {
+        return false;
+    }
+    return identity_.exportPrivateKey(out_priv);
+}
+
+bool MeshCoreAdapter::importIdentityPrivateKey(const uint8_t* in_priv, size_t len)
+{
+    if (!in_priv || len != MeshCoreIdentity::kPrivKeySize)
+    {
+        return false;
+    }
+    if (!identity_.importPrivateKey(in_priv))
+    {
+        return false;
+    }
+    self_hash_ = identity_.selfHash();
+    const NodeId identity_node = deriveNodeIdFromPubkey(identity_.publicKey(), MeshCoreIdentity::kPubKeySize);
+    if (identity_node != 0)
+    {
+        node_id_ = identity_node;
+    }
+    return true;
+}
+
+bool MeshCoreAdapter::signPayload(const uint8_t* data, size_t len,
+                                  uint8_t out_sig[MeshCoreIdentity::kSignatureSize]) const
+{
+    if (!data || len == 0 || !out_sig || !identity_.isReady())
+    {
+        return false;
+    }
+    return identity_.sign(data, len, out_sig);
+}
+
+bool MeshCoreAdapter::clearPeerPath(uint8_t peer_hash)
+{
+    PeerRouteEntry* entry = findPeerRouteByHash(peer_hash);
+    if (!entry)
+    {
+        return false;
+    }
+    entry->out_path_len = 0;
+    entry->has_out_path = false;
+    memset(entry->out_path, 0, sizeof(entry->out_path));
+    Event ev{};
+    ev.type = Event::Type::PathUpdated;
+    ev.peer_hash = peer_hash;
+    ev.peer_node = resolvePeerNodeId(peer_hash);
+    pushEvent(std::move(ev));
+    return true;
 }
 
 } // namespace meshcore

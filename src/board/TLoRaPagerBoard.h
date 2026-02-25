@@ -188,6 +188,17 @@ class TLoRaPagerBoard : public BoardBase,
      */
     void wakeUp() override;
 
+    /** @brief Turn off GPS/NFC/sensor power when screen sleeps to save power */
+    void enterScreenSleep() override;
+    /** @brief Restore GPS/NFC/sensor power when screen wakes */
+    void exitScreenSleep() override;
+
+    void setPowerTier(int tier) override;
+    int getPowerTier() const override
+    {
+        return power_tier_;
+    }
+
     // Display
     void setBrightness(uint8_t level) override;
     uint8_t getBrightness() override;
@@ -349,9 +360,37 @@ class TLoRaPagerBoard : public BoardBase,
     bool isPMUReady() const { return isHardwareOnline(HW_PMU_ONLINE); }
 
     /**
+     * @brief Best-effort USB VBUS voltage in millivolts (0 if unavailable)
+     *
+     * Uses PMU ADC when online and VBUS is present; intended for UI/diagnostic display only, not safety-critical.
+     */
+    int getUsbVoltageMv_bestEffort() const;
+
+    /**
+     * @brief Best-effort battery charge current in milliamps (0 if not charging)
+     *
+     * Relies on PMU ADC and charge-status registers; intended for UI display only.
+     */
+    int getChargeCurrentMa_bestEffort() const;
+
+    /**
+     * @brief Re-apply BQ27220 capacity profile from NVS preferences.
+     *
+     * Reads gauge_design_mah / gauge_full_mah from NVS space \"power\" (if present),
+     * and updates the BQ27220 profile via gauge.setNewCapacity(...). Used to apply
+     * Settings changes at runtime without reboot.
+     */
+    void reloadGaugeCapacityFromPrefs();
+
+    /**
      * @brief Check if battery gauge is initialized and online
      */
     bool isGaugeReady() const { return isHardwareOnline(HW_GAUGE_ONLINE); }
+
+    /**
+     * @brief Last valid battery temperature in degrees Celsius (NAN if unavailable)
+     */
+    float getBatteryTemperatureC_bestEffort() const;
 
     /**
      * @brief Get battery level percentage (0-100)
@@ -448,6 +487,7 @@ class TLoRaPagerBoard : public BoardBase,
     // Two-stage power-off implementation
     bool isUsbPresent_bestEffort();
 
+    int power_tier_ = 0;          ///< 0=Normal, 1=Low(<=20%), 2=Critical(<=10%)
     uint32_t devices_probe = 0;   ///< Hardware detection status bitmask
     uint8_t _haptic_effects = 15; ///< Default haptic effect (strong buzz for message notification)
     uint8_t _message_tone_volume = 45;

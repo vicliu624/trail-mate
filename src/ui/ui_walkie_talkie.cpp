@@ -1,11 +1,13 @@
 #include "ui_walkie_talkie.h"
 
+#include "../app/power_tier.h"
 #include "../walkie/walkie_service.h"
 #include <Arduino.h>
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 #include "../board/TLoRaPagerBoard.h"
 #endif
 #include "ui_common.h"
+#include "widgets/system_notification.h"
 #include "widgets/top_bar.h"
 
 // Forward declarations from main.cpp
@@ -134,6 +136,11 @@ void set_error_text(const char* message)
 
 void ui_walkie_talkie_enter(lv_obj_t* parent)
 {
+    if (getPowerTier() >= 1)
+    {
+        ui::SystemNotification::show("Low battery - audio disabled", 3000);
+    }
+
     s_started = false;
 
     lv_group_t* prev_group = lv_group_get_default();

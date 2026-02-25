@@ -85,15 +85,6 @@ void refresh_team_cache(bool force = false)
     s_team_cache.last_refresh_ms = now;
 }
 
-int get_total_unread()
-{
-    app::AppContext& app_ctx = app::AppContext::getInstance();
-    chat::ChatService& chat = app_ctx.getChatService();
-    int unread = chat.getTotalUnread();
-    refresh_team_cache();
-    return unread + s_team_cache.team_unread;
-}
-
 StatusSnapshot collect_status()
 {
     StatusSnapshot snap{};
@@ -224,6 +215,15 @@ void force_update()
 {
     refresh_team_cache(true);
     status_timer_cb(nullptr);
+}
+
+int get_total_unread()
+{
+    app::AppContext& app_ctx = app::AppContext::getInstance();
+    chat::ChatService& chat = app_ctx.getChatService();
+    int unread = chat.getTotalUnread();
+    refresh_team_cache();
+    return unread + s_team_cache.team_unread;
 }
 
 } // namespace status

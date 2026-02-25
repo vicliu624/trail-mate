@@ -215,6 +215,10 @@ void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_le
         bw_khz = region->wide_lora ? 812.5f : 250.0f;
         sf = 10;
         break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
+        bw_khz = region->wide_lora ? 1625.0f : 500.0f;
+        sf = 11;
+        break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
         bw_khz = region->wide_lora ? 406.25f : 125.0f;
         sf = 11;

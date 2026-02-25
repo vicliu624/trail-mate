@@ -58,7 +58,7 @@ void ui_contacts_enter(lv_obj_t* parent)
 {
     CONTACTS_LOG("[Contacts] Entering Contacts page\n");
 
-    // 清理旧状态
+    // Clear any previous UI state.
     if (g_contacts_state.root != nullptr)
     {
         lv_obj_del(g_contacts_state.root);
@@ -75,7 +75,7 @@ void ui_contacts_enter(lv_obj_t* parent)
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
 
-    // ✅ 所有布局代码都在layout模块中
+    // All layout code lives in the dedicated layout module.
     g_contacts_state.root = contacts::ui::layout::create_root(parent);
 
     lv_obj_t* header = contacts::ui::layout::create_header(
@@ -86,10 +86,10 @@ void ui_contacts_enter(lv_obj_t* parent)
     lv_obj_t* content = contacts::ui::layout::create_content(g_contacts_state.root);
     g_contacts_state.page = content;
 
-    // 更新电池显示
+    // Initialize battery indicator on the shared top bar.
     ui_update_top_bar_battery(g_contacts_state.top_bar);
 
-    // 仅创建两列：Filter + List（移除常驻 Action Panel）
+    // Create only two columns: Filter + List (no persistent Action panel on the right).
     create_filter_panel(content);
     create_list_panel(content);
     g_contacts_state.action_panel = nullptr;

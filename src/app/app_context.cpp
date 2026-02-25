@@ -5,6 +5,8 @@
 
 #include "app_context.h"
 #include "../chat/infra/protocol_factory.h"
+#include "../chat/infra/meshtastic/mt_region.h"
+#include "../chat/infra/meshcore/mc_region_presets.h"
 #include "../gps/usecase/gps_service.h"
 #include "../gps/usecase/track_recorder.h"
 #include "../hostlink/hostlink_bridge_radio.h"
@@ -56,6 +58,73 @@ uint8_t load_message_tone_volume()
     }
     return static_cast<uint8_t>(value);
 }
+
+bool apply_region_pref_fallback(app::AppConfig& config, Preferences& prefs)
+{
+    bool has_region = false;
+    bool has_mc_preset = false;
+    if (prefs.begin("chat", true))
+    {
+        has_region = prefs.isKey("region");
+        has_mc_preset = prefs.isKey("mc_region_preset");
+        prefs.end();
+    }
+
+    if (has_region && has_mc_preset)
+    {
+        return false;
+    }
+
+    int ui_region = -1;
+    int ui_mc_preset = -1;
+    if (prefs.begin("settings", true))
+    {
+        if (!has_region)
+        {
+            ui_region = prefs.getInt("chat_region", -1);
+        }
+        if (!has_mc_preset)
+        {
+            ui_mc_preset = prefs.getInt("mc_region_preset", -1);
+        }
+        prefs.end();
+    }
+
+    bool changed = false;
+    if (!has_region && ui_region > 0)
+    {
+        const auto* region = chat::meshtastic::findRegion(
+            static_cast<meshtastic_Config_LoRaConfig_RegionCode>(ui_region));
+        if (region && region->code != meshtastic_Config_LoRaConfig_RegionCode_UNSET)
+        {
+            config.meshtastic_config.region = static_cast<uint8_t>(ui_region);
+            changed = true;
+        }
+    }
+
+    if (!has_mc_preset && ui_mc_preset >= 0)
+    {
+        const uint8_t preset_id = static_cast<uint8_t>(ui_mc_preset);
+        if (chat::meshcore::isValidRegionPresetId(preset_id))
+        {
+            config.meshcore_config.meshcore_region_preset = preset_id;
+            if (preset_id > 0)
+            {
+                if (const chat::meshcore::RegionPreset* preset =
+                        chat::meshcore::findRegionPresetById(preset_id))
+                {
+                    config.meshcore_config.meshcore_freq_mhz = preset->freq_mhz;
+                    config.meshcore_config.meshcore_bw_khz = preset->bw_khz;
+                    config.meshcore_config.meshcore_sf = preset->sf;
+                    config.meshcore_config.meshcore_cr = preset->cr;
+                }
+            }
+            changed = true;
+        }
+    }
+
+    return changed;
+}
 } // namespace
 
 bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_board, MotionBoard* motion_board,
@@ -76,6 +145,10 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
 
     // Load configuration
     config_.load(preferences_);
+    if (apply_region_pref_fallback(config_, preferences_))
+    {
+        config_.save(preferences_);
+    }
     (void)ui_get_timezone_offset_min();
 
     if (gps_board_ && motion_board_)
@@ -218,6 +291,10 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
         *node_store_, *contact_store_);
     contact_service_->begin();
 
+    // Start BLE services
+    ble_manager_ = std::make_unique<ble::BleManager>(*this);
+    ble_manager_->begin();
+
     return true;
 }
 
@@ -341,6 +418,10 @@ void AppContext::update()
     if (team_track_sampler_)
     {
         team_track_sampler_->update(team_controller_.get(), team_active);
+    }
+    if (ble_manager_)
+    {
+        ble_manager_->update();
     }
 
     // Update UI controller

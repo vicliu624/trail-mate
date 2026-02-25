@@ -14,6 +14,13 @@ namespace team
 class TeamService
 {
   public:
+    class IncomingDataObserver
+    {
+      public:
+        virtual ~IncomingDataObserver() = default;
+        virtual void onIncomingData(const chat::MeshIncomingData& msg) = 0;
+    };
+
     enum class SendError
     {
         None,
@@ -33,6 +40,9 @@ class TeamService
                         const uint8_t* psk, size_t psk_len);
 
     void processIncoming();
+
+    void addIncomingDataObserver(IncomingDataObserver* observer);
+    void removeIncomingDataObserver(IncomingDataObserver* observer);
 
     bool sendKick(const team::proto::TeamKick& msg,
                   chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
@@ -66,6 +76,7 @@ class TeamService
     team::ITeamEventSink& sink_;
     TeamKeys keys_{};
     SendError last_send_error_ = SendError::None;
+    std::vector<IncomingDataObserver*> incoming_data_observers_;
 
     bool decodeEncryptedPayload(const chat::MeshIncomingData& data,
                                 const uint8_t* key, size_t key_len,

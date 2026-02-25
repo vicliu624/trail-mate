@@ -61,6 +61,14 @@ struct AppConfig
     static constexpr uint8_t kMeshCoreDefaultSf = 11;
     static constexpr uint8_t kMeshCoreDefaultCr = 5;
     static constexpr int8_t kMeshCoreDefaultTxPowerDbm = 20;
+    static constexpr int8_t kTxPowerMinDbm = -9;
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+    static constexpr int8_t kTxPowerMaxDbm = 22;
+#elif defined(ARDUINO_LILYGO_LORA_SX1280)
+    static constexpr int8_t kTxPowerMaxDbm = 13;
+#else
+    static constexpr int8_t kTxPowerMaxDbm = 20;
+#endif
     // Chat settings
     chat::ChatPolicy chat_policy;
     chat::MeshConfig meshtastic_config;
@@ -289,6 +297,15 @@ struct AppConfig
         secondary_enabled = prefs.getBool("secondary_enabled", false);
         prefs.getBytes("secondary_key", secondary_key, 16);
         memcpy(meshtastic_config.secondary_key, secondary_key, sizeof(meshtastic_config.secondary_key));
+
+        auto clamp_tx_power = [](int8_t value) -> int8_t
+        {
+            if (value < kTxPowerMinDbm) return kTxPowerMinDbm;
+            if (value > kTxPowerMaxDbm) return kTxPowerMaxDbm;
+            return value;
+        };
+        meshtastic_config.tx_power = clamp_tx_power(meshtastic_config.tx_power);
+        meshcore_config.tx_power = clamp_tx_power(meshcore_config.tx_power);
 
         prefs.end();
 

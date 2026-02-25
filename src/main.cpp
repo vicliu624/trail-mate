@@ -36,7 +36,6 @@ extern "C"
     extern const lv_image_dsc_t contact;
     extern const lv_image_dsc_t team_icon;
     extern const lv_image_dsc_t tracker_icon;
-    extern const lv_image_dsc_t shutdown;
     extern const lv_image_dsc_t rf;
     extern const lv_image_dsc_t sstv;
     extern const lv_image_dsc_t Spectrum;
@@ -107,6 +106,9 @@ void setScreenSleepTimeout(uint32_t timeout_ms);
 void disableScreenSleep();
 void enableScreenSleep();
 bool isScreenSleepDisabled();
+bool isScreenSaverActive();
+void wakeScreenSaver();
+void enterFromScreenSaver();
 
 // GPS data access - now provided by GpsService
 // Use gps::GpsService::getInstance().getData()
@@ -145,6 +147,101 @@ bool format_menu_time(char* out, size_t out_len)
     strftime(out, out_len, "%H:%M", info);
     return true;
 }
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+constexpr int kLowBatteryWarnPercent = 15;
+constexpr int kCriticalBatteryPercent = 5;
+constexpr uint8_t kCriticalStreakToShutdown = 2;
+constexpr uint32_t kLowBatteryWarnCooldownMs = 15 * 60 * 1000;
+constexpr uint32_t kCriticalBatteryWarnCooldownMs = 5 * 60 * 1000;
+constexpr uint32_t kCriticalShutdownDelayMs = 3000;
+
+static uint32_t s_last_low_battery_warn_ms = 0;
+static uint32_t s_last_critical_battery_warn_ms = 0;
+static uint8_t s_critical_battery_streak = 0;
+static lv_timer_t* s_low_battery_shutdown_timer = nullptr;
+
+static void cancel_low_battery_shutdown()
+{
+    if (s_low_battery_shutdown_timer)
+    {
+        lv_timer_del(s_low_battery_shutdown_timer);
+        s_low_battery_shutdown_timer = nullptr;
+    }
+}
+
+static void low_battery_shutdown_cb(lv_timer_t* timer)
+{
+    (void)timer;
+    s_low_battery_shutdown_timer = nullptr;
+    board.softwareShutdown();
+}
+
+static void handle_low_battery(int level, bool charging)
+{
+    if (level < 0)
+    {
+        return;
+    }
+    if (charging)
+    {
+        board.setPowerTier(0);
+        s_critical_battery_streak = 0;
+        cancel_low_battery_shutdown();
+        return;
+    }
+
+    // Low-battery tier: 0=Normal, 1=Low(<=20%), 2=Critical(<=10%)
+    if (level <= 10)
+    {
+        board.setPowerTier(2);
+    }
+    else if (level <= 20)
+    {
+        board.setPowerTier(1);
+    }
+    else
+    {
+        board.setPowerTier(0);
+    }
+
+    const uint32_t now_ms = millis();
+
+    if (level <= kCriticalBatteryPercent)
+    {
+        s_critical_battery_streak++;
+        if (now_ms - s_last_critical_battery_warn_ms >= kCriticalBatteryWarnCooldownMs)
+        {
+            ui::SystemNotification::show("Battery critical", 2500);
+            s_last_critical_battery_warn_ms = now_ms;
+        }
+        if (s_critical_battery_streak >= kCriticalStreakToShutdown && s_low_battery_shutdown_timer == nullptr)
+        {
+            ui::SystemNotification::show("Shutting down to protect battery", 3000);
+            s_low_battery_shutdown_timer = lv_timer_create(low_battery_shutdown_cb, kCriticalShutdownDelayMs, nullptr);
+            if (s_low_battery_shutdown_timer)
+            {
+                lv_timer_set_repeat_count(s_low_battery_shutdown_timer, 1);
+            }
+        }
+        return;
+    }
+
+    s_critical_battery_streak = 0;
+    cancel_low_battery_shutdown();
+
+    if (level <= kLowBatteryWarnPercent)
+    {
+        if (now_ms - s_last_low_battery_warn_ms >= kLowBatteryWarnCooldownMs)
+        {
+            char msg[48];
+            snprintf(msg, sizeof(msg), "Low battery: %d%%", level);
+            ui::SystemNotification::show(msg, 2500);
+            s_last_low_battery_warn_ms = now_ms;
+        }
+    }
+}
+#endif
 
 #if defined(ARDUINO_T_WATCH_S3)
 int s_watch_face_battery = -1;
@@ -246,15 +343,6 @@ class FunctionAppScreen : public AppScreen
     void (*exit_)(lv_obj_t*);
 };
 
-// Shutdown app - directly triggers system shutdown
-static void ui_shutdown_enter(lv_obj_t* parent)
-{
-    (void)parent;
-    // Directly trigger software shutdown without confirmation dialog
-    // The main menu access already implies user intent
-    board.softwareShutdown();
-}
-
 static FunctionAppScreen s_gps_app("Map", &gps_icon, ui_gps_enter, ui_gps_exit);
 static FunctionAppScreen s_skyplot_app("Sky Plot", &Satellite, ui_gnss_skyplot_enter, ui_gnss_skyplot_exit);
 static FunctionAppScreen s_tracker_app("Tracker", &tracker_icon, ui_tracker_enter, ui_tracker_exit);
@@ -268,35 +356,15 @@ static FunctionAppScreen s_energy_sweep_app("Energy Sweep", &Spectrum, ui_energy
 static FunctionAppScreen s_walkie_app("Walkie Talkie", &walkie_talkie, ui_walkie_talkie_enter, ui_walkie_talkie_exit);
 #endif
 static FunctionAppScreen s_setting_app("Setting", &Setting, ui_setting_enter, ui_setting_exit);
-static FunctionAppScreen s_shutdown_app("Shutdown", &shutdown, ui_shutdown_enter, nullptr);
 
 #ifdef ARDUINO_USB_MODE
 static FunctionAppScreen s_usb_app("USB Mass Storage", &img_usb, ui_usb_enter, ui_usb_exit);
 #if HAS_GPS
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_sstv_app, &s_energy_sweep_app,
-#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-                                   &s_walkie_app,
+                                   &s_team_app, &s_pc_link_app,
+#if !defined(ARDUINO_T_DECK)
+                                   &s_sstv_app,
 #endif
-#if HAS_SD
-                                   &s_usb_app,
-#endif
-                                   &s_setting_app, &s_shutdown_app};
-#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-#if HAS_SD
-#define NUM_APPS 13
-#else
-#define NUM_APPS 12
-#endif
-#else
-#if HAS_SD
-#define NUM_APPS 12
-#else
-#define NUM_APPS 11
-#endif
-#endif
-#else
-static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app, &s_sstv_app,
                                    &s_energy_sweep_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
@@ -304,48 +372,71 @@ static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s
 #if HAS_SD
                                    &s_usb_app,
 #endif
-                                   &s_setting_app, &s_shutdown_app};
+                                   &s_setting_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
 #if HAS_SD
-#define NUM_APPS 10
 #else
-#define NUM_APPS 9
 #endif
 #else
 #if HAS_SD
-#define NUM_APPS 9
 #else
-#define NUM_APPS 8
+#endif
+#endif
+#else
+static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app,
+#if !defined(ARDUINO_T_DECK)
+                                   &s_sstv_app,
+#endif
+                                   &s_energy_sweep_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+                                   &s_walkie_app,
+#endif
+#if HAS_SD
+                                   &s_usb_app,
+#endif
+                                   &s_setting_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#if HAS_SD
+#else
+#endif
+#else
+#if HAS_SD
+#else
 #endif
 #endif
 #endif
 #else
 #if HAS_GPS
 static AppScreen* kAppScreens[] = {&s_gps_app, &s_skyplot_app, &s_tracker_app, &s_chat_app, &s_contacts_app,
-                                   &s_team_app, &s_pc_link_app, &s_sstv_app, &s_energy_sweep_app,
-#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-                                   &s_walkie_app,
+                                   &s_team_app, &s_pc_link_app,
+#if !defined(ARDUINO_T_DECK)
+                                   &s_sstv_app,
 #endif
-                                   &s_setting_app, &s_shutdown_app};
-#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-#define NUM_APPS 12
-#else
-#define NUM_APPS 11
-#endif
-#else
-static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app, &s_sstv_app,
                                    &s_energy_sweep_app,
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
                                    &s_walkie_app,
 #endif
-                                   &s_setting_app, &s_shutdown_app};
+                                   &s_setting_app};
 #if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
-#define NUM_APPS 9
 #else
-#define NUM_APPS 8
+#endif
+#else
+static AppScreen* kAppScreens[] = {&s_chat_app, &s_contacts_app, &s_team_app, &s_pc_link_app,
+#if !defined(ARDUINO_T_DECK)
+                                   &s_sstv_app,
+#endif
+                                   &s_energy_sweep_app,
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+                                   &s_walkie_app,
+#endif
+                                   &s_setting_app};
+#if defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#else
 #endif
 #endif
 #endif
+
+static constexpr size_t NUM_APPS = sizeof(kAppScreens) / sizeof(kAppScreens[0]);
 
 #if LVGL_VERSION_MAJOR == 9
 static uint32_t name_change_id;
@@ -387,8 +478,18 @@ static void create_app(lv_obj_t* parent, AppScreen* app, size_t idx)
     const lv_image_dsc_t* img = app ? app->icon() : nullptr;
 
     lv_obj_t* btn = lv_btn_create(parent);
+#if defined(ARDUINO_T_DECK)
+    // T-Deck: 320x240. Target 4 columns:
+    // 4 * 72px cells + 3 * 6px gaps = 324px，
+    // 配合 panel 的实际可用宽度，使左右留白更均衡。
+    lv_coord_t w = 72;
+    lv_coord_t h = 83; // 稍微再高一点，避免内容太挤
+#else
+    // Pager: keep existing wide horizontal carousel layout.
+    uint32_t phy_hor_res = lv_display_get_physical_horizontal_resolution(NULL);
     lv_coord_t w = 150;
     lv_coord_t h = LV_PCT(100);
+#endif
 
     lv_obj_set_size(btn, w, h);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
@@ -403,19 +504,71 @@ static void create_app(lv_obj_t* parent, AppScreen* app, size_t idx)
     lv_obj_set_style_border_color(btn, ui::theme::border(), LV_STATE_FOCUSED);
     lv_obj_set_style_bg_color(btn, ui::theme::accent(), LV_STATE_FOCUS_KEY);
     lv_obj_set_style_border_color(btn, ui::theme::border(), LV_STATE_FOCUS_KEY);
-    uint32_t phy_hor_res = lv_display_get_physical_horizontal_resolution(NULL);
+
+#if defined(ARDUINO_T_DECK)
+    // T-Deck grid cells: remove heavy frames, keep a clean, flat look.
+    lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(btn, 0, 0);
+    lv_obj_set_style_radius(btn, 0, 0);
+
+    // Use flex column so icon和文字共用一条垂直中线。
+    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(btn,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    // 去掉左右 padding，避免额外占宽；只保留少量上下和行间距。
+    lv_obj_set_style_pad_left(btn, 0, 0);
+    lv_obj_set_style_pad_right(btn, 0, 0);
+    lv_obj_set_style_pad_top(btn, 4, 0);
+    lv_obj_set_style_pad_bottom(btn, 4, 0);
+    lv_obj_set_style_pad_row(btn, 2, 0);
+#else
     if (phy_hor_res < 320)
     {
         lv_obj_set_style_radius(btn, 10, 0);
     }
+#endif
 
     lv_obj_t* icon = nullptr;
+    lv_obj_t* label = nullptr;
     if (img != NULL)
     {
         icon = lv_image_create(btn);
         lv_image_set_src(icon, img);
+#if defined(ARDUINO_T_DECK)
+        // Scale down icons on T-Deck to fit 4-column grid gracefully.
+        // Use the image center as the transform pivot so scaling does not shift it left/up.
+        lv_coord_t iw = lv_image_get_src_width(icon);
+        lv_coord_t ih = lv_image_get_src_height(icon);
+        lv_obj_set_style_transform_pivot_x(icon, iw / 2, 0);
+        lv_obj_set_style_transform_pivot_y(icon, ih / 2, 0);
+        lv_obj_set_style_transform_scale(icon, 176, 0); // ~69%
+        // 图标在 flex 列中设置 grow，让它占据更多垂直空间，整体偏上。
+        lv_obj_set_flex_grow(icon, 1);
+#else
         lv_obj_center(icon);
+#endif
     }
+
+#if defined(ARDUINO_T_DECK)
+    // Add a short label under the icon for touch-first UX.
+    if (name && name[0] != '\0')
+    {
+        label = lv_label_create(btn);
+        lv_label_set_text(label, name);
+        // Fix label width so long text can trigger scrolling inside the cell.
+        lv_obj_set_width(label, w - 4);
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        // 文字由 flex 自动排在图标下方，靠近 cell 底部；使用更小字号以留出空间。
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+        // Use warm text color for T-Deck app names.
+        lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), 0);
+        lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), LV_STATE_FOCUSED);
+        // Long labels scroll from right to left within the cell.
+        lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    }
+#endif
     if (idx < NUM_APPS)
     {
         s_menu_apps[idx].name = name;
@@ -500,7 +653,15 @@ static bool screen_sleeping = false;
 static bool screen_sleep_disabled = false;       // Flag to disable screen sleep (e.g., during USB mode)
 static uint8_t saved_keyboard_brightness = 127;  // Save keyboard brightness before sleep (default 127)
 static uint32_t screen_sleep_timeout_ms = 60000; // Default 60 seconds, can be configured
+static bool screen_sleep_timeout_loaded = false;
 static Preferences preferences;                  // For saving/loading settings
+static bool screen_saver_active = false;
+static lv_obj_t* screen_saver_layer = nullptr;
+static lv_obj_t* screen_saver_time_label = nullptr;
+static lv_obj_t* screen_saver_unread_label = nullptr;
+static lv_obj_t* screen_saver_hint_label = nullptr;
+static lv_timer_t* screen_saver_timer = nullptr;
+static constexpr uint32_t kScreenSaverDurationMs = 3000;
 
 namespace
 {
@@ -569,25 +730,220 @@ bool isScreenSleeping()
     return sleeping;
 }
 
-/**
- * Get current screen sleep timeout
- * This function reads from persistent storage to ensure we always have the latest value
- * @return Screen sleep timeout in milliseconds
- */
-uint32_t getScreenSleepTimeout()
+static void init_screen_saver()
 {
-    uint32_t timeout = read_screen_timeout_ms();
+    if (screen_saver_layer)
+    {
+        return;
+    }
 
-    // Also update memory variable for faster access
+    screen_saver_layer = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(screen_saver_layer, LV_PCT(100), LV_PCT(100));
+    lv_obj_align(screen_saver_layer, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(screen_saver_layer, lv_color_hex(0xF6E6C6), 0); // WarmBG
+    lv_obj_set_style_bg_opa(screen_saver_layer, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(screen_saver_layer, 0, 0);
+    lv_obj_clear_flag(screen_saver_layer, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(screen_saver_layer, LV_OBJ_FLAG_CLICKABLE);
+
+    screen_saver_time_label = lv_label_create(screen_saver_layer);
+    lv_obj_set_style_text_color(screen_saver_time_label, lv_color_hex(0x6B4A1E), 0); // Text
+    lv_obj_set_style_text_font(screen_saver_time_label, &lv_font_montserrat_36, 0);
+    lv_label_set_text(screen_saver_time_label, "--:--");
+    lv_obj_align(screen_saver_time_label, LV_ALIGN_CENTER, 0, -26);
+
+    screen_saver_unread_label = lv_label_create(screen_saver_layer);
+    lv_obj_set_style_text_color(screen_saver_unread_label, lv_color_hex(0x6B4A1E), 0); // Text
+    lv_obj_set_style_text_font(screen_saver_unread_label, &lv_font_montserrat_20, 0);
+    lv_label_set_text(screen_saver_unread_label, "Unread: 0");
+    lv_obj_align(screen_saver_unread_label, LV_ALIGN_CENTER, 0, 10);
+
+    screen_saver_hint_label = lv_label_create(screen_saver_layer);
+    lv_obj_set_style_text_color(screen_saver_hint_label, lv_color_hex(0x8A6A3A), 0); // TextDim
+    lv_obj_set_style_text_font(screen_saver_hint_label, &lv_font_montserrat_14, 0);
+    // Hint depends on board type: keyboard vs. touch.
+#if defined(ARDUINO_T_DECK)
+    lv_label_set_text(screen_saver_hint_label, "Tap screen to enter");
+#else
+    lv_label_set_text(screen_saver_hint_label, "Press SPACE to enter");
+#endif
+    lv_obj_align(screen_saver_hint_label, LV_ALIGN_CENTER, 0, 40);
+
+    lv_obj_add_flag(screen_saver_layer, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void hide_screen_saver_layer()
+{
+    if (!screen_saver_layer)
+    {
+        return;
+    }
+    lv_obj_add_flag(screen_saver_layer, LV_OBJ_FLAG_HIDDEN);
+    if (screen_saver_timer)
+    {
+        lv_timer_pause(screen_saver_timer);
+    }
+}
+
+static void screen_saver_refresh()
+{
+    if (!screen_saver_layer || !screen_saver_time_label || !screen_saver_unread_label)
+    {
+        return;
+    }
+
+    char time_buf[16] = "--:--";
+    if (!format_menu_time(time_buf, sizeof(time_buf)))
+    {
+        snprintf(time_buf, sizeof(time_buf), "--:--");
+    }
+    lv_label_set_text(screen_saver_time_label, time_buf);
+
+    int unread = ui::status::get_total_unread();
+    char unread_buf[32];
+    if (unread > 0)
+    {
+        snprintf(unread_buf, sizeof(unread_buf), "Unread: %d", unread);
+    }
+    else
+    {
+        snprintf(unread_buf, sizeof(unread_buf), "Unread: 0");
+    }
+    lv_label_set_text(screen_saver_unread_label, unread_buf);
+}
+
+static void screen_saver_timer_cb(lv_timer_t* /*timer*/)
+{
     if (activity_mutex != NULL)
     {
         if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
         {
-            screen_sleep_timeout_ms = timeout;
+            screen_saver_active = false;
+            screen_sleeping = true;
+            xSemaphoreGive(activity_mutex);
+        }
+    }
+    hide_screen_saver_layer();
+    if (board.hasKeyboard())
+    {
+        board.keyboardSetBrightness(0);
+    }
+    board.setBrightness(0);
+    board.enterScreenSleep();
+}
+
+bool isScreenSaverActive()
+{
+    bool active = false;
+    if (activity_mutex != NULL)
+    {
+        if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            active = screen_saver_active;
+            xSemaphoreGive(activity_mutex);
+        }
+    }
+    return active;
+}
+
+void wakeScreenSaver()
+{
+    if (screen_sleep_disabled)
+    {
+        updateUserActivity();
+        return;
+    }
+
+    if (!screen_saver_layer)
+    {
+        return;
+    }
+
+    if (activity_mutex != NULL)
+    {
+        if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            screen_saver_active = true;
+            screen_sleeping = true;
             xSemaphoreGive(activity_mutex);
         }
     }
 
+    screen_saver_refresh();
+    lv_obj_clear_flag(screen_saver_layer, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(screen_saver_layer);
+
+    // Render the screen saver before turning the backlight on to avoid a flash of the main UI.
+    lv_refr_now(NULL);
+    board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+
+    if (screen_saver_timer == nullptr)
+    {
+        screen_saver_timer = lv_timer_create(screen_saver_timer_cb, kScreenSaverDurationMs, nullptr);
+    }
+    else
+    {
+        lv_timer_set_period(screen_saver_timer, kScreenSaverDurationMs);
+        lv_timer_reset(screen_saver_timer);
+        lv_timer_resume(screen_saver_timer);
+    }
+}
+
+void enterFromScreenSaver()
+{
+    if (!isScreenSaverActive())
+    {
+        return;
+    }
+
+    if (activity_mutex != NULL)
+    {
+        if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            // Leaving screen saver: mark both saver and sleep state as inactive.
+            screen_saver_active = false;
+            screen_sleeping = false;
+            last_user_activity_time = millis();
+            xSemaphoreGive(activity_mutex);
+        }
+    }
+
+    hide_screen_saver_layer();
+    updateUserActivity();
+    // After leaving the screen saver, always return to the main menu.
+    menu_show();
+}
+
+/**
+ * Get current screen sleep timeout
+ * Cached in memory; settings updates call setScreenSleepTimeout().
+ * @return Screen sleep timeout in milliseconds
+ */
+uint32_t getScreenSleepTimeout()
+{
+    if (!screen_sleep_timeout_loaded)
+    {
+        uint32_t timeout = read_screen_timeout_ms();
+        if (activity_mutex != NULL)
+        {
+            if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                screen_sleep_timeout_ms = timeout;
+                screen_sleep_timeout_loaded = true;
+                xSemaphoreGive(activity_mutex);
+            }
+        }
+    }
+
+    uint32_t timeout = screen_sleep_timeout_ms;
+    if (activity_mutex != NULL)
+    {
+        if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            timeout = screen_sleep_timeout_ms;
+            xSemaphoreGive(activity_mutex);
+        }
+    }
     return timeout;
 }
 
@@ -607,6 +963,7 @@ void setScreenSleepTimeout(uint32_t timeout_ms)
         if (xSemaphoreTake(activity_mutex, portMAX_DELAY) == pdTRUE)
         {
             screen_sleep_timeout_ms = timeout_ms;
+            screen_sleep_timeout_loaded = true;
             xSemaphoreGive(activity_mutex);
         }
     }
@@ -621,11 +978,17 @@ void setScreenSleepTimeout(uint32_t timeout_ms)
  */
 void disableScreenSleep()
 {
+    bool hide_saver = false;
     if (activity_mutex != NULL)
     {
         if (xSemaphoreTake(activity_mutex, portMAX_DELAY) == pdTRUE)
         {
             screen_sleep_disabled = true;
+            if (screen_saver_active)
+            {
+                screen_saver_active = false;
+                hide_saver = true;
+            }
             // Wake up screen if it's sleeping
             if (screen_sleeping)
             {
@@ -639,6 +1002,10 @@ void disableScreenSleep()
             }
             xSemaphoreGive(activity_mutex);
         }
+    }
+    if (hide_saver)
+    {
+        hide_screen_saver_layer();
     }
 }
 
@@ -684,11 +1051,17 @@ bool isScreenSleepDisabled()
 void updateUserActivity()
 {
     bool woke_from_sleep = false;
+    bool hide_saver = false;
     if (activity_mutex != NULL)
     {
         if (xSemaphoreTake(activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
         {
             last_user_activity_time = millis();
+            if (screen_saver_active)
+            {
+                screen_saver_active = false;
+                hide_saver = true;
+            }
             // If screen is sleeping, wake it up
             if (screen_sleeping)
             {
@@ -703,6 +1076,10 @@ void updateUserActivity()
             }
             xSemaphoreGive(activity_mutex);
         }
+    }
+    if (hide_saver)
+    {
+        hide_screen_saver_layer();
     }
 #if defined(ARDUINO_T_WATCH_S3)
     if (woke_from_sleep)
@@ -738,22 +1115,17 @@ static void screenSleepTask(void* pvParameters)
                 uint32_t current_time = millis();
                 uint32_t time_since_activity = current_time - last_user_activity_time;
 
-                // Get current timeout from persistent storage (may have been changed in settings)
-                // Read directly from preferences to ensure we have the latest value
-                uint32_t current_timeout = read_screen_timeout_ms();
-
-                // Update memory variable
-                screen_sleep_timeout_ms = current_timeout;
+                // Use cached timeout; settings updates call setScreenSleepTimeout().
+                uint32_t current_timeout = screen_sleep_timeout_ms;
 
                 // Skip sleep if screen sleep is disabled (e.g., during USB mode)
                 if (screen_sleep_disabled)
                 {
-                    // If screen is sleeping but sleep is now disabled, wake it up
                     if (screen_sleeping)
                     {
                         screen_sleeping = false;
+                        board.exitScreenSleep();
                         board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
-                        // Restore keyboard brightness
                         if (board.hasKeyboard())
                         {
                             board.keyboardSetBrightness(saved_keyboard_brightness);
@@ -766,22 +1138,22 @@ static void screenSleepTask(void* pvParameters)
                     // Normal sleep logic
                     if (!screen_sleeping && time_since_activity >= current_timeout)
                     {
-                        // Put screen to sleep
+                        // Put screen to sleep: backlight off then peripheral power off
                         screen_sleeping = true;
-                        // Save current keyboard brightness before turning off
                         if (board.hasKeyboard())
                         {
                             saved_keyboard_brightness = board.keyboardGetBrightness();
-                            board.keyboardSetBrightness(0); // Turn off keyboard backlight
+                            board.keyboardSetBrightness(0);
                         }
-                        board.setBrightness(0); // Turn off display backlight
+                        board.setBrightness(0);
+                        board.enterScreenSleep();
                     }
                     else if (screen_sleeping && time_since_activity < current_timeout)
                     {
-                        // Wake up screen (shouldn't happen here, but just in case)
+                        // Wake up: restore peripheral power then backlight
                         screen_sleeping = false;
+                        board.exitScreenSleep();
                         board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
-                        // Restore keyboard brightness
                         if (board.hasKeyboard())
                         {
                             board.keyboardSetBrightness(saved_keyboard_brightness);
@@ -995,11 +1367,29 @@ void setup()
     /* Initialize the menu view - moved down to make room for time */
     lv_obj_t* panel = lv_obj_create(menu_panel);
     lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_OFF);
+#if defined(ARDUINO_T_DECK)
+    // T-Deck: make the grid area taller to fit 4xN layout more comfortably.
+    // Screen height is 240px; 80% ≈ 192px, 比之前 70% 多大约 20 像素。
+    lv_obj_set_size(panel, LV_PCT(100), LV_PCT(80));
+#else
     lv_obj_set_size(panel, LV_PCT(100), LV_PCT(70));
+#endif
+
+#if defined(ARDUINO_T_DECK)
+    // T-Deck: vertical scrollable grid of apps (4 columns, multiple rows).
+    lv_obj_set_scroll_dir(panel, LV_DIR_VER);
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_style_pad_row(panel, 6, 0);
+    // Column padding 0 so that 4 cells of 25% width always fit in one row.
+    lv_obj_set_style_pad_column(panel, 0, 0);
+#else
+    // Pager and other boards: horizontal carousel row.
     lv_obj_set_scroll_snap_x(panel, LV_SCROLL_SNAP_CENTER);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_ROW);
-    // Move panel down to make room for time label (adjust offset based on screen size)
-    int panel_offset = 30; // Offset for time label space
+#endif
+
+    // Move panel down to make room for time label (adjust offset based on screen size).
+    int panel_offset = 30; // Offset to keep time label readable
     if (lv_display_get_physical_vertical_resolution(NULL) > 320)
     {
         panel_offset = 35; // Slightly more space on larger screens
@@ -1021,6 +1411,10 @@ void setup()
     }
     /* Initialize the label */
     desc_label = lv_label_create(menu_panel);
+#if defined(ARDUINO_T_DECK)
+    // On T-Deck, app name is already shown under each icon; hide bottom description label.
+    lv_obj_add_flag(desc_label, LV_OBJ_FLAG_HIDDEN);
+#endif
     lv_obj_set_width(desc_label, LV_PCT(100));
     lv_obj_align(desc_label, LV_ALIGN_BOTTOM_MID, 0, offset);
     lv_obj_set_style_text_align(desc_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -1161,6 +1555,10 @@ void setup()
                                                         return;
                                                     }
 
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+                                                    handle_low_battery(level, charging);
+#endif
+
 #if defined(ARDUINO_T_WATCH_S3)
                                                     s_watch_face_battery = level;
 #endif
@@ -1199,35 +1597,13 @@ void setup()
     int level = board.getBatteryLevel();
     if (level >= 0)
     {
-        // Select appropriate battery symbol based on level
-        const char* battery_symbol;
-        if (charging)
-        {
-            battery_symbol = LV_SYMBOL_CHARGE;
-        }
-        else if (level >= 90)
-        {
-            battery_symbol = LV_SYMBOL_BATTERY_FULL;
-        }
-        else if (level >= 60)
-        {
-            battery_symbol = LV_SYMBOL_BATTERY_3;
-        }
-        else if (level >= 30)
-        {
-            battery_symbol = LV_SYMBOL_BATTERY_2;
-        }
-        else if (level >= 10)
-        {
-            battery_symbol = LV_SYMBOL_BATTERY_1;
-        }
-        else
-        {
-            battery_symbol = LV_SYMBOL_BATTERY_EMPTY;
-        }
-        snprintf(battery_str, sizeof(battery_str), "%s %d%%", battery_symbol, level);
+        ui_format_battery(level, charging, battery_str, sizeof(battery_str));
         lv_label_set_text(battery_label, battery_str);
     }
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+    handle_low_battery(level, charging);
+#endif
 
 #if defined(ARDUINO_T_WATCH_S3)
     s_watch_face_battery = level;
@@ -1235,6 +1611,8 @@ void setup()
 #endif
 
     board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+
+    init_screen_saver();
 
 #if defined(ARDUINO_T_WATCH_S3)
     show_watch_face();
@@ -1255,6 +1633,7 @@ void setup()
 
         // Load screen sleep timeout from preferences
         screen_sleep_timeout_ms = read_screen_timeout_ms();
+        screen_sleep_timeout_loaded = true;
     }
 
     // Create screen sleep management task

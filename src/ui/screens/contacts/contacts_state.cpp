@@ -10,7 +10,7 @@ namespace contacts
 namespace ui
 {
 
-ContactsPageState g_contacts_state; // 这里是“唯一的定义”
+ContactsPageState g_contacts_state; // Single global definition for Contacts page state.
 
 } // namespace ui
 } // namespace contacts

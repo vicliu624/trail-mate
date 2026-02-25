@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file mt_adapter.cpp
  * @brief Meshtastic mesh adapter implementation
  */
@@ -50,7 +50,6 @@ namespace
 constexpr uint8_t kDefaultPsk[16] = {0xd4, 0xf1, 0xbb, 0x3a, 0x20, 0x29, 0x07, 0x59,
                                      0xf0, 0xbc, 0xff, 0xab, 0xcf, 0x4e, 0x69, 0x01};
 constexpr uint8_t kDefaultPskIndex = 1;
-constexpr const char* kPrimaryChannelName = "LongFast";
 constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
@@ -109,13 +108,17 @@ void modemPresetToParams(meshtastic_Config_LoRaConfig_ModemPreset preset, bool w
         cr_denom = 5;
         sf = 10;
         break;
+    case meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO:
+        bw_khz = wide_lora ? 1625.0f : 500.0f;
+        cr_denom = 8;
+        sf = 11;
+        break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
         bw_khz = wide_lora ? 406.25f : 125.0f;
         cr_denom = 8;
         sf = 11;
         break;
     case meshtastic_Config_LoRaConfig_ModemPreset_LONG_SLOW:
-    case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
         bw_khz = wide_lora ? 406.25f : 125.0f;
         cr_denom = 8;
         sf = 12;
@@ -1819,8 +1822,13 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
         }
     }
 
-    const char* channel_name =
-        (channel == ChannelId::SECONDARY) ? kSecondaryChannelName : kPrimaryChannelName;
+    const char* channel_name = kSecondaryChannelName;
+    if (channel != ChannelId::SECONDARY)
+    {
+        auto preset =
+            static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(config_.modem_preset);
+        channel_name = config_.use_preset ? chat::meshtastic::presetDisplayName(preset) : "Custom";
+    }
     LORA_LOG("[LORA] TX channel name='%s' hash=0x%02X psk=%u pki=%u dest=%08lX\n",
              channel_name,
              channel_hash,
@@ -2053,6 +2061,13 @@ void MtAdapter::configureRadio()
         sf = config_.spread_factor;
         cr_denom = config_.coding_rate;
 
+        if (bw_khz == 31.0f) bw_khz = 31.25f;
+        if (bw_khz == 62.0f) bw_khz = 62.5f;
+        if (bw_khz == 200.0f) bw_khz = 203.125f;
+        if (bw_khz == 400.0f) bw_khz = 406.25f;
+        if (bw_khz == 800.0f) bw_khz = 812.5f;
+        if (bw_khz == 1600.0f) bw_khz = 1625.0f;
+
         if (bw_khz < 7.0f) bw_khz = 7.8f;
         if (!region->wide_lora && bw_khz > 500.0f) bw_khz = 500.0f;
         if (region->wide_lora && bw_khz > 1625.0f) bw_khz = 1625.0f;
@@ -2073,7 +2088,7 @@ void MtAdapter::configureRadio()
     }
 
     const char* channel_name =
-        using_preset ? chat::meshtastic::presetDisplayName(preset) : kPrimaryChannelName;
+        using_preset ? chat::meshtastic::presetDisplayName(preset) : "Custom";
 
     float span_mhz = region->freq_end_mhz - region->freq_start_mhz;
     float spacing_mhz = region->spacing_khz / 1000.0f;
@@ -2170,13 +2185,13 @@ void MtAdapter::initNodeIdentity()
 {
     const uint64_t raw = ESP.getEfuseMac();
 
-    // 重要：getEfuseMac() 是把 6 bytes MAC 写进 uint64_t 的内存低地址处。
-    // ESP32 是 little-endian，所以 raw 的“整数值”不等于“MAC字符串”。
-    // 正确做法：按字节读取。
+    // Important: getEfuseMac() writes the 6-byte MAC into the low bytes of a uint64_t.
+    // ESP32 is little-endian, so the raw integer value is NOT the same as the MAC string.
+    // Correct approach: interpret as bytes.
     const uint8_t* p = reinterpret_cast<const uint8_t*>(&raw);
 
-    // p[0..5] 就是 esp_efuse_mac_get_default 写入的那 6 个字节（顺序与 API 一致）
-    // 为了避免任何误解，这里先把它们复制出来
+    // p[0..5] are exactly the 6 bytes that esp_efuse_mac_get_default writes (same order as API).
+    // To avoid any ambiguity, copy them explicitly into our MAC buffer.
     mac_addr_[0] = p[0];
     mac_addr_[1] = p[1];
     mac_addr_[2] = p[2];
@@ -2190,7 +2205,7 @@ void MtAdapter::initNodeIdentity()
              mac_addr_[0], mac_addr_[1], mac_addr_[2],
              mac_addr_[3], mac_addr_[4], mac_addr_[5]);
 
-    // 你的原逻辑：取 MAC 的后 4 字节作为 node_id
+    // Derive node_id from the last 4 bytes of the MAC (as in the original logic).
     node_id_ = (static_cast<uint32_t>(mac_addr_[2]) << 24) |
                (static_cast<uint32_t>(mac_addr_[3]) << 16) |
                (static_cast<uint32_t>(mac_addr_[4]) << 8) |
@@ -2224,7 +2239,14 @@ void MtAdapter::updateChannelKeys()
         secondary_psk_len_ = sizeof(secondary_psk_);
     }
 
-    primary_channel_hash_ = computeChannelHash(kPrimaryChannelName, primary_psk_, primary_psk_len_);
+    auto preset =
+        static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(config_.modem_preset);
+    const char* primary_name = config_.use_preset ? chat::meshtastic::presetDisplayName(preset) : "Custom";
+    if (!primary_name || primary_name[0] == '\0')
+    {
+        primary_name = "Custom";
+    }
+    primary_channel_hash_ = computeChannelHash(primary_name, primary_psk_, primary_psk_len_);
     secondary_channel_hash_ =
         computeChannelHash(kSecondaryChannelName,
                            (secondary_psk_len_ > 0) ? secondary_psk_ : nullptr,
@@ -2234,7 +2256,7 @@ void MtAdapter::updateChannelKeys()
     if (primary_psk_hex.empty()) primary_psk_hex = "-";
     if (secondary_psk_hex.empty()) secondary_psk_hex = "-";
     LORA_LOG("[LORA] channel primary='%s' hash=0x%02X psk=%u hex=%s\n",
-             kPrimaryChannelName,
+             primary_name,
              primary_channel_hash_,
              (unsigned)primary_psk_len_,
              primary_psk_hex.c_str());

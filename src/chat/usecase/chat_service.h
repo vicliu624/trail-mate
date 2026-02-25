@@ -9,6 +9,7 @@
 #include "../domain/chat_types.h"
 #include "../ports/i_chat_store.h"
 #include "../ports/i_mesh_adapter.h"
+#include <vector>
 
 namespace chat
 {
@@ -20,6 +21,13 @@ namespace chat
 class ChatService
 {
   public:
+    class IncomingTextObserver
+    {
+      public:
+        virtual ~IncomingTextObserver() = default;
+        virtual void onIncomingText(const MeshIncomingText& msg) = 0;
+    };
+
     ChatService(ChatModel& model,
                 IMeshAdapter& adapter,
                 IChatStore& store,
@@ -80,6 +88,9 @@ class ChatService
      */
     void processIncoming();
 
+    void addIncomingTextObserver(IncomingTextObserver* observer);
+    void removeIncomingTextObserver(IncomingTextObserver* observer);
+
     /**
      * @brief Handle send result (ack/timeout)
      * @param msg_id Message ID
@@ -117,6 +128,7 @@ class ChatService
     ChannelId current_channel_;
     bool model_enabled_ = true;
     MeshProtocol active_protocol_ = MeshProtocol::Meshtastic;
+    std::vector<IncomingTextObserver*> incoming_text_observers_;
 };
 
 } // namespace chat

@@ -2,46 +2,60 @@
 
 #include <Arduino.h>
 
-// 抽象基类：为不同硬件板子提供统一接口。
-// 仅保留当前应用层实际使用的最小集合，避免过度耦合。
+// Abstract base class: provides a unified interface for different hardware boards.
+// Only keeps the minimal set actually used by the application layer to avoid tight coupling.
 class BoardBase
 {
   public:
     virtual ~BoardBase() = default;
 
-    // 生命周期 / 功耗
+    // Lifecycle / power management
     virtual uint32_t begin(uint32_t disable_hw_init = 0) = 0;
     virtual void wakeUp() = 0;
     virtual void handlePowerButton() = 0;
     virtual void softwareShutdown() = 0;
 
-    // 显示 / 亮度
+    // Turn off peripheral power when screen sleeps, and restore on wake; default no-op.
+    virtual void enterScreenSleep() {}
+    virtual void exitScreenSleep() {}
+
+    // Low-battery tiers: 0=Normal, 1=Low (<=20%), 2=Critical (<=10%); used for brightness/GPS policies.
+    virtual void setPowerTier(int tier)
+    {
+        (void)tier;
+    }
+    virtual int getPowerTier() const
+    {
+        return 0;
+    }
+
+    // Display / brightness
     virtual void setBrightness(uint8_t level) = 0;
     virtual uint8_t getBrightness() = 0;
 
-    // 键盘背光（如无键盘可为空实现）
+    // Keyboard backlight (may be a stub on boards without keyboard)
     virtual bool hasKeyboard() = 0;
     virtual void keyboardSetBrightness(uint8_t level) = 0;
     virtual uint8_t keyboardGetBrightness() = 0;
 
-    // 传感与电源状态
+    // Sensors and power state
     virtual bool isRTCReady() const = 0;
     virtual bool isCharging() = 0;
     virtual int getBatteryLevel() = 0;
 
-    // 存储 / 外设状态
+    // Storage / peripheral state
     virtual bool isSDReady() const = 0;
     virtual bool isCardReady() = 0;
     virtual bool isGPSReady() const = 0;
 
-    // 触觉反馈
+    // Haptic feedback
     virtual void vibrator() = 0;
     virtual void stopVibrator() = 0;
 
-    // 收到消息提示音（默认空实现，具体板级按需覆盖）
+    // Incoming-message tone (default no-op; boards can override if needed)
     virtual void playMessageTone() {}
 
-    // 系统提示音音量（0-100，默认45）
+    // System notification volume (0-100, default 45)
     virtual void setMessageToneVolume(uint8_t volume_percent)
     {
         (void)volume_percent;
@@ -52,7 +66,7 @@ class BoardBase
     }
 };
 
-// 全局板实例（与原来的 instance 等价，用于解耦调用方类型）
+// Global board instance (replaces legacy instance, keeps callers decoupled from concrete type)
 
 #ifndef DEVICE_MAX_BRIGHTNESS_LEVEL
 #define DEVICE_MAX_BRIGHTNESS_LEVEL 16
