@@ -1,6 +1,13 @@
 #pragma once
 
+// In Arduino environments we use <Arduino.h> for basic types and helpers.
+// In ESP-IDF (or other non-Arduino builds), fall back to standard headers.
+#if __has_include(<Arduino.h>)
 #include <Arduino.h>
+#else
+#include <stdint.h>
+#include <stdbool.h>
+#endif
 
 // Abstract base class: provides a unified interface for different hardware boards.
 // Only keeps the minimal set actually used by the application layer to avoid tight coupling.

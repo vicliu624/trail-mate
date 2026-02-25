@@ -1475,6 +1475,13 @@ void setup()
 
     lv_obj_update_snap(panel, LV_ANIM_ON);
 
+#if defined(ARDUINO_M5STACK_TAB5)
+    // On Tab5 (touch-only), create a bottom virtual key bar to emulate
+    // Back/Up/Down/OK keyboard navigation.
+    extern void ui_tab5_init_virtual_keys(lv_obj_t* root);
+    ui_tab5_init_virtual_keys(menu_panel);
+#endif
+
     ::ui::status::init();
 
 #if defined(ARDUINO_T_WATCH_S3)
