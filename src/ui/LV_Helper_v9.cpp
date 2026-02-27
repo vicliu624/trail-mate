@@ -278,17 +278,20 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
     auto* plane = (LilyGo_Display*)lv_indev_get_user_data(drv);
     int state = plane->getKeyChar(&c);
 
-    // If screen is sleeping or screen saver is active, handle wake/enter logic and don't pass input to UI.
-    // Some keyboard drivers may not report a clean press/release sequence in this state,
-    // so we don't gate on KeyboardState here.
+    // If screen is sleeping or screen saver is active, only a *real* key press
+    // should wake/exit. Previously this path ran unconditionally on every poll,
+    // which could cause spurious wake→enterFromScreenSaver() without user input.
     if (isScreenSleeping() || isScreenSaverActive())
     {
-        // When the screen saver is visible, any key will enter from the screen saver.
-        // When the screen is fully sleeping, the first key press shows the screen saver.
-        if (isScreenSaverActive())
-            enterFromScreenSaver();
-        else
-            wakeScreenSaver();
+        if (state == KEYBOARD_PRESSED)
+        {
+            // When the screen saver is visible, any key will enter from the screen saver.
+            // When the screen is fully sleeping, the first key press shows the screen saver.
+            if (isScreenSaverActive())
+                enterFromScreenSaver();
+            else
+                wakeScreenSaver();
+        }
         data->state = LV_INDEV_STATE_REL; // Don't pass key to UI
         return;
     }

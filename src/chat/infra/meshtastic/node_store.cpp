@@ -112,7 +112,7 @@ void NodeStore::begin()
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
                        uint32_t now_secs, float snr, float rssi, uint8_t protocol, uint8_t role,
-                       uint8_t hops_away)
+                       uint8_t hops_away, uint8_t hw_model)
 {
     NODE_STORE_LOG("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f rssi=%.1f\n",
                    (unsigned long)node_id,
@@ -155,6 +155,10 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
             {
                 e.role = role;
             }
+            if (hw_model != 0)
+            {
+                e.hw_model = hw_model;
+            }
             dirty_ = true;
             maybeSave();
             return;
@@ -183,6 +187,7 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
     e.hops_away = hops_away;
     e.protocol = protocol;
     e.role = (role != contacts::kNodeRoleUnknown) ? role : contacts::kNodeRoleUnknown;
+    e.hw_model = hw_model;
     entries_.push_back(e);
     dirty_ = true;
     maybeSave();
@@ -261,6 +266,7 @@ void NodeStore::save()
             dst.protocol = src.protocol;
             dst.role = src.role;
             dst.hops_away = src.hops_away;
+            dst.hw_model = src.hw_model;
             persisted.push_back(dst);
         }
         size_t expected = persisted.size() * sizeof(PersistedNodeEntry);
@@ -422,6 +428,7 @@ bool NodeStore::loadFromNvs()
             dst.hops_away = src.hops_away;
             dst.protocol = src.protocol;
             dst.role = src.role;
+            dst.hw_model = src.hw_model;
             entries_.push_back(dst);
         }
     }
@@ -499,6 +506,7 @@ bool NodeStore::loadFromSd()
         dst.hops_away = src.hops_away;
         dst.protocol = src.protocol;
         dst.role = src.role;
+        dst.hw_model = src.hw_model;
         entries_.push_back(dst);
     }
     NODE_STORE_LOG("[NodeStore] loaded=%u (SD)\n", static_cast<unsigned>(entries_.size()));

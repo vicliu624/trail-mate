@@ -51,7 +51,8 @@ class ContactService
      */
     void updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
                         float snr, float rssi, uint32_t now_secs, uint8_t protocol = 0,
-                        uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF);
+                        uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF,
+                        uint8_t hw_model = 0);
 
     /**
      * @brief Update node protocol type (without changing names)

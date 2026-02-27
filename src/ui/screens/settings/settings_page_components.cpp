@@ -26,8 +26,7 @@
 #include "settings_page_styles.h"
 #include "settings_state.h"
 
-extern uint32_t getScreenSleepTimeout();
-extern void setScreenSleepTimeout(uint32_t timeout_ms);
+#include "../../../screen_sleep.h"
 
 namespace settings::ui::components
 {
@@ -523,6 +522,9 @@ static void settings_load()
         g_settings.speaker_volume = 100;
     }
     board.setMessageToneVolume(static_cast<uint8_t>(g_settings.speaker_volume));
+
+    // BLE enable flag (System > Bluetooth toggle). Default ON so existing devices keep BLE active.
+    g_settings.ble_enabled = prefs_get_bool("ble_enabled", true);
 
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
 
@@ -1699,6 +1701,7 @@ static settings::ui::SettingItem kScreenItems[] = {
     {"Screen Timeout", settings::ui::SettingType::Enum, kScreenTimeoutOptions, 4, &g_settings.screen_timeout_ms, nullptr, nullptr, 0, false, "screen_timeout"},
     {"Speaker Volume", settings::ui::SettingType::Enum, kSpeakerVolumeOptions,
      sizeof(kSpeakerVolumeOptions) / sizeof(kSpeakerVolumeOptions[0]), &g_settings.speaker_volume, nullptr, nullptr, 0, false, "speaker_volume"},
+    {"Bluetooth", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.ble_enabled, nullptr, 0, false, "ble_enabled"},
     {"Time Zone", settings::ui::SettingType::Enum, kTimeZoneOptions, sizeof(kTimeZoneOptions) / sizeof(kTimeZoneOptions[0]), &g_settings.timezone_offset_min, nullptr, nullptr, 0, false, "timezone_offset"},
     {"Gauge Design (mAh)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr,
      g_settings.gauge_design_mah, sizeof(g_settings.gauge_design_mah), false, "gauge_design_mah"},
@@ -1974,6 +1977,11 @@ static void on_item_clicked(lv_event_t* e)
                 app_ctx.getConfig().privacy_pki = *item.bool_value;
                 app_ctx.saveConfig();
                 app_ctx.applyPrivacyConfig();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "ble_enabled") == 0)
+            {
+                app::AppContext& app_ctx = app::AppContext::getInstance();
+                app_ctx.setBleEnabled(*item.bool_value);
             }
         }
         return;

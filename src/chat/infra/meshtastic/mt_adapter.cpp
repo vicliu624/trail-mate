@@ -1350,7 +1350,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                         node_id, short_name, long_name, snr, rssi, now_secs,
                         static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                        hops_away);
+                        hops_away, static_cast<uint8_t>(user.hw_model));
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
@@ -1935,11 +1935,22 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
         snprintf(short_name, sizeof(short_name), "%04X", suffix);
     }
 
+    meshtastic_HardwareModel hw_model = meshtastic_HardwareModel_UNSET;
+#if defined(ARDUINO_T_DECK)
+    hw_model = meshtastic_HardwareModel_T_DECK;
+#elif defined(ARDUINO_LILYGO_TWATCH_S3)
+    hw_model = meshtastic_HardwareModel_T_WATCH_S3;
+#elif defined(ARDUINO_M5STACK_TAB5)
+    hw_model = meshtastic_HardwareModel_MESH_TAB;
+#elif defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    hw_model = meshtastic_HardwareModel_T_LORA_PAGER;
+#endif
+
     if (!encodeNodeInfoMessage(
             user_id,
             long_name,
             short_name,
-            meshtastic_HardwareModel_T_LORA_PAGER,
+            hw_model,
             mac_addr_,
             pki_public_key_.data(),
             pki_ready_ ? pki_public_key_.size() : 0,

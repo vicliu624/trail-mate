@@ -26,7 +26,7 @@ BleManager::~BleManager()
 
 void BleManager::begin()
 {
-    restartService(active_protocol_);
+    setEnabled(true);
 }
 
 void BleManager::update()
@@ -48,6 +48,29 @@ void BleManager::applyProtocol(chat::MeshProtocol protocol)
     if (protocol != active_protocol_)
     {
         restartService(protocol);
+    }
+}
+
+void BleManager::setEnabled(bool enabled)
+{
+    if (enabled)
+    {
+        if (!service_)
+        {
+            restartService(ctx_.getConfig().mesh_protocol);
+        }
+    }
+    else
+    {
+        if (service_)
+        {
+            service_->stop();
+            service_.reset();
+        }
+        // NOTE: Do not deinit NimBLE on toggle-off, to avoid tearing down the
+        // host task while it's still running (can cause InstrFetchProhibited).
+        // Leaving NimBLE initialized but without services/advertising is enough
+        // to consider Bluetooth "off" from the app's perspective.
     }
 }
 

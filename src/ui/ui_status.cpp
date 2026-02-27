@@ -19,6 +19,7 @@ extern "C"
     extern const lv_image_dsc_t route_topbar;
     extern const lv_image_dsc_t team_topbar;
     extern const lv_image_dsc_t tracker_topbar;
+    extern const lv_image_dsc_t ble_topbar;
 }
 
 namespace ui
@@ -34,6 +35,7 @@ struct StatusSnapshot
     bool track_recording = false;
     bool gps_enabled = false;
     bool team_active = false;
+    bool ble_enabled = false;
     int unread = 0;
 };
 
@@ -52,6 +54,7 @@ lv_obj_t* s_menu_tracker_icon = nullptr;
 lv_obj_t* s_menu_gps_icon = nullptr;
 lv_obj_t* s_menu_team_icon = nullptr;
 lv_obj_t* s_menu_msg_icon = nullptr;
+lv_obj_t* s_menu_ble_icon = nullptr;
 lv_obj_t* s_chat_badge = nullptr;
 lv_obj_t* s_chat_badge_label = nullptr;
 TeamSnapshotCache s_team_cache;
@@ -94,6 +97,7 @@ StatusSnapshot collect_status()
     snap.route_active = cfg.route_enabled && (cfg.route_path[0] != '\0');
     snap.track_recording = gps::TrackRecorder::getInstance().isRecording();
     snap.gps_enabled = gps::GpsService::getInstance().isEnabled();
+    snap.ble_enabled = app_ctx.isBleEnabled();
 
     refresh_team_cache();
     snap.team_active = s_team_cache.team_active;
@@ -134,9 +138,11 @@ void apply_menu_icons(const StatusSnapshot& snap)
     apply_icon(s_menu_gps_icon, &gps_topbar, snap.gps_enabled);
     apply_icon(s_menu_team_icon, &team_topbar, snap.team_active);
     apply_icon(s_menu_msg_icon, &message_topbar, snap.unread > 0);
+    apply_icon(s_menu_ble_icon, &ble_topbar, snap.ble_enabled);
 
     const bool any =
-        snap.route_active || snap.track_recording || snap.gps_enabled || snap.team_active || (snap.unread > 0);
+        snap.route_active || snap.track_recording || snap.gps_enabled || snap.team_active ||
+        snap.ble_enabled || (snap.unread > 0);
     if (any)
     {
         lv_obj_clear_flag(s_menu_status_row, LV_OBJ_FLAG_HIDDEN);
@@ -193,7 +199,8 @@ void register_menu_status_row(lv_obj_t* row,
                               lv_obj_t* tracker_icon,
                               lv_obj_t* gps_icon,
                               lv_obj_t* team_icon,
-                              lv_obj_t* msg_icon)
+                              lv_obj_t* msg_icon,
+                              lv_obj_t* ble_icon)
 {
     s_menu_status_row = row;
     s_menu_route_icon = route_icon;
@@ -201,6 +208,7 @@ void register_menu_status_row(lv_obj_t* row,
     s_menu_gps_icon = gps_icon;
     s_menu_team_icon = team_icon;
     s_menu_msg_icon = msg_icon;
+    s_menu_ble_icon = ble_icon;
     status_timer_cb(nullptr);
 }
 

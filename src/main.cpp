@@ -98,9 +98,7 @@ void updateUserActivity();
 // Forward declaration to check if screen is sleeping
 bool isScreenSleeping();
 
-// Forward declaration to get/set screen sleep timeout
-uint32_t getScreenSleepTimeout();
-void setScreenSleepTimeout(uint32_t timeout_ms);
+#include "screen_sleep.h"
 
 // Forward declaration to disable/enable screen sleep (for USB mode, etc.)
 void disableScreenSleep();
@@ -1351,18 +1349,21 @@ void setup()
     lv_obj_t* menu_gps_icon = lv_image_create(menu_status_row);
     lv_obj_t* menu_team_icon = lv_image_create(menu_status_row);
     lv_obj_t* menu_msg_icon = lv_image_create(menu_status_row);
+    lv_obj_t* menu_ble_icon = lv_image_create(menu_status_row);
     lv_obj_add_flag(menu_route_icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(menu_tracker_icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(menu_gps_icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(menu_team_icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(menu_msg_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(menu_ble_icon, LV_OBJ_FLAG_HIDDEN);
 
     ::ui::status::register_menu_status_row(menu_status_row,
                                            menu_route_icon,
                                            menu_tracker_icon,
                                            menu_gps_icon,
                                            menu_team_icon,
-                                           menu_msg_icon);
+                                           menu_msg_icon,
+                                           menu_ble_icon);
 
     /* Initialize the menu view - moved down to make room for time */
     lv_obj_t* panel = lv_obj_create(menu_panel);

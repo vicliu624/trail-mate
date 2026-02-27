@@ -23,6 +23,9 @@
 #include <SD.h>
 #include <cstdio>
 #include <cstring>
+#if __has_include("esp_efuse.h")
+#include "esp_efuse.h"
+#endif
 
 namespace app
 {
@@ -293,7 +296,18 @@ bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_boa
 
     // Start BLE services
     ble_manager_ = std::make_unique<ble::BleManager>(*this);
-    ble_manager_->begin();
+    {
+        // Default BLE enable state comes from "settings" NVS namespace,
+        // key "ble_enabled". If not present, default to enabled.
+        Preferences prefs;
+        prefs.begin("settings", true);
+        bool ble_enabled = prefs.getBool("ble_enabled", true);
+        prefs.end();
+        if (ble_enabled)
+        {
+            ble_manager_->setEnabled(true);
+        }
+    }
 
     return true;
 }
@@ -347,6 +361,12 @@ bool AppContext::switchMeshProtocol(chat::MeshProtocol protocol, bool persist)
         saveConfig();
     }
     return true;
+}
+
+void AppContext::applyPositionConfig()
+{
+    gps::GpsService::getInstance().setCollectionInterval(config_.gps_interval_ms);
+    gps::GpsService::getInstance().setGnssConfig(config_.gps_mode, config_.gps_sat_mask);
 }
 
 void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
@@ -560,7 +580,8 @@ void AppContext::update()
                     node_event->timestamp,
                     node_event->protocol,
                     node_event->role,
-                    node_event->hops_away);
+                    node_event->hops_away,
+                    node_event->hw_model);
             }
             // Don't forward to UI - this is handled by ContactService
             delete event;
@@ -693,6 +714,70 @@ void AppContext::update()
             delete event;
         }
     }
+}
+
+void AppContext::setBleEnabled(bool enabled)
+{
+    if (ble_manager_)
+    {
+        ble_manager_->setEnabled(enabled);
+    }
+}
+
+chat::NodeId AppContext::getSelfNodeId() const
+{
+    // Cache in static so we don't hit NVS or MAC every call
+    static chat::NodeId cached_id = 0;
+    if (cached_id != 0)
+    {
+        return cached_id;
+    }
+
+    // First try to load a persisted node_id so IDs are stable across firmware updates
+    uint32_t stored_id = 0;
+    {
+        Preferences prefs;
+        prefs.begin("chat", true);
+        stored_id = prefs.getUInt("node_id", 0);
+        prefs.end();
+    }
+    if (stored_id != 0)
+    {
+        cached_id = stored_id;
+        return cached_id;
+    }
+
+    // Derive a new node id from the chip's unique MAC address.
+    uint64_t mac = 0;
+#if __has_include(<Arduino.h>)
+    mac = ESP.getEfuseMac();
+#else
+    uint8_t mac_bytes[6] = {};
+    if (esp_efuse_mac_get_default(mac_bytes) == ESP_OK)
+    {
+        mac = (static_cast<uint64_t>(mac_bytes[0]) << 40) |
+              (static_cast<uint64_t>(mac_bytes[1]) << 32) |
+              (static_cast<uint64_t>(mac_bytes[2]) << 24) |
+              (static_cast<uint64_t>(mac_bytes[3]) << 16) |
+              (static_cast<uint64_t>(mac_bytes[4]) << 8) |
+              (static_cast<uint64_t>(mac_bytes[5]));
+    }
+#endif
+
+    uint32_t node_id = static_cast<uint32_t>(mac & 0xFFFFFFFFu);
+    if (node_id == 0)
+    {
+        node_id = 1;
+    }
+
+    {
+        Preferences prefs;
+        prefs.begin("chat", false);
+        prefs.putUInt("node_id", node_id);
+        prefs.end();
+    }
+    cached_id = node_id;
+    return cached_id;
 }
 
 void AppContext::clearNodeDb()

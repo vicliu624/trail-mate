@@ -28,6 +28,8 @@ class BleManager
     ~BleManager();
 
     void begin();
+    void setEnabled(bool enabled);
+    bool isEnabled() const { return service_ != nullptr; }
     void update();
     void applyProtocol(chat::MeshProtocol protocol);
 

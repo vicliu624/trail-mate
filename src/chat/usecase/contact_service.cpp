@@ -39,14 +39,14 @@ void ContactService::begin()
 
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
                                     float snr, float rssi, uint32_t now_secs, uint8_t protocol, uint8_t role,
-                                    uint8_t hops_away)
+                                    uint8_t hops_away, uint8_t hw_model)
 {
     CONTACT_SERVICE_LOG("[ContactService] updateNodeInfo node=%08lX snr=%.1f rssi=%.1f ts=%lu\n",
                         (unsigned long)node_id,
                         snr,
                         rssi,
                         (unsigned long)now_secs);
-    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi, protocol, role, hops_away);
+    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi, protocol, role, hops_away, hw_model);
     invalidateCache();
 }
 

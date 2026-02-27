@@ -128,11 +128,12 @@ struct NodeInfoUpdateEvent : public Event
     uint8_t protocol;
     uint8_t role;
     uint8_t hops_away;
+    uint8_t hw_model;
 
     NodeInfoUpdateEvent(uint32_t id, const char* sname, const char* lname, float s, float rssi_val,
-                        uint32_t ts, uint8_t proto, uint8_t r, uint8_t hops = 0xFF)
+                        uint32_t ts, uint8_t proto, uint8_t r, uint8_t hops = 0xFF, uint8_t hw = 0)
         : Event(EventType::NodeInfoUpdate), node_id(id), snr(s), rssi(rssi_val), timestamp(ts), protocol(proto),
-          role(r), hops_away(hops)
+          role(r), hops_away(hops), hw_model(hw)
     {
         if (sname)
         {

@@ -1,6 +1,7 @@
 #include "meshtastic_ble.h"
 
 #include "ble_uuids.h"
+#include "../screen_sleep.h"
 #include <Arduino.h>
 #include "../board/BoardBase.h"
 #include "../chat/domain/contact_types.h"
@@ -20,6 +21,17 @@ namespace ble
 
 namespace
 {
+// Lightweight BLE/Meshtastic debug logging. Always uses Serial so you can
+// see exchange_user_info / exchange_positions behavior in the monitor.
+inline void ble_log(const char* fmt, ...)
+{
+    char buf[128];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    Serial.printf("[BLE] %s\n", buf);
+}
 constexpr uint32_t kConfigNonceOnlyConfig = 69420;
 constexpr uint32_t kConfigNonceOnlyNodes = 69421;
 
@@ -609,15 +621,32 @@ class MeshtasticBleService::PhoneApi
         uint64_t mac = ESP.getEfuseMac();
         memcpy(info.device_id.bytes, &mac, std::min(sizeof(mac), sizeof(info.device_id.bytes)));
         info.device_id.size = 8;
-        strncpy(info.pio_env, "trail-mate", sizeof(info.pio_env) - 1);
+        // Use a human-friendly firmware name without '-' so Meshtastic app
+        // shows "Trail Mate" instead of truncating at 'trail-'.
+        strncpy(info.pio_env, "Trail Mate", sizeof(info.pio_env) - 1);
         info.firmware_edition = meshtastic_FirmwareEdition_VANILLA;
         return info;
+    }
+
+    meshtastic_HardwareModel getSelfHardwareModel()
+    {
+#if defined(ARDUINO_T_DECK)
+        return meshtastic_HardwareModel_T_DECK;
+#elif defined(ARDUINO_LILYGO_TWATCH_S3)
+        return meshtastic_HardwareModel_T_WATCH_S3;
+#elif defined(ARDUINO_M5STACK_TAB5)
+        return meshtastic_HardwareModel_MESH_TAB;
+#elif defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+        return meshtastic_HardwareModel_T_LORA_PAGER;
+#else
+        return meshtastic_HardwareModel_UNSET;
+#endif
     }
 
     meshtastic_DeviceMetadata buildMetadata()
     {
         meshtastic_DeviceMetadata meta = meshtastic_DeviceMetadata_init_zero;
-        strncpy(meta.firmware_version, "trail-mate", sizeof(meta.firmware_version) - 1);
+        strncpy(meta.firmware_version, "Trail Mate", sizeof(meta.firmware_version) - 1);
         meta.device_state_version = 1;
         meta.canShutdown = true;
         meta.hasWifi = false;
@@ -625,7 +654,7 @@ class MeshtasticBleService::PhoneApi
         meta.hasEthernet = false;
         meta.role = meshtastic_Config_DeviceConfig_Role_CLIENT;
         meta.position_flags = 0;
-        meta.hw_model = meshtastic_HardwareModel_T_LORA_PAGER;
+        meta.hw_model = getSelfHardwareModel();
         meta.hasRemoteHardware = false;
         meta.hasPKC = ctx_.getMeshAdapter() ? ctx_.getMeshAdapter()->isPkiReady() : false;
         meta.excluded_modules = 0;
@@ -654,6 +683,23 @@ class MeshtasticBleService::PhoneApi
         ui.is_clockface_analog = false;
         ui.gps_format = meshtastic_DeviceUIConfig_GpsCoordinateFormat_DEC;
         return ui;
+    }
+
+    meshtastic_DeviceMetrics buildDeviceMetrics()
+    {
+        meshtastic_DeviceMetrics m = meshtastic_DeviceMetrics_init_zero;
+        if (BoardBase* board = ctx_.getBoard())
+        {
+            int level = board->getBatteryLevel();
+            if (level >= 0 && level <= 100)
+            {
+                m.has_battery_level = true;
+                m.battery_level = static_cast<uint32_t>(level);
+            }
+        }
+        m.has_uptime_seconds = true;
+        m.uptime_seconds = static_cast<uint32_t>(millis() / 1000U);
+        return m;
     }
 
     meshtastic_Channel buildChannel(uint8_t idx)
@@ -938,10 +984,36 @@ class MeshtasticBleService::PhoneApi
         info.num = entry.node_id;
         info.has_user = true;
         zeroInit(info.user);
-        strncpy(info.user.long_name, entry.long_name, sizeof(info.user.long_name) - 1);
-        strncpy(info.user.short_name, entry.short_name, sizeof(info.user.short_name) - 1);
+
+        // Start from stored names in NodeStore.
+        char long_name[sizeof(entry.long_name)];
+        char short_name[sizeof(entry.short_name)];
+        strncpy(long_name, entry.long_name, sizeof(long_name) - 1);
+        long_name[sizeof(long_name) - 1] = '\0';
+        strncpy(short_name, entry.short_name, sizeof(short_name) - 1);
+        short_name[sizeof(short_name) - 1] = '\0';
+
+        // Ensure we always have a usable short name (fallback to node_id suffix).
+        if (short_name[0] == '\0')
+        {
+            snprintf(short_name, sizeof(short_name), "%04X",
+                     static_cast<unsigned>(entry.node_id & 0xFFFF));
+        }
+
+        // If long name is empty, fall back to a lilygo-XXXX style name.
+        if (long_name[0] == '\0')
+        {
+            snprintf(long_name, sizeof(long_name), "lilygo-%04X",
+                     static_cast<unsigned>(entry.node_id & 0xFFFF));
+        }
+
+        strncpy(info.user.long_name, long_name, sizeof(info.user.long_name) - 1);
+        strncpy(info.user.short_name, short_name, sizeof(info.user.short_name) - 1);
         fillUserId(info.user.id, sizeof(info.user.id), entry.node_id);
-        info.user.hw_model = meshtastic_HardwareModel_UNSET;
+
+        // Use the stored hardware model if we have it; otherwise leave UNSET so
+        // the Meshtastic app can decide how to render unknown peers.
+        info.user.hw_model = static_cast<meshtastic_HardwareModel>(entry.hw_model);
         info.user.role = roleFromConfig(entry.role);
         info.snr = entry.snr;
         info.last_heard = entry.last_seen;
@@ -960,11 +1032,13 @@ class MeshtasticBleService::PhoneApi
         info.num = ctx_.getSelfNodeId();
         info.has_user = true;
         zeroInit(info.user);
-        const auto& cfg = ctx_.getConfig();
-        strncpy(info.user.long_name, cfg.node_name, sizeof(info.user.long_name) - 1);
-        strncpy(info.user.short_name, cfg.short_name, sizeof(info.user.short_name) - 1);
+        char long_name[sizeof(ctx_.getConfig().node_name)];
+        char short_name[sizeof(ctx_.getConfig().short_name)];
+        ctx_.getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+        strncpy(info.user.long_name, long_name, sizeof(info.user.long_name) - 1);
+        strncpy(info.user.short_name, short_name, sizeof(info.user.short_name) - 1);
         fillUserId(info.user.id, sizeof(info.user.id), info.num);
-        info.user.hw_model = meshtastic_HardwareModel_T_LORA_PAGER;
+        info.user.hw_model = getSelfHardwareModel();
         info.user.role = meshtastic_Config_DeviceConfig_Role_CLIENT;
         info.last_heard = nowSeconds();
         info.has_hops_away = true;
@@ -972,6 +1046,8 @@ class MeshtasticBleService::PhoneApi
         info.is_favorite = true;
         info.is_ignored = false;
         info.is_key_manually_verified = false;
+        info.has_device_metrics = true;
+        info.device_metrics = buildDeviceMetrics();
         return info;
     }
 
@@ -1065,11 +1141,14 @@ class MeshtasticBleService::PhoneApi
                                                      packet.decoded.payload.size);
         if (!pb_decode(&stream, meshtastic_AdminMessage_fields, &req))
         {
+            ble_log("Admin decode failed (len=%u)", (unsigned)packet.decoded.payload.size);
             return false;
         }
 
         meshtastic_AdminMessage resp = meshtastic_AdminMessage_init_zero;
         bool has_resp = false;
+
+        ble_log("Admin request tag=%d", (int)req.which_payload_variant);
 
         switch (req.which_payload_variant)
         {
@@ -1109,11 +1188,22 @@ class MeshtasticBleService::PhoneApi
         case meshtastic_AdminMessage_set_owner_tag:
         {
             auto& cfg = ctx_.getConfig();
+            ble_log("set_owner long='%s' short='%s'",
+                    req.set_owner.long_name,
+                    req.set_owner.short_name);
             copyBounded(cfg.node_name, sizeof(cfg.node_name), req.set_owner.long_name);
             copyBounded(cfg.short_name, sizeof(cfg.short_name), req.set_owner.short_name);
             ctx_.saveConfig();
             ctx_.applyUserInfo();
-            has_resp = false;
+
+            // Per Meshtastic behavior, acknowledge set_owner by returning the
+            // updated owner User record, same shape as get_owner_response.
+            resp.which_payload_variant = meshtastic_AdminMessage_get_owner_response_tag;
+            resp.get_owner_response = buildSelfNodeInfo().user;
+            ble_log("set_owner applied, responding with owner long='%s' short='%s'",
+                    resp.get_owner_response.long_name,
+                    resp.get_owner_response.short_name);
+            has_resp = true;
             break;
         }
         case meshtastic_AdminMessage_set_channel_tag:
@@ -1151,7 +1241,9 @@ class MeshtasticBleService::PhoneApi
                 ctx_.saveConfig();
                 ctx_.applyMeshConfig();
             }
-            has_resp = false;
+            resp.which_payload_variant = meshtastic_AdminMessage_get_channel_response_tag;
+            resp.get_channel_response = buildChannel(req.set_channel.index);
+            has_resp = true;
             break;
         }
         case meshtastic_AdminMessage_set_config_tag:
@@ -1185,6 +1277,7 @@ class MeshtasticBleService::PhoneApi
                 cfg.gps_mode = pos.gps_enabled ? 1 : 0;
                 cfg.gps_interval_ms = pos.gps_update_interval * 1000U;
                 ctx_.saveConfig();
+                ctx_.applyPositionConfig();
                 break;
             }
             case meshtastic_Config_display_tag:
@@ -1192,11 +1285,7 @@ class MeshtasticBleService::PhoneApi
                 uint32_t secs = req.set_config.payload_variant.display.screen_on_secs;
                 if (secs > 0)
                 {
-                    uint32_t timeout_ms = clampScreenTimeoutMs(secs * 1000U);
-                    Preferences prefs;
-                    prefs.begin(kSettingsNs, false);
-                    prefs.putUInt(kScreenTimeoutKey, timeout_ms);
-                    prefs.end();
+                    setScreenSleepTimeout(clampScreenTimeoutMs(secs * 1000U));
                 }
                 break;
             }
@@ -1220,18 +1309,16 @@ class MeshtasticBleService::PhoneApi
                 const auto& ui = req.set_config.payload_variant.device_ui;
                 if (ui.screen_timeout > 0)
                 {
-                    uint32_t timeout_ms = clampScreenTimeoutMs(static_cast<uint32_t>(ui.screen_timeout) * 1000U);
-                    Preferences prefs;
-                    prefs.begin(kSettingsNs, false);
-                    prefs.putUInt(kScreenTimeoutKey, timeout_ms);
-                    prefs.end();
+                    setScreenSleepTimeout(clampScreenTimeoutMs(static_cast<uint32_t>(ui.screen_timeout) * 1000U));
                 }
                 break;
             }
             default:
                 break;
             }
-            has_resp = false;
+            resp.which_payload_variant = meshtastic_AdminMessage_get_config_response_tag;
+            resp.get_config_response = buildConfig(static_cast<meshtastic_AdminMessage_ConfigType>(req.set_config.which_payload_variant));
+            has_resp = true;
             break;
         }
         case meshtastic_AdminMessage_set_module_config_tag:
@@ -1296,7 +1383,9 @@ class MeshtasticBleService::PhoneApi
             }
             service_.module_config_.version = kModuleConfigVersion;
             service_.saveModuleConfig();
-            has_resp = false;
+            resp.which_payload_variant = meshtastic_AdminMessage_get_module_config_response_tag;
+            resp.get_module_config_response = buildModuleConfig(static_cast<meshtastic_AdminMessage_ModuleConfigType>(req.set_module_config.which_payload_variant));
+            has_resp = true;
             break;
         }
         case meshtastic_AdminMessage_store_ui_config_tag:
@@ -1304,13 +1393,11 @@ class MeshtasticBleService::PhoneApi
             const auto& ui = req.store_ui_config;
             if (ui.screen_timeout > 0)
             {
-                uint32_t timeout_ms = clampScreenTimeoutMs(static_cast<uint32_t>(ui.screen_timeout) * 1000U);
-                Preferences prefs;
-                prefs.begin(kSettingsNs, false);
-                prefs.putUInt(kScreenTimeoutKey, timeout_ms);
-                prefs.end();
+                setScreenSleepTimeout(clampScreenTimeoutMs(static_cast<uint32_t>(ui.screen_timeout) * 1000U));
             }
-            has_resp = false;
+            resp.which_payload_variant = meshtastic_AdminMessage_get_ui_config_response_tag;
+            resp.get_ui_config_response = buildDeviceUi();
+            has_resp = true;
             break;
         }
         default:
@@ -1459,6 +1546,14 @@ void MeshtasticBleService::loadModuleConfig()
         module_config_.neighbor_info.enabled = false;
         module_config_.neighbor_info.update_interval = 0;
         module_config_.neighbor_info.transmit_over_lora = false;
+
+        module_config_.telemetry.device_update_interval = 3600;
+        module_config_.telemetry.device_telemetry_enabled = true;
+        module_config_.telemetry.environment_update_interval = 0;
+        module_config_.telemetry.environment_measurement_enabled = false;
+        module_config_.telemetry.power_update_interval = 0;
+        module_config_.telemetry.health_update_interval = 0;
+        module_config_.telemetry.air_quality_interval = 0;
 
         module_config_.detection_sensor.enabled = false;
         module_config_.detection_sensor.detection_trigger_type =

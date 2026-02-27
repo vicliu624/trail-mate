@@ -27,6 +27,7 @@ struct NodeEntry
     uint8_t hops_away = 0xFF;
     uint8_t protocol; // NodeProtocolType
     uint8_t role;     // NodeRoleType (Meshtastic roles)
+    uint8_t hw_model; // Meshtastic_HardwareModel (0 = UNSET)
 };
 
 static constexpr uint8_t kNodeRoleUnknown = 0xFF;
@@ -55,7 +56,8 @@ class INodeStore
      */
     virtual void upsert(uint32_t node_id, const char* short_name, const char* long_name,
                         uint32_t now_secs, float snr = 0.0f, float rssi = 0.0f, uint8_t protocol = 0,
-                        uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF) = 0;
+                        uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF,
+                        uint8_t hw_model = 0) = 0;
 
     /**
      * @brief Update node protocol (without changing names)

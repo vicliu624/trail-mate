@@ -120,10 +120,7 @@ class AppContext
         return config_;
     }
 
-    chat::NodeId getSelfNodeId() const
-    {
-        return mesh_router_ ? mesh_router_->getNodeId() : 0;
-    }
+    chat::NodeId getSelfNodeId() const;
 
     chat::IMeshAdapter* getMeshAdapter()
     {
@@ -210,6 +207,9 @@ class AppContext
         }
     }
 
+    /** Apply position/GPS config to GpsService (interval, GNSS mode). Call after changing config_.gps_* */
+    void applyPositionConfig();
+
     void broadcastNodeInfo()
     {
         if (mesh_router_)
@@ -288,6 +288,14 @@ class AppContext
      * @brief Update (call from main loop)
      */
     void update();
+
+    // BLE control (used by Settings -> System -> Bluetooth toggle)
+    void setBleEnabled(bool enabled);
+
+    bool isBleEnabled() const
+    {
+        return ble_manager_ && ble_manager_->isEnabled();
+    }
 
   private:
     AppContext() = default;
