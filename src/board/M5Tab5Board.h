@@ -42,7 +42,6 @@ class M5Tab5Board : public BoardBase,
     int getBatteryLevel() override { return -1; }
 
     bool isSDReady() const override { return sd_ready_; }
-    bool isGPSReady() const override { return gps_ready_; }
 
     void vibrator() override {}
     void stopVibrator() override {}
