@@ -235,15 +235,17 @@ struct MeshIncomingData
     NodeId from;
     NodeId to;
     MessageId packet_id;
+    uint32_t request_id;
     ChannelId channel;
     uint8_t channel_hash;
+    uint8_t hop_limit;
     bool want_response;
     std::vector<uint8_t> payload;
     RxMeta rx_meta;
 
     MeshIncomingData()
-        : portnum(0), from(0), to(0), packet_id(0),
-          channel(ChannelId::PRIMARY), channel_hash(0),
+        : portnum(0), from(0), to(0), packet_id(0), request_id(0),
+          channel(ChannelId::PRIMARY), channel_hash(0), hop_limit(0xFF),
           want_response(false) {}
 };
 
@@ -267,6 +269,8 @@ struct MeshConfig
     float frequency_offset_mhz;
     float override_frequency_mhz; // 0 = disabled
     bool enable_relay;            // Reserved relay switch (not currently routed)
+    bool ignore_mqtt;             // Ignore incoming packets that arrived via MQTT
+    bool config_ok_to_mqtt;       // Set ok_to_mqtt bit on outgoing packets
 
     // Channel encryption keys (PSK for encrypted channels)
     uint8_t primary_key[16];   // Primary channel key (usually empty for public)
@@ -301,6 +305,8 @@ struct MeshConfig
           frequency_offset_mhz(0.0f),
           override_frequency_mhz(0.0f),
           enable_relay(true),
+          ignore_mqtt(false),
+          config_ok_to_mqtt(false),
           meshcore_region_preset(0),
           meshcore_freq_mhz(915.0f),
           meshcore_bw_khz(125.0f),

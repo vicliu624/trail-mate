@@ -143,7 +143,10 @@ bool init_wifi_stack()
                       esp_err_to_name(mode_err));
         return false;
     }
-    esp_err_t ps_err = esp_wifi_set_ps(WIFI_PS_NONE);
+    // Keep Wi-Fi modem sleep enabled in BLE coexistence mode.
+    // On ESP32-S3/NimBLE, forcing WIFI_PS_NONE while BLE is active can
+    // trip a coex assertion during esp_wifi_start() and reboot the device.
+    esp_err_t ps_err = esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
     if (ps_err != ESP_OK)
     {
         Serial.printf("[Pairing] wifi ps err=%d (%s)\n",

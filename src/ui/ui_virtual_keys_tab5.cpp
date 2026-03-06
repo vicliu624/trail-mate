@@ -115,4 +115,3 @@ extern "C" void ui_tab5_init_virtual_keys(lv_obj_t* root)
 }
 
 #endif // ARDUINO_M5STACK_TAB5
-

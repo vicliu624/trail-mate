@@ -123,14 +123,18 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
     {
         input::MorseEngine::notifyTouch();
 #if defined(ARDUINO_T_DECK)
-        // T-Deck: a tap既要负责唤醒/退出屏保，也要被传递给当前 UI。
+        // T-Deck: touch can wake/show the screen saver, but only SPACE enters the main menu.
         if (isScreenSaverActive())
         {
-            enterFromScreenSaver();
+            wakeScreenSaver();
+            data->state = LV_INDEV_STATE_REL;
+            return;
         }
         else if (isScreenSleeping())
         {
             wakeScreenSaver();
+            data->state = LV_INDEV_STATE_REL;
+            return;
         }
         updateUserActivity();
         data->point.x = x;
@@ -285,12 +289,24 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
     {
         if (state == KEYBOARD_PRESSED)
         {
-            // When the screen saver is visible, any key will enter from the screen saver.
-            // When the screen is fully sleeping, the first key press shows the screen saver.
+#if defined(ARDUINO_T_DECK)
+            // T-Deck policy: first key wake shows the screen saver, and only SPACE enters the main menu.
+            if (isScreenSleeping())
+            {
+                wakeScreenSaver();
+            }
+            else if (isScreenSaverActive() && c == ' ')
+            {
+                enterFromScreenSaver();
+            }
+#else
+            // Other keyboard devices keep the original behavior:
+            // first key wakes the screen saver, and any key exits it.
             if (isScreenSaverActive())
                 enterFromScreenSaver();
             else
                 wakeScreenSaver();
+#endif
         }
         data->state = LV_INDEV_STATE_REL; // Don't pass key to UI
         return;

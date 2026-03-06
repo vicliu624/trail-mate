@@ -13,6 +13,10 @@
 namespace
 {
 constexpr time_t kMinValidEpochSeconds = 1577836800; // 2020-01-01 00:00:00 UTC
+constexpr uint8_t kTDeckKeyboardAddress = 0x55;
+constexpr uint8_t kTDeckKeyboardBrightnessCmd = 0x01;
+constexpr uint8_t kTDeckKeyboardDefaultBrightnessCmd = 0x02;
+constexpr uint32_t kTDeckKeyboardBootDelayMs = 500;
 
 // Civil date to UNIX epoch days (UTC), based on Howard Hinnant's algorithm.
 int64_t days_from_civil(int year, unsigned month, unsigned day)
@@ -221,6 +225,16 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     devices_probe_ = 0;
     pmu_ready_ = initPMU();
     touch_ready_ = initTouch();
+    keyboard_ready_ = initKeyboard();
+    if (keyboard_ready_)
+    {
+        devices_probe_ |= HW_KEYBOARD_ONLINE;
+        Serial.println("[TDeckBoard] keyboard init OK");
+    }
+    else
+    {
+        Serial.println("[TDeckBoard] keyboard not detected");
+    }
     rtc_ready_ = (time(nullptr) > 0);
 
     // Initialize display (ST7789) before SD so the SPI lock exists (pager-style ordering).
@@ -347,6 +361,82 @@ bool TDeckBoard::initTouch()
     touch_.setMirrorXY(false, true);
     Serial.println("[TDeckBoard] touch init OK");
     return true;
+}
+
+bool TDeckBoard::initKeyboard()
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    const uint32_t elapsed = millis() - boot_ms_;
+    if (elapsed < kTDeckKeyboardBootDelayMs)
+    {
+        delay(kTDeckKeyboardBootDelayMs - elapsed);
+    }
+
+    const int value = readKeyboardByte();
+    if (value < 0)
+    {
+        return false;
+    }
+
+    keyboard_pending_release_ = false;
+    keyboard_last_char_ = '\0';
+    const uint8_t default_brightness = keyboard_brightness_ > 0 ? keyboard_brightness_ : 127;
+    sendKeyboardCommand(kTDeckKeyboardDefaultBrightnessCmd, default_brightness);
+    sendKeyboardCommand(kTDeckKeyboardBrightnessCmd, keyboard_brightness_);
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool TDeckBoard::sendKeyboardCommand(uint8_t cmd, uint8_t value)
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    Wire.beginTransmission(kTDeckKeyboardAddress);
+    Wire.write(cmd);
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+#else
+    (void)cmd;
+    (void)value;
+    return false;
+#endif
+}
+
+int TDeckBoard::readKeyboardByte()
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    const uint8_t bytes = Wire.requestFrom(kTDeckKeyboardAddress, static_cast<uint8_t>(1));
+    if (bytes < 1 || Wire.available() < 1)
+    {
+        return -1;
+    }
+    const int value = Wire.read();
+    while (Wire.available() > 0)
+    {
+        Wire.read();
+    }
+    return value;
+#else
+    return -1;
+#endif
+}
+
+char TDeckBoard::translateKeyboardByte(uint8_t value)
+{
+    if (value == 0x00)
+    {
+        return '\0';
+    }
+    if (value == 0x08)
+    {
+        return '\b';
+    }
+    if (value == 0x0D || value == 0x0A)
+    {
+        return '\r';
+    }
+    return static_cast<char>(value);
 }
 
 bool TDeckBoard::installSD()
@@ -514,6 +604,31 @@ void TDeckBoard::setBrightness(uint8_t level)
 #endif
 }
 
+bool TDeckBoard::hasKeyboard()
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    return (devices_probe_ & HW_KEYBOARD_ONLINE) != 0;
+#else
+    return false;
+#endif
+}
+
+void TDeckBoard::keyboardSetBrightness(uint8_t level)
+{
+    keyboard_brightness_ = level;
+#ifdef USING_INPUT_DEV_KEYBOARD
+    if (keyboard_ready_)
+    {
+        sendKeyboardCommand(kTDeckKeyboardBrightnessCmd, level);
+    }
+#endif
+}
+
+uint8_t TDeckBoard::keyboardGetBrightness()
+{
+    return keyboard_brightness_;
+}
+
 bool TDeckBoard::isCardReady()
 {
     bool ready = false;
@@ -617,6 +732,43 @@ uint8_t TDeckBoard::getPoint(int16_t* x, int16_t* y, uint8_t get_point)
     *x = lx;
     *y = ly;
     return touched;
+}
+
+int TDeckBoard::getKeyChar(char* c)
+{
+#ifdef USING_INPUT_DEV_KEYBOARD
+    if (!keyboard_ready_ || !c)
+    {
+        return -1;
+    }
+
+    if (keyboard_pending_release_)
+    {
+        *c = keyboard_last_char_;
+        keyboard_pending_release_ = false;
+        return KEYBOARD_RELEASED;
+    }
+
+    const int value = readKeyboardByte();
+    if (value < 0)
+    {
+        return -1;
+    }
+
+    const char translated = translateKeyboardByte(static_cast<uint8_t>(value));
+    if (translated == '\0')
+    {
+        return -1;
+    }
+
+    *c = translated;
+    keyboard_last_char_ = translated;
+    keyboard_pending_release_ = true;
+    return KEYBOARD_PRESSED;
+#else
+    (void)c;
+    return -1;
+#endif
 }
 
 bool TDeckBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)

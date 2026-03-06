@@ -39,14 +39,15 @@ void ContactService::begin()
 
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
                                     float snr, float rssi, uint32_t now_secs, uint8_t protocol, uint8_t role,
-                                    uint8_t hops_away, uint8_t hw_model)
+                                    uint8_t hops_away, uint8_t hw_model, uint8_t channel)
 {
     CONTACT_SERVICE_LOG("[ContactService] updateNodeInfo node=%08lX snr=%.1f rssi=%.1f ts=%lu\n",
                         (unsigned long)node_id,
                         snr,
                         rssi,
                         (unsigned long)now_secs);
-    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi, protocol, role, hops_away, hw_model);
+    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi,
+                       protocol, role, hops_away, hw_model, channel);
     invalidateCache();
 }
 
@@ -152,6 +153,25 @@ bool ContactService::removeContact(uint32_t node_id)
     return false;
 }
 
+bool ContactService::removeNode(uint32_t node_id)
+{
+    bool removed = false;
+    if (contact_store_.removeNickname(node_id))
+    {
+        removed = true;
+    }
+    if (node_store_.remove(node_id))
+    {
+        removed = true;
+    }
+    positions_.erase(node_id);
+    if (removed)
+    {
+        invalidateCache();
+    }
+    return removed;
+}
+
 const NodeInfo* ContactService::getNodeInfo(uint32_t node_id) const
 {
     buildCache();
@@ -209,6 +229,7 @@ void ContactService::buildCache() const
         info.snr = entry.snr;
         info.rssi = entry.rssi;
         info.hops_away = entry.hops_away;
+        info.channel = entry.channel;
         info.protocol = static_cast<NodeProtocolType>(entry.protocol);
         info.role = static_cast<NodeRoleType>(entry.role);
         auto pos_it = positions_.find(entry.node_id);

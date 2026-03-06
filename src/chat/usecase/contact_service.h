@@ -52,7 +52,7 @@ class ContactService
     void updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
                         float snr, float rssi, uint32_t now_secs, uint8_t protocol = 0,
                         uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF,
-                        uint8_t hw_model = 0);
+                        uint8_t hw_model = 0, uint8_t channel = 0xFF);
 
     /**
      * @brief Update node protocol type (without changing names)
@@ -103,6 +103,13 @@ class ContactService
      * @return true if removed
      */
     bool removeContact(uint32_t node_id);
+
+    /**
+     * @brief Remove a node entirely from local contact/node caches
+     * @param node_id Node ID
+     * @return true if any local record was removed
+     */
+    bool removeNode(uint32_t node_id);
 
     /**
      * @brief Get node info by node_id

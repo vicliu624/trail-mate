@@ -87,9 +87,9 @@ static void on_action_menu_item_clicked(lv_event_t* e);
 static void on_action_menu_key(lv_event_t* e);
 static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text);
 static const chat::contacts::NodeInfo* get_selected_node();
-static bool get_selected_broadcast_target(chat::MeshProtocol* out_protocol,
-                                          chat::ChannelId* out_channel,
-                                          const char** out_title);
+struct BroadcastTargetSpec;
+static bool get_selected_broadcast_target(BroadcastTargetSpec* out_spec,
+                                          std::string* out_title);
 static void open_add_edit_modal(bool is_edit);
 static void open_delete_confirm_modal();
 static void open_node_info_screen();
@@ -314,9 +314,11 @@ static bool node_protocol_to_mesh(chat::contacts::NodeProtocolType protocol, cha
 
 struct BroadcastTargetSpec
 {
-    chat::MeshProtocol protocol;
-    chat::ChannelId channel;
-    const char* label;
+    chat::MeshProtocol protocol = chat::MeshProtocol::Meshtastic;
+    chat::ChannelId channel = chat::ChannelId::PRIMARY;
+    uint8_t channel_index = 0;
+    bool enabled = false;
+    bool chat_supported = false;
 };
 
 enum class DiscoveryActionCommand : uint8_t
@@ -341,29 +343,85 @@ static constexpr DiscoveryActionSpec kDiscoveryActionSpecs[] = {
     {"Cancel", "Back", DiscoveryActionCommand::Cancel},
 };
 
+static size_t get_broadcast_target_count()
+{
+    return (active_mesh_protocol() == chat::MeshProtocol::Meshtastic) ? 8U : 2U;
+}
+
 static bool get_broadcast_target_spec(int index, BroadcastTargetSpec* out)
 {
-    if (!out)
+    if (!out || index < 0)
     {
         return false;
     }
+
+    if (active_mesh_protocol() == chat::MeshProtocol::Meshtastic)
+    {
+        if (index >= 8)
+        {
+            return false;
+        }
+
+        const auto& cfg = app::AppContext::getInstance().getConfig();
+        out->protocol = chat::MeshProtocol::Meshtastic;
+        out->channel_index = static_cast<uint8_t>(index);
+        out->channel = (index == 1) ? chat::ChannelId::SECONDARY : chat::ChannelId::PRIMARY;
+        out->enabled = (index == 0) ? cfg.primary_enabled : ((index == 1) ? cfg.secondary_enabled : false);
+        out->chat_supported = out->enabled && (index <= 1);
+        return true;
+    }
+
     switch (index)
     {
     case 0:
-        *out = {chat::MeshProtocol::Meshtastic, chat::ChannelId::PRIMARY, "[MT] Primary"};
+        out->protocol = chat::MeshProtocol::MeshCore;
+        out->channel = chat::ChannelId::PRIMARY;
+        out->channel_index = 0;
+        out->enabled = true;
+        out->chat_supported = true;
         return true;
     case 1:
-        *out = {chat::MeshProtocol::Meshtastic, chat::ChannelId::SECONDARY, "[MT] Secondary"};
-        return true;
-    case 2:
-        *out = {chat::MeshProtocol::MeshCore, chat::ChannelId::PRIMARY, "[MC] Primary"};
-        return true;
-    case 3:
-        *out = {chat::MeshProtocol::MeshCore, chat::ChannelId::SECONDARY, "[MC] Secondary"};
+        out->protocol = chat::MeshProtocol::MeshCore;
+        out->channel = chat::ChannelId::SECONDARY;
+        out->channel_index = 1;
+        out->enabled = true;
+        out->chat_supported = true;
         return true;
     default:
         return false;
     }
+}
+
+static std::string format_broadcast_target_label(const BroadcastTargetSpec& spec)
+{
+    if (spec.protocol == chat::MeshProtocol::Meshtastic)
+    {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "[MT] Slot %u", static_cast<unsigned>(spec.channel_index));
+        return std::string(buf);
+    }
+    return (spec.channel == chat::ChannelId::SECONDARY) ? "[MC] Secondary" : "[MC] Primary";
+}
+
+static std::string format_broadcast_target_status(const BroadcastTargetSpec& spec)
+{
+    if (spec.protocol == chat::MeshProtocol::Meshtastic)
+    {
+        if (!spec.enabled)
+        {
+            return "Disabled";
+        }
+        if (spec.channel_index == 0)
+        {
+            return "Primary";
+        }
+        if (spec.channel_index == 1)
+        {
+            return "Secondary";
+        }
+        return spec.chat_supported ? "Ready" : "Slot";
+    }
+    return "Ready";
 }
 
 static bool get_discovery_action_spec(int index, DiscoveryActionSpec* out)
@@ -645,6 +703,15 @@ static void on_list_item_clicked(lv_event_t* e)
         execute_discovery_command(static_cast<uint8_t>(g_contacts_state.selected_index));
         return;
     }
+    if (g_contacts_state.current_mode == ContactsMode::Broadcast)
+    {
+        BroadcastTargetSpec spec{};
+        if (get_selected_broadcast_target(&spec, nullptr) && !spec.chat_supported)
+        {
+            ::ui::SystemNotification::show("MT send uses slot 0/1 only", 2200);
+            return;
+        }
+    }
     open_action_menu_modal();
 }
 
@@ -708,12 +775,10 @@ static const chat::contacts::NodeInfo* get_selected_node()
     return &list[g_contacts_state.selected_index];
 }
 
-static bool get_selected_broadcast_target(chat::MeshProtocol* out_protocol,
-                                          chat::ChannelId* out_channel,
-                                          const char** out_title)
+static bool get_selected_broadcast_target(BroadcastTargetSpec* out_spec,
+                                          std::string* out_title)
 {
-    if (g_contacts_state.current_mode != ContactsMode::Broadcast ||
-        !out_protocol || !out_channel || !out_title)
+    if (g_contacts_state.current_mode != ContactsMode::Broadcast || !out_spec)
     {
         return false;
     }
@@ -722,9 +787,11 @@ static bool get_selected_broadcast_target(chat::MeshProtocol* out_protocol,
     {
         return false;
     }
-    *out_protocol = spec.protocol;
-    *out_channel = spec.channel;
-    *out_title = spec.label;
+    *out_spec = spec;
+    if (out_title)
+    {
+        *out_title = format_broadcast_target_label(spec);
+    }
     return true;
 }
 
@@ -1075,25 +1142,21 @@ static void open_chat_compose()
     std::string title;
     if (g_contacts_state.current_mode == ContactsMode::Broadcast)
     {
-        chat::MeshProtocol target_protocol = protocol;
-        chat::ChannelId target_channel = chat::ChannelId::PRIMARY;
-        const char* target_title = nullptr;
-        if (!get_selected_broadcast_target(&target_protocol, &target_channel, &target_title))
+        BroadcastTargetSpec target_spec{};
+        std::string target_title;
+        if (!get_selected_broadcast_target(&target_spec, &target_title))
         {
             return;
         }
-        if (target_protocol != active_mesh_protocol())
+        if (!target_spec.chat_supported)
         {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "Switch to %s to chat",
-                     (target_protocol == chat::MeshProtocol::MeshCore) ? "MeshCore" : "Meshtastic");
-            ::ui::SystemNotification::show(buf, 2200);
+            ::ui::SystemNotification::show("MT send uses slot 0/1 only", 2200);
             return;
         }
-        protocol = target_protocol;
-        channel = target_channel;
+        protocol = target_spec.protocol;
+        channel = target_spec.channel;
         peer_id = 0;
-        title = target_title ? target_title : "Broadcast";
+        title = target_title.empty() ? "Broadcast" : target_title;
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
@@ -2237,18 +2300,20 @@ void refresh_ui()
     }
     else
     {
-        for (int i = 0; i < 4; ++i)
+        const size_t target_count = get_broadcast_target_count();
+        for (size_t i = 0; i < target_count; ++i)
         {
             BroadcastTargetSpec spec{};
-            if (!get_broadcast_target_spec(i, &spec))
+            if (!get_broadcast_target_spec(static_cast<int>(i), &spec))
             {
                 continue;
             }
             chat::contacts::NodeInfo target{};
-            target.display_name = spec.label;
+            target.display_name = format_broadcast_target_label(spec);
             target.protocol = (spec.protocol == chat::MeshProtocol::MeshCore)
                                   ? chat::contacts::NodeProtocolType::MeshCore
                                   : chat::contacts::NodeProtocolType::Meshtastic;
+            target.channel = spec.channel_index;
             broadcast_list.push_back(target);
         }
         current_list = &broadcast_list;
@@ -2328,7 +2393,7 @@ void refresh_ui()
             BroadcastTargetSpec spec{};
             if (get_broadcast_target_spec(i, &spec))
             {
-                status_text = (spec.protocol == active_mesh_protocol()) ? "Ready" : "Switch";
+                status_text = format_broadcast_target_status(spec);
             }
             else
             {

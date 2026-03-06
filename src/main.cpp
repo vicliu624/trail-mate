@@ -652,7 +652,7 @@ static bool screen_sleep_disabled = false;       // Flag to disable screen sleep
 static uint8_t saved_keyboard_brightness = 127;  // Save keyboard brightness before sleep (default 127)
 static uint32_t screen_sleep_timeout_ms = 60000; // Default 60 seconds, can be configured
 static bool screen_sleep_timeout_loaded = false;
-static Preferences preferences;                  // For saving/loading settings
+static Preferences preferences; // For saving/loading settings
 static bool screen_saver_active = false;
 static lv_obj_t* screen_saver_layer = nullptr;
 static lv_obj_t* screen_saver_time_label = nullptr;
@@ -761,7 +761,7 @@ static void init_screen_saver()
     lv_obj_set_style_text_font(screen_saver_hint_label, &lv_font_montserrat_14, 0);
     // Hint depends on board type: keyboard vs. touch.
 #if defined(ARDUINO_T_DECK)
-    lv_label_set_text(screen_saver_hint_label, "Tap screen to enter");
+    lv_label_set_text(screen_saver_hint_label, "Press SPACE to enter main menu");
 #else
     lv_label_set_text(screen_saver_hint_label, "Press SPACE to enter");
 #endif
@@ -1479,7 +1479,7 @@ void setup()
 #if defined(ARDUINO_M5STACK_TAB5)
     // On Tab5 (touch-only), create a bottom virtual key bar to emulate
     // Back/Up/Down/OK keyboard navigation.
-    extern void ui_tab5_init_virtual_keys(lv_obj_t* root);
+    extern void ui_tab5_init_virtual_keys(lv_obj_t * root);
     ui_tab5_init_virtual_keys(menu_panel);
 #endif
 

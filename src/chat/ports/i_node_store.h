@@ -25,9 +25,10 @@ struct NodeEntry
     float snr;          // Signal-to-Noise Ratio
     float rssi;         // RSSI in dBm
     uint8_t hops_away = 0xFF;
-    uint8_t protocol; // NodeProtocolType
-    uint8_t role;     // NodeRoleType (Meshtastic roles)
-    uint8_t hw_model; // Meshtastic_HardwareModel (0 = UNSET)
+    uint8_t channel = 0xFF; // Meshtastic channel index; 0xFF = unknown
+    uint8_t protocol;       // NodeProtocolType
+    uint8_t role;           // NodeRoleType (Meshtastic roles)
+    uint8_t hw_model;       // Meshtastic_HardwareModel (0 = UNSET)
 };
 
 static constexpr uint8_t kNodeRoleUnknown = 0xFF;
@@ -57,7 +58,7 @@ class INodeStore
     virtual void upsert(uint32_t node_id, const char* short_name, const char* long_name,
                         uint32_t now_secs, float snr = 0.0f, float rssi = 0.0f, uint8_t protocol = 0,
                         uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF,
-                        uint8_t hw_model = 0) = 0;
+                        uint8_t hw_model = 0, uint8_t channel = 0xFF) = 0;
 
     /**
      * @brief Update node protocol (without changing names)
@@ -66,6 +67,13 @@ class INodeStore
      * @param now_secs Current timestamp (seconds)
      */
     virtual void updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs) = 0;
+
+    /**
+     * @brief Remove a node entry by node ID
+     * @param node_id Node ID
+     * @return true if an entry was removed
+     */
+    virtual bool remove(uint32_t node_id) = 0;
 
     /**
      * @brief Get all entries (for iteration)

@@ -1,8 +1,8 @@
 #include "M5Tab5Board.h"
 
-#include "gps/GPS.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "gps/GPS.h"
 
 // NOTE: This is a minimal skeleton implementation that allows the firmware
 // to build and run on the M5Stack Tab5 environment. Hardware-specific
@@ -168,4 +168,3 @@ M5Tab5Board& getInstanceRef()
 
 M5Tab5Board& instance = getInstanceRef();
 BoardBase& board = getInstanceRef();
-

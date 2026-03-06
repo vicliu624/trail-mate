@@ -82,6 +82,10 @@ struct AppConfig
     // Channel settings
     bool primary_enabled;
     bool secondary_enabled;
+    bool primary_uplink_enabled;
+    bool primary_downlink_enabled;
+    bool secondary_uplink_enabled;
+    bool secondary_downlink_enabled;
     uint8_t secondary_key[16]; // PSK for secondary channel
 
     // GPS settings
@@ -146,6 +150,10 @@ struct AppConfig
         short_name[0] = '\0';
         primary_enabled = true;
         secondary_enabled = false;
+        primary_uplink_enabled = false;
+        primary_downlink_enabled = false;
+        secondary_uplink_enabled = false;
+        secondary_downlink_enabled = false;
         memset(secondary_key, 0, 16);
         gps_interval_ms = 60000;
         gps_mode = 0;
@@ -238,6 +246,8 @@ struct AppConfig
         meshtastic_config.channel_num = prefs.getUShort("mesh_ch_num", 0);
         meshtastic_config.frequency_offset_mhz = prefs.getFloat("mesh_freq_off", 0.0f);
         meshtastic_config.override_frequency_mhz = prefs.getFloat("mesh_freq_override", 0.0f);
+        meshtastic_config.ignore_mqtt = prefs.getBool("mesh_ignore_mqtt", false);
+        meshtastic_config.config_ok_to_mqtt = prefs.getBool("mesh_ok_to_mqtt", false);
 
         // Load meshcore profile (protocol-specific keys)
         meshcore_config.meshcore_freq_mhz = prefs.getFloat("mc_freq", meshcore_config.meshcore_freq_mhz);
@@ -295,6 +305,10 @@ struct AppConfig
         // Load channel settings
         primary_enabled = prefs.getBool("primary_enabled", true);
         secondary_enabled = prefs.getBool("secondary_enabled", false);
+        primary_uplink_enabled = prefs.getBool("primary_uplink", false);
+        primary_downlink_enabled = prefs.getBool("primary_downlink", false);
+        secondary_uplink_enabled = prefs.getBool("secondary_uplink", false);
+        secondary_downlink_enabled = prefs.getBool("secondary_downlink", false);
         prefs.getBytes("secondary_key", secondary_key, 16);
         memcpy(meshtastic_config.secondary_key, secondary_key, sizeof(meshtastic_config.secondary_key));
 
@@ -419,6 +433,8 @@ struct AppConfig
         prefs.putUShort("mesh_ch_num", meshtastic_config.channel_num);
         prefs.putFloat("mesh_freq_off", meshtastic_config.frequency_offset_mhz);
         prefs.putFloat("mesh_freq_override", meshtastic_config.override_frequency_mhz);
+        prefs.putBool("mesh_ignore_mqtt", meshtastic_config.ignore_mqtt);
+        prefs.putBool("mesh_ok_to_mqtt", meshtastic_config.config_ok_to_mqtt);
 
         // Save meshcore profile
         prefs.putFloat("mc_freq", meshcore_config.meshcore_freq_mhz);
@@ -447,6 +463,10 @@ struct AppConfig
         // Save channel settings
         prefs.putBool("primary_enabled", primary_enabled);
         prefs.putBool("secondary_enabled", secondary_enabled);
+        prefs.putBool("primary_uplink", primary_uplink_enabled);
+        prefs.putBool("primary_downlink", primary_downlink_enabled);
+        prefs.putBool("secondary_uplink", secondary_uplink_enabled);
+        prefs.putBool("secondary_downlink", secondary_downlink_enabled);
         memcpy(secondary_key, meshtastic_config.secondary_key, sizeof(secondary_key));
         prefs.putBytes("secondary_key", secondary_key, 16);
 

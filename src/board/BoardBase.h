@@ -5,8 +5,8 @@
 #if __has_include(<Arduino.h>)
 #include <Arduino.h>
 #else
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #endif
 
 // Abstract base class: provides a unified interface for different hardware boards.

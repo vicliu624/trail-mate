@@ -74,6 +74,7 @@ struct NodeInfoBase
     float snr;                // Signal-to-Noise Ratio
     float rssi;               // RSSI in dBm
     uint8_t hops_away = 0xFF; // 0xFF = unknown
+    uint8_t channel = 0xFF;   // Meshtastic channel index, 0xFF = unknown
     bool is_contact;          // true if user has assigned a nickname
     std::string display_name; // nickname if contact, short_name otherwise
     NodeProtocolType protocol;

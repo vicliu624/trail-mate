@@ -1,16 +1,16 @@
 #pragma once
 
-#include "ble_manager.h"
 #include "../app/app_context.h"
-#include "../chat/usecase/chat_service.h"
-#include "../team/usecase/team_service.h"
 #include "../chat/infra/meshcore/meshcore_adapter.h"
 #include "../chat/ports/i_node_store.h"
+#include "../chat/usecase/chat_service.h"
+#include "../team/usecase/team_service.h"
+#include "ble_manager.h"
 #include <NimBLEDevice.h>
 #include <array>
 #include <deque>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace ble
 {
@@ -138,6 +138,8 @@ class MeshCoreBleService : public BleService,
                               uint8_t code, Frame& out);
     bool lookupPeerByPrefix(const uint8_t* prefix, size_t len,
                             chat::meshcore::MeshCoreAdapter::PeerInfo* out) const;
+    chat::meshcore::MeshCoreAdapter* meshCoreAdapter();
+    const chat::meshcore::MeshCoreAdapter* meshCoreAdapter() const;
     uint32_t deriveNodeIdFromPubkey(const uint8_t* pubkey, size_t len) const;
 };
 

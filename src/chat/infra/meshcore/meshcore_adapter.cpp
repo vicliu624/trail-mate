@@ -1273,11 +1273,11 @@ bool MeshCoreAdapter::sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
     if (out_est_timeout)
     {
         *out_est_timeout = estimateSendTimeoutMs(frame_len,
-                                                (route_type == kRouteTypeDirect) ? out_path_len : 0,
-                                                route_type == kRouteTypeFlood,
-                                                config_.meshcore_bw_khz,
-                                                config_.meshcore_sf,
-                                                config_.meshcore_cr);
+                                                 (route_type == kRouteTypeDirect) ? out_path_len : 0,
+                                                 route_type == kRouteTypeFlood,
+                                                 config_.meshcore_bw_khz,
+                                                 config_.meshcore_sf,
+                                                 config_.meshcore_cr);
     }
     return ok;
 }
@@ -1372,11 +1372,11 @@ bool MeshCoreAdapter::sendAnonRequestPayload(const uint8_t* pubkey, size_t len,
     if (out_est_timeout)
     {
         *out_est_timeout = estimateSendTimeoutMs(frame_len,
-                                                (route_type == kRouteTypeDirect) ? out_path_len : 0,
-                                                route_type == kRouteTypeFlood,
-                                                config_.meshcore_bw_khz,
-                                                config_.meshcore_sf,
-                                                config_.meshcore_cr);
+                                                 (route_type == kRouteTypeDirect) ? out_path_len : 0,
+                                                 route_type == kRouteTypeFlood,
+                                                 config_.meshcore_bw_khz,
+                                                 config_.meshcore_sf,
+                                                 config_.meshcore_cr);
     }
     return ok;
 }
@@ -1416,9 +1416,9 @@ bool MeshCoreAdapter::sendRawData(const uint8_t* path, size_t path_len,
     if (out_est_timeout)
     {
         *out_est_timeout = estimateSendTimeoutMs(frame_len, path_len, false,
-                                                config_.meshcore_bw_khz,
-                                                config_.meshcore_sf,
-                                                config_.meshcore_cr);
+                                                 config_.meshcore_bw_khz,
+                                                 config_.meshcore_sf,
+                                                 config_.meshcore_cr);
     }
     return ok;
 }
@@ -1462,9 +1462,9 @@ bool MeshCoreAdapter::sendTracePath(const uint8_t* path, size_t path_len,
     if (out_est_timeout)
     {
         *out_est_timeout = estimateSendTimeoutMs(frame_len, path_len, false,
-                                                config_.meshcore_bw_khz,
-                                                config_.meshcore_sf,
-                                                config_.meshcore_cr);
+                                                 config_.meshcore_bw_khz,
+                                                 config_.meshcore_sf,
+                                                 config_.meshcore_cr);
     }
     return ok;
 }
@@ -3672,11 +3672,11 @@ bool MeshCoreAdapter::sendDirectTextDetailed(ChannelId channel, const std::strin
     if (out_timeout)
     {
         *out_timeout = estimateSendTimeoutMs(frame_len,
-                                            (route_type == kRouteTypeDirect) ? out_path_len : 0,
-                                            route_type == kRouteTypeFlood,
-                                            config_.meshcore_bw_khz,
-                                            config_.meshcore_sf,
-                                            config_.meshcore_cr);
+                                             (route_type == kRouteTypeDirect) ? out_path_len : 0,
+                                             route_type == kRouteTypeFlood,
+                                             config_.meshcore_bw_khz,
+                                             config_.meshcore_sf,
+                                             config_.meshcore_cr);
     }
     if (out_sent_flood)
     {
@@ -3704,8 +3704,12 @@ bool MeshCoreAdapter::pollIncomingText(MeshIncomingText* out)
 
 bool MeshCoreAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                                   const uint8_t* payload, size_t len,
-                                  NodeId dest, bool want_ack)
+                                  NodeId dest, bool want_ack,
+                                  MessageId packet_id,
+                                  bool want_response)
 {
+    (void)packet_id;
+    (void)want_response;
     if (!payload || len == 0)
     {
         MESHCORE_LOG("[MESHCORE] TX app-data dropped (invalid payload) port=%u len=%u payload=%u\n",

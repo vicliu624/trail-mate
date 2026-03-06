@@ -48,7 +48,9 @@ class MeshCoreAdapter : public IMeshAdapter
 
     bool sendAppData(ChannelId channel, uint32_t portnum,
                      const uint8_t* payload, size_t len,
-                     NodeId dest = 0, bool want_ack = false) override;
+                     NodeId dest = 0, bool want_ack = false,
+                     MessageId packet_id = 0,
+                     bool want_response = false) override;
 
     bool pollIncomingData(MeshIncomingData* out) override;
     bool requestNodeInfo(NodeId dest, bool want_response) override;

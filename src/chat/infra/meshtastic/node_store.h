@@ -39,12 +39,18 @@ class NodeStore : public contacts::INodeStore
                 uint32_t now_secs, float snr = 0.0f, float rssi = 0.0f, uint8_t protocol = 0,
                 uint8_t role = contacts::kNodeRoleUnknown,
                 uint8_t hops_away = 0xFF,
-                uint8_t hw_model = 0) override;
+                uint8_t hw_model = 0,
+                uint8_t channel = 0xFF) override;
 
     /**
      * @brief Update protocol for an existing node (best effort)
      */
     void updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs) override;
+
+    /**
+     * @brief Remove a node entry and persist (best effort)
+     */
+    bool remove(uint32_t node_id) override;
 
     /**
      * @brief Get all entries (for iteration)

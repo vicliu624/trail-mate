@@ -30,6 +30,20 @@ namespace meshtastic
 class MtAdapter : public chat::IMeshAdapter
 {
   public:
+    struct MqttProxySettings
+    {
+        bool enabled = false;
+        bool proxy_to_client_enabled = false;
+        bool encryption_enabled = true;
+        bool primary_uplink_enabled = false;
+        bool primary_downlink_enabled = false;
+        bool secondary_uplink_enabled = false;
+        bool secondary_downlink_enabled = false;
+        std::string root;
+        std::string primary_channel_id;
+        std::string secondary_channel_id;
+    };
+
     MtAdapter(LoraBoard& board);
     virtual ~MtAdapter();
     MeshCapabilities getCapabilities() const override;
@@ -39,13 +53,24 @@ class MtAdapter : public chat::IMeshAdapter
     bool pollIncomingText(MeshIncomingText* out) override;
     bool sendAppData(ChannelId channel, uint32_t portnum,
                      const uint8_t* payload, size_t len,
-                     NodeId dest = 0, bool want_ack = false) override;
+                     NodeId dest = 0, bool want_ack = false,
+                     MessageId packet_id = 0,
+                     bool want_response = false) override;
     bool pollIncomingData(MeshIncomingData* out) override;
     bool requestNodeInfo(NodeId dest, bool want_response) override;
+    bool sendMeshPacket(const meshtastic_MeshPacket& packet);
     bool startKeyVerification(NodeId node_id) override;
     bool submitKeyVerificationNumber(NodeId node_id, uint64_t nonce, uint32_t number) override;
     bool isPkiReady() const override;
     bool hasPkiKey(NodeId dest) const override;
+    bool getNodePublicKey(NodeId node_id, uint8_t out_key[32]) const;
+    bool getOwnPublicKey(uint8_t out_key[32]) const;
+    void rememberNodePublicKey(NodeId node_id, const uint8_t* key, size_t key_len);
+    void forgetNodePublicKey(NodeId node_id);
+    meshtastic_Routing_Error getLastRoutingError() const;
+    void setMqttProxySettings(const MqttProxySettings& settings);
+    bool pollMqttProxyMessage(meshtastic_MqttClientProxyMessage* out);
+    bool handleMqttProxyMessage(const meshtastic_MqttClientProxyMessage& msg);
     void applyConfig(const MeshConfig& config) override;
     void setUserInfo(const char* long_name, const char* short_name) override;
     void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
@@ -152,6 +177,8 @@ class MtAdapter : public chat::IMeshAdapter
     std::queue<PendingSend> send_queue_;
     std::queue<MeshIncomingText> receive_queue_;
     std::queue<MeshIncomingData> app_receive_queue_;
+    std::queue<meshtastic_MqttClientProxyMessage> mqtt_proxy_queue_;
+    MqttProxySettings mqtt_proxy_settings_;
 
     static constexpr size_t MAX_PACKET_SIZE = 255;
     static constexpr uint32_t RETRY_DELAY_MS = 1000;
@@ -172,10 +199,12 @@ class MtAdapter : public chat::IMeshAdapter
     uint32_t last_tx_ms_ = 0;
     uint8_t encrypt_mode_ = 1;
     bool pki_enabled_ = false;
+    meshtastic_Routing_Error last_send_error_ = meshtastic_Routing_Error_NONE;
 
     bool sendPacket(const PendingSend& pending);
     bool sendNodeInfo();
-    bool sendNodeInfoTo(uint32_t dest, bool want_response);
+    bool sendNodeInfoTo(uint32_t dest, bool want_response,
+                        ChannelId channel = ChannelId::PRIMARY);
     bool sendPositionTo(uint32_t dest, ChannelId channel);
     void maybeBroadcastNodeInfo(uint32_t now_ms);
     void configureRadio();
@@ -198,6 +227,13 @@ class MtAdapter : public chat::IMeshAdapter
     bool sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t channel_hash,
                           const uint8_t* psk, size_t psk_len,
                           meshtastic_Routing_Error reason);
+    void emitRoutingResultToPhone(uint32_t request_id,
+                                  meshtastic_Routing_Error reason,
+                                  uint32_t from,
+                                  uint32_t to,
+                                  ChannelId channel,
+                                  uint8_t channel_hash,
+                                  const chat::RxMeta* rx_meta);
 
     void updateKeyVerificationState();
     void resetKeyVerificationState();
@@ -211,6 +247,25 @@ class MtAdapter : public chat::IMeshAdapter
                                    bool want_response);
     bool processKeyVerificationNumber(uint32_t remote_node, uint64_t nonce, uint32_t number);
     void buildVerificationCode(char* out, size_t out_len) const;
+    bool decodeMqttServiceEnvelope(const uint8_t* payload, size_t payload_len,
+                                   meshtastic_MeshPacket* out_packet,
+                                   char* out_channel_id, size_t channel_id_len,
+                                   char* out_gateway_id, size_t gateway_id_len) const;
+    bool injectMqttEnvelope(const meshtastic_MeshPacket& packet,
+                            const char* channel_id,
+                            const char* gateway_id);
+    bool queueMqttProxyPublish(const meshtastic_MeshPacket& packet,
+                               const char* channel_id);
+    bool queueMqttProxyPublishFromWire(const uint8_t* wire_data,
+                                       size_t wire_size,
+                                       const meshtastic_Data* decoded,
+                                       ChannelId channel_index);
+    bool shouldPublishToMqtt(ChannelId channel, bool from_mqtt, bool is_pki) const;
+    bool hasAnyMqttDownlinkEnabled() const;
+    const char* mqttChannelIdFor(ChannelId channel) const;
+    uint8_t mqttChannelHashForId(const char* channel_id, bool* out_known = nullptr,
+                                 ChannelId* out_channel = nullptr) const;
+    std::string mqttNodeIdString() const;
 };
 
 } // namespace meshtastic

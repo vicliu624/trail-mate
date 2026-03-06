@@ -272,10 +272,10 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
     else
     {
         log_d("Battery gauge initialized successfully");
-    devices_probe |= HW_GAUGE_ONLINE;
+        devices_probe |= HW_GAUGE_ONLINE;
 
-    // Configure battery capacity (mAh) for BQ27220.
-    // Default 1500mAh, but allow overrides from NVS (for production tuning or advanced settings).
+        // Configure battery capacity (mAh) for BQ27220.
+        // Default 1500mAh, but allow overrides from NVS (for production tuning or advanced settings).
         uint16_t designCapacity = 1500;
         uint16_t fullChargeCapacity = 1500;
         Preferences prefs;
@@ -1777,8 +1777,7 @@ int TLoRaPagerBoard::getBatteryLevel()
     constexpr int kDropGuardPct = 30;
     constexpr int kZeroGuardMinPct = 15;
     constexpr uint8_t kZeroGuardCount = 3;
-    constexpr int kSocMismatchGuardPct = 35;
-    constexpr int kQuietCurrentMa = 300;
+    constexpr int kRiseGuardPct = 2;
 
     const uint32_t now_ms = millis();
     if (s_last_level >= 0 && (now_ms - s_last_read_ms) < kMinReadIntervalMs)
@@ -1978,6 +1977,12 @@ int TLoRaPagerBoard::getBatteryLevel()
         }
     }
 
+    if (!gauge_ok && s_last_voltage_mv > 0 && voltage_mv > 0)
+    {
+        voltage_mv = (s_last_voltage_mv * 3 + voltage_mv + 2) / 4;
+        voltage_percent = battery_percent_from_mv(voltage_mv);
+    }
+
     int level = gauge_ok ? soc : -1;
     if (level < 0 || level > 100)
     {
@@ -1986,29 +1991,6 @@ int TLoRaPagerBoard::getBatteryLevel()
     if (level < 0 && voltage_percent >= 0)
     {
         level = voltage_percent;
-    }
-
-    if (level >= 0 && voltage_percent >= 0)
-    {
-        const int diff = std::abs(level - voltage_percent);
-        const int current_abs = current_ma >= 0 ? current_ma : -current_ma;
-        const bool current_quiet = current_abs <= kQuietCurrentMa;
-        if (diff >= kSocMismatchGuardPct && current_quiet)
-        {
-            level = voltage_percent;
-        }
-        if (level <= 3 && voltage_percent >= 15)
-        {
-            level = voltage_percent;
-        }
-        if (level >= 95 && voltage_percent <= 80)
-        {
-            level = voltage_percent;
-        }
-        if (gauge_ok && !temp_ok)
-        {
-            level = voltage_percent;
-        }
     }
 
     // Temperature notifications: only when we have a valid reading, with cooldowns to avoid spam.
@@ -2039,6 +2021,18 @@ int TLoRaPagerBoard::getBatteryLevel()
     }
 
     const bool charging = isCharging();
+
+    if (s_last_level >= 0)
+    {
+        if (!charging && level > s_last_level + kRiseGuardPct)
+        {
+            level = s_last_level;
+        }
+        if (charging && level + kRiseGuardPct < s_last_level)
+        {
+            level = s_last_level;
+        }
+    }
 
     if (!charging && s_last_level >= 0 && level + kDropGuardPct < s_last_level)
     {

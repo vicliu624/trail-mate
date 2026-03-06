@@ -23,6 +23,7 @@
 #define TEST_CURVE25519_FIELD_OPS
 #include "../../../board/TLoRaPagerTypes.h"
 #include "generated/meshtastic/config.pb.h"
+#include "generated/meshtastic/mqtt.pb.h"
 #include "mt_region.h"
 #include <AES.h>
 #include <Curve25519.h>
@@ -54,6 +55,100 @@ constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kLoraSyncWord = 0x2b;
 constexpr uint16_t kLoraPreambleLen = 16;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
+constexpr size_t kMaxMqttProxyQueue = 12;
+
+bool readPbString(pb_istream_t* stream, char* out, size_t out_len)
+{
+    if (!stream || !out || out_len == 0)
+    {
+        return false;
+    }
+    size_t to_read = stream->bytes_left;
+    if (to_read >= out_len)
+    {
+        to_read = out_len - 1;
+    }
+    if (to_read > 0 && !pb_read(stream, reinterpret_cast<pb_byte_t*>(out), to_read))
+    {
+        return false;
+    }
+    out[to_read] = '\0';
+    size_t remaining = stream->bytes_left;
+    if (remaining > 0)
+    {
+        uint8_t discard[32];
+        while (remaining > 0)
+        {
+            size_t chunk = std::min(remaining, sizeof(discard));
+            if (!pb_read(stream, discard, chunk))
+            {
+                return false;
+            }
+            remaining -= chunk;
+        }
+    }
+    return true;
+}
+
+bool makeEncryptedPacketFromWire(const uint8_t* wire_data, size_t wire_size,
+                                 meshtastic_MeshPacket* out_packet)
+{
+    if (!wire_data || !out_packet || wire_size < sizeof(chat::meshtastic::PacketHeaderWire))
+    {
+        return false;
+    }
+
+    chat::meshtastic::PacketHeaderWire header{};
+    uint8_t payload[256];
+    size_t payload_size = sizeof(payload);
+    if (!chat::meshtastic::parseWirePacket(wire_data, wire_size, &header, payload, &payload_size))
+    {
+        return false;
+    }
+
+    meshtastic_MeshPacket packet = meshtastic_MeshPacket_init_zero;
+    packet.from = header.from;
+    packet.to = header.to;
+    packet.channel = header.channel;
+    packet.id = header.id;
+    packet.hop_limit = header.flags & chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
+    packet.want_ack = (header.flags & chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK) != 0;
+    packet.via_mqtt = (header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
+    packet.hop_start = (header.flags & chat::meshtastic::PACKET_FLAGS_HOP_START_MASK) >>
+                       chat::meshtastic::PACKET_FLAGS_HOP_START_SHIFT;
+    packet.next_hop = header.next_hop;
+    packet.relay_node = header.relay_node;
+    packet.pki_encrypted = (header.channel == 0);
+    packet.which_payload_variant = meshtastic_MeshPacket_encrypted_tag;
+    packet.encrypted.size = static_cast<pb_size_t>(std::min(payload_size, sizeof(packet.encrypted.bytes)));
+    memcpy(packet.encrypted.bytes, payload, packet.encrypted.size);
+    *out_packet = packet;
+    return true;
+}
+
+void fillDecodedPacketCommon(meshtastic_MeshPacket* packet,
+                             const meshtastic_Data& decoded,
+                             const chat::meshtastic::PacketHeaderWire& header,
+                             chat::ChannelId channel_index)
+{
+    if (!packet)
+    {
+        return;
+    }
+    packet->from = header.from;
+    packet->to = header.to;
+    packet->channel = (channel_index == chat::ChannelId::SECONDARY) ? 1 : 0;
+    packet->id = header.id;
+    packet->hop_limit = header.flags & chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
+    packet->want_ack = (header.flags & chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK) != 0;
+    packet->via_mqtt = (header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
+    packet->hop_start = (header.flags & chat::meshtastic::PACKET_FLAGS_HOP_START_MASK) >>
+                        chat::meshtastic::PACKET_FLAGS_HOP_START_SHIFT;
+    packet->next_hop = header.next_hop;
+    packet->relay_node = header.relay_node;
+    packet->which_payload_variant = meshtastic_MeshPacket_decoded_tag;
+    packet->decoded = decoded;
+}
 
 bool allowPkiForPortnum(uint32_t portnum)
 {
@@ -736,7 +831,9 @@ bool MtAdapter::pollIncomingText(MeshIncomingText* out)
 
 bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                             const uint8_t* payload, size_t len,
-                            NodeId dest, bool want_ack)
+                            NodeId dest, bool want_ack,
+                            MessageId packet_id,
+                            bool want_response)
 {
     if (!ready_ || !config_.tx_enabled)
     {
@@ -758,7 +855,9 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
 
     uint8_t data_buffer[256];
     size_t data_size = sizeof(data_buffer);
-    if (!encodeAppData(portnum, payload, len, want_ack, data_buffer, &data_size))
+    // Keep legacy behavior for existing callers: want_ack implied want_response.
+    bool effective_want_response = want_response || want_ack;
+    if (!encodeAppData(portnum, payload, len, effective_want_response, data_buffer, &data_size))
     {
         return false;
     }
@@ -774,8 +873,16 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         (out_channel == ChannelId::SECONDARY) ? secondary_psk_len_ : primary_psk_len_;
     uint8_t hop_limit = config_.hop_limit;
     uint32_t dest_node = (dest != 0) ? dest : 0xFFFFFFFF;
-    bool want_ack_flag = want_ack && (dest_node != 0xFFFFFFFF);
-    MessageId msg_id = next_packet_id_++;
+    bool want_ack_flag = want_ack;
+    MessageId msg_id = (packet_id != 0) ? packet_id : next_packet_id_++;
+    if (packet_id != 0 && packet_id >= next_packet_id_)
+    {
+        next_packet_id_ = packet_id + 1;
+        if (next_packet_id_ == 0)
+        {
+            next_packet_id_ = 1;
+        }
+    }
 
     const uint8_t* out_payload = data_buffer;
     size_t out_len = data_size;
@@ -844,16 +951,181 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
 #endif
 
     bool ok = (state == RADIOLIB_ERR_NONE);
-    LORA_LOG("[LORA] TX app port=%u len=%u ok=%d\n",
+    LORA_LOG("[LORA] TX app port=%u len=%u want_resp=%u want_ack=%u ok=%d\n",
              (unsigned)portnum,
              (unsigned)wire_size,
+             effective_want_response ? 1U : 0U,
+             want_ack_flag ? 1U : 0U,
              ok ? 1 : 0);
     if (ok)
     {
         last_tx_ms_ = now_ms;
+        if (want_ack_flag)
+        {
+            pending_ack_ms_[msg_id] = millis();
+            pending_ack_dest_[msg_id] = dest_node;
+        }
+        meshtastic_Data mqtt_data = meshtastic_Data_init_default;
+        mqtt_data.portnum = static_cast<meshtastic_PortNum>(portnum);
+        mqtt_data.want_response = effective_want_response;
+        mqtt_data.dest = dest_node;
+        mqtt_data.source = node_id_;
+        mqtt_data.has_bitfield = true;
+        mqtt_data.payload.size = std::min(len, sizeof(mqtt_data.payload.bytes));
+        if (mqtt_data.payload.size > 0)
+        {
+            memcpy(mqtt_data.payload.bytes, payload, mqtt_data.payload.size);
+        }
+        queueMqttProxyPublishFromWire(wire_buffer, wire_size,
+                                      use_pki ? nullptr : &mqtt_data,
+                                      out_channel);
         startRadioReceive();
     }
     return ok;
+}
+
+bool MtAdapter::sendMeshPacket(const meshtastic_MeshPacket& packet)
+{
+    last_send_error_ = meshtastic_Routing_Error_NONE;
+    if (!ready_ || !config_.tx_enabled || !board_.isRadioOnline())
+    {
+        last_send_error_ = meshtastic_Routing_Error_NO_INTERFACE;
+        return false;
+    }
+    if (packet.which_payload_variant != meshtastic_MeshPacket_decoded_tag)
+    {
+        last_send_error_ = meshtastic_Routing_Error_BAD_REQUEST;
+        return false;
+    }
+
+    uint32_t now_ms = millis();
+    if (min_tx_interval_ms_ > 0 && last_tx_ms_ > 0 &&
+        (now_ms - last_tx_ms_) < min_tx_interval_ms_)
+    {
+        last_send_error_ = meshtastic_Routing_Error_DUTY_CYCLE_LIMIT;
+        return false;
+    }
+
+    uint32_t msg_id = (packet.id != 0) ? packet.id : next_packet_id_++;
+    if (packet.id != 0 && packet.id >= next_packet_id_)
+    {
+        next_packet_id_ = packet.id + 1;
+        if (next_packet_id_ == 0)
+        {
+            next_packet_id_ = 1;
+        }
+    }
+
+    meshtastic_Data data = packet.decoded;
+    data.dest = (packet.to != 0) ? packet.to : 0xFFFFFFFF;
+    data.source = node_id_;
+    data.has_bitfield = true;
+
+    uint8_t data_buf[256];
+    pb_ostream_t dstream = pb_ostream_from_buffer(data_buf, sizeof(data_buf));
+    if (!pb_encode(&dstream, meshtastic_Data_fields, &data))
+    {
+        last_send_error_ = meshtastic_Routing_Error_TOO_LARGE;
+        return false;
+    }
+
+    const uint32_t dest = data.dest;
+    const uint8_t hop_limit = (packet.hop_limit > 0) ? packet.hop_limit : config_.hop_limit;
+    bool want_ack = packet.want_ack;
+    uint8_t channel_hash = primary_channel_hash_;
+    const uint8_t* psk = primary_psk_;
+    size_t psk_len = primary_psk_len_;
+    const uint8_t* out_payload = data_buf;
+    size_t out_len = dstream.bytes_written;
+
+    if (packet.pki_encrypted)
+    {
+        if (dest == 0 || dest == 0xFFFFFFFF)
+        {
+            last_send_error_ = meshtastic_Routing_Error_BAD_REQUEST;
+            return false;
+        }
+        if (packet.public_key.size > 0 && packet.public_key.size != pki_public_key_.size())
+        {
+            last_send_error_ = meshtastic_Routing_Error_BAD_REQUEST;
+            return false;
+        }
+        if (packet.public_key.size == pki_public_key_.size())
+        {
+            savePkiNodeKey(dest, packet.public_key.bytes, packet.public_key.size);
+        }
+        if (!pki_ready_)
+        {
+            last_send_error_ = meshtastic_Routing_Error_PKI_FAILED;
+            return false;
+        }
+        if (node_public_keys_.find(dest) == node_public_keys_.end())
+        {
+            last_send_error_ = meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY;
+            return false;
+        }
+
+        uint8_t pki_buf[256];
+        size_t pki_len = sizeof(pki_buf);
+        if (!encryptPkiPayload(dest, msg_id, data_buf, dstream.bytes_written, pki_buf, &pki_len))
+        {
+            last_send_error_ = meshtastic_Routing_Error_PKI_FAILED;
+            return false;
+        }
+
+        out_payload = pki_buf;
+        out_len = pki_len;
+        channel_hash = 0;
+        psk = nullptr;
+        psk_len = 0;
+        want_ack = true;
+    }
+    else if (packet.channel == 1)
+    {
+        channel_hash = secondary_channel_hash_;
+        psk = secondary_psk_;
+        psk_len = secondary_psk_len_;
+    }
+    else if (packet.channel != 0)
+    {
+        last_send_error_ = meshtastic_Routing_Error_NO_CHANNEL;
+        return false;
+    }
+
+    uint8_t wire_buffer[512];
+    size_t wire_size = sizeof(wire_buffer);
+    if (!buildWirePacket(out_payload, out_len, node_id_, msg_id,
+                         dest, channel_hash, hop_limit, want_ack,
+                         psk, psk_len, wire_buffer, &wire_size))
+    {
+        last_send_error_ = meshtastic_Routing_Error_TOO_LARGE;
+        return false;
+    }
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    int state = board_.transmitRadio(wire_buffer, wire_size);
+#else
+    int state = RADIOLIB_ERR_UNSUPPORTED;
+#endif
+
+    if (state == RADIOLIB_ERR_NONE)
+    {
+        last_tx_ms_ = now_ms;
+        last_send_error_ = meshtastic_Routing_Error_NONE;
+        if (want_ack)
+        {
+            pending_ack_ms_[msg_id] = millis();
+            pending_ack_dest_[msg_id] = dest;
+        }
+        ChannelId mqtt_channel = (packet.channel == 1) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
+        queueMqttProxyPublishFromWire(wire_buffer, wire_size,
+                                      (packet.which_payload_variant == meshtastic_MeshPacket_decoded_tag) ? &data : nullptr,
+                                      mqtt_channel);
+        startRadioReceive();
+        return true;
+    }
+    last_send_error_ = meshtastic_Routing_Error_NO_INTERFACE;
+    return false;
 }
 
 bool MtAdapter::pollIncomingData(MeshIncomingData* out)
@@ -875,7 +1147,16 @@ bool MtAdapter::requestNodeInfo(NodeId dest, bool want_response)
         return false;
     }
     uint32_t target = (dest == 0) ? 0xFFFFFFFF : dest;
-    return sendNodeInfoTo(target, want_response);
+    ChannelId channel = ChannelId::PRIMARY;
+    if (target != 0xFFFFFFFF)
+    {
+        auto it = node_last_channel_.find(target);
+        if (it != node_last_channel_.end())
+        {
+            channel = it->second;
+        }
+    }
+    return sendNodeInfoTo(target, want_response, channel);
 }
 
 bool MtAdapter::isPkiReady() const
@@ -886,6 +1167,510 @@ bool MtAdapter::isPkiReady() const
 bool MtAdapter::hasPkiKey(NodeId dest) const
 {
     return node_public_keys_.find(dest) != node_public_keys_.end();
+}
+
+bool MtAdapter::getNodePublicKey(NodeId node_id, uint8_t out_key[32]) const
+{
+    if (!out_key)
+    {
+        return false;
+    }
+    auto it = node_public_keys_.find(node_id);
+    if (it == node_public_keys_.end())
+    {
+        return false;
+    }
+    memcpy(out_key, it->second.data(), 32);
+    return true;
+}
+
+bool MtAdapter::getOwnPublicKey(uint8_t out_key[32]) const
+{
+    if (!out_key || !pki_ready_)
+    {
+        return false;
+    }
+    memcpy(out_key, pki_public_key_.data(), 32);
+    return true;
+}
+
+void MtAdapter::rememberNodePublicKey(NodeId node_id, const uint8_t* key, size_t key_len)
+{
+    if (node_id == 0 || !key || key_len != pki_public_key_.size())
+    {
+        return;
+    }
+    savePkiNodeKey(node_id, key, key_len);
+}
+
+void MtAdapter::forgetNodePublicKey(NodeId node_id)
+{
+    if (node_id == 0)
+    {
+        return;
+    }
+    node_public_keys_.erase(node_id);
+    node_key_last_seen_.erase(node_id);
+    node_last_channel_.erase(node_id);
+    nodeinfo_last_seen_ms_.erase(node_id);
+    node_long_names_.erase(node_id);
+    savePkiKeysToPrefs();
+}
+
+meshtastic_Routing_Error MtAdapter::getLastRoutingError() const
+{
+    return last_send_error_;
+}
+
+void MtAdapter::setMqttProxySettings(const MqttProxySettings& settings)
+{
+    mqtt_proxy_settings_ = settings;
+}
+
+bool MtAdapter::pollMqttProxyMessage(meshtastic_MqttClientProxyMessage* out)
+{
+    if (!out || mqtt_proxy_queue_.empty())
+    {
+        return false;
+    }
+    *out = mqtt_proxy_queue_.front();
+    mqtt_proxy_queue_.pop();
+    return true;
+}
+
+std::string MtAdapter::mqttNodeIdString() const
+{
+    char node_id[16];
+    snprintf(node_id, sizeof(node_id), "!%08lx", static_cast<unsigned long>(node_id_));
+    return std::string(node_id);
+}
+
+const char* MtAdapter::mqttChannelIdFor(ChannelId channel) const
+{
+    if (channel == ChannelId::SECONDARY && !mqtt_proxy_settings_.secondary_channel_id.empty())
+    {
+        return mqtt_proxy_settings_.secondary_channel_id.c_str();
+    }
+    if (!mqtt_proxy_settings_.primary_channel_id.empty())
+    {
+        return mqtt_proxy_settings_.primary_channel_id.c_str();
+    }
+    return nullptr;
+}
+
+bool MtAdapter::hasAnyMqttDownlinkEnabled() const
+{
+    return mqtt_proxy_settings_.primary_downlink_enabled ||
+           mqtt_proxy_settings_.secondary_downlink_enabled;
+}
+
+bool MtAdapter::shouldPublishToMqtt(ChannelId channel, bool from_mqtt, bool is_pki) const
+{
+    if (!mqtt_proxy_settings_.enabled || !mqtt_proxy_settings_.proxy_to_client_enabled || from_mqtt)
+    {
+        return false;
+    }
+    if (is_pki)
+    {
+        return true;
+    }
+    if (channel == ChannelId::SECONDARY)
+    {
+        return mqtt_proxy_settings_.secondary_uplink_enabled;
+    }
+    return mqtt_proxy_settings_.primary_uplink_enabled;
+}
+
+uint8_t MtAdapter::mqttChannelHashForId(const char* channel_id, bool* out_known,
+                                        ChannelId* out_channel) const
+{
+    bool known = false;
+    ChannelId channel = ChannelId::PRIMARY;
+    uint8_t hash = primary_channel_hash_;
+    if (channel_id && strcmp(channel_id, "PKI") == 0)
+    {
+        known = hasAnyMqttDownlinkEnabled();
+        hash = 0;
+        channel = ChannelId::PRIMARY;
+    }
+    else if (channel_id && !mqtt_proxy_settings_.primary_channel_id.empty() &&
+             strcmp(channel_id, mqtt_proxy_settings_.primary_channel_id.c_str()) == 0)
+    {
+        known = mqtt_proxy_settings_.primary_downlink_enabled;
+        hash = primary_channel_hash_;
+        channel = ChannelId::PRIMARY;
+    }
+    else if (channel_id && !mqtt_proxy_settings_.secondary_channel_id.empty() &&
+             strcmp(channel_id, mqtt_proxy_settings_.secondary_channel_id.c_str()) == 0)
+    {
+        known = mqtt_proxy_settings_.secondary_downlink_enabled;
+        hash = secondary_channel_hash_;
+        channel = ChannelId::SECONDARY;
+    }
+
+    if (out_known)
+    {
+        *out_known = known;
+    }
+    if (out_channel)
+    {
+        *out_channel = channel;
+    }
+    return hash;
+}
+
+bool MtAdapter::decodeMqttServiceEnvelope(const uint8_t* payload, size_t payload_len,
+                                          meshtastic_MeshPacket* out_packet,
+                                          char* out_channel_id, size_t channel_id_len,
+                                          char* out_gateway_id, size_t gateway_id_len) const
+{
+    if (!payload || payload_len == 0 || !out_packet || !out_channel_id || !out_gateway_id ||
+        channel_id_len == 0 || gateway_id_len == 0)
+    {
+        return false;
+    }
+
+    *out_packet = meshtastic_MeshPacket_init_zero;
+    out_channel_id[0] = '\0';
+    out_gateway_id[0] = '\0';
+
+    pb_istream_t stream = pb_istream_from_buffer(payload, payload_len);
+    while (stream.bytes_left > 0)
+    {
+        pb_wire_type_t wire_type = PB_WT_VARINT;
+        uint32_t tag = 0;
+        bool eof = false;
+        if (!pb_decode_tag(&stream, &wire_type, &tag, &eof))
+        {
+            return false;
+        }
+        if (eof)
+        {
+            break;
+        }
+
+        if (tag == meshtastic_ServiceEnvelope_packet_tag)
+        {
+            if (wire_type != PB_WT_STRING)
+            {
+                return false;
+            }
+            pb_istream_t substream;
+            if (!pb_make_string_substream(&stream, &substream))
+            {
+                return false;
+            }
+            bool ok = pb_decode(&substream, meshtastic_MeshPacket_fields, out_packet);
+            pb_close_string_substream(&stream, &substream);
+            if (!ok)
+            {
+                return false;
+            }
+        }
+        else if (tag == meshtastic_ServiceEnvelope_channel_id_tag)
+        {
+            if (wire_type != PB_WT_STRING)
+            {
+                return false;
+            }
+            pb_istream_t substream;
+            if (!pb_make_string_substream(&stream, &substream))
+            {
+                return false;
+            }
+            bool ok = readPbString(&substream, out_channel_id, channel_id_len);
+            pb_close_string_substream(&stream, &substream);
+            if (!ok)
+            {
+                return false;
+            }
+        }
+        else if (tag == meshtastic_ServiceEnvelope_gateway_id_tag)
+        {
+            if (wire_type != PB_WT_STRING)
+            {
+                return false;
+            }
+            pb_istream_t substream;
+            if (!pb_make_string_substream(&stream, &substream))
+            {
+                return false;
+            }
+            bool ok = readPbString(&substream, out_gateway_id, gateway_id_len);
+            pb_close_string_substream(&stream, &substream);
+            if (!ok)
+            {
+                return false;
+            }
+        }
+        else if (!pb_skip_field(&stream, wire_type))
+        {
+            return false;
+        }
+    }
+
+    return out_packet->which_payload_variant == meshtastic_MeshPacket_decoded_tag ||
+           out_packet->which_payload_variant == meshtastic_MeshPacket_encrypted_tag;
+}
+
+bool MtAdapter::injectMqttEnvelope(const meshtastic_MeshPacket& packet,
+                                   const char* channel_id,
+                                   const char* gateway_id)
+{
+    if (!mqtt_proxy_settings_.enabled || !mqtt_proxy_settings_.proxy_to_client_enabled)
+    {
+        return false;
+    }
+
+    bool known_channel = false;
+    ChannelId channel_index = ChannelId::PRIMARY;
+    uint8_t channel_hash = mqttChannelHashForId(channel_id, &known_channel, &channel_index);
+    if (!known_channel)
+    {
+        LORA_LOG("[MQTT] downlink ignored unknown/disabled channel id='%s'\n",
+                 channel_id ? channel_id : "");
+        return false;
+    }
+
+    if (packet.which_payload_variant == meshtastic_MeshPacket_decoded_tag)
+    {
+        if (mqtt_proxy_settings_.encryption_enabled)
+        {
+            LORA_LOG("[MQTT] downlink ignore decoded payload while mqtt encryption enabled\n");
+            return false;
+        }
+        if (packet.decoded.portnum == meshtastic_PortNum_ADMIN_APP)
+        {
+            LORA_LOG("[MQTT] downlink ignore admin payload\n");
+            return false;
+        }
+    }
+
+    PacketHeaderWire header{};
+    header.to = packet.to;
+    header.from = packet.from;
+    header.id = packet.id;
+    header.flags = (packet.hop_limit & PACKET_FLAGS_HOP_LIMIT_MASK) |
+                   ((packet.hop_start << PACKET_FLAGS_HOP_START_SHIFT) & PACKET_FLAGS_HOP_START_MASK) |
+                   PACKET_FLAGS_VIA_MQTT_MASK;
+    if (packet.want_ack)
+    {
+        header.flags |= PACKET_FLAGS_WANT_ACK_MASK;
+    }
+    header.channel = (packet.which_payload_variant == meshtastic_MeshPacket_encrypted_tag)
+                         ? packet.channel
+                         : channel_hash;
+    if (header.channel == 0 && packet.which_payload_variant != meshtastic_MeshPacket_encrypted_tag)
+    {
+        header.channel = channel_hash;
+    }
+    header.next_hop = packet.next_hop;
+    header.relay_node = packet.relay_node;
+
+    uint8_t wire_buffer[sizeof(PacketHeaderWire) + 256];
+    size_t wire_size = sizeof(PacketHeaderWire);
+    memcpy(wire_buffer, &header, sizeof(header));
+
+    if (packet.which_payload_variant == meshtastic_MeshPacket_encrypted_tag)
+    {
+        size_t payload_size = std::min(static_cast<size_t>(packet.encrypted.size), sizeof(packet.encrypted.bytes));
+        if (wire_size + payload_size > sizeof(wire_buffer))
+        {
+            return false;
+        }
+        memcpy(wire_buffer + wire_size, packet.encrypted.bytes, payload_size);
+        wire_size += payload_size;
+    }
+    else
+    {
+        meshtastic_Data decoded = packet.decoded;
+        decoded.dest = packet.to;
+        decoded.source = packet.from;
+        decoded.has_bitfield = true;
+        uint8_t data_buffer[256];
+        pb_ostream_t dstream = pb_ostream_from_buffer(data_buffer, sizeof(data_buffer));
+        if (!pb_encode(&dstream, meshtastic_Data_fields, &decoded))
+        {
+            return false;
+        }
+        const uint8_t* psk = nullptr;
+        size_t psk_len = 0;
+        if (channel_hash == secondary_channel_hash_)
+        {
+            psk = secondary_psk_;
+            psk_len = secondary_psk_len_;
+        }
+        else if (channel_hash == primary_channel_hash_)
+        {
+            psk = primary_psk_;
+            psk_len = primary_psk_len_;
+        }
+        uint8_t rebuilt[sizeof(wire_buffer)];
+        size_t rebuilt_size = sizeof(rebuilt);
+        if (!buildWirePacket(data_buffer, dstream.bytes_written, packet.from, packet.id,
+                             packet.to, channel_hash, packet.hop_limit, packet.want_ack,
+                             psk, psk_len, rebuilt, &rebuilt_size))
+        {
+            return false;
+        }
+        if (rebuilt_size > sizeof(wire_buffer))
+        {
+            return false;
+        }
+        memcpy(wire_buffer, rebuilt, rebuilt_size);
+        wire_size = rebuilt_size;
+        auto* rebuilt_header = reinterpret_cast<PacketHeaderWire*>(wire_buffer);
+        rebuilt_header->flags |= PACKET_FLAGS_VIA_MQTT_MASK;
+        if (packet.hop_start != 0)
+        {
+            rebuilt_header->flags &= ~PACKET_FLAGS_HOP_START_MASK;
+            rebuilt_header->flags |= ((packet.hop_start << PACKET_FLAGS_HOP_START_SHIFT) &
+                                      PACKET_FLAGS_HOP_START_MASK);
+        }
+        rebuilt_header->next_hop = packet.next_hop;
+        rebuilt_header->relay_node = packet.relay_node;
+    }
+
+    LORA_LOG("[MQTT] downlink inject topic_ch='%s' gateway='%s' from=%08lX to=%08lX id=%08lX\n",
+             channel_id ? channel_id : "",
+             gateway_id ? gateway_id : "",
+             (unsigned long)packet.from,
+             (unsigned long)packet.to,
+             (unsigned long)packet.id);
+    processReceivedPacket(wire_buffer, wire_size);
+    return true;
+}
+
+bool MtAdapter::handleMqttProxyMessage(const meshtastic_MqttClientProxyMessage& msg)
+{
+    if (!mqtt_proxy_settings_.enabled || !mqtt_proxy_settings_.proxy_to_client_enabled)
+    {
+        return false;
+    }
+    if (msg.which_payload_variant != meshtastic_MqttClientProxyMessage_data_tag)
+    {
+        return false;
+    }
+
+    const auto* data_field = &msg.payload_variant.data;
+    if (!data_field || data_field->size == 0)
+    {
+        return false;
+    }
+
+    meshtastic_MeshPacket packet = meshtastic_MeshPacket_init_zero;
+    char channel_id[32] = {0};
+    char gateway_id[16] = {0};
+    if (!decodeMqttServiceEnvelope(data_field->bytes, data_field->size,
+                                   &packet,
+                                   channel_id, sizeof(channel_id),
+                                   gateway_id, sizeof(gateway_id)))
+    {
+        LORA_LOG("[MQTT] downlink decode fail topic='%s' len=%u\n",
+                 msg.topic,
+                 static_cast<unsigned>(data_field->size));
+        return false;
+    }
+    return injectMqttEnvelope(packet, channel_id, gateway_id);
+}
+
+bool MtAdapter::queueMqttProxyPublish(const meshtastic_MeshPacket& packet,
+                                      const char* channel_id)
+{
+    if (!mqtt_proxy_settings_.enabled || !mqtt_proxy_settings_.proxy_to_client_enabled ||
+        !channel_id || *channel_id == '\0')
+    {
+        return false;
+    }
+
+    uint8_t env_buf[435];
+    meshtastic_MeshPacket packet_copy = packet;
+    std::string node_id = mqttNodeIdString();
+    meshtastic_ServiceEnvelope env = meshtastic_ServiceEnvelope_init_zero;
+    env.packet = &packet_copy;
+    env.channel_id = const_cast<char*>(channel_id);
+    env.gateway_id = const_cast<char*>(node_id.c_str());
+
+    pb_ostream_t estream = pb_ostream_from_buffer(env_buf, sizeof(env_buf));
+    if (!pb_encode(&estream, meshtastic_ServiceEnvelope_fields, &env))
+    {
+        LORA_LOG("[MQTT] uplink encode fail ch='%s' err=%s\n",
+                 channel_id,
+                 PB_GET_ERROR(&estream));
+        return false;
+    }
+
+    meshtastic_MqttClientProxyMessage proxy = meshtastic_MqttClientProxyMessage_init_zero;
+    proxy.which_payload_variant = meshtastic_MqttClientProxyMessage_data_tag;
+    std::string root = mqtt_proxy_settings_.root.empty() ? std::string("msh") : mqtt_proxy_settings_.root;
+    std::string topic = root + "/2/e/" + channel_id + "/" + node_id;
+    strncpy(proxy.topic, topic.c_str(), sizeof(proxy.topic) - 1);
+    proxy.topic[sizeof(proxy.topic) - 1] = '\0';
+    proxy.payload_variant.data.size = static_cast<pb_size_t>(estream.bytes_written);
+    memcpy(proxy.payload_variant.data.bytes, env_buf, estream.bytes_written);
+    proxy.retained = false;
+
+    while (mqtt_proxy_queue_.size() >= kMaxMqttProxyQueue)
+    {
+        mqtt_proxy_queue_.pop();
+    }
+    mqtt_proxy_queue_.push(proxy);
+    LORA_LOG("[MQTT] uplink queue topic='%s' bytes=%u q=%u\n",
+             proxy.topic,
+             static_cast<unsigned>(proxy.payload_variant.data.size),
+             static_cast<unsigned>(mqtt_proxy_queue_.size()));
+    return true;
+}
+
+bool MtAdapter::queueMqttProxyPublishFromWire(const uint8_t* wire_data,
+                                              size_t wire_size,
+                                              const meshtastic_Data* decoded,
+                                              ChannelId channel_index)
+{
+    if (!wire_data || wire_size < sizeof(PacketHeaderWire))
+    {
+        return false;
+    }
+
+    PacketHeaderWire header{};
+    uint8_t payload[256];
+    size_t payload_size = sizeof(payload);
+    if (!parseWirePacket(wire_data, wire_size, &header, payload, &payload_size))
+    {
+        return false;
+    }
+
+    const bool from_mqtt = (header.flags & PACKET_FLAGS_VIA_MQTT_MASK) != 0;
+    const bool is_pki = (header.channel == 0);
+    if (!shouldPublishToMqtt(channel_index, from_mqtt, is_pki))
+    {
+        return false;
+    }
+
+    const char* channel_id = is_pki ? "PKI" : mqttChannelIdFor(channel_index);
+    if (!channel_id || *channel_id == '\0')
+    {
+        return false;
+    }
+
+    if (mqtt_proxy_settings_.encryption_enabled)
+    {
+        meshtastic_MeshPacket encrypted_packet = meshtastic_MeshPacket_init_zero;
+        if (!makeEncryptedPacketFromWire(wire_data, wire_size, &encrypted_packet))
+        {
+            return false;
+        }
+        return queueMqttProxyPublish(encrypted_packet, channel_id);
+    }
+
+    if (!decoded)
+    {
+        return false;
+    }
+
+    meshtastic_MeshPacket decoded_packet = meshtastic_MeshPacket_init_zero;
+    fillDecodedPacketCommon(&decoded_packet, *decoded, header, channel_index);
+    return queueMqttProxyPublish(decoded_packet, channel_id);
 }
 
 void MtAdapter::applyConfig(const MeshConfig& config)
@@ -1051,11 +1836,6 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     }
     LORA_LOG("[LORA] RX channel kind=%s hash=0x%02X\n", channel_kind, header.channel);
     LORA_LOG("[LORA] RX full packet hex: %s\n", full_hex.c_str());
-    if (header.from == node_id_)
-    {
-        LORA_LOG("[LORA] RX self drop id=%08lX\n", (unsigned long)header.id);
-        return;
-    }
 
     // Check for duplicates
     if (dedup_.isDuplicate(header.from, header.id))
@@ -1107,6 +1887,33 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     rx_meta.sf = radio_sf_;
     rx_meta.cr = radio_cr_;
 
+    if (header.from == node_id_)
+    {
+        auto pending_it = pending_ack_ms_.find(header.id);
+        if (header.to == 0xFFFFFFFF && pending_it != pending_ack_ms_.end())
+        {
+            ChannelId channel_id =
+                (header.channel == secondary_channel_hash_) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
+            uint32_t ack_from = (header.relay_node != 0) ? header.relay_node : node_id_;
+            LORA_LOG("[LORA] RX implicit ack via rebroadcast req=%08lX relay=%08lX\n",
+                     (unsigned long)header.id,
+                     (unsigned long)ack_from);
+            pending_ack_ms_.erase(pending_it);
+            pending_ack_dest_.erase(header.id);
+            emitRoutingResultToPhone(header.id,
+                                     meshtastic_Routing_Error_NONE,
+                                     ack_from,
+                                     node_id_,
+                                     channel_id,
+                                     header.channel,
+                                     &rx_meta);
+            return;
+        }
+
+        LORA_LOG("[LORA] RX self drop id=%08lX\n", (unsigned long)header.id);
+        return;
+    }
+
     // Decrypt payload if needed
     uint8_t plaintext[256];
     size_t plaintext_len = sizeof(plaintext);
@@ -1128,7 +1935,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                      (unsigned long)header.from,
                      (unsigned long)header.id,
                      (unsigned)payload_size);
-            sendNodeInfoTo(header.from, true);
+            sendNodeInfoTo(header.from, true, ChannelId::PRIMARY);
             sendRoutingError(header.from, header.id, primary_channel_hash_,
                              primary_psk_, primary_psk_len_,
                              meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
@@ -1226,6 +2033,15 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         }
 
         bool nodeinfo_decoded = false;
+        uint8_t channel_index = 0xFF;
+        if (header.channel == primary_channel_hash_)
+        {
+            channel_index = 0;
+        }
+        else if (header.channel == secondary_channel_hash_)
+        {
+            channel_index = 1;
+        }
         auto publish_link_stats = [&](uint32_t node_id)
         {
             float snr = last_rx_snr_;
@@ -1239,7 +2055,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                 node_id, "", "", snr, rssi, now_secs, 0,
                 chat::contacts::kNodeRoleUnknown,
-                hops_away);
+                hops_away, 0, channel_index);
             sys::EventBus::publish(event, 0);
         };
 
@@ -1290,7 +2106,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                     node_id, short_name, long_name, snr, rssi, now_secs,
                     static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                    hops_away);
+                    hops_away, static_cast<uint8_t>(node.user.hw_model), channel_index);
                 bool published = sys::EventBus::publish(event, 0);
                 if (published)
                 {
@@ -1350,7 +2166,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                         node_id, short_name, long_name, snr, rssi, now_secs,
                         static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                        hops_away, static_cast<uint8_t>(user.hw_model));
+                        hops_away, static_cast<uint8_t>(user.hw_model), channel_index);
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
@@ -1423,7 +2239,10 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                         (routing.error_reason == meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY ||
                          routing.error_reason == meshtastic_Routing_Error_NO_CHANNEL))
                     {
-                        sendNodeInfoTo(header.from, true);
+                        sendNodeInfoTo(header.from, true,
+                                       (header.channel == secondary_channel_hash_)
+                                           ? ChannelId::SECONDARY
+                                           : ChannelId::PRIMARY);
                         LORA_LOG("[LORA] TX nodeinfo after routing err from=%08lX reason=%s\n",
                                  (unsigned long)header.from,
                                  routingErrorName(routing.error_reason));
@@ -1507,19 +2326,21 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         {
             node_last_channel_[header.from] = channel_id;
         }
-        if ((want_ack_flag || want_response) && to_us && is_text_port)
+        if (want_ack_flag && to_us)
         {
             if (sendRoutingAck(header.from, header.id, header.channel, psk, psk_len))
             {
-                LORA_LOG("[LORA] TX ack to=%08lX req=%08lX\n",
+                LORA_LOG("[LORA] TX ack to=%08lX req=%08lX port=%u\n",
                          (unsigned long)header.from,
-                         (unsigned long)header.id);
+                         (unsigned long)header.id,
+                         static_cast<unsigned>(decoded.portnum));
             }
             else
             {
-                LORA_LOG("[LORA] TX ack fail to=%08lX req=%08lX\n",
+                LORA_LOG("[LORA] TX ack fail to=%08lX req=%08lX port=%u\n",
                          (unsigned long)header.from,
-                         (unsigned long)header.id);
+                         (unsigned long)header.id,
+                         static_cast<unsigned>(decoded.portnum));
             }
         }
 
@@ -1541,7 +2362,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 nodeinfo_last_seen_ms_[header.from] = now_ms;
                 if (allow_reply)
                 {
-                    if (sendNodeInfoTo(header.from, false))
+                    if (sendNodeInfoTo(header.from, false, channel_id))
                     {
                         LORA_LOG("[LORA] TX nodeinfo reply to=%08lX\n",
                                  (unsigned long)header.from);
@@ -1592,6 +2413,8 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             }
         }
 
+        queueMqttProxyPublishFromWire(data, size, &decoded, channel_id);
+
         if (!is_text_port && decoded.payload.size > 0)
         {
             MeshIncomingData incoming;
@@ -1599,8 +2422,10 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             incoming.from = header.from;
             incoming.to = header.to;
             incoming.packet_id = header.id;
+            incoming.request_id = decoded.request_id;
             incoming.channel = channel_id;
             incoming.channel_hash = header.channel;
+            incoming.hop_limit = header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
             incoming.want_response = want_response;
             incoming.payload.assign(decoded.payload.bytes,
                                     decoded.payload.bytes + decoded.payload.size);
@@ -1666,13 +2491,14 @@ void MtAdapter::processSendQueue()
         {
             LORA_LOG("[LORA] RX ack timeout req=%08lX\n",
                      (unsigned long)it->first);
-            auto dest_it = pending_ack_dest_.find(it->first);
-            if (dest_it != pending_ack_dest_.end())
-            {
-                pending_ack_dest_.erase(dest_it);
-            }
-            sys::EventBus::publish(
-                new sys::ChatSendResultEvent(it->first, false), 0);
+            pending_ack_dest_.erase(it->first);
+            emitRoutingResultToPhone(it->first,
+                                     meshtastic_Routing_Error_MAX_RETRANSMIT,
+                                     node_id_,
+                                     node_id_,
+                                     ChannelId::PRIMARY,
+                                     primary_channel_hash_,
+                                     nullptr);
             it = pending_ack_ms_.erase(it);
             continue;
         }
@@ -1744,11 +2570,13 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     {
         return false;
     }
+    meshtastic_Data decoded = meshtastic_Data_init_default;
+    bool decoded_ok = false;
     {
-        meshtastic_Data decoded = meshtastic_Data_init_default;
         pb_istream_t stream = pb_istream_from_buffer(data_buffer, data_size);
         if (pb_decode(&stream, meshtastic_Data_fields, &decoded))
         {
+            decoded_ok = true;
             LORA_LOG("[LORA] TX data plain port=%u dest=%08lX src=%08lX req=%08lX want_resp=%u bitfield=%u has_bitfield=%u payload=%u\n",
                      (unsigned)decoded.portnum,
                      (unsigned long)decoded.dest,
@@ -1776,7 +2604,7 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
         (channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
     uint8_t hop_limit = config_.hop_limit;
     uint32_t dest = (pending.dest != 0) ? pending.dest : 0xFFFFFFFF;
-    bool want_ack = (dest != 0xFFFFFFFF);
+    bool want_ack = true;
 
     // Try PKI encryption for direct messages when key is known
     const uint8_t* payload = data_buffer;
@@ -1877,13 +2705,13 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     if (ok && want_ack)
     {
         pending_ack_ms_[pending.msg_id] = millis();
-        if (dest != 0xFFFFFFFF)
-        {
-            pending_ack_dest_[pending.msg_id] = dest;
-        }
+        pending_ack_dest_[pending.msg_id] = dest;
     }
     if (ok)
     {
+        queueMqttProxyPublishFromWire(wire_buffer, wire_size,
+                                      decoded_ok ? &decoded : nullptr,
+                                      channel);
         startRadioReceive();
     }
     return ok;
@@ -1896,10 +2724,10 @@ bool MtAdapter::sendNodeInfo()
         return false;
     }
 
-    return sendNodeInfoTo(0xFFFFFFFF, false);
+    return sendNodeInfoTo(0xFFFFFFFF, false, ChannelId::PRIMARY);
 }
 
-bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
+bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response, ChannelId channel)
 {
     uint8_t data_buffer[256];
     size_t data_size = sizeof(data_buffer);
@@ -1967,18 +2795,24 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response)
     uint8_t wire_buffer[512];
     size_t wire_size = sizeof(wire_buffer);
 
-    uint8_t channel_hash = primary_channel_hash_;
+    uint8_t channel_hash =
+        (channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
     uint8_t hop_limit = config_.hop_limit;
     bool want_ack = want_response && (dest != 0xFFFFFFFF);
+    const uint8_t* psk =
+        (channel == ChannelId::SECONDARY) ? secondary_psk_ : primary_psk_;
+    size_t psk_len =
+        (channel == ChannelId::SECONDARY) ? secondary_psk_len_ : primary_psk_len_;
 
     if (!buildWirePacket(data_buffer, data_size, node_id_, next_packet_id_++,
                          dest, channel_hash, hop_limit, want_ack,
-                         primary_psk_, primary_psk_len_, wire_buffer, &wire_size))
+                         psk, psk_len, wire_buffer, &wire_size))
     {
         return false;
     }
-    LORA_LOG("[LORA] TX nodeinfo wire ch=0x%02X hop=%u wire=%u\n",
+    LORA_LOG("[LORA] TX nodeinfo wire ch=0x%02X idx=%u hop=%u wire=%u\n",
              channel_hash,
+             (unsigned)(channel == ChannelId::SECONDARY ? 1 : 0),
              hop_limit,
              (unsigned)wire_size);
     std::string nodeinfo_full_hex = toHex(wire_buffer, wire_size, wire_size);
@@ -2584,7 +3418,7 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     if (it == node_public_keys_.end())
     {
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)from);
-        sendNodeInfoTo(from, true);
+        sendNodeInfoTo(from, true, ChannelId::PRIMARY);
         sendRoutingError(from, packet_id, primary_channel_hash_,
                          primary_psk_, primary_psk_len_,
                          meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
@@ -3242,6 +4076,71 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
         return true;
     }
     return false;
+}
+
+void MtAdapter::emitRoutingResultToPhone(uint32_t request_id,
+                                         meshtastic_Routing_Error reason,
+                                         uint32_t from,
+                                         uint32_t to,
+                                         ChannelId channel,
+                                         uint8_t channel_hash,
+                                         const chat::RxMeta* rx_meta)
+{
+    if (request_id == 0)
+    {
+        return;
+    }
+
+    meshtastic_Routing routing = meshtastic_Routing_init_default;
+    routing.which_variant = meshtastic_Routing_error_reason_tag;
+    routing.error_reason = reason;
+
+    uint8_t routing_buf[32];
+    pb_ostream_t rstream = pb_ostream_from_buffer(routing_buf, sizeof(routing_buf));
+    if (!pb_encode(&rstream, meshtastic_Routing_fields, &routing))
+    {
+        LORA_LOG("[LORA] synthetic routing encode fail req=%08lX\n",
+                 (unsigned long)request_id);
+        return;
+    }
+
+    MeshIncomingData incoming;
+    incoming.portnum = meshtastic_PortNum_ROUTING_APP;
+    incoming.from = from;
+    incoming.to = to;
+    incoming.packet_id = 0;
+    incoming.request_id = request_id;
+    incoming.channel = channel;
+    incoming.channel_hash = channel_hash;
+    incoming.hop_limit = rx_meta ? rx_meta->hop_limit : 0;
+    incoming.want_response = false;
+    incoming.payload.assign(routing_buf, routing_buf + rstream.bytes_written);
+
+    if (rx_meta)
+    {
+        incoming.rx_meta = *rx_meta;
+    }
+    else
+    {
+        incoming.rx_meta.rx_timestamp_ms = millis();
+        incoming.rx_meta.rx_timestamp_s = incoming.rx_meta.rx_timestamp_ms / 1000U;
+        incoming.rx_meta.time_source = chat::RxTimeSource::Uptime;
+        incoming.rx_meta.origin = chat::RxOrigin::Mesh;
+        incoming.rx_meta.channel_hash = channel_hash;
+    }
+
+    if (app_receive_queue_.size() < MAX_APP_QUEUE)
+    {
+        app_receive_queue_.push(incoming);
+    }
+    else
+    {
+        LORA_LOG("[LORA] synthetic routing drop req=%08lX queue full\n",
+                 (unsigned long)request_id);
+    }
+
+    sys::EventBus::publish(
+        new sys::ChatSendResultEvent(request_id, reason == meshtastic_Routing_Error_NONE), 0);
 }
 
 } // namespace meshtastic

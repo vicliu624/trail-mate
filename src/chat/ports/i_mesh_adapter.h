@@ -63,11 +63,15 @@ class IMeshAdapter
      * @param len Payload length
      * @param dest Destination node (0 for broadcast)
      * @param want_ack Request ACK if supported
+     * @param packet_id Optional packet id hint (0 = auto)
+     * @param want_response Request app-level response if supported
      * @return true if queued successfully
      */
     virtual bool sendAppData(ChannelId channel, uint32_t portnum,
                              const uint8_t* payload, size_t len,
-                             NodeId dest = 0, bool want_ack = false) = 0;
+                             NodeId dest = 0, bool want_ack = false,
+                             MessageId packet_id = 0,
+                             bool want_response = false) = 0;
 
     /**
      * @brief Poll for incoming app payload data

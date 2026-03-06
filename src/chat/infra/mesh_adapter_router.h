@@ -25,6 +25,8 @@ class MeshAdapterRouter : public IMeshAdapter
     bool installBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend);
     bool hasBackend() const;
     MeshProtocol backendProtocol() const;
+    IMeshAdapter* backendForProtocol(MeshProtocol protocol);
+    const IMeshAdapter* backendForProtocol(MeshProtocol protocol) const;
 
     MeshCapabilities getCapabilities() const override;
     bool sendText(ChannelId channel, const std::string& text,
@@ -32,7 +34,9 @@ class MeshAdapterRouter : public IMeshAdapter
     bool pollIncomingText(MeshIncomingText* out) override;
     bool sendAppData(ChannelId channel, uint32_t portnum,
                      const uint8_t* payload, size_t len,
-                     NodeId dest = 0, bool want_ack = false) override;
+                     NodeId dest = 0, bool want_ack = false,
+                     MessageId packet_id = 0,
+                     bool want_response = false) override;
     bool pollIncomingData(MeshIncomingData* out) override;
     bool requestNodeInfo(NodeId dest, bool want_response) override;
     bool startKeyVerification(NodeId dest) override;

@@ -17,7 +17,7 @@ static constexpr const char* kPersistNodesNs = "nodes";
 static constexpr const char* kPersistNodesKey = "node_blob";
 static constexpr const char* kPersistNodesKeyVer = "ver";
 static constexpr const char* kPersistNodesKeyCrc = "crc";
-static constexpr uint8_t kPersistVersion = 4;
+static constexpr uint8_t kPersistVersion = 5;
 
 struct PersistedNodeEntry
 {
@@ -31,9 +31,10 @@ struct PersistedNodeEntry
     uint8_t role;
     uint8_t hops_away;
     uint8_t hw_model;
+    uint8_t channel;
 } __attribute__((packed));
 
-static_assert(sizeof(PersistedNodeEntry) == 62, "PersistedNodeEntry size changed");
+static_assert(sizeof(PersistedNodeEntry) == 63, "PersistedNodeEntry size changed");
 
 } // namespace meshtastic
 } // namespace chat

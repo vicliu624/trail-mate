@@ -4,9 +4,9 @@
  */
 
 #include "app_context.h"
-#include "../chat/infra/protocol_factory.h"
-#include "../chat/infra/meshtastic/mt_region.h"
 #include "../chat/infra/meshcore/mc_region_presets.h"
+#include "../chat/infra/meshtastic/mt_region.h"
+#include "../chat/infra/protocol_factory.h"
 #include "../gps/usecase/gps_service.h"
 #include "../gps/usecase/track_recorder.h"
 #include "../hostlink/hostlink_bridge_radio.h"
@@ -581,7 +581,8 @@ void AppContext::update()
                     node_event->protocol,
                     node_event->role,
                     node_event->hops_away,
-                    node_event->hw_model);
+                    node_event->hw_model,
+                    node_event->channel);
             }
             // Don't forward to UI - this is handled by ContactService
             delete event;
@@ -733,49 +734,41 @@ chat::NodeId AppContext::getSelfNodeId() const
         return cached_id;
     }
 
-    // First try to load a persisted node_id so IDs are stable across firmware updates
-    uint32_t stored_id = 0;
-    {
-        Preferences prefs;
-        prefs.begin("chat", true);
-        stored_id = prefs.getUInt("node_id", 0);
-        prefs.end();
-    }
-    if (stored_id != 0)
-    {
-        cached_id = stored_id;
-        return cached_id;
-    }
-
-    // Derive a new node id from the chip's unique MAC address.
-    uint64_t mac = 0;
-#if __has_include(<Arduino.h>)
-    mac = ESP.getEfuseMac();
-#else
+    // Derive the canonical node id from the last 4 MAC bytes in byte order.
+    // This must stay aligned with Meshtastic/MeshCore radio adapters, otherwise
+    // BLE-reported self node ID and on-air node ID diverge.
     uint8_t mac_bytes[6] = {};
-    if (esp_efuse_mac_get_default(mac_bytes) == ESP_OK)
+#if __has_include(<Arduino.h>)
+    const uint64_t raw = ESP.getEfuseMac();
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(&raw);
+    for (size_t i = 0; i < 6; ++i)
     {
-        mac = (static_cast<uint64_t>(mac_bytes[0]) << 40) |
-              (static_cast<uint64_t>(mac_bytes[1]) << 32) |
-              (static_cast<uint64_t>(mac_bytes[2]) << 24) |
-              (static_cast<uint64_t>(mac_bytes[3]) << 16) |
-              (static_cast<uint64_t>(mac_bytes[4]) << 8) |
-              (static_cast<uint64_t>(mac_bytes[5]));
+        mac_bytes[i] = p[i];
     }
+#else
+    (void)esp_efuse_mac_get_default(mac_bytes);
 #endif
 
-    uint32_t node_id = static_cast<uint32_t>(mac & 0xFFFFFFFFu);
+    uint32_t node_id = (static_cast<uint32_t>(mac_bytes[2]) << 24) |
+                       (static_cast<uint32_t>(mac_bytes[3]) << 16) |
+                       (static_cast<uint32_t>(mac_bytes[4]) << 8) |
+                       (static_cast<uint32_t>(mac_bytes[5]) << 0);
     if (node_id == 0)
     {
         node_id = 1;
     }
 
+    // Migrate any previously persisted legacy ID to the canonical radio-aligned ID.
     {
         Preferences prefs;
         prefs.begin("chat", false);
-        prefs.putUInt("node_id", node_id);
+        if (prefs.getUInt("node_id", 0) != node_id)
+        {
+            prefs.putUInt("node_id", node_id);
+        }
         prefs.end();
     }
+
     cached_id = node_id;
     return cached_id;
 }

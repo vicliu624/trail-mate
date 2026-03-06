@@ -70,6 +70,26 @@ MeshProtocol MeshAdapterRouter::backendProtocol() const
     return backend_protocol_;
 }
 
+IMeshAdapter* MeshAdapterRouter::backendForProtocol(MeshProtocol protocol)
+{
+    LockGuard lock(mutex_);
+    if (!lock.locked() || !backend_ || backend_protocol_ != protocol)
+    {
+        return nullptr;
+    }
+    return backend_.get();
+}
+
+const IMeshAdapter* MeshAdapterRouter::backendForProtocol(MeshProtocol protocol) const
+{
+    LockGuard lock(mutex_);
+    if (!lock.locked() || !backend_ || backend_protocol_ != protocol)
+    {
+        return nullptr;
+    }
+    return backend_.get();
+}
+
 MeshCapabilities MeshAdapterRouter::getCapabilities() const
 {
     LockGuard lock(mutex_);
@@ -95,11 +115,14 @@ bool MeshAdapterRouter::pollIncomingText(MeshIncomingText* out)
 
 bool MeshAdapterRouter::sendAppData(ChannelId channel, uint32_t portnum,
                                     const uint8_t* payload, size_t len,
-                                    NodeId dest, bool want_ack)
+                                    NodeId dest, bool want_ack,
+                                    MessageId packet_id,
+                                    bool want_response)
 {
     LockGuard lock(mutex_);
     return lock.locked() && backend_ &&
-           backend_->sendAppData(channel, portnum, payload, len, dest, want_ack);
+           backend_->sendAppData(channel, portnum, payload, len, dest, want_ack,
+                                 packet_id, want_response);
 }
 
 bool MeshAdapterRouter::pollIncomingData(MeshIncomingData* out)

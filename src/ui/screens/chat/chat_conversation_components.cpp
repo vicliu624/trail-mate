@@ -37,6 +37,7 @@ namespace ui
 namespace
 {
 constexpr lv_coord_t kBubbleMaxWidth = 322; // same as original
+constexpr lv_coord_t kBubblePadX = 10;      // keep in sync with styles.cpp
 constexpr lv_coord_t kTeamLocationIconSize = 24;
 constexpr uint32_t kSecondsPerDay = 24U * 60U * 60U;
 constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
@@ -485,8 +486,20 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     }
 
     item.text_label = chat::ui::layout::create_bubble_text(bubble);
-    lv_label_set_text(item.text_label, display_text.c_str());
     chat::ui::conversation::styles::apply_bubble_text(item.text_label);
+    lv_label_set_text(item.text_label, display_text.c_str());
+
+    const lv_coord_t max_text_w = std::max<lv_coord_t>(max_bubble_w - 2 * kBubblePadX, 24);
+    lv_obj_update_layout(item.text_label);
+    const lv_coord_t natural_text_w = lv_obj_get_width(item.text_label);
+    if (natural_text_w > max_text_w)
+    {
+        lv_obj_set_width(item.text_label, max_text_w);
+    }
+    else
+    {
+        lv_obj_set_width(item.text_label, LV_SIZE_CONTENT);
+    }
 
     item.status_label = chat::ui::layout::create_bubble_status(bubble);
     chat::ui::conversation::styles::apply_bubble_status(item.status_label);

@@ -1,17 +1,18 @@
 #include "meshcore_ble.h"
 
-#include "ble_uuids.h"
-#include <Arduino.h>
 #include "../board/BoardBase.h"
 #include "../chat/domain/contact_types.h"
+#include "../chat/infra/mesh_adapter_router.h"
 #include "../chat/infra/meshcore/meshcore_adapter.h"
+#include "ble_uuids.h"
+#include <Arduino.h>
 #include <Preferences.h>
 #include <algorithm>
-#include <ctime>
 #include <cstring>
+#include <ctime>
 #include <limits>
-#include <sys/time.h>
 #include <string>
+#include <sys/time.h>
 
 namespace
 {
@@ -232,6 +233,9 @@ class MeshCoreServerCallbacks : public NimBLEServerCallbacks
         owner_.connected_ = false;
         owner_.outbound_.clear();
         owner_.rx_queue_.clear();
+        owner_.startAdvertising();
+        Serial.printf("[BLE][meshcore] disconnected; advertising restarted uuid=%s\n",
+                      NUS_SERVICE_UUID);
     }
 
   private:
@@ -249,6 +253,32 @@ MeshCoreBleService::MeshCoreBleService(app::AppContext& ctx, const std::string& 
 MeshCoreBleService::~MeshCoreBleService()
 {
     stop();
+}
+
+chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter()
+{
+    auto* adapter = ctx_.getMeshAdapter();
+    if (!adapter || ctx_.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    {
+        return nullptr;
+    }
+
+    auto* router = static_cast<chat::MeshAdapterRouter*>(adapter);
+    auto* backend = router->backendForProtocol(chat::MeshProtocol::MeshCore);
+    return static_cast<chat::meshcore::MeshCoreAdapter*>(backend);
+}
+
+const chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter() const
+{
+    const auto* adapter = ctx_.getMeshAdapter();
+    if (!adapter || ctx_.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    {
+        return nullptr;
+    }
+
+    const auto* router = static_cast<const chat::MeshAdapterRouter*>(adapter);
+    const auto* backend = router->backendForProtocol(chat::MeshProtocol::MeshCore);
+    return static_cast<const chat::meshcore::MeshCoreAdapter*>(backend);
 }
 
 void MeshCoreBleService::start()
@@ -291,7 +321,7 @@ void MeshCoreBleService::stop()
 void MeshCoreBleService::update()
 {
     handleIncomingFrames();
-    auto* adapter = static_cast<chat::meshcore::MeshCoreAdapter*>(ctx_.getMeshAdapter());
+    auto* adapter = meshCoreAdapter();
     if (adapter)
     {
         const uint32_t now_ms = millis();
@@ -307,7 +337,8 @@ void MeshCoreBleService::update()
         }
 
         auto fillPrefix = [&](uint8_t peer_hash, chat::NodeId peer_node,
-                              uint8_t out_prefix[kPubKeyPrefixSize]) {
+                              uint8_t out_prefix[kPubKeyPrefixSize])
+        {
             memset(out_prefix, 0, kPubKeyPrefixSize);
             chat::meshcore::MeshCoreAdapter::PeerInfo peer{};
             if (adapter->lookupPeerByHash(peer_hash, &peer) && peer.has_pubkey)
@@ -328,7 +359,8 @@ void MeshCoreBleService::update()
         };
 
         auto fillPubkey = [&](uint8_t peer_hash, chat::NodeId peer_node,
-                              uint8_t out_pubkey[kPubKeySize]) {
+                              uint8_t out_pubkey[kPubKeySize])
+        {
             memset(out_pubkey, 0, kPubKeySize);
             chat::meshcore::MeshCoreAdapter::PeerInfo peer{};
             if (adapter->lookupPeerByHash(peer_hash, &peer) && peer.has_pubkey)
@@ -655,7 +687,8 @@ void MeshCoreBleService::onIncomingText(const chat::MeshIncomingText& msg)
     Frame frame;
     int i = 0;
     const bool use_v3 = (app_target_ver_ >= 3);
-    auto encodeSnrQdb = [](int16_t snr_x10) -> int8_t {
+    auto encodeSnrQdb = [](int16_t snr_x10) -> int8_t
+    {
         if (snr_x10 == std::numeric_limits<int16_t>::min())
         {
             return 0;
@@ -696,7 +729,7 @@ void MeshCoreBleService::onIncomingText(const chat::MeshIncomingText& msg)
             frame.buf[i++] = 0;
         }
         uint8_t prefix[kPubKeyPrefixSize] = {};
-        auto* adapter = static_cast<chat::meshcore::MeshCoreAdapter*>(ctx_.getMeshAdapter());
+        auto* adapter = meshCoreAdapter();
         chat::meshcore::MeshCoreAdapter::PeerInfo peer{};
         if (adapter && adapter->lookupPeerByNodeId(msg.from, &peer) && peer.has_pubkey)
         {
@@ -756,9 +789,16 @@ void MeshCoreBleService::startAdvertising()
         return;
     }
     NimBLEAdvertising* adv = server_->getAdvertising();
-    adv->addServiceUUID(NUS_SERVICE_UUID);
+    const bool service_ok = adv->addServiceUUID(NUS_SERVICE_UUID);
     adv->enableScanResponse(true);
-    adv->start();
+    const bool name_ok = adv->setName(device_name_);
+    const bool start_ok = adv->start();
+    Serial.printf("[BLE][meshcore] advertising uuid=%s name=%s service_ok=%u name_ok=%u start_ok=%u\n",
+                  NUS_SERVICE_UUID,
+                  device_name_.c_str(),
+                  service_ok ? 1U : 0U,
+                  name_ok ? 1U : 0U,
+                  start_ok ? 1U : 0U);
 }
 
 void MeshCoreBleService::handleIncomingFrames()
@@ -784,15 +824,17 @@ void MeshCoreBleService::handleCmdFrame(size_t len)
     }
 
     const uint8_t cmd = cmd_frame_[0];
-    auto* adapter = static_cast<chat::meshcore::MeshCoreAdapter*>(ctx_.getMeshAdapter());
+    auto* adapter = meshCoreAdapter();
     auto& cfg = ctx_.getConfig();
 
-    auto writeOk = [&]() {
+    auto writeOk = [&]()
+    {
         uint8_t code = RESP_CODE_OK;
         enqueueFrame(&code, 1);
     };
 
-    auto writeErr = [&](uint8_t err) {
+    auto writeErr = [&](uint8_t err)
+    {
         uint8_t buf[2] = {RESP_CODE_ERR, err};
         enqueueFrame(buf, sizeof(buf));
     };
@@ -876,7 +918,7 @@ void MeshCoreBleService::handleCmdFrame(size_t len)
         }
         int i = 1;
         uint8_t txt_type = cmd_frame_[i++];
-        i++; // attempt
+        i++;    // attempt
         i += 4; // timestamp
         uint8_t* pub_prefix = &cmd_frame_[i];
         i += 6;
@@ -2334,7 +2376,7 @@ bool MeshCoreBleService::resolveContactByPubkey(const uint8_t* pubkey,
             return true;
         }
     }
-    const auto* adapter = static_cast<const chat::meshcore::MeshCoreAdapter*>(ctx_.getMeshAdapter());
+    const auto* adapter = meshCoreAdapter();
     if (adapter)
     {
         chat::meshcore::MeshCoreAdapter::PeerInfo peer{};
@@ -2397,7 +2439,8 @@ void MeshCoreBleService::buildContactsSnapshot(uint32_t filter_since)
     contacts_frames_.clear();
     contacts_most_recent_ = 0;
 
-    auto add_contact_frame = [&](const ContactRecord& record, uint8_t code) {
+    auto add_contact_frame = [&](const ContactRecord& record, uint8_t code)
+    {
         Frame frame;
         int i = 0;
         frame.buf[i++] = code;
@@ -2437,7 +2480,7 @@ void MeshCoreBleService::buildContactsSnapshot(uint32_t filter_since)
         add_contact_frame(record, RESP_CODE_CONTACT);
     }
 
-    if (auto* adapter = static_cast<chat::meshcore::MeshCoreAdapter*>(ctx_.getMeshAdapter()))
+    if (auto* adapter = meshCoreAdapter())
     {
         std::vector<chat::meshcore::MeshCoreAdapter::PeerInfo> peers;
         adapter->getPeerInfos(peers);
@@ -2633,7 +2676,7 @@ bool MeshCoreBleService::lookupPeerByPrefix(const uint8_t* prefix, size_t len,
     {
         return false;
     }
-    const auto* adapter = static_cast<const chat::meshcore::MeshCoreAdapter*>(ctx_.getMeshAdapter());
+    const auto* adapter = meshCoreAdapter();
     if (!adapter)
     {
         return false;

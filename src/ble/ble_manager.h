@@ -5,7 +5,8 @@
 #include <memory>
 #include <string>
 
-namespace app {
+namespace app
+{
 class AppContext;
 }
 
@@ -41,7 +42,7 @@ class BleManager
 
     void restartService(chat::MeshProtocol protocol);
     void shutdownNimble();
-    std::string buildDeviceName() const;
+    std::string buildDeviceName(chat::MeshProtocol protocol) const;
 };
 
 } // namespace ble

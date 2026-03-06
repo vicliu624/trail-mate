@@ -112,7 +112,7 @@ void NodeStore::begin()
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
                        uint32_t now_secs, float snr, float rssi, uint8_t protocol, uint8_t role,
-                       uint8_t hops_away, uint8_t hw_model)
+                       uint8_t hops_away, uint8_t hw_model, uint8_t channel)
 {
     NODE_STORE_LOG("[NodeStore] upsert node=%08lX ts=%lu snr=%.1f rssi=%.1f\n",
                    (unsigned long)node_id,
@@ -159,6 +159,10 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
             {
                 e.hw_model = hw_model;
             }
+            if (channel != 0xFF)
+            {
+                e.channel = channel;
+            }
             dirty_ = true;
             maybeSave();
             return;
@@ -188,6 +192,7 @@ void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* lon
     e.protocol = protocol;
     e.role = (role != contacts::kNodeRoleUnknown) ? role : contacts::kNodeRoleUnknown;
     e.hw_model = hw_model;
+    e.channel = channel;
     entries_.push_back(e);
     dirty_ = true;
     maybeSave();
@@ -223,10 +228,29 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
     e.snr = std::numeric_limits<float>::quiet_NaN();
     e.rssi = std::numeric_limits<float>::quiet_NaN();
     e.hops_away = 0xFF;
+    e.channel = 0xFF;
     e.protocol = protocol;
     entries_.push_back(e);
     dirty_ = true;
     maybeSave();
+}
+
+bool NodeStore::remove(uint32_t node_id)
+{
+    for (auto it = entries_.begin(); it != entries_.end(); ++it)
+    {
+        if (it->node_id == node_id)
+        {
+            entries_.erase(it);
+            dirty_ = true;
+            save();
+            NODE_STORE_LOG("[NodeStore] remove node=%08lX remaining=%u\n",
+                           static_cast<unsigned long>(node_id),
+                           static_cast<unsigned>(entries_.size()));
+            return true;
+        }
+    }
+    return false;
 }
 
 void NodeStore::save()
@@ -267,6 +291,7 @@ void NodeStore::save()
             dst.role = src.role;
             dst.hops_away = src.hops_away;
             dst.hw_model = src.hw_model;
+            dst.channel = src.channel;
             persisted.push_back(dst);
         }
         size_t expected = persisted.size() * sizeof(PersistedNodeEntry);
@@ -429,6 +454,7 @@ bool NodeStore::loadFromNvs()
             dst.protocol = src.protocol;
             dst.role = src.role;
             dst.hw_model = src.hw_model;
+            dst.channel = src.channel;
             entries_.push_back(dst);
         }
     }
@@ -507,6 +533,7 @@ bool NodeStore::loadFromSd()
         dst.protocol = src.protocol;
         dst.role = src.role;
         dst.hw_model = src.hw_model;
+        dst.channel = src.channel;
         entries_.push_back(dst);
     }
     NODE_STORE_LOG("[NodeStore] loaded=%u (SD)\n", static_cast<unsigned>(entries_.size()));
@@ -555,6 +582,8 @@ bool NodeStore::saveToSd() const
         dst.protocol = src.protocol;
         dst.role = src.role;
         dst.hops_away = src.hops_away;
+        dst.hw_model = src.hw_model;
+        dst.channel = src.channel;
         persisted.push_back(dst);
     }
 

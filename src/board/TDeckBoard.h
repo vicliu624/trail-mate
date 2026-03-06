@@ -51,9 +51,9 @@ class TDeckBoard : public BoardBase,
     void setBrightness(uint8_t level) override;
     uint8_t getBrightness() override { return brightness_; }
 
-    bool hasKeyboard() override { return false; }
-    void keyboardSetBrightness(uint8_t level) override { keyboard_brightness_ = level; }
-    uint8_t keyboardGetBrightness() override { return keyboard_brightness_; }
+    bool hasKeyboard() override;
+    void keyboardSetBrightness(uint8_t level) override;
+    uint8_t keyboardGetBrightness() override;
 
     bool isRTCReady() const override;
     bool isCharging() override;
@@ -79,6 +79,7 @@ class TDeckBoard : public BoardBase,
     bool hasTouch() override { return touch_ready_; }
     uint8_t getPoint(int16_t* x, int16_t* y, uint8_t get_point) override;
     bool hasEncoder() override { return true; }
+    int getKeyChar(char* c) override;
     RotaryMsg_t getRotary() override;
 
     // LoraBoard
@@ -120,19 +121,26 @@ class TDeckBoard : public BoardBase,
     TDeckBoard();
     bool initPMU();
     bool initTouch();
+    bool initKeyboard();
     bool installSD();
     void uninstallSD();
+    bool sendKeyboardCommand(uint8_t cmd, uint8_t value);
+    int readKeyboardByte();
+    static char translateKeyboardByte(uint8_t value);
 
   private:
     uint32_t devices_probe_ = 0;
     uint8_t brightness_ = 8;
-    uint8_t keyboard_brightness_ = 0;
+    uint8_t keyboard_brightness_ = 127;
     uint8_t rotation_ = 0;
     bool pmu_ready_ = false;
     bool rtc_ready_ = false;
     bool sd_ready_ = false;
     bool display_ready_ = false;
     bool touch_ready_ = false;
+    bool keyboard_ready_ = false;
+    bool keyboard_pending_release_ = false;
+    char keyboard_last_char_ = '\0';
     int last_battery_level_ = -1;
     uint8_t battery_zero_streak_ = 0;
     uint32_t boot_ms_ = 0;

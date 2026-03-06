@@ -18,6 +18,7 @@ namespace app
 {
 class AppContext;
 }
+#include "../ble/ble_manager.h"
 #include "../board/BoardBase.h"
 #include "../board/GpsBoard.h"
 #include "../board/LoraBoard.h"
@@ -34,7 +35,6 @@ class AppContext;
 #include "../chat/ports/i_node_store.h"
 #include "../team/usecase/team_track_sampler.h"
 #include "../ui/ui_controller.h"
-#include "../ble/ble_manager.h"
 #include "app_config.h"
 #include <cstddef>
 #include <memory>

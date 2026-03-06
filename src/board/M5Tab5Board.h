@@ -3,8 +3,8 @@
 #include "BoardBase.h"
 #include "GpsBoard.h"
 #include "LoraBoard.h"
-#include "SdBoard.h"
 #include "MotionBoard.h"
+#include "SdBoard.h"
 #include "display/DisplayInterface.h"
 
 // Minimal M5Stack Tab5 board integration.
@@ -104,4 +104,3 @@ class M5Tab5Board : public BoardBase,
     bool sd_ready_ = false;
     bool gps_ready_ = false;
 };
-

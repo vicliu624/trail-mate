@@ -14,4 +14,3 @@ void init_virtual_keys(lv_obj_t* root);
 } // namespace ui::tab5
 
 #endif // ARDUINO_M5STACK_TAB5
-
