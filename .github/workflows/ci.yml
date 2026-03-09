@@ -21,8 +21,8 @@ jobs:
       - name: Verify formatting
         run: |
           clang-format-14 --version
-          git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' ':(exclude)src/chat/infra/meshtastic/generated/*' \
-            ':(exclude)src/ui/assets/**' \
+          git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' ':(exclude)modules/core_chat/generated/**' \
+            ':(exclude)modules/ui_shared/src/ui/assets/**' \
             | xargs -0 clang-format-14 --dry-run --Werror
 
   build:

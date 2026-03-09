@@ -1,0 +1,24 @@
+{
+    "name":  "core_chat",
+    "version":  "0.1.0",
+    "build":  {
+                  "includeDir":  "include",
+                  "srcDir":  ".",
+                  "srcFilter":  "+\u003csrc/\u003e +\u003cgenerated/\u003e +\u003cthird_party/nanopb/\u003e",
+                  "flags":  [
+                                "-I../core_sys/include",
+                                "-I../core_gps/include",
+                                "-I../core_team/include",
+                                "-Igenerated",
+                                "-Ithird_party/nanopb"
+                            ]
+              },
+    "dependencies":  [
+                         {
+                             "name":  "core_sys"
+                         },
+                         {
+                             "name":  "Crypto"
+                         }
+                     ]
+}

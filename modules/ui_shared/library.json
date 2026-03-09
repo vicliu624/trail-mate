@@ -1,0 +1,22 @@
+{
+    "name":  "ui_shared",
+    "version":  "0.1.0",
+    "build":  {
+                  "includeDir":  "include",
+                  "srcDir":  "src",
+                  "flags":  [
+                                "-I../../modules/core_sys/include",
+                                "-I../../modules/core_chat/include",
+                                "-I../../modules/core_gps/include",
+                                "-I../../modules/core_hostlink/include",
+                                "-I../../modules/core_team/include",
+                                "-I../../platform/esp/arduino_common/include",
+                                "-I../../platform/esp/boards/include"
+                            ]
+              },
+    "dependencies":  [
+                         {
+                             "name":  "Preferences"
+                         }
+                     ]
+}

@@ -107,10 +107,10 @@
 
 ## 7. 代码参考
 
-- 地图源与后缀映射：`src/ui/widgets/map/map_tiles.cpp`
-- 底图路径构造：`src/ui/widgets/map/map_tiles.cpp`
-- 等高线路径构造与 profile 选择：`src/ui/widgets/map/map_tiles.cpp`
-- 缩放范围：`src/ui/screens/gps/gps_constants.h`
-- Route 列表目录：`src/ui/screens/tracker/tracker_page_components.cpp`
-- Track 列表目录：`src/ui/screens/gps/gps_tracker_overlay.cpp`
+- 地图源与后缀映射：`platform/esp/arduino_common/src/ui/widgets/map/map_tiles.cpp`
+- 底图路径构造：`platform/esp/arduino_common/src/ui/widgets/map/map_tiles.cpp`
+- 等高线路径构造与 profile 选择：`platform/esp/arduino_common/src/ui/widgets/map/map_tiles.cpp`
+- 缩放范围：`platform/esp/arduino_common/include/ui/screens/gps/gps_constants.h`
+- Route 列表目录：`modules/ui_shared/src/ui/screens/tracker/tracker_page_components.cpp`
+- Track 列表目录：`platform/esp/arduino_common/src/ui/screens/gps/gps_tracker_overlay.cpp`
 

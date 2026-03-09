@@ -238,3 +238,17 @@ docs/.doctrees/
 
 # Project specific
 .tmp_lilygolib/
+
+# build artifacts
+build/
+build.*/
+
+# idf component manager
+managed_components/
+
+# cmake
+CMakeFiles/
+CMakeCache.txt
+
+# sdkconfig local override
+sdkconfig.old

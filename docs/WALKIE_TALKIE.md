@@ -10,9 +10,9 @@ It covers signal flow, protocol framing, buffering, and tuning knobs.
 - Emphasis: stability and intelligibility over absolute minimum latency.
 
 ## File Locations
-- Core service: `src/walkie/walkie_service.cpp`
-- UI: `src/ui/ui_walkie_talkie.cpp`
-- Input hook: `src/ui/LV_Helper_v9.cpp`
+- Core service: `platform/esp/arduino_common/src/walkie/walkie_service.cpp`
+- UI: `apps/esp_pio/src/ui_walkie_talkie.cpp`
+- Input hook: `platform/esp/arduino_common/src/LV_Helper_v9.cpp`
 
 ## Radio Configuration (FSK)
 Radio is switched from LoRa to FSK when entering walkie mode.

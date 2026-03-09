@@ -6,7 +6,7 @@ Usage:
     python png_to_lvgl.py <input.png> <output.c> [image_name]
 
 Example:
-    python png_to_lvgl.py images/img_usb.png src/ui/assets/img_usb_v9.c img_usb
+    python png_to_lvgl.py images/img_usb.png modules/ui_shared/src/ui/assets/img_usb_v9.c img_usb
 """
 
 import sys

@@ -1,0 +1,52 @@
+{
+    "name":  "esp_boards",
+    "version":  "0.1.0",
+    "frameworks":  [
+                       "arduino"
+                   ],
+    "build":  {
+                  "includeDir":  "include",
+                  "srcDir":  "src",
+                  "flags":  [
+                                "-I../../../modules/ui_shared/include",
+                                "-I../../../modules/core_sys/include",
+                                "-I../../../modules/core_chat/include",
+                                "-I../../../modules/core_gps/include",
+                                "-I../../../modules/core_hostlink/include",
+                                "-I../../../modules/core_team/include",
+                                "-I../../../platform/esp/arduino_common/include"
+                            ]
+              },
+    "dependencies":  [
+                         {
+                             "name":  "lvgl"
+                         },
+                         {
+                             "name":  "SensorLib"
+                         },
+                         {
+                             "name":  "XPowersLib"
+                         },
+                         {
+                             "name":  "RadioLib"
+                         },
+                         {
+                             "name":  "STM32duino ST25R3916"
+                         },
+                         {
+                             "name":  "STM32duino NFC-RFAL"
+                         },
+                         {
+                             "name":  "Adafruit TCA8418"
+                         },
+                         {
+                             "name":  "Adafruit BusIO"
+                         },
+                         {
+                             "name":  "TinyGPSPlus"
+                         },
+                         {
+                             "name":  "esp_arduino_audio_codec"
+                         }
+                     ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "esp_idf_common",
+  "version": "0.1.0",
+  "frameworks": ["espidf"],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "apps_esp_idf",
+  "version": "0.1.0",
+  "frameworks": ["espidf"],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

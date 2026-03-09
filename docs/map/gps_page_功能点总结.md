@@ -4,7 +4,7 @@
 
 ## 1) 页面入口与布局（谁创建了什么）
 
-- 入口函数：`src/ui/ui_gps.cpp` 的 `ui_gps_enter(lv_obj_t* parent)`
+- 入口函数：`apps/esp_pio/src/ui_gps.cpp` 的 `ui_gps_enter(lv_obj_t* parent)`
 - 主要职责：
   - 创建根容器与头部（TopBar）
   - 创建内容区 `content`
@@ -26,7 +26,7 @@
 
 ## 2) 状态结构（所有静态状态放哪里）
 
-- 状态结构体：`src/ui/screens/gps/gps_state.h` 中的 `struct GPSPageState`
+- 状态结构体：`platform/esp/arduino_common/include/ui/screens/gps/gps_state.h` 中的 `struct GPSPageState`
 - 关键字段：
   - UI 引用：`map / panel / resolution_label / gps_marker / ...`
   - 地图状态：`zoom_level / lat / lng / pan_x / pan_y / has_fix`
@@ -46,7 +46,7 @@
 
 ## 3) 定时驱动（页面如何“动起来”）
 
-- 主定时器回调：`src/ui/ui_gps.cpp` 的 `gps_update_timer_cb`
+- 主定时器回调：`apps/esp_pio/src/ui_gps.cpp` 的 `gps_update_timer_cb`
 - 逻辑顺序（概念上）：
   - 若有 `pending_refresh`：调用 `update_map_tiles(false)`
   - `tick_loader()`：推进瓦片加载
@@ -55,7 +55,7 @@
 
 ## 4) 地图与瓦片（地图为什么会“盖住按钮”）
 
-地图主流程在：`src/ui/screens/gps/gps_page_map.cpp`
+地图主流程在：`platform/esp/arduino_common/src/ui/screens/gps/gps_page_map.cpp`
 
 核心函数：
 - `update_map_tiles(bool lightweight)`
@@ -77,7 +77,7 @@
 
 ## 5) 输入与交互（旋钮/按键如何映射到功能）
 
-输入处理主要在：`src/ui/screens/gps/gps_page_input.cpp`
+输入处理主要在：`platform/esp/arduino_common/src/ui/screens/gps/gps_page_input.cpp`
 
 职责：
 - 将 LVGL 的键盘/旋钮/点击事件映射到：
@@ -91,7 +91,7 @@
 
 ## 6) 轨迹叠加层（GPX 加载与绘制）
 
-轨迹逻辑在：`src/ui/screens/gps/gps_tracker_overlay.cpp`
+轨迹逻辑在：`platform/esp/arduino_common/src/ui/screens/gps/gps_tracker_overlay.cpp`
 
 功能点：
 - 轨迹入口：
@@ -133,10 +133,10 @@
   - 路线在地图上以点状渲染（由浅到深，体现方向）
 
 核心文件与职责：
-- Tracker 入口与写配置：`src/ui/screens/tracker/tracker_page_components.cpp`
-- GPS 按钮显示/隐藏：`src/ui/ui_gps.cpp`
-- 输入映射（RouteBtn / R 键）：`src/ui/screens/gps/gps_page_input.cpp`
-- 路线解析与绘制：`src/ui/screens/gps/gps_route_overlay.cpp`
+- Tracker 入口与写配置：`modules/ui_shared/src/ui/screens/tracker/tracker_page_components.cpp`
+- GPS 按钮显示/隐藏：`apps/esp_pio/src/ui_gps.cpp`
+- 输入映射（RouteBtn / R 键）：`platform/esp/arduino_common/src/ui/screens/gps/gps_page_input.cpp`
+- 路线解析与绘制：`platform/esp/arduino_common/src/ui/screens/gps/gps_route_overlay.cpp`
 
 KML 解析策略（当前支持）：
 - `gx:Track` 的 `<gx:coord>`（优先）
@@ -145,7 +145,7 @@ KML 解析策略（当前支持）：
 ## 8) 退出与清理（避免状态泄漏）
 
 清理入口：
-- `src/ui/ui_gps.cpp` 的 `ui_gps_exit(...)`
+- `apps/esp_pio/src/ui_gps.cpp` 的 `ui_gps_exit(...)`
 - 相关清理：
   - 关闭模态框
   - 停止定时器

@@ -8,7 +8,7 @@ print("[pio] pre: configuring build environment")
 # Add include path for LVGL configuration file
 # This ensures LVGL library can find lv_conf.h during compilation
 project_dir = env.get("PROJECT_DIR")
-ui_dir = os.path.join(project_dir, "src", "ui")
+ui_dir = os.path.join(project_dir, "platform", "esp", "arduino_common", "include")
 
 # Add to both CPPFLAGS (for C/C++ compilation) and CCFLAGS (for all compilation)
 env.Append(CPPFLAGS=["-I" + ui_dir])

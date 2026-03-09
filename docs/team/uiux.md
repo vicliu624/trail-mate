@@ -385,7 +385,7 @@ v0.1 必须记录的关键事件：
 ## 1.1 建议目录结构
 
 ```
-src/team/
+modules/core_team/
   domain/
     team_types.h
     team_model.h/.cpp
@@ -402,10 +402,10 @@ src/team/
     team_presence_flow.h/.cpp
 
   ports/
-    i_team_store.h       // 持久化：snapshot + event log
-    i_team_transport.h   // 发送/接收 Team 包（基于 Meshtastic portnum）
+    i_team_runtime.h     // 时间/随机数/节点身份/发送能力等运行时依赖
+    i_team_pairing_transport.h // Pairing 阶段传输（如 ESP-NOW）
     i_team_crypto.h      // 生成/派生/加解密/MAC（可在 domain 里做，但建议 port）
-    i_clock.h            // 时间戳（可复用系统已有）
+    i_team_event_sink.h  // 向上抛出 Team 事件
     i_rng.h              // 随机数（team_id / key）
     i_ui_notifier.h      // 弹窗/Toast/页面跳转事件（可选）
 
@@ -794,9 +794,9 @@ void TeamService::onSyncRsp(const SyncRsp& rsp) {
 
 如果你想最快把骨架跑起来，我建议按这个顺序建文件：
 
-1. `domain/team_types.h` + `domain/team_events.h`
-2. `domain/team_model.cpp`（apply 事件）
-3. `ports/i_team_transport.h`（send / sendTo / onPacket）
-4. `usecase/team_service.cpp`（先只做 create + invite 广播 + presence）
-5. `ui/screens/team/team_state.h` + `team_pages.cpp`（StatusNotInTeam / StatusInTeam 两页先跑起来）
+1. `modules/core_team/include/team/domain/team_types.h` + `modules/core_team/include/team/domain/team_events.h`
+2. `modules/core_team/include/team/usecase/team_service.h` + `modules/core_team/src/usecase/team_service.cpp`
+3. `modules/core_team/include/team/ports/i_team_pairing_transport.h` + `modules/core_team/include/team/ports/i_team_runtime.h`
+4. `modules/core_team/src/usecase/team_controller.cpp` + `modules/core_team/src/usecase/team_pairing_coordinator.cpp`
+5. `modules/ui_shared/include/ui/screens/team/team_state.h` + `apps/esp_pio/src/ui_team.cpp`（StatusNotInTeam / StatusInTeam 两页先跑起来）
 6. 再加 join/kick/sync

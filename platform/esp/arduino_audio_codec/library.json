@@ -1,0 +1,16 @@
+{
+  "name": "esp_arduino_audio_codec",
+  "version": "0.1.0",
+  "frameworks": [
+    "arduino"
+  ],
+  "build": {
+    "includeDir": ".",
+    "srcDir": "audio/codec"
+  },
+  "dependencies": [
+    {
+      "name": "Wire"
+    }
+  ]
+}

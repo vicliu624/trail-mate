@@ -1,0 +1,177 @@
+#pragma once
+
+#include <Arduino.h>
+#include <RadioLib.h>
+#include <SensorBHI260AP.hpp>
+#include <TouchDrvGT911.hpp>
+#include <XPowersAXP2101.tpp>
+
+#include "BoardBase.h"
+#include "GpsBoard.h"
+#include "LoraBoard.h"
+#include "MotionBoard.h"
+#include "SdBoard.h"
+#include "board/TLoRaPagerTypes.h"
+#include "display/DisplayInterface.h"
+#include "pins_arduino.h"
+#include "platform/esp/arduino_common/gps/GPS.h"
+
+#if !defined(SCREEN_WIDTH) || !defined(SCREEN_HEIGHT)
+#error "SCREEN_WIDTH and SCREEN_HEIGHT must be provided via build flags (env .ini)."
+#endif
+
+#define newModule() new Module(LORA_CS, LORA_IRQ, LORA_RST, LORA_BUSY)
+
+class SX1262Access : public SX1262
+{
+  public:
+    using SX1262::SX1262;
+    using SX126x::readRegister;
+    using SX126x::setTxParams;
+    using SX126x::writeRegister;
+};
+
+class TDeckBoard : public BoardBase,
+                   public LoraBoard,
+                   public GpsBoard,
+                   public MotionBoard,
+                   public SdBoard,
+                   public LilyGo_Display,
+                   public LilyGoDispArduinoSPI
+{
+  public:
+    static TDeckBoard* getInstance();
+
+    // BoardBase
+    uint32_t begin(uint32_t disable_hw_init = 0) override;
+    void wakeUp() override {}
+    void handlePowerButton() override {}
+    void softwareShutdown() override {}
+
+    void setBrightness(uint8_t level) override;
+    uint8_t getBrightness() override { return brightness_; }
+
+    bool hasKeyboard() override;
+    void keyboardSetBrightness(uint8_t level) override;
+    uint8_t keyboardGetBrightness() override;
+
+    bool isRTCReady() const override;
+    bool isCharging() override;
+    int getBatteryLevel() override;
+
+    bool isSDReady() const override { return sd_ready_; }
+    bool isCardReady() override;
+    bool isGPSReady() const override { return (devices_probe_ & HW_GPS_ONLINE) != 0; }
+
+    void vibrator() override {}
+    void stopVibrator() override {}
+    void playMessageTone() override;
+    void setMessageToneVolume(uint8_t volume_percent) override;
+    uint8_t getMessageToneVolume() const override;
+
+    // LilyGo_Display
+    void setRotation(uint8_t rotation) override;
+    uint8_t getRotation() override;
+    void pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color) override;
+    uint16_t width() override;
+    uint16_t height() override;
+    bool useDMA() override { return true; }
+    bool hasTouch() override { return touch_ready_; }
+    uint8_t getPoint(int16_t* x, int16_t* y, uint8_t get_point) override;
+    bool hasEncoder() override { return true; }
+    int getKeyChar(char* c) override;
+    RotaryMsg_t getRotary() override;
+
+    // LoraBoard
+    bool isRadioOnline() const override { return (devices_probe_ & HW_RADIO_ONLINE) != 0; }
+    int transmitRadio(const uint8_t* data, size_t len) override;
+    int startRadioReceive() override;
+    uint32_t getRadioIrqFlags() override;
+    int getRadioPacketLength(bool update) override;
+    int readRadioData(uint8_t* buf, size_t len) override;
+    void clearRadioIrqFlags(uint32_t flags) override;
+    float getRadioRSSI() override;
+    float getRadioSNR() override;
+    void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
+                            int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
+                            uint8_t crc_len) override;
+
+    // GpsBoard
+    bool initGPS() override;
+    void setGPSOnline(bool online) override
+    {
+        if (online)
+        {
+            devices_probe_ |= HW_GPS_ONLINE;
+        }
+        else
+        {
+            devices_probe_ &= ~HW_GPS_ONLINE;
+        }
+    }
+    GPS& getGPS() override { return gps_; }
+    void powerControl(PowerCtrlChannel_t, bool) override {}
+    bool syncTimeFromGPS(uint32_t gps_task_interval_ms = 0) override;
+
+    // MotionBoard
+    SensorBHI260AP& getMotionSensor() override { return sensor_; }
+    bool isSensorReady() const override { return (devices_probe_ & HW_BHI260AP_ONLINE) != 0; }
+
+  private:
+    TDeckBoard();
+    bool initPMU();
+    bool initTouch();
+    bool initKeyboard();
+    bool installSD();
+    void uninstallSD();
+    bool sendKeyboardCommand(uint8_t cmd);
+    bool sendKeyboardCommand(uint8_t cmd, uint8_t value);
+    int readKeyboardByte();
+    static char translateKeyboardByte(uint8_t value);
+
+  private:
+    uint32_t devices_probe_ = 0;
+    uint8_t brightness_ = 8;
+    uint8_t keyboard_brightness_ = 127;
+    uint8_t rotation_ = 0;
+    bool pmu_ready_ = false;
+    bool rtc_ready_ = false;
+    bool sd_ready_ = false;
+    bool display_ready_ = false;
+    bool touch_ready_ = false;
+    bool keyboard_ready_ = false;
+    bool keyboard_pending_release_ = false;
+    char keyboard_last_char_ = '\0';
+    int last_battery_level_ = -1;
+    uint8_t battery_zero_streak_ = 0;
+    uint32_t boot_ms_ = 0;
+    uint32_t last_trackball_ms_ = 0;
+    uint32_t last_click_ms_ = 0;
+    uint8_t left_count_ = 0;
+    uint8_t right_count_ = 0;
+    uint8_t up_count_ = 0;
+    uint8_t down_count_ = 0;
+    uint8_t click_count_ = 0;
+    uint8_t message_tone_volume_ = 45;
+    bool left_latched_ = false;
+    bool right_latched_ = false;
+    bool up_latched_ = false;
+    bool down_latched_ = false;
+    bool click_latched_ = false;
+    static constexpr uint32_t kRotaryBootGuardMs = 1200;
+
+    GPS gps_;
+    SensorBHI260AP sensor_;
+    XPowersAXP2101 pmu_;
+    TouchDrvGT911 touch_;
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+    SX1262Access radio_ = newModule();
+#elif defined(ARDUINO_LILYGO_LORA_SX1280)
+    SX1280 radio_ = newModule();
+#else
+    SX1262Access radio_ = newModule();
+#endif
+};
+
+extern TDeckBoard& instance;
+extern BoardBase& board;

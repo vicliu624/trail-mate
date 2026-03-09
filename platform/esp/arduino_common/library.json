@@ -1,0 +1,27 @@
+{
+    "name":  "esp_arduino_common",
+    "version":  "0.1.0",
+    "frameworks":  [
+                       "arduino"
+                   ],
+    "build":  {
+                  "includeDir":  "include",
+                  "srcDir":  "src",
+                  "flags":  [
+                                "-I../../../modules/ui_shared/include",
+                                "-I../../../modules/core_sys/include",
+                                "-I../../../modules/core_chat/include",
+                                "-I../../../modules/core_gps/include",
+                                "-I../../../modules/core_hostlink/include",
+                                "-I../../../modules/core_team/include",
+                                "-I../../../modules/core_chat/generated",
+                                "-I../../../modules/core_chat/third_party/nanopb",
+                                "-I../../../platform/esp/common/include"
+                            ]
+              },
+    "dependencies":  [
+                         {
+                             "name":  "esp_boards"
+                         }
+                     ]
+}

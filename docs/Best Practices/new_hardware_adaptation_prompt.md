@@ -1,4 +1,4 @@
-﻿# 新硬件适配 Prompt（Trail-Mate）
+# 新硬件适配 Prompt（Trail-Mate）
 
 你是本项目（Trail-Mate）的嵌入式适配工程师。你的任务是为“一个新硬件板卡”增加支持，同时**不破坏已有环境（尤其是 tlora_pager_*）**，并严格遵守“面向能力接口解耦”的设计原则。
 
@@ -18,21 +18,21 @@
 在修改前先快速审视以下内容：
 
 - 板级抽象与能力接口：
-  - `src/board/BoardBase.h`
-  - `src/board/LoraBoard.h`
-  - `src/board/GpsBoard.h`
-  - `src/board/MotionBoard.h`
+  - `platform/esp/boards/include/board/BoardBase.h`
+  - `platform/esp/boards/include/board/LoraBoard.h`
+  - `platform/esp/boards/include/board/GpsBoard.h`
+  - `platform/esp/boards/include/board/MotionBoard.h`
 - 现有板实现：
-  - `src/board/TLoRaPagerBoard.h`
-  - `src/board/TLoRaPagerBoard.cpp`
+  - `platform/esp/boards/include/board/TLoRaPagerBoard.h`
+  - `platform/esp/boards/src/board/TLoRaPagerBoard.cpp`
 - 环境与变体：
   - `variants/lilygo_tlora_pager/envs/tlora_pager.ini`
   - `variants/tdeck/envs/tdeck.ini`
   - `variants/*/pins_arduino.h`
 - 入口与装配点：
-  - `src/main.cpp`
+  - `apps/esp_pio/src/arduino_entry.cpp`
   - `src/app/app_context.cpp`
-  - `src/chat/infra/protocol_factory.*`
+  - `platform/esp/arduino_common/include/platform/esp/arduino_common/chat/infra/protocol_factory.h / platform/esp/arduino_common/src/chat/infra/protocol_factory.cpp`
 
 审视后用 3-6 条要点说明：
 - 哪些地方已经解耦良好；
@@ -51,7 +51,7 @@
   - GPS：只用 `GpsBoard` 能力。
   - Motion：只用 `MotionBoard` 能力。
 - 使用编译期宏在入口处选择板实现：
-  - 例如在 `src/main.cpp`：
+  - 例如在 `apps/esp_pio/src/arduino_entry.cpp`：
     - `#if defined(ARDUINO_T_DECK)` -> `#include "board/TDeckBoard.h"`
     - `#else` -> `#include "board/TLoRaPagerBoard.h"`
 - 使用 PlatformIO 的环境隔离板级源文件：
@@ -96,8 +96,8 @@
    - 设置 `build_flags`（包括屏幕尺寸、板宏、变体 include path）
    - 设置 `build_src_filter`：
      - `+<*>`
-     - `-<board/TLoRaPagerBoard.cpp>`（或其他旧板文件）
-     - `+<board/<NewBoard>.cpp>`
+     - `-<../platform/esp/boards/src/board/TLoRaPagerBoard.cpp>`（或其他旧板文件）
+     - `+<../platform/esp/boards/src/board/<NewBoard>.cpp>`
 
 2) 在旧环境（如 `variants/lilygo_tlora_pager/envs/tlora_pager.ini`）确保：
    - `build_src_filter` 排除新板源文件。
@@ -105,8 +105,8 @@
 ### Step B - 新增板实现（而不是污染旧实现）
 
 1) 新建：
-   - `src/board/<NewBoard>.h`
-   - `src/board/<NewBoard>.cpp`
+   - `platform/esp/boards/include/board/<NewBoard>.h`
+   - `platform/esp/boards/src/board/<NewBoard>.cpp`
 
 2) 新板类应：
    - `public BoardBase`
@@ -120,7 +120,7 @@
 
 仅在“装配点”做宏分发：
 
-- `src/main.cpp`
+- `apps/esp_pio/src/arduino_entry.cpp`
 - 如有必要：`src/app/app_context.cpp`
 
 模式：
@@ -137,8 +137,8 @@
 - 允许改动：
   - `variants/*/envs/*.ini`
   - `variants/*/pins_arduino.h`
-  - `src/board/*`
-  - `src/main.cpp`（仅装配/宏分发层面）
+  - `platform/esp/boards/include/board/*` 与 `platform/esp/boards/src/board/*`
+  - `apps/esp_pio/src/arduino_entry.cpp`（PlatformIO 装配/宏分发层面）
   - 极少量上层代码：仅为了移除具体板依赖、改为能力接口
 
 ### 5.2 高风险改动（尽量避免）

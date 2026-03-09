@@ -10,9 +10,9 @@
 - 重点：稳定性与可懂度优先，不追求极限低延时。
 
 ## 文件位置
-- 核心服务：`src/walkie/walkie_service.cpp`
-- UI：`src/ui/ui_walkie_talkie.cpp`
-- 输入钩子：`src/ui/LV_Helper_v9.cpp`
+- 核心服务：`platform/esp/arduino_common/src/walkie/walkie_service.cpp`
+- UI：`apps/esp_pio/src/ui_walkie_talkie.cpp`
+- 输入钩子：`platform/esp/arduino_common/src/LV_Helper_v9.cpp`
 
 ## 无线配置（FSK）
 进入 walkie 模式时，电台从 LoRa 切换到 FSK。
