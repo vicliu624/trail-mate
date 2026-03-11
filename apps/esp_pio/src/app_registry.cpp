@@ -33,8 +33,6 @@ ui::AppCatalog buildCatalog()
     return ui::app_catalog_builder::build(buildFeatureFlags());
 }
 
-ui::AppCatalog s_catalog = buildCatalog();
-
 } // namespace
 
 namespace ui
@@ -42,7 +40,7 @@ namespace ui
 
 AppCatalog appCatalog()
 {
-    return s_catalog;
+    return buildCatalog();
 }
 
 } // namespace ui
