@@ -150,6 +150,26 @@ bool translate_touch_token(const char* token, uint32_t& key)
     return false;
 }
 
+bool resolve_touch_button_id(lv_event_t* e, lv_obj_t* matrix, uint32_t& button_id)
+{
+    if (!matrix)
+    {
+        return false;
+    }
+
+    const auto* event_button_id = static_cast<const uint32_t*>(lv_event_get_param(e));
+    if (event_button_id)
+    {
+        button_id = *event_button_id;
+    }
+    else
+    {
+        button_id = lv_btnmatrix_get_selected_btn(matrix);
+    }
+
+    return button_id != LV_BUTTONMATRIX_BUTTON_NONE;
+}
+
 } // namespace
 
 extern "C" void ui_ime_toggle_mode()
@@ -625,6 +645,8 @@ void ImeWidget::sync_textarea()
     {
         lv_group_focus_obj(textarea_);
     }
+    lv_obj_send_event(textarea_, LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_obj_invalidate(textarea_);
 }
 
 void ImeWidget::setText(const char* text)
@@ -839,7 +861,12 @@ void ImeWidget::on_touch_key_event(lv_event_t* e)
         return;
     }
 
-    const uint32_t button_id = lv_btnmatrix_get_selected_btn(self->keyboard_matrix_);
+    uint32_t button_id = LV_BUTTONMATRIX_BUTTON_NONE;
+    if (!resolve_touch_button_id(e, self->keyboard_matrix_, button_id))
+    {
+        return;
+    }
+
     const char* token = lv_btnmatrix_get_btn_text(self->keyboard_matrix_, button_id);
     uint32_t key = 0;
     if (!translate_touch_token(token, key))

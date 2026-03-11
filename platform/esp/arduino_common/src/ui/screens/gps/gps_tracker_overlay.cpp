@@ -17,7 +17,6 @@
 #include <cmath>
 #include <cctype>
 #include <cstdlib>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -176,22 +175,32 @@ bool load_gpx_points(const char* path, std::vector<GPSPageState::TrackOverlayPoi
 
     bool have_last = false;
     GPSPageState::TrackOverlayPoint last{};
-    std::istringstream input(text);
-    std::string line;
-    while (std::getline(input, line))
+    std::size_t line_start = 0;
+    while (line_start <= text.size())
     {
-        if (line.find("<trkpt") == std::string::npos)
+        const std::size_t line_end = text.find('\n', line_start);
+        std::string line = line_end == std::string::npos ? text.substr(line_start)
+                                                         : text.substr(line_start, line_end - line_start);
+        if (!line.empty() && line.back() == '\r')
         {
-            continue;
+            line.pop_back();
         }
 
-        double lat = 0.0;
-        double lon = 0.0;
-        if (!parse_attr_double(line, "lat", lat) || !parse_attr_double(line, "lon", lon))
+        if (line.find("<trkpt") != std::string::npos)
         {
-            continue;
+            double lat = 0.0;
+            double lon = 0.0;
+            if (parse_attr_double(line, "lat", lat) && parse_attr_double(line, "lon", lon))
+            {
+                append_point(out_points, have_last, last, lat, lon);
+            }
         }
-        append_point(out_points, have_last, last, lat, lon);
+
+        if (line_end == std::string::npos)
+        {
+            break;
+        }
+        line_start = line_end + 1;
     }
 
     return !out_points.empty();
@@ -213,39 +222,46 @@ bool load_csv_points(const char* path, std::vector<GPSPageState::TrackOverlayPoi
 
     bool have_last = false;
     GPSPageState::TrackOverlayPoint last{};
-    std::istringstream input(text);
-    std::string line;
-    while (std::getline(input, line))
+    std::size_t line_start = 0;
+    while (line_start <= text.size())
     {
-        line = trim_copy(line);
-        if (line.empty())
+        const std::size_t line_end = text.find('\n', line_start);
+        std::string line = line_end == std::string::npos ? text.substr(line_start)
+                                                         : text.substr(line_start, line_end - line_start);
+        if (!line.empty() && line.back() == '\r')
         {
-            continue;
+            line.pop_back();
         }
 
-        const char ch = line.front();
-        if (!((ch >= '0' && ch <= '9') || ch == '-'))
+        line = trim_copy(std::move(line));
+        if (!line.empty())
         {
-            continue;
+            const char ch = line.front();
+            if ((ch >= '0' && ch <= '9') || ch == '-')
+            {
+                const std::size_t comma1 = line.find(',');
+                if (comma1 != std::string::npos && comma1 > 0)
+                {
+                    const std::size_t comma2 = line.find(',', comma1 + 1);
+                    const std::string lat_str = line.substr(0, comma1);
+                    const std::string lon_str = comma2 != std::string::npos ? line.substr(comma1 + 1, comma2 - comma1 - 1)
+                                                                            : line.substr(comma1 + 1);
+
+                    double lat = 0.0;
+                    double lon = 0.0;
+                    if (parse_double_token(lat_str, lat) && parse_double_token(lon_str, lon))
+                    {
+                        append_point(out_points, have_last, last, lat, lon);
+                    }
+                }
+            }
         }
 
-        const std::size_t comma1 = line.find(',');
-        if (comma1 == std::string::npos || comma1 == 0)
+        if (line_end == std::string::npos)
         {
-            continue;
+            break;
         }
-        const std::size_t comma2 = line.find(',', comma1 + 1);
-        const std::string lat_str = line.substr(0, comma1);
-        const std::string lon_str = comma2 != std::string::npos ? line.substr(comma1 + 1, comma2 - comma1 - 1)
-                                                                : line.substr(comma1 + 1);
-
-        double lat = 0.0;
-        double lon = 0.0;
-        if (!parse_double_token(lat_str, lat) || !parse_double_token(lon_str, lon))
-        {
-            continue;
-        }
-        append_point(out_points, have_last, last, lat, lon);
+        line_start = line_end + 1;
     }
 
     return !out_points.empty();

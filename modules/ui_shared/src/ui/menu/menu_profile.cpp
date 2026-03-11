@@ -90,8 +90,8 @@ MenuLayoutProfile make_pager_profile()
     profile.card_border_width = 2;
     profile.grid_height_pct = 70;
     profile.grid_top_offset = 30;
-    profile.grid_pad_row = 6;
-    profile.grid_pad_column = 6;
+    profile.grid_pad_row = 0;
+    profile.grid_pad_column = 0;
     profile.top_bar_height = 30;
     profile.top_bar_side_inset = 5;
     profile.top_bar_text_pad = 4;

@@ -15,7 +15,7 @@
 #include <cstring>
 #include <cmath>
 #include <cctype>
-#include <sstream>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -94,12 +94,77 @@ void downsample_points(std::vector<GPSPageState::TrackOverlayPoint>& points)
     points.swap(reduced);
 }
 
+void append_point(std::vector<GPSPageState::TrackOverlayPoint>& out_points,
+                  bool& have_last,
+                  GPSPageState::TrackOverlayPoint& last,
+                  RouteBounds& bounds,
+                  double lat,
+                  double lon);
+
+bool parse_double_token(const std::string& token, double& out)
+{
+    char* end = nullptr;
+    out = std::strtod(token.c_str(), &end);
+    return end != token.c_str();
+}
+
 bool parse_lon_lat_token(const std::string& token, double& lon, double& lat)
 {
-    std::string normalized = token;
-    std::replace(normalized.begin(), normalized.end(), ',', ' ');
-    std::istringstream input(normalized);
-    return static_cast<bool>(input >> lon >> lat);
+    std::size_t split = token.find(',');
+    if (split == std::string::npos)
+    {
+        split = token.find_first_of(" \t\r\n");
+    }
+    if (split == std::string::npos || split == 0)
+    {
+        return false;
+    }
+
+    const std::size_t lat_start = token.find_first_not_of(", \t\r\n", split);
+    if (lat_start == std::string::npos)
+    {
+        return false;
+    }
+
+    const std::size_t lat_end = token.find_first_of(", \t\r\n", lat_start);
+    const std::string lon_token = token.substr(0, split);
+    const std::string lat_token = lat_end == std::string::npos ? token.substr(lat_start)
+                                                                : token.substr(lat_start, lat_end - lat_start);
+    return parse_double_token(lon_token, lon) && parse_double_token(lat_token, lat);
+}
+
+void parse_coordinate_block(const std::string& block,
+                            std::vector<GPSPageState::TrackOverlayPoint>& out_points,
+                            bool& have_last,
+                            GPSPageState::TrackOverlayPoint& last,
+                            RouteBounds& bounds)
+{
+    const char* cursor = block.c_str();
+    while (*cursor != '\0')
+    {
+        while (*cursor != '\0' && std::isspace(static_cast<unsigned char>(*cursor)) != 0)
+        {
+            ++cursor;
+        }
+        if (*cursor == '\0')
+        {
+            break;
+        }
+
+        const char* token_start = cursor;
+        while (*cursor != '\0' && std::isspace(static_cast<unsigned char>(*cursor)) == 0)
+        {
+            ++cursor;
+        }
+
+        std::string token(token_start, static_cast<std::size_t>(cursor - token_start));
+        double lon = 0.0;
+        double lat = 0.0;
+        if (parse_lon_lat_token(token, lon, lat))
+        {
+            append_point(out_points, have_last, last, bounds, lat, lon);
+        }
+    }
 }
 
 void append_point(std::vector<GPSPageState::TrackOverlayPoint>& out_points,
@@ -126,25 +191,6 @@ void append_point(std::vector<GPSPageState::TrackOverlayPoint>& out_points,
     update_bounds(bounds, lat, lon);
     last = point;
     have_last = true;
-}
-
-void parse_coordinate_block(const std::string& block,
-                            std::vector<GPSPageState::TrackOverlayPoint>& out_points,
-                            bool& have_last,
-                            GPSPageState::TrackOverlayPoint& last,
-                            RouteBounds& bounds)
-{
-    std::istringstream input(block);
-    std::string token;
-    while (input >> token)
-    {
-        double lon = 0.0;
-        double lat = 0.0;
-        if (parse_lon_lat_token(token, lon, lat))
-        {
-            append_point(out_points, have_last, last, bounds, lat, lon);
-        }
-    }
 }
 
 bool parse_gx_track_points(const std::string& text,
