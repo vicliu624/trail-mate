@@ -8,8 +8,8 @@
 #include "esp_log.h"
 #include "platform/esp/boards/board_runtime.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
-#include "platform/esp/idf_common/startup_support.h"
 #include "platform/esp/idf_common/gps_runtime.h"
+#include "platform/esp/idf_common/startup_support.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
 #include "platform/esp/idf_common/tab5_rtc_runtime.h"
 #include "platform/ui/gps_runtime.h"
@@ -24,8 +24,8 @@ extern "C"
 {
 #include <stdint.h>
 
-bool bsp_display_lock(uint32_t timeout_ms);
-void bsp_display_unlock(void);
+    bool bsp_display_lock(uint32_t timeout_ms);
+    void bsp_display_unlock(void);
 }
 #endif
 
@@ -103,7 +103,8 @@ ui::startup_shell::Hooks buildShellHooks()
     hooks.apps = ui::appCatalog();
     hooks.show_main_menu = menu_show;
     hooks.watch_face = ui::startup_shell::defaultWatchFaceHooks();
-    hooks.set_max_brightness = []() {
+    hooks.set_max_brightness = []()
+    {
         (void)platform::esp::idf_common::bsp_runtime::wake_display();
     };
     return hooks;

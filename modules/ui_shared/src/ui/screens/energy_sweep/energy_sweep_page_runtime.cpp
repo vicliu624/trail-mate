@@ -9,8 +9,8 @@
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
-#include "ui/ui_common.h"
 #include "sys/clock.h"
+#include "ui/ui_common.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -1520,9 +1520,6 @@ void exit(lv_obj_t* parent)
 
 } // namespace energy_sweep::ui::runtime
 
-
-
-
 #else
 
 namespace energy_sweep::ui::runtime
@@ -1547,4 +1544,3 @@ void exit(lv_obj_t* parent)
 } // namespace energy_sweep::ui::runtime
 
 #endif
-

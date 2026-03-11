@@ -3,6 +3,7 @@
  * @brief Team page components
  */
 
+#include "ui/screens/team/team_page_components.h"
 #include "app/app_facade_access.h"
 #include "chat/usecase/contact_service.h"
 #include "sys/clock.h"
@@ -18,7 +19,6 @@
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
-#include "ui/screens/team/team_page_components.h"
 #include "ui/screens/team/team_page_input.h"
 #include "ui/screens/team/team_page_layout.h"
 #include "ui/screens/team/team_page_styles.h"
@@ -311,8 +311,8 @@ void process_status_broadcasts()
         status.key_id = g_team_state.security_round;
         fill_status_members(status);
         std::printf("[Team] status rebroadcast members=%u leader=%08lX\n",
-                      static_cast<unsigned>(status.members.size()),
-                      static_cast<unsigned long>(status.leader_id));
+                    static_cast<unsigned>(status.members.size()),
+                    static_cast<unsigned long>(status.leader_id));
         if (!controller->onStatus(status, chat::ChannelId::PRIMARY, 0))
         {
             notify_send_failed("Status", true);
@@ -1365,12 +1365,12 @@ void handle_team_key_dist(const team::TeamKeyDistEvent& ev)
 void handle_team_pairing(const team::TeamPairingEvent& ev)
 {
     std::printf("[TeamUI] pairing event role=%u state=%u peer=%08lX in_team=%u leader=%u members=%u\n",
-                  static_cast<unsigned>(ev.role),
-                  static_cast<unsigned>(ev.state),
-                  static_cast<unsigned long>(ev.peer_id),
-                  g_team_state.in_team ? 1 : 0,
-                  g_team_state.self_is_leader ? 1 : 0,
-                  static_cast<unsigned>(g_team_state.members.size()));
+                static_cast<unsigned>(ev.role),
+                static_cast<unsigned>(ev.state),
+                static_cast<unsigned long>(ev.peer_id),
+                g_team_state.in_team ? 1 : 0,
+                g_team_state.self_is_leader ? 1 : 0,
+                static_cast<unsigned>(g_team_state.members.size()));
     g_team_state.pairing_role = ev.role;
     g_team_state.pairing_state = ev.state;
     g_team_state.pairing_peer_id = ev.peer_id;
@@ -1419,8 +1419,8 @@ void handle_team_pairing(const team::TeamPairingEvent& ev)
         payload.push_back(kKeyRoleMember);
         append_key_event(TeamKeyEventType::MemberAccepted, payload);
         std::printf("[TeamUI] leader accept member=%08lX members=%u\n",
-                      static_cast<unsigned long>(ev.peer_id),
-                      static_cast<unsigned>(g_team_state.members.size()));
+                    static_cast<unsigned long>(ev.peer_id),
+                    static_cast<unsigned>(g_team_state.members.size()));
         if (is_new_member)
         {
             team::TeamController* controller = app::teamFacade().getTeamController();

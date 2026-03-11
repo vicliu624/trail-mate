@@ -1,5 +1,5 @@
-#include "bsp/m5stack_tab5.h"
 #include "bsp/trail_mate_tab5_runtime.h"
+#include "bsp/m5stack_tab5.h"
 
 #include "esp_err.h"
 #include "esp_log.h"

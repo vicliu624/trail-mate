@@ -94,8 +94,7 @@ void update_status_label()
     }
 
     const platform::ui::usb_support::Status st = platform::ui::usb_support::get_status();
-    const char* message = (st.message && st.message[0] != '\0') ? st.message :
-                          (st.active ? "USB Active" : "USB Idle");
+    const char* message = (st.message && st.message[0] != '\0') ? st.message : (st.active ? "USB Active" : "USB Idle");
     lv_label_set_text(s_status_label, message);
 }
 

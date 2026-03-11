@@ -50,7 +50,7 @@ void add_if(lv_obj_t* obj)
 
 void init_team_input()
 {
-        if (!::app_g)
+    if (!::app_g)
     {
         return;
     }

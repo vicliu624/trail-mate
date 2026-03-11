@@ -4,12 +4,12 @@
  */
 
 #include "ui/screens/gps/gps_modal.h"
+#include "sys/clock.h"
 #include "ui/LV_Helper.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
 #include "ui/screens/gps/gps_page_styles.h"
-#include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
-#include "sys/clock.h"
 #include <cstdio>
 
 // Configuration
@@ -115,8 +115,8 @@ lv_obj_t* modal_create_touch_content_area(lv_obj_t* win, lv_coord_t title_height
     const lv_coord_t pad_top = lv_obj_get_style_pad_top(win, LV_PART_MAIN);
     const lv_coord_t pad_bottom = lv_obj_get_style_pad_bottom(win, LV_PART_MAIN);
     const lv_coord_t inner_height = win_height > (pad_top + pad_bottom)
-                                      ? static_cast<lv_coord_t>(win_height - pad_top - pad_bottom)
-                                      : 0;
+                                        ? static_cast<lv_coord_t>(win_height - pad_top - pad_bottom)
+                                        : 0;
     const lv_coord_t content_height = inner_height > title_height ? (inner_height - title_height) : 0;
     lv_obj_set_size(content_area, LV_PCT(100), content_height);
     gps::ui::styles::apply_zoom_popup_content_area(content_area);
@@ -132,10 +132,10 @@ lv_obj_t* modal_create_touch_content_area(lv_obj_t* win, lv_coord_t title_height
 }
 
 lv_obj_t* modal_create_touch_action_button(lv_obj_t* parent,
-                                          const char* text,
-                                          lv_event_cb_t cb,
-                                          void* user_data,
-                                          lv_coord_t width)
+                                           const char* text,
+                                           lv_event_cb_t cb,
+                                           void* user_data,
+                                           lv_coord_t width)
 {
     if (!parent)
     {
@@ -236,7 +236,7 @@ bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group)
     lv_obj_move_to_index(m.win, -1);
 
     // Setup group management
-        // Get current default group (via lv_group_get_default) instead of assuming app_g
+    // Get current default group (via lv_group_get_default) instead of assuming app_g
     m.prev_default = lv_group_get_default() ? lv_group_get_default() : app_g;
 
     if (m.group == NULL)
@@ -268,7 +268,7 @@ void modal_close(Modal& m)
     if (is_alive())
     {
         // Restore default group and encoder binding BEFORE deleting objects
-                lv_group_t* restore = m.prev_default ? m.prev_default : app_g;
+        lv_group_t* restore = m.prev_default ? m.prev_default : app_g;
         set_default_group(restore);
         bind_encoder_to_group(restore);
     }

@@ -4,13 +4,13 @@
 #include "app/app_facade_access.h"
 #include "lvgl.h"
 #include "platform/ui/device_runtime.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_modal.h"
 #include "ui/screens/gps/gps_page_input.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
 #include "ui/screens/gps/gps_page_map.h"
 #include "ui/screens/gps/gps_page_styles.h"
 #include "ui/screens/gps/gps_route_overlay.h"
-#include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
@@ -173,7 +173,7 @@ void show_pan_h_indicator()
 
     set_control_id(g_gps_state.pan_h_indicator, ControlId::PanHIndicator);
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_add_obj(app_g, g_gps_state.pan_h_indicator);
     }
@@ -199,7 +199,7 @@ void hide_pan_h_indicator()
         return;
     }
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_remove_obj(g_gps_state.pan_h_indicator);
     }
@@ -239,7 +239,7 @@ void show_pan_v_indicator()
 
     set_control_id(g_gps_state.pan_v_indicator, ControlId::PanVIndicator);
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_add_obj(app_g, g_gps_state.pan_v_indicator);
     }
@@ -265,7 +265,7 @@ void hide_pan_v_indicator()
         return;
     }
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_remove_obj(g_gps_state.pan_v_indicator);
     }
@@ -493,8 +493,8 @@ static void build_zoom_popup_ui(lv_obj_t* win)
     const lv_coord_t pad_top = lv_obj_get_style_pad_top(win, LV_PART_MAIN);
     const lv_coord_t pad_bottom = lv_obj_get_style_pad_bottom(win, LV_PART_MAIN);
     const lv_coord_t inner_height = win_height > (pad_top + pad_bottom)
-                                      ? static_cast<lv_coord_t>(win_height - pad_top - pad_bottom)
-                                      : 0;
+                                        ? static_cast<lv_coord_t>(win_height - pad_top - pad_bottom)
+                                        : 0;
     const lv_coord_t content_height = inner_height > title_height ? (inner_height - title_height) : 0;
     lv_obj_set_size(content_area, LV_PCT(100), content_height);
     gps::ui::styles::apply_zoom_popup_content_area(content_area);
@@ -583,7 +583,7 @@ void show_zoom_popup()
         return;
     }
 
-        if (!modal_open(g_gps_state.zoom_modal, lv_screen_active(), app_g))
+    if (!modal_open(g_gps_state.zoom_modal, lv_screen_active(), app_g))
     {
         return;
     }
@@ -596,8 +596,8 @@ void show_zoom_popup()
     if (g_gps_state.zoom_modal.group != NULL)
     {
         lv_obj_t* focus_target = g_gps_state.popup_roller != NULL ? g_gps_state.popup_roller
-                                                           : (g_gps_state.popup_apply_btn != NULL ? g_gps_state.popup_apply_btn
-                                                                                                   : g_gps_state.popup_label);
+                                                                  : (g_gps_state.popup_apply_btn != NULL ? g_gps_state.popup_apply_btn
+                                                                                                         : g_gps_state.popup_label);
 
         lv_group_remove_all_objs(g_gps_state.zoom_modal.group);
         if (g_gps_state.popup_roller != NULL)
@@ -665,7 +665,7 @@ void hide_zoom_popup()
     g_gps_state.popup_cancel_btn = nullptr;
     reset_zoom_touch_level_btns();
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_set_editing(app_g, false);
         set_default_group(app_g);
@@ -1019,7 +1019,7 @@ void hide_layer_popup()
     s_layer_source_btns[2] = nullptr;
     s_layer_contour_btn = nullptr;
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_set_editing(app_g, false);
         set_default_group(app_g);
@@ -1090,9 +1090,7 @@ void refresh_route_popup_labels()
     if (s_route_hint_label != nullptr)
     {
         lv_label_set_text(s_route_hint_label,
-                          g_gps_state.route_overlay_active ?
-                              "Tap Center Route to focus the active route." :
-                              "Tap Center Route to load and focus the configured route.");
+                          g_gps_state.route_overlay_active ? "Tap Center Route to focus the active route." : "Tap Center Route to load and focus the configured route.");
     }
 }
 

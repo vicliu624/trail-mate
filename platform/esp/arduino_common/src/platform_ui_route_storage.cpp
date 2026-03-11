@@ -21,9 +21,7 @@ bool has_kml_extension(const std::string& name)
     }
     std::string lower = name;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch)
-    {
-        return static_cast<char>(std::tolower(ch));
-    });
+                   { return static_cast<char>(std::tolower(ch)); });
     return lower.compare(lower.size() - 4, 4, ".kml") == 0;
 }
 

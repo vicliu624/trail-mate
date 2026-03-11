@@ -1,7 +1,7 @@
 #include "platform/ui/sstv_runtime.h"
 
-#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/boards/t_display_p4_board_profile.h"
+#include "platform/esp/boards/tab5_board_profile.h"
 #include "sstv/sstv_service.h"
 
 namespace

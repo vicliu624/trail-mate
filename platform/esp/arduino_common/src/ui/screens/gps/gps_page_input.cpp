@@ -1,16 +1,16 @@
 #include "ui/screens/gps/gps_page_input.h"
+#include "platform/ui/gps_runtime.h"
 #include "screen_sleep.h"
+#include "sys/clock.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_modal.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
-#include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
-#include "platform/ui/gps_runtime.h"
-#include "sys/clock.h"
 #include <cstdint>
 #include <cstdio>
 
@@ -24,7 +24,6 @@
 extern GPSPageState g_gps_state;
 
 using gps::ui::lifetime::is_alive;
-
 
 using GPSData = platform::ui::gps::GpsState;
 
@@ -130,7 +129,7 @@ static void exit_pan_h_mode()
     g_gps_state.edit_mode = 0;
     hide_pan_h_indicator();
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_set_editing(app_g, false);
         if (g_gps_state.pan_h != NULL)
@@ -148,7 +147,7 @@ static void exit_pan_v_mode()
     g_gps_state.edit_mode = 0;
     hide_pan_v_indicator();
 
-        if (app_g != NULL)
+    if (app_g != NULL)
     {
         lv_group_set_editing(app_g, false);
         if (g_gps_state.pan_v != NULL)
@@ -172,7 +171,7 @@ void on_ui_event(lv_event_t* e)
     // ============================================================================
     // DEBUG: detailed event trace
     // ============================================================================
-        lv_obj_t* focused = app_g ? lv_group_get_focused(app_g) : nullptr;
+    lv_obj_t* focused = app_g ? lv_group_get_focused(app_g) : nullptr;
     bool editing = app_g ? lv_group_get_editing(app_g) : false;
     ControlId target_id = ctrl_id(target);
     if (target_id == ControlId::BackBtn)
@@ -341,7 +340,7 @@ void pan_indicator_event_cb(lv_event_t* e)
             g_gps_state.pan_h_editing = false; // Keep in sync with original code
             extern void hide_pan_h_indicator();
             hide_pan_h_indicator();
-                        if (app_g != NULL)
+            if (app_g != NULL)
             {
                 lv_group_set_editing(app_g, false);
                 if (g_gps_state.pan_h != NULL)
@@ -358,7 +357,7 @@ void pan_indicator_event_cb(lv_event_t* e)
             g_gps_state.pan_v_editing = false; // Keep in sync with original code
             extern void hide_pan_v_indicator();
             hide_pan_v_indicator();
-                        if (app_g != NULL)
+            if (app_g != NULL)
             {
                 lv_group_set_editing(app_g, false);
                 if (g_gps_state.pan_v != NULL)
@@ -779,7 +778,7 @@ static void action_pan_enter(ControlId axis_id)
         hide_pan_v_indicator();
         show_pan_h_indicator();
 
-                if (app_g != NULL && g_gps_state.pan_h_indicator != NULL)
+        if (app_g != NULL && g_gps_state.pan_h_indicator != NULL)
         {
             set_default_group(app_g);
             bind_encoder_to_group(app_g);
@@ -809,7 +808,7 @@ static void action_pan_enter(ControlId axis_id)
         hide_pan_h_indicator();
         show_pan_v_indicator();
 
-                if (app_g != NULL && g_gps_state.pan_v_indicator != NULL)
+        if (app_g != NULL && g_gps_state.pan_v_indicator != NULL)
         {
             set_default_group(app_g);
             bind_encoder_to_group(app_g);

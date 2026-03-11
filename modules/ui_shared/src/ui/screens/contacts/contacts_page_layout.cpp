@@ -24,7 +24,7 @@ namespace layout
 
 // Layout constants
 static constexpr int kButtonSpacing = 3;
-static constexpr int kPanelGap = 3;          // Gap between filter and list columns
+static constexpr int kPanelGap = 3; // Gap between filter and list columns
 
 namespace
 {

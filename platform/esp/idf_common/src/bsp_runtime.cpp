@@ -5,15 +5,15 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/boards/t_display_p4_board_profile.h"
+#include "platform/esp/boards/tab5_board_profile.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 extern "C"
 {
-esp_err_t bsp_sdcard_init(char* mount_point, size_t max_files);
-esp_err_t bsp_display_brightness_set(int brightness_percent);
-bool trail_mate_tab5_display_runtime_is_ready(void);
+    esp_err_t bsp_sdcard_init(char* mount_point, size_t max_files);
+    esp_err_t bsp_display_brightness_set(int brightness_percent);
+    bool trail_mate_tab5_display_runtime_is_ready(void);
 }
 #endif
 
@@ -162,4 +162,3 @@ bool sdcard_capable()
 }
 
 } // namespace platform::esp::idf_common::bsp_runtime
-

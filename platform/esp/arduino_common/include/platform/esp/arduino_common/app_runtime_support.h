@@ -14,7 +14,7 @@ namespace app
 {
 class IAppBleFacade;
 class IAppFacade;
-}
+} // namespace app
 
 namespace ble
 {

@@ -1,7 +1,7 @@
 #include "platform/ui/tracker_runtime.h"
 
-#include "platform/ui/device_runtime.h"
 #include "platform/esp/arduino_common/gps/track_recorder.h"
+#include "platform/ui/device_runtime.h"
 
 #include <SD.h>
 

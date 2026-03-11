@@ -231,7 +231,7 @@ int startTransmit(Session* session, const uint8_t* data, size_t size)
 
 int startReceive(Session* session)
 {
-        return (resolve_state(session) && radio().startReceive()) ? 0 : -1;
+    return (resolve_state(session) && radio().startReceive()) ? 0 : -1;
 }
 
 uint32_t getRadioIrqFlags(Session* session)

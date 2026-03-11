@@ -8,10 +8,10 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/usecase/contact_service.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/screens/chat/chat_conversation_input.h"
 #include "ui/screens/chat/chat_conversation_layout.h"
 #include "ui/screens/chat/chat_conversation_styles.h"
-#include "ui/assets/fonts/font_utils.h"
 #include "ui/ui_common.h"
 
 #include "sys/clock.h"

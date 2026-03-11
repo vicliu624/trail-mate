@@ -288,7 +288,9 @@ void persist_snapshot_locked()
 
 bool ensure_dir(const std::string& path)
 {
-    struct stat st {};
+    struct stat st
+    {
+    };
     if (stat(path.c_str(), &st) == 0)
     {
         return (st.st_mode & S_IFDIR) != 0;
@@ -314,7 +316,7 @@ std::string iso_time(uint32_t ts)
     }
     char buf[32] = {0};
     std::time_t value = static_cast<std::time_t>(ts);
-    std::tm info {};
+    std::tm info{};
     if (gmtime_r(&value, &info) == nullptr)
     {
         return std::string();
@@ -581,4 +583,3 @@ bool team_ui_get_member_track_path(const TeamId& team_id,
 }
 
 } // namespace team::ui
-

@@ -6,8 +6,8 @@
 #include "app/app_facade_access.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/usecase/chat_service.h"
-#include "platform/ui/device_runtime.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_bridge_radio.h"
+#include "platform/ui/device_runtime.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 #include "platform/esp/idf_common/tab5_rtc_runtime.h"

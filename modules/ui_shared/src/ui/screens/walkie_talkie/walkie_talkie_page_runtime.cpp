@@ -393,9 +393,6 @@ void ui_walkie_talkie_exit(lv_obj_t* parent)
     walkie_page::ui::shell::exit(nullptr, parent);
 }
 
-
-
-
 #else
 
 namespace walkie_page::ui::runtime
@@ -420,5 +417,3 @@ void exit(lv_obj_t* parent)
 } // namespace walkie_page::ui::runtime
 
 #endif
-
-

@@ -1,11 +1,11 @@
+#include "ui/screens/tracker/tracker_page_components.h"
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/route_storage.h"
 #include "platform/ui/tracker_runtime.h"
-#include "ui/page/page_profile.h"
 #include "ui/assets/fonts/fonts.h"
-#include "ui/screens/tracker/tracker_page_components.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/tracker/tracker_page_input.h"
 #include "ui/screens/tracker/tracker_page_layout.h"
 #include "ui/screens/tracker/tracker_state.h"
@@ -1068,7 +1068,7 @@ void open_action_menu_modal()
     modal_prepare_group();
     const int max_modal_h = page_profile().large_touch_hitbox ? 320 : 220;
     const int modal_content_h = 56 + static_cast<int>(action_count) *
-                                static_cast<int>(action_menu_button_height() + action_menu_row_gap());
+                                         static_cast<int>(action_menu_button_height() + action_menu_row_gap());
     const int modal_h = std::min<int>(max_modal_h, modal_content_h);
     state.action_menu_modal = create_modal_root(190, modal_h);
     lv_obj_t* win = lv_obj_get_child(state.action_menu_modal, 0);
@@ -1362,7 +1362,7 @@ void on_del_confirm_clicked(lv_event_t*)
             app_ctx.saveConfig();
             state.active_route.clear();
         }
-                ok = platform::ui::route_storage::remove_route(path);
+        ok = platform::ui::route_storage::remove_route(path);
         if (ok)
         {
             state.selected_route_idx = -1;

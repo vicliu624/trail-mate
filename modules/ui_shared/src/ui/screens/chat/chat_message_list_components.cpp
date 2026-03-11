@@ -7,10 +7,10 @@
 #include "ui/screens/chat/chat_message_list_components.h"
 
 #include "chat/infra/mesh_protocol_utils.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/screens/chat/chat_message_list_input.h"
 #include "ui/screens/chat/chat_message_list_layout.h"
 #include "ui/screens/chat/chat_message_list_styles.h"
-#include "ui/assets/fonts/font_utils.h"
 #include "ui/ui_common.h"
 
 #include "sys/clock.h"
@@ -130,7 +130,7 @@ static const char* protocol_short_label(chat::MeshProtocol protocol)
 }
 
 static bool conversation_meta_equal(const chat::ConversationMeta& lhs,
-                                   const chat::ConversationMeta& rhs)
+                                    const chat::ConversationMeta& rhs)
 {
     return lhs.id == rhs.id &&
            lhs.name == rhs.name &&
@@ -463,7 +463,6 @@ bool ChatMessageListScreen::activateListButton(lv_obj_t* button)
                           (unsigned)items_.size());
     return false;
 }
-
 
 void ChatMessageListScreen::setActionCallback(
     void (*cb)(ActionIntent intent, const chat::ConversationId& conv, void*),

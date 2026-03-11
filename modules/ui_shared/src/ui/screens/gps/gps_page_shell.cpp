@@ -20,7 +20,8 @@ void enter(void* user_data, lv_obj_t* parent)
         user_data,
         parent,
         runtime::is_available(),
-        [](const Host* host, lv_obj_t* shell_parent) { runtime::enter(host, shell_parent); });
+        [](const Host* host, lv_obj_t* shell_parent)
+        { runtime::enter(host, shell_parent); });
 }
 
 void exit(void* user_data, lv_obj_t* parent)
@@ -30,7 +31,8 @@ void exit(void* user_data, lv_obj_t* parent)
         s_placeholder_state,
         parent,
         runtime::is_available(),
-        [](lv_obj_t* shell_parent) { runtime::exit(shell_parent); });
+        [](lv_obj_t* shell_parent)
+        { runtime::exit(shell_parent); });
 }
 
 } // namespace gps::ui::shell

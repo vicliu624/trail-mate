@@ -168,7 +168,6 @@ std::string trim_copy(const std::string& value)
     return value.substr(start, end - start);
 }
 
-
 std::string read_line(File& file)
 {
     std::string line;

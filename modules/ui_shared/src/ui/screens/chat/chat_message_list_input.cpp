@@ -170,4 +170,3 @@ void focus_list(Controller* controller)
 } // namespace chat
 
 #endif
-

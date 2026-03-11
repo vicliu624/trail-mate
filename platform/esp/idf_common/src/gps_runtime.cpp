@@ -4,18 +4,18 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <ctime>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <limits>
 #include <mutex>
 
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/boards/t_display_p4_board_profile.h"
+#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
 #include "platform/esp/idf_common/tab5_rtc_runtime.h"
 
@@ -35,14 +35,24 @@ constexpr uint32_t kProbeWarmupMs = 1500;
 constexpr uint32_t kProbeListenMs = 3500;
 constexpr uint32_t kNoDataWarnMs = 5000;
 
-enum class CollectorSlot : size_t { GPS = 0, GLN, GAL, BD, UNKNOWN, COUNT };
+enum class CollectorSlot : size_t
+{
+    GPS = 0,
+    GLN,
+    GAL,
+    BD,
+    UNKNOWN,
+    COUNT
+};
 
-struct GsvCollector {
+struct GsvCollector
+{
     std::array<gps::GnssSatInfo, gps::kMaxGnssSats> sats{};
     std::size_t count = 0;
 };
 
-struct RuntimeState {
+struct RuntimeState
+{
     gps::GpsState data{};
     std::array<gps::GnssSatInfo, gps::kMaxGnssSats> sats{};
     std::size_t sat_count = 0;
@@ -123,11 +133,16 @@ gps::GnssSystem system_for_slot(CollectorSlot slot)
 {
     switch (slot)
     {
-    case CollectorSlot::GPS: return gps::GnssSystem::GPS;
-    case CollectorSlot::GLN: return gps::GnssSystem::GLN;
-    case CollectorSlot::GAL: return gps::GnssSystem::GAL;
-    case CollectorSlot::BD: return gps::GnssSystem::BD;
-    default: return gps::GnssSystem::UNKNOWN;
+    case CollectorSlot::GPS:
+        return gps::GnssSystem::GPS;
+    case CollectorSlot::GLN:
+        return gps::GnssSystem::GLN;
+    case CollectorSlot::GAL:
+        return gps::GnssSystem::GAL;
+    case CollectorSlot::BD:
+        return gps::GnssSystem::BD;
+    default:
+        return gps::GnssSystem::UNKNOWN;
     }
 }
 
@@ -288,8 +303,8 @@ void maybe_sync_time_from_rmc_locked(const std::array<char*, kMaxFields>& fields
     const std::time_t now_epoch = std::time(nullptr);
     const bool system_valid = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(now_epoch);
     const long long delta_seconds = system_valid
-        ? std::llabs(static_cast<long long>(now_epoch) - static_cast<long long>(gnss_epoch))
-        : std::numeric_limits<long long>::max();
+                                        ? std::llabs(static_cast<long long>(now_epoch) - static_cast<long long>(gnss_epoch))
+                                        : std::numeric_limits<long long>::max();
     const bool needs_system_update = !system_valid || delta_seconds >= 2;
     const bool needs_commit = !s_runtime.time_sync_committed;
     if (!needs_system_update && !needs_commit)
@@ -345,8 +360,24 @@ void parse_rmc_locked(const std::array<char*, kMaxFields>& fields, std::size_t c
     double lat = 0.0, lng = 0.0, speed_knots = 0.0, course = 0.0;
     if (parse_latlon(fields[3], fields[4], true, &lat)) s_runtime.data.lat = lat;
     if (parse_latlon(fields[5], fields[6], false, &lng)) s_runtime.data.lng = lng;
-    if (parse_double(fields[7], &speed_knots)) { s_runtime.data.speed_mps = speed_knots * 0.514444; s_runtime.data.has_speed = true; } else { s_runtime.data.has_speed = false; }
-    if (parse_double(fields[8], &course)) { s_runtime.data.course_deg = course; s_runtime.data.has_course = true; } else { s_runtime.data.has_course = false; }
+    if (parse_double(fields[7], &speed_knots))
+    {
+        s_runtime.data.speed_mps = speed_knots * 0.514444;
+        s_runtime.data.has_speed = true;
+    }
+    else
+    {
+        s_runtime.data.has_speed = false;
+    }
+    if (parse_double(fields[8], &course))
+    {
+        s_runtime.data.course_deg = course;
+        s_runtime.data.has_course = true;
+    }
+    else
+    {
+        s_runtime.data.has_course = false;
+    }
     s_runtime.last_fix_ms = ts;
 }
 
@@ -356,10 +387,22 @@ void parse_gga_locked(const std::array<char*, kMaxFields>& fields, std::size_t c
     int quality = 0;
     if (parse_int(fields[6], &quality)) s_runtime.data.valid = quality > 0;
     uint32_t satellites = 0;
-    if (parse_uint(fields[7], &satellites)) { s_runtime.data.satellites = static_cast<uint8_t>(std::min<uint32_t>(satellites, 255)); s_runtime.status.sats_in_use = s_runtime.data.satellites; }
+    if (parse_uint(fields[7], &satellites))
+    {
+        s_runtime.data.satellites = static_cast<uint8_t>(std::min<uint32_t>(satellites, 255));
+        s_runtime.status.sats_in_use = s_runtime.data.satellites;
+    }
     double hdop = 0.0, altitude = 0.0;
     if (parse_double(fields[8], &hdop)) s_runtime.status.hdop = static_cast<float>(hdop);
-    if (parse_double(fields[9], &altitude)) { s_runtime.data.alt_m = altitude; s_runtime.data.has_alt = true; } else { s_runtime.data.has_alt = false; }
+    if (parse_double(fields[9], &altitude))
+    {
+        s_runtime.data.alt_m = altitude;
+        s_runtime.data.has_alt = true;
+    }
+    else
+    {
+        s_runtime.data.has_alt = false;
+    }
     if (s_runtime.data.valid) s_runtime.last_fix_ms = ts;
 }
 
@@ -401,7 +444,8 @@ void parse_gsv_locked(const char* talker, const std::array<char*, kMaxFields>& f
         gps::GnssSatInfo sat{};
         sat.id = static_cast<uint16_t>(sat_id);
         sat.sys = system_for_slot(collector_slot_for_talker(talker));
-        uint32_t elev = 0, az = 0; int snr = -1;
+        uint32_t elev = 0, az = 0;
+        int snr = -1;
         if (parse_uint(fields[base + 1], &elev)) sat.elevation = static_cast<uint8_t>(std::min<uint32_t>(elev, 90));
         if (parse_uint(fields[base + 2], &az)) sat.azimuth = static_cast<uint16_t>(std::min<uint32_t>(az, 359));
         if (parse_int(fields[base + 3], &snr)) sat.snr = static_cast<int8_t>(std::clamp(snr, -1, 99));

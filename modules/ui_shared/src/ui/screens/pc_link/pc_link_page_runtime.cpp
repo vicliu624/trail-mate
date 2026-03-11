@@ -2,9 +2,9 @@
 
 #if defined(ARDUINO) || defined(ESP_PLATFORM)
 
-#include "ui/assets/fonts/fonts.h"
 #include "platform/ui/hostlink_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/assets/fonts/fonts.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/top_bar.h"
 
@@ -213,9 +213,6 @@ void exit(lv_obj_t* parent)
 
 } // namespace pc_link::ui::runtime
 
-
-
-
 #else
 
 namespace pc_link::ui::runtime
@@ -240,4 +237,3 @@ void exit(lv_obj_t* parent)
 } // namespace pc_link::ui::runtime
 
 #endif
-

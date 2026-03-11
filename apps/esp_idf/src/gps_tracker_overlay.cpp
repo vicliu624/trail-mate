@@ -1,5 +1,5 @@
-﻿#include "ui/screens/gps/gps_state.h"
-#include "ui/screens/gps/gps_tracker_overlay.h"
+﻿#include "ui/screens/gps/gps_tracker_overlay.h"
+#include "ui/screens/gps/gps_state.h"
 
 #include <cstdio>
 

@@ -99,7 +99,9 @@ bool ui_take_screenshot_to_sd()
     char path[128] = {0};
     const time_t now = time(nullptr);
     const time_t local = ui_apply_timezone_offset(now);
-    struct tm info {};
+    struct tm info
+    {
+    };
     if (gmtime_r(&local, &info) != nullptr)
     {
         strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", &info);
@@ -182,4 +184,3 @@ bool ui_take_screenshot_to_sd()
     return false;
 #endif
 }
-

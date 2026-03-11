@@ -1,5 +1,5 @@
-#include "ui/app_catalog_builder.h"
 #include "ui/app_registry.h"
+#include "ui/app_catalog_builder.h"
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/hostlink_runtime.h"

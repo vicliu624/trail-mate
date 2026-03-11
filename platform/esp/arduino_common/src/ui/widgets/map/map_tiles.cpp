@@ -7,12 +7,12 @@
 #include "display/DisplayInterface.h"
 #include "freertos/FreeRTOS.h"
 #include "lvgl.h"
-#include "ui/support/lvgl_fs_utils.h"
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
-#include "ui/screens/gps/gps_constants.h"
-#include "ui/page/page_profile.h"
 #include "sys/clock.h"
+#include "ui/page/page_profile.h"
+#include "ui/screens/gps/gps_constants.h"
+#include "ui/support/lvgl_fs_utils.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -1264,7 +1264,7 @@ static void mark_all_invisible(TileContext& ctx, int target_zoom)
             tile.has_png_file = false;
             tile.contour_checked = false;
             tile.contour_loaded = false;
-            tile.cached_img = NULL;         // Clear cache reference
+            tile.cached_img = NULL;                  // Clear cache reference
             tile.obj_evicted_ms = sys::millis_now(); // Mark as evicted for record cleanup protection
         }
     }

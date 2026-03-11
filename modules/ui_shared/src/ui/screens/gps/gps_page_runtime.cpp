@@ -6,6 +6,7 @@ using Host = gps::ui::shell::Host;
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_modal.h"
 #include "ui/screens/gps/gps_page_components.h"
@@ -17,7 +18,6 @@ using Host = gps::ui::shell::Host;
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
-#include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
 
@@ -55,7 +55,7 @@ void request_exit()
     ui_request_exit_to_menu();
 }
 
-}
+} // namespace
 
 static void gps_top_bar_back(void* /*user_data*/)
 {
@@ -333,7 +333,6 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
 
-    
     gps::ui::layout::Spec spec{};
     gps::ui::layout::Widgets w{};
     gps::ui::layout::create(parent, spec, w);
@@ -485,7 +484,7 @@ void exit(lv_obj_t* parent)
     g_gps_state.toast_timer = nullptr;
     GPS_LOG("[GPS][EXIT] timers cleared\n");
 
-        if (app_g)
+    if (app_g)
     {
         auto remove_if = [](lv_obj_t* obj)
         {
@@ -564,7 +563,6 @@ void exit(lv_obj_t* parent)
 }
 
 } // namespace gps::ui::runtime
-
 
 #else
 

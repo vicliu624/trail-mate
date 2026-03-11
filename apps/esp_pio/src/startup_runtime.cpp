@@ -2,8 +2,8 @@
 
 #include <Arduino.h>
 
-#include "apps/esp_pio/app_runtime_access.h"
 #include "app/app_facade_access.h"
+#include "apps/esp_pio/app_runtime_access.h"
 #include "board/BoardBase.h"
 #include "display/DisplayConfig.h"
 #include "platform/esp/arduino_common/display_runtime.h"
@@ -20,7 +20,8 @@ void initializeShell()
     ui::startup_shell::Hooks hooks{};
     hooks.messaging = &app::messagingFacade();
     hooks.apps = ui::appCatalog();
-    hooks.set_max_brightness = []() { board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL); };
+    hooks.set_max_brightness = []()
+    { board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL); };
     hooks.show_main_menu = menu_show;
     hooks.watch_face = ui::startup_shell::defaultWatchFaceHooks();
     ui::startup_shell::initializeShell(hooks);

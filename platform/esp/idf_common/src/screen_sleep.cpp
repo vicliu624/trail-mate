@@ -16,7 +16,8 @@
 #include "platform/ui/settings_store.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-extern "C" {
+extern "C"
+{
 #include "bsp/trail_mate_tab5_runtime.h"
 }
 #endif

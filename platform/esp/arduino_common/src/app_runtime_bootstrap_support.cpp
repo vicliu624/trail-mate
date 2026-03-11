@@ -33,7 +33,7 @@ bool bootstrapAppContext(app::AppContext& app_context,
     app_context.attachEventRuntimeHooks(platform::esp::arduino_common::makeAppEventRuntimeHooks());
     result.app_context_bound = true;
     result.background_tasks = platform::esp::arduino_common::startBackgroundTasks(handles.lora_board,
-                                                                                   app_context.getMeshAdapter());
+                                                                                  app_context.getMeshAdapter());
 
     if (out_result)
     {

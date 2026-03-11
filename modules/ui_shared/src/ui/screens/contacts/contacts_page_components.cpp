@@ -3,6 +3,7 @@
  * @brief Contacts page behavior implementation on top of shared layout/styles
  */
 
+#include "ui/screens/contacts/contacts_page_components.h"
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/infra/mesh_protocol_utils.h"
@@ -13,10 +14,10 @@
 #include "team/protocol/team_chat.h"
 #include "team/protocol/team_position.h"
 #include "team/usecase/team_controller.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
 #include "ui/screens/chat/chat_page_shell.h"
-#include "ui/screens/contacts/contacts_page_components.h"
 #include "ui/screens/contacts/contacts_page_input.h"
 #include "ui/screens/contacts/contacts_page_layout.h"
 #include "ui/screens/contacts/contacts_page_styles.h"
@@ -24,7 +25,6 @@
 #include "ui/screens/node_info/node_info_page_components.h"
 #include "ui/screens/team/team_state.h"
 #include "ui/screens/team/team_ui_store.h"
-#include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
@@ -44,7 +44,6 @@
 #endif
 
 using namespace contacts::ui;
-
 
 static constexpr int kItemsPerPage = 4;
 static constexpr int kButtonHeight = 28;
@@ -2617,7 +2616,3 @@ void cleanup_modals()
     }
     g_contacts_state.prev_group = nullptr;
 }
-
-
-
-

@@ -1260,7 +1260,7 @@ void ui_gnss_skyplot_enter(lv_obj_t* parent)
         s_refresh_timer = lv_timer_create(refresh_timer_cb, 1000, nullptr);
     }
 
-        if (app_g && s_ui.top_bar.back_btn)
+    if (app_g && s_ui.top_bar.back_btn)
     {
         lv_group_remove_all_objs(app_g);
         lv_group_add_obj(app_g, s_ui.top_bar.back_btn);
@@ -1315,5 +1315,3 @@ void exit(lv_obj_t* parent)
 }
 
 } // namespace gnss::ui::runtime
-
-

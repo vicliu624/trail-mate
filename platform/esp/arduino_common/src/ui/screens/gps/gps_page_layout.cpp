@@ -53,7 +53,7 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 
     const auto& profile = ::ui::page_profile::current();
     const lv_coord_t header_height = profile.top_bar_height > 0 ? profile.top_bar_height
-                                                                 : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
+                                                                : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
 
     w.root = lv_obj_create(parent);
     lv_obj_set_size(w.root, LV_PCT(100), LV_PCT(100));

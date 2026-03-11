@@ -3,8 +3,8 @@
 #include <cmath>
 #include <limits>
 
-#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/boards/t_display_p4_board_profile.h"
+#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
 
 namespace

@@ -7,10 +7,10 @@
  * custom memory management for LVGL v9.x.
  */
 
+#include "display/DisplayInterface.h"
 #include "input/morse_engine.h"
 #include "screen_sleep.h"
 #include "ui/LV_Helper.h"
-#include "display/DisplayInterface.h"
 #include "ui/app_runtime.h"
 #include "walkie/walkie_service.h"
 #include <Arduino.h>

@@ -18,16 +18,15 @@
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/tracker_runtime.h"
+#include "ui/page/page_profile.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
 #include "ui/screens/settings/settings_page_layout.h"
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
-#include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 #include "ui/widgets/top_bar.h"
-
 
 namespace settings::ui::components
 {
@@ -1312,7 +1311,7 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.getConfig().privacy_nmea_output = static_cast<uint8_t>(payload->value);
         app_ctx.saveConfig();
         gps_runtime::set_nmea_config(app_ctx.getConfig().privacy_nmea_output,
-                                 app_ctx.getConfig().privacy_nmea_sentence);
+                                     app_ctx.getConfig().privacy_nmea_sentence);
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_nmea_sent") == 0)
     {
@@ -1320,7 +1319,7 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.getConfig().privacy_nmea_sentence = static_cast<uint8_t>(payload->value);
         app_ctx.saveConfig();
         gps_runtime::set_nmea_config(app_ctx.getConfig().privacy_nmea_output,
-                                 app_ctx.getConfig().privacy_nmea_sentence);
+                                     app_ctx.getConfig().privacy_nmea_sentence);
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0)
     {
@@ -1368,7 +1367,7 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
     // Overlay only below top bar; list starts 3px under top bar, no title
     const auto& profile = ::ui::page_profile::current();
     const lv_coord_t kTopBarH = profile.top_bar_height > 0 ? profile.top_bar_height
-                                                            : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
+                                                           : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
     const lv_coord_t kGapFromTopBar = 3;
 
     lv_coord_t content_h = lv_obj_get_height(g_state.root) - kTopBarH;
@@ -2164,4 +2163,3 @@ void destroy()
 }
 
 } // namespace settings::ui::components
-

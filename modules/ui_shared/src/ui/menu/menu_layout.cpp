@@ -8,8 +8,8 @@
 #include "ui/app_runtime.h"
 #include "ui/menu/menu_profile.h"
 #include "ui/ui_common.h"
-#include "ui/ui_theme.h"
 #include "ui/ui_status.h"
+#include "ui/ui_theme.h"
 
 namespace ui
 {

@@ -2,16 +2,16 @@
 
 #if defined(ARDUINO) || defined(ESP_PLATFORM)
 
-#include "ui/LV_Helper.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/sstv_runtime.h"
+#include "ui/LV_Helper.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
 #define lv_font_montserrat_12 lv_font_montserrat_14
@@ -742,9 +742,6 @@ void exit(lv_obj_t* parent)
 }
 
 } // namespace sstv_page::ui::runtime
-
-
-
 
 #else
 

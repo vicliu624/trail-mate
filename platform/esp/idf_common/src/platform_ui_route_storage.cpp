@@ -25,15 +25,15 @@ bool has_kml_extension(const std::string& name)
     }
     std::string lower = name;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch)
-    {
-        return static_cast<char>(std::tolower(ch));
-    });
+                   { return static_cast<char>(std::tolower(ch)); });
     return lower.compare(lower.size() - 4, 4, ".kml") == 0;
 }
 
 bool is_regular_file(const std::string& path)
 {
-    struct stat st {};
+    struct stat st
+    {
+    };
     return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 

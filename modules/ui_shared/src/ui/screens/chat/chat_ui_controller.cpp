@@ -10,12 +10,12 @@
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/screen_runtime.h"
-#include "sys/event_bus.h"
 #include "sys/clock.h"
+#include "sys/event_bus.h"
 #include "team/protocol/team_location_marker.h"
 #include "team/usecase/team_controller.h"
-#include "ui/screens/team/team_ui_store.h"
 #include "ui/page/page_profile.h"
+#include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
@@ -396,7 +396,7 @@ void UiController::onChatEvent(sys::Event* event)
     {
         sys::ChatNewMessageEvent* msg_event = (sys::ChatNewMessageEvent*)event;
         CHAT_UI_LOG("[UiController::onChatEvent] ChatNewMessage received: channel=%d, state=%d, current_channel=%d\n",
-                      msg_event->channel, (int)state_, (int)current_channel_);
+                    msg_event->channel, (int)state_, (int)current_channel_);
 
         // Note: Haptic feedback is now handled by the app runtime event pump
         // No need to call vibrator() here
@@ -454,16 +454,16 @@ void UiController::switchToChannelList()
     stopTeamConversationTimer();
     team_conv_active_ = false;
     CHAT_UI_LOG("[UiController] switchToChannelList: parent=%p active=%p sleeping=%d\n",
-                  parent_, lv_screen_active(), platform::ui::screen::is_sleeping() ? 1 : 0);
+                parent_, lv_screen_active(), platform::ui::screen::is_sleeping() ? 1 : 0);
     if (lv_obj_t* active = lv_screen_active())
     {
         CHAT_UI_LOG("[UiController] switchToChannelList active child count=%u\n",
-                      (unsigned)lv_obj_get_child_cnt(active));
+                    (unsigned)lv_obj_get_child_cnt(active));
     }
     if (parent_)
     {
         CHAT_UI_LOG("[UiController] switchToChannelList parent child count=%u\n",
-                      (unsigned)lv_obj_get_child_cnt(parent_));
+                    (unsigned)lv_obj_get_child_cnt(parent_));
     }
 
     if (conversation_)
@@ -495,17 +495,17 @@ void UiController::switchToConversation(chat::ConversationId conv)
     team_conv_active_ = isTeamConversation(conv);
     stopTeamConversationTimer();
     CHAT_UI_LOG("[UiController] switchToConversation: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
-                  parent_, lv_screen_active(), platform::ui::screen::is_sleeping() ? 1 : 0,
-                  (unsigned long)conv.peer);
+                parent_, lv_screen_active(), platform::ui::screen::is_sleeping() ? 1 : 0,
+                (unsigned long)conv.peer);
     if (lv_obj_t* active = lv_screen_active())
     {
         CHAT_UI_LOG("[UiController] switchToConversation active child count=%u\n",
-                      (unsigned)lv_obj_get_child_cnt(active));
+                    (unsigned)lv_obj_get_child_cnt(active));
     }
     if (parent_)
     {
         CHAT_UI_LOG("[UiController] switchToConversation parent child count=%u\n",
-                      (unsigned)lv_obj_get_child_cnt(parent_));
+                    (unsigned)lv_obj_get_child_cnt(parent_));
     }
 
     if (channel_list_)
@@ -615,17 +615,17 @@ void UiController::switchToCompose(chat::ConversationId conv)
 
     stopTeamConversationTimer();
     CHAT_UI_LOG("[UiController] switchToCompose: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
-                  parent_, lv_screen_active(), platform::ui::screen::is_sleeping() ? 1 : 0,
-                  (unsigned long)conv.peer);
+                parent_, lv_screen_active(), platform::ui::screen::is_sleeping() ? 1 : 0,
+                (unsigned long)conv.peer);
     if (lv_obj_t* active = lv_screen_active())
     {
         CHAT_UI_LOG("[UiController] switchToCompose active child count=%u\n",
-                      (unsigned)lv_obj_get_child_cnt(active));
+                    (unsigned)lv_obj_get_child_cnt(active));
     }
     if (parent_)
     {
         CHAT_UI_LOG("[UiController] switchToCompose parent child count=%u\n",
-                      (unsigned)lv_obj_get_child_cnt(parent_));
+                    (unsigned)lv_obj_get_child_cnt(parent_));
     }
 
     if (channel_list_)
@@ -1380,5 +1380,3 @@ void UiController::exitToMenu()
 
 } // namespace ui
 } // namespace chat
-
-

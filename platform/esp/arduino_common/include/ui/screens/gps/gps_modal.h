@@ -31,9 +31,9 @@ lv_coord_t modal_resolve_action_button_height();
 lv_obj_t* modal_create_touch_title_bar(lv_obj_t* win, const char* title);
 lv_obj_t* modal_create_touch_content_area(lv_obj_t* win, lv_coord_t title_height);
 lv_obj_t* modal_create_touch_action_button(lv_obj_t* parent,
-                                          const char* text,
-                                          lv_event_cb_t cb,
-                                          void* user_data,
-                                          lv_coord_t width);
+                                           const char* text,
+                                           lv_event_cb_t cb,
+                                           void* user_data,
+                                           lv_coord_t width);
 
 #endif // GPS_MODAL_H

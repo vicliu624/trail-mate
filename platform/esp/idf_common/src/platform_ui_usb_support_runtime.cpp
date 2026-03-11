@@ -1,23 +1,23 @@
 ﻿#include "platform/ui/usb_support_runtime.h"
 
 #include "app/app_facade_access.h"
-#include "sdkconfig.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "platform/esp/arduino_common/gps/gps_service_api.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
 #include "screen_sleep.h"
+#include "sdkconfig.h"
 #include "team/usecase/team_pairing_service.h"
 
 #include <cstdio>
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-#include "esp_err.h"
 #include "driver/sdmmc_host.h"
+#include "esp_err.h"
 #include "platform/esp/boards/tab5_board_profile.h"
-#include "sdmmc_cmd.h"
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
+#include "sdmmc_cmd.h"
 #include "tinyusb.h"
 #include "tusb_msc_storage.h"
 extern "C" esp_err_t bsp_sdcard_init(char* mount_point, size_t max_files);

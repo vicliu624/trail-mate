@@ -468,9 +468,9 @@ void walkie_task(void*)
             if (current_ms - last_mic_log_ms >= kMicLogIntervalMs)
             {
                 std::printf("[WALKIE] mic read ok=%lu fail=%lu last=%d\n",
-                              static_cast<unsigned long>(tx_read_ok),
-                              static_cast<unsigned long>(tx_read_fail),
-                              last_read_state);
+                            static_cast<unsigned long>(tx_read_ok),
+                            static_cast<unsigned long>(tx_read_fail),
+                            last_read_state);
                 tx_read_ok = 0;
                 tx_read_fail = 0;
                 last_mic_log_ms = current_ms;
@@ -478,10 +478,10 @@ void walkie_task(void*)
             if (current_ms - last_audio_log_ms >= 1000)
             {
                 std::printf("[WALKIE] tx lvl=%u peak=%d q=%u inflight=%d\n",
-                              static_cast<unsigned>(tx_level),
-                              static_cast<int>(last_tx_peak),
-                              static_cast<unsigned>(tx_frame_count),
-                              tx_in_flight ? 1 : 0);
+                            static_cast<unsigned>(tx_level),
+                            static_cast<int>(last_tx_peak),
+                            static_cast<unsigned>(tx_frame_count),
+                            tx_in_flight ? 1 : 0);
                 last_audio_log_ms = current_ms;
             }
             vTaskDelay(pdMS_TO_TICKS(2));
@@ -709,10 +709,10 @@ void walkie_task(void*)
             if (rx_pkts != 0 || rx_bad != 0)
             {
                 std::printf("[WALKIE] rx ok=%lu bad=%lu last_len=%d state=%d\n",
-                              static_cast<unsigned long>(rx_pkts),
-                              static_cast<unsigned long>(rx_bad),
-                              last_rx_len,
-                              last_rx_state);
+                            static_cast<unsigned long>(rx_pkts),
+                            static_cast<unsigned long>(rx_bad),
+                            last_rx_len,
+                            last_rx_state);
             }
             rx_pkts = 0;
             rx_bad = 0;
@@ -723,11 +723,11 @@ void walkie_task(void*)
         if (current_ms - last_audio_log_ms >= 1000)
         {
             std::printf("[WALKIE] rx lvl=%u peak=%d buf=%u pre=%u underrun=%lu\n",
-                          static_cast<unsigned>(rx_level),
-                          static_cast<int>(last_rx_peak),
-                          static_cast<unsigned>(rx_frame_count),
-                          static_cast<unsigned>(rx_target_prebuffer),
-                          static_cast<unsigned long>(rx_underruns));
+                        static_cast<unsigned>(rx_level),
+                        static_cast<int>(last_rx_peak),
+                        static_cast<unsigned>(rx_frame_count),
+                        static_cast<unsigned>(rx_target_prebuffer),
+                        static_cast<unsigned long>(rx_underruns));
             last_audio_log_ms = current_ms;
         }
 
@@ -797,8 +797,8 @@ bool start()
     update_status_freq(freq_mhz);
 
     std::printf("[WALKIE] config freq=%.3f br=%.1f dev=%.1f rxBw=%.1f preamble=%u pwr=%d\n",
-                  freq_mhz, kFskBitRateKbps, kFskFreqDevKHz, kFskRxBwKHz,
-                  kFskPreambleLen, config.meshtastic_config.tx_power);
+                freq_mhz, kFskBitRateKbps, kFskFreqDevKHz, kFskRxBwKHz,
+                kFskPreambleLen, config.meshtastic_config.tx_power);
 
     char runtime_error[64] = {0};
     if (!walkie_runtime::configureFsk(&s_runtime_session,

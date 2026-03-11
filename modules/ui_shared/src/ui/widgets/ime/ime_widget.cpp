@@ -29,15 +29,13 @@ static const char* kTouchEnMap[] = {
     "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "Bksp", "\n",
     "a", "s", "d", "f", "g", "h", "j", "k", "l", "Enter", "\n",
     "z", "x", "c", "v", "b", "n", "m", ",", ".", "?", "\n",
-    "Space", ""
-};
+    "Space", ""};
 
 static const char* kTouchNumMap[] = {
     "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Bksp", "\n",
     "-", "/", ":", ";", "(", ")", "$", "&", "@", "Enter", "\n",
     ".", ",", "?", "!", "'", "\"", "%", "+", "\n",
-    "Space", ""
-};
+    "Space", ""};
 #endif
 std::string make_candidates_text(const std::vector<std::string>& candidates, int active_idx)
 {
@@ -174,7 +172,6 @@ bool resolve_touch_button_id(lv_event_t* e, lv_obj_t* matrix, uint32_t& button_i
 }
 #endif
 
-
 } // namespace
 
 extern "C" void ui_ime_toggle_mode()
@@ -263,8 +260,7 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
         {
             ImeWidget* self = static_cast<ImeWidget*>(lv_event_get_user_data(e));
             if (!self) return;
-            self->handle_key(e);
-        },
+            self->handle_key(e); },
         LV_EVENT_KEY, this);
 
     candidates_label_ = lv_label_create(container_);
@@ -331,8 +327,7 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
         {
             ImeWidget* self = static_cast<ImeWidget*>(lv_event_get_user_data(e));
             if (!self) return;
-            self->handle_key(e);
-        },
+            self->handle_key(e); },
         LV_EVENT_KEY, this);
 
     candidates_label_ = lv_label_create(top_row_);
@@ -399,7 +394,6 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     refresh_touch_candidates();
 }
 #endif
-
 
 void ImeWidget::detach()
 {
@@ -769,7 +763,6 @@ void ImeWidget::refresh_touch_candidates()
 }
 #endif
 
-
 void ImeWidget::refresh_labels()
 {
     if (!toggle_label_ || !candidates_label_)
@@ -944,7 +937,6 @@ void ImeWidget::on_candidate_nav_clicked(lv_event_t* e)
     }
 }
 #endif
-
 
 } // namespace widgets
 } // namespace ui

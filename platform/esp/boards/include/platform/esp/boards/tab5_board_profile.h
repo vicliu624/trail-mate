@@ -99,4 +99,3 @@ inline constexpr BoardProfile kBoardProfile{
 };
 
 } // namespace platform::esp::boards::tab5
-

@@ -13,9 +13,9 @@
 
 extern "C"
 {
-i2c_master_bus_handle_t bsp_i2c_get_handle(void);
-bool bsp_i2c_lock(uint32_t timeout_ms);
-void bsp_i2c_unlock(void);
+    i2c_master_bus_handle_t bsp_i2c_get_handle(void);
+    bool bsp_i2c_lock(uint32_t timeout_ms);
+    void bsp_i2c_unlock(void);
 }
 #endif
 
@@ -107,7 +107,7 @@ uint8_t weekday_mask_from_date(int year, uint8_t month, uint8_t day)
 
 class ScopedRtcDevice
 {
-public:
+  public:
     ScopedRtcDevice()
     {
         if (!bsp_i2c_lock(kI2cTimeoutMs))
@@ -198,7 +198,7 @@ public:
         return write(reg, &value, 1);
     }
 
-private:
+  private:
     bool locked_ = false;
     i2c_master_dev_handle_t handle_ = nullptr;
 };

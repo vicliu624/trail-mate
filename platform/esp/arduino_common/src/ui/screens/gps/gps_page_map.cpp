@@ -4,7 +4,9 @@
 #include "chat/usecase/contact_service.h"
 #include "lvgl.h"
 #include "platform/ui/device_runtime.h"
+#include "platform/ui/gps_runtime.h"
 #include "screen_sleep.h"
+#include "sys/clock.h"
 #include "team/protocol/team_location_marker.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_page_components.h"
@@ -16,8 +18,6 @@
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
-#include "platform/ui/gps_runtime.h"
-#include "sys/clock.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -705,7 +705,6 @@ void update_map_tiles(bool lightweight)
         update_team_marker_positions();
         update_team_signal_marker_positions();
     }
-
 }
 
 /**

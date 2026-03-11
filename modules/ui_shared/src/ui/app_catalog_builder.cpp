@@ -211,4 +211,3 @@ AppCatalog build(const FeatureFlags& flags)
 }
 
 } // namespace ui::app_catalog_builder
-

@@ -12,11 +12,11 @@
 #include "ui/widgets/map/map_tiles.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <cstring>
-#include <cmath>
 #include <cctype>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -62,13 +62,10 @@ std::string trim_copy(std::string value)
     };
 
     value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](char ch)
-    {
-        return !is_space(static_cast<unsigned char>(ch));
-    }));
+                                            { return !is_space(static_cast<unsigned char>(ch)); }));
     value.erase(std::find_if(value.rbegin(), value.rend(), [&](char ch)
-    {
-        return !is_space(static_cast<unsigned char>(ch));
-    }).base(),
+                             { return !is_space(static_cast<unsigned char>(ch)); })
+                    .base(),
                 value.end());
     return value;
 }
@@ -563,7 +560,7 @@ bool gps_tracker_load_file(const char* path, bool show_fail_toast)
     std::vector<GPSPageState::TrackOverlayPoint> points;
     const std::string lower_path = ui::fs::normalize_path(path);
     const bool loaded = ends_with_ignore_case(lower_path, ".csv") ? load_csv_points(path, points)
-                                                                    : load_gpx_points(path, points);
+                                                                  : load_gpx_points(path, points);
     if (!loaded)
     {
         if (show_fail_toast)

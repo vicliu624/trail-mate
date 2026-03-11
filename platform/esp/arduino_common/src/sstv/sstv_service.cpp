@@ -116,7 +116,9 @@ struct StorageFacade
 {
     bool exists(const char* path) const
     {
-        struct stat st {};
+        struct stat st
+        {
+        };
         return ::stat(resolve_sd_path(path).c_str(), &st) == 0;
     }
 
@@ -1483,4 +1485,3 @@ uint16_t frame_height()
 } // namespace sstv
 
 #endif
-

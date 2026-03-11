@@ -26,12 +26,16 @@ void loopTask(void* parameter)
     (void)parameter;
 
     ui::loop_shell::Hooks hooks{};
-    hooks.now_ms = []() -> uint32_t {
+    hooks.now_ms = []() -> uint32_t
+    {
         return static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
     };
-    hooks.update_runtime = []() { app_runtime_access::tick(); };
-    hooks.yield_now = []() { taskYIELD(); };
-    hooks.sleep_ms = [](uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); };
+    hooks.update_runtime = []()
+    { app_runtime_access::tick(); };
+    hooks.yield_now = []()
+    { taskYIELD(); };
+    hooks.sleep_ms = [](uint32_t ms)
+    { vTaskDelay(pdMS_TO_TICKS(ms)); };
     hooks.overlay_sleep_ms = s_loop.config.loop_delay_ms;
     hooks.idle_sleep_ms = s_loop.config.loop_delay_ms;
 

@@ -12,10 +12,10 @@
 #include "ui/widgets/map/map_tiles.h"
 
 #include <algorithm>
-#include <cstring>
-#include <cmath>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -129,7 +129,7 @@ bool parse_lon_lat_token(const std::string& token, double& lon, double& lat)
     const std::size_t lat_end = token.find_first_of(", \t\r\n", lat_start);
     const std::string lon_token = token.substr(0, split);
     const std::string lat_token = lat_end == std::string::npos ? token.substr(lat_start)
-                                                                : token.substr(lat_start, lat_end - lat_start);
+                                                               : token.substr(lat_start, lat_end - lat_start);
     return parse_double_token(lon_token, lon) && parse_double_token(lat_token, lat);
 }
 

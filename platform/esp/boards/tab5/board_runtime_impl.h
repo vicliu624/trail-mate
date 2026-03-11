@@ -8,10 +8,11 @@
 #include "platform/esp/boards/board_runtime.h"
 #include "platform/esp/boards/tab5_board_profile.h"
 
-extern "C" {
+extern "C"
+{
 #include "bsp/trail_mate_tab5_runtime.h"
 
-void bsp_set_ext_5v_en(bool en);
+    void bsp_set_ext_5v_en(bool en);
 }
 
 namespace platform::esp::boards::detail

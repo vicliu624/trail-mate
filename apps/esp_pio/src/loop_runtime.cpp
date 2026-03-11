@@ -47,23 +47,28 @@ namespace apps::esp_pio::loop_runtime
 void tick()
 {
     ui::loop_shell::Hooks hooks{};
-    hooks.now_ms = []() -> uint32_t { return millis(); };
-    hooks.is_overlay_active = []() -> bool {
+    hooks.now_ms = []() -> uint32_t
+    { return millis(); };
+    hooks.is_overlay_active = []() -> bool
+    {
         return ui_is_overlay_active();
     };
-    hooks.handle_power_button = []() { board.handlePowerButton(); };
-    hooks.update_runtime = []() { apps::esp_pio::app_runtime_access::tick(); };
-    hooks.display_tick_if_due = [](uint32_t now_ms) {
+    hooks.handle_power_button = []()
+    { board.handlePowerButton(); };
+    hooks.update_runtime = []()
+    { apps::esp_pio::app_runtime_access::tick(); };
+    hooks.display_tick_if_due = [](uint32_t now_ms)
+    {
         log_loop_interval(now_ms);
         platform::esp::arduino_common::display_runtime::tickIfDue(now_ms);
     };
-    hooks.yield_now = []() { yield(); };
-    hooks.sleep_ms = [](uint32_t ms) { delay(ms); };
+    hooks.yield_now = []()
+    { yield(); };
+    hooks.sleep_ms = [](uint32_t ms)
+    { delay(ms); };
     hooks.overlay_sleep_ms = 10;
     hooks.idle_sleep_ms = 2;
     ui::loop_shell::tick(hooks);
 }
 
 } // namespace apps::esp_pio::loop_runtime
-
-

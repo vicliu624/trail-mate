@@ -10,29 +10,30 @@
 #include "driver/i2s_std.h"
 extern "C"
 {
-typedef esp_err_t (*bsp_i2s_read_fn)(void* audio_buffer, size_t len, size_t* bytes_read, uint32_t timeout_ms);
-typedef esp_err_t (*bsp_i2s_write_fn)(void* audio_buffer, size_t len, size_t* bytes_written, uint32_t timeout_ms);
-typedef esp_err_t (*bsp_codec_set_in_gain_fn)(float gain);
-typedef esp_err_t (*bsp_codec_mute_fn)(bool enable);
-typedef int (*bsp_codec_volume_fn)(int volume);
-typedef esp_err_t (*bsp_codec_get_volume_fn)(void);
-typedef esp_err_t (*bsp_codec_reconfig_fn)(uint32_t rate, uint32_t bps, i2s_slot_mode_t ch);
-typedef esp_err_t (*bsp_i2s_reconfig_clk_fn)(uint32_t rate, uint32_t bits_cfg, i2s_slot_mode_t ch);
+    typedef esp_err_t (*bsp_i2s_read_fn)(void* audio_buffer, size_t len, size_t* bytes_read, uint32_t timeout_ms);
+    typedef esp_err_t (*bsp_i2s_write_fn)(void* audio_buffer, size_t len, size_t* bytes_written, uint32_t timeout_ms);
+    typedef esp_err_t (*bsp_codec_set_in_gain_fn)(float gain);
+    typedef esp_err_t (*bsp_codec_mute_fn)(bool enable);
+    typedef int (*bsp_codec_volume_fn)(int volume);
+    typedef esp_err_t (*bsp_codec_get_volume_fn)(void);
+    typedef esp_err_t (*bsp_codec_reconfig_fn)(uint32_t rate, uint32_t bps, i2s_slot_mode_t ch);
+    typedef esp_err_t (*bsp_i2s_reconfig_clk_fn)(uint32_t rate, uint32_t bits_cfg, i2s_slot_mode_t ch);
 
-typedef struct {
-    bsp_i2s_read_fn i2s_read;
-    bsp_i2s_write_fn i2s_write;
-    bsp_codec_mute_fn set_mute;
-    bsp_codec_volume_fn set_volume;
-    bsp_codec_get_volume_fn get_volume;
-    bsp_codec_set_in_gain_fn set_in_gain;
-    bsp_codec_reconfig_fn codec_reconfig_fn;
-    bsp_i2s_reconfig_clk_fn i2s_reconfig_clk_fn;
-} bsp_codec_config_t;
+    typedef struct
+    {
+        bsp_i2s_read_fn i2s_read;
+        bsp_i2s_write_fn i2s_write;
+        bsp_codec_mute_fn set_mute;
+        bsp_codec_volume_fn set_volume;
+        bsp_codec_get_volume_fn get_volume;
+        bsp_codec_set_in_gain_fn set_in_gain;
+        bsp_codec_reconfig_fn codec_reconfig_fn;
+        bsp_i2s_reconfig_clk_fn i2s_reconfig_clk_fn;
+    } bsp_codec_config_t;
 
-void bsp_codec_init(void);
-bsp_codec_config_t* bsp_get_codec_handle(void);
-uint8_t bsp_codec_feed_channel(void);
+    void bsp_codec_init(void);
+    bsp_codec_config_t* bsp_get_codec_handle(void);
+    uint8_t bsp_codec_feed_channel(void);
 }
 #endif
 

@@ -4,7 +4,7 @@ static const ili9881c_lcd_init_cmd_t tab5_lcd_ili9881c_specific_init_code_defaul
     // {cmd, { data }, data_size, delay}
     /**** CMD_Page 1 ****/
     {0xFF, (uint8_t[]){0x98, 0x81, 0x01}, 3, 0},
-    {0xB7, (uint8_t[]){0x03}, 1, 0},  // set 2 lane
+    {0xB7, (uint8_t[]){0x03}, 1, 0}, // set 2 lane
     /**** CMD_Page 3 ****/
     {0xFF, (uint8_t[]){0x98, 0x81, 0x03}, 3, 0},
     {0x01, (uint8_t[]){0x00}, 1, 0},
