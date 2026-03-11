@@ -48,6 +48,8 @@ struct MenuLayoutProfile
     lv_coord_t grid_top_offset = 30;
     lv_coord_t grid_pad_row = 6;
     lv_coord_t grid_pad_column = 6;
+    lv_coord_t grid_pad_left = 0;
+    lv_coord_t grid_pad_right = 0;
 
     lv_coord_t top_bar_height = 30;
     lv_coord_t top_bar_side_inset = 5;

@@ -317,7 +317,10 @@ void createAppGrid()
     lv_obj_t* panel = lv_obj_create(s_menu_panel);
     lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_size(panel, LV_PCT(100), LV_PCT(profile.grid_height_pct));
-    lv_obj_set_style_pad_all(panel, 0, 0);
+    lv_obj_set_style_pad_top(panel, 0, 0);
+    lv_obj_set_style_pad_bottom(panel, 0, 0);
+    lv_obj_set_style_pad_left(panel, profile.grid_pad_left, 0);
+    lv_obj_set_style_pad_right(panel, profile.grid_pad_right, 0);
     lv_obj_set_style_pad_row(panel, profile.grid_pad_row, 0);
     lv_obj_set_style_pad_column(panel, profile.grid_pad_column, 0);
     lv_obj_set_scroll_dir(panel, profile.vertical_scroll ? LV_DIR_VER : LV_DIR_HOR);
