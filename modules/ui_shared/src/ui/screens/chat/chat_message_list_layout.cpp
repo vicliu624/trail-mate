@@ -43,6 +43,10 @@ Metrics current_metrics()
         metrics.unread_x = 72;
         metrics.time_x = 16;
     }
+    else
+    {
+        metrics.filter_panel_width = std::max(metrics.filter_panel_width, 104);
+    }
     return metrics;
 }
 

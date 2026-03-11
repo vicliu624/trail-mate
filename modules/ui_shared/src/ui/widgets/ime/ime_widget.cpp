@@ -24,6 +24,7 @@ namespace
 ImeWidget* s_active_ime = nullptr;
 static constexpr int kCandidatesPerPage = 12;
 
+#if UI_SHARED_TOUCH_IME_ENABLED
 static const char* kTouchEnMap[] = {
     "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "Bksp", "\n",
     "a", "s", "d", "f", "g", "h", "j", "k", "l", "Enter", "\n",
@@ -37,6 +38,7 @@ static const char* kTouchNumMap[] = {
     ".", ",", "?", "!", "'", "\"", "%", "+", "\n",
     "Space", ""
 };
+#endif
 std::string make_candidates_text(const std::vector<std::string>& candidates, int active_idx)
 {
     std::string out;
@@ -90,6 +92,7 @@ void erase_last_utf8_char(std::string& text)
     text.erase(pos);
 }
 
+#if UI_SHARED_TOUCH_IME_ENABLED
 void set_button_label(lv_obj_t* button, const char* text)
 {
     if (!button)
@@ -169,6 +172,8 @@ bool resolve_touch_button_id(lv_event_t* e, lv_obj_t* matrix, uint32_t& button_i
 
     return button_id != LV_BUTTONMATRIX_BUTTON_NONE;
 }
+#endif
+
 
 } // namespace
 
@@ -199,15 +204,18 @@ void ImeWidget::init(lv_obj_t* parent, lv_obj_t* textarea)
     s_active_ime = this;
 
     const auto& profile = ::ui::page_profile::current();
-    touch_keyboard_enabled_ = profile.large_touch_hitbox && profile.ime_keyboard_height > 0;
     candidate_window_start_ = 0;
 
+#if UI_SHARED_TOUCH_IME_ENABLED
+    touch_keyboard_enabled_ = profile.large_touch_hitbox && profile.ime_keyboard_height > 0;
     if (touch_keyboard_enabled_)
     {
         init_touch_ui(parent);
     }
     else
+#endif
     {
+        touch_keyboard_enabled_ = false;
         init_compact_ui(parent);
     }
 
@@ -267,6 +275,7 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
     lv_obj_set_style_text_align(candidates_label_, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
+#if UI_SHARED_TOUCH_IME_ENABLED
 void ImeWidget::init_touch_ui(lv_obj_t* parent)
 {
     const auto& profile = ::ui::page_profile::current();
@@ -389,6 +398,8 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     refresh_touch_keyboard();
     refresh_touch_candidates();
 }
+#endif
+
 
 void ImeWidget::detach()
 {
@@ -661,6 +672,7 @@ void ImeWidget::setText(const char* text)
     refresh_labels();
 }
 
+#if UI_SHARED_TOUCH_IME_ENABLED
 void ImeWidget::refresh_touch_keyboard()
 {
     if (!touch_keyboard_enabled_ || !keyboard_matrix_)
@@ -755,6 +767,8 @@ void ImeWidget::refresh_touch_candidates()
         }
     }
 }
+#endif
+
 
 void ImeWidget::refresh_labels()
 {
@@ -788,22 +802,37 @@ void ImeWidget::refresh_labels()
     if (mode_ == Mode::EN)
     {
         lv_label_set_text(toggle_label_, "EN");
-        lv_label_set_text(candidates_label_, touch_keyboard_enabled_ ? "English keyboard" : "");
-        refresh_touch_keyboard();
-        refresh_touch_candidates();
+#if UI_SHARED_TOUCH_IME_ENABLED
+        if (touch_keyboard_enabled_)
+        {
+            lv_label_set_text(candidates_label_, "English keyboard");
+            refresh_touch_keyboard();
+            refresh_touch_candidates();
+            return;
+        }
+#endif
+        lv_label_set_text(candidates_label_, "");
         return;
     }
 
     if (mode_ == Mode::NUM)
     {
         lv_label_set_text(toggle_label_, "123");
-        lv_label_set_text(candidates_label_, touch_keyboard_enabled_ ? "Number keyboard" : "");
-        refresh_touch_keyboard();
-        refresh_touch_candidates();
+#if UI_SHARED_TOUCH_IME_ENABLED
+        if (touch_keyboard_enabled_)
+        {
+            lv_label_set_text(candidates_label_, "Number keyboard");
+            refresh_touch_keyboard();
+            refresh_touch_candidates();
+            return;
+        }
+#endif
+        lv_label_set_text(candidates_label_, "");
         return;
     }
 
     lv_label_set_text(toggle_label_, "CN");
+#if UI_SHARED_TOUCH_IME_ENABLED
     if (touch_keyboard_enabled_)
     {
         std::string hint = ime_.hasBuffer() ? (std::string("Pinyin: ") + ime_.buffer()) : std::string("Pinyin keyboard");
@@ -812,6 +841,7 @@ void ImeWidget::refresh_labels()
         refresh_touch_candidates();
         return;
     }
+#endif
 
     refresh_candidates();
 }
@@ -853,6 +883,7 @@ void ImeWidget::on_toggle_clicked(lv_event_t* e)
     }
 }
 
+#if UI_SHARED_TOUCH_IME_ENABLED
 void ImeWidget::on_touch_key_event(lv_event_t* e)
 {
     ImeWidget* self = static_cast<ImeWidget*>(lv_event_get_user_data(e));
@@ -912,6 +943,8 @@ void ImeWidget::on_candidate_nav_clicked(lv_event_t* e)
         self->handle_key_code(LV_KEY_RIGHT);
     }
 }
+#endif
+
 
 } // namespace widgets
 } // namespace ui
