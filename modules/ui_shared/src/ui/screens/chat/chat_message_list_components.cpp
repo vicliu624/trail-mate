@@ -228,8 +228,7 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
         lv_obj_t* label = lv_obj_get_child(btn, 0);
         if (label)
         {
-            chat::ui::message_list::styles::apply_label_name(label);
-            ::ui::fonts::apply_ui_chrome_font(label);
+            chat::ui::message_list::styles::apply_filter_label(label);
         }
     };
     apply_filter_label(direct_btn_);

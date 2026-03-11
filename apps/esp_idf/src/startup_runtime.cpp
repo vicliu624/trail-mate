@@ -11,6 +11,7 @@
 #include "platform/esp/idf_common/startup_support.h"
 #include "platform/esp/idf_common/gps_runtime.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/esp/idf_common/tab5_rtc_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
@@ -123,6 +124,10 @@ void run(const RuntimeConfig& config)
     (void)platform::esp::idf_common::bsp_runtime::ensure_nvs_ready();
     platform::esp::boards::initializeBoard(waking_from_sleep);
     platform::esp::boards::initializeDisplay();
+    if (platform::esp::idf_common::tab5_rtc_runtime::sync_system_time_from_hardware_rtc())
+    {
+        ESP_LOGI(config.log_tag, "Boot time restored from hardware RTC");
+    }
     (void)platform::esp::idf_common::bsp_runtime::ensure_sdcard_ready();
 
     ESP_LOGI(config.log_tag, "prepareBootUi begin waking=%d", waking_from_sleep ? 1 : 0);

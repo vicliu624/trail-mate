@@ -47,7 +47,7 @@ constexpr int kTileSize = 256;
 const lv_font_t* font_montserrat_12_safe()
 {
 #if defined(LV_FONT_MONTSERRAT_12) && LV_FONT_MONTSERRAT_12
-    return font_montserrat_12_safe();
+    return &lv_font_montserrat_12;
 #else
     return LV_FONT_DEFAULT;
 #endif
@@ -56,7 +56,7 @@ const lv_font_t* font_montserrat_12_safe()
 const lv_font_t* font_montserrat_16_safe()
 {
 #if defined(LV_FONT_MONTSERRAT_16) && LV_FONT_MONTSERRAT_16
-    return font_montserrat_16_safe();
+    return &lv_font_montserrat_16;
 #else
     return LV_FONT_DEFAULT;
 #endif

@@ -48,6 +48,9 @@ struct GPSPageState
     lv_obj_t* pan_h_indicator = nullptr; // Horizontal pan indicator (line with arrows at bottom)
     lv_obj_t* pan_v_indicator = nullptr; // Vertical pan indicator (line with arrows on right)
     lv_obj_t* popup_label = nullptr;     // zoom_popup_label
+    lv_obj_t* popup_roller = nullptr;    // zoom selector widget (roller on non-touch)
+    lv_obj_t* popup_apply_btn = nullptr; // touch zoom apply button
+    lv_obj_t* popup_cancel_btn = nullptr; // touch zoom cancel button
     lv_obj_t* loading_msgbox = nullptr;
     lv_obj_t* toast_msgbox = nullptr;  // Toast notification message box
     lv_timer_t* toast_timer = nullptr; // Timer to auto-hide toast
@@ -75,6 +78,7 @@ struct GPSPageState
     Modal zoom_modal;
     Modal tracker_modal;
     Modal layer_modal;
+    Modal route_modal;
     int popup_zoom = gps_ui::kDefaultZoom;
     bool zoom_win_cb_bound = false;
 

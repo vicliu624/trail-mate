@@ -34,5 +34,6 @@ void apply_zoom_popup_title_bar(lv_obj_t* bar);
 void apply_zoom_popup_title_label(lv_obj_t* label);
 void apply_zoom_popup_content_area(lv_obj_t* area);
 void apply_zoom_popup_value_label(lv_obj_t* label);
+void apply_zoom_popup_roller(lv_obj_t* roller);
 
 } // namespace gps::ui::styles

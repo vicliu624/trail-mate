@@ -11,6 +11,7 @@
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "ui/screens/gps/gps_constants.h"
+#include "ui/page/page_profile.h"
 #include "sys/clock.h"
 #include <algorithm>
 #include <cmath>
@@ -38,6 +39,34 @@ static bool g_tile_cache_initialized = false;
 static uint32_t g_cache_full_until_ms = 0;
 static uint32_t g_cache_full_log_ms = 0;
 static uint8_t g_requested_map_source = 0;
+
+static void style_placeholder_card(lv_obj_t* card);
+static void style_placeholder_text(lv_obj_t* label);
+
+static bool use_non_touch_placeholder_cards()
+{
+    return !::ui::page_profile::current().large_touch_hitbox;
+}
+
+static void create_placeholder_tile_card(lv_obj_t* parent, MapTile& tile, int screen_x, int screen_y)
+{
+    tile.img_obj = lv_obj_create(parent);
+    lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
+    lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
+    style_placeholder_card(tile.img_obj);
+    lv_obj_move_background(tile.img_obj);
+
+    lv_obj_t* placeholder_label = lv_label_create(tile.img_obj);
+    lv_label_set_text(placeholder_label, "No tile");
+    style_placeholder_text(placeholder_label);
+    lv_obj_center(placeholder_label);
+
+    tile.has_png_file = false;
+    tile.contour_obj = NULL;
+    tile.contour_checked = false;
+    tile.contour_loaded = false;
+}
+
 static bool g_requested_contour_enabled = false;
 static uint8_t g_active_map_source = 0xFF;
 static bool g_active_contour_enabled = false;
@@ -1047,19 +1076,12 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     {
         // File missing: use unified placeholder card
         GPS_LOG("[GPS] Creating placeholder card for missing tile %d/%d/%d\n", tile.z, tile.x, tile.y);
-        tile.has_png_file = false;
-        tile.contour_obj = NULL;
-        tile.contour_checked = false;
-        tile.contour_loaded = false;
-        tile.img_obj = lv_obj_create(ctx.map_container);
-        lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
-        lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
-        style_placeholder_card(tile.img_obj);
-
-        lv_obj_t* placeholder_label = lv_label_create(tile.img_obj);
-        lv_label_set_text(placeholder_label, "No tile");
-        style_placeholder_text(placeholder_label);
-        lv_obj_center(placeholder_label);
+        if (tile.img_obj != NULL)
+        {
+            lv_obj_del(tile.img_obj);
+            tile.img_obj = NULL;
+        }
+        create_placeholder_tile_card(ctx.map_container, tile, screen_x, screen_y);
 
         if (!g_missing_tile_notice_emitted)
         {
@@ -1404,13 +1426,19 @@ static void layout_loaded_tile_objects(TileContext& ctx)
 
         if (is_visible)
         {
-            // Keep unloaded tiles object-free. Large panels such as Tab5 can show
-            // more than a dozen tiles at once; creating placeholder cards for each
-            // pending tile causes avoidable full-screen churn and visible flicker.
+            // Restore main-branch behavior for non-touch PIO layouts so missing
+            // tiles stay behind the control overlays. Large touch layouts keep
+            // unloaded tiles object-free to reduce full-screen churn.
+            if (tile.img_obj == NULL && use_non_touch_placeholder_cards())
+            {
+                create_placeholder_tile_card(ctx.map_container, tile, screen_x, screen_y);
+            }
+
             if (tile.img_obj != NULL)
             {
                 lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
                 lv_obj_clear_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_move_background(tile.img_obj);
             }
             if (tile.contour_obj != NULL)
             {

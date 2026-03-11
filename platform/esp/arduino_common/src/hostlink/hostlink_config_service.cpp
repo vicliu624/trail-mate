@@ -9,6 +9,10 @@
 #include "platform/ui/device_runtime.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_bridge_radio.h"
 
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+#include "platform/esp/idf_common/tab5_rtc_runtime.h"
+#endif
+
 #include <cstring>
 #include <sys/time.h>
 
@@ -227,10 +231,15 @@ bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)
 
 bool set_time_epoch(uint64_t epoch_seconds)
 {
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+    return platform::esp::idf_common::tab5_rtc_runtime::apply_system_time_and_sync_rtc(
+        static_cast<time_t>(epoch_seconds), "hostlink");
+#else
     timeval tv;
     tv.tv_sec = static_cast<time_t>(epoch_seconds);
     tv.tv_usec = 0;
     return settimeofday(&tv, nullptr) == 0;
+#endif
 }
 
 } // namespace hostlink

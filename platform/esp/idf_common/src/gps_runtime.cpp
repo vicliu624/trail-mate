@@ -4,9 +4,11 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <ctime>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <mutex>
 
 #include "driver/uart.h"
@@ -15,6 +17,7 @@
 #include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/boards/t_display_p4_board_profile.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
+#include "platform/esp/idf_common/tab5_rtc_runtime.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 extern "C" void bsp_set_ext_5v_en(bool en);
@@ -62,7 +65,10 @@ struct RuntimeState {
     uint32_t last_rx_ms = 0;
     uint32_t last_fix_ms = 0;
     uint32_t last_no_data_log_ms = 0;
+    uint32_t last_time_sync_attempt_ms = 0;
     bool first_sentence_logged = false;
+    bool time_sync_committed = false;
+    std::time_t last_time_sync_epoch = 0;
     std::array<uint16_t, 12> used_sat_ids{};
     std::size_t used_sat_count = 0;
     std::array<GsvCollector, static_cast<size_t>(CollectorSlot::COUNT)> gsv{};
@@ -205,7 +211,103 @@ void clear_payload_locked()
     s_runtime.status = gps::GnssStatus{};
     s_runtime.sat_count = 0;
     s_runtime.used_sat_count = 0;
+    s_runtime.last_time_sync_attempt_ms = 0;
+    s_runtime.last_time_sync_epoch = 0;
+    s_runtime.time_sync_committed = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
     for (auto& collector : s_runtime.gsv) collector = GsvCollector{};
+}
+
+bool parse_two_digits(const char* text, uint8_t* out)
+{
+    if (text == nullptr || out == nullptr || text[0] < '0' || text[0] > '9' || text[1] < '0' || text[1] > '9')
+    {
+        return false;
+    }
+    *out = static_cast<uint8_t>((text[0] - '0') * 10 + (text[1] - '0'));
+    return true;
+}
+
+bool parse_hhmmss(const char* text, uint8_t* hour, uint8_t* minute, uint8_t* second)
+{
+    if (text == nullptr || hour == nullptr || minute == nullptr || second == nullptr)
+    {
+        return false;
+    }
+    return parse_two_digits(text, hour) &&
+           parse_two_digits(text + 2, minute) &&
+           parse_two_digits(text + 4, second);
+}
+
+bool parse_ddmmyy(const char* text, uint8_t* day, uint8_t* month, int* year)
+{
+    if (text == nullptr || day == nullptr || month == nullptr || year == nullptr)
+    {
+        return false;
+    }
+
+    uint8_t yy = 0;
+    if (!parse_two_digits(text, day) || !parse_two_digits(text + 2, month) || !parse_two_digits(text + 4, &yy))
+    {
+        return false;
+    }
+
+    *year = 2000 + static_cast<int>(yy);
+    return true;
+}
+
+void maybe_sync_time_from_rmc_locked(const std::array<char*, kMaxFields>& fields, std::size_t count, uint32_t ts)
+{
+    if (count <= 9)
+    {
+        return;
+    }
+
+    uint8_t hour = 0;
+    uint8_t minute = 0;
+    uint8_t second = 0;
+    uint8_t day = 0;
+    uint8_t month = 0;
+    int year = 0;
+    if (!parse_hhmmss(fields[1], &hour, &minute, &second) || !parse_ddmmyy(fields[9], &day, &month, &year))
+    {
+        return;
+    }
+
+    if (!platform::esp::idf_common::tab5_rtc_runtime::validate_datetime_utc(year, month, day, hour, minute, second))
+    {
+        return;
+    }
+
+    const std::time_t gnss_epoch = platform::esp::idf_common::tab5_rtc_runtime::datetime_to_epoch_utc(
+        year, month, day, hour, minute, second);
+    if (gnss_epoch < 0)
+    {
+        return;
+    }
+
+    const std::time_t now_epoch = std::time(nullptr);
+    const bool system_valid = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(now_epoch);
+    const long long delta_seconds = system_valid
+        ? std::llabs(static_cast<long long>(now_epoch) - static_cast<long long>(gnss_epoch))
+        : std::numeric_limits<long long>::max();
+    const bool needs_system_update = !system_valid || delta_seconds >= 2;
+    const bool needs_commit = !s_runtime.time_sync_committed;
+    if (!needs_system_update && !needs_commit)
+    {
+        return;
+    }
+
+    if (s_runtime.last_time_sync_attempt_ms != 0 && (ts - s_runtime.last_time_sync_attempt_ms) < 5000)
+    {
+        return;
+    }
+
+    s_runtime.last_time_sync_attempt_ms = ts;
+    if (platform::esp::idf_common::tab5_rtc_runtime::apply_system_time_and_sync_rtc(gnss_epoch, "gnss_rmc"))
+    {
+        s_runtime.last_time_sync_epoch = gnss_epoch;
+        s_runtime.time_sync_committed = true;
+    }
 }
 
 bool used_sat_locked(uint16_t sat_id)
@@ -238,6 +340,7 @@ void parse_rmc_locked(const std::array<char*, kMaxFields>& fields, std::size_t c
     if (count < 9) return;
     bool active = fields[2] && fields[2][0] == 'A';
     s_runtime.data.valid = active;
+    maybe_sync_time_from_rmc_locked(fields, count, ts);
     if (!active) return;
     double lat = 0.0, lng = 0.0, speed_knots = 0.0, course = 0.0;
     if (parse_latlon(fields[3], fields[4], true, &lat)) s_runtime.data.lat = lat;
@@ -453,6 +556,9 @@ void worker_task(void*)
         s_runtime.worker_handle = nullptr;
         s_runtime.last_rx_ms = 0;
         s_runtime.last_fix_ms = 0;
+        s_runtime.last_time_sync_attempt_ms = 0;
+        s_runtime.last_time_sync_epoch = 0;
+        s_runtime.time_sync_committed = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
         s_runtime.first_sentence_logged = false;
         s_runtime.last_no_data_log_ms = 0;
     }
@@ -537,6 +643,7 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     }
     s_runtime.probe_requested = false;
     s_runtime.probe_deadline_ms = 0;
+    s_runtime.time_sync_committed = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
     ensure_worker_locked();
     ESP_LOGI(kTag, "GNSS runtime enabled: interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u", static_cast<unsigned long>(s_runtime.collection_interval_ms), s_runtime.gnss_mode, s_runtime.gnss_sat_mask, s_runtime.power_strategy);
 }

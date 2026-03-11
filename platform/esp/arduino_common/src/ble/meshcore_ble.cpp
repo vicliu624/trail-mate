@@ -18,6 +18,10 @@
 #include <string>
 #include <sys/time.h>
 
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+#include "platform/esp/idf_common/tab5_rtc_runtime.h"
+#endif
+
 namespace
 {
 constexpr uint8_t CMD_DEVICE_QEURY = 22;
@@ -1851,10 +1855,15 @@ void MeshCoreBleService::handleCmdFrame(size_t len)
     if (cmd == CMD_SET_DEVICE_TIME && len >= 5)
     {
         uint32_t epoch = readUint32LE(&cmd_frame_[1]);
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+        if (platform::esp::idf_common::tab5_rtc_runtime::apply_system_time_and_sync_rtc(
+                static_cast<time_t>(epoch), "meshcore_ble"))
+#else
         timeval tv{};
         tv.tv_sec = static_cast<time_t>(epoch);
         tv.tv_usec = 0;
         if (settimeofday(&tv, nullptr) == 0)
+#endif
         {
             writeOk();
         }

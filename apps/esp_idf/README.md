@@ -31,5 +31,8 @@ Current status:
 
 Recommended invocation:
 
-- `idf.py -B build.tab5 -DTRAIL_MATE_IDF_TARGET=tab5 reconfigure flash monitor`
+- `idf.py -B build.tab5 -DTRAIL_MATE_IDF_TARGET=tab5 reconfigure build`
+- `idf.py -B build.tab5 -DTRAIL_MATE_IDF_TARGET=tab5 -p COM6 flash`
+- for Tab5, prefer starting `monitor` separately after a manual `RESET` press instead of chaining `flash monitor`, because auto-reset can leave ESP32-P4 in ROM download mode
 - do not rely on a source-root `sdkconfig.tab5`; the build directory now owns the generated config state
+- VS Code workspace tasks now provide split `IDF Tab5: Build`, `IDF Tab5: Flash`, and `IDF Tab5: Monitor` entries through `tools/vscode/run_idf_task.ps1`

@@ -59,6 +59,105 @@ void bind_encoder_to_group(lv_group_t* g)
     }
 }
 
+bool modal_uses_touch_layout()
+{
+    return ::ui::page_profile::current().large_touch_hitbox;
+}
+
+lv_coord_t modal_resolve_title_height()
+{
+    const lv_coord_t base = ::ui::page_profile::resolve_popup_title_height();
+    if (modal_uses_touch_layout())
+    {
+        return base > 60 ? base : 60;
+    }
+    return base > 35 ? base : 35;
+}
+
+lv_coord_t modal_resolve_action_button_height()
+{
+    const lv_coord_t base = ::ui::page_profile::resolve_control_button_height();
+    if (modal_uses_touch_layout())
+    {
+        return base > 64 ? base : 64;
+    }
+    return base;
+}
+
+lv_obj_t* modal_create_touch_title_bar(lv_obj_t* win, const char* title)
+{
+    if (!win)
+    {
+        return nullptr;
+    }
+
+    lv_obj_t* title_bar = lv_obj_create(win);
+    lv_obj_set_size(title_bar, LV_PCT(100), modal_resolve_title_height());
+    gps::ui::styles::apply_zoom_popup_title_bar(title_bar);
+    lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, 0);
+
+    lv_obj_t* title_label = lv_label_create(title_bar);
+    lv_label_set_text(title_label, title ? title : "");
+    gps::ui::styles::apply_zoom_popup_title_label(title_label);
+    lv_obj_center(title_label);
+    return title_bar;
+}
+
+lv_obj_t* modal_create_touch_content_area(lv_obj_t* win, lv_coord_t title_height)
+{
+    if (!win)
+    {
+        return nullptr;
+    }
+
+    lv_obj_t* content_area = lv_obj_create(win);
+    const lv_coord_t win_height = lv_obj_get_height(win);
+    const lv_coord_t pad_top = lv_obj_get_style_pad_top(win, LV_PART_MAIN);
+    const lv_coord_t pad_bottom = lv_obj_get_style_pad_bottom(win, LV_PART_MAIN);
+    const lv_coord_t inner_height = win_height > (pad_top + pad_bottom)
+                                      ? static_cast<lv_coord_t>(win_height - pad_top - pad_bottom)
+                                      : 0;
+    const lv_coord_t content_height = inner_height > title_height ? (inner_height - title_height) : 0;
+    lv_obj_set_size(content_area, LV_PCT(100), content_height);
+    gps::ui::styles::apply_zoom_popup_content_area(content_area);
+    lv_obj_align(content_area, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    const lv_coord_t modal_pad = ::ui::page_profile::resolve_modal_pad();
+    lv_obj_set_style_pad_all(content_area, modal_pad, 0);
+    lv_obj_set_style_pad_row(content_area, modal_pad, 0);
+    lv_obj_clear_flag(content_area, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(content_area, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(content_area, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    return content_area;
+}
+
+lv_obj_t* modal_create_touch_action_button(lv_obj_t* parent,
+                                          const char* text,
+                                          lv_event_cb_t cb,
+                                          void* user_data,
+                                          lv_coord_t width)
+{
+    if (!parent)
+    {
+        return nullptr;
+    }
+
+    lv_obj_t* button = lv_btn_create(parent);
+    gps::ui::styles::apply_control_button(button);
+    lv_obj_set_height(button, modal_resolve_action_button_height());
+    lv_obj_set_width(button, width);
+    if (cb != nullptr)
+    {
+        lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, user_data);
+    }
+
+    lv_obj_t* label = lv_label_create(button);
+    lv_label_set_text(label, text ? text : "");
+    gps::ui::styles::apply_control_button_label(label);
+    lv_obj_center(label);
+    return button;
+}
+
 /**
  * Open a modal popup with background overlay
  */
@@ -199,5 +298,17 @@ void modal_set_size(Modal& m, lv_coord_t w, lv_coord_t h)
         return;
     }
     lv_obj_set_size(m.win, w, h);
+    lv_obj_align(m.win, LV_ALIGN_CENTER, 0, 0);
+}
+
+void modal_set_requested_size(Modal& m, lv_coord_t requested_w, lv_coord_t requested_h)
+{
+    if (!m.is_open() || !m.win)
+    {
+        return;
+    }
+
+    const auto modal_size = ::ui::page_profile::resolve_modal_size(requested_w, requested_h, m.bg ? m.bg : lv_screen_active());
+    lv_obj_set_size(m.win, modal_size.width, modal_size.height);
     lv_obj_align(m.win, LV_ALIGN_CENTER, 0, 0);
 }

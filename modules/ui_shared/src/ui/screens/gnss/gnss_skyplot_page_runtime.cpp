@@ -18,6 +18,9 @@
 #if !defined(LV_FONT_MONTSERRAT_18) || !LV_FONT_MONTSERRAT_18
 #define lv_font_montserrat_18 lv_font_montserrat_14
 #endif
+#if !defined(LV_FONT_MONTSERRAT_20) || !LV_FONT_MONTSERRAT_20
+#define lv_font_montserrat_20 lv_font_montserrat_18
+#endif
 
 namespace
 {
@@ -33,38 +36,231 @@ void request_exit()
     ui_request_exit_to_menu();
 }
 
-constexpr int kScreenW = 480;
-constexpr int kScreenH = 222;
-constexpr int kTopBarH = 30;
+constexpr int kClassicScreenW = 480;
+constexpr int kClassicScreenH = 222;
 constexpr int kCompactMaxWidth = 320;
-
-constexpr int kSkyPanelX = 8;
-constexpr int kSkyPanelY = 38;
-constexpr int kSkyPanelW = 277;
-constexpr int kSkyPanelH = 176;
-
-constexpr int kStatusPanelX = 293;
-constexpr int kStatusPanelY = 38;
-constexpr int kStatusPanelW = 179;
-constexpr int kStatusPanelH = 176;
-constexpr int kStatusPanelRightMargin = 8;
-constexpr int kStatusToggleBtnW = 82;
-constexpr int kStatusToggleBtnH = 24;
-constexpr int kStatusToggleBtnBottomMargin = 6;
-
-constexpr int kSkyAreaX = 10;
-constexpr int kSkyAreaY = 2;
-constexpr int kSkyAreaSize = 170;
-constexpr int kSkyCenter = 85;
-constexpr int kSkyRadius = 82;
-constexpr int kSkyRadius60 = 55;
-constexpr int kSkyRadius30 = 27;
-
-constexpr int kDotRadius = 10;
-constexpr int kDotSize = kDotRadius * 2;
+constexpr int kWide720MinLongSide = 1200;
+constexpr int kWide720MinShortSide = 680;
+constexpr int kWide720FallbackScreenW = 1280;
+constexpr int kWide720FallbackScreenH = 720;
 
 constexpr int kMaxSats = 32;
 constexpr int kTableRows = 7;
+
+struct SkyPlotLayout
+{
+    bool compact_layout = false;
+    bool wide_720_layout = false;
+
+    lv_coord_t screen_w = kClassicScreenW;
+    lv_coord_t screen_h = kClassicScreenH;
+
+    lv_coord_t root_radius = 8;
+    lv_coord_t panel_radius = 10;
+    lv_coord_t panel_border_width = 2;
+
+    lv_coord_t sky_panel_x = 8;
+    lv_coord_t sky_panel_y = 38;
+    lv_coord_t sky_panel_w = 277;
+    lv_coord_t sky_panel_h = 176;
+
+    lv_coord_t status_panel_x = 293;
+    lv_coord_t status_panel_y = 38;
+    lv_coord_t status_panel_w = 179;
+    lv_coord_t status_panel_h = 176;
+    lv_coord_t status_panel_right_margin = 8;
+
+    lv_coord_t status_header_h = 26;
+    lv_coord_t table_header_y = 26;
+    lv_coord_t table_header_h = 22;
+    lv_coord_t table_row_start_y = 48;
+    lv_coord_t table_row_h = 17;
+    lv_coord_t table_row_step = 17;
+
+    lv_coord_t status_toggle_btn_w = 82;
+    lv_coord_t status_toggle_btn_h = 24;
+    lv_coord_t status_toggle_btn_bottom_margin = 6;
+    lv_coord_t status_toggle_btn_radius = 6;
+
+    lv_coord_t sky_area_x = 10;
+    lv_coord_t sky_area_y = 2;
+    lv_coord_t sky_area_size = 170;
+    lv_coord_t sky_center = 85;
+    lv_coord_t sky_radius = 82;
+    lv_coord_t sky_radius60 = 55;
+    lv_coord_t sky_radius30 = 27;
+
+    lv_coord_t outer_ring_border_width = 2;
+    lv_coord_t inner_ring_border_width = 1;
+    lv_coord_t axis_line_width = 1;
+
+    lv_coord_t center_dot_size = 4;
+    lv_coord_t center_dot_radius = 2;
+
+    lv_coord_t dot_radius = 10;
+    lv_coord_t dot_size = 20;
+    lv_coord_t dot_border_width = 2;
+
+    lv_coord_t use_tag_anchor_dx = 12;
+    lv_coord_t use_tag_anchor_dy = 12;
+    lv_coord_t use_tag_radius = 6;
+    lv_coord_t use_tag_pad_h = 4;
+    lv_coord_t use_tag_pad_v = 1;
+
+    lv_coord_t label_n_top = 0;
+    lv_coord_t label_e_gap = 8;
+    lv_coord_t label_e_y_adjust = 10;
+    lv_coord_t label_w_x = 2;
+    lv_coord_t label_w_y_adjust = 10;
+    lv_coord_t horizon_offset_y = 12;
+
+    lv_coord_t legend_sys_x = 190;
+    lv_coord_t legend_sys_y = 105;
+    lv_coord_t legend_sys_row = 15;
+    lv_coord_t legend_snr_x = 190;
+    lv_coord_t legend_snr_y = 9;
+    lv_coord_t legend_snr_row = 15;
+    lv_coord_t legend_block_size = 10;
+    lv_coord_t legend_block_radius = 2;
+    lv_coord_t legend_block_y_offset = 4;
+    lv_coord_t legend_label_x_offset = 14;
+
+    const lv_font_t* top_bar_title_font = &lv_font_montserrat_14;
+    const lv_font_t* compass_font = &lv_font_montserrat_18;
+    const lv_font_t* ring_label_font = &lv_font_montserrat_16;
+    const lv_font_t* horizon_font = &lv_font_montserrat_12;
+    const lv_font_t* legend_font = &lv_font_montserrat_12;
+    const lv_font_t* status_header_font = &lv_font_montserrat_14;
+    const lv_font_t* table_header_font = &lv_font_montserrat_14;
+    const lv_font_t* table_row_font = &lv_font_montserrat_16;
+    const lv_font_t* sat_dot_font = &lv_font_montserrat_12;
+    const lv_font_t* use_tag_font = &lv_font_montserrat_12;
+
+    int table_col_w[5] = {24, 38, 39, 38, 39};
+};
+
+bool is_wide_720_canvas(lv_coord_t width, lv_coord_t height)
+{
+    const lv_coord_t long_side = std::max(width, height);
+    const lv_coord_t short_side = std::min(width, height);
+    return long_side >= kWide720MinLongSide && short_side >= kWide720MinShortSide;
+}
+
+SkyPlotLayout make_classic_layout(bool compact, lv_coord_t parent_w, lv_coord_t parent_h)
+{
+    SkyPlotLayout layout{};
+    layout.compact_layout = compact;
+    layout.screen_w = compact ? (parent_w > 0 ? parent_w : kCompactMaxWidth) : kClassicScreenW;
+    layout.screen_h = compact ? (parent_h > 0 ? parent_h : 240) : kClassicScreenH;
+    layout.status_panel_x = compact
+                                ? std::max<lv_coord_t>(0, layout.screen_w - layout.status_panel_w - layout.status_panel_right_margin)
+                                : 293;
+    return layout;
+}
+
+SkyPlotLayout make_wide_720_layout(lv_coord_t parent_w, lv_coord_t parent_h, lv_coord_t top_bar_h)
+{
+    SkyPlotLayout layout{};
+    layout.wide_720_layout = true;
+    layout.screen_w = parent_w > 0 ? parent_w : kWide720FallbackScreenW;
+    layout.screen_h = parent_h > 0 ? parent_h : kWide720FallbackScreenH;
+
+    layout.root_radius = 0;
+    layout.panel_radius = 18;
+    layout.panel_border_width = 2;
+
+    const lv_coord_t content_top = top_bar_h + 16;
+    const lv_coord_t content_bottom_margin = 20;
+    const lv_coord_t side_margin = 20;
+    const lv_coord_t panel_gap = 20;
+
+    layout.sky_panel_x = side_margin;
+    layout.sky_panel_y = content_top;
+    layout.status_panel_w = 440;
+    layout.status_panel_x = layout.screen_w - layout.status_panel_w - side_margin;
+    layout.status_panel_y = content_top;
+    layout.sky_panel_w = layout.status_panel_x - layout.sky_panel_x - panel_gap;
+    layout.sky_panel_h = layout.screen_h - content_top - content_bottom_margin;
+    layout.status_panel_h = layout.sky_panel_h;
+    layout.status_panel_right_margin = side_margin;
+
+    layout.status_header_h = 56;
+    layout.table_header_y = layout.status_header_h;
+    layout.table_header_h = 44;
+    layout.table_row_start_y = layout.table_header_y + layout.table_header_h;
+    layout.table_row_h = 74;
+    layout.table_row_step = 74;
+
+    layout.sky_area_x = 24;
+    layout.sky_area_y = 52;
+    layout.sky_area_size = 500;
+    layout.sky_center = 250;
+    layout.sky_radius = 236;
+    layout.sky_radius60 = 157;
+    layout.sky_radius30 = 78;
+    layout.outer_ring_border_width = 4;
+    layout.inner_ring_border_width = 2;
+    layout.axis_line_width = 2;
+
+    layout.center_dot_size = 8;
+    layout.center_dot_radius = 4;
+
+    layout.dot_radius = 16;
+    layout.dot_size = 32;
+    layout.dot_border_width = 3;
+    layout.use_tag_anchor_dx = 18;
+    layout.use_tag_anchor_dy = 18;
+    layout.use_tag_radius = 10;
+    layout.use_tag_pad_h = 8;
+    layout.use_tag_pad_v = 4;
+
+    layout.label_n_top = 12;
+    layout.label_e_gap = 20;
+    layout.label_e_y_adjust = 14;
+    layout.label_w_x = 12;
+    layout.label_w_y_adjust = 14;
+    layout.horizon_offset_y = 22;
+
+    layout.legend_sys_x = 560;
+    layout.legend_sys_y = 352;
+    layout.legend_sys_row = 42;
+    layout.legend_snr_x = 560;
+    layout.legend_snr_y = 128;
+    layout.legend_snr_row = 42;
+    layout.legend_block_size = 18;
+    layout.legend_block_radius = 5;
+    layout.legend_block_y_offset = 10;
+    layout.legend_label_x_offset = 26;
+
+    layout.top_bar_title_font = &lv_font_montserrat_20;
+    layout.compass_font = &lv_font_montserrat_20;
+    layout.ring_label_font = &lv_font_montserrat_18;
+    layout.horizon_font = &lv_font_montserrat_16;
+    layout.legend_font = &lv_font_montserrat_16;
+    layout.status_header_font = &lv_font_montserrat_18;
+    layout.table_header_font = &lv_font_montserrat_16;
+    layout.table_row_font = &lv_font_montserrat_18;
+    layout.sat_dot_font = &lv_font_montserrat_14;
+    layout.use_tag_font = &lv_font_montserrat_14;
+
+    layout.table_col_w[0] = 56;
+    layout.table_col_w[1] = 92;
+    layout.table_col_w[2] = 84;
+    layout.table_col_w[3] = 76;
+    layout.table_col_w[4] = 132;
+    return layout;
+}
+
+SkyPlotLayout resolve_layout(lv_coord_t parent_w, lv_coord_t parent_h, lv_coord_t top_bar_h)
+{
+    if (is_wide_720_canvas(parent_w, parent_h))
+    {
+        return make_wide_720_layout(parent_w, parent_h, top_bar_h);
+    }
+
+    const bool compact_layout = (parent_w > 0 && parent_w <= kCompactMaxWidth);
+    return make_classic_layout(compact_layout, parent_w, parent_h);
+}
 
 constexpr uint32_t kColorAmber = 0xEBA341;
 constexpr uint32_t kColorAmberDark = 0xC98118;
@@ -134,6 +330,7 @@ struct SkyPlotUi
 };
 
 static SkyPlotUi s_ui{};
+static SkyPlotLayout s_layout{};
 static lv_timer_t* s_refresh_timer = nullptr;
 
 static SatInfo s_cached_sats[kMaxSats];
@@ -279,7 +476,7 @@ lv_obj_t* create_axis_line(lv_obj_t* parent, const lv_point_precise_t* pts, uint
     lv_obj_t* line = lv_line_create(parent);
     lv_line_set_points(line, pts, count);
     lv_obj_set_style_line_color(line, lv_color_hex(kColorLine), 0);
-    lv_obj_set_style_line_width(line, 1, 0);
+    lv_obj_set_style_line_width(line, s_layout.axis_line_width, 0);
     lv_obj_set_style_line_rounded(line, false, 0);
     return line;
 }
@@ -296,33 +493,33 @@ void ensure_sat_dot(int index)
     }
     SatDot& dot = s_ui.sats[index];
     dot.dot = lv_obj_create(s_ui.panel_sky);
-    lv_obj_set_size(dot.dot, kDotSize, kDotSize);
-    lv_obj_set_style_radius(dot.dot, kDotRadius, 0);
+    lv_obj_set_size(dot.dot, s_layout.dot_size, s_layout.dot_size);
+    lv_obj_set_style_radius(dot.dot, s_layout.dot_radius, 0);
     lv_obj_set_style_bg_opa(dot.dot, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(dot.dot, 2, 0);
+    lv_obj_set_style_border_width(dot.dot, s_layout.dot_border_width, 0);
     lv_obj_set_style_pad_all(dot.dot, 0, 0);
     lv_obj_clear_flag(dot.dot, LV_OBJ_FLAG_SCROLLABLE);
 
     dot.label = lv_label_create(dot.dot);
-    lv_obj_set_style_text_font(dot.label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(dot.label, s_layout.sat_dot_font, 0);
     lv_obj_center(dot.label);
 
     dot.use_tag = lv_obj_create(s_ui.panel_sky);
     lv_obj_set_size(dot.use_tag, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_color(dot.use_tag, lv_color_hex(kColorOk), 0);
     lv_obj_set_style_bg_opa(dot.use_tag, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(dot.use_tag, 6, 0);
+    lv_obj_set_style_radius(dot.use_tag, s_layout.use_tag_radius, 0);
     lv_obj_set_style_border_width(dot.use_tag, 0, 0);
-    lv_obj_set_style_pad_left(dot.use_tag, 4, 0);
-    lv_obj_set_style_pad_right(dot.use_tag, 4, 0);
-    lv_obj_set_style_pad_top(dot.use_tag, 1, 0);
-    lv_obj_set_style_pad_bottom(dot.use_tag, 1, 0);
+    lv_obj_set_style_pad_left(dot.use_tag, s_layout.use_tag_pad_h, 0);
+    lv_obj_set_style_pad_right(dot.use_tag, s_layout.use_tag_pad_h, 0);
+    lv_obj_set_style_pad_top(dot.use_tag, s_layout.use_tag_pad_v, 0);
+    lv_obj_set_style_pad_bottom(dot.use_tag, s_layout.use_tag_pad_v, 0);
     lv_obj_clear_flag(dot.use_tag, LV_OBJ_FLAG_SCROLLABLE);
 
     dot.use_label = lv_label_create(dot.use_tag);
     lv_label_set_text(dot.use_label, "USE");
     lv_obj_set_style_text_color(dot.use_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(dot.use_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(dot.use_label, s_layout.use_tag_font, 0);
     lv_obj_center(dot.use_label);
 
     lv_obj_add_flag(dot.use_tag, LV_OBJ_FLAG_HIDDEN);
@@ -360,14 +557,14 @@ void update_sat_dot(int index, const SatInfo& sat)
         az += 360.0f;
     }
     float el = std::max(0.0f, std::min(90.0f, sat.elevation));
-    float r = kSkyRadius * (1.0f - el / 90.0f);
+    float r = s_layout.sky_radius * (1.0f - el / 90.0f);
     float rad = az * 3.1415926535f / 180.0f;
 
-    float sx = (kSkyAreaX + kSkyCenter) + r * std::sin(rad);
-    float sy = (kSkyAreaY + kSkyCenter) - r * std::cos(rad);
+    float sx = (s_layout.sky_area_x + s_layout.sky_center) + r * std::sin(rad);
+    float sy = (s_layout.sky_area_y + s_layout.sky_center) - r * std::cos(rad);
 
-    int dot_x = static_cast<int>(std::round(sx)) - kDotRadius;
-    int dot_y = static_cast<int>(std::round(sy)) - kDotRadius;
+    int dot_x = static_cast<int>(std::round(sx)) - s_layout.dot_radius;
+    int dot_y = static_cast<int>(std::round(sy)) - s_layout.dot_radius;
 
     lv_obj_set_pos(dot.dot, dot_x, dot_y);
     lv_obj_clear_flag(dot.dot, LV_OBJ_FLAG_HIDDEN);
@@ -387,8 +584,8 @@ void update_sat_dot(int index, const SatInfo& sat)
     {
         if (sat.used)
         {
-            int tag_x = dot_x + kDotRadius - 12;
-            int tag_y = dot_y + kDotRadius + 12;
+            int tag_x = dot_x + s_layout.dot_radius - s_layout.use_tag_anchor_dx;
+            int tag_y = dot_y + s_layout.dot_radius + s_layout.use_tag_anchor_dy;
             lv_obj_set_pos(dot.use_tag, tag_x, tag_y);
             lv_obj_clear_flag(dot.use_tag, LV_OBJ_FLAG_HIDDEN);
         }
@@ -673,19 +870,21 @@ void refresh_timer_cb(lv_timer_t* timer)
 lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 {
     s_ui = {};
+    s_layout = {};
     if (parent)
     {
         lv_obj_update_layout(parent);
     }
+
     lv_coord_t parent_w = parent ? lv_obj_get_width(parent) : 0;
     lv_coord_t parent_h = parent ? lv_obj_get_height(parent) : 0;
-    const bool compact_layout = (parent_w > 0 && parent_w <= kCompactMaxWidth);
-    const lv_coord_t screen_w = compact_layout ? (parent_w > 0 ? parent_w : kCompactMaxWidth) : kScreenW;
-    const lv_coord_t screen_h = compact_layout ? (parent_h > 0 ? parent_h : 240) : kScreenH;
-    const lv_coord_t status_panel_x = compact_layout
-                                          ? std::max<lv_coord_t>(0, screen_w - kStatusPanelW - kStatusPanelRightMargin)
-                                          : kStatusPanelX;
-    s_ui.compact_layout = compact_layout;
+    const auto& profile = ::ui::page_profile::current();
+    const lv_coord_t top_bar_h = profile.top_bar_height;
+    s_layout = resolve_layout(parent_w, parent_h, top_bar_h);
+    s_ui.compact_layout = s_layout.compact_layout;
+
+    const lv_coord_t screen_w = s_layout.screen_w;
+    const lv_coord_t screen_h = s_layout.screen_h;
 
     s_ui.root = lv_obj_create(parent);
     lv_obj_set_size(s_ui.root, screen_w, screen_h);
@@ -693,14 +892,13 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     lv_obj_set_style_bg_opa(s_ui.root, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.root, 0, 0);
     lv_obj_set_style_pad_all(s_ui.root, 0, 0);
-    lv_obj_set_style_radius(s_ui.root, 8, 0);
+    lv_obj_set_style_radius(s_ui.root, s_layout.root_radius, 0);
     lv_obj_clear_flag(s_ui.root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_ui.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_ui.root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     s_ui.header = lv_obj_create(s_ui.root);
     lv_obj_set_pos(s_ui.header, 0, 0);
-    const lv_coord_t top_bar_h = ::ui::page_profile::current().top_bar_height;
     lv_obj_set_size(s_ui.header, screen_w, top_bar_h);
     lv_obj_set_style_bg_opa(s_ui.header, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ui.header, 0, 0);
@@ -714,8 +912,9 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     {
         lv_label_set_recolor(s_ui.top_bar.title_label, true);
         lv_label_set_long_mode(s_ui.top_bar.title_label, LV_LABEL_LONG_CLIP);
-        lv_obj_set_style_text_font(s_ui.top_bar.title_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(s_ui.top_bar.title_label, s_layout.top_bar_title_font, 0);
     }
+
     char title_buf[96];
     snprintf(title_buf,
              sizeof(title_buf),
@@ -736,109 +935,112 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     }
 
     s_ui.panel_sky = lv_obj_create(s_ui.root);
-    lv_obj_set_pos(s_ui.panel_sky, kSkyPanelX, kSkyPanelY);
-    lv_obj_set_size(s_ui.panel_sky, kSkyPanelW, kSkyPanelH);
+    lv_obj_set_pos(s_ui.panel_sky, s_layout.sky_panel_x, s_layout.sky_panel_y);
+    lv_obj_set_size(s_ui.panel_sky, s_layout.sky_panel_w, s_layout.sky_panel_h);
     apply_common_container_style(s_ui.panel_sky,
                                  lv_color_hex(kColorPanelBg),
                                  lv_color_hex(kColorAmberDark),
-                                 10,
-                                 2);
+                                 s_layout.panel_radius,
+                                 s_layout.panel_border_width);
 
     s_ui.sky_area = lv_obj_create(s_ui.panel_sky);
-    lv_obj_set_pos(s_ui.sky_area, kSkyAreaX, kSkyAreaY);
-    lv_obj_set_size(s_ui.sky_area, kSkyAreaSize, kSkyAreaSize);
+    lv_obj_set_pos(s_ui.sky_area, s_layout.sky_area_x, s_layout.sky_area_y);
+    lv_obj_set_size(s_ui.sky_area, s_layout.sky_area_size, s_layout.sky_area_size);
     lv_obj_set_style_bg_opa(s_ui.sky_area, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ui.sky_area, 0, 0);
     lv_obj_set_style_pad_all(s_ui.sky_area, 0, 0);
     lv_obj_clear_flag(s_ui.sky_area, LV_OBJ_FLAG_SCROLLABLE);
 
-    const int center_x = kSkyAreaX + kSkyCenter;
-    const int center_y = kSkyAreaY + kSkyCenter;
+    const int center_x = s_layout.sky_area_x + s_layout.sky_center;
+    const int center_y = s_layout.sky_area_y + s_layout.sky_center;
 
-    lv_obj_t* outer_ring = create_ring(s_ui.panel_sky, kSkyRadius, 2);
-    lv_obj_set_pos(outer_ring, center_x - kSkyRadius, center_y - kSkyRadius);
+    lv_obj_t* outer_ring = create_ring(s_ui.panel_sky, s_layout.sky_radius, s_layout.outer_ring_border_width);
+    lv_obj_set_pos(outer_ring, center_x - s_layout.sky_radius, center_y - s_layout.sky_radius);
     lv_obj_move_background(outer_ring);
 
-    lv_obj_t* mid_ring = create_ring(s_ui.panel_sky, kSkyRadius60, 1);
-    lv_obj_set_pos(mid_ring, center_x - kSkyRadius60, center_y - kSkyRadius60);
+    lv_obj_t* mid_ring = create_ring(s_ui.panel_sky, s_layout.sky_radius60, s_layout.inner_ring_border_width);
+    lv_obj_set_pos(mid_ring, center_x - s_layout.sky_radius60, center_y - s_layout.sky_radius60);
     lv_obj_move_background(mid_ring);
 
-    lv_obj_t* inner_ring = create_ring(s_ui.panel_sky, kSkyRadius30, 1);
-    lv_obj_set_pos(inner_ring, center_x - kSkyRadius30, center_y - kSkyRadius30);
+    lv_obj_t* inner_ring = create_ring(s_ui.panel_sky, s_layout.sky_radius30, s_layout.inner_ring_border_width);
+    lv_obj_set_pos(inner_ring, center_x - s_layout.sky_radius30, center_y - s_layout.sky_radius30);
     lv_obj_move_background(inner_ring);
 
-    s_ui.ns_points[0] = {static_cast<lv_value_precise_t>(center_x), static_cast<lv_value_precise_t>(center_y - kSkyRadius)};
-    s_ui.ns_points[1] = {static_cast<lv_value_precise_t>(center_x), static_cast<lv_value_precise_t>(center_y + kSkyRadius)};
+    s_ui.ns_points[0] = {static_cast<lv_value_precise_t>(center_x), static_cast<lv_value_precise_t>(center_y - s_layout.sky_radius)};
+    s_ui.ns_points[1] = {static_cast<lv_value_precise_t>(center_x), static_cast<lv_value_precise_t>(center_y + s_layout.sky_radius)};
     lv_obj_t* ns_line = create_axis_line(s_ui.panel_sky, s_ui.ns_points, 2);
     lv_obj_set_pos(ns_line, 0, 0);
     lv_obj_move_background(ns_line);
 
-    s_ui.ew_points[0] = {static_cast<lv_value_precise_t>(center_x - kSkyRadius), static_cast<lv_value_precise_t>(center_y)};
-    s_ui.ew_points[1] = {static_cast<lv_value_precise_t>(center_x + kSkyRadius), static_cast<lv_value_precise_t>(center_y)};
+    s_ui.ew_points[0] = {static_cast<lv_value_precise_t>(center_x - s_layout.sky_radius), static_cast<lv_value_precise_t>(center_y)};
+    s_ui.ew_points[1] = {static_cast<lv_value_precise_t>(center_x + s_layout.sky_radius), static_cast<lv_value_precise_t>(center_y)};
     lv_obj_t* ew_line = create_axis_line(s_ui.panel_sky, s_ui.ew_points, 2);
     lv_obj_set_pos(ew_line, 0, 0);
     lv_obj_move_background(ew_line);
 
     lv_obj_t* center_dot = lv_obj_create(s_ui.panel_sky);
-    lv_obj_set_size(center_dot, 4, 4);
-    lv_obj_set_pos(center_dot, center_x - 2, center_y - 2);
+    lv_obj_set_size(center_dot, s_layout.center_dot_size, s_layout.center_dot_size);
+    lv_obj_set_pos(center_dot,
+                   center_x - (s_layout.center_dot_size / 2),
+                   center_y - (s_layout.center_dot_size / 2));
     lv_obj_set_style_bg_color(center_dot, lv_color_hex(kColorLine), 0);
     lv_obj_set_style_bg_opa(center_dot, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(center_dot, 0, 0);
-    lv_obj_set_style_radius(center_dot, 2, 0);
+    lv_obj_set_style_radius(center_dot, s_layout.center_dot_radius, 0);
     lv_obj_clear_flag(center_dot, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_move_background(center_dot);
 
     s_ui.label_n = lv_label_create(s_ui.panel_sky);
     lv_label_set_text(s_ui.label_n, "N");
     lv_obj_set_style_text_color(s_ui.label_n, lv_color_hex(kColorText), 0);
-    lv_obj_set_style_text_font(s_ui.label_n, &lv_font_montserrat_18, 0);
-    place_label_center_x(s_ui.label_n, kSkyAreaX + kSkyCenter, kSkyAreaY - 2);
+    lv_obj_set_style_text_font(s_ui.label_n, s_layout.compass_font, 0);
+    place_label_center_x(s_ui.label_n, center_x, s_layout.label_n_top);
 
     s_ui.label_e = lv_label_create(s_ui.panel_sky);
     lv_label_set_text(s_ui.label_e, "E");
     lv_obj_set_style_text_color(s_ui.label_e, lv_color_hex(kColorText), 0);
-    lv_obj_set_style_text_font(s_ui.label_e, &lv_font_montserrat_18, 0);
-    lv_obj_set_pos(s_ui.label_e, kSkyAreaX + kSkyAreaSize + 8, kSkyAreaY + kSkyCenter - 10);
+    lv_obj_set_style_text_font(s_ui.label_e, s_layout.compass_font, 0);
+    lv_obj_set_pos(s_ui.label_e,
+                   s_layout.sky_area_x + s_layout.sky_area_size + s_layout.label_e_gap,
+                   s_layout.sky_area_y + s_layout.sky_center - s_layout.label_e_y_adjust);
 
     s_ui.label_w = lv_label_create(s_ui.panel_sky);
     lv_label_set_text(s_ui.label_w, "W");
     lv_obj_set_style_text_color(s_ui.label_w, lv_color_hex(kColorText), 0);
-    lv_obj_set_style_text_font(s_ui.label_w, &lv_font_montserrat_18, 0);
-    lv_obj_set_pos(s_ui.label_w, 2, kSkyAreaY + kSkyCenter - 10);
+    lv_obj_set_style_text_font(s_ui.label_w, s_layout.compass_font, 0);
+    lv_obj_set_pos(s_ui.label_w,
+                   s_layout.label_w_x,
+                   s_layout.sky_area_y + s_layout.sky_center - s_layout.label_w_y_adjust);
 
     s_ui.label_90 = lv_label_create(s_ui.panel_sky);
-    lv_label_set_text(s_ui.label_90, "90掳");
+    lv_label_set_text(s_ui.label_90, "90°");
     lv_obj_set_style_text_color(s_ui.label_90, lv_color_hex(kColorTextDim), 0);
-    lv_obj_set_style_text_font(s_ui.label_90, &lv_font_montserrat_16, 0);
-    place_label_diagonal_1030(s_ui.label_90, center_x, center_y, kSkyRadius);
+    lv_obj_set_style_text_font(s_ui.label_90, s_layout.ring_label_font, 0);
+    place_label_diagonal_1030(s_ui.label_90, center_x, center_y, s_layout.sky_radius);
 
     s_ui.label_60 = lv_label_create(s_ui.panel_sky);
-    lv_label_set_text(s_ui.label_60, "60掳");
+    lv_label_set_text(s_ui.label_60, "60°");
     lv_obj_set_style_text_color(s_ui.label_60, lv_color_hex(kColorTextDim), 0);
-    lv_obj_set_style_text_font(s_ui.label_60, &lv_font_montserrat_16, 0);
-    place_label_diagonal_1030(s_ui.label_60, center_x, center_y, kSkyRadius60);
+    lv_obj_set_style_text_font(s_ui.label_60, s_layout.ring_label_font, 0);
+    place_label_diagonal_1030(s_ui.label_60, center_x, center_y, s_layout.sky_radius60);
 
     s_ui.label_30 = lv_label_create(s_ui.panel_sky);
-    lv_label_set_text(s_ui.label_30, "30掳");
+    lv_label_set_text(s_ui.label_30, "30°");
     lv_obj_set_style_text_color(s_ui.label_30, lv_color_hex(kColorTextDim), 0);
-    lv_obj_set_style_text_font(s_ui.label_30, &lv_font_montserrat_16, 0);
-    place_label_diagonal_1030(s_ui.label_30, center_x, center_y, kSkyRadius30);
+    lv_obj_set_style_text_font(s_ui.label_30, s_layout.ring_label_font, 0);
+    place_label_diagonal_1030(s_ui.label_30, center_x, center_y, s_layout.sky_radius30);
 
     s_ui.label_horizon = lv_label_create(s_ui.panel_sky);
-    lv_label_set_text(s_ui.label_horizon, "0掳 Horizon");
+    lv_label_set_text(s_ui.label_horizon, "0° Horizon");
     lv_obj_set_style_text_color(s_ui.label_horizon, lv_color_hex(kColorTextDim), 0);
-    lv_obj_set_style_text_font(s_ui.label_horizon, &lv_font_montserrat_12, 0);
-    place_label_center(s_ui.label_horizon, kSkyAreaX + kSkyCenter, kSkyAreaY + kSkyCenter + 12);
+    lv_obj_set_style_text_font(s_ui.label_horizon, s_layout.horizon_font, 0);
+    place_label_center(s_ui.label_horizon, center_x, s_layout.sky_area_y + s_layout.sky_center + s_layout.horizon_offset_y);
 
     struct LegendSys
     {
         const char* text;
         uint32_t color;
     };
-    const int legend_sys_x = 190;
-    const int legend_sys_y = 105;
-    const int legend_sys_row = 15;
     const LegendSys sys_legend[] = {
         {"GPS", kColorSysGps},
         {"GLONASS", kColorSysGln},
@@ -847,22 +1049,22 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     };
     for (int i = 0; i < 4; ++i)
     {
-        int x = legend_sys_x;
-        int y = legend_sys_y + i * legend_sys_row;
+        const int x = s_layout.legend_sys_x;
+        const int y = s_layout.legend_sys_y + i * s_layout.legend_sys_row;
         lv_obj_t* block = lv_obj_create(s_ui.panel_sky);
-        lv_obj_set_pos(block, x, y + 4);
-        lv_obj_set_size(block, 10, 10);
+        lv_obj_set_pos(block, x, y + s_layout.legend_block_y_offset);
+        lv_obj_set_size(block, s_layout.legend_block_size, s_layout.legend_block_size);
         lv_obj_set_style_bg_color(block, lv_color_hex(sys_legend[i].color), 0);
         lv_obj_set_style_bg_opa(block, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(block, 0, 0);
-        lv_obj_set_style_radius(block, 2, 0);
+        lv_obj_set_style_radius(block, s_layout.legend_block_radius, 0);
         lv_obj_clear_flag(block, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t* label = lv_label_create(s_ui.panel_sky);
         lv_label_set_text(label, sys_legend[i].text);
         lv_obj_set_style_text_color(label, lv_color_hex(kColorText), 0);
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
-        lv_obj_set_pos(label, x + 14, y);
+        lv_obj_set_style_text_font(label, s_layout.legend_font, 0);
+        lv_obj_set_pos(label, x + s_layout.legend_label_x_offset, y);
     }
 
     struct LegendSnr
@@ -876,57 +1078,54 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         {"Not Used", kColorSnrNotUsed},
         {"In View", kColorSnrInView},
     };
-    const int snr_row = legend_sys_row;
-    const int snr_gap = 6;
-    const int snr_start_y = legend_sys_y - (4 * snr_row) - snr_gap - 30;
     for (int i = 0; i < 4; ++i)
     {
-        int x = legend_sys_x;
-        int y = snr_start_y + i * snr_row;
+        const int x = s_layout.legend_snr_x;
+        const int y = s_layout.legend_snr_y + i * s_layout.legend_snr_row;
         lv_obj_t* dot = lv_obj_create(s_ui.panel_sky);
-        lv_obj_set_pos(dot, x, y + 4);
-        lv_obj_set_size(dot, 10, 10);
+        lv_obj_set_pos(dot, x, y + s_layout.legend_block_y_offset);
+        lv_obj_set_size(dot, s_layout.legend_block_size, s_layout.legend_block_size);
         lv_obj_set_style_bg_color(dot, lv_color_hex(snr_legend[i].color), 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(dot, 0, 0);
-        lv_obj_set_style_radius(dot, 5, 0);
+        lv_obj_set_style_radius(dot, s_layout.legend_block_size / 2, 0);
         lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t* label = lv_label_create(s_ui.panel_sky);
         lv_label_set_text(label, snr_legend[i].text);
         lv_obj_set_style_text_color(label, lv_color_hex(kColorTextDim), 0);
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
-        lv_obj_set_pos(label, x + 14, y);
+        lv_obj_set_style_text_font(label, s_layout.legend_font, 0);
+        lv_obj_set_pos(label, x + s_layout.legend_label_x_offset, y);
     }
 
     s_ui.panel_status = lv_obj_create(s_ui.root);
-    lv_obj_set_pos(s_ui.panel_status, status_panel_x, kStatusPanelY);
-    lv_obj_set_size(s_ui.panel_status, kStatusPanelW, kStatusPanelH);
+    lv_obj_set_pos(s_ui.panel_status, s_layout.status_panel_x, s_layout.status_panel_y);
+    lv_obj_set_size(s_ui.panel_status, s_layout.status_panel_w, s_layout.status_panel_h);
     apply_common_container_style(s_ui.panel_status,
                                  lv_color_hex(kColorPanelBg),
                                  lv_color_hex(kColorAmberDark),
-                                 10,
-                                 2);
+                                 s_layout.panel_radius,
+                                 s_layout.panel_border_width);
 
     s_ui.status_header = lv_obj_create(s_ui.panel_status);
     lv_obj_set_pos(s_ui.status_header, 0, 0);
-    lv_obj_set_size(s_ui.status_header, kStatusPanelW, 26);
+    lv_obj_set_size(s_ui.status_header, s_layout.status_panel_w, s_layout.status_header_h);
     lv_obj_set_style_bg_color(s_ui.status_header, lv_color_hex(kColorAmber), 0);
     lv_obj_set_style_bg_opa(s_ui.status_header, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.status_header, 0, 0);
-    lv_obj_set_style_radius(s_ui.status_header, 10, 0);
+    lv_obj_set_style_radius(s_ui.status_header, s_layout.panel_radius, 0);
     lv_obj_set_style_pad_all(s_ui.status_header, 0, 0);
     lv_obj_clear_flag(s_ui.status_header, LV_OBJ_FLAG_SCROLLABLE);
 
     s_ui.status_header_label = lv_label_create(s_ui.status_header);
     lv_label_set_text(s_ui.status_header_label, "SATELLITE STATUS");
     lv_obj_set_style_text_color(s_ui.status_header_label, lv_color_hex(0x2A1A05), 0);
-    lv_obj_set_style_text_font(s_ui.status_header_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(s_ui.status_header_label, s_layout.status_header_font, 0);
     lv_obj_center(s_ui.status_header_label);
 
     s_ui.table_header = lv_obj_create(s_ui.panel_status);
-    lv_obj_set_pos(s_ui.table_header, 0, 26);
-    lv_obj_set_size(s_ui.table_header, kStatusPanelW, 22);
+    lv_obj_set_pos(s_ui.table_header, 0, s_layout.table_header_y);
+    lv_obj_set_size(s_ui.table_header, s_layout.status_panel_w, s_layout.table_header_h);
     lv_obj_set_style_bg_color(s_ui.table_header, lv_color_hex(0xF2D9A5), 0);
     lv_obj_set_style_bg_opa(s_ui.table_header, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.table_header, 0, 0);
@@ -934,7 +1133,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     lv_obj_clear_flag(s_ui.table_header, LV_OBJ_FLAG_SCROLLABLE);
 
     const char* header_texts[5] = {"ID", "SYS", "ELEV", "SNR", "USE"};
-    const int col_w[5] = {24, 38, 39, 38, 39};
+    const int* col_w = s_layout.table_col_w;
     int col_x = 0;
     for (int i = 0; i < 5; ++i)
     {
@@ -942,8 +1141,8 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         lv_label_set_text(s_ui.table_header_cells[i], header_texts[i]);
         lv_label_set_long_mode(s_ui.table_header_cells[i], LV_LABEL_LONG_CLIP);
         lv_obj_set_style_text_color(s_ui.table_header_cells[i], lv_color_hex(kColorTextDim), 0);
-        lv_obj_set_style_text_font(s_ui.table_header_cells[i], &lv_font_montserrat_14, 0);
-        lv_obj_set_size(s_ui.table_header_cells[i], col_w[i], 22);
+        lv_obj_set_style_text_font(s_ui.table_header_cells[i], s_layout.table_header_font, 0);
+        lv_obj_set_size(s_ui.table_header_cells[i], col_w[i], s_layout.table_header_h);
         lv_obj_set_style_text_align(s_ui.table_header_cells[i], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_pos(s_ui.table_header_cells[i], col_x, 0);
         col_x += col_w[i];
@@ -953,8 +1152,8 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     {
         TableRow& r = s_ui.table_rows[row];
         r.row = lv_obj_create(s_ui.panel_status);
-        lv_obj_set_pos(r.row, 0, 48 + row * 17);
-        lv_obj_set_size(r.row, kStatusPanelW, 17);
+        lv_obj_set_pos(r.row, 0, s_layout.table_row_start_y + row * s_layout.table_row_step);
+        lv_obj_set_size(r.row, s_layout.status_panel_w, s_layout.table_row_h);
         lv_obj_set_style_bg_opa(r.row, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(r.row, 1, 0);
         lv_obj_set_style_border_color(r.row, lv_color_hex(kColorLine), 0);
@@ -969,8 +1168,8 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
             lv_label_set_text(r.cells[i], "");
             lv_label_set_long_mode(r.cells[i], LV_LABEL_LONG_CLIP);
             lv_obj_set_style_text_color(r.cells[i], lv_color_hex(kColorText), 0);
-            lv_obj_set_style_text_font(r.cells[i], &lv_font_montserrat_16, 0);
-            lv_obj_set_size(r.cells[i], col_w[i], 17);
+            lv_obj_set_style_text_font(r.cells[i], s_layout.table_row_font, 0);
+            lv_obj_set_size(r.cells[i], col_w[i], s_layout.table_row_h);
             lv_obj_set_style_text_align(r.cells[i], LV_TEXT_ALIGN_CENTER, 0);
             lv_obj_set_pos(r.cells[i], col_x, 0);
             col_x += col_w[i];
@@ -986,15 +1185,15 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     if (s_ui.compact_layout)
     {
         s_ui.status_toggle_btn = lv_btn_create(s_ui.root);
-        lv_obj_set_size(s_ui.status_toggle_btn, kStatusToggleBtnW, kStatusToggleBtnH);
+        lv_obj_set_size(s_ui.status_toggle_btn, s_layout.status_toggle_btn_w, s_layout.status_toggle_btn_h);
         lv_obj_set_pos(s_ui.status_toggle_btn,
-                       screen_w - kStatusToggleBtnW - kStatusPanelRightMargin,
-                       screen_h - kStatusToggleBtnH - kStatusToggleBtnBottomMargin);
+                       screen_w - s_layout.status_toggle_btn_w - s_layout.status_panel_right_margin,
+                       screen_h - s_layout.status_toggle_btn_h - s_layout.status_toggle_btn_bottom_margin);
         lv_obj_set_style_bg_color(s_ui.status_toggle_btn, lv_color_hex(kColorAmber), 0);
         lv_obj_set_style_bg_opa(s_ui.status_toggle_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(s_ui.status_toggle_btn, 1, 0);
         lv_obj_set_style_border_color(s_ui.status_toggle_btn, lv_color_hex(kColorAmberDark), 0);
-        lv_obj_set_style_radius(s_ui.status_toggle_btn, 6, 0);
+        lv_obj_set_style_radius(s_ui.status_toggle_btn, s_layout.status_toggle_btn_radius, 0);
         lv_obj_set_style_pad_all(s_ui.status_toggle_btn, 0, 0);
         lv_obj_clear_flag(s_ui.status_toggle_btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(s_ui.status_toggle_btn, on_status_toggle_clicked, LV_EVENT_CLICKED, nullptr);
@@ -1092,6 +1291,7 @@ void ui_gnss_skyplot_exit(lv_obj_t* parent)
         lv_obj_del(s_ui.root);
     }
     s_ui = {};
+    s_layout = {};
 }
 
 namespace gnss::ui::runtime

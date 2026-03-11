@@ -40,6 +40,31 @@ static bool indev_is_pressed(lv_event_t* e)
     return lv_indev_get_state(indev) == LV_INDEV_STATE_PRESSED;
 }
 
+static bool adjust_popup_zoom(int32_t diff)
+{
+    if (diff > 0)
+    {
+        if (g_gps_state.popup_zoom >= gps_ui::kMaxZoom)
+        {
+            return false;
+        }
+        ++g_gps_state.popup_zoom;
+        return true;
+    }
+
+    if (diff < 0)
+    {
+        if (g_gps_state.popup_zoom <= gps_ui::kMinZoom)
+        {
+            return false;
+        }
+        --g_gps_state.popup_zoom;
+        return true;
+    }
+
+    return false;
+}
+
 ControlId ctrl_id(lv_obj_t* obj)
 {
     if (obj == nullptr) return ControlId::Page;
@@ -703,6 +728,12 @@ static void action_route_focus()
     {
         return;
     }
+    if (::ui::page_profile::current().large_touch_hitbox)
+    {
+        extern void show_route_popup();
+        show_route_popup();
+        return;
+    }
     extern void show_toast(const char* message, uint32_t duration_ms);
     if (!gps_route_focus(true))
     {
@@ -825,6 +856,82 @@ static void action_pan_step(ControlId axis_id, int32_t step)
     refresh_map_after_pan_step();
 }
 
+void zoom_popup_sync_widgets()
+{
+    if (g_gps_state.popup_label != NULL && ::ui::page_profile::current().large_touch_hitbox)
+    {
+        extern void zoom_popup_sync_touch_selection();
+        zoom_popup_sync_touch_selection();
+        lv_obj_invalidate(g_gps_state.popup_label);
+    }
+    else if (g_gps_state.popup_label != NULL)
+    {
+        char zoom_text[32];
+        snprintf(zoom_text, sizeof(zoom_text), "%d", g_gps_state.popup_zoom);
+        lv_label_set_text(g_gps_state.popup_label, zoom_text);
+        lv_obj_invalidate(g_gps_state.popup_label);
+    }
+
+    if (g_gps_state.popup_roller != NULL)
+    {
+        const uint16_t selected = static_cast<uint16_t>(g_gps_state.popup_zoom - gps_ui::kMinZoom);
+        if (lv_roller_get_selected(g_gps_state.popup_roller) != selected)
+        {
+            lv_roller_set_selected(g_gps_state.popup_roller, selected, LV_ANIM_OFF);
+        }
+        lv_obj_invalidate(g_gps_state.popup_roller);
+    }
+}
+
+void zoom_popup_apply_selection()
+{
+    if (!is_alive())
+    {
+        return;
+    }
+
+    extern void hide_zoom_popup();
+    extern void update_map_tiles(bool lightweight);
+    extern void update_map_anchor();
+    extern void update_resolution_display();
+    extern void update_zoom_btn();
+
+    GPS_LOG("[GPS] Applying zoom level %d\n", g_gps_state.popup_zoom);
+
+    double center_lat = g_gps_state.lat;
+    double center_lng = g_gps_state.lng;
+
+    if (g_gps_state.anchor.valid)
+    {
+        get_screen_center_lat_lng(g_gps_state.tile_ctx, center_lat, center_lng);
+        GPS_LOG("[GPS] Screen center before zoom: lat=%.6f, lng=%.6f\n", center_lat, center_lng);
+    }
+    else if (!g_gps_state.has_fix)
+    {
+        center_lat = gps_ui::kDefaultLat;
+        center_lng = gps_ui::kDefaultLng;
+        GPS_LOG("[GPS] Using London as default center (no anchor, no GPS fix)\n");
+    }
+
+    g_gps_state.zoom_level = g_gps_state.popup_zoom;
+    g_gps_state.lat = center_lat;
+    g_gps_state.lng = center_lng;
+    g_gps_state.pan_x = 0;
+    g_gps_state.pan_y = 0;
+
+    g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
+    g_gps_state.last_resolution_lat = g_gps_state.lat;
+
+    update_resolution_display();
+    update_map_anchor();
+    update_map_tiles(false);
+    update_zoom_btn();
+    hide_zoom_popup();
+
+    GPS_LOG("[GPS] Zoom applied: level=%d, center=(%.6f, %.6f)\n",
+            g_gps_state.zoom_level, g_gps_state.lat, g_gps_state.lng);
+}
+
 void zoom_popup_handle_rotary(int32_t diff)
 {
     if (!is_alive())
@@ -833,35 +940,10 @@ void zoom_popup_handle_rotary(int32_t diff)
     }
 
     updateUserActivity();
-    bool zoom_changed = false;
-
-    if (diff > 0)
+    if (adjust_popup_zoom(diff))
     {
-        if (g_gps_state.popup_zoom < gps_ui::kMaxZoom)
-        {
-            g_gps_state.popup_zoom++;
-            zoom_changed = true;
-        }
-    }
-    else if (diff < 0)
-    {
-        if (g_gps_state.popup_zoom > gps_ui::kMinZoom)
-        {
-            g_gps_state.popup_zoom--;
-            zoom_changed = true;
-        }
-    }
-
-    if (zoom_changed)
-    {
-        if (g_gps_state.popup_label != NULL)
-        {
-            char zoom_text[32];
-            snprintf(zoom_text, sizeof(zoom_text), "%d", g_gps_state.popup_zoom);
-            lv_label_set_text(g_gps_state.popup_label, zoom_text);
-            lv_obj_invalidate(g_gps_state.popup_label);
-            GPS_LOG("[GPS] Selected zoom changed to %d\n", g_gps_state.popup_zoom);
-        }
+        zoom_popup_sync_widgets();
+        GPS_LOG("[GPS] Selected zoom changed to %d\n", g_gps_state.popup_zoom);
     }
 }
 
@@ -872,10 +954,6 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e)
         return;
     }
     extern void hide_zoom_popup();
-    extern void update_map_tiles(bool lightweight);
-    extern void update_map_anchor();
-    extern void update_resolution_display();
-    extern void update_zoom_btn();
 
     if (key == LV_KEY_ESC)
     {
@@ -891,40 +969,7 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e)
 
     if (key == LV_KEY_ENTER || (key == ENCODER_KEY_ROTATE_UP && rising_edge))
     {
-        GPS_LOG("[GPS] ENTER key: Applying zoom level %d\n", g_gps_state.popup_zoom);
-
-        double center_lat = g_gps_state.lat;
-        double center_lng = g_gps_state.lng;
-
-        if (g_gps_state.anchor.valid)
-        {
-            get_screen_center_lat_lng(g_gps_state.tile_ctx, center_lat, center_lng);
-            GPS_LOG("[GPS] Screen center before zoom: lat=%.6f, lng=%.6f\n", center_lat, center_lng);
-        }
-        else if (!g_gps_state.has_fix)
-        {
-            center_lat = gps_ui::kDefaultLat;
-            center_lng = gps_ui::kDefaultLng;
-            GPS_LOG("[GPS] Using London as default center (no anchor, no GPS fix)\n");
-        }
-
-        g_gps_state.zoom_level = g_gps_state.popup_zoom;
-        g_gps_state.lat = center_lat;
-        g_gps_state.lng = center_lng;
-        g_gps_state.pan_x = 0;
-        g_gps_state.pan_y = 0;
-
-        g_gps_state.last_resolution_zoom = g_gps_state.zoom_level;
-        g_gps_state.last_resolution_lat = g_gps_state.lat;
-
-        update_resolution_display();
-        update_map_anchor();
-        update_map_tiles(false);
-        update_zoom_btn();
-        hide_zoom_popup();
-
-        GPS_LOG("[GPS] Zoom applied: level=%d, center=(%.6f, %.6f)\n",
-                g_gps_state.zoom_level, g_gps_state.lat, g_gps_state.lng);
+        zoom_popup_apply_selection();
         return;
     }
 
@@ -945,38 +990,10 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e)
         return;
     }
 
-    if (diff != 0)
+    if (diff != 0 && adjust_popup_zoom(diff))
     {
         updateUserActivity();
-        bool zoom_changed = false;
-
-        if (diff > 0)
-        {
-            if (g_gps_state.popup_zoom < gps_ui::kMaxZoom)
-            {
-                g_gps_state.popup_zoom++;
-                zoom_changed = true;
-            }
-        }
-        else if (diff < 0)
-        {
-            if (g_gps_state.popup_zoom > gps_ui::kMinZoom)
-            {
-                g_gps_state.popup_zoom--;
-                zoom_changed = true;
-            }
-        }
-
-        if (zoom_changed)
-        {
-            if (g_gps_state.popup_label != NULL)
-            {
-                char zoom_text[32];
-                snprintf(zoom_text, sizeof(zoom_text), "%d", g_gps_state.popup_zoom);
-                lv_label_set_text(g_gps_state.popup_label, zoom_text);
-                lv_obj_invalidate(g_gps_state.popup_label);
-                GPS_LOG("[GPS] Selected zoom changed to %d (via key)\n", g_gps_state.popup_zoom);
-            }
-        }
+        zoom_popup_sync_widgets();
+        GPS_LOG("[GPS] Selected zoom changed to %d (via key)\n", g_gps_state.popup_zoom);
     }
 }

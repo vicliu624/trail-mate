@@ -114,23 +114,24 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
         lv_obj_center(label);
     };
 
-    const bool show_pan_axis_controls = !profile.large_touch_hitbox;
+    const bool touch_layout = profile.large_touch_hitbox;
+    const bool show_pan_axis_controls = !touch_layout;
 
-    create_control(w.zoom_btn, w.zoom_label, "[Z]oom");
-    create_control(w.pos_btn, w.pos_label, "[P]osition");
+    create_control(w.zoom_btn, w.zoom_label, touch_layout ? "Zoom" : "[Z]oom");
+    create_control(w.pos_btn, w.pos_label, touch_layout ? "Position" : "[P]osition");
     if (show_pan_axis_controls)
     {
         create_control(w.pan_h_btn, w.pan_h_label, "[H]oriz");
         create_control(w.pan_v_btn, w.pan_v_label, "[V]ert");
     }
-    create_control(w.tracker_btn, w.tracker_label, "[T]racker");
-    create_control(w.layer_btn, w.layer_label, "[L]ayer");
+    create_control(w.tracker_btn, w.tracker_label, touch_layout ? "Track" : "[T]racker");
+    create_control(w.layer_btn, w.layer_label, touch_layout ? "Layer" : "[L]ayer");
 
     w.route_btn = lv_btn_create(w.member_panel);
     lv_obj_set_width(w.route_btn, LV_PCT(100));
     lv_obj_set_height(w.route_btn, spec.control_btn_h);
     w.route_label = lv_label_create(w.route_btn);
-    lv_label_set_text(w.route_label, "[R]oute");
+    lv_label_set_text(w.route_label, touch_layout ? "Route" : "[R]oute");
     lv_obj_center(w.route_label);
 }
 

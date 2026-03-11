@@ -31,6 +31,11 @@ void clear_modal_groups()
         lv_group_del(g_gps_state.layer_modal.group);
         g_gps_state.layer_modal.group = nullptr;
     }
+    if (g_gps_state.route_modal.group)
+    {
+        lv_group_del(g_gps_state.route_modal.group);
+        g_gps_state.route_modal.group = nullptr;
+    }
 }
 
 void detach_group_objs()
@@ -88,6 +93,9 @@ void on_root_deleted(lv_event_t* e)
     g_gps_state.loading_msgbox = nullptr;
     g_gps_state.toast_msgbox = nullptr;
     g_gps_state.popup_label = nullptr;
+    g_gps_state.popup_roller = nullptr;
+    g_gps_state.popup_apply_btn = nullptr;
+    g_gps_state.popup_cancel_btn = nullptr;
 
     // Close modals that are not children of the root container.
     if (g_gps_state.zoom_modal.is_open())
@@ -97,6 +105,10 @@ void on_root_deleted(lv_event_t* e)
     if (g_gps_state.layer_modal.is_open())
     {
         modal_close(g_gps_state.layer_modal);
+    }
+    if (g_gps_state.route_modal.is_open())
+    {
+        modal_close(g_gps_state.route_modal);
     }
     gps_tracker_cleanup();
     gps_route_cleanup();

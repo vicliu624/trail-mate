@@ -6,6 +6,7 @@
 #include "ui/widgets/top_bar.h"
 
 #include <algorithm>
+#include <cstring>
 
 #include "ui/page/page_profile.h"
 #include "ui/ui_theme.h"
@@ -128,6 +129,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         lv_label_set_text(bar.title_label, "");
         lv_label_set_long_mode(bar.title_label, LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_color(bar.title_label, ui::theme::text(), 0);
+        lv_obj_set_style_bg_opa(bar.title_label, LV_OPA_TRANSP, 0);
     }
     lv_obj_set_style_text_font(bar.title_label, text_font, 0);
     lv_obj_set_flex_grow(bar.title_label, 1);
@@ -142,22 +144,39 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_obj_set_style_text_color(bar.right_label, ui::theme::text_muted(), 0);
     lv_obj_set_style_text_align(bar.right_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_style_text_font(bar.right_label, text_font, 0);
+    lv_obj_set_style_bg_opa(bar.right_label, LV_OPA_TRANSP, 0);
 }
 
 void top_bar_set_title(TopBar& bar, const char* title)
 {
-    if (bar.title_label != nullptr && title != nullptr)
+    if (bar.title_label == nullptr || title == nullptr)
     {
-        lv_label_set_text(bar.title_label, title);
+        return;
     }
+
+    const char* current = lv_label_get_text(bar.title_label);
+    if (current != nullptr && std::strcmp(current, title) == 0)
+    {
+        return;
+    }
+
+    lv_label_set_text(bar.title_label, title);
 }
 
 void top_bar_set_right_text(TopBar& bar, const char* text)
 {
-    if (bar.right_label != nullptr && text != nullptr)
+    if (bar.right_label == nullptr || text == nullptr)
     {
-        lv_label_set_text(bar.right_label, text);
+        return;
     }
+
+    const char* current = lv_label_get_text(bar.right_label);
+    if (current != nullptr && std::strcmp(current, text) == 0)
+    {
+        return;
+    }
+
+    lv_label_set_text(bar.right_label, text);
 }
 
 void top_bar_set_back_callback(TopBar& bar, void (*cb)(void*), void* user_data)

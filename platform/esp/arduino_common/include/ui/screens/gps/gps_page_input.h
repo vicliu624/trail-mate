@@ -41,5 +41,7 @@ void pan_indicator_event_cb(lv_event_t* e);
 
 void zoom_popup_handle_rotary(int32_t diff);
 void zoom_popup_handle_key(lv_key_t key, lv_event_t* e);
+void zoom_popup_sync_widgets();
+void zoom_popup_apply_selection();
 
 #endif // GPS_PAGE_INPUT_H

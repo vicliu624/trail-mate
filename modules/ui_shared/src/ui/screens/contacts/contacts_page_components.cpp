@@ -105,12 +105,13 @@ static void on_action_menu_item_clicked(lv_event_t* e);
 static void on_action_menu_key(lv_event_t* e);
 static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text);
 static const chat::contacts::NodeInfo* get_selected_node();
+static const chat::contacts::NodeInfo* find_node_by_id(uint32_t node_id);
 struct BroadcastTargetSpec;
 static bool get_selected_broadcast_target(BroadcastTargetSpec* out_spec,
                                           std::string* out_title);
 static void open_add_edit_modal(bool is_edit);
 static void open_delete_confirm_modal();
-static void open_node_info_screen();
+static void open_node_info_screen_for_node(uint32_t node_id);
 static void close_node_info_screen();
 static void modal_close(lv_obj_t*& modal_obj);
 static void modal_prepare_group();
@@ -789,6 +790,25 @@ static const chat::contacts::NodeInfo* get_selected_node()
     return &list[g_contacts_state.selected_index];
 }
 
+static const chat::contacts::NodeInfo* find_node_by_id(uint32_t node_id)
+{
+    for (const auto& node : g_contacts_state.contacts_list)
+    {
+        if (node.node_id == node_id)
+        {
+            return &node;
+        }
+    }
+    for (const auto& node : g_contacts_state.nearby_list)
+    {
+        if (node.node_id == node_id)
+        {
+            return &node;
+        }
+    }
+    return nullptr;
+}
+
 static bool get_selected_broadcast_target(BroadcastTargetSpec* out_spec,
                                           std::string* out_title)
 {
@@ -1023,13 +1043,18 @@ static void open_delete_confirm_modal()
     lv_group_focus_obj(cancel_btn);
 }
 
-static void open_node_info_screen()
+static void open_node_info_screen_for_node(uint32_t node_id)
 {
     if (g_contacts_state.node_info_root)
     {
         return;
     }
-    const auto* node = get_selected_node();
+
+    const chat::contacts::NodeInfo* node = find_node_by_id(node_id);
+    if (!node && g_contacts_state.contact_service)
+    {
+        node = g_contacts_state.contact_service->getNodeInfo(node_id);
+    }
     if (!node)
     {
         return;
@@ -2000,8 +2025,13 @@ static void on_action_menu_item_clicked(lv_event_t* e)
     ActionMenuCommand cmd = static_cast<ActionMenuCommand>(
         reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
 
+    uint32_t selected_node_id = 0;
+    if (const auto* node = get_selected_node())
+    {
+        selected_node_id = node->node_id;
+    }
+
     modal_close(g_contacts_state.action_menu_modal);
-    contacts_focus_to_list();
 
     switch (cmd)
     {
@@ -2012,7 +2042,10 @@ static void on_action_menu_item_clicked(lv_event_t* e)
         send_team_position();
         break;
     case ActionMenuCommand::Info:
-        open_node_info_screen();
+        if (selected_node_id != 0)
+        {
+            open_node_info_screen_for_node(selected_node_id);
+        }
         break;
     case ActionMenuCommand::Edit:
         open_add_edit_modal(true);
@@ -2025,6 +2058,7 @@ static void on_action_menu_item_clicked(lv_event_t* e)
         break;
     case ActionMenuCommand::Cancel:
     default:
+        contacts_focus_to_list();
         break;
     }
 }

@@ -380,6 +380,22 @@ void on_tracker_close_clicked(lv_event_t* /*e*/)
     close_tracker_modal();
 }
 
+void on_tracker_bg_clicked(lv_event_t* e)
+{
+    if (!e || lv_event_get_code(e) != LV_EVENT_CLICKED)
+    {
+        return;
+    }
+
+    lv_obj_t* target = lv_event_get_target_obj(e);
+    if (target != g_gps_state.tracker_modal.bg)
+    {
+        return;
+    }
+
+    close_tracker_modal();
+}
+
 void on_track_selected(lv_event_t* e)
 {
     if (!is_alive())
@@ -410,25 +426,61 @@ void build_tracker_modal()
         return;
     }
     auto& state = g_gps_state;
+    const bool touch_layout = modal_uses_touch_layout();
 
-    lv_obj_t* title = lv_label_create(state.tracker_modal.win);
-    lv_label_set_text(title, "Select Track");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_t* list_parent = state.tracker_modal.win;
+    if (touch_layout)
+    {
+        gps::ui::styles::apply_zoom_popup_win(state.tracker_modal.win);
+        lv_obj_t* title_bar = modal_create_touch_title_bar(state.tracker_modal.win, "Select Track");
+        const lv_coord_t title_height = title_bar != nullptr ? lv_obj_get_height(title_bar) : modal_resolve_title_height();
+        list_parent = modal_create_touch_content_area(state.tracker_modal.win, title_height);
+        if (list_parent == nullptr)
+        {
+            return;
+        }
+        lv_obj_set_style_pad_row(list_parent, 10, 0);
+    }
+    else
+    {
+        lv_obj_t* title = lv_label_create(state.tracker_modal.win);
+        lv_label_set_text(title, "Select Track");
+        lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
+    }
 
-    lv_obj_t* list = lv_list_create(state.tracker_modal.win);
-    lv_obj_set_size(list, LV_PCT(100), 90);
-    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_t* list = lv_list_create(list_parent);
+    if (touch_layout)
+    {
+        lv_obj_set_width(list, LV_PCT(100));
+        lv_obj_set_height(list, 0);
+        lv_obj_set_flex_grow(list, 1);
+        lv_obj_set_style_pad_left(list, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_right(list, 0, LV_PART_MAIN);
+    }
+    else
+    {
+        lv_obj_set_size(list, LV_PCT(100), 90);
+        lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 28);
+    }
     gps::ui::styles::apply_tracker_modal_list(list);
 
-    lv_obj_t* close_btn = lv_btn_create(state.tracker_modal.win);
-    lv_obj_set_size(close_btn, 100, 24);
-    lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -4);
-    gps::ui::styles::apply_control_button(close_btn);
-    lv_obj_t* close_label = lv_label_create(close_btn);
-    lv_label_set_text(close_label, "Close");
-    gps::ui::styles::apply_control_button_label(close_label);
-    lv_obj_center(close_label);
-    lv_obj_add_event_cb(close_btn, on_tracker_close_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* close_btn = nullptr;
+    if (touch_layout)
+    {
+        close_btn = modal_create_touch_action_button(list_parent, "Close", on_tracker_close_clicked, nullptr, LV_PCT(100));
+    }
+    else
+    {
+        close_btn = lv_btn_create(state.tracker_modal.win);
+        lv_obj_set_size(close_btn, 100, 24);
+        lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -4);
+        gps::ui::styles::apply_control_button(close_btn);
+        lv_obj_t* close_label = lv_label_create(close_btn);
+        lv_label_set_text(close_label, "Close");
+        gps::ui::styles::apply_control_button_label(close_label);
+        lv_obj_center(close_label);
+        lv_obj_add_event_cb(close_btn, on_tracker_close_clicked, LV_EVENT_CLICKED, nullptr);
+    }
 
     s_modal_names.clear();
     platform::ui::tracker::list_tracks(s_modal_names, 64);
@@ -439,6 +491,12 @@ void build_tracker_modal()
     {
         lv_obj_t* label = lv_label_create(list);
         lv_label_set_text(label, "No track files");
+        gps::ui::styles::apply_control_button_label(label);
+        if (touch_layout)
+        {
+            lv_obj_set_width(label, LV_PCT(100));
+            lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        }
         lv_group_add_obj(state.tracker_modal.group, close_btn);
         set_default_group(state.tracker_modal.group);
         bind_encoder_to_group(state.tracker_modal.group);
@@ -446,13 +504,19 @@ void build_tracker_modal()
         return;
     }
 
+    const lv_coord_t track_row_height = touch_layout ? 60 : 26;
+    const lv_coord_t track_row_pad_ver = touch_layout ? 10 : 2;
+    const lv_coord_t track_row_pad_hor = touch_layout ? 12 : 6;
+    lv_obj_t* first_btn = nullptr;
+
     for (std::size_t index = 0; index < s_modal_names.size(); ++index)
     {
         const std::string& name = s_modal_names[index];
         lv_obj_t* btn = lv_list_add_btn(list, LV_SYMBOL_FILE, name.c_str());
-        lv_obj_set_height(btn, 26);
-        lv_obj_set_style_pad_ver(btn, 2, LV_PART_MAIN);
-        lv_obj_set_style_pad_hor(btn, 6, LV_PART_MAIN);
+        lv_obj_set_width(btn, LV_PCT(100));
+        lv_obj_set_height(btn, track_row_height);
+        lv_obj_set_style_pad_ver(btn, track_row_pad_ver, LV_PART_MAIN);
+        lv_obj_set_style_pad_hor(btn, track_row_pad_hor, LV_PART_MAIN);
         gps::ui::styles::apply_control_button(btn);
         const uint32_t child_count = lv_obj_get_child_cnt(btn);
         for (uint32_t child_index = 0; child_index < child_count; ++child_index)
@@ -461,6 +525,10 @@ void build_tracker_modal()
             if (child && lv_obj_check_type(child, &lv_label_class))
             {
                 gps::ui::styles::apply_control_button_label(child);
+                if (touch_layout && child_index == child_count - 1)
+                {
+                    lv_label_set_long_mode(child, LV_LABEL_LONG_SCROLL_CIRCULAR);
+                }
             }
         }
         lv_obj_add_event_cb(btn,
@@ -468,14 +536,18 @@ void build_tracker_modal()
                             LV_EVENT_CLICKED,
                             reinterpret_cast<void*>(index));
         lv_group_add_obj(state.tracker_modal.group, btn);
+        if (first_btn == nullptr)
+        {
+            first_btn = btn;
+        }
     }
     lv_group_add_obj(state.tracker_modal.group, close_btn);
 
     set_default_group(state.tracker_modal.group);
     bind_encoder_to_group(state.tracker_modal.group);
-    if (lv_obj_t* first = lv_group_get_focused(state.tracker_modal.group))
+    if (first_btn != nullptr)
     {
-        lv_group_focus_obj(first);
+        lv_group_focus_obj(first_btn);
     }
 }
 
@@ -528,7 +600,13 @@ void gps_tracker_open_modal()
         return;
     }
 
-    modal_set_size(g_gps_state.tracker_modal, 280, 190);
+    if (g_gps_state.tracker_modal.bg != nullptr)
+    {
+        lv_obj_add_event_cb(g_gps_state.tracker_modal.bg, on_tracker_bg_clicked, LV_EVENT_CLICKED, nullptr);
+    }
+
+    const bool touch_layout = modal_uses_touch_layout();
+    modal_set_requested_size(g_gps_state.tracker_modal, touch_layout ? 520 : 280, touch_layout ? 620 : 190);
     build_tracker_modal();
 }
 

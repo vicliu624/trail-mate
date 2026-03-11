@@ -40,6 +40,8 @@ lv_style_t s_zoom_title_label;
 lv_style_t s_zoom_content_area;
 lv_style_t s_zoom_value_label;
 lv_style_t s_zoom_value_label_focused;
+lv_style_t s_zoom_roller;
+lv_style_t s_zoom_roller_selected;
 
 constexpr uint32_t kBlack = 0xFFF3DF;
 constexpr uint32_t kWhite = 0xFFF7E9;
@@ -261,6 +263,27 @@ void init_once()
     lv_style_set_outline_pad(&s_zoom_value_label_focused, 6);
     lv_style_set_radius(&s_zoom_value_label_focused, 8);
 
+    lv_style_init(&s_zoom_roller);
+    lv_style_set_bg_color(&s_zoom_roller, lv_color_hex(kWhite));
+    lv_style_set_bg_opa(&s_zoom_roller, LV_OPA_COVER);
+    lv_style_set_border_width(&s_zoom_roller, 1);
+    lv_style_set_border_color(&s_zoom_roller, lv_color_hex(kPanelBtnBorder));
+    lv_style_set_radius(&s_zoom_roller, 10);
+    lv_style_set_pad_top(&s_zoom_roller, 10);
+    lv_style_set_pad_bottom(&s_zoom_roller, 10);
+    lv_style_set_text_color(&s_zoom_roller, lv_color_hex(kZoomValueText));
+    lv_style_set_text_font(&s_zoom_roller, font_montserrat_18_safe());
+    lv_style_set_text_align(&s_zoom_roller, LV_TEXT_ALIGN_CENTER);
+
+    lv_style_init(&s_zoom_roller_selected);
+    lv_style_set_bg_color(&s_zoom_roller_selected, lv_color_hex(kZoomValueFocusedBg));
+    lv_style_set_bg_opa(&s_zoom_roller_selected, LV_OPA_COVER);
+    lv_style_set_border_width(&s_zoom_roller_selected, 0);
+    lv_style_set_radius(&s_zoom_roller_selected, 8);
+    lv_style_set_text_color(&s_zoom_roller_selected, lv_color_hex(kZoomValueText));
+    lv_style_set_text_font(&s_zoom_roller_selected, font_montserrat_48_safe());
+    lv_style_set_text_align(&s_zoom_roller_selected, LV_TEXT_ALIGN_CENTER);
+
     s_inited = true;
 }
 
@@ -399,6 +422,14 @@ void apply_zoom_popup_value_label(lv_obj_t* label)
     init_once();
     lv_obj_add_style(label, &s_zoom_value_label, LV_PART_MAIN);
     lv_obj_add_style(label, &s_zoom_value_label_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
+}
+
+void apply_zoom_popup_roller(lv_obj_t* roller)
+{
+    if (!roller) return;
+    init_once();
+    lv_obj_add_style(roller, &s_zoom_roller, LV_PART_MAIN);
+    lv_obj_add_style(roller, &s_zoom_roller_selected, LV_PART_SELECTED);
 }
 
 void apply_all(const layout::Widgets& w, const layout::Spec& spec)

@@ -113,17 +113,35 @@ bool usbStartStopCallback(uint8_t power_condition, bool start, bool load_eject)
     return true;
 }
 
-void setup_usb_msc()
+bool setup_usb_msc()
 {
-    uint64_t card_size = SD.cardSize();
-    uint32_t sec_size = SD.sectorSize();
-    if (card_size == 0 || sec_size == 0)
+    if (!platform::ui::device::card_ready())
     {
-        set_status_message("SD card not ready");
-        return;
+        set_status_message("SD Card Not Found");
+        return false;
     }
 
-    uint32_t num_sectors = static_cast<uint32_t>(card_size / sec_size);
+    if (SD.cardType() == CARD_NONE)
+    {
+        set_status_message("SD Card Not Detected");
+        return false;
+    }
+
+    const uint32_t sec_size = SD.sectorSize();
+    if (sec_size == 0)
+    {
+        set_status_message("SD Card Sector Error");
+        return false;
+    }
+
+    const uint64_t card_size = SD.cardSize();
+    if (card_size == 0)
+    {
+        set_status_message("SD Card Not Ready");
+        return false;
+    }
+
+    const uint32_t num_sectors = static_cast<uint32_t>(card_size / sec_size);
     s_msc.vendorID("TrailMate");
     s_msc.productID("SD Card");
     s_msc.productRevision("1.0");
@@ -131,7 +149,11 @@ void setup_usb_msc()
     s_msc.onWrite(usbWriteCallback);
     s_msc.onStartStop(usbStartStopCallback);
     s_msc.mediaPresent(true);
-    s_msc.begin(num_sectors, sec_size);
+    if (!s_msc.begin(num_sectors, sec_size))
+    {
+        set_status_message("USB MSC Init Failed");
+        return false;
+    }
 
     USB.onEvent([](void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
     {
@@ -161,9 +183,16 @@ void setup_usb_msc()
         }
     });
 
-    USB.begin();
+    if (!USB.begin())
+    {
+        s_msc.end();
+        set_status_message("USB Stack Init Failed");
+        return false;
+    }
+
     set_status_message("Initializing USB...");
     s_backend_started = true;
+    return true;
 }
 #endif
 
@@ -229,14 +258,21 @@ bool start()
 
     prepare_mass_storage_mode();
     s_prepared = true;
-    setup_usb_msc();
+    if (!setup_usb_msc())
+    {
+        restore_mass_storage_mode();
+        s_prepared = false;
+        s_status.active = false;
+        return false;
+    }
+
     platform::ui::device::delay_ms(500);
-    s_status.active = s_backend_started;
-    if (s_backend_started && s_message[0] == '\0')
+    s_status.active = true;
+    if (s_message[0] == '\0')
     {
         set_status_message("USB Started - Ready");
     }
-    return s_backend_started;
+    return true;
 #else
     return false;
 #endif

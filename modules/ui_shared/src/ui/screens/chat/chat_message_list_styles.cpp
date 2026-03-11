@@ -1,5 +1,6 @@
 #if !defined(ARDUINO_T_WATCH_S3)
 #include "ui/screens/chat/chat_message_list_styles.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/fonts/fonts.h"
 #include "ui/components/two_pane_styles.h"
 
@@ -56,6 +57,13 @@ void apply_item_btn(lv_obj_t* btn)
 void apply_filter_btn(lv_obj_t* btn)
 {
     ::ui::components::two_pane_styles::apply_btn_filter(btn);
+}
+
+void apply_filter_label(lv_obj_t* label)
+{
+    init_once();
+    ::ui::components::two_pane_styles::apply_label_primary(label);
+    ::ui::fonts::apply_ui_chrome_font(label);
 }
 
 void apply_label_name(lv_obj_t* label)

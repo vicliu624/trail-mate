@@ -14,6 +14,7 @@ void apply_filter_panel(lv_obj_t* obj);
 // list item
 void apply_item_btn(lv_obj_t* btn);
 void apply_filter_btn(lv_obj_t* btn);
+void apply_filter_label(lv_obj_t* label);
 
 // labels
 void apply_label_name(lv_obj_t* label);

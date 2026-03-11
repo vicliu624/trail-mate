@@ -1,4 +1,4 @@
-﻿#include "ui/screens/usb/usb_page_runtime.h"
+#include "ui/screens/usb/usb_page_runtime.h"
 
 #if defined(ARDUINO) || defined(ESP_PLATFORM)
 
@@ -25,8 +25,11 @@ lv_obj_t* s_loading_overlay = nullptr;
 lv_obj_t* s_loading_box = nullptr;
 lv_timer_t* s_status_timer = nullptr;
 lv_timer_t* s_exit_timer = nullptr;
+lv_timer_t* s_start_timer = nullptr;
 ui::widgets::TopBar s_top_bar;
 bool s_exit_started = false;
+
+void refresh_status_cb(lv_timer_t* timer);
 
 void request_exit()
 {
@@ -106,6 +109,30 @@ void finish_exit_cb(lv_timer_t* timer)
     request_exit();
 }
 
+void start_usb_cb(lv_timer_t* timer)
+{
+    if (timer)
+    {
+        lv_timer_del(timer);
+    }
+    s_start_timer = nullptr;
+
+    if (s_root == nullptr || s_exit_started)
+    {
+        return;
+    }
+
+    const bool started = platform::ui::usb_support::start();
+    update_status_label();
+    ui_set_overlay_active(started);
+
+    if (!s_status_timer)
+    {
+        s_status_timer = lv_timer_create(refresh_status_cb, 250, nullptr);
+    }
+    refresh_status_cb(nullptr);
+}
+
 void begin_exit()
 {
     if (s_exit_started)
@@ -115,6 +142,11 @@ void begin_exit()
     s_exit_started = true;
 
     show_loading("Exiting USB...");
+    if (s_start_timer)
+    {
+        lv_timer_del(s_start_timer);
+        s_start_timer = nullptr;
+    }
     platform::ui::usb_support::stop();
     ui_set_overlay_active(false);
 
@@ -177,7 +209,13 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         lv_timer_del(s_exit_timer);
         s_exit_timer = nullptr;
     }
+    if (s_start_timer)
+    {
+        lv_timer_del(s_start_timer);
+        s_start_timer = nullptr;
+    }
     clear_loading_overlay();
+    ui_set_overlay_active(false);
 
     if (s_root)
     {
@@ -255,15 +293,22 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_set_style_text_color(info_label, lv_color_hex(0x6A5646), LV_PART_MAIN);
     lv_obj_set_style_text_opa(info_label, LV_OPA_80, LV_PART_MAIN);
 
-    const bool started = platform::ui::usb_support::start();
     update_status_label();
-    ui_set_overlay_active(started);
 
-    if (!s_status_timer)
+    if (s_start_timer)
     {
-        s_status_timer = lv_timer_create(refresh_status_cb, 250, nullptr);
+        lv_timer_del(s_start_timer);
+        s_start_timer = nullptr;
     }
-    refresh_status_cb(nullptr);
+    s_start_timer = lv_timer_create(start_usb_cb, 1, nullptr);
+    if (s_start_timer)
+    {
+        lv_timer_set_repeat_count(s_start_timer, 1);
+    }
+    else
+    {
+        start_usb_cb(nullptr);
+    }
 }
 
 void exit(lv_obj_t* parent)
@@ -279,6 +324,11 @@ void exit(lv_obj_t* parent)
     {
         lv_timer_del(s_exit_timer);
         s_exit_timer = nullptr;
+    }
+    if (s_start_timer)
+    {
+        lv_timer_del(s_start_timer);
+        s_start_timer = nullptr;
     }
 
     platform::ui::usb_support::stop();

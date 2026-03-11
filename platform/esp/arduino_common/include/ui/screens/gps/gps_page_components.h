@@ -25,6 +25,10 @@ void hide_zoom_popup();
 void show_layer_popup();
 void hide_layer_popup();
 
+// Route action modal
+void show_route_popup();
+void hide_route_popup();
+
 // UI layout helper
 void fix_ui_elements_position();
 

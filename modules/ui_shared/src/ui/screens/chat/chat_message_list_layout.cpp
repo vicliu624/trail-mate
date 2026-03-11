@@ -50,6 +50,11 @@ Metrics current_metrics()
     return metrics;
 }
 
+const char* broadcast_filter_text()
+{
+    return ::ui::page_profile::current().large_touch_hitbox ? "Broadcast" : "Bcast";
+}
+
 void style_filter_label(lv_obj_t* label)
 {
     if (!label)
@@ -101,7 +106,7 @@ lv_obj_t* create_filter_panel(lv_obj_t* parent,
     lv_obj_set_size(broadcast, LV_PCT(100), metrics.filter_button_height);
     ::ui::components::two_pane_layout::make_non_scrollable(broadcast);
     lv_obj_t* broadcast_label = lv_label_create(broadcast);
-    lv_label_set_text(broadcast_label, "Broadcast");
+    lv_label_set_text(broadcast_label, broadcast_filter_text());
     style_filter_label(broadcast_label);
     lv_obj_center(broadcast_label);
 

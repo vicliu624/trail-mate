@@ -24,6 +24,10 @@
 #include <limits>
 #include <sys/time.h>
 
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+#include "platform/esp/idf_common/tab5_rtc_runtime.h"
+#endif
+
 namespace ble
 {
 
@@ -2312,10 +2316,15 @@ class MeshtasticBleService::PhoneApi
         }
         case meshtastic_AdminMessage_set_time_only_tag:
         {
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+            const bool ok = platform::esp::idf_common::tab5_rtc_runtime::apply_system_time_and_sync_rtc(
+                static_cast<time_t>(req.set_time_only), "meshtastic_ble");
+#else
             struct timeval tv = {};
             tv.tv_sec = static_cast<time_t>(req.set_time_only);
             tv.tv_usec = 0;
             const bool ok = (settimeofday(&tv, nullptr) == 0);
+#endif
             ble_log("set_time_only=%lu ok=%u",
                     static_cast<unsigned long>(req.set_time_only),
                     ok ? 1U : 0U);
