@@ -28,6 +28,7 @@ struct MenuAppUi
 
 lv_obj_t* s_menu_panel = nullptr;
 lv_obj_t* s_app_panel = nullptr;
+lv_obj_t* s_grid_panel = nullptr;
 lv_obj_t* s_desc_label = nullptr;
 lv_obj_t* s_node_id_label = nullptr;
 MenuAppUi s_menu_apps[kMaxMenuApps];
@@ -315,18 +316,29 @@ void createAppGrid()
     }
 
     lv_obj_t* panel = lv_obj_create(s_menu_panel);
+    s_grid_panel = panel;
     lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_size(panel, LV_PCT(100), LV_PCT(profile.grid_height_pct));
-    lv_obj_set_style_pad_top(panel, 0, 0);
-    lv_obj_set_style_pad_bottom(panel, 0, 0);
-    lv_obj_set_style_pad_left(panel, profile.grid_pad_left, 0);
-    lv_obj_set_style_pad_right(panel, profile.grid_pad_right, 0);
     lv_obj_set_style_pad_row(panel, profile.grid_pad_row, 0);
     lv_obj_set_style_pad_column(panel, profile.grid_pad_column, 0);
+    if (profile.variant != ui::menu_profile::LayoutVariant::CompactGrid)
+    {
+        lv_obj_set_style_pad_top(panel, 0, 0);
+        lv_obj_set_style_pad_bottom(panel, 0, 0);
+        lv_obj_set_style_pad_left(panel, profile.grid_pad_left, 0);
+        lv_obj_set_style_pad_right(panel, profile.grid_pad_right, 0);
+    }
     lv_obj_set_scroll_dir(panel, profile.vertical_scroll ? LV_DIR_VER : LV_DIR_HOR);
     if (profile.wrap_grid)
     {
-        lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+        if (profile.variant == ui::menu_profile::LayoutVariant::CompactGrid)
+        {
+            lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+        }
+        else
+        {
+            lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+        }
     }
     else
     {
@@ -425,6 +437,22 @@ void init(const InitOptions& options)
 lv_obj_t* menuPanel()
 {
     return s_menu_panel;
+}
+
+void bringContentToFront()
+{
+    if (s_grid_panel != nullptr)
+    {
+        lv_obj_move_foreground(s_grid_panel);
+    }
+    if (s_desc_label != nullptr)
+    {
+        lv_obj_move_foreground(s_desc_label);
+    }
+    if (s_node_id_label != nullptr)
+    {
+        lv_obj_move_foreground(s_node_id_label);
+    }
 }
 
 } // namespace menu_layout

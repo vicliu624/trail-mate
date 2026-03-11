@@ -18,6 +18,7 @@ struct InitOptions
 
 void init(const InitOptions& options);
 lv_obj_t* menuPanel();
+void bringContentToFront();
 
 } // namespace menu_layout
 } // namespace ui

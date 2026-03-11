@@ -68,7 +68,7 @@ MenuLayoutProfile make_tdeck_profile()
     profile.show_desc_label = false;
     profile.show_node_id = true;
     profile.large_touch_hitbox = false;
-    profile.card_label_font = &lv_font_montserrat_14;
+    profile.card_label_font = &lv_font_montserrat_12;
     profile.desc_font = &lv_font_montserrat_14;
     profile.node_id_font = &lv_font_montserrat_14;
     profile.top_bar_font = &lv_font_montserrat_14;

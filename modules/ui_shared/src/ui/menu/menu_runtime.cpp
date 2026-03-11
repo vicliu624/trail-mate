@@ -6,6 +6,7 @@
 
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
+#include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_profile.h"
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
@@ -211,9 +212,9 @@ void createTopBar()
     lv_obj_set_style_pad_all(menu_topbar, 0, 0);
     lv_obj_clear_flag(menu_topbar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(menu_topbar, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_move_foreground(menu_topbar);
+    lv_obj_move_background(menu_topbar);
 
-    s_runtime.time_label = lv_label_create(menu_topbar);
+    s_runtime.time_label = lv_label_create(s_runtime.menu_panel);
     lv_obj_set_width(s_runtime.time_label, LV_SIZE_CONTENT);
     lv_obj_align(s_runtime.time_label, LV_ALIGN_TOP_LEFT, profile.top_bar_side_inset, 0);
     lv_obj_set_style_text_align(s_runtime.time_label, LV_TEXT_ALIGN_LEFT, 0);
@@ -222,8 +223,9 @@ void createTopBar()
     lv_obj_set_style_pad_all(s_runtime.time_label, profile.top_bar_text_pad, 0);
     lv_obj_set_style_text_font(s_runtime.time_label, profile.top_bar_font, 0);
     lv_label_set_text(s_runtime.time_label, "--:--");
+    lv_obj_move_foreground(s_runtime.time_label);
 
-    s_runtime.battery_label = lv_label_create(menu_topbar);
+    s_runtime.battery_label = lv_label_create(s_runtime.menu_panel);
     lv_obj_set_width(s_runtime.battery_label, LV_SIZE_CONTENT);
     lv_obj_align(s_runtime.battery_label, LV_ALIGN_TOP_RIGHT, -profile.top_bar_side_inset, 0);
     lv_obj_set_style_text_align(s_runtime.battery_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -232,8 +234,9 @@ void createTopBar()
     lv_obj_set_style_pad_all(s_runtime.battery_label, profile.top_bar_text_pad, 0);
     lv_obj_set_style_text_font(s_runtime.battery_label, profile.top_bar_font, 0);
     lv_label_set_text(s_runtime.battery_label, "--");
+    lv_obj_move_foreground(s_runtime.battery_label);
 
-    lv_obj_t* menu_status_row = lv_obj_create(menu_topbar);
+    lv_obj_t* menu_status_row = lv_obj_create(s_runtime.menu_panel);
     lv_obj_set_size(menu_status_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(menu_status_row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(menu_status_row, 0, 0);
@@ -246,6 +249,7 @@ void createTopBar()
     lv_obj_set_flex_align(menu_status_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_flag(menu_status_row, LV_OBJ_FLAG_HIDDEN);
     lv_obj_align(menu_status_row, LV_ALIGN_TOP_MID, 0, profile.status_row_offset_y);
+    lv_obj_move_foreground(menu_status_row);
 
     lv_obj_t* menu_route_icon = lv_image_create(menu_status_row);
     lv_obj_t* menu_tracker_icon = lv_image_create(menu_status_row);
@@ -313,6 +317,7 @@ void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, co
     s_runtime.menu_panel = menu_panel;
 
     createTopBar();
+    ui::menu_layout::bringContentToFront();
     ui::status::init();
     initWatchFace();
     createTimers();
