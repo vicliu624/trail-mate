@@ -22,6 +22,9 @@
     "dependencies":  [
                          {
                              "name":  "esp_boards"
+                         },
+                         {
+                             "name":  "trail_mate_codec2"
                          }
                      ]
 }
