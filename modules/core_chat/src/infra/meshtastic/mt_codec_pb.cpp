@@ -251,6 +251,33 @@ bool encodeAppData(uint32_t portnum, const uint8_t* payload, size_t payload_len,
     return true;
 }
 
+bool decodeAppData(const uint8_t* buffer, size_t size, MeshIncomingData* out)
+{
+    if (!buffer || !out || size == 0)
+    {
+        return false;
+    }
+
+    meshtastic_Data data = meshtastic_Data_init_default;
+    pb_istream_t stream = pb_istream_from_buffer(buffer, size);
+    if (!pb_decode(&stream, meshtastic_Data_fields, &data))
+    {
+        return false;
+    }
+
+    if (data.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
+        data.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP ||
+        data.portnum == meshtastic_PortNum_NODEINFO_APP)
+    {
+        return false;
+    }
+
+    out->portnum = static_cast<uint32_t>(data.portnum);
+    out->want_response = data.want_response;
+    out->payload.assign(data.payload.bytes, data.payload.bytes + data.payload.size);
+    return true;
+}
+
 bool encodeMeshPacket(const meshtastic_MeshPacket& packet, uint8_t* out_buffer, size_t* out_size)
 {
     if (!out_buffer || !out_size)

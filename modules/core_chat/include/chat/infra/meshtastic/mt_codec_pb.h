@@ -88,6 +88,7 @@ bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_n
  */
 bool encodeAppData(uint32_t portnum, const uint8_t* payload, size_t payload_len,
                    bool want_response, uint8_t* out_buffer, size_t* out_size);
+bool decodeAppData(const uint8_t* buffer, size_t size, MeshIncomingData* out);
 
 /**
  * @brief Encode MeshPacket to buffer

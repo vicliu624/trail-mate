@@ -42,7 +42,12 @@ inline const lv_font_t* ui_chrome_font()
 
 inline const lv_font_t* chat_content_font(const char* text)
 {
+#if defined(GAT562_NO_CJK) && GAT562_NO_CJK
+    (void)text;
+    return ui_chrome_font();
+#else
     return utf8_has_non_ascii(text) ? &lv_font_noto_cjk_16_2bpp : ui_chrome_font();
+#endif
 }
 
 inline void apply_font(lv_obj_t* label, const lv_font_t* font)

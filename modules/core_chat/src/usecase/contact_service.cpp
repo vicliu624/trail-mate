@@ -268,7 +268,7 @@ bool ContactService::isNodeVisible(uint32_t last_seen) const
 
 std::string ContactService::formatTimeStatus(uint32_t last_seen) const
 {
-    uint32_t now_secs = time(nullptr);
+    uint32_t now_secs = sys::epoch_seconds_now();
     if (now_secs < last_seen)
     {
         return "Offline";

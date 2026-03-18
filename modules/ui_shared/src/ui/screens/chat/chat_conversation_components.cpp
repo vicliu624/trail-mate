@@ -100,7 +100,7 @@ static void format_message_time(char* out, size_t out_len, uint32_t ts)
         return;
     }
 
-    uint32_t now_epoch = static_cast<uint32_t>(time(nullptr));
+    uint32_t now_epoch = sys::epoch_seconds_now();
     bool ts_is_epoch = is_valid_epoch_ts(ts);
     bool now_is_epoch = is_valid_epoch_ts(now_epoch);
     uint32_t now_secs = now_is_epoch ? now_epoch : static_cast<uint32_t>(sys::millis_now() / 1000U);

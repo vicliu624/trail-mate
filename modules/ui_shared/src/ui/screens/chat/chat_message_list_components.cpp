@@ -59,7 +59,7 @@ static void format_time_hhmm(char out[16], uint32_t ts)
     }
     if (!is_valid_epoch_ts(ts))
     {
-        uint32_t now_epoch = static_cast<uint32_t>(time(nullptr));
+        uint32_t now_epoch = sys::epoch_seconds_now();
         uint32_t now_secs = is_valid_epoch_ts(now_epoch) ? now_epoch : static_cast<uint32_t>(sys::millis_now() / 1000U);
         if (now_secs < ts)
         {

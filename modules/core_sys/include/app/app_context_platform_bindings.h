@@ -124,8 +124,7 @@ struct AppContextPlatformBindings
         return load_app_config && save_app_config && load_message_tone_volume &&
                init_gps_runtime && apply_position_config && init_track_recorder &&
                set_team_mode_active && finalize_startup && create_chat_services &&
-               create_mesh_backend && create_contact_services &&
-               create_team_services && get_self_node_id;
+               create_mesh_backend && create_contact_services && get_self_node_id;
     }
 };
 

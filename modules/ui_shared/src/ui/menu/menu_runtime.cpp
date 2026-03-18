@@ -6,6 +6,7 @@
 
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
+#include "platform/ui/time_runtime.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_profile.h"
 #include "ui/ui_common.h"
@@ -92,24 +93,16 @@ void updateWatchFaceTime()
         return;
     }
 
-    const time_t now = time(nullptr);
-    if (now <= 0)
-    {
-        watchFaceSetTime(-1, -1, -1, -1, nullptr, battery);
-        return;
-    }
-
-    const time_t local = ui_apply_timezone_offset(now);
-    struct tm* info = gmtime(&local);
-    if (!info)
+    struct tm info{};
+    if (!::platform::ui::time::localtime_now(&info))
     {
         watchFaceSetTime(-1, -1, -1, -1, nullptr, battery);
         return;
     }
 
     char weekday[8] = "---";
-    strftime(weekday, sizeof(weekday), "%a", info);
-    watchFaceSetTime(info->tm_hour, info->tm_min, info->tm_mon + 1, info->tm_mday, weekday, battery);
+    strftime(weekday, sizeof(weekday), "%a", &info);
+    watchFaceSetTime(info.tm_hour, info.tm_min, info.tm_mon + 1, info.tm_mday, weekday, battery);
 }
 
 void hideWatchFaceInternal()

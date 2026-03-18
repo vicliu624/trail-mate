@@ -233,7 +233,7 @@ void refresh_contacts_data()
 
 static std::string format_time_status(uint32_t last_seen)
 {
-    uint32_t now_secs = time(nullptr);
+    uint32_t now_secs = sys::epoch_seconds_now();
     if (now_secs < last_seen)
     {
         return "Offline";
@@ -588,7 +588,7 @@ static bool is_team_available()
 
 static uint32_t current_timestamp_seconds()
 {
-    uint32_t ts = static_cast<uint32_t>(time(nullptr));
+    uint32_t ts = sys::epoch_seconds_now();
     if (ts < 1577836800U)
     {
         ts = sys::millis_now() / 1000U;
@@ -1500,7 +1500,7 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
             if (g_contacts_state.chat_service)
             {
                 s_last_sent_text = text;
-                s_last_sent_ts = static_cast<uint32_t>(time(nullptr));
+                s_last_sent_ts = sys::epoch_seconds_now();
                 chat::MessageId msg_id = g_contacts_state.chat_service->sendText(
                     s_compose_channel, text, s_compose_peer_id);
                 g_contacts_state.compose_screen->beginSend(
@@ -1529,7 +1529,7 @@ static void on_compose_send_done(bool ok, bool /*timeout*/, void* /*user_data*/)
         uint32_t ts = s_last_sent_ts;
         if (ts == 0)
         {
-            ts = static_cast<uint32_t>(time(nullptr));
+            ts = sys::epoch_seconds_now();
         }
         team::ui::team_ui_chatlog_append(team::ui::g_team_state.team_id,
                                          0,

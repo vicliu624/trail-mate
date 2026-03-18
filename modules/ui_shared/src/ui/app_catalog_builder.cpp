@@ -9,12 +9,18 @@
 #include "ui/screens/energy_sweep/energy_sweep_page_shell.h"
 #include "ui/screens/gnss/gnss_skyplot_page_shell.h"
 #include "ui/screens/gps/gps_page_shell.h"
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
 #include "ui/screens/pc_link/pc_link_page_shell.h"
+#endif
 #include "ui/screens/settings/settings_page_shell.h"
 #include "ui/screens/sstv/sstv_page_shell.h"
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
 #include "ui/screens/team/team_page_shell.h"
+#endif
 #include "ui/screens/tracker/tracker_page_shell.h"
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
 #include "ui/screens/usb/usb_page_shell.h"
+#endif
 #include "ui/screens/walkie_talkie/walkie_talkie_page_shell.h"
 
 namespace
@@ -29,12 +35,18 @@ extern "C"
     extern const lv_image_dsc_t Satellite;
     extern const lv_image_dsc_t contact;
     extern const lv_image_dsc_t Spectrum;
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
     extern const lv_image_dsc_t team_icon;
+#endif
     extern const lv_image_dsc_t tracker_icon;
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
     extern const lv_image_dsc_t rf;
+#endif
     extern const lv_image_dsc_t sstv;
     extern const lv_image_dsc_t Setting;
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
     extern const lv_image_dsc_t img_usb;
+#endif
     extern const lv_image_dsc_t walkie_talkie;
 }
 
@@ -72,26 +84,32 @@ ui::CallbackAppScreen s_energy_sweep_app("Energy Sweep", &Spectrum,
                                          energy_sweep::ui::shell::enter,
                                          energy_sweep::ui::shell::exit,
                                          &s_menu_host);
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
 ui::CallbackAppScreen s_team_app("Team", &team_icon,
                                  team::ui::shell::enter,
                                  team::ui::shell::exit,
                                  &s_menu_host);
+#endif
 ui::CallbackAppScreen s_tracker_app("Tracker", &tracker_icon,
                                     tracker::ui::shell::enter,
                                     tracker::ui::shell::exit,
                                     &s_menu_host);
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
 ui::CallbackAppScreen s_pc_link_app("Data Exchange", &rf,
                                     pc_link::ui::shell::enter,
                                     pc_link::ui::shell::exit,
                                     &s_menu_host);
+#endif
 ui::CallbackAppScreen s_sstv_app("SSTV", &sstv,
                                  sstv_page::ui::shell::enter,
                                  sstv_page::ui::shell::exit,
                                  &s_menu_host);
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
 ui::CallbackAppScreen s_usb_app("USB Mass Storage", &img_usb,
                                 usb_storage::ui::shell::enter,
                                 usb_storage::ui::shell::exit,
                                 &s_menu_host);
+#endif
 ui::CallbackAppScreen s_setting_app("Setting", &Setting,
                                     settings::ui::shell::enter,
                                     settings::ui::shell::exit,
@@ -129,7 +147,9 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_team)
         {
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
             add(&s_team_app);
+#endif
         }
         if (flags.profile == CatalogProfile::IdfDefault && flags.include_tracker)
         {
@@ -137,7 +157,9 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_pc_link)
         {
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
             add(&s_pc_link_app);
+#endif
         }
         if (flags.profile == CatalogProfile::PioDefault && flags.include_sstv)
         {
@@ -153,7 +175,9 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_usb)
         {
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
             add(&s_usb_app);
+#endif
         }
         if (flags.profile == CatalogProfile::IdfDefault && flags.include_sstv)
         {

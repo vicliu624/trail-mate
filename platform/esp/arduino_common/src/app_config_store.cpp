@@ -107,6 +107,7 @@ bool loadAppConfigFromPreferences(AppConfig& config, Preferences& prefs)
     auto& map_track_enabled = config.map_track_enabled;
     auto& map_track_interval = config.map_track_interval;
     auto& map_track_format = config.map_track_format;
+    auto& ble_enabled = config.ble_enabled;
     auto& chat_channel = config.chat_channel;
     auto& net_duty_cycle = config.net_duty_cycle;
     auto& net_channel_util = config.net_channel_util;
@@ -239,6 +240,7 @@ bool loadAppConfigFromPreferences(AppConfig& config, Preferences& prefs)
     map_track_enabled = prefs.getBool("map_track", map_track_enabled);
     map_track_interval = prefs.getUChar("map_track_interval", map_track_interval);
     map_track_format = prefs.getUChar("map_track_format", map_track_format);
+    ble_enabled = prefs.getBool("ble_enabled", ble_enabled);
     chat_channel = prefs.getUChar("chat_channel", chat_channel);
     net_duty_cycle = prefs.getBool("net_duty_cycle", net_duty_cycle);
     net_channel_util = prefs.getUChar("net_util", net_channel_util);
@@ -330,6 +332,7 @@ bool saveAppConfigToPreferences(AppConfig& config, Preferences& prefs)
     auto& map_track_enabled = config.map_track_enabled;
     auto& map_track_interval = config.map_track_interval;
     auto& map_track_format = config.map_track_format;
+    auto& ble_enabled = config.ble_enabled;
     auto& chat_channel = config.chat_channel;
     auto& net_duty_cycle = config.net_duty_cycle;
     auto& net_channel_util = config.net_channel_util;
@@ -422,6 +425,7 @@ bool saveAppConfigToPreferences(AppConfig& config, Preferences& prefs)
     prefs.putBool("map_track", map_track_enabled);
     prefs.putUChar("map_track_interval", map_track_interval);
     prefs.putUChar("map_track_format", map_track_format);
+    prefs.putBool("ble_enabled", ble_enabled);
     prefs.putUChar("chat_channel", chat_channel);
     prefs.putBool("net_duty_cycle", net_duty_cycle);
     prefs.putUChar("net_util", net_channel_util);

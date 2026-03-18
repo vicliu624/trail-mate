@@ -7,6 +7,7 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "sys/clock.h"
 #include "ui/screens/node_info/node_info_page_layout.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/top_bar.h"
@@ -210,7 +211,7 @@ void format_age(const char* prefix, uint32_t ts, char* out, size_t out_len)
         snprintf(out, out_len, "%s -", prefix);
         return;
     }
-    uint32_t now = time(nullptr);
+    uint32_t now = sys::epoch_seconds_now();
     if (now < ts)
     {
         snprintf(out, out_len, "%s 0s", prefix);

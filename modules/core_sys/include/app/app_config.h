@@ -79,6 +79,7 @@ struct AppConfig
     // Device settings
     char node_name[32];
     char short_name[16];
+    bool ble_enabled;
 
     // Channel settings
     bool primary_enabled;
@@ -149,6 +150,7 @@ struct AppConfig
         mesh_protocol = chat::MeshProtocol::Meshtastic;
         node_name[0] = '\0';
         short_name[0] = '\0';
+        ble_enabled = true;
         primary_enabled = true;
         secondary_enabled = false;
         primary_uplink_enabled = false;

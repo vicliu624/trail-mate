@@ -1,0 +1,33 @@
+{
+  "name": "boards_gat562_mesh_evb_pro",
+  "version": "0.1.0",
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "nordicnrf52"
+  ],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-std=gnu++17",
+      "-Iinclude",
+      "-I../..",
+      "-I../../platform/esp/boards/include",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_chat/generated",
+      "-I../../modules/core_gps/include",
+      "-I../../modules/ui_mono_128x64/include",
+      "-I../../modules/ui_shared/include",
+      "-I../../platform/nrf52/arduino_common/include",
+      "-I../../variants/gat562_mesh_evb_pro",
+      "-I../../.pio/libdeps/gat562_mesh_evb_pro/RadioLib/src",
+      "-I../../.pio/libdeps/gat562_mesh_evb_pro/TinyGPSPlus/src",
+      "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ GFX\\ Library",
+      "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ SSD1306",
+      "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ BusIO"
+    ]
+  }
+}

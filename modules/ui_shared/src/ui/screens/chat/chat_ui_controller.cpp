@@ -1175,7 +1175,7 @@ bool UiController::sendTeamLocationWithIcon(uint8_t icon_id)
         return false;
     }
 
-    uint32_t ts = static_cast<uint32_t>(time(nullptr));
+    uint32_t ts = sys::epoch_seconds_now();
     if (ts < kMinValidEpochSeconds)
     {
         ts = static_cast<uint32_t>(sys::millis_now() / 1000U);
@@ -1307,7 +1307,7 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
             return;
         }
 
-        uint32_t ts = static_cast<uint32_t>(time(nullptr));
+        uint32_t ts = sys::epoch_seconds_now();
         if (ts < kMinValidEpochSeconds)
         {
             ts = static_cast<uint32_t>(sys::millis_now() / 1000U);

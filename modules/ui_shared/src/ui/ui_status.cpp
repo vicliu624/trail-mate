@@ -11,7 +11,9 @@
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/tracker_runtime.h"
 #include "sys/clock.h"
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
 #include "ui/screens/team/team_ui_store.h"
+#endif
 
 #include <cstdio>
 
@@ -20,7 +22,9 @@ extern "C"
     extern const lv_image_dsc_t gps_topbar;
     extern const lv_image_dsc_t message_topbar;
     extern const lv_image_dsc_t route_topbar;
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
     extern const lv_image_dsc_t team_topbar;
+#endif
     extern const lv_image_dsc_t tracker_topbar;
     extern const lv_image_dsc_t ble_topbar;
 }
@@ -70,6 +74,14 @@ bool obj_valid(lv_obj_t* obj)
 
 void refresh_team_cache(bool force = false)
 {
+#if defined(GAT562_NO_TEAM) && GAT562_NO_TEAM
+    (void)force;
+    s_team_cache.team_active = false;
+    s_team_cache.team_unread = 0;
+    s_team_cache.valid = true;
+    s_team_cache.last_refresh_ms = sys::millis_now();
+    return;
+#else
     const uint32_t now = sys::millis_now();
     if (!force && s_team_cache.valid && (now - s_team_cache.last_refresh_ms) < kTeamSnapshotRefreshMs)
     {
@@ -89,6 +101,7 @@ void refresh_team_cache(bool force = false)
     }
     s_team_cache.valid = true;
     s_team_cache.last_refresh_ms = now;
+#endif
 }
 
 StatusSnapshot collect_status()
@@ -138,7 +151,11 @@ void apply_menu_icons(const StatusSnapshot& snap)
     apply_icon(s_menu_route_icon, &route_topbar, snap.route_active);
     apply_icon(s_menu_tracker_icon, &tracker_topbar, snap.track_recording);
     apply_icon(s_menu_gps_icon, &gps_topbar, snap.gps_enabled);
+#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
     apply_icon(s_menu_team_icon, &team_topbar, snap.team_active);
+#else
+    apply_icon(s_menu_team_icon, nullptr, false);
+#endif
     apply_icon(s_menu_msg_icon, &message_topbar, snap.unread > 0);
     apply_icon(s_menu_ble_icon, &ble_topbar, snap.ble_enabled);
 

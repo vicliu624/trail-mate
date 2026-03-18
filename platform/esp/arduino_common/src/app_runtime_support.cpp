@@ -1,5 +1,6 @@
 #include "platform/esp/arduino_common/app_runtime_support.h"
 
+#include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "app/app_facades.h"
 #include "ble/ble_manager.h"
@@ -146,7 +147,7 @@ bool dispatchEvent(app::IAppFacade& app_context, sys::Event* event)
 std::unique_ptr<ble::BleManager> createBleManager(app::IAppBleFacade& app_facade)
 {
     std::unique_ptr<ble::BleManager> ble_manager(new ble::BleManager(app_facade));
-    if (platform::esp::arduino_common::device_identity::loadBleEnabledPreference())
+    if (app_facade.getConfig().ble_enabled)
     {
         ble_manager->setEnabled(true);
     }

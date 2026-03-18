@@ -5,8 +5,10 @@
 #include "ble/meshcore_ble.h"
 #include "ble/meshtastic_ble.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "chat/runtime/self_identity_policy.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <cstring>
 
 namespace ble
 {
@@ -130,52 +132,20 @@ void BleManager::shutdownNimble()
 
 std::string BleManager::buildDeviceName(chat::MeshProtocol protocol) const
 {
-    const auto& cfg = ctx_.getConfig();
-    std::string name;
-    if (cfg.node_name[0] != '\0')
-    {
-        name = std::string(cfg.node_name);
-    }
-    else
-    {
-        char buf[32];
-        uint32_t suffix = static_cast<uint32_t>(ctx_.getSelfNodeId() & 0xFFFF);
-        snprintf(buf, sizeof(buf), "lilygo-%04X", static_cast<unsigned>(suffix));
-        name = std::string(buf);
-    }
+    char long_name[32] = {};
+    char short_name[16] = {};
+    ctx_.getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
 
-    // BLE advertised name should not include TrailMate branding prefix.
-    // Keep the suffix part so the user can still identify the node.
-    static const std::string kTrailMatePrefix = "TrailMate-";
-    if (name.rfind(kTrailMatePrefix, 0) == 0)
-    {
-        name.erase(0, kTrailMatePrefix.size());
-        if (name.empty())
-        {
-            char buf[16];
-            uint32_t suffix = static_cast<uint32_t>(ctx_.getSelfNodeId() & 0xFFFF);
-            snprintf(buf, sizeof(buf), "%04X", static_cast<unsigned>(suffix));
-            name = std::string(buf);
-        }
-    }
+    chat::runtime::EffectiveSelfIdentity identity{};
+    identity.node_id = ctx_.getSelfNodeId();
+    std::strncpy(identity.long_name, long_name, sizeof(identity.long_name) - 1);
+    identity.long_name[sizeof(identity.long_name) - 1] = '\0';
+    std::strncpy(identity.short_name, short_name, sizeof(identity.short_name) - 1);
+    identity.short_name[sizeof(identity.short_name) - 1] = '\0';
 
-    if (protocol == chat::MeshProtocol::MeshCore)
-    {
-        static const std::string kMeshCorePrefix = "MeshCore-";
-        if (name.rfind(kMeshCorePrefix, 0) != 0)
-        {
-            name = kMeshCorePrefix + name;
-        }
-    }
-    else if (protocol == chat::MeshProtocol::Meshtastic)
-    {
-        char meshtastic_name[32];
-        snprintf(meshtastic_name, sizeof(meshtastic_name), "Meshtastic_%04X",
-                 static_cast<unsigned>(ctx_.getSelfNodeId() & 0xFFFF));
-        name = meshtastic_name;
-    }
-
-    return name;
+    char visible_name[32] = {};
+    chat::runtime::buildBleVisibleName(identity, protocol, visible_name, sizeof(visible_name));
+    return visible_name;
 }
 
 } // namespace ble

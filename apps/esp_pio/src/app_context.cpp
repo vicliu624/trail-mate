@@ -10,6 +10,7 @@
 #include "board/LoraBoard.h"
 #include "board/MotionBoard.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "chat/runtime/self_identity_policy.h"
 #include "sys/event_bus.h"
 #ifdef USING_ST25R3916
 #endif
@@ -99,9 +100,18 @@ void AppContext::initChatRuntime(bool use_mock_adapter)
 
 void AppContext::initTeamServices()
 {
-    if (!mesh_router_ || !platform_bindings_.create_team_services)
+    if (!mesh_router_)
     {
-        Serial.printf("[Team] platform bindings missing\n");
+        Serial.printf("[Team] mesh router unavailable, skip team services\n");
+        return;
+    }
+
+    if (!platform_bindings_.create_team_services)
+    {
+        if (platform_bindings_.set_team_mode_active)
+        {
+            platform_bindings_.set_team_mode_active(false);
+        }
         return;
     }
 
@@ -219,7 +229,7 @@ void AppContext::applyPrivacyConfig()
 
 bool AppContext::isBleEnabled() const
 {
-    return ble_manager_ && ble_manager_->isEnabled();
+    return config_.ble_enabled;
 }
 
 bool AppContext::init(BoardBase& board, LoraBoard* lora_board, GpsBoard* gps_board, MotionBoard* motion_board,
@@ -320,41 +330,21 @@ void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
         return;
     }
 
-    out_long[0] = '\0';
-    out_short[0] = '\0';
+    chat::runtime::SelfIdentityInput input{};
+    input.node_id = getSelfNodeId();
+    input.configured_long_name = config_.node_name;
+    input.configured_short_name = config_.short_name;
+    input.fallback_long_prefix = "lilygo";
+    input.fallback_ble_prefix = "TrailMate";
+    input.allow_short_hex_fallback = true;
 
-    const char* cfg_long = config_.node_name;
-    const char* cfg_short = config_.short_name;
-    uint16_t suffix = static_cast<uint16_t>(getSelfNodeId() & 0x0ffff);
+    chat::runtime::EffectiveSelfIdentity identity{};
+    (void)chat::runtime::resolveEffectiveSelfIdentity(input, &identity);
 
-    if (cfg_long && cfg_long[0] != '\0')
-    {
-        strncpy(out_long, cfg_long, long_len - 1);
-        out_long[long_len - 1] = '\0';
-    }
-    else
-    {
-        snprintf(out_long, long_len, "lilygo-%04X", suffix);
-    }
-
-    if (cfg_short && cfg_short[0] != '\0')
-    {
-        size_t copy_len = strlen(cfg_short);
-        if (copy_len > 4)
-        {
-            copy_len = 4;
-        }
-        if (copy_len > short_len - 1)
-        {
-            copy_len = short_len - 1;
-        }
-        memcpy(out_short, cfg_short, copy_len);
-        out_short[copy_len] = '\0';
-    }
-    else
-    {
-        snprintf(out_short, short_len, "%04X", suffix);
-    }
+    strncpy(out_long, identity.long_name, long_len - 1);
+    out_long[long_len - 1] = '\0';
+    strncpy(out_short, identity.short_name, short_len - 1);
+    out_short[short_len - 1] = '\0';
 }
 
 void AppContext::updateCoreServices()
@@ -411,10 +401,12 @@ void AppContext::attachBleManager(std::unique_ptr<ble::BleManager> ble_manager)
 
 void AppContext::setBleEnabled(bool enabled)
 {
+    config_.ble_enabled = enabled;
     if (ble_manager_)
     {
         ble_manager_->setEnabled(enabled);
     }
+    saveConfig();
 }
 
 chat::NodeId AppContext::getSelfNodeId() const

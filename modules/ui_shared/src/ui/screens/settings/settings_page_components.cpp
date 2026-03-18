@@ -17,6 +17,7 @@
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/settings_store.h"
+#include "platform/ui/time_runtime.h"
 #include "platform/ui/tracker_runtime.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/settings/settings_page_components.h"
@@ -563,7 +564,7 @@ static void settings_load()
     g_settings.privacy_nmea_sentence = cfg.privacy_nmea_sentence;
 
     g_settings.screen_timeout_ms = prefs_get_int("screen_timeout", static_cast<int>(screen_runtime::timeout_ms()));
-    g_settings.timezone_offset_min = prefs_get_int("timezone_offset", 0);
+    g_settings.timezone_offset_min = ::platform::ui::time::timezone_offset_min();
     g_settings.speaker_volume = prefs_get_int("speaker_volume",
                                               static_cast<int>(get_message_tone_volume_default()));
     if (g_settings.speaker_volume < 0)
@@ -1323,7 +1324,7 @@ static void on_option_clicked(lv_event_t* e)
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0)
     {
-        ui_set_timezone_offset_min(payload->value);
+        ::platform::ui::time::set_timezone_offset_min(payload->value);
         (void)previous_value;
         restart_now = true;
     }

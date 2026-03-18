@@ -2,6 +2,7 @@
 
 #include <ctime>
 
+#include "platform/ui/time_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/menu/menu_layout.h"
@@ -22,20 +23,12 @@ bool format_menu_time(char* out, size_t out_len)
         return false;
     }
 
-    const time_t now = time(nullptr);
-    if (now <= 0)
+    struct tm info{};
+    if (!::platform::ui::time::localtime_now(&info))
     {
         return false;
     }
-
-    const time_t local = ui_apply_timezone_offset(now);
-    struct tm* info = gmtime(&local);
-    if (!info)
-    {
-        return false;
-    }
-
-    strftime(out, out_len, "%H:%M", info);
+    strftime(out, out_len, "%H:%M", &info);
     return true;
 }
 
