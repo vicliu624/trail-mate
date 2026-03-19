@@ -84,9 +84,9 @@ This snapshot records what the current `gat562_mesh_evb_pro` branch has already 
   - `CMD_GET_BATT_AND_STORAGE`
   - `CMD_LOGOUT / CMD_RESET_PATH`
   - incoming text/app-data forwarding on the BLE TX path
-- nRF52 `MeshCoreAdapterLite` now exports its own public key so BLE self-info can stay protocol-backed instead of inventing board-local identity logic.
-- nRF52 `MeshCoreAdapterLite` now exposes self-advert triggering for BLE command routing.
-- nRF52 `MeshCoreAdapterLite` now also owns lightweight MeshCore request/control packet building for:
+- nRF52 `MeshCoreRadioAdapter` now exports its own public key so BLE self-info can stay protocol-backed instead of inventing board-local identity logic.
+- nRF52 `MeshCoreRadioAdapter` now exposes self-advert triggering for BLE command routing.
+- nRF52 `MeshCoreRadioAdapter` now also owns lightweight MeshCore request/control packet building for:
   - peer request types
   - anonymous login-style requests
   - binary request payloads

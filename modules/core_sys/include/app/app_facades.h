@@ -101,6 +101,7 @@ class IAppRuntimeFacade
     virtual const ble::BleManager* getBleManager() const = 0;
     virtual bool isBleEnabled() const = 0;
     virtual void setBleEnabled(bool enabled) = 0;
+    virtual void restartDevice() = 0;
     virtual chat::ui::IChatUiRuntime* getChatUiRuntime() = 0;
     virtual void setChatUiRuntime(chat::ui::IChatUiRuntime* runtime) = 0;
     virtual BoardBase* getBoard() = 0;
@@ -133,6 +134,8 @@ class IAppBleFacade : public IAppFacade
     ~IAppBleFacade() override = default;
     virtual chat::contacts::INodeStore* getNodeStore() = 0;
     virtual const chat::contacts::INodeStore* getNodeStore() const = 0;
+    virtual bool getDeviceMacAddress(uint8_t out_mac[6]) const = 0;
+    virtual bool syncCurrentEpochSeconds(uint32_t epoch_seconds) = 0;
     virtual void resetMeshConfig() = 0;
 };
 

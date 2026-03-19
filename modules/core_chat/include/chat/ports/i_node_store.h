@@ -26,6 +26,7 @@ struct NodeEntry
     float rssi;         // RSSI in dBm
     uint8_t hops_away = 0xFF;
     uint8_t channel = 0xFF; // Meshtastic channel index; 0xFF = unknown
+    uint8_t next_hop = 0;   // Meshtastic learned next-hop relay hint; 0 = unknown/flooding
     uint8_t protocol;       // NodeProtocolType
     uint8_t role;           // NodeRoleType (Meshtastic roles)
     uint8_t hw_model;       // Meshtastic_HardwareModel (0 = UNSET)

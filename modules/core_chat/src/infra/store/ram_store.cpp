@@ -22,9 +22,18 @@ RamStore::~RamStore()
 
 void RamStore::append(const ChatMessage& msg)
 {
+    if (total_message_count_ >= MAX_MESSAGES_TOTAL)
+    {
+        evictOldestMessage();
+    }
+
     ConversationId conv(msg.channel, msg.peer, msg.protocol);
     ConversationStorage& storage = getConversationStorage(conv);
-    storage.messages.append(msg);
+    StoredMessageEntry entry;
+    entry.message = msg;
+    entry.sequence = next_sequence_++;
+    storage.messages.push_back(entry);
+    total_message_count_++;
     if (msg.status == MessageStatus::Incoming)
     {
         storage.unread_count++;
@@ -36,16 +45,12 @@ std::vector<ChatMessage> RamStore::loadRecent(const ConversationId& conv, size_t
     const ConversationStorage& storage = getConversationStorage(conv);
     std::vector<ChatMessage> result;
 
-    size_t count = storage.messages.count();
+    size_t count = storage.messages.size();
     size_t start = (count > n) ? (count - n) : 0;
 
     for (size_t i = start; i < count; i++)
     {
-        const ChatMessage* msg = storage.messages.get(i);
-        if (msg)
-        {
-            result.push_back(*msg);
-        }
+        result.push_back(storage.messages[i].message);
     }
 
     return result;
@@ -61,20 +66,15 @@ std::vector<ConversationMeta> RamStore::loadConversationPage(size_t offset,
     {
         const ConversationId& conv = pair.first;
         const ConversationStorage& storage = pair.second;
-        size_t count = storage.messages.count();
+        size_t count = storage.messages.size();
         if (count == 0)
-        {
-            continue;
-        }
-        const ChatMessage* last = storage.messages.get(count - 1);
-        if (!last)
         {
             continue;
         }
         ConversationMeta meta;
         meta.id = conv;
-        meta.preview = last->text;
-        meta.last_timestamp = last->timestamp;
+        meta.preview = storage.messages.back().message.text;
+        meta.last_timestamp = storage.messages.back().message.timestamp;
         meta.unread = storage.unread_count;
         if (conv.peer == 0)
         {
@@ -135,13 +135,17 @@ int RamStore::getUnread(const ConversationId& conv) const
 void RamStore::clearConversation(const ConversationId& conv)
 {
     ConversationStorage& storage = getConversationStorage(conv);
+    total_message_count_ -= std::min(total_message_count_, storage.messages.size());
     storage.messages.clear();
     storage.unread_count = 0;
+    conversations_.erase(conv);
 }
 
 void RamStore::clearAll()
 {
     conversations_.clear();
+    total_message_count_ = 0;
+    next_sequence_ = 1;
 }
 
 bool RamStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
@@ -150,10 +154,10 @@ bool RamStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
     for (auto& pair : conversations_)
     {
         ConversationStorage& storage = pair.second;
-        size_t count = storage.messages.count();
+        size_t count = storage.messages.size();
         for (size_t i = 0; i < count; ++i)
         {
-            ChatMessage* msg = storage.messages.get(i);
+            ChatMessage* msg = &storage.messages[i].message;
             if (!msg) continue;
             if (msg->msg_id != msg_id) continue;
             if (msg->from != 0) continue; // only update outgoing messages
@@ -162,6 +166,51 @@ bool RamStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
         }
     }
     return false;
+}
+
+void RamStore::evictOldestMessage()
+{
+    auto oldest_it = conversations_.end();
+    size_t oldest_index = 0;
+    uint32_t oldest_sequence = 0;
+    bool found = false;
+
+    for (auto it = conversations_.begin(); it != conversations_.end(); ++it)
+    {
+        auto& messages = it->second.messages;
+        for (size_t index = 0; index < messages.size(); ++index)
+        {
+            if (!found || messages[index].sequence < oldest_sequence)
+            {
+                oldest_it = it;
+                oldest_index = index;
+                oldest_sequence = messages[index].sequence;
+                found = true;
+            }
+        }
+    }
+
+    if (!found)
+    {
+        total_message_count_ = 0;
+        return;
+    }
+
+    ConversationStorage& storage = oldest_it->second;
+    const ChatMessage removed = storage.messages[oldest_index].message;
+    storage.messages.erase(storage.messages.begin() + static_cast<long>(oldest_index));
+    if (removed.status == MessageStatus::Incoming && storage.unread_count > 0)
+    {
+        storage.unread_count--;
+    }
+    if (storage.messages.empty())
+    {
+        conversations_.erase(oldest_it);
+    }
+    if (total_message_count_ > 0)
+    {
+        total_message_count_--;
+    }
 }
 
 RamStore::ConversationStorage& RamStore::getConversationStorage(const ConversationId& conv)

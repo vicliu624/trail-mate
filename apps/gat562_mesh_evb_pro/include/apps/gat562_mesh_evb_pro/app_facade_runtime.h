@@ -80,8 +80,11 @@ class AppFacadeRuntime final : public app::IAppBleFacade
     const ble::BleManager* getBleManager() const override;
     bool isBleEnabled() const override;
     void setBleEnabled(bool enabled) override;
+    void restartDevice() override;
     chat::contacts::INodeStore* getNodeStore() override;
     const chat::contacts::INodeStore* getNodeStore() const override;
+    bool getDeviceMacAddress(uint8_t out_mac[6]) const override;
+    bool syncCurrentEpochSeconds(uint32_t epoch_seconds) override;
     void resetMeshConfig() override;
     chat::ui::IChatUiRuntime* getChatUiRuntime() override;
     void setChatUiRuntime(chat::ui::IChatUiRuntime* runtime) override;
@@ -100,6 +103,7 @@ class AppFacadeRuntime final : public app::IAppBleFacade
     void initializeStores();
     void initializeChatRuntime();
     void refreshEffectiveIdentity();
+    chat::NodeId resolveSelfNodeId() const;
     const chat::runtime::SelfIdentityProvider* identityProvider() const;
 
     bool initialized_ = false;

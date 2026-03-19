@@ -6,6 +6,7 @@
 #include "chat/usecase/contact_service.h"
 #include "sys/clock.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -35,6 +36,13 @@ void ContactService::begin()
 {
     node_store_.begin();
     contact_store_.begin();
+
+    const std::vector<uint32_t> contact_ids = contact_store_.getAllContactIds();
+    for (size_t i = 0; i < contact_ids.size(); ++i)
+    {
+        (void)ensureNodeExistsForContact(contact_ids[i]);
+    }
+
     invalidateCache();
 }
 
@@ -123,6 +131,10 @@ std::vector<NodeInfo> ContactService::getNearby() const
 
 bool ContactService::addContact(uint32_t node_id, const char* nickname)
 {
+    if (!ensureNodeExistsForContact(node_id))
+    {
+        return false;
+    }
     if (contact_store_.setNickname(node_id, nickname))
     {
         invalidateCache();
@@ -133,6 +145,10 @@ bool ContactService::addContact(uint32_t node_id, const char* nickname)
 
 bool ContactService::editContact(uint32_t node_id, const char* nickname)
 {
+    if (!ensureNodeExistsForContact(node_id))
+    {
+        return false;
+    }
     if (contact_store_.setNickname(node_id, nickname))
     {
         invalidateCache();
@@ -258,6 +274,45 @@ void ContactService::buildCache() const
     }
 
     cache_timestamp_ = now_ms;
+}
+
+bool ContactService::ensureNodeExistsForContact(uint32_t node_id)
+{
+    if (node_id == 0)
+    {
+        return false;
+    }
+
+    if (hasNodeEntry(node_id))
+    {
+        return true;
+    }
+
+    node_store_.upsert(node_id,
+                       nullptr,
+                       nullptr,
+                       0,
+                       std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::quiet_NaN(),
+                       0,
+                       kNodeRoleUnknown,
+                       0xFF,
+                       0,
+                       0xFF);
+    return hasNodeEntry(node_id);
+}
+
+bool ContactService::hasNodeEntry(uint32_t node_id) const
+{
+    const auto& entries = node_store_.getEntries();
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        if (entries[i].node_id == node_id)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ContactService::isNodeVisible(uint32_t last_seen) const

@@ -16,6 +16,8 @@
 #include "platform/nrf52/arduino_common/chat/infra/contact_store.h"
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/node_store.h"
 #include "platform/nrf52/arduino_common/chat/infra/radio_packet_io.h"
+#include "platform/nrf52/arduino_common/chat/infra/store/internal_fs_store.h"
+#include "platform/nrf52/arduino_common/device_identity.h"
 #include "platform/nrf52/arduino_common/self_identity_bridge.h"
 
 #include <Arduino.h>
@@ -75,14 +77,17 @@ bool AppFacadeRuntime::initialize()
 
     (void)::boards::gat562_mesh_evb_pro::settings_store::loadAppConfig(config_);
     ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
+    initializeStores();
+    const chat::NodeId resolved_self_node_id = resolveSelfNodeId();
+    platform::nrf52::arduino_common::device_identity::setResolvedSelfNodeId(resolved_self_node_id);
     identity_bridge_ = std::unique_ptr<platform::nrf52::arduino_common::SelfIdentityBridge>(
         new platform::nrf52::arduino_common::SelfIdentityBridge(config_,
                                                                 NRF_FICR->DEVICEADDR[0],
                                                                 NRF_FICR->DEVICEADDR[1],
                                                                 board_->defaultLongName(),
                                                                 board_->defaultShortName()));
+    identity_bridge_->setNodeId(resolved_self_node_id);
     refreshEffectiveIdentity();
-    initializeStores();
     initializeChatRuntime();
 
     app::bindAppFacade(*this);
@@ -127,10 +132,22 @@ bool AppFacadeRuntime::installMeshBackend(chat::MeshProtocol protocol,
 
 void AppFacadeRuntime::initializeStores()
 {
-    node_store_ = std::unique_ptr<chat::contacts::INodeStore>(
+    if (node_store_ && contact_store_ && contact_service_)
+    {
+        return;
+    }
+
+    auto node_store = std::unique_ptr<platform::nrf52::arduino_common::chat::meshtastic::NodeStore>(
         new platform::nrf52::arduino_common::chat::meshtastic::NodeStore());
-    contact_store_ = std::unique_ptr<chat::contacts::IContactStore>(
+    auto contact_store = std::unique_ptr<platform::nrf52::arduino_common::chat::infra::ContactStore>(
         new platform::nrf52::arduino_common::chat::infra::ContactStore());
+    platform::nrf52::arduino_common::chat::infra::ContactStore* contact_store_ptr = contact_store.get();
+    node_store->setProtectedNodeChecker([contact_store_ptr](uint32_t node_id)
+                                        {
+                                            return contact_store_ptr && contact_store_ptr->hasContactNode(node_id);
+                                        });
+    node_store_ = std::move(node_store);
+    contact_store_ = std::move(contact_store);
     contact_service_ = std::unique_ptr<chat::contacts::ContactService>(
         new chat::contacts::ContactService(*node_store_, *contact_store_));
 
@@ -151,7 +168,8 @@ void AppFacadeRuntime::initializeStores()
 void AppFacadeRuntime::initializeChatRuntime()
 {
     chat_model_ = std::unique_ptr<chat::ChatModel>(new chat::ChatModel());
-    chat_store_ = std::unique_ptr<chat::IChatStore>(new chat::RamStore());
+    chat_store_ = std::unique_ptr<chat::IChatStore>(
+        new platform::nrf52::arduino_common::chat::infra::store::InternalFsStore());
     mesh_router_ = std::unique_ptr<chat::IMeshAdapter>(new chat::MeshAdapterRouterCore());
     chat_service_ = std::unique_ptr<chat::ChatService>(
         new chat::ChatService(*chat_model_, *mesh_router_, *chat_store_, config_.mesh_protocol));
@@ -162,7 +180,9 @@ void AppFacadeRuntime::initializeChatRuntime()
     }
 
     (void)installMeshBackend(chat::MeshProtocol::Meshtastic,
-                             createProtocolAdapter(chat::MeshProtocol::Meshtastic, identityProvider()));
+                             createProtocolAdapter(chat::MeshProtocol::Meshtastic,
+                                                   identityProvider(),
+                                                   static_cast<platform::nrf52::arduino_common::chat::meshtastic::NodeStore*>(node_store_.get())));
     (void)installMeshBackend(chat::MeshProtocol::MeshCore,
                              createProtocolAdapter(chat::MeshProtocol::MeshCore, identityProvider()));
 
@@ -260,6 +280,16 @@ void AppFacadeRuntime::applyPositionConfig()
     {
         board_->applyGpsConfig(config_);
     }
+}
+
+chat::NodeId AppFacadeRuntime::resolveSelfNodeId() const
+{
+    return platform::nrf52::arduino_common::device_identity::resolveNodeId(
+        NRF_FICR->DEVICEADDR[0],
+        NRF_FICR->DEVICEADDR[1],
+        NRF_FICR->DEVICEID[0],
+        NRF_FICR->DEVICEID[1],
+        node_store_.get());
 }
 
 void AppFacadeRuntime::applyNetworkLimits()
@@ -441,6 +471,11 @@ void AppFacadeRuntime::setBleEnabled(bool enabled)
     (void)::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_);
 }
 
+void AppFacadeRuntime::restartDevice()
+{
+    NVIC_SystemReset();
+}
+
 chat::contacts::INodeStore* AppFacadeRuntime::getNodeStore()
 {
     return node_store_.get();
@@ -449,6 +484,29 @@ chat::contacts::INodeStore* AppFacadeRuntime::getNodeStore()
 const chat::contacts::INodeStore* AppFacadeRuntime::getNodeStore() const
 {
     return node_store_.get();
+}
+
+bool AppFacadeRuntime::getDeviceMacAddress(uint8_t out_mac[6]) const
+{
+    if (!out_mac)
+    {
+        return false;
+    }
+
+    const auto mac = platform::nrf52::arduino_common::device_identity::getSelfMacAddress();
+    std::copy(mac.begin(), mac.end(), out_mac);
+    return true;
+}
+
+bool AppFacadeRuntime::syncCurrentEpochSeconds(uint32_t epoch_seconds)
+{
+    if (!board_ || epoch_seconds == 0)
+    {
+        return false;
+    }
+
+    board_->setCurrentEpochSeconds(epoch_seconds);
+    return true;
 }
 
 void AppFacadeRuntime::resetMeshConfig()

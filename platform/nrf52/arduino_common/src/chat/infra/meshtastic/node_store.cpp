@@ -27,6 +27,16 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
     core_.updateProtocol(node_id, protocol, now_secs);
 }
 
+bool NodeStore::setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_secs)
+{
+    return core_.setNextHop(node_id, next_hop, now_secs);
+}
+
+uint8_t NodeStore::getNextHop(uint32_t node_id) const
+{
+    return core_.getNextHop(node_id);
+}
+
 bool NodeStore::remove(uint32_t node_id)
 {
     return core_.remove(node_id);
@@ -40,6 +50,11 @@ const std::vector<::chat::contacts::NodeEntry>& NodeStore::getEntries() const
 void NodeStore::clear()
 {
     core_.clear();
+}
+
+void NodeStore::setProtectedNodeChecker(std::function<bool(uint32_t)> checker)
+{
+    core_.setProtectedNodeChecker(std::move(checker));
 }
 
 } // namespace platform::nrf52::arduino_common::chat::meshtastic

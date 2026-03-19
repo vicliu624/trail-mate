@@ -3,6 +3,7 @@
 #include "app/app_facades.h"
 #include "ble/ble_manager.h"
 #include "chat/infra/meshtastic/mt_codec_pb.h"
+#include "chat/ble/meshtastic_phone_session.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
 #include "meshtastic/admin.pb.h"
@@ -25,7 +26,9 @@ namespace ble
 
 class MeshtasticBleService : public BleService,
                              public chat::ChatService::IncomingTextObserver,
-                             public team::TeamService::IncomingDataObserver
+                             public team::TeamService::IncomingDataObserver,
+                             public MeshtasticPhoneTransport,
+                             public MeshtasticPhoneHooks
 {
   public:
     MeshtasticBleService(app::IAppBleFacade& ctx, const std::string& device_name);
@@ -37,10 +40,19 @@ class MeshtasticBleService : public BleService,
 
     void onIncomingText(const chat::MeshIncomingText& msg) override;
     void onIncomingData(const chat::MeshIncomingData& msg) override;
+    bool isBleConnected() const override;
+    void notifyFromNum(uint32_t value) override;
+    bool loadBluetoothConfig(meshtastic_Config_BluetoothConfig* out) const override;
+    void saveBluetoothConfig(const meshtastic_Config_BluetoothConfig& config) override;
+    bool loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const override;
+    bool loadModuleConfig(meshtastic_LocalModuleConfig* out) const override;
+    void saveModuleConfig(const meshtastic_LocalModuleConfig& config) override;
+    bool handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg) override;
+    bool pollMqttProxyToPhone(meshtastic_MqttClientProxyMessage* out) override;
+    void onConfigStart() override;
+    void onConfigComplete() override;
 
   private:
-    class PhoneApi;
-
     app::IAppBleFacade& ctx_;
     std::string device_name_;
     NimBLEServer* server_ = nullptr;
@@ -64,7 +76,7 @@ class MeshtasticBleService : public BleService,
     meshtastic_Config_BluetoothConfig ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
     meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
 
-    std::unique_ptr<PhoneApi> phone_api_;
+    std::unique_ptr<MeshtasticPhoneSession> phone_session_;
 
     struct Frame
     {
@@ -113,14 +125,11 @@ class MeshtasticBleService : public BleService,
     void handleFromPhone();
     void handleToPhone();
     void syncMqttProxySettings();
-    void pumpMqttProxyMessages();
     bool shouldBlockOnRead() const;
-    void notifyFromNum(uint32_t value);
     void clearQueues();
-    void closePhoneApi();
+    void closePhoneSession();
     void refreshBatteryLevel(bool notify);
 
-    friend class PhoneApi;
     friend class MeshtasticToRadioCallbacks;
     friend class MeshtasticFromRadioCallbacks;
     friend class MeshtasticNotifyStateCallbacks;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Preferences.h>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -69,6 +70,22 @@ inline chat::NodeId getSelfNodeId()
 
     cached_id = node_id;
     return cached_id;
+}
+
+inline std::array<uint8_t, 6> getSelfMacAddress()
+{
+    std::array<uint8_t, 6> mac_bytes{};
+#if __has_include(<Arduino.h>)
+    const uint64_t raw = ESP.getEfuseMac();
+    const uint8_t* raw_bytes = reinterpret_cast<const uint8_t*>(&raw);
+    for (size_t i = 0; i < mac_bytes.size(); ++i)
+    {
+        mac_bytes[i] = raw_bytes[i];
+    }
+#else
+    (void)esp_efuse_mac_get_default(mac_bytes.data());
+#endif
+    return mac_bytes;
 }
 
 } // namespace platform::esp::arduino_common::device_identity

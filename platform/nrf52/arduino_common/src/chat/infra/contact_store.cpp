@@ -44,4 +44,9 @@ size_t ContactStore::getCount() const
     return core_.getCount();
 }
 
+bool ContactStore::hasContactNode(uint32_t node_id) const
+{
+    return !core_.getNickname(node_id).empty();
+}
+
 } // namespace platform::nrf52::arduino_common::chat::infra

@@ -168,6 +168,10 @@ class AppContext final : public IAppBleFacade
         return node_store_.get();
     }
 
+    bool getDeviceMacAddress(uint8_t out_mac[6]) const override;
+    bool syncCurrentEpochSeconds(uint32_t epoch_seconds) override;
+    void restartDevice() override;
+
     chat::contacts::IContactStore* getContactStore()
     {
         return contact_store_.get();

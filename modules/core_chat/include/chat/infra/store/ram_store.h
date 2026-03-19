@@ -7,8 +7,8 @@
 
 #include "chat/domain/chat_types.h"
 #include "chat/ports/i_chat_store.h"
-#include "sys/ringbuf.h"
 #include <map>
+#include <vector>
 
 namespace chat
 {
@@ -20,7 +20,7 @@ namespace chat
 class RamStore : public IChatStore
 {
   public:
-    static constexpr size_t MAX_MESSAGES_PER_CONV = 100;
+    static constexpr size_t MAX_MESSAGES_TOTAL = 20;
 
     RamStore();
     virtual ~RamStore();
@@ -37,18 +37,27 @@ class RamStore : public IChatStore
     bool updateMessageStatus(MessageId msg_id, MessageStatus status) override;
 
   private:
+    struct StoredMessageEntry
+    {
+        ChatMessage message;
+        uint32_t sequence = 0;
+    };
+
     struct ConversationStorage
     {
-        sys::RingBuffer<ChatMessage, MAX_MESSAGES_PER_CONV> messages;
+        std::vector<StoredMessageEntry> messages;
         int unread_count;
 
         ConversationStorage() : unread_count(0) {}
     };
 
     std::map<ConversationId, ConversationStorage> conversations_;
+    uint32_t next_sequence_ = 1;
+    size_t total_message_count_ = 0;
 
     ConversationStorage& getConversationStorage(const ConversationId& conv);
     const ConversationStorage& getConversationStorage(const ConversationId& conv) const;
+    void evictOldestMessage();
 };
 
 } // namespace chat

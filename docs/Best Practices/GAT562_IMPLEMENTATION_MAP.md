@@ -139,10 +139,10 @@
 落点：
 - `platform/nrf52/arduino_common/include/platform/nrf52/arduino_common/chat/infra/protocol_factory.h`
 - `platform/nrf52/arduino_common/src/chat/infra/protocol_factory.cpp`
-- `platform/nrf52/arduino_common/include/platform/nrf52/arduino_common/chat/infra/meshtastic/mt_adapter_lite.h`
-- `platform/nrf52/arduino_common/src/chat/infra/meshtastic/mt_adapter_lite.cpp`
-- `platform/nrf52/arduino_common/include/platform/nrf52/arduino_common/chat/infra/meshcore/meshcore_adapter_lite.h`
-- `platform/nrf52/arduino_common/src/chat/infra/meshcore/meshcore_adapter_lite.cpp`
+- `platform/nrf52/arduino_common/include/platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h`
+- `platform/nrf52/arduino_common/src/chat/infra/meshtastic/meshtastic_radio_adapter.cpp`
+- `platform/nrf52/arduino_common/include/platform/nrf52/arduino_common/chat/infra/meshcore/meshcore_radio_adapter.h`
+- `platform/nrf52/arduino_common/src/chat/infra/meshcore/meshcore_radio_adapter.cpp`
 
 承载内容：
 - Meshtastic Lite Adapter：文本、AppData、NodeInfo、自宣告

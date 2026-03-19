@@ -10,6 +10,10 @@
 
 namespace chat
 {
+namespace meshcore
+{
+class IMeshCoreBleBackend;
+}
 
 struct MeshCapabilities
 {
@@ -262,6 +266,16 @@ class IMeshAdapter
     virtual const IMeshAdapter* backendForProtocol(MeshProtocol protocol) const
     {
         (void)protocol;
+        return nullptr;
+    }
+
+    virtual meshcore::IMeshCoreBleBackend* asMeshCoreBleBackend()
+    {
+        return nullptr;
+    }
+
+    virtual const meshcore::IMeshCoreBleBackend* asMeshCoreBleBackend() const
+    {
         return nullptr;
     }
 

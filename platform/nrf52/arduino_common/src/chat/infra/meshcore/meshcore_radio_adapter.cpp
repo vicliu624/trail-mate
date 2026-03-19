@@ -1,4 +1,4 @@
-#include "platform/nrf52/arduino_common/chat/infra/meshcore/meshcore_adapter_lite.h"
+#include "platform/nrf52/arduino_common/chat/infra/meshcore/meshcore_radio_adapter.h"
 
 #include "chat/infra/meshcore/meshcore_identity_crypto.h"
 #include "chat/infra/meshcore/meshcore_payload_helpers.h"
@@ -67,13 +67,13 @@ bool isPrintableTextPayload(const uint8_t* data, size_t len)
 
 } // namespace
 
-MeshCoreAdapterLite::MeshCoreAdapterLite(const ::chat::runtime::SelfIdentityProvider* identity_provider)
+MeshCoreRadioAdapter::MeshCoreRadioAdapter(const ::chat::runtime::SelfIdentityProvider* identity_provider)
     : node_id_(device_identity::getSelfNodeId()),
       identity_provider_(identity_provider)
 {
 }
 
-::chat::MeshCapabilities MeshCoreAdapterLite::getCapabilities() const
+::chat::MeshCapabilities MeshCoreRadioAdapter::getCapabilities() const
 {
     ::chat::MeshCapabilities caps{};
     caps.supports_unicast_appdata = true;
@@ -81,7 +81,7 @@ MeshCoreAdapterLite::MeshCoreAdapterLite(const ::chat::runtime::SelfIdentityProv
     return caps;
 }
 
-bool MeshCoreAdapterLite::sendText(::chat::ChannelId channel, const std::string& text,
+bool MeshCoreRadioAdapter::sendText(::chat::ChannelId channel, const std::string& text,
                                    ::chat::MessageId* out_msg_id, ::chat::NodeId peer)
 {
     if (!out_msg_id)
@@ -100,7 +100,7 @@ bool MeshCoreAdapterLite::sendText(::chat::ChannelId channel, const std::string&
                        false);
 }
 
-bool MeshCoreAdapterLite::pollIncomingText(::chat::MeshIncomingText* out)
+bool MeshCoreRadioAdapter::pollIncomingText(::chat::MeshIncomingText* out)
 {
     if (!out || text_queue_.empty())
     {
@@ -111,7 +111,7 @@ bool MeshCoreAdapterLite::pollIncomingText(::chat::MeshIncomingText* out)
     return true;
 }
 
-bool MeshCoreAdapterLite::sendAppData(::chat::ChannelId channel, uint32_t portnum,
+bool MeshCoreRadioAdapter::sendAppData(::chat::ChannelId channel, uint32_t portnum,
                                       const uint8_t* payload, size_t len,
                                       ::chat::NodeId dest, bool want_ack,
                                       ::chat::MessageId packet_id,
@@ -183,7 +183,7 @@ bool MeshCoreAdapterLite::sendAppData(::chat::ChannelId channel, uint32_t portnu
     return transmitFrame(frame, frame_len);
 }
 
-bool MeshCoreAdapterLite::pollIncomingData(::chat::MeshIncomingData* out)
+bool MeshCoreRadioAdapter::pollIncomingData(::chat::MeshIncomingData* out)
 {
     if (!out || data_queue_.empty())
     {
@@ -194,14 +194,14 @@ bool MeshCoreAdapterLite::pollIncomingData(::chat::MeshIncomingData* out)
     return true;
 }
 
-bool MeshCoreAdapterLite::requestNodeInfo(::chat::NodeId dest, bool want_response)
+bool MeshCoreRadioAdapter::requestNodeInfo(::chat::NodeId dest, bool want_response)
 {
     (void)dest;
     (void)want_response;
     return sendAdvert(true);
 }
 
-bool MeshCoreAdapterLite::triggerDiscoveryAction(::chat::MeshDiscoveryAction action)
+bool MeshCoreRadioAdapter::triggerDiscoveryAction(::chat::MeshDiscoveryAction action)
 {
     switch (action)
     {
@@ -214,40 +214,40 @@ bool MeshCoreAdapterLite::triggerDiscoveryAction(::chat::MeshDiscoveryAction act
     }
 }
 
-void MeshCoreAdapterLite::applyConfig(const ::chat::MeshConfig& config)
+void MeshCoreRadioAdapter::applyConfig(const ::chat::MeshConfig& config)
 {
     config_ = config;
 }
 
-void MeshCoreAdapterLite::setUserInfo(const char* long_name, const char* short_name)
+void MeshCoreRadioAdapter::setUserInfo(const char* long_name, const char* short_name)
 {
     long_name_ = long_name ? long_name : "";
     short_name_ = short_name ? short_name : "";
 }
 
-void MeshCoreAdapterLite::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent)
+void MeshCoreRadioAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent)
 {
     (void)duty_cycle_enabled;
     (void)util_percent;
 }
 
-void MeshCoreAdapterLite::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MeshCoreRadioAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
 {
     (void)encrypt_mode;
     (void)pki_enabled;
 }
 
-bool MeshCoreAdapterLite::isReady() const
+bool MeshCoreRadioAdapter::isReady() const
 {
     return ::platform::nrf52::arduino_common::chat::infra::radioPacketIo() != nullptr;
 }
 
-::chat::NodeId MeshCoreAdapterLite::getNodeId() const
+::chat::NodeId MeshCoreRadioAdapter::getNodeId() const
 {
     return node_id_;
 }
 
-bool MeshCoreAdapterLite::pollIncomingRawPacket(uint8_t* out_data, size_t& out_len, size_t max_len)
+bool MeshCoreRadioAdapter::pollIncomingRawPacket(uint8_t* out_data, size_t& out_len, size_t max_len)
 {
     (void)out_data;
     (void)max_len;
@@ -255,7 +255,7 @@ bool MeshCoreAdapterLite::pollIncomingRawPacket(uint8_t* out_data, size_t& out_l
     return false;
 }
 
-void MeshCoreAdapterLite::handleRawPacket(const uint8_t* data, size_t size)
+void MeshCoreRadioAdapter::handleRawPacket(const uint8_t* data, size_t size)
 {
     if (!data || size == 0)
     {
@@ -333,17 +333,22 @@ void MeshCoreAdapterLite::handleRawPacket(const uint8_t* data, size_t size)
     }
 }
 
-void MeshCoreAdapterLite::setLastRxStats(float rssi, float snr)
+void MeshCoreRadioAdapter::setLastRxStats(float rssi, float snr)
 {
     (void)rssi;
     (void)snr;
 }
 
-void MeshCoreAdapterLite::processSendQueue()
+void MeshCoreRadioAdapter::processSendQueue()
 {
 }
 
-bool MeshCoreAdapterLite::exportIdentityPublicKey(uint8_t* out_key, size_t out_len)
+bool MeshCoreRadioAdapter::exportIdentityPublicKey(uint8_t out_pubkey[::chat::meshcore::kMeshCorePubKeySize])
+{
+    return exportIdentityPublicKey(out_pubkey, ::chat::meshcore::kMeshCorePubKeySize);
+}
+
+bool MeshCoreRadioAdapter::exportIdentityPublicKey(uint8_t* out_key, size_t out_len)
 {
     if (!out_key || out_len < sizeof(public_key_))
     {
@@ -358,7 +363,12 @@ bool MeshCoreAdapterLite::exportIdentityPublicKey(uint8_t* out_key, size_t out_l
     return true;
 }
 
-bool MeshCoreAdapterLite::exportIdentityPrivateKey(uint8_t* out_key, size_t out_len)
+bool MeshCoreRadioAdapter::exportIdentityPrivateKey(uint8_t out_priv[::chat::meshcore::kMeshCorePrivKeySize])
+{
+    return exportIdentityPrivateKey(out_priv, ::chat::meshcore::kMeshCorePrivKeySize);
+}
+
+bool MeshCoreRadioAdapter::exportIdentityPrivateKey(uint8_t* out_key, size_t out_len)
 {
     if (!out_key || out_len < sizeof(private_key_))
     {
@@ -373,7 +383,7 @@ bool MeshCoreAdapterLite::exportIdentityPrivateKey(uint8_t* out_key, size_t out_
     return true;
 }
 
-bool MeshCoreAdapterLite::importIdentityPrivateKey(const uint8_t* key, size_t len)
+bool MeshCoreRadioAdapter::importIdentityPrivateKey(const uint8_t* key, size_t len)
 {
     if (!key || len < sizeof(private_key_))
     {
@@ -384,7 +394,13 @@ bool MeshCoreAdapterLite::importIdentityPrivateKey(const uint8_t* key, size_t le
     return keys_ready_;
 }
 
-bool MeshCoreAdapterLite::signPayload(const uint8_t* payload, size_t len, uint8_t* out_signature, size_t out_len)
+bool MeshCoreRadioAdapter::signPayload(const uint8_t* payload, size_t len,
+                                       uint8_t out_signature[::chat::meshcore::kMeshCoreSignatureSize])
+{
+    return signPayload(payload, len, out_signature, ::chat::meshcore::kMeshCoreSignatureSize);
+}
+
+bool MeshCoreRadioAdapter::signPayload(const uint8_t* payload, size_t len, uint8_t* out_signature, size_t out_len)
 {
     if (!payload || len == 0 || !out_signature || out_len < ::chat::meshcore::kMeshCoreSignatureSize)
     {
@@ -398,12 +414,12 @@ bool MeshCoreAdapterLite::signPayload(const uint8_t* payload, size_t len, uint8_
     return ::chat::meshcore::meshcoreSign(private_key_, public_key_, payload, len, out_signature);
 }
 
-bool MeshCoreAdapterLite::sendSelfAdvert(bool broadcast)
+bool MeshCoreRadioAdapter::sendSelfAdvert(bool broadcast)
 {
     return sendAdvert(broadcast);
 }
 
-bool MeshCoreAdapterLite::sendPeerRequestType(const uint8_t* pubkey, size_t len, uint8_t req_type,
+bool MeshCoreRadioAdapter::sendPeerRequestType(const uint8_t* pubkey, size_t len, uint8_t req_type,
                                               uint32_t* out_tag, uint32_t* out_est_timeout,
                                               bool* out_sent_flood)
 {
@@ -421,7 +437,7 @@ bool MeshCoreAdapterLite::sendPeerRequestType(const uint8_t* pubkey, size_t len,
                                   out_sent_flood);
 }
 
-bool MeshCoreAdapterLite::sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
+bool MeshCoreRadioAdapter::sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
                                                  const uint8_t* payload, size_t payload_len,
                                                  bool force_flood,
                                                  uint32_t* out_tag, uint32_t* out_est_timeout,
@@ -511,7 +527,7 @@ bool MeshCoreAdapterLite::sendPeerRequestPayload(const uint8_t* pubkey, size_t l
     return true;
 }
 
-bool MeshCoreAdapterLite::sendAnonRequestPayload(const uint8_t* pubkey, size_t len,
+bool MeshCoreRadioAdapter::sendAnonRequestPayload(const uint8_t* pubkey, size_t len,
                                                  const uint8_t* payload, size_t payload_len,
                                                  uint32_t* out_est_timeout,
                                                  bool* out_sent_flood)
@@ -592,7 +608,7 @@ bool MeshCoreAdapterLite::sendAnonRequestPayload(const uint8_t* pubkey, size_t l
     return true;
 }
 
-bool MeshCoreAdapterLite::sendTracePath(const uint8_t* path, size_t path_len,
+bool MeshCoreRadioAdapter::sendTracePath(const uint8_t* path, size_t path_len,
                                         uint32_t tag, uint32_t auth, uint8_t flags,
                                         uint32_t* out_est_timeout)
 {
@@ -632,7 +648,7 @@ bool MeshCoreAdapterLite::sendTracePath(const uint8_t* path, size_t path_len,
     return true;
 }
 
-bool MeshCoreAdapterLite::sendControlData(const uint8_t* payload, size_t payload_len)
+bool MeshCoreRadioAdapter::sendControlData(const uint8_t* payload, size_t payload_len)
 {
     if (!payload || payload_len == 0 || payload_len > kMeshcoreMaxPayloadSize)
     {
@@ -656,7 +672,7 @@ bool MeshCoreAdapterLite::sendControlData(const uint8_t* payload, size_t payload
     return transmitFrame(frame, frame_len);
 }
 
-bool MeshCoreAdapterLite::sendRawData(const uint8_t* path, size_t path_len,
+bool MeshCoreRadioAdapter::sendRawData(const uint8_t* path, size_t path_len,
                                       const uint8_t* payload, size_t payload_len,
                                       uint32_t* out_est_timeout)
 {
@@ -690,7 +706,7 @@ bool MeshCoreAdapterLite::sendRawData(const uint8_t* path, size_t path_len,
     return true;
 }
 
-void MeshCoreAdapterLite::setFloodScopeKey(const uint8_t* key, size_t len)
+void MeshCoreRadioAdapter::setFloodScopeKey(const uint8_t* key, size_t len)
 {
     flood_scope_key_.fill(0);
     if (!key || len == 0)
@@ -700,7 +716,7 @@ void MeshCoreAdapterLite::setFloodScopeKey(const uint8_t* key, size_t len)
     std::memcpy(flood_scope_key_.data(), key, std::min(len, flood_scope_key_.size()));
 }
 
-::chat::runtime::EffectiveSelfIdentity MeshCoreAdapterLite::buildEffectiveIdentity() const
+::chat::runtime::EffectiveSelfIdentity MeshCoreRadioAdapter::buildEffectiveIdentity() const
 {
     ::chat::runtime::EffectiveSelfIdentity identity{};
 
@@ -733,7 +749,7 @@ void MeshCoreAdapterLite::setFloodScopeKey(const uint8_t* key, size_t len)
     return identity;
 }
 
-void MeshCoreAdapterLite::ensureIdentityKeys()
+void MeshCoreRadioAdapter::ensureIdentityKeys()
 {
     if (keys_ready_)
     {
@@ -752,13 +768,13 @@ void MeshCoreAdapterLite::ensureIdentityKeys()
     keys_ready_ = ::chat::meshcore::meshcoreCreateKeypair(seed, public_key_, private_key_);
 }
 
-bool MeshCoreAdapterLite::transmitFrame(const uint8_t* data, size_t size)
+bool MeshCoreRadioAdapter::transmitFrame(const uint8_t* data, size_t size)
 {
     auto* io = ::platform::nrf52::arduino_common::chat::infra::radioPacketIo();
     return io && io->transmit(data, size);
 }
 
-bool MeshCoreAdapterLite::sendAdvert(bool broadcast)
+bool MeshCoreRadioAdapter::sendAdvert(bool broadcast)
 {
     ensureIdentityKeys();
     if (!keys_ready_)

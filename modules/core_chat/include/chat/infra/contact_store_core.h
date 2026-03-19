@@ -2,6 +2,7 @@
 
 #include "../ports/i_contact_blob_store.h"
 #include "../ports/i_contact_store.h"
+#include "chat/infra/node_store_core.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -15,6 +16,15 @@ namespace contacts
 class ContactStoreCore : public IContactStore
 {
   public:
+    struct Entry
+    {
+        uint32_t node_id = 0;
+        char nickname[13] = {0};
+    };
+
+    static constexpr size_t kMaxContacts = NodeStoreCore::kMaxNodes;
+    static constexpr size_t kSerializedEntrySize = sizeof(Entry);
+
     explicit ContactStoreCore(IContactBlobStore& blob_store);
 
     void begin() override;
@@ -26,15 +36,6 @@ class ContactStoreCore : public IContactStore
     size_t getCount() const override;
 
   private:
-    struct Entry
-    {
-        uint32_t node_id = 0;
-        char nickname[13] = {0};
-    };
-
-    static constexpr size_t kMaxContacts = 100;
-    static constexpr size_t kSerializedEntrySize = sizeof(Entry);
-
     bool loadEntries();
     bool saveEntries();
     bool decodeEntries(const uint8_t* data, size_t len);

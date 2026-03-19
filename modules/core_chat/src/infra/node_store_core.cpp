@@ -20,11 +20,12 @@ struct PersistedNodeEntry
     uint32_t last_seen;
     float snr;
     float rssi;
+    uint8_t hops_away;
+    uint8_t channel;
+    uint8_t next_hop;
     uint8_t protocol;
     uint8_t role;
-    uint8_t hops_away;
     uint8_t hw_model;
-    uint8_t channel;
 } __attribute__((packed));
 
 static_assert(sizeof(PersistedNodeEntry) == NodeStoreCore::kSerializedEntrySize,
@@ -40,11 +41,12 @@ void copyIntoPersisted(PersistedNodeEntry& dst, const NodeEntry& src)
     dst.last_seen = src.last_seen;
     dst.snr = src.snr;
     dst.rssi = src.rssi;
+    dst.hops_away = src.hops_away;
+    dst.channel = src.channel;
+    dst.next_hop = src.next_hop;
     dst.protocol = src.protocol;
     dst.role = src.role;
-    dst.hops_away = src.hops_away;
     dst.hw_model = src.hw_model;
-    dst.channel = src.channel;
 }
 
 void copyFromPersisted(NodeEntry& dst, const PersistedNodeEntry& src)
@@ -58,11 +60,12 @@ void copyFromPersisted(NodeEntry& dst, const PersistedNodeEntry& src)
     dst.last_seen = src.last_seen;
     dst.snr = src.snr;
     dst.rssi = src.rssi;
+    dst.hops_away = src.hops_away;
+    dst.channel = src.channel;
+    dst.next_hop = src.next_hop;
     dst.protocol = src.protocol;
     dst.role = src.role;
-    dst.hops_away = src.hops_away;
     dst.hw_model = src.hw_model;
-    dst.channel = src.channel;
 }
 
 } // namespace
@@ -70,6 +73,11 @@ void copyFromPersisted(NodeEntry& dst, const PersistedNodeEntry& src)
 NodeStoreCore::NodeStoreCore(INodeBlobStore& blob_store)
     : blob_store_(blob_store)
 {
+}
+
+void NodeStoreCore::setProtectedNodeChecker(std::function<bool(uint32_t)> checker)
+{
+    protected_node_checker_ = std::move(checker);
 }
 
 void NodeStoreCore::begin()
@@ -137,7 +145,11 @@ void NodeStoreCore::upsert(uint32_t node_id, const char* short_name, const char*
 
     if (entries_.size() >= kMaxNodes)
     {
-        entries_.erase(entries_.begin());
+        const size_t eviction_index = selectEvictionIndex();
+        if (eviction_index < entries_.size())
+        {
+            entries_.erase(entries_.begin() + static_cast<long>(eviction_index));
+        }
     }
 
     NodeEntry entry{};
@@ -187,7 +199,11 @@ void NodeStoreCore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t 
 
     if (entries_.size() >= kMaxNodes)
     {
-        entries_.erase(entries_.begin());
+        const size_t eviction_index = selectEvictionIndex();
+        if (eviction_index < entries_.size())
+        {
+            entries_.erase(entries_.begin() + static_cast<long>(eviction_index));
+        }
     }
 
     NodeEntry entry{};
@@ -204,6 +220,73 @@ void NodeStoreCore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t 
 
     dirty_ = true;
     maybeSave();
+}
+
+bool NodeStoreCore::setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_secs)
+{
+    if (node_id == 0)
+    {
+        return false;
+    }
+
+    for (auto& entry : entries_)
+    {
+        if (entry.node_id != node_id)
+        {
+            continue;
+        }
+
+        if (entry.next_hop == next_hop)
+        {
+            return true;
+        }
+
+        entry.next_hop = next_hop;
+        if (now_secs != 0)
+        {
+            entry.last_seen = now_secs;
+        }
+        dirty_ = true;
+        maybeSave();
+        return true;
+    }
+
+    if (entries_.size() >= kMaxNodes)
+    {
+        const size_t eviction_index = selectEvictionIndex();
+        if (eviction_index < entries_.size())
+        {
+            entries_.erase(entries_.begin() + static_cast<long>(eviction_index));
+        }
+    }
+
+    NodeEntry entry{};
+    entry.node_id = node_id;
+    entry.last_seen = now_secs;
+    entry.snr = std::numeric_limits<float>::quiet_NaN();
+    entry.rssi = std::numeric_limits<float>::quiet_NaN();
+    entry.hops_away = 0xFF;
+    entry.channel = 0xFF;
+    entry.next_hop = next_hop;
+    entry.protocol = 0;
+    entry.role = kNodeRoleUnknown;
+    entry.hw_model = 0;
+    entries_.push_back(entry);
+    dirty_ = true;
+    maybeSave();
+    return true;
+}
+
+uint8_t NodeStoreCore::getNextHop(uint32_t node_id) const
+{
+    for (const auto& entry : entries_)
+    {
+        if (entry.node_id == node_id)
+        {
+            return entry.next_hop;
+        }
+    }
+    return 0;
 }
 
 bool NodeStoreCore::remove(uint32_t node_id)
@@ -349,6 +432,47 @@ void NodeStoreCore::maybeSave()
     {
         saveEntries();
     }
+}
+
+size_t NodeStoreCore::selectEvictionIndex() const
+{
+    if (entries_.empty())
+    {
+        return 0;
+    }
+
+    auto is_protected = [this](uint32_t node_id) -> bool
+    {
+        return protected_node_checker_ ? protected_node_checker_(node_id) : false;
+    };
+
+    size_t oldest_unprotected_index = entries_.size();
+    uint32_t oldest_unprotected_seen = std::numeric_limits<uint32_t>::max();
+    size_t oldest_any_index = 0;
+    uint32_t oldest_any_seen = std::numeric_limits<uint32_t>::max();
+
+    for (size_t index = 0; index < entries_.size(); ++index)
+    {
+        const NodeEntry& entry = entries_[index];
+        if (entry.last_seen < oldest_any_seen)
+        {
+            oldest_any_seen = entry.last_seen;
+            oldest_any_index = index;
+        }
+
+        if (is_protected(entry.node_id))
+        {
+            continue;
+        }
+
+        if (entry.last_seen < oldest_unprotected_seen)
+        {
+            oldest_unprotected_seen = entry.last_seen;
+            oldest_unprotected_index = index;
+        }
+    }
+
+    return (oldest_unprotected_index < entries_.size()) ? oldest_unprotected_index : oldest_any_index;
 }
 
 } // namespace contacts

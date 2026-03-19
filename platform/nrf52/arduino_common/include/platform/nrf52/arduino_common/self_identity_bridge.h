@@ -18,6 +18,10 @@ class SelfIdentityBridge final : public ::chat::runtime::SelfIdentityProvider
                        const char* fallback_ble_prefix);
 
     bool readSelfIdentityInput(::chat::runtime::SelfIdentityInput* out) const override;
+    void setNodeId(::chat::NodeId node_id)
+    {
+        node_id_ = node_id;
+    }
 
     const std::array<uint8_t, 6>& macAddress() const
     {

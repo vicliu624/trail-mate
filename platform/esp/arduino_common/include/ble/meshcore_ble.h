@@ -2,6 +2,7 @@
 
 #include "app/app_facades.h"
 #include "ble/ble_manager.h"
+#include "chat/ble/meshcore_phone_core.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
 #include "platform/esp/arduino_common/chat/infra/meshcore/meshcore_adapter.h"
@@ -10,6 +11,7 @@
 #include <array>
 #include <atomic>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,7 @@ namespace ble
 {
 
 class MeshCoreBleService : public BleService,
+                           public MeshCorePhoneHooks,
                            public chat::ChatService::IncomingTextObserver,
                            public team::TeamService::IncomingDataObserver
 {
@@ -121,6 +124,7 @@ class MeshCoreBleService : public BleService,
         uint16_t keep_alive_secs = 0;
     };
     std::vector<ConnectionEntry> connections_;
+    std::unique_ptr<MeshCorePhoneCore> shared_core_;
 
     void setupService();
     void startAdvertising();
@@ -166,6 +170,41 @@ class MeshCoreBleService : public BleService,
     chat::meshcore::MeshCoreAdapter* meshCoreAdapter();
     const chat::meshcore::MeshCoreAdapter* meshCoreAdapter() const;
     uint32_t deriveNodeIdFromPubkey(const uint8_t* pubkey, size_t len) const;
+    bool shouldUseSharedCore(uint8_t cmd) const;
+    bool handleViaSharedCore(size_t len);
+    MeshCorePhoneBatteryInfo getBatteryInfo() const override;
+    MeshCorePhoneLocation getAdvertLocation() const override;
+    uint32_t getReportedBlePin() const override;
+    uint8_t getAdvertLocationPolicy() const override;
+    uint8_t getTelemetryModeBits() const override;
+    bool getManualAddContacts() const override;
+    bool resolvePeerPublicKey(const uint8_t* in_pubkey, size_t in_len,
+                              uint8_t* out_pubkey, size_t out_len) const override;
+    void onPendingBinaryRequest(uint32_t tag) override;
+    void onPendingTelemetryRequest(uint32_t tag) override;
+    void onPendingPathDiscoveryRequest(uint32_t tag) override;
+    void onSentRoute(bool sent_flood) override;
+    bool lookupAdvertPath(const uint8_t* pubkey, size_t len,
+                          uint32_t* out_ts, uint8_t* out_path, size_t* inout_len) const override;
+    bool hasActiveConnection(const uint8_t* prefix, size_t len) const override;
+    void logoutActiveConnection(const uint8_t* prefix, size_t len) override;
+    bool getRadioStats(MeshCorePhoneRadioStats* out) const override;
+    bool getPacketStats(MeshCorePhonePacketStats* out) const override;
+    bool setAdvertLocation(int32_t lat, int32_t lon) override;
+    bool upsertContactFromFrame(const uint8_t* frame, size_t len) override;
+    bool removeContact(const uint8_t* pubkey, size_t len) override;
+    bool exportContact(const uint8_t* pubkey, size_t len, uint8_t* out, size_t* out_len) const override;
+    bool importContact(const uint8_t* frame, size_t len) override;
+    bool shareContact(const uint8_t* pubkey, size_t len) override;
+    bool popOfflineMessage(uint8_t* out, size_t* out_len) override;
+    bool setTuningParams(const MeshCorePhoneTuningParams& params) override;
+    bool getTuningParams(MeshCorePhoneTuningParams* out) const override;
+    bool setOtherParams(uint8_t manual_add_contacts, uint8_t telemetry_bits,
+                        bool has_multi_acks, uint8_t advert_loc_policy, uint8_t multi_acks) override;
+    bool setDevicePin(uint32_t pin) override;
+    bool getCustomVars(std::string* out) const override;
+    bool setCustomVar(const char* key, const char* value) override;
+    void onFactoryReset() override;
 };
 
 } // namespace ble

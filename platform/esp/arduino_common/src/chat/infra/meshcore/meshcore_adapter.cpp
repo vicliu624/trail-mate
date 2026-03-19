@@ -356,6 +356,11 @@ bool MeshCoreAdapter::sendPeerRequestType(const uint8_t* pubkey, size_t len, uin
                                   out_tag, out_est_timeout, out_sent_flood);
 }
 
+bool MeshCoreAdapter::sendSelfAdvert(bool broadcast)
+{
+    return sendIdentityAdvert(broadcast);
+}
+
 bool MeshCoreAdapter::sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
                                              const uint8_t* payload, size_t payload_len,
                                              bool force_flood,
@@ -4910,6 +4915,11 @@ bool MeshCoreAdapter::lookupPeerByNodeId(NodeId node_id, PeerInfo* out) const
     return false;
 }
 
+bool MeshCoreAdapter::exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentity::kPubKeySize])
+{
+    return static_cast<const MeshCoreAdapter&>(*this).exportIdentityPublicKey(out_pubkey);
+}
+
 bool MeshCoreAdapter::exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentity::kPubKeySize]) const
 {
     if (!out_pubkey || !identity_.isReady())
@@ -4918,6 +4928,11 @@ bool MeshCoreAdapter::exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentit
     }
     memcpy(out_pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize);
     return true;
+}
+
+bool MeshCoreAdapter::exportIdentityPrivateKey(uint8_t out_priv[MeshCoreIdentity::kPrivKeySize])
+{
+    return static_cast<const MeshCoreAdapter&>(*this).exportIdentityPrivateKey(out_priv);
 }
 
 bool MeshCoreAdapter::exportIdentityPrivateKey(uint8_t out_priv[MeshCoreIdentity::kPrivKeySize]) const
@@ -4946,6 +4961,12 @@ bool MeshCoreAdapter::importIdentityPrivateKey(const uint8_t* in_priv, size_t le
         node_id_ = identity_node;
     }
     return true;
+}
+
+bool MeshCoreAdapter::signPayload(const uint8_t* data, size_t len,
+                                  uint8_t out_sig[MeshCoreIdentity::kSignatureSize])
+{
+    return static_cast<const MeshCoreAdapter&>(*this).signPayload(data, len, out_sig);
 }
 
 bool MeshCoreAdapter::signPayload(const uint8_t* data, size_t len,

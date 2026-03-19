@@ -19,22 +19,12 @@ ChatModel::~ChatModel()
 void ChatModel::onIncoming(const ChatMessage& msg)
 {
     ConversationId conv(msg.channel, msg.peer, msg.protocol);
-    ConversationData& data = getConvData(conv);
-
-    data.messages.append(msg);
-    data.preview = msg.text;
-    data.last_ts = msg.timestamp;
-
-    if (!data.muted)
-    {
-        data.unread_count++;
-    }
+    appendMessage(conv, msg);
 }
 
 void ChatModel::onSendQueued(const ChatMessage& msg)
 {
     ConversationId conv(msg.channel, msg.peer, msg.protocol);
-    ConversationData& data = getConvData(conv);
 
     ChatMessage copy = msg;
     if (copy.msg_id == 0)
@@ -46,9 +36,7 @@ void ChatModel::onSendQueued(const ChatMessage& msg)
         copy.status = MessageStatus::Queued;
     }
 
-    data.messages.append(copy);
-    data.preview = copy.text;
-    data.last_ts = copy.timestamp;
+    appendMessage(conv, copy);
 }
 
 void ChatModel::onSendResult(MessageId msg_id, bool ok)
@@ -57,15 +45,19 @@ void ChatModel::onSendResult(MessageId msg_id, bool ok)
     for (auto& pair : conversations_)
     {
         ConversationData& data = pair.second;
-        for (size_t i = 0; i < data.messages.count(); i++)
+        for (size_t i = 0; i < data.messages.size(); i++)
         {
-            ChatMessage* msg = data.messages.get(i);
+            ChatMessage* msg = &data.messages[i].message;
             if (msg && msg->msg_id == msg_id)
             {
                 msg->status = ok ? MessageStatus::Sent : MessageStatus::Failed;
                 if (!ok)
                 {
-                    failed_messages_.append(*msg);
+                    if (failed_messages_.size() >= MAX_FAILED_MESSAGES)
+                    {
+                        failed_messages_.erase(failed_messages_.begin());
+                    }
+                    failed_messages_.push_back(*msg);
                 }
                 return;
             }
@@ -90,16 +82,12 @@ std::vector<ChatMessage> ChatModel::getRecent(const ConversationId& conv, size_t
     const ConversationData& data = getConvData(conv);
     std::vector<ChatMessage> result;
 
-    size_t count = data.messages.count();
+    size_t count = data.messages.size();
     size_t start = (count > limit) ? (count - limit) : 0;
 
     for (size_t i = start; i < count; i++)
     {
-        const ChatMessage* msg = data.messages.get(i);
-        if (msg)
-        {
-            result.push_back(*msg);
-        }
+        result.push_back(data.messages[i].message);
     }
 
     return result;
@@ -108,15 +96,11 @@ std::vector<ChatMessage> ChatModel::getRecent(const ConversationId& conv, size_t
 std::vector<ChatMessage> ChatModel::getFailedMessages() const
 {
     std::vector<ChatMessage> result;
-    size_t count = failed_messages_.count();
+    size_t count = failed_messages_.size();
 
     for (size_t i = 0; i < count; i++)
     {
-        const ChatMessage* msg = failed_messages_.get(i);
-        if (msg)
-        {
-            result.push_back(*msg);
-        }
+        result.push_back(failed_messages_[i]);
     }
 
     return result;
@@ -127,9 +111,9 @@ const ChatMessage* ChatModel::getMessage(MessageId msg_id) const
     for (const auto& pair : conversations_)
     {
         const ConversationData& data = pair.second;
-        for (size_t i = 0; i < data.messages.count(); i++)
+        for (size_t i = 0; i < data.messages.size(); i++)
         {
-            const ChatMessage* msg = data.messages.get(i);
+            const ChatMessage* msg = &data.messages[i].message;
             if (msg && msg->msg_id == msg_id)
             {
                 return msg;
@@ -143,6 +127,8 @@ void ChatModel::clearAll()
 {
     conversations_.clear();
     failed_messages_.clear();
+    total_message_count_ = 0;
+    next_sequence_ = 1;
 }
 
 std::vector<ConversationMeta> ChatModel::getConversations() const
@@ -201,6 +187,88 @@ const ChatModel::ConversationData& ChatModel::getConvData(const ConversationId& 
         return empty;
     }
     return it->second;
+}
+
+void ChatModel::appendMessage(const ConversationId& conv, const ChatMessage& msg)
+{
+    if (total_message_count_ >= MAX_MESSAGES_TOTAL)
+    {
+        evictOldestMessage();
+    }
+
+    ConversationData& data = getConvData(conv);
+    StoredMessageEntry entry;
+    entry.message = msg;
+    entry.sequence = next_sequence_++;
+    data.messages.push_back(entry);
+    total_message_count_++;
+    refreshConversationMeta(data);
+
+    if (msg.status == MessageStatus::Incoming && !data.muted)
+    {
+        data.unread_count++;
+    }
+}
+
+void ChatModel::evictOldestMessage()
+{
+    auto oldest_it = conversations_.end();
+    size_t oldest_index = 0;
+    uint32_t oldest_sequence = 0;
+    bool found = false;
+
+    for (auto it = conversations_.begin(); it != conversations_.end(); ++it)
+    {
+        auto& messages = it->second.messages;
+        for (size_t index = 0; index < messages.size(); ++index)
+        {
+            if (!found || messages[index].sequence < oldest_sequence)
+            {
+                oldest_it = it;
+                oldest_index = index;
+                oldest_sequence = messages[index].sequence;
+                found = true;
+            }
+        }
+    }
+
+    if (!found)
+    {
+        total_message_count_ = 0;
+        return;
+    }
+
+    ConversationData& data = oldest_it->second;
+    const ChatMessage removed = data.messages[oldest_index].message;
+    data.messages.erase(data.messages.begin() + static_cast<long>(oldest_index));
+    if (removed.status == MessageStatus::Incoming && data.unread_count > 0)
+    {
+        data.unread_count--;
+    }
+    refreshConversationMeta(data);
+    if (data.messages.empty())
+    {
+        conversations_.erase(oldest_it);
+    }
+    if (total_message_count_ > 0)
+    {
+        total_message_count_--;
+    }
+}
+
+void ChatModel::refreshConversationMeta(ConversationData& data)
+{
+    if (data.messages.empty())
+    {
+        data.preview.clear();
+        data.last_ts = 0;
+        data.unread_count = 0;
+        return;
+    }
+
+    const ChatMessage& newest = data.messages.back().message;
+    data.preview = newest.text;
+    data.last_ts = newest.timestamp;
 }
 
 } // namespace chat

@@ -18,6 +18,7 @@ class ContactStore final : public ::chat::contacts::IContactStore
     bool hasNickname(const char* nickname) const override;
     std::vector<uint32_t> getAllContactIds() const override;
     size_t getCount() const override;
+    bool hasContactNode(uint32_t node_id) const;
 
   private:
     ContactBlobFileStore blob_store_;

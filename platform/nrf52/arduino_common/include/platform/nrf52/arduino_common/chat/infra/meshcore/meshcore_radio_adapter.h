@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/infra/meshcore/meshcore_identity_crypto.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/runtime/self_identity_policy.h"
@@ -12,10 +13,10 @@
 namespace platform::nrf52::arduino_common::chat::meshcore
 {
 
-class MeshCoreAdapterLite final : public ::chat::IMeshAdapter
+class MeshCoreRadioAdapter final : public ::chat::IMeshAdapter, public ::chat::meshcore::IMeshCoreBleBackend
 {
   public:
-    explicit MeshCoreAdapterLite(const ::chat::runtime::SelfIdentityProvider* identity_provider = nullptr);
+    explicit MeshCoreRadioAdapter(const ::chat::runtime::SelfIdentityProvider* identity_provider = nullptr);
 
     ::chat::MeshCapabilities getCapabilities() const override;
     bool sendText(::chat::ChannelId channel, const std::string& text,
@@ -35,10 +36,16 @@ class MeshCoreAdapterLite final : public ::chat::IMeshAdapter
     void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled) override;
     bool isReady() const override;
     ::chat::NodeId getNodeId() const override;
+    ::chat::meshcore::IMeshCoreBleBackend* asMeshCoreBleBackend() override { return this; }
+    const ::chat::meshcore::IMeshCoreBleBackend* asMeshCoreBleBackend() const override { return this; }
     bool pollIncomingRawPacket(uint8_t* out_data, size_t& out_len, size_t max_len) override;
     void handleRawPacket(const uint8_t* data, size_t size) override;
     void setLastRxStats(float rssi, float snr) override;
     void processSendQueue() override;
+    bool exportIdentityPublicKey(uint8_t out_pubkey[::chat::meshcore::kMeshCorePubKeySize]) override;
+    bool exportIdentityPrivateKey(uint8_t out_priv[::chat::meshcore::kMeshCorePrivKeySize]) override;
+    bool signPayload(const uint8_t* payload, size_t len,
+                     uint8_t out_signature[::chat::meshcore::kMeshCoreSignatureSize]) override;
     bool exportIdentityPublicKey(uint8_t* out_key, size_t out_len);
     bool exportIdentityPrivateKey(uint8_t* out_key, size_t out_len);
     bool importIdentityPrivateKey(const uint8_t* key, size_t len);

@@ -7,8 +7,8 @@
 
 #include "chat/domain/chat_policy.h"
 #include "chat/domain/chat_types.h"
-#include "sys/ringbuf.h"
 #include <map>
+#include <string>
 #include <vector>
 
 namespace chat
@@ -21,7 +21,7 @@ namespace chat
 class ChatModel
 {
   public:
-    static constexpr size_t MAX_MESSAGES_PER_CONV = 50;
+    static constexpr size_t MAX_MESSAGES_TOTAL = 20;
     static constexpr size_t MAX_FAILED_MESSAGES = 5;
 
     ChatModel();
@@ -78,9 +78,15 @@ class ChatModel
     }
 
   private:
+    struct StoredMessageEntry
+    {
+        ChatMessage message;
+        uint32_t sequence = 0;
+    };
+
     struct ConversationData
     {
-        sys::RingBuffer<ChatMessage, MAX_MESSAGES_PER_CONV> messages;
+        std::vector<StoredMessageEntry> messages;
         int unread_count;
         uint32_t last_ts;
         std::string preview;
@@ -90,12 +96,17 @@ class ChatModel
     };
 
     std::map<ConversationId, ConversationData> conversations_;
-    sys::RingBuffer<ChatMessage, MAX_FAILED_MESSAGES> failed_messages_;
+    std::vector<ChatMessage> failed_messages_;
     ChatPolicy policy_;
     MessageId next_msg_id_;
+    uint32_t next_sequence_ = 1;
+    size_t total_message_count_ = 0;
 
     ConversationData& getConvData(const ConversationId& conv);
     const ConversationData& getConvData(const ConversationId& conv) const;
+    void appendMessage(const ConversationId& conv, const ChatMessage& msg);
+    void evictOldestMessage();
+    static void refreshConversationMeta(ConversationData& data);
 };
 
 } // namespace chat

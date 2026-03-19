@@ -6,6 +6,7 @@
 #pragma once
 
 #include "board/LoraBoard.h"
+#include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "platform/esp/arduino_common/chat/infra/meshcore/meshcore_identity.h"
 #include <deque>
@@ -22,7 +23,7 @@ namespace meshcore
 /**
  * @brief MeshCore protocol adapter
  */
-class MeshCoreAdapter : public IMeshAdapter
+class MeshCoreAdapter : public IMeshAdapter, public IMeshCoreBleBackend
 {
   public:
     /**
@@ -68,6 +69,8 @@ class MeshCoreAdapter : public IMeshAdapter
 
     bool isReady() const override;
     NodeId getNodeId() const override { return node_id_; }
+    IMeshCoreBleBackend* asMeshCoreBleBackend() override { return this; }
+    const IMeshCoreBleBackend* asMeshCoreBleBackend() const override { return this; }
 
     /**
      * @brief Poll for incoming raw packet data
@@ -109,9 +112,13 @@ class MeshCoreAdapter : public IMeshAdapter
     bool lookupPeerByHash(uint8_t hash, PeerInfo* out) const;
     bool lookupPeerByNodeId(NodeId node_id, PeerInfo* out) const;
 
+    bool exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentity::kPubKeySize]) override;
     bool exportIdentityPublicKey(uint8_t out_pubkey[MeshCoreIdentity::kPubKeySize]) const;
+    bool exportIdentityPrivateKey(uint8_t out_priv[MeshCoreIdentity::kPrivKeySize]) override;
     bool exportIdentityPrivateKey(uint8_t out_priv[MeshCoreIdentity::kPrivKeySize]) const;
     bool importIdentityPrivateKey(const uint8_t* in_priv, size_t len);
+    bool signPayload(const uint8_t* data, size_t len,
+                     uint8_t out_sig[MeshCoreIdentity::kSignatureSize]) override;
     bool signPayload(const uint8_t* data, size_t len,
                      uint8_t out_sig[MeshCoreIdentity::kSignatureSize]) const;
     uint8_t getSelfHash() const { return self_hash_; }
@@ -164,6 +171,7 @@ class MeshCoreAdapter : public IMeshAdapter
     bool sendPeerRequestType(const uint8_t* pubkey, size_t len, uint8_t req_type,
                              uint32_t* out_tag, uint32_t* out_est_timeout,
                              bool* out_sent_flood);
+    bool sendSelfAdvert(bool broadcast) override;
     bool sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
                                 const uint8_t* payload, size_t payload_len,
                                 bool force_flood,

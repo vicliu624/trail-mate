@@ -1,23 +1,25 @@
 #include "apps/gat562_mesh_evb_pro/protocol_factory.h"
 
-#include "platform/nrf52/arduino_common/chat/infra/meshcore/meshcore_adapter_lite.h"
-#include "platform/nrf52/arduino_common/chat/infra/meshtastic/mt_adapter_lite.h"
+#include "platform/nrf52/arduino_common/chat/infra/meshcore/meshcore_radio_adapter.h"
+#include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
 
 namespace apps::gat562_mesh_evb_pro
 {
 
 std::unique_ptr<chat::IMeshAdapter> createProtocolAdapter(chat::MeshProtocol protocol,
-                                                          const chat::runtime::SelfIdentityProvider* identity_provider)
+                                                          const chat::runtime::SelfIdentityProvider* identity_provider,
+                                                          platform::nrf52::arduino_common::chat::meshtastic::NodeStore* meshtastic_node_store)
 {
     switch (protocol)
     {
     case chat::MeshProtocol::MeshCore:
         return std::unique_ptr<chat::IMeshAdapter>(
-            new platform::nrf52::arduino_common::chat::meshcore::MeshCoreAdapterLite(identity_provider));
+            new platform::nrf52::arduino_common::chat::meshcore::MeshCoreRadioAdapter(identity_provider));
     case chat::MeshProtocol::Meshtastic:
     default:
         return std::unique_ptr<chat::IMeshAdapter>(
-            new platform::nrf52::arduino_common::chat::meshtastic::MtAdapterLite(identity_provider));
+            new platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter(identity_provider,
+                                                                                           meshtastic_node_store));
     }
 }
 

@@ -133,6 +133,8 @@ class ContactService
 
     void invalidateCache() const;
     void buildCache() const;
+    bool ensureNodeExistsForContact(uint32_t node_id);
+    bool hasNodeEntry(uint32_t node_id) const;
     bool isNodeVisible(uint32_t last_seen) const;
     std::string formatTimeStatus(uint32_t last_seen) const;
 };
