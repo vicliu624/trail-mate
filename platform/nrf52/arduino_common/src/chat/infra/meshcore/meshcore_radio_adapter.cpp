@@ -82,7 +82,7 @@ MeshCoreRadioAdapter::MeshCoreRadioAdapter(const ::chat::runtime::SelfIdentityPr
 }
 
 bool MeshCoreRadioAdapter::sendText(::chat::ChannelId channel, const std::string& text,
-                                   ::chat::MessageId* out_msg_id, ::chat::NodeId peer)
+                                    ::chat::MessageId* out_msg_id, ::chat::NodeId peer)
 {
     if (!out_msg_id)
     {
@@ -112,10 +112,10 @@ bool MeshCoreRadioAdapter::pollIncomingText(::chat::MeshIncomingText* out)
 }
 
 bool MeshCoreRadioAdapter::sendAppData(::chat::ChannelId channel, uint32_t portnum,
-                                      const uint8_t* payload, size_t len,
-                                      ::chat::NodeId dest, bool want_ack,
-                                      ::chat::MessageId packet_id,
-                                      bool want_response)
+                                       const uint8_t* payload, size_t len,
+                                       ::chat::NodeId dest, bool want_ack,
+                                       ::chat::MessageId packet_id,
+                                       bool want_response)
 {
     (void)channel;
     (void)packet_id;
@@ -420,8 +420,8 @@ bool MeshCoreRadioAdapter::sendSelfAdvert(bool broadcast)
 }
 
 bool MeshCoreRadioAdapter::sendPeerRequestType(const uint8_t* pubkey, size_t len, uint8_t req_type,
-                                              uint32_t* out_tag, uint32_t* out_est_timeout,
-                                              bool* out_sent_flood)
+                                               uint32_t* out_tag, uint32_t* out_est_timeout,
+                                               bool* out_sent_flood)
 {
     uint8_t payload[9] = {};
     payload[0] = req_type;
@@ -438,10 +438,10 @@ bool MeshCoreRadioAdapter::sendPeerRequestType(const uint8_t* pubkey, size_t len
 }
 
 bool MeshCoreRadioAdapter::sendPeerRequestPayload(const uint8_t* pubkey, size_t len,
-                                                 const uint8_t* payload, size_t payload_len,
-                                                 bool force_flood,
-                                                 uint32_t* out_tag, uint32_t* out_est_timeout,
-                                                 bool* out_sent_flood)
+                                                  const uint8_t* payload, size_t payload_len,
+                                                  bool force_flood,
+                                                  uint32_t* out_tag, uint32_t* out_est_timeout,
+                                                  bool* out_sent_flood)
 {
     if (!pubkey || len != sizeof(public_key_) || !payload || payload_len == 0)
     {
@@ -528,9 +528,9 @@ bool MeshCoreRadioAdapter::sendPeerRequestPayload(const uint8_t* pubkey, size_t 
 }
 
 bool MeshCoreRadioAdapter::sendAnonRequestPayload(const uint8_t* pubkey, size_t len,
-                                                 const uint8_t* payload, size_t payload_len,
-                                                 uint32_t* out_est_timeout,
-                                                 bool* out_sent_flood)
+                                                  const uint8_t* payload, size_t payload_len,
+                                                  uint32_t* out_est_timeout,
+                                                  bool* out_sent_flood)
 {
     if (!pubkey || len != sizeof(public_key_) || !payload || payload_len == 0)
     {
@@ -609,8 +609,8 @@ bool MeshCoreRadioAdapter::sendAnonRequestPayload(const uint8_t* pubkey, size_t 
 }
 
 bool MeshCoreRadioAdapter::sendTracePath(const uint8_t* path, size_t path_len,
-                                        uint32_t tag, uint32_t auth, uint8_t flags,
-                                        uint32_t* out_est_timeout)
+                                         uint32_t tag, uint32_t auth, uint8_t flags,
+                                         uint32_t* out_est_timeout)
 {
     if (!path || path_len == 0 || path_len > 64)
     {
@@ -673,8 +673,8 @@ bool MeshCoreRadioAdapter::sendControlData(const uint8_t* payload, size_t payloa
 }
 
 bool MeshCoreRadioAdapter::sendRawData(const uint8_t* path, size_t path_len,
-                                      const uint8_t* payload, size_t payload_len,
-                                      uint32_t* out_est_timeout)
+                                       const uint8_t* payload, size_t payload_len,
+                                       uint32_t* out_est_timeout)
 {
     if (!payload || payload_len == 0 || path_len > 64 || (path_len > 0 && !path))
     {

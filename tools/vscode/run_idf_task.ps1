@@ -22,7 +22,7 @@ function Get-WorkspaceSettings([string]$RepoRoot) {
         return Get-Content $settingsPath -Raw | ConvertFrom-Json
     }
     catch {
-        Write-Warning "Failed to parse $settingsPath: $_"
+        Write-Warning "Failed to parse ${settingsPath}: $_"
         return $null
     }
 }
@@ -82,6 +82,29 @@ function Resolve-PythonExe($Settings) {
     throw 'Unable to resolve Python executable for ESP-IDF.'
 }
 
+function Resolve-NinjaExe() {
+    $candidates = @()
+    $toolsRoot = 'C:\ProgramData\Espressif\tools\ninja'
+    if (Test-Path $toolsRoot) {
+        $candidates += (Get-ChildItem $toolsRoot -Directory | Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName 'ninja.exe' })
+    }
+    $candidates += 'ninja.exe'
+
+    foreach ($candidate in $candidates) {
+        try {
+            $command = Get-Command $candidate -ErrorAction Stop
+            return $command.Source
+        }
+        catch {
+            if (Test-Path $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    return $null
+}
+
 function Resolve-Port($Settings, [string]$RequestedPort) {
     if ($RequestedPort) {
         return $RequestedPort
@@ -104,9 +127,23 @@ $repoRoot = Get-RepoRoot
 $settings = Get-WorkspaceSettings $repoRoot
 $idfPath = Resolve-IdfPath $repoRoot $settings
 $pythonExe = Resolve-PythonExe $settings
+$ninjaExe = Resolve-NinjaExe
 $portValue = Resolve-Port $settings $Port
 if (-not $BuildDir) {
     $BuildDir = "build.$Target"
+}
+
+$env:IDF_PATH = $idfPath
+$env:IDF_PYTHON_ENV_PATH = Split-Path -Parent (Split-Path -Parent $pythonExe)
+if ($ninjaExe) {
+    $env:PATH = "$(Split-Path -Parent $ninjaExe);$env:PATH"
+}
+$espRomElfRoot = 'C:\ProgramData\Espressif\tools\esp-rom-elfs'
+if ((-not $env:ESP_ROM_ELF_DIR) -and (Test-Path $espRomElfRoot)) {
+    $latestRomDir = Get-ChildItem $espRomElfRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
+    if ($latestRomDir) {
+        $env:ESP_ROM_ELF_DIR = $latestRomDir.FullName
+    }
 }
 
 $idfPy = Join-Path $idfPath 'tools\idf.py'
@@ -116,11 +153,11 @@ if ($Action -ne 'build' -and $portValue) {
 }
 
 $actionArgs = switch ($Action) {
-    'reconfigure' { @('reconfigure') }
-    'build' { @('build') }
-    'flash' { @('flash') }
-    'monitor' { @('monitor') }
-    'flash-monitor' { @('flash', 'monitor') }
+    'reconfigure' { ,@('reconfigure') }
+    'build' { ,@('build') }
+    'flash' { ,@('flash') }
+    'monitor' { ,@('monitor') }
+    'flash-monitor' { ,@('flash', 'monitor') }
 }
 
 Write-Host "[trail-mate] RepoRoot : $repoRoot"

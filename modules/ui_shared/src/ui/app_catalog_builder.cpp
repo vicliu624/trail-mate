@@ -28,6 +28,12 @@ namespace
 
 constexpr size_t kMaxMenuApps = 16;
 
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+constexpr bool kTab5SkipSkyPlot = true;
+#else
+constexpr bool kTab5SkipSkyPlot = false;
+#endif
+
 extern "C"
 {
     extern const lv_image_dsc_t Chat;
@@ -201,7 +207,10 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_gnss_skyplot)
         {
-            add(&s_skyplot_app);
+            if (!kTab5SkipSkyPlot)
+            {
+                add(&s_skyplot_app);
+            }
         }
         add_common_tail();
     }
@@ -213,7 +222,10 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_gnss_skyplot)
         {
-            add(&s_skyplot_app);
+            if (!kTab5SkipSkyPlot)
+            {
+                add(&s_skyplot_app);
+            }
         }
         if (flags.include_tracker)
         {

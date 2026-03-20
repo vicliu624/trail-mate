@@ -548,11 +548,11 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint32_t est_timeout = 0;
         bool sent_flood = false;
         if (!backend->sendAnonRequestPayload(pubkey,
-                                          kPubKeySize,
-                                          payload,
-                                          payload_len,
-                                          &est_timeout,
-                                          &sent_flood))
+                                             kPubKeySize,
+                                             payload,
+                                             payload_len,
+                                             &est_timeout,
+                                             &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -581,11 +581,11 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint32_t est_timeout = 0;
         bool sent_flood = false;
         if (!backend->sendPeerRequestType(pubkey,
-                                       kPubKeySize,
-                                       0x01,
-                                       &tag,
-                                       &est_timeout,
-                                       &sent_flood))
+                                          kPubKeySize,
+                                          0x01,
+                                          &tag,
+                                          &est_timeout,
+                                          &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -996,13 +996,13 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint32_t est_timeout = 0;
         bool sent_flood = false;
         if (!backend->sendPeerRequestPayload(pubkey,
-                                          kPubKeySize,
-                                          req_data,
-                                          sizeof(req_data),
-                                          true,
-                                          &tag,
-                                          &est_timeout,
-                                          &sent_flood))
+                                             kPubKeySize,
+                                             req_data,
+                                             sizeof(req_data),
+                                             true,
+                                             &tag,
+                                             &est_timeout,
+                                             &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1083,13 +1083,13 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint32_t est_timeout = 0;
         bool sent_flood = false;
         if (!backend->sendPeerRequestPayload(pubkey,
-                                          kPubKeySize,
-                                          payload,
-                                          payload_len,
-                                          false,
-                                          &tag,
-                                          &est_timeout,
-                                          &sent_flood))
+                                             kPubKeySize,
+                                             payload,
+                                             payload_len,
+                                             false,
+                                             &tag,
+                                             &est_timeout,
+                                             &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1790,4 +1790,3 @@ bool MeshCorePhoneCore::buildContactFromNode(const chat::contacts::NodeEntry& en
 }
 
 } // namespace ble
-

@@ -15,7 +15,7 @@ namespace contacts
 {
 struct NodeEntry;
 }
-}
+} // namespace chat
 
 namespace ble
 {

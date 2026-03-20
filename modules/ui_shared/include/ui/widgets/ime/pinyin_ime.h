@@ -17,7 +17,10 @@ class PinyinIme
 {
   public:
 #if defined(GAT562_NO_PINYIN_IME) && GAT562_NO_PINYIN_IME
-    void setEnabled(bool enabled) { enabled_ = enabled; }
+    void setEnabled(bool enabled)
+    {
+        enabled_ = enabled;
+    }
     bool isEnabled() const { return false; }
 
     void reset()

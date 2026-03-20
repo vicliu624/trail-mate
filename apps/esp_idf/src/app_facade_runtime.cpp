@@ -1,8 +1,10 @@
 #include "apps/esp_idf/app_facade_runtime.h"
+#include "apps/esp_idf/meshtastic_radio_adapter.h"
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "app/app_facades.h"
+#include "boards/tab5/tab5_board.h"
 #include "chat/domain/chat_model.h"
 #include "chat/infra/contact_store_core.h"
 #include "chat/infra/mesh_adapter_router_core.h"
@@ -923,7 +925,12 @@ class MinimalAppFacade final : public app::IAppFacade
         chat_model_ = std::make_unique<chat::ChatModel>();
         chat_store_ = std::make_unique<chat::RamStore>();
         mesh_router_ = std::make_unique<chat::MeshAdapterRouterCore>();
-        installLoopbackBackend(config_.mesh_protocol);
+        installMeshBackend(config_.mesh_protocol);
+        if (mesh_router_)
+        {
+            self_node_id_ = mesh_router_->getNodeId();
+        }
+        team_pairing_->setIdentity(self_node_id_, config_.short_name);
         chat_service_ = std::make_unique<chat::ChatService>(*chat_model_, *mesh_router_, *chat_store_, config_.mesh_protocol);
 
         team_runtime_ = std::make_unique<MinimalTeamRuntime>();
@@ -947,6 +954,11 @@ class MinimalAppFacade final : public app::IAppFacade
         if (!initialized_)
         {
             return;
+        }
+
+        if (mesh_router_)
+        {
+            mesh_router_->processSendQueue();
         }
 
         if (loopback_adapter_ && chat_service_)
@@ -1044,7 +1056,15 @@ class MinimalAppFacade final : public app::IAppFacade
         {
             chat_service_->setActiveProtocol(protocol);
         }
-        installLoopbackBackend(protocol);
+        installMeshBackend(protocol);
+        if (mesh_router_)
+        {
+            self_node_id_ = mesh_router_->getNodeId();
+        }
+        if (team_pairing_)
+        {
+            team_pairing_->setIdentity(self_node_id_, config_.short_name);
+        }
         applyMeshConfig();
         return true;
     }
@@ -1104,7 +1124,18 @@ class MinimalAppFacade final : public app::IAppFacade
         (void)active;
     }
 
-    void broadcastNodeInfo() override {}
+    void broadcastNodeInfo() override
+    {
+        if (!mesh_router_)
+        {
+            return;
+        }
+
+        if (meshtastic_adapter_)
+        {
+            (void)meshtastic_adapter_->broadcastNodeInfo();
+        }
+    }
 
     void clearNodeDb() override
     {
@@ -1146,6 +1177,11 @@ class MinimalAppFacade final : public app::IAppFacade
         ble_enabled_ = enabled;
     }
 
+    void restartDevice() override
+    {
+        esp_restart();
+    }
+
     chat::ui::IChatUiRuntime* getChatUiRuntime() override
     {
         return chat_ui_runtime_;
@@ -1158,12 +1194,12 @@ class MinimalAppFacade final : public app::IAppFacade
 
     BoardBase* getBoard() override
     {
-        return nullptr;
+        return &::boards::tab5::Tab5Board::instance();
     }
 
     const BoardBase* getBoard() const override
     {
-        return nullptr;
+        return &::boards::tab5::Tab5Board::instance();
     }
 
     void updateCoreServices() override
@@ -1187,6 +1223,16 @@ class MinimalAppFacade final : public app::IAppFacade
 
             switch (event->type)
             {
+            case sys::EventType::ChatSendResult:
+            {
+                auto* result_event = static_cast<sys::ChatSendResultEvent*>(event);
+                if (chat_service_)
+                {
+                    chat_service_->handleSendResult(result_event->msg_id, result_event->success);
+                }
+                delete event;
+                continue;
+            }
             case sys::EventType::NodeInfoUpdate:
             {
                 auto* node_event = static_cast<sys::NodeInfoUpdateEvent*>(event);
@@ -1388,16 +1434,35 @@ class MinimalAppFacade final : public app::IAppFacade
     void configureIdentity(const RuntimeConfig& runtime_config)
     {
         const char* target_name = runtime_config.target_name ? runtime_config.target_name : "IDF";
-        std::snprintf(config_.node_name, sizeof(config_.node_name), "Trail Mate %s", target_name);
-        makeShortName(target_name, config_.short_name, sizeof(config_.short_name));
+        std::snprintf(config_.node_name, sizeof(config_.node_name), "%s",
+                      ::boards::tab5::Tab5Board::defaultLongName());
+        std::snprintf(config_.short_name, sizeof(config_.short_name), "%s",
+                      ::boards::tab5::Tab5Board::defaultShortName());
+        if (target_name && target_name[0] != '\0' &&
+            std::strcmp(target_name, "tab5") != 0 &&
+            std::strcmp(target_name, "TAB5") != 0)
+        {
+            makeShortName(target_name, config_.short_name, sizeof(config_.short_name));
+        }
         config_.mesh_protocol = chat::MeshProtocol::Meshtastic;
         config_.chat_channel = 0;
     }
 
-    void installLoopbackBackend(chat::MeshProtocol protocol)
+    void installMeshBackend(chat::MeshProtocol protocol)
     {
         if (!mesh_router_)
         {
+            return;
+        }
+
+        loopback_adapter_ = nullptr;
+        meshtastic_adapter_ = nullptr;
+        if (protocol == chat::MeshProtocol::Meshtastic)
+        {
+            auto backend = std::make_unique<apps::esp_idf::MeshtasticRadioAdapter>(
+                ::boards::tab5::Tab5Board::instance());
+            meshtastic_adapter_ = backend.get();
+            (void)mesh_router_->installBackend(protocol, std::move(backend));
             return;
         }
 
@@ -1553,6 +1618,7 @@ class MinimalAppFacade final : public app::IAppFacade
     std::unique_ptr<chat::RamStore> chat_store_;
     std::unique_ptr<chat::MeshAdapterRouterCore> mesh_router_;
     LoopbackMeshAdapter* loopback_adapter_ = nullptr;
+    apps::esp_idf::MeshtasticRadioAdapter* meshtastic_adapter_ = nullptr;
     std::unique_ptr<chat::ChatService> chat_service_;
 
     std::unique_ptr<MinimalTeamRuntime> team_runtime_;

@@ -1,7 +1,7 @@
 #include "platform/ui/sstv_runtime.h"
 
-#include "platform/esp/boards/t_display_p4_board_profile.h"
-#include "platform/esp/boards/tab5_board_profile.h"
+#include "boards/t_display_p4/board_profile.h"
+#include "boards/tab5/tab5_board.h"
 #include "sstv/sstv_service.h"
 
 namespace
@@ -29,8 +29,8 @@ platform::ui::sstv::State convert_state(::sstv::State state)
 bool board_supports_sstv()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    return platform::esp::boards::tab5::kBoardProfile.has_audio &&
-           platform::esp::boards::tab5::kBoardProfile.has_sdcard;
+    return ::boards::tab5::Tab5Board::hasAudio() &&
+           ::boards::tab5::Tab5Board::hasSdCard();
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     return platform::esp::boards::t_display_p4::kBoardProfile.has_audio &&
            platform::esp::boards::t_display_p4::kBoardProfile.has_sdcard;

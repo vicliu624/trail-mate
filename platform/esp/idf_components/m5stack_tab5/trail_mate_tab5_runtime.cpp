@@ -10,6 +10,7 @@ namespace
 {
 constexpr const char* kTag = "tab5-display-runtime";
 constexpr uint32_t kLvglTimerPeriodMs = 10;
+constexpr int kLvglTaskStackSize = 16384;
 constexpr uint32_t kFrameBufferLines = BSP_LCD_V_RES;
 constexpr bool kUseDoubleBuffer = true;
 constexpr int kStartupBrightnessPercent = 10;
@@ -82,6 +83,7 @@ extern "C" bool trail_mate_tab5_display_runtime_init(void)
 
     lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     lvgl_cfg.timer_period_ms = kLvglTimerPeriodMs;
+    lvgl_cfg.task_stack = kLvglTaskStackSize;
 
     bsp_display_cfg_t cfg = {
         .lvgl_port_cfg = lvgl_cfg,
@@ -126,10 +128,11 @@ extern "C" bool trail_mate_tab5_display_runtime_init(void)
 
     s_ready = true;
     ESP_LOGI(kTag,
-             "Tab5 display runtime ready: buffer_lines=%lu double_buffer=%d timer_period_ms=%lu brightness=%d",
+             "Tab5 display runtime ready: buffer_lines=%lu double_buffer=%d timer_period_ms=%lu task_stack=%d brightness=%d",
              static_cast<unsigned long>(kFrameBufferLines),
              static_cast<int>(kUseDoubleBuffer),
              static_cast<unsigned long>(kLvglTimerPeriodMs),
+             kLvglTaskStackSize,
              kStartupBrightnessPercent);
     return true;
 }

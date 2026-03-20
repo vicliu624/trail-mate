@@ -67,26 +67,26 @@ Primary board definition files:
 - [boards/lilygo-t-lora-pager.json](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/lilygo-t-lora-pager.json)
 - [pins_arduino.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/pins_arduino.h)
 - [tlora_pager.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/envs/tlora_pager.ini)
-- [TLoRaPagerBoard.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/platform/esp/boards/src/board/TLoRaPagerBoard.cpp)
-- [TLoRaPagerBoard.h](/C:/Users/VicLi/Documents/Projects/trail-mate/platform/esp/boards/include/board/TLoRaPagerBoard.h)
+- [tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp)
+- [tlora_pager_board.h](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/include/boards/tlora_pager/tlora_pager_board.h)
 
 Rules:
 
 - pin truth belongs in `variants/lilygo_tlora_pager/pins_arduino.h`
-- board bring-up behavior belongs in `platform/esp/boards/src/board/TLoRaPagerBoard.cpp`
+- board bring-up behavior belongs in `boards/tlora_pager/src/tlora_pager_board.cpp`
 - environment-specific radio and display choices belong in `variants/lilygo_tlora_pager/envs/tlora_pager.ini`
 - device docs should reflect what this repository actually builds, not just vendor marketing material
 
 ## Important Boundary
 
 This repository uses the LilyGo Pager as an ESP board with its own runtime
-implementation in [TLoRaPagerBoard.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/platform/esp/boards/src/board/TLoRaPagerBoard.cpp).
+implementation in [tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp).
 
 That means the most authoritative sources for day-to-day maintenance are:
 
 - `pins_arduino.h` for GPIO ownership
 - `tlora_pager.ini` for enabled features per environment
-- `TLoRaPagerBoard.cpp` for initialization order and power sequencing
+- `tlora_pager_board.cpp` for initialization order and power sequencing
 
 If external vendor docs disagree with runtime behavior here, prefer the checked-in
 board runtime unless real hardware verification proves otherwise.
@@ -255,7 +255,7 @@ These flags are part of the board contract and are relied on by the ESP platform
 ## Runtime Bring-Up Notes
 
 The board runtime in
-[TLoRaPagerBoard.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/platform/esp/boards/src/board/TLoRaPagerBoard.cpp)
+[tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp)
 currently initializes or manages:
 
 - battery gauge `BQ27220`
@@ -301,5 +301,5 @@ When changing this board next time:
 
 1. Update [pins_arduino.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/pins_arduino.h) first for GPIO truth.
 2. Update [tlora_pager.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/envs/tlora_pager.ini) if the radio or build flags change.
-3. Update [TLoRaPagerBoard.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/platform/esp/boards/src/board/TLoRaPagerBoard.cpp) for init order, power gating or runtime behavior.
+3. Update [tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp) for init order, power gating or runtime behavior.
 4. Keep this document aligned with the checked-in implementation, not with stale vendor copy.

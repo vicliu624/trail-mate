@@ -1,8 +1,8 @@
 #include "../../include/ble/ble_manager.h"
 
-#include "app/app_config.h"
 #include "../../include/ble/meshcore_ble.h"
 #include "../../include/ble/meshtastic_ble.h"
+#include "app/app_config.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/runtime/self_identity_policy.h"
 
@@ -77,6 +77,16 @@ void BleManager::applyProtocol(chat::MeshProtocol protocol)
     {
         restartService(protocol);
     }
+}
+
+bool BleManager::getPairingStatus(BlePairingStatus* out) const
+{
+    if (!out)
+    {
+        return false;
+    }
+    *out = BlePairingStatus{};
+    return service_ ? service_->getPairingStatus(out) : false;
 }
 
 void BleManager::restartService(chat::MeshProtocol protocol)

@@ -133,7 +133,6 @@ inline constexpr BoardProfile kBoardProfile{
     248832,
     0xFF000,
     {"GAT562", "GAT562", "GAT562"},
-    {}
-};
+    {}};
 
 } // namespace boards::gat562_mesh_evb_pro

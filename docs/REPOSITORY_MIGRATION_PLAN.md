@@ -1200,7 +1200,7 @@ The repository now has evidence of a second real ESP-IDF board target outside Ta
 - `.tmp/T-Display-P4` is a pure ESP-IDF device reference tree for an `esp32p4` target
 - this means `apps/esp_idf_tab5` should be treated as a transitional shell, not the final IDF app-layer shape
 - the intended end-state is `apps/esp_idf/` as the shared IDF shell root, with target descriptors under `apps/esp_idf/targets/tab5` and `apps/esp_idf/targets/t_display_p4`
-- board-specific runtime details should continue to converge downward into `platform/esp/boards/tab5` and the planned `platform/esp/boards/t_display_p4`
+- board-specific runtime details should continue to converge downward into `boards/tab5` and `boards/t_display_p4`
 
 This reframes the IDF plan from "one board-specific shell" to "one shared IDF shell with multiple board targets".
 
@@ -1219,7 +1219,7 @@ This is the first concrete code move from a board-specific IDF shell toward a sh
 - the top-level IDF build now selects its active target shell through `TRAIL_MATE_IDF_TARGET` instead of hardwiring `apps/esp_idf_tab5`
 - introduced `apps/esp_idf_t_display_p4` as a second transitional IDF target shell so the repository no longer assumes Tab5 is the only IDF board
 - changed `platform/esp/boards/src/board_runtime.cpp` to select board runtime by explicit board macro (`TRAIL_MATE_ESP_BOARD_*`) instead of by `CONFIG_IDF_TARGET_ESP32P4`, which would incorrectly collapse multiple ESP32-P4 boards onto the same runtime implementation
-- added initial T-Display-P4 target metadata and board-profile placeholders under `apps/esp_idf/targets/t_display_p4` and `platform/esp/boards/t_display_p4`
+- added initial T-Display-P4 target metadata and board-profile placeholders under `apps/esp_idf/targets/t_display_p4`, now converged into `boards/t_display_p4`
 
 This makes the IDF side structurally ready for multiple boards that share the same SoC family.
 

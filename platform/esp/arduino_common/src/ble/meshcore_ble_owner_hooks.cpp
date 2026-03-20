@@ -513,5 +513,4 @@ void MeshCoreBleService::onFactoryReset()
     }
 }
 
-
 } // namespace ble

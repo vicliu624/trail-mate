@@ -1,8 +1,8 @@
 #include "platform/nrf52/arduino_common/chat/infra/blob_file_store.h"
 
 #include "chat/infra/contact_store_core.h"
-#include "chat/infra/node_store_core.h"
 #include "chat/infra/node_store_blob_format.h"
+#include "chat/infra/node_store_core.h"
 
 #include <InternalFileSystem.h>
 

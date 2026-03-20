@@ -70,6 +70,7 @@ set(trail_mate_idf_requires
     esp_wifi
     espressif__esp_codec_dev
     espressif__esp_lvgl_port
+    mbedtls
 )
 
 set(trail_mate_idf_ui_shared_sources
@@ -193,6 +194,7 @@ set(trail_mate_idf_ui_shared_sources
 
 set(trail_mate_idf_include_dirs
     "include"
+    "${CMAKE_SOURCE_DIR}/boards/tab5/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_shared/include"
     "${CMAKE_SOURCE_DIR}/modules/core_sys/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/include"
@@ -209,17 +211,51 @@ set(trail_mate_idf_include_dirs
 )
 
 if(TRAIL_MATE_IDF_TARGET STREQUAL "tab5")
+    set(trail_mate_dashboard_sources
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/menu_dashboard.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_state.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_style.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_mesh_widget.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_gps_widget.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_recent_widget.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_compass_widget.cpp
+    )
     list(APPEND trail_mate_idf_include_dirs
         "${CMAKE_SOURCE_DIR}/platform/esp/idf_components/m5stack_tab5/include"
+        "${CMAKE_SOURCE_DIR}/platform/esp/idf_components/sensor_bmi270/include"
     )
     list(APPEND trail_mate_idf_requires
         m5stack_tab5
+        sensor_bmi270
+    )
+    list(APPEND trail_mate_idf_external_sources
+        ${CMAKE_SOURCE_DIR}/boards/tab5/src/tab5_board.cpp
+        ${CMAKE_SOURCE_DIR}/boards/tab5/src/rtc_runtime.cpp
+        ${CMAKE_SOURCE_DIR}/boards/tab5/src/heading_runtime.cpp
+        ${CMAKE_SOURCE_DIR}/boards/tab5/src/codec_compat.cpp
+    )
+    list(APPEND trail_mate_idf_ui_shared_sources
+        ${trail_mate_dashboard_sources}
+    )
+elseif(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4")
+    set(trail_mate_dashboard_sources
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/menu_dashboard.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_state.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_style.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_mesh_widget.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_gps_widget.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_recent_widget.cpp
+        ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/dashboard/dashboard_compass_widget.cpp
+    )
+    list(APPEND trail_mate_idf_ui_shared_sources
+        ${trail_mate_dashboard_sources}
     )
 endif()
 
 list(FILTER trail_mate_idf_external_sources EXCLUDE REGEX ".*/modules/core_chat/src/infra/meshcore/meshcore_protocol_helpers\.cpp$")
 list(FILTER trail_mate_idf_external_sources EXCLUDE REGEX ".*/modules/core_chat/src/infra/meshtastic/mt_packet_wire\.cpp$")
 list(FILTER trail_mate_idf_external_sources EXCLUDE REGEX ".*/modules/core_chat/src/infra/meshtastic/mt_pki_crypto\.cpp$")
+list(FILTER trail_mate_idf_external_sources EXCLUDE REGEX ".*/modules/core_chat/src/ble/.*\.cpp$")
 list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/idf_component_anchor\.cpp$")
 list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/gps_tracker_overlay\.cpp$")
 
@@ -244,13 +280,3 @@ elseif(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4")
 else()
     message(FATAL_ERROR "Unsupported TRAIL_MATE_IDF_TARGET='${TRAIL_MATE_IDF_TARGET}' inside apps/esp_idf/CMakeLists.txt")
 endif()
-
-
-
-
-
-
-
-
-
-

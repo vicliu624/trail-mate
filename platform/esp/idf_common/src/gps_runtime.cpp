@@ -11,17 +11,13 @@
 #include <limits>
 #include <mutex>
 
+#include "boards/t_display_p4/board_profile.h"
+#include "boards/tab5/rtc_runtime.h"
+#include "boards/tab5/tab5_board.h"
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "platform/esp/boards/t_display_p4_board_profile.h"
-#include "platform/esp/boards/tab5_board_profile.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
-#include "platform/esp/idf_common/tab5_rtc_runtime.h"
-
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-extern "C" void bsp_set_ext_5v_en(bool en);
-#endif
 
 namespace platform::esp::idf_common::gps_runtime
 {
@@ -107,9 +103,8 @@ struct GpsUartPins
 GpsUartPins gps_uart_pins()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    return {platform::esp::boards::tab5::kBoardProfile.gps_uart.port,
-            platform::esp::boards::tab5::kBoardProfile.gps_uart.tx,
-            platform::esp::boards::tab5::kBoardProfile.gps_uart.rx};
+    const auto& uart = ::boards::tab5::Tab5Board::gpsUart();
+    return {uart.port, uart.tx, uart.rx};
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     return {platform::esp::boards::t_display_p4::kBoardProfile.gps_uart.port,
             platform::esp::boards::t_display_p4::kBoardProfile.gps_uart.tx,
@@ -228,7 +223,7 @@ void clear_payload_locked()
     s_runtime.used_sat_count = 0;
     s_runtime.last_time_sync_attempt_ms = 0;
     s_runtime.last_time_sync_epoch = 0;
-    s_runtime.time_sync_committed = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
+    s_runtime.time_sync_committed = ::boards::tab5::rtc_runtime::is_valid_epoch(std::time(nullptr));
     for (auto& collector : s_runtime.gsv) collector = GsvCollector{};
 }
 
@@ -288,12 +283,12 @@ void maybe_sync_time_from_rmc_locked(const std::array<char*, kMaxFields>& fields
         return;
     }
 
-    if (!platform::esp::idf_common::tab5_rtc_runtime::validate_datetime_utc(year, month, day, hour, minute, second))
+    if (!::boards::tab5::rtc_runtime::validate_datetime_utc(year, month, day, hour, minute, second))
     {
         return;
     }
 
-    const std::time_t gnss_epoch = platform::esp::idf_common::tab5_rtc_runtime::datetime_to_epoch_utc(
+    const std::time_t gnss_epoch = ::boards::tab5::rtc_runtime::datetime_to_epoch_utc(
         year, month, day, hour, minute, second);
     if (gnss_epoch < 0)
     {
@@ -301,7 +296,7 @@ void maybe_sync_time_from_rmc_locked(const std::array<char*, kMaxFields>& fields
     }
 
     const std::time_t now_epoch = std::time(nullptr);
-    const bool system_valid = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(now_epoch);
+    const bool system_valid = ::boards::tab5::rtc_runtime::is_valid_epoch(now_epoch);
     const long long delta_seconds = system_valid
                                         ? std::llabs(static_cast<long long>(now_epoch) - static_cast<long long>(gnss_epoch))
                                         : std::numeric_limits<long long>::max();
@@ -318,7 +313,7 @@ void maybe_sync_time_from_rmc_locked(const std::array<char*, kMaxFields>& fields
     }
 
     s_runtime.last_time_sync_attempt_ms = ts;
-    if (platform::esp::idf_common::tab5_rtc_runtime::apply_system_time_and_sync_rtc(gnss_epoch, "gnss_rmc"))
+    if (::boards::tab5::rtc_runtime::apply_system_time_and_sync_rtc(gnss_epoch, "gnss_rmc"))
     {
         s_runtime.last_time_sync_epoch = gnss_epoch;
         s_runtime.time_sync_committed = true;
@@ -504,13 +499,15 @@ void append_bytes_and_process(const uint8_t* buffer, int length, char* line_buff
 void ensure_ext5v_enabled()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    bsp_set_ext_5v_en(true);
-    ESP_LOGI(kTag, "Tab5 M5-Bus Ext5V enabled for GNSS runtime");
+    (void)::boards::tab5::Tab5Board::instance().acquireExt5vRail("gps_runtime");
 #endif
 }
 
 void configure_uart_hardware()
 {
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+    (void)::boards::tab5::Tab5Board::instance().configureGpsUart();
+#else
     const auto gps_uart = gps_uart_pins();
     uart_config_t config{};
     config.baud_rate = 38400;
@@ -524,15 +521,21 @@ void configure_uart_hardware()
     ESP_ERROR_CHECK(uart_set_pin(static_cast<uart_port_t>(gps_uart.port), gps_uart.tx, gps_uart.rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     ESP_ERROR_CHECK(uart_driver_install(static_cast<uart_port_t>(gps_uart.port), 4096, 0, 0, nullptr, 0));
     ESP_LOGI(kTag, "GNSS UART configured: port=%d tx=%d rx=%d baud=%d", gps_uart.port, gps_uart.tx, gps_uart.rx, config.baud_rate);
+#endif
 }
 
 void teardown_uart_hardware()
 {
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+    ::boards::tab5::Tab5Board::instance().teardownGpsUart();
+    ::boards::tab5::Tab5Board::instance().releaseExt5vRail("gps_runtime");
+#else
     const auto gps_uart = gps_uart_pins();
     if (gps_uart.port >= 0)
     {
         uart_driver_delete(static_cast<uart_port_t>(gps_uart.port));
     }
+#endif
 }
 
 void worker_task(void*)
@@ -556,7 +559,12 @@ void worker_task(void*)
     while (true)
     {
         const auto gps_uart = gps_uart_pins();
-        int read_len = uart_read_bytes(static_cast<uart_port_t>(gps_uart.port), rx_buffer, sizeof(rx_buffer), pdMS_TO_TICKS(200));
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+        const auto port = ::boards::tab5::Tab5Board::instance().gpsUartPort();
+#else
+        const auto port = static_cast<uart_port_t>(gps_uart.port);
+#endif
+        int read_len = uart_read_bytes(port, rx_buffer, sizeof(rx_buffer), pdMS_TO_TICKS(200));
         if (read_len > 0) append_bytes_and_process(rx_buffer, read_len, line_buffer, &line_length);
 
         bool should_exit = false;
@@ -602,7 +610,7 @@ void worker_task(void*)
         s_runtime.last_fix_ms = 0;
         s_runtime.last_time_sync_attempt_ms = 0;
         s_runtime.last_time_sync_epoch = 0;
-        s_runtime.time_sync_committed = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
+        s_runtime.time_sync_committed = ::boards::tab5::rtc_runtime::is_valid_epoch(std::time(nullptr));
         s_runtime.first_sentence_logged = false;
         s_runtime.last_no_data_log_ms = 0;
     }
@@ -677,7 +685,12 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     std::lock_guard<std::mutex> lock(s_mutex);
     s_runtime.gnss_mode = mode;
     s_runtime.gnss_sat_mask = sat_mask;
-    s_runtime.enabled = gps_available() && mode != 0;
+    // Shared settings use:
+    //   0 = High Accuracy
+    //   1 = Power Save
+    //   2 = Fix Only
+    // So all current values are active modes, not "off".
+    s_runtime.enabled = gps_available() && sat_mask != 0;
     if (!s_runtime.enabled)
     {
         s_runtime.stop_requested = true;
@@ -687,7 +700,7 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     }
     s_runtime.probe_requested = false;
     s_runtime.probe_deadline_ms = 0;
-    s_runtime.time_sync_committed = platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
+    s_runtime.time_sync_committed = ::boards::tab5::rtc_runtime::is_valid_epoch(std::time(nullptr));
     ensure_worker_locked();
     ESP_LOGI(kTag, "GNSS runtime enabled: interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u", static_cast<unsigned long>(s_runtime.collection_interval_ms), s_runtime.gnss_mode, s_runtime.gnss_sat_mask, s_runtime.power_strategy);
 }

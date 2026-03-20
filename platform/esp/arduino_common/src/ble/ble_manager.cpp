@@ -56,6 +56,16 @@ void BleManager::applyProtocol(chat::MeshProtocol protocol)
     }
 }
 
+bool BleManager::getPairingStatus(BlePairingStatus* out) const
+{
+    if (!out)
+    {
+        return false;
+    }
+    *out = BlePairingStatus{};
+    return service_ ? service_->getPairingStatus(out) : false;
+}
+
 void BleManager::setEnabled(bool enabled)
 {
     if (enabled)

@@ -1,7 +1,7 @@
 #include "boards/gat562_mesh_evb_pro/sx1262_radio_packet_io.h"
 
-#include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "boards/gat562_mesh_evb_pro/board_profile.h"
+#include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_region.h"
 
@@ -326,7 +326,7 @@ bool Sx1262RadioPacketIo::applyRadioConfig(const AppliedRadioConfig& config)
 }
 
 Sx1262RadioPacketIo::AppliedRadioConfig Sx1262RadioPacketIo::deriveRadioConfig(::chat::MeshProtocol protocol,
-                                                                                const ::chat::MeshConfig& config) const
+                                                                               const ::chat::MeshConfig& config) const
 {
     return protocol == ::chat::MeshProtocol::MeshCore
                ? deriveMeshCoreRadioConfig(config)

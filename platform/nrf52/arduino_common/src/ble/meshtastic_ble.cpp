@@ -6,6 +6,7 @@
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
 
 #include <Arduino.h>
+#include <cstdio>
 #include <cstring>
 
 namespace ble
@@ -13,6 +14,7 @@ namespace ble
 namespace
 {
 constexpr const char* kDefaultMqttRoot = "msh";
+constexpr uint32_t kDefaultBleFixedPin = 654321;
 
 platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(app::IAppBleFacade& ctx)
 {
@@ -56,23 +58,68 @@ std::string channelDisplayName(const app::IAppBleFacade& ctx, uint8_t idx)
                : std::string("Custom");
 }
 
+uint32_t parsePasskeyDigits(const uint8_t passkey[6])
+{
+    if (!passkey)
+    {
+        return 0;
+    }
+
+    char digits[7] = {};
+    for (size_t i = 0; i < 6; ++i)
+    {
+        const uint8_t ch = passkey[i];
+        if (ch < '0' || ch > '9')
+        {
+            return 0;
+        }
+        digits[i] = static_cast<char>(ch);
+    }
+    return static_cast<uint32_t>(std::strtoul(digits, nullptr, 10));
+}
+
 MeshtasticBleService* s_active_service = nullptr;
 
-void onBleConnect(uint16_t)
+void onBleConnect(uint16_t conn_handle)
 {
     if (s_active_service)
     {
-        s_active_service->handleConnectEvent();
+        s_active_service->handleConnectEvent(conn_handle);
     }
 }
 
-void onBleDisconnect(uint16_t, uint8_t)
+void onBleDisconnect(uint16_t conn_handle, uint8_t)
 {
     if (!s_active_service)
     {
         return;
     }
-    s_active_service->handleDisconnectEvent();
+    s_active_service->handleDisconnectEvent(conn_handle);
+}
+
+bool onPairPasskeyDisplay(uint16_t conn_handle, uint8_t const passkey[6], bool match_request)
+{
+    if (s_active_service)
+    {
+        s_active_service->handlePairPasskeyDisplay(conn_handle, passkey, match_request);
+    }
+    return true;
+}
+
+void onPairComplete(uint16_t conn_handle, uint8_t auth_status)
+{
+    if (s_active_service)
+    {
+        s_active_service->handlePairComplete(conn_handle, auth_status);
+    }
+}
+
+void onSecured(uint16_t conn_handle)
+{
+    if (s_active_service)
+    {
+        s_active_service->handleSecured(conn_handle);
+    }
 }
 
 void prepareBluefruit(const std::string& device_name)
@@ -166,7 +213,7 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
 {
     ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
     ble_config_.enabled = ctx_.isBleEnabled();
-    ble_config_.mode = meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN;
+    ble_config_.mode = meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN;
     ble_config_.fixed_pin = 0;
 
     std::memset(&module_config_, 0, sizeof(module_config_));
@@ -186,31 +233,41 @@ void MeshtasticBleService::start()
 {
     s_active_service = this;
     prepareBluefruit(device_name_);
+    applyBleSecurity();
 
     service_.begin();
 
     to_radio_.setProperties(CHR_PROPS_WRITE);
-    to_radio_.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+    to_radio_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
+                                                                                                     : SECMODE_ENC_WITH_MITM,
+                            ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
+                                                                                                     : SECMODE_ENC_WITH_MITM);
     to_radio_.setFixedLen(0);
     to_radio_.setMaxLen(meshtastic_ToRadio_size);
     to_radio_.setWriteCallback(onToRadioWrite, false);
     to_radio_.begin();
 
     from_radio_.setProperties(CHR_PROPS_READ);
-    from_radio_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+    from_radio_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
+                                                                                                       : SECMODE_ENC_WITH_MITM,
+                              SECMODE_NO_ACCESS);
     from_radio_.setFixedLen(0);
     from_radio_.setMaxLen(meshtastic_FromRadio_size);
     from_radio_.setReadAuthorizeCallback(onFromRadioAuthorize, false);
     from_radio_.begin();
 
     from_num_.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_READ);
-    from_num_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+    from_num_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
+                                                                                                     : SECMODE_ENC_WITH_MITM,
+                            SECMODE_NO_ACCESS);
     from_num_.setFixedLen(4);
     from_num_.write32(0);
     from_num_.begin();
 
     log_radio_.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_READ);
-    log_radio_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+    log_radio_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
+                                                                                                      : SECMODE_ENC_WITH_MITM,
+                             SECMODE_NO_ACCESS);
     log_radio_.setFixedLen(0);
     log_radio_.setMaxLen(96);
     log_radio_.begin();
@@ -218,6 +275,7 @@ void MeshtasticBleService::start()
     ctx_.getChatService().addIncomingTextObserver(this);
     startAdvertising(service_);
     active_ = true;
+    pending_passkey_.store(0);
     syncMqttProxySettings();
 }
 
@@ -232,6 +290,7 @@ void MeshtasticBleService::stop()
     }
     active_ = false;
     connected_ = false;
+    pending_passkey_.store(0);
     if (s_active_service == this)
     {
         s_active_service = nullptr;
@@ -276,18 +335,62 @@ bool MeshtasticBleService::popToPhone(MeshtasticBleFrame* out)
     return phone_session_ ? phone_session_->popToPhone(out) : false;
 }
 
-void MeshtasticBleService::handleConnectEvent()
+void MeshtasticBleService::handleConnectEvent(uint16_t conn_handle)
 {
     connected_ = true;
+    requestPairingIfNeeded(conn_handle);
 }
 
-void MeshtasticBleService::handleDisconnectEvent()
+void MeshtasticBleService::handleDisconnectEvent(uint16_t conn_handle)
 {
     connected_ = false;
     if (phone_session_)
     {
         phone_session_->close();
     }
+    pending_passkey_.store(0);
+    Serial2.printf("[BLE][nrf52][mt] disconnected conn=%u\n", static_cast<unsigned>(conn_handle));
+}
+
+void MeshtasticBleService::handlePairPasskeyDisplay(uint16_t conn_handle, const uint8_t passkey[6], bool match_request)
+{
+    const uint32_t parsed = parsePasskeyDigits(passkey);
+    pending_passkey_.store(parsed);
+    Serial2.printf("[BLE][nrf52][mt] pairing passkey=%06lu match=%u conn=%u\n",
+                   static_cast<unsigned long>(parsed),
+                   match_request ? 1U : 0U,
+                   static_cast<unsigned>(conn_handle));
+}
+
+void MeshtasticBleService::handlePairComplete(uint16_t conn_handle, uint8_t auth_status)
+{
+    Serial2.printf("[BLE][nrf52][mt] pair complete status=%u conn=%u\n",
+                   static_cast<unsigned>(auth_status),
+                   static_cast<unsigned>(conn_handle));
+    pending_passkey_.store(0);
+}
+
+void MeshtasticBleService::handleSecured(uint16_t conn_handle)
+{
+    Serial2.printf("[BLE][nrf52][mt] secured conn=%u\n", static_cast<unsigned>(conn_handle));
+    pending_passkey_.store(0);
+}
+
+bool MeshtasticBleService::getPairingStatus(BlePairingStatus* out) const
+{
+    if (!out)
+    {
+        return false;
+    }
+
+    *out = BlePairingStatus{};
+    out->available = ble_config_.enabled;
+    out->requires_passkey = ble_config_.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN;
+    out->is_fixed_pin = ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN;
+    out->is_connected = isBleConnected();
+    out->passkey = effectivePasskey();
+    out->is_pairing_active = out->requires_passkey && out->passkey != 0;
+    return true;
 }
 
 bool MeshtasticBleService::isBleConnected() const
@@ -322,7 +425,7 @@ bool MeshtasticBleService::loadDeviceConnectionStatus(meshtastic_DeviceConnectio
     meshtastic_DeviceConnectionStatus status = meshtastic_DeviceConnectionStatus_init_zero;
     *out = status;
     out->has_bluetooth = true;
-    out->bluetooth.pin = 0;
+    out->bluetooth.pin = effectivePasskey();
     out->bluetooth.rssi = 0;
     out->bluetooth.is_connected = isBleConnected();
     return true;
@@ -378,6 +481,93 @@ void MeshtasticBleService::syncMqttProxySettings()
     settings.primary_channel_id = channelDisplayName(ctx_, 0);
     settings.secondary_channel_id = channelDisplayName(ctx_, 1);
     mt->setMqttProxySettings(settings);
+}
+
+void MeshtasticBleService::applyBleSecurity()
+{
+    pending_passkey_.store(0);
+
+    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
+        Bluefruit.Security.setMITM(false);
+        Bluefruit.Security.setIOCaps(false, false, false);
+        Bluefruit.Security.setPairPasskeyCallback(nullptr);
+        Bluefruit.Security.setPairCompleteCallback(nullptr);
+        Bluefruit.Security.setSecuredCallback(nullptr);
+        Serial2.printf("[BLE][nrf52][mt] security mode=no_pin\n");
+        return;
+    }
+
+    Bluefruit.Security.setIOCaps(true, false, false);
+    Bluefruit.Security.setMITM(true);
+    Bluefruit.Security.setPairPasskeyCallback(onPairPasskeyDisplay);
+    Bluefruit.Security.setPairCompleteCallback(onPairComplete);
+    Bluefruit.Security.setSecuredCallback(onSecured);
+
+    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN)
+    {
+        const uint32_t fixed_pin = ble_config_.fixed_pin != 0 ? ble_config_.fixed_pin : kDefaultBleFixedPin;
+        ble_config_.fixed_pin = fixed_pin;
+        char digits[7] = {};
+        std::snprintf(digits, sizeof(digits), "%06lu", static_cast<unsigned long>(fixed_pin));
+        (void)Bluefruit.Security.setPIN(digits);
+        Serial2.printf("[BLE][nrf52][mt] security mode=fixed pin=%s\n", digits);
+        return;
+    }
+
+    Serial2.printf("[BLE][nrf52][mt] security mode=random_pin\n");
+}
+
+void MeshtasticBleService::requestPairingIfNeeded(uint16_t conn_handle)
+{
+    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
+        return;
+    }
+
+    if (conn_handle == BLE_CONN_HANDLE_INVALID)
+    {
+        for (uint8_t index = 0; index < BLE_MAX_CONNECTION; ++index)
+        {
+            if (!Bluefruit.connected(index))
+            {
+                continue;
+            }
+            BLEConnection* connection = Bluefruit.Connection(index);
+            if (connection)
+            {
+                const bool ok = connection->requestPairing();
+                Serial2.printf("[BLE][nrf52][mt] requestPairing conn=%u ok=%u\n",
+                               static_cast<unsigned>(index),
+                               ok ? 1U : 0U);
+            }
+        }
+        return;
+    }
+
+    BLEConnection* connection = Bluefruit.Connection(conn_handle);
+    if (!connection)
+    {
+        return;
+    }
+    const bool ok = connection->requestPairing();
+    Serial2.printf("[BLE][nrf52][mt] requestPairing conn=%u ok=%u\n",
+                   static_cast<unsigned>(conn_handle),
+                   ok ? 1U : 0U);
+}
+
+uint32_t MeshtasticBleService::effectivePasskey() const
+{
+    const uint32_t pending = pending_passkey_.load();
+    if (pending != 0)
+    {
+        return pending;
+    }
+    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN)
+    {
+        return ble_config_.fixed_pin;
+    }
+    return 0;
 }
 
 } // namespace ble

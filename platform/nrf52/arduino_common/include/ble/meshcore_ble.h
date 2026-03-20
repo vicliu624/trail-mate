@@ -2,8 +2,8 @@
 
 #include "app/app_facades.h"
 #include "ble_manager.h"
-#include "chat/domain/chat_types.h"
 #include "chat/ble/meshcore_phone_core.h"
+#include "chat/domain/chat_types.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
 

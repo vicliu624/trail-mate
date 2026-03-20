@@ -19,10 +19,10 @@ void run()
     debug_console::println("[gat562] startup begin");
     auto& board = ::boards::gat562_mesh_evb_pro::Gat562Board::instance();
     (void)board.begin();
-    sys::set_millis_provider([]() -> uint32_t { return millis(); });
-    sys::set_epoch_seconds_provider([]() -> uint32_t {
-        return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().currentEpochSeconds();
-    });
+    sys::set_millis_provider([]() -> uint32_t
+                             { return millis(); });
+    sys::set_epoch_seconds_provider([]() -> uint32_t
+                                    { return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().currentEpochSeconds(); });
     ui_runtime::initialize();
     ui_runtime::appendBootLog("startup begin");
     ui_runtime::appendBootLog("board/input ok");

@@ -10,6 +10,14 @@ namespace ui
 namespace menu_runtime
 {
 
+enum class Scene : uint8_t
+{
+    Menu = 0,
+    App,
+    WatchFace,
+    Sleeping,
+};
+
 struct Hooks
 {
     struct WatchFaceHooks
@@ -29,6 +37,9 @@ struct Hooks
 void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, const Hooks& hooks);
 void showWatchFace();
 void onWakeFromSleep();
+void setMenuActive(bool active);
+void setScene(Scene scene);
+Scene currentScene();
 
 } // namespace menu_runtime
 } // namespace ui

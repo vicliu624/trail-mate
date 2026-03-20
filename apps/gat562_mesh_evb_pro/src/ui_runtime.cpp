@@ -3,11 +3,11 @@
 #include "apps/gat562_mesh_evb_pro/app_facade_runtime.h"
 #include "apps/gat562_mesh_evb_pro/debug_console.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
-#include "ui/fonts/fusion_pixel_8_font.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/time_runtime.h"
 #include "sys/clock.h"
+#include "ui/fonts/fusion_pixel_8_font.h"
 #include "ui/mono_128x64/runtime.h"
 
 #include <Arduino.h>
@@ -47,14 +47,22 @@ ui::mono_128x64::InputAction to_input_action(
 
     switch (event->key)
     {
-    case BoardInputKey::JoystickUp: return ui::mono_128x64::InputAction::Up;
-    case BoardInputKey::JoystickDown: return ui::mono_128x64::InputAction::Down;
-    case BoardInputKey::JoystickLeft: return ui::mono_128x64::InputAction::Left;
-    case BoardInputKey::JoystickRight: return ui::mono_128x64::InputAction::Right;
-    case BoardInputKey::JoystickPress: return ui::mono_128x64::InputAction::Select;
-    case BoardInputKey::PrimaryButton: return ui::mono_128x64::InputAction::Primary;
-    case BoardInputKey::SecondaryButton: return ui::mono_128x64::InputAction::Secondary;
-    default: return ui::mono_128x64::InputAction::None;
+    case BoardInputKey::JoystickUp:
+        return ui::mono_128x64::InputAction::Up;
+    case BoardInputKey::JoystickDown:
+        return ui::mono_128x64::InputAction::Down;
+    case BoardInputKey::JoystickLeft:
+        return ui::mono_128x64::InputAction::Left;
+    case BoardInputKey::JoystickRight:
+        return ui::mono_128x64::InputAction::Right;
+    case BoardInputKey::JoystickPress:
+        return ui::mono_128x64::InputAction::Select;
+    case BoardInputKey::PrimaryButton:
+        return ui::mono_128x64::InputAction::Primary;
+    case BoardInputKey::SecondaryButton:
+        return ui::mono_128x64::InputAction::Secondary;
+    default:
+        return ui::mono_128x64::InputAction::None;
     }
 }
 

@@ -1,6 +1,7 @@
 #include "ui/mono_128x64/runtime.h"
 
 #include "app/app_config.h"
+#include "ble/ble_manager.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_region.h"
@@ -12,9 +13,10 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdarg>
 #include <cstdio>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 
 namespace ui::mono_128x64
 {
@@ -24,58 +26,67 @@ const char* inputActionName(InputAction action)
 {
     switch (action)
     {
-    case InputAction::None: return "None";
-    case InputAction::Up: return "Up";
-    case InputAction::Down: return "Down";
-    case InputAction::Left: return "Left";
-    case InputAction::Right: return "Right";
-    case InputAction::Select: return "Select";
-    case InputAction::Back: return "Back";
-    case InputAction::Primary: return "Primary";
-    case InputAction::Secondary: return "Secondary";
-    default: return "?";
+    case InputAction::None:
+        return "None";
+    case InputAction::Up:
+        return "Up";
+    case InputAction::Down:
+        return "Down";
+    case InputAction::Left:
+        return "Left";
+    case InputAction::Right:
+        return "Right";
+    case InputAction::Select:
+        return "Select";
+    case InputAction::Back:
+        return "Back";
+    case InputAction::Primary:
+        return "Primary";
+    case InputAction::Secondary:
+        return "Secondary";
+    default:
+        return "?";
     }
 }
-
 
 constexpr const char* kMainMenuItems[] = {
     "CHATS",
     "NODES",
-    "NEW MESSAGE",
-    "SETTINGS",
     "GPS",
-    "RADIO",
-    "DEVICE",
-    "ACTIONS",
+    "SETTINGS",
+    "INFO",
 };
 
 constexpr const char* kSettingsMenuItems[] = {
-    "IDENTITY",
-    "RADIO",
+    "LORA",
     "DEVICE",
 };
 
-constexpr const char* kIdentityItems[] = {
-    "USER NAME",
-    "SHORT NAME",
-};
-
-constexpr const char* kRadioItems[] = {
+constexpr const char* kMeshtasticRadioItems[] = {
     "PROTOCOL",
-    "TX POWER",
     "REGION",
-    "PRESET",
+    "TX POWER",
+    "MODEM",
     "CHANNEL",
     "ENCRYPT",
-    "PSK/Name",
+};
+
+constexpr const char* kMeshCoreRadioItems[] = {
+    "PROTOCOL",
+    "REGION",
+    "TX POWER",
+    "PRESET",
+    "SLOT",
+    "ENCRYPT",
+    "NAME",
 };
 
 constexpr const char* kDeviceItems[] = {
     "BLE",
-    "TIME ZONE",
     "GPS",
-    "GPS INTERVAL",
-    "CHAT CHANNEL",
+    "SATS",
+    "GPS INT",
+    "TIME ZONE",
 };
 
 constexpr const char* kActionItems[] = {
@@ -121,20 +132,104 @@ constexpr uint32_t kSleepTimeoutMs = 30000;
 constexpr uint32_t kComposeMultiTapWindowMs = 700;
 constexpr size_t kMessageInfoPageSize = 6;
 constexpr size_t kNodeInfoPageSize = 6;
+constexpr size_t kInfoPageSize = 6;
 constexpr size_t kGnssSummaryPageSize = 6;
 constexpr size_t kGnssSatPageSize = 5;
 constexpr int kTimezoneMin = -12 * 60;
 constexpr int kTimezoneMax = 14 * 60;
 constexpr int kTimezoneStep = 60;
 constexpr const char* kHamTerms[] = {
-    "73", "88", "AGN", "ALFA", "ATT", "BREAK", "BRAVO", "CALL", "CHARLIE", "COPY", "CQ", "CTCSS", "DE",
-    "DELTA", "DIRECT", "DUPLEX", "DX", "ECHO", "ES", "FB", "FM", "FREQ", "FT8", "FT4", "HOTEL", "ID",
-    "INDIA", "INFO", "JA", "JULIETT", "KILO", "LIMA", "LOG", "LSB", "MIKE", "NIL", "NOVEMBER", "OM",
-    "OSCAR", "OUT", "OVER", "PAPA", "PSE", "QRL", "QRM", "QRN", "QRP", "QRQ", "QRS", "QRT", "QRV",
-    "QRZ", "QSB", "QSL", "QSO", "QSP", "QSX", "QSY", "QTC", "QTH", "QTR", "QUEBEC", "RELAY", "REPEATER",
-    "RIG", "ROGER", "ROMEO", "RST", "RX", "SEND", "SIERRA", "SIMPLEX", "SOLID", "SPLIT", "STANDBY", "SYM",
-    "TANGO", "TKS", "TNX", "TU", "TX", "UNIFORM", "USB", "VICTOR", "WAIT", "WHISKEY", "X-RAY", "XYL",
-    "YANKEE", "YL", "ZULU",
+    "73",
+    "88",
+    "AGN",
+    "ALFA",
+    "ATT",
+    "BREAK",
+    "BRAVO",
+    "CALL",
+    "CHARLIE",
+    "COPY",
+    "CQ",
+    "CTCSS",
+    "DE",
+    "DELTA",
+    "DIRECT",
+    "DUPLEX",
+    "DX",
+    "ECHO",
+    "ES",
+    "FB",
+    "FM",
+    "FREQ",
+    "FT8",
+    "FT4",
+    "HOTEL",
+    "ID",
+    "INDIA",
+    "INFO",
+    "JA",
+    "JULIETT",
+    "KILO",
+    "LIMA",
+    "LOG",
+    "LSB",
+    "MIKE",
+    "NIL",
+    "NOVEMBER",
+    "OM",
+    "OSCAR",
+    "OUT",
+    "OVER",
+    "PAPA",
+    "PSE",
+    "QRL",
+    "QRM",
+    "QRN",
+    "QRP",
+    "QRQ",
+    "QRS",
+    "QRT",
+    "QRV",
+    "QRZ",
+    "QSB",
+    "QSL",
+    "QSO",
+    "QSP",
+    "QSX",
+    "QSY",
+    "QTC",
+    "QTH",
+    "QTR",
+    "QUEBEC",
+    "RELAY",
+    "REPEATER",
+    "RIG",
+    "ROGER",
+    "ROMEO",
+    "RST",
+    "RX",
+    "SEND",
+    "SIERRA",
+    "SIMPLEX",
+    "SOLID",
+    "SPLIT",
+    "STANDBY",
+    "SYM",
+    "TANGO",
+    "TKS",
+    "TNX",
+    "TU",
+    "TX",
+    "UNIFORM",
+    "USB",
+    "VICTOR",
+    "WAIT",
+    "WHISKEY",
+    "X-RAY",
+    "XYL",
+    "YANKEE",
+    "YL",
+    "ZULU",
 };
 
 template <typename T, size_t N>
@@ -185,11 +280,14 @@ const char* composeKeysetForMode(ui::mono_128x64::Runtime::ComposeMode mode)
 {
     switch (mode)
     {
-    case ui::mono_128x64::Runtime::ComposeMode::Num: return kComposeNumKeys;
-    case ui::mono_128x64::Runtime::ComposeMode::Sym: return kComposeSymKeys;
+    case ui::mono_128x64::Runtime::ComposeMode::Num:
+        return kComposeNumKeys;
+    case ui::mono_128x64::Runtime::ComposeMode::Sym:
+        return kComposeSymKeys;
     case ui::mono_128x64::Runtime::ComposeMode::AbcUpper:
     case ui::mono_128x64::Runtime::ComposeMode::AbcLower:
-    default: return kComposeAbcKeys;
+    default:
+        return kComposeAbcKeys;
     }
 }
 
@@ -197,11 +295,16 @@ const char* composeModeLabel(ui::mono_128x64::Runtime::ComposeMode mode)
 {
     switch (mode)
     {
-    case ui::mono_128x64::Runtime::ComposeMode::AbcLower: return "abc";
-    case ui::mono_128x64::Runtime::ComposeMode::AbcUpper: return "ABC";
-    case ui::mono_128x64::Runtime::ComposeMode::Num: return "123";
-    case ui::mono_128x64::Runtime::ComposeMode::Sym: return "SYM";
-    default: return "ABC";
+    case ui::mono_128x64::Runtime::ComposeMode::AbcLower:
+        return "abc";
+    case ui::mono_128x64::Runtime::ComposeMode::AbcUpper:
+        return "ABC";
+    case ui::mono_128x64::Runtime::ComposeMode::Num:
+        return "123";
+    case ui::mono_128x64::Runtime::ComposeMode::Sym:
+        return "SYM";
+    default:
+        return "ABC";
     }
 }
 
@@ -330,10 +433,13 @@ const char* gnssFixLabel(::gps::GnssFix fix)
 {
     switch (fix)
     {
-    case ::gps::GnssFix::FIX2D: return "2D";
-    case ::gps::GnssFix::FIX3D: return "3D";
+    case ::gps::GnssFix::FIX2D:
+        return "2D";
+    case ::gps::GnssFix::FIX3D:
+        return "3D";
     case ::gps::GnssFix::NOFIX:
-    default: return "NO";
+    default:
+        return "NO";
     }
 }
 
@@ -341,12 +447,17 @@ const char* gnssSystemLabel(::gps::GnssSystem sys)
 {
     switch (sys)
     {
-    case ::gps::GnssSystem::GPS: return "GPS";
-    case ::gps::GnssSystem::GLN: return "GLN";
-    case ::gps::GnssSystem::GAL: return "GAL";
-    case ::gps::GnssSystem::BD: return "BDS";
+    case ::gps::GnssSystem::GPS:
+        return "GPS";
+    case ::gps::GnssSystem::GLN:
+        return "GLN";
+    case ::gps::GnssSystem::GAL:
+        return "GAL";
+    case ::gps::GnssSystem::BD:
+        return "BDS";
     case ::gps::GnssSystem::UNKNOWN:
-    default: return "UNK";
+    default:
+        return "UNK";
     }
 }
 
@@ -374,6 +485,110 @@ const char* composeAbcGroupLabel(size_t index)
 const char* protocolShortLabel(chat::MeshProtocol protocol)
 {
     return protocol == chat::MeshProtocol::MeshCore ? "MC" : "MT";
+}
+
+const char* protocolLabel(chat::MeshProtocol protocol)
+{
+    return protocol == chat::MeshProtocol::MeshCore ? "MeshCore" : "Meshtastic";
+}
+
+const char* const* radioItemsFor(chat::MeshProtocol protocol)
+{
+    return protocol == chat::MeshProtocol::MeshCore ? kMeshCoreRadioItems : kMeshtasticRadioItems;
+}
+
+size_t radioItemCount(chat::MeshProtocol protocol)
+{
+    return protocol == chat::MeshProtocol::MeshCore ? arrayCount(kMeshCoreRadioItems) : arrayCount(kMeshtasticRadioItems);
+}
+
+const char* radioRegionLabel(const app::AppConfig& cfg)
+{
+    if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
+    {
+        const auto* region = chat::meshtastic::findRegion(
+            static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.meshtastic_config.region));
+        return region ? region->label : "-";
+    }
+
+    const auto* preset = chat::meshcore::findRegionPresetById(cfg.meshcore_config.meshcore_region_preset);
+    return preset ? preset->title : "Custom";
+}
+
+const char* gpsSatMaskLabel(uint8_t mask)
+{
+    switch (mask)
+    {
+    case 0x1:
+        return "GPS";
+    case 0x1 | 0x8:
+        return "GPS+BDS";
+    case 0x1 | 0x4:
+        return "GPS+GAL";
+    case 0x1 | 0x8 | 0x4:
+        return "GPS+BDS+GAL";
+    case 0x1 | 0x8 | 0x4 | 0x2:
+        return "GPS+BDS+GAL+GLO";
+    default:
+        return "CUSTOM";
+    }
+}
+
+uint8_t nextGpsSatMask(uint8_t current, int delta)
+{
+    static constexpr uint8_t kGpsMasks[] = {
+        0x1 | 0x8 | 0x4,
+        0x1,
+        0x1 | 0x8,
+        0x1 | 0x4,
+        0x1 | 0x8 | 0x4 | 0x2,
+    };
+
+    int index = 0;
+    for (size_t i = 0; i < arrayCount(kGpsMasks); ++i)
+    {
+        if (kGpsMasks[i] == current)
+        {
+            index = static_cast<int>(i);
+            break;
+        }
+    }
+    index = clampValue(index + delta, 0, static_cast<int>(arrayCount(kGpsMasks)) - 1);
+    return kGpsMasks[index];
+}
+
+void formatTimezoneLabel(int offset_min, char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    const int hours = offset_min / 60;
+    const int minutes = std::abs(offset_min % 60);
+    if (minutes == 0)
+    {
+        std::snprintf(out, out_len, "UTC%+d", hours);
+    }
+    else
+    {
+        std::snprintf(out, out_len, "UTC%+d:%02d", hours, minutes);
+    }
+}
+
+void appendStatus(Runtime* runtime, const char* fmt, ...)
+{
+    if (!runtime || !fmt)
+    {
+        return;
+    }
+
+    char line[40] = {};
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(line, sizeof(line), fmt, args);
+    va_end(args);
+    runtime->appendBootLog(line);
 }
 
 template <size_t N>
@@ -408,56 +623,23 @@ void setEncryptEnabled(app::AppConfig& config, bool enabled)
     config.privacy_encrypt_mode = enabled ? 1 : 0;
 }
 
-void bytesToHex(const uint8_t* data, size_t len, char* out, size_t out_len)
+bool loadBlePairingStatus(app::IAppFacade* app, ble::BlePairingStatus* out)
 {
-    if (!out || out_len == 0)
+    if (!app || !out)
     {
-        return;
+        return false;
     }
-
-    out[0] = '\0';
-    if (!data || len == 0)
-    {
-        return;
-    }
-
-    size_t pos = 0;
-    for (size_t i = 0; i < len && pos + 2 < out_len; ++i)
-    {
-        const int written = std::snprintf(out + pos, out_len - pos, "%02X", static_cast<unsigned>(data[i]));
-        if (written <= 0)
-        {
-            break;
-        }
-        pos += static_cast<size_t>(written);
-    }
+    ble::BleManager* manager = app->getBleManager();
+    return manager ? manager->getPairingStatus(out) : false;
 }
 
-bool hexToBytes(const char* hex, uint8_t* out, size_t out_len)
+const char* blePairingModeLabel(const ble::BlePairingStatus& status)
 {
-    if (!hex || !out)
+    if (!status.requires_passkey)
     {
-        return false;
+        return "OPEN";
     }
-
-    const size_t hex_len = std::strlen(hex);
-    if (hex_len != out_len * 2U)
-    {
-        return false;
-    }
-
-    for (size_t i = 0; i < out_len; ++i)
-    {
-        char part[3] = {hex[i * 2U], hex[i * 2U + 1U], '\0'};
-        char* end = nullptr;
-        const long value = std::strtol(part, &end, 16);
-        if (!end || *end != '\0' || value < 0 || value > 255)
-        {
-            return false;
-        }
-        out[i] = static_cast<uint8_t>(value);
-    }
-    return true;
+    return status.is_fixed_pin ? "FIXED" : "RANDOM";
 }
 
 } // namespace
@@ -624,18 +806,23 @@ void Runtime::handleInput(InputAction action)
         {
             switch (main_menu_index_)
             {
-            case 0: enterPage(Page::ChatList); break;
-            case 1: enterPage(Page::NodeList); break;
-            case 2:
-                active_conversation_ = chat::ConversationId(chat::ChannelId::PRIMARY, 0, app()->getConfig().mesh_protocol);
-                openCompose(EditTarget::Message);
+            case 0:
+                enterPage(Page::ChatList);
                 break;
-            case 3: enterPage(Page::SettingsMenu); break;
-            case 4: enterPage(Page::GnssPage); break;
-            case 5: enterPage(Page::RadioSettings); break;
-            case 6: enterPage(Page::DeviceSettings); break;
-            case 7: enterPage(Page::ActionPage); break;
-            default: break;
+            case 1:
+                enterPage(Page::NodeList);
+                break;
+            case 2:
+                enterPage(Page::GnssPage);
+                break;
+            case 3:
+                enterPage(Page::SettingsMenu);
+                break;
+            case 4:
+                enterPage(Page::InfoPage);
+                break;
+            default:
+                break;
             }
         }
         break;
@@ -961,37 +1148,31 @@ void Runtime::handleInput(InputAction action)
         {
             switch (settings_menu_index_)
             {
-            case 0: enterPage(Page::IdentitySettings); break;
-            case 1: enterPage(Page::RadioSettings); break;
-            case 2: enterPage(Page::DeviceSettings); break;
-            default: break;
+            case 0:
+                enterPage(Page::RadioSettings);
+                break;
+            case 1:
+                enterPage(Page::DeviceSettings);
+                break;
+            default:
+                break;
             }
         }
         break;
 
-    case Page::IdentitySettings:
-        if (action == InputAction::Up && identity_index_ > 0)
+    case Page::InfoPage:
+        if (action == InputAction::Up && info_scroll_ > 0)
         {
-            --identity_index_;
+            info_scroll_ = (info_scroll_ >= kInfoPageSize) ? (info_scroll_ - kInfoPageSize) : 0U;
         }
-        else if (action == InputAction::Down && identity_index_ + 1 < arrayCount(kIdentityItems))
+        else if (action == InputAction::Down)
         {
-            ++identity_index_;
+            info_scroll_ += kInfoPageSize;
         }
-        else if (action == InputAction::Left || action == InputAction::Back)
+        else if (action == InputAction::Left || action == InputAction::Back ||
+                 action == InputAction::Right || action == InputAction::Select || action == InputAction::Primary)
         {
             enterPage(Page::MainMenu);
-        }
-        else if (action == InputAction::Right || action == InputAction::Select || action == InputAction::Primary)
-        {
-            if (identity_index_ == 0)
-            {
-                openCompose(EditTarget::UserName, app()->getConfig().node_name);
-            }
-            else
-            {
-                openCompose(EditTarget::ShortName, app()->getConfig().short_name);
-            }
         }
         break;
 
@@ -1000,7 +1181,7 @@ void Runtime::handleInput(InputAction action)
         {
             --radio_index_;
         }
-        else if (action == InputAction::Down && radio_index_ + 1 < arrayCount(kRadioItems))
+        else if (action == InputAction::Down && radio_index_ + 1 < radioItemCount(app()->getConfig().mesh_protocol))
         {
             ++radio_index_;
         }
@@ -1014,23 +1195,14 @@ void Runtime::handleInput(InputAction action)
         }
         else if (action == InputAction::Back)
         {
-            enterPage(Page::MainMenu);
+            enterPage(Page::SettingsMenu);
         }
         else if (action == InputAction::Select || action == InputAction::Primary)
         {
-            if (radio_index_ == 6)
+            if (app()->getConfig().mesh_protocol == chat::MeshProtocol::MeshCore &&
+                radio_index_ + 1 == radioItemCount(app()->getConfig().mesh_protocol))
             {
-                const auto protocol = app()->getConfig().mesh_protocol;
-                if (protocol == chat::MeshProtocol::Meshtastic)
-                {
-                    char hex[33] = {};
-                    bytesToHex(app()->getConfig().meshtastic_config.secondary_key, 16, hex, sizeof(hex));
-                    openCompose(EditTarget::MeshtasticPsk, hex);
-                }
-                else
-                {
-                    openCompose(EditTarget::MeshCoreChannelName, app()->getConfig().meshcore_config.meshcore_channel_name);
-                }
+                openCompose(EditTarget::MeshCoreChannelName, app()->getConfig().meshcore_config.meshcore_channel_name);
             }
             else
             {
@@ -1058,7 +1230,7 @@ void Runtime::handleInput(InputAction action)
         }
         else if (action == InputAction::Back)
         {
-            enterPage(Page::MainMenu);
+            enterPage(Page::SettingsMenu);
         }
         break;
 
@@ -1129,25 +1301,77 @@ void Runtime::render()
     display_.clear();
     switch (page_)
     {
-    case Page::BootLog: renderBootLog(); break;
-    case Page::Screensaver: renderScreensaver(); break;
-    case Page::Sleep: renderSleep(); break;
-    case Page::MainMenu: renderMainMenu(); break;
-    case Page::ChatList: renderChatList(); break;
-    case Page::NodeList: renderNodeList(); break;
-    case Page::NodeInfo: renderNodeInfo(); break;
-    case Page::Conversation: renderConversation(); break;
-    case Page::MessageMenu: renderMessageMenu(); break;
-    case Page::MessageInfo: renderMessageInfo(); break;
-    case Page::Compose: renderCompose(); break;
-    case Page::SettingsMenu: renderSettingsMenu(); break;
-    case Page::IdentitySettings: renderIdentitySettings(); break;
-    case Page::RadioSettings: renderRadioSettings(); break;
-    case Page::DeviceSettings: renderDeviceSettings(); break;
-    case Page::GnssPage: renderGnssPage(); break;
-    case Page::ActionPage: renderActionPage(); break;
-    default: renderScreensaver(); break;
+    case Page::BootLog:
+        renderBootLog();
+        break;
+    case Page::Screensaver:
+        renderScreensaver();
+        break;
+    case Page::Sleep:
+        renderSleep();
+        break;
+    case Page::MainMenu:
+        renderMainMenu();
+        break;
+    case Page::ChatList:
+        renderChatList();
+        break;
+    case Page::NodeList:
+        renderNodeList();
+        break;
+    case Page::NodeInfo:
+        renderNodeInfo();
+        break;
+    case Page::Conversation:
+        renderConversation();
+        break;
+    case Page::MessageMenu:
+        renderMessageMenu();
+        break;
+    case Page::MessageInfo:
+        renderMessageInfo();
+        break;
+    case Page::Compose:
+        renderCompose();
+        break;
+    case Page::SettingsMenu:
+        renderSettingsMenu();
+        break;
+    case Page::RadioSettings:
+        renderRadioSettings();
+        break;
+    case Page::DeviceSettings:
+        renderDeviceSettings();
+        break;
+    case Page::InfoPage:
+        renderInfoPage();
+        break;
+    case Page::GnssPage:
+        renderGnssPage();
+        break;
+    case Page::ActionPage:
+        renderActionPage();
+        break;
+    default:
+        renderScreensaver();
+        break;
     }
+
+    ble::BlePairingStatus ble_status{};
+    if (loadBlePairingStatus(app(), &ble_status) &&
+        ble_status.requires_passkey &&
+        ble_status.is_pairing_active)
+    {
+        display_.fillRect(0, 45, display_.width(), 19, false);
+        display_.drawHLine(0, 44, display_.width());
+        char line1[24] = {};
+        char line2[24] = {};
+        std::snprintf(line1, sizeof(line1), "BLE %s PIN", ble_status.is_fixed_pin ? "FIXED" : "PAIR");
+        std::snprintf(line2, sizeof(line2), "%06lu", static_cast<unsigned long>(ble_status.passkey));
+        text_renderer_.drawText(display_, 0, 46, line1);
+        text_renderer_.drawText(display_, 0, 54, line2);
+    }
+
     display_.present();
 }
 
@@ -1569,61 +1793,28 @@ void Runtime::renderSettingsMenu()
     drawMenuList("SETTINGS", kSettingsMenuItems, arrayCount(kSettingsMenuItems), settings_menu_index_);
 }
 
-void Runtime::renderIdentitySettings()
-{
-    drawTitleBar("IDENTITY", nullptr);
-    char value[40] = {};
-    for (size_t i = 0; i < arrayCount(kIdentityItems); ++i)
-    {
-        if (i == 0)
-        {
-            copyText(value, app()->getConfig().node_name);
-        }
-        else
-        {
-            copyText(value, app()->getConfig().short_name);
-        }
-
-        char line[48] = {};
-        std::snprintf(line, sizeof(line), "%s: %s", kIdentityItems[i], value[0] ? value : "-");
-        drawTextClipped(0, 10 + static_cast<int>(i * text_renderer_.lineHeight()),
-                        display_.width(), line, i == identity_index_);
-    }
-}
-
 void Runtime::renderRadioSettings()
 {
-    drawTitleBar("RADIO", protocolShortLabel(app()->getConfig().mesh_protocol));
+    const auto protocol = app()->getConfig().mesh_protocol;
+    const char* const* items = radioItemsFor(protocol);
+    const size_t item_count = radioItemCount(protocol);
+
+    drawTitleBar("LORA", protocolShortLabel(protocol));
     char value[40] = {};
     auto& cfg = app()->getConfig();
-    for (size_t i = 0; i < arrayCount(kRadioItems); ++i)
+    for (size_t i = 0; i < item_count; ++i)
     {
         value[0] = '\0';
         switch (i)
         {
         case 0:
-            copyText(value, cfg.mesh_protocol == chat::MeshProtocol::MeshCore ? "MeshCore" : "Meshtastic");
+            copyText(value, protocolLabel(cfg.mesh_protocol));
             break;
         case 1:
-            std::snprintf(value, sizeof(value), "%ddBm", static_cast<int>(cfg.activeMeshConfig().tx_power));
+            copyText(value, radioRegionLabel(cfg));
             break;
         case 2:
-            if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
-            {
-                if (const auto* region = chat::meshtastic::findRegion(
-                        static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.meshtastic_config.region)))
-                {
-                    copyText(value, region->label);
-                }
-            }
-            else if (const auto* preset = chat::meshcore::findRegionPresetById(cfg.meshcore_config.meshcore_region_preset))
-            {
-                copyText(value, preset->title);
-            }
-            else
-            {
-                copyText(value, "Custom");
-            }
+            std::snprintf(value, sizeof(value), "%ddBm", static_cast<int>(cfg.activeMeshConfig().tx_power));
             break;
         case 3:
             if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
@@ -1634,9 +1825,7 @@ void Runtime::renderRadioSettings()
             }
             else
             {
-                std::snprintf(value, sizeof(value), "%.3f/%.0f",
-                              static_cast<double>(cfg.meshcore_config.meshcore_freq_mhz),
-                              static_cast<double>(cfg.meshcore_config.meshcore_bw_khz));
+                copyText(value, radioRegionLabel(cfg));
             }
             break;
         case 4:
@@ -1646,8 +1835,7 @@ void Runtime::renderRadioSettings()
             }
             else
             {
-                std::snprintf(value, sizeof(value), "%s/%u",
-                              cfg.meshcore_config.meshcore_channel_name,
+                std::snprintf(value, sizeof(value), "%u",
                               static_cast<unsigned>(cfg.meshcore_config.meshcore_channel_slot));
             }
             break;
@@ -1655,13 +1843,7 @@ void Runtime::renderRadioSettings()
             copyText(value, encryptEnabled(cfg) ? "On" : "Off");
             break;
         case 6:
-            if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
-            {
-                char hex[33] = {};
-                bytesToHex(cfg.meshtastic_config.secondary_key, 16, hex, sizeof(hex));
-                copyText(value, hex[0] ? hex : "0000...");
-            }
-            else
+            if (cfg.mesh_protocol == chat::MeshProtocol::MeshCore)
             {
                 copyText(value, cfg.meshcore_config.meshcore_channel_name);
             }
@@ -1669,7 +1851,7 @@ void Runtime::renderRadioSettings()
         }
 
         char line[48] = {};
-        std::snprintf(line, sizeof(line), "%s: %s", kRadioItems[i], value);
+        std::snprintf(line, sizeof(line), "%s: %s", items[i], value);
         drawTextClipped(0, 10 + static_cast<int>(i * text_renderer_.lineHeight()),
                         display_.width(), line, i == radio_index_);
     }
@@ -1678,34 +1860,222 @@ void Runtime::renderRadioSettings()
 void Runtime::renderDeviceSettings()
 {
     drawTitleBar("DEVICE", nullptr);
+    ble::BlePairingStatus ble_status{};
+    const bool has_ble_status = loadBlePairingStatus(app(), &ble_status);
     char line[48] = {};
     for (size_t i = 0; i < arrayCount(kDeviceItems); ++i)
     {
         if (i == 0)
         {
-            std::snprintf(line, sizeof(line), "BLE: %s", app()->isBleEnabled() ? "ON" : "OFF");
+            if (has_ble_status && ble_status.requires_passkey && ble_status.passkey != 0)
+            {
+                std::snprintf(line, sizeof(line), "BLE: ON %s %06lu",
+                              ble_status.is_fixed_pin ? "FIX" : "PIN",
+                              static_cast<unsigned long>(ble_status.passkey));
+            }
+            else if (has_ble_status && ble_status.requires_passkey)
+            {
+                std::snprintf(line, sizeof(line), "BLE: ON %s",
+                              ble_status.is_fixed_pin ? "FIXED" : "RANDOM");
+            }
+            else
+            {
+                std::snprintf(line, sizeof(line), "BLE: %s", app()->isBleEnabled() ? "ON" : "OFF");
+            }
         }
         else if (i == 1)
         {
-            const int tz = host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0;
-            std::snprintf(line, sizeof(line), "TIME ZONE: UTC%+d", tz / 60);
+            std::snprintf(line, sizeof(line), "GPS: %s", app()->getConfig().gps_mode != 0 ? "ON" : "OFF");
         }
         else if (i == 2)
         {
-            std::snprintf(line, sizeof(line), "GPS: %s", app()->getConfig().gps_mode != 0 ? "ON" : "OFF");
+            std::snprintf(line, sizeof(line), "SATS: %s", gpsSatMaskLabel(app()->getConfig().gps_sat_mask));
         }
         else if (i == 3)
         {
             std::snprintf(line, sizeof(line), "GPS INT: %lus",
                           static_cast<unsigned long>(app()->getConfig().gps_interval_ms / 1000UL));
         }
-        else
+        else if (i == 4)
         {
-            std::snprintf(line, sizeof(line), "CHAT CH: %s",
-                          app()->getConfig().chat_channel == 0 ? "PRIMARY" : "SECONDARY");
+            const int tz = host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0;
+            char tz_label[16] = {};
+            formatTimezoneLabel(tz, tz_label, sizeof(tz_label));
+            std::snprintf(line, sizeof(line), "TIME ZONE: %s", tz_label);
         }
         drawTextClipped(0, 10 + static_cast<int>(i * text_renderer_.lineHeight()),
                         display_.width(), line, i == device_index_);
+    }
+}
+
+void Runtime::renderInfoPage()
+{
+    drawTitleBar("INFO", nullptr);
+
+    char lines[24][40] = {};
+    size_t line_count = 0;
+    auto push_line = [&](const char* text)
+    {
+        if (!text || text[0] == '\0' || line_count >= arrayCount(lines))
+        {
+            return;
+        }
+        copyText(lines[line_count++], text);
+    };
+    auto push_kv = [&](const char* key, const char* value)
+    {
+        if (!key || !value || line_count >= arrayCount(lines))
+        {
+            return;
+        }
+        appendInfoLine(lines[line_count++], key, value);
+    };
+
+    char long_name[24] = {};
+    char short_name[12] = {};
+    app()->getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+    const auto& cfg = app()->getConfig();
+    const auto battery = host_.battery_info_fn ? host_.battery_info_fn() : platform::ui::device::BatteryInfo{};
+    const auto gps = host_.gps_data_fn ? host_.gps_data_fn() : platform::ui::gps::GpsState{};
+    ble::BlePairingStatus ble_status{};
+    const bool has_ble_status = loadBlePairingStatus(app(), &ble_status);
+
+    push_line("[DEVICE]");
+    push_kv("NAME", long_name[0] ? long_name : "-");
+    push_kv("SHORT", short_name[0] ? short_name : "-");
+    char self_id[16] = {};
+    formatNodeLabel(self_id, sizeof(self_id));
+    push_kv("NODE", self_id[0] ? self_id : "-");
+
+    char value[40] = {};
+    std::snprintf(value, sizeof(value), "%s", protocolLabel(cfg.mesh_protocol));
+    push_kv("PROTO", value);
+    push_kv("BLE", app()->isBleEnabled() ? "ON" : "OFF");
+    if (has_ble_status && ble_status.requires_passkey)
+    {
+        push_kv("BLE MODE", blePairingModeLabel(ble_status));
+        if (ble_status.passkey != 0)
+        {
+            std::snprintf(value, sizeof(value), "%06lu", static_cast<unsigned long>(ble_status.passkey));
+            push_kv("BLE PIN", value);
+        }
+    }
+
+    if (host_.format_frequency_fn)
+    {
+        char freq[24] = {};
+        host_.format_frequency_fn(host_.active_lora_frequency_hz_fn ? host_.active_lora_frequency_hz_fn() : 0U,
+                                  freq,
+                                  sizeof(freq));
+        push_kv("FREQ", freq[0] ? freq : "-");
+    }
+
+    push_line("[RADIO]");
+    std::snprintf(value, sizeof(value), "%s", protocolLabel(cfg.mesh_protocol));
+    push_kv("PROTO", value);
+    push_kv("REGION", radioRegionLabel(cfg));
+    std::snprintf(value, sizeof(value), "%ddBm", static_cast<int>(cfg.activeMeshConfig().tx_power));
+    push_kv("TX", value);
+    if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
+    {
+        push_kv("MODEM", chat::meshtastic::presetDisplayName(
+                             static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset)));
+        std::snprintf(value, sizeof(value), "Slot %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
+        push_kv("CHAN", value);
+        push_kv("ENCRYPT", encryptEnabled(cfg) ? "ON" : "OFF");
+    }
+    else
+    {
+        push_kv("PRESET", radioRegionLabel(cfg));
+        push_kv("NAME", cfg.meshcore_config.meshcore_channel_name);
+        std::snprintf(value, sizeof(value), "%u",
+                      static_cast<unsigned>(cfg.meshcore_config.meshcore_channel_slot));
+        push_kv("SLOT", value);
+        push_kv("ENCRYPT", encryptEnabled(cfg) ? "ON" : "OFF");
+    }
+
+    push_line("[SYSTEM]");
+    push_kv("BLE", app()->isBleEnabled() ? "ON" : "OFF");
+    if (has_ble_status && ble_status.requires_passkey)
+    {
+        push_kv("BLE MODE", blePairingModeLabel(ble_status));
+        if (ble_status.passkey != 0)
+        {
+            std::snprintf(value, sizeof(value), "%06lu", static_cast<unsigned long>(ble_status.passkey));
+            push_kv("BLE PIN", value);
+        }
+    }
+    if (battery.available && battery.level >= 0)
+    {
+        std::snprintf(value, sizeof(value), "%d%%%s", battery.level, battery.charging ? "+" : "");
+        push_kv("BAT", value);
+    }
+    else
+    {
+        push_kv("BAT", "-");
+    }
+    char tz_label[16] = {};
+    formatTimezoneLabel(host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0, tz_label, sizeof(tz_label));
+    push_kv("TZ", tz_label[0] ? tz_label : "UTC+0");
+
+    char time_buf[16] = {};
+    char date_buf[24] = {};
+    formatTime(time_buf, sizeof(time_buf), date_buf, sizeof(date_buf));
+    push_kv("TIME", time_buf[0] ? time_buf : "-");
+    push_kv("DATE", date_buf[0] ? date_buf : "-");
+
+    push_line("[GPS]");
+    push_kv("GPS", cfg.gps_mode != 0 ? "ON" : "OFF");
+    push_kv("SATS", gpsSatMaskLabel(cfg.gps_sat_mask));
+    std::snprintf(value, sizeof(value), "%lus", static_cast<unsigned long>(cfg.gps_interval_ms / 1000UL));
+    push_kv("INT", value);
+    push_kv("PWR", (host_.gps_powered_fn && host_.gps_powered_fn()) ? "ON" : "OFF");
+    if (gps.valid)
+    {
+        std::snprintf(value, sizeof(value), "%.5f", gps.lat);
+        push_kv("LAT", value);
+        std::snprintf(value, sizeof(value), "%.5f", gps.lng);
+        push_kv("LON", value);
+        std::snprintf(value, sizeof(value), "%u", static_cast<unsigned>(gps.satellites));
+        push_kv("SATS", value);
+        if (gps.has_alt)
+        {
+            std::snprintf(value, sizeof(value), "%.0fm", gps.alt_m);
+            push_kv("ALT", value);
+        }
+        if (gps.has_speed)
+        {
+            std::snprintf(value, sizeof(value), "%.1fkmh", gps.speed_mps * 3.6);
+            push_kv("SPD", value);
+        }
+        if (gps.has_course)
+        {
+            std::snprintf(value, sizeof(value), "%.0fdeg", gps.course_deg);
+            push_kv("CRS", value);
+        }
+        std::snprintf(value, sizeof(value), "%lus", static_cast<unsigned long>(gps.age / 1000UL));
+        push_kv("AGE", value);
+    }
+    else
+    {
+        push_kv("FIX", "SEARCH");
+    }
+
+    const size_t max_scroll = line_count > kInfoPageSize ? (line_count - kInfoPageSize) : 0U;
+    if (info_scroll_ > max_scroll)
+    {
+        info_scroll_ = max_scroll;
+    }
+
+    const int line_h = text_renderer_.lineHeight();
+    const int start_y = 10;
+    const size_t visible = std::min(line_count - info_scroll_, kInfoPageSize);
+    for (size_t i = 0; i < visible; ++i)
+    {
+        drawTextClipped(0,
+                        start_y + static_cast<int>(i * line_h),
+                        display_.width(),
+                        lines[info_scroll_ + i]);
     }
 }
 
@@ -1894,6 +2264,10 @@ void Runtime::enterPage(Page page)
         message_info_scroll_ = 0;
         buildMessageInfo();
     }
+    else if (page == Page::InfoPage)
+    {
+        info_scroll_ = 0;
+    }
     else if (page == Page::GnssPage)
     {
         gnss_page_index_ = 0;
@@ -2048,8 +2422,8 @@ void Runtime::buildNodeInfo()
     push_kv("LN", node.long_name[0] != '\0' ? node.long_name : "-");
 
     push_section("LINK");
-    push_kv("P", node.protocol == chat::contacts::NodeProtocolType::MeshCore ? "MC" :
-                 node.protocol == chat::contacts::NodeProtocolType::Meshtastic ? "MT" : "?");
+    push_kv("P", node.protocol == chat::contacts::NodeProtocolType::MeshCore ? "MC" : node.protocol == chat::contacts::NodeProtocolType::Meshtastic ? "MT"
+                                                                                                                                                    : "?");
     std::snprintf(value, sizeof(value), "%u", static_cast<unsigned>(node.hops_away));
     push_kv("HP", node.hops_away == 0xFF ? "-" : value);
     std::snprintf(value, sizeof(value), "%u", static_cast<unsigned>(node.channel));
@@ -2386,14 +2760,9 @@ void Runtime::adjustRadioSetting(int delta)
                                       ? chat::MeshProtocol::MeshCore
                                       : chat::MeshProtocol::Meshtastic,
                                   false);
+        appendStatus(this, "proto %s", protocolShortLabel(app()->getConfig().mesh_protocol));
         break;
     case 1:
-        cfg.activeMeshConfig().tx_power = static_cast<int8_t>(clampValue<int>(
-            static_cast<int>(cfg.activeMeshConfig().tx_power) + delta,
-            static_cast<int>(app::AppConfig::kTxPowerMinDbm),
-            static_cast<int>(app::AppConfig::kTxPowerMaxDbm)));
-        break;
-    case 2:
         if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
         {
             size_t count = 0;
@@ -2433,6 +2802,14 @@ void Runtime::adjustRadioSetting(int delta)
                 cfg.meshcore_config.meshcore_region_preset = table[index].id;
             }
         }
+        appendStatus(this, "region %s", radioRegionLabel(cfg));
+        break;
+    case 2:
+        cfg.activeMeshConfig().tx_power = static_cast<int8_t>(clampValue<int>(
+            static_cast<int>(cfg.activeMeshConfig().tx_power) + delta,
+            static_cast<int>(app::AppConfig::kTxPowerMinDbm),
+            static_cast<int>(app::AppConfig::kTxPowerMaxDbm)));
+        appendStatus(this, "tx %ddBm", static_cast<int>(cfg.activeMeshConfig().tx_power));
         break;
     case 3:
         if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
@@ -2466,21 +2843,34 @@ void Runtime::adjustRadioSetting(int delta)
                 cfg.meshcore_config.meshcore_cr = table[index].cr;
             }
         }
+        if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
+        {
+            appendStatus(this, "modem %s",
+                         chat::meshtastic::presetDisplayName(
+                             static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset)));
+        }
+        else
+        {
+            appendStatus(this, "preset %s", radioRegionLabel(cfg));
+        }
         break;
     case 4:
         if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
         {
             cfg.meshtastic_config.channel_num = static_cast<uint16_t>(clampValue<int>(
                 static_cast<int>(cfg.meshtastic_config.channel_num) + delta, 0, 255));
+            appendStatus(this, "channel %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
         }
         else
         {
             cfg.meshcore_config.meshcore_channel_slot = static_cast<uint8_t>(clampValue<int>(
                 static_cast<int>(cfg.meshcore_config.meshcore_channel_slot) + delta, 0, 15));
+            appendStatus(this, "slot %u", static_cast<unsigned>(cfg.meshcore_config.meshcore_channel_slot));
         }
         break;
     case 5:
         setEncryptEnabled(cfg, !encryptEnabled(cfg));
+        appendStatus(this, "encrypt %s", encryptEnabled(cfg) ? "on" : "off");
         break;
     default:
         break;
@@ -2499,17 +2889,19 @@ void Runtime::adjustDeviceSetting(int delta)
     if (device_index_ == 0)
     {
         app()->setBleEnabled(!app()->isBleEnabled());
+        appendStatus(this, "ble %s", app()->isBleEnabled() ? "on" : "off");
     }
-    else if (device_index_ == 1 && host_.timezone_offset_min_fn && host_.set_timezone_offset_min_fn)
-    {
-        const int current = host_.timezone_offset_min_fn();
-        const int next = clampValue(current + delta * kTimezoneStep, kTimezoneMin, kTimezoneMax);
-        host_.set_timezone_offset_min_fn(next);
-    }
-    else if (device_index_ == 2)
+    else if (device_index_ == 1)
     {
         app()->getConfig().gps_mode = (app()->getConfig().gps_mode == 0) ? 1 : 0;
         commitConfig();
+        appendStatus(this, "gps %s", app()->getConfig().gps_mode != 0 ? "on" : "off");
+    }
+    else if (device_index_ == 2)
+    {
+        app()->getConfig().gps_sat_mask = nextGpsSatMask(app()->getConfig().gps_sat_mask, delta);
+        commitConfig();
+        appendStatus(this, "sats %s", gpsSatMaskLabel(app()->getConfig().gps_sat_mask));
     }
     else if (device_index_ == 3)
     {
@@ -2523,11 +2915,16 @@ void Runtime::adjustDeviceSetting(int delta)
         const int next = clampValue<int>(static_cast<int>(index) + delta, 0, static_cast<int>(arrayCount(kGpsIntervals)) - 1);
         app()->getConfig().gps_interval_ms = kGpsIntervals[next];
         commitConfig();
+        appendStatus(this, "gps int %lus", static_cast<unsigned long>(app()->getConfig().gps_interval_ms / 1000UL));
     }
-    else if (device_index_ == 4)
+    else if (device_index_ == 4 && host_.timezone_offset_min_fn && host_.set_timezone_offset_min_fn)
     {
-        app()->getConfig().chat_channel = app()->getConfig().chat_channel == 0 ? 1 : 0;
-        commitConfig();
+        const int current = host_.timezone_offset_min_fn();
+        const int next = clampValue(current + delta * kTimezoneStep, kTimezoneMin, kTimezoneMax);
+        host_.set_timezone_offset_min_fn(next);
+        char tz_label[16] = {};
+        formatTimezoneLabel(next, tz_label, sizeof(tz_label));
+        appendStatus(this, "tz %s", tz_label);
     }
 }
 
@@ -2827,15 +3224,6 @@ void Runtime::saveEditedTextToConfig()
     auto& cfg = app()->getConfig();
     switch (edit_target_)
     {
-    case EditTarget::UserName:
-        copyText(cfg.node_name, compose_buffer_);
-        break;
-    case EditTarget::ShortName:
-        copyText(cfg.short_name, compose_buffer_);
-        break;
-    case EditTarget::MeshtasticPsk:
-        (void)hexToBytes(compose_buffer_, cfg.meshtastic_config.secondary_key, 16);
-        break;
     case EditTarget::MeshCoreChannelName:
         copyText(cfg.meshcore_config.meshcore_channel_name, compose_buffer_);
         break;
@@ -3046,7 +3434,7 @@ void Runtime::drawTextClipped(int x, int y, int w, const char* text, bool invers
 
 bool Runtime::editUsesHexCharset() const
 {
-    return edit_target_ == EditTarget::MeshtasticPsk;
+    return false;
 }
 
 bool Runtime::usesSmartCompose() const

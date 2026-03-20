@@ -342,6 +342,24 @@ static void clear_tile_decode_cache()
     g_cache_full_until_ms = 0;
 }
 
+static void release_tile_decode_cache_usage()
+{
+    if (!g_tile_cache_initialized)
+    {
+        return;
+    }
+
+    const uint32_t now_ms = sys::millis_now();
+    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
+    {
+        g_tile_decode_cache[i].in_use = false;
+        if (g_tile_decode_cache[i].img_dsc != NULL)
+        {
+            g_tile_decode_cache[i].last_used_ms = now_ms;
+        }
+    }
+}
+
 /**
  * Find cached decoded tile image
  */
@@ -1863,9 +1881,10 @@ void cleanup_tiles(TileContext& ctx)
         reset_tile_runtime(tile);
     }
     ctx.tiles->clear();
-    ctx.tiles->shrink_to_fit();
-    lv_image_cache_drop(NULL);
-    clear_tile_decode_cache();
+    // Keep vector capacity and decoded tile cache alive across page exits.
+    // Late LVGL draw work can still reference image internals for a short time,
+    // so aggressively freeing image caches here is unsafe.
+    release_tile_decode_cache_usage();
     g_active_map_source = 0xFF;
     g_active_contour_enabled = false;
     g_missing_tile_notice_pending = false;

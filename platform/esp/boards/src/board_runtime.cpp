@@ -1,15 +1,15 @@
 #include "platform/esp/boards/board_runtime.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-#include "../tab5/board_runtime_impl.h"
+#include "boards/tab5/platform_esp_board_runtime.h"
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
-#include "../t_display_p4/board_runtime_impl.h"
+#include "boards/t_display_p4/platform_esp_board_runtime.h"
 #elif defined(ARDUINO_T_DECK)
-#include "../tdeck/board_runtime_impl.h"
+#include "boards/tdeck/platform_esp_board_runtime.h"
 #elif defined(ARDUINO_T_WATCH_S3)
-#include "../twatchs3/board_runtime_impl.h"
+#include "boards/twatchs3/platform_esp_board_runtime.h"
 #else
-#include "../tlora_pager/board_runtime_impl.h"
+#include "boards/tlora_pager/platform_esp_board_runtime.h"
 #endif
 
 namespace platform::esp::boards

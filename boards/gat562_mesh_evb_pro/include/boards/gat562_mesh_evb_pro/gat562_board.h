@@ -1,7 +1,7 @@
 #pragma once
 
-#include "board/BoardBase.h"
 #include "app/app_config.h"
+#include "board/BoardBase.h"
 #include "chat/domain/chat_types.h"
 #include "gps/domain/gnss_satellite.h"
 #include "gps/domain/gps_state.h"

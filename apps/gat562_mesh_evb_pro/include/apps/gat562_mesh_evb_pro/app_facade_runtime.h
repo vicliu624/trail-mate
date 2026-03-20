@@ -19,7 +19,7 @@ class INodeStore;
 class IContactStore;
 class ContactService;
 } // namespace contacts
-}
+} // namespace chat
 
 namespace platform::nrf52::arduino_common
 {

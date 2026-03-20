@@ -3,8 +3,8 @@
 #include <cmath>
 #include <limits>
 
-#include "platform/esp/boards/t_display_p4_board_profile.h"
-#include "platform/esp/boards/tab5_board_profile.h"
+#include "boards/t_display_p4/board_profile.h"
+#include "boards/tab5/tab5_board.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
 
 namespace
@@ -13,8 +13,8 @@ namespace
 bool board_has_lora_capability()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    return platform::esp::boards::tab5::kBoardProfile.has_lora ||
-           platform::esp::boards::tab5::kBoardProfile.has_m5bus_lora_module_routing;
+    return ::boards::tab5::Tab5Board::hasLora() ||
+           ::boards::tab5::Tab5Board::hasM5BusLoraRouting();
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     return platform::esp::boards::t_display_p4::kBoardProfile.has_lora;
 #else

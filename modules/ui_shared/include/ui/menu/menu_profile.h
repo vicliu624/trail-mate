@@ -69,11 +69,13 @@ struct MenuLayoutProfile
 
     lv_coord_t title_offset_x = 0;
     lv_coord_t title_offset_y = 0;
+    uint8_t max_columns = 0;
 
     bool wrap_grid = false;
     bool vertical_scroll = false;
     bool snap_center = false;
     bool transparent_cards = false;
+    bool grid_anchor_top_left = false;
     bool show_top_bar = false;
     bool show_card_label = false;
     bool show_desc_label = true;

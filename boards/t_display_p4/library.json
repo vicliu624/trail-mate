@@ -1,0 +1,27 @@
+{
+  "name": "boards_t_display_p4",
+  "version": "0.1.0",
+  "frameworks": [
+    "espidf"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-std=gnu++17",
+      "-Iinclude",
+      "-I../..",
+      "-I../../platform/esp/boards/include",
+      "-I../../platform/esp/idf_common/include",
+      "-I../../modules/ui_shared/include",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_gps/include",
+      "-I../../modules/core_hostlink/include",
+      "-I../../modules/core_team/include"
+    ]
+  }
+}

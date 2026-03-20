@@ -5,8 +5,14 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(ESP_PLATFORM)
+#include "esp_log.h"
+#endif
+
 #include "ui/app_runtime.h"
+#include "ui/menu/menu_dashboard.h"
 #include "ui/menu/menu_profile.h"
+#include "ui/menu/menu_runtime.h"
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
 #include "ui/ui_theme.h"
@@ -17,6 +23,10 @@ namespace menu_layout
 {
 namespace
 {
+
+#if defined(ESP_PLATFORM)
+constexpr const char* kTag = "ui-menu-layout";
+#endif
 
 constexpr size_t kMaxMenuApps = 16;
 
@@ -51,15 +61,29 @@ void enterPendingApp(void* user_data)
     auto* target_app = static_cast<AppScreen*>(user_data);
     if (target_app == nullptr || target_app != s_pending_app_launch || s_app_panel == nullptr)
     {
+#if defined(ESP_PLATFORM)
+        ESP_LOGW(kTag,
+                 "enterPendingApp skipped target=%s pending=%s app_panel=%d",
+                 target_app ? target_app->name() : "(null)",
+                 s_pending_app_launch ? s_pending_app_launch->name() : "(null)",
+                 s_app_panel ? 1 : 0);
+#endif
         return;
     }
 
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "enterPendingApp target=%s", target_app->name());
+#endif
     s_pending_app_launch = nullptr;
     ui_switch_to_app(target_app, s_app_panel);
 }
 
 void menuHidden()
 {
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "menuHidden -> tile(0,1)");
+#endif
+    setMenuVisible(false);
     lv_tileview_set_tile_by_index(main_screen, 0, 1, transition_anim());
 }
 
@@ -102,18 +126,33 @@ void menuButtonClickCallback(lv_event_t* e)
     auto* target_app = static_cast<AppScreen*>(lv_event_get_user_data(e));
     if (main_screen != nullptr && lv_obj_has_flag(main_screen, LV_OBJ_FLAG_HIDDEN))
     {
+#if defined(ESP_PLATFORM)
+        ESP_LOGW(kTag, "click ignored because main_screen hidden target=%s", target_app ? target_app->name() : "(null)");
+#endif
         return;
     }
 
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag,
+             "menu click target=%s touch_primary=%d",
+             target_app ? target_app->name() : "(null)",
+             ui::menu_profile::current().input_mode == ui::menu_profile::InputMode::TouchPrimary ? 1 : 0);
+#endif
     set_default_group(nullptr);
     if (ui::menu_profile::current().input_mode == ui::menu_profile::InputMode::TouchPrimary)
     {
         s_pending_app_launch = target_app;
+#if defined(ESP_PLATFORM)
+        ESP_LOGI(kTag, "queue async app enter target=%s", target_app ? target_app->name() : "(null)");
+#endif
         menuHidden();
         lv_async_call(enterPendingApp, target_app);
         return;
     }
 
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "direct app enter target=%s", target_app ? target_app->name() : "(null)");
+#endif
     ui_switch_to_app(target_app, s_app_panel);
     menuHidden();
 }
@@ -200,10 +239,7 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
         lv_obj_set_style_text_font(label, profile.card_label_font, 0);
         lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), 0);
         lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), LV_STATE_FOCUSED);
-        lv_label_set_long_mode(label,
-                               profile.input_mode == ui::menu_profile::InputMode::TouchPrimary
-                                   ? LV_LABEL_LONG_CLIP
-                                   : LV_LABEL_LONG_SCROLL_CIRCULAR);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     }
 
     if (idx < kMaxMenuApps)
@@ -234,19 +270,11 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
         lv_obj_update_layout(btn);
         if (profile.badge_anchor_mode == ui::menu_profile::BadgeAnchorMode::IconTopRight)
         {
-            lv_obj_align_to(badge,
-                            icon,
-                            LV_ALIGN_TOP_RIGHT,
-                            profile.badge_offset_x,
-                            profile.badge_offset_y);
+            lv_obj_align_to(badge, icon, LV_ALIGN_TOP_RIGHT, profile.badge_offset_x, profile.badge_offset_y);
         }
         else
         {
-            lv_obj_align_to(badge,
-                            icon,
-                            LV_ALIGN_TOP_LEFT,
-                            profile.badge_offset_x,
-                            profile.badge_offset_y);
+            lv_obj_align_to(badge, icon, LV_ALIGN_TOP_LEFT, profile.badge_offset_x, profile.badge_offset_y);
         }
 
         lv_obj_t* badge_label = lv_label_create(badge);
@@ -318,7 +346,16 @@ void createAppGrid()
     lv_obj_t* panel = lv_obj_create(s_menu_panel);
     s_grid_panel = panel;
     lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_size(panel, LV_PCT(100), LV_PCT(profile.grid_height_pct));
+    lv_coord_t panel_width = lv_pct(100);
+    if (profile.max_columns > 0)
+    {
+        panel_width = static_cast<lv_coord_t>(
+            profile.grid_pad_left +
+            profile.grid_pad_right +
+            (profile.card_width * profile.max_columns) +
+            (profile.grid_pad_column * (profile.max_columns - 1)));
+    }
+    lv_obj_set_size(panel, panel_width, LV_PCT(profile.grid_height_pct));
     lv_obj_set_style_pad_row(panel, profile.grid_pad_row, 0);
     lv_obj_set_style_pad_column(panel, profile.grid_pad_column, 0);
     if (profile.variant != ui::menu_profile::LayoutVariant::CompactGrid)
@@ -331,7 +368,7 @@ void createAppGrid()
     lv_obj_set_scroll_dir(panel, profile.vertical_scroll ? LV_DIR_VER : LV_DIR_HOR);
     if (profile.wrap_grid)
     {
-        if (profile.variant == ui::menu_profile::LayoutVariant::CompactGrid)
+        if (profile.grid_anchor_top_left || profile.variant == ui::menu_profile::LayoutVariant::CompactGrid)
         {
             lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
         }
@@ -349,14 +386,17 @@ void createAppGrid()
         lv_obj_set_scroll_snap_x(panel, LV_SCROLL_SNAP_CENTER);
     }
     lv_obj_set_flex_flow(panel, profile.wrap_grid ? LV_FLEX_FLOW_ROW_WRAP : LV_FLEX_FLOW_ROW);
-    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, profile.grid_top_offset);
+    if (profile.grid_anchor_top_left)
+    {
+        lv_obj_align(panel, LV_ALIGN_TOP_LEFT, 0, profile.grid_top_offset);
+    }
+    else
+    {
+        lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, profile.grid_top_offset);
+    }
     lv_obj_add_style(panel, &frameless_style, 0);
 
     const size_t app_count = ui::catalogCount(s_init_options.apps);
-    if (app_count > kMaxMenuApps)
-    {
-        // Ignore anything above the UI cap for now.
-    }
     for (size_t index = 0; index < app_count && index < kMaxMenuApps; ++index)
     {
         AppScreen* app = ui::catalogAt(s_init_options.apps, index);
@@ -381,10 +421,7 @@ void createAppGrid()
     lv_obj_set_style_text_align(s_node_id_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(s_node_id_label, ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(s_node_id_label, profile.node_id_font, 0);
-    lv_obj_align(s_node_id_label,
-                 LV_ALIGN_BOTTOM_LEFT,
-                 profile.node_id_offset_x,
-                 profile.node_id_offset_y);
+    lv_obj_align(s_node_id_label, LV_ALIGN_BOTTOM_LEFT, profile.node_id_offset_x, profile.node_id_offset_y);
     if (!profile.show_node_id)
     {
         lv_obj_add_flag(s_node_id_label, LV_OBJ_FLAG_HIDDEN);
@@ -394,18 +431,16 @@ void createAppGrid()
     const uint32_t self_id = s_init_options.messaging ? s_init_options.messaging->getSelfNodeId() : 0;
     if (self_id != 0)
     {
-        snprintf(node_id_buf, sizeof(node_id_buf), "ID: !%08lX", static_cast<unsigned long>(self_id));
+        std::snprintf(node_id_buf, sizeof(node_id_buf), "ID: !%08lX", static_cast<unsigned long>(self_id));
     }
     else
     {
-        snprintf(node_id_buf, sizeof(node_id_buf), "ID: -");
+        std::snprintf(node_id_buf, sizeof(node_id_buf), "ID: -");
     }
     lv_label_set_text(s_node_id_label, node_id_buf);
 #endif
-    lv_label_set_long_mode(s_desc_label,
-                           profile.input_mode == ui::menu_profile::InputMode::TouchPrimary
-                               ? LV_LABEL_LONG_CLIP
-                               : LV_LABEL_LONG_SCROLL_CIRCULAR);
+
+    lv_label_set_long_mode(s_desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
 #if LVGL_VERSION_MAJOR == 9
     s_name_change_id = lv_event_register_id();
@@ -432,6 +467,7 @@ void init(const InitOptions& options)
 
     createPanels();
     createAppGrid();
+    ui::menu::dashboard::init(s_menu_panel, s_grid_panel, s_init_options);
 }
 
 lv_obj_t* menuPanel()
@@ -453,6 +489,26 @@ void bringContentToFront()
     {
         lv_obj_move_foreground(s_node_id_label);
     }
+    ui::menu::dashboard::bringToFront();
+}
+
+void setMenuVisible(bool visible)
+{
+    if (s_menu_panel != nullptr)
+    {
+        if (visible)
+        {
+            lv_obj_clear_flag(s_menu_panel, LV_OBJ_FLAG_HIDDEN);
+        }
+        else
+        {
+            lv_obj_add_flag(s_menu_panel, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    ui::menu_runtime::setMenuActive(visible);
+    ui::status::set_menu_active(visible);
+    ui::menu::dashboard::setActive(visible);
 }
 
 } // namespace menu_layout

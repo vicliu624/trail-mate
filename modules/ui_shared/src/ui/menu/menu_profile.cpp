@@ -1,5 +1,9 @@
 #include "ui/menu/menu_profile.h"
 
+#if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
+#define lv_font_montserrat_12 lv_font_montserrat_14
+#endif
+
 #if !defined(LV_FONT_MONTSERRAT_16) || !LV_FONT_MONTSERRAT_16
 #define lv_font_montserrat_16 lv_font_montserrat_14
 #endif
@@ -133,18 +137,20 @@ MenuLayoutProfile make_tab5_profile()
     profile.variant = LayoutVariant::LargeTouchGrid;
     profile.input_mode = InputMode::TouchPrimary;
     profile.badge_anchor_mode = BadgeAnchorMode::IconTopRight;
-    profile.card_width = 176;
-    profile.card_height = 150;
+    profile.card_width = 112;
+    profile.card_height = 120;
     profile.icon_scale = 256;
     profile.card_radius = 0;
     profile.card_border_width = 0;
-    profile.card_pad_top = 10;
-    profile.card_pad_bottom = 10;
-    profile.card_pad_row = 6;
-    profile.grid_height_pct = 80;
-    profile.grid_top_offset = 46;
-    profile.grid_pad_row = 10;
-    profile.grid_pad_column = 10;
+    profile.card_pad_top = 4;
+    profile.card_pad_bottom = 4;
+    profile.card_pad_row = 2;
+    profile.grid_height_pct = 82;
+    profile.grid_top_offset = 56;
+    profile.grid_pad_row = 4;
+    profile.grid_pad_column = 4;
+    profile.grid_pad_left = 4;
+    profile.grid_pad_right = 4;
     profile.top_bar_height = 46;
     profile.top_bar_side_inset = 10;
     profile.top_bar_text_pad = 8;
@@ -160,10 +166,12 @@ MenuLayoutProfile make_tab5_profile()
     profile.badge_pad_v = 3;
     profile.title_offset_x = 0;
     profile.title_offset_y = 0;
+    profile.max_columns = 4;
     profile.wrap_grid = true;
     profile.vertical_scroll = true;
     profile.snap_center = false;
     profile.transparent_cards = true;
+    profile.grid_anchor_top_left = true;
     profile.show_top_bar = true;
     profile.show_card_label = true;
     profile.show_desc_label = false;

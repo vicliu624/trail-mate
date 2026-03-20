@@ -2,11 +2,11 @@
 
 #include <ctime>
 
+#include "boards/tab5/rtc_runtime.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
-#include "platform/esp/idf_common/tab5_rtc_runtime.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 #include "bsp/m5stack_tab5.h"
@@ -27,7 +27,7 @@ void restart()
 
 bool rtc_ready()
 {
-    return platform::esp::idf_common::tab5_rtc_runtime::is_valid_epoch(std::time(nullptr));
+    return ::boards::tab5::rtc_runtime::is_valid_epoch(std::time(nullptr));
 }
 
 BatteryInfo battery_info()

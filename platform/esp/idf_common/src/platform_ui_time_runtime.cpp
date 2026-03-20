@@ -26,7 +26,7 @@ bool localtime_now(struct tm* out_tm)
     {
         return false;
     }
-    const time_t local = apply_timezone_offset(time(nullptr));
+    const time_t local = apply_timezone_offset(::time(nullptr));
     const tm* tmp = gmtime(&local);
     if (!tmp)
     {

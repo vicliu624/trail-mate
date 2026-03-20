@@ -2,8 +2,8 @@
 
 #include <ctime>
 
-#include "platform/ui/time_runtime.h"
 #include "platform/ui/screen_runtime.h"
+#include "platform/ui/time_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_runtime.h"
@@ -23,7 +23,9 @@ bool format_menu_time(char* out, size_t out_len)
         return false;
     }
 
-    struct tm info{};
+    struct tm info
+    {
+    };
     if (!::platform::ui::time::localtime_now(&info))
     {
         return false;

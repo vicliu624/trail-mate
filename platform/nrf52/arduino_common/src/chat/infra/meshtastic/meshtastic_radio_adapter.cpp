@@ -15,10 +15,10 @@
 
 #include <algorithm>
 #include <array>
-#include <cstdarg>
 #include <cmath>
-#include <ctime>
+#include <cstdarg>
 #include <cstring>
+#include <ctime>
 #include <string>
 
 namespace platform::nrf52::arduino_common::chat::meshtastic
@@ -34,11 +34,11 @@ constexpr uint32_t kRetransmitIntervalMs = 1500;
 constexpr ::chat::NodeId kBroadcastNode = 0xFFFFFFFFUL;
 constexpr uint8_t kDefaultPskIndex = 1;
 
+using ::chat::meshtastic::expandShortPsk;
 using ::chat::meshtastic::fillDecodedPacketCommon;
+using ::chat::meshtastic::isZeroKey;
 using ::chat::meshtastic::makeEncryptedPacketFromWire;
 using ::chat::meshtastic::readPbString;
-using ::chat::meshtastic::expandShortPsk;
-using ::chat::meshtastic::isZeroKey;
 
 void logMeshtasticRx(const char* format, ...)
 {
@@ -1221,7 +1221,7 @@ bool MeshtasticRadioAdapter::hasRelayer(const PacketHistoryEntry& entry, uint8_t
 }
 
 MeshtasticRadioAdapter::HistoryResult MeshtasticRadioAdapter::updatePacketHistory(const ::chat::meshtastic::PacketHeaderWire& header,
-                                                                                   bool allow_update)
+                                                                                  bool allow_update)
 {
     HistoryResult result{};
     if (header.id == 0)

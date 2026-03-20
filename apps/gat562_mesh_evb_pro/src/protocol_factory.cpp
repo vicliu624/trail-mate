@@ -19,7 +19,7 @@ std::unique_ptr<chat::IMeshAdapter> createProtocolAdapter(chat::MeshProtocol pro
     default:
         return std::unique_ptr<chat::IMeshAdapter>(
             new platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter(identity_provider,
-                                                                                           meshtastic_node_store));
+                                                                                          meshtastic_node_store));
     }
 }
 

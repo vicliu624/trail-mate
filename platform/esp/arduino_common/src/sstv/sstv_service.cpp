@@ -21,7 +21,7 @@
 #include "platform/esp/idf_common/tab5_codec_compat.h"
 #include "sys/clock.h"
 #else
-#include "board/TLoRaPagerBoard.h"
+#include "boards/tlora_pager/tlora_pager_board.h"
 #include <SD.h>
 #endif
 
@@ -803,7 +803,7 @@ void render_line_from_buffer(uint8_t line_rgb[320][4], e_mode mode, uint16_t lin
 
 void sstv_task(void*)
 {
-    TLoRaPagerBoard* board = TLoRaPagerBoard::getInstance();
+    boards::tlora_pager::TLoRaPagerBoard* board = boards::tlora_pager::TLoRaPagerBoard::getInstance();
     int prev_volume = -1;
     bool prev_out_mute = false;
     bool restore_amp = false;

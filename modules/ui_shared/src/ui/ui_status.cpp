@@ -66,6 +66,7 @@ lv_obj_t* s_chat_badge = nullptr;
 lv_obj_t* s_chat_badge_label = nullptr;
 TeamSnapshotCache s_team_cache;
 constexpr uint32_t kTeamSnapshotRefreshMs = 5000;
+bool s_menu_active = true;
 
 bool obj_valid(lv_obj_t* obj)
 {
@@ -192,6 +193,11 @@ void apply_menu_badge(const StatusSnapshot& snap)
 
 void status_timer_cb(lv_timer_t* /*timer*/)
 {
+    if (!s_menu_active)
+    {
+        return;
+    }
+
     StatusSnapshot snap = collect_status();
 
     apply_menu_icons(snap);
@@ -242,6 +248,25 @@ void force_update()
 {
     refresh_team_cache(true);
     status_timer_cb(nullptr);
+}
+
+void set_menu_active(bool active)
+{
+    s_menu_active = active;
+    if (s_status_timer == nullptr)
+    {
+        return;
+    }
+
+    if (active)
+    {
+        lv_timer_resume(s_status_timer);
+        status_timer_cb(nullptr);
+    }
+    else
+    {
+        lv_timer_pause(s_status_timer);
+    }
 }
 
 int get_total_unread()

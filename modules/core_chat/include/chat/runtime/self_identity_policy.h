@@ -1,7 +1,7 @@
 #pragma once
 
-#include "chat/runtime/self_identity_provider.h"
 #include "chat/domain/chat_types.h"
+#include "chat/runtime/self_identity_provider.h"
 
 #include <cstddef>
 

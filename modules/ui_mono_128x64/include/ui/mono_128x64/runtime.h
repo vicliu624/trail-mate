@@ -111,9 +111,9 @@ class Runtime : public chat::ChatService::IncomingTextObserver
         MessageInfo,
         Compose,
         SettingsMenu,
-        IdentitySettings,
         RadioSettings,
         DeviceSettings,
+        InfoPage,
         GnssPage,
         ActionPage,
     };
@@ -122,9 +122,6 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     {
         None = 0,
         Message,
-        UserName,
-        ShortName,
-        MeshtasticPsk,
         MeshCoreChannelName,
     };
 
@@ -143,9 +140,9 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     void renderMessageInfo();
     void renderCompose();
     void renderSettingsMenu();
-    void renderIdentitySettings();
     void renderRadioSettings();
     void renderDeviceSettings();
+    void renderInfoPage();
     void renderGnssPage();
     void renderActionPage();
 
@@ -209,9 +206,9 @@ class Runtime : public chat::ChatService::IncomingTextObserver
 
     size_t main_menu_index_ = 0;
     size_t settings_menu_index_ = 0;
-    size_t identity_index_ = 0;
     size_t radio_index_ = 0;
     size_t device_index_ = 0;
+    size_t info_scroll_ = 0;
     size_t action_index_ = 0;
     size_t chat_list_index_ = 0;
     size_t node_list_index_ = 0;

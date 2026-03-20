@@ -8,6 +8,16 @@
 namespace ble
 {
 
+struct BlePairingStatus
+{
+    bool available = false;
+    bool requires_passkey = false;
+    bool is_fixed_pin = false;
+    bool is_pairing_active = false;
+    bool is_connected = false;
+    uint32_t passkey = 0;
+};
+
 class BleService
 {
   public:
@@ -15,6 +25,11 @@ class BleService
     virtual void start() = 0;
     virtual void stop() = 0;
     virtual void update() = 0;
+    virtual bool getPairingStatus(BlePairingStatus* out) const
+    {
+        (void)out;
+        return false;
+    }
 };
 
 class BleManager
@@ -28,6 +43,7 @@ class BleManager
     bool isEnabled() const { return service_ != nullptr; }
     void update();
     void applyProtocol(chat::MeshProtocol protocol);
+    bool getPairingStatus(BlePairingStatus* out) const;
 
   private:
     app::IAppBleFacade& ctx_;

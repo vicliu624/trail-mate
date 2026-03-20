@@ -1,5 +1,5 @@
-#include "platform/ui/time_runtime.h"
 #include "platform/ui/settings_store.h"
+#include "platform/ui/time_runtime.h"
 #include "sys/clock.h"
 
 #include <ctime>

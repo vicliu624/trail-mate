@@ -14,7 +14,7 @@ using Adafruit_LittleFS_Namespace::FILE_O_READ;
 using Adafruit_LittleFS_Namespace::FILE_O_WRITE;
 
 constexpr const char* kTempSuffix = ".tmp";
-}
+} // namespace
 
 InternalFsStore::InternalFsStore(const char* path)
     : path_(path)
@@ -57,8 +57,8 @@ std::vector<::chat::ChatMessage> InternalFsStore::loadRecent(const ::chat::Conve
 }
 
 std::vector<::chat::ConversationMeta> InternalFsStore::loadConversationPage(size_t offset,
-                                                                             size_t limit,
-                                                                             size_t* total)
+                                                                            size_t limit,
+                                                                            size_t* total)
 {
     std::vector<::chat::ConversationMeta> list;
     list.reserve(conversations_.size());

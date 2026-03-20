@@ -2,11 +2,11 @@
 
 #include <cstddef>
 
+#include "boards/t_display_p4/board_profile.h"
+#include "boards/tab5/tab5_board.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "platform/esp/boards/t_display_p4_board_profile.h"
-#include "platform/esp/boards/tab5_board_profile.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 extern "C"
@@ -63,7 +63,7 @@ bool ensure_sdcard_ready()
     {
         return true;
     }
-    if (platform::esp::boards::tab5::kBoardProfile.has_sdcard == false)
+    if (!::boards::tab5::Tab5Board::hasSdCard())
     {
         return false;
     }
@@ -142,7 +142,7 @@ int default_awake_brightness_percent()
 bool gps_capable()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    return platform::esp::boards::tab5::kBoardProfile.has_gps_uart;
+    return ::boards::tab5::Tab5Board::hasGpsUart();
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     return platform::esp::boards::t_display_p4::kBoardProfile.has_gps_uart;
 #else
@@ -153,7 +153,7 @@ bool gps_capable()
 bool sdcard_capable()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    return platform::esp::boards::tab5::kBoardProfile.has_sdcard;
+    return ::boards::tab5::Tab5Board::hasSdCard();
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     return platform::esp::boards::t_display_p4::kBoardProfile.has_sdcard;
 #else

@@ -23,6 +23,7 @@ void register_menu_status_row(lv_obj_t* row,
 void register_chat_badge(lv_obj_t* badge_bg, lv_obj_t* badge_label);
 void force_update();
 int get_total_unread();
+void set_menu_active(bool active);
 
 } // namespace status
 } // namespace ui

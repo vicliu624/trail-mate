@@ -4,6 +4,10 @@
 #include <cstring>
 #include <ctime>
 
+#if defined(ESP_PLATFORM)
+#include "esp_log.h"
+#endif
+
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/time_runtime.h"
@@ -20,6 +24,10 @@ namespace menu_runtime
 namespace
 {
 
+#if defined(ESP_PLATFORM)
+constexpr const char* kTag = "ui-menu-runtime";
+#endif
+
 struct RuntimeState
 {
     Hooks hooks{};
@@ -31,9 +39,20 @@ struct RuntimeState
     lv_timer_t* time_timer = nullptr;
     lv_timer_t* battery_timer = nullptr;
     int watch_face_battery = -1;
+    bool menu_active = true;
+    Scene scene = Scene::Menu;
 };
 
 RuntimeState s_runtime;
+
+bool use_menu_status_icons()
+{
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+    return false;
+#else
+    return true;
+#endif
+}
 
 bool formatMenuTime(char* out, size_t out_len)
 {
@@ -42,6 +61,9 @@ bool formatMenuTime(char* out, size_t out_len)
 
 void showMainMenu()
 {
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "showMainMenu hook");
+#endif
     if (s_runtime.hooks.show_main_menu)
     {
         s_runtime.hooks.show_main_menu();
@@ -93,7 +115,9 @@ void updateWatchFaceTime()
         return;
     }
 
-    struct tm info{};
+    struct tm info
+    {
+    };
     if (!::platform::ui::time::localtime_now(&info))
     {
         watchFaceSetTime(-1, -1, -1, -1, nullptr, battery);
@@ -111,12 +135,18 @@ void hideWatchFaceInternal()
     {
         return;
     }
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "hideWatchFaceInternal");
+#endif
     watchFaceShow(false);
     lv_obj_clear_flag(s_runtime.main_screen, LV_OBJ_FLAG_HIDDEN);
 }
 
 void watchFaceUnlock()
 {
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "watchFaceUnlock");
+#endif
     hideWatchFaceInternal();
     showMainMenu();
 }
@@ -244,18 +274,31 @@ void createTopBar()
     lv_obj_align(menu_status_row, LV_ALIGN_TOP_MID, 0, profile.status_row_offset_y);
     lv_obj_move_foreground(menu_status_row);
 
-    lv_obj_t* menu_route_icon = lv_image_create(menu_status_row);
-    lv_obj_t* menu_tracker_icon = lv_image_create(menu_status_row);
-    lv_obj_t* menu_gps_icon = lv_image_create(menu_status_row);
-    lv_obj_t* menu_team_icon = lv_image_create(menu_status_row);
-    lv_obj_t* menu_msg_icon = lv_image_create(menu_status_row);
-    lv_obj_t* menu_ble_icon = lv_image_create(menu_status_row);
-    lv_obj_add_flag(menu_route_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(menu_tracker_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(menu_gps_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(menu_team_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(menu_msg_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(menu_ble_icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t* menu_route_icon = nullptr;
+    lv_obj_t* menu_tracker_icon = nullptr;
+    lv_obj_t* menu_gps_icon = nullptr;
+    lv_obj_t* menu_team_icon = nullptr;
+    lv_obj_t* menu_msg_icon = nullptr;
+    lv_obj_t* menu_ble_icon = nullptr;
+    if (use_menu_status_icons())
+    {
+        menu_route_icon = lv_image_create(menu_status_row);
+        menu_tracker_icon = lv_image_create(menu_status_row);
+        menu_gps_icon = lv_image_create(menu_status_row);
+        menu_team_icon = lv_image_create(menu_status_row);
+        menu_msg_icon = lv_image_create(menu_status_row);
+        menu_ble_icon = lv_image_create(menu_status_row);
+        lv_obj_add_flag(menu_route_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(menu_tracker_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(menu_gps_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(menu_team_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(menu_msg_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(menu_ble_icon, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        lv_obj_add_flag(menu_status_row, LV_OBJ_FLAG_HIDDEN);
+    }
 
     ui::status::register_menu_status_row(
         menu_status_row, menu_route_icon, menu_tracker_icon, menu_gps_icon, menu_team_icon, menu_msg_icon, menu_ble_icon);
@@ -316,6 +359,7 @@ void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, co
     createTimers();
     refreshTimeLabel();
     refreshBatteryLabel();
+    setScene(Scene::Menu);
 }
 
 void showWatchFace()
@@ -324,15 +368,78 @@ void showWatchFace()
     {
         return;
     }
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "showWatchFace");
+#endif
     showMainMenu();
     lv_obj_clear_flag(s_runtime.main_screen, LV_OBJ_FLAG_HIDDEN);
     watchFaceShow(true);
+    setScene(Scene::WatchFace);
     updateWatchFaceTime();
 }
 
 void onWakeFromSleep()
 {
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "onWakeFromSleep");
+#endif
     showWatchFace();
+}
+
+void setMenuActive(bool active)
+{
+    s_runtime.menu_active = active;
+
+    if (s_runtime.time_timer != nullptr)
+    {
+        if (active)
+        {
+            lv_timer_resume(s_runtime.time_timer);
+        }
+        else
+        {
+            lv_timer_pause(s_runtime.time_timer);
+        }
+    }
+
+    if (s_runtime.battery_timer != nullptr)
+    {
+        if (active)
+        {
+            lv_timer_resume(s_runtime.battery_timer);
+        }
+        else
+        {
+            lv_timer_pause(s_runtime.battery_timer);
+        }
+    }
+
+    if (active)
+    {
+        refreshTimeLabel();
+        refreshBatteryLabel();
+    }
+}
+
+void setScene(Scene scene)
+{
+    s_runtime.scene = scene;
+    switch (scene)
+    {
+    case Scene::Menu:
+        setMenuActive(true);
+        break;
+    case Scene::App:
+    case Scene::WatchFace:
+    case Scene::Sleeping:
+        setMenuActive(false);
+        break;
+    }
+}
+
+Scene currentScene()
+{
+    return s_runtime.scene;
 }
 
 } // namespace menu_runtime

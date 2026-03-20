@@ -5,13 +5,13 @@
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
+#include "boards/tab5/rtc_runtime.h"
 #include "esp_log.h"
 #include "platform/esp/boards/board_runtime.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
 #include "platform/esp/idf_common/gps_runtime.h"
 #include "platform/esp/idf_common/startup_support.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
-#include "platform/esp/idf_common/tab5_rtc_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
@@ -125,7 +125,7 @@ void run(const RuntimeConfig& config)
     (void)platform::esp::idf_common::bsp_runtime::ensure_nvs_ready();
     platform::esp::boards::initializeBoard(waking_from_sleep);
     platform::esp::boards::initializeDisplay();
-    if (platform::esp::idf_common::tab5_rtc_runtime::sync_system_time_from_hardware_rtc())
+    if (::boards::tab5::rtc_runtime::sync_system_time_from_hardware_rtc())
     {
         ESP_LOGI(config.log_tag, "Boot time restored from hardware RTC");
     }

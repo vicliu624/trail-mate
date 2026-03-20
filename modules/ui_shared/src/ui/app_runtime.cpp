@@ -1,5 +1,11 @@
 #include "ui/app_runtime.h"
+#include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_profile.h"
+#include "ui/menu/menu_runtime.h"
+
+#if defined(ESP_PLATFORM)
+#include "esp_log.h"
+#endif
 
 lv_obj_t* main_screen = nullptr;
 lv_group_t* menu_g = nullptr;
@@ -7,6 +13,10 @@ lv_group_t* app_g = nullptr;
 
 namespace
 {
+#if defined(ESP_PLATFORM)
+constexpr const char* kTag = "ui-app-runtime";
+#endif
+
 AppScreen* s_active_app = nullptr;
 AppScreen* s_pending_exit = nullptr;
 lv_timer_t* s_exit_timer = nullptr;
@@ -17,6 +27,31 @@ lv_anim_enable_t transition_anim()
     return ui::menu_profile::current().input_mode == ui::menu_profile::InputMode::TouchPrimary
                ? LV_ANIM_OFF
                : LV_ANIM_ON;
+}
+
+void show_menu_internal()
+{
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "show_menu_internal active=%s", s_active_app ? s_active_app->name() : "(null)");
+#endif
+    ui_clear_active_app();
+    set_default_group(menu_g);
+    ui::menu_layout::setMenuVisible(true);
+    ui::menu_runtime::setScene(ui::menu_runtime::Scene::Menu);
+    lv_tileview_set_tile_by_index(main_screen, 0, 0, transition_anim());
+}
+
+uint32_t child_count(lv_obj_t* obj)
+{
+    if (obj == nullptr)
+    {
+        return 0;
+    }
+#if LVGL_VERSION_MAJOR >= 9
+    return lv_obj_get_child_count(obj);
+#else
+    return static_cast<uint32_t>(lv_obj_get_child_cnt(obj));
+#endif
 }
 
 uint32_t exit_delay_ms()
@@ -41,18 +76,51 @@ void exit_to_menu_timer_cb(lv_timer_t* timer)
         return;
     }
     s_pending_exit = nullptr;
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "exit_to_menu_timer_cb begin app=%s", app->name());
+#endif
     if (main_screen == nullptr)
     {
         app->exit(nullptr);
+        s_active_app = nullptr;
         return;
     }
     lv_obj_t* parent = lv_obj_get_child(main_screen, 1);
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag,
+             "exit_to_menu_timer_cb parent=%p child_count_before=%lu",
+             parent,
+             static_cast<unsigned long>(child_count(parent)));
+#endif
     app->exit(parent);
+    if (parent != nullptr)
+    {
+        const uint32_t leaked_children = child_count(parent);
+        if (leaked_children > 0)
+        {
+#if defined(ESP_PLATFORM)
+            ESP_LOGW(kTag,
+                     "exit_to_menu_timer_cb cleaning leaked app_panel children=%lu",
+                     static_cast<unsigned long>(leaked_children));
+#endif
+            lv_obj_clean(parent);
+        }
+    }
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag,
+             "exit_to_menu_timer_cb parent=%p child_count_after=%lu",
+             parent,
+             static_cast<unsigned long>(child_count(parent)));
+#endif
+    s_active_app = nullptr;
+    show_menu_internal();
     if (menu_g)
     {
-        set_default_group(menu_g);
         lv_group_set_editing(menu_g, false);
     }
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "exit_to_menu_timer_cb complete");
+#endif
 }
 } // namespace
 
@@ -84,9 +152,7 @@ void set_default_group(lv_group_t* group)
 
 void menu_show()
 {
-    ui_clear_active_app();
-    set_default_group(menu_g);
-    lv_tileview_set_tile_by_index(main_screen, 0, 0, transition_anim());
+    show_menu_internal();
 }
 
 AppScreen* ui_get_active_app()
@@ -101,17 +167,31 @@ void ui_clear_active_app()
 
 void ui_switch_to_app(AppScreen* app, lv_obj_t* parent)
 {
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag,
+             "ui_switch_to_app from=%s to=%s parent=%d",
+             s_active_app ? s_active_app->name() : "(null)",
+             app ? app->name() : "(null)",
+             parent ? 1 : 0);
+#endif
     if (s_pending_exit == app)
     {
         s_pending_exit = nullptr;
     }
     if (s_active_app && s_active_app != app)
     {
+#if defined(ESP_PLATFORM)
+        ESP_LOGI(kTag, "exiting previous app=%s", s_active_app->name());
+#endif
         s_active_app->exit(parent);
     }
     if (app)
     {
+#if defined(ESP_PLATFORM)
+        ESP_LOGI(kTag, "enter app=%s", app->name());
+#endif
         app->enter(parent);
+        ui::menu_runtime::setScene(ui::menu_runtime::Scene::App);
     }
     s_active_app = app;
 }
@@ -123,14 +203,18 @@ void ui_exit_active_app(lv_obj_t* parent)
         s_active_app->exit(parent);
     }
     s_active_app = nullptr;
+    ui::menu_runtime::setScene(ui::menu_runtime::Scene::Menu);
 }
 
 void ui_request_exit_to_menu()
 {
     AppScreen* app = s_active_app;
-    menu_show();
+#if defined(ESP_PLATFORM)
+    ESP_LOGI(kTag, "ui_request_exit_to_menu app=%s", app ? app->name() : "(null)");
+#endif
     if (app == nullptr)
     {
+        menu_show();
         return;
     }
     if (s_pending_exit == app)

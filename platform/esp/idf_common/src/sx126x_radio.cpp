@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "boards/tab5/tab5_board.h"
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "esp_err.h"
@@ -13,7 +14,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
-#include "platform/esp/boards/tab5_board_profile.h"
 
 namespace platform::esp::idf_common
 {
@@ -272,7 +272,7 @@ uint8_t ocp_for_60ma()
 
 const auto& lora_pins()
 {
-    return platform::esp::boards::tab5::kBoardProfile.lora_module;
+    return ::boards::tab5::Tab5Board::loraModulePins();
 }
 
 } // namespace

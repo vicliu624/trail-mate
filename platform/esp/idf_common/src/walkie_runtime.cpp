@@ -1,11 +1,11 @@
 #include "platform/esp/common/walkie_runtime.h"
+#include "boards/tab5/tab5_board.h"
 
 #include <cstdio>
 #include <cstring>
 
-#include "platform/esp/boards/tab5_board_profile.h"
+#include "boards/tab5/codec_compat.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
-#include "platform/esp/idf_common/tab5_codec_compat.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 namespace
@@ -18,16 +18,16 @@ constexpr uint8_t kFskSyncWord[] = {0x2D, 0x01};
 
 struct BackendState
 {
-    platform::esp::idf_common::Tab5CodecCompat codec;
+    ::boards::tab5::CodecCompat codec;
 };
 
 BackendState s_backend_state;
 
 bool board_supports_walkie()
 {
-    return platform::esp::boards::tab5::kBoardProfile.has_audio &&
-           (platform::esp::boards::tab5::kBoardProfile.has_lora ||
-            platform::esp::boards::tab5::kBoardProfile.has_m5bus_lora_module_routing);
+    return ::boards::tab5::Tab5Board::hasAudio() &&
+           (::boards::tab5::Tab5Board::hasLora() ||
+            ::boards::tab5::Tab5Board::hasM5BusLoraRouting());
 }
 
 platform::esp::idf_common::Sx126xRadio& radio()

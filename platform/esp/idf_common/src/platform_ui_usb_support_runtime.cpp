@@ -13,9 +13,9 @@
 #include <cstdio>
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+#include "boards/tab5/tab5_board.h"
 #include "driver/sdmmc_host.h"
 #include "esp_err.h"
-#include "platform/esp/boards/tab5_board_profile.h"
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #include "sdmmc_cmd.h"
 #include "tinyusb.h"
@@ -199,12 +199,13 @@ esp_err_t init_sd_host_raw()
 
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
     slot_config.width = 4;
-    slot_config.clk = static_cast<gpio_num_t>(platform::esp::boards::tab5::kBoardProfile.sdmmc.clk);
-    slot_config.cmd = static_cast<gpio_num_t>(platform::esp::boards::tab5::kBoardProfile.sdmmc.cmd);
-    slot_config.d0 = static_cast<gpio_num_t>(platform::esp::boards::tab5::kBoardProfile.sdmmc.d0);
-    slot_config.d1 = static_cast<gpio_num_t>(platform::esp::boards::tab5::kBoardProfile.sdmmc.d1);
-    slot_config.d2 = static_cast<gpio_num_t>(platform::esp::boards::tab5::kBoardProfile.sdmmc.d2);
-    slot_config.d3 = static_cast<gpio_num_t>(platform::esp::boards::tab5::kBoardProfile.sdmmc.d3);
+    const auto& pins = ::boards::tab5::Tab5Board::sdmmcPins();
+    slot_config.clk = static_cast<gpio_num_t>(pins.clk);
+    slot_config.cmd = static_cast<gpio_num_t>(pins.cmd);
+    slot_config.d0 = static_cast<gpio_num_t>(pins.d0);
+    slot_config.d1 = static_cast<gpio_num_t>(pins.d1);
+    slot_config.d2 = static_cast<gpio_num_t>(pins.d2);
+    slot_config.d3 = static_cast<gpio_num_t>(pins.d3);
 
     s_card = static_cast<sdmmc_card_t*>(malloc(sizeof(sdmmc_card_t)));
     if (!s_card)

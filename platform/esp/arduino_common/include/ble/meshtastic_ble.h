@@ -2,8 +2,8 @@
 
 #include "app/app_facades.h"
 #include "ble/ble_manager.h"
-#include "chat/infra/meshtastic/mt_codec_pb.h"
 #include "chat/ble/meshtastic_phone_session.h"
+#include "chat/infra/meshtastic/mt_codec_pb.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
 #include "meshtastic/admin.pb.h"

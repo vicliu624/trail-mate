@@ -3,9 +3,9 @@
 #include "app/app_facade_access.h"
 #include "apps/gat562_mesh_evb_pro/debug_console.h"
 #include "apps/gat562_mesh_evb_pro/protocol_factory.h"
+#include "ble/ble_manager.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
-#include "ble/ble_manager.h"
 #include "chat/domain/chat_model.h"
 #include "chat/infra/mesh_adapter_router_core.h"
 #include "chat/infra/mesh_protocol_utils.h"
@@ -148,9 +148,7 @@ void AppFacadeRuntime::initializeStores()
         new platform::nrf52::arduino_common::chat::infra::ContactStore());
     platform::nrf52::arduino_common::chat::infra::ContactStore* contact_store_ptr = contact_store.get();
     node_store->setProtectedNodeChecker([contact_store_ptr](uint32_t node_id)
-                                        {
-                                            return contact_store_ptr && contact_store_ptr->hasContactNode(node_id);
-                                        });
+                                        { return contact_store_ptr && contact_store_ptr->hasContactNode(node_id); });
     node_store_ = std::move(node_store);
     contact_store_ = std::move(contact_store);
     contact_service_ = std::unique_ptr<chat::contacts::ContactService>(

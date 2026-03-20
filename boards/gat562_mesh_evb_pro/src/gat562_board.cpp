@@ -9,8 +9,8 @@
 #include ".pio/libdeps/gat562_mesh_evb_pro/Adafruit SSD1306/Adafruit_SSD1306.h"
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
-#include <time.h>
 #include <Wire.h>
+#include <time.h>
 
 #include <algorithm>
 #include <cmath>

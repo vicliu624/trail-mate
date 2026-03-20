@@ -1,8 +1,8 @@
 #include "chat/ble/meshtastic_phone_core.h"
 
 #include "app/app_config.h"
-#include "chat/runtime/self_identity_policy.h"
 #include "chat/ports/i_mesh_adapter.h"
+#include "chat/runtime/self_identity_policy.h"
 #include "chat/usecase/chat_service.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
