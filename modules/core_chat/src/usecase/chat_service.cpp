@@ -32,6 +32,12 @@ ChatService::ChatService(ChatModel& model,
 
 MessageId ChatService::sendText(ChannelId channel, const std::string& text, NodeId peer)
 {
+    return sendTextWithId(channel, text, 0, peer);
+}
+
+MessageId ChatService::sendTextWithId(ChannelId channel, const std::string& text,
+                                      MessageId forced_msg_id, NodeId peer)
+{
     if (text.empty())
     {
         return 0;
@@ -39,7 +45,7 @@ MessageId ChatService::sendText(ChannelId channel, const std::string& text, Node
 
     // Try to send via adapter first to get packet ID
     MessageId msg_id = 0;
-    bool queued = adapter_.sendText(channel, text, &msg_id, peer);
+    bool queued = adapter_.sendTextWithId(channel, text, forced_msg_id, &msg_id, peer);
 
     ChatMessage msg;
     msg.protocol = active_protocol_;

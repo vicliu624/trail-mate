@@ -42,6 +42,9 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     ::chat::MeshCapabilities getCapabilities() const override;
     bool sendText(::chat::ChannelId channel, const std::string& text,
                   ::chat::MessageId* out_msg_id, ::chat::NodeId peer = 0) override;
+    bool sendTextWithId(::chat::ChannelId channel, const std::string& text,
+                        ::chat::MessageId forced_msg_id,
+                        ::chat::MessageId* out_msg_id, ::chat::NodeId peer = 0) override;
     bool pollIncomingText(::chat::MeshIncomingText* out) override;
     bool sendAppData(::chat::ChannelId channel, uint32_t portnum,
                      const uint8_t* payload, size_t len,
@@ -50,6 +53,10 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
                      bool want_response = false) override;
     bool pollIncomingData(::chat::MeshIncomingData* out) override;
     bool requestNodeInfo(::chat::NodeId dest, bool want_response) override;
+    bool startKeyVerification(::chat::NodeId node_id) override;
+    bool submitKeyVerificationNumber(::chat::NodeId node_id, uint64_t nonce, uint32_t number) override;
+    bool isPkiReady() const override;
+    bool hasPkiKey(::chat::NodeId dest) const override;
     void applyConfig(const ::chat::MeshConfig& config) override;
     void setUserInfo(const char* long_name, const char* short_name) override;
     void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
@@ -97,14 +104,17 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
         bool want_ack = false;
         bool local_origin = false;
         bool fallback_sent = false;
+        bool observe_only = false;
     };
 
     ::chat::runtime::EffectiveSelfIdentity buildEffectiveIdentity() const;
     bool transmitWire(const uint8_t* data, size_t size);
     bool transmitPreparedWire(uint8_t* data, size_t size, ::chat::ChannelId channel,
                               const meshtastic_Data* decoded, bool track_retransmit,
-                              bool local_origin, uint8_t retries_override = 0);
-    bool buildAndQueueNodeInfo(::chat::NodeId dest, bool want_response);
+                              bool local_origin, uint8_t retries_override = 0,
+                              bool observe_broadcast_ack = false);
+    bool buildAndQueueNodeInfo(::chat::NodeId dest, bool want_response,
+                               ::chat::ChannelId channel = ::chat::ChannelId::PRIMARY);
     bool buildAndQueueRoutingPacket(::chat::NodeId dest, uint32_t request_id,
                                     uint8_t channel_hash, ::chat::ChannelId channel,
                                     meshtastic_Routing_Error reason,
@@ -119,12 +129,14 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     bool sendTraceRouteResponse(::chat::NodeId dest, uint32_t request_id,
                                 const meshtastic_RouteDiscovery& route,
                                 ::chat::ChannelId channel, bool want_ack);
+    bool sendPositionTo(::chat::NodeId dest, ::chat::ChannelId channel);
     bool handleTraceRoutePacket(const ::chat::meshtastic::PacketHeaderWire& header,
                                 meshtastic_Data* decoded,
                                 const ::chat::RxMeta* rx_meta,
                                 ::chat::ChannelId channel,
                                 bool want_ack_flag,
                                 bool want_response);
+    void maybeBroadcastNodeInfo(uint32_t now_ms);
     void emitRoutingResult(uint32_t request_id, meshtastic_Routing_Error reason,
                            ::chat::NodeId from, ::chat::NodeId to,
                            ::chat::ChannelId channel, uint8_t channel_hash,
@@ -149,10 +161,34 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     void queuePendingRetransmit(const ::chat::meshtastic::PacketHeaderWire& header,
                                 const uint8_t* wire, size_t wire_size,
                                 ::chat::ChannelId channel,
-                                bool local_origin, uint8_t retries_override);
+                                bool local_origin, uint8_t retries_override,
+                                bool observe_only = false);
     bool stopPendingRetransmit(::chat::NodeId from, ::chat::MessageId packet_id);
     void maybeHandleObservedRelay(const ::chat::meshtastic::PacketHeaderWire& header);
     static uint64_t pendingKey(::chat::NodeId from, ::chat::MessageId packet_id);
+    bool initPkiKeys();
+    void loadPkiNodeKeys();
+    void savePkiNodeKey(::chat::NodeId node_id, const uint8_t* key, size_t key_len);
+    void savePkiKeysToPrefs();
+    void touchPkiNodeKey(::chat::NodeId node_id);
+    bool decryptPkiPayload(::chat::NodeId from, ::chat::MessageId packet_id,
+                           const uint8_t* cipher, size_t cipher_len,
+                           uint8_t* out_plain, size_t* out_plain_len);
+    bool encryptPkiPayload(::chat::NodeId dest, ::chat::MessageId packet_id,
+                           const uint8_t* plain, size_t plain_len,
+                           uint8_t* out_cipher, size_t* out_cipher_len);
+    void updateKeyVerificationState();
+    void resetKeyVerificationState();
+    void buildVerificationCode(char* out, size_t out_len) const;
+    bool handleKeyVerificationInit(const ::chat::meshtastic::PacketHeaderWire& header,
+                                   const meshtastic_KeyVerification& kv);
+    bool handleKeyVerificationReply(const ::chat::meshtastic::PacketHeaderWire& header,
+                                    const meshtastic_KeyVerification& kv);
+    bool handleKeyVerificationFinal(const ::chat::meshtastic::PacketHeaderWire& header,
+                                    const meshtastic_KeyVerification& kv);
+    bool sendKeyVerificationPacket(::chat::NodeId dest, const meshtastic_KeyVerification& kv,
+                                   bool want_response);
+    bool processKeyVerificationNumber(::chat::NodeId remote_node, uint64_t nonce, uint32_t number);
     std::string mqttNodeIdString() const;
     const char* mqttChannelIdFor(::chat::ChannelId channel) const;
     bool hasAnyMqttDownlinkEnabled() const;
@@ -189,6 +225,38 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     MqttProxySettings mqtt_proxy_settings_{};
     std::vector<PacketHistoryEntry> packet_history_;
     std::map<uint64_t, PendingRetransmit> pending_retransmits_;
+    uint32_t last_nodeinfo_ms_ = 0;
+    uint8_t last_raw_packet_[256] = {};
+    size_t last_raw_packet_len_ = 0;
+    bool has_pending_raw_packet_ = false;
+    uint8_t encrypt_mode_ = 1;
+    bool pki_enabled_ = false;
+    bool pki_ready_ = false;
+    std::array<uint8_t, 32> pki_public_key_{};
+    std::array<uint8_t, 32> pki_private_key_{};
+    std::map<::chat::NodeId, std::array<uint8_t, 32>> node_public_keys_;
+    std::map<::chat::NodeId, uint32_t> node_key_last_seen_;
+    std::map<::chat::NodeId, ::chat::ChannelId> node_last_channel_;
+    std::map<::chat::NodeId, uint32_t> nodeinfo_last_seen_ms_;
+    uint32_t last_position_reply_ms_ = 0;
+
+    enum class KeyVerificationState : uint8_t
+    {
+        Idle,
+        SenderInitiated,
+        SenderAwaitingNumber,
+        SenderAwaitingUser,
+        ReceiverAwaitingHash1,
+        ReceiverAwaitingUser
+    };
+
+    KeyVerificationState kv_state_ = KeyVerificationState::Idle;
+    uint64_t kv_nonce_ = 0;
+    uint32_t kv_nonce_ms_ = 0;
+    uint32_t kv_security_number_ = 0;
+    ::chat::NodeId kv_remote_node_ = 0;
+    std::array<uint8_t, 32> kv_hash1_{};
+    std::array<uint8_t, 32> kv_hash2_{};
 };
 
 } // namespace platform::nrf52::arduino_common::chat::meshtastic

@@ -47,6 +47,8 @@ class ChatService
      * @return Message ID if queued successfully, 0 on failure
      */
     MessageId sendText(ChannelId channel, const std::string& text, NodeId peer = 0);
+    MessageId sendTextWithId(ChannelId channel, const std::string& text,
+                             MessageId forced_msg_id, NodeId peer = 0);
 
     /**
      * @brief Trigger protocol discovery action (if supported by active adapter)

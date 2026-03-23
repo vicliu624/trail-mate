@@ -70,6 +70,14 @@ bool MeshAdapterRouterCore::sendText(ChannelId channel, const std::string& text,
     return backend && backend->sendText(channel, text, out_msg_id, peer);
 }
 
+bool MeshAdapterRouterCore::sendTextWithId(ChannelId channel, const std::string& text,
+                                           MessageId forced_msg_id,
+                                           MessageId* out_msg_id, NodeId peer)
+{
+    IMeshAdapter* backend = activeBackend();
+    return backend && backend->sendTextWithId(channel, text, forced_msg_id, out_msg_id, peer);
+}
+
 bool MeshAdapterRouterCore::pollIncomingText(MeshIncomingText* out)
 {
     IMeshAdapter* backend = activeBackend();

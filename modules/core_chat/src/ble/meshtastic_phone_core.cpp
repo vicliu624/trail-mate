@@ -25,6 +25,30 @@ constexpr const char* kCompatFirmwareVersion = "2.7.4.0";
 constexpr uint8_t kQueueDepthHint = 4;
 constexpr uint8_t kMaxMeshtasticChannels = 8;
 constexpr uint32_t kModuleConfigVersion = 1;
+constexpr meshtastic_AdminMessage_ConfigType kConfigSnapshotTypes[] = {
+    meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG,
+    meshtastic_AdminMessage_ConfigType_POSITION_CONFIG,
+    meshtastic_AdminMessage_ConfigType_DISPLAY_CONFIG,
+    meshtastic_AdminMessage_ConfigType_LORA_CONFIG,
+    meshtastic_AdminMessage_ConfigType_BLUETOOTH_CONFIG,
+    meshtastic_AdminMessage_ConfigType_SECURITY_CONFIG,
+    meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG,
+};
+constexpr meshtastic_AdminMessage_ModuleConfigType kModuleSnapshotTypes[] = {
+    meshtastic_AdminMessage_ModuleConfigType_MQTT_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_SERIAL_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_EXTNOTIF_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_STOREFORWARD_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_RANGETEST_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_TELEMETRY_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_CANNEDMSG_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_AUDIO_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_REMOTEHARDWARE_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_NEIGHBORINFO_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_AMBIENTLIGHTING_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_DETECTIONSENSOR_CONFIG,
+    meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG,
+};
 
 void copyBounded(char* dst, size_t dst_len, const char* src)
 {
@@ -211,6 +235,11 @@ MeshtasticPhoneCore::MeshtasticPhoneCore(app::IAppBleFacade& ctx, MeshtasticPhon
 
 void MeshtasticPhoneCore::reset()
 {
+    config_nonce_ = 0;
+    config_node_index_ = 0;
+    config_channel_index_ = 0;
+    config_type_index_ = 0;
+    config_module_type_index_ = 0;
     last_to_radio_len_ = 0;
     std::memset(last_to_radio_, 0, sizeof(last_to_radio_));
     config_flow_active_ = false;
@@ -298,6 +327,16 @@ bool MeshtasticPhoneCore::handleToRadioPacket(meshtastic_MeshPacket& packet)
     packet.from = ctx_.getSelfNodeId();
     packet.rx_time = nowSeconds();
 
+    const bool is_broadcast = (packet.to == 0 || packet.to == 0xFFFFFFFFUL);
+    if (is_broadcast)
+    {
+        // Meshtastic broadcast messages should not be modeled as ACKed sends.
+        // Some phone clients set want_ack by default, which leaves the UI waiting
+        // for an ACK that will never exist for broadcast traffic.
+        packet.want_ack = false;
+        packet.decoded.want_response = false;
+    }
+
     const bool admin_for_self =
         (packet.decoded.portnum == meshtastic_PortNum_ADMIN_APP) &&
         (packet.to == 0 || packet.to == ctx_.getSelfNodeId());
@@ -319,7 +358,7 @@ bool MeshtasticPhoneCore::handleToRadioPacket(meshtastic_MeshPacket& packet)
     if (packet.decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP)
     {
         std::string text(reinterpret_cast<const char*>(packet.decoded.payload.bytes), packet.decoded.payload.size);
-        const chat::MessageId msg_id = ctx_.getChatService().sendText(channel, text, packet.to);
+        const chat::MessageId msg_id = ctx_.getChatService().sendTextWithId(channel, text, packet.id, packet.to);
         enqueueQueueStatus(packet.id, msg_id != 0);
         return msg_id != 0;
     }
@@ -816,14 +855,11 @@ bool MeshtasticPhoneCore::popToPhone(MeshtasticBleFrame* out)
     {
         *out = frame_queue_.front();
         frame_queue_.pop_front();
-        if (config_flow_active_ && frame_queue_.empty())
-        {
-            config_flow_active_ = false;
-            if (hooks_)
-            {
-                hooks_->onConfigComplete();
-            }
-        }
+        return true;
+    }
+
+    if (config_flow_active_ && popConfigSnapshotFrame(out))
+    {
         return true;
     }
 
@@ -845,6 +881,103 @@ bool MeshtasticPhoneCore::popToPhone(MeshtasticBleFrame* out)
     }
 
     return false;
+}
+
+bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
+{
+    if (!out || !config_flow_active_)
+    {
+        return false;
+    }
+
+    meshtastic_FromRadio from = meshtastic_FromRadio_init_zero;
+    uint32_t from_num = config_nonce_;
+
+    if (config_node_index_ == 0)
+    {
+        from.which_payload_variant = meshtastic_FromRadio_my_info_tag;
+        from.my_info = buildMyInfo();
+        ++config_node_index_;
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    if (config_node_index_ == 1)
+    {
+        from.which_payload_variant = meshtastic_FromRadio_deviceuiConfig_tag;
+        from.deviceuiConfig = buildDeviceUi();
+        ++config_node_index_;
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    if (config_node_index_ == 2)
+    {
+        from.which_payload_variant = meshtastic_FromRadio_node_info_tag;
+        from.node_info = buildSelfNodeInfo();
+        ++config_node_index_;
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    if (const auto* store = ctx_.getNodeStore())
+    {
+        const auto& entries = store->getEntries();
+        while ((config_node_index_ - 3) < entries.size())
+        {
+            const auto& entry = entries[config_node_index_ - 3];
+            ++config_node_index_;
+            if (entry.node_id == 0 || entry.node_id == ctx_.getSelfNodeId())
+            {
+                continue;
+            }
+            from.which_payload_variant = meshtastic_FromRadio_node_info_tag;
+            from.node_info = buildNodeInfoFromEntry(entry);
+            return encodeFromRadio(from, entry.node_id, out);
+        }
+    }
+
+    if (config_channel_index_ == 0)
+    {
+        from.which_payload_variant = meshtastic_FromRadio_metadata_tag;
+        from.metadata = buildMetadata();
+        ++config_channel_index_;
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    const uint8_t channel_slot = static_cast<uint8_t>(config_channel_index_ - 1);
+    if (channel_slot < kMaxMeshtasticChannels)
+    {
+        from.which_payload_variant = meshtastic_FromRadio_channel_tag;
+        from.channel = buildChannel(channel_slot);
+        ++config_channel_index_;
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    if (config_type_index_ < (sizeof(kConfigSnapshotTypes) / sizeof(kConfigSnapshotTypes[0])))
+    {
+        from.which_payload_variant = meshtastic_FromRadio_config_tag;
+        from.config = buildConfig(kConfigSnapshotTypes[config_type_index_++]);
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    if (config_module_type_index_ < (sizeof(kModuleSnapshotTypes) / sizeof(kModuleSnapshotTypes[0])))
+    {
+        from.which_payload_variant = meshtastic_FromRadio_moduleConfig_tag;
+        from.moduleConfig = buildModuleConfig(kModuleSnapshotTypes[config_module_type_index_++]);
+        return encodeFromRadio(from, from_num, out);
+    }
+
+    from.which_payload_variant = meshtastic_FromRadio_config_complete_id_tag;
+    from.config_complete_id = config_nonce_;
+    config_flow_active_ = false;
+    config_nonce_ = 0;
+    config_node_index_ = 0;
+    config_channel_index_ = 0;
+    config_type_index_ = 0;
+    config_module_type_index_ = 0;
+    if (hooks_)
+    {
+        hooks_->onConfigComplete();
+    }
+    return encodeFromRadio(from, from_num, out);
 }
 
 bool MeshtasticPhoneCore::encodeFromRadio(const meshtastic_FromRadio& from, uint32_t from_num, MeshtasticBleFrame* out) const
@@ -880,100 +1013,16 @@ void MeshtasticPhoneCore::enqueueQueueStatus(uint32_t packet_id, bool ok)
 void MeshtasticPhoneCore::enqueueConfigSnapshot(uint32_t config_nonce)
 {
     config_flow_active_ = true;
+    config_nonce_ = config_nonce;
+    config_node_index_ = 0;
+    config_channel_index_ = 0;
+    config_type_index_ = 0;
+    config_module_type_index_ = 0;
+    frame_queue_.clear();
     if (hooks_)
     {
         hooks_->onConfigStart();
     }
-
-    meshtastic_FromRadio from = meshtastic_FromRadio_init_zero;
-    from.which_payload_variant = meshtastic_FromRadio_my_info_tag;
-    from.my_info = buildMyInfo();
-    enqueueFromRadio(from, config_nonce);
-
-    from = meshtastic_FromRadio_init_zero;
-    from.which_payload_variant = meshtastic_FromRadio_deviceuiConfig_tag;
-    from.deviceuiConfig = buildDeviceUi();
-    enqueueFromRadio(from, config_nonce);
-
-    from = meshtastic_FromRadio_init_zero;
-    from.which_payload_variant = meshtastic_FromRadio_node_info_tag;
-    from.node_info = buildSelfNodeInfo();
-    enqueueFromRadio(from, config_nonce);
-
-    if (const auto* store = ctx_.getNodeStore())
-    {
-        const auto& entries = store->getEntries();
-        for (const auto& entry : entries)
-        {
-            if (entry.node_id == 0 || entry.node_id == ctx_.getSelfNodeId())
-            {
-                continue;
-            }
-            from = meshtastic_FromRadio_init_zero;
-            from.which_payload_variant = meshtastic_FromRadio_node_info_tag;
-            from.node_info = buildNodeInfoFromEntry(entry);
-            enqueueFromRadio(from, entry.node_id);
-        }
-    }
-
-    from = meshtastic_FromRadio_init_zero;
-    from.which_payload_variant = meshtastic_FromRadio_metadata_tag;
-    from.metadata = buildMetadata();
-    enqueueFromRadio(from, config_nonce);
-
-    for (uint8_t channel_idx = 0; channel_idx < kMaxMeshtasticChannels; ++channel_idx)
-    {
-        from = meshtastic_FromRadio_init_zero;
-        from.which_payload_variant = meshtastic_FromRadio_channel_tag;
-        from.channel = buildChannel(channel_idx);
-        enqueueFromRadio(from, config_nonce);
-    }
-
-    const meshtastic_AdminMessage_ConfigType config_types[] = {
-        meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG,
-        meshtastic_AdminMessage_ConfigType_POSITION_CONFIG,
-        meshtastic_AdminMessage_ConfigType_DISPLAY_CONFIG,
-        meshtastic_AdminMessage_ConfigType_LORA_CONFIG,
-        meshtastic_AdminMessage_ConfigType_BLUETOOTH_CONFIG,
-        meshtastic_AdminMessage_ConfigType_SECURITY_CONFIG,
-        meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG,
-    };
-    for (const auto config_type : config_types)
-    {
-        from = meshtastic_FromRadio_init_zero;
-        from.which_payload_variant = meshtastic_FromRadio_config_tag;
-        from.config = buildConfig(config_type);
-        enqueueFromRadio(from, config_nonce);
-    }
-
-    const meshtastic_AdminMessage_ModuleConfigType module_types[] = {
-        meshtastic_AdminMessage_ModuleConfigType_MQTT_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_SERIAL_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_EXTNOTIF_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_STOREFORWARD_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_RANGETEST_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_TELEMETRY_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_CANNEDMSG_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_AUDIO_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_REMOTEHARDWARE_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_NEIGHBORINFO_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_AMBIENTLIGHTING_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_DETECTIONSENSOR_CONFIG,
-        meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG,
-    };
-    for (const auto module_type : module_types)
-    {
-        from = meshtastic_FromRadio_init_zero;
-        from.which_payload_variant = meshtastic_FromRadio_moduleConfig_tag;
-        from.moduleConfig = buildModuleConfig(module_type);
-        enqueueFromRadio(from, config_nonce);
-    }
-
-    from = meshtastic_FromRadio_init_zero;
-    from.which_payload_variant = meshtastic_FromRadio_config_complete_id_tag;
-    from.config_complete_id = config_nonce;
-    enqueueFromRadio(from, config_nonce);
-
     notifyFromNum(config_nonce);
 }
 
@@ -1076,7 +1125,15 @@ meshtastic_DeviceMetadata MeshtasticPhoneCore::buildMetadata() const
     metadata.hasWifi = false;
     metadata.hasEthernet = false;
     metadata.hasRemoteHardware = false;
+#if defined(NRF52840_XXAA) || defined(ARDUINO_NRF52840_FEATHER)
+    // The nRF52 radio backend can use PKI on-air, but the phone-side BLE admin
+    // flow does not yet fully model the official PKI management exchange.
+    // Advertising PKC here causes some phone apps to enter unsupported init paths
+    // immediately after pairing.
+    metadata.hasPKC = false;
+#else
     metadata.hasPKC = ctx_.getMeshAdapter() ? ctx_.getMeshAdapter()->isPkiReady() : false;
+#endif
     metadata.role = meshtastic_Config_DeviceConfig_Role_CLIENT;
     metadata.position_flags = 0;
     metadata.hw_model = meshtastic_HardwareModel_UNSET;

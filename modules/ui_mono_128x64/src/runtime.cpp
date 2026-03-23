@@ -130,7 +130,7 @@ constexpr uint32_t kBootMinMs = 1800;
 constexpr uint32_t kSleepTimeoutMs = 30000;
 constexpr uint32_t kComposeMultiTapWindowMs = 700;
 constexpr size_t kChatListPageSize = 6;
-constexpr size_t kNodeListPageSize = 3;
+constexpr size_t kNodeListPageSize = 6;
 constexpr size_t kMessageInfoPageSize = 6;
 constexpr size_t kNodeInfoPageSize = 6;
 constexpr size_t kInfoPageSize = 6;
@@ -1931,14 +1931,14 @@ void Runtime::renderNodeList()
         return;
     }
 
-    constexpr size_t kNodeAliasMax = 8;
+    constexpr size_t kNodeAliasMax = 6;
     const size_t visible = std::min(node_count_ - start, kNodeListPageSize);
 
     for (size_t i = 0; i < visible; ++i)
     {
         const size_t node_index = start + i;
         const auto& node = nodes_[node_index];
-        const int card_y = 10 + static_cast<int>(i * 18);
+        const int row_y = 10 + static_cast<int>(i * text_renderer_.lineHeight());
         char node_id[8] = {};
         std::snprintf(node_id, sizeof(node_id), "%04lX",
                       static_cast<unsigned long>(node.node_id & 0xFFFFUL));
@@ -1949,21 +1949,15 @@ void Runtime::renderNodeList()
             alias[kNodeAliasMax] = '\0';
         }
 
-        char line[24] = {};
+        char label[16] = {};
         if (alias[0] == '\0' || equalsIgnoreCase(alias, node_id))
         {
-            std::snprintf(line, sizeof(line), "%s", node_id);
+            std::snprintf(label, sizeof(label), "%s", node_id);
         }
         else
         {
-            std::snprintf(line, sizeof(line), "%s %s", node_id, alias);
+            std::snprintf(label, sizeof(label), "%s %s", node_id, alias);
         }
-
-        if (node_index == selected)
-        {
-            drawFrame(display_, 0, card_y - 1, display_.width(), 17);
-        }
-        drawTextClipped(2, card_y, 90, line, false);
 
         char age_buf[8] = {};
         const time_t now_s = host_.utc_now_fn ? host_.utc_now_fn() : 0;
@@ -1982,21 +1976,21 @@ void Runtime::renderNodeList()
             std::snprintf(dist_buf, sizeof(dist_buf), "-");
         }
 
-        char subline[32] = {};
-        std::snprintf(subline, sizeof(subline), "%s %s %s",
-                      age_buf,
-                      dist_buf,
-                      signalRatingLabel(node.snr, node.rssi));
-        drawTextClipped(6, card_y + 8, 78, subline, false);
-
         const char* sig = signalRatingLabel(node.snr, node.rssi);
+        char line[24] = {};
+        std::snprintf(line, sizeof(line), "%s %s %s",
+                      label,
+                      age_buf,
+                      dist_buf);
+        drawTextClipped(0, row_y, 104, line, node_index == selected);
+
         const int bars = std::strcmp(sig, "STR") == 0 ? 4 : std::strcmp(sig, "OK") == 0 ? 3 : std::strcmp(sig, "WEAK") == 0 ? 2
                                                                                                                    : 1;
         for (int bar = 0; bar < 4; ++bar)
         {
             const int bar_h = 2 + bar * 2;
             const int bar_x = 108 + bar * 4;
-            const int bar_y = card_y + 14 - bar_h;
+            const int bar_y = row_y + 6 - bar_h;
             if (bar < bars)
             {
                 display_.fillRect(bar_x, bar_y, 3, bar_h, true);

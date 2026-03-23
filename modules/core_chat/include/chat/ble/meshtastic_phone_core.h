@@ -93,6 +93,7 @@ class MeshtasticPhoneCore
     bool handleAdmin(meshtastic_MeshPacket& packet);
     bool handleLocalSelfPacket(meshtastic_MeshPacket& packet);
     bool encodeFromRadio(const meshtastic_FromRadio& from, uint32_t from_num, MeshtasticBleFrame* out) const;
+    bool popConfigSnapshotFrame(MeshtasticBleFrame* out);
     void enqueueQueueStatus(uint32_t packet_id, bool ok);
     void enqueueConfigSnapshot(uint32_t config_nonce);
     void enqueueFromRadio(const meshtastic_FromRadio& from, uint32_t from_num);
@@ -113,6 +114,11 @@ class MeshtasticPhoneCore
     app::IAppBleFacade& ctx_;
     MeshtasticPhoneTransport& transport_;
     MeshtasticPhoneHooks* hooks_ = nullptr;
+    uint32_t config_nonce_ = 0;
+    size_t config_node_index_ = 0;
+    uint8_t config_channel_index_ = 0;
+    uint8_t config_type_index_ = 0;
+    uint8_t config_module_type_index_ = 0;
     uint8_t last_to_radio_[meshtastic_ToRadio_size] = {};
     size_t last_to_radio_len_ = 0;
     bool config_flow_active_ = false;
