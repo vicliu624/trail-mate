@@ -327,6 +327,9 @@ void MeshtasticBleService::onIncomingText(const chat::MeshIncomingText& msg)
 
 bool MeshtasticBleService::handleToRadio(const uint8_t* data, size_t len)
 {
+    Serial2.printf("[BLE][nrf52][mt] handleToRadio len=%u connected=%u\n",
+                   static_cast<unsigned>(len),
+                   connected_ ? 1U : 0U);
     return phone_session_ ? phone_session_->handleToRadio(data, len) : false;
 }
 
@@ -444,8 +447,14 @@ bool MeshtasticBleService::loadModuleConfig(meshtastic_LocalModuleConfig* out) c
 
 void MeshtasticBleService::saveModuleConfig(const meshtastic_LocalModuleConfig& config)
 {
+    Serial2.printf("[BLE][nrf52][mt] saveModuleConfig mqtt enabled=%u proxy=%u enc=%u root=%s\n",
+                   config.has_mqtt && config.mqtt.enabled ? 1U : 0U,
+                   config.has_mqtt && config.mqtt.proxy_to_client_enabled ? 1U : 0U,
+                   config.has_mqtt ? (config.mqtt.encryption_enabled ? 1U : 0U) : 1U,
+                   config.has_mqtt ? config.mqtt.root : "");
     module_config_ = config;
     syncMqttProxySettings();
+    Serial2.printf("[BLE][nrf52][mt] saveModuleConfig done\n");
 }
 
 bool MeshtasticBleService::handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg)

@@ -121,6 +121,7 @@ class AppFacadeRuntime final : public app::IAppBleFacade
     std::unique_ptr<ble::BleManager> ble_manager_;
     boards::gat562_mesh_evb_pro::Gat562Board* board_ = nullptr;
     chat::ui::IChatUiRuntime* chat_ui_runtime_ = nullptr;
+    bool config_save_pending_ = false;
 };
 
 } // namespace apps::gat562_mesh_evb_pro

@@ -370,19 +370,45 @@ void ensureCacheLoaded()
 
 void normalizeConfig(app::AppConfig& config)
 {
+    Serial.printf("[gat562][settings] normalize start proto=%u mt_region=%u ok_to_mqtt=%u ignore_mqtt=%u gps_ms=%lu\n",
+                  static_cast<unsigned>(config.mesh_protocol),
+                  static_cast<unsigned>(config.meshtastic_config.region),
+                  config.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                  config.meshtastic_config.ignore_mqtt ? 1U : 0U,
+                  static_cast<unsigned long>(config.gps_interval_ms));
+    Serial2.printf("[gat562][settings] normalize start proto=%u mt_region=%u ok_to_mqtt=%u ignore_mqtt=%u gps_ms=%lu\n",
+                   static_cast<unsigned>(config.mesh_protocol),
+                   static_cast<unsigned>(config.meshtastic_config.region),
+                   config.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                   config.meshtastic_config.ignore_mqtt ? 1U : 0U,
+                   static_cast<unsigned long>(config.gps_interval_ms));
     if (!chat::infra::isValidMeshProtocol(config.mesh_protocol))
     {
         config.mesh_protocol = chat::MeshProtocol::Meshtastic;
     }
+    Serial.printf("[gat562][settings] normalize post-proto proto=%u\n",
+                  static_cast<unsigned>(config.mesh_protocol));
+    Serial2.printf("[gat562][settings] normalize post-proto proto=%u\n",
+                   static_cast<unsigned>(config.mesh_protocol));
 
     if (chat::meshtastic::findRegion(
             static_cast<meshtastic_Config_LoRaConfig_RegionCode>(config.meshtastic_config.region)) == nullptr)
     {
         config.meshtastic_config.region = app::AppConfig::kDefaultRegionCode;
     }
+    Serial.printf("[gat562][settings] normalize post-region mt_region=%u\n",
+                  static_cast<unsigned>(config.meshtastic_config.region));
+    Serial2.printf("[gat562][settings] normalize post-region mt_region=%u\n",
+                   static_cast<unsigned>(config.meshtastic_config.region));
 
     config.meshtastic_config.tx_power = clampTxPower(config.meshtastic_config.tx_power);
     config.meshcore_config.tx_power = clampTxPower(config.meshcore_config.tx_power);
+    Serial.printf("[gat562][settings] normalize post-tx mt_tx=%d mc_tx=%d\n",
+                  static_cast<int>(config.meshtastic_config.tx_power),
+                  static_cast<int>(config.meshcore_config.tx_power));
+    Serial2.printf("[gat562][settings] normalize post-tx mt_tx=%d mc_tx=%d\n",
+                   static_cast<int>(config.meshtastic_config.tx_power),
+                   static_cast<int>(config.meshcore_config.tx_power));
 
     if (chat::meshcore::isValidRegionPresetId(config.meshcore_config.meshcore_region_preset) &&
         config.meshcore_config.meshcore_region_preset > 0)
@@ -400,11 +426,19 @@ void normalizeConfig(app::AppConfig& config)
     {
         config.meshcore_config.meshcore_region_preset = 0;
     }
+    Serial.printf("[gat562][settings] normalize post-mc-preset preset=%u\n",
+                  static_cast<unsigned>(config.meshcore_config.meshcore_region_preset));
+    Serial2.printf("[gat562][settings] normalize post-mc-preset preset=%u\n",
+                   static_cast<unsigned>(config.meshcore_config.meshcore_region_preset));
 
     if (config.gps_interval_ms == 0)
     {
         config.gps_interval_ms = 60000UL;
     }
+    Serial.printf("[gat562][settings] normalize done gps_ms=%lu\n",
+                  static_cast<unsigned long>(config.gps_interval_ms));
+    Serial2.printf("[gat562][settings] normalize done gps_ms=%lu\n",
+                   static_cast<unsigned long>(config.gps_interval_ms));
 }
 
 bool loadAppConfig(app::AppConfig& config)

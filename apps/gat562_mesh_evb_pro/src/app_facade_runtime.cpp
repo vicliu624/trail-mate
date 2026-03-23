@@ -231,19 +231,38 @@ const app::AppConfig& AppFacadeRuntime::getConfig() const
 
 void AppFacadeRuntime::saveConfig()
 {
+    debug_console::printf("[gat562][cfg] save start proto=%u ok_to_mqtt=%u ignore_mqtt=%u ble=%u\n",
+                          static_cast<unsigned>(config_.mesh_protocol),
+                          config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                          config_.meshtastic_config.ignore_mqtt ? 1U : 0U,
+                          config_.ble_enabled ? 1U : 0U);
     ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
-    (void)::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_);
+    debug_console::printf("[gat562][cfg] save post-normalize ok_to_mqtt=%u ignore_mqtt=%u\n",
+                          config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                          config_.meshtastic_config.ignore_mqtt ? 1U : 0U);
     refreshEffectiveIdentity();
+    debug_console::printf("[gat562][cfg] save post-identity\n");
     applyMeshConfig();
+    debug_console::printf("[gat562][cfg] save post-applyMesh\n");
     applyUserInfo();
+    debug_console::printf("[gat562][cfg] save post-applyUser\n");
     applyPositionConfig();
+    debug_console::printf("[gat562][cfg] save post-applyPos\n");
     applyNetworkLimits();
+    debug_console::printf("[gat562][cfg] save post-applyLimits\n");
     applyPrivacyConfig();
+    debug_console::printf("[gat562][cfg] save post-applyPrivacy\n");
     applyChatDefaults();
+    config_save_pending_ = true;
+    debug_console::printf("[gat562][cfg] save deferred-store queued\n");
 }
 
 void AppFacadeRuntime::applyMeshConfig()
 {
+    debug_console::printf("[gat562][cfg] applyMesh start proto=%u ok_to_mqtt=%u ignore_mqtt=%u\n",
+                          static_cast<unsigned>(config_.mesh_protocol),
+                          config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                          config_.meshtastic_config.ignore_mqtt ? 1U : 0U);
     ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
     if (mesh_router_)
     {
@@ -266,6 +285,7 @@ void AppFacadeRuntime::applyMeshConfig()
     {
         ble_manager_->applyProtocol(config_.mesh_protocol);
     }
+    debug_console::printf("[gat562][cfg] applyMesh end\n");
 
     const chat::MeshConfig& mesh = config_.activeMeshConfig();
     debug_console::printf("[gat562] radio cfg %s region=%u preset=%u ch=%u tx=%d hop=%u\n",
@@ -279,13 +299,18 @@ void AppFacadeRuntime::applyMeshConfig()
 
 void AppFacadeRuntime::applyUserInfo()
 {
+    const chat::runtime::EffectiveSelfIdentity previous_identity = effective_identity_;
     refreshEffectiveIdentity();
     if (mesh_router_)
     {
         mesh_router_->setUserInfo(effective_identity_.long_name,
                                   effective_identity_.short_name);
     }
-    if (ble_manager_ && ble_manager_->isEnabled())
+
+    const bool ble_identity_changed =
+        std::strcmp(previous_identity.long_name, effective_identity_.long_name) != 0 ||
+        std::strcmp(previous_identity.short_name, effective_identity_.short_name) != 0;
+    if (ble_identity_changed && ble_manager_ && ble_manager_->isEnabled())
     {
         ble_manager_->setEnabled(false);
         ble_manager_->setEnabled(true);
@@ -577,6 +602,18 @@ void AppFacadeRuntime::updateCoreServices()
 
 void AppFacadeRuntime::tickEventRuntime()
 {
+    if (!config_save_pending_)
+    {
+        return;
+    }
+
+    debug_console::printf("[gat562][cfg] deferred-store start\n");
+    const bool ok = ::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_);
+    debug_console::printf("[gat562][cfg] deferred-store done ok=%u\n", ok ? 1U : 0U);
+    if (ok)
+    {
+        config_save_pending_ = false;
+    }
 }
 
 void AppFacadeRuntime::dispatchPendingEvents(std::size_t max_events)

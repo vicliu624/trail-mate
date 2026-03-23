@@ -11,6 +11,7 @@
 #include <Arduino.h>
 #include <algorithm>
 #include <array>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 
@@ -49,6 +50,22 @@ constexpr meshtastic_AdminMessage_ModuleConfigType kModuleSnapshotTypes[] = {
     meshtastic_AdminMessage_ModuleConfigType_DETECTIONSENSOR_CONFIG,
     meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG,
 };
+
+void logDual(const char* format, ...)
+{
+    if (!format)
+    {
+        return;
+    }
+
+    char buffer[192] = {};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    Serial.print(buffer);
+    Serial2.print(buffer);
+}
 
 void copyBounded(char* dst, size_t dst_len, const char* src)
 {
@@ -291,6 +308,10 @@ bool MeshtasticPhoneCore::handleToRadio(const uint8_t* data, size_t len)
         return false;
     }
 
+    logDual("[BLE][mtcore] to_radio variant=%u len=%u\n",
+            static_cast<unsigned>(to_radio.which_payload_variant),
+            static_cast<unsigned>(len));
+
     switch (to_radio.which_payload_variant)
     {
     case meshtastic_ToRadio_packet_tag:
@@ -504,6 +525,12 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         switch (req.set_config.which_payload_variant)
         {
         case meshtastic_Config_lora_tag:
+            logDual("[BLE][mtcore] set_config lora start ok_to_mqtt=%u ignore_mqtt=%u hop=%u ch=%u preset=%u\n",
+                    req.set_config.payload_variant.lora.config_ok_to_mqtt ? 1U : 0U,
+                    req.set_config.payload_variant.lora.ignore_mqtt ? 1U : 0U,
+                    static_cast<unsigned>(req.set_config.payload_variant.lora.hop_limit),
+                    static_cast<unsigned>(req.set_config.payload_variant.lora.channel_num),
+                    static_cast<unsigned>(req.set_config.payload_variant.lora.modem_preset));
             cfg.meshtastic_config.use_preset = req.set_config.payload_variant.lora.use_preset;
             cfg.meshtastic_config.modem_preset = static_cast<uint8_t>(req.set_config.payload_variant.lora.modem_preset);
             cfg.meshtastic_config.bandwidth_khz = req.set_config.payload_variant.lora.bandwidth;
@@ -519,8 +546,13 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
             cfg.meshtastic_config.override_frequency_mhz = req.set_config.payload_variant.lora.override_frequency;
             cfg.meshtastic_config.ignore_mqtt = req.set_config.payload_variant.lora.ignore_mqtt;
             cfg.meshtastic_config.config_ok_to_mqtt = req.set_config.payload_variant.lora.config_ok_to_mqtt;
+            logDual("[BLE][mtcore] set_config lora pre-save ok_to_mqtt=%u ignore_mqtt=%u\n",
+                    cfg.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                    cfg.meshtastic_config.ignore_mqtt ? 1U : 0U);
             ctx_.saveConfig();
+            logDual("[BLE][mtcore] set_config lora post-save\n");
             ctx_.applyMeshConfig();
+            logDual("[BLE][mtcore] set_config lora post-apply\n");
             break;
         case meshtastic_Config_position_tag:
             cfg.gps_mode = req.set_config.payload_variant.position.gps_enabled ? 1 : 0;
@@ -576,6 +608,11 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         switch (req.set_module_config.which_payload_variant)
         {
         case meshtastic_ModuleConfig_mqtt_tag:
+            logDual("[BLE][mtcore] set_module_config mqtt start enabled=%u proxy=%u enc=%u root=%s\n",
+                    req.set_module_config.payload_variant.mqtt.enabled ? 1U : 0U,
+                    req.set_module_config.payload_variant.mqtt.proxy_to_client_enabled ? 1U : 0U,
+                    req.set_module_config.payload_variant.mqtt.encryption_enabled ? 1U : 0U,
+                    req.set_module_config.payload_variant.mqtt.root);
             module_config_.has_mqtt = true;
             module_config_.mqtt = req.set_module_config.payload_variant.mqtt;
             break;
@@ -632,7 +669,11 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         }
         if (hooks_)
         {
+            logDual("[BLE][mtcore] set_module_config pre-save variant=%u\n",
+                    static_cast<unsigned>(req.set_module_config.which_payload_variant));
             hooks_->saveModuleConfig(module_config_);
+            logDual("[BLE][mtcore] set_module_config post-save variant=%u\n",
+                    static_cast<unsigned>(req.set_module_config.which_payload_variant));
         }
 
         resp.which_payload_variant = meshtastic_AdminMessage_get_module_config_response_tag;
@@ -687,6 +728,11 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
     default:
         return false;
     }
+
+    logDual("[BLE][mtcore] admin handled variant=%u has_resp=%u resp_variant=%u\n",
+            static_cast<unsigned>(req.which_payload_variant),
+            has_resp ? 1U : 0U,
+            static_cast<unsigned>(resp.which_payload_variant));
 
     if (!has_resp)
     {
