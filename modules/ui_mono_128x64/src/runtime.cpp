@@ -8,6 +8,9 @@
 #include "chat/runtime/self_identity_policy.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
+#include "generated/meshtastic/mesh.pb.h"
+#include "generated/meshtastic/portnums.pb.h"
+#include "pb_encode.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -59,6 +62,7 @@ constexpr const char* kMainMenuItems[] = {
 constexpr const char* kSettingsMenuItems[] = {
     "LORA",
     "DEVICE",
+    "ACTIONS",
 };
 
 constexpr const char* kMeshtasticRadioItems[] = {
@@ -100,6 +104,15 @@ constexpr const char* kMessageMenuItems[] = {
     "REPLY",
 };
 
+constexpr const char* kNodeActionItems[] = {
+    "DETAIL",
+    "ADD CONTACT",
+    "TRACE ROUTE",
+    "KEY VERIFICATION",
+    "EXCHANGE POSITION",
+    "OPEN COMPASS",
+};
+
 constexpr const char* kWeekdays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 constexpr const char* kComposeCharset =
     " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?-_/:#@+*=()[]";
@@ -108,6 +121,9 @@ constexpr const char* kComposeAbcKeys = " ETAOINSHRDLUCMFWYPVBGKQJXZ";
 constexpr const char* kComposeNumKeys = "0123456789";
 constexpr const char* kComposeSymKeys = " .,!?/-:@#()[]+=";
 constexpr const char* kComposeActionLabels[] = {"ABC", "SP", "BACK", "DEL", "SEND"};
+constexpr uint32_t kConversationScrollStartPauseMs = 500;
+constexpr uint32_t kConversationScrollStepMs = 250;
+constexpr uint32_t kConversationScrollEndPauseMs = 800;
 struct ComposeGroupDef
 {
     const char* input;
@@ -244,6 +260,27 @@ template <typename T>
 constexpr T clampValue(T value, T low, T high)
 {
     return value < low ? low : (value > high ? high : value);
+}
+
+size_t utf8CharLength(unsigned char lead)
+{
+    if ((lead & 0x80U) == 0)
+    {
+        return 1;
+    }
+    if ((lead & 0xE0U) == 0xC0U)
+    {
+        return 2;
+    }
+    if ((lead & 0xF0U) == 0xE0U)
+    {
+        return 3;
+    }
+    if ((lead & 0xF8U) == 0xF0U)
+    {
+        return 4;
+    }
+    return 1;
 }
 
 template <size_t N>
@@ -429,6 +466,57 @@ const char* bearingCardinal(double bearing_deg)
         "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
     const int index = static_cast<int>((normalizeBearingDeg(bearing_deg) + 11.25) / 22.5) % 16;
     return kDirs[index];
+}
+
+void drawBearingArrow(MonoDisplay& display, int center_x, int center_y, double bearing_deg, bool selected_row)
+{
+    const bool on = !selected_row;
+    const int dir = static_cast<int>((normalizeBearingDeg(bearing_deg) + 22.5) / 45.0) % 8;
+    display.drawPixel(center_x, center_y, on);
+
+    switch (dir)
+    {
+    case 0: // N
+        display.drawPixel(center_x, center_y - 2, on);
+        display.drawPixel(center_x - 1, center_y - 1, on);
+        display.drawPixel(center_x + 1, center_y - 1, on);
+        break;
+    case 1: // NE
+        display.drawPixel(center_x + 2, center_y - 2, on);
+        display.drawPixel(center_x + 1, center_y - 2, on);
+        display.drawPixel(center_x + 2, center_y - 1, on);
+        break;
+    case 2: // E
+        display.drawPixel(center_x + 2, center_y, on);
+        display.drawPixel(center_x + 1, center_y - 1, on);
+        display.drawPixel(center_x + 1, center_y + 1, on);
+        break;
+    case 3: // SE
+        display.drawPixel(center_x + 2, center_y + 2, on);
+        display.drawPixel(center_x + 1, center_y + 2, on);
+        display.drawPixel(center_x + 2, center_y + 1, on);
+        break;
+    case 4: // S
+        display.drawPixel(center_x, center_y + 2, on);
+        display.drawPixel(center_x - 1, center_y + 1, on);
+        display.drawPixel(center_x + 1, center_y + 1, on);
+        break;
+    case 5: // SW
+        display.drawPixel(center_x - 2, center_y + 2, on);
+        display.drawPixel(center_x - 1, center_y + 2, on);
+        display.drawPixel(center_x - 2, center_y + 1, on);
+        break;
+    case 6: // W
+        display.drawPixel(center_x - 2, center_y, on);
+        display.drawPixel(center_x - 1, center_y - 1, on);
+        display.drawPixel(center_x - 1, center_y + 1, on);
+        break;
+    default: // NW
+        display.drawPixel(center_x - 2, center_y - 2, on);
+        display.drawPixel(center_x - 1, center_y - 2, on);
+        display.drawPixel(center_x - 2, center_y - 1, on);
+        break;
+    }
 }
 
 void drawFrame(MonoDisplay& display, int x, int y, int w, int h, bool filled = false)
@@ -1202,9 +1290,32 @@ void Runtime::handleInput(InputAction action)
         {
             enterPage(Page::MainMenu);
         }
-        else if (action == InputAction::Right || action == InputAction::Select || action == InputAction::Primary)
+        else if (action == InputAction::Right)
+        {
+            enterPage(Page::NodeActionMenu);
+        }
+        else if (action == InputAction::Select || action == InputAction::Primary)
         {
             enterPage(Page::NodeInfo);
+        }
+        break;
+
+    case Page::NodeActionMenu:
+        if (action == InputAction::Up && node_action_index_ > 0)
+        {
+            --node_action_index_;
+        }
+        else if (action == InputAction::Down && node_action_index_ + 1 < arrayCount(kNodeActionItems))
+        {
+            ++node_action_index_;
+        }
+        else if (action == InputAction::Left || action == InputAction::Back)
+        {
+            enterPage(Page::NodeList);
+        }
+        else if (action == InputAction::Right || action == InputAction::Select || action == InputAction::Primary)
+        {
+            executeNodeAction();
         }
         break;
 
@@ -1230,10 +1341,12 @@ void Runtime::handleInput(InputAction action)
         if (action == InputAction::Up && message_index_ > 0)
         {
             --message_index_;
+            message_focus_started_ms_ = nowMs();
         }
         else if (action == InputAction::Down && message_index_ + 1 < message_count_)
         {
             ++message_index_;
+            message_focus_started_ms_ = nowMs();
         }
         else if (action == InputAction::Left || action == InputAction::Back)
         {
@@ -1495,6 +1608,9 @@ void Runtime::handleInput(InputAction action)
             case 1:
                 enterPage(Page::DeviceSettings);
                 break;
+            case 2:
+                enterPage(Page::ActionPage);
+                break;
             default:
                 break;
             }
@@ -1589,33 +1705,17 @@ void Runtime::handleInput(InputAction action)
         }
         else if (action == InputAction::Left || action == InputAction::Back)
         {
-            enterPage(Page::MainMenu);
+            enterPage(Page::SettingsMenu);
         }
         else if (action == InputAction::Right || action == InputAction::Select || action == InputAction::Primary)
         {
-            switch (action_index_)
+            if (action_index_ == 1 || action_index_ == 2)
             {
-            case 0:
-                app()->broadcastNodeInfo();
-                appendBootLog("nodeinfo tx");
-                break;
-            case 1:
-                app()->clearNodeDb();
-                appendBootLog("nodes cleared");
-                break;
-            case 2:
-                app()->clearMessageDb();
-                appendBootLog("messages cleared");
-                break;
-            case 3:
-                if (auto* ble_app = static_cast<app::IAppBleFacade*>(app()))
-                {
-                    ble_app->resetMeshConfig();
-                    appendBootLog("radio reset");
-                }
-                break;
-            default:
-                break;
+                beginSettingPopup(Page::ActionPage, action_index_);
+            }
+            else
+            {
+                executeActionPageItem(action_index_);
             }
         }
         break;
@@ -1647,6 +1747,9 @@ void Runtime::render()
         break;
     case Page::NodeList:
         renderNodeList();
+        break;
+    case Page::NodeActionMenu:
+        renderNodeActionMenu();
         break;
     case Page::NodeInfo:
         renderNodeInfo();
@@ -1914,49 +2017,53 @@ void Runtime::renderChatList()
 void Runtime::renderNodeList()
 {
     rebuildNodeList();
-    const size_t total_pages = std::max<size_t>(1U, (node_count_ + kNodeListPageSize - 1U) / kNodeListPageSize);
     const size_t selected = (node_count_ > 0)
                                 ? std::min(node_list_index_, node_count_ - 1U)
                                 : 0U;
     const size_t start = (node_count_ > 0) ? ((selected / kNodeListPageSize) * kNodeListPageSize) : 0U;
-    const size_t current_page = (node_count_ > 0) ? ((start / kNodeListPageSize) + 1U) : 1U;
-    char pos[16] = {};
-    std::snprintf(pos, sizeof(pos), "%u/%u",
-                  static_cast<unsigned>(current_page),
-                  static_cast<unsigned>(total_pages));
-    drawTitleBar("NODES", pos);
+    constexpr int kHeaderY = 0;
+    const int line_h = text_renderer_.lineHeight();
+    constexpr int kRowStartY = 10;
+    constexpr int kNameX = 0;
+    constexpr int kNameW = 24;
+    constexpr int kAgeX = 26;
+    constexpr int kAgeW = 16;
+    constexpr int kDistX = 44;
+    constexpr int kDistW = 24;
+    constexpr int kBrgX = 70;
+    constexpr int kBrgW = 16;
+    constexpr int kHopsX = 88;
+    constexpr int kHopsW = 18;
+    constexpr int kBarsX = 114;
+
+    display_.fillRect(0, kHeaderY, display_.width(), line_h + 1, true);
+    drawTextClipped(kAgeX, kHeaderY, kAgeW, "AGE", true);
+    drawTextClipped(kDistX, kHeaderY, kDistW, "DIST", true);
+    drawTextClipped(kBrgX, kHeaderY, kBrgW, "BRG", true);
+    drawTextClipped(kHopsX, kHeaderY, kHopsW, "HOPS", true);
     if (node_count_ == 0)
     {
-        text_renderer_.drawText(display_, 0, 18, "NO NODES");
+        text_renderer_.drawText(display_, 0, kRowStartY, "NO NODES");
         return;
     }
 
-    constexpr size_t kNodeAliasMax = 6;
     const size_t visible = std::min(node_count_ - start, kNodeListPageSize);
 
     for (size_t i = 0; i < visible; ++i)
     {
         const size_t node_index = start + i;
         const auto& node = nodes_[node_index];
-        const int row_y = 10 + static_cast<int>(i * text_renderer_.lineHeight());
+        const int row_y = kRowStartY + static_cast<int>(i * line_h);
+        const bool selected_row = (node_index == selected);
         char node_id[8] = {};
         std::snprintf(node_id, sizeof(node_id), "%04lX",
                       static_cast<unsigned long>(node.node_id & 0xFFFFUL));
-        char alias[kNodeAliasMax + 1] = {};
-        if (!node.display_name.empty())
-        {
-            copyText(alias, node.display_name.c_str());
-            alias[kNodeAliasMax] = '\0';
-        }
-
         char label[16] = {};
-        if (alias[0] == '\0' || equalsIgnoreCase(alias, node_id))
+        std::snprintf(label, sizeof(label), "%s", node_id);
+
+        if (selected_row)
         {
-            std::snprintf(label, sizeof(label), "%s", node_id);
-        }
-        else
-        {
-            std::snprintf(label, sizeof(label), "%s %s", node_id, alias);
+            display_.fillRect(0, row_y, display_.width(), line_h, true);
         }
 
         char age_buf[8] = {};
@@ -1976,29 +2083,52 @@ void Runtime::renderNodeList()
             std::snprintf(dist_buf, sizeof(dist_buf), "-");
         }
 
-        const char* sig = signalRatingLabel(node.snr, node.rssi);
-        char line[24] = {};
-        std::snprintf(line, sizeof(line), "%s %s %s",
-                      label,
-                      age_buf,
-                      dist_buf);
-        drawTextClipped(0, row_y, 104, line, node_index == selected);
-
-        const int bars = std::strcmp(sig, "STR") == 0 ? 4 : std::strcmp(sig, "OK") == 0 ? 3 : std::strcmp(sig, "WEAK") == 0 ? 2
-                                                                                                                   : 1;
-        for (int bar = 0; bar < 4; ++bar)
+        bool has_bearing = false;
+        double relative_bearing_deg = 0.0;
+        if (gps.valid && node.position.valid)
         {
-            const int bar_h = 2 + bar * 2;
-            const int bar_x = 108 + bar * 4;
+            const double node_lat = static_cast<double>(node.position.latitude_i) / 1e7;
+            const double node_lon = static_cast<double>(node.position.longitude_i) / 1e7;
+            const double brg_deg = bearingDegrees(gps.lat, gps.lng, node_lat, node_lon);
+            relative_bearing_deg = gps.has_course ? normalizeBearingDeg(brg_deg - gps.course_deg) : brg_deg;
+            has_bearing = true;
+        }
+
+        const char* sig = signalRatingLabel(node.snr, node.rssi);
+        char hops_buf[6] = {};
+        if (node.hops_away == 0xFF)
+        {
+            std::snprintf(hops_buf, sizeof(hops_buf), "-");
+        }
+        else
+        {
+            std::snprintf(hops_buf, sizeof(hops_buf), "%u", static_cast<unsigned>(node.hops_away));
+        }
+        drawTextClipped(kNameX, row_y, kNameW, label, selected_row);
+        drawTextClipped(kAgeX, row_y, kAgeW, age_buf, selected_row);
+        drawTextClipped(kDistX, row_y, kDistW, dist_buf, selected_row);
+        drawTextClipped(kHopsX, row_y, kHopsW, hops_buf, selected_row);
+        if (has_bearing)
+        {
+            drawBearingArrow(display_, kBrgX + (kBrgW / 2), row_y + (line_h / 2), relative_bearing_deg, selected_row);
+        }
+        else
+        {
+            drawTextClipped(kBrgX, row_y, kBrgW, "-", selected_row);
+        }
+
+        const int bars = std::strcmp(sig, "STR") == 0 ? 3 : std::strcmp(sig, "OK") == 0 ? 2 : std::strcmp(sig, "WEAK") == 0 ? 1
+                                                                                                                   : 0;
+        for (int bar = 0; bar < 3; ++bar)
+        {
+            if (bar >= bars)
+            {
+                continue;
+            }
+            const int bar_h = 2 + bar * 3;
+            const int bar_x = kBarsX + bar * 4;
             const int bar_y = row_y + 6 - bar_h;
-            if (bar < bars)
-            {
-                display_.fillRect(bar_x, bar_y, 3, bar_h, true);
-            }
-            else
-            {
-                drawFrame(display_, bar_x, bar_y, 3, bar_h);
-            }
+            display_.fillRect(bar_x, bar_y, 3, bar_h, !selected_row);
         }
     }
 }
@@ -2031,6 +2161,17 @@ void Runtime::renderNodeInfo()
     }
 }
 
+void Runtime::renderNodeActionMenu()
+{
+    const auto* node = selectedNode();
+    char title[20] = {};
+    if (node)
+    {
+        std::snprintf(title, sizeof(title), "%04lX", static_cast<unsigned long>(node->node_id & 0xFFFFUL));
+    }
+    drawMenuList(title[0] != '\0' ? title : "NODE", kNodeActionItems, arrayCount(kNodeActionItems), node_action_index_);
+}
+
 void Runtime::renderConversation()
 {
     rebuildMessages();
@@ -2054,6 +2195,7 @@ void Runtime::renderConversation()
     const int line_h = text_renderer_.lineHeight();
     const size_t selected_index = std::min(message_index_, message_count_ - 1U);
     const size_t visible = std::min(message_count_, static_cast<size_t>(6));
+    constexpr int kMessageViewportWidth = 90;
     size_t start = 0;
     if (message_count_ > visible)
     {
@@ -2068,20 +2210,19 @@ void Runtime::renderConversation()
         const size_t msg_index = start + i;
         const auto& msg = messages_[msg_index];
         const bool selected = (msg_index == selected_index);
-        char line[64] = {};
-        char sender[12] = {};
-        if (msg.from == 0)
+        std::string line;
+        if (active_conversation_.peer == 0 && msg.from != 0)
         {
-            copyText(sender, "SELF");
+            char sender[12] = {};
+            std::snprintf(sender, sizeof(sender), "%04lX ", static_cast<unsigned long>(msg.from & 0xFFFFUL));
+            line = sender;
         }
-        else
-        {
-            std::snprintf(sender, sizeof(sender), "%04lX", static_cast<unsigned long>(msg.from & 0xFFFFUL));
-        }
-        std::snprintf(line, sizeof(line), "%s>%s", sender, msg.text.c_str());
+        line += msg.text;
 
         const int y = 10 + static_cast<int>(i * line_h);
-        drawTextClipped(0, y, display_.width(), line, selected);
+        const bool is_self = (msg.from == 0);
+        const int x = is_self ? (display_.width() - kMessageViewportWidth) : 0;
+        drawConversationText(x, y, kMessageViewportWidth, line.c_str(), selected, is_self);
     }
 }
 
@@ -2414,7 +2555,8 @@ void Runtime::renderSettingPopup()
     char value[32] = {};
     const bool is_radio = setting_popup_owner_ == Page::RadioSettings;
     const bool is_device = setting_popup_owner_ == Page::DeviceSettings;
-    if (!is_radio && !is_device)
+    const bool is_action = setting_popup_owner_ == Page::ActionPage;
+    if (!is_radio && !is_device && !is_action)
     {
         return;
     }
@@ -2430,7 +2572,7 @@ void Runtime::renderSettingPopup()
         }
         std::snprintf(title, sizeof(title), "%s", items[setting_popup_index_]);
     }
-    else
+    else if (is_device)
     {
         if (setting_popup_index_ >= arrayCount(kDeviceItems))
         {
@@ -2438,8 +2580,20 @@ void Runtime::renderSettingPopup()
         }
         std::snprintf(title, sizeof(title), "%s", kDeviceItems[setting_popup_index_]);
     }
+    else
+    {
+        if (setting_popup_index_ >= arrayCount(kActionItems))
+        {
+            return;
+        }
+        std::snprintf(title, sizeof(title), "%s", kActionItems[setting_popup_index_]);
+        std::snprintf(value, sizeof(value), "SELECT TO CONFIRM");
+    }
 
-    formatSettingPopupValue(value, sizeof(value));
+    if (!is_action)
+    {
+        formatSettingPopupValue(value, sizeof(value));
+    }
 
     constexpr int kBoxX = 8;
     constexpr int kBoxY = 14;
@@ -2451,7 +2605,14 @@ void Runtime::renderSettingPopup()
     text_renderer_.drawText(display_, kBoxX + std::max(2, (kBoxW - title_w) / 2), kBoxY + 3, title);
     const int value_w = text_renderer_.measureTextWidth(value);
     text_renderer_.drawText(display_, kBoxX + std::max(2, (kBoxW - value_w) / 2), kBoxY + 14, value);
-    drawTextClipped(kBoxX + 2, kBoxY + 25, kBoxW - 4, "ADJ ARROWS SEL OK BACK ESC");
+    if (is_action)
+    {
+        drawTextClipped(kBoxX + 2, kBoxY + 25, kBoxW - 4, "SELECT CONFIRM  BACK CANCEL");
+    }
+    else
+    {
+        drawTextClipped(kBoxX + 2, kBoxY + 25, kBoxW - 4, "ADJ ARROWS SEL OK BACK ESC");
+    }
 }
 
 void Runtime::renderInfoPage()
@@ -2826,6 +2987,7 @@ void Runtime::enterPage(Page page)
             app()->getChatService().markConversationRead(active_conversation_);
         }
         rebuildMessages();
+        message_focus_started_ms_ = nowMs();
         message_menu_index_ = 0;
         message_info_scroll_ = 0;
     }
@@ -3052,7 +3214,7 @@ void Runtime::buildNodeInfo()
         push_kv("DST", value);
 
         std::snprintf(value, sizeof(value), "%s %.0f", bearingCardinal(brg_deg), brg_deg);
-        push_kv("DIR", value);
+        push_kv("BRG", value);
 
         if (gps.has_course)
         {
@@ -3531,6 +3693,14 @@ void Runtime::confirmSettingPopup()
         return;
     }
 
+    if (setting_popup_owner_ == Page::ActionPage)
+    {
+        const size_t action = setting_popup_index_;
+        setting_popup_active_ = false;
+        executeActionPageItem(action);
+        return;
+    }
+
     auto& cfg = app()->getConfig();
     cfg = setting_popup_config_;
     cfg.ble_enabled = setting_popup_ble_enabled_;
@@ -3550,6 +3720,11 @@ void Runtime::confirmSettingPopup()
 void Runtime::adjustSettingPopup(int delta)
 {
     if (!setting_popup_active_ || !app() || delta == 0)
+    {
+        return;
+    }
+
+    if (setting_popup_owner_ == Page::ActionPage)
     {
         return;
     }
@@ -4288,6 +4463,118 @@ void Runtime::drawTextClipped(int x, int y, int w, const char* text, bool invers
     text_renderer_.drawText(display_, x, y, clipped, inverse);
 }
 
+void Runtime::drawConversationText(int x, int y, int w, const char* text, bool selected, bool align_right)
+{
+    if (!text || w <= 0)
+    {
+        return;
+    }
+
+    const int full_width = text_renderer_.measureTextWidth(text);
+
+    if (full_width <= w)
+    {
+        const int draw_x = align_right ? (x + std::max(0, w - full_width)) : x;
+        text_renderer_.drawText(display_, draw_x, y, text, selected);
+        return;
+    }
+
+    char clipped[96] = {};
+    if (!selected)
+    {
+        if (w > text_renderer_.ellipsisWidth())
+        {
+            const size_t keep_bytes = text_renderer_.clipTextToWidth(text, w - text_renderer_.ellipsisWidth());
+            std::memcpy(clipped, text, std::min(keep_bytes, sizeof(clipped) - 4));
+            clipped[std::min(keep_bytes, sizeof(clipped) - 4)] = '\0';
+            std::strcat(clipped, "...");
+        }
+        else
+        {
+            const size_t keep_bytes = text_renderer_.clipTextToWidth(text, w);
+            std::memcpy(clipped, text, std::min(keep_bytes, sizeof(clipped) - 1));
+            clipped[std::min(keep_bytes, sizeof(clipped) - 1)] = '\0';
+        }
+        text_renderer_.drawText(display_, x, y, clipped, false);
+        return;
+    }
+
+    const size_t text_len = std::strlen(text);
+    std::vector<size_t> offsets;
+    offsets.reserve(text_len + 1);
+    for (size_t off = 0; off < text_len;)
+    {
+        offsets.push_back(off);
+        off += utf8CharLength(static_cast<unsigned char>(text[off]));
+    }
+    offsets.push_back(text_len);
+
+    size_t max_scroll_index = 0;
+    for (size_t i = 0; i + 1 < offsets.size(); ++i)
+    {
+        if (text_renderer_.measureTextWidth(text + offsets[i]) > w)
+        {
+            max_scroll_index = i + 1;
+        }
+    }
+
+    size_t scroll_index = 0;
+    const uint32_t elapsed_ms = nowMs() >= message_focus_started_ms_ ? (nowMs() - message_focus_started_ms_) : 0U;
+    if (max_scroll_index > 0 && elapsed_ms > kConversationScrollStartPauseMs)
+    {
+        const uint32_t rolling_ms = static_cast<uint32_t>(max_scroll_index) * kConversationScrollStepMs;
+        const uint32_t cycle_ms = rolling_ms + kConversationScrollEndPauseMs;
+        const uint32_t within_cycle = (elapsed_ms - kConversationScrollStartPauseMs) % std::max<uint32_t>(1U, cycle_ms);
+        if (within_cycle < rolling_ms)
+        {
+            scroll_index = std::min<size_t>(max_scroll_index, within_cycle / kConversationScrollStepMs);
+        }
+        else
+        {
+            scroll_index = max_scroll_index;
+        }
+    }
+
+    const char* window_text = text + offsets[scroll_index];
+    const size_t keep_bytes = text_renderer_.clipTextToWidth(window_text, w);
+    std::memcpy(clipped, window_text, std::min(keep_bytes, sizeof(clipped) - 1));
+    clipped[std::min(keep_bytes, sizeof(clipped) - 1)] = '\0';
+    text_renderer_.drawText(display_, x, y, clipped, true);
+}
+
+void Runtime::executeActionPageItem(size_t index)
+{
+    if (!app())
+    {
+        return;
+    }
+
+    switch (index)
+    {
+    case 0:
+        app()->broadcastNodeInfo();
+        appendBootLog("nodeinfo tx");
+        break;
+    case 1:
+        app()->clearNodeDb();
+        appendBootLog("nodes cleared");
+        break;
+    case 2:
+        app()->clearMessageDb();
+        appendBootLog("messages cleared");
+        break;
+    case 3:
+        if (auto* ble_app = static_cast<app::IAppBleFacade*>(app()))
+        {
+            ble_app->resetMeshConfig();
+            appendBootLog("radio reset");
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 bool Runtime::editUsesHexCharset() const
 {
     return false;
@@ -4316,6 +4603,114 @@ const chat::ChatMessage* Runtime::selectedMessage() const
     }
     const size_t index = std::min(message_index_, message_count_ - 1U);
     return &messages_[index];
+}
+
+const chat::contacts::NodeInfo* Runtime::selectedNode() const
+{
+    if (node_count_ == 0)
+    {
+        return nullptr;
+    }
+    const size_t index = std::min(node_list_index_, node_count_ - 1U);
+    return &nodes_[index];
+}
+
+void Runtime::executeNodeAction()
+{
+    auto* mesh = app() ? app()->getMeshAdapter() : nullptr;
+    auto* contacts = app() ? &app()->getContactService() : nullptr;
+    const chat::contacts::NodeInfo* node = selectedNode();
+    if (!node || !mesh || !contacts)
+    {
+        appendBootLog("node action na");
+        return;
+    }
+
+    switch (node_action_index_)
+    {
+    case 0:
+        node_info_scroll_ = 0;
+        enterPage(Page::NodeInfo);
+        return;
+    case 1:
+    {
+        if (node->is_contact)
+        {
+            appendBootLog("contact exists");
+            return;
+        }
+
+        char nickname[13] = {};
+        if (node->short_name[0] != '\0')
+        {
+            copyText(nickname, node->short_name);
+        }
+        else
+        {
+            std::snprintf(nickname, sizeof(nickname), "%04lX",
+                          static_cast<unsigned long>(node->node_id & 0xFFFFUL));
+        }
+
+        if (contacts->addContact(node->node_id, nickname))
+        {
+            appendBootLog("contact added");
+            rebuildNodeList();
+            enterPage(Page::NodeList);
+        }
+        else
+        {
+            appendBootLog("contact failed");
+        }
+        return;
+    }
+    case 2:
+    {
+        meshtastic_RouteDiscovery route = meshtastic_RouteDiscovery_init_zero;
+        uint8_t route_buf[96] = {};
+        pb_ostream_t stream = pb_ostream_from_buffer(route_buf, sizeof(route_buf));
+        if (!pb_encode(&stream, meshtastic_RouteDiscovery_fields, &route))
+        {
+            appendBootLog("trace encode err");
+            return;
+        }
+
+        const bool ok = mesh->sendAppData(chat::ChannelId::PRIMARY,
+                                          meshtastic_PortNum_TRACEROUTE_APP,
+                                          route_buf,
+                                          stream.bytes_written,
+                                          node->node_id,
+                                          false,
+                                          0,
+                                          true);
+        appendBootLog(ok ? "trace queued" : "trace failed");
+        return;
+    }
+    case 3:
+    {
+        const bool ok = mesh->startKeyVerification(node->node_id);
+        appendBootLog(ok ? "verify queued" : "verify failed");
+        return;
+    }
+    case 4:
+    {
+        const bool ok = mesh->sendAppData(chat::ChannelId::PRIMARY,
+                                          meshtastic_PortNum_POSITION_APP,
+                                          nullptr,
+                                          0,
+                                          node->node_id,
+                                          false,
+                                          0,
+                                          true);
+        appendBootLog(ok ? "pos req queued" : "pos req failed");
+        return;
+    }
+    case 5:
+        node_info_scroll_ = 0;
+        enterPage(Page::NodeInfo);
+        return;
+    default:
+        return;
+    }
 }
 
 } // namespace ui::mono_128x64

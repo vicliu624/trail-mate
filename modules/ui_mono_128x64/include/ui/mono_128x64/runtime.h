@@ -118,6 +118,7 @@ class Runtime : public chat::ChatService::IncomingTextObserver
         MainMenu,
         ChatList,
         NodeList,
+        NodeActionMenu,
         NodeInfo,
         Conversation,
         MessageMenu,
@@ -147,6 +148,7 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     void renderMainMenu();
     void renderChatList();
     void renderNodeList();
+    void renderNodeActionMenu();
     void renderNodeInfo();
     void renderConversation();
     void renderMessageMenu();
@@ -201,13 +203,17 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     void drawMenuList(const char* title, const char* const* items, size_t count, size_t selected);
     void drawFooterHint(const char* hint);
     void drawTextClipped(int x, int y, int w, const char* text, bool inverse = false);
+    void drawConversationText(int x, int y, int w, const char* text, bool selected, bool align_right);
     void refreshGnssSnapshot(bool force = false);
     bool editUsesHexCharset() const;
     bool usesSmartCompose() const;
+    void executeActionPageItem(size_t index);
 
     uint32_t nowMs() const;
     app::IAppFacade* app() const;
     const chat::ChatMessage* selectedMessage() const;
+    const chat::contacts::NodeInfo* selectedNode() const;
+    void executeNodeAction();
 
     MonoDisplay& display_;
     TextRenderer text_renderer_;
@@ -239,8 +245,10 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     size_t action_index_ = 0;
     size_t chat_list_index_ = 0;
     size_t node_list_index_ = 0;
+    size_t node_action_index_ = 0;
     size_t node_info_scroll_ = 0;
     size_t message_index_ = 0;
+    uint32_t message_focus_started_ms_ = 0;
     size_t message_menu_index_ = 0;
     size_t message_info_scroll_ = 0;
     size_t gnss_page_index_ = 0;

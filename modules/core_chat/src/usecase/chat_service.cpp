@@ -9,6 +9,13 @@
 
 namespace chat
 {
+namespace
+{
+NodeId normalize_conversation_peer(NodeId peer)
+{
+    return (peer == 0 || peer == 0xFFFFFFFFUL) ? 0 : peer;
+}
+} // namespace
 
 #ifndef CHAT_SERVICE_LOG_ENABLE
 #define CHAT_SERVICE_LOG_ENABLE 0
@@ -51,7 +58,7 @@ MessageId ChatService::sendTextWithId(ChannelId channel, const std::string& text
     msg.protocol = active_protocol_;
     msg.channel = channel;
     msg.from = 0; // Local message
-    msg.peer = peer;
+    msg.peer = normalize_conversation_peer(peer);
     msg.msg_id = msg_id;
     msg.timestamp = now_message_timestamp();
     msg.text = text;
@@ -153,14 +160,7 @@ void ChatService::processIncoming()
         msg.protocol = active_protocol_;
         msg.channel = incoming.channel;
         msg.from = incoming.from;
-        if (incoming.to == 0xFFFFFFFF)
-        {
-            msg.peer = 0;
-        }
-        else
-        {
-            msg.peer = incoming.from;
-        }
+        msg.peer = normalize_conversation_peer(incoming.to) == 0 ? 0 : incoming.from;
         msg.msg_id = incoming.msg_id;
         // Use local receive time to avoid sender clock skew.
         msg.timestamp = now_message_timestamp();
