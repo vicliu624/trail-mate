@@ -25,6 +25,7 @@ class NodeStore : public contacts::INodeStore,
                 uint8_t role = contacts::kNodeRoleUnknown, uint8_t hops_away = 0xFF,
                 uint8_t hw_model = 0, uint8_t channel = 0xFF) override;
     void updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs) override;
+    void updatePosition(uint32_t node_id, const contacts::NodePosition& position) override;
     bool remove(uint32_t node_id) override;
     const std::vector<contacts::NodeEntry>& getEntries() const override;
     void clear() override;

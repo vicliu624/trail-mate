@@ -68,7 +68,7 @@ void ContactService::updateNodeProtocol(uint32_t node_id, uint8_t protocol, uint
 
 void ContactService::updateNodePosition(uint32_t node_id, const NodePosition& pos)
 {
-    positions_[node_id] = pos;
+    node_store_.updatePosition(node_id, pos);
     invalidateCache();
 }
 
@@ -178,7 +178,6 @@ bool ContactService::removeNode(uint32_t node_id)
     {
         removed = true;
     }
-    positions_.erase(node_id);
     if (removed)
     {
         invalidateCache();
@@ -243,11 +242,17 @@ void ContactService::buildCache() const
         info.channel = entry.channel;
         info.protocol = static_cast<NodeProtocolType>(entry.protocol);
         info.role = static_cast<NodeRoleType>(entry.role);
-        auto pos_it = positions_.find(entry.node_id);
-        if (pos_it != positions_.end())
-        {
-            info.position = pos_it->second;
-        }
+        info.position.valid = entry.position_valid;
+        info.position.latitude_i = entry.position_latitude_i;
+        info.position.longitude_i = entry.position_longitude_i;
+        info.position.has_altitude = entry.position_has_altitude;
+        info.position.altitude = entry.position_altitude;
+        info.position.timestamp = entry.position_timestamp;
+        info.position.precision_bits = entry.position_precision_bits;
+        info.position.pdop = entry.position_pdop;
+        info.position.hdop = entry.position_hdop;
+        info.position.vdop = entry.position_vdop;
+        info.position.gps_accuracy_mm = entry.position_gps_accuracy_mm;
 
         if (info.short_name[0] == '\0')
         {

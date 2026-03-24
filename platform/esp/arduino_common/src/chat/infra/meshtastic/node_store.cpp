@@ -96,6 +96,11 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
     core_.updateProtocol(node_id, protocol, now_secs);
 }
 
+void NodeStore::updatePosition(uint32_t node_id, const contacts::NodePosition& position)
+{
+    core_.updatePosition(node_id, position);
+}
+
 bool NodeStore::remove(uint32_t node_id)
 {
     const bool removed = core_.remove(node_id);
@@ -273,7 +278,10 @@ bool NodeStore::loadFromSd(std::vector<uint8_t>& out) const
         return false;
     }
 
-    const size_t expected_bytes = contacts::nodeBlobByteSize(header.count);
+    const size_t entry_size = (header.ver == contacts::NodeStoreCore::kPersistVersion)
+                                  ? contacts::NodeStoreCore::kSerializedEntrySize
+                                  : contacts::NodeStoreCore::kLegacySerializedEntrySize;
+    const size_t expected_bytes = header.count * entry_size;
     out.resize(expected_bytes);
     const size_t read_bytes = expected_bytes > 0 ? file.read(out.data(), expected_bytes) : 0;
     file.close();

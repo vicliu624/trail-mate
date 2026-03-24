@@ -16,8 +16,9 @@ class NodeStoreCore : public INodeStore
 {
   public:
     static constexpr size_t kMaxNodes = 80;
-    static constexpr size_t kSerializedEntrySize = 64;
-    static constexpr uint8_t kPersistVersion = 6;
+    static constexpr size_t kLegacySerializedEntrySize = 64;
+    static constexpr size_t kSerializedEntrySize = 104;
+    static constexpr uint8_t kPersistVersion = 7;
     static constexpr uint32_t kSaveIntervalMs = 5000;
 
     explicit NodeStoreCore(INodeBlobStore& blob_store);
@@ -29,6 +30,7 @@ class NodeStoreCore : public INodeStore
                 uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF,
                 uint8_t hw_model = 0, uint8_t channel = 0xFF) override;
     void updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs) override;
+    void updatePosition(uint32_t node_id, const NodePosition& position) override;
     bool setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_secs);
     uint8_t getNextHop(uint32_t node_id) const;
     bool remove(uint32_t node_id) override;

@@ -27,6 +27,11 @@ void NodeStore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_
     core_.updateProtocol(node_id, protocol, now_secs);
 }
 
+void NodeStore::updatePosition(uint32_t node_id, const ::chat::contacts::NodePosition& position)
+{
+    core_.updatePosition(node_id, position);
+}
+
 bool NodeStore::setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_secs)
 {
     return core_.setNextHop(node_id, next_hop, now_secs);

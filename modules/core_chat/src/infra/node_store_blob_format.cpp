@@ -14,12 +14,17 @@ namespace contacts
 
 bool isValidNodeBlobSize(size_t len)
 {
-    return (len % NodeStoreCore::kSerializedEntrySize) == 0;
+    return (len % NodeStoreCore::kSerializedEntrySize) == 0 ||
+           (len % NodeStoreCore::kLegacySerializedEntrySize) == 0;
 }
 
 size_t nodeBlobEntryCount(size_t len)
 {
-    return len / NodeStoreCore::kSerializedEntrySize;
+    if ((len % NodeStoreCore::kSerializedEntrySize) == 0)
+    {
+        return len / NodeStoreCore::kSerializedEntrySize;
+    }
+    return len / NodeStoreCore::kLegacySerializedEntrySize;
 }
 
 size_t nodeBlobByteSize(size_t count)
@@ -51,6 +56,13 @@ NodeBlobValidation validateNodeBlobMetadata(size_t len, uint8_t version,
     {
         return NodeBlobValidation::InvalidLength;
     }
+    const size_t entry_size = (version == NodeStoreCore::kPersistVersion)
+                                  ? NodeStoreCore::kSerializedEntrySize
+                                  : NodeStoreCore::kLegacySerializedEntrySize;
+    if ((len % entry_size) != 0)
+    {
+        return NodeBlobValidation::InvalidLength;
+    }
     if (nodeBlobEntryCount(len) > NodeStoreCore::kMaxNodes)
     {
         return NodeBlobValidation::TooManyEntries;
@@ -59,7 +71,8 @@ NodeBlobValidation validateNodeBlobMetadata(size_t len, uint8_t version,
     {
         return NodeBlobValidation::MissingCrc;
     }
-    if (version != NodeStoreCore::kPersistVersion)
+    if (version != NodeStoreCore::kPersistVersion &&
+        version != (NodeStoreCore::kPersistVersion - 1))
     {
         return NodeBlobValidation::VersionMismatch;
     }
@@ -73,7 +86,8 @@ NodeBlobValidation validateNodeBlobMetadata(size_t len, uint8_t version,
 
 NodeBlobValidation validateNodeStoreSdHeader(const NodeStoreSdHeader& header)
 {
-    if (header.ver != NodeStoreCore::kPersistVersion)
+    if (header.ver != NodeStoreCore::kPersistVersion &&
+        header.ver != (NodeStoreCore::kPersistVersion - 1))
     {
         return NodeBlobValidation::VersionMismatch;
     }
@@ -92,7 +106,10 @@ NodeBlobValidation validateNodeStoreSdBlob(const NodeStoreSdHeader& header,
     {
         return header_status;
     }
-    const size_t expected_bytes = nodeBlobByteSize(header.count);
+    const size_t entry_size = (header.ver == NodeStoreCore::kPersistVersion)
+                                  ? NodeStoreCore::kSerializedEntrySize
+                                  : NodeStoreCore::kLegacySerializedEntrySize;
+    const size_t expected_bytes = header.count * entry_size;
     if (expected_bytes != len || !isValidNodeBlobSize(len))
     {
         return NodeBlobValidation::InvalidLength;

@@ -19,6 +19,7 @@ class NodeStore final : public ::chat::contacts::INodeStore
                 uint8_t role = ::chat::contacts::kNodeRoleUnknown, uint8_t hops_away = 0xFF,
                 uint8_t hw_model = 0, uint8_t channel = 0xFF) override;
     void updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs) override;
+    void updatePosition(uint32_t node_id, const ::chat::contacts::NodePosition& position) override;
     bool setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_secs);
     uint8_t getNextHop(uint32_t node_id) const;
     bool remove(uint32_t node_id) override;

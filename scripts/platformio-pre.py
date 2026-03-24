@@ -10,24 +10,45 @@ project_dir = env.get("PROJECT_DIR")
 pio_platform = (env.get("PIOPLATFORM") or "").lower()
 is_esp32_env = "espressif32" in pio_platform
 is_nrf52_env = "nordicnrf52" in pio_platform
+is_gat562_env = env.get("PIOENV") == "gat562_mesh_evb_pro"
 
 
-def configure_radiolib_for_gat562():
-    if env.get("PIOENV") != "gat562_mesh_evb_pro":
-        return
-
-    project_dir = env.get("PROJECT_DIR")
-    radiolib_dir = os.path.join(project_dir, ".pio", "libdeps", env.get("PIOENV"), "RadioLib")
-    library_json_path = os.path.join(radiolib_dir, "library.json")
-
+def update_library_build_metadata(library_json_path, desired_updates, description):
     if not os.path.exists(library_json_path):
-        print(f"[pio] pre: RadioLib metadata not found yet: {library_json_path}")
+        print(f"[pio] pre: {description} metadata not found yet: {library_json_path}")
         return
 
     with open(library_json_path, "r", encoding="utf-8") as fp:
         library_json = json.load(fp)
 
     build_section = dict(library_json.get("build", {}))
+    changed = False
+
+    for key, value in desired_updates.items():
+        if build_section.get(key) != value:
+            build_section[key] = value
+            changed = True
+
+    if not changed:
+        print(f"[pio] pre: {description} metadata already trimmed")
+        return
+
+    library_json["build"] = build_section
+
+    with open(library_json_path, "w", encoding="utf-8", newline="\n") as fp:
+        json.dump(library_json, fp, indent=4)
+        fp.write("\n")
+
+    print(f"[pio] pre: Trimmed {description} build metadata")
+
+
+def configure_radiolib_for_gat562():
+    if not is_gat562_env:
+        return
+
+    project_dir = env.get("PROJECT_DIR")
+    radiolib_dir = os.path.join(project_dir, ".pio", "libdeps", env.get("PIOENV"), "RadioLib")
+    library_json_path = os.path.join(radiolib_dir, "library.json")
     desired_src_filter = [
         "-<*>",
         "+<Hal.cpp>",
@@ -42,22 +63,113 @@ def configure_radiolib_for_gat562():
         "+<modules/SX126x/SX126x_commands.cpp>",
         "+<modules/SX126x/SX126x_config.cpp>",
     ]
+    update_library_build_metadata(
+        library_json_path,
+        {"srcFilter": desired_src_filter},
+        "RadioLib for gat562_mesh_evb_pro",
+    )
 
-    if build_section.get("srcFilter") == desired_src_filter:
-        print("[pio] pre: RadioLib srcFilter already trimmed for gat562_mesh_evb_pro")
+
+def configure_crypto_for_gat562():
+    if not is_gat562_env:
         return
 
-    build_section["srcFilter"] = desired_src_filter
-    library_json["build"] = build_section
+    crypto_dir = os.path.join(project_dir, ".pio", "libdeps", env.get("PIOENV"), "Crypto")
+    library_json_path = os.path.join(crypto_dir, "library.json")
+    desired_src_filter = [
+        "-<*>",
+        "+<AES128.cpp>",
+        "+<AES256.cpp>",
+        "+<AESCommon.cpp>",
+        "+<BigNumberUtil.cpp>",
+        "+<BlockCipher.cpp>",
+        "+<CTR.cpp>",
+        "+<ChaCha.cpp>",
+        "+<Cipher.cpp>",
+        "+<Crypto.cpp>",
+        "+<Curve25519.cpp>",
+        "+<Hash.cpp>",
+        "+<RNG.cpp>",
+        "+<SHA256.cpp>",
+    ]
+    update_library_build_metadata(
+        library_json_path,
+        {"srcFilter": desired_src_filter},
+        "Crypto for gat562_mesh_evb_pro",
+    )
 
-    with open(library_json_path, "w", encoding="utf-8", newline="\n") as fp:
-        json.dump(library_json, fp, indent=4)
-        fp.write("\n")
 
-    print("[pio] pre: Trimmed RadioLib build to SX126x-only sources for gat562_mesh_evb_pro")
+def configure_nrf52_framework_libraries():
+    if not is_gat562_env or not is_nrf52_env:
+        return
+
+    platform = env.PioPlatform()
+    framework_dir = platform.get_package_dir("framework-arduinoadafruitnrf52")
+    if not framework_dir:
+        return
+
+    tinyusb_cppdefines = [
+        ("CFG_TUD_CDC", 1),
+        ("CFG_TUD_MSC", 0),
+        ("CFG_TUD_HID", 0),
+        ("CFG_TUD_MIDI", 0),
+        ("CFG_TUD_VENDOR", 0),
+        ("CFG_TUD_VIDEO", 0),
+        ("CFG_TUD_VIDEO_STREAMING", 0),
+    ]
+    env.AppendUnique(CPPDEFINES=tinyusb_cppdefines)
+    print("[pio] pre: Restricted TinyUSB device classes for gat562_mesh_evb_pro")
+
+    bluefruit_json_path = os.path.join(framework_dir, "libraries", "Bluefruit52Lib", "library.json")
+    bluefruit_src_filter = [
+        "-<*>",
+        "+<BLEAdvertising.cpp>",
+        "+<BLECentral.cpp>",
+        "+<BLECharacteristic.cpp>",
+        "+<BLEClientCharacteristic.cpp>",
+        "+<BLEClientService.cpp>",
+        "+<BLEConnection.cpp>",
+        "+<BLEDiscovery.cpp>",
+        "+<BLEGatt.cpp>",
+        "+<BLEPeriph.cpp>",
+        "+<BLEScanner.cpp>",
+        "+<BLESecurity.cpp>",
+        "+<BLEService.cpp>",
+        "+<BLEUuid.cpp>",
+        "+<bluefruit.cpp>",
+        "+<utility/*.cpp>",
+    ]
+    update_library_build_metadata(
+        bluefruit_json_path,
+        {"srcFilter": bluefruit_src_filter},
+        "Bluefruit52Lib for gat562_mesh_evb_pro",
+    )
+
+    tinyusb_json_path = os.path.join(framework_dir, "libraries", "Adafruit_TinyUSB_Arduino", "library.json")
+    tinyusb_src_filter = [
+        "-<*>",
+        "+<tusb.c>",
+        "+<arduino/Adafruit_TinyUSB_API.cpp>",
+        "+<arduino/Adafruit_USBD_CDC.cpp>",
+        "+<arduino/Adafruit_USBD_Device.cpp>",
+        "+<arduino/Adafruit_USBD_Interface.cpp>",
+        "+<arduino/ports/nrf/Adafruit_TinyUSB_nrf.cpp>",
+        "+<class/cdc/cdc_device.c>",
+        "+<common/tusb_fifo.c>",
+        "+<device/usbd.c>",
+        "+<device/usbd_control.c>",
+        "+<portable/nordic/nrf5x/dcd_nrf5x.c>",
+    ]
+    update_library_build_metadata(
+        tinyusb_json_path,
+        {"srcFilter": tinyusb_src_filter, "libArchive": False},
+        "Adafruit_TinyUSB_Arduino for gat562_mesh_evb_pro",
+    )
 
 
 configure_radiolib_for_gat562()
+configure_crypto_for_gat562()
+configure_nrf52_framework_libraries()
 
 # Only ESP Arduino builds need the shared LVGL config under platform/esp.
 if is_esp32_env:

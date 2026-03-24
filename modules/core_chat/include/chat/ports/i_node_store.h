@@ -13,6 +13,8 @@ namespace chat
 namespace contacts
 {
 
+struct NodePosition;
+
 /**
  * @brief Node entry structure
  */
@@ -30,6 +32,17 @@ struct NodeEntry
     uint8_t protocol;       // NodeProtocolType
     uint8_t role;           // NodeRoleType (Meshtastic roles)
     uint8_t hw_model;       // Meshtastic_HardwareModel (0 = UNSET)
+    bool position_valid = false;
+    int32_t position_latitude_i = 0;
+    int32_t position_longitude_i = 0;
+    bool position_has_altitude = false;
+    int32_t position_altitude = 0;
+    uint32_t position_timestamp = 0;
+    uint32_t position_precision_bits = 0;
+    uint32_t position_pdop = 0;
+    uint32_t position_hdop = 0;
+    uint32_t position_vdop = 0;
+    uint32_t position_gps_accuracy_mm = 0;
 };
 
 static constexpr uint8_t kNodeRoleUnknown = 0xFF;
@@ -68,6 +81,13 @@ class INodeStore
      * @param now_secs Current timestamp (seconds)
      */
     virtual void updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs) = 0;
+
+    /**
+     * @brief Update node position info
+     * @param node_id Node ID
+     * @param position Latest known position
+     */
+    virtual void updatePosition(uint32_t node_id, const NodePosition& position) = 0;
 
     /**
      * @brief Remove a node entry by node ID
