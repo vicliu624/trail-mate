@@ -93,6 +93,7 @@ firmware.elf
 !.vscode/extensions.json
 !.vscode/settings.json
 *.code-workspace
+compile_commands.json
 
 # IDE - JetBrains (CLion, IntelliJ, etc.)
 .idea/
