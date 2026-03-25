@@ -317,6 +317,12 @@ class TLoRaPagerBoard : public BoardBase,
     void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                             int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                             uint8_t crc_len) override;
+    int radioStandby();
+    int configureFskRadio(float freq_mhz, float bit_rate_kbps, float freq_dev_khz, float rx_bw_khz,
+                          int8_t tx_power, uint16_t preamble_len, float tcxo_voltage,
+                          const uint8_t* sync_word, size_t sync_word_len, uint8_t crc_len);
+    int restoreLoRaRadio();
+    int startRadioTransmit(const uint8_t* data, size_t len);
 
     // GpsBoard
     void setGPSOnline(bool online) override { setGPSOnlineInternal(online); }
@@ -469,6 +475,19 @@ class TLoRaPagerBoard : public BoardBase,
 #endif
 
   private:
+    struct CachedLoRaConfig
+    {
+        bool valid = false;
+        float freq_mhz = 0.0f;
+        float bw_khz = 0.0f;
+        uint8_t sf = 0;
+        uint8_t cr_denom = 0;
+        int8_t tx_power = 0;
+        uint16_t preamble_len = 0;
+        uint8_t sync_word = 0;
+        uint8_t crc_len = 0;
+    };
+
     // Singleton pattern - prevent copy and assignment
     TLoRaPagerBoard();
     ~TLoRaPagerBoard();
@@ -490,6 +509,7 @@ class TLoRaPagerBoard : public BoardBase,
     // Two-stage power-off implementation
     bool isUsbPresent_bestEffort();
 
+    CachedLoRaConfig lora_config_;
     int power_tier_ = 0;          ///< 0=Normal, 1=Low(<=20%), 2=Critical(<=10%)
     uint32_t devices_probe = 0;   ///< Hardware detection status bitmask
     uint8_t _haptic_effects = 15; ///< Default haptic effect (strong buzz for message notification)

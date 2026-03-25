@@ -1,9 +1,8 @@
 #include "platform/esp/common/walkie_runtime.h"
 
-#if defined(ARDUINO_T_LORA_PAGER) && defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)
+#if defined(ARDUINO_T_LORA_PAGER) && defined(ARDUINO_LILYGO_LORA_SX1262)
 #include <Arduino.h>
 #include <RadioLib.h>
-#include <cstring>
 
 #include "boards/tlora_pager/tlora_pager_board.h"
 #include "platform/esp/arduino_common/app_tasks.h"
@@ -19,9 +18,9 @@ constexpr float kFskRxBwKHz = 156.2f;
 constexpr uint16_t kFskPreambleLen = 16;
 constexpr uint8_t kFskSyncWord[] = {0x2D, 0x01};
 
-boards::tlora_pager::TLoRaPagerBoard* resolveBoard(const Session* session)
+::boards::tlora_pager::TLoRaPagerBoard* resolveBoard(const Session* session)
 {
-    return session ? static_cast<boards::tlora_pager::TLoRaPagerBoard*>(session->impl) : nullptr;
+    return session ? static_cast<::boards::tlora_pager::TLoRaPagerBoard*>(session->impl) : nullptr;
 }
 
 void writeError(char* error_buffer, size_t error_buffer_size, const char* message)
@@ -92,85 +91,50 @@ bool isValid(const Session& session)
 
 bool isRadioReady(const Session& session)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(&session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(&session);
     return board && board->isRadioOnline();
 }
 
 bool isCodecReady(const Session& session)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(&session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(&session);
     return board && ((board->getDevicesProbe() & HW_CODEC_ONLINE) != 0);
 }
 
 bool configureFsk(Session* session, float freq_mhz, int8_t tx_power, char* error_buffer,
                   size_t error_buffer_size)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (!board || !board->isRadioOnline())
     {
         writeError(error_buffer, error_buffer_size, "Radio offline");
         return false;
     }
 
-    if (!board->lock(pdMS_TO_TICKS(200)))
-    {
-        writeError(error_buffer, error_buffer_size, "Radio lock failed");
-        return false;
-    }
-
-    board->radio_.standby();
-    int state = board->radio_.beginFSK(freq_mhz,
-                                       kFskBitRateKbps,
-                                       kFskFreqDevKHz,
-                                       kFskRxBwKHz,
-                                       tx_power,
-                                       kFskPreambleLen,
-                                       1.6f);
+    int state = board->configureFskRadio(freq_mhz,
+                                         kFskBitRateKbps,
+                                         kFskFreqDevKHz,
+                                         kFskRxBwKHz,
+                                         tx_power,
+                                         kFskPreambleLen,
+                                         1.6f,
+                                         kFskSyncWord,
+                                         sizeof(kFskSyncWord),
+                                         2);
     if (state != RADIOLIB_ERR_NONE)
     {
-        Serial.printf("[WALKIE] beginFSK failed state=%d\n", state);
+        Serial.printf("[WALKIE] configureFskRadio failed state=%d\n", state);
         writeStateError(error_buffer, error_buffer_size, "beginFSK fail", state);
-        board->unlock();
         return false;
     }
 
-    uint8_t sync[sizeof(kFskSyncWord)];
-    memcpy(sync, kFskSyncWord, sizeof(sync));
-    state = board->radio_.setSyncWord(sync, sizeof(sync));
-    if (state != RADIOLIB_ERR_NONE)
-    {
-        Serial.printf("[WALKIE] setSyncWord failed state=%d\n", state);
-        writeStateError(error_buffer, error_buffer_size, "setSync fail", state);
-        board->unlock();
-        return false;
-    }
-
-    state = board->radio_.setCRC(2);
-    if (state != RADIOLIB_ERR_NONE)
-    {
-        Serial.printf("[WALKIE] setCRC failed state=%d\n", state);
-        writeStateError(error_buffer, error_buffer_size, "setCRC fail", state);
-        board->unlock();
-        return false;
-    }
-
-    state = board->radio_.setPreambleLength(kFskPreambleLen);
-    if (state != RADIOLIB_ERR_NONE)
-    {
-        Serial.printf("[WALKIE] setPreamble failed state=%d\n", state);
-        writeStateError(error_buffer, error_buffer_size, "setPre fail", state);
-        board->unlock();
-        return false;
-    }
-
-    board->unlock();
     session->lora_mode_configured = true;
     return true;
 }
 
 bool restoreLora(Session* session, char* error_buffer, size_t error_buffer_size)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (!board)
     {
         return false;
@@ -179,14 +143,7 @@ bool restoreLora(Session* session, char* error_buffer, size_t error_buffer_size)
     {
         return true;
     }
-    if (!board->lock(pdMS_TO_TICKS(200)))
-    {
-        writeError(error_buffer, error_buffer_size, "Radio lock failed");
-        return false;
-    }
-
-    int state = board->radio_.begin();
-    board->unlock();
+    int state = board->restoreLoRaRadio();
     if (state != RADIOLIB_ERR_NONE)
     {
         Serial.printf("[WALKIE] restore LoRa failed state=%d\n", state);
@@ -200,7 +157,7 @@ bool restoreLora(Session* session, char* error_buffer, size_t error_buffer_size)
 
 int codecOpen(Session* session, uint8_t bits_per_sample, uint8_t channels, uint32_t sample_rate)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (!board)
     {
         return -1;
@@ -215,7 +172,7 @@ int codecOpen(Session* session, uint8_t bits_per_sample, uint8_t channels, uint3
 
 void codecClose(Session* session)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (!board || !session->codec_open)
     {
         return;
@@ -226,19 +183,19 @@ void codecClose(Session* session)
 
 int codecRead(Session* session, uint8_t* buffer, size_t size)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     return board ? board->codec.read(buffer, size) : -1;
 }
 
 int codecWrite(Session* session, uint8_t* buffer, size_t size)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     return board ? board->codec.write(buffer, size) : -1;
 }
 
 void codecSetVolume(Session* session, uint8_t level)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (board)
     {
         board->codec.setVolume(level);
@@ -247,7 +204,7 @@ void codecSetVolume(Session* session, uint8_t level)
 
 void codecSetGain(Session* session, float db_value)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (board)
     {
         board->codec.setGain(db_value);
@@ -256,7 +213,7 @@ void codecSetGain(Session* session, float db_value)
 
 void codecSetMute(Session* session, bool enabled)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (board)
     {
         board->codec.setMute(enabled);
@@ -265,44 +222,38 @@ void codecSetMute(Session* session, bool enabled)
 
 void standby(Session* session)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (board)
     {
-        board->radio_.standby();
+        (void)board->radioStandby();
     }
 }
 
 int startTransmit(Session* session, const uint8_t* data, size_t size)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (!board)
     {
         return -1;
     }
-    if (!board->lock(pdMS_TO_TICKS(50)))
-    {
-        return -1;
-    }
-    int state = board->radio_.startTransmit(const_cast<uint8_t*>(data), size);
-    board->unlock();
-    return state;
+    return board->startRadioTransmit(data, size);
 }
 
 int startReceive(Session* session)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     return board ? board->startRadioReceive() : -1;
 }
 
 uint32_t getRadioIrqFlags(Session* session)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     return board ? board->getRadioIrqFlags() : 0;
 }
 
 void clearRadioIrqFlags(Session* session, uint32_t flags)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     if (board)
     {
         board->clearRadioIrqFlags(flags);
@@ -311,13 +262,13 @@ void clearRadioIrqFlags(Session* session, uint32_t flags)
 
 int getPacketLength(Session* session, bool update)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     return board ? board->getRadioPacketLength(update) : -1;
 }
 
 int readRadioData(Session* session, uint8_t* buffer, size_t size)
 {
-    boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
+    ::boards::tlora_pager::TLoRaPagerBoard* board = resolveBoard(session);
     return board ? board->readRadioData(buffer, size) : -1;
 }
 

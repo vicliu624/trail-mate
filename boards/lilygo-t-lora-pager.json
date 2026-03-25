@@ -18,7 +18,7 @@
     "flash_mode": "qio",
     "hwids": [["0x303A", "0x82D4"]],
     "mcu": "esp32s3",
-    "variant": "lilygo_twatch_ultra",
+    "variant": "lilygo_tlora_pager",
     "variants_dir": "variants"
   },
   "connectivity": ["wifi"],

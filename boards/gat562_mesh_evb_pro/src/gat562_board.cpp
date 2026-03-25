@@ -923,6 +923,45 @@ void Gat562Board::stopVibrator()
 void Gat562Board::playMessageTone()
 {
     pulseNotificationLed(25);
+
+    if (message_tone_volume_ == 0)
+    {
+        return;
+    }
+
+    const int buzzer_pin = kBoardProfile.buzzer.pin;
+    if (buzzer_pin < 0)
+    {
+        return;
+    }
+
+    pinMode(buzzer_pin, OUTPUT);
+    digitalWrite(buzzer_pin, kBoardProfile.buzzer.active_high ? LOW : HIGH);
+
+    struct ToneStep
+    {
+        unsigned frequency_hz;
+        uint16_t duration_ms;
+        uint16_t gap_ms;
+    };
+
+    static constexpr ToneStep kMessageTone[] = {
+        {1760U, 70U, 25U},
+        {2093U, 110U, 0U},
+    };
+
+    for (const ToneStep& step : kMessageTone)
+    {
+        tone(static_cast<uint8_t>(buzzer_pin), step.frequency_hz, step.duration_ms);
+        delay(step.duration_ms);
+        noTone(static_cast<uint8_t>(buzzer_pin));
+        if (step.gap_ms > 0)
+        {
+            delay(step.gap_ms);
+        }
+    }
+
+    digitalWrite(buzzer_pin, kBoardProfile.buzzer.active_high ? LOW : HIGH);
 }
 
 void Gat562Board::setMessageToneVolume(uint8_t volume_percent)

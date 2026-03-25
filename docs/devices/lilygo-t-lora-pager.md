@@ -64,11 +64,11 @@ working with real hardware:
 
 Primary board definition files:
 
-- [boards/lilygo-t-lora-pager.json](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/lilygo-t-lora-pager.json)
-- [pins_arduino.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/pins_arduino.h)
-- [tlora_pager.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/envs/tlora_pager.ini)
-- [tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp)
-- [tlora_pager_board.h](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/include/boards/tlora_pager/tlora_pager_board.h)
+- [boards/lilygo-t-lora-pager.json](../../boards/lilygo-t-lora-pager.json)
+- [pins_arduino.h](../../variants/lilygo_tlora_pager/pins_arduino.h)
+- [tlora_pager.ini](../../variants/lilygo_tlora_pager/envs/tlora_pager.ini)
+- [tlora_pager_board.cpp](../../boards/tlora_pager/src/tlora_pager_board.cpp)
+- [tlora_pager_board.h](../../boards/tlora_pager/include/boards/tlora_pager/tlora_pager_board.h)
 
 Rules:
 
@@ -80,7 +80,7 @@ Rules:
 ## Important Boundary
 
 This repository uses the LilyGo Pager as an ESP board with its own runtime
-implementation in [tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp).
+implementation in [tlora_pager_board.cpp](../../boards/tlora_pager/src/tlora_pager_board.cpp).
 
 That means the most authoritative sources for day-to-day maintenance are:
 
@@ -93,7 +93,7 @@ board runtime unless real hardware verification proves otherwise.
 
 ## Build Environments
 
-Defined in [tlora_pager.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/envs/tlora_pager.ini):
+Defined in [tlora_pager.ini](../../variants/lilygo_tlora_pager/envs/tlora_pager.ini):
 
 - `tlora_pager_sx1262`
 - `tlora_pager_sx1262_debug`
@@ -111,7 +111,7 @@ Current build-time facts:
 ## Verified Pin Map
 
 The pin map below is taken from
-[pins_arduino.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/pins_arduino.h),
+[pins_arduino.h](../../variants/lilygo_tlora_pager/pins_arduino.h),
 which is the active variant source for this repo.
 
 ### Shared I2C Bus
@@ -217,7 +217,7 @@ Notes:
 The Pager uses an `XL9555` I/O expander to gate multiple peripherals.
 
 Current logical assignments from
-[pins_arduino.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/pins_arduino.h):
+[pins_arduino.h](../../variants/lilygo_tlora_pager/pins_arduino.h):
 
 - `EXPANDS_DRV_EN = 0`
 - `EXPANDS_AMP_EN = 1`
@@ -255,7 +255,7 @@ These flags are part of the board contract and are relied on by the ESP platform
 ## Runtime Bring-Up Notes
 
 The board runtime in
-[tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp)
+[tlora_pager_board.cpp](../../boards/tlora_pager/src/tlora_pager_board.cpp)
 currently initializes or manages:
 
 - battery gauge `BQ27220`
@@ -274,6 +274,18 @@ When debugging missing peripherals on Pager, always check both:
 1. the raw pin assignment
 2. the relevant `XL9555` enable line or runtime init path
 
+## Sleep / Power Ownership Notes
+
+- GPS power is owned by `HalGps` / `GpsService`, not by screen sleep helpers.
+- NFC power is board-owned and is toggled by Pager board runtime entrypoints such as
+  `initNFC()`, `startNFCDiscovery()`, `stopNFCDiscovery()`, and screen sleep.
+- The motion sensor is initialized by the board runtime, but Pager does not currently
+  implement a dedicated `POWER_SENSOR` hardware branch in `powerControl()`. Do not
+  assume screen sleep physically power-cycles `BHI260AP`.
+- Walkie temporarily switches the radio into FSK mode. Pager now caches the last
+  normal LoRa config so the board can restore the previous LoRa parameters when
+  Walkie exits before the higher-level mesh config path re-applies its own runtime state.
+
 ## Display Notes
 
 There are two dimensions worth remembering:
@@ -286,20 +298,19 @@ validated in runtime code rather than assumed from the raw panel numbers alone.
 
 ## Known Risks / Maintenance Notes
 
-- `boards/lilygo-t-lora-pager.json` currently points at variant `lilygo_twatch_ultra`
-  while the actual pin definitions used for Pager live under
-  [variants/lilygo_tlora_pager](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager).
-  This is worth treating carefully whenever board configuration is refactored.
 - Pager hardware is highly multiplexed. A peripheral can fail because of shared-bus
   contention, expander power state, or init order, not just because a GPIO number is wrong.
 - LoRa, SD, NFC and display all share the SPI bus, so bus ownership issues are realistic.
 - Many auxiliary devices share the same I2C bus, so probe order and bus locking matter.
+- Some apparent power-control paths are logical rather than physical. Maintenance changes
+  should avoid assuming every peripheral named in sleep or init code has a real board-level
+  power gate unless `powerControl()` actually implements it.
 
 ## Maintenance Guidance
 
 When changing this board next time:
 
-1. Update [pins_arduino.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/pins_arduino.h) first for GPIO truth.
-2. Update [tlora_pager.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/lilygo_tlora_pager/envs/tlora_pager.ini) if the radio or build flags change.
-3. Update [tlora_pager_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/tlora_pager/src/tlora_pager_board.cpp) for init order, power gating or runtime behavior.
+1. Update [pins_arduino.h](../../variants/lilygo_tlora_pager/pins_arduino.h) first for GPIO truth.
+2. Update [tlora_pager.ini](../../variants/lilygo_tlora_pager/envs/tlora_pager.ini) if the radio or build flags change.
+3. Update [tlora_pager_board.cpp](../../boards/tlora_pager/src/tlora_pager_board.cpp) for init order, power gating or runtime behavior.
 4. Keep this document aligned with the checked-in implementation, not with stale vendor copy.
