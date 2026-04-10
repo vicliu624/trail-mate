@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 class TwoWire;
 
@@ -23,6 +24,9 @@ class IRadioPacketIo;
 
 namespace boards::gat562_mesh_evb_pro
 {
+
+class GpsRuntime;
+class InputRuntime;
 
 enum class BoardInputKey : uint8_t
 {
@@ -76,6 +80,7 @@ class Gat562Board final : public BoardBase
     };
 
     static Gat562Board& instance();
+    ~Gat562Board() override;
 
     uint32_t begin(uint32_t disable_hw_init = 0) override;
     void wakeUp() override;
@@ -150,7 +155,7 @@ class Gat562Board final : public BoardBase
     uint32_t currentEpochSeconds() const;
 
   private:
-    Gat562Board() = default;
+    Gat562Board();
 
     void initializeBoardHardware();
     void enablePeripheralRail();
@@ -164,6 +169,8 @@ class Gat562Board final : public BoardBase
     uint8_t brightness_ = DEVICE_MAX_BRIGHTNESS_LEVEL;
     uint8_t keyboard_brightness_ = 0;
     uint8_t message_tone_volume_ = 45;
+    std::unique_ptr<GpsRuntime> gps_runtime_;
+    std::unique_ptr<InputRuntime> input_runtime_;
 };
 
 } // namespace boards::gat562_mesh_evb_pro

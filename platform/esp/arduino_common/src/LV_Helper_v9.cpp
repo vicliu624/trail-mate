@@ -166,7 +166,7 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
         data->state = LV_INDEV_STATE_PR;
         return;
 #else
-        // 閸忔湹绮拋鎯ь槵娴犲秶鍔ф穱婵囧瘮閳ユ粌鍘涢崬銈夊晪閵嗕椒绗夋导鐘电舶 UI閳ユ繄娈戦柅鏄忕帆閵?        // Priority: if screen saver is visible, consume the touch to exit it.
+        // Priority: if the screen saver is visible, consume the touch and exit it.
         if (isScreenSaverActive())
         {
             enterFromScreenSaver();
@@ -296,7 +296,7 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
 
     // If screen is sleeping or screen saver is active, only a *real* key press
     // should wake/exit. Previously this path ran unconditionally on every poll,
-    // which could cause spurious wake閳姀nterFromScreenSaver() without user input.
+    // which could cause a spurious wake or enterFromScreenSaver() without user input.
     if (isScreenSleeping() || isScreenSaverActive())
     {
         if (state == KEYBOARD_PRESSED)

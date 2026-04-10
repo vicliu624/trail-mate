@@ -2,6 +2,7 @@
 
 #include "app/app_config.h"
 #include "app/app_facades.h"
+#include "ble/ble_manager.h"
 #include "chat/runtime/self_identity_policy.h"
 #include "chat/runtime/self_identity_provider.h"
 
@@ -34,7 +35,10 @@ class Gat562Board;
 namespace apps::gat562_mesh_evb_pro
 {
 
-class AppFacadeRuntime final : public app::IAppBleFacade
+class RuntimeApplyService;
+
+class AppFacadeRuntime final : public app::IAppBleFacade,
+                               public ble::IBleRuntimeContext
 {
   public:
     static AppFacadeRuntime& instance();
@@ -95,6 +99,13 @@ class AppFacadeRuntime final : public app::IAppBleFacade
     void tickEventRuntime() override;
     void dispatchPendingEvents(std::size_t max_events = 32) override;
 
+    const app::AppConfig& bleConfig() const override;
+    bool bleEnabled() const override;
+    void bleEffectiveUserInfo(char* out_long, std::size_t long_len,
+                              char* out_short, std::size_t short_len) const override;
+    chat::NodeId bleSelfNodeId() const override;
+    app::IAppBleFacade& bleAppFacade() override;
+
     const chat::runtime::EffectiveSelfIdentity& effectiveIdentity() const;
 
   private:
@@ -120,9 +131,11 @@ class AppFacadeRuntime final : public app::IAppBleFacade
     std::unique_ptr<chat::IMeshAdapter> mesh_router_;
     std::unique_ptr<chat::ChatService> chat_service_;
     std::unique_ptr<ble::BleManager> ble_manager_;
+    std::unique_ptr<RuntimeApplyService> apply_service_;
     boards::gat562_mesh_evb_pro::Gat562Board* board_ = nullptr;
     chat::ui::IChatUiRuntime* chat_ui_runtime_ = nullptr;
     bool config_save_pending_ = false;
+    uint32_t last_chat_store_flush_ms_ = 0;
 };
 
 } // namespace apps::gat562_mesh_evb_pro

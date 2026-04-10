@@ -8,15 +8,15 @@
  * +------------------------------------------------------------------+
  * | TopRow (ROW, grow)                                                |
  * |  +-------------------------+  +---------------------------------+ |
- * |  | Info Card (left)         |  | Location Card (right)          | |
- * |  | +---------------------+  |  | +---------------------------+ | |
- * |  | | Avatar (S)          |  |  | | Title: Location           | | |
- * |  | | Name: ALFA-3        |  |  | +---------------------------+ | |
- * |  | | Desc: Relay Node    |  |  | | Map Placeholder           | | |
- * |  | +---------------------+  |  | | [Map image]               | | |
- * |  | | ID: !a1b2c3          |  |  | +---------------------------+ | |
- * |  | | Role: Router         |  |  | | Lat,Lon +/-Acc  Alt       | | |
- * |  | +---------------------+  |  | +---------------------------+ | |
+ * |  | Info Card (left)        |  | Location Card (right)          | |
+ * |  | +---------------------+ |  | +---------------------------+ | |
+ * |  | | Avatar (S)          | |  | | Title: Location           | | |
+ * |  | | Name: ALFA-3        | |  | +---------------------------+ | |
+ * |  | | Desc: Relay Node    | |  | | Map Placeholder           | | |
+ * |  | +---------------------+ |  | | [Map image]               | | |
+ * |  | | ID: !a1b2c3         | |  | +---------------------------+ | |
+ * |  | | Role: Router        | |  | | Lat,Lon +/-Acc  Alt       | | |
+ * |  | +---------------------+ |  | +---------------------------+ | |
  * |  |                         |  | | Updated: 2m ago            | | |
  * |  +-------------------------+  | +---------------------------+ | |
  * |                               +---------------------------------+ |
@@ -25,29 +25,29 @@
  * |  +------------------------------------------------------------+  |
  * |  | Title: Link                                                |  |
  * |  +------------------------------------------------------------+  |
- * |  | RSSI: -112  SNR: 7.5     Ch: 478.875  SF: 7  BW: 125k      | |
+ * |  | RSSI: -112  SNR: 7.5     Ch: 478.875  SF: 7  BW: 125k      |  |
  * |  +------------------------------------------------------------+  |
- * |  | Hop: 2  Last heard: 18s                                   |  |
+ * |  | Hop: 2  Last heard: 18s                                    |  |
  * |  +------------------------------------------------------------+  |
  * +------------------------------------------------------------------+
  *
  * Tree view:
  * Root(COL)
- * 鈹溾攢 Header
- * 鈹斺攢 Content(COL)
- *    鈹溾攢 TopRow(ROW, grow=1)
- *    鈹? 鈹溾攢 InfoCard(COL)
- *    鈹? 鈹? 鈹溾攢 InfoHeader(ROW)
- *    鈹? 鈹? 鈹斺攢 InfoFooter(ROW)
- *    鈹? 鈹斺攢 LocationCard(COL, grow=1)
- *    鈹?    鈹溾攢 LocationHeader
- *    鈹?    鈹溾攢 LocationMap(grow=1)
- *    鈹?    鈹溾攢 LocationCoords
- *    鈹?    鈹斺攢 LocationUpdated
- *    鈹斺攢 LinkPanel(COL)
- *       鈹溾攢 LinkHeader
- *       鈹溾攢 LinkRow1
- *       鈹斺攢 LinkRow2
+ * - Header
+ * - Content(COL)
+ *   - TopRow(ROW, grow=1)
+ *     - InfoCard(COL)
+ *       - InfoHeader(ROW)
+ *       - InfoFooter(ROW)
+ *     - LocationCard(COL, grow=1)
+ *       - LocationHeader
+ *       - LocationMap(grow=1)
+ *       - LocationCoords
+ *       - LocationUpdated
+ *   - LinkPanel(COL)
+ *     - LinkHeader
+ *     - LinkRow1
+ *     - LinkRow2
  *
  * Preconditions:
  * - Root uses LV_FLEX_FLOW_COLUMN.

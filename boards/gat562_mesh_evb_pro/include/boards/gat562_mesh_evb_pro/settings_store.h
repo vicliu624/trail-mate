@@ -27,8 +27,12 @@ enum class StoreStatus : uint8_t
 void normalizeConfig(app::AppConfig& config);
 bool loadAppConfig(app::AppConfig& config);
 bool saveAppConfig(const app::AppConfig& config);
+void queueSaveAppConfig(const app::AppConfig& config);
 uint8_t loadMessageToneVolume();
 bool saveMessageToneVolume(uint8_t volume);
+void queueSaveMessageToneVolume(uint8_t volume);
+bool tickDeferredSave();
+bool hasDeferredSavePending();
 StoreStatus lastLoadStatus();
 StoreStatus lastSaveStatus();
 const char* statusLabel(StoreStatus status);

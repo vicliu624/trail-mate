@@ -320,8 +320,10 @@ ChatRecHeaderV1 {
 text[text_len]                  // UTF-8
 ```
 
-#### Team chat????????V2, TEAM_CHAT_APP?
-???? TeamChat ?????????? V2 ?? chatlog.log?
+#### Team chat 记录格式（V2，对应 `TEAM_CHAT_APP`）
+
+当收到 `TeamChat` 负载并完成解码后，按 V2 结构追加写入 `chatlog.log`。
+相比 V1，V2 在记录头中额外保存消息类型，便于统一回放文本、位置和指令类消息。
 
 ```c
 ChatRecHeaderV2 {
@@ -339,7 +341,6 @@ ChatRecHeaderV2 {
   uint16 reserved2;
 }
 payload[payload_len]            // decoded TeamChat payload
-```
 ```
 
 #### 上限策略（简单）
@@ -597,5 +598,4 @@ Member Core                          Mesh                         Leader Core
 
 * payload 必须能解码为 `meshtastic_Position`，否则丢弃（或统计 error）
 * 不做自定义版本字段检查（以 Meshtastic 协议为准）
-
 

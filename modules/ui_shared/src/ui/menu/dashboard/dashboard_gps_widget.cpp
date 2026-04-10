@@ -14,6 +14,41 @@ namespace ui::menu::dashboard
 namespace
 {
 
+void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::GnssStatus& gnss, bool fix)
+{
+    static bool s_last_has_snapshot = false;
+    static bool s_last_fix = false;
+    static std::size_t s_last_sat_count = static_cast<std::size_t>(-1);
+    static uint8_t s_last_sats_in_view = 0xFF;
+    static uint8_t s_last_sats_in_use = 0xFF;
+    static uint32_t s_last_log_ms = 0;
+
+    const uint32_t now_ms = millis();
+    const bool changed = (has_snapshot != s_last_has_snapshot) || (fix != s_last_fix) || (sat_count != s_last_sat_count) ||
+                         (gnss.sats_in_view != s_last_sats_in_view) || (gnss.sats_in_use != s_last_sats_in_use);
+    const bool suspicious_full_scale =
+        has_snapshot && sat_count == gps::kMaxGnssSats && gnss.sats_in_view != static_cast<uint8_t>(sat_count);
+    if (!changed && !suspicious_full_scale && (now_ms - s_last_log_ms) < 2000U)
+    {
+        return;
+    }
+
+    s_last_has_snapshot = has_snapshot;
+    s_last_fix = fix;
+    s_last_sat_count = sat_count;
+    s_last_sats_in_view = gnss.sats_in_view;
+    s_last_sats_in_use = gnss.sats_in_use;
+    s_last_log_ms = now_ms;
+
+    Serial.printf("[ui][gps][dashboard] has=%u fix=%u count=%u used=%u view=%u hdop=%.1f\n",
+                  static_cast<unsigned>(has_snapshot ? 1 : 0),
+                  static_cast<unsigned>(fix ? 1 : 0),
+                  static_cast<unsigned>(sat_count),
+                  static_cast<unsigned>(gnss.sats_in_use),
+                  static_cast<unsigned>(gnss.sats_in_view),
+                  static_cast<double>(gnss.hdop));
+}
+
 void set_label_text_if_changed(lv_obj_t* label, const char* text)
 {
     if (label == nullptr || text == nullptr)
@@ -184,6 +219,7 @@ void refresh_gps_widget()
     const bool has_snapshot = platform::ui::gps::get_gnss_snapshot(sats, gps::kMaxGnssSats, &sat_count, &gnss);
     const auto state = platform::ui::gps::get_data();
     const bool fix = state.valid || (has_snapshot && gnss.fix != gps::GnssFix::NOFIX);
+    logDashboardGpsFlow(has_snapshot, sat_count, gnss, fix);
 
     set_status_chip(gps_ui.chrome,
                     fix_text(gnss.fix),

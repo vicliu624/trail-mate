@@ -1483,7 +1483,7 @@ void tick_gps_update(bool allow_map_refresh)
     static uint32_t last_refresh_ms = 0;
 
     const uint32_t TITLE_UPDATE_INTERVAL_MS = 30000;
-    const double MOVE_THRESHOLD_M = 15.0;      // Ignore small jitter; can tune to ~10閳?0m.
+    const double MOVE_THRESHOLD_M = 15.0;      // Ignore small jitter; can tune to about 10-20m.
     const uint32_t REFRESH_INTERVAL_MS = 2000; // Even if movement is slow, refresh at this interval.
 
     bool gps_ready = platform::ui::device::gps_ready();

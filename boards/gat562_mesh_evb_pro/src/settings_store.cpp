@@ -24,6 +24,7 @@ constexpr const char* kSettingsCorruptPath = "/gat562_settings.bin.corrupt";
 constexpr uint32_t kSettingsMagic = 0x53415447UL; // GTAS
 constexpr uint16_t kSettingsVersion = 1;
 constexpr uint8_t kDefaultToneVolume = 45;
+constexpr uint32_t kDeferredSaveDebounceMs = 1500UL;
 
 struct PersistedPayload
 {
@@ -51,6 +52,8 @@ bool s_cache_loaded = false;
 CachedSettings s_cache{};
 StoreStatus s_last_load_status = StoreStatus::NotFound;
 StoreStatus s_last_save_status = StoreStatus::NotFound;
+bool s_deferred_save_pending = false;
+uint32_t s_last_dirty_ms = 0;
 
 int8_t clampTxPower(int8_t value)
 {
@@ -354,6 +357,12 @@ bool saveToFs()
     return true;
 }
 
+void markDeferredSaveDirty()
+{
+    s_deferred_save_pending = true;
+    s_last_dirty_ms = millis();
+}
+
 void ensureCacheLoaded()
 {
     if (s_cache_loaded)
@@ -455,7 +464,16 @@ bool saveAppConfig(const app::AppConfig& config)
     ensureCacheLoaded();
     s_cache.config = config;
     normalizeConfig(s_cache.config);
+    s_deferred_save_pending = false;
     return saveToFs();
+}
+
+void queueSaveAppConfig(const app::AppConfig& config)
+{
+    ensureCacheLoaded();
+    s_cache.config = config;
+    normalizeConfig(s_cache.config);
+    markDeferredSaveDirty();
 }
 
 uint8_t loadMessageToneVolume()
@@ -468,7 +486,47 @@ bool saveMessageToneVolume(uint8_t volume)
 {
     ensureCacheLoaded();
     s_cache.tone_volume = clampToneVolume(volume);
+    s_deferred_save_pending = false;
     return saveToFs();
+}
+
+void queueSaveMessageToneVolume(uint8_t volume)
+{
+    ensureCacheLoaded();
+    s_cache.tone_volume = clampToneVolume(volume);
+    markDeferredSaveDirty();
+}
+
+bool tickDeferredSave()
+{
+    ensureCacheLoaded();
+    if (!s_deferred_save_pending)
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    if ((now_ms - s_last_dirty_ms) < kDeferredSaveDebounceMs)
+    {
+        return false;
+    }
+
+    s_deferred_save_pending = false;
+    if (saveToFs())
+    {
+        return true;
+    }
+
+    // Retry on a later loop if this write attempt fails.
+    s_deferred_save_pending = true;
+    s_last_dirty_ms = millis();
+    return false;
+}
+
+bool hasDeferredSavePending()
+{
+    ensureCacheLoaded();
+    return s_deferred_save_pending;
 }
 
 StoreStatus lastLoadStatus()

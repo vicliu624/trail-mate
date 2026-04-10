@@ -1,13 +1,30 @@
 #pragma once
 
-#include "app/app_facades.h"
+#include "app/app_config.h"
 #include "chat/domain/chat_types.h"
 
 #include <memory>
 #include <string>
 
+namespace app
+{
+class IAppBleFacade;
+}
+
 namespace ble
 {
+
+class IBleRuntimeContext
+{
+  public:
+    virtual ~IBleRuntimeContext() = default;
+    virtual const app::AppConfig& bleConfig() const = 0;
+    virtual bool bleEnabled() const = 0;
+    virtual void bleEffectiveUserInfo(char* out_long, std::size_t long_len,
+                                      char* out_short, std::size_t short_len) const = 0;
+    virtual chat::NodeId bleSelfNodeId() const = 0;
+    virtual app::IAppBleFacade& bleAppFacade() = 0;
+};
 
 struct BlePairingStatus
 {
@@ -36,7 +53,7 @@ class BleService
 class BleManager
 {
   public:
-    explicit BleManager(app::IAppBleFacade& ctx);
+    explicit BleManager(IBleRuntimeContext& ctx);
     ~BleManager();
 
     void begin();
@@ -50,7 +67,7 @@ class BleManager
     void restartService(chat::MeshProtocol protocol);
     std::string buildDeviceName(chat::MeshProtocol protocol) const;
 
-    app::IAppBleFacade& ctx_;
+    IBleRuntimeContext& ctx_;
     chat::MeshProtocol active_protocol_;
     std::unique_ptr<BleService> service_;
 };
