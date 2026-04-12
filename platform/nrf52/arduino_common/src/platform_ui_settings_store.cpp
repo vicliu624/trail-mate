@@ -427,7 +427,15 @@ bool put_blob(const char* ns, const char* key, const void* data, std::size_t len
     }
     ensureLoaded();
     auto& blob = blobStore()[makeScopedKey(ns, key)];
-    blob.assign(static_cast<const uint8_t*>(data), static_cast<const uint8_t*>(data) + len);
+    if (len == 0)
+    {
+        blob.clear();
+    }
+    else
+    {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        blob.assign(bytes, bytes + len);
+    }
     return saveToFs();
 }
 

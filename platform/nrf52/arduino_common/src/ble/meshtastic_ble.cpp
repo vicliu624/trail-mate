@@ -8,13 +8,17 @@
 #include "chat/ble/meshtastic_defaults.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
+#if !defined(GAT562_MESH_EVB_PRO)
 #include "platform/ui/settings_store.h"
+#endif
 
 #include <Arduino.h>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#if !defined(GAT562_MESH_EVB_PRO)
 #include <vector>
+#endif
 
 namespace ble
 {
@@ -22,9 +26,11 @@ namespace
 {
 constexpr uint32_t kDefaultBleFixedPin = 654321;
 constexpr uint32_t kConfigSaveDebounceMs = 1500UL;
+#if !defined(GAT562_MESH_EVB_PRO)
 constexpr const char* kBleSettingsNamespace = "ble_meshtastic";
 constexpr const char* kBluetoothConfigKey = "bt_cfg";
 constexpr const char* kModuleConfigKey = "mod_cfg";
+#endif
 
 bool usbSerialWritable(std::size_t len)
 {
@@ -175,6 +181,7 @@ struct PersistedBleState
     meshtastic_LocalModuleConfig module = meshtastic_LocalModuleConfig_init_zero;
 };
 
+#if !defined(GAT562_MESH_EVB_PRO)
 template <typename T>
 bool loadBlobConfigFromUiStore(const char* key, T* out)
 {
@@ -213,6 +220,7 @@ bool saveBlobConfigToUiStore(const char* key, const T& value)
     }
     return ok;
 }
+#endif
 
 bool loadPersistedBleState(PersistedBleState* out)
 {
@@ -230,8 +238,8 @@ bool loadPersistedBleState(PersistedBleState* out)
         out->has_module = true;
         return true;
     }
-#endif
-
+    return false;
+#else
     out->has_bluetooth = loadBlobConfigFromUiStore(kBluetoothConfigKey, &out->bluetooth);
     out->has_module = loadBlobConfigFromUiStore(kModuleConfigKey, &out->module);
     if (out->has_bluetooth || out->has_module)
@@ -241,6 +249,7 @@ bool loadPersistedBleState(PersistedBleState* out)
                    out->has_module ? 1U : 0U);
     }
     return out->has_bluetooth || out->has_module;
+#endif
 }
 
 bool savePersistedBleState(const meshtastic_Config_BluetoothConfig& bluetooth,
@@ -1073,7 +1082,7 @@ bool MeshtasticBleService::getPairingStatus(BlePairingStatus* out) const
     }
 
     *out = BlePairingStatus{};
-    out->available = ble_config_.enabled;
+    out->available = ctx_.isBleEnabled();
     out->requires_passkey = ble_config_.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN;
     out->is_fixed_pin = ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN;
     out->is_connected = isBleConnected();
@@ -1143,6 +1152,7 @@ bool MeshtasticBleService::loadBluetoothConfig(meshtastic_Config_BluetoothConfig
         return false;
     }
     *out = ble_config_;
+    out->enabled = ctx_.isBleEnabled();
     return true;
 }
 
@@ -1249,8 +1259,11 @@ void MeshtasticBleService::flushPendingConfigSaves(bool force)
         }
     }
 
+    meshtastic_Config_BluetoothConfig persisted_bluetooth = ble_config_;
+    persisted_bluetooth.enabled = ctx_.isBleEnabled();
     const bool needs_save = bluetooth_config_save_pending_ || module_config_save_pending_;
-    const bool persisted = needs_save ? savePersistedBleState(ble_config_, module_config_) : true;
+    const bool persisted = needs_save ? savePersistedBleState(persisted_bluetooth, module_config_) : true;
+    ble_config_.enabled = persisted_bluetooth.enabled;
 
     bleLogBoth("[BLE][nrf52][mt] current mem persisted=%u bluetooth_config_save_pending_=%u module_config_save_pending_=%u needs_save=%u",
                persisted ? 1U : 0U,
@@ -1262,9 +1275,9 @@ void MeshtasticBleService::flushPendingConfigSaves(bool force)
     {
         bleLogBoth("[BLE][nrf52][mt] flush bluetooth cfg persisted=%u mode=%u pin=%06lu enabled=%u",
                    persisted ? 1U : 0U,
-                   static_cast<unsigned>(ble_config_.mode),
-                   static_cast<unsigned long>(ble_config_.fixed_pin),
-                   ble_config_.enabled ? 1U : 0U);
+                   static_cast<unsigned>(persisted_bluetooth.mode),
+                   static_cast<unsigned long>(persisted_bluetooth.fixed_pin),
+                   persisted_bluetooth.enabled ? 1U : 0U);
         if (persisted)
         {
             bluetooth_config_save_pending_ = false;

@@ -7,6 +7,7 @@ NodeStore::NodeStore()
     : blob_store_("/chat_nodes.bin"),
       core_(blob_store_)
 {
+    core_.setAutoSaveEnabled(false);
 }
 
 void NodeStore::begin()

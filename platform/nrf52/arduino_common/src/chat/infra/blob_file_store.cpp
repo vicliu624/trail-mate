@@ -3,19 +3,41 @@
 #include "chat/infra/contact_store_core.h"
 #include "chat/infra/node_store_blob_format.h"
 #include "chat/infra/node_store_core.h"
+#include "platform/nrf52/arduino_common/internal_fs_utils.h"
 
 #include <InternalFileSystem.h>
 
+#include <algorithm>
 #include <cstring>
-#include <string>
 
 namespace platform::nrf52::arduino_common::chat::infra
 {
 namespace
 {
 using Adafruit_LittleFS_Namespace::FILE_O_READ;
-using Adafruit_LittleFS_Namespace::FILE_O_WRITE;
-constexpr const char* kTempSuffix = ".tmp";
+constexpr const char* kLogTag = "[nrf52][blob_store]";
+
+bool writeBytes(Adafruit_LittleFS_Namespace::File& file, const uint8_t* data, std::size_t len)
+{
+    if (!data && len != 0)
+    {
+        return false;
+    }
+
+    constexpr std::size_t kChunkSize = 128;
+    std::size_t offset = 0;
+    while (offset < len)
+    {
+        const std::size_t chunk = std::min(kChunkSize, len - offset);
+        const std::size_t written = file.write(data + offset, chunk);
+        if (written != chunk)
+        {
+            return false;
+        }
+        offset += written;
+    }
+    return true;
+}
 
 } // namespace
 
@@ -123,7 +145,7 @@ bool BlobFileStore::loadBlob(std::vector<uint8_t>& out)
 
 bool BlobFileStore::saveBlob(const uint8_t* data, size_t len)
 {
-    if (!path_ || !ensureFs())
+    if (!path_ || !::platform::nrf52::arduino_common::internal_fs::ensureMounted(false, kLogTag))
     {
         return false;
     }
@@ -134,15 +156,14 @@ bool BlobFileStore::saveBlob(const uint8_t* data, size_t len)
         return true;
     }
 
-    std::string temp_path = std::string(path_) + kTempSuffix;
-    if (InternalFS.exists(temp_path.c_str()))
+    Adafruit_LittleFS_Namespace::File file(InternalFS);
+    if (!::platform::nrf52::arduino_common::internal_fs::openForOverwrite(path_, &file, false, kLogTag))
     {
-        InternalFS.remove(temp_path.c_str());
+        return false;
     }
-
-    auto file = InternalFS.open(temp_path.c_str(), FILE_O_WRITE);
-    if (!file)
+    if (!::platform::nrf52::arduino_common::internal_fs::rewindForOverwrite(file))
     {
+        file.close();
         return false;
     }
 
@@ -152,24 +173,16 @@ bool BlobFileStore::saveBlob(const uint8_t* data, size_t len)
     header.payload_len = static_cast<uint32_t>(len);
     header.crc = computeCrc(data, len);
 
-    size_t written = file.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header));
-    if (written == sizeof(header) && data && len > 0)
+    uint32_t final_size = static_cast<uint32_t>(sizeof(header) + len);
+    bool ok = writeBytes(file, reinterpret_cast<const uint8_t*>(&header), sizeof(header));
+    if (ok && len > 0)
     {
-        written += file.write(data, len);
+        ok = writeBytes(file, data, len);
     }
+    const bool trunc_ok = ok && ::platform::nrf52::arduino_common::internal_fs::truncateAfterWrite(file, final_size);
     file.flush();
     file.close();
-    if (written != (sizeof(header) + len))
-    {
-        InternalFS.remove(temp_path.c_str());
-        return false;
-    }
-
-    if (InternalFS.exists(path_))
-    {
-        InternalFS.remove(path_);
-    }
-    return InternalFS.rename(temp_path.c_str(), path_);
+    return ok && trunc_ok;
 }
 
 void BlobFileStore::clearBlob()
@@ -178,10 +191,7 @@ void BlobFileStore::clearBlob()
     {
         return;
     }
-    if (InternalFS.exists(path_))
-    {
-        InternalFS.remove(path_);
-    }
+    ::platform::nrf52::arduino_common::internal_fs::removeIfExists(path_);
 }
 
 uint32_t BlobFileStore::computeCrc(const uint8_t* data, size_t len)

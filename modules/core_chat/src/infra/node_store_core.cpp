@@ -291,6 +291,11 @@ void NodeStoreCore::setProtectedNodeChecker(std::function<bool(uint32_t)> checke
     protected_node_checker_ = std::move(checker);
 }
 
+void NodeStoreCore::setAutoSaveEnabled(bool enabled)
+{
+    auto_save_enabled_ = enabled;
+}
+
 void NodeStoreCore::begin()
 {
     if (!loadEntries())
@@ -686,7 +691,7 @@ void NodeStoreCore::encodeEntries(std::vector<uint8_t>& out) const
 
 void NodeStoreCore::maybeSave()
 {
-    if (!dirty_)
+    if (!dirty_ || !auto_save_enabled_)
     {
         return;
     }

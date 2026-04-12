@@ -7,6 +7,8 @@
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
+#include "platform/ui/settings_store.h"
+#include "platform/ui/time_runtime.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
 #include "sys/clock.h"
@@ -15,10 +17,12 @@
 #include <rtos.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace ble
 {
@@ -26,6 +30,8 @@ namespace
 {
 
 constexpr uint8_t kQueueDepthHint = 4;
+constexpr const char* kUiSettingsNs = "settings";
+constexpr const char* kTimezoneTzdefKey = "timezone_tzdef";
 constexpr meshtastic_AdminMessage_ConfigType kConfigSnapshotTypes[] = {
     meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG,
     meshtastic_AdminMessage_ConfigType_POSITION_CONFIG,
@@ -80,6 +86,174 @@ void copyBounded(char* dst, size_t dst_len, const char* src)
     }
     std::strncpy(dst, src, dst_len - 1);
     dst[dst_len - 1] = '\0';
+}
+
+bool parsePosixTzOffsetMinutes(const char* tzdef, int* out_offset_min)
+{
+    if (!tzdef || !out_offset_min || tzdef[0] == '\0')
+    {
+        return false;
+    }
+
+    const char* cursor = tzdef;
+    if (*cursor == '<')
+    {
+        ++cursor;
+        while (*cursor != '\0' && *cursor != '>')
+        {
+            ++cursor;
+        }
+        if (*cursor != '>')
+        {
+            return false;
+        }
+        ++cursor;
+    }
+    else
+    {
+        size_t name_len = 0;
+        while (*cursor != '\0' && std::isalpha(static_cast<unsigned char>(*cursor)))
+        {
+            ++cursor;
+            ++name_len;
+        }
+        if (name_len < 3U)
+        {
+            return false;
+        }
+    }
+
+    int sign = 1;
+    if (*cursor == '-')
+    {
+        sign = -1;
+        ++cursor;
+    }
+    else if (*cursor == '+')
+    {
+        ++cursor;
+    }
+
+    if (!std::isdigit(static_cast<unsigned char>(*cursor)))
+    {
+        return false;
+    }
+
+    int hours = 0;
+    while (std::isdigit(static_cast<unsigned char>(*cursor)))
+    {
+        hours = (hours * 10) + (*cursor - '0');
+        ++cursor;
+    }
+
+    int minutes = 0;
+    if (*cursor == ':')
+    {
+        ++cursor;
+        if (!std::isdigit(static_cast<unsigned char>(*cursor)))
+        {
+            return false;
+        }
+        while (std::isdigit(static_cast<unsigned char>(*cursor)))
+        {
+            minutes = (minutes * 10) + (*cursor - '0');
+            ++cursor;
+        }
+
+        if (*cursor == ':')
+        {
+            ++cursor;
+            while (std::isdigit(static_cast<unsigned char>(*cursor)))
+            {
+                ++cursor;
+            }
+        }
+    }
+
+    const int posix_offset_min = sign * ((hours * 60) + minutes);
+    *out_offset_min = -posix_offset_min;
+    return true;
+}
+
+void buildFixedPosixTzdef(int offset_min, char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    const int posix_offset_min = -offset_min;
+    const int abs_minutes = posix_offset_min < 0 ? -posix_offset_min : posix_offset_min;
+    const int abs_hours = abs_minutes / 60;
+    const int rem_minutes = abs_minutes % 60;
+
+    if (rem_minutes == 0)
+    {
+        std::snprintf(out, out_len, "UTC%+d", posix_offset_min / 60);
+    }
+    else
+    {
+        std::snprintf(out,
+                      out_len,
+                      "UTC%+d:%02d",
+                      posix_offset_min < 0 ? -abs_hours : abs_hours,
+                      rem_minutes);
+    }
+}
+
+bool loadStoredTimezoneTzdef(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return false;
+    }
+
+    out[0] = '\0';
+    std::vector<uint8_t> blob;
+    if (!::platform::ui::settings_store::get_blob(kUiSettingsNs, kTimezoneTzdefKey, blob) || blob.empty())
+    {
+        return false;
+    }
+
+    const size_t copy_len = std::min(out_len - 1U, blob.size());
+    std::memcpy(out, blob.data(), copy_len);
+    out[copy_len] = '\0';
+    return out[0] != '\0';
+}
+
+void saveStoredTimezoneTzdef(const char* tzdef)
+{
+    if (!tzdef || tzdef[0] == '\0')
+    {
+        const char* keys[] = {kTimezoneTzdefKey};
+        ::platform::ui::settings_store::remove_keys(kUiSettingsNs, keys, 1);
+        return;
+    }
+
+    (void)::platform::ui::settings_store::put_blob(kUiSettingsNs, kTimezoneTzdefKey, tzdef, std::strlen(tzdef) + 1U);
+}
+
+void buildLinkedTimezoneTzdef(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    const int current_offset_min = ::platform::ui::time::timezone_offset_min();
+    char stored[65] = {};
+    if (loadStoredTimezoneTzdef(stored, sizeof(stored)))
+    {
+        int parsed_offset_min = 0;
+        if (parsePosixTzOffsetMinutes(stored, &parsed_offset_min) && parsed_offset_min == current_offset_min)
+        {
+            copyBounded(out, out_len, stored);
+            return;
+        }
+    }
+
+    buildFixedPosixTzdef(current_offset_min, out, out_len);
 }
 
 uint32_t nowSeconds()
@@ -723,6 +897,25 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
             }
             ctx_.setBleEnabled(req.set_config.payload_variant.bluetooth.enabled);
             break;
+        case meshtastic_Config_device_tag:
+        {
+            const char* tzdef = req.set_config.payload_variant.device.tzdef;
+            if (tzdef[0] != '\0')
+            {
+                int offset_min = 0;
+                if (parsePosixTzOffsetMinutes(tzdef, &offset_min))
+                {
+                    ::platform::ui::time::set_timezone_offset_min(offset_min);
+                    saveStoredTimezoneTzdef(tzdef);
+                    logDual("[BLE][mtcore] set_config device tzdef=%s offset_min=%d\n", tzdef, offset_min);
+                }
+                else
+                {
+                    logDual("[BLE][mtcore] set_config device tzdef parse failed tzdef=%s\n", tzdef);
+                }
+            }
+            break;
+        }
         case meshtastic_Config_device_ui_tag:
             break;
         case meshtastic_Config_display_tag:
@@ -738,6 +931,10 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         else if (req.set_config.which_payload_variant == meshtastic_Config_bluetooth_tag)
         {
             resp.get_config_response = buildConfig(meshtastic_AdminMessage_ConfigType_BLUETOOTH_CONFIG);
+        }
+        else if (req.set_config.which_payload_variant == meshtastic_Config_device_tag)
+        {
+            resp.get_config_response = buildConfig(meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG);
         }
         else if (req.set_config.which_payload_variant == meshtastic_Config_display_tag)
         {
@@ -1703,6 +1900,8 @@ void MeshtasticPhoneCore::fillConfig(meshtastic_AdminMessage_ConfigType type, me
         cfg_out.payload_variant.device.is_managed = false;
         cfg_out.payload_variant.device.led_heartbeat_disabled = false;
         cfg_out.payload_variant.device.buzzer_mode = meshtastic_Config_DeviceConfig_BuzzerMode_DISABLED;
+        buildLinkedTimezoneTzdef(cfg_out.payload_variant.device.tzdef,
+                                 sizeof(cfg_out.payload_variant.device.tzdef));
         break;
     case meshtastic_AdminMessage_ConfigType_POSITION_CONFIG:
         cfg_out.which_payload_variant = meshtastic_Config_position_tag;

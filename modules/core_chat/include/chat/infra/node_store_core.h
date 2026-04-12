@@ -24,6 +24,7 @@ class NodeStoreCore : public INodeStore
 
     explicit NodeStoreCore(INodeBlobStore& blob_store);
     void setProtectedNodeChecker(std::function<bool(uint32_t)> checker);
+    void setAutoSaveEnabled(bool enabled);
 
     void begin() override;
     void applyUpdate(uint32_t node_id, const NodeUpdate& update) override;
@@ -54,6 +55,7 @@ class NodeStoreCore : public INodeStore
     std::vector<NodeEntry> entries_;
     uint32_t last_save_ms_ = 0;
     bool dirty_ = false;
+    bool auto_save_enabled_ = true;
     std::function<bool(uint32_t)> protected_node_checker_;
 };
 

@@ -14,6 +14,7 @@
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/nrf52/arduino_common/chat/infra/contact_store.h"
+#include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/node_store.h"
 #include "platform/nrf52/arduino_common/chat/infra/radio_packet_io.h"
 #include "platform/nrf52/arduino_common/chat/infra/store/internal_fs_store.h"
@@ -33,6 +34,19 @@ namespace apps::gat562_mesh_evb_pro
 namespace
 {
 constexpr uint32_t kChatStoreFlushIntervalMs = 2000UL;
+
+platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(chat::IMeshAdapter* adapter)
+{
+    if (!adapter)
+    {
+        return nullptr;
+    }
+
+    chat::IMeshAdapter* backend = adapter->backendForProtocol(chat::MeshProtocol::Meshtastic);
+    return backend
+               ? static_cast<platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter*>(backend)
+               : nullptr;
+}
 
 template <typename T>
 void copyString(const char* src, T* dst, size_t dst_len)
@@ -584,6 +598,14 @@ void AppFacadeRuntime::updateCoreServices()
         if ((now_ms - last_chat_store_flush_ms_) >= kChatStoreFlushIntervalMs)
         {
             chat_service_->flushStore();
+            if (node_store_)
+            {
+                (void)node_store_->flush();
+            }
+            if (auto* mt = getMeshtasticBackend(getMeshAdapter()))
+            {
+                mt->flushDeferredPersistence(false);
+            }
             last_chat_store_flush_ms_ = now_ms;
         }
     }
@@ -617,10 +639,6 @@ void AppFacadeRuntime::syncSelfPositionFromGps()
     }
 
     contact_service_->updateNodePosition(effective_identity_.node_id, position);
-    if (node_store_)
-    {
-        (void)node_store_->flush();
-    }
 }
 
 void AppFacadeRuntime::tickEventRuntime()
