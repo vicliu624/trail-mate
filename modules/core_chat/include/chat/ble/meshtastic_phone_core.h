@@ -89,6 +89,14 @@ class MeshtasticPhoneCore
     bool isConfigFlowActive() const;
 
   private:
+    struct DeferredPacketReply
+    {
+        uint32_t due_ms = 0;
+        uint8_t attempt = 0;
+        bool refresh_packet_id = false;
+        meshtastic_MeshPacket packet = meshtastic_MeshPacket_init_zero;
+    };
+
     bool handleToRadioPacket(meshtastic_MeshPacket& packet);
     bool handleAdmin(meshtastic_MeshPacket& packet);
     bool handleLocalSelfPacket(meshtastic_MeshPacket& packet);
@@ -97,6 +105,12 @@ class MeshtasticPhoneCore
     void enqueueQueueStatus(uint32_t packet_id, bool ok);
     void enqueueConfigSnapshot(uint32_t config_nonce);
     void enqueueFromRadio(const meshtastic_FromRadio& from, uint32_t from_num);
+    void scheduleDeferredPacketReply(const meshtastic_MeshPacket& packet);
+    void enqueueDeferredPacketReply(const meshtastic_MeshPacket& packet,
+                                    uint32_t delay_ms,
+                                    uint8_t attempt = 1,
+                                    bool refresh_packet_id = false);
+    void releaseDueDeferredPacketReplies();
     void notifyFromNum(uint32_t from_num);
     void fillMyInfo(meshtastic_MyNodeInfo* out) const;
     void fillSelfNodeInfo(meshtastic_NodeInfo* out) const;
@@ -135,6 +149,7 @@ class MeshtasticPhoneCore
     std::deque<MeshtasticBleFrame> frame_queue_;
     std::deque<meshtastic_QueueStatus> queue_status_queue_;
     std::deque<meshtastic_MeshPacket> packet_queue_;
+    std::deque<DeferredPacketReply> deferred_packet_queue_;
     meshtastic_Config_BluetoothConfig bluetooth_config_ = meshtastic_Config_BluetoothConfig_init_zero;
     meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
     char admin_canned_messages_[160] = {};

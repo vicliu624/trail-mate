@@ -12,7 +12,16 @@
 #include "sys/clock.h"
 
 #include <Arduino.h>
+#if defined(__has_include)
+#if __has_include(<rtos.h>)
 #include <rtos.h>
+#define TRAIL_MATE_HAS_RTOS_H 1
+#else
+#define TRAIL_MATE_HAS_RTOS_H 0
+#endif
+#else
+#define TRAIL_MATE_HAS_RTOS_H 0
+#endif
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -26,6 +35,8 @@ namespace
 {
 
 constexpr uint8_t kQueueDepthHint = 4;
+constexpr uint32_t kDeferredLoopbackReplyMs = 60U;
+constexpr uint32_t kDeferredLoopbackReplyRetryMs = 400U;
 constexpr meshtastic_AdminMessage_ConfigType kConfigSnapshotTypes[] = {
     meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG,
     meshtastic_AdminMessage_ConfigType_POSITION_CONFIG,
@@ -161,9 +172,14 @@ uint8_t channelIndexFromId(chat::ChannelId channel)
 
 void logRuntimeFootprint(const char* stage)
 {
+#if TRAIL_MATE_HAS_RTOS_H
     const char* task_name = pcTaskGetName(nullptr);
     const unsigned long stack_hwm =
         static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
+#else
+    const char* task_name = "?";
+    const unsigned long stack_hwm = 0;
+#endif
     logDual("[BLE][mtcore][rt] stage=%s task=%s stack_hwm=%lu\n",
             stage ? stage : "unknown",
             task_name ? task_name : "?",
@@ -357,6 +373,11 @@ bool moduleConfigTypeFromVariant(pb_size_t variant_tag, meshtastic_AdminMessage_
     }
 }
 
+bool timeReached(uint32_t now_ms, uint32_t due_ms)
+{
+    return static_cast<int32_t>(now_ms - due_ms) >= 0;
+}
+
 } // namespace
 
 MeshtasticPhoneCore::MeshtasticPhoneCore(app::IAppBleFacade& ctx, MeshtasticPhoneTransport& transport,
@@ -400,6 +421,7 @@ void MeshtasticPhoneCore::reset()
     frame_queue_.clear();
     queue_status_queue_.clear();
     packet_queue_.clear();
+    deferred_packet_queue_.clear();
 }
 
 void MeshtasticPhoneCore::onIncomingText(const chat::MeshIncomingText& msg)
@@ -913,8 +935,7 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         return false;
     }
     reply.decoded.payload.size = static_cast<pb_size_t>(out_stream.bytes_written);
-    packet_queue_.push_back(reply);
-    notifyFromNum(reply.id);
+    scheduleDeferredPacketReply(reply);
     return true;
 }
 
@@ -974,8 +995,7 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
             return false;
         }
         reply.decoded.payload.size = static_cast<pb_size_t>(out_stream.bytes_written);
-        packet_queue_.push_back(reply);
-        notifyFromNum(reply.id);
+        scheduleDeferredPacketReply(reply);
         return true;
     }
 
@@ -1005,8 +1025,7 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
             return true;
         }
         reply.decoded.payload.size = static_cast<pb_size_t>(payload_len);
-        packet_queue_.push_back(reply);
-        notifyFromNum(reply.id);
+        scheduleDeferredPacketReply(reply);
         return true;
     }
 
@@ -1035,8 +1054,7 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
             return false;
         }
         reply.decoded.payload.size = static_cast<pb_size_t>(out_stream.bytes_written);
-        packet_queue_.push_back(reply);
-        notifyFromNum(reply.id);
+        scheduleDeferredPacketReply(reply);
         return true;
     }
 
@@ -1056,6 +1074,8 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
 
 void MeshtasticPhoneCore::pumpIncomingAppData()
 {
+    releaseDueDeferredPacketReplies();
+
     chat::IMeshAdapter* adapter = ctx_.getMeshAdapter();
     if (!adapter)
     {
@@ -1080,6 +1100,8 @@ bool MeshtasticPhoneCore::popToPhone(MeshtasticBleFrame* out)
     {
         return false;
     }
+
+    releaseDueDeferredPacketReplies();
 
     if (hooks_)
     {
@@ -1282,10 +1304,25 @@ bool MeshtasticPhoneCore::encodeFromRadio(const meshtastic_FromRadio& from, uint
 
     out->len = ostream.bytes_written;
     out->from_num = from_num;
-    logDual("[BLE][mtcore] encode from_radio ok: variant=%u from_num=%08lX len=%u\n",
-            static_cast<unsigned>(from.which_payload_variant),
-            static_cast<unsigned long>(from_num),
-            static_cast<unsigned>(out->len));
+    if (from.which_payload_variant == meshtastic_FromRadio_packet_tag)
+    {
+        logDual("[BLE][mtcore] encode from_radio ok: variant=%u from_num=%08lX len=%u packet_from=%08lX packet_to=%08lX packet_id=%08lX req_id=%08lX port=%u\n",
+                static_cast<unsigned>(from.which_payload_variant),
+                static_cast<unsigned long>(from_num),
+                static_cast<unsigned>(out->len),
+                static_cast<unsigned long>(from.packet.from),
+                static_cast<unsigned long>(from.packet.to),
+                static_cast<unsigned long>(from.packet.id),
+                static_cast<unsigned long>(from.packet.decoded.request_id),
+                static_cast<unsigned>(from.packet.decoded.portnum));
+    }
+    else
+    {
+        logDual("[BLE][mtcore] encode from_radio ok: variant=%u from_num=%08lX len=%u\n",
+                static_cast<unsigned>(from.which_payload_variant),
+                static_cast<unsigned long>(from_num),
+                static_cast<unsigned>(out->len));
+    }
     return true;
 }
 
@@ -1334,6 +1371,71 @@ void MeshtasticPhoneCore::enqueueFromRadio(const meshtastic_FromRadio& from, uin
     if (encodeFromRadio(from, from_num, &frame))
     {
         frame_queue_.push_back(frame);
+    }
+}
+
+void MeshtasticPhoneCore::scheduleDeferredPacketReply(const meshtastic_MeshPacket& packet)
+{
+    enqueueDeferredPacketReply(packet, kDeferredLoopbackReplyMs, 1, false);
+    if (packet.decoded.portnum == meshtastic_PortNum_ADMIN_APP)
+    {
+        enqueueDeferredPacketReply(packet, kDeferredLoopbackReplyRetryMs, 2, true);
+    }
+}
+
+void MeshtasticPhoneCore::enqueueDeferredPacketReply(const meshtastic_MeshPacket& packet,
+                                                     uint32_t delay_ms,
+                                                     uint8_t attempt,
+                                                     bool refresh_packet_id)
+{
+    DeferredPacketReply deferred{};
+    deferred.due_ms = millis() + delay_ms;
+    deferred.attempt = attempt;
+    deferred.refresh_packet_id = refresh_packet_id;
+    deferred.packet = packet;
+    deferred_packet_queue_.push_back(deferred);
+    logDual("[BLE][mtcore] defer local reply id=%08lX req=%08lX port=%u wait_ms=%lu attempt=%u refresh_id=%u depth=%u\n",
+            static_cast<unsigned long>(packet.id),
+            static_cast<unsigned long>(packet.decoded.request_id),
+            static_cast<unsigned>(packet.decoded.portnum),
+            static_cast<unsigned long>(delay_ms),
+            static_cast<unsigned>(attempt),
+            refresh_packet_id ? 1U : 0U,
+            static_cast<unsigned>(deferred_packet_queue_.size()));
+}
+
+void MeshtasticPhoneCore::releaseDueDeferredPacketReplies()
+{
+    const uint32_t now_ms = millis();
+    while (!deferred_packet_queue_.empty())
+    {
+        const DeferredPacketReply deferred = deferred_packet_queue_.front();
+        if (!timeReached(now_ms, deferred.due_ms))
+        {
+            break;
+        }
+
+        meshtastic_MeshPacket released_packet = deferred.packet;
+        if (deferred.refresh_packet_id)
+        {
+            released_packet.id = static_cast<uint32_t>(millis());
+            if (released_packet.id == 0)
+            {
+                released_packet.id = 1;
+            }
+        }
+
+        packet_queue_.push_back(released_packet);
+        const meshtastic_MeshPacket& packet = packet_queue_.back();
+        logDual("[BLE][mtcore] release local reply id=%08lX req=%08lX port=%u attempt=%u refresh_id=%u depth=%u\n",
+                static_cast<unsigned long>(packet.id),
+                static_cast<unsigned long>(packet.decoded.request_id),
+                static_cast<unsigned>(packet.decoded.portnum),
+                static_cast<unsigned>(deferred.attempt),
+                deferred.refresh_packet_id ? 1U : 0U,
+                static_cast<unsigned>(deferred_packet_queue_.size()));
+        notifyFromNum(packet.id);
+        deferred_packet_queue_.pop_front();
     }
 }
 

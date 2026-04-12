@@ -1,5 +1,16 @@
 #include "ui/menu/dashboard/dashboard_widgets.h"
 
+#if defined(__has_include)
+#if __has_include(<Arduino.h>)
+#include <Arduino.h>
+#define TRAIL_MATE_HAS_ARDUINO_UI 1
+#else
+#define TRAIL_MATE_HAS_ARDUINO_UI 0
+#endif
+#else
+#define TRAIL_MATE_HAS_ARDUINO_UI 0
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -23,7 +34,12 @@ void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::Gn
     static uint8_t s_last_sats_in_use = 0xFF;
     static uint32_t s_last_log_ms = 0;
 
-    const uint32_t now_ms = millis();
+    const uint32_t now_ms =
+#if TRAIL_MATE_HAS_ARDUINO_UI
+        millis();
+#else
+        0;
+#endif
     const bool changed = (has_snapshot != s_last_has_snapshot) || (fix != s_last_fix) || (sat_count != s_last_sat_count) ||
                          (gnss.sats_in_view != s_last_sats_in_view) || (gnss.sats_in_use != s_last_sats_in_use);
     const bool suspicious_full_scale =
@@ -40,6 +56,7 @@ void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::Gn
     s_last_sats_in_use = gnss.sats_in_use;
     s_last_log_ms = now_ms;
 
+#if TRAIL_MATE_HAS_ARDUINO_UI
     Serial.printf("[ui][gps][dashboard] has=%u fix=%u count=%u used=%u view=%u hdop=%.1f\n",
                   static_cast<unsigned>(has_snapshot ? 1 : 0),
                   static_cast<unsigned>(fix ? 1 : 0),
@@ -47,6 +64,12 @@ void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::Gn
                   static_cast<unsigned>(gnss.sats_in_use),
                   static_cast<unsigned>(gnss.sats_in_view),
                   static_cast<double>(gnss.hdop));
+#else
+    (void)has_snapshot;
+    (void)sat_count;
+    (void)gnss;
+    (void)fix;
+#endif
 }
 
 void set_label_text_if_changed(lv_obj_t* label, const char* text)
