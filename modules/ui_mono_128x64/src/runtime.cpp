@@ -2466,9 +2466,18 @@ void Runtime::renderConversation()
     }
 
     const int line_h = text_renderer_.lineHeight();
+    constexpr int kConversationStartY = 10;
+    constexpr int kBubbleGap = 1;
+    constexpr int kBubbleWidth = 118;
+    const int bubble_h = (line_h * 2) + 1;
+    const int row_h = bubble_h + kBubbleGap;
+    const int bubble_w = std::max(8, std::min(kBubbleWidth, display_.width() - 2));
+    const size_t visible = std::max<size_t>(
+        1U,
+        std::min(message_count_,
+                 static_cast<size_t>(std::max(1, (display_.height() - kConversationStartY + kBubbleGap) /
+                                                     std::max(1, row_h)))));
     const size_t selected_index = std::min(message_index_, message_count_ - 1U);
-    const size_t visible = std::min(message_count_, static_cast<size_t>(6));
-    constexpr int kMessageViewportWidth = 90;
     size_t start = 0;
     if (message_count_ > visible)
     {
@@ -2483,19 +2492,15 @@ void Runtime::renderConversation()
         const size_t msg_index = start + i;
         const auto& msg = messages_[msg_index];
         const bool selected = (msg_index == selected_index);
-        std::string line;
-        if (active_conversation_.peer == 0 && msg.from != 0)
-        {
-            char sender[12] = {};
-            std::snprintf(sender, sizeof(sender), "%04lX ", static_cast<unsigned long>(msg.from & 0xFFFFUL));
-            line = sender;
-        }
-        line += msg.text;
+        char sender[16] = {};
+        char time_text[16] = {};
+        formatConversationSender(sender, sizeof(sender), msg, selected);
+        formatConversationTime(time_text, sizeof(time_text), msg.timestamp, selected);
 
-        const int y = 10 + static_cast<int>(i * line_h);
+        const int y = kConversationStartY + static_cast<int>(i * row_h);
         const bool is_self = (msg.from == 0);
-        const int x = is_self ? (display_.width() - kMessageViewportWidth) : 0;
-        drawConversationText(x, y, kMessageViewportWidth, line.c_str(), selected, is_self);
+        const int x = is_self ? (display_.width() - bubble_w - 1) : 1;
+        drawConversationBubble(x, y, bubble_w, sender, time_text, msg.text.c_str(), selected, is_self);
     }
 }
 
@@ -4734,6 +4739,78 @@ void Runtime::formatTimestamp(char* out, size_t out_len, uint32_t timestamp_s) c
                   tm->tm_min);
 }
 
+void Runtime::formatConversationTime(char* out, size_t out_len, uint32_t timestamp_s, bool expanded) const
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    out[0] = '\0';
+    if (timestamp_s == 0)
+    {
+        std::snprintf(out, out_len, "%s", "--:--");
+        return;
+    }
+
+    if (timestamp_s >= 1700000000U)
+    {
+        const int tz_offset_s = (host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0) * 60;
+        const time_t adjusted = static_cast<time_t>(timestamp_s + tz_offset_s);
+        const std::tm* tm = std::gmtime(&adjusted);
+        if (tm)
+        {
+            if (expanded)
+            {
+                std::snprintf(out, out_len, "%02d/%02d %02d:%02d",
+                              tm->tm_mon + 1,
+                              tm->tm_mday,
+                              tm->tm_hour,
+                              tm->tm_min);
+            }
+            else
+            {
+                std::snprintf(out, out_len, "%02d/%02d", tm->tm_mon + 1, tm->tm_mday);
+            }
+            return;
+        }
+    }
+
+    const unsigned long hours = static_cast<unsigned long>((timestamp_s / 3600U) % 24U);
+    const unsigned long minutes = static_cast<unsigned long>((timestamp_s / 60U) % 60U);
+    std::snprintf(out, out_len, "%02lu:%02lu", hours, minutes);
+}
+
+void Runtime::formatConversationSender(char* out, size_t out_len, const chat::ChatMessage& msg, bool expanded) const
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    if (msg.from == 0)
+    {
+        const chat::NodeId self_id = app() ? app()->getSelfNodeId() : 0;
+        if (expanded && self_id != 0)
+        {
+            std::snprintf(out, out_len, "%08lX", static_cast<unsigned long>(self_id));
+        }
+        else
+        {
+            std::snprintf(out, out_len, "%s", "ME");
+        }
+        return;
+    }
+
+    if (expanded)
+    {
+        std::snprintf(out, out_len, "%08lX", static_cast<unsigned long>(msg.from));
+    }
+    else
+    {
+        std::snprintf(out, out_len, "%04lX", static_cast<unsigned long>(msg.from & 0xFFFFUL));
+    }
+}
+
 void Runtime::formatProtocol(char* out, size_t out_len) const
 {
     if (!out || out_len == 0 || !app())
@@ -4854,7 +4931,7 @@ void Runtime::drawConversationText(int x, int y, int w, const char* text, bool s
     if (full_width <= w)
     {
         const int draw_x = align_right ? (x + std::max(0, w - full_width)) : x;
-        text_renderer_.drawText(display_, draw_x, y, text, selected);
+        text_renderer_.drawText(display_, draw_x, y, text, false);
         return;
     }
 
@@ -4874,7 +4951,9 @@ void Runtime::drawConversationText(int x, int y, int w, const char* text, bool s
             std::memcpy(clipped, text, std::min(keep_bytes, sizeof(clipped) - 1));
             clipped[std::min(keep_bytes, sizeof(clipped) - 1)] = '\0';
         }
-        text_renderer_.drawText(display_, x, y, clipped, false);
+        const int clipped_width = text_renderer_.measureTextWidth(clipped);
+        const int draw_x = align_right ? (x + std::max(0, w - clipped_width)) : x;
+        text_renderer_.drawText(display_, draw_x, y, clipped, false);
         return;
     }
 
@@ -4918,7 +4997,51 @@ void Runtime::drawConversationText(int x, int y, int w, const char* text, bool s
     const size_t keep_bytes = text_renderer_.clipTextToWidth(window_text, w);
     std::memcpy(clipped, window_text, std::min(keep_bytes, sizeof(clipped) - 1));
     clipped[std::min(keep_bytes, sizeof(clipped) - 1)] = '\0';
-    text_renderer_.drawText(display_, x, y, clipped, true);
+    const int clipped_width = text_renderer_.measureTextWidth(clipped);
+    const int draw_x = align_right ? (x + std::max(0, w - clipped_width)) : x;
+    text_renderer_.drawText(display_, draw_x, y, clipped, false);
+}
+
+void Runtime::drawConversationBubble(int x, int y, int w, const char* sender, const char* time_text,
+                                     const char* text, bool selected, bool align_right)
+{
+    if (!text || w <= 4)
+    {
+        return;
+    }
+
+    const int line_h = text_renderer_.lineHeight();
+    const int bubble_h = (line_h * 2) + 1;
+    drawFrame(display_, x, y, w, bubble_h);
+
+    const int inner_x = x + 1;
+    const int inner_w = w - 2;
+    const int divider_y = y + line_h;
+    const int band_h = std::max(1, line_h - 1);
+    display_.fillRect(inner_x, divider_y, inner_w, 1, true);
+
+    display_.fillRect(inner_x, y + 1, inner_w, band_h, true);
+
+    const bool header_inverse = true;
+    const int header_pad = 1;
+    const int header_x = inner_x + header_pad;
+    const int header_w = std::max(0, inner_w - (header_pad * 2));
+    const int time_w = (time_text && time_text[0] != '\0') ? text_renderer_.measureTextWidth(time_text) : 0;
+    const int time_x = x + w - 2 - header_pad - time_w;
+    const int sender_w = std::max(0, time_x - header_x - 2);
+
+    if (sender && sender[0] != '\0' && sender_w > 0)
+    {
+        drawTextClipped(header_x, y, sender_w, sender, header_inverse);
+    }
+    if (time_text && time_text[0] != '\0' && header_w > 0)
+    {
+        text_renderer_.drawText(display_, std::max(header_x, time_x), y, time_text, header_inverse);
+    }
+
+    const int body_x = inner_x + 1;
+    const int body_w = std::max(0, inner_w - 2);
+    drawConversationText(body_x, y + line_h + 1, body_w, text, selected, align_right);
 }
 
 void Runtime::executeActionPageItem(size_t index)
