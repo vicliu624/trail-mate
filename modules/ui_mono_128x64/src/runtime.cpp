@@ -3016,7 +3016,7 @@ void Runtime::renderTransientPopup()
 
 void Runtime::renderInfoPage()
 {
-    char lines[24][40] = {};
+    char lines[32][40] = {};
     size_t line_count = 0;
     auto push_line = [&](const char* text)
     {
@@ -3140,8 +3140,10 @@ void Runtime::renderInfoPage()
     }
     if (flash.available && flash.total_bytes > 0)
     {
-        std::snprintf(value, sizeof(value), "%lu/%luK",
-                      static_cast<unsigned long>(flash.used_bytes / 1024U),
+        const uint32_t flash_free_bytes =
+            flash.total_bytes > flash.used_bytes ? (flash.total_bytes - flash.used_bytes) : 0U;
+        std::snprintf(value, sizeof(value), "%lu/%luK free",
+                      static_cast<unsigned long>(flash_free_bytes / 1024U),
                       static_cast<unsigned long>(flash.total_bytes / 1024U));
         push_kv("FLASH", value);
     }

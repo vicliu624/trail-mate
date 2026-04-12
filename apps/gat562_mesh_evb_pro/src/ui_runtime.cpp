@@ -3,6 +3,7 @@
 #include "apps/gat562_mesh_evb_pro/app_facade_runtime.h"
 #include "apps/gat562_mesh_evb_pro/debug_console.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
+#include "platform/nrf52/arduino_common/internal_fs_utils.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/time_runtime.h"
@@ -60,39 +61,10 @@ ui::mono_128x64::HostCallbacks::ResourceUsage ram_usage()
     return usage;
 }
 
-uint32_t accumulateFsBytes(File dir)
-{
-    uint32_t total = 0;
-    if (!dir)
-    {
-        return total;
-    }
-
-    dir.rewindDirectory();
-    while (true)
-    {
-        File entry = dir.openNextFile();
-        if (!entry)
-        {
-            break;
-        }
-        if (entry.isDirectory())
-        {
-            total += accumulateFsBytes(entry);
-        }
-        else
-        {
-            total += entry.size();
-        }
-        entry.close();
-    }
-    return total;
-}
-
 ui::mono_128x64::HostCallbacks::ResourceUsage flash_usage()
 {
     ui::mono_128x64::HostCallbacks::ResourceUsage usage{};
-    if (!InternalFS.begin())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(false))
     {
         return usage;
     }
@@ -104,7 +76,7 @@ ui::mono_128x64::HostCallbacks::ResourceUsage flash_usage()
     }
 
     usage.available = true;
-    usage.used_bytes = accumulateFsBytes(root);
+    usage.used_bytes = ::platform::nrf52::arduino_common::internal_fs::accumulateBytes(root);
     usage.total_bytes = kGat562FsTotalBytes;
     root.close();
     return usage;

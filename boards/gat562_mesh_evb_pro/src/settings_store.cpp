@@ -3,6 +3,7 @@
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "platform/nrf52/arduino_common/internal_fs_utils.h"
 
 #include <Arduino.h>
 #include <InternalFileSystem.h>
@@ -15,10 +16,10 @@ namespace boards::gat562_mesh_evb_pro::settings_store
 namespace
 {
 using Adafruit_LittleFS_Namespace::FILE_O_READ;
-using Adafruit_LittleFS_Namespace::FILE_O_WRITE;
 
 constexpr const char* kSettingsPath = "/gat562_settings.bin";
 constexpr const char* kSettingsCorruptPath = "/gat562_settings.bin.corrupt";
+constexpr const char* kLogTag = "[gat562][settings]";
 constexpr uint32_t kSettingsMagic = 0x53415447UL; // GTAS
 constexpr uint16_t kSettingsVersion = 2;
 constexpr uint8_t kDefaultToneVolume = 45;
@@ -122,39 +123,6 @@ const char* statusText(StoreStatus status)
     }
 }
 
-bool ensureFs()
-{
-    if (InternalFS.begin())
-    {
-        return true;
-    }
-
-    Serial.printf("[gat562][settings] fs begin failed, formatting...\n");
-
-    if (!InternalFS.format())
-    {
-        Serial.printf("[gat562][settings] fs format failed\n");
-        return false;
-    }
-
-    if (!InternalFS.begin())
-    {
-        Serial.printf("[gat562][settings] fs remount after format failed\n");
-        return false;
-    }
-
-    Serial.printf("[gat562][settings] fs recovered by format\n");
-    return true;
-}
-
-void removeIfExists(const char* path)
-{
-    if (path && InternalFS.exists(path))
-    {
-        InternalFS.remove(path);
-    }
-}
-
 uint32_t crc32(const uint8_t* data, size_t len)
 {
     uint32_t crc = 0xFFFFFFFFU;
@@ -176,7 +144,7 @@ bool quarantineCorruptFile(StoreStatus status)
         return true;
     }
 
-    removeIfExists(kSettingsCorruptPath);
+    ::platform::nrf52::arduino_common::internal_fs::removeIfExists(kSettingsCorruptPath);
     if (InternalFS.rename(kSettingsPath, kSettingsCorruptPath))
     {
         Serial.printf("[gat562][settings] quarantined corrupt store status=%s path=%s\n",
@@ -288,7 +256,7 @@ bool verifySavedFile()
 
 bool loadFromFs()
 {
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(true, kLogTag))
     {
         s_last_load_status = StoreStatus::FsInitFailed;
         return false;
@@ -457,10 +425,10 @@ bool saveToFsOnce()
 {
     Serial.printf("[gat562][settings] save begin path=%s\n", kSettingsPath);
 
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(true, kLogTag))
     {
         s_last_save_status = StoreStatus::FsInitFailed;
-        Serial.printf("[gat562][settings] ensureFs failed\n");
+        Serial.printf("%s ensureMounted failed\n", kLogTag);
         return false;
     }
 
@@ -481,36 +449,12 @@ bool saveToFsOnce()
     header.crc32 = crc32(reinterpret_cast<const uint8_t*>(&payload), sizeof(PersistedPayload));
 
     // 先尝试正常打开已有文件
-    auto file = InternalFS.open(kSettingsPath, FILE_O_WRITE);
-
-    // 若文件不存在或打开失败，format 后再试一次
-    if (!file)
+    Adafruit_LittleFS_Namespace::File file(InternalFS);
+    if (!::platform::nrf52::arduino_common::internal_fs::openForOverwrite(kSettingsPath, &file, true, kLogTag))
     {
-        Serial.printf("[gat562][settings] initial open failed path=%s, retry after format\n",
-                      kSettingsPath);
-
-        if (!InternalFS.format())
-        {
-            s_last_save_status = StoreStatus::OpenFailed;
-            Serial.printf("[gat562][settings] format before recreate failed\n");
-            return false;
-        }
-
-        if (!InternalFS.begin())
-        {
-            s_last_save_status = StoreStatus::FsInitFailed;
-            Serial.printf("[gat562][settings] remount after recreate format failed\n");
-            return false;
-        }
-
-        file = InternalFS.open(kSettingsPath, FILE_O_WRITE);
-        if (!file)
-        {
-            s_last_save_status = StoreStatus::OpenFailed;
-            Serial.printf("[gat562][settings] open failed path=%s after format/remount\n",
-                          kSettingsPath);
-            return false;
-        }
+        s_last_save_status = StoreStatus::OpenFailed;
+        Serial.printf("%s open failed path=%s\n", kLogTag, kSettingsPath);
+        return false;
     }
 
     {
@@ -523,7 +467,7 @@ bool saveToFsOnce()
         }
     }
 
-    const bool seek_ok = file.seek(0);
+    const bool seek_ok = ::platform::nrf52::arduino_common::internal_fs::rewindForOverwrite(file);
     Serial.printf("[gat562][settings] seek0 ok=%u\n", seek_ok ? 1U : 0U);
     if (!seek_ok)
     {
@@ -548,7 +492,7 @@ bool saveToFsOnce()
     if (header_written == sizeof(FileHeader) &&
         payload_written == sizeof(PersistedPayload))
     {
-        trunc_ok = file.truncate(final_size);
+        trunc_ok = ::platform::nrf52::arduino_common::internal_fs::truncateAfterWrite(file, final_size);
     }
 
     file.flush();

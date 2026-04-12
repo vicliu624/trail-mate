@@ -1,8 +1,10 @@
 #include "platform/ui/settings_store.h"
+#include "platform/nrf52/arduino_common/internal_fs_utils.h"
 
 #include <Arduino.h>
 #include <InternalFileSystem.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -13,10 +15,9 @@ namespace
 {
 
 using Adafruit_LittleFS_Namespace::FILE_O_READ;
-using Adafruit_LittleFS_Namespace::FILE_O_WRITE;
 
 constexpr const char* kSettingsPath = "/ui_settings.bin";
-constexpr const char* kSettingsTempPath = "/ui_settings.bin.tmp";
+constexpr const char* kLogTag = "[nrf52][ui_settings]";
 constexpr uint32_t kMagic = 0x55535447UL; // USTG
 constexpr uint16_t kVersion = 1;
 
@@ -87,24 +88,6 @@ void clearAllStores()
     boolStore().clear();
     uintStore().clear();
     blobStore().clear();
-}
-
-bool ensureFs()
-{
-    const bool ok = InternalFS.begin();
-    if (!ok)
-    {
-        Serial.printf("[nrf52][ui_settings] fs init failed\n");
-    }
-    return ok;
-}
-
-void removeIfExists(const char* path)
-{
-    if (path && InternalFS.exists(path))
-    {
-        InternalFS.remove(path);
-    }
 }
 
 template <typename T>
@@ -178,28 +161,34 @@ bool writeRecordHeader(Adafruit_LittleFS_Namespace::File& file,
 
 bool saveToFs()
 {
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(false, kLogTag))
     {
         return false;
     }
 
-    removeIfExists(kSettingsTempPath);
-    auto file = InternalFS.open(kSettingsTempPath, FILE_O_WRITE);
-    if (!file)
+    Adafruit_LittleFS_Namespace::File file(InternalFS);
+    if (!::platform::nrf52::arduino_common::internal_fs::openForOverwrite(kSettingsPath, &file, false, kLogTag))
     {
-        Serial.printf("[nrf52][ui_settings] temp open failed path=%s\n", kSettingsTempPath);
+        Serial.printf("%s open failed path=%s\n", kLogTag, kSettingsPath);
+        return false;
+    }
+    if (!::platform::nrf52::arduino_common::internal_fs::rewindForOverwrite(file))
+    {
+        file.close();
+        Serial.printf("%s seek failed path=%s\n", kLogTag, kSettingsPath);
         return false;
     }
 
     const uint32_t record_count = static_cast<uint32_t>(
         intStore().size() + boolStore().size() + uintStore().size() + blobStore().size());
+    uint32_t final_size = static_cast<uint32_t>(sizeof(FileHeader));
     FileHeader header{};
     header.record_count = record_count;
     if (!writePod(file, header))
     {
         file.close();
-        removeIfExists(kSettingsTempPath);
-        Serial.printf("[nrf52][ui_settings] header write failed records=%lu\n",
+        Serial.printf("%s header write failed records=%lu\n",
+                      kLogTag,
                       static_cast<unsigned long>(record_count));
         return false;
     }
@@ -211,10 +200,10 @@ bool saveToFs()
             !writeBytes(file, reinterpret_cast<const uint8_t*>(&value), sizeof(value)))
         {
             file.close();
-            removeIfExists(kSettingsTempPath);
-            Serial.printf("[nrf52][ui_settings] int write failed key=%s\n", entry.first.c_str());
+            Serial.printf("%s int write failed key=%s\n", kLogTag, entry.first.c_str());
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + sizeof(value));
     }
 
     for (const auto& entry : boolStore())
@@ -224,10 +213,10 @@ bool saveToFs()
             !writeBytes(file, &value, sizeof(value)))
         {
             file.close();
-            removeIfExists(kSettingsTempPath);
-            Serial.printf("[nrf52][ui_settings] bool write failed key=%s\n", entry.first.c_str());
+            Serial.printf("%s bool write failed key=%s\n", kLogTag, entry.first.c_str());
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + sizeof(value));
     }
 
     for (const auto& entry : uintStore())
@@ -237,10 +226,10 @@ bool saveToFs()
             !writeBytes(file, reinterpret_cast<const uint8_t*>(&value), sizeof(value)))
         {
             file.close();
-            removeIfExists(kSettingsTempPath);
-            Serial.printf("[nrf52][ui_settings] uint write failed key=%s\n", entry.first.c_str());
+            Serial.printf("%s uint write failed key=%s\n", kLogTag, entry.first.c_str());
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + sizeof(value));
     }
 
     for (const auto& entry : blobStore())
@@ -249,30 +238,27 @@ bool saveToFs()
             (!entry.second.empty() && !writeBytes(file, entry.second.data(), entry.second.size())))
         {
             file.close();
-            removeIfExists(kSettingsTempPath);
-            Serial.printf("[nrf52][ui_settings] blob write failed key=%s len=%lu\n",
+            Serial.printf("%s blob write failed key=%s len=%lu\n",
+                          kLogTag,
                           entry.first.c_str(),
                           static_cast<unsigned long>(entry.second.size()));
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + entry.second.size());
     }
 
+    const bool trunc_ok = ::platform::nrf52::arduino_common::internal_fs::truncateAfterWrite(file, final_size);
     file.flush();
     file.close();
 
-    if (InternalFS.exists(kSettingsPath))
+    if (!trunc_ok)
     {
-        InternalFS.remove(kSettingsPath);
+        Serial.printf("%s truncate failed path=%s size=%lu\n",
+                      kLogTag,
+                      kSettingsPath,
+                      static_cast<unsigned long>(final_size));
     }
-    const bool renamed = InternalFS.rename(kSettingsTempPath, kSettingsPath);
-    if (!renamed)
-    {
-        Serial.printf("[nrf52][ui_settings] rename failed temp=%s main=%s\n",
-                      kSettingsTempPath,
-                      kSettingsPath);
-        removeIfExists(kSettingsTempPath);
-    }
-    return renamed;
+    return trunc_ok;
 }
 
 void ensureLoaded()
@@ -283,7 +269,7 @@ void ensureLoaded()
     }
 
     clearAllStores();
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(false, kLogTag))
     {
         return;
     }
