@@ -31,12 +31,12 @@ const char kProbeSymbols[] = "\xE2\x94\x80\xE2\x96\x88\xE2\x96\xA0";
 
 extern "C"
 {
-extern uint32_t __data_start__[];
-extern unsigned char __HeapBase[];
-extern unsigned char __HeapLimit[];
-extern uint32_t __StackTop[];
-extern uint32_t __StackLimit[];
-int dbgStackUsed(void);
+    extern uint32_t __data_start__[];
+    extern unsigned char __HeapBase[];
+    extern unsigned char __HeapLimit[];
+    extern uint32_t __StackTop[];
+    extern uint32_t __StackLimit[];
+    int dbgStackUsed(void);
 }
 
 uint32_t now_ms() { return millis(); }

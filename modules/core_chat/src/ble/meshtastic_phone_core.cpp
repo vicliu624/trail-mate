@@ -6,11 +6,11 @@
 #include "chat/runtime/self_identity_policy.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
+#include "pb_decode.h"
+#include "pb_encode.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
-#include "pb_decode.h"
-#include "pb_encode.h"
 #include "sys/clock.h"
 
 #include <Arduino.h>
@@ -1932,8 +1932,8 @@ void MeshtasticPhoneCore::fillConfig(meshtastic_AdminMessage_ConfigType type, me
         cfg_out.payload_variant.position.gps_enabled = (cfg.gps_mode != 0);
         cfg_out.payload_variant.position.gps_update_interval = cfg.gps_interval_ms / 1000U;
         cfg_out.payload_variant.position.gps_mode = (cfg.gps_mode != 0)
-                                                    ? meshtastic_Config_PositionConfig_GpsMode_ENABLED
-                                                    : meshtastic_Config_PositionConfig_GpsMode_DISABLED;
+                                                        ? meshtastic_Config_PositionConfig_GpsMode_ENABLED
+                                                        : meshtastic_Config_PositionConfig_GpsMode_DISABLED;
         break;
     case meshtastic_AdminMessage_ConfigType_DISPLAY_CONFIG:
         cfg_out.which_payload_variant = meshtastic_Config_display_tag;
