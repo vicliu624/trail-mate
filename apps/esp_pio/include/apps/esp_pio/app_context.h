@@ -38,6 +38,7 @@ class ContactService;
 namespace ui
 {
 class IChatUiRuntime;
+class GlobalChatUiRuntime;
 } // namespace ui
 } // namespace chat
 
@@ -79,15 +80,9 @@ class AppContext final : public IAppBleFacade
     {
         return *contact_service_;
     }
-    chat::ui::IChatUiRuntime* getChatUiRuntime() override
-    {
-        return chat_ui_runtime_;
-    }
+    chat::ui::IChatUiRuntime* getChatUiRuntime() override;
 
-    void setChatUiRuntime(chat::ui::IChatUiRuntime* runtime) override
-    {
-        chat_ui_runtime_ = runtime;
-    }
+    void setChatUiRuntime(chat::ui::IChatUiRuntime* runtime) override;
 
     team::TeamController* getTeamController() override
     {
@@ -296,7 +291,7 @@ class AppContext final : public IAppBleFacade
     std::unique_ptr<team::ITeamPairingTransport> team_pairing_transport_;
     std::unique_ptr<team::TeamPairingService> team_pairing_service_;
 
-    chat::ui::IChatUiRuntime* chat_ui_runtime_ = nullptr;
+    std::unique_ptr<chat::ui::GlobalChatUiRuntime> chat_ui_runtime_proxy_;
     std::unique_ptr<ble::BleManager> ble_manager_;
     AppEventRuntimeHooks event_runtime_hooks_{};
 

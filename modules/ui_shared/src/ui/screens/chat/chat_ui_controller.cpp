@@ -14,12 +14,15 @@
 #include "sys/event_bus.h"
 #include "team/protocol/team_location_marker.h"
 #include "team/usecase/team_controller.h"
+#include "ui/assets/fonts/fonts.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
+#include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 
 #ifndef CHAT_UI_LOG_ENABLE
@@ -132,6 +135,18 @@ std::string truncate_text(const std::string& text, size_t max_len)
         return text.substr(0, max_len);
     }
     return text.substr(0, max_len - 3) + "...";
+}
+
+std::string resolve_contact_name(chat::NodeId node_id)
+{
+    std::string name = app::messagingFacade().getContactService().getContactName(node_id);
+    if (!name.empty())
+    {
+        return name;
+    }
+    char fallback[16] = {};
+    std::snprintf(fallback, sizeof(fallback), "%08lX", static_cast<unsigned long>(node_id));
+    return fallback;
 }
 
 std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
@@ -292,6 +307,7 @@ UiController::UiController(lv_obj_t* parent, chat::ChatService& service, chat::C
 UiController::~UiController()
 {
     closeTeamPositionPicker(false);
+    closeKeyVerificationModal(false);
     stopTeamConversationTimer();
     service_.setModelEnabled(false);
     channel_list_.reset();
@@ -318,12 +334,10 @@ void UiController::update()
 {
     // Process incoming messages
     service_.processIncoming();
+    service_.flushStore();
 
-    // Refresh UI if needed
-    if (state_ == State::ChannelList && channel_list_)
-    {
-        refreshUnreadCounts();
-    }
+    // Refresh UI only when an event marks the conversation list dirty.
+    refreshUnreadCounts(false);
 }
 
 void UiController::onChannelClicked(chat::ConversationId conv)
@@ -401,19 +415,26 @@ void UiController::onChatEvent(sys::Event* event)
         // Note: Haptic feedback is now handled by the app runtime event pump
         // No need to call vibrator() here
 
-        if (state_ == State::Conversation &&
-            (uint8_t)current_channel_ == msg_event->channel)
+        const ChatMessage* latest = service_.getMessage(msg_event->msg_id);
+        if (latest)
         {
-            CHAT_UI_LOG("[UiController::onChatEvent] Updating conversation UI...\n");
-            auto messages = service_.getRecentMessages(current_conv_, 50);
-            conversation_->clearMessages();
-            for (const auto& m : messages)
+            const bool is_current_conversation =
+                (state_ == State::Conversation) && (current_conv_ == chat::ConversationId(latest->channel,
+                                                                                          latest->peer,
+                                                                                          latest->protocol));
+            updateConversationMetaForMessage(*latest, !is_current_conversation);
+            if (is_current_conversation)
             {
-                conversation_->addMessage(m);
+                (void)updateConversationViewForIncoming(*latest);
+                reloadConversationView();
+                service_.markConversationRead(current_conv_);
             }
-            conversation_->scrollToBottom();
+            else
+            {
+                conversation_list_dirty_ = true;
+            }
         }
-        refreshUnreadCounts();
+        refreshUnreadCounts(false);
         break;
     }
 
@@ -422,13 +443,11 @@ void UiController::onChatEvent(sys::Event* event)
         sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
         if (state_ == State::Conversation && conversation_)
         {
-            auto messages = service_.getRecentMessages(current_conv_, 50);
-            conversation_->clearMessages();
-            for (const auto& m : messages)
+            const ChatMessage* msg = service_.getMessage(result_event->msg_id);
+            if (!msg || !conversation_->updateMessageStatus(result_event->msg_id, msg->status))
             {
-                conversation_->addMessage(m);
+                reloadConversationView();
             }
-            conversation_->scrollToBottom();
         }
         (void)result_event;
         break;
@@ -436,9 +455,16 @@ void UiController::onChatEvent(sys::Event* event)
 
     case sys::EventType::ChatUnreadChanged:
     {
-        refreshUnreadCounts();
+        conversation_list_dirty_ = true;
+        refreshUnreadCounts(false);
         break;
     }
+    case sys::EventType::KeyVerificationNumberRequest:
+        break;
+    case sys::EventType::KeyVerificationNumberInform:
+        break;
+    case sys::EventType::KeyVerificationFinal:
+        break;
 
     default:
         break;
@@ -483,7 +509,7 @@ void UiController::switchToChannelList()
     }
 
     service_.setModelEnabled(true);
-    refreshUnreadCounts();
+    refreshUnreadCounts(true);
 }
 
 void UiController::switchToConversation(chat::ConversationId conv)
@@ -732,27 +758,28 @@ void UiController::handleSendMessage(const std::string& text)
 
 void UiController::refreshUnreadCounts()
 {
+    refreshUnreadCounts(true);
+}
+
+void UiController::refreshUnreadCounts(const bool force_reload)
+{
     if (!channel_list_)
     {
         return;
     }
 
-    size_t total = 0;
-    auto convs = service_.getConversations(0, 0, &total);
-
-    // Update conversation names with contact nicknames
-    for (auto& conv : convs)
+    if (force_reload || conversation_list_dirty_ || cached_conversations_.empty())
     {
-        if (conv.id.peer != 0)
-        {
-            std::string contact_name = app::messagingFacade().getContactService().getContactName(conv.id.peer);
-            if (!contact_name.empty())
-            {
-                conv.name = contact_name;
-            }
-            // Otherwise keep the short_name from ConversationMeta
-        }
+        syncConversationListFromStore();
     }
+    applyConversationListToUi();
+}
+
+void UiController::syncConversationListFromStore()
+{
+    size_t total = 0;
+    cached_conversations_ = service_.getConversations(0, 0, &total);
+    normalizeConversationNames(cached_conversations_);
 
     team::ui::TeamUiSnapshot team_snap;
     if (team::ui::team_ui_get_store().load(team_snap) && team_snap.has_team_id)
@@ -775,14 +802,111 @@ void UiController::refreshUnreadCounts()
         {
             team_conv.preview = "No messages";
         }
-        convs.insert(convs.begin(), team_conv);
+        cached_conversations_.insert(cached_conversations_.begin(), team_conv);
     }
 
-    channel_list_->setConversations(convs);
-    channel_list_->setSelectedConversation(current_conv_);
+    conversation_list_dirty_ = false;
+}
 
-    // Update header status (battery only, with icon)
+void UiController::normalizeConversationNames(std::vector<chat::ConversationMeta>& convs) const
+{
+    for (auto& conv : convs)
+    {
+        if (conv.id.peer == 0)
+        {
+            continue;
+        }
+        std::string contact_name = app::messagingFacade().getContactService().getContactName(conv.id.peer);
+        if (!contact_name.empty())
+        {
+            conv.name = contact_name;
+        }
+    }
+}
+
+void UiController::applyConversationListToUi()
+{
+    if (!channel_list_)
+    {
+        return;
+    }
+
+    channel_list_->setConversations(cached_conversations_);
+    channel_list_->setSelectedConversation(current_conv_);
     channel_list_->updateBatteryFromBoard();
+}
+
+void UiController::updateConversationMetaForMessage(const chat::ChatMessage& msg,
+                                                    const bool increment_unread)
+{
+    if (isTeamConversation(chat::ConversationId(msg.channel, msg.peer, msg.protocol)))
+    {
+        conversation_list_dirty_ = true;
+        return;
+    }
+
+    chat::ConversationMeta meta;
+    meta.id = chat::ConversationId(msg.channel, msg.peer, msg.protocol);
+    meta.name = (msg.peer == 0) ? "Broadcast" : resolve_contact_name(msg.peer);
+    meta.preview = msg.text;
+    meta.last_timestamp = msg.timestamp;
+    meta.unread = (increment_unread && msg.status == chat::MessageStatus::Incoming) ? 1 : 0;
+
+    bool found = false;
+    for (auto it = cached_conversations_.begin(); it != cached_conversations_.end(); ++it)
+    {
+        if (!(it->id == meta.id))
+        {
+            continue;
+        }
+        found = true;
+        meta.unread += it->unread;
+        if (!increment_unread && msg.status == chat::MessageStatus::Incoming)
+        {
+            meta.unread = 0;
+        }
+        cached_conversations_.erase(it);
+        break;
+    }
+
+    if (!found && msg.peer == 0)
+    {
+        meta.name = "Broadcast";
+    }
+
+    cached_conversations_.insert(cached_conversations_.begin(), meta);
+}
+
+bool UiController::updateConversationViewForIncoming(const chat::ChatMessage& msg)
+{
+    if (!conversation_)
+    {
+        return false;
+    }
+
+    if (!(current_conv_ == chat::ConversationId(msg.channel, msg.peer, msg.protocol)))
+    {
+        return false;
+    }
+
+    conversation_->addMessage(msg);
+    return true;
+}
+
+void UiController::reloadConversationView()
+{
+    if (!conversation_ || team_conv_active_)
+    {
+        return;
+    }
+
+    auto messages = service_.getRecentMessages(current_conv_, 50);
+    conversation_->clearMessages();
+    for (const auto& msg : messages)
+    {
+        conversation_->addMessage(msg);
+    }
+    conversation_->scrollToBottom();
 }
 
 bool UiController::isTeamConversation(const chat::ConversationId& conv) const
@@ -1127,6 +1251,432 @@ void UiController::closeTeamPositionPicker(bool restore_group)
     team_position_picker_desc_ = nullptr;
     team_position_picker_group_ = nullptr;
     team_position_prev_group_ = nullptr;
+}
+
+bool UiController::isKeyVerificationModalOpen() const
+{
+    return key_verify_overlay_ != nullptr;
+}
+
+void UiController::clearKeyVerificationError()
+{
+    if (key_verify_error_label_)
+    {
+        lv_label_set_text(key_verify_error_label_, "");
+    }
+}
+
+void UiController::key_verify_submit_event_cb(lv_event_t* e)
+{
+    auto* controller = static_cast<UiController*>(lv_event_get_user_data(e));
+    if (!controller)
+    {
+        return;
+    }
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_KEY)
+    {
+        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
+        if (key != LV_KEY_ENTER)
+        {
+            return;
+        }
+    }
+    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
+    {
+        controller->submitKeyVerificationNumber();
+    }
+}
+
+void UiController::key_verify_close_event_cb(lv_event_t* e)
+{
+    auto* controller = static_cast<UiController*>(lv_event_get_user_data(e));
+    if (!controller)
+    {
+        return;
+    }
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_KEY)
+    {
+        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
+        if (key != LV_KEY_ENTER)
+        {
+            return;
+        }
+    }
+    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
+    {
+        controller->closeKeyVerificationModal(true);
+    }
+}
+
+void UiController::key_verify_trust_event_cb(lv_event_t* e)
+{
+    auto* controller = static_cast<UiController*>(lv_event_get_user_data(e));
+    if (!controller)
+    {
+        return;
+    }
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_KEY)
+    {
+        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
+        if (key != LV_KEY_ENTER)
+        {
+            return;
+        }
+    }
+    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
+    {
+        controller->trustKeyFromVerificationModal();
+    }
+}
+
+void UiController::closeKeyVerificationModal(bool restore_group)
+{
+    if (key_verify_ime_)
+    {
+        key_verify_ime_->detach();
+        key_verify_ime_.reset();
+    }
+
+    if (key_verify_group_ && lv_group_get_default() == key_verify_group_)
+    {
+        if (restore_group)
+        {
+            lv_group_t* restore_target = key_verify_prev_group_ ? key_verify_prev_group_ : app_g;
+            set_default_group(restore_target);
+        }
+        else
+        {
+            set_default_group(nullptr);
+        }
+    }
+
+    if (key_verify_overlay_ && lv_obj_is_valid(key_verify_overlay_))
+    {
+        lv_obj_del(key_verify_overlay_);
+    }
+    if (key_verify_group_)
+    {
+        lv_group_del(key_verify_group_);
+    }
+
+    key_verify_overlay_ = nullptr;
+    key_verify_panel_ = nullptr;
+    key_verify_desc_ = nullptr;
+    key_verify_textarea_ = nullptr;
+    key_verify_error_label_ = nullptr;
+    key_verify_group_ = nullptr;
+    key_verify_prev_group_ = nullptr;
+    key_verify_node_id_ = 0;
+    key_verify_nonce_ = 0;
+    key_verify_expects_number_ = false;
+    key_verify_can_trust_ = false;
+}
+
+void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t nonce)
+{
+    closeKeyVerificationModal(false);
+    if (!parent_)
+    {
+        return;
+    }
+
+    key_verify_node_id_ = node_id;
+    key_verify_nonce_ = nonce;
+    key_verify_expects_number_ = true;
+    key_verify_can_trust_ = false;
+
+    key_verify_prev_group_ = lv_group_get_default();
+    key_verify_group_ = lv_group_create();
+    set_default_group(key_verify_group_);
+
+    key_verify_overlay_ = lv_obj_create(parent_);
+    lv_obj_set_size(key_verify_overlay_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(key_verify_overlay_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(key_verify_overlay_, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(key_verify_overlay_, 0, 0);
+    lv_obj_set_style_pad_all(key_verify_overlay_, 0, 0);
+    lv_obj_set_style_radius(key_verify_overlay_, 0, 0);
+    lv_obj_clear_flag(key_verify_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+
+    const auto& profile = ::ui::page_profile::current();
+    const auto modal_size = ::ui::page_profile::resolve_modal_size(
+        profile.large_touch_hitbox ? 560 : 320,
+        profile.large_touch_hitbox ? 380 : 220,
+        key_verify_overlay_);
+
+    key_verify_panel_ = lv_obj_create(key_verify_overlay_);
+    lv_obj_set_size(key_verify_panel_, modal_size.width, modal_size.height);
+    lv_obj_center(key_verify_panel_);
+    lv_obj_set_style_bg_color(key_verify_panel_, lv_color_hex(0xFAF0D8), 0);
+    lv_obj_set_style_bg_opa(key_verify_panel_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(key_verify_panel_, 1, 0);
+    lv_obj_set_style_border_color(key_verify_panel_, lv_color_hex(0xE7C98F), 0);
+    lv_obj_set_style_radius(key_verify_panel_, 10, 0);
+    lv_obj_set_style_pad_all(key_verify_panel_, ::ui::page_profile::resolve_modal_pad(), 0);
+    lv_obj_clear_flag(key_verify_panel_, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* title = lv_label_create(key_verify_panel_);
+    lv_label_set_text(title, "Key Verification");
+    lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_font(title, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+
+    std::string desc = "Enter number for ";
+    desc += resolve_contact_name(node_id);
+    key_verify_desc_ = lv_label_create(key_verify_panel_);
+    lv_label_set_text(key_verify_desc_, desc.c_str());
+    lv_obj_set_width(key_verify_desc_, LV_PCT(100));
+    lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(key_verify_desc_, lv_color_hex(0x8A6A3A), 0);
+    lv_obj_align(key_verify_desc_, LV_ALIGN_TOP_MID, 0, 34);
+
+    key_verify_textarea_ = lv_textarea_create(key_verify_panel_);
+    lv_obj_set_width(key_verify_textarea_, LV_PCT(100));
+    lv_textarea_set_one_line(key_verify_textarea_, true);
+    lv_textarea_set_placeholder_text(key_verify_textarea_, "6 digits");
+    lv_textarea_set_accepted_chars(key_verify_textarea_, "0123456789");
+    lv_textarea_set_max_length(key_verify_textarea_, 6);
+    lv_obj_align(key_verify_textarea_, LV_ALIGN_TOP_MID, 0, 72);
+
+    key_verify_error_label_ = lv_label_create(key_verify_panel_);
+    lv_label_set_text(key_verify_error_label_, "");
+    lv_obj_set_width(key_verify_error_label_, LV_PCT(100));
+    lv_obj_set_style_text_align(key_verify_error_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(key_verify_error_label_, lv_color_hex(0xB94A2C), 0);
+    lv_obj_align(key_verify_error_label_, LV_ALIGN_TOP_MID, 0, 110);
+
+    lv_obj_t* submit_btn = lv_btn_create(key_verify_panel_);
+    lv_obj_set_size(submit_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+    lv_obj_align(submit_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_t* submit_label = lv_label_create(submit_btn);
+    lv_label_set_text(submit_label, "Submit");
+    lv_obj_center(submit_label);
+
+    lv_obj_t* cancel_btn = lv_btn_create(key_verify_panel_);
+    lv_obj_set_size(cancel_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+    lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
+    lv_label_set_text(cancel_label, "Cancel");
+    lv_obj_center(cancel_label);
+
+    lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_KEY, this);
+    lv_obj_add_event_cb(cancel_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(cancel_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
+
+    lv_group_add_obj(key_verify_group_, key_verify_textarea_);
+    lv_group_add_obj(key_verify_group_, submit_btn);
+    lv_group_add_obj(key_verify_group_, cancel_btn);
+    lv_group_focus_obj(key_verify_textarea_);
+
+    if (::ui::page_profile::current().large_touch_hitbox)
+    {
+        key_verify_ime_.reset(new ::ui::widgets::ImeWidget());
+        key_verify_ime_->init(key_verify_panel_, key_verify_textarea_);
+        key_verify_ime_->setMode(::ui::widgets::ImeWidget::Mode::NUM);
+    }
+
+    lv_obj_move_foreground(key_verify_overlay_);
+}
+
+void UiController::openKeyVerificationInfoModal(chat::NodeId node_id, uint32_t number)
+{
+    closeKeyVerificationModal(false);
+    if (!parent_)
+    {
+        return;
+    }
+
+    key_verify_node_id_ = node_id;
+    key_verify_expects_number_ = false;
+    key_verify_can_trust_ = false;
+
+    key_verify_prev_group_ = lv_group_get_default();
+    key_verify_group_ = lv_group_create();
+    set_default_group(key_verify_group_);
+
+    key_verify_overlay_ = lv_obj_create(parent_);
+    lv_obj_set_size(key_verify_overlay_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(key_verify_overlay_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(key_verify_overlay_, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(key_verify_overlay_, 0, 0);
+    lv_obj_set_style_pad_all(key_verify_overlay_, 0, 0);
+    lv_obj_set_style_radius(key_verify_overlay_, 0, 0);
+    lv_obj_clear_flag(key_verify_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+
+    const auto modal_size = ::ui::page_profile::resolve_modal_size(360, 220, key_verify_overlay_);
+    key_verify_panel_ = lv_obj_create(key_verify_overlay_);
+    lv_obj_set_size(key_verify_panel_, modal_size.width, modal_size.height);
+    lv_obj_center(key_verify_panel_);
+
+    lv_obj_t* title = lv_label_create(key_verify_panel_);
+    lv_label_set_text(title, "Verification Number");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+
+    char num_buf[24] = {};
+    std::snprintf(num_buf,
+                  sizeof(num_buf),
+                  "%03u %03u",
+                  static_cast<unsigned>(number / 1000U),
+                  static_cast<unsigned>(number % 1000U));
+    key_verify_desc_ = lv_label_create(key_verify_panel_);
+    std::string desc = resolve_contact_name(node_id) + "\nShare this number:\n";
+    desc += num_buf;
+    lv_label_set_text(key_verify_desc_, desc.c_str());
+    lv_obj_set_width(key_verify_desc_, LV_PCT(100));
+    lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(key_verify_desc_, LV_ALIGN_CENTER, 0, -12);
+
+    lv_obj_t* close_btn = lv_btn_create(key_verify_panel_);
+    lv_obj_set_size(close_btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
+    lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_t* close_label = lv_label_create(close_btn);
+    lv_label_set_text(close_label, "OK");
+    lv_obj_center(close_label);
+    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
+    lv_group_add_obj(key_verify_group_, close_btn);
+    lv_group_focus_obj(close_btn);
+    lv_obj_move_foreground(key_verify_overlay_);
+}
+
+void UiController::openKeyVerificationFinalModal(chat::NodeId node_id, const char* code, bool is_sender)
+{
+    closeKeyVerificationModal(false);
+    if (!parent_)
+    {
+        return;
+    }
+
+    key_verify_node_id_ = node_id;
+    key_verify_expects_number_ = false;
+    key_verify_can_trust_ = true;
+
+    key_verify_prev_group_ = lv_group_get_default();
+    key_verify_group_ = lv_group_create();
+    set_default_group(key_verify_group_);
+
+    key_verify_overlay_ = lv_obj_create(parent_);
+    lv_obj_set_size(key_verify_overlay_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(key_verify_overlay_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(key_verify_overlay_, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(key_verify_overlay_, 0, 0);
+    lv_obj_set_style_pad_all(key_verify_overlay_, 0, 0);
+    lv_obj_set_style_radius(key_verify_overlay_, 0, 0);
+    lv_obj_clear_flag(key_verify_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+
+    const auto modal_size = ::ui::page_profile::resolve_modal_size(420, 260, key_verify_overlay_);
+    key_verify_panel_ = lv_obj_create(key_verify_overlay_);
+    lv_obj_set_size(key_verify_panel_, modal_size.width, modal_size.height);
+    lv_obj_center(key_verify_panel_);
+
+    lv_obj_t* title = lv_label_create(key_verify_panel_);
+    lv_label_set_text(title, "Compare Verification Code");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+
+    std::string desc = resolve_contact_name(node_id);
+    desc += "\n";
+    desc += is_sender ? "Send this code and compare:\n" : "Confirm received code:\n";
+    desc += (code && code[0] != '\0') ? code : "--------";
+    desc += "\n\nIf it matches, trust the key.";
+    key_verify_desc_ = lv_label_create(key_verify_panel_);
+    lv_label_set_text(key_verify_desc_, desc.c_str());
+    lv_obj_set_width(key_verify_desc_, LV_PCT(100));
+    lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(key_verify_desc_, LV_ALIGN_CENTER, 0, -8);
+
+    lv_obj_t* trust_btn = lv_btn_create(key_verify_panel_);
+    lv_obj_set_size(trust_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+    lv_obj_align(trust_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_t* trust_label = lv_label_create(trust_btn);
+    lv_label_set_text(trust_label, "Trust Key");
+    lv_obj_center(trust_label);
+
+    lv_obj_t* close_btn = lv_btn_create(key_verify_panel_);
+    lv_obj_set_size(close_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+    lv_obj_align(close_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_t* close_label = lv_label_create(close_btn);
+    lv_label_set_text(close_label, "Later");
+    lv_obj_center(close_label);
+
+    lv_obj_add_event_cb(trust_btn, key_verify_trust_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(trust_btn, key_verify_trust_event_cb, LV_EVENT_KEY, this);
+    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
+    lv_group_add_obj(key_verify_group_, trust_btn);
+    lv_group_add_obj(key_verify_group_, close_btn);
+    lv_group_focus_obj(trust_btn);
+    lv_obj_move_foreground(key_verify_overlay_);
+}
+
+void UiController::submitKeyVerificationNumber()
+{
+    if (!key_verify_expects_number_ || !key_verify_textarea_)
+    {
+        return;
+    }
+
+    clearKeyVerificationError();
+    const char* text = lv_textarea_get_text(key_verify_textarea_);
+    if (!text || text[0] == '\0')
+    {
+        if (key_verify_error_label_)
+        {
+            lv_label_set_text(key_verify_error_label_, "Enter the 6-digit number");
+        }
+        return;
+    }
+
+    char* end_ptr = nullptr;
+    unsigned long parsed = std::strtoul(text, &end_ptr, 10);
+    if (!end_ptr || *end_ptr != '\0' || parsed > 999999UL)
+    {
+        if (key_verify_error_label_)
+        {
+            lv_label_set_text(key_verify_error_label_, "Invalid number");
+        }
+        return;
+    }
+
+    chat::IMeshAdapter* mesh = app::messagingFacade().getMeshAdapter();
+    if (!mesh)
+    {
+        if (key_verify_error_label_)
+        {
+            lv_label_set_text(key_verify_error_label_, "Mesh unavailable");
+        }
+        return;
+    }
+
+    const bool ok = mesh->submitKeyVerificationNumber(key_verify_node_id_, key_verify_nonce_,
+                                                      static_cast<uint32_t>(parsed));
+    if (!ok)
+    {
+        if (key_verify_error_label_)
+        {
+            lv_label_set_text(key_verify_error_label_, "Submit failed");
+        }
+        return;
+    }
+
+    ::ui::SystemNotification::show("Verification number sent", 2000);
+    closeKeyVerificationModal(true);
+}
+
+void UiController::trustKeyFromVerificationModal()
+{
+    if (!key_verify_can_trust_ || key_verify_node_id_ == 0)
+    {
+        closeKeyVerificationModal(true);
+        return;
+    }
+
+    bool ok = app::messagingFacade().getContactService().setNodeKeyManuallyVerified(key_verify_node_id_, true);
+    ::ui::SystemNotification::show(ok ? "Key marked trusted" : "Key trust failed", 2000);
+    closeKeyVerificationModal(true);
 }
 
 void UiController::onTeamPositionCancel()

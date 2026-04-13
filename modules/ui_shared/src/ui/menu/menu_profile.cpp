@@ -13,7 +13,7 @@ namespace ui::menu_profile
 namespace
 {
 
-#if !defined(TRAIL_MATE_ESP_BOARD_TAB5) && !defined(ARDUINO_T_LORA_PAGER) && !defined(ARDUINO_T_DECK)
+#if !defined(TRAIL_MATE_ESP_BOARD_TAB5) && !defined(ARDUINO_T_LORA_PAGER) && !defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_DECK_PRO)
 lv_coord_t display_width()
 {
     lv_coord_t width = lv_display_get_physical_horizontal_resolution(nullptr);
@@ -206,7 +206,7 @@ const MenuLayoutProfile& current()
         return make_tab5_profile();
 #elif defined(ARDUINO_T_LORA_PAGER)
         return make_pager_profile();
-#elif defined(ARDUINO_T_DECK)
+#elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
         return make_tdeck_profile();
 #else
         return make_default_profile(display_width(), display_height());

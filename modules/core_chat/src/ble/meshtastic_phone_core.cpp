@@ -1,32 +1,51 @@
 #include "chat/ble/meshtastic_phone_core.h"
 
 #include "app/app_config.h"
+#include "chat/ble/meshtastic_defaults.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/runtime/self_identity_policy.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
+#include "platform/ui/gps_runtime.h"
+#include "platform/ui/settings_store.h"
+#include "platform/ui/time_runtime.h"
 #include "sys/clock.h"
 
 #include <Arduino.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <vector>
+
+#if defined(__has_include)
+#if __has_include(<rtos.h>)
+#include <rtos.h>
+#define TRAIL_MATE_HAS_RTOS_TASK_INTROSPECTION 1
+#elif __has_include("freertos/FreeRTOS.h") && __has_include("freertos/task.h")
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#define TRAIL_MATE_HAS_RTOS_TASK_INTROSPECTION 1
+#else
+#define TRAIL_MATE_HAS_RTOS_TASK_INTROSPECTION 0
+#endif
+#else
+#define TRAIL_MATE_HAS_RTOS_TASK_INTROSPECTION 0
+#endif
 
 namespace ble
 {
 namespace
 {
 
-constexpr uint32_t kOfficialMinAppVersion = 30200;
-constexpr uint32_t kOfficialDeviceStateVersion = 24;
-constexpr const char* kCompatFirmwareVersion = "2.7.4.0";
 constexpr uint8_t kQueueDepthHint = 4;
-constexpr uint8_t kMaxMeshtasticChannels = 8;
-constexpr uint32_t kModuleConfigVersion = 1;
+constexpr const char* kUiSettingsNs = "settings";
+constexpr const char* kTimezoneTzdefKey = "timezone_tzdef";
 constexpr meshtastic_AdminMessage_ConfigType kConfigSnapshotTypes[] = {
     meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG,
     meshtastic_AdminMessage_ConfigType_POSITION_CONFIG,
@@ -83,14 +102,278 @@ void copyBounded(char* dst, size_t dst_len, const char* src)
     dst[dst_len - 1] = '\0';
 }
 
+bool parsePosixTzOffsetMinutes(const char* tzdef, int* out_offset_min)
+{
+    if (!tzdef || !out_offset_min || tzdef[0] == '\0')
+    {
+        return false;
+    }
+
+    const char* cursor = tzdef;
+    if (*cursor == '<')
+    {
+        ++cursor;
+        while (*cursor != '\0' && *cursor != '>')
+        {
+            ++cursor;
+        }
+        if (*cursor != '>')
+        {
+            return false;
+        }
+        ++cursor;
+    }
+    else
+    {
+        size_t name_len = 0;
+        while (*cursor != '\0' && std::isalpha(static_cast<unsigned char>(*cursor)))
+        {
+            ++cursor;
+            ++name_len;
+        }
+        if (name_len < 3U)
+        {
+            return false;
+        }
+    }
+
+    int sign = 1;
+    if (*cursor == '-')
+    {
+        sign = -1;
+        ++cursor;
+    }
+    else if (*cursor == '+')
+    {
+        ++cursor;
+    }
+
+    if (!std::isdigit(static_cast<unsigned char>(*cursor)))
+    {
+        return false;
+    }
+
+    int hours = 0;
+    while (std::isdigit(static_cast<unsigned char>(*cursor)))
+    {
+        hours = (hours * 10) + (*cursor - '0');
+        ++cursor;
+    }
+
+    int minutes = 0;
+    if (*cursor == ':')
+    {
+        ++cursor;
+        if (!std::isdigit(static_cast<unsigned char>(*cursor)))
+        {
+            return false;
+        }
+        while (std::isdigit(static_cast<unsigned char>(*cursor)))
+        {
+            minutes = (minutes * 10) + (*cursor - '0');
+            ++cursor;
+        }
+
+        if (*cursor == ':')
+        {
+            ++cursor;
+            while (std::isdigit(static_cast<unsigned char>(*cursor)))
+            {
+                ++cursor;
+            }
+        }
+    }
+
+    const int posix_offset_min = sign * ((hours * 60) + minutes);
+    *out_offset_min = -posix_offset_min;
+    return true;
+}
+
+void buildFixedPosixTzdef(int offset_min, char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    const int posix_offset_min = -offset_min;
+    const int abs_minutes = posix_offset_min < 0 ? -posix_offset_min : posix_offset_min;
+    const int abs_hours = abs_minutes / 60;
+    const int rem_minutes = abs_minutes % 60;
+
+    if (rem_minutes == 0)
+    {
+        std::snprintf(out, out_len, "UTC%+d", posix_offset_min / 60);
+    }
+    else
+    {
+        std::snprintf(out,
+                      out_len,
+                      "UTC%+d:%02d",
+                      posix_offset_min < 0 ? -abs_hours : abs_hours,
+                      rem_minutes);
+    }
+}
+
+bool loadStoredTimezoneTzdef(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return false;
+    }
+
+    out[0] = '\0';
+    std::vector<uint8_t> blob;
+    if (!::platform::ui::settings_store::get_blob(kUiSettingsNs, kTimezoneTzdefKey, blob) || blob.empty())
+    {
+        return false;
+    }
+
+    const size_t copy_len = std::min(out_len - 1U, blob.size());
+    std::memcpy(out, blob.data(), copy_len);
+    out[copy_len] = '\0';
+    return out[0] != '\0';
+}
+
+void saveStoredTimezoneTzdef(const char* tzdef)
+{
+    if (!tzdef || tzdef[0] == '\0')
+    {
+        const char* keys[] = {kTimezoneTzdefKey};
+        ::platform::ui::settings_store::remove_keys(kUiSettingsNs, keys, 1);
+        return;
+    }
+
+    (void)::platform::ui::settings_store::put_blob(kUiSettingsNs, kTimezoneTzdefKey, tzdef, std::strlen(tzdef) + 1U);
+}
+
+void buildLinkedTimezoneTzdef(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    const int current_offset_min = ::platform::ui::time::timezone_offset_min();
+    char stored[65] = {};
+    if (loadStoredTimezoneTzdef(stored, sizeof(stored)))
+    {
+        int parsed_offset_min = 0;
+        if (parsePosixTzOffsetMinutes(stored, &parsed_offset_min) && parsed_offset_min == current_offset_min)
+        {
+            copyBounded(out, out_len, stored);
+            return;
+        }
+    }
+
+    buildFixedPosixTzdef(current_offset_min, out, out_len);
+}
+
 uint32_t nowSeconds()
 {
     return sys::epoch_seconds_now();
 }
 
+bool buildSelfPositionPayload(uint8_t* out_buf, size_t* out_len)
+{
+    if (!out_buf || !out_len || *out_len == 0)
+    {
+        return false;
+    }
+
+    const platform::ui::gps::GpsState gps_state = platform::ui::gps::get_data();
+    if (!gps_state.valid)
+    {
+        return false;
+    }
+
+    meshtastic_Position pos = meshtastic_Position_init_zero;
+    pos.has_latitude_i = true;
+    pos.latitude_i = static_cast<int32_t>(std::lround(gps_state.lat * 1e7));
+    pos.has_longitude_i = true;
+    pos.longitude_i = static_cast<int32_t>(std::lround(gps_state.lng * 1e7));
+    pos.location_source = meshtastic_Position_LocSource_LOC_INTERNAL;
+
+    if (gps_state.has_alt)
+    {
+        pos.has_altitude = true;
+        pos.altitude = static_cast<int32_t>(std::lround(gps_state.alt_m));
+        pos.altitude_source = meshtastic_Position_AltSource_ALT_INTERNAL;
+    }
+    if (gps_state.has_speed)
+    {
+        pos.has_ground_speed = true;
+        pos.ground_speed = static_cast<uint32_t>(std::lround(gps_state.speed_mps));
+    }
+    if (gps_state.has_course)
+    {
+        double course = gps_state.course_deg;
+        if (course < 0.0)
+        {
+            course = 0.0;
+        }
+        uint32_t cdeg = static_cast<uint32_t>(std::lround(course * 100.0));
+        if (cdeg >= 36000U)
+        {
+            cdeg = 35999U;
+        }
+        pos.has_ground_track = true;
+        pos.ground_track = cdeg;
+    }
+    if (gps_state.satellites > 0)
+    {
+        pos.sats_in_view = gps_state.satellites;
+    }
+
+    const uint32_t ts = nowSeconds();
+    if (ts >= 1577836800U)
+    {
+        pos.timestamp = ts;
+    }
+
+    pb_ostream_t stream = pb_ostream_from_buffer(out_buf, *out_len);
+    if (!pb_encode(&stream, meshtastic_Position_fields, &pos))
+    {
+        return false;
+    }
+
+    *out_len = stream.bytes_written;
+    return true;
+}
+
 uint8_t channelIndexFromId(chat::ChannelId channel)
 {
     return (channel == chat::ChannelId::SECONDARY) ? 1U : 0U;
+}
+
+void logRuntimeFootprint(const char* stage)
+{
+#if TRAIL_MATE_HAS_RTOS_TASK_INTROSPECTION
+    const char* task_name = pcTaskGetName(nullptr);
+    const unsigned long stack_hwm =
+        static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
+    logDual("[BLE][mtcore][rt] stage=%s task=%s stack_hwm=%lu\n",
+            stage ? stage : "unknown",
+            task_name ? task_name : "?",
+            stack_hwm);
+#else
+    logDual("[BLE][mtcore][rt] stage=%s task=? stack_hwm=0\n",
+            stage ? stage : "unknown");
+#endif
+}
+
+const char* configStageName(uint32_t nonce)
+{
+    switch (nonce)
+    {
+    case meshtastic_defaults::kConfigNonceOnlyConfig:
+        return "stage1_config";
+    case meshtastic_defaults::kConfigNonceOnlyNodes:
+        return "stage2_nodes";
+    default:
+        return "stage_unknown";
+    }
 }
 
 meshtastic_Config_DeviceConfig_Role roleFromEntry(uint8_t role)
@@ -136,7 +419,7 @@ void initDefaultModuleConfig(meshtastic_LocalModuleConfig* out, uint32_t self_no
     }
     meshtastic_LocalModuleConfig zero = meshtastic_LocalModuleConfig_init_zero;
     *out = zero;
-    out->version = kModuleConfigVersion;
+    out->version = meshtastic_defaults::kModuleConfigVersion;
     out->has_mqtt = true;
     out->has_serial = true;
     out->has_external_notification = true;
@@ -150,6 +433,19 @@ void initDefaultModuleConfig(meshtastic_LocalModuleConfig* out, uint32_t self_no
     out->has_ambient_lighting = true;
     out->has_detection_sensor = true;
     out->has_paxcounter = true;
+
+    copyBounded(out->mqtt.address, sizeof(out->mqtt.address), meshtastic_defaults::kDefaultMqttAddress);
+    copyBounded(out->mqtt.username, sizeof(out->mqtt.username), meshtastic_defaults::kDefaultMqttUsername);
+    copyBounded(out->mqtt.password, sizeof(out->mqtt.password), meshtastic_defaults::kDefaultMqttPassword);
+    copyBounded(out->mqtt.root, sizeof(out->mqtt.root), meshtastic_defaults::kDefaultMqttRoot);
+    out->mqtt.enabled = false;
+    out->mqtt.proxy_to_client_enabled = false;
+    out->mqtt.encryption_enabled = meshtastic_defaults::kDefaultMqttEncryptionEnabled;
+    out->mqtt.tls_enabled = meshtastic_defaults::kDefaultMqttTlsEnabled;
+    out->mqtt.has_map_report_settings = true;
+    out->mqtt.map_report_settings.publish_interval_secs = meshtastic_defaults::kDefaultMapPublishIntervalSecs;
+    out->mqtt.map_report_settings.position_precision = 0;
+    out->mqtt.map_report_settings.should_report_location = false;
 
     out->telemetry.device_update_interval = 3600;
     out->telemetry.device_telemetry_enabled = true;
@@ -168,6 +464,38 @@ void initDefaultModuleConfig(meshtastic_LocalModuleConfig* out, uint32_t self_no
     out->ambient_lighting.red = (self_node >> 16) & 0xFFU;
     out->ambient_lighting.green = (self_node >> 8) & 0xFFU;
     out->ambient_lighting.blue = self_node & 0xFFU;
+}
+
+void applyLegacyMqttDefaults(meshtastic_LocalModuleConfig* out)
+{
+    if (!out || !out->has_mqtt)
+    {
+        return;
+    }
+
+    if (out->mqtt.address[0] == '\0')
+    {
+        copyBounded(out->mqtt.address, sizeof(out->mqtt.address), meshtastic_defaults::kDefaultMqttAddress);
+    }
+    if (out->mqtt.username[0] == '\0')
+    {
+        copyBounded(out->mqtt.username, sizeof(out->mqtt.username), meshtastic_defaults::kDefaultMqttUsername);
+    }
+    if (out->mqtt.password[0] == '\0')
+    {
+        copyBounded(out->mqtt.password, sizeof(out->mqtt.password), meshtastic_defaults::kDefaultMqttPassword);
+    }
+    if (out->mqtt.root[0] == '\0')
+    {
+        copyBounded(out->mqtt.root, sizeof(out->mqtt.root), meshtastic_defaults::kDefaultMqttRoot);
+    }
+    if (!out->mqtt.has_map_report_settings)
+    {
+        out->mqtt.has_map_report_settings = true;
+        out->mqtt.map_report_settings.publish_interval_secs = meshtastic_defaults::kDefaultMapPublishIntervalSecs;
+        out->mqtt.map_report_settings.position_precision = 0;
+        out->mqtt.map_report_settings.should_report_location = false;
+    }
 }
 
 bool moduleConfigTypeFromVariant(pb_size_t variant_tag, meshtastic_AdminMessage_ModuleConfigType* out)
@@ -247,6 +575,7 @@ MeshtasticPhoneCore::MeshtasticPhoneCore(app::IAppBleFacade& ctx, MeshtasticPhon
         if (hooks_->loadModuleConfig(&loaded))
         {
             module_config_ = loaded;
+            applyLegacyMqttDefaults(&module_config_);
         }
     }
 }
@@ -269,12 +598,24 @@ void MeshtasticPhoneCore::reset()
 void MeshtasticPhoneCore::onIncomingText(const chat::MeshIncomingText& msg)
 {
     packet_queue_.push_back(buildPacketFromText(msg));
+    logDual("[BLE][mtcore] enqueue text packet id=%08lX from=%08lX to=%08lX len=%u\n",
+            static_cast<unsigned long>(packet_queue_.back().id),
+            static_cast<unsigned long>(packet_queue_.back().from),
+            static_cast<unsigned long>(packet_queue_.back().to),
+            static_cast<unsigned>(packet_queue_.back().decoded.payload.size));
     notifyFromNum(packet_queue_.back().id);
 }
 
 void MeshtasticPhoneCore::onIncomingData(const chat::MeshIncomingData& msg)
 {
     packet_queue_.push_back(buildPacketFromData(msg));
+    logDual("[BLE][mtcore] enqueue data packet id=%08lX port=%u req=%08lX from=%08lX to=%08lX len=%u\n",
+            static_cast<unsigned long>(packet_queue_.back().id),
+            static_cast<unsigned>(packet_queue_.back().decoded.portnum),
+            static_cast<unsigned long>(packet_queue_.back().decoded.request_id),
+            static_cast<unsigned long>(packet_queue_.back().from),
+            static_cast<unsigned long>(packet_queue_.back().to),
+            static_cast<unsigned>(packet_queue_.back().decoded.payload.size));
     notifyFromNum(packet_queue_.back().id);
 }
 
@@ -302,7 +643,8 @@ bool MeshtasticPhoneCore::handleToRadio(const uint8_t* data, size_t len)
     std::memcpy(last_to_radio_, data, len);
     last_to_radio_len_ = len;
 
-    meshtastic_ToRadio to_radio = meshtastic_ToRadio_init_zero;
+    auto& to_radio = to_radio_scratch_;
+    std::memset(&to_radio, 0, sizeof(to_radio));
     pb_istream_t stream = pb_istream_from_buffer(data, len);
     if (!pb_decode(&stream, meshtastic_ToRadio_fields, &to_radio))
     {
@@ -320,6 +662,9 @@ bool MeshtasticPhoneCore::handleToRadio(const uint8_t* data, size_t len)
     case meshtastic_ToRadio_mqttClientProxyMessage_tag:
         return hooks_ ? hooks_->handleMqttProxyToRadio(to_radio.mqttClientProxyMessage) : false;
     case meshtastic_ToRadio_want_config_id_tag:
+        logDual("[BLE][mtcore][flow] want_config nonce=%08lX stage=%s\n",
+                static_cast<unsigned long>(to_radio.want_config_id),
+                configStageName(to_radio.want_config_id));
         enqueueConfigSnapshot(to_radio.want_config_id);
         return true;
     case meshtastic_ToRadio_heartbeat_tag:
@@ -348,16 +693,11 @@ bool MeshtasticPhoneCore::handleToRadioPacket(meshtastic_MeshPacket& packet)
 
     packet.from = ctx_.getSelfNodeId();
     packet.rx_time = nowSeconds();
-
-    const bool is_broadcast = (packet.to == 0 || packet.to == 0xFFFFFFFFUL);
-    if (is_broadcast)
-    {
-        // Meshtastic broadcast messages should not be modeled as ACKed sends.
-        // Some phone clients set want_ack by default, which leaves the UI waiting
-        // for an ACK that will never exist for broadcast traffic.
-        packet.want_ack = false;
-        packet.decoded.want_response = false;
-    }
+    logDual("[BLE][mtcore] packet port=%u to=%08lX want_resp=%u len=%u\n",
+            static_cast<unsigned>(packet.decoded.portnum),
+            static_cast<unsigned long>(packet.to),
+            packet.decoded.want_response ? 1U : 0U,
+            static_cast<unsigned>(packet.decoded.payload.size));
 
     const bool admin_for_self =
         (packet.decoded.portnum == meshtastic_PortNum_ADMIN_APP) &&
@@ -406,14 +746,16 @@ bool MeshtasticPhoneCore::handleToRadioPacket(meshtastic_MeshPacket& packet)
 
 bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
 {
-    meshtastic_AdminMessage req = meshtastic_AdminMessage_init_zero;
+    std::memset(&admin_req_scratch_, 0, sizeof(admin_req_scratch_));
     pb_istream_t stream = pb_istream_from_buffer(packet.decoded.payload.bytes, packet.decoded.payload.size);
-    if (!pb_decode(&stream, meshtastic_AdminMessage_fields, &req))
+    if (!pb_decode(&stream, meshtastic_AdminMessage_fields, &admin_req_scratch_))
     {
         return false;
     }
 
-    meshtastic_AdminMessage resp = meshtastic_AdminMessage_init_zero;
+    std::memset(&admin_resp_scratch_, 0, sizeof(admin_resp_scratch_));
+    meshtastic_AdminMessage& req = admin_req_scratch_;
+    meshtastic_AdminMessage& resp = admin_resp_scratch_;
     bool has_resp = false;
     auto& cfg = ctx_.getConfig();
 
@@ -574,6 +916,25 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
             }
             ctx_.setBleEnabled(req.set_config.payload_variant.bluetooth.enabled);
             break;
+        case meshtastic_Config_device_tag:
+        {
+            const char* tzdef = req.set_config.payload_variant.device.tzdef;
+            if (tzdef[0] != '\0')
+            {
+                int offset_min = 0;
+                if (parsePosixTzOffsetMinutes(tzdef, &offset_min))
+                {
+                    ::platform::ui::time::set_timezone_offset_min(offset_min);
+                    saveStoredTimezoneTzdef(tzdef);
+                    logDual("[BLE][mtcore] set_config device tzdef=%s offset_min=%d\n", tzdef, offset_min);
+                }
+                else
+                {
+                    logDual("[BLE][mtcore] set_config device tzdef parse failed tzdef=%s\n", tzdef);
+                }
+            }
+            break;
+        }
         case meshtastic_Config_device_ui_tag:
             break;
         case meshtastic_Config_display_tag:
@@ -589,6 +950,10 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         else if (req.set_config.which_payload_variant == meshtastic_Config_bluetooth_tag)
         {
             resp.get_config_response = buildConfig(meshtastic_AdminMessage_ConfigType_BLUETOOTH_CONFIG);
+        }
+        else if (req.set_config.which_payload_variant == meshtastic_Config_device_tag)
+        {
+            resp.get_config_response = buildConfig(meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG);
         }
         else if (req.set_config.which_payload_variant == meshtastic_Config_display_tag)
         {
@@ -616,6 +981,7 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
                     req.set_module_config.payload_variant.mqtt.root);
             module_config_.has_mqtt = true;
             module_config_.mqtt = req.set_module_config.payload_variant.mqtt;
+            applyLegacyMqttDefaults(&module_config_);
             break;
         case meshtastic_ModuleConfig_serial_tag:
             module_config_.has_serial = true;
@@ -740,7 +1106,8 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         return true;
     }
 
-    meshtastic_MeshPacket reply = meshtastic_MeshPacket_init_zero;
+    auto& reply = reply_packet_scratch_;
+    std::memset(&reply, 0, sizeof(reply));
     reply.from = ctx_.getSelfNodeId();
     reply.to = ctx_.getSelfNodeId();
     reply.channel = packet.channel;
@@ -801,7 +1168,8 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
             return false;
         }
 
-        meshtastic_MeshPacket reply = meshtastic_MeshPacket_init_zero;
+        auto& reply = reply_packet_scratch_;
+        std::memset(&reply, 0, sizeof(reply));
         reply.from = self;
         reply.to = self;
         reply.channel = packet.channel;
@@ -827,10 +1195,42 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
         return true;
     }
 
+    if (packet.decoded.portnum == meshtastic_PortNum_POSITION_APP && packet.decoded.want_response)
+    {
+        auto& reply = reply_packet_scratch_;
+        std::memset(&reply, 0, sizeof(reply));
+        reply.from = self;
+        reply.to = self;
+        reply.channel = packet.channel;
+        reply.id = static_cast<uint32_t>(millis());
+        reply.rx_time = nowSeconds();
+        reply.which_payload_variant = meshtastic_MeshPacket_decoded_tag;
+        reply.decoded = meshtastic_Data_init_zero;
+        reply.decoded.portnum = meshtastic_PortNum_POSITION_APP;
+        reply.decoded.dest = self;
+        reply.decoded.source = self;
+        reply.decoded.request_id = packet.id;
+        reply.decoded.want_response = false;
+        reply.decoded.has_bitfield = true;
+        reply.decoded.bitfield = 0;
+        size_t payload_len = sizeof(reply.decoded.payload.bytes);
+        if (!buildSelfPositionPayload(reply.decoded.payload.bytes, &payload_len))
+        {
+            logDual("[BLE][mtcore] self position unavailable, skip loopback tx req=%08lX\n",
+                    static_cast<unsigned long>(packet.id));
+            return true;
+        }
+        reply.decoded.payload.size = static_cast<pb_size_t>(payload_len);
+        packet_queue_.push_back(reply);
+        notifyFromNum(reply.id);
+        return true;
+    }
+
     if (packet.decoded.portnum == meshtastic_PortNum_NODEINFO_APP && packet.decoded.want_response)
     {
         meshtastic_NodeInfo self_info = buildSelfNodeInfo();
-        meshtastic_MeshPacket reply = meshtastic_MeshPacket_init_zero;
+        auto& reply = reply_packet_scratch_;
+        std::memset(&reply, 0, sizeof(reply));
         reply.from = self;
         reply.to = self;
         reply.channel = packet.channel;
@@ -854,6 +1254,17 @@ bool MeshtasticPhoneCore::handleLocalSelfPacket(meshtastic_MeshPacket& packet)
         packet_queue_.push_back(reply);
         notifyFromNum(reply.id);
         return true;
+    }
+
+    if (packet.decoded.portnum != meshtastic_PortNum_TEXT_MESSAGE_APP &&
+        packet.decoded.portnum != meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
+    {
+        logDual("[BLE][mtcore] suppress self loopback port=%u want_resp=%u req=%08lX len=%u\n",
+                static_cast<unsigned>(packet.decoded.portnum),
+                packet.decoded.want_response ? 1U : 0U,
+                static_cast<unsigned long>(packet.id),
+                static_cast<unsigned>(packet.decoded.payload.size));
+        return !packet.decoded.want_response;
     }
 
     return false;
@@ -888,10 +1299,12 @@ bool MeshtasticPhoneCore::popToPhone(MeshtasticBleFrame* out)
 
     if (hooks_)
     {
-        meshtastic_MqttClientProxyMessage mqtt = meshtastic_MqttClientProxyMessage_init_zero;
+        auto& mqtt = mqtt_proxy_scratch_;
+        std::memset(&mqtt, 0, sizeof(mqtt));
         if (hooks_->pollMqttProxyToPhone(&mqtt))
         {
-            meshtastic_FromRadio from = meshtastic_FromRadio_init_zero;
+            auto& from = from_radio_scratch_;
+            std::memset(&from, 0, sizeof(from));
             from.which_payload_variant = meshtastic_FromRadio_mqttClientProxyMessage_tag;
             from.mqttClientProxyMessage = mqtt;
             return encodeFromRadio(from, 0, out);
@@ -910,7 +1323,15 @@ bool MeshtasticPhoneCore::popToPhone(MeshtasticBleFrame* out)
         return true;
     }
 
-    meshtastic_FromRadio from = meshtastic_FromRadio_init_zero;
+    if (config_drain_empty_pending_)
+    {
+        config_drain_empty_pending_ = false;
+        logDual("[BLE][mtcore] config snapshot drain-empty\n");
+        return false;
+    }
+
+    auto& from = from_radio_scratch_;
+    std::memset(&from, 0, sizeof(from));
     if (!queue_status_queue_.empty())
     {
         from.which_payload_variant = meshtastic_FromRadio_queueStatus_tag;
@@ -937,30 +1358,43 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
         return false;
     }
 
-    meshtastic_FromRadio from = meshtastic_FromRadio_init_zero;
-    uint32_t from_num = config_nonce_;
+    auto& from = from_radio_scratch_;
+    std::memset(&from, 0, sizeof(from));
+    const uint32_t from_num = config_nonce_;
 
     if (config_node_index_ == 0)
     {
         from.which_payload_variant = meshtastic_FromRadio_my_info_tag;
-        from.my_info = buildMyInfo();
+        fillMyInfo(&from.my_info);
         ++config_node_index_;
+        logDual("[BLE][mtcore][cfg#%lu] frame my_info nonce=%08lX\n",
+                static_cast<unsigned long>(config_request_seq_),
+                static_cast<unsigned long>(from_num));
+        logRuntimeFootprint("cfg_my_info");
         return encodeFromRadio(from, from_num, out);
     }
 
     if (config_node_index_ == 1)
     {
         from.which_payload_variant = meshtastic_FromRadio_deviceuiConfig_tag;
-        from.deviceuiConfig = buildDeviceUi();
+        fillDeviceUi(&from.deviceuiConfig);
         ++config_node_index_;
+        logDual("[BLE][mtcore][cfg#%lu] frame deviceui nonce=%08lX\n",
+                static_cast<unsigned long>(config_request_seq_),
+                static_cast<unsigned long>(from_num));
+        logRuntimeFootprint("cfg_deviceui");
         return encodeFromRadio(from, from_num, out);
     }
 
     if (config_node_index_ == 2)
     {
         from.which_payload_variant = meshtastic_FromRadio_node_info_tag;
-        from.node_info = buildSelfNodeInfo();
+        fillSelfNodeInfo(&from.node_info);
         ++config_node_index_;
+        logDual("[BLE][mtcore][cfg#%lu] frame self_node nonce=%08lX\n",
+                static_cast<unsigned long>(config_request_seq_),
+                static_cast<unsigned long>(from_num));
+        logRuntimeFootprint("cfg_self_node");
         return encodeFromRadio(from, from_num, out);
     }
 
@@ -976,7 +1410,7 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
                 continue;
             }
             from.which_payload_variant = meshtastic_FromRadio_node_info_tag;
-            from.node_info = buildNodeInfoFromEntry(entry);
+            fillNodeInfoFromEntry(entry, &from.node_info);
             return encodeFromRadio(from, entry.node_id, out);
         }
     }
@@ -984,16 +1418,16 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
     if (config_channel_index_ == 0)
     {
         from.which_payload_variant = meshtastic_FromRadio_metadata_tag;
-        from.metadata = buildMetadata();
+        fillMetadata(&from.metadata);
         ++config_channel_index_;
         return encodeFromRadio(from, from_num, out);
     }
 
     const uint8_t channel_slot = static_cast<uint8_t>(config_channel_index_ - 1);
-    if (channel_slot < kMaxMeshtasticChannels)
+    if (channel_slot < meshtastic_defaults::kMaxMeshtasticChannels)
     {
         from.which_payload_variant = meshtastic_FromRadio_channel_tag;
-        from.channel = buildChannel(channel_slot);
+        fillChannel(channel_slot, &from.channel);
         ++config_channel_index_;
         return encodeFromRadio(from, from_num, out);
     }
@@ -1001,20 +1435,25 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
     if (config_type_index_ < (sizeof(kConfigSnapshotTypes) / sizeof(kConfigSnapshotTypes[0])))
     {
         from.which_payload_variant = meshtastic_FromRadio_config_tag;
-        from.config = buildConfig(kConfigSnapshotTypes[config_type_index_++]);
+        fillConfig(kConfigSnapshotTypes[config_type_index_++], &from.config);
         return encodeFromRadio(from, from_num, out);
     }
 
     if (config_module_type_index_ < (sizeof(kModuleSnapshotTypes) / sizeof(kModuleSnapshotTypes[0])))
     {
         from.which_payload_variant = meshtastic_FromRadio_moduleConfig_tag;
-        from.moduleConfig = buildModuleConfig(kModuleSnapshotTypes[config_module_type_index_++]);
+        fillModuleConfig(kModuleSnapshotTypes[config_module_type_index_++], &from.moduleConfig);
         return encodeFromRadio(from, from_num, out);
     }
 
     from.which_payload_variant = meshtastic_FromRadio_config_complete_id_tag;
     from.config_complete_id = config_nonce_;
+    const size_t completed_node_index = config_node_index_;
+    const uint8_t completed_channel_index = config_channel_index_;
+    const uint8_t completed_config_index = config_type_index_;
+    const uint8_t completed_module_index = config_module_type_index_;
     config_flow_active_ = false;
+    config_drain_empty_pending_ = true;
     config_nonce_ = 0;
     config_node_index_ = 0;
     config_channel_index_ = 0;
@@ -1024,6 +1463,17 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
     {
         hooks_->onConfigComplete();
     }
+    logDual("[BLE][mtcore][cfg#%lu] complete nonce=%08lX nodes=%u channels=%u configs=%u modules=%u\n",
+            static_cast<unsigned long>(config_request_seq_),
+            static_cast<unsigned long>(from_num),
+            static_cast<unsigned>(completed_node_index),
+            static_cast<unsigned>(completed_channel_index),
+            static_cast<unsigned>(completed_config_index),
+            static_cast<unsigned>(completed_module_index));
+    logDual("[BLE][mtcore][flow] cfg_complete stage=%s nonce=%08lX\n",
+            configStageName(from_num),
+            static_cast<unsigned long>(from_num));
+    logRuntimeFootprint("cfg_complete");
     return encodeFromRadio(from, from_num, out);
 }
 
@@ -1031,18 +1481,27 @@ bool MeshtasticPhoneCore::encodeFromRadio(const meshtastic_FromRadio& from, uint
 {
     if (!out)
     {
+        logDual("[BLE][mtcore] encode from_radio failed: out=null variant=%u from_num=%08lX\n",
+                static_cast<unsigned>(from.which_payload_variant),
+                static_cast<unsigned long>(from_num));
         return false;
     }
 
-    meshtastic_FromRadio msg = from;
     pb_ostream_t ostream = pb_ostream_from_buffer(out->buf, sizeof(out->buf));
-    if (!pb_encode(&ostream, meshtastic_FromRadio_fields, &msg))
+    if (!pb_encode(&ostream, meshtastic_FromRadio_fields, const_cast<meshtastic_FromRadio*>(&from)))
     {
+        logDual("[BLE][mtcore] encode from_radio failed: variant=%u from_num=%08lX\n",
+                static_cast<unsigned>(from.which_payload_variant),
+                static_cast<unsigned long>(from_num));
         return false;
     }
 
     out->len = ostream.bytes_written;
     out->from_num = from_num;
+    logDual("[BLE][mtcore] encode from_radio ok: variant=%u from_num=%08lX len=%u\n",
+            static_cast<unsigned>(from.which_payload_variant),
+            static_cast<unsigned long>(from_num),
+            static_cast<unsigned>(out->len));
     return true;
 }
 
@@ -1054,11 +1513,16 @@ void MeshtasticPhoneCore::enqueueQueueStatus(uint32_t packet_id, bool ok)
     status.maxlen = kQueueDepthHint;
     status.mesh_packet_id = packet_id;
     queue_status_queue_.push_back(status);
+    logDual("[BLE][mtcore] queue status mesh_packet_id=%08lX ok=%u depth=%u\n",
+            static_cast<unsigned long>(packet_id),
+            ok ? 1U : 0U,
+            static_cast<unsigned>(queue_status_queue_.size()));
     notifyFromNum(packet_id);
 }
 
 void MeshtasticPhoneCore::enqueueConfigSnapshot(uint32_t config_nonce)
 {
+    ++config_request_seq_;
     config_flow_active_ = true;
     config_nonce_ = config_nonce;
     config_node_index_ = 0;
@@ -1070,6 +1534,13 @@ void MeshtasticPhoneCore::enqueueConfigSnapshot(uint32_t config_nonce)
     {
         hooks_->onConfigStart();
     }
+    logDual("[BLE][mtcore][cfg#%lu] start nonce=%08lX\n",
+            static_cast<unsigned long>(config_request_seq_),
+            static_cast<unsigned long>(config_nonce));
+    logDual("[BLE][mtcore][flow] cfg_start stage=%s nonce=%08lX\n",
+            configStageName(config_nonce),
+            static_cast<unsigned long>(config_nonce));
+    logRuntimeFootprint("cfg_start");
     notifyFromNum(config_nonce);
 }
 
@@ -1087,12 +1558,17 @@ void MeshtasticPhoneCore::notifyFromNum(uint32_t from_num)
     transport_.notifyFromNum(from_num);
 }
 
-meshtastic_MyNodeInfo MeshtasticPhoneCore::buildMyInfo() const
+void MeshtasticPhoneCore::fillMyInfo(meshtastic_MyNodeInfo* out) const
 {
-    meshtastic_MyNodeInfo info = meshtastic_MyNodeInfo_init_zero;
+    if (!out)
+    {
+        return;
+    }
+    meshtastic_MyNodeInfo& info = *out;
+    std::memset(&info, 0, sizeof(info));
     info.my_node_num = ctx_.getSelfNodeId();
     info.reboot_count = 0;
-    info.min_app_version = kOfficialMinAppVersion;
+    info.min_app_version = meshtastic_defaults::kOfficialMinAppVersion;
 
     size_t nodedb_count = 1;
     if (const auto* store = ctx_.getNodeStore())
@@ -1114,12 +1590,23 @@ meshtastic_MyNodeInfo MeshtasticPhoneCore::buildMyInfo() const
 
     copyBounded(info.pio_env, sizeof(info.pio_env), "Trail Mate");
     info.firmware_edition = meshtastic_FirmwareEdition_VANILLA;
+}
+
+meshtastic_MyNodeInfo MeshtasticPhoneCore::buildMyInfo() const
+{
+    meshtastic_MyNodeInfo info = meshtastic_MyNodeInfo_init_zero;
+    fillMyInfo(&info);
     return info;
 }
 
-meshtastic_NodeInfo MeshtasticPhoneCore::buildSelfNodeInfo() const
+void MeshtasticPhoneCore::fillSelfNodeInfo(meshtastic_NodeInfo* out) const
 {
-    meshtastic_NodeInfo info = meshtastic_NodeInfo_init_zero;
+    if (!out)
+    {
+        return;
+    }
+    meshtastic_NodeInfo& info = *out;
+    std::memset(&info, 0, sizeof(info));
     info.num = ctx_.getSelfNodeId();
     info.has_user = true;
 
@@ -1138,12 +1625,23 @@ meshtastic_NodeInfo MeshtasticPhoneCore::buildSelfNodeInfo() const
     info.last_heard = nowSeconds();
     info.has_hops_away = true;
     info.hops_away = 0;
+}
+
+meshtastic_NodeInfo MeshtasticPhoneCore::buildSelfNodeInfo() const
+{
+    meshtastic_NodeInfo info = meshtastic_NodeInfo_init_zero;
+    fillSelfNodeInfo(&info);
     return info;
 }
 
-meshtastic_NodeInfo MeshtasticPhoneCore::buildNodeInfoFromEntry(const chat::contacts::NodeEntry& entry) const
+void MeshtasticPhoneCore::fillNodeInfoFromEntry(const chat::contacts::NodeEntry& entry, meshtastic_NodeInfo* out) const
 {
-    meshtastic_NodeInfo info = meshtastic_NodeInfo_init_zero;
+    if (!out)
+    {
+        return;
+    }
+    meshtastic_NodeInfo& info = *out;
+    std::memset(&info, 0, sizeof(info));
     info.num = entry.node_id;
     info.has_user = true;
 
@@ -1152,6 +1650,10 @@ meshtastic_NodeInfo MeshtasticPhoneCore::buildNodeInfoFromEntry(const chat::cont
     copyBounded(info.user.id, sizeof(info.user.id), user_id);
     copyBounded(info.user.long_name, sizeof(info.user.long_name), entry.long_name);
     copyBounded(info.user.short_name, sizeof(info.user.short_name), entry.short_name);
+    if (entry.has_macaddr)
+    {
+        memcpy(info.user.macaddr, entry.macaddr, sizeof(info.user.macaddr));
+    }
     info.user.hw_model = static_cast<meshtastic_HardwareModel>(entry.hw_model);
     info.user.role = roleFromEntry(entry.role);
     info.channel = entry.channel;
@@ -1159,6 +1661,23 @@ meshtastic_NodeInfo MeshtasticPhoneCore::buildNodeInfoFromEntry(const chat::cont
     info.snr = entry.snr;
     info.has_hops_away = (entry.hops_away != 0xFFU);
     info.hops_away = entry.hops_away;
+    info.via_mqtt = entry.via_mqtt;
+    info.is_ignored = entry.is_ignored;
+    info.is_key_manually_verified = entry.key_manually_verified;
+    if (entry.has_device_metrics)
+    {
+        info.has_device_metrics = true;
+        info.device_metrics.has_battery_level = entry.device_metrics.has_battery_level;
+        info.device_metrics.battery_level = entry.device_metrics.battery_level;
+        info.device_metrics.has_voltage = entry.device_metrics.has_voltage;
+        info.device_metrics.voltage = entry.device_metrics.voltage;
+        info.device_metrics.has_channel_utilization = entry.device_metrics.has_channel_utilization;
+        info.device_metrics.channel_utilization = entry.device_metrics.channel_utilization;
+        info.device_metrics.has_air_util_tx = entry.device_metrics.has_air_util_tx;
+        info.device_metrics.air_util_tx = entry.device_metrics.air_util_tx;
+        info.device_metrics.has_uptime_seconds = entry.device_metrics.has_uptime_seconds;
+        info.device_metrics.uptime_seconds = entry.device_metrics.uptime_seconds;
+    }
 
     const chat::contacts::NodeInfo* node = ctx_.getContactService().getNodeInfo(entry.node_id);
     if (node != nullptr)
@@ -1181,15 +1700,25 @@ meshtastic_NodeInfo MeshtasticPhoneCore::buildNodeInfoFromEntry(const chat::cont
             info.position.gps_accuracy = node->position.gps_accuracy_mm;
         }
     }
+}
 
+meshtastic_NodeInfo MeshtasticPhoneCore::buildNodeInfoFromEntry(const chat::contacts::NodeEntry& entry) const
+{
+    meshtastic_NodeInfo info = meshtastic_NodeInfo_init_zero;
+    fillNodeInfoFromEntry(entry, &info);
     return info;
 }
 
-meshtastic_DeviceMetadata MeshtasticPhoneCore::buildMetadata() const
+void MeshtasticPhoneCore::fillMetadata(meshtastic_DeviceMetadata* out) const
 {
-    meshtastic_DeviceMetadata metadata = meshtastic_DeviceMetadata_init_zero;
-    copyBounded(metadata.firmware_version, sizeof(metadata.firmware_version), kCompatFirmwareVersion);
-    metadata.device_state_version = kOfficialDeviceStateVersion;
+    if (!out)
+    {
+        return;
+    }
+    meshtastic_DeviceMetadata& metadata = *out;
+    std::memset(&metadata, 0, sizeof(metadata));
+    copyBounded(metadata.firmware_version, sizeof(metadata.firmware_version), meshtastic_defaults::kCompatFirmwareVersion);
+    metadata.device_state_version = meshtastic_defaults::kOfficialDeviceStateVersion;
     metadata.canShutdown = true;
     metadata.hasBluetooth = true;
     metadata.hasWifi = false;
@@ -1208,6 +1737,12 @@ meshtastic_DeviceMetadata MeshtasticPhoneCore::buildMetadata() const
     metadata.position_flags = 0;
     metadata.hw_model = meshtastic_HardwareModel_UNSET;
     metadata.excluded_modules = 0;
+}
+
+meshtastic_DeviceMetadata MeshtasticPhoneCore::buildMetadata() const
+{
+    meshtastic_DeviceMetadata metadata = meshtastic_DeviceMetadata_init_zero;
+    fillMetadata(&metadata);
     return metadata;
 }
 
@@ -1243,9 +1778,14 @@ meshtastic_LocalStats MeshtasticPhoneCore::buildLocalStats() const
     return stats;
 }
 
-meshtastic_DeviceUIConfig MeshtasticPhoneCore::buildDeviceUi() const
+void MeshtasticPhoneCore::fillDeviceUi(meshtastic_DeviceUIConfig* out) const
 {
-    meshtastic_DeviceUIConfig ui = meshtastic_DeviceUIConfig_init_zero;
+    if (!out)
+    {
+        return;
+    }
+    meshtastic_DeviceUIConfig& ui = *out;
+    std::memset(&ui, 0, sizeof(ui));
     ui.version = 1;
     ui.screen_brightness = 255;
     ui.screen_timeout = 30;
@@ -1264,12 +1804,23 @@ meshtastic_DeviceUIConfig MeshtasticPhoneCore::buildDeviceUi() const
     ui.screen_rgb_color = 0;
     ui.is_clockface_analog = false;
     ui.gps_format = meshtastic_DeviceUIConfig_GpsCoordinateFormat_DEC;
+}
+
+meshtastic_DeviceUIConfig MeshtasticPhoneCore::buildDeviceUi() const
+{
+    meshtastic_DeviceUIConfig ui = meshtastic_DeviceUIConfig_init_zero;
+    fillDeviceUi(&ui);
     return ui;
 }
 
-meshtastic_Channel MeshtasticPhoneCore::buildChannel(uint8_t idx) const
+void MeshtasticPhoneCore::fillChannel(uint8_t idx, meshtastic_Channel* out) const
 {
-    meshtastic_Channel channel = meshtastic_Channel_init_zero;
+    if (!out)
+    {
+        return;
+    }
+    meshtastic_Channel& channel = *out;
+    std::memset(&channel, 0, sizeof(channel));
     channel.index = idx;
 
     const auto& cfg = ctx_.getConfig();
@@ -1292,7 +1843,7 @@ meshtastic_Channel MeshtasticPhoneCore::buildChannel(uint8_t idx) const
     if (!enabled)
     {
         channel.has_settings = false;
-        return channel;
+        return;
     }
 
     channel.has_settings = true;
@@ -1333,174 +1884,205 @@ meshtastic_Channel MeshtasticPhoneCore::buildChannel(uint8_t idx) const
                         sizeof(cfg.meshtastic_config.secondary_key));
         }
     }
+}
+
+meshtastic_Channel MeshtasticPhoneCore::buildChannel(uint8_t idx) const
+{
+    meshtastic_Channel channel = meshtastic_Channel_init_zero;
+    fillChannel(idx, &channel);
     return channel;
+}
+
+void MeshtasticPhoneCore::fillConfig(meshtastic_AdminMessage_ConfigType type, meshtastic_Config* out) const
+{
+    if (!out)
+    {
+        return;
+    }
+    const auto& cfg = ctx_.getConfig();
+    std::memset(out, 0, sizeof(*out));
+    meshtastic_Config& cfg_out = *out;
+    switch (type)
+    {
+    case meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_device_tag;
+        {
+            meshtastic_Config_DeviceConfig device = meshtastic_Config_DeviceConfig_init_zero;
+            cfg_out.payload_variant.device = device;
+        }
+        cfg_out.payload_variant.device.role = meshtastic_Config_DeviceConfig_Role_CLIENT;
+        cfg_out.payload_variant.device.rebroadcast_mode =
+            cfg.chat_policy.enable_relay ? meshtastic_Config_DeviceConfig_RebroadcastMode_ALL
+                                         : meshtastic_Config_DeviceConfig_RebroadcastMode_NONE;
+        cfg_out.payload_variant.device.node_info_broadcast_secs = 900;
+        cfg_out.payload_variant.device.serial_enabled = false;
+        cfg_out.payload_variant.device.is_managed = false;
+        cfg_out.payload_variant.device.led_heartbeat_disabled = false;
+        cfg_out.payload_variant.device.buzzer_mode = meshtastic_Config_DeviceConfig_BuzzerMode_DISABLED;
+        buildLinkedTimezoneTzdef(cfg_out.payload_variant.device.tzdef,
+                                 sizeof(cfg_out.payload_variant.device.tzdef));
+        break;
+    case meshtastic_AdminMessage_ConfigType_POSITION_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_position_tag;
+        {
+            meshtastic_Config_PositionConfig position = meshtastic_Config_PositionConfig_init_zero;
+            cfg_out.payload_variant.position = position;
+        }
+        cfg_out.payload_variant.position.position_broadcast_secs = 900;
+        cfg_out.payload_variant.position.gps_enabled = (cfg.gps_mode != 0);
+        cfg_out.payload_variant.position.gps_update_interval = cfg.gps_interval_ms / 1000U;
+        cfg_out.payload_variant.position.gps_mode = (cfg.gps_mode != 0)
+                                                        ? meshtastic_Config_PositionConfig_GpsMode_ENABLED
+                                                        : meshtastic_Config_PositionConfig_GpsMode_DISABLED;
+        break;
+    case meshtastic_AdminMessage_ConfigType_DISPLAY_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_display_tag;
+        {
+            meshtastic_Config_DisplayConfig display = meshtastic_Config_DisplayConfig_init_zero;
+            cfg_out.payload_variant.display = display;
+        }
+        cfg_out.payload_variant.display.screen_on_secs = 30;
+        cfg_out.payload_variant.display.units = meshtastic_Config_DisplayConfig_DisplayUnits_METRIC;
+        cfg_out.payload_variant.display.oled = meshtastic_Config_DisplayConfig_OledType_OLED_AUTO;
+        cfg_out.payload_variant.display.displaymode = meshtastic_Config_DisplayConfig_DisplayMode_DEFAULT;
+        cfg_out.payload_variant.display.compass_orientation = meshtastic_Config_DisplayConfig_CompassOrientation_DEGREES_0;
+        break;
+    case meshtastic_AdminMessage_ConfigType_LORA_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_lora_tag;
+        {
+            meshtastic_Config_LoRaConfig lora = meshtastic_Config_LoRaConfig_init_zero;
+            cfg_out.payload_variant.lora = lora;
+        }
+        cfg_out.payload_variant.lora.use_preset = cfg.meshtastic_config.use_preset;
+        cfg_out.payload_variant.lora.modem_preset =
+            static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset);
+        cfg_out.payload_variant.lora.bandwidth = static_cast<uint32_t>(cfg.meshtastic_config.bandwidth_khz);
+        cfg_out.payload_variant.lora.spread_factor = cfg.meshtastic_config.spread_factor;
+        cfg_out.payload_variant.lora.coding_rate = cfg.meshtastic_config.coding_rate;
+        cfg_out.payload_variant.lora.frequency_offset = cfg.meshtastic_config.frequency_offset_mhz;
+        cfg_out.payload_variant.lora.region =
+            static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.meshtastic_config.region);
+        cfg_out.payload_variant.lora.hop_limit = cfg.meshtastic_config.hop_limit;
+        cfg_out.payload_variant.lora.tx_enabled = cfg.meshtastic_config.tx_enabled;
+        cfg_out.payload_variant.lora.tx_power = cfg.meshtastic_config.tx_power;
+        cfg_out.payload_variant.lora.channel_num = cfg.meshtastic_config.channel_num;
+        cfg_out.payload_variant.lora.override_duty_cycle = cfg.meshtastic_config.override_duty_cycle;
+        cfg_out.payload_variant.lora.override_frequency = cfg.meshtastic_config.override_frequency_mhz;
+        cfg_out.payload_variant.lora.ignore_mqtt = cfg.meshtastic_config.ignore_mqtt;
+        cfg_out.payload_variant.lora.config_ok_to_mqtt = cfg.meshtastic_config.config_ok_to_mqtt;
+        break;
+    case meshtastic_AdminMessage_ConfigType_BLUETOOTH_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_bluetooth_tag;
+        {
+            meshtastic_Config_BluetoothConfig bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
+            cfg_out.payload_variant.bluetooth = bluetooth;
+        }
+        cfg_out.payload_variant.bluetooth = bluetooth_config_;
+        cfg_out.payload_variant.bluetooth.enabled = ctx_.isBleEnabled();
+        break;
+    case meshtastic_AdminMessage_ConfigType_SECURITY_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_security_tag;
+        {
+            meshtastic_Config_SecurityConfig security = meshtastic_Config_SecurityConfig_init_zero;
+            cfg_out.payload_variant.security = security;
+        }
+        cfg_out.payload_variant.security.is_managed = false;
+        cfg_out.payload_variant.security.serial_enabled = false;
+        cfg_out.payload_variant.security.debug_log_api_enabled = false;
+        cfg_out.payload_variant.security.admin_channel_enabled = false;
+        break;
+    case meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG:
+        cfg_out.which_payload_variant = meshtastic_Config_device_ui_tag;
+        fillDeviceUi(&cfg_out.payload_variant.device_ui);
+        break;
+    default:
+        cfg_out.which_payload_variant = meshtastic_Config_device_tag;
+        {
+            meshtastic_Config_DeviceConfig device = meshtastic_Config_DeviceConfig_init_zero;
+            cfg_out.payload_variant.device = device;
+        }
+        break;
+    }
 }
 
 meshtastic_Config MeshtasticPhoneCore::buildConfig(meshtastic_AdminMessage_ConfigType type) const
 {
-    const auto& cfg = ctx_.getConfig();
     meshtastic_Config out = meshtastic_Config_init_zero;
+    fillConfig(type, &out);
+    return out;
+}
+
+void MeshtasticPhoneCore::fillModuleConfig(meshtastic_AdminMessage_ModuleConfigType type, meshtastic_ModuleConfig* out) const
+{
+    if (!out)
+    {
+        return;
+    }
+    std::memset(out, 0, sizeof(*out));
+    meshtastic_ModuleConfig& module = *out;
     switch (type)
     {
-    case meshtastic_AdminMessage_ConfigType_DEVICE_CONFIG:
-        out.which_payload_variant = meshtastic_Config_device_tag;
-        {
-            meshtastic_Config_DeviceConfig device = meshtastic_Config_DeviceConfig_init_zero;
-            out.payload_variant.device = device;
-        }
-        out.payload_variant.device.role = meshtastic_Config_DeviceConfig_Role_CLIENT;
-        out.payload_variant.device.rebroadcast_mode =
-            cfg.chat_policy.enable_relay ? meshtastic_Config_DeviceConfig_RebroadcastMode_ALL
-                                         : meshtastic_Config_DeviceConfig_RebroadcastMode_NONE;
-        out.payload_variant.device.node_info_broadcast_secs = 900;
-        out.payload_variant.device.serial_enabled = false;
-        out.payload_variant.device.is_managed = false;
-        out.payload_variant.device.led_heartbeat_disabled = false;
-        out.payload_variant.device.buzzer_mode = meshtastic_Config_DeviceConfig_BuzzerMode_DISABLED;
+    case meshtastic_AdminMessage_ModuleConfigType_MQTT_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_mqtt_tag;
+        module.payload_variant.mqtt = module_config_.mqtt;
         break;
-    case meshtastic_AdminMessage_ConfigType_POSITION_CONFIG:
-        out.which_payload_variant = meshtastic_Config_position_tag;
-        {
-            meshtastic_Config_PositionConfig position = meshtastic_Config_PositionConfig_init_zero;
-            out.payload_variant.position = position;
-        }
-        out.payload_variant.position.position_broadcast_secs = 900;
-        out.payload_variant.position.gps_enabled = (cfg.gps_mode != 0);
-        out.payload_variant.position.gps_update_interval = cfg.gps_interval_ms / 1000U;
-        out.payload_variant.position.gps_mode = (cfg.gps_mode != 0)
-                                                    ? meshtastic_Config_PositionConfig_GpsMode_ENABLED
-                                                    : meshtastic_Config_PositionConfig_GpsMode_DISABLED;
+    case meshtastic_AdminMessage_ModuleConfigType_SERIAL_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_serial_tag;
+        module.payload_variant.serial = module_config_.serial;
         break;
-    case meshtastic_AdminMessage_ConfigType_DISPLAY_CONFIG:
-        out.which_payload_variant = meshtastic_Config_display_tag;
-        {
-            meshtastic_Config_DisplayConfig display = meshtastic_Config_DisplayConfig_init_zero;
-            out.payload_variant.display = display;
-        }
-        out.payload_variant.display.screen_on_secs = 30;
-        out.payload_variant.display.units = meshtastic_Config_DisplayConfig_DisplayUnits_METRIC;
-        out.payload_variant.display.oled = meshtastic_Config_DisplayConfig_OledType_OLED_AUTO;
-        out.payload_variant.display.displaymode = meshtastic_Config_DisplayConfig_DisplayMode_DEFAULT;
-        out.payload_variant.display.compass_orientation = meshtastic_Config_DisplayConfig_CompassOrientation_DEGREES_0;
+    case meshtastic_AdminMessage_ModuleConfigType_EXTNOTIF_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_external_notification_tag;
+        module.payload_variant.external_notification = module_config_.external_notification;
         break;
-    case meshtastic_AdminMessage_ConfigType_LORA_CONFIG:
-        out.which_payload_variant = meshtastic_Config_lora_tag;
-        {
-            meshtastic_Config_LoRaConfig lora = meshtastic_Config_LoRaConfig_init_zero;
-            out.payload_variant.lora = lora;
-        }
-        out.payload_variant.lora.use_preset = cfg.meshtastic_config.use_preset;
-        out.payload_variant.lora.modem_preset =
-            static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset);
-        out.payload_variant.lora.bandwidth = static_cast<uint32_t>(cfg.meshtastic_config.bandwidth_khz);
-        out.payload_variant.lora.spread_factor = cfg.meshtastic_config.spread_factor;
-        out.payload_variant.lora.coding_rate = cfg.meshtastic_config.coding_rate;
-        out.payload_variant.lora.frequency_offset = cfg.meshtastic_config.frequency_offset_mhz;
-        out.payload_variant.lora.region = static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.meshtastic_config.region);
-        out.payload_variant.lora.hop_limit = cfg.meshtastic_config.hop_limit;
-        out.payload_variant.lora.tx_enabled = cfg.meshtastic_config.tx_enabled;
-        out.payload_variant.lora.tx_power = cfg.meshtastic_config.tx_power;
-        out.payload_variant.lora.channel_num = cfg.meshtastic_config.channel_num;
-        out.payload_variant.lora.override_duty_cycle = cfg.meshtastic_config.override_duty_cycle;
-        out.payload_variant.lora.override_frequency = cfg.meshtastic_config.override_frequency_mhz;
-        out.payload_variant.lora.ignore_mqtt = cfg.meshtastic_config.ignore_mqtt;
-        out.payload_variant.lora.config_ok_to_mqtt = cfg.meshtastic_config.config_ok_to_mqtt;
+    case meshtastic_AdminMessage_ModuleConfigType_STOREFORWARD_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_store_forward_tag;
+        module.payload_variant.store_forward = module_config_.store_forward;
         break;
-    case meshtastic_AdminMessage_ConfigType_BLUETOOTH_CONFIG:
-        out.which_payload_variant = meshtastic_Config_bluetooth_tag;
-        {
-            meshtastic_Config_BluetoothConfig bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
-            out.payload_variant.bluetooth = bluetooth;
-        }
-        out.payload_variant.bluetooth = bluetooth_config_;
-        out.payload_variant.bluetooth.enabled = ctx_.isBleEnabled();
+    case meshtastic_AdminMessage_ModuleConfigType_RANGETEST_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_range_test_tag;
+        module.payload_variant.range_test = module_config_.range_test;
         break;
-    case meshtastic_AdminMessage_ConfigType_SECURITY_CONFIG:
-        out.which_payload_variant = meshtastic_Config_security_tag;
-        {
-            meshtastic_Config_SecurityConfig security = meshtastic_Config_SecurityConfig_init_zero;
-            out.payload_variant.security = security;
-        }
-        out.payload_variant.security.is_managed = false;
-        out.payload_variant.security.serial_enabled = false;
-        out.payload_variant.security.debug_log_api_enabled = false;
-        out.payload_variant.security.admin_channel_enabled = false;
+    case meshtastic_AdminMessage_ModuleConfigType_TELEMETRY_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_telemetry_tag;
+        module.payload_variant.telemetry = module_config_.telemetry;
         break;
-    case meshtastic_AdminMessage_ConfigType_DEVICEUI_CONFIG:
-        out.which_payload_variant = meshtastic_Config_device_ui_tag;
-        out.payload_variant.device_ui = buildDeviceUi();
+    case meshtastic_AdminMessage_ModuleConfigType_CANNEDMSG_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_canned_message_tag;
+        module.payload_variant.canned_message = module_config_.canned_message;
+        break;
+    case meshtastic_AdminMessage_ModuleConfigType_AUDIO_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_audio_tag;
+        module.payload_variant.audio = module_config_.audio;
+        break;
+    case meshtastic_AdminMessage_ModuleConfigType_REMOTEHARDWARE_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_remote_hardware_tag;
+        module.payload_variant.remote_hardware = module_config_.remote_hardware;
+        break;
+    case meshtastic_AdminMessage_ModuleConfigType_NEIGHBORINFO_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_neighbor_info_tag;
+        module.payload_variant.neighbor_info = module_config_.neighbor_info;
+        break;
+    case meshtastic_AdminMessage_ModuleConfigType_AMBIENTLIGHTING_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_ambient_lighting_tag;
+        module.payload_variant.ambient_lighting = module_config_.ambient_lighting;
+        break;
+    case meshtastic_AdminMessage_ModuleConfigType_DETECTIONSENSOR_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_detection_sensor_tag;
+        module.payload_variant.detection_sensor = module_config_.detection_sensor;
+        break;
+    case meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG:
+        module.which_payload_variant = meshtastic_ModuleConfig_paxcounter_tag;
+        module.payload_variant.paxcounter = module_config_.paxcounter;
         break;
     default:
-        out.which_payload_variant = meshtastic_Config_device_tag;
-        {
-            meshtastic_Config_DeviceConfig device = meshtastic_Config_DeviceConfig_init_zero;
-            out.payload_variant.device = device;
-        }
         break;
     }
-    return out;
 }
 
 meshtastic_ModuleConfig MeshtasticPhoneCore::buildModuleConfig(meshtastic_AdminMessage_ModuleConfigType type) const
 {
     meshtastic_ModuleConfig out = meshtastic_ModuleConfig_init_zero;
-    switch (type)
-    {
-    case meshtastic_AdminMessage_ModuleConfigType_MQTT_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_mqtt_tag;
-        out.payload_variant.mqtt = module_config_.mqtt;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_SERIAL_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_serial_tag;
-        out.payload_variant.serial = module_config_.serial;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_EXTNOTIF_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_external_notification_tag;
-        out.payload_variant.external_notification = module_config_.external_notification;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_STOREFORWARD_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_store_forward_tag;
-        out.payload_variant.store_forward = module_config_.store_forward;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_RANGETEST_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_range_test_tag;
-        out.payload_variant.range_test = module_config_.range_test;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_TELEMETRY_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_telemetry_tag;
-        out.payload_variant.telemetry = module_config_.telemetry;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_CANNEDMSG_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_canned_message_tag;
-        out.payload_variant.canned_message = module_config_.canned_message;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_AUDIO_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_audio_tag;
-        out.payload_variant.audio = module_config_.audio;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_REMOTEHARDWARE_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_remote_hardware_tag;
-        out.payload_variant.remote_hardware = module_config_.remote_hardware;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_NEIGHBORINFO_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_neighbor_info_tag;
-        out.payload_variant.neighbor_info = module_config_.neighbor_info;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_AMBIENTLIGHTING_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_ambient_lighting_tag;
-        out.payload_variant.ambient_lighting = module_config_.ambient_lighting;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_DETECTIONSENSOR_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_detection_sensor_tag;
-        out.payload_variant.detection_sensor = module_config_.detection_sensor;
-        break;
-    case meshtastic_AdminMessage_ModuleConfigType_PAXCOUNTER_CONFIG:
-        out.which_payload_variant = meshtastic_ModuleConfig_paxcounter_tag;
-        out.payload_variant.paxcounter = module_config_.paxcounter;
-        break;
-    default:
-        break;
-    }
+    fillModuleConfig(type, &out);
     return out;
 }
 
@@ -1538,7 +2120,20 @@ meshtastic_MeshPacket MeshtasticPhoneCore::buildPacketFromData(const chat::MeshI
     packet.from = msg.from;
     packet.to = msg.to;
     packet.channel = channelIndexFromId(msg.channel);
-    packet.id = (msg.packet_id == 0) ? static_cast<uint32_t>(millis()) : msg.packet_id;
+    if (msg.packet_id != 0)
+    {
+        packet.id = msg.packet_id;
+    }
+    else if (msg.portnum == meshtastic_PortNum_ROUTING_APP && msg.request_id != 0)
+    {
+        // Keep synthetic routing/ack packets tied to the original request ID so
+        // Meshtastic phone clients can correlate them with the pending send.
+        packet.id = msg.request_id;
+    }
+    else
+    {
+        packet.id = static_cast<uint32_t>(millis());
+    }
     packet.rx_time = (msg.rx_meta.rx_timestamp_s != 0) ? msg.rx_meta.rx_timestamp_s : nowSeconds();
     packet.rx_snr = msg.rx_meta.snr_db_x10 / 10.0f;
     packet.rx_rssi = msg.rx_meta.rssi_dbm_x10 / 10;

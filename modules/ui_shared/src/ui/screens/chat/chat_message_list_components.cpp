@@ -156,6 +156,23 @@ static bool conversation_list_equal(const std::vector<chat::ConversationMeta>& l
     return true;
 }
 
+static bool conversation_identity_list_equal(const std::vector<chat::ConversationMeta>& lhs,
+                                             const std::vector<chat::ConversationMeta>& rhs)
+{
+    if (lhs.size() != rhs.size())
+    {
+        return false;
+    }
+    for (size_t index = 0; index < lhs.size(); ++index)
+    {
+        if (!(lhs[index].id == rhs[index].id))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static const char* touch_event_name(lv_event_code_t code)
 {
     switch (code)
@@ -337,6 +354,7 @@ void ChatMessageListScreen::setConversations(const std::vector<chat::Conversatio
                           team_visibility_changed ? 1 : 0,
                           (unsigned)convs.size());
 
+    const std::vector<chat::ConversationMeta> previous_convs = convs_;
     convs_ = convs;
     if (team_btn_)
     {
@@ -354,7 +372,11 @@ void ChatMessageListScreen::setConversations(const std::vector<chat::Conversatio
         filter_mode_ = FilterMode::Broadcast;
     }
     updateFilterHighlight();
-    rebuildList();
+    if (!conversation_identity_list_equal(previous_convs, convs_) ||
+        !updateListInPlace(convs_))
+    {
+        rebuildList();
+    }
 }
 
 void ChatMessageListScreen::setSelected(int index)
@@ -615,6 +637,95 @@ void ChatMessageListScreen::rebuildList()
     }
 
     chat::ui::message_list::input::on_ui_refreshed(&input_controller_);
+}
+
+bool ChatMessageListScreen::updateListInPlace(const std::vector<chat::ConversationMeta>& convs)
+{
+    if (!guard_ || !guard_->alive || !list_panel_ || !lv_obj_is_valid(list_panel_))
+    {
+        return false;
+    }
+    if (!conversation_identity_list_equal(convs_, convs))
+    {
+        return false;
+    }
+
+    std::vector<chat::ConversationMeta> filtered;
+    filtered.reserve(convs.size());
+    for (const auto& conv : convs)
+    {
+        if (is_team_conversation(conv.id))
+        {
+            if (filter_mode_ == FilterMode::Team)
+            {
+                filtered.push_back(conv);
+            }
+            continue;
+        }
+        if (filter_mode_ == FilterMode::Direct && conv.id.peer != 0)
+        {
+            filtered.push_back(conv);
+        }
+        else if (filter_mode_ == FilterMode::Broadcast && conv.id.peer == 0)
+        {
+            filtered.push_back(conv);
+        }
+    }
+
+    if (filtered.size() != items_.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0; index < filtered.size(); ++index)
+    {
+        if (!(items_[index].conv == filtered[index].id))
+        {
+            return false;
+        }
+    }
+
+    for (size_t index = 0; index < filtered.size(); ++index)
+    {
+        updateListItem(index, filtered[index]);
+    }
+    return true;
+}
+
+void ChatMessageListScreen::updateListItem(const size_t index,
+                                           const chat::ConversationMeta& conv)
+{
+    if (index >= items_.size())
+    {
+        return;
+    }
+
+    MessageItem& item = items_[index];
+    std::string title = "[" + std::string(protocol_short_label(conv.id.protocol)) + "] " + conv.name;
+    lv_label_set_text(item.name_label, title.c_str());
+    ::ui::fonts::apply_chat_content_font(item.name_label, title.c_str());
+
+    std::string preview = truncate_preview(conv.preview);
+    lv_label_set_text(item.preview_label, preview.c_str());
+    ::ui::fonts::apply_chat_content_font(item.preview_label, preview.c_str());
+
+    char time_buf[16];
+    format_time_hhmm(time_buf, conv.last_timestamp);
+    lv_label_set_text(item.time_label, time_buf);
+    ::ui::fonts::apply_ui_chrome_font(item.time_label);
+
+    if (conv.unread > 0)
+    {
+        char unread_str[16];
+        snprintf(unread_str, sizeof(unread_str), "%d", conv.unread);
+        lv_label_set_text(item.unread_label, unread_str);
+    }
+    else
+    {
+        lv_label_set_text(item.unread_label, "");
+    }
+    ::ui::fonts::apply_ui_chrome_font(item.unread_label);
+    item.unread_count = conv.unread;
 }
 
 void ChatMessageListScreen::item_event_cb(lv_event_t* e)

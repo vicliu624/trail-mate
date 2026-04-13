@@ -26,6 +26,7 @@ namespace ble
 
 class MeshtasticBleService : public BleService,
                              public chat::ChatService::IncomingTextObserver,
+                             public chat::ChatService::OutgoingTextObserver,
                              public team::TeamService::IncomingDataObserver,
                              public MeshtasticPhoneTransport,
                              public MeshtasticPhoneHooks
@@ -39,6 +40,7 @@ class MeshtasticBleService : public BleService,
     void update() override;
 
     void onIncomingText(const chat::MeshIncomingText& msg) override;
+    void onOutgoingText(const chat::MeshIncomingText& msg) override;
     void onIncomingData(const chat::MeshIncomingData& msg) override;
     bool isBleConnected() const override;
     void notifyFromNum(uint32_t value) override;

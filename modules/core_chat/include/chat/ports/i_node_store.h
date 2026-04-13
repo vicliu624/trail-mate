@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "chat/domain/contact_types.h"
 #include <cstdint>
 #include <vector>
 
@@ -12,8 +13,6 @@ namespace chat
 {
 namespace contacts
 {
-
-struct NodePosition;
 
 /**
  * @brief Node entry structure
@@ -32,6 +31,14 @@ struct NodeEntry
     uint8_t protocol;       // NodeProtocolType
     uint8_t role;           // NodeRoleType (Meshtastic roles)
     uint8_t hw_model;       // Meshtastic_HardwareModel (0 = UNSET)
+    bool has_macaddr = false;
+    uint8_t macaddr[6] = {};
+    bool via_mqtt = false;
+    bool is_ignored = false;
+    bool has_public_key = false;
+    bool key_manually_verified = false;
+    bool has_device_metrics = false;
+    NodeDeviceMetrics device_metrics{};
     bool position_valid = false;
     int32_t position_latitude_i = 0;
     int32_t position_longitude_i = 0;
@@ -63,12 +70,9 @@ class INodeStore
 
     /**
      * @brief Update or insert a node entry
-     * @param node_id Node ID
-     * @param short_name Short name
-     * @param long_name Long name
-     * @param now_secs Current timestamp (seconds)
-     * @param snr Signal-to-Noise Ratio
      */
+    virtual void applyUpdate(uint32_t node_id, const NodeUpdate& update) = 0;
+
     virtual void upsert(uint32_t node_id, const char* short_name, const char* long_name,
                         uint32_t now_secs, float snr = 0.0f, float rssi = 0.0f, uint8_t protocol = 0,
                         uint8_t role = kNodeRoleUnknown, uint8_t hops_away = 0xFF,
@@ -106,6 +110,12 @@ class INodeStore
      * @brief Clear all stored node entries
      */
     virtual void clear() = 0;
+
+    /**
+     * @brief Flush any pending dirty state to persistent storage immediately
+     * @return true if storage is synced or there was nothing pending
+     */
+    virtual bool flush() = 0;
 };
 
 } // namespace contacts

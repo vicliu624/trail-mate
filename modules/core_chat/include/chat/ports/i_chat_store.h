@@ -77,6 +77,13 @@ class IChatStore
      * @return true if updated
      */
     virtual bool updateMessageStatus(MessageId msg_id, MessageStatus status) = 0;
+
+    /**
+     * @brief Flush pending buffered writes to persistent storage
+     *
+     * Default implementation is a no-op for stores that do not buffer.
+     */
+    virtual void flush() {}
 };
 
 } // namespace chat

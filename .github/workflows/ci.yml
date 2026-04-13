@@ -39,6 +39,7 @@ jobs:
           - tlora_pager_sx1262
           - tdeck
           - lilygo_twatch_s3
+          - gat562_mesh_evb_pro
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,13 +78,18 @@ jobs:
       - name: Collect firmware
         run: |
           mkdir -p dist
-          cp .pio/build/${{ matrix.env }}/firmware.bin dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.bin
+          if [ "${{ matrix.env }}" = "gat562_mesh_evb_pro" ]; then
+            cp .pio/build/${{ matrix.env }}/firmware.hex dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.hex
+            cp .pio/build/${{ matrix.env }}/firmware.zip dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.zip
+          else
+            cp .pio/build/${{ matrix.env }}/firmware.bin dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.bin
+          fi
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}
-          path: dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.bin
+          path: dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.*
 
   release:
     name: Publish GitHub Release
@@ -102,7 +108,7 @@ jobs:
 
       - name: Verify collected firmware files
         run: |
-          find dist -type f -name '*.bin' -print | sort
+          find dist -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.zip' \) -print | sort
 
       - name: Create or update release
         uses: softprops/action-gh-release@v2
@@ -114,3 +120,5 @@ jobs:
           overwrite_files: true
           files: |
             dist/**/*.bin
+            dist/**/*.hex
+            dist/**/*.zip

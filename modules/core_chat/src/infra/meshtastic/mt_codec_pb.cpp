@@ -64,6 +64,57 @@ bool encodeTextMessage(ChannelId channel, const std::string& text,
     return true;
 }
 
+bool decodeTextPayload(const meshtastic_Data& data, MeshIncomingText* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+
+    if (data.portnum != meshtastic_PortNum_TEXT_MESSAGE_APP &&
+        data.portnum != meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
+    {
+        return false;
+    }
+
+    if (data.payload.size == 0 || data.payload.size > sizeof(data.payload.bytes))
+    {
+        return false;
+    }
+
+    if (data.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
+    {
+        char decompressed[256] = {};
+        const int out_len = unishox2_decompress(
+            reinterpret_cast<const char*>(data.payload.bytes),
+            static_cast<int>(data.payload.size),
+            decompressed,
+            static_cast<int>(sizeof(decompressed) - 1),
+            USX_PSET_DFLT);
+        if (out_len <= 0)
+        {
+            return false;
+        }
+        decompressed[std::min<int>(out_len, static_cast<int>(sizeof(decompressed) - 1))] = '\0';
+        out->text.assign(decompressed, static_cast<size_t>(out_len));
+    }
+    else
+    {
+        out->text.assign(reinterpret_cast<const char*>(data.payload.bytes), data.payload.size);
+    }
+
+    // Note: from, msg_id, timestamp, channel should be extracted from packet header
+    // This will be done in the adapter when decoding the full packet.
+    out->from = 0;
+    out->msg_id = 0;
+    out->timestamp = now_message_timestamp();
+    out->channel = ChannelId::PRIMARY;
+    out->hop_limit = 2;
+    out->encrypted = false;
+
+    return true;
+}
+
 bool decodeTextMessage(const uint8_t* buffer, size_t size, MeshIncomingText* out)
 {
     if (!buffer || !out || size == 0)
@@ -79,47 +130,7 @@ bool decodeTextMessage(const uint8_t* buffer, size_t size, MeshIncomingText* out
         return false;
     }
 
-    // Check port number
-    if (data.portnum != meshtastic_PortNum_TEXT_MESSAGE_APP &&
-        data.portnum != meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
-    {
-        return false;
-    }
-
-    // Extract text (decompress if needed)
-    if (data.payload.size == 0 || data.payload.size > sizeof(data.payload.bytes))
-    {
-        return false;
-    }
-
-    if (data.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
-    {
-        char decompressed[256];
-        memset(decompressed, 0, sizeof(decompressed));
-        int out_len = unishox2_decompress_simple(
-            reinterpret_cast<const char*>(data.payload.bytes),
-            static_cast<int>(data.payload.size),
-            decompressed);
-        if (out_len <= 0)
-        {
-            return false;
-        }
-        out->text.assign(decompressed, static_cast<size_t>(out_len));
-    }
-    else
-    {
-        out->text.assign(reinterpret_cast<const char*>(data.payload.bytes), data.payload.size);
-    }
-    // Note: from, msg_id, timestamp, channel should be extracted from packet header
-    // This will be done in mt_adapter when decoding full packet
-    out->from = 0;   // Will be set from packet header
-    out->msg_id = 0; // Will be set from packet header
-    out->timestamp = now_message_timestamp();
-    out->channel = ChannelId::PRIMARY; // Will be set from packet header
-    out->hop_limit = 2;
-    out->encrypted = false;
-
-    return true;
+    return decodeTextPayload(data, out);
 }
 
 bool decodeKeyVerificationMessage(const uint8_t* buffer, size_t size,
@@ -265,9 +276,18 @@ bool decodeAppData(const uint8_t* buffer, size_t size, MeshIncomingData* out)
         return false;
     }
 
+    return decodeAppPayload(data, out);
+}
+
+bool decodeAppPayload(const meshtastic_Data& data, MeshIncomingData* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+
     if (data.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
-        data.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP ||
-        data.portnum == meshtastic_PortNum_NODEINFO_APP)
+        data.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
     {
         return false;
     }

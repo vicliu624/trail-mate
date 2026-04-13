@@ -496,17 +496,15 @@ void append_bytes_and_process(const uint8_t* buffer, int length, char* line_buff
     }
 }
 
-void ensure_ext5v_enabled()
+bool configure_uart_hardware()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    (void)::boards::tab5::Tab5Board::instance().acquireExt5vRail("gps_runtime");
-#endif
-}
-
-void configure_uart_hardware()
-{
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    (void)::boards::tab5::Tab5Board::instance().configureGpsUart();
+    if (!::boards::tab5::Tab5Board::instance().configureGpsUart())
+    {
+        ESP_LOGE(kTag, "Tab5 GNSS UART setup failed");
+        return false;
+    }
+    return true;
 #else
     const auto gps_uart = gps_uart_pins();
     uart_config_t config{};
@@ -521,14 +519,14 @@ void configure_uart_hardware()
     ESP_ERROR_CHECK(uart_set_pin(static_cast<uart_port_t>(gps_uart.port), gps_uart.tx, gps_uart.rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     ESP_ERROR_CHECK(uart_driver_install(static_cast<uart_port_t>(gps_uart.port), 4096, 0, 0, nullptr, 0));
     ESP_LOGI(kTag, "GNSS UART configured: port=%d tx=%d rx=%d baud=%d", gps_uart.port, gps_uart.tx, gps_uart.rx, config.baud_rate);
+    return true;
 #endif
 }
 
 void teardown_uart_hardware()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    ::boards::tab5::Tab5Board::instance().teardownGpsUart();
-    ::boards::tab5::Tab5Board::instance().releaseExt5vRail("gps_runtime");
+    // Tab5 keeps GNSS power and UART under board ownership for the whole runtime.
 #else
     const auto gps_uart = gps_uart_pins();
     if (gps_uart.port >= 0)
@@ -540,9 +538,18 @@ void teardown_uart_hardware()
 
 void worker_task(void*)
 {
-    ensure_ext5v_enabled();
     vTaskDelay(pdMS_TO_TICKS(kProbeWarmupMs));
-    configure_uart_hardware();
+    if (!configure_uart_hardware())
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_runtime.powered = false;
+        s_runtime.stop_requested = false;
+        s_runtime.probe_requested = false;
+        s_runtime.probe_deadline_ms = 0;
+        s_runtime.worker_handle = nullptr;
+        vTaskDelete(nullptr);
+        return;
+    }
     {
         std::lock_guard<std::mutex> lock(s_mutex);
         s_runtime.powered = true;

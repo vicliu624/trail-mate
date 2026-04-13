@@ -4,7 +4,6 @@
 
 namespace apps::gat562_mesh_evb_pro::ui_runtime
 {
-
 bool initialize();
 void bindChatObservers();
 void appendBootLog(const char* line);

@@ -976,6 +976,7 @@ class MinimalAppFacade final : public app::IAppFacade
         if (chat_service_)
         {
             chat_service_->processIncoming();
+            chat_service_->flushStore();
         }
 
         if (team_pairing_)

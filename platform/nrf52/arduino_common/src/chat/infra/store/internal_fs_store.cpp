@@ -2,6 +2,7 @@
 
 #include <InternalFileSystem.h>
 
+#include "sys/clock.h"
 #include <algorithm>
 #include <cstring>
 #include <string>
@@ -39,7 +40,8 @@ void InternalFsStore::append(const ::chat::ChatMessage& msg)
     {
         storage.unread_count++;
     }
-    (void)saveToFs();
+    markDirty();
+    maybeSave();
 }
 
 std::vector<::chat::ChatMessage> InternalFsStore::loadRecent(const ::chat::ConversationId& conv, size_t n)
@@ -119,7 +121,8 @@ std::vector<::chat::ConversationMeta> InternalFsStore::loadConversationPage(size
 void InternalFsStore::setUnread(const ::chat::ConversationId& conv, int unread)
 {
     getConversationStorage(conv).unread_count = unread;
-    (void)saveToFs();
+    markDirty();
+    maybeSave();
 }
 
 int InternalFsStore::getUnread(const ::chat::ConversationId& conv) const
@@ -139,7 +142,8 @@ void InternalFsStore::clearConversation(const ::chat::ConversationId& conv)
     it->second.messages.clear();
     it->second.unread_count = 0;
     conversations_.erase(it);
-    (void)saveToFs();
+    markDirty();
+    maybeSave(true);
 }
 
 void InternalFsStore::clearAll()
@@ -147,6 +151,9 @@ void InternalFsStore::clearAll()
     conversations_.clear();
     total_message_count_ = 0;
     next_sequence_ = 1;
+    dirty_ = false;
+    pending_write_count_ = 0;
+    dirty_since_ms_ = 0;
     if (ensureFs() && path_ && InternalFS.exists(path_))
     {
         InternalFS.remove(path_);
@@ -172,7 +179,8 @@ bool InternalFsStore::updateMessageStatus(::chat::MessageId msg_id, ::chat::Mess
                 continue;
             }
             msg->status = status;
-            (void)saveToFs();
+            markDirty();
+            maybeSave();
             return true;
         }
     }
@@ -312,6 +320,10 @@ bool InternalFsStore::loadFromFs()
     {
         evictOldestMessage();
     }
+    dirty_ = false;
+    pending_write_count_ = 0;
+    dirty_since_ms_ = 0;
+    last_save_ms_ = sys::millis_now();
     return true;
 }
 
@@ -403,7 +415,49 @@ bool InternalFsStore::saveToFs() const
     {
         InternalFS.remove(path_);
     }
-    return InternalFS.rename(temp_path.c_str(), path_);
+    const bool renamed = InternalFS.rename(temp_path.c_str(), path_);
+    if (renamed)
+    {
+        dirty_ = false;
+        pending_write_count_ = 0;
+        dirty_since_ms_ = 0;
+        last_save_ms_ = sys::millis_now();
+    }
+    return renamed;
+}
+
+void InternalFsStore::flush()
+{
+    maybeSave(true);
+}
+
+void InternalFsStore::markDirty()
+{
+    if (!dirty_)
+    {
+        dirty_ = true;
+        dirty_since_ms_ = sys::millis_now();
+    }
+    ++pending_write_count_;
+}
+
+void InternalFsStore::maybeSave(bool force)
+{
+    if (!dirty_)
+    {
+        return;
+    }
+
+    const uint32_t now_ms = sys::millis_now();
+    const bool interval_elapsed =
+        (dirty_since_ms_ != 0) && ((now_ms - dirty_since_ms_) >= kSaveIntervalMs);
+    const bool too_many_pending = pending_write_count_ >= kMaxPendingWrites;
+    if (!force && !interval_elapsed && !too_many_pending)
+    {
+        return;
+    }
+
+    (void)saveToFs();
 }
 
 void InternalFsStore::evictOldestMessage()

@@ -40,6 +40,8 @@ class ContactService
      */
     void begin();
 
+    void applyNodeUpdate(uint32_t node_id, const NodeUpdate& update);
+
     /**
      * @brief Update node info from NodeInfo packet
      * @param node_id Node ID
@@ -81,6 +83,11 @@ class ContactService
     std::vector<NodeInfo> getNearby() const;
 
     /**
+     * @brief Get ignored non-contact nodes so local admin UIs can still manage them
+     */
+    std::vector<NodeInfo> getIgnoredNodes() const;
+
+    /**
      * @brief Add contact (set nickname)
      * @param node_id Node ID
      * @param nickname Nickname (max 12 bytes)
@@ -109,6 +116,22 @@ class ContactService
      * @return true if any local record was removed
      */
     bool removeNode(uint32_t node_id);
+
+    /**
+     * @brief Set whether a node should be ignored by nearby/discovery style UX
+     * @param node_id Node ID
+     * @param ignored True to ignore, false to unignore
+     * @return true if the node exists and was updated
+     */
+    bool setNodeIgnored(uint32_t node_id, bool ignored);
+
+    /**
+     * @brief Set whether a node's public key has been manually trusted/verified
+     * @param node_id Node ID
+     * @param verified True to trust, false to clear trust
+     * @return true if the node exists and was updated
+     */
+    bool setNodeKeyManuallyVerified(uint32_t node_id, bool verified);
 
     /**
      * @brief Get node info by node_id

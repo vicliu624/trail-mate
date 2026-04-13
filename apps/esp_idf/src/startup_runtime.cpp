@@ -5,6 +5,7 @@
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
+#include "board/BoardBase.h"
 #include "boards/tab5/rtc_runtime.h"
 #include "esp_log.h"
 #include "platform/esp/boards/board_runtime.h"
@@ -12,9 +13,11 @@
 #include "platform/esp/idf_common/gps_runtime.h"
 #include "platform/esp/idf_common/startup_support.h"
 #include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
+#include "platform/ui/settings_store.h"
 #include "ui/app_registry.h"
 #include "ui/app_runtime.h"
 #include "ui/startup_shell.h"
@@ -105,7 +108,14 @@ ui::startup_shell::Hooks buildShellHooks()
     hooks.watch_face = ui::startup_shell::defaultWatchFaceHooks();
     hooks.set_max_brightness = []()
     {
+        const int saved = platform::ui::settings_store::get_int("settings", "screen_brightness",
+                                                                DEVICE_MAX_BRIGHTNESS_LEVEL);
+        const int clamped =
+            saved < DEVICE_MIN_BRIGHTNESS_LEVEL
+                ? DEVICE_MIN_BRIGHTNESS_LEVEL
+                : (saved > DEVICE_MAX_BRIGHTNESS_LEVEL ? DEVICE_MAX_BRIGHTNESS_LEVEL : saved);
         (void)platform::esp::idf_common::bsp_runtime::wake_display();
+        platform::ui::device::set_screen_brightness(static_cast<uint8_t>(clamped));
     };
     return hooks;
 }

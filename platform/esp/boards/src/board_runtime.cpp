@@ -4,6 +4,8 @@
 #include "boards/tab5/platform_esp_board_runtime.h"
 #elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
 #include "boards/t_display_p4/platform_esp_board_runtime.h"
+#elif defined(ARDUINO_T_DECK_PRO)
+#include "boards/tdeck_pro/platform_esp_board_runtime.h"
 #elif defined(ARDUINO_T_DECK)
 #include "boards/tdeck/platform_esp_board_runtime.h"
 #elif defined(ARDUINO_T_WATCH_S3)

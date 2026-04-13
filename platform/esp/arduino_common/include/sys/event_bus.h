@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "chat/domain/chat_types.h"
+#include "chat/domain/contact_types.h"
 #include "team/domain/team_events.h"
 
 namespace sys
@@ -130,12 +131,26 @@ struct NodeInfoUpdateEvent : public Event
     uint8_t hops_away;
     uint8_t hw_model;
     uint8_t channel;
+    bool has_macaddr;
+    uint8_t macaddr[6];
+    bool via_mqtt;
+    bool is_ignored;
+    bool has_public_key;
+    bool key_manually_verified;
+    bool has_device_metrics;
+    chat::contacts::NodeDeviceMetrics device_metrics;
 
     NodeInfoUpdateEvent(uint32_t id, const char* sname, const char* lname, float s, float rssi_val,
                         uint32_t ts, uint8_t proto, uint8_t r, uint8_t hops = 0xFF, uint8_t hw = 0,
-                        uint8_t ch = 0xFF)
+                        uint8_t ch = 0xFF, bool has_mac = false, const uint8_t* mac = nullptr,
+                        bool via_mqtt_value = false, bool is_ignored_value = false,
+                        bool has_pubkey = false, bool key_verified = false,
+                        bool has_metrics = false,
+                        const chat::contacts::NodeDeviceMetrics* metrics = nullptr)
         : Event(EventType::NodeInfoUpdate), node_id(id), snr(s), rssi(rssi_val), timestamp(ts), protocol(proto),
-          role(r), hops_away(hops), hw_model(hw), channel(ch)
+          role(r), hops_away(hops), hw_model(hw), channel(ch), has_macaddr(has_mac), macaddr{},
+          via_mqtt(via_mqtt_value), is_ignored(is_ignored_value), has_public_key(has_pubkey),
+          key_manually_verified(key_verified), has_device_metrics(has_metrics), device_metrics{}
     {
         if (sname)
         {
@@ -154,6 +169,14 @@ struct NodeInfoUpdateEvent : public Event
         else
         {
             long_name[0] = '\0';
+        }
+        if (has_macaddr && mac)
+        {
+            memcpy(macaddr, mac, sizeof(macaddr));
+        }
+        if (has_device_metrics && metrics)
+        {
+            device_metrics = *metrics;
         }
     }
 };

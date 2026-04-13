@@ -42,6 +42,7 @@ enum class ContactsMode
 {
     Contacts,  // Show contacts (nodes with nicknames)
     Nearby,    // Show nearby nodes (nodes without nicknames)
+    Ignored,   // Show ignored nodes so they can be managed/unignored
     Broadcast, // Show broadcast channels
     Team,      // Show team (if joined)
     Discover   // Show MeshCore discover actions
@@ -58,6 +59,7 @@ struct ContactsPageState
     lv_obj_t* filter_panel = nullptr;
     lv_obj_t* contacts_btn = nullptr;
     lv_obj_t* nearby_btn = nullptr;
+    lv_obj_t* ignored_btn = nullptr;
     lv_obj_t* broadcast_btn = nullptr;
     lv_obj_t* team_btn = nullptr;
     lv_obj_t* discover_btn = nullptr;
@@ -81,6 +83,7 @@ struct ContactsPageState
     // Data (using forward declaration, full type in .cpp)
     std::vector<chat::contacts::NodeInfo> contacts_list;
     std::vector<chat::contacts::NodeInfo> nearby_list;
+    std::vector<chat::contacts::NodeInfo> ignored_list;
 
     // Timers
     lv_timer_t* refresh_timer = nullptr;

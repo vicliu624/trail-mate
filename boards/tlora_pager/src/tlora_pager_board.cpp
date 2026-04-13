@@ -375,7 +375,8 @@ uint32_t TLoRaPagerBoard::begin(uint32_t disable_hw_init)
 
     // Initialize display (ST7796)
     LilyGoDispArduinoSPI::init(DISP_SCK, DISP_MISO, DISP_MOSI, DISP_CS, DISP_RST, DISP_DC, -1);
-    log_d("Display (ST7796) initialized: %dx%d", DISP_WIDTH, DISP_HEIGHT);
+    log_d("Display (ST7796) initialized: logical=%dx%d raw=%dx%d",
+          LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height, DISP_WIDTH, DISP_HEIGHT);
 
     // Initialize SPI bus for LoRa/SD/NFC (shared SPI bus)
     SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI);
@@ -675,6 +676,20 @@ bool TLoRaPagerBoard::initNFC()
 bool TLoRaPagerBoard::initKeyboard()
 {
 #ifdef USING_INPUT_DEV_KEYBOARD
+    if (devices_probe & HW_EXPAND_ONLINE)
+    {
+        powerControl(POWER_KEYBOARD, true);
+        delay(5);
+#ifdef EXPANDS_KB_RST
+        // Reset is held high in the steady state; pulse low to force a clean
+        // controller restart before probing the TCA8418 over I2C.
+        io.digitalWrite(EXPANDS_KB_RST, LOW);
+        delay(5);
+        io.digitalWrite(EXPANDS_KB_RST, HIGH);
+        delay(20);
+#endif
+    }
+
     // Configure keyboard backlight pin
     kb.setPins(KB_BACKLIGHT);
 
@@ -1276,6 +1291,17 @@ int TLoRaPagerBoard::transmitRadio(const uint8_t* data, size_t len)
     return RADIOLIB_ERR_SPI_WRITE_FAILED;
 }
 
+int TLoRaPagerBoard::radioStandby()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.standby();
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
 int TLoRaPagerBoard::startRadioReceive()
 {
     if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
@@ -1351,6 +1377,81 @@ float TLoRaPagerBoard::getRadioSNR()
     return std::numeric_limits<float>::quiet_NaN();
 }
 
+int TLoRaPagerBoard::configureFskRadio(float freq_mhz, float bit_rate_kbps, float freq_dev_khz, float rx_bw_khz,
+                                       int8_t tx_power, uint16_t preamble_len, float tcxo_voltage,
+                                       const uint8_t* sync_word, size_t sync_word_len, uint8_t crc_len)
+{
+    if (!sync_word || sync_word_len == 0)
+    {
+        return -1;
+    }
+
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(200)))
+    {
+        int rc = radio_.standby();
+        if (rc == RADIOLIB_ERR_NONE)
+        {
+            rc = radio_.beginFSK(freq_mhz, bit_rate_kbps, freq_dev_khz, rx_bw_khz,
+                                 tx_power, preamble_len, tcxo_voltage);
+        }
+        if (rc == RADIOLIB_ERR_NONE)
+        {
+            rc = radio_.setSyncWord(const_cast<uint8_t*>(sync_word), sync_word_len);
+        }
+        if (rc == RADIOLIB_ERR_NONE)
+        {
+            rc = radio_.setCRC(crc_len);
+        }
+        if (rc == RADIOLIB_ERR_NONE)
+        {
+            rc = radio_.setPreambleLength(preamble_len);
+        }
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+int TLoRaPagerBoard::restoreLoRaRadio()
+{
+    CachedLoRaConfig cached = lora_config_;
+
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(200)))
+    {
+        int rc = radio_.begin();
+        LilyGoDispArduinoSPI::unlock();
+        if (rc != RADIOLIB_ERR_NONE)
+        {
+            return rc;
+        }
+
+        if (cached.valid)
+        {
+            configureLoraRadio(cached.freq_mhz,
+                               cached.bw_khz,
+                               cached.sf,
+                               cached.cr_denom,
+                               cached.tx_power,
+                               cached.preamble_len,
+                               cached.sync_word,
+                               cached.crc_len);
+        }
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
+int TLoRaPagerBoard::startRadioTransmit(const uint8_t* data, size_t len)
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    {
+        int rc = radio_.startTransmit(const_cast<uint8_t*>(data), len);
+        LilyGoDispArduinoSPI::unlock();
+        return rc;
+    }
+    return RADIOLIB_ERR_SPI_WRITE_FAILED;
+}
+
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
 static void apply_tx_power(SX1262Access& radio, int8_t tx_power)
 {
@@ -1365,6 +1466,16 @@ void TLoRaPagerBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t s
                                          int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                                          uint8_t crc_len)
 {
+    lora_config_.valid = true;
+    lora_config_.freq_mhz = freq_mhz;
+    lora_config_.bw_khz = bw_khz;
+    lora_config_.sf = sf;
+    lora_config_.cr_denom = cr_denom;
+    lora_config_.tx_power = tx_power;
+    lora_config_.preamble_len = preamble_len;
+    lora_config_.sync_word = sync_word;
+    lora_config_.crc_len = crc_len;
+
     if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(100)))
     {
         radio_.setFrequency(freq_mhz);
@@ -2526,17 +2637,16 @@ void TLoRaPagerBoard::wakeUp()
 
 void TLoRaPagerBoard::enterScreenSleep()
 {
-    // Turn off peripheral power to save current; LoRa stays on for mesh.
-    powerControl(POWER_GPS, false);
+    // Turn off selected peripheral power to save current; LoRa stays on for mesh.
+    // GPS power is owned by GpsService/HalGps so screen sleep does not desync
+    // the hardware rail from the service's gps_powered_/HW_GPS_ONLINE state.
     powerControl(POWER_NFC, false);
-    powerControl(POWER_SENSOR, false);
 }
 
 void TLoRaPagerBoard::exitScreenSleep()
 {
-    powerControl(POWER_GPS, true);
+    // Keep GPS power ownership in the GPS service path for consistent state.
     powerControl(POWER_NFC, true);
-    powerControl(POWER_SENSOR, true);
 }
 
 void TLoRaPagerBoard::setPowerTier(int tier)

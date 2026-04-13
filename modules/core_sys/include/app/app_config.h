@@ -63,12 +63,15 @@ struct AppConfig
     static constexpr uint8_t kMeshCoreDefaultCr = 5;
     static constexpr int8_t kMeshCoreDefaultTxPowerDbm = 20;
     static constexpr int8_t kTxPowerMinDbm = -9;
-#if defined(ARDUINO_LILYGO_LORA_SX1262)
+#if defined(TRAIL_MATE_LORA_TX_POWER_MAX_DBM)
+    // Board/module capability must be declared per build target.
+    // Examples: SX1262 22S => 22 dBm, 30S => 30 dBm, 33S => 33 dBm.
+    static constexpr int8_t kTxPowerMaxDbm = TRAIL_MATE_LORA_TX_POWER_MAX_DBM;
+#elif defined(__INTELLISENSE__)
+    // Keep IDE parsing usable when build flags are not loaded.
     static constexpr int8_t kTxPowerMaxDbm = 22;
-#elif defined(ARDUINO_LILYGO_LORA_SX1280)
-    static constexpr int8_t kTxPowerMaxDbm = 13;
 #else
-    static constexpr int8_t kTxPowerMaxDbm = 20;
+#error "Define TRAIL_MATE_LORA_TX_POWER_MAX_DBM for this build target."
 #endif
     // Chat settings
     chat::ChatPolicy chat_policy;

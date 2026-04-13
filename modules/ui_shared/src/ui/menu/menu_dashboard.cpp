@@ -10,13 +10,17 @@
 #include "ui/menu/dashboard/dashboard_state.h"
 #include "ui/menu/dashboard/dashboard_widgets.h"
 #include "ui/menu/menu_profile.h"
+#include "ui/ui_theme.h"
 
 namespace ui::menu::dashboard
 {
 namespace
 {
 
-constexpr uint32_t kDashboardTimerMs = 220;
+// Tab5's 720x1280 menu can starve the LVGL task if we keep animating the
+// dashboard aggressively while the menu grid is also visible. A slower cadence
+// keeps the dashboard useful without continuously forcing large redraws.
+constexpr uint32_t kDashboardTimerMs = 1000;
 
 bool is_tab5_profile()
 {
@@ -34,7 +38,6 @@ void refresh_dashboard(lv_timer_t* timer)
 
     ++dashboard.tick;
 
-    // Keep motion responsive, but avoid repainting the whole dashboard too aggressively.
     refresh_compass_widget();
 
     if ((dashboard.tick % 2U) == 1U)
@@ -68,7 +71,8 @@ void init(lv_obj_t* menu_panel, lv_obj_t* grid_panel, const ui::menu_layout::Ini
 
     dashboard.dock_right = right_gap >= 240;
     dashboard.panel = lv_obj_create(menu_panel);
-    lv_obj_set_style_bg_opa(dashboard.panel, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_color(dashboard.panel, ui::theme::page_bg(), 0);
+    lv_obj_set_style_bg_opa(dashboard.panel, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(dashboard.panel, 0, 0);
     lv_obj_set_style_pad_all(dashboard.panel, 0, 0);
     lv_obj_set_style_pad_row(dashboard.panel, 12, 0);

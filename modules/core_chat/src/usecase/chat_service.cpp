@@ -50,21 +50,19 @@ MessageId ChatService::sendTextWithId(ChannelId channel, const std::string& text
         return 0;
     }
 
-    // Try to send via adapter first to get packet ID
     MessageId msg_id = 0;
     bool queued = adapter_.sendTextWithId(channel, text, forced_msg_id, &msg_id, peer);
 
     ChatMessage msg;
     msg.protocol = active_protocol_;
     msg.channel = channel;
-    msg.from = 0; // Local message
+    msg.from = 0;
     msg.peer = normalize_conversation_peer(peer);
     msg.msg_id = msg_id;
     msg.timestamp = now_message_timestamp();
     msg.text = text;
     msg.status = queued ? MessageStatus::Queued : MessageStatus::Failed;
 
-    // Queue in model (if enabled)
     if (model_enabled_)
     {
         model_.onSendQueued(msg);
@@ -74,8 +72,28 @@ MessageId ChatService::sendTextWithId(ChannelId channel, const std::string& text
         }
     }
 
-    // Store message
     store_.append(msg);
+
+    if (queued && msg_id != 0)
+    {
+        MeshIncomingText outgoing{};
+        outgoing.channel = channel;
+        outgoing.from = adapter_.getNodeId();
+        outgoing.to = (peer != 0) ? peer : 0xFFFFFFFFUL;
+        outgoing.msg_id = msg_id;
+        outgoing.timestamp = msg.timestamp;
+        outgoing.text = text;
+        outgoing.hop_limit = 0;
+        outgoing.encrypted = false;
+
+        for (auto* observer : outgoing_text_observers_)
+        {
+            if (observer)
+            {
+                observer->onOutgoingText(outgoing);
+            }
+        }
+    }
 
     return msg.msg_id;
 }
@@ -88,7 +106,6 @@ bool ChatService::triggerDiscoveryAction(MeshDiscoveryAction action)
 void ChatService::switchChannel(ChannelId channel)
 {
     current_channel_ = channel;
-    // Could emit event here
 }
 
 bool ChatService::resendFailed(MessageId msg_id)
@@ -99,11 +116,9 @@ bool ChatService::resendFailed(MessageId msg_id)
         return false;
     }
 
-    // Resend via adapter
     MessageId new_msg_id = 0;
     if (adapter_.sendText(msg->channel, msg->text, &new_msg_id, msg->peer))
     {
-        // Create new queued message
         ChatMessage resend_msg = *msg;
         resend_msg.msg_id = (new_msg_id != 0) ? new_msg_id : msg_id;
         resend_msg.status = MessageStatus::Queued;
@@ -152,43 +167,39 @@ void ChatService::markConversationRead(const ConversationId& conv)
 
 void ChatService::processIncoming()
 {
-    MeshIncomingText incoming;
-    while (adapter_.pollIncomingText(&incoming))
+    MeshIncomingText incoming_text;
+    while (adapter_.pollIncomingText(&incoming_text))
     {
-        // Convert to ChatMessage
         ChatMessage msg;
         msg.protocol = active_protocol_;
-        msg.channel = incoming.channel;
-        msg.from = incoming.from;
-        msg.peer = normalize_conversation_peer(incoming.to) == 0 ? 0 : incoming.from;
-        msg.msg_id = incoming.msg_id;
-        // Use local receive time to avoid sender clock skew.
+        msg.channel = incoming_text.channel;
+        msg.from = incoming_text.from;
+        msg.peer = normalize_conversation_peer(incoming_text.to) == 0 ? 0 : incoming_text.from;
+        msg.msg_id = incoming_text.msg_id;
         msg.timestamp = now_message_timestamp();
-        msg.text = incoming.text;
+        msg.text = incoming_text.text;
         msg.status = MessageStatus::Incoming;
 
-        CHAT_SERVICE_LOG("[ChatService] incoming ch=%u from=%08lX to=%08lX peer=%08lX ts=%lu len=%u\n",
+        CHAT_SERVICE_LOG("[ChatService] incoming text ch=%u from=%08lX to=%08lX peer=%08lX ts=%lu len=%u\n",
                          static_cast<unsigned>(msg.channel),
                          static_cast<unsigned long>(msg.from),
-                         static_cast<unsigned long>(incoming.to),
+                         static_cast<unsigned long>(incoming_text.to),
                          static_cast<unsigned long>(msg.peer),
                          static_cast<unsigned long>(msg.timestamp),
                          static_cast<unsigned>(msg.text.size()));
 
-        // Add to model (if enabled)
         if (model_enabled_)
         {
             model_.onIncoming(msg);
         }
 
-        // Store
         store_.append(msg);
 
         for (auto* observer : incoming_message_observers_)
         {
             if (observer)
             {
-                observer->onIncomingMessage(msg, &incoming.rx_meta);
+                observer->onIncomingMessage(msg, &incoming_text.rx_meta);
             }
         }
 
@@ -196,10 +207,35 @@ void ChatService::processIncoming()
         {
             if (observer)
             {
-                observer->onIncomingText(incoming);
+                observer->onIncomingText(incoming_text);
             }
         }
     }
+
+    MeshIncomingData incoming_data;
+    while (adapter_.pollIncomingData(&incoming_data))
+    {
+        CHAT_SERVICE_LOG("[ChatService] incoming data ch=%u from=%08lX to=%08lX pkt=%08lX port=%u len=%u\n",
+                         static_cast<unsigned>(incoming_data.channel),
+                         static_cast<unsigned long>(incoming_data.from),
+                         static_cast<unsigned long>(incoming_data.to),
+                         static_cast<unsigned long>(incoming_data.packet_id),
+                         static_cast<unsigned>(incoming_data.portnum),
+                         static_cast<unsigned>(incoming_data.payload.size()));
+
+        for (auto* observer : incoming_data_observers_)
+        {
+            if (observer)
+            {
+                observer->onIncomingData(incoming_data);
+            }
+        }
+    }
+}
+
+void ChatService::flushStore()
+{
+    store_.flush();
 }
 
 void ChatService::addIncomingMessageObserver(IncomingMessageObserver* observer)
@@ -234,9 +270,76 @@ void ChatService::removeIncomingMessageObserver(IncomingMessageObserver* observe
     }
 }
 
+void ChatService::addOutgoingTextObserver(OutgoingTextObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto* existing : outgoing_text_observers_)
+    {
+        if (existing == observer)
+        {
+            return;
+        }
+    }
+    outgoing_text_observers_.push_back(observer);
+}
+
+void ChatService::removeOutgoingTextObserver(OutgoingTextObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto it = outgoing_text_observers_.begin(); it != outgoing_text_observers_.end(); ++it)
+    {
+        if (*it == observer)
+        {
+            outgoing_text_observers_.erase(it);
+            return;
+        }
+    }
+}
+
+void ChatService::addIncomingDataObserver(IncomingDataObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto* existing : incoming_data_observers_)
+    {
+        if (existing == observer)
+        {
+            return;
+        }
+    }
+    incoming_data_observers_.push_back(observer);
+}
+
+void ChatService::removeIncomingDataObserver(IncomingDataObserver* observer)
+{
+    if (!observer)
+    {
+        return;
+    }
+    for (auto it = incoming_data_observers_.begin(); it != incoming_data_observers_.end(); ++it)
+    {
+        if (*it == observer)
+        {
+            incoming_data_observers_.erase(it);
+            return;
+        }
+    }
+}
+
 void ChatService::handleSendResult(MessageId msg_id, bool ok)
 {
-    if (msg_id == 0) return;
+    if (msg_id == 0)
+    {
+        return;
+    }
     if (model_enabled_)
     {
         model_.onSendResult(msg_id, ok);

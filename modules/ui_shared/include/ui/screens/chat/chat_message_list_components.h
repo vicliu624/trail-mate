@@ -140,6 +140,8 @@ class ChatMessageListScreen
     message_list::input::Controller input_controller_{};
 
     void rebuildList();
+    bool updateListInPlace(const std::vector<chat::ConversationMeta>& convs);
+    void updateListItem(size_t index, const chat::ConversationMeta& conv);
     void updateFilterHighlight();
     void setFilterMode(FilterMode mode);
 

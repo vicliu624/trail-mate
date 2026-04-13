@@ -3,7 +3,7 @@
 #include "app/app_facade_access.h"
 #include "apps/gat562_mesh_evb_pro/debug_console.h"
 #include "apps/gat562_mesh_evb_pro/protocol_factory.h"
-#include "ble/ble_manager.h"
+#include "apps/gat562_mesh_evb_pro/runtime_apply_service.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
 #include "chat/domain/chat_model.h"
@@ -14,15 +14,18 @@
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/nrf52/arduino_common/chat/infra/contact_store.h"
+#include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/node_store.h"
 #include "platform/nrf52/arduino_common/chat/infra/radio_packet_io.h"
 #include "platform/nrf52/arduino_common/chat/infra/store/internal_fs_store.h"
 #include "platform/nrf52/arduino_common/device_identity.h"
 #include "platform/nrf52/arduino_common/self_identity_bridge.h"
+#include "sys/clock.h"
 
 #include <Arduino.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -30,6 +33,20 @@ namespace apps::gat562_mesh_evb_pro
 {
 namespace
 {
+constexpr uint32_t kChatStoreFlushIntervalMs = 2000UL;
+
+platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(chat::IMeshAdapter* adapter)
+{
+    if (!adapter)
+    {
+        return nullptr;
+    }
+
+    chat::IMeshAdapter* backend = adapter->backendForProtocol(chat::MeshProtocol::Meshtastic);
+    return backend
+               ? static_cast<platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter*>(backend)
+               : nullptr;
+}
 
 template <typename T>
 void copyString(const char* src, T* dst, size_t dst_len)
@@ -50,9 +67,23 @@ void copyString(const char* src, T* dst, size_t dst_len)
     dst[copy_len] = '\0';
 }
 
-const char* protocolLabel(chat::MeshProtocol protocol)
+bool buildNodePositionFromGpsState(const ::gps::GpsState& gps_state,
+                                   ::chat::contacts::NodePosition* out_position)
 {
-    return protocol == chat::MeshProtocol::MeshCore ? "MC" : "MT";
+    if (!out_position || !gps_state.valid)
+    {
+        return false;
+    }
+
+    ::chat::contacts::NodePosition position{};
+    position.valid = true;
+    position.latitude_i = static_cast<int32_t>(std::lround(gps_state.lat * 1e7));
+    position.longitude_i = static_cast<int32_t>(std::lround(gps_state.lng * 1e7));
+    position.has_altitude = gps_state.has_alt;
+    position.altitude = gps_state.has_alt ? static_cast<int32_t>(std::lround(gps_state.alt_m)) : 0;
+    position.timestamp = ::sys::epoch_seconds_now();
+    *out_position = position;
+    return true;
 }
 
 } // namespace
@@ -63,7 +94,10 @@ AppFacadeRuntime& AppFacadeRuntime::instance()
     return runtime;
 }
 
-AppFacadeRuntime::AppFacadeRuntime() = default;
+AppFacadeRuntime::AppFacadeRuntime()
+    : apply_service_(new RuntimeApplyService())
+{
+}
 
 AppFacadeRuntime::~AppFacadeRuntime() = default;
 
@@ -79,7 +113,6 @@ bool AppFacadeRuntime::initialize()
     {
         (void)board_->begin();
     }
-
     (void)::boards::gat562_mesh_evb_pro::settings_store::loadAppConfig(config_);
     ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
     initializeStores();
@@ -253,75 +286,41 @@ void AppFacadeRuntime::saveConfig()
     applyPrivacyConfig();
     debug_console::printf("[gat562][cfg] save post-applyPrivacy\n");
     applyChatDefaults();
+    ::boards::gat562_mesh_evb_pro::settings_store::queueSaveAppConfig(config_);
     config_save_pending_ = true;
     debug_console::printf("[gat562][cfg] save deferred-store queued\n");
 }
 
 void AppFacadeRuntime::applyMeshConfig()
 {
-    debug_console::printf("[gat562][cfg] applyMesh start proto=%u ok_to_mqtt=%u ignore_mqtt=%u\n",
-                          static_cast<unsigned>(config_.mesh_protocol),
-                          config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
-                          config_.meshtastic_config.ignore_mqtt ? 1U : 0U);
-    ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
-    if (mesh_router_)
+    if (apply_service_)
     {
-        auto* router = static_cast<chat::MeshAdapterRouterCore*>(mesh_router_.get());
-        router->setActiveProtocol(config_.mesh_protocol);
+        apply_service_->applyMesh(config_,
+                                  mesh_router_.get(),
+                                  chat_service_.get(),
+                                  ble_manager_.get(),
+                                  board_);
     }
-    if (mesh_router_)
-    {
-        mesh_router_->applyConfig(config_.activeMeshConfig());
-    }
-    if (board_)
-    {
-        board_->applyRadioConfig(config_.mesh_protocol, config_.activeMeshConfig());
-    }
-    if (chat_service_)
-    {
-        chat_service_->setActiveProtocol(config_.mesh_protocol);
-    }
-    if (ble_manager_)
-    {
-        ble_manager_->applyProtocol(config_.mesh_protocol);
-    }
-    debug_console::printf("[gat562][cfg] applyMesh end\n");
-
-    const chat::MeshConfig& mesh = config_.activeMeshConfig();
-    debug_console::printf("[gat562] radio cfg %s region=%u preset=%u ch=%u tx=%d hop=%u\n",
-                          protocolLabel(config_.mesh_protocol),
-                          static_cast<unsigned>(mesh.region),
-                          static_cast<unsigned>(mesh.modem_preset),
-                          static_cast<unsigned>(mesh.channel_num),
-                          static_cast<int>(mesh.tx_power),
-                          static_cast<unsigned>(mesh.hop_limit));
 }
 
 void AppFacadeRuntime::applyUserInfo()
 {
     const chat::runtime::EffectiveSelfIdentity previous_identity = effective_identity_;
     refreshEffectiveIdentity();
-    if (mesh_router_)
+    if (apply_service_)
     {
-        mesh_router_->setUserInfo(effective_identity_.long_name,
-                                  effective_identity_.short_name);
-    }
-
-    const bool ble_identity_changed =
-        std::strcmp(previous_identity.long_name, effective_identity_.long_name) != 0 ||
-        std::strcmp(previous_identity.short_name, effective_identity_.short_name) != 0;
-    if (ble_identity_changed && ble_manager_ && ble_manager_->isEnabled())
-    {
-        ble_manager_->setEnabled(false);
-        ble_manager_->setEnabled(true);
+        apply_service_->applyUserInfo(previous_identity,
+                                      effective_identity_,
+                                      mesh_router_.get(),
+                                      ble_manager_.get());
     }
 }
 
 void AppFacadeRuntime::applyPositionConfig()
 {
-    if (board_)
+    if (apply_service_)
     {
-        board_->applyGpsConfig(config_);
+        apply_service_->applyPosition(config_, board_);
     }
 }
 
@@ -511,7 +510,8 @@ void AppFacadeRuntime::setBleEnabled(bool enabled)
     {
         ble_manager_->setEnabled(enabled);
     }
-    (void)::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_);
+    ::boards::gat562_mesh_evb_pro::settings_store::queueSaveAppConfig(config_);
+    config_save_pending_ = true;
 }
 
 void AppFacadeRuntime::restartDevice()
@@ -590,14 +590,55 @@ const BoardBase* AppFacadeRuntime::getBoard() const
 
 void AppFacadeRuntime::updateCoreServices()
 {
+    syncSelfPositionFromGps();
     if (chat_service_)
     {
         chat_service_->processIncoming();
+        const uint32_t now_ms = ::sys::millis_now();
+        if ((now_ms - last_chat_store_flush_ms_) >= kChatStoreFlushIntervalMs)
+        {
+            chat_service_->flushStore();
+            if (node_store_)
+            {
+                (void)node_store_->flush();
+            }
+            if (auto* mt = getMeshtasticBackend(getMeshAdapter()))
+            {
+                mt->flushDeferredPersistence(false);
+            }
+            last_chat_store_flush_ms_ = now_ms;
+        }
     }
     if (ble_manager_)
     {
         ble_manager_->update();
     }
+}
+
+void AppFacadeRuntime::syncSelfPositionFromGps()
+{
+    if (!contact_service_ || !board_ || effective_identity_.node_id == 0)
+    {
+        return;
+    }
+
+    ::chat::contacts::NodePosition position{};
+    if (!buildNodePositionFromGpsState(board_->gpsData(), &position))
+    {
+        return;
+    }
+
+    const ::chat::contacts::NodeInfo* existing = contact_service_->getNodeInfo(effective_identity_.node_id);
+    if (existing && existing->position.valid &&
+        existing->position.latitude_i == position.latitude_i &&
+        existing->position.longitude_i == position.longitude_i &&
+        existing->position.has_altitude == position.has_altitude &&
+        existing->position.altitude == position.altitude)
+    {
+        return;
+    }
+
+    contact_service_->updateNodePosition(effective_identity_.node_id, position);
 }
 
 void AppFacadeRuntime::tickEventRuntime()
@@ -607,18 +648,49 @@ void AppFacadeRuntime::tickEventRuntime()
         return;
     }
 
-    debug_console::printf("[gat562][cfg] deferred-store start\n");
-    const bool ok = ::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_);
-    debug_console::printf("[gat562][cfg] deferred-store done ok=%u\n", ok ? 1U : 0U);
-    if (ok)
+    if (!::boards::gat562_mesh_evb_pro::settings_store::hasDeferredSavePending())
     {
         config_save_pending_ = false;
+        return;
     }
+
+    const bool flushed = ::boards::gat562_mesh_evb_pro::settings_store::tickDeferredSave();
+    if (flushed)
+    {
+        debug_console::printf("[gat562][cfg] deferred-store flush ok\n");
+    }
+    config_save_pending_ = ::boards::gat562_mesh_evb_pro::settings_store::hasDeferredSavePending();
 }
 
 void AppFacadeRuntime::dispatchPendingEvents(std::size_t max_events)
 {
     (void)max_events;
+}
+
+const app::AppConfig& AppFacadeRuntime::bleConfig() const
+{
+    return config_;
+}
+
+bool AppFacadeRuntime::bleEnabled() const
+{
+    return isBleEnabled();
+}
+
+void AppFacadeRuntime::bleEffectiveUserInfo(char* out_long, std::size_t long_len,
+                                            char* out_short, std::size_t short_len) const
+{
+    getEffectiveUserInfo(out_long, long_len, out_short, short_len);
+}
+
+chat::NodeId AppFacadeRuntime::bleSelfNodeId() const
+{
+    return getSelfNodeId();
+}
+
+app::IAppBleFacade& AppFacadeRuntime::bleAppFacade()
+{
+    return *this;
 }
 
 const chat::runtime::EffectiveSelfIdentity& AppFacadeRuntime::effectiveIdentity() const

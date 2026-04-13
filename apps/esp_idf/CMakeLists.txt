@@ -194,7 +194,9 @@ set(trail_mate_idf_ui_shared_sources
 
 set(trail_mate_idf_include_dirs
     "include"
+    "${CMAKE_SOURCE_DIR}/platform/shared/include"
     "${CMAKE_SOURCE_DIR}/boards/tab5/include"
+    "${CMAKE_SOURCE_DIR}/boards/t_display_p4/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_shared/include"
     "${CMAKE_SOURCE_DIR}/modules/core_sys/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/include"

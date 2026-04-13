@@ -77,10 +77,12 @@ void refresh_contacts_data_impl_internal()
     chat::contacts::ContactService& contact_service = app::messagingFacade().getContactService();
     g_contacts_state.contacts_list = contact_service.getContacts();
     g_contacts_state.nearby_list = contact_service.getNearby();
+    g_contacts_state.ignored_list = contact_service.getIgnoredNodes();
 
-    CONTACTS_LOG("[Contacts] Data refreshed: %zu contacts, %zu nearby\n",
+    CONTACTS_LOG("[Contacts] Data refreshed: %zu contacts, %zu nearby, %zu ignored\n",
                  g_contacts_state.contacts_list.size(),
-                 g_contacts_state.nearby_list.size());
+                 g_contacts_state.nearby_list.size(),
+                 g_contacts_state.ignored_list.size());
 }
 
 } // namespace

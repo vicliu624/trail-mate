@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace ui::menu::dashboard
 {
@@ -98,7 +99,8 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
     chrome.body = lv_obj_create(chrome.card);
     lv_obj_set_size(chrome.body, LV_PCT(100), card_h - kHeaderH - kFooterH);
     lv_obj_align_to(chrome.body, chrome.header, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_bg_opa(chrome.body, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_color(chrome.body, color_panel_bg(), 0);
+    lv_obj_set_style_bg_opa(chrome.body, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(chrome.body, 0, 0);
     lv_obj_set_style_pad_left(chrome.body, 10, 0);
     lv_obj_set_style_pad_right(chrome.body, 10, 0);
@@ -110,7 +112,7 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
     lv_obj_set_size(chrome.footer, LV_PCT(100), kFooterH);
     lv_obj_align(chrome.footer, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(chrome.footer, color_soft_amber(), 0);
-    lv_obj_set_style_bg_opa(chrome.footer, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(chrome.footer, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(chrome.footer, 0, 0);
     lv_obj_set_style_radius(chrome.footer, 18, 0);
     lv_obj_set_style_pad_left(chrome.footer, 10, 0);
@@ -128,10 +130,23 @@ void set_status_chip(DashboardCardChrome& chrome, const char* text, lv_color_t b
     {
         return;
     }
-    lv_obj_set_style_bg_color(chrome.status_chip, bg, 0);
-    lv_obj_set_style_bg_opa(chrome.status_chip, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(chrome.status_label, fg, 0);
-    lv_label_set_text(chrome.status_label, text);
+    if (lv_color_to_int(lv_obj_get_style_bg_color(chrome.status_chip, LV_PART_MAIN)) != lv_color_to_int(bg))
+    {
+        lv_obj_set_style_bg_color(chrome.status_chip, bg, 0);
+    }
+    if (lv_obj_get_style_bg_opa(chrome.status_chip, LV_PART_MAIN) != LV_OPA_COVER)
+    {
+        lv_obj_set_style_bg_opa(chrome.status_chip, LV_OPA_COVER, 0);
+    }
+    if (lv_color_to_int(lv_obj_get_style_text_color(chrome.status_label, LV_PART_MAIN)) != lv_color_to_int(fg))
+    {
+        lv_obj_set_style_text_color(chrome.status_label, fg, 0);
+    }
+    const char* current = lv_label_get_text(chrome.status_label);
+    if (text != nullptr && (current == nullptr || std::strcmp(current, text) != 0))
+    {
+        lv_label_set_text(chrome.status_label, text);
+    }
 }
 
 void style_stat_tile(lv_obj_t* tile, lv_color_t bg)

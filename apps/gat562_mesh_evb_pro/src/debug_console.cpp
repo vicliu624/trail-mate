@@ -1,6 +1,7 @@
 #include "apps/gat562_mesh_evb_pro/debug_console.h"
 
 #include <Arduino.h>
+#include <cstring>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -11,9 +12,19 @@ namespace
 
 constexpr unsigned long kBaudRate = 115200UL;
 
+bool usbSerialWritable(std::size_t len)
+{
+    return static_cast<bool>(Serial) && Serial.dtr() != 0 && Serial.availableForWrite() >= static_cast<int>(len);
+}
+
 void writeToUsbSerial(const char* text)
 {
     if (!text)
+    {
+        return;
+    }
+    const std::size_t len = std::strlen(text);
+    if (!usbSerialWritable(len))
     {
         return;
     }

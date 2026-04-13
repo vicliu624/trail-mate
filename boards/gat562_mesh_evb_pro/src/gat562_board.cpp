@@ -1,6 +1,8 @@
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
 
 #include "boards/gat562_mesh_evb_pro/board_profile.h"
+#include "boards/gat562_mesh_evb_pro/gps_runtime.h"
+#include "boards/gat562_mesh_evb_pro/input_runtime.h"
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
 #include "boards/gat562_mesh_evb_pro/sx1262_radio_packet_io.h"
 #include "platform/nrf52/arduino_common/chat/infra/radio_packet_io.h"
@@ -736,6 +738,14 @@ Gat562Board& Gat562Board::instance()
     return board_instance;
 }
 
+Gat562Board::Gat562Board()
+    : gps_runtime_(new GpsRuntime()),
+      input_runtime_(new InputRuntime())
+{
+}
+
+Gat562Board::~Gat562Board() = default;
+
 uint32_t Gat562Board::begin(uint32_t disable_hw_init)
 {
     (void)disable_hw_init;
@@ -857,7 +867,7 @@ uint8_t Gat562Board::keyboardGetBrightness()
 
 bool Gat562Board::isRTCReady() const
 {
-    return s_gps.time_synced && currentEpochSeconds() >= kMinValidEpochSeconds;
+    return gps_runtime_ ? gps_runtime_->isRtcReady() : false;
 }
 
 bool Gat562Board::isCharging()
@@ -923,12 +933,51 @@ void Gat562Board::stopVibrator()
 void Gat562Board::playMessageTone()
 {
     pulseNotificationLed(25);
+
+    if (message_tone_volume_ == 0)
+    {
+        return;
+    }
+
+    const int buzzer_pin = kBoardProfile.buzzer.pin;
+    if (buzzer_pin < 0)
+    {
+        return;
+    }
+
+    pinMode(buzzer_pin, OUTPUT);
+    digitalWrite(buzzer_pin, kBoardProfile.buzzer.active_high ? LOW : HIGH);
+
+    struct ToneStep
+    {
+        unsigned frequency_hz;
+        uint16_t duration_ms;
+        uint16_t gap_ms;
+    };
+
+    static constexpr ToneStep kMessageTone[] = {
+        {1760U, 70U, 25U},
+        {2093U, 110U, 0U},
+    };
+
+    for (const ToneStep& step : kMessageTone)
+    {
+        tone(static_cast<uint8_t>(buzzer_pin), step.frequency_hz, step.duration_ms);
+        delay(step.duration_ms);
+        noTone(static_cast<uint8_t>(buzzer_pin));
+        if (step.gap_ms > 0)
+        {
+            delay(step.gap_ms);
+        }
+    }
+
+    digitalWrite(buzzer_pin, kBoardProfile.buzzer.active_high ? LOW : HIGH);
 }
 
 void Gat562Board::setMessageToneVolume(uint8_t volume_percent)
 {
     message_tone_volume_ = volume_percent;
-    (void)::boards::gat562_mesh_evb_pro::settings_store::saveMessageToneVolume(volume_percent);
+    ::boards::gat562_mesh_evb_pro::settings_store::queueSaveMessageToneVolume(volume_percent);
 }
 
 uint8_t Gat562Board::getMessageToneVolume() const
@@ -958,27 +1007,7 @@ void Gat562Board::pulseNotificationLed(uint32_t pulse_ms)
 
 bool Gat562Board::pollInputSnapshot(BoardInputSnapshot* out_snapshot) const
 {
-    if (!out_snapshot)
-    {
-        return false;
-    }
-
-    const auto& inputs = kBoardProfile.inputs;
-    BoardInputSnapshot snapshot{};
-    snapshot.button_primary = readActiveLowPin(inputs.button_primary, inputs.buttons_need_pullup);
-    snapshot.button_secondary = readActiveLowPin(inputs.button_secondary, inputs.buttons_need_pullup);
-    snapshot.joystick_up = readActiveLowPin(inputs.joystick_up, inputs.joystick_need_pullup);
-    snapshot.joystick_down = readActiveLowPin(inputs.joystick_down, inputs.joystick_need_pullup);
-    snapshot.joystick_left = readActiveLowPin(inputs.joystick_left, inputs.joystick_need_pullup);
-    snapshot.joystick_right = readActiveLowPin(inputs.joystick_right, inputs.joystick_need_pullup);
-    snapshot.joystick_press = readActiveLowPin(inputs.joystick_press, inputs.joystick_need_pullup);
-    snapshot.any_activity = snapshot.button_primary || snapshot.button_secondary ||
-                            snapshot.joystick_up || snapshot.joystick_down ||
-                            snapshot.joystick_left || snapshot.joystick_right ||
-                            snapshot.joystick_press;
-
-    *out_snapshot = snapshot;
-    return snapshot.any_activity;
+    return input_runtime_ ? input_runtime_->pollSnapshot(out_snapshot) : false;
 }
 
 bool Gat562Board::formatLoraFrequencyMHz(uint32_t freq_hz, char* out, std::size_t out_len) const
@@ -998,7 +1027,7 @@ bool Gat562Board::formatLoraFrequencyMHz(uint32_t freq_hz, char* out, std::size_
 
 uint16_t Gat562Board::inputDebounceMs() const
 {
-    return kBoardProfile.inputs.debounce_ms;
+    return input_runtime_ ? input_runtime_->debounceMs() : kBoardProfile.inputs.debounce_ms;
 }
 
 bool Gat562Board::ensureI2cReady()
@@ -1053,32 +1082,7 @@ TwoWire& Gat562Board::i2cWire()
 
 bool Gat562Board::pollInputEvent(BoardInputEvent* out_event)
 {
-    if (out_event)
-    {
-        *out_event = BoardInputEvent{};
-    }
-
-    BoardInputSnapshot current{};
-    (void)pollInputSnapshot(&current);
-    s_input.snapshot = current;
-
-    const uint32_t now_ms = millis();
-    const uint16_t debounce_ms = inputDebounceMs();
-
-    return updateDebounced(current.button_primary, s_input.button_primary, debounce_ms,
-                           BoardInputKey::PrimaryButton, out_event, now_ms) ||
-           updateDebounced(current.button_secondary, s_input.button_secondary, debounce_ms,
-                           BoardInputKey::SecondaryButton, out_event, now_ms) ||
-           updateDebounced(current.joystick_up, s_input.joystick_up, debounce_ms,
-                           BoardInputKey::JoystickUp, out_event, now_ms) ||
-           updateDebounced(current.joystick_down, s_input.joystick_down, debounce_ms,
-                           BoardInputKey::JoystickDown, out_event, now_ms) ||
-           updateDebounced(current.joystick_left, s_input.joystick_left, debounce_ms,
-                           BoardInputKey::JoystickLeft, out_event, now_ms) ||
-           updateDebounced(current.joystick_right, s_input.joystick_right, debounce_ms,
-                           BoardInputKey::JoystickRight, out_event, now_ms) ||
-           updateDebounced(current.joystick_press, s_input.joystick_press, debounce_ms,
-                           BoardInputKey::JoystickPress, out_event, now_ms);
+    return input_runtime_ ? input_runtime_->pollEvent(out_event) : false;
 }
 
 namespace
@@ -1270,104 +1274,53 @@ uint32_t Gat562Board::activeLoraFrequencyHz() const
 
 bool Gat562Board::startGpsRuntime(const app::AppConfig& config)
 {
-    if (!beginGps(config))
-    {
-        return false;
-    }
-    applyGpsConfig(config);
-    return true;
+    return gps_runtime_ ? gps_runtime_->start(config) : false;
 }
 
 bool Gat562Board::beginGps(const app::AppConfig& config)
 {
-    (void)config;
-    if (!s_gps.initialized)
-    {
-        const auto& profile = kBoardProfile;
-        if (profile.gps.uart.aux >= 0)
-        {
-            pinMode(profile.gps.uart.aux, OUTPUT);
-            digitalWrite(profile.gps.uart.aux, HIGH);
-        }
-        Serial1.setPins(profile.gps.uart.rx, profile.gps.uart.tx);
-        Serial1.begin(profile.gps.baud_rate);
-        s_gps.initialized = true;
-        s_gps.powered = true;
-    }
-    return true;
+    return gps_runtime_ ? gps_runtime_->begin(config) : false;
 }
 
 void Gat562Board::applyGpsConfig(const app::AppConfig& config)
 {
-    s_gps.collection_interval_ms = config.gps_interval_ms;
-    s_gps.power_strategy = config.gps_strategy;
-    s_gps.gnss_mode = config.gps_mode;
-    s_gps.sat_mask = config.gps_sat_mask;
-    s_gps.nmea_output_hz = config.privacy_nmea_output;
-    s_gps.nmea_sentence_mask = config.privacy_nmea_sentence;
-    s_gps.motion_idle_timeout_ms = config.motion_config.idle_timeout_ms;
-    s_gps.motion_sensor_id = config.motion_config.sensor_id;
-    s_gps.enabled = (config.gps_mode != 0);
-    if (!s_gps.enabled)
+    if (gps_runtime_)
     {
-        clearGpsObservations();
+        gps_runtime_->applyConfig(config);
     }
-    Serial.printf(
-        "[gat562][gps] config enabled=%u interval_ms=%lu strategy=%u mode=%u sat_mask=0x%02X nmea_hz=%u nmea_mask=0x%02X motion_idle_ms=%lu motion_sensor=%u\n",
-        static_cast<unsigned>(s_gps.enabled ? 1 : 0),
-        static_cast<unsigned long>(s_gps.collection_interval_ms),
-        static_cast<unsigned>(s_gps.power_strategy),
-        static_cast<unsigned>(s_gps.gnss_mode),
-        static_cast<unsigned>(s_gps.sat_mask),
-        static_cast<unsigned>(s_gps.nmea_output_hz),
-        static_cast<unsigned>(s_gps.nmea_sentence_mask),
-        static_cast<unsigned long>(s_gps.motion_idle_timeout_ms),
-        static_cast<unsigned>(s_gps.motion_sensor_id));
 }
 
 void Gat562Board::tickGps()
 {
-    if (!s_gps.initialized || !s_gps.enabled)
+    if (gps_runtime_)
     {
-        return;
+        gps_runtime_->tick();
     }
-
-    while (Serial1.available() > 0)
-    {
-        s_gps.nmea_seen = true;
-        s_gps.last_nmea_ms = millis();
-        const char ch = static_cast<char>(Serial1.read());
-        s_gps.parser.encode(ch);
-        processGpsNmeaChar(ch);
-    }
-    applyGpsTimeIfValid();
-    refreshGpsFix();
-    logGpsStatusIfDue();
 }
 
 bool Gat562Board::isGpsRuntimeReady() const
 {
-    return s_gps.initialized && s_gps.powered;
+    return gps_runtime_ ? gps_runtime_->isReady() : false;
 }
 
 ::gps::GpsState Gat562Board::gpsData() const
 {
-    return s_gps.data;
+    return gps_runtime_ ? gps_runtime_->data() : ::gps::GpsState{};
 }
 
 bool Gat562Board::gpsEnabled() const
 {
-    return s_gps.enabled;
+    return gps_runtime_ ? gps_runtime_->enabled() : false;
 }
 
 bool Gat562Board::gpsPowered() const
 {
-    return s_gps.powered;
+    return gps_runtime_ ? gps_runtime_->powered() : false;
 }
 
 uint32_t Gat562Board::gpsLastMotionMs() const
 {
-    return s_gps.last_motion_ms;
+    return gps_runtime_ ? gps_runtime_->lastMotionMs() : 0;
 }
 
 bool Gat562Board::gpsGnssSnapshot(::gps::GnssSatInfo* out,
@@ -1375,96 +1328,77 @@ bool Gat562Board::gpsGnssSnapshot(::gps::GnssSatInfo* out,
                                   std::size_t* out_count,
                                   ::gps::GnssStatus* status) const
 {
-    if (out_count)
-    {
-        *out_count = 0;
-    }
-    if (status)
-    {
-        *status = s_gps.status;
-    }
-    if (out && max > 0 && s_gps.sat_count > 0)
-    {
-        const std::size_t copy_count = std::min<std::size_t>(max, s_gps.sat_count);
-        for (std::size_t index = 0; index < copy_count; ++index)
-        {
-            out[index] = s_gps.sats[index];
-        }
-        if (out_count)
-        {
-            *out_count = copy_count;
-        }
-        return true;
-    }
-    return s_gps.data.valid || s_gps.data.satellites > 0 || s_gps.sat_count > 0;
+    return gps_runtime_ ? gps_runtime_->gnssSnapshot(out, max, out_count, status) : false;
 }
 
-void Gat562Board::setGpsCollectionInterval(uint32_t interval_ms) { s_gps.collection_interval_ms = interval_ms; }
-void Gat562Board::setGpsPowerStrategy(uint8_t strategy) { s_gps.power_strategy = strategy; }
+void Gat562Board::setGpsCollectionInterval(uint32_t interval_ms)
+{
+    if (gps_runtime_)
+    {
+        gps_runtime_->setCollectionInterval(interval_ms);
+    }
+}
+void Gat562Board::setGpsPowerStrategy(uint8_t strategy)
+{
+    if (gps_runtime_)
+    {
+        gps_runtime_->setPowerStrategy(strategy);
+    }
+}
 void Gat562Board::setGpsConfig(uint8_t mode, uint8_t sat_mask)
 {
-    s_gps.gnss_mode = mode;
-    s_gps.sat_mask = sat_mask;
-    s_gps.enabled = (mode != 0);
-    if (!s_gps.enabled)
+    if (gps_runtime_)
     {
-        clearGpsObservations();
+        gps_runtime_->setConfig(mode, sat_mask);
     }
 }
 void Gat562Board::setGpsNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
 {
-    s_gps.nmea_output_hz = output_hz;
-    s_gps.nmea_sentence_mask = sentence_mask;
+    if (gps_runtime_)
+    {
+        gps_runtime_->setNmeaConfig(output_hz, sentence_mask);
+    }
 }
-void Gat562Board::setGpsMotionIdleTimeout(uint32_t timeout_ms) { s_gps.motion_idle_timeout_ms = timeout_ms; }
-void Gat562Board::setGpsMotionSensorId(uint8_t sensor_id) { s_gps.motion_sensor_id = sensor_id; }
+void Gat562Board::setGpsMotionIdleTimeout(uint32_t timeout_ms)
+{
+    if (gps_runtime_)
+    {
+        gps_runtime_->setMotionIdleTimeout(timeout_ms);
+    }
+}
+void Gat562Board::setGpsMotionSensorId(uint8_t sensor_id)
+{
+    if (gps_runtime_)
+    {
+        gps_runtime_->setMotionSensorId(sensor_id);
+    }
+}
 void Gat562Board::suspendGps()
 {
-    s_gps.enabled = false;
-    clearGpsObservations();
+    if (gps_runtime_)
+    {
+        gps_runtime_->suspend();
+    }
 }
 
 void Gat562Board::resumeGps()
 {
-    s_gps.enabled = (s_gps.gnss_mode != 0);
-    if (!s_gps.enabled)
+    if (gps_runtime_)
     {
-        clearGpsObservations();
+        gps_runtime_->resume();
     }
 }
 void Gat562Board::setCurrentEpochSeconds(uint32_t epoch_s)
 {
-    if (epoch_s < kMinValidEpochSeconds)
+    if (gps_runtime_)
     {
-        return;
+        gps_runtime_->setCurrentEpochSeconds(epoch_s);
     }
-
-    const uint32_t prev_epoch_s = s_gps.epoch_base_s;
-    s_gps.epoch_base_s = epoch_s;
-    s_gps.epoch_base_ms = millis();
-    s_gps.time_synced = true;
-    s_gps.last_time_sync_epoch_logged = epoch_s;
-    s_gps.last_time_sync_log_ms = s_gps.epoch_base_ms;
-    Serial.printf("[gat562][gps] time sync source=external epoch=%lu prev=%lu\n",
-                  static_cast<unsigned long>(epoch_s),
-                  static_cast<unsigned long>(prev_epoch_s));
-    syncSystemClockFromEpoch(epoch_s);
 }
 
 uint32_t Gat562Board::currentEpochSeconds() const
 {
-    const uint32_t system_epoch_s = readSystemEpochSeconds();
-    if (system_epoch_s >= kMinValidEpochSeconds)
-    {
-        return system_epoch_s;
-    }
-
-    if (!s_gps.time_synced || s_gps.epoch_base_s == 0)
-    {
-        return 0;
-    }
-    const uint32_t elapsed_s = (millis() - s_gps.epoch_base_ms) / 1000U;
-    return s_gps.epoch_base_s + elapsed_s;
+    return gps_runtime_ ? gps_runtime_->currentEpochSeconds() : 0;
 }
 
 } // namespace boards::gat562_mesh_evb_pro

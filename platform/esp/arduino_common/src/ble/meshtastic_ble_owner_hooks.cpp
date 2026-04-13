@@ -2,6 +2,7 @@
 
 #include "app/app_config.h"
 #include "board/BoardBase.h"
+#include "chat/ble/meshtastic_defaults.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "platform/esp/arduino_common/chat/infra/meshtastic/mt_adapter.h"
 
@@ -22,13 +23,6 @@ constexpr const char* kModulePrefsNs = "mt_mod";
 constexpr const char* kModuleBlobKey = "cfg";
 constexpr uint32_t kModuleConfigVersion = 1;
 
-constexpr const char* kDefaultMqttAddress = "mqtt.meshtastic.org";
-constexpr const char* kDefaultMqttUsername = "meshdev";
-constexpr const char* kDefaultMqttPassword = "large4cats";
-constexpr const char* kDefaultMqttRoot = "msh";
-constexpr bool kDefaultMqttEncryptionEnabled = true;
-constexpr bool kDefaultMqttTlsEnabled = false;
-constexpr uint32_t kDefaultMapPublishIntervalSecs = 60 * 60;
 constexpr uint32_t kDefaultDetectionMinBroadcastSecs = 45;
 constexpr uint32_t kDefaultAmbientCurrent = 10;
 
@@ -249,14 +243,14 @@ void MeshtasticBleService::loadModuleConfig()
         module_config_.has_detection_sensor = true;
         module_config_.has_paxcounter = true;
 
-        copyBounded(module_config_.mqtt.address, sizeof(module_config_.mqtt.address), kDefaultMqttAddress);
-        copyBounded(module_config_.mqtt.username, sizeof(module_config_.mqtt.username), kDefaultMqttUsername);
-        copyBounded(module_config_.mqtt.password, sizeof(module_config_.mqtt.password), kDefaultMqttPassword);
-        copyBounded(module_config_.mqtt.root, sizeof(module_config_.mqtt.root), kDefaultMqttRoot);
-        module_config_.mqtt.encryption_enabled = kDefaultMqttEncryptionEnabled;
-        module_config_.mqtt.tls_enabled = kDefaultMqttTlsEnabled;
+        copyBounded(module_config_.mqtt.address, sizeof(module_config_.mqtt.address), meshtastic_defaults::kDefaultMqttAddress);
+        copyBounded(module_config_.mqtt.username, sizeof(module_config_.mqtt.username), meshtastic_defaults::kDefaultMqttUsername);
+        copyBounded(module_config_.mqtt.password, sizeof(module_config_.mqtt.password), meshtastic_defaults::kDefaultMqttPassword);
+        copyBounded(module_config_.mqtt.root, sizeof(module_config_.mqtt.root), meshtastic_defaults::kDefaultMqttRoot);
+        module_config_.mqtt.encryption_enabled = meshtastic_defaults::kDefaultMqttEncryptionEnabled;
+        module_config_.mqtt.tls_enabled = meshtastic_defaults::kDefaultMqttTlsEnabled;
         module_config_.mqtt.has_map_report_settings = true;
-        module_config_.mqtt.map_report_settings.publish_interval_secs = kDefaultMapPublishIntervalSecs;
+        module_config_.mqtt.map_report_settings.publish_interval_secs = meshtastic_defaults::kDefaultMapPublishIntervalSecs;
         module_config_.mqtt.map_report_settings.position_precision = 0;
         module_config_.mqtt.map_report_settings.should_report_location = false;
 
@@ -372,7 +366,7 @@ void MeshtasticBleService::syncMqttProxySettings()
     settings.primary_downlink_enabled = cfg.primary_downlink_enabled;
     settings.secondary_uplink_enabled = cfg.secondary_uplink_enabled;
     settings.secondary_downlink_enabled = cfg.secondary_downlink_enabled;
-    settings.root = module_config_.mqtt.root[0] ? module_config_.mqtt.root : kDefaultMqttRoot;
+    settings.root = module_config_.mqtt.root[0] ? module_config_.mqtt.root : meshtastic_defaults::kDefaultMqttRoot;
     settings.primary_channel_id = channelDisplayName(ctx_, 0);
     settings.secondary_channel_id = channelDisplayName(ctx_, 1);
     mt->setMqttProxySettings(settings);

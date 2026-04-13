@@ -3,6 +3,7 @@
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "platform/nrf52/arduino_common/internal_fs_utils.h"
 
 #include <Arduino.h>
 #include <InternalFileSystem.h>
@@ -15,21 +16,31 @@ namespace boards::gat562_mesh_evb_pro::settings_store
 namespace
 {
 using Adafruit_LittleFS_Namespace::FILE_O_READ;
-using Adafruit_LittleFS_Namespace::FILE_O_WRITE;
 
 constexpr const char* kSettingsPath = "/gat562_settings.bin";
-constexpr const char* kSettingsTempPath = "/gat562_settings.bin.tmp";
-constexpr const char* kSettingsBackupPath = "/gat562_settings.bin.bak";
 constexpr const char* kSettingsCorruptPath = "/gat562_settings.bin.corrupt";
+constexpr const char* kLogTag = "[gat562][settings]";
 constexpr uint32_t kSettingsMagic = 0x53415447UL; // GTAS
-constexpr uint16_t kSettingsVersion = 1;
+constexpr uint16_t kSettingsVersion = 2;
 constexpr uint8_t kDefaultToneVolume = 45;
+constexpr uint32_t kDeferredSaveDebounceMs = 1500UL;
+constexpr uint32_t kImmediateSaveRetryDelayMs = 20UL;
+
+struct PersistedPayloadV1
+{
+    app::AppConfig config;
+    uint8_t tone_volume = kDefaultToneVolume;
+    uint8_t reserved[3] = {};
+};
 
 struct PersistedPayload
 {
     app::AppConfig config;
     uint8_t tone_volume = kDefaultToneVolume;
-    uint8_t reserved[3] = {};
+    uint8_t has_meshtastic_ble_state = 0;
+    uint8_t reserved[2] = {};
+    meshtastic_Config_BluetoothConfig meshtastic_ble_bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
+    meshtastic_LocalModuleConfig meshtastic_ble_module = meshtastic_LocalModuleConfig_init_zero;
 };
 
 struct FileHeader
@@ -45,12 +56,19 @@ struct CachedSettings
 {
     app::AppConfig config;
     uint8_t tone_volume = kDefaultToneVolume;
+    bool has_meshtastic_ble_state = false;
+    meshtastic_Config_BluetoothConfig meshtastic_ble_bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
+    meshtastic_LocalModuleConfig meshtastic_ble_module = meshtastic_LocalModuleConfig_init_zero;
 };
 
 bool s_cache_loaded = false;
 CachedSettings s_cache{};
 StoreStatus s_last_load_status = StoreStatus::NotFound;
 StoreStatus s_last_save_status = StoreStatus::NotFound;
+bool s_deferred_save_pending = false;
+uint32_t s_last_dirty_ms = 0;
+bool s_save_in_progress = false;
+uint32_t s_last_save_attempt_ms = 0;
 
 int8_t clampTxPower(int8_t value)
 {
@@ -105,24 +123,6 @@ const char* statusText(StoreStatus status)
     }
 }
 
-bool ensureFs()
-{
-    if (InternalFS.begin())
-    {
-        return true;
-    }
-    Serial.printf("[gat562][settings] fs init failed\n");
-    return false;
-}
-
-void removeIfExists(const char* path)
-{
-    if (path && InternalFS.exists(path))
-    {
-        InternalFS.remove(path);
-    }
-}
-
 uint32_t crc32(const uint8_t* data, size_t len)
 {
     uint32_t crc = 0xFFFFFFFFU;
@@ -144,7 +144,7 @@ bool quarantineCorruptFile(StoreStatus status)
         return true;
     }
 
-    removeIfExists(kSettingsCorruptPath);
+    ::platform::nrf52::arduino_common::internal_fs::removeIfExists(kSettingsCorruptPath);
     if (InternalFS.rename(kSettingsPath, kSettingsCorruptPath))
     {
         Serial.printf("[gat562][settings] quarantined corrupt store status=%s path=%s\n",
@@ -162,12 +162,101 @@ void resetCacheToDefaults()
 {
     s_cache = CachedSettings{};
     s_cache.tone_volume = kDefaultToneVolume;
+    s_cache.has_meshtastic_ble_state = false;
+    s_cache.meshtastic_ble_bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
+    meshtastic_LocalModuleConfig zero_module = meshtastic_LocalModuleConfig_init_zero;
+    s_cache.meshtastic_ble_module = zero_module;
     normalizeConfig(s_cache.config);
+}
+
+bool verifySavedFile()
+{
+    auto file = InternalFS.open(kSettingsPath, FILE_O_READ);
+    if (!file)
+    {
+        Serial.printf("[gat562][settings] verify open failed path=%s\n", kSettingsPath);
+        return false;
+    }
+
+    const uint32_t actual_size = file.size();
+    const uint32_t expected_size =
+        static_cast<uint32_t>(sizeof(FileHeader) + sizeof(PersistedPayload));
+
+    if (actual_size != expected_size)
+    {
+        file.close();
+        Serial.printf("[gat562][settings] verify size mismatch actual=%lu expected=%lu\n",
+                      static_cast<unsigned long>(actual_size),
+                      static_cast<unsigned long>(expected_size));
+        return false;
+    }
+
+    FileHeader header{};
+    if (file.read(&header, sizeof(header)) != sizeof(header))
+    {
+        file.close();
+        Serial.printf("[gat562][settings] verify header read failed\n");
+        return false;
+    }
+
+    if (header.magic != kSettingsMagic)
+    {
+        file.close();
+        Serial.printf("[gat562][settings] verify magic mismatch got=0x%08lX expected=0x%08lX\n",
+                      static_cast<unsigned long>(header.magic),
+                      static_cast<unsigned long>(kSettingsMagic));
+        return false;
+    }
+
+    if (header.version != kSettingsVersion)
+    {
+        file.close();
+        Serial.printf("[gat562][settings] verify version mismatch got=%u expected=%u\n",
+                      static_cast<unsigned>(header.version),
+                      static_cast<unsigned>(kSettingsVersion));
+        return false;
+    }
+
+    if (header.payload_size != sizeof(PersistedPayload))
+    {
+        file.close();
+        Serial.printf("[gat562][settings] verify payload size mismatch got=%lu expected=%lu\n",
+                      static_cast<unsigned long>(header.payload_size),
+                      static_cast<unsigned long>(sizeof(PersistedPayload)));
+        return false;
+    }
+
+    PersistedPayload payload{};
+    if (file.read(&payload, sizeof(payload)) != sizeof(payload))
+    {
+        file.close();
+        Serial.printf("[gat562][settings] verify payload read failed\n");
+        return false;
+    }
+
+    file.close();
+
+    const uint32_t actual_crc =
+        crc32(reinterpret_cast<const uint8_t*>(&payload), sizeof(payload));
+
+    if (actual_crc != header.crc32)
+    {
+        Serial.printf("[gat562][settings] verify crc mismatch got=0x%08lX expected=0x%08lX\n",
+                      static_cast<unsigned long>(actual_crc),
+                      static_cast<unsigned long>(header.crc32));
+        return false;
+    }
+
+    Serial.printf("[gat562][settings] verify ok size=%lu crc=0x%08lX mt_ble=%u\n",
+                  static_cast<unsigned long>(actual_size),
+                  static_cast<unsigned long>(actual_crc),
+                  payload.has_meshtastic_ble_state ? 1U : 0U);
+    return true;
 }
 
 bool loadFromFs()
 {
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(true, kLogTag))
     {
         s_last_load_status = StoreStatus::FsInitFailed;
         return false;
@@ -187,16 +276,15 @@ bool loadFromFs()
         return false;
     }
 
-    const uint32_t expected_size = static_cast<uint32_t>(sizeof(FileHeader) + sizeof(PersistedPayload));
     const uint32_t actual_size = file.size();
-    if (actual_size != expected_size)
+    if (actual_size < sizeof(FileHeader))
     {
         file.close();
         s_last_load_status = StoreStatus::PayloadSizeMismatch;
         (void)quarantineCorruptFile(s_last_load_status);
-        Serial.printf("[gat562][settings] size mismatch actual=%lu expected=%lu\n",
+        Serial.printf("[gat562][settings] size mismatch actual=%lu expected_at_least=%lu\n",
                       static_cast<unsigned long>(actual_size),
-                      static_cast<unsigned long>(expected_size));
+                      static_cast<unsigned long>(sizeof(FileHeader)));
         return false;
     }
 
@@ -222,6 +310,58 @@ bool loadFromFs()
 
     if (header.version != kSettingsVersion)
     {
+        if (header.version == 1)
+        {
+            const uint32_t expected_size_v1 =
+                static_cast<uint32_t>(sizeof(FileHeader) + sizeof(PersistedPayloadV1));
+            if (header.payload_size != sizeof(PersistedPayloadV1) || actual_size != expected_size_v1)
+            {
+                file.close();
+                s_last_load_status = StoreStatus::PayloadSizeMismatch;
+                (void)quarantineCorruptFile(s_last_load_status);
+                Serial.printf("[gat562][settings] v1 payload size mismatch got=%lu expected=%lu actual=%lu\n",
+                              static_cast<unsigned long>(header.payload_size),
+                              static_cast<unsigned long>(sizeof(PersistedPayloadV1)),
+                              static_cast<unsigned long>(actual_size));
+                return false;
+            }
+
+            PersistedPayloadV1 payload_v1{};
+            if (file.read(&payload_v1, sizeof(payload_v1)) != sizeof(payload_v1))
+            {
+                file.close();
+                s_last_load_status = StoreStatus::ReadFailed;
+                Serial.printf("[gat562][settings] v1 payload read failed\n");
+                return false;
+            }
+            file.close();
+
+            const uint32_t actual_crc = crc32(reinterpret_cast<const uint8_t*>(&payload_v1), sizeof(payload_v1));
+            if (actual_crc != header.crc32)
+            {
+                s_last_load_status = StoreStatus::CrcMismatch;
+                (void)quarantineCorruptFile(s_last_load_status);
+                Serial.printf("[gat562][settings] v1 crc mismatch got=0x%08lX expected=0x%08lX\n",
+                              static_cast<unsigned long>(actual_crc),
+                              static_cast<unsigned long>(header.crc32));
+                return false;
+            }
+
+            s_cache.config = payload_v1.config;
+            normalizeConfig(s_cache.config);
+            s_cache.tone_volume = clampToneVolume(payload_v1.tone_volume);
+            s_cache.has_meshtastic_ble_state = false;
+            s_cache.meshtastic_ble_bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
+            meshtastic_LocalModuleConfig zero_module = meshtastic_LocalModuleConfig_init_zero;
+            s_cache.meshtastic_ble_module = zero_module;
+            s_last_load_status = StoreStatus::Ok;
+            Serial.printf("[gat562][settings] load ok tone=%u ble=%u proto=%u mt_ble=0 version=1\n",
+                          static_cast<unsigned>(s_cache.tone_volume),
+                          static_cast<unsigned>(s_cache.config.ble_enabled ? 1 : 0),
+                          static_cast<unsigned>(s_cache.config.mesh_protocol));
+            return true;
+        }
+
         file.close();
         s_last_load_status = StoreStatus::VersionMismatch;
         (void)quarantineCorruptFile(s_last_load_status);
@@ -231,14 +371,16 @@ bool loadFromFs()
         return false;
     }
 
-    if (header.payload_size != sizeof(PersistedPayload))
+    if (header.payload_size != sizeof(PersistedPayload) ||
+        actual_size != static_cast<uint32_t>(sizeof(FileHeader) + sizeof(PersistedPayload)))
     {
         file.close();
         s_last_load_status = StoreStatus::PayloadSizeMismatch;
         (void)quarantineCorruptFile(s_last_load_status);
-        Serial.printf("[gat562][settings] payload size mismatch got=%lu expected=%lu\n",
+        Serial.printf("[gat562][settings] payload size mismatch got=%lu expected=%lu actual=%lu\n",
                       static_cast<unsigned long>(header.payload_size),
-                      static_cast<unsigned long>(sizeof(PersistedPayload)));
+                      static_cast<unsigned long>(sizeof(PersistedPayload)),
+                      static_cast<unsigned long>(actual_size));
         return false;
     }
 
@@ -266,92 +408,170 @@ bool loadFromFs()
     s_cache.config = payload.config;
     normalizeConfig(s_cache.config);
     s_cache.tone_volume = clampToneVolume(payload.tone_volume);
+    s_cache.has_meshtastic_ble_state = (payload.has_meshtastic_ble_state != 0);
+    s_cache.meshtastic_ble_bluetooth = payload.meshtastic_ble_bluetooth;
+    s_cache.meshtastic_ble_module = payload.meshtastic_ble_module;
     s_last_load_status = StoreStatus::Ok;
-    Serial.printf("[gat562][settings] load ok tone=%u ble=%u proto=%u\n",
+    Serial.printf("[gat562][settings] load ok tone=%u ble=%u proto=%u mt_ble=%u version=%u\n",
                   static_cast<unsigned>(s_cache.tone_volume),
                   static_cast<unsigned>(s_cache.config.ble_enabled ? 1 : 0),
-                  static_cast<unsigned>(s_cache.config.mesh_protocol));
+                  static_cast<unsigned>(s_cache.config.mesh_protocol),
+                  s_cache.has_meshtastic_ble_state ? 1U : 0U,
+                  static_cast<unsigned>(header.version));
     return true;
 }
 
-bool saveToFs()
+bool saveToFsOnce()
 {
-    if (!ensureFs())
+    Serial.printf("[gat562][settings] save begin path=%s\n", kSettingsPath);
+
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(true, kLogTag))
     {
         s_last_save_status = StoreStatus::FsInitFailed;
-        return false;
-    }
-
-    removeIfExists(kSettingsTempPath);
-
-    auto file = InternalFS.open(kSettingsTempPath, FILE_O_WRITE);
-    if (!file)
-    {
-        s_last_save_status = StoreStatus::OpenFailed;
-        Serial.printf("[gat562][settings] temp open failed path=%s\n", kSettingsTempPath);
+        Serial.printf("%s ensureMounted failed\n", kLogTag);
         return false;
     }
 
     PersistedPayload payload{};
     payload.config = s_cache.config;
     payload.tone_volume = clampToneVolume(s_cache.tone_volume);
+    payload.has_meshtastic_ble_state = s_cache.has_meshtastic_ble_state ? 1U : 0U;
+    payload.reserved[0] = 0;
+    payload.reserved[1] = 0;
+    payload.meshtastic_ble_bluetooth = s_cache.meshtastic_ble_bluetooth;
+    payload.meshtastic_ble_module = s_cache.meshtastic_ble_module;
 
     FileHeader header{};
     header.magic = kSettingsMagic;
     header.version = kSettingsVersion;
-    header.payload_size = sizeof(payload);
-    header.crc32 = crc32(reinterpret_cast<const uint8_t*>(&payload), sizeof(payload));
+    header.reserved = 0;
+    header.payload_size = sizeof(PersistedPayload);
+    header.crc32 = crc32(reinterpret_cast<const uint8_t*>(&payload), sizeof(PersistedPayload));
 
-    const size_t header_written = file.write(reinterpret_cast<const uint8_t*>(&header), sizeof(header));
-    const size_t payload_written = header_written == sizeof(header)
-                                       ? file.write(reinterpret_cast<const uint8_t*>(&payload), sizeof(payload))
-                                       : 0U;
+    // 先尝试正常打开已有文件
+    Adafruit_LittleFS_Namespace::File file(InternalFS);
+    if (!::platform::nrf52::arduino_common::internal_fs::openForOverwrite(kSettingsPath, &file, true, kLogTag))
+    {
+        s_last_save_status = StoreStatus::OpenFailed;
+        Serial.printf("%s open failed path=%s\n", kLogTag, kSettingsPath);
+        return false;
+    }
+
+    {
+        auto oldf = InternalFS.open(kSettingsPath, FILE_O_READ);
+        if (oldf)
+        {
+            Serial.printf("[gat562][settings] old size before overwrite=%lu\n",
+                          static_cast<unsigned long>(oldf.size()));
+            oldf.close();
+        }
+    }
+
+    const bool seek_ok = ::platform::nrf52::arduino_common::internal_fs::rewindForOverwrite(file);
+    Serial.printf("[gat562][settings] seek0 ok=%u\n", seek_ok ? 1U : 0U);
+    if (!seek_ok)
+    {
+        file.close();
+        s_last_save_status = StoreStatus::WriteFailed;
+        Serial.printf("[gat562][settings] seek failed path=%s\n", kSettingsPath);
+        return false;
+    }
+
+    const size_t header_written =
+        file.write(reinterpret_cast<const uint8_t*>(&header), sizeof(FileHeader));
+
+    const size_t payload_written =
+        (header_written == sizeof(FileHeader))
+            ? file.write(reinterpret_cast<const uint8_t*>(&payload), sizeof(PersistedPayload))
+            : 0U;
+
+    const uint32_t final_size =
+        static_cast<uint32_t>(sizeof(FileHeader) + sizeof(PersistedPayload));
+
+    bool trunc_ok = false;
+    if (header_written == sizeof(FileHeader) &&
+        payload_written == sizeof(PersistedPayload))
+    {
+        trunc_ok = ::platform::nrf52::arduino_common::internal_fs::truncateAfterWrite(file, final_size);
+    }
+
     file.flush();
-    const bool write_ok = (header_written == sizeof(header) && payload_written == sizeof(payload));
     file.close();
 
-    if (!write_ok)
+    if (header_written != sizeof(FileHeader) ||
+        payload_written != sizeof(PersistedPayload))
     {
-        removeIfExists(kSettingsTempPath);
         s_last_save_status = StoreStatus::WriteFailed;
-        Serial.printf("[gat562][settings] write failed header=%lu payload=%lu\n",
+        Serial.printf("[gat562][settings] write failed header=%lu payload=%lu expected_header=%lu expected_payload=%lu crc=0x%08lx exists=%u\n",
                       static_cast<unsigned long>(header_written),
-                      static_cast<unsigned long>(payload_written));
+                      static_cast<unsigned long>(payload_written),
+                      static_cast<unsigned long>(sizeof(FileHeader)),
+                      static_cast<unsigned long>(sizeof(PersistedPayload)),
+                      static_cast<unsigned long>(header.crc32),
+                      InternalFS.exists(kSettingsPath) ? 1U : 0U);
         return false;
     }
 
-    removeIfExists(kSettingsBackupPath);
-    if (InternalFS.exists(kSettingsPath) && !InternalFS.rename(kSettingsPath, kSettingsBackupPath))
+    if (!trunc_ok)
     {
-        removeIfExists(kSettingsTempPath);
-        s_last_save_status = StoreStatus::BackupFailed;
-        Serial.printf("[gat562][settings] backup rename failed main=%s backup=%s\n",
-                      kSettingsPath,
-                      kSettingsBackupPath);
+        s_last_save_status = StoreStatus::WriteFailed;
+        Serial.printf("[gat562][settings] truncate failed target=%lu\n",
+                      static_cast<unsigned long>(final_size));
         return false;
     }
 
-    if (!InternalFS.rename(kSettingsTempPath, kSettingsPath))
+    if (!verifySavedFile())
     {
-        if (InternalFS.exists(kSettingsBackupPath))
-        {
-            (void)InternalFS.rename(kSettingsBackupPath, kSettingsPath);
-        }
-        removeIfExists(kSettingsTempPath);
-        s_last_save_status = StoreStatus::RenameFailed;
-        Serial.printf("[gat562][settings] commit rename failed temp=%s main=%s\n",
-                      kSettingsTempPath,
-                      kSettingsPath);
+        s_last_save_status = StoreStatus::WriteFailed;
+        Serial.printf("[gat562][settings] verify after save failed\n");
         return false;
     }
 
-    removeIfExists(kSettingsBackupPath);
     s_last_save_status = StoreStatus::Ok;
-    Serial.printf("[gat562][settings] save ok tone=%u ble=%u proto=%u\n",
+    Serial.printf("[gat562][settings] save ok size=%lu crc=0x%08lx tone=%u mt_ble=%u\n",
+                  static_cast<unsigned long>(sizeof(PersistedPayload)),
+                  static_cast<unsigned long>(header.crc32),
                   static_cast<unsigned>(payload.tone_volume),
-                  static_cast<unsigned>(payload.config.ble_enabled ? 1 : 0),
-                  static_cast<unsigned>(payload.config.mesh_protocol));
+                  static_cast<unsigned>(payload.has_meshtastic_ble_state));
     return true;
+}
+
+bool saveToFs()
+{
+    if (s_save_in_progress)
+    {
+        Serial.printf("[gat562][settings] save skipped: already in progress\n");
+        return false;
+    }
+
+    s_save_in_progress = true;
+    s_last_save_attempt_ms = millis();
+
+    bool ok = saveToFsOnce();
+    if (!ok)
+    {
+        Serial.printf("[gat562][settings] save first attempt failed status=%s retry_delay_ms=%lu\n",
+                      statusText(s_last_save_status),
+                      static_cast<unsigned long>(kImmediateSaveRetryDelayMs));
+
+        delay(kImmediateSaveRetryDelayMs);
+
+        ok = saveToFsOnce();
+        if (!ok)
+        {
+            Serial.printf("[gat562][settings] save retry failed status=%s\n",
+                          statusText(s_last_save_status));
+        }
+    }
+
+    s_save_in_progress = false;
+    return ok;
+}
+
+void markDeferredSaveDirty()
+{
+    s_deferred_save_pending = true;
+    s_last_dirty_ms = millis();
 }
 
 void ensureCacheLoaded()
@@ -455,7 +675,16 @@ bool saveAppConfig(const app::AppConfig& config)
     ensureCacheLoaded();
     s_cache.config = config;
     normalizeConfig(s_cache.config);
+    s_deferred_save_pending = false;
     return saveToFs();
+}
+
+void queueSaveAppConfig(const app::AppConfig& config)
+{
+    ensureCacheLoaded();
+    s_cache.config = config;
+    normalizeConfig(s_cache.config);
+    markDeferredSaveDirty();
 }
 
 uint8_t loadMessageToneVolume()
@@ -468,7 +697,102 @@ bool saveMessageToneVolume(uint8_t volume)
 {
     ensureCacheLoaded();
     s_cache.tone_volume = clampToneVolume(volume);
+    s_deferred_save_pending = false;
     return saveToFs();
+}
+
+void queueSaveMessageToneVolume(uint8_t volume)
+{
+    ensureCacheLoaded();
+    s_cache.tone_volume = clampToneVolume(volume);
+    markDeferredSaveDirty();
+}
+
+bool loadMeshtasticBleState(meshtastic_Config_BluetoothConfig* bluetooth,
+                            meshtastic_LocalModuleConfig* module)
+{
+    ensureCacheLoaded();
+
+    Serial.printf("[gat562][settings][mt] load request has_state=%u last_load=%s\n",
+                  s_cache.has_meshtastic_ble_state ? 1U : 0U,
+                  statusText(s_last_load_status));
+
+    if (!bluetooth || !module || !s_cache.has_meshtastic_ble_state)
+    {
+        return false;
+    }
+
+    *bluetooth = s_cache.meshtastic_ble_bluetooth;
+    *module = s_cache.meshtastic_ble_module;
+
+    Serial.printf("[gat562][settings][mt] load ok mode=%u mqtt=%u proxy=%u root=%s\n",
+                  static_cast<unsigned>(bluetooth->mode),
+                  module->has_mqtt && module->mqtt.enabled ? 1U : 0U,
+                  module->has_mqtt && module->mqtt.proxy_to_client_enabled ? 1U : 0U,
+                  module->mqtt.root);
+    return true;
+}
+
+bool saveMeshtasticBleState(const meshtastic_Config_BluetoothConfig& bluetooth,
+                            const meshtastic_LocalModuleConfig& module)
+{
+    ensureCacheLoaded();
+    s_cache.has_meshtastic_ble_state = true;
+    s_cache.meshtastic_ble_bluetooth = bluetooth;
+    s_cache.meshtastic_ble_module = module;
+
+    s_deferred_save_pending = false;
+    const bool ok = saveToFs();
+    if (!ok)
+    {
+        s_deferred_save_pending = true;
+        s_last_dirty_ms = millis();
+        Serial.printf("[gat562][settings][mt] save failed status=%s\n", statusText(s_last_save_status));
+        return false;
+    }
+
+    Serial.printf("[gat562][settings][mt] save ok mode=%u mqtt=%u proxy=%u root=%s\n",
+                  static_cast<unsigned>(bluetooth.mode),
+                  module.has_mqtt && module.mqtt.enabled ? 1U : 0U,
+                  module.has_mqtt && module.mqtt.proxy_to_client_enabled ? 1U : 0U,
+                  module.mqtt.root);
+    return true;
+}
+
+bool tickDeferredSave()
+{
+    ensureCacheLoaded();
+    if (!s_deferred_save_pending)
+    {
+        return false;
+    }
+
+    if (s_save_in_progress)
+    {
+        return false;
+    }
+
+    const uint32_t now_ms = millis();
+    if ((now_ms - s_last_dirty_ms) < kDeferredSaveDebounceMs)
+    {
+        return false;
+    }
+
+    s_deferred_save_pending = false;
+    if (saveToFs())
+    {
+        return true;
+    }
+
+    s_deferred_save_pending = true;
+    s_last_dirty_ms = millis();
+    return false;
+}
+
+bool hasDeferredSavePending()
+{
+    ensureCacheLoaded();
+    return s_deferred_save_pending;
 }
 
 StoreStatus lastLoadStatus()

@@ -81,6 +81,14 @@ bool MeshAdapterRouter::sendText(ChannelId channel, const std::string& text,
     return lock.locked() && core_.sendText(channel, text, out_msg_id, peer);
 }
 
+bool MeshAdapterRouter::sendTextWithId(ChannelId channel, const std::string& text,
+                                       MessageId forced_msg_id,
+                                       MessageId* out_msg_id, NodeId peer)
+{
+    LockGuard lock(mutex_);
+    return lock.locked() && core_.sendTextWithId(channel, text, forced_msg_id, out_msg_id, peer);
+}
+
 bool MeshAdapterRouter::pollIncomingText(MeshIncomingText* out)
 {
     LockGuard lock(mutex_);

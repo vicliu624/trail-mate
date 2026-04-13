@@ -1,5 +1,7 @@
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
 
+#include "app/app_facade_access.h"
+#include "chat/usecase/contact_service.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 
@@ -118,6 +120,26 @@ void handle_low_battery(const BatteryInfo& info)
     (void)info;
 }
 
+bool supports_screen_brightness()
+{
+    return false;
+}
+
+uint8_t screen_brightness()
+{
+    return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().getBrightness();
+}
+
+void set_screen_brightness(uint8_t level)
+{
+    ::boards::gat562_mesh_evb_pro::Gat562Board::instance().setBrightness(level);
+}
+
+void trigger_haptic()
+{
+    ::boards::gat562_mesh_evb_pro::Gat562Board::instance().vibrator();
+}
+
 uint8_t default_message_tone_volume()
 {
     return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().getMessageToneVolume();
@@ -158,14 +180,94 @@ int power_tier()
 namespace platform::ui::gps
 {
 
+namespace
+{
+
+void logGnssSnapshotUiFlow(bool has_snapshot, std::size_t sat_count, const GnssStatus& status)
+{
+    static bool s_last_has_snapshot = false;
+    static std::size_t s_last_sat_count = static_cast<std::size_t>(-1);
+    static uint8_t s_last_sats_in_view = 0xFF;
+    static uint8_t s_last_sats_in_use = 0xFF;
+    static uint32_t s_last_log_ms = 0;
+
+    const uint32_t now_ms = millis();
+    const bool changed = (has_snapshot != s_last_has_snapshot) || (sat_count != s_last_sat_count) ||
+                         (status.sats_in_view != s_last_sats_in_view) || (status.sats_in_use != s_last_sats_in_use);
+    const bool suspicious_full_scale =
+        has_snapshot && sat_count == ::gps::kMaxGnssSats && status.sats_in_view != static_cast<uint8_t>(sat_count);
+    if (!changed && !suspicious_full_scale && (now_ms - s_last_log_ms) < 2000U)
+    {
+        return;
+    }
+
+    s_last_has_snapshot = has_snapshot;
+    s_last_sat_count = sat_count;
+    s_last_sats_in_view = status.sats_in_view;
+    s_last_sats_in_use = status.sats_in_use;
+    s_last_log_ms = now_ms;
+
+    Serial.printf("[gat562][gps][ui] snapshot has=%u count=%u status_view=%u status_use=%u hdop=%.1f fix=%u\n",
+                  static_cast<unsigned>(has_snapshot ? 1 : 0),
+                  static_cast<unsigned>(sat_count),
+                  static_cast<unsigned>(status.sats_in_view),
+                  static_cast<unsigned>(status.sats_in_use),
+                  static_cast<double>(status.hdop),
+                  static_cast<unsigned>(status.fix != ::gps::GnssFix::NOFIX ? 1 : 0));
+}
+
+} // namespace
+
 GpsState get_data()
 {
-    return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().gpsData();
+    GpsState gps = ::boards::gat562_mesh_evb_pro::Gat562Board::instance().gpsData();
+    if (gps.valid)
+    {
+        return gps;
+    }
+
+    if (!::app::hasAppFacade())
+    {
+        return gps;
+    }
+
+    auto& facade = ::app::appFacade();
+    const ::chat::NodeId self_id = facade.getSelfNodeId();
+    if (self_id == 0)
+    {
+        return gps;
+    }
+
+    const ::chat::contacts::NodeInfo* self = facade.getContactService().getNodeInfo(self_id);
+    if (!self || !self->position.valid)
+    {
+        return gps;
+    }
+
+    gps.valid = true;
+    gps.lat = static_cast<double>(self->position.latitude_i) / 1e7;
+    gps.lng = static_cast<double>(self->position.longitude_i) / 1e7;
+    gps.has_alt = self->position.has_altitude;
+    gps.alt_m = self->position.has_altitude ? static_cast<double>(self->position.altitude) : 0.0;
+    gps.has_speed = false;
+    gps.speed_mps = 0.0;
+    gps.has_course = false;
+    gps.course_deg = 0.0;
+    gps.satellites = 0;
+    gps.age = 0xFFFFFFFFUL;
+    return gps;
 }
 
 bool get_gnss_snapshot(GnssSatInfo* out, std::size_t max, std::size_t* out_count, GnssStatus* status)
 {
-    return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().gpsGnssSnapshot(out, max, out_count, status);
+    GnssStatus local_status{};
+    std::size_t local_count = 0;
+    const bool has_snapshot = ::boards::gat562_mesh_evb_pro::Gat562Board::instance().gpsGnssSnapshot(
+        out, max, out_count ? out_count : &local_count, status ? status : &local_status);
+    const std::size_t final_count = out_count ? *out_count : local_count;
+    const GnssStatus& final_status = status ? *status : local_status;
+    logGnssSnapshotUiFlow(has_snapshot, final_count, final_status);
+    return has_snapshot;
 }
 
 uint32_t last_motion_ms()

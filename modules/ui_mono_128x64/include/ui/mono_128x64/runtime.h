@@ -199,6 +199,8 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     void saveEditedTextToConfig();
     void formatTime(char* out_time, size_t out_len, char* out_date, size_t date_len) const;
     void formatTimestamp(char* out, size_t out_len, uint32_t timestamp_s) const;
+    void formatConversationTime(char* out, size_t out_len, uint32_t timestamp_s, bool expanded = false) const;
+    void formatConversationSender(char* out, size_t out_len, const chat::ChatMessage& msg, bool expanded = false) const;
     void formatProtocol(char* out, size_t out_len) const;
     void formatNodeLabel(char* out, size_t out_len) const;
     void formatComposeTarget(char* out, size_t out_len) const;
@@ -207,10 +209,14 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     void drawFooterHint(const char* hint);
     void drawTextClipped(int x, int y, int w, const char* text, bool inverse = false);
     void drawConversationText(int x, int y, int w, const char* text, bool selected, bool align_right);
+    void drawConversationBubble(int x, int y, int w, const char* sender, const char* time_text,
+                                const char* text, bool selected, bool align_right);
     void refreshGnssSnapshot(bool force = false);
     bool editUsesHexCharset() const;
     bool usesSmartCompose() const;
     void executeActionPageItem(size_t index);
+    size_t nodeActionCount() const;
+    const char* nodeActionLabel(size_t index) const;
 
     uint32_t nowMs() const;
     app::IAppFacade* app() const;
@@ -246,6 +252,7 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     size_t setting_popup_index_ = 0;
     app::AppConfig setting_popup_config_{};
     bool setting_popup_ble_enabled_ = false;
+    uint32_t setting_popup_screen_timeout_ms_ = 30000;
     int setting_popup_timezone_min_ = 0;
     size_t info_scroll_ = 0;
     size_t action_index_ = 0;

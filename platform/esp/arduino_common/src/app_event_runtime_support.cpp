@@ -8,6 +8,7 @@
 #include "chat/usecase/contact_service.h"
 #include "platform/esp/arduino_common/app_runtime_support.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_bridge_radio.h"
+#include "platform/ui/settings_store.h"
 #include "sys/event_bus.h"
 #include "team/protocol/team_chat.h"
 #include "ui/chat_ui_runtime.h"
@@ -26,7 +27,10 @@ void triggerMessageFeedback(app::IAppFacade& app_context)
     {
         return;
     }
-    board->vibrator();
+    if (platform::ui::settings_store::get_bool("settings", "vibration_enabled", true))
+    {
+        board->vibrator();
+    }
     board->playMessageTone();
 }
 
@@ -104,7 +108,7 @@ void handleTeamChatNotification(app::IAppFacade& app_context, const sys::TeamCha
         notice += "Message";
     }
 
-    ui::SystemNotification::show(notice.c_str(), 3000);
+    ::ui::SystemNotification::show(notice.c_str(), 3000);
 }
 
 void tickUiRuntime(app::IAppFacade& app_context)
@@ -133,7 +137,7 @@ bool handleUiEvent(app::IAppFacade& app_context, sys::Event* event)
     {
         auto* msg_event = static_cast<sys::ChatNewMessageEvent*>(event);
         triggerMessageFeedback(app_context);
-        ui::SystemNotification::show(msg_event->text, 3000);
+        ::ui::SystemNotification::show(msg_event->text, 3000);
         break;
     }
     case sys::EventType::TeamChat:
@@ -141,31 +145,49 @@ bool handleUiEvent(app::IAppFacade& app_context, sys::Event* event)
         break;
     case sys::EventType::KeyVerificationNumberRequest:
     {
+        chat::ui::IChatUiRuntime* chat_ui_runtime = app_context.getChatUiRuntime();
+        if (chat_ui_runtime)
+        {
+            chat_ui_runtime->onChatEvent(event);
+            return true;
+        }
         auto* kv_event = static_cast<sys::KeyVerificationNumberRequestEvent*>(event);
         std::string msg = "Key verify: enter number for " + resolveContactName(app_context, kv_event->node_id);
-        ui::SystemNotification::show(msg.c_str(), 4000);
+        ::ui::SystemNotification::show(msg.c_str(), 4000);
         delete event;
         return true;
     }
     case sys::EventType::KeyVerificationNumberInform:
     {
+        chat::ui::IChatUiRuntime* chat_ui_runtime = app_context.getChatUiRuntime();
+        if (chat_ui_runtime)
+        {
+            chat_ui_runtime->onChatEvent(event);
+            return true;
+        }
         auto* kv_event = static_cast<sys::KeyVerificationNumberInformEvent*>(event);
         const std::string name = resolveContactName(app_context, kv_event->node_id);
         const uint32_t number = kv_event->security_number % 1000000;
         char number_buf[16];
         snprintf(number_buf, sizeof(number_buf), "%03u %03u", number / 1000, number % 1000);
         std::string msg = "Key verify: " + name + " " + number_buf;
-        ui::SystemNotification::show(msg.c_str(), 5000);
+        ::ui::SystemNotification::show(msg.c_str(), 5000);
         delete event;
         return true;
     }
     case sys::EventType::KeyVerificationFinal:
     {
+        chat::ui::IChatUiRuntime* chat_ui_runtime = app_context.getChatUiRuntime();
+        if (chat_ui_runtime)
+        {
+            chat_ui_runtime->onChatEvent(event);
+            return true;
+        }
         auto* kv_event = static_cast<sys::KeyVerificationFinalEvent*>(event);
         std::string msg = std::string("Key verify: ") + (kv_event->is_sender ? "send " : "confirm ") +
                           kv_event->verification_code + " " +
                           resolveContactName(app_context, kv_event->node_id);
-        ui::SystemNotification::show(msg.c_str(), 5000);
+        ::ui::SystemNotification::show(msg.c_str(), 5000);
         delete event;
         return true;
     }

@@ -1,7 +1,10 @@
+#include "platform/nrf52/arduino_common/internal_fs_utils.h"
 #include "platform/ui/settings_store.h"
 
+#include <Arduino.h>
 #include <InternalFileSystem.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -12,10 +15,9 @@ namespace
 {
 
 using Adafruit_LittleFS_Namespace::FILE_O_READ;
-using Adafruit_LittleFS_Namespace::FILE_O_WRITE;
 
 constexpr const char* kSettingsPath = "/ui_settings.bin";
-constexpr const char* kSettingsTempPath = "/ui_settings.bin.tmp";
+constexpr const char* kLogTag = "[nrf52][ui_settings]";
 constexpr uint32_t kMagic = 0x55535447UL; // USTG
 constexpr uint16_t kVersion = 1;
 
@@ -88,21 +90,60 @@ void clearAllStores()
     blobStore().clear();
 }
 
-bool ensureFs()
-{
-    return InternalFS.begin();
-}
-
 template <typename T>
 bool writePod(Adafruit_LittleFS_Namespace::File& file, const T& value)
 {
     return file.write(reinterpret_cast<const uint8_t*>(&value), sizeof(T)) == sizeof(T);
 }
 
+bool writeBytes(Adafruit_LittleFS_Namespace::File& file, const uint8_t* data, std::size_t len)
+{
+    if (!data && len != 0)
+    {
+        return false;
+    }
+
+    constexpr std::size_t kChunkSize = 128;
+    std::size_t offset = 0;
+    while (offset < len)
+    {
+        const std::size_t chunk = std::min(kChunkSize, len - offset);
+        const std::size_t written = file.write(data + offset, chunk);
+        if (written != chunk)
+        {
+            return false;
+        }
+        offset += written;
+    }
+    return true;
+}
+
 template <typename T>
 bool readPod(Adafruit_LittleFS_Namespace::File& file, T* value)
 {
     return value && file.read(value, sizeof(T)) == sizeof(T);
+}
+
+bool readBytes(Adafruit_LittleFS_Namespace::File& file, uint8_t* data, std::size_t len)
+{
+    if (!data && len != 0)
+    {
+        return false;
+    }
+
+    constexpr std::size_t kChunkSize = 128;
+    std::size_t offset = 0;
+    while (offset < len)
+    {
+        const std::size_t chunk = std::min(kChunkSize, len - offset);
+        const int read = file.read(data + offset, static_cast<uint32_t>(chunk));
+        if (read != static_cast<int>(chunk))
+        {
+            return false;
+        }
+        offset += static_cast<std::size_t>(read);
+    }
+    return true;
 }
 
 bool writeRecordHeader(Adafruit_LittleFS_Namespace::File& file,
@@ -115,29 +156,40 @@ bool writeRecordHeader(Adafruit_LittleFS_Namespace::File& file,
     header.key_len = static_cast<uint16_t>(key.size());
     header.value_len = value_len;
     return writePod(file, header) &&
-           (key.empty() || file.write(key.data(), key.size()) == key.size());
+           (key.empty() || writeBytes(file, reinterpret_cast<const uint8_t*>(key.data()), key.size()));
 }
 
 bool saveToFs()
 {
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(false, kLogTag))
     {
         return false;
     }
 
-    auto file = InternalFS.open(kSettingsTempPath, FILE_O_WRITE);
-    if (!file)
+    Adafruit_LittleFS_Namespace::File file(InternalFS);
+    if (!::platform::nrf52::arduino_common::internal_fs::openForOverwrite(kSettingsPath, &file, false, kLogTag))
     {
+        Serial.printf("%s open failed path=%s\n", kLogTag, kSettingsPath);
+        return false;
+    }
+    if (!::platform::nrf52::arduino_common::internal_fs::rewindForOverwrite(file))
+    {
+        file.close();
+        Serial.printf("%s seek failed path=%s\n", kLogTag, kSettingsPath);
         return false;
     }
 
     const uint32_t record_count = static_cast<uint32_t>(
         intStore().size() + boolStore().size() + uintStore().size() + blobStore().size());
+    uint32_t final_size = static_cast<uint32_t>(sizeof(FileHeader));
     FileHeader header{};
     header.record_count = record_count;
     if (!writePod(file, header))
     {
         file.close();
+        Serial.printf("%s header write failed records=%lu\n",
+                      kLogTag,
+                      static_cast<unsigned long>(record_count));
         return false;
     }
 
@@ -145,53 +197,68 @@ bool saveToFs()
     {
         const int32_t value = entry.second;
         if (!writeRecordHeader(file, ValueType::Int, entry.first, sizeof(value)) ||
-            file.write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)) != sizeof(value))
+            !writeBytes(file, reinterpret_cast<const uint8_t*>(&value), sizeof(value)))
         {
             file.close();
+            Serial.printf("%s int write failed key=%s\n", kLogTag, entry.first.c_str());
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + sizeof(value));
     }
 
     for (const auto& entry : boolStore())
     {
         const uint8_t value = entry.second ? 1U : 0U;
         if (!writeRecordHeader(file, ValueType::Bool, entry.first, sizeof(value)) ||
-            file.write(&value, sizeof(value)) != sizeof(value))
+            !writeBytes(file, &value, sizeof(value)))
         {
             file.close();
+            Serial.printf("%s bool write failed key=%s\n", kLogTag, entry.first.c_str());
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + sizeof(value));
     }
 
     for (const auto& entry : uintStore())
     {
         const uint32_t value = entry.second;
         if (!writeRecordHeader(file, ValueType::Uint, entry.first, sizeof(value)) ||
-            file.write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)) != sizeof(value))
+            !writeBytes(file, reinterpret_cast<const uint8_t*>(&value), sizeof(value)))
         {
             file.close();
+            Serial.printf("%s uint write failed key=%s\n", kLogTag, entry.first.c_str());
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + sizeof(value));
     }
 
     for (const auto& entry : blobStore())
     {
         if (!writeRecordHeader(file, ValueType::Blob, entry.first, static_cast<uint32_t>(entry.second.size())) ||
-            (!entry.second.empty() && file.write(entry.second.data(), entry.second.size()) != entry.second.size()))
+            (!entry.second.empty() && !writeBytes(file, entry.second.data(), entry.second.size())))
         {
             file.close();
+            Serial.printf("%s blob write failed key=%s len=%lu\n",
+                          kLogTag,
+                          entry.first.c_str(),
+                          static_cast<unsigned long>(entry.second.size()));
             return false;
         }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + entry.second.size());
     }
 
+    const bool trunc_ok = ::platform::nrf52::arduino_common::internal_fs::truncateAfterWrite(file, final_size);
     file.flush();
     file.close();
 
-    if (InternalFS.exists(kSettingsPath))
+    if (!trunc_ok)
     {
-        InternalFS.remove(kSettingsPath);
+        Serial.printf("%s truncate failed path=%s size=%lu\n",
+                      kLogTag,
+                      kSettingsPath,
+                      static_cast<unsigned long>(final_size));
     }
-    return InternalFS.rename(kSettingsTempPath, kSettingsPath);
+    return trunc_ok;
 }
 
 void ensureLoaded()
@@ -202,7 +269,7 @@ void ensureLoaded()
     }
 
     clearAllStores();
-    if (!ensureFs())
+    if (!::platform::nrf52::arduino_common::internal_fs::ensureMounted(false, kLogTag))
     {
         return;
     }
@@ -241,7 +308,8 @@ void ensureLoaded()
         }
 
         std::string key(rec.key_len, '\0');
-        if (rec.key_len > 0 && file.read(&key[0], rec.key_len) != rec.key_len)
+        if (rec.key_len > 0 &&
+            !readBytes(file, reinterpret_cast<uint8_t*>(&key[0]), rec.key_len))
         {
             file.close();
             return;
@@ -285,7 +353,7 @@ void ensureLoaded()
         case ValueType::Blob:
         {
             std::vector<uint8_t> value(rec.value_len, 0);
-            if (rec.value_len > 0 && file.read(value.data(), rec.value_len) != rec.value_len)
+            if (rec.value_len > 0 && !readBytes(file, value.data(), rec.value_len))
             {
                 file.close();
                 return;
@@ -296,7 +364,7 @@ void ensureLoaded()
         default:
         {
             std::vector<uint8_t> skip(rec.value_len, 0);
-            if (rec.value_len > 0 && file.read(skip.data(), rec.value_len) != rec.value_len)
+            if (rec.value_len > 0 && !readBytes(file, skip.data(), rec.value_len))
             {
                 file.close();
                 return;
@@ -359,7 +427,15 @@ bool put_blob(const char* ns, const char* key, const void* data, std::size_t len
     }
     ensureLoaded();
     auto& blob = blobStore()[makeScopedKey(ns, key)];
-    blob.assign(static_cast<const uint8_t*>(data), static_cast<const uint8_t*>(data) + len);
+    if (len == 0)
+    {
+        blob.clear();
+    }
+    else
+    {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        blob.assign(bytes, bytes + len);
+    }
     return saveToFs();
 }
 

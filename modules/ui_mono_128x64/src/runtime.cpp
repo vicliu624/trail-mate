@@ -11,6 +11,7 @@
 #include "generated/meshtastic/mesh.pb.h"
 #include "generated/meshtastic/portnums.pb.h"
 #include "pb_encode.h"
+#include "platform/ui/screen_runtime.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -70,7 +71,7 @@ constexpr const char* kMeshtasticRadioItems[] = {
     "REGION",
     "TX POWER",
     "MODEM",
-    "CHANNEL",
+    "CH SLOT",
     "ENCRYPT",
 };
 
@@ -84,11 +85,43 @@ constexpr const char* kMeshCoreRadioItems[] = {
     "NAME",
 };
 
+constexpr uint16_t kMeshtasticChannelNumMax = 16;
+constexpr uint32_t kScreenTimeoutAlwaysMs = 300000UL;
+constexpr uint32_t kScreenTimeoutOptionsMs[] = {15000UL, 30000UL, 60000UL, kScreenTimeoutAlwaysMs};
+
+uint16_t normalizedMeshtasticChannelNum(uint16_t channel_num)
+{
+    return std::min<uint16_t>(channel_num, kMeshtasticChannelNumMax);
+}
+
+void sanitizeMeshtasticChannelNum(app::AppConfig& cfg)
+{
+    cfg.meshtastic_config.channel_num = normalizedMeshtasticChannelNum(cfg.meshtastic_config.channel_num);
+}
+
+void formatMeshtasticChannelSlot(char* out, size_t out_len, uint16_t channel_num)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    const unsigned slot = static_cast<unsigned>(normalizedMeshtasticChannelNum(channel_num));
+    if (slot == 0U)
+    {
+        std::snprintf(out, out_len, "Auto");
+        return;
+    }
+
+    std::snprintf(out, out_len, "%u", slot);
+}
+
 constexpr const char* kDeviceItems[] = {
     "BLE",
     "GPS",
     "SATS",
     "GPS INT",
+    "SCREEN OFF",
     "TIME ZONE",
 };
 
@@ -104,14 +137,7 @@ constexpr const char* kMessageMenuItems[] = {
     "REPLY",
 };
 
-constexpr const char* kNodeActionItems[] = {
-    "DETAIL",
-    "ADD CONTACT",
-    "TRACE ROUTE",
-    "KEY VERIFICATION",
-    "EXCHANGE POSITION",
-    "OPEN COMPASS",
-};
+constexpr size_t kNodeActionItemCount = 7;
 
 constexpr const char* kWeekdays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 constexpr const char* kComposeCharset =
@@ -143,7 +169,6 @@ constexpr ComposeGroupDef kComposeAbcGroups[] = {
     {".,?", ".,?"},
 };
 constexpr uint32_t kBootMinMs = 1800;
-constexpr uint32_t kSleepTimeoutMs = 30000;
 constexpr uint32_t kComposeMultiTapWindowMs = 700;
 constexpr size_t kChatListPageSize = 6;
 constexpr size_t kNodeListPageSize = 6;
@@ -260,6 +285,52 @@ template <typename T>
 constexpr T clampValue(T value, T low, T high)
 {
     return value < low ? low : (value > high ? high : value);
+}
+
+uint32_t normalizedScreenTimeoutMs(uint32_t timeout_ms)
+{
+    return platform::ui::screen::clamp_timeout_ms(timeout_ms);
+}
+
+size_t screenTimeoutOptionIndex(uint32_t timeout_ms)
+{
+    timeout_ms = normalizedScreenTimeoutMs(timeout_ms);
+    size_t index = 0;
+    while (index + 1 < arrayCount(kScreenTimeoutOptionsMs) &&
+           kScreenTimeoutOptionsMs[index] < timeout_ms)
+    {
+        ++index;
+    }
+    return index;
+}
+
+uint32_t stepScreenTimeoutMs(uint32_t current_timeout_ms, int delta)
+{
+    const int current = static_cast<int>(screenTimeoutOptionIndex(current_timeout_ms));
+    const int next = clampValue(current + delta, 0, static_cast<int>(arrayCount(kScreenTimeoutOptionsMs)) - 1);
+    return kScreenTimeoutOptionsMs[next];
+}
+
+void formatScreenTimeoutLabel(char* out, size_t out_len, uint32_t timeout_ms)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    const uint32_t normalized = normalizedScreenTimeoutMs(timeout_ms);
+    if (normalized >= kScreenTimeoutAlwaysMs)
+    {
+        std::snprintf(out, out_len, "Always");
+        return;
+    }
+    if (normalized % 60000UL == 0)
+    {
+        std::snprintf(out, out_len, "%lumin", static_cast<unsigned long>(normalized / 60000UL));
+        return;
+    }
+
+    std::snprintf(out, out_len, "%lus", static_cast<unsigned long>(normalized / 1000UL));
 }
 
 size_t utf8CharLength(unsigned char lead)
@@ -1407,7 +1478,7 @@ void Runtime::handleInput(InputAction action)
         {
             --node_action_index_;
         }
-        else if (action == InputAction::Down && node_action_index_ + 1 < arrayCount(kNodeActionItems))
+        else if (action == InputAction::Down && node_action_index_ + 1 < nodeActionCount())
         {
             ++node_action_index_;
         }
@@ -2323,11 +2394,43 @@ void Runtime::renderNodeCompass()
     const double abs_bearing_deg = bearingDegrees(gps.lat, gps.lng, node_lat, node_lon);
     const double rel_bearing_deg = gps.has_course ? normalizeBearingDeg(abs_bearing_deg - gps.course_deg) : abs_bearing_deg;
 
-    constexpr int kCenterX = 20;
+    constexpr int kCenterX = 25;
     constexpr int kCenterY = 39;
     constexpr int kRadius = 17;
-    constexpr int kInfoX = 42;
-    constexpr int kInfoW = 86;
+    constexpr int kInfoRightX = 127;
+    constexpr int kInfoW = 58;
+    constexpr int kInfoMinX = kInfoRightX - kInfoW + 1;
+    auto drawInfoRight = [this](int y, const char* text)
+    {
+        if (!text || text[0] == '\0')
+        {
+            return;
+        }
+
+        const char* draw_text = text;
+        char clipped[32] = {};
+        if (text_renderer_.measureTextWidth(text) > kInfoW)
+        {
+            if (kInfoW > text_renderer_.ellipsisWidth())
+            {
+                const size_t keep_bytes = text_renderer_.clipTextToWidth(text, kInfoW - text_renderer_.ellipsisWidth());
+                std::memcpy(clipped, text, keep_bytes);
+                clipped[keep_bytes] = '\0';
+                std::strcat(clipped, "...");
+            }
+            else
+            {
+                const size_t keep_bytes = text_renderer_.clipTextToWidth(text, kInfoW);
+                std::memcpy(clipped, text, keep_bytes);
+                clipped[keep_bytes] = '\0';
+            }
+            draw_text = clipped;
+        }
+
+        const int draw_w = text_renderer_.measureTextWidth(draw_text);
+        const int draw_x = std::max(kInfoMinX, kInfoRightX - draw_w);
+        text_renderer_.drawText(display_, draw_x, y, draw_text);
+    };
     drawCircle(display_, kCenterX, kCenterY, kRadius);
     display_.drawPixel(kCenterX, kCenterY, true);
     text_renderer_.drawText(display_, kCenterX - 2, kCenterY - kRadius - 7, "N");
@@ -2356,22 +2459,22 @@ void Runtime::renderNodeCompass()
     {
         std::snprintf(line, sizeof(line), "DST %.2fkm", dist_m / 1000.0);
     }
-    drawTextClipped(kInfoX, 18, kInfoW, line);
+    drawInfoRight(18, line);
 
     std::snprintf(line, sizeof(line), "BRG %s %.0f", bearingCardinal(abs_bearing_deg), abs_bearing_deg);
-    drawTextClipped(kInfoX, 26, kInfoW, line);
+    drawInfoRight(26, line);
 
     if (gps.has_course)
     {
         std::snprintf(line, sizeof(line), "HDG %.0f", gps.course_deg);
-        drawTextClipped(kInfoX, 34, kInfoW, line);
+        drawInfoRight(34, line);
         std::snprintf(line, sizeof(line), "REL %.0f", rel_bearing_deg);
-        drawTextClipped(kInfoX, 42, kInfoW, line);
+        drawInfoRight(42, line);
     }
     else
     {
-        drawTextClipped(kInfoX, 34, kInfoW, "HDG N/A");
-        drawTextClipped(kInfoX, 42, kInfoW, "REL N/A");
+        drawInfoRight(34, "HDG N/A");
+        drawInfoRight(42, "REL N/A");
     }
 
     if (node->position.has_altitude)
@@ -2382,7 +2485,7 @@ void Runtime::renderNodeCompass()
     {
         std::snprintf(line, sizeof(line), "ALT -");
     }
-    drawTextClipped(kInfoX, 50, kInfoW, line);
+    drawInfoRight(50, line);
 
     char age_buf[12] = {};
     formatElapsedShort(host_.utc_now_fn ? host_.utc_now_fn() : 0, node->last_seen, age_buf, sizeof(age_buf));
@@ -2401,18 +2504,23 @@ void Runtime::renderNodeCompass()
                       static_cast<unsigned>(node->hops_away),
                       age_buf);
     }
-    drawTextClipped(kInfoX, 58, kInfoW, footer);
+    drawInfoRight(58, footer);
 }
 
 void Runtime::renderNodeActionMenu()
 {
     const auto* node = selectedNode();
+    std::array<const char*, kNodeActionItemCount> items{};
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        items[i] = nodeActionLabel(i);
+    }
     char title[20] = {};
     if (node)
     {
         std::snprintf(title, sizeof(title), "%04lX", static_cast<unsigned long>(node->node_id & 0xFFFFUL));
     }
-    drawMenuList(title[0] != '\0' ? title : "NODE", kNodeActionItems, arrayCount(kNodeActionItems), node_action_index_);
+    drawMenuList(title[0] != '\0' ? title : "NODE", items.data(), items.size(), node_action_index_);
 }
 
 void Runtime::renderConversation()
@@ -2436,9 +2544,16 @@ void Runtime::renderConversation()
     }
 
     const int line_h = text_renderer_.lineHeight();
+    constexpr int kConversationStartY = 10;
+    constexpr int kBubbleGap = 1;
+    constexpr int kBubbleWidth = 118;
+    constexpr int kBubbleBodyBottomPadding = 2;
+    constexpr size_t kVisibleConversationBubbles = 2;
+    const int bubble_h = (line_h * 2) + 1 + kBubbleBodyBottomPadding;
+    const int row_h = bubble_h + kBubbleGap;
+    const int bubble_w = std::max(8, std::min(kBubbleWidth, display_.width() - 2));
+    const size_t visible = std::min(message_count_, kVisibleConversationBubbles);
     const size_t selected_index = std::min(message_index_, message_count_ - 1U);
-    const size_t visible = std::min(message_count_, static_cast<size_t>(6));
-    constexpr int kMessageViewportWidth = 90;
     size_t start = 0;
     if (message_count_ > visible)
     {
@@ -2453,19 +2568,36 @@ void Runtime::renderConversation()
         const size_t msg_index = start + i;
         const auto& msg = messages_[msg_index];
         const bool selected = (msg_index == selected_index);
-        std::string line;
-        if (active_conversation_.peer == 0 && msg.from != 0)
+        char sender[16] = {};
+        char time_text[16] = {};
+        uint32_t display_timestamp = msg.timestamp;
+        if (selected && display_timestamp < 1700000000U)
         {
-            char sender[12] = {};
-            std::snprintf(sender, sizeof(sender), "%04lX ", static_cast<unsigned long>(msg.from & 0xFFFFUL));
-            line = sender;
+            for (size_t meta_index = 0; meta_index < kMessageMetaCapacity; ++meta_index)
+            {
+                const MessageMetaEntry& candidate = message_meta_[meta_index];
+                if (!candidate.used)
+                {
+                    continue;
+                }
+                if (candidate.protocol == msg.protocol &&
+                    candidate.channel == msg.channel &&
+                    candidate.from == msg.from &&
+                    candidate.msg_id == msg.msg_id &&
+                    candidate.rx_meta.rx_timestamp_s >= 1700000000U)
+                {
+                    display_timestamp = candidate.rx_meta.rx_timestamp_s;
+                    break;
+                }
+            }
         }
-        line += msg.text;
+        formatConversationSender(sender, sizeof(sender), msg, selected);
+        formatConversationTime(time_text, sizeof(time_text), display_timestamp, selected);
 
-        const int y = 10 + static_cast<int>(i * line_h);
+        const int y = kConversationStartY + static_cast<int>(i * row_h);
         const bool is_self = (msg.from == 0);
-        const int x = is_self ? (display_.width() - kMessageViewportWidth) : 0;
-        drawConversationText(x, y, kMessageViewportWidth, line.c_str(), selected, is_self);
+        const int x = is_self ? (display_.width() - bubble_w - 1) : 1;
+        drawConversationBubble(x, y, bubble_w, sender, time_text, msg.text.c_str(), selected, is_self);
     }
 }
 
@@ -2715,7 +2847,7 @@ void Runtime::renderRadioSettings()
         case 4:
             if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
             {
-                std::snprintf(value, sizeof(value), "Slot %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
+                formatMeshtasticChannelSlot(value, sizeof(value), cfg.meshtastic_config.channel_num);
             }
             else
             {
@@ -2781,6 +2913,12 @@ void Runtime::renderDeviceSettings()
                           static_cast<unsigned long>(app()->getConfig().gps_interval_ms / 1000UL));
         }
         else if (i == 4)
+        {
+            char timeout_label[16] = {};
+            formatScreenTimeoutLabel(timeout_label, sizeof(timeout_label), platform::ui::screen::timeout_ms());
+            std::snprintf(line, sizeof(line), "SCREEN OFF: %s", timeout_label);
+        }
+        else if (i == 5)
         {
             const int tz = host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0;
             char tz_label[16] = {};
@@ -2878,7 +3016,7 @@ void Runtime::renderTransientPopup()
 
 void Runtime::renderInfoPage()
 {
-    char lines[24][40] = {};
+    char lines[32][40] = {};
     size_t line_count = 0;
     auto push_line = [&](const char* text)
     {
@@ -2948,8 +3086,8 @@ void Runtime::renderInfoPage()
     {
         push_kv("MODEM", chat::meshtastic::presetDisplayName(
                              static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset)));
-        std::snprintf(value, sizeof(value), "Slot %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
-        push_kv("CHAN", value);
+        formatMeshtasticChannelSlot(value, sizeof(value), cfg.meshtastic_config.channel_num);
+        push_kv("CH SLOT", value);
         push_kv("ENCRYPT", encryptEnabled(cfg) ? "ON" : "OFF");
     }
     else
@@ -3002,8 +3140,10 @@ void Runtime::renderInfoPage()
     }
     if (flash.available && flash.total_bytes > 0)
     {
-        std::snprintf(value, sizeof(value), "%lu/%luK",
-                      static_cast<unsigned long>(flash.used_bytes / 1024U),
+        const uint32_t flash_free_bytes =
+            flash.total_bytes > flash.used_bytes ? (flash.total_bytes - flash.used_bytes) : 0U;
+        std::snprintf(value, sizeof(value), "%lu/%luK free",
+                      static_cast<unsigned long>(flash_free_bytes / 1024U),
                       static_cast<unsigned long>(flash.total_bytes / 1024U));
         push_kv("FLASH", value);
     }
@@ -3272,7 +3412,7 @@ void Runtime::enterPage(Page page)
     }
     else if (page == Page::NodeCompass)
     {
-        node_action_index_ = std::min(node_action_index_, arrayCount(kNodeActionItems) - 1U);
+        node_action_index_ = std::min(node_action_index_, nodeActionCount() - 1U);
     }
     else if (page == Page::Conversation)
     {
@@ -3375,7 +3515,9 @@ void Runtime::rebuildNodeList()
 
     auto contacts = app()->getContactService().getContacts();
     auto nearby = app()->getContactService().getNearby();
+    auto ignored = app()->getContactService().getIgnoredNodes();
     contacts.insert(contacts.end(), nearby.begin(), nearby.end());
+    contacts.insert(contacts.end(), ignored.begin(), ignored.end());
     std::sort(contacts.begin(), contacts.end(),
               [](const chat::contacts::NodeInfo& a, const chat::contacts::NodeInfo& b)
               {
@@ -3467,6 +3609,59 @@ void Runtime::buildNodeInfo()
     formatElapsedShort(host_.utc_now_fn ? host_.utc_now_fn() : 0, node.last_seen, value, sizeof(value));
     push_kv("AGO", value);
     push_kv("SIG", signalRatingLabel(node.snr, node.rssi));
+    std::snprintf(value, sizeof(value), "%u", static_cast<unsigned>(node.hw_model));
+    push_kv("HW", node.hw_model == 0 ? "-" : value);
+    std::snprintf(value, sizeof(value), "%02X", static_cast<unsigned>(node.next_hop));
+    push_kv("NH", node.next_hop == 0 ? "-" : value);
+    push_kv("MQTT", node.via_mqtt ? "Y" : "N");
+    push_kv("IGN", node.is_ignored ? "Y" : "N");
+    if (node.has_macaddr)
+    {
+        char mac_buf[24];
+        std::snprintf(mac_buf,
+                      sizeof(mac_buf),
+                      "%02X:%02X:%02X:%02X:%02X:%02X",
+                      static_cast<unsigned>(node.macaddr[0]),
+                      static_cast<unsigned>(node.macaddr[1]),
+                      static_cast<unsigned>(node.macaddr[2]),
+                      static_cast<unsigned>(node.macaddr[3]),
+                      static_cast<unsigned>(node.macaddr[4]),
+                      static_cast<unsigned>(node.macaddr[5]));
+        push_kv("MAC", mac_buf);
+    }
+    push_kv("PKI", node.key_manually_verified ? "VERIFIED" : (node.has_public_key ? "KNOWN" : "-"));
+    if (node.has_device_metrics)
+    {
+        if (node.device_metrics.has_battery_level)
+        {
+            std::snprintf(value, sizeof(value), "%lu%%",
+                          static_cast<unsigned long>(node.device_metrics.battery_level));
+            push_kv("BAT", value);
+        }
+        if (node.device_metrics.has_voltage)
+        {
+            std::snprintf(value, sizeof(value), "%.2fV", static_cast<double>(node.device_metrics.voltage));
+            push_kv("V", value);
+        }
+        if (node.device_metrics.has_channel_utilization)
+        {
+            std::snprintf(value, sizeof(value), "%.1f%%",
+                          static_cast<double>(node.device_metrics.channel_utilization));
+            push_kv("UTIL", value);
+        }
+        if (node.device_metrics.has_air_util_tx)
+        {
+            std::snprintf(value, sizeof(value), "%.1f%%",
+                          static_cast<double>(node.device_metrics.air_util_tx));
+            push_kv("AIR", value);
+        }
+        if (node.device_metrics.has_uptime_seconds)
+        {
+            std::snprintf(value, sizeof(value), "%lu",
+                          static_cast<unsigned long>(node.device_metrics.uptime_seconds));
+            push_kv("UP", value);
+        }
+    }
 
     push_section("POS");
     if (node.position.valid)
@@ -3583,6 +3778,91 @@ void Runtime::buildMessageInfo()
         ++message_info_count_;
     };
 
+    auto fitUtf8Bytes = [](const char* text, size_t max_bytes)
+    {
+        if (!text || max_bytes == 0)
+        {
+            return static_cast<size_t>(0);
+        }
+
+        size_t used = 0;
+        while (text[used] != '\0')
+        {
+            const size_t char_len = utf8CharLength(static_cast<unsigned char>(text[used]));
+            if (used + char_len > max_bytes)
+            {
+                break;
+            }
+            used += char_len;
+        }
+        return used;
+    };
+
+    auto push_text_block = [this, &push_line, &fitUtf8Bytes](const char* value)
+    {
+        if (!value || message_info_count_ >= kMessageInfoLines)
+        {
+            return;
+        }
+
+        const int available_width = std::max(1, display_.width());
+        const size_t storage_limit = std::max<size_t>(1U, kMessageInfoWidth - 1U);
+
+        const char* cursor = value;
+        while (message_info_count_ < kMessageInfoLines)
+        {
+            const char* logical_end = cursor;
+            while (*logical_end != '\0' && *logical_end != '\n' && *logical_end != '\r')
+            {
+                ++logical_end;
+            }
+
+            const size_t logical_len = static_cast<size_t>(logical_end - cursor);
+            if (logical_len == 0)
+            {
+                push_line(" ");
+            }
+            else
+            {
+                std::string logical_line(cursor, logical_len);
+                const char* wrapped = logical_line.c_str();
+                while (*wrapped != '\0' && message_info_count_ < kMessageInfoLines)
+                {
+                    size_t keep_bytes = text_renderer_.clipTextToWidth(wrapped, available_width);
+                    if (keep_bytes == 0)
+                    {
+                        keep_bytes = utf8CharLength(static_cast<unsigned char>(*wrapped));
+                    }
+                    keep_bytes = std::min(keep_bytes, fitUtf8Bytes(wrapped, storage_limit));
+                    if (keep_bytes == 0)
+                    {
+                        keep_bytes = std::min(storage_limit, static_cast<size_t>(1));
+                    }
+
+                    char chunk[kMessageInfoWidth] = {};
+                    std::memcpy(chunk, wrapped, std::min(keep_bytes, sizeof(chunk) - 1));
+                    chunk[std::min(keep_bytes, sizeof(chunk) - 1)] = '\0';
+                    push_line(chunk);
+                    wrapped += keep_bytes;
+                }
+            }
+
+            if (*logical_end == '\0')
+            {
+                break;
+            }
+
+            if (*logical_end == '\r' && logical_end[1] == '\n')
+            {
+                cursor = logical_end + 2;
+            }
+            else
+            {
+                cursor = logical_end + 1;
+            }
+        }
+    };
+
     auto formatInfoTime = [this](uint32_t timestamp_s, char* out, size_t out_len)
     {
         if (!out || out_len == 0)
@@ -3642,7 +3922,8 @@ void Runtime::buildMessageInfo()
 
     if (!msg->text.empty())
     {
-        push_kv("TXT", msg->text.c_str());
+        push_section("TXT");
+        push_text_block(msg->text.c_str());
     }
 
     const MessageMetaEntry* meta = nullptr;
@@ -3769,7 +4050,18 @@ void Runtime::ensureSleepTimeout(InputAction action)
         return;
     }
 
-    if ((now - last_interaction_ms_) < kSleepTimeoutMs)
+    if (platform::ui::screen::is_sleep_disabled())
+    {
+        return;
+    }
+
+    const uint32_t timeout_ms = platform::ui::screen::timeout_ms();
+    if (timeout_ms >= kScreenTimeoutAlwaysMs)
+    {
+        return;
+    }
+
+    if ((now - last_interaction_ms_) < timeout_ms)
     {
         return;
     }
@@ -3890,9 +4182,17 @@ void Runtime::adjustRadioSetting(int delta)
     case 4:
         if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
         {
+            const int current = static_cast<int>(normalizedMeshtasticChannelNum(cfg.meshtastic_config.channel_num));
             cfg.meshtastic_config.channel_num = static_cast<uint16_t>(clampValue<int>(
-                static_cast<int>(cfg.meshtastic_config.channel_num) + delta, 0, 255));
-            appendStatus(this, "channel %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
+                current + delta, 0, static_cast<int>(kMeshtasticChannelNumMax)));
+            if (cfg.meshtastic_config.channel_num == 0)
+            {
+                appendStatus(this, "channel auto");
+            }
+            else
+            {
+                appendStatus(this, "channel slot %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
+            }
         }
         else
         {
@@ -3950,7 +4250,15 @@ void Runtime::adjustDeviceSetting(int delta)
         commitConfig();
         appendStatus(this, "gps int %lus", static_cast<unsigned long>(app()->getConfig().gps_interval_ms / 1000UL));
     }
-    else if (device_index_ == 4 && host_.timezone_offset_min_fn && host_.set_timezone_offset_min_fn)
+    else if (device_index_ == 4)
+    {
+        const uint32_t next = stepScreenTimeoutMs(platform::ui::screen::timeout_ms(), delta);
+        platform::ui::screen::set_timeout_ms(next);
+        char timeout_label[16] = {};
+        formatScreenTimeoutLabel(timeout_label, sizeof(timeout_label), next);
+        appendStatus(this, "screen %s", timeout_label);
+    }
+    else if (device_index_ == 5 && host_.timezone_offset_min_fn && host_.set_timezone_offset_min_fn)
     {
         const int current = host_.timezone_offset_min_fn();
         const int next = clampValue(current + delta * kTimezoneStep, kTimezoneMin, kTimezoneMax);
@@ -3972,6 +4280,7 @@ void Runtime::beginSettingPopup(Page owner, size_t index)
     setting_popup_index_ = index;
     setting_popup_config_ = app()->getConfig();
     setting_popup_ble_enabled_ = app()->isBleEnabled();
+    setting_popup_screen_timeout_ms_ = platform::ui::screen::timeout_ms();
     setting_popup_timezone_min_ = host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0;
 }
 
@@ -3996,12 +4305,14 @@ void Runtime::confirmSettingPopup()
     }
 
     auto& cfg = app()->getConfig();
+    sanitizeMeshtasticChannelNum(setting_popup_config_);
     cfg = setting_popup_config_;
     cfg.ble_enabled = setting_popup_ble_enabled_;
     if (host_.set_timezone_offset_min_fn)
     {
         host_.set_timezone_offset_min_fn(setting_popup_timezone_min_);
     }
+    platform::ui::screen::set_timeout_ms(setting_popup_screen_timeout_ms_);
     app()->setBleEnabled(setting_popup_ble_enabled_);
     app()->saveConfig();
 
@@ -4117,8 +4428,9 @@ void Runtime::adjustSettingPopup(int delta)
         case 4:
             if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
             {
+                const int current = static_cast<int>(normalizedMeshtasticChannelNum(cfg.meshtastic_config.channel_num));
                 cfg.meshtastic_config.channel_num = static_cast<uint16_t>(clampValue<int>(
-                    static_cast<int>(cfg.meshtastic_config.channel_num) + delta, 0, 255));
+                    current + delta, 0, static_cast<int>(kMeshtasticChannelNumMax)));
             }
             else
             {
@@ -4162,6 +4474,9 @@ void Runtime::adjustSettingPopup(int delta)
             break;
         }
         case 4:
+            setting_popup_screen_timeout_ms_ = stepScreenTimeoutMs(setting_popup_screen_timeout_ms_, delta);
+            break;
+        case 5:
             setting_popup_timezone_min_ = clampValue(setting_popup_timezone_min_ + delta * kTimezoneStep,
                                                      kTimezoneMin,
                                                      kTimezoneMax);
@@ -4209,7 +4524,7 @@ void Runtime::formatSettingPopupValue(char* out, size_t out_len) const
         case 4:
             if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
             {
-                std::snprintf(out, out_len, "CH %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
+                formatMeshtasticChannelSlot(out, out_len, cfg.meshtastic_config.channel_num);
             }
             else
             {
@@ -4241,6 +4556,9 @@ void Runtime::formatSettingPopupValue(char* out, size_t out_len) const
             std::snprintf(out, out_len, "%lus", static_cast<unsigned long>(setting_popup_config_.gps_interval_ms / 1000UL));
             return;
         case 4:
+            formatScreenTimeoutLabel(out, out_len, setting_popup_screen_timeout_ms_);
+            return;
+        case 5:
         {
             char tz_label[16] = {};
             formatTimezoneLabel(setting_popup_timezone_min_, tz_label, sizeof(tz_label));
@@ -4649,6 +4967,85 @@ void Runtime::formatTimestamp(char* out, size_t out_len, uint32_t timestamp_s) c
                   tm->tm_min);
 }
 
+void Runtime::formatConversationTime(char* out, size_t out_len, uint32_t timestamp_s, bool expanded) const
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    out[0] = '\0';
+    if (timestamp_s == 0)
+    {
+        std::snprintf(out, out_len, "%s", "--:--");
+        return;
+    }
+
+    if (timestamp_s >= 1700000000U)
+    {
+        const int tz_offset_s = (host_.timezone_offset_min_fn ? host_.timezone_offset_min_fn() : 0) * 60;
+        const time_t adjusted = static_cast<time_t>(timestamp_s + tz_offset_s);
+        const std::tm* tm = std::gmtime(&adjusted);
+        if (tm)
+        {
+            if (expanded)
+            {
+                std::snprintf(out, out_len, "%02d/%02d %02d:%02d",
+                              tm->tm_mon + 1,
+                              tm->tm_mday,
+                              tm->tm_hour,
+                              tm->tm_min);
+            }
+            else
+            {
+                std::snprintf(out, out_len, "%02d/%02d", tm->tm_mon + 1, tm->tm_mday);
+            }
+            return;
+        }
+    }
+
+    const unsigned long hours = static_cast<unsigned long>((timestamp_s / 3600U) % 24U);
+    const unsigned long minutes = static_cast<unsigned long>((timestamp_s / 60U) % 60U);
+    if (expanded)
+    {
+        std::snprintf(out, out_len, "--/-- %02lu:%02lu", hours, minutes);
+    }
+    else
+    {
+        std::snprintf(out, out_len, "%02lu:%02lu", hours, minutes);
+    }
+}
+
+void Runtime::formatConversationSender(char* out, size_t out_len, const chat::ChatMessage& msg, bool expanded) const
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    if (msg.from == 0)
+    {
+        const chat::NodeId self_id = app() ? app()->getSelfNodeId() : 0;
+        if (expanded && self_id != 0)
+        {
+            std::snprintf(out, out_len, "%08lX", static_cast<unsigned long>(self_id));
+        }
+        else
+        {
+            std::snprintf(out, out_len, "%s", "ME");
+        }
+        return;
+    }
+
+    if (expanded)
+    {
+        std::snprintf(out, out_len, "%08lX", static_cast<unsigned long>(msg.from));
+    }
+    else
+    {
+        std::snprintf(out, out_len, "%04lX", static_cast<unsigned long>(msg.from & 0xFFFFUL));
+    }
+}
+
 void Runtime::formatProtocol(char* out, size_t out_len) const
 {
     if (!out || out_len == 0 || !app())
@@ -4769,7 +5166,7 @@ void Runtime::drawConversationText(int x, int y, int w, const char* text, bool s
     if (full_width <= w)
     {
         const int draw_x = align_right ? (x + std::max(0, w - full_width)) : x;
-        text_renderer_.drawText(display_, draw_x, y, text, selected);
+        text_renderer_.drawText(display_, draw_x, y, text, false);
         return;
     }
 
@@ -4789,7 +5186,9 @@ void Runtime::drawConversationText(int x, int y, int w, const char* text, bool s
             std::memcpy(clipped, text, std::min(keep_bytes, sizeof(clipped) - 1));
             clipped[std::min(keep_bytes, sizeof(clipped) - 1)] = '\0';
         }
-        text_renderer_.drawText(display_, x, y, clipped, false);
+        const int clipped_width = text_renderer_.measureTextWidth(clipped);
+        const int draw_x = align_right ? (x + std::max(0, w - clipped_width)) : x;
+        text_renderer_.drawText(display_, draw_x, y, clipped, false);
         return;
     }
 
@@ -4833,7 +5232,52 @@ void Runtime::drawConversationText(int x, int y, int w, const char* text, bool s
     const size_t keep_bytes = text_renderer_.clipTextToWidth(window_text, w);
     std::memcpy(clipped, window_text, std::min(keep_bytes, sizeof(clipped) - 1));
     clipped[std::min(keep_bytes, sizeof(clipped) - 1)] = '\0';
-    text_renderer_.drawText(display_, x, y, clipped, true);
+    const int clipped_width = text_renderer_.measureTextWidth(clipped);
+    const int draw_x = align_right ? (x + std::max(0, w - clipped_width)) : x;
+    text_renderer_.drawText(display_, draw_x, y, clipped, false);
+}
+
+void Runtime::drawConversationBubble(int x, int y, int w, const char* sender, const char* time_text,
+                                     const char* text, bool selected, bool align_right)
+{
+    if (!text || w <= 4)
+    {
+        return;
+    }
+
+    const int line_h = text_renderer_.lineHeight();
+    constexpr int kBubbleBodyBottomPadding = 2;
+    const int bubble_h = (line_h * 2) + 1 + kBubbleBodyBottomPadding;
+    drawFrame(display_, x, y, w, bubble_h);
+
+    const int inner_x = x + 1;
+    const int inner_w = w - 2;
+    const int divider_y = y + line_h;
+    const int band_h = std::max(1, line_h - 1);
+    display_.fillRect(inner_x, divider_y, inner_w, 1, true);
+
+    display_.fillRect(inner_x, y + 1, inner_w, band_h, true);
+
+    const bool header_inverse = true;
+    const int header_pad = 1;
+    const int header_x = inner_x + header_pad;
+    const int header_w = std::max(0, inner_w - (header_pad * 2));
+    const int time_w = (time_text && time_text[0] != '\0') ? text_renderer_.measureTextWidth(time_text) : 0;
+    const int time_x = x + w - 2 - header_pad - time_w;
+    const int sender_w = std::max(0, time_x - header_x - 2);
+
+    if (sender && sender[0] != '\0' && sender_w > 0)
+    {
+        drawTextClipped(header_x, y, sender_w, sender, header_inverse);
+    }
+    if (time_text && time_text[0] != '\0' && header_w > 0)
+    {
+        text_renderer_.drawText(display_, std::max(header_x, time_x), y, time_text, header_inverse);
+    }
+
+    const int body_x = inner_x + 1;
+    const int body_w = std::max(0, inner_w - 2);
+    drawConversationText(body_x, y + line_h + 1, body_w, text, selected, align_right);
 }
 
 void Runtime::executeActionPageItem(size_t index)
@@ -4933,11 +5377,43 @@ const chat::contacts::NodeInfo* Runtime::selectedNode() const
     return &nodes_[index];
 }
 
+size_t Runtime::nodeActionCount() const
+{
+    const bool meshtastic_mode = app() && app()->getConfig().mesh_protocol != chat::MeshProtocol::MeshCore;
+    return meshtastic_mode ? kNodeActionItemCount : (kNodeActionItemCount - 1U);
+}
+
+const char* Runtime::nodeActionLabel(size_t index) const
+{
+    const chat::contacts::NodeInfo* node = selectedNode();
+    const bool meshtastic_mode = app() && app()->getConfig().mesh_protocol != chat::MeshProtocol::MeshCore;
+    switch (index)
+    {
+    case 0:
+        return "DETAIL";
+    case 1:
+        return "REPLY";
+    case 2:
+        return "ADD CONTACT";
+    case 3:
+        return (node && node->is_ignored) ? "UNIGNORE NODE" : "IGNORE NODE";
+    case 4:
+        return "TRACE ROUTE";
+    case 5:
+        return meshtastic_mode ? "EXCHANGE POSITION" : "OPEN COMPASS";
+    case 6:
+        return meshtastic_mode ? "OPEN COMPASS" : "";
+    default:
+        return "";
+    }
+}
+
 void Runtime::executeNodeAction()
 {
     auto* mesh = app() ? app()->getMeshAdapter() : nullptr;
     auto* contacts = app() ? &app()->getContactService() : nullptr;
     const chat::contacts::NodeInfo* node = selectedNode();
+    const bool meshtastic_mode = app() && app()->getConfig().mesh_protocol != chat::MeshProtocol::MeshCore;
     if (!node)
     {
         appendBootLog("node action na");
@@ -4953,6 +5429,16 @@ void Runtime::executeNodeAction()
         return;
     case 1:
     {
+        active_conversation_ = chat::ConversationId(chat::ChannelId::PRIMARY,
+                                                    node->node_id,
+                                                    chat::infra::meshProtocolFromRaw(
+                                                        static_cast<uint8_t>(node->protocol),
+                                                        app()->getConfig().mesh_protocol));
+        openCompose(EditTarget::Message);
+        return;
+    }
+    case 2:
+    {
         if (!contacts)
         {
             appendBootLog("contact svc na");
@@ -4967,6 +5453,7 @@ void Runtime::executeNodeAction()
         }
 
         char nickname[13] = {};
+        char fallback_nickname[13] = {};
         if (node->short_name[0] != '\0')
         {
             copyText(nickname, node->short_name);
@@ -4976,8 +5463,16 @@ void Runtime::executeNodeAction()
             std::snprintf(nickname, sizeof(nickname), "%04lX",
                           static_cast<unsigned long>(node->node_id & 0xFFFFUL));
         }
+        std::snprintf(fallback_nickname, sizeof(fallback_nickname), "%04lX",
+                      static_cast<unsigned long>(node->node_id & 0xFFFFUL));
 
-        if (contacts->addContact(node->node_id, nickname))
+        bool added = contacts->addContact(node->node_id, nickname);
+        if (!added && std::strcmp(nickname, fallback_nickname) != 0)
+        {
+            added = contacts->addContact(node->node_id, fallback_nickname);
+        }
+
+        if (added)
         {
             appendBootLog("contact added");
             showTransientPopup("ADD CONTACT", "SUCCESS");
@@ -4991,7 +5486,26 @@ void Runtime::executeNodeAction()
         }
         return;
     }
-    case 2:
+    case 3:
+    {
+        if (!contacts)
+        {
+            appendBootLog("ignore na");
+            showTransientPopup("IGNORE NODE", "UNAVAILABLE");
+            return;
+        }
+        const bool ignored = !node->is_ignored;
+        const bool ok = contacts->setNodeIgnored(node->node_id, ignored);
+        appendBootLog(ok ? (ignored ? "node ignored" : "node unignored") : "ignore failed");
+        showTransientPopup(ignored ? "IGNORE NODE" : "UNIGNORE NODE", ok ? "SUCCESS" : "FAILED");
+        if (ok)
+        {
+            rebuildNodeList();
+            enterPage(Page::NodeList);
+        }
+        return;
+    }
+    case 4:
     {
         if (!mesh)
         {
@@ -5021,23 +5535,16 @@ void Runtime::executeNodeAction()
         showTransientPopup("TRACE ROUTE", ok ? "QUEUED" : "FAILED");
         return;
     }
-    case 3:
-    {
-        if (!mesh)
+    case 5:
+        if (meshtastic_mode)
         {
-            appendBootLog("verify na");
-            showTransientPopup("KEY VERIFICATION", "UNAVAILABLE");
+            requestNodePositionExchange();
             return;
         }
-        const bool ok = mesh->startKeyVerification(node->node_id);
-        appendBootLog(ok ? "verify queued" : "verify failed");
-        showTransientPopup("KEY VERIFICATION", ok ? "QUEUED" : "FAILED");
+        showTransientPopup("OPEN COMPASS", "OPENED");
+        enterPage(Page::NodeCompass);
         return;
-    }
-    case 4:
-        requestNodePositionExchange();
-        return;
-    case 5:
+    case 6:
         showTransientPopup("OPEN COMPASS", "OPENED");
         enterPage(Page::NodeCompass);
         return;

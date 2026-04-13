@@ -2,19 +2,54 @@
 
 #include "app/app_config.h"
 #include "ble/ble_uuids.h"
+#if defined(GAT562_MESH_EVB_PRO)
+#include "boards/gat562_mesh_evb_pro/settings_store.h"
+#endif
+#include "chat/ble/meshtastic_defaults.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
+#if !defined(GAT562_MESH_EVB_PRO)
+#include "platform/ui/settings_store.h"
+#endif
 
 #include <Arduino.h>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#if !defined(GAT562_MESH_EVB_PRO)
+#include <vector>
+#endif
 
 namespace ble
 {
 namespace
 {
-constexpr const char* kDefaultMqttRoot = "msh";
 constexpr uint32_t kDefaultBleFixedPin = 654321;
+constexpr uint32_t kConfigSaveDebounceMs = 1500UL;
+#if !defined(GAT562_MESH_EVB_PRO)
+constexpr const char* kBleSettingsNamespace = "ble_meshtastic";
+constexpr const char* kBluetoothConfigKey = "bt_cfg";
+constexpr const char* kModuleConfigKey = "mod_cfg";
+#endif
+
+bool usbSerialWritable(std::size_t len)
+{
+    return static_cast<bool>(Serial) && Serial.dtr() != 0 && Serial.availableForWrite() >= static_cast<int>(len);
+}
+
+void bleLogBoth(const char* fmt, ...)
+{
+    char buffer[192] = {};
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    if (usbSerialWritable(std::strlen(buffer) + 2U))
+    {
+        Serial.println(buffer);
+    }
+    Serial2.println(buffer);
+}
 
 platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(app::IAppBleFacade& ctx)
 {
@@ -42,6 +77,201 @@ void copyBounded(char* dst, size_t dst_len, const char* src)
 
     std::strncpy(dst, src, dst_len - 1);
     dst[dst_len - 1] = '\0';
+}
+
+void repairLegacyMqttConfig(meshtastic_LocalModuleConfig* config)
+{
+    if (!config)
+    {
+        return;
+    }
+
+    config->has_mqtt = true;
+    config->mqtt.address[sizeof(config->mqtt.address) - 1] = '\0';
+    config->mqtt.username[sizeof(config->mqtt.username) - 1] = '\0';
+    config->mqtt.password[sizeof(config->mqtt.password) - 1] = '\0';
+    config->mqtt.root[sizeof(config->mqtt.root) - 1] = '\0';
+    if (config->mqtt.address[0] == '\0')
+    {
+        copyBounded(config->mqtt.address, sizeof(config->mqtt.address), meshtastic_defaults::kDefaultMqttAddress);
+    }
+    if (config->mqtt.username[0] == '\0')
+    {
+        copyBounded(config->mqtt.username, sizeof(config->mqtt.username), meshtastic_defaults::kDefaultMqttUsername);
+    }
+    if (config->mqtt.password[0] == '\0')
+    {
+        copyBounded(config->mqtt.password, sizeof(config->mqtt.password), meshtastic_defaults::kDefaultMqttPassword);
+    }
+    if (config->mqtt.root[0] == '\0')
+    {
+        copyBounded(config->mqtt.root, sizeof(config->mqtt.root), meshtastic_defaults::kDefaultMqttRoot);
+    }
+    if (!config->mqtt.has_map_report_settings)
+    {
+        config->mqtt.has_map_report_settings = true;
+        config->mqtt.map_report_settings.publish_interval_secs = meshtastic_defaults::kDefaultMapPublishIntervalSecs;
+        config->mqtt.map_report_settings.position_precision = 0;
+        config->mqtt.map_report_settings.should_report_location = false;
+    }
+}
+
+void initDefaultModuleConfig(app::IAppBleFacade& ctx, meshtastic_LocalModuleConfig* config)
+{
+    if (!config)
+    {
+        return;
+    }
+
+    meshtastic_LocalModuleConfig zero = meshtastic_LocalModuleConfig_init_zero;
+    *config = zero;
+    config->version = meshtastic_defaults::kModuleConfigVersion;
+    config->has_mqtt = true;
+    config->has_serial = true;
+    config->has_external_notification = true;
+    config->has_store_forward = true;
+    config->has_range_test = true;
+    config->has_telemetry = true;
+    config->has_canned_message = true;
+    config->has_audio = true;
+    config->has_remote_hardware = true;
+    config->has_neighbor_info = true;
+    config->has_ambient_lighting = true;
+    config->has_detection_sensor = true;
+    config->has_paxcounter = true;
+
+    config->mqtt.enabled = false;
+    config->mqtt.proxy_to_client_enabled = false;
+    copyBounded(config->mqtt.address, sizeof(config->mqtt.address), meshtastic_defaults::kDefaultMqttAddress);
+    copyBounded(config->mqtt.username, sizeof(config->mqtt.username), meshtastic_defaults::kDefaultMqttUsername);
+    copyBounded(config->mqtt.password, sizeof(config->mqtt.password), meshtastic_defaults::kDefaultMqttPassword);
+    copyBounded(config->mqtt.root, sizeof(config->mqtt.root), meshtastic_defaults::kDefaultMqttRoot);
+    config->mqtt.encryption_enabled = meshtastic_defaults::kDefaultMqttEncryptionEnabled;
+    config->mqtt.tls_enabled = meshtastic_defaults::kDefaultMqttTlsEnabled;
+    config->mqtt.has_map_report_settings = true;
+    config->mqtt.map_report_settings.publish_interval_secs = meshtastic_defaults::kDefaultMapPublishIntervalSecs;
+    config->mqtt.map_report_settings.position_precision = 0;
+    config->mqtt.map_report_settings.should_report_location = false;
+
+    config->telemetry.device_update_interval = 3600;
+    config->telemetry.device_telemetry_enabled = true;
+    config->telemetry.environment_update_interval = 0;
+    config->telemetry.environment_measurement_enabled = false;
+    config->telemetry.power_update_interval = 0;
+    config->telemetry.health_update_interval = 0;
+    config->telemetry.air_quality_interval = 0;
+
+    config->neighbor_info.enabled = false;
+    config->neighbor_info.update_interval = 0;
+    config->neighbor_info.transmit_over_lora = false;
+
+    config->detection_sensor.enabled = false;
+    config->ambient_lighting.current = meshtastic_defaults::kDefaultAmbientCurrent;
+    const uint32_t self_node = ctx.getSelfNodeId();
+    config->ambient_lighting.red = (self_node >> 16) & 0xFFU;
+    config->ambient_lighting.green = (self_node >> 8) & 0xFFU;
+    config->ambient_lighting.blue = self_node & 0xFFU;
+}
+
+struct PersistedBleState
+{
+    bool has_bluetooth = false;
+    bool has_module = false;
+    meshtastic_Config_BluetoothConfig bluetooth = meshtastic_Config_BluetoothConfig_init_zero;
+    meshtastic_LocalModuleConfig module = meshtastic_LocalModuleConfig_init_zero;
+};
+
+#if !defined(GAT562_MESH_EVB_PRO)
+template <typename T>
+bool loadBlobConfigFromUiStore(const char* key, T* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+
+    std::vector<uint8_t> blob;
+    if (!platform::ui::settings_store::get_blob(kBleSettingsNamespace, key, blob))
+    {
+        return false;
+    }
+    if (blob.size() != sizeof(T))
+    {
+        bleLogBoth("[BLE][nrf52][mt] load cfg size mismatch key=%s got=%u expected=%u",
+                   key ? key : "?",
+                   static_cast<unsigned>(blob.size()),
+                   static_cast<unsigned>(sizeof(T)));
+        return false;
+    }
+
+    std::memcpy(out, blob.data(), sizeof(T));
+    return true;
+}
+
+template <typename T>
+bool saveBlobConfigToUiStore(const char* key, const T& value)
+{
+    const bool ok = platform::ui::settings_store::put_blob(kBleSettingsNamespace, key, &value, sizeof(T));
+    if (!ok)
+    {
+        bleLogBoth("[BLE][nrf52][mt] save cfg failed key=%s size=%u",
+                   key ? key : "?",
+                   static_cast<unsigned>(sizeof(T)));
+    }
+    return ok;
+}
+#endif
+
+bool loadPersistedBleState(PersistedBleState* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+
+    *out = PersistedBleState{};
+
+#if defined(GAT562_MESH_EVB_PRO)
+    if (::boards::gat562_mesh_evb_pro::settings_store::loadMeshtasticBleState(&out->bluetooth, &out->module))
+    {
+        out->has_bluetooth = true;
+        out->has_module = true;
+        return true;
+    }
+    return false;
+#else
+    out->has_bluetooth = loadBlobConfigFromUiStore(kBluetoothConfigKey, &out->bluetooth);
+    out->has_module = loadBlobConfigFromUiStore(kModuleConfigKey, &out->module);
+    if (out->has_bluetooth || out->has_module)
+    {
+        bleLogBoth("[BLE][nrf52][mt] legacy cfg store fallback bt=%u mod=%u",
+                   out->has_bluetooth ? 1U : 0U,
+                   out->has_module ? 1U : 0U);
+    }
+    return out->has_bluetooth || out->has_module;
+#endif
+}
+
+bool savePersistedBleState(const meshtastic_Config_BluetoothConfig& bluetooth,
+                           const meshtastic_LocalModuleConfig& module)
+{
+#if defined(GAT562_MESH_EVB_PRO)
+    return ::boards::gat562_mesh_evb_pro::settings_store::saveMeshtasticBleState(bluetooth, module);
+#else
+    const bool bluetooth_ok = saveBlobConfigToUiStore(kBluetoothConfigKey, bluetooth);
+    const bool module_ok = saveBlobConfigToUiStore(kModuleConfigKey, module);
+    return bluetooth_ok && module_ok;
+#endif
+}
+
+bool isValidBluetoothMode(uint8_t mode)
+{
+    return mode <= static_cast<uint8_t>(meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN);
+}
+
+bool isValidBlePin(uint32_t pin)
+{
+    return pin == 0 || (pin >= 100000 && pin <= 999999);
 }
 
 std::string channelDisplayName(const app::IAppBleFacade& ctx, uint8_t idx)
@@ -124,16 +354,19 @@ void onSecured(uint16_t conn_handle)
 
 void prepareBluefruit(const std::string& device_name)
 {
+    bleLogBoth("[BLE][nrf52][mt] bluefruit begin name=%s", device_name.c_str());
     Bluefruit.autoConnLed(false);
     Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
     Bluefruit.begin();
     Bluefruit.setName(device_name.c_str());
     Bluefruit.Periph.setConnectCallback(onBleConnect);
     Bluefruit.Periph.setDisconnectCallback(onBleDisconnect);
+    bleLogBoth("[BLE][nrf52][mt] bluefruit ready");
 }
 
 void startAdvertising(::BLEService& service)
 {
+    (void)service;
     Bluefruit.Advertising.stop();
     Bluefruit.Advertising.clearData();
     Bluefruit.ScanResponse.clearData();
@@ -145,6 +378,8 @@ void startAdvertising(::BLEService& service)
     Bluefruit.Advertising.setInterval(32, 668);
     Bluefruit.Advertising.setFastTimeout(30);
     Bluefruit.Advertising.start(0);
+    bleLogBoth("[BLE][nrf52][mt] advertising started running=%u",
+               Bluefruit.Advertising.isRunning() ? 1U : 0U);
 }
 
 void disconnectAll()
@@ -171,7 +406,15 @@ void onToRadioWrite(uint16_t, BLECharacteristic*, uint8_t* data, uint16_t len)
     {
         return;
     }
-    (void)s_active_service->handleToRadio(data, len);
+    (void)s_active_service->enqueueToRadio(data, len);
+}
+
+void onFromNumCccdWrite(uint16_t conn_handle, BLECharacteristic*, uint16_t value)
+{
+    if (s_active_service)
+    {
+        s_active_service->handleFromNumCccdWrite(conn_handle, value);
+    }
 }
 
 void onFromRadioAuthorize(uint16_t conn_handle, BLECharacteristic* chr, ble_gatts_evt_read_t* request)
@@ -184,15 +427,29 @@ void onFromRadioAuthorize(uint16_t conn_handle, BLECharacteristic* chr, ble_gatt
 
     if (request->offset == 0)
     {
-        MeshtasticBleFrame frame{};
-        if (s_active_service && s_active_service->popToPhone(&frame))
+        if (s_active_service && s_active_service->hasReadableFromRadio())
         {
-            chr->write(frame.buf, frame.len);
+            s_active_service->beginReadWait();
         }
         else
         {
-            uint8_t empty = 0;
-            chr->write(&empty, 0);
+            if (s_active_service)
+            {
+                if (s_active_service->shouldBlockOnRead())
+                {
+                    s_active_service->waitForReadableFromRadio(20, 1);
+                }
+
+                if (s_active_service->hasReadableFromRadio())
+                {
+                    s_active_service->beginReadWait();
+                }
+                else
+                {
+                    s_active_service->markReadableFromRadioConsumed();
+                    s_active_service->endReadWait();
+                }
+            }
         }
     }
 
@@ -208,20 +465,60 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
       to_radio_(::BLEUuid(TORADIO_UUID)),
       from_radio_(::BLEUuid(FROMRADIO_UUID)),
       from_num_(::BLEUuid(FROMNUM_UUID)),
-      log_radio_(::BLEUuid(LOGRADIO_UUID)),
-      phone_session_(new MeshtasticPhoneSession(ctx, *this, this))
+      log_radio_(::BLEUuid(LOGRADIO_UUID))
 {
     ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
     ble_config_.enabled = ctx_.isBleEnabled();
     ble_config_.mode = meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN;
     ble_config_.fixed_pin = 0;
 
-    std::memset(&module_config_, 0, sizeof(module_config_));
-    module_config_.has_mqtt = true;
-    module_config_.mqtt.enabled = false;
-    module_config_.mqtt.proxy_to_client_enabled = false;
-    module_config_.mqtt.encryption_enabled = true;
-    copyBounded(module_config_.mqtt.root, sizeof(module_config_.mqtt.root), kDefaultMqttRoot);
+    PersistedBleState persisted{};
+    const bool persisted_ok = loadPersistedBleState(&persisted);
+
+    bleLogBoth("[BLE][nrf52][mt] persisted load ok=%u has_bt=%u has_mod=%u",
+               persisted_ok ? 1U : 0U,
+               persisted.has_bluetooth ? 1U : 0U,
+               persisted.has_module ? 1U : 0U);
+
+#if defined(GAT562_MESH_EVB_PRO)
+    bleLogBoth("[BLE][nrf52][mt] settings_store load=%s save=%s",
+               ::boards::gat562_mesh_evb_pro::settings_store::statusLabel(
+                   ::boards::gat562_mesh_evb_pro::settings_store::lastLoadStatus()),
+               ::boards::gat562_mesh_evb_pro::settings_store::statusLabel(
+                   ::boards::gat562_mesh_evb_pro::settings_store::lastSaveStatus()));
+#endif
+
+    if (persisted.has_bluetooth &&
+        isValidBluetoothMode(static_cast<uint8_t>(persisted.bluetooth.mode)) &&
+        isValidBlePin(persisted.bluetooth.fixed_pin))
+    {
+        ble_config_.mode = persisted.bluetooth.mode;
+        ble_config_.fixed_pin = persisted.bluetooth.fixed_pin;
+        bleLogBoth("[BLE][nrf52][mt] loaded bluetooth cfg mode=%u pin=%06lu",
+                   static_cast<unsigned>(ble_config_.mode),
+                   static_cast<unsigned long>(ble_config_.fixed_pin));
+    }
+    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
+        ble_config_.fixed_pin = 0;
+    }
+
+    initDefaultModuleConfig(ctx_, &module_config_);
+    if (persisted.has_module)
+    {
+        module_config_ = persisted.module;
+        if (module_config_.version == 0)
+        {
+            module_config_.version = meshtastic_defaults::kModuleConfigVersion;
+        }
+        repairLegacyMqttConfig(&module_config_);
+        bleLogBoth("[BLE][nrf52][mt] loaded module cfg mqtt enabled=%u proxy=%u root=%s",
+                   module_config_.has_mqtt && module_config_.mqtt.enabled ? 1U : 0U,
+                   module_config_.has_mqtt && module_config_.mqtt.proxy_to_client_enabled ? 1U : 0U,
+                   module_config_.mqtt.root);
+    }
+
+    phone_session_.reset(new MeshtasticPhoneSession(ctx, *this, this));
 }
 
 MeshtasticBleService::~MeshtasticBleService()
@@ -232,65 +529,107 @@ MeshtasticBleService::~MeshtasticBleService()
 void MeshtasticBleService::start()
 {
     s_active_service = this;
+    conn_handle_ = BLE_CONN_HANDLE_INVALID;
+    from_num_notify_enabled_ = false;
+    pending_to_radio_head_ = 0;
+    pending_to_radio_tail_ = 0;
+    pending_to_radio_count_ = 0;
+    clearToPhoneQueue();
+    pending_from_num_valid_ = false;
+    pending_from_num_ = 0;
+    pending_connect_log_ = false;
+    pending_disconnect_log_ = false;
+    pending_from_num_cccd_log_ = false;
+    pending_pair_complete_log_ = false;
+    pending_secured_log_ = false;
+    pending_from_radio_read_log_ = false;
+    pending_from_radio_empty_log_ = false;
+    pairing_request_pending_ = false;
+    pending_pairing_conn_handle_ = BLE_CONN_HANDLE_INVALID;
+    last_ble_activity_ms_ = millis();
+
     prepareBluefruit(device_name_);
     applyBleSecurity();
 
     service_.begin();
+    bleLogBoth("[BLE][nrf52][mt] service begin");
 
     to_radio_.setProperties(CHR_PROPS_WRITE);
-    to_radio_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
-                                                                                                     : SECMODE_ENC_WITH_MITM,
-                            ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
-                                                                                                     : SECMODE_ENC_WITH_MITM);
+    to_radio_.setPermission(SECMODE_OPEN, SECMODE_OPEN);
     to_radio_.setFixedLen(0);
     to_radio_.setMaxLen(meshtastic_ToRadio_size);
     to_radio_.setWriteCallback(onToRadioWrite, false);
     to_radio_.begin();
 
     from_radio_.setProperties(CHR_PROPS_READ);
-    from_radio_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
-                                                                                                       : SECMODE_ENC_WITH_MITM,
-                              SECMODE_NO_ACCESS);
+    from_radio_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
     from_radio_.setFixedLen(0);
     from_radio_.setMaxLen(meshtastic_FromRadio_size);
     from_radio_.setReadAuthorizeCallback(onFromRadioAuthorize, false);
     from_radio_.begin();
+    {
+        uint8_t empty = 0;
+        from_radio_.write(&empty, 0);
+    }
 
     from_num_.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_READ);
-    from_num_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
-                                                                                                     : SECMODE_ENC_WITH_MITM,
-                            SECMODE_NO_ACCESS);
+    from_num_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
     from_num_.setFixedLen(4);
     from_num_.write32(0);
+    from_num_.setCccdWriteCallback(onFromNumCccdWrite, false);
     from_num_.begin();
 
     log_radio_.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_READ);
-    log_radio_.setPermission(ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN ? SECMODE_OPEN
-                                                                                                      : SECMODE_ENC_WITH_MITM,
-                             SECMODE_NO_ACCESS);
+    log_radio_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
     log_radio_.setFixedLen(0);
     log_radio_.setMaxLen(96);
     log_radio_.begin();
+    bleLogBoth("[BLE][nrf52][mt] chars ready");
 
     ctx_.getChatService().addIncomingTextObserver(this);
+    ctx_.getChatService().addOutgoingTextObserver(this);
+    ctx_.getChatService().addIncomingDataObserver(this);
+
     startAdvertising(service_);
     active_ = true;
     pending_passkey_.store(0);
     syncMqttProxySettings();
+    bleLogBoth("[BLE][nrf52][mt] service active");
 }
 
 void MeshtasticBleService::stop()
 {
     ctx_.getChatService().removeIncomingTextObserver(this);
+    ctx_.getChatService().removeOutgoingTextObserver(this);
+    ctx_.getChatService().removeIncomingDataObserver(this);
+
     disconnectAll();
     Bluefruit.Advertising.stop();
+    flushPendingConfigSaves(true);
     if (phone_session_)
     {
         phone_session_->close();
     }
     active_ = false;
     connected_ = false;
+    from_num_notify_enabled_ = false;
+    conn_handle_ = BLE_CONN_HANDLE_INVALID;
     pending_passkey_.store(0);
+    pending_to_radio_head_ = 0;
+    pending_to_radio_tail_ = 0;
+    pending_to_radio_count_ = 0;
+    clearToPhoneQueue();
+    pending_from_num_valid_ = false;
+    pending_from_num_ = 0;
+    pending_connect_log_ = false;
+    pending_disconnect_log_ = false;
+    pending_from_num_cccd_log_ = false;
+    pending_pair_complete_log_ = false;
+    pending_secured_log_ = false;
+    pending_from_radio_read_log_ = false;
+    pending_from_radio_empty_log_ = false;
+    pairing_request_pending_ = false;
+    pending_pairing_conn_handle_ = BLE_CONN_HANDLE_INVALID;
     if (s_active_service == this)
     {
         s_active_service = nullptr;
@@ -311,9 +650,22 @@ void MeshtasticBleService::update()
         phone_session_->pumpIncomingAppData();
     }
 
+    processPendingPairingRequest();
+    processPendingToRadio();
+    if (from_radio_consume_pending_)
+    {
+        markReadableFromRadioConsumed();
+    }
+    handleToPhone();
+    prepareReadableFromRadio();
+    flushPendingFromNumNotify();
+    logDeferredBleEvents();
+    flushPendingConfigSaves(false);
+
     if (!Bluefruit.connected() && !Bluefruit.Advertising.isRunning())
     {
         Bluefruit.Advertising.start(0);
+        bleLogBoth("[BLE][nrf52][mt] advertising restarted");
     }
 }
 
@@ -322,15 +674,199 @@ void MeshtasticBleService::onIncomingText(const chat::MeshIncomingText& msg)
     if (phone_session_)
     {
         phone_session_->onIncomingText(msg);
+        if (phone_session_->isSendingPackets())
+        {
+            notifyFromNum(0);
+        }
+    }
+}
+
+void MeshtasticBleService::onOutgoingText(const chat::MeshIncomingText& msg)
+{
+    if (phone_session_)
+    {
+        Serial2.printf("[BLE][nrf52][mt] local text mirror id=%08lX from=%08lX to=%08lX len=%u\n",
+                       static_cast<unsigned long>(msg.msg_id),
+                       static_cast<unsigned long>(msg.from),
+                       static_cast<unsigned long>(msg.to),
+                       static_cast<unsigned>(msg.text.size()));
+        phone_session_->onIncomingText(msg);
+        if (phone_session_->isSendingPackets())
+        {
+            notifyFromNum(0);
+        }
+    }
+}
+
+void MeshtasticBleService::onIncomingData(const chat::MeshIncomingData& msg)
+{
+    if (phone_session_)
+    {
+        phone_session_->onIncomingData(msg);
+        if (phone_session_->isSendingPackets())
+        {
+            notifyFromNum(0);
+        }
     }
 }
 
 bool MeshtasticBleService::handleToRadio(const uint8_t* data, size_t len)
 {
+    last_ble_activity_ms_ = millis();
     Serial2.printf("[BLE][nrf52][mt] handleToRadio len=%u connected=%u\n",
                    static_cast<unsigned>(len),
                    connected_ ? 1U : 0U);
     return phone_session_ ? phone_session_->handleToRadio(data, len) : false;
+}
+
+void MeshtasticBleService::handleToPhone()
+{
+    if (!phone_session_)
+    {
+        return;
+    }
+
+    const bool waiting_for_read = read_waiting_.load();
+    const bool in_send_packets = phone_session_->isSendingPackets();
+    const bool config_flow_active = phone_session_->isConfigFlowActive();
+    const bool can_prepare = connected_ && (!in_send_packets || config_flow_active);
+
+    if (config_flow_active && !from_num_notify_enabled_)
+    {
+        return;
+    }
+
+    if (config_flow_active && (from_radio_preloaded_valid_ || to_phone_count_ > 0 || pending_to_phone_valid_))
+    {
+        return;
+    }
+
+    Frame* frame = &pending_to_phone_;
+    if (pending_to_phone_valid_)
+    {
+    }
+    else
+    {
+        if (!waiting_for_read && !can_prepare)
+        {
+            return;
+        }
+        if (to_phone_count_ >= kToPhoneQueueDepth)
+        {
+            return;
+        }
+
+        *frame = Frame{};
+        session_frame_scratch_ = MeshtasticBleFrame{};
+        if (!phone_session_->popToPhone(&session_frame_scratch_))
+        {
+            if (waiting_for_read && in_send_packets)
+            {
+                read_waiting_.store(false);
+            }
+            return;
+        }
+
+        if (session_frame_scratch_.len == 0 || session_frame_scratch_.len > frame->buf.size())
+        {
+            bleLogBoth("[BLE][nrf52][mt] drop oversize to_phone frame from_num=%08lX len=%u max=%u",
+                       static_cast<unsigned long>(session_frame_scratch_.from_num),
+                       static_cast<unsigned>(session_frame_scratch_.len),
+                       static_cast<unsigned>(frame->buf.size()));
+            if (waiting_for_read && in_send_packets)
+            {
+                read_waiting_.store(false);
+            }
+            return;
+        }
+
+        frame->len = session_frame_scratch_.len;
+        frame->from_num = session_frame_scratch_.from_num;
+        std::memcpy(frame->buf.data(), session_frame_scratch_.buf, session_frame_scratch_.len);
+    }
+
+    if (enqueueToPhoneFrame(*frame))
+    {
+        pending_to_phone_valid_ = false;
+        Serial2.printf("[BLE][nrf52][mt] to_phone enqueue from_num=%08lX len=%u q=%u\n",
+                       static_cast<unsigned long>(frame->from_num),
+                       static_cast<unsigned>(frame->len),
+                       static_cast<unsigned>(to_phone_count_));
+        if (!waiting_for_read && (in_send_packets || config_flow_active))
+        {
+            notifyFromNum(frame->from_num);
+        }
+        else if (can_prepare && !config_flow_active && to_phone_count_ < kToPhoneQueueDepth)
+        {
+            handleToPhone();
+        }
+    }
+    else
+    {
+        pending_to_phone_ = *frame;
+        pending_to_phone_valid_ = true;
+        Serial2.printf("[BLE][nrf52][mt] to_phone defer from_num=%08lX len=%u\n",
+                       static_cast<unsigned long>(frame->from_num),
+                       static_cast<unsigned>(frame->len));
+    }
+}
+
+bool MeshtasticBleService::enqueueToRadio(const uint8_t* data, size_t len)
+{
+    if (!data || len == 0 || len > meshtastic_ToRadio_size)
+    {
+        return false;
+    }
+
+    noInterrupts();
+    if (pending_to_radio_count_ >= kPendingToRadioCapacity)
+    {
+        interrupts();
+        Serial2.printf("[BLE][nrf52][mt] to_radio queue full len=%u\n", static_cast<unsigned>(len));
+        return false;
+    }
+
+    PendingToRadioFrame& frame = pending_to_radio_[pending_to_radio_tail_];
+    std::memcpy(frame.buf, data, len);
+    frame.len = len;
+    pending_to_radio_tail_ = static_cast<uint8_t>((pending_to_radio_tail_ + 1U) % kPendingToRadioCapacity);
+    ++pending_to_radio_count_;
+    interrupts();
+    return true;
+}
+
+void MeshtasticBleService::processPendingToRadio()
+{
+    PendingToRadioFrame frame{};
+    while (true)
+    {
+        noInterrupts();
+        if (pending_to_radio_count_ == 0)
+        {
+            interrupts();
+            return;
+        }
+
+        frame = pending_to_radio_[pending_to_radio_head_];
+        pending_to_radio_head_ = static_cast<uint8_t>((pending_to_radio_head_ + 1U) % kPendingToRadioCapacity);
+        --pending_to_radio_count_;
+        interrupts();
+
+        (void)handleToRadio(frame.buf, frame.len);
+    }
+}
+
+void MeshtasticBleService::processPendingPairingRequest()
+{
+    if (!pairing_request_pending_)
+    {
+        return;
+    }
+
+    const uint16_t conn_handle = pending_pairing_conn_handle_;
+    pairing_request_pending_ = false;
+    pending_pairing_conn_handle_ = BLE_CONN_HANDLE_INVALID;
+    requestPairingIfNeeded(conn_handle);
 }
 
 bool MeshtasticBleService::popToPhone(MeshtasticBleFrame* out)
@@ -338,45 +874,228 @@ bool MeshtasticBleService::popToPhone(MeshtasticBleFrame* out)
     return phone_session_ ? phone_session_->popToPhone(out) : false;
 }
 
+bool MeshtasticBleService::shouldBlockOnRead() const
+{
+    if (!connected_ || !phone_session_)
+    {
+        return false;
+    }
+    return phone_session_->isSendingPackets() || phone_session_->isConfigFlowActive();
+}
+
+void MeshtasticBleService::beginReadWait()
+{
+    read_waiting_.store(true);
+    if (from_radio_preloaded_valid_)
+    {
+        from_radio_consume_pending_ = true;
+    }
+}
+
+bool MeshtasticBleService::isReadWaiting() const
+{
+    return read_waiting_.load();
+}
+
+void MeshtasticBleService::endReadWait()
+{
+    read_waiting_.store(false);
+}
+
+bool MeshtasticBleService::waitForReadableFromRadio(uint8_t max_tries, uint8_t delay_ms)
+{
+    beginReadWait();
+    uint8_t tries = 0;
+    while (!hasReadableFromRadio() && isReadWaiting() && tries < max_tries)
+    {
+        handleToPhone();
+        prepareReadableFromRadio();
+        if (hasReadableFromRadio())
+        {
+            break;
+        }
+        delay(delay_ms);
+        ++tries;
+    }
+    return hasReadableFromRadio();
+}
+
+bool MeshtasticBleService::enqueueToPhoneFrame(const Frame& frame)
+{
+    if (frame.len == 0 || frame.len > meshtastic_FromRadio_size)
+    {
+        return false;
+    }
+
+    noInterrupts();
+    if (to_phone_count_ >= kToPhoneQueueDepth)
+    {
+        interrupts();
+        return false;
+    }
+
+    to_phone_queue_[to_phone_tail_] = frame;
+    to_phone_tail_ = static_cast<uint8_t>((to_phone_tail_ + 1U) % kToPhoneQueueDepth);
+    ++to_phone_count_;
+    interrupts();
+    return true;
+}
+
+bool MeshtasticBleService::popQueuedToPhoneFrame(Frame* out)
+{
+    if (!out)
+    {
+        return false;
+    }
+
+    noInterrupts();
+    if (to_phone_count_ == 0)
+    {
+        interrupts();
+        return false;
+    }
+
+    *out = to_phone_queue_[to_phone_head_];
+    to_phone_head_ = static_cast<uint8_t>((to_phone_head_ + 1U) % kToPhoneQueueDepth);
+    --to_phone_count_;
+    interrupts();
+    return true;
+}
+
+void MeshtasticBleService::clearToPhoneQueue()
+{
+    read_waiting_.store(false);
+    pending_to_phone_valid_ = false;
+    pending_to_phone_ = Frame{};
+    from_radio_preloaded_valid_ = false;
+    from_radio_preloaded_ = Frame{};
+    from_radio_consume_pending_ = false;
+    noInterrupts();
+    to_phone_head_ = 0;
+    to_phone_tail_ = 0;
+    to_phone_count_ = 0;
+    interrupts();
+}
+
+void MeshtasticBleService::prepareReadableFromRadio()
+{
+    if (from_radio_preloaded_valid_)
+    {
+        return;
+    }
+
+    Frame frame{};
+    if (!popQueuedToPhoneFrame(&frame))
+    {
+        return;
+    }
+
+    from_radio_.write(frame.buf.data(), frame.len);
+    from_radio_preloaded_ = frame;
+    from_radio_preloaded_valid_ = true;
+    bleLogBoth("[BLE][nrf52][mt][flow] preload from_num=%08lX len=%u q=%u",
+               static_cast<unsigned long>(frame.from_num),
+               static_cast<unsigned>(frame.len),
+               static_cast<unsigned>(to_phone_count_));
+}
+
+bool MeshtasticBleService::hasReadableFromRadio() const
+{
+    return from_radio_preloaded_valid_;
+}
+
+void MeshtasticBleService::markReadableFromRadioConsumed()
+{
+    from_radio_consume_pending_ = false;
+
+    if (!from_radio_preloaded_valid_)
+    {
+        pending_from_radio_empty_log_ = true;
+        return;
+    }
+
+    pending_from_radio_read_len_ = static_cast<uint16_t>(from_radio_preloaded_.len);
+    pending_from_radio_read_from_num_ = from_radio_preloaded_.from_num;
+    pending_from_radio_read_log_ = true;
+    from_radio_preloaded_valid_ = false;
+    from_radio_preloaded_ = Frame{};
+    uint8_t empty = 0;
+    from_radio_.write(&empty, 0);
+}
+
 void MeshtasticBleService::handleConnectEvent(uint16_t conn_handle)
 {
     connected_ = true;
-    requestPairingIfNeeded(conn_handle);
+    conn_handle_ = conn_handle;
+    last_ble_activity_ms_ = millis();
+    from_num_notify_enabled_ = false;
+    clearToPhoneQueue();
+    pairing_request_pending_ = true;
+    pending_pairing_conn_handle_ = conn_handle;
+    pending_connect_conn_handle_ = conn_handle;
+    pending_connect_log_ = true;
+    bleLogBoth("[BLE][nrf52][mt][flow] link-up conn=%u adv=%u",
+               static_cast<unsigned>(conn_handle),
+               Bluefruit.Advertising.isRunning() ? 1U : 0U);
 }
 
 void MeshtasticBleService::handleDisconnectEvent(uint16_t conn_handle)
 {
     connected_ = false;
+    from_num_notify_enabled_ = false;
+    conn_handle_ = BLE_CONN_HANDLE_INVALID;
+    last_ble_activity_ms_ = millis();
     if (phone_session_)
     {
         phone_session_->close();
     }
     pending_passkey_.store(0);
-    Serial2.printf("[BLE][nrf52][mt] disconnected conn=%u\n", static_cast<unsigned>(conn_handle));
+    pending_to_radio_head_ = 0;
+    pending_to_radio_tail_ = 0;
+    pending_to_radio_count_ = 0;
+    clearToPhoneQueue();
+    pairing_request_pending_ = false;
+    pending_pairing_conn_handle_ = BLE_CONN_HANDLE_INVALID;
+    pending_disconnect_conn_handle_ = conn_handle;
+    pending_disconnect_log_ = true;
+    flushPendingConfigSaves(true);
+}
+
+void MeshtasticBleService::handleFromNumCccdWrite(uint16_t conn_handle, uint16_t value)
+{
+    conn_handle_ = conn_handle;
+    last_ble_activity_ms_ = millis();
+    from_num_notify_enabled_ = (value != 0U);
+    pending_from_num_cccd_conn_handle_ = conn_handle;
+    pending_from_num_cccd_value_ = value;
+    pending_from_num_cccd_log_ = true;
+    bleLogBoth("[BLE][nrf52][mt][flow] from_num subscribed=%u conn=%u value=0x%04X",
+               from_num_notify_enabled_ ? 1U : 0U,
+               static_cast<unsigned>(conn_handle),
+               static_cast<unsigned>(value));
 }
 
 void MeshtasticBleService::handlePairPasskeyDisplay(uint16_t conn_handle, const uint8_t passkey[6], bool match_request)
 {
     const uint32_t parsed = parsePasskeyDigits(passkey);
     pending_passkey_.store(parsed);
-    Serial2.printf("[BLE][nrf52][mt] pairing passkey=%06lu match=%u conn=%u\n",
-                   static_cast<unsigned long>(parsed),
-                   match_request ? 1U : 0U,
-                   static_cast<unsigned>(conn_handle));
+    (void)match_request;
+    (void)conn_handle;
 }
 
 void MeshtasticBleService::handlePairComplete(uint16_t conn_handle, uint8_t auth_status)
 {
-    Serial2.printf("[BLE][nrf52][mt] pair complete status=%u conn=%u\n",
-                   static_cast<unsigned>(auth_status),
-                   static_cast<unsigned>(conn_handle));
     pending_passkey_.store(0);
+    pending_pair_complete_conn_handle_ = conn_handle;
+    pending_pair_complete_status_ = auth_status;
+    pending_pair_complete_log_ = true;
 }
 
 void MeshtasticBleService::handleSecured(uint16_t conn_handle)
 {
-    Serial2.printf("[BLE][nrf52][mt] secured conn=%u\n", static_cast<unsigned>(conn_handle));
     pending_passkey_.store(0);
+    pending_secured_conn_handle_ = conn_handle;
+    pending_secured_log_ = true;
 }
 
 bool MeshtasticBleService::getPairingStatus(BlePairingStatus* out) const
@@ -387,7 +1106,7 @@ bool MeshtasticBleService::getPairingStatus(BlePairingStatus* out) const
     }
 
     *out = BlePairingStatus{};
-    out->available = ble_config_.enabled;
+    out->available = ctx_.isBleEnabled();
     out->requires_passkey = ble_config_.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN;
     out->is_fixed_pin = ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN;
     out->is_connected = isBleConnected();
@@ -403,9 +1122,50 @@ bool MeshtasticBleService::isBleConnected() const
 
 void MeshtasticBleService::notifyFromNum(uint32_t from_num)
 {
-    if (active_ && Bluefruit.connected())
+    pending_from_num_ = from_num;
+    pending_from_num_valid_ = true;
+    bleLogBoth("[BLE][nrf52][mt][flow] from_num pending=%08lX", static_cast<unsigned long>(from_num));
+}
+
+void MeshtasticBleService::flushPendingFromNumNotify()
+{
+    if (!pending_from_num_valid_)
     {
-        from_num_.notify32(from_num);
+        return;
+    }
+
+    const uint32_t from_num = pending_from_num_;
+    pending_from_num_valid_ = false;
+
+    if (!active_ || !connected_)
+    {
+        bleLogBoth("[BLE][nrf52][mt][flow] from_num skip=%08lX reason=inactive active=%u connected=%u",
+                   static_cast<unsigned long>(from_num),
+                   active_ ? 1U : 0U,
+                   connected_ ? 1U : 0U);
+        return;
+    }
+
+    if (!from_num_notify_enabled_ || conn_handle_ == BLE_CONN_HANDLE_INVALID)
+    {
+        bleLogBoth("[BLE][nrf52][mt][flow] from_num skip=%08lX reason=not-subscribed notify=%u conn=%u",
+                   static_cast<unsigned long>(from_num),
+                   from_num_notify_enabled_ ? 1U : 0U,
+                   static_cast<unsigned>(conn_handle_));
+        return;
+    }
+
+    from_num_.write32(from_num);
+    const bool ok = from_num_.notify32(conn_handle_, from_num);
+    bleLogBoth("[BLE][nrf52][mt][flow] from_num notify=%08lX conn=%u ok=%u cccd=0x%04X",
+               static_cast<unsigned long>(from_num),
+               static_cast<unsigned>(conn_handle_),
+               ok ? 1U : 0U,
+               static_cast<unsigned>(from_num_.getCccd(conn_handle_)));
+    if (!ok && Bluefruit.connected())
+    {
+        const bool fallback_ok = from_num_.notify32(from_num);
+        bleLogBoth("[BLE][nrf52][mt][flow] from_num notify fallback ok=%u", fallback_ok ? 1U : 0U);
     }
 }
 
@@ -416,7 +1176,29 @@ bool MeshtasticBleService::loadBluetoothConfig(meshtastic_Config_BluetoothConfig
         return false;
     }
     *out = ble_config_;
+    out->enabled = ctx_.isBleEnabled();
     return true;
+}
+
+void MeshtasticBleService::saveBluetoothConfig(const meshtastic_Config_BluetoothConfig& config)
+{
+    ble_config_ = config;
+    ble_config_.enabled = config.enabled;
+    if (!isValidBluetoothMode(static_cast<uint8_t>(ble_config_.mode)))
+    {
+        ble_config_.mode = meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN;
+    }
+    if (!isValidBlePin(ble_config_.fixed_pin) ||
+        ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
+        ble_config_.fixed_pin = 0;
+    }
+
+    markConfigSavePending(true, false);
+    bleLogBoth("[BLE][nrf52][mt] saveBluetoothConfig queued mode=%u pin=%06lu enabled=%u",
+               static_cast<unsigned>(ble_config_.mode),
+               static_cast<unsigned long>(ble_config_.fixed_pin),
+               ble_config_.enabled ? 1U : 0U);
 }
 
 bool MeshtasticBleService::loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const
@@ -442,19 +1224,107 @@ bool MeshtasticBleService::loadModuleConfig(meshtastic_LocalModuleConfig* out) c
     }
 
     *out = module_config_;
+    repairLegacyMqttConfig(out);
     return true;
 }
 
 void MeshtasticBleService::saveModuleConfig(const meshtastic_LocalModuleConfig& config)
 {
-    Serial2.printf("[BLE][nrf52][mt] saveModuleConfig mqtt enabled=%u proxy=%u enc=%u root=%s\n",
-                   config.has_mqtt && config.mqtt.enabled ? 1U : 0U,
-                   config.has_mqtt && config.mqtt.proxy_to_client_enabled ? 1U : 0U,
-                   config.has_mqtt ? (config.mqtt.encryption_enabled ? 1U : 0U) : 1U,
-                   config.has_mqtt ? config.mqtt.root : "");
+    bleLogBoth("[BLE][nrf52][mt] saveModuleConfig mqtt enabled=%u proxy=%u enc=%u root=%s",
+               config.has_mqtt && config.mqtt.enabled ? 1U : 0U,
+               config.has_mqtt && config.mqtt.proxy_to_client_enabled ? 1U : 0U,
+               config.has_mqtt ? (config.mqtt.encryption_enabled ? 1U : 0U) : 1U,
+               config.has_mqtt ? config.mqtt.root : "");
     module_config_ = config;
+    if (module_config_.version == 0)
+    {
+        module_config_.version = meshtastic_defaults::kModuleConfigVersion;
+    }
+    repairLegacyMqttConfig(&module_config_);
+    markConfigSavePending(false, true);
     syncMqttProxySettings();
-    Serial2.printf("[BLE][nrf52][mt] saveModuleConfig done\n");
+    bleLogBoth("[BLE][nrf52][mt] saveModuleConfig queued");
+}
+
+void MeshtasticBleService::markConfigSavePending(bool bluetooth_changed, bool module_changed)
+{
+    if (bluetooth_changed)
+    {
+        bluetooth_config_save_pending_ = true;
+    }
+    if (module_changed)
+    {
+        module_config_save_pending_ = true;
+    }
+    config_save_due_ms_ = millis() + kConfigSaveDebounceMs;
+}
+
+void MeshtasticBleService::flushPendingConfigSaves(bool force)
+{
+    if (!bluetooth_config_save_pending_ && !module_config_save_pending_)
+    {
+        return;
+    }
+
+    const uint32_t now_ms = millis();
+    if (!force)
+    {
+        if (phone_session_ && phone_session_->isConfigFlowActive())
+        {
+            return;
+        }
+        if (static_cast<int32_t>(now_ms - config_save_due_ms_) < 0)
+        {
+            return;
+        }
+        if (connected_ && (now_ms - last_ble_activity_ms_) < kConfigSaveDebounceMs)
+        {
+            return;
+        }
+    }
+
+    meshtastic_Config_BluetoothConfig persisted_bluetooth = ble_config_;
+    persisted_bluetooth.enabled = ctx_.isBleEnabled();
+    const bool needs_save = bluetooth_config_save_pending_ || module_config_save_pending_;
+    const bool persisted = needs_save ? savePersistedBleState(persisted_bluetooth, module_config_) : true;
+    ble_config_.enabled = persisted_bluetooth.enabled;
+
+    bleLogBoth("[BLE][nrf52][mt] current mem persisted=%u bluetooth_config_save_pending_=%u module_config_save_pending_=%u needs_save=%u",
+               persisted ? 1U : 0U,
+               bluetooth_config_save_pending_ ? 1U : 0U,
+               module_config_save_pending_ ? 1U : 0U,
+               needs_save ? 1U : 0U);
+
+    if (bluetooth_config_save_pending_)
+    {
+        bleLogBoth("[BLE][nrf52][mt] flush bluetooth cfg persisted=%u mode=%u pin=%06lu enabled=%u",
+                   persisted ? 1U : 0U,
+                   static_cast<unsigned>(persisted_bluetooth.mode),
+                   static_cast<unsigned long>(persisted_bluetooth.fixed_pin),
+                   persisted_bluetooth.enabled ? 1U : 0U);
+        if (persisted)
+        {
+            bluetooth_config_save_pending_ = false;
+        }
+    }
+
+    if (module_config_save_pending_)
+    {
+        bleLogBoth("[BLE][nrf52][mt] flush module cfg persisted=%u enabled=%u proxy=%u root=%s",
+                   persisted ? 1U : 0U,
+                   module_config_.has_mqtt && module_config_.mqtt.enabled ? 1U : 0U,
+                   module_config_.has_mqtt && module_config_.mqtt.proxy_to_client_enabled ? 1U : 0U,
+                   module_config_.mqtt.root);
+        if (persisted)
+        {
+            module_config_save_pending_ = false;
+        }
+    }
+
+    if (!persisted)
+    {
+        config_save_due_ms_ = millis() + kConfigSaveDebounceMs;
+    }
 }
 
 bool MeshtasticBleService::handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg)
@@ -486,7 +1356,7 @@ void MeshtasticBleService::syncMqttProxySettings()
     settings.primary_downlink_enabled = cfg.primary_downlink_enabled;
     settings.secondary_uplink_enabled = cfg.secondary_uplink_enabled;
     settings.secondary_downlink_enabled = cfg.secondary_downlink_enabled;
-    settings.root = module_config_.mqtt.root[0] ? module_config_.mqtt.root : kDefaultMqttRoot;
+    settings.root = module_config_.mqtt.root[0] ? module_config_.mqtt.root : meshtastic_defaults::kDefaultMqttRoot;
     settings.primary_channel_id = channelDisplayName(ctx_, 0);
     settings.secondary_channel_id = channelDisplayName(ctx_, 1);
     mt->setMqttProxySettings(settings);
@@ -533,36 +1403,65 @@ void MeshtasticBleService::requestPairingIfNeeded(uint16_t conn_handle)
     {
         return;
     }
-
-    if (conn_handle == BLE_CONN_HANDLE_INVALID)
-    {
-        for (uint8_t index = 0; index < BLE_MAX_CONNECTION; ++index)
-        {
-            if (!Bluefruit.connected(index))
-            {
-                continue;
-            }
-            BLEConnection* connection = Bluefruit.Connection(index);
-            if (connection)
-            {
-                const bool ok = connection->requestPairing();
-                Serial2.printf("[BLE][nrf52][mt] requestPairing conn=%u ok=%u\n",
-                               static_cast<unsigned>(index),
-                               ok ? 1U : 0U);
-            }
-        }
-        return;
-    }
-
-    BLEConnection* connection = Bluefruit.Connection(conn_handle);
-    if (!connection)
-    {
-        return;
-    }
-    const bool ok = connection->requestPairing();
-    Serial2.printf("[BLE][nrf52][mt] requestPairing conn=%u ok=%u\n",
+    Serial2.printf("[BLE][nrf52][mt] pairing wait-for-central conn=%u mode=%u\n",
                    static_cast<unsigned>(conn_handle),
-                   ok ? 1U : 0U);
+                   static_cast<unsigned>(ble_config_.mode));
+}
+
+void MeshtasticBleService::logDeferredBleEvents()
+{
+    if (pending_connect_log_)
+    {
+        pending_connect_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] connected conn=%u mode=%u",
+                   static_cast<unsigned>(pending_connect_conn_handle_),
+                   static_cast<unsigned>(ble_config_.mode));
+    }
+
+    if (pending_disconnect_log_)
+    {
+        pending_disconnect_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] disconnected conn=%u",
+                   static_cast<unsigned>(pending_disconnect_conn_handle_));
+    }
+
+    if (pending_from_num_cccd_log_)
+    {
+        pending_from_num_cccd_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] from_num cccd conn=%u value=0x%04X enabled=%u",
+                   static_cast<unsigned>(pending_from_num_cccd_conn_handle_),
+                   static_cast<unsigned>(pending_from_num_cccd_value_),
+                   from_num_notify_enabled_ ? 1U : 0U);
+    }
+
+    if (pending_pair_complete_log_)
+    {
+        pending_pair_complete_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] pair complete status=%u conn=%u",
+                   static_cast<unsigned>(pending_pair_complete_status_),
+                   static_cast<unsigned>(pending_pair_complete_conn_handle_));
+    }
+
+    if (pending_secured_log_)
+    {
+        pending_secured_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] secured conn=%u",
+                   static_cast<unsigned>(pending_secured_conn_handle_));
+    }
+
+    if (pending_from_radio_read_log_)
+    {
+        pending_from_radio_read_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] from_radio read len=%u from_num=%08lX",
+                   static_cast<unsigned>(pending_from_radio_read_len_),
+                   static_cast<unsigned long>(pending_from_radio_read_from_num_));
+    }
+
+    if (pending_from_radio_empty_log_)
+    {
+        pending_from_radio_empty_log_ = false;
+        bleLogBoth("[BLE][nrf52][mt] from_radio read empty");
+    }
 }
 
 uint32_t MeshtasticBleService::effectivePasskey() const

@@ -157,6 +157,27 @@ void ChatConversationScreen::scrollToBottom()
     lv_obj_scroll_to_view(messages_.back().container, LV_ANIM_OFF);
 }
 
+bool ChatConversationScreen::updateMessageStatus(const chat::MessageId msg_id,
+                                                 const chat::MessageStatus status)
+{
+    if (!guard_ || !guard_->alive || msg_id == 0)
+    {
+        return false;
+    }
+
+    for (auto& item : messages_)
+    {
+        if (item.msg.msg_id != msg_id)
+        {
+            continue;
+        }
+        item.msg.status = status;
+        return true;
+    }
+
+    return false;
+}
+
 void ChatConversationScreen::setActionCallback(void (*cb)(ActionIntent intent, void*), void* user_data)
 {
     action_cb_ = cb;

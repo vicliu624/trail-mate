@@ -98,6 +98,14 @@ class MeshtasticPhoneCore
     void enqueueConfigSnapshot(uint32_t config_nonce);
     void enqueueFromRadio(const meshtastic_FromRadio& from, uint32_t from_num);
     void notifyFromNum(uint32_t from_num);
+    void fillMyInfo(meshtastic_MyNodeInfo* out) const;
+    void fillSelfNodeInfo(meshtastic_NodeInfo* out) const;
+    void fillNodeInfoFromEntry(const chat::contacts::NodeEntry& entry, meshtastic_NodeInfo* out) const;
+    void fillMetadata(meshtastic_DeviceMetadata* out) const;
+    void fillDeviceUi(meshtastic_DeviceUIConfig* out) const;
+    void fillChannel(uint8_t idx, meshtastic_Channel* out) const;
+    void fillConfig(meshtastic_AdminMessage_ConfigType type, meshtastic_Config* out) const;
+    void fillModuleConfig(meshtastic_AdminMessage_ModuleConfigType type, meshtastic_ModuleConfig* out) const;
     meshtastic_MyNodeInfo buildMyInfo() const;
     meshtastic_NodeInfo buildSelfNodeInfo() const;
     meshtastic_NodeInfo buildNodeInfoFromEntry(const chat::contacts::NodeEntry& entry) const;
@@ -119,9 +127,11 @@ class MeshtasticPhoneCore
     uint8_t config_channel_index_ = 0;
     uint8_t config_type_index_ = 0;
     uint8_t config_module_type_index_ = 0;
+    uint32_t config_request_seq_ = 0;
     uint8_t last_to_radio_[meshtastic_ToRadio_size] = {};
     size_t last_to_radio_len_ = 0;
     bool config_flow_active_ = false;
+    bool config_drain_empty_pending_ = false;
     std::deque<MeshtasticBleFrame> frame_queue_;
     std::deque<meshtastic_QueueStatus> queue_status_queue_;
     std::deque<meshtastic_MeshPacket> packet_queue_;
@@ -129,6 +139,12 @@ class MeshtasticPhoneCore
     meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
     char admin_canned_messages_[160] = {};
     char admin_ringtone_[96] = {};
+    meshtastic_ToRadio to_radio_scratch_ = meshtastic_ToRadio_init_zero;
+    meshtastic_AdminMessage admin_req_scratch_ = meshtastic_AdminMessage_init_zero;
+    meshtastic_AdminMessage admin_resp_scratch_ = meshtastic_AdminMessage_init_zero;
+    meshtastic_MeshPacket reply_packet_scratch_ = meshtastic_MeshPacket_init_zero;
+    meshtastic_MqttClientProxyMessage mqtt_proxy_scratch_ = meshtastic_MqttClientProxyMessage_init_zero;
+    meshtastic_FromRadio from_radio_scratch_ = meshtastic_FromRadio_init_zero;
 };
 
 } // namespace ble

@@ -36,6 +36,7 @@ TaskHandle_t s_screen_sleep_task_handle = nullptr;
 uint32_t s_last_user_activity_time = 0;
 bool s_screen_sleeping = false;
 bool s_screen_sleep_disabled = false;
+uint8_t s_saved_screen_brightness = DEVICE_MAX_BRIGHTNESS_LEVEL;
 uint8_t s_saved_keyboard_brightness = 127;
 bool s_screen_saver_active = false;
 lv_obj_t* s_screen_saver_layer = nullptr;
@@ -210,7 +211,7 @@ void init_screen_saver()
     s_screen_saver_hint_label = lv_label_create(s_screen_saver_layer);
     lv_obj_set_style_text_color(s_screen_saver_hint_label, lv_color_hex(0x8A6A3A), 0);
     lv_obj_set_style_text_font(s_screen_saver_hint_label, &lv_font_montserrat_14, 0);
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
     lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to enter main menu");
 #else
     lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to enter");
@@ -242,7 +243,7 @@ void screenSleepTask(void* pvParameters)
                     {
                         s_screen_sleeping = false;
                         board.exitScreenSleep();
-                        board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                        board.setBrightness(s_saved_screen_brightness);
                         if (board.hasKeyboard())
                         {
                             board.keyboardSetBrightness(s_saved_keyboard_brightness);
@@ -260,6 +261,7 @@ void screenSleepTask(void* pvParameters)
                             s_saved_keyboard_brightness = board.keyboardGetBrightness();
                             board.keyboardSetBrightness(0);
                         }
+                        s_saved_screen_brightness = board.getBrightness();
                         board.setBrightness(0);
                         board.enterScreenSleep();
                     }
@@ -267,7 +269,7 @@ void screenSleepTask(void* pvParameters)
                     {
                         s_screen_sleeping = false;
                         board.exitScreenSleep();
-                        board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                        board.setBrightness(s_saved_screen_brightness);
                         if (board.hasKeyboard())
                         {
                             board.keyboardSetBrightness(s_saved_keyboard_brightness);
@@ -404,11 +406,17 @@ void wakeScreenSaver()
         return;
     }
 
+    bool was_sleeping = false;
     if (s_activity_mutex != nullptr)
     {
         if (xSemaphoreTake(s_activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
         {
+            was_sleeping = s_screen_sleeping;
             s_screen_saver_active = true;
+            // Keep the runtime in the logical sleep state while the transient
+            // saver is visible. This matches the 0.1.13 behavior: waking only
+            // shows the saver shell, and if the user does nothing for 3s we go
+            // right back to sleep instead of being treated as fully awake.
             s_screen_sleeping = true;
             xSemaphoreGive(s_activity_mutex);
         }
@@ -418,7 +426,20 @@ void wakeScreenSaver()
     lv_obj_clear_flag(s_screen_saver_layer, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_screen_saver_layer);
     lv_refr_now(nullptr);
-    board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+    if (was_sleeping)
+    {
+        board.exitScreenSleep();
+        board.setBrightness(s_saved_screen_brightness);
+        if (board.hasKeyboard())
+        {
+            board.keyboardSetBrightness(s_saved_keyboard_brightness);
+        }
+    }
+    else
+    {
+        s_saved_screen_brightness = board.getBrightness();
+        board.setBrightness(s_saved_screen_brightness);
+    }
 
     if (s_screen_saver_timer == nullptr)
     {
@@ -471,7 +492,7 @@ void disableScreenSleep()
             if (s_screen_sleeping)
             {
                 s_screen_sleeping = false;
-                board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
+                board.setBrightness(s_saved_screen_brightness);
                 if (board.hasKeyboard())
                 {
                     board.keyboardSetBrightness(s_saved_keyboard_brightness);
@@ -517,6 +538,7 @@ void updateUserActivity()
 {
     bool woke_from_sleep = false;
     bool hide_saver = false;
+    bool restore_sleep_state = false;
     if (s_activity_mutex != nullptr)
     {
         if (xSemaphoreTake(s_activity_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
@@ -530,12 +552,8 @@ void updateUserActivity()
             if (s_screen_sleeping)
             {
                 s_screen_sleeping = false;
-                board.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
-                if (board.hasKeyboard())
-                {
-                    board.keyboardSetBrightness(s_saved_keyboard_brightness);
-                }
                 woke_from_sleep = true;
+                restore_sleep_state = true;
             }
             xSemaphoreGive(s_activity_mutex);
         }
@@ -543,6 +561,15 @@ void updateUserActivity()
     if (hide_saver)
     {
         hide_screen_saver_layer();
+    }
+    if (restore_sleep_state)
+    {
+        board.exitScreenSleep();
+        board.setBrightness(s_saved_screen_brightness);
+        if (board.hasKeyboard())
+        {
+            board.keyboardSetBrightness(s_saved_keyboard_brightness);
+        }
     }
     if (woke_from_sleep)
     {

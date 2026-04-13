@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 namespace chat
@@ -62,6 +63,74 @@ struct NodePosition
     uint32_t gps_accuracy_mm = 0;
 };
 
+struct NodeDeviceMetrics
+{
+    bool has_battery_level = false;
+    uint32_t battery_level = 0;
+    bool has_voltage = false;
+    float voltage = 0.0f;
+    bool has_channel_utilization = false;
+    float channel_utilization = 0.0f;
+    bool has_air_util_tx = false;
+    float air_util_tx = 0.0f;
+    bool has_uptime_seconds = false;
+    uint32_t uptime_seconds = 0;
+};
+
+struct NodeUpdate
+{
+    const char* short_name = nullptr;
+    const char* long_name = nullptr;
+
+    bool has_last_seen = false;
+    uint32_t last_seen = 0;
+
+    bool has_snr = false;
+    float snr = 0.0f;
+
+    bool has_rssi = false;
+    float rssi = 0.0f;
+
+    bool has_hops_away = false;
+    uint8_t hops_away = 0xFF;
+
+    bool has_channel = false;
+    uint8_t channel = 0xFF;
+
+    bool has_next_hop = false;
+    uint8_t next_hop = 0;
+
+    bool has_protocol = false;
+    uint8_t protocol = 0;
+
+    bool has_role = false;
+    uint8_t role = 0xFF;
+
+    bool has_hw_model = false;
+    uint8_t hw_model = 0;
+
+    bool has_macaddr = false;
+    uint8_t macaddr[6] = {};
+
+    bool has_via_mqtt = false;
+    bool via_mqtt = false;
+
+    bool has_is_ignored = false;
+    bool is_ignored = false;
+
+    bool has_public_key = false;
+    bool public_key_present = false;
+
+    bool has_key_manually_verified = false;
+    bool key_manually_verified = false;
+
+    bool has_device_metrics = false;
+    NodeDeviceMetrics device_metrics{};
+
+    bool has_position = false;
+    NodePosition position{};
+};
+
 /**
  * @brief Base node information
  */
@@ -79,6 +148,16 @@ struct NodeInfoBase
     std::string display_name; // nickname if contact, short_name otherwise
     NodeProtocolType protocol;
     NodeRoleType role;
+    uint8_t hw_model = 0;
+    uint8_t next_hop = 0;
+    bool has_macaddr = false;
+    uint8_t macaddr[6] = {};
+    bool via_mqtt = false;
+    bool is_ignored = false;
+    bool has_public_key = false;
+    bool key_manually_verified = false;
+    bool has_device_metrics = false;
+    NodeDeviceMetrics device_metrics;
     NodePosition position;
 };
 

@@ -7,6 +7,7 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
@@ -152,6 +153,7 @@ static void refresh_filter_checked_state()
 {
     if (g_contacts_state.contacts_btn == nullptr ||
         g_contacts_state.nearby_btn == nullptr ||
+        g_contacts_state.ignored_btn == nullptr ||
         g_contacts_state.broadcast_btn == nullptr)
     {
         return;
@@ -159,6 +161,7 @@ static void refresh_filter_checked_state()
 
     lv_obj_clear_state(g_contacts_state.contacts_btn, LV_STATE_CHECKED);
     lv_obj_clear_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+    lv_obj_clear_state(g_contacts_state.ignored_btn, LV_STATE_CHECKED);
     lv_obj_clear_state(g_contacts_state.broadcast_btn, LV_STATE_CHECKED);
     if (g_contacts_state.team_btn)
     {
@@ -176,6 +179,10 @@ static void refresh_filter_checked_state()
     else if (g_contacts_state.current_mode == ContactsMode::Nearby)
     {
         lv_obj_add_state(g_contacts_state.nearby_btn, LV_STATE_CHECKED);
+    }
+    else if (g_contacts_state.current_mode == ContactsMode::Ignored)
+    {
+        lv_obj_add_state(g_contacts_state.ignored_btn, LV_STATE_CHECKED);
     }
     else if (g_contacts_state.current_mode == ContactsMode::Broadcast)
     {
@@ -618,6 +625,11 @@ void create_filter_panel(lv_obj_t* parent)
         lv_obj_add_event_cb(g_contacts_state.nearby_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
         lv_obj_add_event_cb(g_contacts_state.nearby_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
     }
+    if (g_contacts_state.ignored_btn)
+    {
+        lv_obj_add_event_cb(g_contacts_state.ignored_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
+        lv_obj_add_event_cb(g_contacts_state.ignored_btn, on_filter_clicked, LV_EVENT_CLICKED, nullptr);
+    }
     if (g_contacts_state.broadcast_btn)
     {
         lv_obj_add_event_cb(g_contacts_state.broadcast_btn, on_filter_focused, LV_EVENT_FOCUSED, nullptr);
@@ -647,6 +659,7 @@ static void on_filter_focused(lv_event_t* e)
     ContactsMode new_mode = g_contacts_state.current_mode;
     if (tgt == g_contacts_state.contacts_btn) new_mode = ContactsMode::Contacts;
     else if (tgt == g_contacts_state.nearby_btn) new_mode = ContactsMode::Nearby;
+    else if (tgt == g_contacts_state.ignored_btn) new_mode = ContactsMode::Ignored;
     else if (tgt == g_contacts_state.broadcast_btn) new_mode = ContactsMode::Broadcast;
     else if (tgt == g_contacts_state.team_btn) new_mode = ContactsMode::Team;
     else if (tgt == g_contacts_state.discover_btn) new_mode = ContactsMode::Discover;
@@ -678,6 +691,15 @@ static void on_filter_clicked(lv_event_t* e)
     {
         g_contacts_state.last_action_mode = g_contacts_state.current_mode;
         g_contacts_state.current_mode = ContactsMode::Discover;
+        g_contacts_state.current_page = 0;
+        g_contacts_state.selected_index = -1;
+        refresh_contacts_data();
+        refresh_ui();
+    }
+    else if (tgt == g_contacts_state.ignored_btn &&
+             g_contacts_state.current_mode != ContactsMode::Ignored)
+    {
+        g_contacts_state.current_mode = ContactsMode::Ignored;
         g_contacts_state.current_page = 0;
         g_contacts_state.selected_index = -1;
         refresh_contacts_data();
@@ -781,7 +803,9 @@ static const chat::contacts::NodeInfo* get_selected_node()
     }
     const auto& list = (g_contacts_state.current_mode == ContactsMode::Contacts)
                            ? g_contacts_state.contacts_list
-                           : g_contacts_state.nearby_list;
+                       : (g_contacts_state.current_mode == ContactsMode::Nearby)
+                           ? g_contacts_state.nearby_list
+                           : g_contacts_state.ignored_list;
     if (g_contacts_state.selected_index >= static_cast<int>(list.size()))
     {
         return nullptr;
@@ -799,6 +823,13 @@ static const chat::contacts::NodeInfo* find_node_by_id(uint32_t node_id)
         }
     }
     for (const auto& node : g_contacts_state.nearby_list)
+    {
+        if (node.node_id == node_id)
+        {
+            return &node;
+        }
+    }
+    for (const auto& node : g_contacts_state.ignored_list)
     {
         if (node.node_id == node_id)
         {
@@ -1988,8 +2019,41 @@ enum class ActionMenuCommand : uint8_t
     Edit = 4,
     Add = 5,
     Delete = 6,
-    Cancel = 7,
+    ToggleIgnore = 7,
+    Cancel = 8,
 };
+
+static void toggle_selected_node_ignore()
+{
+    const auto* node = get_selected_node();
+    if (!node || !g_contacts_state.contact_service)
+    {
+        ::ui::SystemNotification::show("Ignore unavailable", 1800);
+        contacts_focus_to_list();
+        return;
+    }
+
+    const bool ignored = !node->is_ignored;
+    const bool node_is_contact = node->is_contact;
+    if (!g_contacts_state.contact_service->setNodeIgnored(node->node_id, ignored))
+    {
+        ::ui::SystemNotification::show("Ignore update failed", 1800);
+        contacts_focus_to_list();
+        return;
+    }
+
+    refresh_contacts_data();
+    refresh_ui();
+    if (ignored && g_contacts_state.current_mode == ContactsMode::Nearby && !node_is_contact)
+    {
+        ::ui::SystemNotification::show("Node ignored and hidden", 2000);
+    }
+    else
+    {
+        ::ui::SystemNotification::show(ignored ? "Node ignored" : "Node unignored", 1800);
+    }
+    contacts_focus_to_list();
+}
 
 static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text)
 {
@@ -2055,6 +2119,9 @@ static void on_action_menu_item_clicked(lv_event_t* e)
     case ActionMenuCommand::Delete:
         open_delete_confirm_modal();
         break;
+    case ActionMenuCommand::ToggleIgnore:
+        toggle_selected_node_ignore();
+        break;
     case ActionMenuCommand::Cancel:
     default:
         contacts_focus_to_list();
@@ -2077,18 +2144,28 @@ static void open_action_menu_modal()
         return;
     }
 
+    const chat::contacts::NodeInfo* node = get_selected_node();
+    const bool show_ignore = (node != nullptr) &&
+                             (g_contacts_state.current_mode == ContactsMode::Contacts ||
+                              g_contacts_state.current_mode == ContactsMode::Nearby);
+
     int action_count = 2; // Chat + Cancel
     if (g_contacts_state.current_mode == ContactsMode::Contacts)
     {
         action_count += 3; // Edit/Delete/Info
     }
-    else if (g_contacts_state.current_mode == ContactsMode::Nearby)
+    else if (g_contacts_state.current_mode == ContactsMode::Nearby ||
+             g_contacts_state.current_mode == ContactsMode::Ignored)
     {
         action_count += 2; // Add/Info
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
         action_count += 1; // Position
+    }
+    if (show_ignore)
+    {
+        action_count += 1;
     }
 
     int modal_h = (::ui::page_profile::current().large_touch_hitbox ? 84 : 62) + action_count * (page_button_height() + (::ui::page_profile::current().large_touch_hitbox ? 8 : 2));
@@ -2179,7 +2256,8 @@ static void open_action_menu_modal()
         add_action(ActionMenuCommand::Delete, "Delete");
         add_action(ActionMenuCommand::Info, "Info");
     }
-    else if (g_contacts_state.current_mode == ContactsMode::Nearby)
+    else if (g_contacts_state.current_mode == ContactsMode::Nearby ||
+             g_contacts_state.current_mode == ContactsMode::Ignored)
     {
         add_action(ActionMenuCommand::Add, "Add");
         add_action(ActionMenuCommand::Info, "Info");
@@ -2187,6 +2265,11 @@ static void open_action_menu_modal()
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
         add_action(ActionMenuCommand::Position, "Position");
+    }
+    if (show_ignore)
+    {
+        add_action(ActionMenuCommand::ToggleIgnore,
+                   (node && node->is_ignored) ? "Unignore" : "Ignore");
     }
     add_action(ActionMenuCommand::Cancel, "Cancel");
 
@@ -2286,6 +2369,10 @@ void refresh_ui()
                          node.snr);
         }
     }
+    else if (g_contacts_state.current_mode == ContactsMode::Ignored)
+    {
+        CONTACTS_LOG("[Contacts] Ignored mode: %zu nodes\n", g_contacts_state.ignored_list.size());
+    }
 
     // Ensure list containers exist (structure handled in layout)
     contacts::ui::layout::ensure_list_subcontainers();
@@ -2312,6 +2399,10 @@ void refresh_ui()
     else if (g_contacts_state.current_mode == ContactsMode::Nearby)
     {
         current_list = &g_contacts_state.nearby_list;
+    }
+    else if (g_contacts_state.current_mode == ContactsMode::Ignored)
+    {
+        current_list = &g_contacts_state.ignored_list;
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
@@ -2365,6 +2456,7 @@ void refresh_ui()
     const bool use_scroll_list =
         (g_contacts_state.current_mode == ContactsMode::Contacts) ||
         (g_contacts_state.current_mode == ContactsMode::Nearby) ||
+        (g_contacts_state.current_mode == ContactsMode::Ignored) ||
         (g_contacts_state.current_mode == ContactsMode::Broadcast) ||
         (g_contacts_state.current_mode == ContactsMode::Discover);
     const bool append_back_item = use_scroll_list;
@@ -2417,6 +2509,22 @@ void refresh_ui()
         else if (g_contacts_state.current_mode == ContactsMode::Nearby)
         {
             status_text = format_time_status(node.last_seen);
+            const char* proto = node_protocol_short_label(node.protocol);
+            if (proto[0] != '\0')
+            {
+                status_text += " ";
+                status_text += proto;
+            }
+        }
+        else if (g_contacts_state.current_mode == ContactsMode::Ignored)
+        {
+            status_text = "Ignored";
+            const std::string seen = format_time_status(node.last_seen);
+            if (!seen.empty())
+            {
+                status_text += " / ";
+                status_text += seen;
+            }
             const char* proto = node_protocol_short_label(node.protocol);
             if (proto[0] != '\0')
             {

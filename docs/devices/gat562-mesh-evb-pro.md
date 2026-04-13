@@ -33,7 +33,7 @@ The most important verified difference at the time of writing:
 
 - `GAT562 Mesh EVB Pro` should be treated as not having on-board external QSPI flash
 - the old inherited `PIN_QSPI_*` / `EXTERNAL_FLASH_*` definitions were removed from
-  [variant.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/gat562_mesh_evb_pro/variant.h)
+  [variant.h](../../variants/gat562_mesh_evb_pro/variant.h)
 
 When adapting this board further, prefer verified EVB Pro hardware facts over
 reference-variant inheritance.
@@ -42,12 +42,12 @@ reference-variant inheritance.
 
 Primary board definition files:
 
-- [boards/gat562_mesh_evb_pro.json](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/gat562_mesh_evb_pro.json)
-- [board_profile.h](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/board_profile.h)
-- [gat562_board.h](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/gat562_board.h)
-- [gat562_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/gat562_mesh_evb_pro/src/gat562_board.cpp)
-- [variant.h](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/gat562_mesh_evb_pro/variant.h)
-- [gat562_mesh_evb_pro.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/gat562_mesh_evb_pro/envs/gat562_mesh_evb_pro.ini)
+- [boards/gat562_mesh_evb_pro.json](../../boards/gat562_mesh_evb_pro.json)
+- [board_profile.h](../../boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/board_profile.h)
+- [gat562_board.h](../../boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/gat562_board.h)
+- [gat562_board.cpp](../../boards/gat562_mesh_evb_pro/src/gat562_board.cpp)
+- [variant.h](../../variants/gat562_mesh_evb_pro/variant.h)
+- [gat562_mesh_evb_pro.ini](../../variants/gat562_mesh_evb_pro/envs/gat562_mesh_evb_pro.ini)
 
 Rules:
 
@@ -66,7 +66,7 @@ The currently verified EVB Pro pin map in this repository is:
 
 ### Buttons And Joystick
 
-Defined in [board_profile.h](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/board_profile.h).
+Defined in [board_profile.h](../../boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/board_profile.h).
 
 - Primary button: `9`
 - Secondary button: `12`
@@ -125,7 +125,7 @@ For that reason the environment enables:
 
 See:
 
-- [gat562_mesh_evb_pro.ini](/C:/Users/VicLi/Documents/Projects/trail-mate/variants/gat562_mesh_evb_pro/envs/gat562_mesh_evb_pro.ini)
+- [gat562_mesh_evb_pro.ini](../../variants/gat562_mesh_evb_pro/envs/gat562_mesh_evb_pro.ini)
 
 This is required so `P0.09` / `P0.10` behave as normal GPIOs instead of NFC pins.
 
@@ -133,8 +133,8 @@ This is required so `P0.09` / `P0.10` behave as normal GPIOs instead of NFC pins
 
 Useful debug path during bring-up:
 
-- board raw input logs are emitted from [gat562_board.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/boards/gat562_mesh_evb_pro/src/gat562_board.cpp)
-- UI input logs are emitted from [ui_runtime.cpp](/C:/Users/VicLi/Documents/Projects/trail-mate/apps/gat562_mesh_evb_pro/src/ui_runtime.cpp)
+- board raw input logs are emitted from [gat562_board.cpp](../../boards/gat562_mesh_evb_pro/src/gat562_board.cpp)
+- UI input logs are emitted from [ui_runtime.cpp](../../apps/gat562_mesh_evb_pro/src/ui_runtime.cpp)
 
 Typical healthy joystick logs look like:
 

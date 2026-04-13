@@ -70,6 +70,7 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     void handleRawPacket(const uint8_t* data, size_t size) override;
     void setLastRxStats(float rssi, float snr) override;
     void processSendQueue() override;
+    void flushDeferredPersistence(bool force = false);
 
   private:
     struct PacketHistoryEntry
@@ -105,6 +106,32 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
         bool local_origin = false;
         bool fallback_sent = false;
         bool observe_only = false;
+    };
+
+    struct TxScratchBuffers
+    {
+        std::array<uint8_t, 256> app_data{};
+        std::array<uint8_t, 256> aux_data{};
+        std::array<uint8_t, 384> wire{};
+    };
+
+    struct RxScratchBuffers
+    {
+        ::chat::meshtastic::PacketHeaderWire header{};
+        std::array<uint8_t, 256> payload{};
+        std::array<uint8_t, 256> plain{};
+        meshtastic_Data decoded = meshtastic_Data_init_zero;
+    };
+
+    struct MqttScratchBuffers
+    {
+        std::array<uint8_t, 256> buffer{};
+        std::array<uint8_t, sizeof(::chat::meshtastic::PacketHeaderWire) + 256> wire{};
+        char channel_id[32] = {};
+        char gateway_id[16] = {};
+        meshtastic_Data decoded = meshtastic_Data_init_zero;
+        meshtastic_MeshPacket packet = meshtastic_MeshPacket_init_zero;
+        meshtastic_MqttClientProxyMessage proxy = meshtastic_MqttClientProxyMessage_init_zero;
     };
 
     ::chat::runtime::EffectiveSelfIdentity buildEffectiveIdentity() const;
@@ -169,7 +196,8 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     bool initPkiKeys();
     void loadPkiNodeKeys();
     void savePkiNodeKey(::chat::NodeId node_id, const uint8_t* key, size_t key_len);
-    void savePkiKeysToPrefs();
+    void markPkiKeysDirty();
+    bool savePkiKeysToPrefs();
     void touchPkiNodeKey(::chat::NodeId node_id);
     bool decryptPkiPayload(::chat::NodeId from, ::chat::MessageId packet_id,
                            const uint8_t* cipher, size_t cipher_len,
@@ -236,9 +264,14 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     std::array<uint8_t, 32> pki_private_key_{};
     std::map<::chat::NodeId, std::array<uint8_t, 32>> node_public_keys_;
     std::map<::chat::NodeId, uint32_t> node_key_last_seen_;
+    uint32_t pki_node_keys_save_due_ms_ = 0;
+    bool pki_node_keys_dirty_ = false;
     std::map<::chat::NodeId, ::chat::ChannelId> node_last_channel_;
     std::map<::chat::NodeId, uint32_t> nodeinfo_last_seen_ms_;
     uint32_t last_position_reply_ms_ = 0;
+    TxScratchBuffers tx_scratch_{};
+    RxScratchBuffers rx_scratch_{};
+    MqttScratchBuffers mqtt_scratch_{};
 
     enum class KeyVerificationState : uint8_t
     {

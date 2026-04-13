@@ -2,6 +2,7 @@
 
 #include <ctime>
 
+#include "board/BoardBase.h"
 #include "boards/tab5/rtc_runtime.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -14,6 +15,13 @@
 
 namespace platform::ui::device
 {
+
+namespace
+{
+
+uint8_t s_brightness_level = DEVICE_MAX_BRIGHTNESS_LEVEL;
+
+} // namespace
 
 void delay_ms(uint32_t ms)
 {
@@ -43,6 +51,28 @@ void handle_low_battery(const BatteryInfo& info)
 {
     (void)info;
 }
+
+bool supports_screen_brightness()
+{
+    return true;
+}
+
+uint8_t screen_brightness()
+{
+    return s_brightness_level;
+}
+
+void set_screen_brightness(uint8_t level)
+{
+    s_brightness_level = level;
+    const int percent = (DEVICE_MAX_BRIGHTNESS_LEVEL <= 0)
+                            ? 100
+                            : static_cast<int>((static_cast<uint32_t>(level) * 100U) /
+                                               static_cast<uint32_t>(DEVICE_MAX_BRIGHTNESS_LEVEL));
+    (void)platform::esp::idf_common::bsp_runtime::set_display_brightness(percent);
+}
+
+void trigger_haptic() {}
 
 uint8_t default_message_tone_volume()
 {

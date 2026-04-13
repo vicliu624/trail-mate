@@ -14,12 +14,17 @@ namespace contacts
 
 bool isValidNodeBlobSize(size_t len)
 {
-    return (len % NodeStoreCore::kSerializedEntrySize) == 0 ||
+    return (len % NodeStoreCore::kSerializedEntrySizeV8) == 0 ||
+           (len % NodeStoreCore::kSerializedEntrySize) == 0 ||
            (len % NodeStoreCore::kLegacySerializedEntrySize) == 0;
 }
 
 size_t nodeBlobEntryCount(size_t len)
 {
+    if ((len % NodeStoreCore::kSerializedEntrySizeV8) == 0)
+    {
+        return len / NodeStoreCore::kSerializedEntrySizeV8;
+    }
     if ((len % NodeStoreCore::kSerializedEntrySize) == 0)
     {
         return len / NodeStoreCore::kSerializedEntrySize;
@@ -29,7 +34,7 @@ size_t nodeBlobEntryCount(size_t len)
 
 size_t nodeBlobByteSize(size_t count)
 {
-    return count * NodeStoreCore::kSerializedEntrySize;
+    return count * NodeStoreCore::kSerializedEntrySizeV8;
 }
 
 NodeStoreSdHeader makeNodeStoreSdHeader(const uint8_t* data, size_t len)
@@ -57,8 +62,10 @@ NodeBlobValidation validateNodeBlobMetadata(size_t len, uint8_t version,
         return NodeBlobValidation::InvalidLength;
     }
     const size_t entry_size = (version == NodeStoreCore::kPersistVersion)
-                                  ? NodeStoreCore::kSerializedEntrySize
-                                  : NodeStoreCore::kLegacySerializedEntrySize;
+                                  ? NodeStoreCore::kSerializedEntrySizeV8
+                                  : ((version == (NodeStoreCore::kPersistVersion - 1))
+                                         ? NodeStoreCore::kSerializedEntrySize
+                                         : NodeStoreCore::kLegacySerializedEntrySize);
     if ((len % entry_size) != 0)
     {
         return NodeBlobValidation::InvalidLength;
@@ -107,8 +114,10 @@ NodeBlobValidation validateNodeStoreSdBlob(const NodeStoreSdHeader& header,
         return header_status;
     }
     const size_t entry_size = (header.ver == NodeStoreCore::kPersistVersion)
-                                  ? NodeStoreCore::kSerializedEntrySize
-                                  : NodeStoreCore::kLegacySerializedEntrySize;
+                                  ? NodeStoreCore::kSerializedEntrySizeV8
+                                  : ((header.ver == (NodeStoreCore::kPersistVersion - 1))
+                                         ? NodeStoreCore::kSerializedEntrySize
+                                         : NodeStoreCore::kLegacySerializedEntrySize);
     const size_t expected_bytes = header.count * entry_size;
     if (expected_bytes != len || !isValidNodeBlobSize(len))
     {

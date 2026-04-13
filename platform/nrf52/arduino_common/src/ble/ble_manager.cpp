@@ -2,20 +2,43 @@
 
 #include "../../include/ble/meshcore_ble.h"
 #include "../../include/ble/meshtastic_ble.h"
-#include "app/app_config.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/runtime/self_identity_policy.h"
 
 #include <Arduino.h>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 
 namespace ble
 {
+namespace
+{
 
-BleManager::BleManager(app::IAppBleFacade& ctx)
+bool usbSerialWritable(std::size_t len)
+{
+    return static_cast<bool>(Serial) && Serial.dtr() != 0 && Serial.availableForWrite() >= static_cast<int>(len);
+}
+
+void bleManagerLog(const char* fmt, ...)
+{
+    char buffer[160] = {};
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    if (usbSerialWritable(std::strlen(buffer) + 2U))
+    {
+        Serial.println(buffer);
+    }
+    Serial2.println(buffer);
+}
+
+} // namespace
+
+BleManager::BleManager(IBleRuntimeContext& ctx)
     : ctx_(ctx),
-      active_protocol_(ctx.getConfig().mesh_protocol)
+      active_protocol_(ctx.bleConfig().mesh_protocol)
 {
 }
 
@@ -30,6 +53,9 @@ BleManager::~BleManager()
 
 void BleManager::begin()
 {
+    bleManagerLog("[BLE][nrf52] begin enabled=%u proto=%u",
+                  ctx_.bleEnabled() ? 1U : 0U,
+                  static_cast<unsigned>(ctx_.bleConfig().mesh_protocol));
     setEnabled(true);
 }
 
@@ -39,13 +65,16 @@ void BleManager::setEnabled(bool enabled)
     {
         if (!service_)
         {
-            restartService(ctx_.getConfig().mesh_protocol);
+            bleManagerLog("[BLE][nrf52] setEnabled on proto=%u",
+                          static_cast<unsigned>(ctx_.bleConfig().mesh_protocol));
+            restartService(ctx_.bleConfig().mesh_protocol);
         }
     }
     else
     {
         if (service_)
         {
+            bleManagerLog("[BLE][nrf52] setEnabled off");
             service_->stop();
             service_.reset();
         }
@@ -54,12 +83,12 @@ void BleManager::setEnabled(bool enabled)
 
 bool BleManager::isEnabled() const
 {
-    return ctx_.isBleEnabled();
+    return ctx_.bleEnabled();
 }
 
 void BleManager::update()
 {
-    const auto current_protocol = ctx_.getConfig().mesh_protocol;
+    const auto current_protocol = ctx_.bleConfig().mesh_protocol;
     if (current_protocol != active_protocol_)
     {
         applyProtocol(current_protocol);
@@ -104,26 +133,26 @@ void BleManager::restartService(chat::MeshProtocol protocol)
     switch (active_protocol_)
     {
     case chat::MeshProtocol::MeshCore:
-        service_ = std::unique_ptr<BleService>(new MeshCoreBleService(ctx_, device_name));
+        service_ = std::unique_ptr<BleService>(new MeshCoreBleService(ctx_.bleAppFacade(), device_name));
         break;
     case chat::MeshProtocol::Meshtastic:
     default:
-        service_ = std::unique_ptr<BleService>(new MeshtasticBleService(ctx_, device_name));
+        service_ = std::unique_ptr<BleService>(new MeshtasticBleService(ctx_.bleAppFacade(), device_name));
         break;
     }
 
     if (service_)
     {
         service_->start();
-        Serial2.printf("[BLE][nrf52] protocol=%s name=%s service=started\n",
-                       protocol_name,
-                       device_name.c_str());
+        bleManagerLog("[BLE][nrf52] protocol=%s name=%s service=started",
+                      protocol_name,
+                      device_name.c_str());
     }
     else
     {
-        Serial2.printf("[BLE][nrf52] protocol=%s name=%s service=create_failed\n",
-                       protocol_name,
-                       device_name.c_str());
+        bleManagerLog("[BLE][nrf52] protocol=%s name=%s service=create_failed",
+                      protocol_name,
+                      device_name.c_str());
     }
 }
 
@@ -131,10 +160,10 @@ std::string BleManager::buildDeviceName(chat::MeshProtocol protocol) const
 {
     char long_name[32] = {};
     char short_name[16] = {};
-    ctx_.getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+    ctx_.bleEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
 
     chat::runtime::EffectiveSelfIdentity identity{};
-    identity.node_id = ctx_.getSelfNodeId();
+    identity.node_id = ctx_.bleSelfNodeId();
     std::strncpy(identity.long_name, long_name, sizeof(identity.long_name) - 1);
     identity.long_name[sizeof(identity.long_name) - 1] = '\0';
     std::strncpy(identity.short_name, short_name, sizeof(identity.short_name) - 1);

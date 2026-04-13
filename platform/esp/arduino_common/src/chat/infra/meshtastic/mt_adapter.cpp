@@ -111,6 +111,16 @@ static const char* portName(uint32_t portnum)
     }
 }
 
+void mt_diag_log(const char* fmt, ...)
+{
+    char buf[192] = {};
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    Serial.print(buf);
+}
+
 using chat::meshtastic::computeChannelHash;
 using chat::meshtastic::expandShortPsk;
 using chat::meshtastic::hasValidPosition;
@@ -281,6 +291,13 @@ MtAdapter::~MtAdapter()
 bool MtAdapter::sendText(ChannelId channel, const std::string& text,
                          MessageId* out_msg_id, NodeId peer)
 {
+    return sendTextWithId(channel, text, 0, out_msg_id, peer);
+}
+
+bool MtAdapter::sendTextWithId(ChannelId channel, const std::string& text,
+                               MessageId forced_msg_id,
+                               MessageId* out_msg_id, NodeId peer)
+{
     if (!ready_ || text.empty() || !config_.tx_enabled)
     {
         return false;
@@ -296,12 +313,25 @@ bool MtAdapter::sendText(ChannelId channel, const std::string& text,
     pending.channel = out_channel;
     pending.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
     pending.text = text;
-    pending.msg_id = next_packet_id_++;
+    pending.msg_id = (forced_msg_id != 0) ? forced_msg_id : next_packet_id_++;
+    if (forced_msg_id != 0 && forced_msg_id >= next_packet_id_)
+    {
+        next_packet_id_ = forced_msg_id + 1;
+        if (next_packet_id_ == 0)
+        {
+            next_packet_id_ = 1;
+        }
+    }
     pending.dest = (peer != 0) ? peer : 0xFFFFFFFF;
     pending.retry_count = 0;
     pending.last_attempt = 0;
 
     send_queue_.push(pending);
+    mt_diag_log("[MT][TX] queue text id=%08lX dest=%08lX ch=%u len=%u\n",
+                static_cast<unsigned long>(pending.msg_id),
+                static_cast<unsigned long>(pending.dest),
+                static_cast<unsigned>(out_channel),
+                static_cast<unsigned>(text.size()));
     LORA_LOG("[LORA] queue text ch=%u len=%u id=%lu\n",
              static_cast<unsigned>(channel),
              static_cast<unsigned>(text.size()),
@@ -451,6 +481,14 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
 #endif
 
     bool ok = (state == RADIOLIB_ERR_NONE);
+    mt_diag_log("[MT][TX] app id=%08lX dest=%08lX port=%u ok=%u air_ack=%u track_ack=%u len=%u\n",
+                static_cast<unsigned long>(msg_id),
+                static_cast<unsigned long>(dest_node),
+                static_cast<unsigned>(portnum),
+                ok ? 1U : 0U,
+                air_want_ack ? 1U : 0U,
+                track_ack ? 1U : 0U,
+                static_cast<unsigned>(wire_size));
     LORA_LOG("[LORA] TX app port=%u len=%u want_resp=%u air_ack=%u track_ack=%u ok=%d\n",
              (unsigned)portnum,
              (unsigned)wire_size,
@@ -1390,22 +1428,33 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     rx_meta.sf = radio_sf_;
     rx_meta.cr = radio_cr_;
 
+    mt_diag_log("[MT][RX] from=%08lX to=%08lX id=%08lX flags=0x%02X ch=%u next=%u relay=%u len=%u\n",
+                static_cast<unsigned long>(header.from),
+                static_cast<unsigned long>(header.to),
+                static_cast<unsigned long>(header.id),
+                static_cast<unsigned>(header.flags),
+                static_cast<unsigned>(header.channel),
+                static_cast<unsigned>(header.next_hop),
+                static_cast<unsigned>(header.relay_node),
+                static_cast<unsigned>(payload_size));
+
     if (header.from == node_id_)
     {
         auto pending_it = pending_ack_ms_.find(header.id);
-        if (header.to == 0xFFFFFFFF && pending_it != pending_ack_ms_.end())
+        if (header.to == kBroadcastNodeId && pending_it != pending_ack_ms_.end())
         {
             ChannelId channel_id =
                 (header.channel == secondary_channel_hash_) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
-            uint32_t ack_from = (header.relay_node != 0) ? header.relay_node : node_id_;
-            LORA_LOG("[LORA] RX implicit ack via rebroadcast req=%08lX relay=%08lX\n",
-                     (unsigned long)header.id,
-                     (unsigned long)ack_from);
+            mt_diag_log("[MT][IMPLICIT_ACK] observed self-broadcast id=%08lX relay=%08lX next=%08lX ch=%u\n",
+                        static_cast<unsigned long>(header.id),
+                        static_cast<unsigned long>(header.relay_node),
+                        static_cast<unsigned long>(header.next_hop),
+                        static_cast<unsigned>(header.channel));
             pending_ack_ms_.erase(pending_it);
             pending_ack_dest_.erase(header.id);
             emitRoutingResultToPhone(header.id,
                                      meshtastic_Routing_Error_NONE,
-                                     ack_from,
+                                     node_id_,
                                      node_id_,
                                      channel_id,
                                      header.channel,
@@ -1413,7 +1462,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             return;
         }
 
-        LORA_LOG("[LORA] RX self drop id=%08lX\n", (unsigned long)header.id);
+        LORA_LOG("[LORA] RX self drop id=%08lX to=%08lX relay=%08lX ch=%u\n",
+                 static_cast<unsigned long>(header.id),
+                 static_cast<unsigned long>(header.to),
+                 static_cast<unsigned long>(header.relay_node),
+                 static_cast<unsigned>(header.channel));
         return;
     }
 
@@ -1606,10 +1659,31 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 }
 
                 uint32_t now_secs = time(nullptr);
+                chat::contacts::NodeDeviceMetrics metrics{};
+                const bool has_metrics = node.has_device_metrics;
+                if (has_metrics)
+                {
+                    metrics.has_battery_level = node.device_metrics.has_battery_level;
+                    metrics.battery_level = node.device_metrics.battery_level;
+                    metrics.has_voltage = node.device_metrics.has_voltage;
+                    metrics.voltage = node.device_metrics.voltage;
+                    metrics.has_channel_utilization = node.device_metrics.has_channel_utilization;
+                    metrics.channel_utilization = node.device_metrics.channel_utilization;
+                    metrics.has_air_util_tx = node.device_metrics.has_air_util_tx;
+                    metrics.air_util_tx = node.device_metrics.air_util_tx;
+                    metrics.has_uptime_seconds = node.device_metrics.has_uptime_seconds;
+                    metrics.uptime_seconds = node.device_metrics.uptime_seconds;
+                }
                 sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                     node_id, short_name, long_name, snr, rssi, now_secs,
                     static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                    hops_away, static_cast<uint8_t>(node.user.hw_model), channel_index);
+                    hops_away, static_cast<uint8_t>(node.user.hw_model), channel_index,
+                    node.has_user, node.has_user ? node.user.macaddr : nullptr,
+                    node.via_mqtt || ((header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0),
+                    node.is_ignored,
+                    node.has_user && node.user.public_key.size == 32,
+                    node.is_key_manually_verified,
+                    has_metrics, has_metrics ? &metrics : nullptr);
                 bool published = sys::EventBus::publish(event, 0);
                 if (published)
                 {
@@ -1669,7 +1743,13 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     sys::NodeInfoUpdateEvent* event = new sys::NodeInfoUpdateEvent(
                         node_id, short_name, long_name, snr, rssi, now_secs,
                         static_cast<uint8_t>(chat::contacts::NodeProtocolType::Meshtastic), role,
-                        hops_away, static_cast<uint8_t>(user.hw_model), channel_index);
+                        hops_away, static_cast<uint8_t>(user.hw_model), channel_index,
+                        true, user.macaddr,
+                        ((header.flags & chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0),
+                        false,
+                        user.public_key.size == 32,
+                        false,
+                        false, nullptr);
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
@@ -1752,6 +1832,11 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     }
                     pending_ack_ms_.erase(decoded.request_id);
                     pending_ack_dest_.erase(decoded.request_id);
+                    mt_diag_log("[MT][ACK] req=%08lX from=%08lX reason=%u ok=%u\n",
+                                static_cast<unsigned long>(decoded.request_id),
+                                static_cast<unsigned long>(header.from),
+                                static_cast<unsigned>(routing.error_reason),
+                                ok ? 1U : 0U);
                     LORA_LOG("[LORA] RX ack reason=%u (%s)\n",
                              static_cast<unsigned>(routing.error_reason),
                              routingErrorName(routing.error_reason));
@@ -2003,8 +2088,15 @@ void MtAdapter::processSendQueue()
     {
         if (now - it->second >= ACK_TIMEOUT_MS)
         {
-            LORA_LOG("[LORA] RX ack timeout req=%08lX\n",
-                     (unsigned long)it->first);
+            const auto dest_it = pending_ack_dest_.find(it->first);
+            const uint32_t dest = (dest_it != pending_ack_dest_.end()) ? dest_it->second : 0;
+            mt_diag_log("[MT][ACK_TIMEOUT] req=%08lX dest=%08lX age_ms=%lu\n",
+                        static_cast<unsigned long>(it->first),
+                        static_cast<unsigned long>(dest),
+                        static_cast<unsigned long>(now - it->second));
+            LORA_LOG("[LORA] RX ack timeout req=%08lX dest=%08lX\n",
+                     static_cast<unsigned long>(it->first),
+                     static_cast<unsigned long>(dest));
             pending_ack_dest_.erase(it->first);
             emitRoutingResultToPhone(it->first,
                                      meshtastic_Routing_Error_MAX_RETRANSMIT,
@@ -3685,6 +3777,12 @@ void MtAdapter::emitRoutingResultToPhone(uint32_t request_id,
     {
         return;
     }
+
+    mt_diag_log("[MT][ACK->BLE] req=%08lX from=%08lX to=%08lX reason=%u\n",
+                static_cast<unsigned long>(request_id),
+                static_cast<unsigned long>(from),
+                static_cast<unsigned long>(to),
+                static_cast<unsigned>(reason));
 
     meshtastic_Routing routing = meshtastic_Routing_init_default;
     routing.which_variant = meshtastic_Routing_error_reason_tag;

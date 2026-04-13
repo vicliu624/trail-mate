@@ -54,6 +54,7 @@ void updateCoreServices(app::IAppFacade& app_context)
     hostlink::process_pending_commands();
 
     app_context.getChatService().processIncoming();
+    app_context.getChatService().flushStore();
 
     team::TeamService* team_service = app_context.getTeamService();
     if (team_service)
@@ -95,18 +96,44 @@ bool dispatchEvent(app::IAppFacade& app_context, sys::Event* event)
     case sys::EventType::NodeInfoUpdate:
     {
         auto* node_event = static_cast<sys::NodeInfoUpdateEvent*>(event);
-        app_context.getContactService().updateNodeInfo(
-            node_event->node_id,
-            node_event->short_name,
-            node_event->long_name,
-            node_event->snr,
-            node_event->rssi,
-            node_event->timestamp,
-            node_event->protocol,
-            node_event->role,
-            node_event->hops_away,
-            node_event->hw_model,
-            node_event->channel);
+        chat::contacts::NodeUpdate update{};
+        update.short_name = node_event->short_name;
+        update.long_name = node_event->long_name;
+        update.has_last_seen = true;
+        update.last_seen = node_event->timestamp;
+        update.has_snr = true;
+        update.snr = node_event->snr;
+        update.has_rssi = true;
+        update.rssi = node_event->rssi;
+        update.has_protocol = true;
+        update.protocol = node_event->protocol;
+        update.has_role = true;
+        update.role = node_event->role;
+        update.has_hops_away = true;
+        update.hops_away = node_event->hops_away;
+        update.has_hw_model = true;
+        update.hw_model = node_event->hw_model;
+        update.has_channel = true;
+        update.channel = node_event->channel;
+        update.has_macaddr = node_event->has_macaddr;
+        if (node_event->has_macaddr)
+        {
+            memcpy(update.macaddr, node_event->macaddr, sizeof(update.macaddr));
+        }
+        update.has_via_mqtt = true;
+        update.via_mqtt = node_event->via_mqtt;
+        update.has_is_ignored = true;
+        update.is_ignored = node_event->is_ignored;
+        update.has_public_key = true;
+        update.public_key_present = node_event->has_public_key;
+        update.has_key_manually_verified = true;
+        update.key_manually_verified = node_event->key_manually_verified;
+        update.has_device_metrics = node_event->has_device_metrics;
+        if (node_event->has_device_metrics)
+        {
+            update.device_metrics = node_event->device_metrics;
+        }
+        app_context.getContactService().applyNodeUpdate(node_event->node_id, update);
         delete event;
         return true;
     }

@@ -179,13 +179,16 @@ void refresh_recent_widget()
     std::snprintf(footer, sizeof(footer), "%u threads active", static_cast<unsigned>(total));
     set_label_text_if_changed(recent.footer_label, footer);
 
+    // Keep the footer accent subtle; continuously animating it forces a redraw
+    // every dashboard tick even when no conversation state changed.
     const lv_coord_t track_w = lv_obj_get_width(recent.scan_track);
     const lv_coord_t runner_w = lv_obj_get_width(recent.scan_runner);
     const lv_coord_t travel = track_w - runner_w;
-    const lv_coord_t x = travel > 0
-                             ? static_cast<lv_coord_t>(((dashboard_state().tick % 2U) == 0U) ? (travel / 3) : ((travel * 2) / 3))
-                             : 0;
-    lv_obj_set_x(recent.scan_runner, x);
+    const lv_coord_t x = travel > 0 ? travel / 2 : 0;
+    if (lv_obj_get_x(recent.scan_runner) != x)
+    {
+        lv_obj_set_x(recent.scan_runner, x);
+    }
 }
 
 } // namespace ui::menu::dashboard

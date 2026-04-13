@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #endif
 
-#if (defined(ARDUINO_T_LORA_PAGER) && defined(ARDUINO_LILYGO_LORA_SX1262) && defined(USING_AUDIO_CODEC)) || defined(TRAIL_MATE_ESP_BOARD_TAB5)
+#if (defined(ARDUINO_T_LORA_PAGER) && defined(ARDUINO_LILYGO_LORA_SX1262)) || defined(TRAIL_MATE_ESP_BOARD_TAB5)
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 #include <cerrno>
@@ -803,7 +803,11 @@ void render_line_from_buffer(uint8_t line_rgb[320][4], e_mode mode, uint16_t lin
 
 void sstv_task(void*)
 {
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+    TLoRaPagerBoard* board = TLoRaPagerBoard::getInstance();
+#else
     boards::tlora_pager::TLoRaPagerBoard* board = boards::tlora_pager::TLoRaPagerBoard::getInstance();
+#endif
     int prev_volume = -1;
     bool prev_out_mute = false;
     bool restore_amp = false;

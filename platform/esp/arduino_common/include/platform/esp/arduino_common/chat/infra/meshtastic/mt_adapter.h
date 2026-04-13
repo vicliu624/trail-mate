@@ -50,6 +50,9 @@ class MtAdapter : public chat::IMeshAdapter
 
     bool sendText(ChannelId channel, const std::string& text,
                   MessageId* out_msg_id, NodeId peer = 0) override;
+    bool sendTextWithId(ChannelId channel, const std::string& text,
+                        MessageId forced_msg_id,
+                        MessageId* out_msg_id, NodeId peer = 0) override;
     bool pollIncomingText(MeshIncomingText* out) override;
     bool sendAppData(ChannelId channel, uint32_t portnum,
                      const uint8_t* payload, size_t len,

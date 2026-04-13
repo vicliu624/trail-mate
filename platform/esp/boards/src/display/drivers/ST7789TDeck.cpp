@@ -6,11 +6,12 @@ namespace drivers
 {
 
 // Command sequence derived from LilyGo T-Deck TFT_eSPI (INIT_SEQUENCE_2).
+// Orientation is intentionally not fixed here because DisplayInterface::init()
+// applies setRotation(0), and the board then selects its preferred rotation.
 // The high bit (0x80) in len requests a post-command delay in DisplayInterface.
 static const CommandTable_t kInit[] = {
     {0x11, {0}, 0x80},                                                                                // SLPOUT + delay
     {0x13, {0}, 0},                                                                                   // NORON
-    {0x36, {0x00}, 1},                                                                                // MADCTL (RGB order)
     {0x3A, {0x55}, 1},                                                                                // COLMOD (RGB565)
     {0xB2, {0x0C, 0x0C, 0x00, 0x33, 0x33}, 5},                                                        // PORCTRL
     {0xB7, {0x75}, 1},                                                                                // GCTRL

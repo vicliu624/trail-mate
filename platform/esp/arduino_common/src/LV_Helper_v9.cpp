@@ -39,6 +39,7 @@ static lv_color16_t* buf1 = nullptr;
 
 static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* color_p)
 {
+    static uint8_t s_tdeck_pro_flush_log_count = 0;
 #if LV_TEST_FLUSH_LOG
     static uint32_t s_flush_count = 0;
     static uint32_t s_flush_last_ms = 0;
@@ -54,6 +55,33 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
 
 #ifdef _SWAP_COLORS
     lv_draw_sw_rgb565_swap(color_p, len);
+#endif
+
+#if defined(ARDUINO_T_DECK_PRO)
+    if (s_tdeck_pro_flush_log_count < 8)
+    {
+        uint32_t blackish = 0;
+        if (color_p != nullptr)
+        {
+            const uint16_t* pix = reinterpret_cast<const uint16_t*>(color_p);
+            for (size_t i = 0; i < len; ++i)
+            {
+                if (pix[i] == 0x0000)
+                {
+                    blackish++;
+                }
+            }
+        }
+        Serial.printf("[LVGL][TDeckPro] flush #%u area=(%d,%d)-(%d,%d) len=%lu rgb565_black=%lu\n",
+                      static_cast<unsigned>(s_tdeck_pro_flush_log_count + 1),
+                      static_cast<int>(area->x1),
+                      static_cast<int>(area->y1),
+                      static_cast<int>(area->x2),
+                      static_cast<int>(area->y2),
+                      static_cast<unsigned long>(len),
+                      static_cast<unsigned long>(blackish));
+        s_tdeck_pro_flush_log_count++;
+    }
 #endif
 
     plane->pushColors(area->x1, area->y1, w, h, (uint16_t*)color_p);
@@ -118,7 +146,7 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
     if (touched)
     {
         input::MorseEngine::notifyTouch();
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
         // T-Deck: touch can wake/show the screen saver, but only SPACE enters the main menu.
         if (isScreenSaverActive())
         {
@@ -138,7 +166,7 @@ static void touchpad_read(lv_indev_t* drv, lv_indev_data_t* data)
         data->state = LV_INDEV_STATE_PR;
         return;
 #else
-        // 閸忔湹绮拋鎯ь槵娴犲秶鍔ф穱婵囧瘮閳ユ粌鍘涢崬銈夊晪閵嗕椒绗夋导鐘电舶 UI閳ユ繄娈戦柅鏄忕帆閵?        // Priority: if screen saver is visible, consume the touch to exit it.
+        // Priority: if the screen saver is visible, consume the touch and exit it.
         if (isScreenSaverActive())
         {
             enterFromScreenSaver();
@@ -172,7 +200,7 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
 {
     auto* plane = (LilyGo_Display*)lv_indev_get_user_data(drv);
     RotaryMsg_t msg = plane->getRotary();
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
     data->enc_diff = 0;
     data->state = LV_INDEV_STATE_RELEASED;
 #endif
@@ -184,7 +212,7 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
         {
             wakeScreenSaver();
         }
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
         // T-Deck path already reset above.
 #else
         data->enc_diff = 0;
@@ -196,7 +224,7 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
     // If GPS is loading tiles, ignore input
     if (isGPSLoadingTiles())
     {
-#if !defined(ARDUINO_T_DECK)
+#if !defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_DECK_PRO)
         data->enc_diff = 0;
         data->state = LV_INDEV_STATE_RELEASED;
 #endif
@@ -224,7 +252,7 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
             return;
         }
 
-#if !defined(ARDUINO_T_DECK)
+#if !defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_DECK_PRO)
         data->enc_diff = 0;
         data->state = LV_INDEV_STATE_RELEASED;
 #endif
@@ -246,7 +274,7 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
         data->enc_diff = -1;
         break;
     default:
-#if !defined(ARDUINO_T_DECK)
+#if !defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_DECK_PRO)
         data->state = LV_INDEV_STATE_RELEASED;
 #endif
         break;
@@ -268,33 +296,21 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
 
     // If screen is sleeping or screen saver is active, only a *real* key press
     // should wake/exit. Previously this path ran unconditionally on every poll,
-    // which could cause spurious wake閳姀nterFromScreenSaver() without user input.
+    // which could cause a spurious wake or enterFromScreenSaver() without user input.
     if (isScreenSleeping() || isScreenSaverActive())
     {
-        if (state == KEYBOARD_PRESSED || state == KEYBOARD_RELEASED)
+        if (state == KEYBOARD_PRESSED)
         {
-#if defined(ARDUINO_T_DECK)
-            // T-Deck policy: any key can wake into the saver shell, and SPACE can continue into the main menu.
-            // Accept both press/release for SPACE so a quick tap from sleep can still land in the menu.
+            // Keyboard wake policy: any key can wake into the saver shell, but
+            // only SPACE is allowed to continue into the main menu.
             if (isScreenSaverActive() && c == ' ')
             {
                 enterFromScreenSaver();
             }
-            else if (state == KEYBOARD_PRESSED)
+            else
             {
                 wakeScreenSaver();
             }
-#else
-            // Other keyboard devices keep the original behavior:
-            // first key wakes the screen saver, and any key exits it.
-            if (state == KEYBOARD_PRESSED)
-            {
-                if (isScreenSaverActive())
-                    enterFromScreenSaver();
-                else
-                    wakeScreenSaver();
-            }
-#endif
         }
         data->state = LV_INDEV_STATE_REL; // Don't pass key to UI
         return;
@@ -306,7 +322,7 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
         walkie::on_key_event(c, state);
     }
 
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
     if (state == KEYBOARD_PRESSED && c == ' ' && ui_get_active_app() == nullptr)
     {
         updateUserActivity();

@@ -26,6 +26,7 @@ class InternalFsStore final : public ::chat::IChatStore
     void clearConversation(const ::chat::ConversationId& conv) override;
     void clearAll() override;
     bool updateMessageStatus(::chat::MessageId msg_id, ::chat::MessageStatus status) override;
+    void flush() override;
 
   private:
     struct StoredMessageEntry
@@ -107,6 +108,8 @@ class InternalFsStore final : public ::chat::IChatStore
     bool ensureFs() const;
     bool loadFromFs();
     bool saveToFs() const;
+    void markDirty();
+    void maybeSave(bool force = false);
     void evictOldestMessage();
     ConversationStorage& getConversationStorage(const ::chat::ConversationId& conv);
     const ConversationStorage& getConversationStorage(const ::chat::ConversationId& conv) const;
@@ -115,6 +118,13 @@ class InternalFsStore final : public ::chat::IChatStore
     std::map<::chat::ConversationId, ConversationStorage> conversations_;
     uint32_t next_sequence_ = 1;
     size_t total_message_count_ = 0;
+    mutable uint32_t last_save_ms_ = 0;
+    mutable uint32_t dirty_since_ms_ = 0;
+    mutable size_t pending_write_count_ = 0;
+    mutable bool dirty_ = false;
+
+    static constexpr uint32_t kSaveIntervalMs = 1500;
+    static constexpr size_t kMaxPendingWrites = 4;
 };
 
 } // namespace platform::nrf52::arduino_common::chat::infra::store

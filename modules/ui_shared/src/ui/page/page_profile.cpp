@@ -163,7 +163,7 @@ const PageLayoutProfile& current()
         return make_tab5_profile();
 #elif defined(ARDUINO_T_LORA_PAGER)
         return make_pager_profile();
-#elif defined(ARDUINO_T_DECK)
+#elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
         return make_tdeck_profile();
 #else
         lv_coord_t width = lv_display_get_physical_horizontal_resolution(nullptr);

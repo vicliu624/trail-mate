@@ -1545,7 +1545,7 @@ esp_err_t bsp_display_new_with_handles(const bsp_display_config_t* config, bsp_l
                 .vsync_pulse_width = 4,
                 .vsync_front_porch = 16,
             },
-        //.flags.use_dma2d = true, // ??? 开启后需要等�?previous draw 完成
+        //.flags.use_dma2d = true, // Enable only after waiting for the previous draw to finish.
     };
 
     st7703_vendor_config_t vendor_config = {

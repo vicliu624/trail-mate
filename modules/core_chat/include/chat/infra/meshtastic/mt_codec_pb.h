@@ -43,6 +43,14 @@ bool encodeTextMessage(ChannelId channel, const std::string& text,
                        uint8_t* out_buffer, size_t* out_size);
 
 /**
+ * @brief Decode an already-parsed Meshtastic Data payload into text
+ * @param data Decoded Meshtastic Data message
+ * @param out Output message
+ * @return true if successful
+ */
+bool decodeTextPayload(const meshtastic_Data& data, MeshIncomingText* out);
+
+/**
  * @brief Decode Meshtastic Data payload to text message using protobuf
  * @param buffer Data message buffer (already decrypted)
  * @param size Buffer size
@@ -88,6 +96,7 @@ bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_n
  */
 bool encodeAppData(uint32_t portnum, const uint8_t* payload, size_t payload_len,
                    bool want_response, uint8_t* out_buffer, size_t* out_size);
+bool decodeAppPayload(const meshtastic_Data& data, MeshIncomingData* out);
 bool decodeAppData(const uint8_t* buffer, size_t size, MeshIncomingData* out);
 
 /**

@@ -42,6 +42,26 @@ void handle_low_battery(const BatteryInfo& info)
     platform::esp::arduino_common::handleLowBattery(info.level, info.charging);
 }
 
+bool supports_screen_brightness()
+{
+    return true;
+}
+
+uint8_t screen_brightness()
+{
+    return board.getBrightness();
+}
+
+void set_screen_brightness(uint8_t level)
+{
+    board.setBrightness(level);
+}
+
+void trigger_haptic()
+{
+    board.vibrator();
+}
+
 uint8_t default_message_tone_volume()
 {
     return board.getMessageToneVolume();

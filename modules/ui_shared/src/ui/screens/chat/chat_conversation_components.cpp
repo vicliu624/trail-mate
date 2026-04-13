@@ -344,6 +344,44 @@ void ChatConversationScreen::scrollToBottom()
     }
 }
 
+bool ChatConversationScreen::updateMessageStatus(const chat::MessageId msg_id,
+                                                 const chat::MessageStatus status)
+{
+    if (!guard_ || !guard_->alive || msg_id == 0)
+    {
+        return false;
+    }
+
+    for (auto& item : messages_)
+    {
+        if (item.msg.msg_id != msg_id)
+        {
+            continue;
+        }
+        item.msg.status = status;
+        if (!item.status_label)
+        {
+            return true;
+        }
+
+        if (status == MessageStatus::Failed)
+        {
+            lv_label_set_text(item.status_label, "Failed");
+            ::ui::fonts::apply_ui_chrome_font(item.status_label);
+            lv_obj_clear_flag(item.status_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        else
+        {
+            lv_label_set_text(item.status_label, "");
+            ::ui::fonts::apply_ui_chrome_font(item.status_label);
+            lv_obj_add_flag(item.status_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        return true;
+    }
+
+    return false;
+}
+
 void ChatConversationScreen::setActionCallback(void (*cb)(ActionIntent intent, void*), void* user_data)
 {
     if (!guard_ || !guard_->alive)

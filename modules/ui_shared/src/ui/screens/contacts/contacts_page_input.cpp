@@ -24,12 +24,14 @@ static int mode_to_index(contacts::ui::ContactsMode mode)
         return 0;
     case contacts::ui::ContactsMode::Nearby:
         return 1;
-    case contacts::ui::ContactsMode::Broadcast:
+    case contacts::ui::ContactsMode::Ignored:
         return 2;
-    case contacts::ui::ContactsMode::Team:
+    case contacts::ui::ContactsMode::Broadcast:
         return 3;
-    case contacts::ui::ContactsMode::Discover:
+    case contacts::ui::ContactsMode::Team:
         return 4;
+    case contacts::ui::ContactsMode::Discover:
+        return 5;
     }
     return 0;
 }
@@ -48,7 +50,7 @@ static lv_obj_t* get_top_back_button(void* /*ctx*/)
 
 static size_t get_filter_count(void* /*ctx*/)
 {
-    return 5;
+    return 6;
 }
 
 static lv_obj_t* get_filter_button(void* /*ctx*/, size_t index)
@@ -61,10 +63,12 @@ static lv_obj_t* get_filter_button(void* /*ctx*/, size_t index)
     case 1:
         return g_contacts_state.nearby_btn;
     case 2:
-        return g_contacts_state.broadcast_btn;
+        return g_contacts_state.ignored_btn;
     case 3:
-        return g_contacts_state.team_btn;
+        return g_contacts_state.broadcast_btn;
     case 4:
+        return g_contacts_state.team_btn;
+    case 5:
         return g_contacts_state.discover_btn;
     default:
         return nullptr;

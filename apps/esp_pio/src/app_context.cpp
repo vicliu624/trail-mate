@@ -12,6 +12,7 @@
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/runtime/self_identity_policy.h"
 #include "sys/event_bus.h"
+#include "ui/chat_ui_runtime_proxy.h"
 #ifdef USING_ST25R3916
 #endif
 #include <cstdio>
@@ -26,7 +27,10 @@ AppContext& AppContext::getInstance()
     return instance;
 }
 
-AppContext::AppContext() = default;
+AppContext::AppContext()
+    : chat_ui_runtime_proxy_(new chat::ui::GlobalChatUiRuntime())
+{
+}
 
 AppContext::~AppContext() = default;
 
@@ -163,6 +167,19 @@ chat::IMeshAdapter* AppContext::getMeshAdapter()
 const chat::IMeshAdapter* AppContext::getMeshAdapter() const
 {
     return mesh_router_.get();
+}
+
+chat::ui::IChatUiRuntime* AppContext::getChatUiRuntime()
+{
+    return chat_ui_runtime_proxy_.get();
+}
+
+void AppContext::setChatUiRuntime(chat::ui::IChatUiRuntime* runtime)
+{
+    if (chat_ui_runtime_proxy_)
+    {
+        chat_ui_runtime_proxy_->setActiveRuntime(runtime);
+    }
 }
 
 void AppContext::saveConfig()

@@ -108,9 +108,11 @@ struct SettingsData
 
     // Screen
     int screen_timeout_ms = 30000;
+    int screen_brightness = 16;
     int timezone_offset_min = 0;
     int speaker_volume = 45;
     bool ble_enabled = true;
+    bool vibration_enabled = true;
 
     // Power / Gauge (System)
     char gauge_design_mah[8] = "";

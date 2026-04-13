@@ -7,11 +7,17 @@ NodeStore::NodeStore()
     : blob_store_("/chat_nodes.bin"),
       core_(blob_store_)
 {
+    core_.setAutoSaveEnabled(false);
 }
 
 void NodeStore::begin()
 {
     core_.begin();
+}
+
+void NodeStore::applyUpdate(uint32_t node_id, const ::chat::contacts::NodeUpdate& update)
+{
+    core_.applyUpdate(node_id, update);
 }
 
 void NodeStore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
@@ -55,6 +61,11 @@ const std::vector<::chat::contacts::NodeEntry>& NodeStore::getEntries() const
 void NodeStore::clear()
 {
     core_.clear();
+}
+
+bool NodeStore::flush()
+{
+    return core_.flush();
 }
 
 void NodeStore::setProtectedNodeChecker(std::function<bool(uint32_t)> checker)

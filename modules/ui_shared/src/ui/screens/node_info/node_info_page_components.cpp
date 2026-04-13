@@ -801,7 +801,20 @@ void set_node_info(const chat::contacts::NodeInfo& node)
 
     update_location_map(node);
 
-    set_label_text(s_widgets.link_title_label, "Link");
+    char link_title[48];
+    if (node.protocol == chat::contacts::NodeProtocolType::Meshtastic)
+    {
+        snprintf(link_title, sizeof(link_title), "Link / Meshtastic");
+    }
+    else if (node.protocol == chat::contacts::NodeProtocolType::MeshCore)
+    {
+        snprintf(link_title, sizeof(link_title), "Link / MeshCore");
+    }
+    else
+    {
+        snprintf(link_title, sizeof(link_title), "Link");
+    }
+    set_label_text(s_widgets.link_title_label, link_title);
 
     // Link info (best-effort)
     char rssi_buf[24];
@@ -832,19 +845,85 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     set_label_text(s_widgets.link_sf_label, sf_buf);
     set_label_text(s_widgets.link_bw_label, bw_buf);
 
-    char last_heard_buf[32];
+    char last_heard_buf[64];
     format_age("Last heard:", node.last_seen, last_heard_buf, sizeof(last_heard_buf));
-    char hop_buf[16];
+    char hop_buf[64];
     if (node.hops_away != 0xFF)
     {
-        snprintf(hop_buf, sizeof(hop_buf), "Hop: %u", static_cast<unsigned>(node.hops_away));
+        if (node.next_hop != 0)
+        {
+            snprintf(hop_buf,
+                     sizeof(hop_buf),
+                     "Hop: %u / NH: %02X",
+                     static_cast<unsigned>(node.hops_away),
+                     static_cast<unsigned>(node.next_hop));
+        }
+        else
+        {
+            snprintf(hop_buf, sizeof(hop_buf), "Hop: %u", static_cast<unsigned>(node.hops_away));
+        }
+        set_label_text(s_widgets.link_hop_label, hop_buf);
+    }
+    else if (node.next_hop != 0)
+    {
+        snprintf(hop_buf, sizeof(hop_buf), "Hop: - / NH: %02X", static_cast<unsigned>(node.next_hop));
         set_label_text(s_widgets.link_hop_label, hop_buf);
     }
     else
     {
         set_label_text(s_widgets.link_hop_label, "Hop: -");
     }
-    set_label_text(s_widgets.link_last_heard_label, last_heard_buf);
+
+    char status_buf[96];
+    const char* mqtt_label = node.via_mqtt ? "MQTT" : "LoRa";
+    const char* ignored_label = node.is_ignored ? "Ignored" : "Active";
+    snprintf(status_buf, sizeof(status_buf), "%s / %s", mqtt_label, ignored_label);
+    set_label_text(s_widgets.link_last_heard_label, status_buf);
+
+    if (node.has_public_key || node.key_manually_verified || node.has_device_metrics || node.hw_model != 0 ||
+        node.has_macaddr || node.last_seen != 0)
+    {
+        char desc_buf[128];
+        char pk_buf[20];
+        if (node.key_manually_verified)
+        {
+            snprintf(pk_buf, sizeof(pk_buf), "PKI: verified");
+        }
+        else if (node.has_public_key)
+        {
+            snprintf(pk_buf, sizeof(pk_buf), "PKI: known");
+        }
+        else
+        {
+            snprintf(pk_buf, sizeof(pk_buf), "PKI: -");
+        }
+
+        if (node.has_device_metrics && node.device_metrics.has_battery_level)
+        {
+            snprintf(desc_buf,
+                     sizeof(desc_buf),
+                     "HW:%u  BAT:%u%%  %s",
+                     static_cast<unsigned>(node.hw_model),
+                     static_cast<unsigned>(node.device_metrics.battery_level),
+                     pk_buf);
+        }
+        else
+        {
+            snprintf(desc_buf,
+                     sizeof(desc_buf),
+                     "HW:%u  %s  %s",
+                     static_cast<unsigned>(node.hw_model),
+                     node.has_macaddr ? "MAC" : "NO-MAC",
+                     pk_buf);
+        }
+        set_label_text(s_widgets.updated_label, desc_buf);
+        lv_obj_clear_flag(s_widgets.location_updated, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        set_label_text(s_widgets.updated_label, last_heard_buf);
+        lv_obj_clear_flag(s_widgets.location_updated, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 } // namespace ui

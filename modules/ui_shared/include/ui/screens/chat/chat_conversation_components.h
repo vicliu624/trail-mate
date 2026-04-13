@@ -33,6 +33,7 @@ class ChatConversationScreen
     void addMessage(const chat::ChatMessage& msg);
     void clearMessages();
     void scrollToBottom();
+    bool updateMessageStatus(chat::MessageId msg_id, chat::MessageStatus status);
 
     void setActionCallback(void (*cb)(ActionIntent intent, void*), void* user_data);
     bool isAlive() const { return guard_ && guard_->alive; }

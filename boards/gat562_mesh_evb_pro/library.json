@@ -27,9 +27,7 @@
       "-I../../.pio/libdeps/gat562_mesh_evb_pro/TinyGPSPlus/src",
       "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ GFX\\ Library",
       "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ SSD1306",
-      "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ BusIO",
-      "-IC:/Users/VicLi/.platformio/packages/framework-arduinoadafruitnrf52/libraries/Adafruit_LittleFS/src",
-      "-IC:/Users/VicLi/.platformio/packages/framework-arduinoadafruitnrf52/libraries/InternalFileSytem/src"
+      "-I../../.pio/libdeps/gat562_mesh_evb_pro/Adafruit\\ BusIO"
     ]
   }
 }

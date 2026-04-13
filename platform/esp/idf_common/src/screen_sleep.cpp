@@ -7,12 +7,14 @@
 
 #include <cstdint>
 
+#include "board/BoardBase.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
+#include "platform/ui/device_runtime.h"
 #include "platform/ui/settings_store.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
@@ -43,6 +45,7 @@ uint32_t s_last_user_activity_ms = 0;
 bool s_screen_sleeping = false;
 bool s_screen_sleep_disabled = false;
 bool s_screen_saver_active = false;
+uint8_t s_saved_screen_brightness = DEVICE_MAX_BRIGHTNESS_LEVEL;
 
 uint32_t now_ms()
 {
@@ -79,8 +82,7 @@ void load_timeout_if_needed_locked()
 
 void wake_display_locked()
 {
-    platform::esp::idf_common::bsp_runtime::set_display_brightness(
-        platform::esp::idf_common::bsp_runtime::default_awake_brightness_percent());
+    platform::ui::device::set_screen_brightness(s_saved_screen_brightness);
     s_last_user_activity_ms = now_ms();
     s_screen_sleeping = false;
     s_screen_saver_active = false;
@@ -89,6 +91,7 @@ void wake_display_locked()
 
 void sleep_display_locked()
 {
+    s_saved_screen_brightness = platform::ui::device::screen_brightness();
     platform::esp::idf_common::bsp_runtime::sleep_display();
     s_screen_sleeping = true;
     s_screen_saver_active = false;

@@ -46,6 +46,12 @@ void ContactService::begin()
     invalidateCache();
 }
 
+void ContactService::applyNodeUpdate(uint32_t node_id, const NodeUpdate& update)
+{
+    node_store_.applyUpdate(node_id, update);
+    invalidateCache();
+}
+
 void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, const char* long_name,
                                     float snr, float rssi, uint32_t now_secs, uint8_t protocol, uint8_t role,
                                     uint8_t hops_away, uint8_t hw_model, uint8_t channel)
@@ -55,21 +61,44 @@ void ContactService::updateNodeInfo(uint32_t node_id, const char* short_name, co
                         snr,
                         rssi,
                         (unsigned long)now_secs);
-    node_store_.upsert(node_id, short_name, long_name, now_secs, snr, rssi,
-                       protocol, role, hops_away, hw_model, channel);
-    invalidateCache();
+    NodeUpdate update{};
+    update.short_name = short_name;
+    update.long_name = long_name;
+    update.has_last_seen = true;
+    update.last_seen = now_secs;
+    update.has_snr = !std::isnan(snr);
+    update.snr = snr;
+    update.has_rssi = !std::isnan(rssi);
+    update.rssi = rssi;
+    update.has_protocol = (protocol != 0);
+    update.protocol = protocol;
+    update.has_role = (role != kNodeRoleUnknown);
+    update.role = role;
+    update.has_hops_away = (hops_away != 0xFF);
+    update.hops_away = hops_away;
+    update.has_hw_model = (hw_model != 0);
+    update.hw_model = hw_model;
+    update.has_channel = (channel != 0xFF);
+    update.channel = channel;
+    applyNodeUpdate(node_id, update);
 }
 
 void ContactService::updateNodeProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs)
 {
-    node_store_.updateProtocol(node_id, protocol, now_secs);
-    invalidateCache();
+    NodeUpdate update{};
+    update.has_protocol = (protocol != 0);
+    update.protocol = protocol;
+    update.has_last_seen = true;
+    update.last_seen = now_secs;
+    applyNodeUpdate(node_id, update);
 }
 
 void ContactService::updateNodePosition(uint32_t node_id, const NodePosition& pos)
 {
-    node_store_.updatePosition(node_id, pos);
-    invalidateCache();
+    NodeUpdate update{};
+    update.has_position = true;
+    update.position = pos;
+    applyNodeUpdate(node_id, update);
 }
 
 std::string ContactService::getContactName(uint32_t node_id) const
@@ -121,12 +150,26 @@ std::vector<NodeInfo> ContactService::getNearby() const
     std::vector<NodeInfo> nearby;
     for (const auto& node : cached_nodes_)
     {
-        if (!node.is_contact && isNodeVisible(node.last_seen))
+        if (!node.is_contact && !node.is_ignored && isNodeVisible(node.last_seen))
         {
             nearby.push_back(node);
         }
     }
     return nearby;
+}
+
+std::vector<NodeInfo> ContactService::getIgnoredNodes() const
+{
+    buildCache();
+    std::vector<NodeInfo> ignored;
+    for (const auto& node : cached_nodes_)
+    {
+        if (!node.is_contact && node.is_ignored && isNodeVisible(node.last_seen))
+        {
+            ignored.push_back(node);
+        }
+    }
+    return ignored;
 }
 
 bool ContactService::addContact(uint32_t node_id, const char* nickname)
@@ -183,6 +226,34 @@ bool ContactService::removeNode(uint32_t node_id)
         invalidateCache();
     }
     return removed;
+}
+
+bool ContactService::setNodeIgnored(uint32_t node_id, bool ignored)
+{
+    if (!hasNodeEntry(node_id))
+    {
+        return false;
+    }
+
+    NodeUpdate update{};
+    update.has_is_ignored = true;
+    update.is_ignored = ignored;
+    applyNodeUpdate(node_id, update);
+    return true;
+}
+
+bool ContactService::setNodeKeyManuallyVerified(uint32_t node_id, bool verified)
+{
+    if (!hasNodeEntry(node_id))
+    {
+        return false;
+    }
+
+    NodeUpdate update{};
+    update.has_key_manually_verified = true;
+    update.key_manually_verified = verified;
+    applyNodeUpdate(node_id, update);
+    return true;
 }
 
 const NodeInfo* ContactService::getNodeInfo(uint32_t node_id) const
@@ -242,6 +313,16 @@ void ContactService::buildCache() const
         info.channel = entry.channel;
         info.protocol = static_cast<NodeProtocolType>(entry.protocol);
         info.role = static_cast<NodeRoleType>(entry.role);
+        info.hw_model = entry.hw_model;
+        info.next_hop = entry.next_hop;
+        info.has_macaddr = entry.has_macaddr;
+        std::memcpy(info.macaddr, entry.macaddr, sizeof(info.macaddr));
+        info.via_mqtt = entry.via_mqtt;
+        info.is_ignored = entry.is_ignored;
+        info.has_public_key = entry.has_public_key;
+        info.key_manually_verified = entry.key_manually_verified;
+        info.has_device_metrics = entry.has_device_metrics;
+        info.device_metrics = entry.device_metrics;
         info.position.valid = entry.position_valid;
         info.position.latitude_i = entry.position_latitude_i;
         info.position.longitude_i = entry.position_longitude_i;
@@ -293,17 +374,10 @@ bool ContactService::ensureNodeExistsForContact(uint32_t node_id)
         return true;
     }
 
-    node_store_.upsert(node_id,
-                       nullptr,
-                       nullptr,
-                       0,
-                       std::numeric_limits<float>::quiet_NaN(),
-                       std::numeric_limits<float>::quiet_NaN(),
-                       0,
-                       kNodeRoleUnknown,
-                       0xFF,
-                       0,
-                       0xFF);
+    NodeUpdate update{};
+    update.has_last_seen = true;
+    update.last_seen = 0;
+    applyNodeUpdate(node_id, update);
     return hasNodeEntry(node_id);
 }
 

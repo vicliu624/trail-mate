@@ -20,6 +20,7 @@ class NodeStore : public contacts::INodeStore,
     NodeStore();
 
     void begin() override;
+    void applyUpdate(uint32_t node_id, const contacts::NodeUpdate& update) override;
     void upsert(uint32_t node_id, const char* short_name, const char* long_name,
                 uint32_t now_secs, float snr = 0.0f, float rssi = 0.0f, uint8_t protocol = 0,
                 uint8_t role = contacts::kNodeRoleUnknown, uint8_t hops_away = 0xFF,
@@ -29,6 +30,7 @@ class NodeStore : public contacts::INodeStore,
     bool remove(uint32_t node_id) override;
     const std::vector<contacts::NodeEntry>& getEntries() const override;
     void clear() override;
+    bool flush() override;
 
   private:
     static constexpr const char* kPersistNodesFile = "/nodes.bin";

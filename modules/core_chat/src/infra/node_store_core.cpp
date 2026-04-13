@@ -63,6 +63,55 @@ struct PersistedNodeEntryV7
 static_assert(sizeof(PersistedNodeEntryV7) == NodeStoreCore::kSerializedEntrySize,
               "PersistedNodeEntryV7 size changed");
 
+struct PersistedNodeEntryV8
+{
+    uint32_t node_id;
+    char short_name[10];
+    char long_name[32];
+    uint32_t last_seen;
+    float snr;
+    float rssi;
+    uint8_t hops_away;
+    uint8_t channel;
+    uint8_t next_hop;
+    uint8_t protocol;
+    uint8_t role;
+    uint8_t hw_model;
+    uint8_t has_macaddr;
+    uint8_t via_mqtt;
+    uint8_t is_ignored;
+    uint8_t has_public_key;
+    uint8_t key_manually_verified;
+    uint8_t has_device_metrics;
+    uint8_t position_valid;
+    uint8_t position_has_altitude;
+    uint8_t metrics_has_battery_level;
+    uint8_t metrics_has_voltage;
+    uint8_t metrics_has_channel_utilization;
+    uint8_t metrics_has_air_util_tx;
+    uint8_t metrics_has_uptime_seconds;
+    uint8_t reserved[3];
+    uint8_t macaddr[6];
+    uint8_t reserved_mac[2];
+    int32_t position_latitude_i;
+    int32_t position_longitude_i;
+    int32_t position_altitude;
+    uint32_t position_timestamp;
+    uint32_t position_precision_bits;
+    uint32_t position_pdop;
+    uint32_t position_hdop;
+    uint32_t position_vdop;
+    uint32_t position_gps_accuracy_mm;
+    uint32_t metrics_battery_level;
+    float metrics_voltage;
+    float metrics_channel_utilization;
+    float metrics_air_util_tx;
+    uint32_t metrics_uptime_seconds;
+} __attribute__((packed));
+
+static_assert(sizeof(PersistedNodeEntryV8) == NodeStoreCore::kSerializedEntrySizeV8,
+              "PersistedNodeEntryV8 size changed");
+
 void copyCommonFields(NodeEntry& dst,
                       uint32_t node_id,
                       const char short_name[10],
@@ -94,7 +143,7 @@ void copyCommonFields(NodeEntry& dst,
     dst.hw_model = hw_model;
 }
 
-void copyIntoPersisted(PersistedNodeEntryV7& dst, const NodeEntry& src)
+void copyIntoPersisted(PersistedNodeEntryV8& dst, const NodeEntry& src)
 {
     memset(&dst, 0, sizeof(dst));
     dst.node_id = src.node_id;
@@ -111,6 +160,13 @@ void copyIntoPersisted(PersistedNodeEntryV7& dst, const NodeEntry& src)
     dst.protocol = src.protocol;
     dst.role = src.role;
     dst.hw_model = src.hw_model;
+    dst.has_macaddr = src.has_macaddr ? 1U : 0U;
+    memcpy(dst.macaddr, src.macaddr, sizeof(dst.macaddr));
+    dst.via_mqtt = src.via_mqtt ? 1U : 0U;
+    dst.is_ignored = src.is_ignored ? 1U : 0U;
+    dst.has_public_key = src.has_public_key ? 1U : 0U;
+    dst.key_manually_verified = src.key_manually_verified ? 1U : 0U;
+    dst.has_device_metrics = src.has_device_metrics ? 1U : 0U;
     dst.position_valid = src.position_valid ? 1U : 0U;
     dst.position_has_altitude = src.position_has_altitude ? 1U : 0U;
     dst.position_latitude_i = src.position_latitude_i;
@@ -122,6 +178,16 @@ void copyIntoPersisted(PersistedNodeEntryV7& dst, const NodeEntry& src)
     dst.position_hdop = src.position_hdop;
     dst.position_vdop = src.position_vdop;
     dst.position_gps_accuracy_mm = src.position_gps_accuracy_mm;
+    dst.metrics_has_battery_level = src.device_metrics.has_battery_level ? 1U : 0U;
+    dst.metrics_has_voltage = src.device_metrics.has_voltage ? 1U : 0U;
+    dst.metrics_has_channel_utilization = src.device_metrics.has_channel_utilization ? 1U : 0U;
+    dst.metrics_has_air_util_tx = src.device_metrics.has_air_util_tx ? 1U : 0U;
+    dst.metrics_has_uptime_seconds = src.device_metrics.has_uptime_seconds ? 1U : 0U;
+    dst.metrics_battery_level = src.device_metrics.battery_level;
+    dst.metrics_voltage = src.device_metrics.voltage;
+    dst.metrics_channel_utilization = src.device_metrics.channel_utilization;
+    dst.metrics_air_util_tx = src.device_metrics.air_util_tx;
+    dst.metrics_uptime_seconds = src.device_metrics.uptime_seconds;
 }
 
 void copyFromPersisted(NodeEntry& dst, const PersistedNodeEntryV6& src)
@@ -169,6 +235,51 @@ void copyFromPersisted(NodeEntry& dst, const PersistedNodeEntryV7& src)
     dst.position_gps_accuracy_mm = src.position_gps_accuracy_mm;
 }
 
+void copyFromPersisted(NodeEntry& dst, const PersistedNodeEntryV8& src)
+{
+    copyCommonFields(dst,
+                     src.node_id,
+                     src.short_name,
+                     src.long_name,
+                     src.last_seen,
+                     src.snr,
+                     src.rssi,
+                     src.hops_away,
+                     src.channel,
+                     src.next_hop,
+                     src.protocol,
+                     src.role,
+                     src.hw_model);
+    dst.has_macaddr = src.has_macaddr != 0;
+    memcpy(dst.macaddr, src.macaddr, sizeof(dst.macaddr));
+    dst.via_mqtt = src.via_mqtt != 0;
+    dst.is_ignored = src.is_ignored != 0;
+    dst.has_public_key = src.has_public_key != 0;
+    dst.key_manually_verified = src.key_manually_verified != 0;
+    dst.has_device_metrics = src.has_device_metrics != 0;
+    dst.position_valid = src.position_valid != 0;
+    dst.position_has_altitude = src.position_has_altitude != 0;
+    dst.position_latitude_i = src.position_latitude_i;
+    dst.position_longitude_i = src.position_longitude_i;
+    dst.position_altitude = src.position_altitude;
+    dst.position_timestamp = src.position_timestamp;
+    dst.position_precision_bits = src.position_precision_bits;
+    dst.position_pdop = src.position_pdop;
+    dst.position_hdop = src.position_hdop;
+    dst.position_vdop = src.position_vdop;
+    dst.position_gps_accuracy_mm = src.position_gps_accuracy_mm;
+    dst.device_metrics.has_battery_level = src.metrics_has_battery_level != 0;
+    dst.device_metrics.battery_level = src.metrics_battery_level;
+    dst.device_metrics.has_voltage = src.metrics_has_voltage != 0;
+    dst.device_metrics.voltage = src.metrics_voltage;
+    dst.device_metrics.has_channel_utilization = src.metrics_has_channel_utilization != 0;
+    dst.device_metrics.channel_utilization = src.metrics_channel_utilization;
+    dst.device_metrics.has_air_util_tx = src.metrics_has_air_util_tx != 0;
+    dst.device_metrics.air_util_tx = src.metrics_air_util_tx;
+    dst.device_metrics.has_uptime_seconds = src.metrics_has_uptime_seconds != 0;
+    dst.device_metrics.uptime_seconds = src.metrics_uptime_seconds;
+}
+
 } // namespace
 
 NodeStoreCore::NodeStoreCore(INodeBlobStore& blob_store)
@@ -181,6 +292,11 @@ void NodeStoreCore::setProtectedNodeChecker(std::function<bool(uint32_t)> checke
     protected_node_checker_ = std::move(checker);
 }
 
+void NodeStoreCore::setAutoSaveEnabled(bool enabled)
+{
+    auto_save_enabled_ = enabled;
+}
+
 void NodeStoreCore::begin()
 {
     if (!loadEntries())
@@ -191,144 +307,102 @@ void NodeStoreCore::begin()
     }
 }
 
-void NodeStoreCore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
-                           uint32_t now_secs, float snr, float rssi, uint8_t protocol,
-                           uint8_t role, uint8_t hops_away, uint8_t hw_model, uint8_t channel)
-{
-    for (auto& entry : entries_)
-    {
-        if (entry.node_id == node_id)
-        {
-            if (short_name && short_name[0] != '\0')
-            {
-                strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
-                entry.short_name[sizeof(entry.short_name) - 1] = '\0';
-            }
-            if (long_name && long_name[0] != '\0')
-            {
-                strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
-                entry.long_name[sizeof(entry.long_name) - 1] = '\0';
-            }
-            entry.last_seen = now_secs;
-            if (!std::isnan(snr))
-            {
-                entry.snr = snr;
-            }
-            if (!std::isnan(rssi))
-            {
-                entry.rssi = rssi;
-            }
-            if (hops_away != 0xFF)
-            {
-                entry.hops_away = hops_away;
-            }
-            if (protocol != 0)
-            {
-                entry.protocol = protocol;
-            }
-            if (role != kNodeRoleUnknown)
-            {
-                entry.role = role;
-            }
-            if (hw_model != 0)
-            {
-                entry.hw_model = hw_model;
-            }
-            if (channel != 0xFF)
-            {
-                entry.channel = channel;
-            }
-            dirty_ = true;
-            maybeSave();
-            return;
-        }
-    }
-
-    if (entries_.size() >= kMaxNodes)
-    {
-        const size_t eviction_index = selectEvictionIndex();
-        if (eviction_index < entries_.size())
-        {
-            entries_.erase(entries_.begin() + static_cast<long>(eviction_index));
-        }
-    }
-
-    NodeEntry entry{};
-    entry.node_id = node_id;
-    if (short_name && short_name[0] != '\0')
-    {
-        strncpy(entry.short_name, short_name, sizeof(entry.short_name) - 1);
-        entry.short_name[sizeof(entry.short_name) - 1] = '\0';
-    }
-    if (long_name && long_name[0] != '\0')
-    {
-        strncpy(entry.long_name, long_name, sizeof(entry.long_name) - 1);
-        entry.long_name[sizeof(entry.long_name) - 1] = '\0';
-    }
-    entry.last_seen = now_secs;
-    entry.snr = snr;
-    entry.rssi = rssi;
-    entry.hops_away = hops_away;
-    entry.protocol = protocol;
-    entry.role = (role != kNodeRoleUnknown) ? role : kNodeRoleUnknown;
-    entry.hw_model = hw_model;
-    entry.channel = channel;
-    entries_.push_back(entry);
-
-    dirty_ = true;
-    maybeSave();
-}
-
-void NodeStoreCore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs)
-{
-    if (protocol == 0)
-    {
-        return;
-    }
-
-    for (auto& entry : entries_)
-    {
-        if (entry.node_id == node_id)
-        {
-            entry.protocol = protocol;
-            entry.last_seen = now_secs;
-            dirty_ = true;
-            maybeSave();
-            return;
-        }
-    }
-
-    if (entries_.size() >= kMaxNodes)
-    {
-        const size_t eviction_index = selectEvictionIndex();
-        if (eviction_index < entries_.size())
-        {
-            entries_.erase(entries_.begin() + static_cast<long>(eviction_index));
-        }
-    }
-
-    NodeEntry entry{};
-    entry.node_id = node_id;
-    entry.short_name[0] = '\0';
-    entry.long_name[0] = '\0';
-    entry.last_seen = now_secs;
-    entry.snr = std::numeric_limits<float>::quiet_NaN();
-    entry.rssi = std::numeric_limits<float>::quiet_NaN();
-    entry.hops_away = 0xFF;
-    entry.channel = 0xFF;
-    entry.protocol = protocol;
-    entries_.push_back(entry);
-
-    dirty_ = true;
-    maybeSave();
-}
-
-void NodeStoreCore::updatePosition(uint32_t node_id, const NodePosition& position)
+void NodeStoreCore::applyUpdate(uint32_t node_id, const NodeUpdate& update)
 {
     if (node_id == 0)
     {
         return;
     }
+
+    auto apply_to_entry = [&](NodeEntry& entry)
+    {
+        if (update.short_name && update.short_name[0] != '\0')
+        {
+            strncpy(entry.short_name, update.short_name, sizeof(entry.short_name) - 1);
+            entry.short_name[sizeof(entry.short_name) - 1] = '\0';
+        }
+        if (update.long_name && update.long_name[0] != '\0')
+        {
+            strncpy(entry.long_name, update.long_name, sizeof(entry.long_name) - 1);
+            entry.long_name[sizeof(entry.long_name) - 1] = '\0';
+        }
+        if (update.has_last_seen)
+        {
+            entry.last_seen = update.last_seen;
+        }
+        if (update.has_snr)
+        {
+            entry.snr = update.snr;
+        }
+        if (update.has_rssi)
+        {
+            entry.rssi = update.rssi;
+        }
+        if (update.has_hops_away)
+        {
+            entry.hops_away = update.hops_away;
+        }
+        if (update.has_channel)
+        {
+            entry.channel = update.channel;
+        }
+        if (update.has_next_hop)
+        {
+            entry.next_hop = update.next_hop;
+        }
+        if (update.has_protocol)
+        {
+            entry.protocol = update.protocol;
+        }
+        if (update.has_role)
+        {
+            entry.role = update.role;
+        }
+        if (update.has_hw_model)
+        {
+            entry.hw_model = update.hw_model;
+        }
+        if (update.has_macaddr)
+        {
+            entry.has_macaddr = true;
+            memcpy(entry.macaddr, update.macaddr, sizeof(entry.macaddr));
+        }
+        if (update.has_via_mqtt)
+        {
+            entry.via_mqtt = update.via_mqtt;
+        }
+        if (update.has_is_ignored)
+        {
+            entry.is_ignored = update.is_ignored;
+        }
+        if (update.has_public_key)
+        {
+            entry.has_public_key = update.public_key_present;
+        }
+        if (update.has_key_manually_verified)
+        {
+            entry.key_manually_verified = update.key_manually_verified;
+        }
+        if (update.has_device_metrics)
+        {
+            entry.has_device_metrics = true;
+            entry.device_metrics = update.device_metrics;
+        }
+        if (update.has_position)
+        {
+            entry.position_valid = update.position.valid;
+            entry.position_latitude_i = update.position.latitude_i;
+            entry.position_longitude_i = update.position.longitude_i;
+            entry.position_has_altitude = update.position.has_altitude;
+            entry.position_altitude = update.position.altitude;
+            entry.position_timestamp = update.position.timestamp;
+            entry.position_precision_bits = update.position.precision_bits;
+            entry.position_pdop = update.position.pdop;
+            entry.position_hdop = update.position.hdop;
+            entry.position_vdop = update.position.vdop;
+            entry.position_gps_accuracy_mm = update.position.gps_accuracy_mm;
+        }
+    };
 
     for (auto& entry : entries_)
     {
@@ -336,18 +410,7 @@ void NodeStoreCore::updatePosition(uint32_t node_id, const NodePosition& positio
         {
             continue;
         }
-
-        entry.position_valid = position.valid;
-        entry.position_latitude_i = position.latitude_i;
-        entry.position_longitude_i = position.longitude_i;
-        entry.position_has_altitude = position.has_altitude;
-        entry.position_altitude = position.altitude;
-        entry.position_timestamp = position.timestamp;
-        entry.position_precision_bits = position.precision_bits;
-        entry.position_pdop = position.pdop;
-        entry.position_hdop = position.hdop;
-        entry.position_vdop = position.vdop;
-        entry.position_gps_accuracy_mm = position.gps_accuracy_mm;
+        apply_to_entry(entry);
         dirty_ = true;
         maybeSave();
         return;
@@ -368,24 +431,59 @@ void NodeStoreCore::updatePosition(uint32_t node_id, const NodePosition& positio
     entry.rssi = std::numeric_limits<float>::quiet_NaN();
     entry.hops_away = 0xFF;
     entry.channel = 0xFF;
-    entry.next_hop = 0;
-    entry.protocol = 0;
     entry.role = kNodeRoleUnknown;
-    entry.hw_model = 0;
-    entry.position_valid = position.valid;
-    entry.position_latitude_i = position.latitude_i;
-    entry.position_longitude_i = position.longitude_i;
-    entry.position_has_altitude = position.has_altitude;
-    entry.position_altitude = position.altitude;
-    entry.position_timestamp = position.timestamp;
-    entry.position_precision_bits = position.precision_bits;
-    entry.position_pdop = position.pdop;
-    entry.position_hdop = position.hdop;
-    entry.position_vdop = position.vdop;
-    entry.position_gps_accuracy_mm = position.gps_accuracy_mm;
+    apply_to_entry(entry);
     entries_.push_back(entry);
     dirty_ = true;
     maybeSave();
+}
+
+void NodeStoreCore::upsert(uint32_t node_id, const char* short_name, const char* long_name,
+                           uint32_t now_secs, float snr, float rssi, uint8_t protocol,
+                           uint8_t role, uint8_t hops_away, uint8_t hw_model, uint8_t channel)
+{
+    NodeUpdate update{};
+    update.short_name = short_name;
+    update.long_name = long_name;
+    update.has_last_seen = true;
+    update.last_seen = now_secs;
+    update.has_snr = !std::isnan(snr);
+    update.snr = snr;
+    update.has_rssi = !std::isnan(rssi);
+    update.rssi = rssi;
+    update.has_protocol = (protocol != 0);
+    update.protocol = protocol;
+    update.has_role = (role != kNodeRoleUnknown);
+    update.role = role;
+    update.has_hops_away = (hops_away != 0xFF);
+    update.hops_away = hops_away;
+    update.has_hw_model = (hw_model != 0);
+    update.hw_model = hw_model;
+    update.has_channel = (channel != 0xFF);
+    update.channel = channel;
+    applyUpdate(node_id, update);
+}
+
+void NodeStoreCore::updateProtocol(uint32_t node_id, uint8_t protocol, uint32_t now_secs)
+{
+    if (protocol == 0)
+    {
+        return;
+    }
+    NodeUpdate update{};
+    update.has_protocol = true;
+    update.protocol = protocol;
+    update.has_last_seen = true;
+    update.last_seen = now_secs;
+    applyUpdate(node_id, update);
+}
+
+void NodeStoreCore::updatePosition(uint32_t node_id, const NodePosition& position)
+{
+    NodeUpdate update{};
+    update.has_position = true;
+    update.position = position;
+    applyUpdate(node_id, update);
 }
 
 bool NodeStoreCore::setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_secs)
@@ -395,51 +493,20 @@ bool NodeStoreCore::setNextHop(uint32_t node_id, uint8_t next_hop, uint32_t now_
         return false;
     }
 
-    for (auto& entry : entries_)
+    if (getNextHop(node_id) == next_hop)
     {
-        if (entry.node_id != node_id)
-        {
-            continue;
-        }
-
-        if (entry.next_hop == next_hop)
-        {
-            return true;
-        }
-
-        entry.next_hop = next_hop;
-        if (now_secs != 0)
-        {
-            entry.last_seen = now_secs;
-        }
-        dirty_ = true;
-        maybeSave();
         return true;
     }
 
-    if (entries_.size() >= kMaxNodes)
+    NodeUpdate update{};
+    update.has_next_hop = true;
+    update.next_hop = next_hop;
+    if (now_secs != 0)
     {
-        const size_t eviction_index = selectEvictionIndex();
-        if (eviction_index < entries_.size())
-        {
-            entries_.erase(entries_.begin() + static_cast<long>(eviction_index));
-        }
+        update.has_last_seen = true;
+        update.last_seen = now_secs;
     }
-
-    NodeEntry entry{};
-    entry.node_id = node_id;
-    entry.last_seen = now_secs;
-    entry.snr = std::numeric_limits<float>::quiet_NaN();
-    entry.rssi = std::numeric_limits<float>::quiet_NaN();
-    entry.hops_away = 0xFF;
-    entry.channel = 0xFF;
-    entry.next_hop = next_hop;
-    entry.protocol = 0;
-    entry.role = kNodeRoleUnknown;
-    entry.hw_model = 0;
-    entries_.push_back(entry);
-    dirty_ = true;
-    maybeSave();
+    applyUpdate(node_id, update);
     return true;
 }
 
@@ -480,6 +547,15 @@ void NodeStoreCore::clear()
     dirty_ = false;
     last_save_ms_ = 0;
     blob_store_.clearBlob();
+}
+
+bool NodeStoreCore::flush()
+{
+    if (!dirty_)
+    {
+        return true;
+    }
+    return saveEntries();
 }
 
 uint32_t NodeStoreCore::computeBlobCrc(const uint8_t* data, size_t len)
@@ -545,14 +621,16 @@ bool NodeStoreCore::decodeEntries(const uint8_t* data, size_t len)
         return true;
     }
 
+    const bool is_v8_blob = (len % sizeof(PersistedNodeEntryV8)) == 0;
     const bool is_v7_blob = (len % kSerializedEntrySize) == 0;
     const bool is_v6_blob = (len % kLegacySerializedEntrySize) == 0;
-    if (!is_v7_blob && !is_v6_blob)
+    if (!is_v8_blob && !is_v7_blob && !is_v6_blob)
     {
         return false;
     }
 
-    const size_t entry_size = is_v7_blob ? kSerializedEntrySize : kLegacySerializedEntrySize;
+    const size_t entry_size = is_v8_blob ? sizeof(PersistedNodeEntryV8)
+                                         : (is_v7_blob ? kSerializedEntrySize : kLegacySerializedEntrySize);
     size_t count = len / entry_size;
     if (count > kMaxNodes)
     {
@@ -561,7 +639,17 @@ bool NodeStoreCore::decodeEntries(const uint8_t* data, size_t len)
 
     entries_.clear();
     entries_.reserve(count);
-    if (is_v7_blob)
+    if (is_v8_blob)
+    {
+        auto* persisted = reinterpret_cast<const PersistedNodeEntryV8*>(data);
+        for (size_t index = 0; index < count; ++index)
+        {
+            NodeEntry entry{};
+            copyFromPersisted(entry, persisted[index]);
+            entries_.push_back(entry);
+        }
+    }
+    else if (is_v7_blob)
     {
         auto* persisted = reinterpret_cast<const PersistedNodeEntryV7*>(data);
         for (size_t index = 0; index < count; ++index)
@@ -592,19 +680,19 @@ void NodeStoreCore::encodeEntries(std::vector<uint8_t>& out) const
         return;
     }
 
-    std::vector<PersistedNodeEntryV7> persisted(entries_.size());
+    std::vector<PersistedNodeEntryV8> persisted(entries_.size());
     for (size_t index = 0; index < entries_.size(); ++index)
     {
         copyIntoPersisted(persisted[index], entries_[index]);
     }
 
-    out.resize(persisted.size() * sizeof(PersistedNodeEntryV7));
+    out.resize(persisted.size() * sizeof(PersistedNodeEntryV8));
     memcpy(out.data(), persisted.data(), out.size());
 }
 
 void NodeStoreCore::maybeSave()
 {
-    if (!dirty_)
+    if (!dirty_ || !auto_save_enabled_)
     {
         return;
     }
