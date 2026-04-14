@@ -15,6 +15,7 @@ namespace ble
 {
 
 class MeshCoreBleService final : public BleService,
+                                 public MeshCorePhoneHooks,
                                  public chat::ChatService::IncomingTextObserver
 {
   public:
@@ -31,6 +32,8 @@ class MeshCoreBleService final : public BleService,
 
   private:
     void sendPendingNotifications();
+    bool getCustomVars(std::string* out) const override;
+    bool setCustomVar(const char* key, const char* value) override;
 
     app::IAppBleFacade& ctx_;
     std::string device_name_;

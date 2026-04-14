@@ -53,7 +53,6 @@ class MeshtasticBleService final : public BleService,
 
     bool handleToRadio(const uint8_t* data, size_t len);
     bool enqueueToRadio(const uint8_t* data, size_t len);
-    bool popToPhone(MeshtasticBleFrame* out);
     void handleToPhone();
     void flushPendingFromNumNotify();
     bool shouldBlockOnRead() const;

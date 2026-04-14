@@ -35,6 +35,35 @@ namespace
 {
 constexpr uint32_t kChatStoreFlushIntervalMs = 2000UL;
 
+class ScopedGpsSuspend
+{
+  public:
+    explicit ScopedGpsSuspend(::boards::gat562_mesh_evb_pro::Gat562Board* board)
+        : board_(board),
+          resume_(board_ && board_->gpsEnabled())
+    {
+        if (resume_)
+        {
+            board_->suspendGps();
+        }
+    }
+
+    ~ScopedGpsSuspend()
+    {
+        if (resume_ && board_)
+        {
+            board_->resumeGps();
+        }
+    }
+
+    ScopedGpsSuspend(const ScopedGpsSuspend&) = delete;
+    ScopedGpsSuspend& operator=(const ScopedGpsSuspend&) = delete;
+
+  private:
+    ::boards::gat562_mesh_evb_pro::Gat562Board* board_ = nullptr;
+    bool resume_ = false;
+};
+
 platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(chat::IMeshAdapter* adapter)
 {
     if (!adapter)
@@ -264,6 +293,7 @@ const app::AppConfig& AppFacadeRuntime::getConfig() const
 
 void AppFacadeRuntime::saveConfig()
 {
+    ScopedGpsSuspend suspend_gps(board_);
     debug_console::printf("[gat562][cfg] save start proto=%u ok_to_mqtt=%u ignore_mqtt=%u ble=%u\n",
                           static_cast<unsigned>(config_.mesh_protocol),
                           config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
@@ -383,15 +413,44 @@ bool AppFacadeRuntime::switchMeshProtocol(chat::MeshProtocol protocol, bool pers
         return false;
     }
 
+    ScopedGpsSuspend suspend_gps(board_);
+    const bool protocol_changed = (config_.mesh_protocol != protocol);
+    debug_console::printf("[gat562][cfg] switch proto=%u persist=%u changed=%u\n",
+                          static_cast<unsigned>(protocol),
+                          persist ? 1U : 0U,
+                          protocol_changed ? 1U : 0U);
     config_.mesh_protocol = protocol;
-    applyMeshConfig();
-    applyUserInfo();
-    applyNetworkLimits();
-    applyPrivacyConfig();
+    ::boards::gat562_mesh_evb_pro::settings_store::cacheAppConfig(config_);
 
     if (persist)
     {
-        saveConfig();
+        ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
+        if (::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_))
+        {
+            config_save_pending_ = ::boards::gat562_mesh_evb_pro::settings_store::hasDeferredSavePending();
+            debug_console::printf("[gat562][cfg] switch persist save=ok deferred=%u\n",
+                                  config_save_pending_ ? 1U : 0U);
+            if (protocol_changed)
+            {
+                debug_console::printf("[gat562][cfg] switch persist rebooting for proto=%u\n",
+                                      static_cast<unsigned>(protocol));
+                restartDevice();
+            }
+        }
+        else
+        {
+            ::boards::gat562_mesh_evb_pro::settings_store::queueSaveAppConfig(config_);
+            config_save_pending_ = true;
+            debug_console::printf("[gat562][cfg] switch persist save=deferred\n");
+        }
+    }
+
+    if (protocol_changed)
+    {
+        applyMeshConfig();
+        applyUserInfo();
+        applyNetworkLimits();
+        applyPrivacyConfig();
     }
     return true;
 }

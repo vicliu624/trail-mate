@@ -23,6 +23,15 @@ constexpr uint32_t kMinValidEpochSeconds = 1700000000UL;
 constexpr std::size_t kNmeaFieldMax = 24;
 constexpr std::size_t kGpsTailCanarySize = 32;
 constexpr uint8_t kGpsTailCanaryByte = 0xA5;
+constexpr uint32_t kTimeSyncHeartbeatLogMs = 60000UL;
+constexpr uint32_t kTimeSyncJumpThresholdS = 5UL;
+
+enum class TimeSyncSource : uint8_t
+{
+    None = 0,
+    Gnss,
+    External,
+};
 
 uint32_t readSystemEpochSeconds()
 {
@@ -294,6 +303,28 @@ time_t gpsDateTimeToEpochUtc(int year, uint8_t month, uint8_t day, uint8_t hour,
     return static_cast<time_t>(epoch64);
 }
 
+void beginGpsSerial()
+{
+    const auto& profile = kBoardProfile;
+    if (profile.gps.uart.aux >= 0)
+    {
+        pinMode(profile.gps.uart.aux, OUTPUT);
+        digitalWrite(profile.gps.uart.aux, HIGH);
+    }
+    Serial1.setPins(profile.gps.uart.rx, profile.gps.uart.tx);
+    Serial1.begin(profile.gps.baud_rate);
+}
+
+void endGpsSerial()
+{
+    const auto& profile = kBoardProfile;
+    Serial1.end();
+    if (profile.gps.uart.aux >= 0)
+    {
+        digitalWrite(profile.gps.uart.aux, LOW);
+    }
+}
+
 } // namespace
 
 struct GpsRuntime::Impl
@@ -324,6 +355,7 @@ struct GpsRuntime::Impl
     uint32_t last_nmea_ms = 0;
     uint32_t last_time_sync_log_ms = 0;
     uint32_t last_time_sync_epoch_logged = 0;
+    TimeSyncSource last_time_sync_source = TimeSyncSource::None;
     uint32_t last_status_log_ms = 0;
     std::array<GsvCollector, 5> gsv{};
     std::array<::gps::GnssSatInfo, ::gps::kMaxGnssSats> sats{};
@@ -696,18 +728,60 @@ struct GpsRuntime::Impl
         {
             return;
         }
+
+        const bool was_time_synced = time_synced;
         const uint32_t prev_epoch_s = epoch_base_s;
+        const uint32_t prev_epoch_ms = epoch_base_ms;
+        const uint32_t now_ms = millis();
         epoch_base_s = utc_s;
-        epoch_base_ms = millis();
+        epoch_base_ms = now_ms;
         time_synced = true;
-        if (last_time_sync_epoch_logged != utc_s || (epoch_base_ms - last_time_sync_log_ms) >= 1000U)
+
+        uint32_t expected_epoch_s = prev_epoch_s;
+        if (prev_epoch_s != 0 && prev_epoch_ms != 0 && now_ms >= prev_epoch_ms)
+        {
+            expected_epoch_s += (now_ms - prev_epoch_ms) / 1000U;
+        }
+        const uint32_t jump_s =
+            (prev_epoch_s == 0)
+                ? 0
+                : (utc_s >= expected_epoch_s ? (utc_s - expected_epoch_s) : (expected_epoch_s - utc_s));
+
+        const bool first_sync = !was_time_synced || prev_epoch_s == 0;
+        const bool source_changed = last_time_sync_source != TimeSyncSource::Gnss;
+        const bool jump_detected = prev_epoch_s != 0 && jump_s >= kTimeSyncJumpThresholdS;
+        const bool heartbeat_due =
+            last_time_sync_log_ms == 0 || (now_ms - last_time_sync_log_ms) >= kTimeSyncHeartbeatLogMs;
+
+        const char* reason = nullptr;
+        if (first_sync)
+        {
+            reason = "first";
+        }
+        else if (source_changed)
+        {
+            reason = "source";
+        }
+        else if (jump_detected)
+        {
+            reason = "jump";
+        }
+        else if (heartbeat_due)
+        {
+            reason = "heartbeat";
+        }
+
+        last_time_sync_source = TimeSyncSource::Gnss;
+        if (reason)
         {
             last_time_sync_epoch_logged = utc_s;
-            last_time_sync_log_ms = epoch_base_ms;
+            last_time_sync_log_ms = now_ms;
             Serial.printf(
-                "[gat562][gps] time sync source=gnss epoch=%lu prev=%lu sats=%u fix=%u age_ms=%lu date=%04u-%02u-%02u time=%02u:%02u:%02u\n",
+                "[gat562][gps] time sync source=gnss reason=%s epoch=%lu prev=%lu jump_s=%lu sats=%u fix=%u age_ms=%lu date=%04u-%02u-%02u time=%02u:%02u:%02u\n",
+                reason,
                 static_cast<unsigned long>(utc_s),
                 static_cast<unsigned long>(prev_epoch_s),
+                static_cast<unsigned long>(jump_s),
                 static_cast<unsigned>(parser.satellites.isValid() ? parser.satellites.value() : 0U),
                 static_cast<unsigned>(parser.location.isValid() ? 1U : 0U),
                 static_cast<unsigned long>(parser.location.isValid() ? parser.location.age() : 0U),
@@ -932,14 +1006,7 @@ bool GpsRuntime::begin(const app::AppConfig& config)
     auto& s = *impl();
     if (!s.initialized)
     {
-        const auto& profile = kBoardProfile;
-        if (profile.gps.uart.aux >= 0)
-        {
-            pinMode(profile.gps.uart.aux, OUTPUT);
-            digitalWrite(profile.gps.uart.aux, HIGH);
-        }
-        Serial1.setPins(profile.gps.uart.rx, profile.gps.uart.tx);
-        Serial1.begin(profile.gps.baud_rate);
+        beginGpsSerial();
         s.initialized = true;
         s.powered = true;
         s.logMemoryLayout("begin");
@@ -961,7 +1028,17 @@ void GpsRuntime::applyConfig(const app::AppConfig& config)
     s.enabled = (config.gps_mode != 0);
     if (!s.enabled)
     {
+        if (s.powered)
+        {
+            endGpsSerial();
+            s.powered = false;
+        }
         s.clearObservations();
+    }
+    else if (s.initialized && !s.powered)
+    {
+        beginGpsSerial();
+        s.powered = true;
     }
     Serial.printf(
         "[gat562][gps] config enabled=%u interval_ms=%lu strategy=%u mode=%u sat_mask=0x%02X nmea_hz=%u nmea_mask=0x%02X motion_idle_ms=%lu motion_sensor=%u\n",
@@ -979,7 +1056,7 @@ void GpsRuntime::applyConfig(const app::AppConfig& config)
 void GpsRuntime::tick()
 {
     auto& s = *impl();
-    if (!s.initialized || !s.enabled)
+    if (!s.initialized || !s.enabled || !s.powered)
     {
         return;
     }
@@ -1112,6 +1189,11 @@ void GpsRuntime::setMotionSensorId(uint8_t sensor_id) { impl()->motion_sensor_id
 void GpsRuntime::suspend()
 {
     auto& s = *impl();
+    if (s.powered)
+    {
+        endGpsSerial();
+        s.powered = false;
+    }
     s.enabled = false;
     s.clearObservations();
 }
@@ -1123,6 +1205,11 @@ void GpsRuntime::resume()
     if (!s.enabled)
     {
         s.clearObservations();
+    }
+    else if (s.initialized && !s.powered)
+    {
+        beginGpsSerial();
+        s.powered = true;
     }
 }
 
@@ -1140,6 +1227,7 @@ void GpsRuntime::setCurrentEpochSeconds(uint32_t epoch_s)
     s.time_synced = true;
     s.last_time_sync_epoch_logged = epoch_s;
     s.last_time_sync_log_ms = s.epoch_base_ms;
+    s.last_time_sync_source = TimeSyncSource::External;
     Serial.printf("[gat562][gps] time sync source=external epoch=%lu prev=%lu\n",
                   static_cast<unsigned long>(epoch_s),
                   static_cast<unsigned long>(prev_epoch_s));

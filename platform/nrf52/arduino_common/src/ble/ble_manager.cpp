@@ -120,10 +120,16 @@ bool BleManager::getPairingStatus(BlePairingStatus* out) const
 
 void BleManager::restartService(chat::MeshProtocol protocol)
 {
+    bleManagerLog("[BLE][nrf52] restart begin from=%u to=%u has_service=%u",
+                  static_cast<unsigned>(active_protocol_),
+                  static_cast<unsigned>(protocol),
+                  service_ ? 1U : 0U);
     if (service_)
     {
+        bleManagerLog("[BLE][nrf52] restart stopping old service");
         service_->stop();
         service_.reset();
+        bleManagerLog("[BLE][nrf52] restart old service stopped");
     }
 
     active_protocol_ = protocol;
@@ -143,6 +149,7 @@ void BleManager::restartService(chat::MeshProtocol protocol)
 
     if (service_)
     {
+        bleManagerLog("[BLE][nrf52] restart starting protocol=%s", protocol_name);
         service_->start();
         bleManagerLog("[BLE][nrf52] protocol=%s name=%s service=started",
                       protocol_name,

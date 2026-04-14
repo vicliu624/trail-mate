@@ -28,6 +28,7 @@ enum class StoreStatus : uint8_t
 
 void normalizeConfig(app::AppConfig& config);
 bool loadAppConfig(app::AppConfig& config);
+void cacheAppConfig(const app::AppConfig& config);
 bool saveAppConfig(const app::AppConfig& config);
 void queueSaveAppConfig(const app::AppConfig& config);
 uint8_t loadMessageToneVolume();

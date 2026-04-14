@@ -1,6 +1,7 @@
 ﻿#include "../../include/ble/meshtastic_ble.h"
 
 #include "app/app_config.h"
+#include "ble/bluefruit_runtime.h"
 #include "ble/ble_uuids.h"
 #if defined(GAT562_MESH_EVB_PRO)
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
@@ -355,10 +356,7 @@ void onSecured(uint16_t conn_handle)
 void prepareBluefruit(const std::string& device_name)
 {
     bleLogBoth("[BLE][nrf52][mt] bluefruit begin name=%s", device_name.c_str());
-    Bluefruit.autoConnLed(false);
-    Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
-    Bluefruit.begin();
-    Bluefruit.setName(device_name.c_str());
+    ::ble::bluefruit_runtime::ensureInitialized(device_name.c_str());
     Bluefruit.Periph.setConnectCallback(onBleConnect);
     Bluefruit.Periph.setDisconnectCallback(onBleDisconnect);
     bleLogBoth("[BLE][nrf52][mt] bluefruit ready");
@@ -481,7 +479,7 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
                persisted.has_module ? 1U : 0U);
 
 #if defined(GAT562_MESH_EVB_PRO)
-    bleLogBoth("[BLE][nrf52][mt] settings_store load=%s save=%s",
+    bleLogBoth("[BLE][nrf52][mt] settings_store load_status=%s last_save_status=%s",
                ::boards::gat562_mesh_evb_pro::settings_store::statusLabel(
                    ::boards::gat562_mesh_evb_pro::settings_store::lastLoadStatus()),
                ::boards::gat562_mesh_evb_pro::settings_store::statusLabel(
@@ -742,10 +740,7 @@ void MeshtasticBleService::handleToPhone()
     }
 
     Frame* frame = &pending_to_phone_;
-    if (pending_to_phone_valid_)
-    {
-    }
-    else
+    if (!pending_to_phone_valid_)
     {
         if (!waiting_for_read && !can_prepare)
         {
@@ -867,11 +862,6 @@ void MeshtasticBleService::processPendingPairingRequest()
     pairing_request_pending_ = false;
     pending_pairing_conn_handle_ = BLE_CONN_HANDLE_INVALID;
     requestPairingIfNeeded(conn_handle);
-}
-
-bool MeshtasticBleService::popToPhone(MeshtasticBleFrame* out)
-{
-    return phone_session_ ? phone_session_->popToPhone(out) : false;
 }
 
 bool MeshtasticBleService::shouldBlockOnRead() const
