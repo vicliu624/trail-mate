@@ -75,6 +75,97 @@ static size_t kMeshCoreRegionPresetOptionCount = 0;
 static settings::ui::SettingOption kTxPowerOptions[64] = {};
 static size_t kTxPowerOptionCount = 0;
 static char kTxPowerLabels[64][12] = {};
+constexpr lv_coord_t kStackedSectionPadX = 8;
+constexpr lv_coord_t kStackedSectionPadY = 3;
+constexpr lv_coord_t kStackedTitleInsetX = 8;
+
+static void update_item_value(settings::ui::ItemWidget& widget);
+
+static bool use_tdeck_stacked_item_layout()
+{
+    return std::strcmp(::ui::page_profile::current().name, "tdeck") == 0;
+}
+
+static lv_coord_t resolve_settings_list_item_height()
+{
+    const lv_coord_t base = ::ui::page_profile::resolve_control_button_height();
+    if (!use_tdeck_stacked_item_layout())
+    {
+        return base;
+    }
+
+    return std::max<lv_coord_t>(46, base + 10);
+}
+
+static void configure_list_item_button(lv_obj_t* btn)
+{
+    lv_obj_set_size(btn, LV_PCT(100), resolve_settings_list_item_height());
+    lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
+
+    if (use_tdeck_stacked_item_layout())
+    {
+        lv_obj_set_style_pad_top(btn, 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_bottom(btn, 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_row(btn, 3, LV_PART_MAIN);
+        lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
+        lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+        return;
+    }
+
+    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+}
+
+static void create_item_content(settings::ui::ItemWidget& widget, lv_obj_t* btn)
+{
+    if (use_tdeck_stacked_item_layout())
+    {
+        lv_obj_t* title_row = lv_obj_create(btn);
+        lv_obj_set_size(title_row, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_clear_flag(title_row, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_bg_opa(title_row, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(title_row, 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(title_row, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_left(title_row, kStackedTitleInsetX, LV_PART_MAIN);
+        lv_obj_set_style_pad_right(title_row, kStackedTitleInsetX, LV_PART_MAIN);
+        lv_obj_set_style_pad_top(title_row, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_bottom(title_row, 0, LV_PART_MAIN);
+
+        lv_obj_t* label = lv_label_create(title_row);
+        lv_obj_set_width(label, LV_PCT(100));
+        lv_label_set_text(label, widget.def->label);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        style::apply_label_muted(label);
+
+        lv_obj_t* value_box = lv_obj_create(btn);
+        lv_obj_set_size(value_box, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_pad_left(value_box, kStackedSectionPadX, LV_PART_MAIN);
+        lv_obj_set_style_pad_right(value_box, kStackedSectionPadX, LV_PART_MAIN);
+        lv_obj_set_style_pad_top(value_box, kStackedSectionPadY, LV_PART_MAIN);
+        lv_obj_set_style_pad_bottom(value_box, kStackedSectionPadY, LV_PART_MAIN);
+        style::apply_value_box(value_box);
+
+        widget.value_label = lv_label_create(value_box);
+        lv_obj_set_width(widget.value_label, LV_PCT(100));
+        lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_DOT);
+        style::apply_label_primary(widget.value_label);
+        update_item_value(widget);
+        return;
+    }
+
+    lv_obj_t* label = lv_label_create(btn);
+    lv_label_set_text(label, widget.def->label);
+    style::apply_label_primary(label);
+
+    widget.value_label = lv_label_create(btn);
+    style::apply_label_muted(widget.value_label);
+    update_item_value(widget);
+}
 
 static void build_item_list();
 
@@ -1936,21 +2027,10 @@ static void build_item_list()
         }
 
         lv_obj_t* btn = lv_btn_create(g_state.list_panel);
-        lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
-        lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
-        lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
-        lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        configure_list_item_button(btn);
         style::apply_list_item(btn);
 
-        lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, widget.def->label);
-        style::apply_label_primary(label);
-
-        widget.value_label = lv_label_create(btn);
-        style::apply_label_muted(widget.value_label);
-        update_item_value(widget);
+        create_item_content(widget, btn);
 
         widget.btn = btn;
         lv_obj_add_event_cb(btn, on_item_clicked, LV_EVENT_CLICKED, &widget);
@@ -1962,7 +2042,7 @@ static void build_item_list()
     lv_obj_set_style_pad_left(g_state.list_back_btn, 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(g_state.list_back_btn, 10, LV_PART_MAIN);
     lv_obj_set_flex_flow(g_state.list_back_btn, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(g_state.list_back_btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
+    lv_obj_set_flex_align(g_state.list_back_btn, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     style::apply_list_item(g_state.list_back_btn);
     lv_obj_t* back_label = lv_label_create(g_state.list_back_btn);

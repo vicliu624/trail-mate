@@ -15,6 +15,7 @@ bool s_inited = false;
 lv_style_t s_modal_bg;
 lv_style_t s_modal_panel;
 lv_style_t s_modal_btn_checked;
+lv_style_t s_value_box;
 
 } // namespace
 
@@ -42,6 +43,15 @@ void init_once()
     lv_style_set_bg_opa(&s_modal_btn_checked, LV_OPA_COVER);
     lv_style_set_bg_color(&s_modal_btn_checked,
                           lv_color_hex(::ui::components::two_pane_styles::kAccent));
+
+    lv_style_init(&s_value_box);
+    lv_style_set_bg_opa(&s_value_box, LV_OPA_COVER);
+    lv_style_set_bg_color(&s_value_box,
+                          lv_color_hex(::ui::components::two_pane_styles::kSidePanelBg));
+    lv_style_set_border_width(&s_value_box, 1);
+    lv_style_set_border_color(&s_value_box,
+                              lv_color_hex(::ui::components::two_pane_styles::kBorder));
+    lv_style_set_radius(&s_value_box, 8);
 }
 
 void apply_panel_side(lv_obj_t* obj)
@@ -77,6 +87,12 @@ void apply_label_primary(lv_obj_t* label)
 void apply_label_muted(lv_obj_t* label)
 {
     ::ui::components::two_pane_styles::apply_label_muted(label);
+}
+
+void apply_value_box(lv_obj_t* obj)
+{
+    init_once();
+    lv_obj_add_style(obj, &s_value_box, 0);
 }
 
 void apply_modal_bg(lv_obj_t* obj)
