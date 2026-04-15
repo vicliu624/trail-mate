@@ -45,6 +45,7 @@ class ST7796
     static const DispRotationConfig_t* getRotationConfig(uint16_t width, uint16_t height,
                                                          uint16_t landscape_offset_x = 0,
                                                          uint16_t portrait_offset_y = 0);
+    static constexpr DispTransferConfig_t getTransferConfig() { return DispTransferConfig_t{true}; }
 
     /**
      * @brief Get the number of rotation configurations

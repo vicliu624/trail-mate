@@ -135,7 +135,8 @@ TDeckBoard::TDeckBoard()
       LilyGoDispArduinoSPI(SCREEN_WIDTH, SCREEN_HEIGHT,
                            display::drivers::ST7789TDeck::getInitCommands(),
                            display::drivers::ST7789TDeck::getInitCommandsCount(),
-                           display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT))
+                           display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT),
+                           display::drivers::ST7789TDeck::getTransferConfig())
 {
 }
 

@@ -6,8 +6,8 @@ namespace drivers
 {
 
 // Command sequence derived from LilyGo T-Deck TFT_eSPI (INIT_SEQUENCE_2).
-// Orientation is intentionally not fixed here because DisplayInterface::init()
-// applies setRotation(0), and the board then selects its preferred rotation.
+// Color-channel order lives in the rotation config only; do not also encode it
+// here in the init table or we end up with multiple competing sources of truth.
 // The high bit (0x80) in len requests a post-command delay in DisplayInterface.
 static const CommandTable_t kInit[] = {
     {0x11, {0}, 0x80},                                                                                // SLPOUT + delay
@@ -42,7 +42,8 @@ size_t ST7789TDeck::getInitCommandsCount()
 
 const DispRotationConfig_t* ST7789TDeck::getRotationConfig(uint16_t width, uint16_t height)
 {
-    // Generic ST7789 rotation table; use RGB order to match LVGL swap path.
+    // Keep T-Deck aligned with the last known-good path from v0.1.13-alpha:
+    // RGB/BGR is decided only here, and the panel uses RGB order.
     static DispRotationConfig_t rot[4];
     rot[0] = {static_cast<uint8_t>(0x00), width, height, 0, 0};
     rot[1] = {static_cast<uint8_t>(0x60), height, width, 0, 0};

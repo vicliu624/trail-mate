@@ -33,10 +33,6 @@ static lv_indev_t* indev_keyboard;
 static lv_color16_t* buf = nullptr;
 static lv_color16_t* buf1 = nullptr;
 
-#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(ARDUINO_T_WATCH_S3)
-#define _SWAP_COLORS
-#endif
-
 static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* color_p)
 {
     static uint8_t s_tdeck_pro_flush_log_count = 0;
@@ -52,10 +48,6 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
     auto* plane = (LilyGo_Display*)lv_display_get_user_data(disp_drv);
-
-#ifdef _SWAP_COLORS
-    lv_draw_sw_rgb565_swap(color_p, len);
-#endif
 
 #if defined(ARDUINO_T_DECK_PRO)
     if (s_tdeck_pro_flush_log_count < 8)
@@ -369,10 +361,6 @@ static void lv_res_changed_cb(lv_event_t* e)
 
 void beginLvglHelper(LilyGo_Display& board, bool debug)
 {
-#ifdef _SWAP_COLORS
-    log_d("Using color swap function");
-#endif
-
     Serial.println("[LVGL] init");
     lv_init();
     Serial.println("[LVGL] init done");

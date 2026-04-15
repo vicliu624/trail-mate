@@ -16,6 +16,7 @@ class ST7789WatchS3
     static const CommandTable_t* getInitCommands();
     static size_t getInitCommandsCount();
     static const DispRotationConfig_t* getRotationConfig(uint16_t width, uint16_t height);
+    static constexpr DispTransferConfig_t getTransferConfig() { return DispTransferConfig_t{true}; }
     static constexpr size_t getRotationConfigCount() { return 4; }
 };
 

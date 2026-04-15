@@ -16,6 +16,9 @@ class ST7789TDeck
     static const CommandTable_t* getInitCommands();
     static size_t getInitCommandsCount();
     static const DispRotationConfig_t* getRotationConfig(uint16_t width, uint16_t height);
+    // T-Deck colors skew purple/blue when RGB565 bytes are forced MSB-first on the
+    // wire. Keep byte order local to this driver so color truth stays centralized.
+    static constexpr DispTransferConfig_t getTransferConfig() { return DispTransferConfig_t{false}; }
     static constexpr size_t getRotationConfigCount() { return 4; }
 };
 

@@ -31,6 +31,13 @@ typedef struct
     uint8_t len;
 } CommandTable_t;
 
+struct DispTransferConfig_t
+{
+    bool rgb565_msb_first;
+
+    constexpr DispTransferConfig_t(bool msb = false) : rgb565_msb_first(msb) {}
+};
+
 typedef enum RotaryDir
 {
     ROTARY_DIR_NONE,
@@ -105,6 +112,7 @@ class LilyGoDispArduinoSPI
     const CommandTable_t* _init_list;
     size_t _init_list_length;
     const DispRotationConfig_t* _rotation_configs;
+    DispTransferConfig_t _transfer_config{};
     SemaphoreHandle_t _lock = nullptr;
 
   public:
@@ -113,9 +121,10 @@ class LilyGoDispArduinoSPI
     uint8_t _brightness = 0;
 
     LilyGoDispArduinoSPI(uint16_t width, uint16_t height, const CommandTable_t* init_list, size_t init_list_length,
-                         const DispRotationConfig_t* rotation_config)
+                         const DispRotationConfig_t* rotation_config,
+                         DispTransferConfig_t transfer_config = {})
         : _init_width(width), _init_height(height), _init_list(init_list), _init_list_length(init_list_length),
-          _rotation_configs(rotation_config)
+          _rotation_configs(rotation_config), _transfer_config(transfer_config)
     {
     }
 

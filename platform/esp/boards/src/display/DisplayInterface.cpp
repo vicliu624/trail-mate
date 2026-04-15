@@ -114,7 +114,8 @@ void LilyGoDispArduinoSPI::setRotation(uint8_t rotation)
 {
     _rotation = rotation % 4;
     uint8_t mad_cmd = _rotation_configs[_rotation].madCmd;
-    writeParams(DISP_CMD_MADCTL, &mad_cmd, 1);
+    writeCommand(DISP_CMD_MADCTL);
+    writeData(mad_cmd);
     _width = _rotation_configs[_rotation].width;
     _height = _rotation_configs[_rotation].height;
     _offset_x = _rotation_configs[_rotation].offset_x;
@@ -127,7 +128,34 @@ void LilyGoDispArduinoSPI::pushColors(uint16_t* data, uint32_t len)
     digitalWrite(_cs, LOW);
     _spi->beginTransaction(SPISettings(_spi_freq, MSBFIRST, SPI_MODE0));
     digitalWrite(_dc, HIGH);
-    _spi->writeBytes((const uint8_t*)data, len * sizeof(uint16_t));
+    if (_transfer_config.rgb565_msb_first)
+    {
+        // Keep pixel byte-order handling in one place: display drivers describe
+        // how RGB565 must be placed on the wire, and LVGL stays unaware of it.
+        constexpr size_t kChunkPixels = 96;
+        uint8_t chunk[kChunkPixels * sizeof(uint16_t)];
+        uint32_t offset = 0;
+        while (offset < len)
+        {
+            size_t batch = len - offset;
+            if (batch > kChunkPixels)
+            {
+                batch = kChunkPixels;
+            }
+            for (size_t i = 0; i < batch; ++i)
+            {
+                const uint16_t pixel = data[offset + i];
+                chunk[i * 2] = static_cast<uint8_t>(pixel >> 8);
+                chunk[i * 2 + 1] = static_cast<uint8_t>(pixel & 0xFF);
+            }
+            _spi->writeBytes(chunk, batch * sizeof(uint16_t));
+            offset += static_cast<uint32_t>(batch);
+        }
+    }
+    else
+    {
+        _spi->writeBytes(reinterpret_cast<const uint8_t*>(data), len * sizeof(uint16_t));
+    }
     _spi->endTransaction();
     digitalWrite(_cs, HIGH);
     xSemaphoreGive(_lock);
@@ -135,34 +163,8 @@ void LilyGoDispArduinoSPI::pushColors(uint16_t* data, uint32_t len)
 
 void LilyGoDispArduinoSPI::pushColors(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* color)
 {
-    if (x2 == 0 || y2 == 0)
-    {
-        return;
-    }
-    uint16_t xs = x1 + _offset_x;
-    uint16_t ys = y1 + _offset_y;
-    uint16_t xe = xs + x2 - 1;
-    uint16_t ye = ys + y2 - 1;
-    uint8_t col_params[4] = {uint8_t(xs >> 8), static_cast<uint8_t>(xs), uint8_t(xe >> 8), static_cast<uint8_t>(xe)};
-    uint8_t row_params[4] = {uint8_t(ys >> 8), static_cast<uint8_t>(ys), uint8_t(ye >> 8), static_cast<uint8_t>(ye)};
-    xSemaphoreTake(_lock, portMAX_DELAY);
-    digitalWrite(_cs, LOW);
-    _spi->beginTransaction(SPISettings(_spi_freq, MSBFIRST, SPI_MODE0));
-    digitalWrite(_dc, LOW);
-    _spi->write(DISP_CMD_CASET);
-    digitalWrite(_dc, HIGH);
-    _spi->writeBytes(col_params, sizeof(col_params));
-    digitalWrite(_dc, LOW);
-    _spi->write(DISP_CMD_RASET);
-    digitalWrite(_dc, HIGH);
-    _spi->writeBytes(row_params, sizeof(row_params));
-    digitalWrite(_dc, LOW);
-    _spi->write(DISP_CMD_RAMWR);
-    digitalWrite(_dc, HIGH);
-    _spi->writeBytes(reinterpret_cast<const uint8_t*>(color), x2 * y2 * sizeof(uint16_t));
-    _spi->endTransaction();
-    digitalWrite(_cs, HIGH);
-    xSemaphoreGive(_lock);
+    setAddrWindow(x1, y1, x1 + x2 - 1, y1 + y2 - 1);
+    pushColors(color, x2 * y2);
 }
 
 void LilyGoDispArduinoSPI::sleep()
@@ -219,17 +221,12 @@ void LilyGoDispArduinoSPI::writeData(uint8_t data)
 
 void LilyGoDispArduinoSPI::writeParams(uint8_t cmd, uint8_t* data, size_t length)
 {
-    xSemaphoreTake(_lock, portMAX_DELAY);
-    digitalWrite(_cs, LOW);
-    _spi->beginTransaction(SPISettings(_spi_freq, MSBFIRST, SPI_MODE0));
-    digitalWrite(_dc, LOW);
-    _spi->write(cmd);
-    if (data != nullptr && length > 0)
+    writeCommand(cmd);
+    if (data != nullptr)
     {
-        digitalWrite(_dc, HIGH);
-        _spi->writeBytes(data, length);
+        for (size_t i = 0; i < length; i++)
+        {
+            writeData(data[i]);
+        }
     }
-    _spi->endTransaction();
-    digitalWrite(_cs, HIGH);
-    xSemaphoreGive(_lock);
 }
