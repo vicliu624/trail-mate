@@ -795,6 +795,7 @@ static void style_tile_obj(lv_obj_t* o)
     lv_obj_set_style_border_width(o, 0, LV_PART_MAIN);
     lv_obj_set_style_radius(o, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_all(o, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
 }
 
 static void style_placeholder_card(lv_obj_t* card)

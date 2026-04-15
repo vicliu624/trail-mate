@@ -403,6 +403,9 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     }
 
     bind_controls_and_group(app_g);
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    bind_map_touch_input();
+#endif
 
     lv_obj_move_foreground(g_gps_state.panel);
     if (g_gps_state.resolution_label != NULL)
@@ -500,12 +503,19 @@ void exit(lv_obj_t* parent)
     // Prevent re-entrant exit.
     g_gps_state.exiting = true;
 
-    // Mirror Contacts cleanup order: stop timers/inputs, close modals, delete root, reset state.
+    // Mirror Contacts cleanup order: stop inputs/timers, close modals, delete root, reset state.
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    unbind_map_touch_input();
+#endif
+
     gps::ui::lifetime::clear_timers();
     g_gps_state.timer = nullptr;
     g_gps_state.loader_timer = nullptr;
     g_gps_state.title_timer = nullptr;
     g_gps_state.toast_timer = nullptr;
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    g_gps_state.touch_timer = nullptr;
+#endif
     GPS_LOG("[GPS][EXIT] timers cleared\n");
 
     if (app_g)

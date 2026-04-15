@@ -173,6 +173,19 @@ struct GPSPageState
     // Edit mode state machine
     GpsEditMode edit_mode = GpsEditMode::None;
 
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    struct TouchPanState
+    {
+        bool pressed = false;
+        bool dragging = false;
+        lv_point_t start = {0, 0};
+        lv_point_t last = {0, 0};
+        int start_pan_x = 0;
+        int start_pan_y = 0;
+    } touch_pan;
+    lv_timer_t* touch_timer = nullptr;
+#endif
+
     // refresh optimization
     bool pending_refresh = false;     // Flag to indicate map needs refresh (for batched updates)
     double last_resolution_lat = 0.0; // Last latitude used for resolution calculation

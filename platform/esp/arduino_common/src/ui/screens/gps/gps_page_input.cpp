@@ -10,8 +10,10 @@
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
+#include "ui/LV_Helper.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 
@@ -155,8 +157,296 @@ static bool event_from_keypad(lv_event_t* e)
     return indev != nullptr && lv_indev_get_type(indev) == LV_INDEV_TYPE_KEYPAD;
 }
 
+static void action_pan_exit();
+
+#ifdef USING_INPUT_DEV_TOUCHPAD
+static bool event_from_pointer(lv_event_t* e)
+{
+    lv_indev_t* indev = resolve_event_indev(e);
+    return indev != nullptr && lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER;
+}
+
+static int coord_abs(int value)
+{
+    return value < 0 ? -value : value;
+}
+
+static bool point_hits_obj(lv_obj_t* obj, const lv_point_t& point)
+{
+    if (obj == nullptr || lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN))
+    {
+        return false;
+    }
+
+    lv_area_t coords{};
+    lv_obj_get_coords(obj, &coords);
+    return lv_area_is_point_on(&coords, &point, 0);
+}
+
+static bool point_hits_map_blocker(const lv_point_t& point)
+{
+    const lv_obj_t* blocked_roots[] = {
+        g_gps_state.panel,
+        g_gps_state.member_panel,
+        g_gps_state.zoom,
+        g_gps_state.pos,
+        g_gps_state.pan_h,
+        g_gps_state.pan_v,
+        g_gps_state.tracker_btn,
+        g_gps_state.layer_btn,
+        g_gps_state.route_btn,
+        g_gps_state.pan_h_indicator,
+        g_gps_state.pan_v_indicator,
+    };
+
+    for (const lv_obj_t* blocked : blocked_roots)
+    {
+        if (point_hits_obj(const_cast<lv_obj_t*>(blocked), point))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void reset_map_touch_pan_state()
+{
+    g_gps_state.touch_pan.pressed = false;
+    g_gps_state.touch_pan.dragging = false;
+}
+
+static void handle_map_touch_press(const lv_point_t& point)
+{
+    lv_point_t search_point = point;
+    lv_obj_t* hit = lv_indev_search_obj(lv_screen_active(), &search_point);
+    const ControlId hit_id = ctrl_id(hit);
+    const bool in_map = point_hits_obj(g_gps_state.map, point);
+    const bool blocked = point_hits_map_blocker(point);
+    if (!in_map || blocked)
+    {
+        reset_map_touch_pan_state();
+        GPS_FLOW_LOG("[GPS][MAP][touch] press_ignored x=%d y=%d hit=%d in_map=%d blocked=%d\n",
+                     point.x,
+                     point.y,
+                     static_cast<int>(hit_id),
+                     in_map ? 1 : 0,
+                     blocked ? 1 : 0);
+        return;
+    }
+
+    updateUserActivity();
+    g_gps_state.touch_pan.pressed = true;
+    g_gps_state.touch_pan.dragging = false;
+    g_gps_state.touch_pan.start = point;
+    g_gps_state.touch_pan.last = point;
+    g_gps_state.touch_pan.start_pan_x = g_gps_state.pan_x;
+    g_gps_state.touch_pan.start_pan_y = g_gps_state.pan_y;
+    GPS_FLOW_LOG("[GPS][MAP][touch] press x=%d y=%d pan=%d,%d target=%d\n",
+                 point.x,
+                 point.y,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y,
+                 static_cast<int>(hit_id));
+}
+
+static void handle_map_touch_move(lv_indev_t* indev, const lv_point_t& point)
+{
+    constexpr int kTouchDragStartPx = 6;
+
+    if (!g_gps_state.touch_pan.pressed)
+    {
+        return;
+    }
+
+    g_gps_state.touch_pan.last = point;
+    const int dx = static_cast<int>(point.x - g_gps_state.touch_pan.start.x);
+    const int dy = static_cast<int>(point.y - g_gps_state.touch_pan.start.y);
+
+    if (!g_gps_state.touch_pan.dragging)
+    {
+        if (coord_abs(dx) < kTouchDragStartPx && coord_abs(dy) < kTouchDragStartPx)
+        {
+            return;
+        }
+
+        g_gps_state.touch_pan.dragging = true;
+        if (is_pan_editing())
+        {
+            action_pan_exit();
+        }
+        GPS_FLOW_LOG("[GPS][MAP][touch] drag_begin dx=%d dy=%d start_pan=%d,%d\n",
+                     dx,
+                     dy,
+                     g_gps_state.touch_pan.start_pan_x,
+                     g_gps_state.touch_pan.start_pan_y);
+    }
+
+    if (g_gps_state.touch_pan.dragging)
+    {
+        lv_indev_stop_processing(indev);
+    }
+
+    const int new_pan_x = g_gps_state.touch_pan.start_pan_x + dx;
+    const int new_pan_y = g_gps_state.touch_pan.start_pan_y + dy;
+    if (new_pan_x == g_gps_state.pan_x && new_pan_y == g_gps_state.pan_y)
+    {
+        return;
+    }
+
+    const int before_x = g_gps_state.pan_x;
+    const int before_y = g_gps_state.pan_y;
+    g_gps_state.pan_x = new_pan_x;
+    g_gps_state.pan_y = new_pan_y;
+    g_gps_state.follow_position = false;
+    g_gps_state.pending_refresh = false;
+    update_map_tiles(false);
+    GPS_FLOW_LOG("[GPS][MAP][touch] drag_move dx=%d dy=%d pan=%d,%d->%d,%d\n",
+                 dx,
+                 dy,
+                 before_x,
+                 before_y,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y);
+}
+
+static void handle_map_touch_release(lv_indev_t* indev, const lv_point_t& point)
+{
+    if (!g_gps_state.touch_pan.pressed)
+    {
+        return;
+    }
+
+    if (g_gps_state.touch_pan.dragging)
+    {
+        lv_indev_stop_processing(indev);
+    }
+    GPS_FLOW_LOG("[GPS][MAP][touch] release x=%d y=%d dragging=%d pan=%d,%d\n",
+                 point.x,
+                 point.y,
+                 g_gps_state.touch_pan.dragging ? 1 : 0,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y);
+    if (g_gps_state.touch_pan.dragging)
+    {
+        log_map_tile_state("touch_drag");
+    }
+    reset_map_touch_pan_state();
+}
+
+static void map_touch_poll_timer_cb(lv_timer_t* timer)
+{
+    (void)timer;
+
+    if (!is_alive() || g_gps_state.map == nullptr || g_gps_state.exiting)
+    {
+        return;
+    }
+
+    lv_indev_t* indev = lv_get_touch_indev();
+    if (indev == nullptr)
+    {
+        return;
+    }
+
+    if (g_gps_state.zoom_modal.is_open() ||
+        modal_is_open(g_gps_state.tracker_modal) ||
+        modal_is_open(g_gps_state.layer_modal) ||
+        modal_is_open(g_gps_state.route_modal))
+    {
+        if (g_gps_state.touch_pan.pressed)
+        {
+            GPS_FLOW_LOG("[GPS][MAP][touch] modal_cancel pan=%d,%d\n",
+                         g_gps_state.pan_x,
+                         g_gps_state.pan_y);
+        }
+        reset_map_touch_pan_state();
+        return;
+    }
+
+    lv_point_t point{};
+    lv_indev_get_point(indev, &point);
+    const bool is_pressed = lv_indev_get_state(indev) == LV_INDEV_STATE_PRESSED;
+
+    if (is_pressed && !g_gps_state.touch_pan.pressed)
+    {
+        handle_map_touch_press(point);
+        return;
+    }
+
+    if (is_pressed)
+    {
+        handle_map_touch_move(indev, point);
+        return;
+    }
+
+    if (g_gps_state.touch_pan.pressed)
+    {
+        handle_map_touch_release(indev, point);
+    }
+}
+
+void bind_map_touch_input()
+{
+    if (!is_alive() || g_gps_state.root == nullptr)
+    {
+        return;
+    }
+
+    lv_indev_t* indev = lv_get_touch_indev();
+    if (indev == nullptr)
+    {
+        GPS_FLOW_LOG("[GPS][MAP][touch] bind skipped indev=null\n");
+        return;
+    }
+
+    if (g_gps_state.touch_timer == nullptr)
+    {
+        g_gps_state.touch_timer = gps::ui::lifetime::add_timer(map_touch_poll_timer_cb, 16, nullptr);
+    }
+    reset_map_touch_pan_state();
+    GPS_FLOW_LOG("[GPS][MAP][touch] bind indev=%p root=%p map=%p timer=%p\n",
+                 static_cast<void*>(indev),
+                 static_cast<void*>(g_gps_state.root),
+                 static_cast<void*>(g_gps_state.map),
+                 static_cast<void*>(g_gps_state.touch_timer));
+}
+
+void unbind_map_touch_input()
+{
+    if (g_gps_state.touch_timer != nullptr)
+    {
+        auto& timers = g_gps_state.timers;
+        const bool owned =
+            std::find(timers.begin(), timers.end(), g_gps_state.touch_timer) != timers.end();
+        if (owned)
+        {
+            gps::ui::lifetime::remove_timer(g_gps_state.touch_timer);
+            GPS_FLOW_LOG("[GPS][MAP][touch] unbind timer=%p root=%p\n",
+                         static_cast<void*>(g_gps_state.touch_timer),
+                         static_cast<void*>(g_gps_state.root));
+        }
+        else
+        {
+            GPS_FLOW_LOG("[GPS][MAP][touch] unbind skip_stale timer=%p root=%p\n",
+                         static_cast<void*>(g_gps_state.touch_timer),
+                         static_cast<void*>(g_gps_state.root));
+        }
+        g_gps_state.touch_timer = nullptr;
+    }
+
+    reset_map_touch_pan_state();
+}
+#endif
+
 static const char* event_input_model_label(lv_event_t* e)
 {
+    #ifdef USING_INPUT_DEV_TOUCHPAD
+    if (event_from_pointer(e))
+    {
+        return "touch";
+    }
+    #endif
     if (event_from_encoder(e))
     {
         return "encoder";
@@ -346,7 +636,6 @@ void on_ui_event(lv_event_t* e)
                 code == LV_EVENT_PRESSED ? "PRESSED" : "RELEASED",
                 target, (int)target_id, focused, editing, is_pan_h_editing(), is_pan_v_editing());
     }
-
     // Handle indicator-local key/rotary events early so focused pan overlays stay responsive.
     if (target == g_gps_state.pan_h_indicator)
     {

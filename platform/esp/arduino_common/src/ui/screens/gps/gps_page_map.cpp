@@ -839,6 +839,7 @@ void create_gps_marker()
 
     // Set marker size (24x24 pixels)
     lv_obj_set_size(g_gps_state.gps_marker, 24, 24);
+    lv_obj_clear_flag(g_gps_state.gps_marker, LV_OBJ_FLAG_SCROLLABLE);
 
     // Set initial position
     update_gps_marker_position();

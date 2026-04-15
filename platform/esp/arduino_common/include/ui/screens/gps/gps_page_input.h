@@ -39,4 +39,9 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e);
 void zoom_popup_sync_widgets();
 void zoom_popup_apply_selection();
 
+#ifdef USING_INPUT_DEV_TOUCHPAD
+void bind_map_touch_input();
+void unbind_map_touch_input();
+#endif
+
 #endif // GPS_PAGE_INPUT_H
