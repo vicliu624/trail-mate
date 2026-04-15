@@ -64,6 +64,7 @@ struct MapTile
     bool record_evicted;          // Record should be removed from vector
     int priority;                 // Loading priority (distance from screen center, lower = higher priority)
     bool has_png_file;            // True if tile has loaded base image file (PNG/JPG)
+    bool base_missing;            // True if the base tile file was confirmed missing for this render state
     bool contour_checked;         // True if contour file lookup was attempted for this tile
     bool contour_loaded;          // True if contour overlay object is present
     DecodedTileCache* cached_img; // Pointer to decoded image cache entry (NULL if not cached)

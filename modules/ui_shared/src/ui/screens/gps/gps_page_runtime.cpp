@@ -40,6 +40,13 @@ static bool show_pan_axis_controls()
 #endif
 #endif
 
+#define GPS_FLOW_LOG(...)         \
+    do                            \
+    {                             \
+        std::printf(__VA_ARGS__); \
+        std::fflush(stdout);      \
+    } while (0)
+
 namespace
 {
 
@@ -202,9 +209,7 @@ void init_gps_state_defaults()
     g_gps_state.pan_y = 0;
     g_gps_state.follow_position = true;
 
-    g_gps_state.pan_h_editing = false;
-    g_gps_state.pan_v_editing = false;
-    g_gps_state.edit_mode = 0;
+    g_gps_state.edit_mode = GpsEditMode::None;
 
     g_gps_state.pending_refresh = false;
     g_gps_state.last_resolution_lat = 0.0;
@@ -228,7 +233,7 @@ bool isGPSLoadingTiles()
 static void title_update_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    if (!gps::ui::lifetime::is_alive())
+    if (!gps::ui::lifetime::is_alive() || g_gps_state.exiting)
     {
         return;
     }
@@ -240,7 +245,7 @@ static void title_update_timer_cb(lv_timer_t* timer)
 static void gps_update_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    if (!gps::ui::lifetime::is_alive())
+    if (!gps::ui::lifetime::is_alive() || g_gps_state.exiting)
     {
         return;
     }
@@ -252,8 +257,14 @@ static void gps_update_timer_cb(lv_timer_t* timer)
 
     if (g_gps_state.pending_refresh)
     {
+        GPS_FLOW_LOG("[GPS][MAP][flow] pending_refresh consume zoom=%d fix=%d pan=%d,%d\n",
+                     g_gps_state.zoom_level,
+                     g_gps_state.has_fix,
+                     g_gps_state.pan_x,
+                     g_gps_state.pan_y);
         g_gps_state.pending_refresh = false;
         update_map_tiles(false);
+        log_map_tile_state("pending_refresh");
     }
 
     refresh_member_panel(false);
@@ -288,7 +299,7 @@ static void gps_update_timer_cb(lv_timer_t* timer)
 static void gps_loader_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    if (!gps::ui::lifetime::is_alive())
+    if (!gps::ui::lifetime::is_alive() || g_gps_state.exiting)
     {
         return;
     }
@@ -297,13 +308,23 @@ static void gps_loader_timer_cb(lv_timer_t* timer)
 
 static void gps_initial_tiles_async(void* /*user_data*/)
 {
-    if (!gps::ui::lifetime::is_alive() || !g_gps_state.map)
+    if (!gps::ui::lifetime::is_alive() || g_gps_state.exiting || !g_gps_state.map)
     {
         return;
     }
     // Ensure final sizes before first tile calculation to avoid visible jitter.
     lv_obj_update_layout(gps_root);
+    GPS_FLOW_LOG("[GPS][MAP][flow] initial_async begin zoom=%d fix=%d src=%u contour=%d map=%dx%d lat=%.6f lng=%.6f\n",
+                 g_gps_state.zoom_level,
+                 g_gps_state.has_fix,
+                 sanitize_map_source(app::configFacade().getConfig().map_source),
+                 app::configFacade().getConfig().map_contour_enabled,
+                 lv_obj_get_width(g_gps_state.map),
+                 lv_obj_get_height(g_gps_state.map),
+                 g_gps_state.lat,
+                 g_gps_state.lng);
     update_map_tiles(false);
+    log_map_tile_state("initial_async");
 }
 
 namespace gps::ui::runtime
@@ -320,6 +341,9 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     GPS_LOG("[GPS] Entering GPS page, SD ready: %d, GPS ready: %d\n",
             platform::ui::device::sd_ready(),
             platform::ui::device::gps_ready());
+    GPS_FLOW_LOG("[GPS][MAP][flow] enter sd=%d gps=%d\n",
+                 platform::ui::device::sd_ready(),
+                 platform::ui::device::gps_ready());
 
     // Ensure any previous instance is cleaned up before we reset state.
     if (gps_root != nullptr)

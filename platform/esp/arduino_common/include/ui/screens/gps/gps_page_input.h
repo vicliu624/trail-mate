@@ -4,11 +4,6 @@
 #include "lvgl.h"
 #include <cstdint>
 
-// Encoder rotation keycodes (from LVGL encoder driver)
-// These are the actual keycodes sent when the rotary encoder rotates.
-#define ENCODER_KEY_ROTATE_DOWN 20 // Scroll down (clockwise)
-#define ENCODER_KEY_ROTATE_UP 19   // Scroll up (counter‑clockwise)
-
 enum class ControlId : uint8_t
 {
     BackBtn,

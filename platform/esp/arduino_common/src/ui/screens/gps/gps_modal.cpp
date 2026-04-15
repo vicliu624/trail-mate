@@ -23,39 +23,24 @@
 #define GPS_LOG(...)
 #endif
 
-// Static encoder cache
-static lv_indev_t* g_encoder_indev = nullptr;
-
 using gps::ui::lifetime::is_alive;
 
-/**
- * Get encoder input device (use helper function from LV_Helper)
- */
-lv_indev_t* get_encoder_indev()
+void bind_navigation_inputs_to_group(lv_group_t* g)
 {
-    if (g_encoder_indev != NULL)
+    lv_indev_t* indev = nullptr;
+    for (;;)
     {
-        return g_encoder_indev;
-    }
+        indev = lv_indev_get_next(indev);
+        if (indev == nullptr)
+        {
+            break;
+        }
 
-    // Use helper function from LV_Helper.h
-    g_encoder_indev = lv_get_encoder_indev();
-    if (g_encoder_indev == NULL)
-    {
-        GPS_LOG("[GPS] WARNING: encoder indev is NULL - popup may not receive input\n");
-    }
-    return g_encoder_indev;
-}
-
-/**
- * Bind encoder input device to a group
- */
-void bind_encoder_to_group(lv_group_t* g)
-{
-    lv_indev_t* encoder = get_encoder_indev();
-    if (encoder)
-    {
-        lv_indev_set_group(encoder, g);
+        const lv_indev_type_t type = lv_indev_get_type(indev);
+        if (type == LV_INDEV_TYPE_ENCODER || type == LV_INDEV_TYPE_KEYPAD)
+        {
+            lv_indev_set_group(indev, g);
+        }
     }
 }
 
@@ -245,7 +230,8 @@ bool modal_open(Modal& m, lv_obj_t* content_root, lv_group_t* focus_group)
     }
     // Clear group - caller (show_zoom_popup) will add popup_label and configure everything
     lv_group_remove_all_objs(m.group);
-    // Don't bind encoder here - let show_zoom_popup do it after popup_label is added and focused
+    // Don't bind navigation inputs here - let the caller do it after focus
+    // targets are added to the modal group.
     GPS_LOG("[GPS] Modal group created (empty), group=%p\n", m.group);
 
     m.close_ms = 0; // Reset close timestamp
@@ -267,10 +253,10 @@ void modal_close(Modal& m)
 
     if (is_alive())
     {
-        // Restore default group and encoder binding BEFORE deleting objects
+        // Restore default group and navigation-input binding BEFORE deleting objects
         lv_group_t* restore = m.prev_default ? m.prev_default : app_g;
         set_default_group(restore);
-        bind_encoder_to_group(restore);
+        bind_navigation_inputs_to_group(restore);
     }
 
     // Only delete bg (win is child of bg, will be deleted automatically)
