@@ -16,9 +16,10 @@ class ST7789TDeck
     static const CommandTable_t* getInitCommands();
     static size_t getInitCommandsCount();
     static const DispRotationConfig_t* getRotationConfig(uint16_t width, uint16_t height);
-    // T-Deck colors skew purple/blue when RGB565 bytes are forced MSB-first on the
-    // wire. Keep byte order local to this driver so color truth stays centralized.
-    static constexpr DispTransferConfig_t getTransferConfig() { return DispTransferConfig_t{false}; }
+    // Historical T-Deck path used lv_draw_sw_rgb565_swap() before the SPI flush,
+    // which means this panel wants RGB565 on the wire in MSB-first order.
+    // Keep that truth here in the driver so LVGL stays generic.
+    static constexpr DispTransferConfig_t getTransferConfig() { return DispTransferConfig_t{true}; }
     static constexpr size_t getRotationConfigCount() { return 4; }
 };
 
