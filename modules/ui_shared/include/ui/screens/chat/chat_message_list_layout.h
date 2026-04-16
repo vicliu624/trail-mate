@@ -30,6 +30,8 @@ struct MessageItemWidgets
 };
 
 MessageItemWidgets create_message_item(lv_obj_t* parent);
+void populate_message_item(const MessageItemWidgets& widgets,
+                           const chat::ConversationMeta& conv);
 
 // placeholder
 lv_obj_t* create_placeholder(lv_obj_t* parent);

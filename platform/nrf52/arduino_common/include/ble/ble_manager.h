@@ -43,6 +43,11 @@ class BleService
     virtual void start() = 0;
     virtual void stop() = 0;
     virtual void update() = 0;
+    virtual bool isRunning() const { return false; }
+    virtual void setDeviceName(const std::string& name)
+    {
+        (void)name;
+    }
     virtual bool getPairingStatus(BlePairingStatus* out) const
     {
         (void)out;

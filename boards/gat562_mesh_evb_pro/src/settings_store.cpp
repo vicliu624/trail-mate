@@ -1,5 +1,6 @@
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
 
+#include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_region.h"
@@ -69,6 +70,41 @@ bool s_deferred_save_pending = false;
 uint32_t s_last_dirty_ms = 0;
 bool s_save_in_progress = false;
 uint32_t s_last_save_attempt_ms = 0;
+// Keep persistence payload scratch off the nRF52 task stack. Protocol switching
+// can nest save + verify while UI/GPS code continues to run, and these payloads
+// are large enough to make the stack path fragile.
+FileHeader s_file_header_scratch{};
+PersistedPayload s_payload_scratch{};
+PersistedPayloadV1 s_payload_v1_scratch{};
+
+class ScopedGpsSuspend
+{
+  public:
+    ScopedGpsSuspend()
+        : board_(&::boards::gat562_mesh_evb_pro::Gat562Board::instance()),
+          resume_(board_->gpsEnabled())
+    {
+        if (resume_)
+        {
+            board_->suspendGps();
+        }
+    }
+
+    ~ScopedGpsSuspend()
+    {
+        if (resume_)
+        {
+            board_->resumeGps();
+        }
+    }
+
+    ScopedGpsSuspend(const ScopedGpsSuspend&) = delete;
+    ScopedGpsSuspend& operator=(const ScopedGpsSuspend&) = delete;
+
+  private:
+    ::boards::gat562_mesh_evb_pro::Gat562Board* board_ = nullptr;
+    bool resume_ = false;
+};
 
 int8_t clampTxPower(int8_t value)
 {
@@ -191,7 +227,8 @@ bool verifySavedFile()
         return false;
     }
 
-    FileHeader header{};
+    auto& header = s_file_header_scratch;
+    std::memset(&header, 0, sizeof(header));
     if (file.read(&header, sizeof(header)) != sizeof(header))
     {
         file.close();
@@ -226,7 +263,8 @@ bool verifySavedFile()
         return false;
     }
 
-    PersistedPayload payload{};
+    auto& payload = s_payload_scratch;
+    std::memset(&payload, 0, sizeof(payload));
     if (file.read(&payload, sizeof(payload)) != sizeof(payload))
     {
         file.close();
@@ -326,7 +364,8 @@ bool loadFromFs()
                 return false;
             }
 
-            PersistedPayloadV1 payload_v1{};
+            auto& payload_v1 = s_payload_v1_scratch;
+            std::memset(&payload_v1, 0, sizeof(payload_v1));
             if (file.read(&payload_v1, sizeof(payload_v1)) != sizeof(payload_v1))
             {
                 file.close();
@@ -384,7 +423,8 @@ bool loadFromFs()
         return false;
     }
 
-    PersistedPayload payload{};
+    auto& payload = s_payload_scratch;
+    std::memset(&payload, 0, sizeof(payload));
     if (file.read(&payload, sizeof(payload)) != sizeof(payload))
     {
         file.close();
@@ -432,7 +472,8 @@ bool saveToFsOnce()
         return false;
     }
 
-    PersistedPayload payload{};
+    auto& payload = s_payload_scratch;
+    std::memset(&payload, 0, sizeof(payload));
     payload.config = s_cache.config;
     payload.tone_volume = clampToneVolume(s_cache.tone_volume);
     payload.has_meshtastic_ble_state = s_cache.has_meshtastic_ble_state ? 1U : 0U;
@@ -441,7 +482,8 @@ bool saveToFsOnce()
     payload.meshtastic_ble_bluetooth = s_cache.meshtastic_ble_bluetooth;
     payload.meshtastic_ble_module = s_cache.meshtastic_ble_module;
 
-    FileHeader header{};
+    auto& header = s_file_header_scratch;
+    std::memset(&header, 0, sizeof(header));
     header.magic = kSettingsMagic;
     header.version = kSettingsVersion;
     header.reserved = 0;
@@ -546,6 +588,7 @@ bool saveToFs()
 
     s_save_in_progress = true;
     s_last_save_attempt_ms = millis();
+    ScopedGpsSuspend suspend_gps;
 
     bool ok = saveToFsOnce();
     if (!ok)
@@ -668,6 +711,13 @@ bool loadAppConfig(app::AppConfig& config)
     normalizeConfig(config);
     s_cache.config = config;
     return s_last_load_status == StoreStatus::Ok;
+}
+
+void cacheAppConfig(const app::AppConfig& config)
+{
+    ensureCacheLoaded();
+    s_cache.config = config;
+    normalizeConfig(s_cache.config);
 }
 
 bool saveAppConfig(const app::AppConfig& config)

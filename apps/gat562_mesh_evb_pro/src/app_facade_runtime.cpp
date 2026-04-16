@@ -34,6 +34,43 @@ namespace apps::gat562_mesh_evb_pro
 namespace
 {
 constexpr uint32_t kChatStoreFlushIntervalMs = 2000UL;
+constexpr uint8_t kSkipApplyMesh = 1U << 0;
+constexpr uint8_t kSkipApplyUser = 1U << 1;
+constexpr uint8_t kSkipApplyPosition = 1U << 2;
+constexpr uint8_t kSkipApplyNetwork = 1U << 3;
+constexpr uint8_t kSkipApplyPrivacy = 1U << 4;
+constexpr uint8_t kSkipApplyChatDefaults = 1U << 5;
+constexpr uint8_t kSkipApplyMaskAll = kSkipApplyMesh | kSkipApplyUser | kSkipApplyPosition | kSkipApplyNetwork |
+                                      kSkipApplyPrivacy | kSkipApplyChatDefaults;
+
+class ScopedGpsSuspend
+{
+  public:
+    explicit ScopedGpsSuspend(::boards::gat562_mesh_evb_pro::Gat562Board* board)
+        : board_(board),
+          resume_(board_ && board_->gpsEnabled())
+    {
+        if (resume_)
+        {
+            board_->suspendGps();
+        }
+    }
+
+    ~ScopedGpsSuspend()
+    {
+        if (resume_ && board_)
+        {
+            board_->resumeGps();
+        }
+    }
+
+    ScopedGpsSuspend(const ScopedGpsSuspend&) = delete;
+    ScopedGpsSuspend& operator=(const ScopedGpsSuspend&) = delete;
+
+  private:
+    ::boards::gat562_mesh_evb_pro::Gat562Board* board_ = nullptr;
+    bool resume_ = false;
+};
 
 platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(chat::IMeshAdapter* adapter)
 {
@@ -264,6 +301,8 @@ const app::AppConfig& AppFacadeRuntime::getConfig() const
 
 void AppFacadeRuntime::saveConfig()
 {
+    ScopedGpsSuspend suspend_gps(board_);
+    clearPostSaveApplySkips();
     debug_console::printf("[gat562][cfg] save start proto=%u ok_to_mqtt=%u ignore_mqtt=%u ble=%u\n",
                           static_cast<unsigned>(config_.mesh_protocol),
                           config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
@@ -286,6 +325,7 @@ void AppFacadeRuntime::saveConfig()
     applyPrivacyConfig();
     debug_console::printf("[gat562][cfg] save post-applyPrivacy\n");
     applyChatDefaults();
+    markPostSaveApplySkips(kSkipApplyMaskAll);
     ::boards::gat562_mesh_evb_pro::settings_store::queueSaveAppConfig(config_);
     config_save_pending_ = true;
     debug_console::printf("[gat562][cfg] save deferred-store queued\n");
@@ -293,6 +333,10 @@ void AppFacadeRuntime::saveConfig()
 
 void AppFacadeRuntime::applyMeshConfig()
 {
+    if (consumePostSaveApplySkip(kSkipApplyMesh, "applyMesh"))
+    {
+        return;
+    }
     if (apply_service_)
     {
         apply_service_->applyMesh(config_,
@@ -305,6 +349,10 @@ void AppFacadeRuntime::applyMeshConfig()
 
 void AppFacadeRuntime::applyUserInfo()
 {
+    if (consumePostSaveApplySkip(kSkipApplyUser, "applyUser"))
+    {
+        return;
+    }
     const chat::runtime::EffectiveSelfIdentity previous_identity = effective_identity_;
     refreshEffectiveIdentity();
     if (apply_service_)
@@ -318,6 +366,10 @@ void AppFacadeRuntime::applyUserInfo()
 
 void AppFacadeRuntime::applyPositionConfig()
 {
+    if (consumePostSaveApplySkip(kSkipApplyPosition, "applyPos"))
+    {
+        return;
+    }
     if (apply_service_)
     {
         apply_service_->applyPosition(config_, board_);
@@ -336,6 +388,10 @@ chat::NodeId AppFacadeRuntime::resolveSelfNodeId() const
 
 void AppFacadeRuntime::applyNetworkLimits()
 {
+    if (consumePostSaveApplySkip(kSkipApplyNetwork, "applyLimits"))
+    {
+        return;
+    }
     if (mesh_router_)
     {
         mesh_router_->setNetworkLimits(config_.net_duty_cycle, config_.net_channel_util);
@@ -344,6 +400,10 @@ void AppFacadeRuntime::applyNetworkLimits()
 
 void AppFacadeRuntime::applyPrivacyConfig()
 {
+    if (consumePostSaveApplySkip(kSkipApplyPrivacy, "applyPrivacy"))
+    {
+        return;
+    }
     if (mesh_router_)
     {
         mesh_router_->setPrivacyConfig(config_.privacy_encrypt_mode, config_.privacy_pki);
@@ -352,6 +412,10 @@ void AppFacadeRuntime::applyPrivacyConfig()
 
 void AppFacadeRuntime::applyChatDefaults()
 {
+    if (consumePostSaveApplySkip(kSkipApplyChatDefaults, "applyChatDefaults"))
+    {
+        return;
+    }
     if (!chat_service_)
     {
         return;
@@ -383,15 +447,44 @@ bool AppFacadeRuntime::switchMeshProtocol(chat::MeshProtocol protocol, bool pers
         return false;
     }
 
+    ScopedGpsSuspend suspend_gps(board_);
+    const bool protocol_changed = (config_.mesh_protocol != protocol);
+    debug_console::printf("[gat562][cfg] switch proto=%u persist=%u changed=%u\n",
+                          static_cast<unsigned>(protocol),
+                          persist ? 1U : 0U,
+                          protocol_changed ? 1U : 0U);
     config_.mesh_protocol = protocol;
-    applyMeshConfig();
-    applyUserInfo();
-    applyNetworkLimits();
-    applyPrivacyConfig();
+    ::boards::gat562_mesh_evb_pro::settings_store::cacheAppConfig(config_);
 
     if (persist)
     {
-        saveConfig();
+        ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
+        if (::boards::gat562_mesh_evb_pro::settings_store::saveAppConfig(config_))
+        {
+            config_save_pending_ = ::boards::gat562_mesh_evb_pro::settings_store::hasDeferredSavePending();
+            debug_console::printf("[gat562][cfg] switch persist save=ok deferred=%u\n",
+                                  config_save_pending_ ? 1U : 0U);
+            if (protocol_changed)
+            {
+                debug_console::printf("[gat562][cfg] switch persist rebooting for proto=%u\n",
+                                      static_cast<unsigned>(protocol));
+                restartDevice();
+            }
+        }
+        else
+        {
+            ::boards::gat562_mesh_evb_pro::settings_store::queueSaveAppConfig(config_);
+            config_save_pending_ = true;
+            debug_console::printf("[gat562][cfg] switch persist save=deferred\n");
+        }
+    }
+
+    if (protocol_changed)
+    {
+        applyMeshConfig();
+        applyUserInfo();
+        applyNetworkLimits();
+        applyPrivacyConfig();
     }
     return true;
 }
@@ -590,6 +683,7 @@ const BoardBase* AppFacadeRuntime::getBoard() const
 
 void AppFacadeRuntime::updateCoreServices()
 {
+    clearPostSaveApplySkips();
     syncSelfPositionFromGps();
     if (chat_service_)
     {
@@ -613,6 +707,29 @@ void AppFacadeRuntime::updateCoreServices()
     {
         ble_manager_->update();
     }
+}
+
+bool AppFacadeRuntime::consumePostSaveApplySkip(uint8_t bit, const char* label)
+{
+    if ((post_save_apply_skip_mask_ & bit) == 0)
+    {
+        return false;
+    }
+
+    post_save_apply_skip_mask_ &= static_cast<uint8_t>(~bit);
+    debug_console::printf("[gat562][cfg] %s skipped: already applied in save\n",
+                          label ? label : "apply");
+    return true;
+}
+
+void AppFacadeRuntime::markPostSaveApplySkips(uint8_t mask)
+{
+    post_save_apply_skip_mask_ |= mask;
+}
+
+void AppFacadeRuntime::clearPostSaveApplySkips()
+{
+    post_save_apply_skip_mask_ = 0;
 }
 
 void AppFacadeRuntime::syncSelfPositionFromGps()

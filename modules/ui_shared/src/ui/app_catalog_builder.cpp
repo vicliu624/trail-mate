@@ -1,9 +1,16 @@
 #include "ui/app_catalog_builder.h"
 
+#include <cstdio>
+
 #include "ui/app_runtime.h"
 #include "ui/assets/images.h"
 #include "ui/callback_app_screen.h"
 #include "ui/page/page_host.h"
+
+#if defined(ESP_PLATFORM)
+#include "esp_log.h"
+#endif
+
 #include "ui/screens/chat/chat_page_shell.h"
 #include "ui/screens/contacts/contacts_page_shell.h"
 #include "ui/screens/energy_sweep/energy_sweep_page_shell.h"
@@ -13,7 +20,9 @@
 #include "ui/screens/pc_link/pc_link_page_shell.h"
 #endif
 #include "ui/screens/settings/settings_page_shell.h"
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
 #include "ui/screens/sstv/sstv_page_shell.h"
+#endif
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
 #include "ui/screens/team/team_page_shell.h"
 #endif
@@ -27,6 +36,8 @@ namespace
 {
 
 constexpr size_t kMaxMenuApps = 16;
+
+#define APP_CATALOG_LOG(...) std::printf("[UI][Catalog] " __VA_ARGS__)
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 constexpr bool kTab5SkipSkyPlot = true;
@@ -48,7 +59,9 @@ extern "C"
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
     extern const lv_image_dsc_t rf;
 #endif
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
     extern const lv_image_dsc_t sstv;
+#endif
     extern const lv_image_dsc_t Setting;
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
     extern const lv_image_dsc_t img_usb;
@@ -106,10 +119,12 @@ ui::CallbackAppScreen s_pc_link_app("Data Exchange", &rf,
                                     pc_link::ui::shell::exit,
                                     &s_menu_host);
 #endif
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
 ui::CallbackAppScreen s_sstv_app("SSTV", &sstv,
                                  sstv_page::ui::shell::enter,
                                  sstv_page::ui::shell::exit,
                                  &s_menu_host);
+#endif
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
 ui::CallbackAppScreen s_usb_app("USB Mass Storage", &img_usb,
                                 usb_storage::ui::shell::enter,
@@ -142,6 +157,9 @@ AppCatalog build(const FeatureFlags& flags)
         if (app != nullptr && count < kMaxMenuApps)
         {
             s_apps[count++] = app;
+            APP_CATALOG_LOG("add index=%u app=%s\n",
+                            static_cast<unsigned>(count - 1),
+                            app->name());
         }
     };
 
@@ -169,7 +187,9 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.profile == CatalogProfile::PioDefault && flags.include_sstv)
         {
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
             add(&s_sstv_app);
+#endif
         }
         if (flags.include_energy_sweep)
         {
@@ -187,7 +207,9 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.profile == CatalogProfile::IdfDefault && flags.include_sstv)
         {
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
             add(&s_sstv_app);
+#endif
         }
         if (flags.include_settings)
         {
@@ -243,6 +265,7 @@ AppCatalog build(const FeatureFlags& flags)
         s_apps[index] = nullptr;
     }
     s_catalog_state.count = count;
+    APP_CATALOG_LOG("build complete count=%u\n", static_cast<unsigned>(count));
     return s_catalog;
 }
 

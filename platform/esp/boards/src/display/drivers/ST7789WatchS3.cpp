@@ -42,7 +42,7 @@ size_t ST7789WatchS3::getInitCommandsCount()
 
 const DispRotationConfig_t* ST7789WatchS3::getRotationConfig(uint16_t width, uint16_t height)
 {
-    // Generic ST7789 rotation table; use RGB order to match LVGL swap path.
+    // Generic ST7789 rotation table with RGB channel order.
     static DispRotationConfig_t rot[4];
     constexpr uint16_t kOffset = 80;
     rot[0] = {static_cast<uint8_t>(0x00), width, height, 0, kOffset};

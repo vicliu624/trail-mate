@@ -31,6 +31,13 @@ typedef struct
     uint8_t len;
 } CommandTable_t;
 
+struct DispTransferConfig_t
+{
+    bool rgb565_msb_first;
+
+    constexpr DispTransferConfig_t(bool msb = false) : rgb565_msb_first(msb) {}
+};
+
 typedef enum RotaryDir
 {
     ROTARY_DIR_NONE,
@@ -43,6 +50,16 @@ typedef enum KeyboardState
     KEYBOARD_RELEASED,
     KEYBOARD_PRESSED,
 } KeyboardState_t;
+
+typedef enum InputNavKey
+{
+    INPUT_NAV_KEY_NONE = 0,
+    INPUT_NAV_KEY_LEFT,
+    INPUT_NAV_KEY_RIGHT,
+    INPUT_NAV_KEY_UP,
+    INPUT_NAV_KEY_DOWN,
+    INPUT_NAV_KEY_ENTER,
+} InputNavKey_t;
 
 typedef struct RotaryMsg
 {
@@ -71,6 +88,12 @@ class LilyGo_Display
     }
     virtual uint8_t getPoint(int16_t* x, int16_t* y, uint8_t get_point) { return 0; }
     virtual int getKeyChar(char* c) { return -1; }
+    virtual bool hasNavKeys() { return false; }
+    virtual int getNavKey(uint32_t* key)
+    {
+        (void)key;
+        return -1;
+    }
     virtual bool hasTouch() { return false; }
     virtual bool hasEncoder() { return false; }
     virtual bool hasKeyboard() { return false; }
@@ -105,6 +128,7 @@ class LilyGoDispArduinoSPI
     const CommandTable_t* _init_list;
     size_t _init_list_length;
     const DispRotationConfig_t* _rotation_configs;
+    DispTransferConfig_t _transfer_config{};
     SemaphoreHandle_t _lock = nullptr;
 
   public:
@@ -113,9 +137,10 @@ class LilyGoDispArduinoSPI
     uint8_t _brightness = 0;
 
     LilyGoDispArduinoSPI(uint16_t width, uint16_t height, const CommandTable_t* init_list, size_t init_list_length,
-                         const DispRotationConfig_t* rotation_config)
+                         const DispRotationConfig_t* rotation_config,
+                         DispTransferConfig_t transfer_config = {})
         : _init_width(width), _init_height(height), _init_list(init_list), _init_list_length(init_list_length),
-          _rotation_configs(rotation_config)
+          _rotation_configs(rotation_config), _transfer_config(transfer_config)
     {
     }
 

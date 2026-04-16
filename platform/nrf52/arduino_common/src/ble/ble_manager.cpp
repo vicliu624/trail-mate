@@ -56,14 +56,24 @@ void BleManager::begin()
     bleManagerLog("[BLE][nrf52] begin enabled=%u proto=%u",
                   ctx_.bleEnabled() ? 1U : 0U,
                   static_cast<unsigned>(ctx_.bleConfig().mesh_protocol));
-    setEnabled(true);
+    setEnabled(ctx_.bleEnabled());
 }
 
 void BleManager::setEnabled(bool enabled)
 {
     if (enabled)
     {
-        if (!service_)
+        if (service_)
+        {
+            service_->setDeviceName(buildDeviceName(active_protocol_));
+            if (!service_->isRunning())
+            {
+                bleManagerLog("[BLE][nrf52] setEnabled resume proto=%u",
+                              static_cast<unsigned>(active_protocol_));
+                service_->start();
+            }
+        }
+        else
         {
             bleManagerLog("[BLE][nrf52] setEnabled on proto=%u",
                           static_cast<unsigned>(ctx_.bleConfig().mesh_protocol));
@@ -72,18 +82,17 @@ void BleManager::setEnabled(bool enabled)
     }
     else
     {
-        if (service_)
+        if (service_ && service_->isRunning())
         {
             bleManagerLog("[BLE][nrf52] setEnabled off");
             service_->stop();
-            service_.reset();
         }
     }
 }
 
 bool BleManager::isEnabled() const
 {
-    return ctx_.bleEnabled();
+    return service_ && service_->isRunning();
 }
 
 void BleManager::update()
@@ -120,10 +129,16 @@ bool BleManager::getPairingStatus(BlePairingStatus* out) const
 
 void BleManager::restartService(chat::MeshProtocol protocol)
 {
+    bleManagerLog("[BLE][nrf52] restart begin from=%u to=%u has_service=%u",
+                  static_cast<unsigned>(active_protocol_),
+                  static_cast<unsigned>(protocol),
+                  service_ ? 1U : 0U);
     if (service_)
     {
+        bleManagerLog("[BLE][nrf52] restart stopping old service");
         service_->stop();
         service_.reset();
+        bleManagerLog("[BLE][nrf52] restart old service stopped");
     }
 
     active_protocol_ = protocol;
@@ -143,6 +158,7 @@ void BleManager::restartService(chat::MeshProtocol protocol)
 
     if (service_)
     {
+        bleManagerLog("[BLE][nrf52] restart starting protocol=%s", protocol_name);
         service_->start();
         bleManagerLog("[BLE][nrf52] protocol=%s name=%s service=started",
                       protocol_name,

@@ -30,6 +30,13 @@
 #define GPS_LOG(...)
 #endif
 
+#define GPS_FLOW_LOG(...)         \
+    do                            \
+    {                             \
+        std::printf(__VA_ARGS__); \
+        std::fflush(stdout);      \
+    } while (0)
+
 // Decoded tile image cache upper bound.
 // Active slots are selected at runtime from the current viewport size so
 // large displays like Tab5 can keep one full screen of decoded tiles hot.
@@ -57,7 +64,9 @@ static void create_placeholder_tile_card(lv_obj_t* parent, MapTile& tile, int sc
     lv_obj_move_background(tile.img_obj);
 
     lv_obj_t* placeholder_label = lv_label_create(tile.img_obj);
-    lv_label_set_text(placeholder_label, "No tile");
+    char placeholder_text[48];
+    snprintf(placeholder_text, sizeof(placeholder_text), "z=%d\nx=%d\ny=%d", tile.z, tile.x, tile.y);
+    lv_label_set_text(placeholder_label, placeholder_text);
     style_placeholder_text(placeholder_label);
     lv_obj_center(placeholder_label);
 
@@ -76,6 +85,44 @@ static uint8_t g_missing_tile_notice_source = 0;
 
 namespace
 {
+void summarize_visible_tiles(const TileContext& ctx,
+                             int& visible_total,
+                             int& visible_loaded,
+                             int& visible_placeholder,
+                             int& visible_unloaded)
+{
+    visible_total = 0;
+    visible_loaded = 0;
+    visible_placeholder = 0;
+    visible_unloaded = 0;
+
+    if (!ctx.tiles)
+    {
+        return;
+    }
+
+    for (const auto& tile : *ctx.tiles)
+    {
+        if (!tile.visible)
+        {
+            continue;
+        }
+        ++visible_total;
+        if (tile.has_png_file)
+        {
+            ++visible_loaded;
+        }
+        else if (tile.img_obj != NULL)
+        {
+            ++visible_placeholder;
+        }
+        else
+        {
+            ++visible_unloaded;
+        }
+    }
+}
+
 const char* base_source_dir(uint8_t map_source)
 {
     switch (sanitize_map_source(map_source))
@@ -731,6 +778,7 @@ static MapTile& ensure_tile(TileContext& ctx, int x, int y, int z, int priority)
     t.record_evicted = false;
     t.priority = priority;
     t.has_png_file = false;
+    t.base_missing = false;
     t.contour_checked = false;
     t.contour_loaded = false;
     t.cached_img = NULL; // No cached image initially
@@ -747,6 +795,7 @@ static void style_tile_obj(lv_obj_t* o)
     lv_obj_set_style_border_width(o, 0, LV_PART_MAIN);
     lv_obj_set_style_radius(o, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_all(o, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
 }
 
 static void style_placeholder_card(lv_obj_t* card)
@@ -786,6 +835,7 @@ static void reset_tile_runtime(MapTile& tile)
     }
     tile.contour_obj = NULL; // contour object is a child of img_obj and is deleted with it
     tile.has_png_file = false;
+    tile.base_missing = false;
     tile.contour_checked = false;
     tile.contour_loaded = false;
 }
@@ -873,33 +923,6 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     build_base_tile_path(tile.z, tile.x, tile.y, g_active_map_source, path, sizeof(path));
 
     bool file_exists = false;
-    bool file_exists_checked = false;
-
-    // If tile already has a placeholder label, check if file exists before recreating
-    // This prevents repeatedly creating placeholders for missing tiles
-    if (tile.img_obj != NULL && !tile.has_png_file)
-    {
-        // Already has placeholder - check if file now exists
-        lv_fs_file_t f;
-        lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-        file_exists = (res == LV_FS_RES_OK);
-        file_exists_checked = true;
-        if (file_exists)
-        {
-            lv_fs_close(&f);
-            // File now exists - proceed to load it (will delete placeholder below)
-            GPS_LOG("[GPS] load_tile_image: Tile %d/%d/%d file now exists, replacing placeholder\n",
-                    tile.z, tile.x, tile.y);
-        }
-        else
-        {
-            // File still doesn't exist - skip to avoid repeated placeholder creation
-            tile.last_used_ms = sys::millis_now();
-            GPS_LOG("[GPS] load_tile_image: Tile %d/%d/%d already has placeholder, file still missing, skipping\n",
-                    tile.z, tile.x, tile.y);
-            return;
-        }
-    }
 
     GPS_LOG("[GPS] load_tile_image: Loading tile %d/%d/%d, path=%s\n", tile.z, tile.x, tile.y, path);
 
@@ -917,26 +940,23 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     lv_coord_t screen_height = lv_obj_get_height(ctx.map_container);
     tile.visible = tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0);
 
-    // Check if tile file exists
-    if (!file_exists_checked)
+    // Check if tile file exists once for the current render state.
+    lv_fs_file_t f;
+    lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
+    file_exists = (res == LV_FS_RES_OK);
+    if (file_exists)
     {
-        lv_fs_file_t f;
-        lv_fs_res_t res = lv_fs_open(&f, path, LV_FS_MODE_RD);
-        file_exists = (res == LV_FS_RES_OK);
-        file_exists_checked = true;
-        if (file_exists)
-        {
-            lv_fs_close(&f);
-            GPS_LOG("[GPS] Tile file EXISTS: %s (res=%d)\n", path, res);
-        }
-        else
-        {
-            GPS_LOG("[GPS] Tile file NOT found: %s (res=%d)\n", path, res);
-        }
+        lv_fs_close(&f);
+        GPS_LOG("[GPS] Tile file EXISTS: %s (res=%d)\n", path, res);
+    }
+    else
+    {
+        GPS_LOG("[GPS] Tile file NOT found: %s (res=%d)\n", path, res);
     }
 
     if (file_exists)
     {
+        tile.base_missing = false;
         // Check cache first
         DecodedTileCache* cached = find_cached_tile(tile.x, tile.y, tile.z, g_active_map_source);
         DecodedTileCache* cache_slot = nullptr;
@@ -1067,6 +1087,11 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
             else
             {
                 // Decode failed - fall back to file path
+                GPS_FLOW_LOG("[GPS][MAP][fallback] decode_path_fallback z=%d x=%d y=%d src=%u\n",
+                             tile.z,
+                             tile.x,
+                             tile.y,
+                             g_active_map_source);
                 GPS_LOG("[GPS] WARNING: Failed to decode tile %d/%d/%d, using file path\n", tile.z, tile.x, tile.y);
                 lv_image_decoder_close(&decoder_dsc);
 
@@ -1100,6 +1125,14 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
             tile.img_obj = NULL;
         }
         create_placeholder_tile_card(ctx.map_container, tile, screen_x, screen_y);
+        tile.base_missing = true;
+        GPS_FLOW_LOG("[GPS][MAP][fallback] base_missing_confirmed z=%d x=%d y=%d src=%u res=%d path=%s\n",
+                     tile.z,
+                     tile.x,
+                     tile.y,
+                     g_active_map_source,
+                     res,
+                     path);
 
         if (!g_missing_tile_notice_emitted)
         {
@@ -1317,12 +1350,20 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
         // Use the current zoom level, not hardcoded 0
         if (!has_fix)
         {
+            GPS_FLOW_LOG("[GPS][MAP][fallback] anchor_invalid_no_fix world_tile zoom=%d lat=%.6f lng=%.6f\n",
+                         zoom,
+                         lat,
+                         lng);
             GPS_LOG("[GPS] No GPS fix and invalid anchor: rendering world map tile 0/0/%d\n", zoom);
             ensure_tile(ctx, 0, 0, zoom, 0); // Priority 0 = center tile, use current zoom
             return;
         }
         else
         {
+            GPS_FLOW_LOG("[GPS][MAP][fallback] anchor_invalid_with_fix zoom=%d lat=%.6f lng=%.6f\n",
+                         zoom,
+                         lat,
+                         lng);
             GPS_LOG("[GPS] ERROR: cached_anchor invalid in collect_required_tiles (has_fix=true)\n");
             return;
         }
@@ -1733,7 +1774,10 @@ void tile_loader_step(TileContext& ctx)
         MapTile* best = nullptr;
         for (auto& tile : *ctx.tiles)
         {
-            if (tile.visible && tile.map_source == g_active_map_source && !tile.has_png_file)
+            if (tile.visible &&
+                tile.map_source == g_active_map_source &&
+                !tile.has_png_file &&
+                !tile.base_missing)
             {
                 bool already_attempted = false;
                 for (int i = 0; i < attempted_count; i++)
@@ -1765,6 +1809,25 @@ void tile_loader_step(TileContext& ctx)
 
         attempted[attempted_count++] = best;
 
+        int before_visible_total = 0;
+        int before_visible_loaded = 0;
+        int before_visible_placeholder = 0;
+        int before_visible_unloaded = 0;
+        summarize_visible_tiles(ctx,
+                                before_visible_total,
+                                before_visible_loaded,
+                                before_visible_placeholder,
+                                before_visible_unloaded);
+        GPS_FLOW_LOG("[GPS][MAP][loader] pick z=%d x=%d y=%d prio=%d vis=%d loaded=%d placeholder=%d unloaded=%d\n",
+                     best->z,
+                     best->x,
+                     best->y,
+                     best->priority,
+                     before_visible_total,
+                     before_visible_loaded,
+                     before_visible_placeholder,
+                     before_visible_unloaded);
+
         // Save old object position for invalidation
         lv_obj_t* old_obj = best->img_obj;
         int old_screen_x = 0, old_screen_y = 0;
@@ -1775,6 +1838,26 @@ void tile_loader_step(TileContext& ctx)
         }
 
         load_tile_image(ctx, *best);
+
+        int after_visible_total = 0;
+        int after_visible_loaded = 0;
+        int after_visible_placeholder = 0;
+        int after_visible_unloaded = 0;
+        summarize_visible_tiles(ctx,
+                                after_visible_total,
+                                after_visible_loaded,
+                                after_visible_placeholder,
+                                after_visible_unloaded);
+        GPS_FLOW_LOG("[GPS][MAP][loader] done z=%d x=%d y=%d file=%d obj=%d vis=%d loaded=%d placeholder=%d unloaded=%d\n",
+                     best->z,
+                     best->x,
+                     best->y,
+                     best->has_png_file,
+                     best->img_obj != NULL,
+                     after_visible_total,
+                     after_visible_loaded,
+                     after_visible_placeholder,
+                     after_visible_unloaded);
 
         // Invalidate only the tile area, not the entire container
         if (best->img_obj != NULL)

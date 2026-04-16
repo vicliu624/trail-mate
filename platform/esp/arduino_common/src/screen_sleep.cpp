@@ -104,14 +104,6 @@ int readUnreadCount()
     return 0;
 }
 
-void showMainMenu()
-{
-    if (s_hooks.show_main_menu)
-    {
-        s_hooks.show_main_menu();
-    }
-}
-
 void notifyWakeFromSleep()
 {
     if (s_hooks.on_wake_from_sleep)
@@ -131,6 +123,17 @@ void hide_screen_saver_layer()
     {
         lv_timer_pause(s_screen_saver_timer);
     }
+}
+
+void refresh_active_screen()
+{
+    lv_obj_t* active = lv_screen_active();
+    if (active == nullptr)
+    {
+        return;
+    }
+    lv_obj_invalidate(active);
+    lv_refr_now(nullptr);
 }
 
 void screen_saver_refresh()
@@ -212,9 +215,9 @@ void init_screen_saver()
     lv_obj_set_style_text_color(s_screen_saver_hint_label, lv_color_hex(0x8A6A3A), 0);
     lv_obj_set_style_text_font(s_screen_saver_hint_label, &lv_font_montserrat_14, 0);
 #if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
-    lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to enter main menu");
+    lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to resume");
 #else
-    lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to enter");
+    lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to resume");
 #endif
     lv_obj_align(s_screen_saver_hint_label, LV_ALIGN_CENTER, 0, 40);
 
@@ -472,8 +475,8 @@ void enterFromScreenSaver()
     }
 
     hide_screen_saver_layer();
+    refresh_active_screen();
     updateUserActivity();
-    showMainMenu();
 }
 
 void disableScreenSleep()
@@ -561,6 +564,7 @@ void updateUserActivity()
     if (hide_saver)
     {
         hide_screen_saver_layer();
+        refresh_active_screen();
     }
     if (restore_sleep_state)
     {

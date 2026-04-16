@@ -33,10 +33,6 @@ static lv_indev_t* indev_keyboard;
 static lv_color16_t* buf = nullptr;
 static lv_color16_t* buf1 = nullptr;
 
-#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(ARDUINO_T_WATCH_S3)
-#define _SWAP_COLORS
-#endif
-
 static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* color_p)
 {
     static uint8_t s_tdeck_pro_flush_log_count = 0;
@@ -52,10 +48,6 @@ static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* c
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
     auto* plane = (LilyGo_Display*)lv_display_get_user_data(disp_drv);
-
-#ifdef _SWAP_COLORS
-    lv_draw_sw_rgb565_swap(color_p, len);
-#endif
 
 #if defined(ARDUINO_T_DECK_PRO)
     if (s_tdeck_pro_flush_log_count < 8)
@@ -291,8 +283,43 @@ static void lv_encoder_read(lv_indev_t* drv, lv_indev_data_t* data)
 static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
 {
     char c = '\0';
+    uint32_t key = 0;
+    bool from_nav = false;
     auto* plane = (LilyGo_Display*)lv_indev_get_user_data(drv);
-    int state = plane->getKeyChar(&c);
+    int state = plane->getNavKey(&key);
+    if (state >= 0)
+    {
+        from_nav = true;
+        switch (key)
+        {
+        case INPUT_NAV_KEY_LEFT:
+            key = LV_KEY_LEFT;
+            break;
+        case INPUT_NAV_KEY_RIGHT:
+            key = LV_KEY_RIGHT;
+            break;
+        case INPUT_NAV_KEY_UP:
+            key = LV_KEY_UP;
+            break;
+        case INPUT_NAV_KEY_DOWN:
+            key = LV_KEY_DOWN;
+            break;
+        case INPUT_NAV_KEY_ENTER:
+            key = LV_KEY_ENTER;
+            break;
+        default:
+            state = -1;
+            break;
+        }
+    }
+    else
+    {
+        state = plane->getKeyChar(&c);
+        if (state >= 0)
+        {
+            key = static_cast<uint8_t>(c);
+        }
+    }
 
     // If screen is sleeping or screen saver is active, only a *real* key press
     // should wake/exit. Previously this path ran unconditionally on every poll,
@@ -317,13 +344,13 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
     }
 
     // Screen is awake, process input normally
-    if (state == KEYBOARD_PRESSED || state == KEYBOARD_RELEASED)
+    if (!from_nav && (state == KEYBOARD_PRESSED || state == KEYBOARD_RELEASED))
     {
         walkie::on_key_event(c, state);
     }
 
 #if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
-    if (state == KEYBOARD_PRESSED && c == ' ' && ui_get_active_app() == nullptr)
+    if (!from_nav && state == KEYBOARD_PRESSED && c == ' ' && ui_get_active_app() == nullptr)
     {
         updateUserActivity();
         menu_show();
@@ -336,7 +363,7 @@ static void keypad_read(lv_indev_t* drv, lv_indev_data_t* data)
     if (state == KEYBOARD_PRESSED)
     {
         updateUserActivity(); // Update activity timestamp
-        data->key = c;
+        data->key = key;
         data->state = LV_INDEV_STATE_PR;
         plane->feedback((void*)drv);
         return;
@@ -369,10 +396,6 @@ static void lv_res_changed_cb(lv_event_t* e)
 
 void beginLvglHelper(LilyGo_Display& board, bool debug)
 {
-#ifdef _SWAP_COLORS
-    log_d("Using color swap function");
-#endif
-
     Serial.println("[LVGL] init");
     lv_init();
     Serial.println("[LVGL] init done");
@@ -552,7 +575,7 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
 #endif
 
 #ifdef USING_INPUT_DEV_KEYBOARD
-    if (board.hasKeyboard())
+    if (board.hasKeyboard() || board.hasNavKeys())
     {
         indev_keyboard = lv_indev_create();
         lv_indev_set_type(indev_keyboard, LV_INDEV_TYPE_KEYPAD);

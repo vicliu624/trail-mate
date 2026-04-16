@@ -369,7 +369,7 @@ void close_tracker_modal()
         return;
     }
     modal_close(g_gps_state.tracker_modal);
-    bind_encoder_to_group(app_g);
+    bind_navigation_inputs_to_group(app_g);
 }
 
 void on_tracker_close_clicked(lv_event_t* /*e*/)
@@ -496,7 +496,7 @@ void build_tracker_modal()
         }
         lv_group_add_obj(state.tracker_modal.group, close_btn);
         set_default_group(state.tracker_modal.group);
-        bind_encoder_to_group(state.tracker_modal.group);
+        bind_navigation_inputs_to_group(state.tracker_modal.group);
         lv_group_focus_obj(close_btn);
         return;
     }
@@ -541,7 +541,7 @@ void build_tracker_modal()
     lv_group_add_obj(state.tracker_modal.group, close_btn);
 
     set_default_group(state.tracker_modal.group);
-    bind_encoder_to_group(state.tracker_modal.group);
+    bind_navigation_inputs_to_group(state.tracker_modal.group);
     if (first_btn != nullptr)
     {
         lv_group_focus_obj(first_btn);

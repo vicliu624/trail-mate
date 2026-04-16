@@ -20,6 +20,7 @@
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 #include "platform/ui/tracker_runtime.h"
+#include "ui/components/info_card.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
@@ -75,6 +76,78 @@ static size_t kMeshCoreRegionPresetOptionCount = 0;
 static settings::ui::SettingOption kTxPowerOptions[64] = {};
 static size_t kTxPowerOptionCount = 0;
 static char kTxPowerLabels[64][12] = {};
+
+static void update_item_value(settings::ui::ItemWidget& widget);
+
+static bool use_tdeck_info_card_layout()
+{
+    return ::ui::components::info_card::use_tdeck_layout();
+}
+
+static constexpr bool use_touch_first_settings_mode()
+{
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
+    return true;
+#else
+    return false;
+#endif
+}
+
+static bool should_show_settings_list_back_button()
+{
+    return !use_touch_first_settings_mode();
+}
+
+static lv_coord_t resolve_settings_list_item_height()
+{
+    const lv_coord_t base = ::ui::page_profile::resolve_control_button_height();
+    if (!use_tdeck_info_card_layout())
+    {
+        return base;
+    }
+
+    return ::ui::components::info_card::resolve_height(base);
+}
+
+static void configure_list_item_button(lv_obj_t* btn)
+{
+    if (use_tdeck_info_card_layout())
+    {
+        ::ui::components::info_card::configure_item(
+            btn, ::ui::page_profile::resolve_control_button_height());
+        return;
+    }
+
+    lv_obj_set_size(btn, LV_PCT(100), resolve_settings_list_item_height());
+    lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
+    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+}
+
+static void create_item_content(settings::ui::ItemWidget& widget, lv_obj_t* btn)
+{
+    if (use_tdeck_info_card_layout())
+    {
+        const auto slots = ::ui::components::info_card::create_content(btn);
+        lv_label_set_text(slots.header_main_label, widget.def->label);
+        style::apply_label_primary(slots.header_main_label);
+
+        widget.value_label = slots.body_main_label;
+        style::apply_label_primary(widget.value_label);
+        update_item_value(widget);
+        return;
+    }
+
+    lv_obj_t* label = lv_label_create(btn);
+    lv_label_set_text(label, widget.def->label);
+    style::apply_label_primary(label);
+
+    widget.value_label = lv_label_create(btn);
+    style::apply_label_muted(widget.value_label);
+    update_item_value(widget);
+}
 
 static void build_item_list();
 
@@ -1815,6 +1888,60 @@ static void update_filter_styles()
     }
 }
 
+static int find_filter_index(lv_obj_t* button)
+{
+    if (!button || !lv_obj_is_valid(button))
+    {
+        return -1;
+    }
+
+    for (size_t i = 0; i < g_state.filter_count; ++i)
+    {
+        if (g_state.filter_buttons[i] == button)
+        {
+            return static_cast<int>(i);
+        }
+    }
+
+    return -1;
+}
+
+static settings::ui::ItemWidget* find_item_widget(lv_obj_t* button)
+{
+    if (!button || !lv_obj_is_valid(button))
+    {
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < g_state.item_count; ++i)
+    {
+        settings::ui::ItemWidget& widget = g_state.item_widgets[i];
+        if (widget.btn == button)
+        {
+            return &widget;
+        }
+    }
+
+    return nullptr;
+}
+
+static bool select_filter_index(int idx)
+{
+    if (idx < 0 || static_cast<size_t>(idx) >= g_state.filter_count)
+    {
+        return false;
+    }
+    if (s_building_list)
+    {
+        return false;
+    }
+
+    g_state.current_category = idx;
+    update_filter_styles();
+    build_item_list();
+    return true;
+}
+
 static bool has_pref_key(const settings::ui::SettingItem& item, const char* key)
 {
     return item.pref_key && key && strcmp(item.pref_key, key) == 0;
@@ -1936,40 +2063,35 @@ static void build_item_list()
         }
 
         lv_obj_t* btn = lv_btn_create(g_state.list_panel);
-        lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
-        lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
-        lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
-        lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        configure_list_item_button(btn);
         style::apply_list_item(btn);
 
-        lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, widget.def->label);
-        style::apply_label_primary(label);
-
-        widget.value_label = lv_label_create(btn);
-        style::apply_label_muted(widget.value_label);
-        update_item_value(widget);
+        create_item_content(widget, btn);
 
         widget.btn = btn;
-        lv_obj_add_event_cb(btn, on_item_clicked, LV_EVENT_CLICKED, &widget);
+        if (!use_touch_first_settings_mode())
+        {
+            lv_obj_add_event_cb(btn, on_item_clicked, LV_EVENT_CLICKED, &widget);
+        }
         lv_obj_add_event_cb(btn, list_item_focused_cb, LV_EVENT_FOCUSED, nullptr);
         g_state.item_count++;
     }
-    g_state.list_back_btn = lv_btn_create(g_state.list_panel);
-    lv_obj_set_size(g_state.list_back_btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_set_style_pad_left(g_state.list_back_btn, 10, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(g_state.list_back_btn, 10, LV_PART_MAIN);
-    lv_obj_set_flex_flow(g_state.list_back_btn, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(g_state.list_back_btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    style::apply_list_item(g_state.list_back_btn);
-    lv_obj_t* back_label = lv_label_create(g_state.list_back_btn);
-    lv_label_set_text(back_label, "Back");
-    style::apply_label_primary(back_label);
-    lv_obj_add_event_cb(g_state.list_back_btn, on_list_back_clicked, LV_EVENT_CLICKED, nullptr);
-    lv_obj_add_event_cb(g_state.list_back_btn, list_item_focused_cb, LV_EVENT_FOCUSED, nullptr);
+    if (should_show_settings_list_back_button())
+    {
+        g_state.list_back_btn = lv_btn_create(g_state.list_panel);
+        lv_obj_set_size(g_state.list_back_btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
+        lv_obj_set_style_pad_left(g_state.list_back_btn, 10, LV_PART_MAIN);
+        lv_obj_set_style_pad_right(g_state.list_back_btn, 10, LV_PART_MAIN);
+        lv_obj_set_flex_flow(g_state.list_back_btn, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(g_state.list_back_btn, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        style::apply_list_item(g_state.list_back_btn);
+        lv_obj_t* back_label = lv_label_create(g_state.list_back_btn);
+        lv_label_set_text(back_label, "Back");
+        style::apply_label_primary(back_label);
+        lv_obj_add_event_cb(g_state.list_back_btn, on_list_back_clicked, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(g_state.list_back_btn, list_item_focused_cb, LV_EVENT_FOCUSED, nullptr);
+    }
     settings::ui::input::on_ui_refreshed();
     lv_obj_scroll_to_y(g_state.list_panel, 0, LV_ANIM_OFF);
     lv_obj_invalidate(g_state.list_panel);
@@ -1978,18 +2100,21 @@ static void build_item_list()
     s_building_list = false;
 }
 
-static void on_item_clicked(lv_event_t* e)
+static bool activate_item_widget(settings::ui::ItemWidget& widget)
 {
-    settings::ui::ItemWidget* widget = static_cast<settings::ui::ItemWidget*>(lv_event_get_user_data(e));
-    if (!widget || !widget->def) return;
-    const SettingItem& item = *widget->def;
+    if (!widget.def)
+    {
+        return false;
+    }
+
+    const SettingItem& item = *widget.def;
     if (item.type == settings::ui::SettingType::Toggle)
     {
         if (item.bool_value)
         {
             *item.bool_value = !(*item.bool_value);
             prefs_put_bool(item.pref_key, *item.bool_value);
-            update_item_value(*widget);
+            update_item_value(widget);
             if (item.pref_key && strcmp(item.pref_key, "net_relay") == 0)
             {
                 app::IAppFacade& app_ctx = app::appFacade();
@@ -2070,17 +2195,17 @@ static void on_item_clicked(lv_event_t* e)
                 device_runtime::trigger_haptic();
             }
         }
-        return;
+        return true;
     }
     if (item.type == settings::ui::SettingType::Enum)
     {
-        open_option_modal(item, *widget);
-        return;
+        open_option_modal(item, widget);
+        return true;
     }
     if (item.type == settings::ui::SettingType::Text)
     {
-        open_text_modal(item, *widget);
-        return;
+        open_text_modal(item, widget);
+        return true;
     }
     if (item.type == settings::ui::SettingType::Action)
     {
@@ -2096,19 +2221,34 @@ static void on_item_clicked(lv_event_t* e)
         {
             clear_message_db();
         }
+        return true;
+    }
+
+    return false;
+}
+
+static void on_item_clicked(lv_event_t* e)
+{
+    settings::ui::ItemWidget* widget = static_cast<settings::ui::ItemWidget*>(lv_event_get_user_data(e));
+    if (!widget)
+    {
         return;
     }
+
+    (void)activate_item_widget(*widget);
 }
 
 static void on_filter_clicked(lv_event_t* e)
 {
     intptr_t idx = reinterpret_cast<intptr_t>(lv_event_get_user_data(e));
-    if (idx < 0) return;
-    if (s_building_list) return;
-    g_state.current_category = static_cast<int>(idx);
-    update_filter_styles();
-    build_item_list();
-    settings::ui::input::focus_to_list();
+    if (idx < 0)
+    {
+        return;
+    }
+    if (select_filter_index(static_cast<int>(idx)))
+    {
+        settings::ui::input::focus_to_list();
+    }
 }
 
 static void on_filter_focused(lv_event_t* e)
@@ -2131,17 +2271,16 @@ static void apply_pending_category_cb(void* /*user_data*/)
     {
         return;
     }
-    g_state.current_category = s_pending_category;
+    const int idx = s_pending_category;
     s_pending_category = -1;
     lv_obj_clear_flag(g_state.list_panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(g_state.list_panel, LV_SCROLLBAR_MODE_OFF);
-    update_filter_styles();
-    build_item_list();
+    (void)select_filter_index(idx);
 }
 
 static void on_list_back_clicked(lv_event_t* /*e*/)
 {
-    settings::ui::input::focus_to_filter();
+    (void)activate_list_back_button(g_state.list_back_btn);
 }
 
 static void settings_back_cb(void* /*user_data*/)
@@ -2171,10 +2310,13 @@ void create(lv_obj_t* parent)
     for (size_t i = 0; i < g_state.filter_count; ++i)
     {
         lv_obj_t* btn = lv_btn_create(g_state.filter_panel);
-        lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
+        lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::current().filter_button_height);
         style::apply_btn_filter(btn);
-        lv_obj_add_event_cb(btn, on_filter_clicked, LV_EVENT_CLICKED, reinterpret_cast<void*>(i));
-        lv_obj_add_event_cb(btn, on_filter_focused, LV_EVENT_FOCUSED, reinterpret_cast<void*>(i));
+        if (!use_touch_first_settings_mode())
+        {
+            lv_obj_add_event_cb(btn, on_filter_clicked, LV_EVENT_CLICKED, reinterpret_cast<void*>(i));
+            lv_obj_add_event_cb(btn, on_filter_focused, LV_EVENT_FOCUSED, reinterpret_cast<void*>(i));
+        }
         lv_obj_t* label = lv_label_create(btn);
         lv_label_set_text(label, kCategories[i].label);
         style::apply_label_primary(label);
@@ -2207,6 +2349,35 @@ void destroy()
         lv_obj_invalidate(g_state.parent);
     }
     g_state = settings::ui::UiState{};
+}
+
+bool activate_filter_button(lv_obj_t* filter_button)
+{
+    return select_filter_index(find_filter_index(filter_button));
+}
+
+bool activate_list_button(lv_obj_t* list_button)
+{
+    settings::ui::ItemWidget* widget = find_item_widget(list_button);
+    if (!widget)
+    {
+        return false;
+    }
+
+    return activate_item_widget(*widget);
+}
+
+bool activate_list_back_button(lv_obj_t* list_back_button)
+{
+    if (!should_show_settings_list_back_button() ||
+        list_back_button == nullptr ||
+        list_back_button != g_state.list_back_btn)
+    {
+        return false;
+    }
+
+    settings::ui::input::focus_to_filter();
+    return true;
 }
 
 } // namespace settings::ui::components

@@ -42,6 +42,13 @@ extern "C"
 #define GPS_LOG(...)
 #endif
 
+#define GPS_FLOW_LOG(...)         \
+    do                            \
+    {                             \
+        std::printf(__VA_ARGS__); \
+        std::fflush(stdout);      \
+    } while (0)
+
 extern GPSPageState g_gps_state;
 
 using gps::ui::lifetime::is_alive;
@@ -663,6 +670,71 @@ void update_map_anchor()
                         g_gps_state.has_fix);
 }
 
+void log_map_tile_state(const char* reason)
+{
+    if (!is_alive())
+    {
+        return;
+    }
+
+    int total = 0;
+    int visible = 0;
+    int visible_loaded = 0;
+    int visible_placeholder = 0;
+    int visible_unloaded = 0;
+
+    for (const auto& tile : g_gps_state.tiles)
+    {
+        ++total;
+        if (!tile.visible)
+        {
+            continue;
+        }
+
+        ++visible;
+        if (tile.has_png_file)
+        {
+            ++visible_loaded;
+        }
+        else if (tile.img_obj != NULL)
+        {
+            ++visible_placeholder;
+        }
+        else
+        {
+            ++visible_unloaded;
+        }
+    }
+
+    const auto& cfg = app::configFacade().getConfig();
+    const int map_w = g_gps_state.map ? lv_obj_get_width(g_gps_state.map) : 0;
+    const int map_h = g_gps_state.map ? lv_obj_get_height(g_gps_state.map) : 0;
+
+    GPS_FLOW_LOG("[GPS][MAP][flow] state reason=%s zoom=%d pan=%d,%d fix=%d follow=%d anchor=%d "
+                 "src=%u contour=%d total=%d visible=%d vis_loaded=%d vis_placeholder=%d vis_unloaded=%d "
+                 "has_map=%d has_visible=%d map=%dx%d lat=%.6f lng=%.6f\n",
+                 reason ? reason : "unknown",
+                 g_gps_state.zoom_level,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y,
+                 g_gps_state.has_fix,
+                 g_gps_state.follow_position,
+                 g_gps_state.anchor.valid,
+                 sanitize_map_source(cfg.map_source),
+                 cfg.map_contour_enabled,
+                 total,
+                 visible,
+                 visible_loaded,
+                 visible_placeholder,
+                 visible_unloaded,
+                 g_gps_state.has_map_data,
+                 g_gps_state.has_visible_map_data,
+                 map_w,
+                 map_h,
+                 g_gps_state.lat,
+                 g_gps_state.lng);
+}
+
 void update_map_tiles(bool lightweight)
 {
     if (!is_alive() || g_gps_state.map == NULL)
@@ -767,6 +839,7 @@ void create_gps_marker()
 
     // Set marker size (24x24 pixels)
     lv_obj_set_size(g_gps_state.gps_marker, 24, 24);
+    lv_obj_clear_flag(g_gps_state.gps_marker, LV_OBJ_FLAG_SCROLLABLE);
 
     // Set initial position
     update_gps_marker_position();

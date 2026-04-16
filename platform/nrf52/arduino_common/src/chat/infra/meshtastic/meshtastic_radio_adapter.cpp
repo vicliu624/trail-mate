@@ -70,94 +70,6 @@ using ::chat::meshtastic::toHex;
 void logMeshtasticRx(const char* format, ...);
 uint32_t nowSeconds();
 
-static constexpr size_t kNodeShortNameMax = 10;
-static constexpr size_t kNodeLongNameMax = 32;
-
-template <size_t N>
-void copyCStringTrunc(char (&dst)[N], const char* src)
-{
-    if constexpr (N == 0)
-    {
-        return;
-    }
-
-    if (!src)
-    {
-        dst[0] = '\0';
-        return;
-    }
-
-    std::strncpy(dst, src, N - 1);
-    dst[N - 1] = '\0';
-}
-
-bool resolveTrustedNodeInfoOwner(::chat::NodeId self_node_id,
-                                 const ::chat::meshtastic::PacketHeaderWire& header,
-                                 uint32_t claimed_node_num,
-                                 ::chat::NodeId* out_effective_node_id)
-{
-    if (!out_effective_node_id)
-    {
-        return false;
-    }
-
-    const ::chat::NodeId effective_node_id = header.from;
-
-    // payload 声称的 num 与真实发件人不一致，直接拒绝
-    if (claimed_node_num != 0 && claimed_node_num != header.from)
-    {
-        logMeshtasticRx("[gat562][mt] reject nodeinfo mismatch from=%08lX claimed=%08lX\n",
-                        static_cast<unsigned long>(header.from),
-                        static_cast<unsigned long>(claimed_node_num));
-        return false;
-    }
-
-    // 外部节点不能借 NodeInfo 更新本机条目
-    if (effective_node_id == self_node_id && header.from != self_node_id)
-    {
-        logMeshtasticRx("[gat562][mt] reject foreign nodeinfo targeting self from=%08lX\n",
-                        static_cast<unsigned long>(header.from));
-        return false;
-    }
-
-    *out_effective_node_id = effective_node_id;
-    return true;
-}
-
-void fillCommonNodeUpdateFields(::chat::contacts::NodeUpdate* update,
-                                float last_seen_snr,
-                                float last_seen_rssi,
-                                uint8_t hops_away,
-                                ::chat::ChannelId channel,
-                                bool via_mqtt)
-{
-    if (!update)
-    {
-        return;
-    }
-
-    update->has_last_seen = true;
-    update->last_seen = nowSeconds();
-
-    update->has_snr = !std::isnan(last_seen_snr);
-    update->snr = last_seen_snr;
-
-    update->has_rssi = !std::isnan(last_seen_rssi);
-    update->rssi = last_seen_rssi;
-
-    update->has_protocol = true;
-    update->protocol = static_cast<uint8_t>(::chat::contacts::NodeProtocolType::Meshtastic);
-
-    update->has_hops_away = true;
-    update->hops_away = hops_away;
-
-    update->has_channel = true;
-    update->channel = static_cast<uint8_t>(channel);
-
-    update->has_via_mqtt = true;
-    update->via_mqtt = via_mqtt;
-}
-
 void logMeshtasticRx(const char* format, ...)
 {
     char buffer[192] = {};
@@ -1307,7 +1219,7 @@ void MeshtasticRadioAdapter::handleRawPacket(const uint8_t* data, size_t size)
     };
 
     // ------------------------------------------------------------
-    // NODEINFO / USER: 保守版，只更新观测字段，先不要把身份字段写进 store
+    // NODEINFO / USER: 淇濆畧鐗堬紝鍙洿鏂拌娴嬪瓧娈碉紝鍏堜笉瑕佹妸韬唤瀛楁鍐欒繘 store
     // ------------------------------------------------------------
     if (decoded_ok &&
         decoded.portnum == meshtastic_PortNum_NODEINFO_APP &&
@@ -2694,8 +2606,7 @@ void MeshtasticRadioAdapter::savePkiNodeKey(::chat::NodeId node_id,
                         static_cast<unsigned long>(node_id));
     }
 
-    // 无论 key 是否变化，都刷新最近看到该节点公钥的时间
-    touchPkiNodeKey(node_id);
+    // 鏃犺 key 鏄惁鍙樺寲锛岄兘鍒锋柊鏈€杩戠湅鍒拌鑺傜偣鍏挜鐨勬椂闂?    touchPkiNodeKey(node_id);
 }
 
 void MeshtasticRadioAdapter::markPkiKeysDirty()

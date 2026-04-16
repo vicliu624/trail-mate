@@ -4,11 +4,6 @@
 #include "lvgl.h"
 #include <cstdint>
 
-// Encoder rotation keycodes (from LVGL encoder driver)
-// These are the actual keycodes sent when the rotary encoder rotates.
-#define ENCODER_KEY_ROTATE_DOWN 20 // Scroll down (clockwise)
-#define ENCODER_KEY_ROTATE_UP 19   // Scroll up (counter‑clockwise)
-
 enum class ControlId : uint8_t
 {
     BackBtn,
@@ -43,5 +38,10 @@ void zoom_popup_handle_rotary(int32_t diff);
 void zoom_popup_handle_key(lv_key_t key, lv_event_t* e);
 void zoom_popup_sync_widgets();
 void zoom_popup_apply_selection();
+
+#ifdef USING_INPUT_DEV_TOUCHPAD
+void bind_map_touch_input();
+void unbind_map_touch_input();
+#endif
 
 #endif // GPS_PAGE_INPUT_H

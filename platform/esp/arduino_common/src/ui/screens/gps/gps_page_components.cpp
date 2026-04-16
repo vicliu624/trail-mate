@@ -26,6 +26,13 @@
 #define GPS_LOG(...)
 #endif
 
+#define GPS_FLOW_LOG(...)         \
+    do                            \
+    {                             \
+        std::printf(__VA_ARGS__); \
+        std::fflush(stdout);      \
+    } while (0)
+
 extern GPSPageState g_gps_state;
 
 using gps::ui::lifetime::is_alive;
@@ -620,7 +627,7 @@ void show_zoom_popup()
         if (focus_target != NULL)
         {
             set_default_group(g_gps_state.zoom_modal.group);
-            bind_encoder_to_group(g_gps_state.zoom_modal.group);
+            bind_navigation_inputs_to_group(g_gps_state.zoom_modal.group);
             lv_group_focus_obj(focus_target);
             lv_group_set_editing(g_gps_state.zoom_modal.group, true);
             lv_obj_invalidate(focus_target);
@@ -669,7 +676,7 @@ void hide_zoom_popup()
     {
         lv_group_set_editing(app_g, false);
         set_default_group(app_g);
-        bind_encoder_to_group(app_g);
+        bind_navigation_inputs_to_group(app_g);
 
         if (g_gps_state.zoom != NULL)
         {
@@ -733,12 +740,18 @@ void refresh_layer_popup_labels()
 void layer_set_map_source(uint8_t map_source)
 {
     app::IAppConfigFacade& config_api = app::configFacade();
+    uint8_t previous = sanitize_map_source(config_api.getConfig().map_source);
     uint8_t normalized = sanitize_map_source(map_source);
     if (config_api.getConfig().map_source != normalized)
     {
+        GPS_FLOW_LOG("[GPS][MAP][flow] layer_source change from=%u to=%u contour=%d\n",
+                     previous,
+                     normalized,
+                     config_api.getConfig().map_contour_enabled);
         config_api.getConfig().map_source = normalized;
         config_api.saveConfig();
         update_map_tiles(false);
+        log_map_tile_state("layer_source");
     }
 
     if (!platform::ui::device::sd_ready())
@@ -757,10 +770,16 @@ void layer_set_map_source(uint8_t map_source)
 void layer_toggle_contour()
 {
     app::IAppConfigFacade& config_api = app::configFacade();
+    bool previous = config_api.getConfig().map_contour_enabled;
     bool enabled = !config_api.getConfig().map_contour_enabled;
+    GPS_FLOW_LOG("[GPS][MAP][flow] contour toggle from=%d to=%d src=%u\n",
+                 previous,
+                 enabled,
+                 sanitize_map_source(config_api.getConfig().map_source));
     config_api.getConfig().map_contour_enabled = enabled;
     config_api.saveConfig();
     update_map_tiles(false);
+    log_map_tile_state("contour_toggle");
 
     if (enabled)
     {
@@ -999,7 +1018,7 @@ void show_layer_popup()
         lv_group_add_obj(g_gps_state.layer_modal.group, contour_btn);
         lv_group_add_obj(g_gps_state.layer_modal.group, close_btn);
         set_default_group(g_gps_state.layer_modal.group);
-        bind_encoder_to_group(g_gps_state.layer_modal.group);
+        bind_navigation_inputs_to_group(g_gps_state.layer_modal.group);
         lv_group_focus_obj(osm_btn);
     }
 }
@@ -1023,7 +1042,7 @@ void hide_layer_popup()
     {
         lv_group_set_editing(app_g, false);
         set_default_group(app_g);
-        bind_encoder_to_group(app_g);
+        bind_navigation_inputs_to_group(app_g);
         if (g_gps_state.layer_btn != NULL)
         {
             lv_group_focus_obj(g_gps_state.layer_btn);
@@ -1268,7 +1287,7 @@ void show_route_popup()
         lv_group_add_obj(g_gps_state.route_modal.group, focus_btn);
         lv_group_add_obj(g_gps_state.route_modal.group, close_btn);
         set_default_group(g_gps_state.route_modal.group);
-        bind_encoder_to_group(g_gps_state.route_modal.group);
+        bind_navigation_inputs_to_group(g_gps_state.route_modal.group);
         lv_group_focus_obj(focus_btn);
     }
 }
@@ -1288,7 +1307,7 @@ void hide_route_popup()
     {
         lv_group_set_editing(app_g, false);
         set_default_group(app_g);
-        bind_encoder_to_group(app_g);
+        bind_navigation_inputs_to_group(app_g);
         if (g_gps_state.route_btn != NULL)
         {
             lv_group_focus_obj(g_gps_state.route_btn);

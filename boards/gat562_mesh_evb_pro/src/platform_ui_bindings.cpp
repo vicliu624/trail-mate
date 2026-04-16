@@ -170,6 +170,11 @@ bool gps_ready()
     return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().isGPSReady();
 }
 
+bool gps_supported()
+{
+    return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().hasGPSHardware();
+}
+
 int power_tier()
 {
     return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().getPowerTier();

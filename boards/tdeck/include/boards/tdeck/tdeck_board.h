@@ -65,6 +65,7 @@ class TDeckBoard : public BoardBase,
     bool isSDReady() const override { return sd_ready_; }
     bool isCardReady() override;
     bool isGPSReady() const override { return (devices_probe_ & HW_GPS_ONLINE) != 0; }
+    bool hasGPSHardware() const override { return true; }
 
     void vibrator() override {}
     void stopVibrator() override {}
@@ -81,8 +82,10 @@ class TDeckBoard : public BoardBase,
     bool useDMA() override { return true; }
     bool hasTouch() override { return touch_ready_; }
     uint8_t getPoint(int16_t* x, int16_t* y, uint8_t get_point) override;
-    bool hasEncoder() override { return true; }
+    bool hasEncoder() override { return false; }
+    bool hasNavKeys() override { return true; }
     int getKeyChar(char* c) override;
+    int getNavKey(uint32_t* key) override;
     RotaryMsg_t getRotary() override;
 
     // LoraBoard

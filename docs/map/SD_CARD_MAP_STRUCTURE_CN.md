@@ -113,4 +113,3 @@
 - 缩放范围：`platform/esp/arduino_common/include/ui/screens/gps/gps_constants.h`
 - Route 列表目录：`modules/ui_shared/src/ui/screens/tracker/tracker_page_components.cpp`
 - Track 列表目录：`platform/esp/arduino_common/src/ui/screens/gps/gps_tracker_overlay.cpp`
-

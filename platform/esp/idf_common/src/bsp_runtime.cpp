@@ -139,17 +139,6 @@ int default_awake_brightness_percent()
     return 100;
 }
 
-bool gps_capable()
-{
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    return ::boards::tab5::Tab5Board::hasGpsUart();
-#elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
-    return platform::esp::boards::t_display_p4::kBoardProfile.has_gps_uart;
-#else
-    return false;
-#endif
-}
-
 bool sdcard_capable()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)

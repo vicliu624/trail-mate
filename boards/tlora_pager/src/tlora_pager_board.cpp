@@ -202,7 +202,8 @@ TLoRaPagerBoard::TLoRaPagerBoard()
                            // T-LoRa-Pager specific offsets:
                            // - Landscape orientations (90°, 270°): landscape_offset_x = 49
                            // - Portrait orientations (0°, 180°): portrait_offset_y = 49
-                           display::drivers::ST7796::getRotationConfig(DISP_WIDTH, DISP_HEIGHT, 49, 49))
+                           display::drivers::ST7796::getRotationConfig(DISP_WIDTH, DISP_HEIGHT, 49, 49),
+                           display::drivers::ST7796::getTransferConfig())
 #ifdef USING_ST25R3916
       ,
       nfc(&NFCReader)

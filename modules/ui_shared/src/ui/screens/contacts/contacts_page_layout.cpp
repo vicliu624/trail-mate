@@ -8,6 +8,7 @@
 #include "app/app_facade_access.h"
 #include "chat/domain/chat_types.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "ui/components/info_card.h"
 #include "ui/components/two_pane_layout.h"
 #include "ui/page/page_profile.h"
 
@@ -227,10 +228,16 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
 {
     const auto& profile = ::ui::page_profile::current();
     lv_obj_t* item = lv_obj_create(parent);
-    lv_obj_set_size(item, LV_PCT(100), profile.list_item_height);
-
     lv_obj_add_flag(item, LV_OBJ_FLAG_CLICKABLE);
-    ::ui::components::two_pane_layout::make_non_scrollable(item);
+    if (::ui::components::info_card::use_tdeck_layout())
+    {
+        ::ui::components::info_card::configure_item(item, profile.list_item_height);
+    }
+    else
+    {
+        lv_obj_set_size(item, LV_PCT(100), profile.list_item_height);
+        ::ui::components::two_pane_layout::make_non_scrollable(item);
+    }
 
     style::apply_list_item(item);
 
@@ -248,15 +255,27 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
         display_name = node.short_name;
     }
 
-    lv_obj_t* name_label = lv_label_create(item);
-    lv_label_set_text(name_label, display_name.c_str());
-    lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 10, 0);
-    style::apply_label_primary(name_label);
+    if (::ui::components::info_card::use_tdeck_layout())
+    {
+        const auto slots = ::ui::components::info_card::create_content(item);
+        lv_label_set_text(slots.header_main_label, display_name.c_str());
+        style::apply_label_primary(slots.header_main_label);
 
-    lv_obj_t* status_label = lv_label_create(item);
-    lv_label_set_text(status_label, status_text);
-    lv_obj_align(status_label, LV_ALIGN_RIGHT_MID, -10, 0);
-    style::apply_label_muted(status_label);
+        lv_label_set_text(slots.body_main_label, status_text);
+        style::apply_label_muted(slots.body_main_label);
+    }
+    else
+    {
+        lv_obj_t* name_label = lv_label_create(item);
+        lv_label_set_text(name_label, display_name.c_str());
+        lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 10, 0);
+        style::apply_label_primary(name_label);
+
+        lv_obj_t* status_label = lv_label_create(item);
+        lv_label_set_text(status_label, status_text);
+        lv_obj_align(status_label, LV_ALIGN_RIGHT_MID, -10, 0);
+        style::apply_label_muted(status_label);
+    }
 
     g_contacts_state.list_items.push_back(item);
     return item;

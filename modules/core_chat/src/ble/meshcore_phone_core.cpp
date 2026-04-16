@@ -379,11 +379,17 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         out[index++] = cfg.meshcore_config.meshcore_sf;
         out[index++] = cfg.meshcore_config.meshcore_cr;
 
-        const size_t name_len = strnlen(cfg.node_name, sizeof(cfg.node_name));
+        char long_name[32] = {};
+        char short_name[16] = {};
+        ctx_.getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+
+        const char* display_name = long_name[0] != '\0' ? long_name : short_name;
+        const size_t name_len = strnlen(display_name, long_name[0] != '\0' ? sizeof(long_name)
+                                                                           : sizeof(short_name));
         const size_t copy_len = std::min(name_len, static_cast<size_t>(kMaxFrameSize - index));
         if (copy_len > 0)
         {
-            std::memcpy(&out[index], cfg.node_name, copy_len);
+            std::memcpy(&out[index], display_name, copy_len);
             index += copy_len;
         }
         enqueueFrame(out, index);

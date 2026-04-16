@@ -28,12 +28,15 @@ namespace
 constexpr const char* kTag = "ui-menu-layout";
 #endif
 
+#define MENU_LAYOUT_DIAG(...) std::printf("[UI][Menu] " __VA_ARGS__)
+
 constexpr size_t kMaxMenuApps = 16;
 
 struct MenuAppUi
 {
     const char* name = nullptr;
     lv_obj_t* icon = nullptr;
+    lv_obj_t* button = nullptr;
 };
 
 lv_obj_t* s_menu_panel = nullptr;
@@ -48,6 +51,115 @@ InitOptions s_init_options{};
 uint32_t s_name_change_id = 0;
 #endif
 AppScreen* s_pending_app_launch = nullptr;
+
+lv_obj_t* firstMenuButton()
+{
+    for (const auto& item : s_menu_apps)
+    {
+        if (item.button != nullptr && !lv_obj_has_flag(item.button, LV_OBJ_FLAG_HIDDEN))
+        {
+            return item.button;
+        }
+    }
+    return nullptr;
+}
+
+bool usesDirectionalMenuKeys()
+{
+    return ui::menu_profile::current().directional_key_nav;
+}
+
+int findMenuButtonIndex(lv_obj_t* obj)
+{
+    if (obj == nullptr)
+    {
+        return -1;
+    }
+    for (size_t i = 0; i < kMaxMenuApps; ++i)
+    {
+        if (s_menu_apps[i].button == obj)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+lv_obj_t* findMenuNeighbor(lv_obj_t* current, uint32_t key)
+{
+    if (current == nullptr)
+    {
+        return firstMenuButton();
+    }
+
+    const int current_x = lv_obj_get_x(current) + lv_obj_get_width(current) / 2;
+    const int current_y = lv_obj_get_y(current) + lv_obj_get_height(current) / 2;
+    lv_obj_t* best = nullptr;
+    int32_t best_score = INT32_MAX;
+
+    for (const auto& item : s_menu_apps)
+    {
+        lv_obj_t* candidate = item.button;
+        if (candidate == nullptr || candidate == current || lv_obj_has_flag(candidate, LV_OBJ_FLAG_HIDDEN))
+        {
+            continue;
+        }
+
+        const int dx = lv_obj_get_x(candidate) + lv_obj_get_width(candidate) / 2 - current_x;
+        const int dy = lv_obj_get_y(candidate) + lv_obj_get_height(candidate) / 2 - current_y;
+
+        bool valid = false;
+        int32_t score = INT32_MAX;
+        switch (key)
+        {
+        case LV_KEY_LEFT:
+            valid = dx < 0;
+            score = static_cast<int32_t>(-dx) + static_cast<int32_t>(std::abs(dy)) * 1000;
+            break;
+        case LV_KEY_RIGHT:
+            valid = dx > 0;
+            score = static_cast<int32_t>(dx) + static_cast<int32_t>(std::abs(dy)) * 1000;
+            break;
+        case LV_KEY_UP:
+            valid = dy < 0;
+            score = static_cast<int32_t>(-dy) + static_cast<int32_t>(std::abs(dx)) * 1000;
+            break;
+        case LV_KEY_DOWN:
+            valid = dy > 0;
+            score = static_cast<int32_t>(dy) + static_cast<int32_t>(std::abs(dx)) * 1000;
+            break;
+        default:
+            break;
+        }
+
+        if (valid && score < best_score)
+        {
+            best = candidate;
+            best_score = score;
+        }
+    }
+
+    return best;
+}
+
+void ensureMenuFocus()
+{
+    if (menu_g == nullptr)
+    {
+        return;
+    }
+
+    lv_obj_t* focused = lv_group_get_focused(menu_g);
+    if (findMenuButtonIndex(focused) >= 0 && !lv_obj_has_flag(focused, LV_OBJ_FLAG_HIDDEN))
+    {
+        return;
+    }
+
+    if (lv_obj_t* first = firstMenuButton())
+    {
+        lv_group_focus_obj(first);
+    }
+}
 
 lv_anim_enable_t transition_anim()
 {
@@ -114,6 +226,27 @@ void menuButtonFocusCallback(lv_event_t* e)
 #else
     (void)text;
 #endif
+}
+
+void menuButtonKeyCallback(lv_event_t* e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_KEY || menu_g == nullptr || !usesDirectionalMenuKeys())
+    {
+        return;
+    }
+
+    const uint32_t key = lv_event_get_key(e);
+    if (key != LV_KEY_LEFT && key != LV_KEY_RIGHT && key != LV_KEY_UP && key != LV_KEY_DOWN)
+    {
+        return;
+    }
+
+    lv_obj_t* current = lv_event_get_target_obj(e);
+    if (lv_obj_t* next = findMenuNeighbor(current, key))
+    {
+        lv_group_focus_obj(next);
+        lv_obj_scroll_to_view(next, LV_ANIM_OFF);
+    }
 }
 
 void menuButtonClickCallback(lv_event_t* e)
@@ -208,6 +341,16 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
         icon = lv_image_create(btn);
         lv_image_set_src(icon, image);
 
+        MENU_LAYOUT_DIAG("createAppButton idx=%u name=%s btn=%p icon=%p image=%p src=%p w=%d h=%d\n",
+                         static_cast<unsigned>(idx),
+                         name ? name : "(null)",
+                         btn,
+                         icon,
+                         image,
+                         lv_image_get_src(icon),
+                         static_cast<int>(lv_image_get_src_width(icon)),
+                         static_cast<int>(lv_image_get_src_height(icon)));
+
         if (profile.icon_scale != 256)
         {
             const lv_coord_t icon_width = lv_image_get_src_width(icon);
@@ -229,6 +372,13 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
             lv_obj_center(icon);
         }
     }
+    else
+    {
+        MENU_LAYOUT_DIAG("createAppButton idx=%u name=%s btn=%p icon=(null) image=(null)\n",
+                         static_cast<unsigned>(idx),
+                         name ? name : "(null)",
+                         btn);
+    }
 
     if (profile.show_card_label && name && name[0] != '\0')
     {
@@ -246,6 +396,7 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     {
         s_menu_apps[idx].name = name;
         s_menu_apps[idx].icon = icon;
+        s_menu_apps[idx].button = btn;
         lv_obj_set_user_data(btn, &s_menu_apps[idx]);
     }
 
@@ -289,6 +440,10 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     if (idx < kMaxMenuApps)
     {
         lv_obj_add_event_cb(btn, menuButtonFocusCallback, LV_EVENT_FOCUSED, &s_menu_apps[idx]);
+    }
+    if (usesDirectionalMenuKeys())
+    {
+        lv_obj_add_event_cb(btn, menuButtonKeyCallback, LV_EVENT_KEY, nullptr);
     }
     lv_obj_add_event_cb(btn, menuButtonClickCallback, LV_EVENT_CLICKED, app);
 }
@@ -397,6 +552,7 @@ void createAppGrid()
     lv_obj_add_style(panel, &frameless_style, 0);
 
     const size_t app_count = ui::catalogCount(s_init_options.apps);
+    MENU_LAYOUT_DIAG("createAppGrid app_count=%u\n", static_cast<unsigned>(app_count));
     for (size_t index = 0; index < app_count && index < kMaxMenuApps; ++index)
     {
         AppScreen* app = ui::catalogAt(s_init_options.apps, index);
@@ -445,13 +601,9 @@ void createAppGrid()
 #if LVGL_VERSION_MAJOR == 9
     s_name_change_id = lv_event_register_id();
     lv_obj_add_event_cb(s_desc_label, menuNameLabelEventCallback, static_cast<lv_event_code_t>(s_name_change_id), nullptr);
-    lv_obj_t* first_child = lv_obj_get_child(panel, 0);
-    if (first_child != nullptr)
-    {
-        lv_obj_send_event(first_child, LV_EVENT_FOCUSED, nullptr);
-    }
 #endif
 
+    ensureMenuFocus();
     lv_obj_update_snap(panel, LV_ANIM_ON);
 }
 
@@ -499,6 +651,7 @@ void setMenuVisible(bool visible)
         if (visible)
         {
             lv_obj_clear_flag(s_menu_panel, LV_OBJ_FLAG_HIDDEN);
+            ensureMenuFocus();
         }
         else
         {

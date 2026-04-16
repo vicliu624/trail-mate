@@ -23,5 +23,6 @@ void apply_btn_modal(lv_obj_t* btn);
 
 void apply_label_primary(lv_obj_t* label);
 void apply_label_muted(lv_obj_t* label);
+void apply_value_box(lv_obj_t* obj);
 
 } // namespace settings::ui::style

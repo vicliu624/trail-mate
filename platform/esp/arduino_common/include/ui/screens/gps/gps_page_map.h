@@ -11,6 +11,7 @@ void update_map_tiles(bool lightweight = false);
 void update_map_anchor();
 void tick_loader();
 void tick_gps_update(bool allow_map_refresh);
+void log_map_tile_state(const char* reason);
 
 // GPS marker management
 void update_gps_marker_position();

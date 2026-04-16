@@ -135,7 +135,8 @@ TDeckBoard::TDeckBoard()
       LilyGoDispArduinoSPI(SCREEN_WIDTH, SCREEN_HEIGHT,
                            display::drivers::ST7789TDeck::getInitCommands(),
                            display::drivers::ST7789TDeck::getInitCommandsCount(),
-                           display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT))
+                           display::drivers::ST7789TDeck::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT),
+                           display::drivers::ST7789TDeck::getTransferConfig())
 {
 }
 
@@ -983,22 +984,18 @@ void TDeckBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, ui
 
 RotaryMsg_t TDeckBoard::getRotary()
 {
+    // T-Deck trackball is modeled as directional keypad input so the menu can
+    // move in two dimensions. Leave encoder output disabled on this board.
     RotaryMsg_t msg{};
+    return msg;
+}
 
-    const uint32_t now = millis();
-    if ((now - boot_ms_) < kRotaryBootGuardMs)
+int TDeckBoard::getNavKey(uint32_t* key)
+{
+    if (!key)
     {
-        // Ignore early boot noise from the trackball/boot pins.
-        return msg;
+        return -1;
     }
-
-    // T-Deck trackball tuning:
-    // - Use press-edge pulse detection to avoid mixed/sticky level states.
-    // - Direction mapping follows physical intuition:
-    //   up/left => ROTARY_DIR_UP, down/right => ROTARY_DIR_DOWN.
-    const uint32_t repeat_ms = 110;  // Minimum spacing between direction events
-    const uint32_t click_ms = 150;   // Click debounce
-    const uint32_t debounce_ms = 22; // Require stable press/release
 
     static bool up_state = false;
     static bool down_state = false;
@@ -1006,11 +1003,35 @@ RotaryMsg_t TDeckBoard::getRotary()
     static bool right_state = false;
     static bool click_state = false;
     static bool click_consumed = false;
+    static bool pending_release = false;
+    static uint32_t pending_key = INPUT_NAV_KEY_NONE;
     static uint32_t up_change_ms = 0;
     static uint32_t down_change_ms = 0;
     static uint32_t left_change_ms = 0;
     static uint32_t right_change_ms = 0;
     static uint32_t click_change_ms = 0;
+
+    if (pending_release)
+    {
+        *key = pending_key;
+        pending_release = false;
+        return KEYBOARD_RELEASED;
+    }
+
+    const uint32_t now = millis();
+    if ((now - boot_ms_) < kRotaryBootGuardMs)
+    {
+        // Ignore early boot noise from the trackball/boot pins.
+        return -1;
+    }
+
+    // T-Deck trackball tuning:
+    // - Use press-edge pulse detection to avoid mixed/sticky level states.
+    // - Map physical directions directly to logical UI directions.
+    const uint32_t repeat_ms = 110;  // Minimum spacing between direction events
+    const uint32_t click_ms = 150;   // Click debounce
+    const uint32_t debounce_ms = 22; // Require stable press/release
+
     bool up_pressed = false;
     bool down_pressed = false;
     bool left_pressed = false;
@@ -1044,20 +1065,27 @@ RotaryMsg_t TDeckBoard::getRotary()
     const bool left_edge = detect_press_edge(left_pressed, left_state, left_change_ms);
     const bool right_edge = detect_press_edge(right_pressed, right_state, right_change_ms);
 
-    const uint8_t up_score = (up_edge ? 1U : 0U) + (left_edge ? 1U : 0U);
-    const uint8_t down_score = (down_edge ? 1U : 0U) + (right_edge ? 1U : 0U);
-
-    if ((up_score > 0 || down_score > 0) &&
-        (now - last_trackball_ms_) >= repeat_ms)
+    uint32_t nav_key = INPUT_NAV_KEY_NONE;
+    if ((now - last_trackball_ms_) >= repeat_ms)
     {
-        if (up_score > down_score)
+        if (left_edge)
         {
-            msg.dir = ROTARY_DIR_UP;
+            nav_key = INPUT_NAV_KEY_LEFT;
             last_trackball_ms_ = now;
         }
-        else if (down_score > up_score)
+        else if (right_edge)
         {
-            msg.dir = ROTARY_DIR_DOWN;
+            nav_key = INPUT_NAV_KEY_RIGHT;
+            last_trackball_ms_ = now;
+        }
+        else if (up_edge)
+        {
+            nav_key = INPUT_NAV_KEY_UP;
+            last_trackball_ms_ = now;
+        }
+        else if (down_edge)
+        {
+            nav_key = INPUT_NAV_KEY_DOWN;
             last_trackball_ms_ = now;
         }
     }
@@ -1079,13 +1107,21 @@ RotaryMsg_t TDeckBoard::getRotary()
     if (click_state && (now - click_change_ms) >= debounce_ms &&
         !click_consumed && (now - last_click_ms_) >= click_ms)
     {
-        msg.centerBtnPressed = true;
+        nav_key = INPUT_NAV_KEY_ENTER;
         last_click_ms_ = now;
         click_consumed = true;
     }
 #endif
 
-    return msg;
+    if (nav_key == INPUT_NAV_KEY_NONE)
+    {
+        return -1;
+    }
+
+    pending_key = nav_key;
+    pending_release = true;
+    *key = nav_key;
+    return KEYBOARD_PRESSED;
 }
 
 void TDeckBoard::playMessageTone()

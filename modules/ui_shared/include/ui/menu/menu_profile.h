@@ -74,6 +74,7 @@ struct MenuLayoutProfile
     bool wrap_grid = false;
     bool vertical_scroll = false;
     bool snap_center = false;
+    bool directional_key_nav = false;
     bool transparent_cards = false;
     bool grid_anchor_top_left = false;
     bool show_top_bar = false;

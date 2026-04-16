@@ -25,6 +25,7 @@ class ChatMessageListScreen
     void updateBatteryFromBoard();
     void setSelected(int index);
     void setSelectedConversation(const chat::ConversationId& conv);
+    bool tryGetSelectedConversation(chat::ConversationId* conv) const;
     chat::ConversationId getSelectedConversation() const;
 
     void setActionCallback(void (*cb)(ActionIntent intent,

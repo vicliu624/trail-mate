@@ -108,13 +108,30 @@ void ChatMessageListScreen::setSelectedConversation(const chat::ConversationId& 
     selected_index_ = 0;
 }
 
+bool ChatMessageListScreen::tryGetSelectedConversation(chat::ConversationId* conv) const
+{
+    if (!conv || view_mode_ == ViewMode::Menu)
+    {
+        return false;
+    }
+
+    if (selected_index_ < 0 || selected_index_ >= static_cast<int>(convs_.size()))
+    {
+        return false;
+    }
+
+    *conv = convs_[selected_index_].id;
+    return true;
+}
+
 chat::ConversationId ChatMessageListScreen::getSelectedConversation() const
 {
-    if (selected_index_ < 0 || selected_index_ >= static_cast<int>(convs_.size()))
+    chat::ConversationId conv{};
+    if (!tryGetSelectedConversation(&conv))
     {
         return chat::ConversationId();
     }
-    return convs_[selected_index_].id;
+    return conv;
 }
 
 void ChatMessageListScreen::setActionCallback(void (*cb)(ActionIntent intent,

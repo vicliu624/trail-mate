@@ -92,6 +92,11 @@ bool gps_ready()
     return board.isGPSReady();
 }
 
+bool gps_supported()
+{
+    return board.hasGPSHardware();
+}
+
 int power_tier()
 {
     return board.getPowerTier();

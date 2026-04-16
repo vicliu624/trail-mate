@@ -80,6 +80,7 @@ class UiController : public IChatUiRuntime
     bool isTeamConversation(const chat::ConversationId& conv) const;
     void syncConversationListFromStore();
     void normalizeConversationNames(std::vector<chat::ConversationMeta>& convs) const;
+    std::string resolveConversationDisplayName(const chat::ConversationId& conv) const;
     void applyConversationListToUi();
     void updateConversationMetaForMessage(const chat::ChatMessage& msg, bool increment_unread);
     bool updateConversationViewForIncoming(const chat::ChatMessage& msg);

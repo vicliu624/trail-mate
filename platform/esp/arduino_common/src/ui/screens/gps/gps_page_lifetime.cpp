@@ -1,6 +1,7 @@
 #include "ui/screens/gps/gps_page_lifetime.h"
 
 #include "ui/screens/gps/gps_modal.h"
+#include "ui/screens/gps/gps_page_input.h"
 #include "ui/screens/gps/gps_page_map.h"
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
@@ -81,6 +82,10 @@ void on_root_deleted(lv_event_t* e)
 
     g_gps_state.alive = false;
     g_gps_state.exiting = true;
+
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    unbind_map_touch_input();
+#endif
 
     clear_timers();
     g_gps_state.timer = nullptr;

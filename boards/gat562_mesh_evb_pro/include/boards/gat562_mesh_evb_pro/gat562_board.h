@@ -102,6 +102,7 @@ class Gat562Board final : public BoardBase
     bool isSDReady() const override;
     bool isCardReady() override;
     bool isGPSReady() const override;
+    bool hasGPSHardware() const override { return true; }
 
     void vibrator() override;
     void stopVibrator() override;

@@ -57,7 +57,8 @@ TWatchS3Board::TWatchS3Board()
       LilyGoDispArduinoSPI(SCREEN_WIDTH, SCREEN_HEIGHT,
                            display::drivers::ST7789WatchS3::getInitCommands(),
                            display::drivers::ST7789WatchS3::getInitCommandsCount(),
-                           display::drivers::ST7789WatchS3::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT))
+                           display::drivers::ST7789WatchS3::getRotationConfig(SCREEN_WIDTH, SCREEN_HEIGHT),
+                           display::drivers::ST7789WatchS3::getTransferConfig())
 {
 }
 

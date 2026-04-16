@@ -2,15 +2,18 @@
 #include "platform/ui/gps_runtime.h"
 #include "screen_sleep.h"
 #include "sys/clock.h"
+#include "ui/LV_Helper.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_modal.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
+#include "ui/screens/gps/gps_page_map.h"
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 
@@ -20,6 +23,13 @@
 #else
 #define GPS_LOG(...)
 #endif
+
+#define GPS_FLOW_LOG(...)         \
+    do                            \
+    {                             \
+        std::printf(__VA_ARGS__); \
+        std::fflush(stdout);      \
+    } while (0)
 
 extern GPSPageState g_gps_state;
 
@@ -32,11 +42,29 @@ static bool show_pan_axis_controls()
     return !::ui::page_profile::current().large_touch_hitbox;
 }
 
-static bool indev_is_pressed(lv_event_t* e)
+static bool is_pan_h_editing()
 {
-    lv_indev_t* indev = lv_event_get_indev(e);
-    if (!indev) return false;
-    return lv_indev_get_state(indev) == LV_INDEV_STATE_PRESSED;
+    return g_gps_state.edit_mode == GpsEditMode::PanH;
+}
+
+static bool is_pan_v_editing()
+{
+    return g_gps_state.edit_mode == GpsEditMode::PanV;
+}
+
+static bool is_pan_editing()
+{
+    return is_pan_h_editing() || is_pan_v_editing();
+}
+
+static int gps_edit_mode_value()
+{
+    return static_cast<int>(g_gps_state.edit_mode);
+}
+
+static bool is_arrow_key(lv_key_t key)
+{
+    return key == LV_KEY_LEFT || key == LV_KEY_RIGHT || key == LV_KEY_UP || key == LV_KEY_DOWN;
 }
 
 static bool adjust_popup_zoom(int32_t diff)
@@ -64,11 +92,417 @@ static bool adjust_popup_zoom(int32_t diff)
     return false;
 }
 
+enum class InputStepMode : uint8_t
+{
+    OneDimensional = 0,
+};
+
+bool map_input_step_from_key(lv_key_t key, InputStepMode mode, int32_t* out_step)
+{
+    if (out_step == nullptr)
+    {
+        return false;
+    }
+
+    switch (mode)
+    {
+    case InputStepMode::OneDimensional:
+        if (key == LV_KEY_RIGHT || key == LV_KEY_UP)
+        {
+            *out_step = +1;
+            return true;
+        }
+        if (key == LV_KEY_LEFT || key == LV_KEY_DOWN)
+        {
+            *out_step = -1;
+            return true;
+        }
+        break;
+    }
+
+    return false;
+}
+
 ControlId ctrl_id(lv_obj_t* obj)
 {
     if (obj == nullptr) return ControlId::Page;
     auto* tag = (ControlTag*)lv_obj_get_user_data(obj);
     return tag ? tag->id : ControlId::Page;
+}
+
+static void action_pan_step(ControlId axis_id, int32_t step);
+
+static lv_indev_t* resolve_event_indev(lv_event_t* e)
+{
+    if (e != nullptr)
+    {
+        if (lv_indev_t* indev = lv_event_get_indev(e))
+        {
+            return indev;
+        }
+    }
+    return lv_indev_active();
+}
+
+static bool event_from_encoder(lv_event_t* e)
+{
+    lv_indev_t* indev = resolve_event_indev(e);
+    return indev != nullptr && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER;
+}
+
+static bool event_from_keypad(lv_event_t* e)
+{
+    lv_indev_t* indev = resolve_event_indev(e);
+    return indev != nullptr && lv_indev_get_type(indev) == LV_INDEV_TYPE_KEYPAD;
+}
+
+static void action_pan_exit();
+
+#ifdef USING_INPUT_DEV_TOUCHPAD
+static bool event_from_pointer(lv_event_t* e)
+{
+    lv_indev_t* indev = resolve_event_indev(e);
+    return indev != nullptr && lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER;
+}
+
+static int coord_abs(int value)
+{
+    return value < 0 ? -value : value;
+}
+
+static bool point_hits_obj(lv_obj_t* obj, const lv_point_t& point)
+{
+    if (obj == nullptr || lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN))
+    {
+        return false;
+    }
+
+    lv_area_t coords{};
+    lv_obj_get_coords(obj, &coords);
+    return lv_area_is_point_on(&coords, &point, 0);
+}
+
+static bool point_hits_map_blocker(const lv_point_t& point)
+{
+    const lv_obj_t* blocked_roots[] = {
+        g_gps_state.panel,
+        g_gps_state.member_panel,
+        g_gps_state.zoom,
+        g_gps_state.pos,
+        g_gps_state.pan_h,
+        g_gps_state.pan_v,
+        g_gps_state.tracker_btn,
+        g_gps_state.layer_btn,
+        g_gps_state.route_btn,
+        g_gps_state.pan_h_indicator,
+        g_gps_state.pan_v_indicator,
+    };
+
+    for (const lv_obj_t* blocked : blocked_roots)
+    {
+        if (point_hits_obj(const_cast<lv_obj_t*>(blocked), point))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void reset_map_touch_pan_state()
+{
+    g_gps_state.touch_pan.pressed = false;
+    g_gps_state.touch_pan.dragging = false;
+}
+
+static void handle_map_touch_press(const lv_point_t& point)
+{
+    lv_point_t search_point = point;
+    lv_obj_t* hit = lv_indev_search_obj(lv_screen_active(), &search_point);
+    const ControlId hit_id = ctrl_id(hit);
+    const bool in_map = point_hits_obj(g_gps_state.map, point);
+    const bool blocked = point_hits_map_blocker(point);
+    if (!in_map || blocked)
+    {
+        reset_map_touch_pan_state();
+        GPS_FLOW_LOG("[GPS][MAP][touch] press_ignored x=%d y=%d hit=%d in_map=%d blocked=%d\n",
+                     point.x,
+                     point.y,
+                     static_cast<int>(hit_id),
+                     in_map ? 1 : 0,
+                     blocked ? 1 : 0);
+        return;
+    }
+
+    updateUserActivity();
+    g_gps_state.touch_pan.pressed = true;
+    g_gps_state.touch_pan.dragging = false;
+    g_gps_state.touch_pan.start = point;
+    g_gps_state.touch_pan.last = point;
+    g_gps_state.touch_pan.start_pan_x = g_gps_state.pan_x;
+    g_gps_state.touch_pan.start_pan_y = g_gps_state.pan_y;
+    GPS_FLOW_LOG("[GPS][MAP][touch] press x=%d y=%d pan=%d,%d target=%d\n",
+                 point.x,
+                 point.y,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y,
+                 static_cast<int>(hit_id));
+}
+
+static void handle_map_touch_move(lv_indev_t* indev, const lv_point_t& point)
+{
+    constexpr int kTouchDragStartPx = 6;
+
+    if (!g_gps_state.touch_pan.pressed)
+    {
+        return;
+    }
+
+    g_gps_state.touch_pan.last = point;
+    const int dx = static_cast<int>(point.x - g_gps_state.touch_pan.start.x);
+    const int dy = static_cast<int>(point.y - g_gps_state.touch_pan.start.y);
+
+    if (!g_gps_state.touch_pan.dragging)
+    {
+        if (coord_abs(dx) < kTouchDragStartPx && coord_abs(dy) < kTouchDragStartPx)
+        {
+            return;
+        }
+
+        g_gps_state.touch_pan.dragging = true;
+        if (is_pan_editing())
+        {
+            action_pan_exit();
+        }
+        GPS_FLOW_LOG("[GPS][MAP][touch] drag_begin dx=%d dy=%d start_pan=%d,%d\n",
+                     dx,
+                     dy,
+                     g_gps_state.touch_pan.start_pan_x,
+                     g_gps_state.touch_pan.start_pan_y);
+    }
+
+    if (g_gps_state.touch_pan.dragging)
+    {
+        lv_indev_stop_processing(indev);
+    }
+
+    const int new_pan_x = g_gps_state.touch_pan.start_pan_x + dx;
+    const int new_pan_y = g_gps_state.touch_pan.start_pan_y + dy;
+    if (new_pan_x == g_gps_state.pan_x && new_pan_y == g_gps_state.pan_y)
+    {
+        return;
+    }
+
+    const int before_x = g_gps_state.pan_x;
+    const int before_y = g_gps_state.pan_y;
+    g_gps_state.pan_x = new_pan_x;
+    g_gps_state.pan_y = new_pan_y;
+    g_gps_state.follow_position = false;
+    g_gps_state.pending_refresh = false;
+    update_map_tiles(false);
+    GPS_FLOW_LOG("[GPS][MAP][touch] drag_move dx=%d dy=%d pan=%d,%d->%d,%d\n",
+                 dx,
+                 dy,
+                 before_x,
+                 before_y,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y);
+}
+
+static void handle_map_touch_release(lv_indev_t* indev, const lv_point_t& point)
+{
+    if (!g_gps_state.touch_pan.pressed)
+    {
+        return;
+    }
+
+    if (g_gps_state.touch_pan.dragging)
+    {
+        lv_indev_stop_processing(indev);
+    }
+    GPS_FLOW_LOG("[GPS][MAP][touch] release x=%d y=%d dragging=%d pan=%d,%d\n",
+                 point.x,
+                 point.y,
+                 g_gps_state.touch_pan.dragging ? 1 : 0,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y);
+    if (g_gps_state.touch_pan.dragging)
+    {
+        log_map_tile_state("touch_drag");
+    }
+    reset_map_touch_pan_state();
+}
+
+static void map_touch_poll_timer_cb(lv_timer_t* timer)
+{
+    (void)timer;
+
+    if (!is_alive() || g_gps_state.map == nullptr || g_gps_state.exiting)
+    {
+        return;
+    }
+
+    lv_indev_t* indev = lv_get_touch_indev();
+    if (indev == nullptr)
+    {
+        return;
+    }
+
+    if (g_gps_state.zoom_modal.is_open() ||
+        modal_is_open(g_gps_state.tracker_modal) ||
+        modal_is_open(g_gps_state.layer_modal) ||
+        modal_is_open(g_gps_state.route_modal))
+    {
+        if (g_gps_state.touch_pan.pressed)
+        {
+            GPS_FLOW_LOG("[GPS][MAP][touch] modal_cancel pan=%d,%d\n",
+                         g_gps_state.pan_x,
+                         g_gps_state.pan_y);
+        }
+        reset_map_touch_pan_state();
+        return;
+    }
+
+    lv_point_t point{};
+    lv_indev_get_point(indev, &point);
+    const bool is_pressed = lv_indev_get_state(indev) == LV_INDEV_STATE_PRESSED;
+
+    if (is_pressed && !g_gps_state.touch_pan.pressed)
+    {
+        handle_map_touch_press(point);
+        return;
+    }
+
+    if (is_pressed)
+    {
+        handle_map_touch_move(indev, point);
+        return;
+    }
+
+    if (g_gps_state.touch_pan.pressed)
+    {
+        handle_map_touch_release(indev, point);
+    }
+}
+
+void bind_map_touch_input()
+{
+    if (!is_alive() || g_gps_state.root == nullptr)
+    {
+        return;
+    }
+
+    lv_indev_t* indev = lv_get_touch_indev();
+    if (indev == nullptr)
+    {
+        GPS_FLOW_LOG("[GPS][MAP][touch] bind skipped indev=null\n");
+        return;
+    }
+
+    if (g_gps_state.touch_timer == nullptr)
+    {
+        g_gps_state.touch_timer = gps::ui::lifetime::add_timer(map_touch_poll_timer_cb, 16, nullptr);
+    }
+    reset_map_touch_pan_state();
+    GPS_FLOW_LOG("[GPS][MAP][touch] bind indev=%p root=%p map=%p timer=%p\n",
+                 static_cast<void*>(indev),
+                 static_cast<void*>(g_gps_state.root),
+                 static_cast<void*>(g_gps_state.map),
+                 static_cast<void*>(g_gps_state.touch_timer));
+}
+
+void unbind_map_touch_input()
+{
+    if (g_gps_state.touch_timer != nullptr)
+    {
+        auto& timers = g_gps_state.timers;
+        const bool owned =
+            std::find(timers.begin(), timers.end(), g_gps_state.touch_timer) != timers.end();
+        if (owned)
+        {
+            gps::ui::lifetime::remove_timer(g_gps_state.touch_timer);
+            GPS_FLOW_LOG("[GPS][MAP][touch] unbind timer=%p root=%p\n",
+                         static_cast<void*>(g_gps_state.touch_timer),
+                         static_cast<void*>(g_gps_state.root));
+        }
+        else
+        {
+            GPS_FLOW_LOG("[GPS][MAP][touch] unbind skip_stale timer=%p root=%p\n",
+                         static_cast<void*>(g_gps_state.touch_timer),
+                         static_cast<void*>(g_gps_state.root));
+        }
+        g_gps_state.touch_timer = nullptr;
+    }
+
+    reset_map_touch_pan_state();
+}
+#endif
+
+static const char* event_input_model_label(lv_event_t* e)
+{
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    if (event_from_pointer(e))
+    {
+        return "touch";
+    }
+#endif
+    if (event_from_encoder(e))
+    {
+        return "encoder";
+    }
+    if (event_from_keypad(e))
+    {
+        return "keypad";
+    }
+    return "unknown";
+}
+
+static bool try_handle_pan_edit_key(lv_obj_t* target, lv_key_t key, lv_event_t* e, const char* source)
+{
+    if (!is_pan_editing() || g_gps_state.zoom_modal.is_open())
+    {
+        return false;
+    }
+
+    if (!is_arrow_key(key))
+    {
+        return false;
+    }
+
+    const bool horizontal = is_pan_h_editing();
+    const char* axis = horizontal ? "h" : "v";
+    const ControlId axis_id = horizontal ? ControlId::PanHIndicator : ControlId::PanVIndicator;
+    const int target_id = static_cast<int>(ctrl_id(target));
+    const char* input_model = event_input_model_label(e);
+
+    int32_t step = 0;
+    if (!map_input_step_from_key(key, InputStepMode::OneDimensional, &step))
+    {
+        GPS_FLOW_LOG("[GPS][MAP][input] pan_key_ignored axis=%s src=%s indev=%s target=%d key=%d mode=%d\n",
+                     axis,
+                     source,
+                     input_model,
+                     target_id,
+                     key,
+                     gps_edit_mode_value());
+        return true;
+    }
+
+    const int32_t before_x = g_gps_state.pan_x;
+    const int32_t before_y = g_gps_state.pan_y;
+    action_pan_step(axis_id, step);
+    GPS_FLOW_LOG("[GPS][MAP][input] pan_key axis=%s src=%s indev=%s target=%d key=%d step=%d pan=%d,%d->%d,%d\n",
+                 axis,
+                 source,
+                 input_model,
+                 target_id,
+                 key,
+                 step,
+                 before_x,
+                 before_y,
+                 g_gps_state.pan_x,
+                 g_gps_state.pan_y);
+    return true;
 }
 
 // Control tag pool (fixed-size, reset on enter).
@@ -120,13 +554,13 @@ static void refresh_map_after_pan_step()
 
     g_gps_state.pending_refresh = false;
     update_map_tiles(false);
+    log_map_tile_state("pan_step");
 }
 
 static void exit_pan_h_mode()
 {
     extern void hide_pan_h_indicator();
-    g_gps_state.pan_h_editing = false;
-    g_gps_state.edit_mode = 0;
+    g_gps_state.edit_mode = GpsEditMode::None;
     hide_pan_h_indicator();
 
     if (app_g != NULL)
@@ -143,8 +577,7 @@ static void exit_pan_h_mode()
 static void exit_pan_v_mode()
 {
     extern void hide_pan_v_indicator();
-    g_gps_state.pan_v_editing = false;
-    g_gps_state.edit_mode = 0;
+    g_gps_state.edit_mode = GpsEditMode::None;
     hide_pan_v_indicator();
 
     if (app_g != NULL)
@@ -183,58 +616,44 @@ void on_ui_event(lv_event_t* e)
     {
         lv_key_t key = (lv_key_t)lv_event_get_key(e);
         GPS_LOG("[GPS] EVENT: KEY, key=%d, target=%p(id=%d), focused=%p, editing=%d, pan_h=%d, pan_v=%d\n",
-                key, target, (int)target_id, focused, editing, g_gps_state.pan_h_editing, g_gps_state.pan_v_editing);
+                key, target, (int)target_id, focused, editing, is_pan_h_editing(), is_pan_v_editing());
     }
     else if (code == LV_EVENT_ROTARY)
     {
         int32_t diff = lv_event_get_rotary_diff(e);
         GPS_LOG("[GPS] EVENT: ROTARY, diff=%d, target=%p(id=%d), focused=%p, editing=%d, pan_h=%d, pan_v=%d\n",
-                diff, target, (int)target_id, focused, editing, g_gps_state.pan_h_editing, g_gps_state.pan_v_editing);
+                diff, target, (int)target_id, focused, editing, is_pan_h_editing(), is_pan_v_editing());
     }
     else if (code == LV_EVENT_CLICKED)
     {
         GPS_LOG("[GPS] EVENT: CLICKED, target=%p(id=%d), focused=%p, editing=%d, pan_h=%d, pan_v=%d\n",
-                target, (int)target_id, focused, editing, g_gps_state.pan_h_editing, g_gps_state.pan_v_editing);
+                target, (int)target_id, focused, editing, is_pan_h_editing(), is_pan_v_editing());
     }
     else if (code == LV_EVENT_PRESSED || code == LV_EVENT_RELEASED)
     {
         GPS_LOG("[GPS] EVENT: %s, target=%p(id=%d), focused=%p, editing=%d, pan_h=%d, pan_v=%d\n",
                 code == LV_EVENT_PRESSED ? "PRESSED" : "RELEASED",
-                target, (int)target_id, focused, editing, g_gps_state.pan_h_editing, g_gps_state.pan_v_editing);
+                target, (int)target_id, focused, editing, is_pan_h_editing(), is_pan_v_editing());
     }
-
-    // CRITICAL: Handle indicator events FIRST, matching original unified_button_handler logic
-    // In original code, indicator events were checked before any other processing
-    // Use pan_h_editing/pan_v_editing to match original code exactly
+    // Handle indicator-local key/rotary events early so focused pan overlays stay responsive.
     if (target == g_gps_state.pan_h_indicator)
     {
         if (g_gps_state.zoom_modal.is_open()) return;
         updateUserActivity();
 
-        // Key event: encoder rotation generates KEY events.
-        if (code == LV_EVENT_KEY && g_gps_state.pan_h_editing)
+        // Focused pan overlays can receive keypad keys or encoder-generated keys.
+        if (code == LV_EVENT_KEY)
         {
-            lv_key_t key = (lv_key_t)lv_event_get_key(e);
-
-            int32_t step = 0;
-            if (key == ENCODER_KEY_ROTATE_DOWN)
+            if (try_handle_pan_edit_key(target, (lv_key_t)lv_event_get_key(e), e, "indicator"))
             {
-                step = +1;
-            }
-            else if (key == ENCODER_KEY_ROTATE_UP)
-            {
-                step = -1;
-            }
-            else
-            {
-                GPS_LOG("[GPS] PanH KEY: unexpected keycode=%d (expected %d or %d), ignoring\n",
-                        key, ENCODER_KEY_ROTATE_UP, ENCODER_KEY_ROTATE_DOWN);
                 return;
             }
+            return;
+        }
 
-            g_gps_state.pan_x += step * gps_ui::kMapPanStep;
-            g_gps_state.follow_position = false;
-            refresh_map_after_pan_step();
+        if (code == LV_EVENT_ROTARY && is_pan_h_editing())
+        {
+            handle_rotary(target, lv_event_get_rotary_diff(e));
             return;
         }
 
@@ -247,32 +666,19 @@ void on_ui_event(lv_event_t* e)
         if (g_gps_state.zoom_modal.is_open()) return;
         updateUserActivity();
 
-        // Key event: encoder rotation generates KEY events.
-        if (code == LV_EVENT_KEY && g_gps_state.pan_v_editing)
+        // Focused pan overlays can receive keypad keys or encoder-generated keys.
+        if (code == LV_EVENT_KEY)
         {
-            lv_key_t key = (lv_key_t)lv_event_get_key(e);
-
-            int32_t step = 0;
-            if (key == ENCODER_KEY_ROTATE_DOWN)
+            if (try_handle_pan_edit_key(target, (lv_key_t)lv_event_get_key(e), e, "indicator"))
             {
-                step = +1;
-            }
-            else if (key == ENCODER_KEY_ROTATE_UP)
-            {
-                step = -1;
-            }
-            else
-            {
-                GPS_LOG("[GPS] PanV KEY: unexpected keycode=%d (expected %d or %d), ignoring\n",
-                        key, ENCODER_KEY_ROTATE_UP, ENCODER_KEY_ROTATE_DOWN);
                 return;
             }
+            return;
+        }
 
-            GPS_LOG("[GPS] PanV KEY: key=%d, step=%d, pan_y: %d -> %d\n",
-                    key, step, g_gps_state.pan_y, g_gps_state.pan_y + step * gps_ui::kMapPanStep);
-            g_gps_state.pan_y += step * gps_ui::kMapPanStep;
-            g_gps_state.follow_position = false;
-            refresh_map_after_pan_step();
+        if (code == LV_EVENT_ROTARY && is_pan_v_editing())
+        {
+            handle_rotary(target, lv_event_get_rotary_diff(e));
             return;
         }
 
@@ -306,10 +712,9 @@ void on_ui_event(lv_event_t* e)
     case LV_EVENT_CLICKED:
         handle_click(target);
         break;
-    // Rotary input arrives as LV_EVENT_KEY (keycode 19/20) on this target.
-    // case LV_EVENT_ROTARY:
-    //     handle_rotary(target, lv_event_get_rotary_diff(e));
-    //     break;
+    case LV_EVENT_ROTARY:
+        handle_rotary(target, lv_event_get_rotary_diff(e));
+        break;
     case LV_EVENT_KEY:
         handle_key(target, (lv_key_t)lv_event_get_key(e), e);
         break;
@@ -336,8 +741,7 @@ void pan_indicator_event_cb(lv_event_t* e)
         if (target == g_gps_state.pan_h_indicator)
         {
             GPS_LOG("[GPS] pan_indicator_event_cb: target is pan_h_indicator, exiting editing mode\n");
-            g_gps_state.edit_mode = 0;         // Exit PanH editing mode
-            g_gps_state.pan_h_editing = false; // Keep in sync with original code
+            g_gps_state.edit_mode = GpsEditMode::None;
             extern void hide_pan_h_indicator();
             hide_pan_h_indicator();
             if (app_g != NULL)
@@ -353,8 +757,7 @@ void pan_indicator_event_cb(lv_event_t* e)
         else if (target == g_gps_state.pan_v_indicator)
         {
             GPS_LOG("[GPS] pan_indicator_event_cb: target is pan_v_indicator, exiting editing mode\n");
-            g_gps_state.edit_mode = 0;         // Exit PanV editing mode
-            g_gps_state.pan_v_editing = false; // Keep in sync with original code
+            g_gps_state.edit_mode = GpsEditMode::None;
             extern void hide_pan_v_indicator();
             hide_pan_v_indicator();
             if (app_g != NULL)
@@ -379,7 +782,7 @@ static void handle_click(lv_obj_t* target)
     ControlId id = ctrl_id(target);
     updateUserActivity();
 
-    GPS_LOG("[GPS] handle_click: id=%d, edit_mode=%d\n", (int)id, g_gps_state.edit_mode);
+    GPS_LOG("[GPS] handle_click: id=%d, edit_mode=%d\n", (int)id, gps_edit_mode_value());
 
     switch (id)
     {
@@ -401,8 +804,8 @@ static void handle_click(lv_obj_t* target)
         break;
 
     case ControlId::PanHBtn:
-        if (g_gps_state.pan_h_editing)
-        { // Use pan_h_editing to match original
+        if (is_pan_h_editing())
+        {
             action_pan_exit();
         }
         else
@@ -412,8 +815,8 @@ static void handle_click(lv_obj_t* target)
         break;
 
     case ControlId::PanVBtn:
-        if (g_gps_state.pan_v_editing)
-        { // Use pan_v_editing to match original
+        if (is_pan_v_editing())
+        {
             action_pan_exit();
         }
         else
@@ -446,7 +849,7 @@ static void handle_rotary(lv_obj_t* target, int32_t diff)
     updateUserActivity();
 
     GPS_LOG("[GPS] handle_rotary: target_id=%d, edit_mode=%d, diff=%d\n",
-            (int)id, g_gps_state.edit_mode, diff);
+            (int)id, gps_edit_mode_value(), diff);
 
     if (g_gps_state.zoom_modal.is_open())
     {
@@ -458,17 +861,16 @@ static void handle_rotary(lv_obj_t* target, int32_t diff)
         }
     }
 
-    // When in pan editing mode, handle rotary regardless of target
-    // This allows rotary to work even if focus is on a different object
-    // Use pan_h_editing/pan_v_editing to match original code
-    if (g_gps_state.pan_h_editing)
+    // When in pan editing mode, handle rotary regardless of target.
+    // This keeps the edit-mode input path target-independent.
+    if (is_pan_h_editing())
     {
         GPS_LOG("[GPS] handle_rotary: PanH editing mode, calling action_pan_step\n");
         action_pan_step(ControlId::PanHIndicator, diff);
         return;
     }
 
-    if (g_gps_state.pan_v_editing)
+    if (is_pan_v_editing())
     {
         GPS_LOG("[GPS] handle_rotary: PanV editing mode, calling action_pan_step\n");
         action_pan_step(ControlId::PanVIndicator, diff);
@@ -523,6 +925,11 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
         return;
     }
 
+    if (try_handle_pan_edit_key(target, key, e, "handle_key"))
+    {
+        return;
+    }
+
     if (key == LV_KEY_ENTER)
     {
         if (id == ControlId::BackBtn)
@@ -542,8 +949,8 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
         }
         if (id == ControlId::PanHBtn)
         {
-            if (g_gps_state.pan_h_editing)
-            { // Use pan_h_editing to match original
+            if (is_pan_h_editing())
+            {
                 action_pan_exit();
             }
             else
@@ -554,8 +961,8 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
         }
         if (id == ControlId::PanVBtn)
         {
-            if (g_gps_state.pan_v_editing)
-            { // Use pan_v_editing to match original
+            if (is_pan_v_editing())
+            {
                 action_pan_exit();
             }
             else
@@ -595,8 +1002,8 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
 
     if (show_pan_axis_controls() && (key == 'h' || key == 'H'))
     {
-        if (g_gps_state.pan_h_editing)
-        { // Use pan_h_editing to match original
+        if (is_pan_h_editing())
+        {
             action_pan_exit();
         }
         else
@@ -608,8 +1015,8 @@ static void handle_key(lv_obj_t* target, lv_key_t key, lv_event_t* e)
 
     if (show_pan_axis_controls() && (key == 'v' || key == 'V'))
     {
-        if (g_gps_state.pan_v_editing)
-        { // Use pan_v_editing to match original
+        if (is_pan_v_editing())
+        {
             action_pan_exit();
         }
         else
@@ -717,6 +1124,7 @@ static void action_position_center()
 
     // Update map to show GPS position centered
     update_map_tiles(false);
+    log_map_tile_state("position_center");
     GPS_LOG("[GPS] Position action: centered GPS marker at lat=%.6f, lng=%.6f\n",
             g_gps_state.lat, g_gps_state.lng);
 }
@@ -772,16 +1180,14 @@ static void action_pan_enter(ControlId axis_id)
 
     if (axis_id == ControlId::PanHBtn)
     {
-        g_gps_state.edit_mode = 1;         // PanH
-        g_gps_state.pan_h_editing = true;  // Keep in sync with original code
-        g_gps_state.pan_v_editing = false; // Keep in sync with original code
+        g_gps_state.edit_mode = GpsEditMode::PanH;
         hide_pan_v_indicator();
         show_pan_h_indicator();
 
         if (app_g != NULL && g_gps_state.pan_h_indicator != NULL)
         {
             set_default_group(app_g);
-            bind_encoder_to_group(app_g);
+            bind_navigation_inputs_to_group(app_g);
 
             // Ensure indicator is focused in group editing mode.
             lv_group_focus_obj(g_gps_state.pan_h_indicator);
@@ -790,6 +1196,10 @@ static void action_pan_enter(ControlId axis_id)
             // Focus diagnostics.
             lv_obj_t* f = lv_group_get_focused(app_g);
             bool editing = lv_group_get_editing(app_g);
+            GPS_FLOW_LOG("[GPS][MAP][input] pan_mode enter axis=h focus=%p indicator=%p editing=%d\n",
+                         f,
+                         g_gps_state.pan_h_indicator,
+                         editing);
             GPS_LOG("[GPS] Horizontal pan: editing mode ON, focus=%p, indicator=%p, editing=%d\n",
                     f, g_gps_state.pan_h_indicator, editing);
 
@@ -802,21 +1212,23 @@ static void action_pan_enter(ControlId axis_id)
     }
     else if (axis_id == ControlId::PanVBtn)
     {
-        g_gps_state.edit_mode = 2;         // PanV
-        g_gps_state.pan_v_editing = true;  // Keep in sync with original code
-        g_gps_state.pan_h_editing = false; // Keep in sync with original code
+        g_gps_state.edit_mode = GpsEditMode::PanV;
         hide_pan_h_indicator();
         show_pan_v_indicator();
 
         if (app_g != NULL && g_gps_state.pan_v_indicator != NULL)
         {
             set_default_group(app_g);
-            bind_encoder_to_group(app_g);
+            bind_navigation_inputs_to_group(app_g);
             lv_group_focus_obj(g_gps_state.pan_v_indicator);
             lv_group_set_editing(app_g, true);
 
             // Focus diagnostics.
             lv_obj_t* f = lv_group_get_focused(app_g);
+            GPS_FLOW_LOG("[GPS][MAP][input] pan_mode enter axis=v focus=%p indicator=%p editing=%d\n",
+                         f,
+                         g_gps_state.pan_v_indicator,
+                         lv_group_get_editing(app_g));
             GPS_LOG("[GPS] Vertical pan: editing mode ON, focus=%p, indicator=%p, editing=%d\n",
                     f, g_gps_state.pan_v_indicator, lv_group_get_editing(app_g));
         }
@@ -825,12 +1237,12 @@ static void action_pan_enter(ControlId axis_id)
 
 static void action_pan_exit()
 {
-    if (g_gps_state.edit_mode == 1)
-    { // PanH
+    if (g_gps_state.edit_mode == GpsEditMode::PanH)
+    {
         exit_pan_h_mode();
     }
-    else if (g_gps_state.edit_mode == 2)
-    { // PanV
+    else if (g_gps_state.edit_mode == GpsEditMode::PanV)
+    {
         exit_pan_v_mode();
     }
 }
@@ -912,6 +1324,7 @@ void zoom_popup_apply_selection()
         GPS_LOG("[GPS] Using London as default center (no anchor, no GPS fix)\n");
     }
 
+    const int previous_zoom = g_gps_state.zoom_level;
     g_gps_state.zoom_level = g_gps_state.popup_zoom;
     g_gps_state.lat = center_lat;
     g_gps_state.lng = center_lng;
@@ -924,6 +1337,13 @@ void zoom_popup_apply_selection()
     update_resolution_display();
     update_map_anchor();
     update_map_tiles(false);
+    GPS_FLOW_LOG("[GPS][MAP][flow] zoom_apply from=%d to=%d center=%.6f,%.6f anchor=%d\n",
+                 previous_zoom,
+                 g_gps_state.zoom_level,
+                 g_gps_state.lat,
+                 g_gps_state.lng,
+                 g_gps_state.anchor.valid);
+    log_map_tile_state("zoom_apply");
     update_zoom_btn();
     hide_zoom_popup();
 
@@ -953,6 +1373,7 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e)
         return;
     }
     extern void hide_zoom_popup();
+    (void)e;
 
     if (key == LV_KEY_ESC)
     {
@@ -961,31 +1382,16 @@ void zoom_popup_handle_key(lv_key_t key, lv_event_t* e)
         return;
     }
 
-    static bool last_pressed_state = false;
-    bool pressed = indev_is_pressed(e);
-    bool rising_edge = pressed && !last_pressed_state;
-    last_pressed_state = pressed;
-
-    if (key == LV_KEY_ENTER || (key == ENCODER_KEY_ROTATE_UP && rising_edge))
+    if (key == LV_KEY_ENTER)
     {
         zoom_popup_apply_selection();
         return;
     }
 
-    // Handle encoder keycodes only.
     int32_t diff = 0;
-    if (key == ENCODER_KEY_ROTATE_DOWN)
+    if (!map_input_step_from_key(key, InputStepMode::OneDimensional, &diff))
     {
-        diff = 1;
-    }
-    else if (key == ENCODER_KEY_ROTATE_UP)
-    {
-        diff = -1;
-    }
-    else
-    {
-        GPS_LOG("[GPS] zoom_popup_handle_key: unexpected keycode=%d (expected %d or %d), ignoring\n",
-                key, ENCODER_KEY_ROTATE_UP, ENCODER_KEY_ROTATE_DOWN);
+        GPS_LOG("[GPS] zoom_popup_handle_key: unexpected keycode=%d, ignoring\n", key);
         return;
     }
 

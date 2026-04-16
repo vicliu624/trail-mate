@@ -100,18 +100,6 @@ static lv_obj_t* get_list_back_button(void* ctx)
     return screen ? screen->getListBackButton() : nullptr;
 }
 
-static bool handle_filter_activate(void* ctx, lv_obj_t* filter_button)
-{
-    auto* screen = static_cast<ChatMessageListScreen*>(ctx);
-    return screen ? screen->activateFilterButton(filter_button) : false;
-}
-
-static bool handle_list_activate(void* ctx, lv_obj_t* list_button)
-{
-    auto* screen = static_cast<ChatMessageListScreen*>(ctx);
-    return screen ? screen->activateListButton(list_button) : false;
-}
-
 static Adapter make_adapter(ChatMessageListScreen* screen)
 {
     Adapter adapter{};
@@ -126,8 +114,6 @@ static Adapter make_adapter(ChatMessageListScreen* screen)
     adapter.get_list_button = get_list_button;
     adapter.get_preferred_list_index = get_preferred_list_index;
     adapter.get_list_back_button = get_list_back_button;
-    adapter.handle_filter_activate = handle_filter_activate;
-    adapter.handle_list_activate = handle_list_activate;
     adapter.filter_top_back_placement = BackPlacement::Leading;
     return adapter;
 }

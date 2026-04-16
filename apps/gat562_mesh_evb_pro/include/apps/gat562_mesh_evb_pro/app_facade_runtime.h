@@ -115,6 +115,9 @@ class AppFacadeRuntime final : public app::IAppBleFacade,
     void initializeChatRuntime();
     void refreshEffectiveIdentity();
     void syncSelfPositionFromGps();
+    bool consumePostSaveApplySkip(uint8_t bit, const char* label);
+    void markPostSaveApplySkips(uint8_t mask);
+    void clearPostSaveApplySkips();
     chat::NodeId resolveSelfNodeId() const;
     const chat::runtime::SelfIdentityProvider* identityProvider() const;
 
@@ -135,6 +138,7 @@ class AppFacadeRuntime final : public app::IAppBleFacade,
     boards::gat562_mesh_evb_pro::Gat562Board* board_ = nullptr;
     chat::ui::IChatUiRuntime* chat_ui_runtime_ = nullptr;
     bool config_save_pending_ = false;
+    uint8_t post_save_apply_skip_mask_ = 0;
     uint32_t last_chat_store_flush_ms_ = 0;
 };
 

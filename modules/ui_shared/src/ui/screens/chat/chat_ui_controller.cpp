@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 
 #ifndef CHAT_UI_LOG_ENABLE
@@ -97,6 +98,36 @@ chat::MeshProtocol active_mesh_protocol()
 const char* protocol_short_label(chat::MeshProtocol protocol)
 {
     return chat::infra::meshProtocolShortName(protocol);
+}
+
+const char* channel_display_name(chat::ChannelId channel)
+{
+    switch (channel)
+    {
+    case chat::ChannelId::SECONDARY:
+        return "Secondary";
+    case chat::ChannelId::PRIMARY:
+    default:
+        return "Primary";
+    }
+}
+
+std::string base_conversation_name(const chat::ConversationId& conv)
+{
+    if (conv.peer == 0)
+    {
+        return "Broadcast";
+    }
+
+    std::string contact_name = app::messagingFacade().getContactService().getContactName(conv.peer);
+    if (!contact_name.empty())
+    {
+        return contact_name;
+    }
+
+    char buf[16] = {};
+    std::snprintf(buf, sizeof(buf), "%08lX", static_cast<unsigned long>(conv.peer));
+    return buf;
 }
 
 chat::ConversationId teamConversationId()
@@ -367,7 +398,11 @@ void UiController::onInput(const sys::InputEvent& event)
         {
             if (channel_list_)
             {
-                handleChannelSelected(channel_list_->getSelectedConversation());
+                chat::ConversationId selected_conv{};
+                if (channel_list_->tryGetSelectedConversation(&selected_conv))
+                {
+                    handleChannelSelected(selected_conv);
+                }
             }
         }
         else if (event.input_type == sys::InputEvent::KeyPress && event.value == 27)
@@ -588,7 +623,7 @@ void UiController::switchToConversation(chat::ConversationId conv)
     }
 
     // Update header (prefer contact name, else short_name)
-    std::string title = "Broadcast";
+    std::string title = resolveConversationDisplayName(conv);
     if (conv.peer != 0)
     {
         std::string contact_name = app::messagingFacade().getContactService().getContactName(conv.peer);
@@ -690,7 +725,7 @@ void UiController::switchToCompose(chat::ConversationId conv)
         }
     }
 
-    std::string title = "Broadcast";
+    std::string title = resolveConversationDisplayName(conv);
     if (team_conv_active_)
     {
         team::ui::TeamUiSnapshot snap;
@@ -812,14 +847,44 @@ void UiController::normalizeConversationNames(std::vector<chat::ConversationMeta
 {
     for (auto& conv : convs)
     {
-        if (conv.id.peer == 0)
+        if (isTeamConversationId(conv.id))
         {
             continue;
         }
-        std::string contact_name = app::messagingFacade().getContactService().getContactName(conv.id.peer);
-        if (!contact_name.empty())
+
+        conv.name = base_conversation_name(conv.id);
+    }
+
+    for (auto& conv : convs)
+    {
+        if (isTeamConversationId(conv.id))
         {
-            conv.name = contact_name;
+            continue;
+        }
+
+        int channel_variant_count = 0;
+        for (const auto& other : convs)
+        {
+            if (isTeamConversationId(other.id))
+            {
+                continue;
+            }
+            if (other.id.protocol != conv.id.protocol)
+            {
+                continue;
+            }
+            if (other.id.peer != conv.id.peer)
+            {
+                continue;
+            }
+            channel_variant_count++;
+        }
+
+        if (channel_variant_count > 1)
+        {
+            conv.name += " (";
+            conv.name += channel_display_name(conv.id.channel);
+            conv.name += ")";
         }
     }
 }
@@ -832,8 +897,25 @@ void UiController::applyConversationListToUi()
     }
 
     channel_list_->setConversations(cached_conversations_);
-    channel_list_->setSelectedConversation(current_conv_);
     channel_list_->updateBatteryFromBoard();
+}
+
+std::string UiController::resolveConversationDisplayName(const chat::ConversationId& conv) const
+{
+    if (isTeamConversation(conv))
+    {
+        return "Team";
+    }
+
+    for (const auto& item : cached_conversations_)
+    {
+        if (item.id == conv && !item.name.empty())
+        {
+            return item.name;
+        }
+    }
+
+    return base_conversation_name(conv);
 }
 
 void UiController::updateConversationMetaForMessage(const chat::ChatMessage& msg,
@@ -847,7 +929,7 @@ void UiController::updateConversationMetaForMessage(const chat::ChatMessage& msg
 
     chat::ConversationMeta meta;
     meta.id = chat::ConversationId(msg.channel, msg.peer, msg.protocol);
-    meta.name = (msg.peer == 0) ? "Broadcast" : resolve_contact_name(msg.peer);
+    meta.name = base_conversation_name(meta.id);
     meta.preview = msg.text;
     meta.last_timestamp = msg.timestamp;
     meta.unread = (increment_unread && msg.status == chat::MessageStatus::Incoming) ? 1 : 0;
@@ -869,12 +951,8 @@ void UiController::updateConversationMetaForMessage(const chat::ChatMessage& msg
         break;
     }
 
-    if (!found && msg.peer == 0)
-    {
-        meta.name = "Broadcast";
-    }
-
     cached_conversations_.insert(cached_conversations_.begin(), meta);
+    normalizeConversationNames(cached_conversations_);
 }
 
 bool UiController::updateConversationViewForIncoming(const chat::ChatMessage& msg)

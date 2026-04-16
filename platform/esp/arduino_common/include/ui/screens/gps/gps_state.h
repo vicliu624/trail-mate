@@ -20,6 +20,14 @@
  * Makes cleanup/exit logic simpler and prevents state leaks
  * Note: No macro aliases - use g_gps_state.member directly
  */
+enum class GpsEditMode : uint8_t
+{
+    None = 0,
+    PanH = 1,
+    PanV = 2,
+    ZoomPopup = 3,
+};
+
 struct GPSPageState
 {
     struct TrackOverlayPoint
@@ -162,12 +170,21 @@ struct GPSPageState
     std::vector<TeamSignalMarker> team_signal_markers;
     uint32_t team_signal_marker_last_ms = 0;
 
-    // pan button editing state (for toggle behavior) - DEPRECATED, use edit_mode instead
-    bool pan_h_editing = false; // Horizontal pan button in editing mode (rotary scrolls map)
-    bool pan_v_editing = false; // Vertical pan button in editing mode (rotary scrolls map)
-
     // Edit mode state machine
-    uint8_t edit_mode = 0; // 0=None, 1=PanH, 2=PanV, 3=ZoomPopup
+    GpsEditMode edit_mode = GpsEditMode::None;
+
+#ifdef USING_INPUT_DEV_TOUCHPAD
+    struct TouchPanState
+    {
+        bool pressed = false;
+        bool dragging = false;
+        lv_point_t start = {0, 0};
+        lv_point_t last = {0, 0};
+        int start_pan_x = 0;
+        int start_pan_y = 0;
+    } touch_pan;
+    lv_timer_t* touch_timer = nullptr;
+#endif
 
     // refresh optimization
     bool pending_refresh = false;     // Flag to indicate map needs refresh (for batched updates)

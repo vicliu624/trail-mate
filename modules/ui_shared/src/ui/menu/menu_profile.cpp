@@ -66,6 +66,7 @@ MenuLayoutProfile make_tdeck_profile()
     profile.wrap_grid = true;
     profile.vertical_scroll = true;
     profile.snap_center = false;
+    profile.directional_key_nav = true;
     profile.transparent_cards = true;
     profile.show_top_bar = false;
     profile.show_card_label = true;
@@ -116,6 +117,7 @@ MenuLayoutProfile make_pager_profile()
     profile.wrap_grid = false;
     profile.vertical_scroll = false;
     profile.snap_center = true;
+    profile.directional_key_nav = false;
     profile.transparent_cards = false;
     profile.show_top_bar = false;
     profile.show_card_label = false;

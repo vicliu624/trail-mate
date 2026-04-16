@@ -15,6 +15,7 @@ namespace ble
 {
 
 class MeshCoreBleService final : public BleService,
+                                 public MeshCorePhoneHooks,
                                  public chat::ChatService::IncomingTextObserver
 {
   public:
@@ -24,6 +25,9 @@ class MeshCoreBleService final : public BleService,
     void start() override;
     void stop() override;
     void update() override;
+    bool isRunning() const override;
+    void setDeviceName(const std::string& name) override;
+    bool getPairingStatus(BlePairingStatus* out) const override;
     void onIncomingText(const chat::MeshIncomingText& msg) override;
 
     bool handleRxFrame(const uint8_t* data, size_t len);
@@ -31,6 +35,8 @@ class MeshCoreBleService final : public BleService,
 
   private:
     void sendPendingNotifications();
+    bool getCustomVars(std::string* out) const override;
+    bool setCustomVar(const char* key, const char* value) override;
 
     app::IAppBleFacade& ctx_;
     std::string device_name_;
@@ -38,6 +44,8 @@ class MeshCoreBleService final : public BleService,
     ::BLECharacteristic rx_char_;
     ::BLECharacteristic tx_char_;
     bool active_ = false;
+    bool gatt_initialized_ = false;
+    bool observer_registered_ = false;
     std::unique_ptr<MeshCorePhoneCore> core_;
 };
 

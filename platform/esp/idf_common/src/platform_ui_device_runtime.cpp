@@ -2,12 +2,14 @@
 
 #include <ctime>
 
-#include "board/BoardBase.h"
+#include "boards/t_display_p4/board_profile.h"
 #include "boards/tab5/rtc_runtime.h"
+#include "boards/tab5/tab5_board.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
+#include "platform/esp/idf_common/gps_runtime.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 #include "bsp/m5stack_tab5.h"
@@ -98,7 +100,19 @@ bool card_ready()
 
 bool gps_ready()
 {
-    return platform::esp::idf_common::bsp_runtime::gps_capable();
+    return platform::esp::idf_common::gps_runtime::is_enabled() ||
+           platform::esp::idf_common::gps_runtime::is_powered();
+}
+
+bool gps_supported()
+{
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+    return ::boards::tab5::Tab5Board::hasGpsUart();
+#elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+    return ::boards::t_display_p4::kBoardProfile.has_gps_uart;
+#else
+    return false;
+#endif
 }
 
 int power_tier()

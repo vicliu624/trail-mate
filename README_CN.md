@@ -4,7 +4,7 @@
 
 > 面向户外导航与通信的低功耗、离线优先手持设备
 
-[English](README.md) | [中文](README_CN.md)
+[English](README.md) | [中文](README_CN.md) | [加入 Discord 社区](https://discord.gg/87PVMVUP)
 
 ---
 
@@ -58,9 +58,9 @@ Trail-mate 将 **稳定性、效率与互操作性** 置于功能堆叠与视觉
 SD 卡瓦片目录结构示例：
 
 ```text
-/maps/osm/{z}/{x}/{y}.png
-/maps/terrain/{z}/{x}/{y}.png
-/maps/satellite/{z}/{x}/{y}.jpg
+/maps/base/osm/{z}/{x}/{y}.png
+/maps/base/terrain/{z}/{x}/{y}.png
+/maps/base/satellite/{z}/{x}/{y}.jpg
 /maps/contour/major-500/{z}/{x}/{y}.png
 /maps/contour/major-200/{z}/{x}/{y}.png
 /maps/contour/major-100/{z}/{x}/{y}.png
@@ -598,6 +598,7 @@ https://github.com/dawsonjon/PicoSSTV 。我们的 SSTV 接收功能参考了其
 ## 联系方式
 
 * Email：**[vicliu@outlook.com](mailto:vicliu@outlook.com)**
+* Discord：**[Trail Mate Discord](https://discord.gg/87PVMVUP)**
 * 微信：**vicliu890624**
 
 可以联系作者的事项包括但不限于：
@@ -610,7 +611,7 @@ https://github.com/dawsonjon/PicoSSTV 。我们的 SSTV 接收功能参考了其
 * 现场部署建议
 * 不方便通过 Issue 描述的问题
 
-实时技术沟通建议使用微信。
+实时技术沟通建议使用 Discord 或微信。
 正式、较长内容建议使用 Email。
 
 ---

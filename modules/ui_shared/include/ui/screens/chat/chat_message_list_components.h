@@ -38,6 +38,7 @@ class ChatMessageListScreen
 
     void setSelected(int index);
     void setSelectedConversation(const chat::ConversationId& conv);
+    bool tryGetSelectedConversation(chat::ConversationId* conv) const;
     chat::ConversationId getSelectedConversation() const;
 
     void setActionCallback(void (*cb)(ActionIntent intent,
@@ -56,8 +57,6 @@ class ChatMessageListScreen
     size_t getItemCount() const { return items_.size(); }
     lv_obj_t* getItemButton(size_t index) const;
     int getSelectedIndex() const { return selected_index_; }
-    bool activateFilterButton(lv_obj_t* button);
-    bool activateListButton(lv_obj_t* button);
 
   private:
     enum class TimerDomain
@@ -90,13 +89,6 @@ class ChatMessageListScreen
         chat::ConversationId conv{};
     };
 
-    struct FocusPayload
-    {
-        LifetimeGuard* guard = nullptr;
-        ChatMessageListScreen* screen = nullptr;
-        bool focus_list = false;
-    };
-
     enum class FilterMode
     {
         Direct,
@@ -113,7 +105,7 @@ class ChatMessageListScreen
     lv_obj_t* team_btn_ = nullptr;
     lv_obj_t* list_back_btn_ = nullptr;
 
-    int selected_index_ = 0;
+    int selected_index_ = -1;
     FilterMode filter_mode_ = FilterMode::Direct;
 
     void (*action_cb_)(ActionIntent intent,
@@ -146,20 +138,17 @@ class ChatMessageListScreen
     void setFilterMode(FilterMode mode);
 
     static void item_event_cb(lv_event_t* e);
-    static void list_panel_click_cb(lv_event_t* e);
     static void list_back_event_cb(lv_event_t* e);
     static void item_focused_cb(lv_event_t* e);
     static void filter_focus_cb(lv_event_t* e);
     static void filter_click_cb(lv_event_t* e);
     static void debug_touch_event_cb(lv_event_t* e);
     static void async_action_cb(void* user_data);
-    static void async_focus_change_cb(void* user_data);
     static void on_root_deleted(lv_event_t* e);
     static void handle_back(void* user_data);
 
     void handle_root_deleted();
     void schedule_action_async(ActionIntent intent, const chat::ConversationId& conv);
-    void schedule_focus_change_async(bool focus_list);
     lv_timer_t* add_timer(lv_timer_cb_t cb, uint32_t period_ms, void* user_data, TimerDomain domain);
     void clear_timers(TimerDomain domain);
     void clear_all_timers();

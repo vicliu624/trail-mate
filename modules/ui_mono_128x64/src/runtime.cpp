@@ -466,24 +466,6 @@ bool hasPrefixIgnoreCase(const char* text, const char* prefix)
     return true;
 }
 
-bool equalsIgnoreCase(const char* a, const char* b)
-{
-    if (!a || !b)
-    {
-        return false;
-    }
-    while (*a != '\0' && *b != '\0')
-    {
-        if (upperAscii(*a) != upperAscii(*b))
-        {
-            return false;
-        }
-        ++a;
-        ++b;
-    }
-    return *a == '\0' && *b == '\0';
-}
-
 double degToRad(double deg)
 {
     return deg * 3.14159265358979323846 / 180.0;
@@ -556,57 +538,6 @@ void formatBearingCompact(char* out, size_t out_len, double bearing_deg)
 
     const int rounded_deg = static_cast<int>(std::lround(normalizeBearingDeg(bearing_deg))) % 360;
     std::snprintf(out, out_len, "%s%d", bearingOctant(bearing_deg), rounded_deg);
-}
-
-void drawBearingArrow(MonoDisplay& display, int center_x, int center_y, double bearing_deg, bool selected_row)
-{
-    const bool on = !selected_row;
-    const int dir = static_cast<int>((normalizeBearingDeg(bearing_deg) + 22.5) / 45.0) % 8;
-    display.drawPixel(center_x, center_y, on);
-
-    switch (dir)
-    {
-    case 0: // N
-        display.drawPixel(center_x, center_y - 2, on);
-        display.drawPixel(center_x - 1, center_y - 1, on);
-        display.drawPixel(center_x + 1, center_y - 1, on);
-        break;
-    case 1: // NE
-        display.drawPixel(center_x + 2, center_y - 2, on);
-        display.drawPixel(center_x + 1, center_y - 2, on);
-        display.drawPixel(center_x + 2, center_y - 1, on);
-        break;
-    case 2: // E
-        display.drawPixel(center_x + 2, center_y, on);
-        display.drawPixel(center_x + 1, center_y - 1, on);
-        display.drawPixel(center_x + 1, center_y + 1, on);
-        break;
-    case 3: // SE
-        display.drawPixel(center_x + 2, center_y + 2, on);
-        display.drawPixel(center_x + 1, center_y + 2, on);
-        display.drawPixel(center_x + 2, center_y + 1, on);
-        break;
-    case 4: // S
-        display.drawPixel(center_x, center_y + 2, on);
-        display.drawPixel(center_x - 1, center_y + 1, on);
-        display.drawPixel(center_x + 1, center_y + 1, on);
-        break;
-    case 5: // SW
-        display.drawPixel(center_x - 2, center_y + 2, on);
-        display.drawPixel(center_x - 1, center_y + 2, on);
-        display.drawPixel(center_x - 2, center_y + 1, on);
-        break;
-    case 6: // W
-        display.drawPixel(center_x - 2, center_y, on);
-        display.drawPixel(center_x - 1, center_y - 1, on);
-        display.drawPixel(center_x - 1, center_y + 1, on);
-        break;
-    default: // NW
-        display.drawPixel(center_x - 2, center_y - 2, on);
-        display.drawPixel(center_x - 1, center_y - 2, on);
-        display.drawPixel(center_x - 2, center_y - 1, on);
-        break;
-    }
 }
 
 void drawLine(MonoDisplay& display, int x0, int y0, int x1, int y1, bool on = true)
@@ -708,40 +639,6 @@ void drawFrame(MonoDisplay& display, int x, int y, int w, int h, bool filled = f
     display.fillRect(x, y + h - 1, w, 1, true);
     display.fillRect(x, y, 1, h, true);
     display.fillRect(x + w - 1, y, 1, h, true);
-}
-
-void drawBatteryIcon(MonoDisplay& display, int x, int y, int level, bool charging)
-{
-    drawFrame(display, x, y, 14, 7);
-    display.fillRect(x + 14, y + 2, 2, 3, true);
-    const int fill_w = clampValue((level < 0 ? 0 : level), 0, 100) / 25;
-    for (int i = 0; i < fill_w; ++i)
-    {
-        display.fillRect(x + 2 + i * 3, y + 2, 2, 3, true);
-    }
-    if (charging)
-    {
-        display.fillRect(x + 6, y + 1, 1, 5, true);
-        display.drawPixel(x + 7, y + 2, true);
-        display.drawPixel(x + 5, y + 4, true);
-    }
-}
-
-void drawMessageIcon(MonoDisplay& display, int x, int y, bool active)
-{
-    drawFrame(display, x, y + 1, 10, 7);
-    display.drawPixel(x + 1, y + 2, true);
-    display.drawPixel(x + 2, y + 3, true);
-    display.drawPixel(x + 3, y + 4, true);
-    display.drawPixel(x + 4, y + 5, true);
-    display.drawPixel(x + 8, y + 2, true);
-    display.drawPixel(x + 7, y + 3, true);
-    display.drawPixel(x + 6, y + 4, true);
-    display.drawPixel(x + 5, y + 5, true);
-    if (active)
-    {
-        display.fillRect(x + 11, y, 2, 2, true);
-    }
 }
 
 void formatToggleLabel(char* out, size_t out_len, const char* name, bool enabled)
@@ -1209,6 +1106,58 @@ bool loadBlePairingStatus(app::IAppFacade* app, ble::BlePairingStatus* out)
     }
     ble::BleManager* manager = app->getBleManager();
     return manager ? manager->getPairingStatus(out) : false;
+}
+
+enum class BleDisplayState
+{
+    Off,
+    On,
+    Link,
+};
+
+BleDisplayState resolveBleDisplayState(app::IAppFacade* app)
+{
+    if (!app)
+    {
+        return BleDisplayState::Off;
+    }
+
+    ble::BleManager* manager = app->getBleManager();
+    if (!manager || !manager->isEnabled())
+    {
+        return BleDisplayState::Off;
+    }
+
+    ble::BlePairingStatus status{};
+    if (manager->getPairingStatus(&status) && status.is_connected)
+    {
+        return BleDisplayState::Link;
+    }
+
+    return BleDisplayState::On;
+}
+
+const char* bleDisplayStateLabel(BleDisplayState state)
+{
+    switch (state)
+    {
+    case BleDisplayState::Link:
+        return "LINK";
+    case BleDisplayState::On:
+        return "ON";
+    case BleDisplayState::Off:
+    default:
+        return "OFF";
+    }
+}
+
+void formatBleStateLabel(char* out, size_t out_len, app::IAppFacade* app)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    std::snprintf(out, out_len, "BLE %s", bleDisplayStateLabel(resolveBleDisplayState(app)));
 }
 
 const char* blePairingModeLabel(const ble::BlePairingStatus& status)
@@ -1985,6 +1934,7 @@ void Runtime::render()
 
     ble::BlePairingStatus ble_status{};
     if (loadBlePairingStatus(app(), &ble_status) &&
+        ble_status.available &&
         ble_status.requires_passkey &&
         ble_status.is_pairing_active)
     {
@@ -2040,6 +1990,7 @@ void Runtime::renderScreensaver()
 {
     char protocol[8] = {};
     char freq[20] = {};
+    char ram_buf[24] = {};
     char time_buf[16] = {};
     char time_main_buf[8] = {};
     char time_sec_buf[4] = {};
@@ -2053,7 +2004,7 @@ void Runtime::renderScreensaver()
     char top_left_buf[32] = {};
     char top_right_buf[32] = {};
     char left_toggle_buf[12] = {};
-    char right_toggle_buf[12] = {};
+    char left_ble_buf[12] = {};
     formatProtocol(protocol, sizeof(protocol));
     formatNodeLabel(node_buf, sizeof(node_buf));
     formatTime(time_buf, sizeof(time_buf), date_buf, sizeof(date_buf));
@@ -2068,11 +2019,11 @@ void Runtime::renderScreensaver()
 
     refreshGnssSnapshot();
     const auto battery = host_.battery_info_fn ? host_.battery_info_fn() : platform::ui::device::BatteryInfo{};
+    const auto ram = host_.ram_usage_fn ? host_.ram_usage_fn() : HostCallbacks::ResourceUsage{};
     const auto& gps = gnss_snapshot_state_;
     const auto& gnss_status = gnss_snapshot_status_;
     const int unread = app() ? app()->getChatService().getTotalUnread() : 0;
     const bool gps_enabled = host_.gps_enabled_fn && host_.gps_enabled_fn();
-    const bool ble_enabled = app() && app()->isBleEnabled();
     std::snprintf(unread_buf, sizeof(unread_buf), unread > 99 ? "99+" : "%d", unread);
     if (battery.available && battery.level >= 0)
     {
@@ -2111,14 +2062,25 @@ void Runtime::renderScreensaver()
     std::snprintf(top_left_buf, sizeof(top_left_buf), "%s %s", protocol[0] ? protocol : "--", bat_pct_buf);
     std::snprintf(top_right_buf, sizeof(top_right_buf), "%s", freq[0] ? freq : "--");
     formatToggleLabel(left_toggle_buf, sizeof(left_toggle_buf), "GPS", gps_enabled);
-    formatToggleLabel(right_toggle_buf, sizeof(right_toggle_buf), "BLE", ble_enabled);
+    formatBleStateLabel(left_ble_buf, sizeof(left_ble_buf), app());
+    if (ram.available && ram.total_bytes > 0)
+    {
+        std::snprintf(ram_buf, sizeof(ram_buf), "RAM %lu/%luK",
+                      static_cast<unsigned long>(ram.used_bytes / 1024U),
+                      static_cast<unsigned long>(ram.total_bytes / 1024U));
+    }
+    else
+    {
+        std::snprintf(ram_buf, sizeof(ram_buf), "RAM --");
+    }
 
     constexpr int kTopY = 1;
     constexpr int kTopDetailY = 9;
-    constexpr int kTimeY = 22;
-    constexpr int kSideToggleY = 26;
-    constexpr int kSecY = 28;
-    constexpr int kDateY = 42;
+    constexpr int kTimeY = 24;
+    constexpr int kSidePrimaryY = 27;
+    constexpr int kSideSecondaryY = 35;
+    constexpr int kSecY = 30;
+    constexpr int kDateY = 44;
     constexpr int kFooterY = 55;
 
     drawTextClipped(2, kTopY, 60, top_left_buf);
@@ -2138,9 +2100,8 @@ void Runtime::renderScreensaver()
         const int sec_x = std::min(display_.width() - 12, time_x + time_w + 4);
         text_renderer_.drawText(display_, sec_x, kSecY, time_sec_buf);
     }
-    drawTextClipped(0, kSideToggleY, 28, left_toggle_buf);
-    const int right_toggle_w = text_renderer_.measureTextWidth(right_toggle_buf);
-    text_renderer_.drawText(display_, std::max(96, display_.width() - right_toggle_w), kSideToggleY, right_toggle_buf);
+    drawTextClipped(0, kSidePrimaryY, 42, left_toggle_buf);
+    drawTextClipped(0, kSideSecondaryY, 42, left_ble_buf);
     const int status_w = text_renderer_.measureTextWidth(status_buf);
     text_renderer_.drawText(display_, std::max(0, (display_.width() - status_w) / 2), kDateY, status_buf);
 
@@ -2148,9 +2109,22 @@ void Runtime::renderScreensaver()
     char footer_right[24] = {};
     std::snprintf(footer_left, sizeof(footer_left), "ID %s", node_buf[0] ? node_buf : "--");
     std::snprintf(footer_right, sizeof(footer_right), "%s", tz_buf[0] ? tz_buf : "UTC+0");
-    drawTextClipped(3, kFooterY, 76, footer_left);
-    const int right_w = text_renderer_.measureTextWidth(footer_right);
-    text_renderer_.drawText(display_, std::max(80, display_.width() - right_w - 3), kFooterY, footer_right);
+    const int ram_w = text_renderer_.measureTextWidth(ram_buf);
+    const int ram_x = std::max(0, (display_.width() - ram_w) / 2);
+    const int footer_gap = 4;
+    const int footer_left_x = 0;
+    const int footer_left_w = std::max(0, ram_x - footer_gap - footer_left_x);
+    const int footer_right_x = std::min(display_.width(), ram_x + ram_w + footer_gap);
+    const int footer_right_w = std::max(0, display_.width() - footer_right_x);
+    if (footer_left_w > 0)
+    {
+        drawConversationText(footer_left_x, kFooterY, footer_left_w, footer_left, false, false);
+    }
+    text_renderer_.drawText(display_, ram_x, kFooterY, ram_buf);
+    if (footer_right_w > 0)
+    {
+        drawConversationText(footer_right_x, kFooterY, footer_right_w, footer_right, false, true);
+    }
 
     if (battery.available && battery.level >= 0 && battery.level <= 20)
     {
@@ -2814,6 +2788,14 @@ void Runtime::renderRadioSettings()
     const auto protocol = app()->getConfig().mesh_protocol;
     const char* const* items = radioItemsFor(protocol);
     const size_t item_count = radioItemCount(protocol);
+    if (item_count == 0)
+    {
+        return;
+    }
+    if (radio_index_ >= item_count)
+    {
+        radio_index_ = item_count - 1;
+    }
 
     drawTitleBar("LORA", protocolShortLabel(protocol));
     char value[40] = {};
@@ -2883,20 +2865,20 @@ void Runtime::renderDeviceSettings()
     {
         if (i == 0)
         {
-            if (has_ble_status && ble_status.requires_passkey && ble_status.passkey != 0)
+            if (has_ble_status && ble_status.available && ble_status.requires_passkey && ble_status.passkey != 0)
             {
                 std::snprintf(line, sizeof(line), "BLE: ON %s %06lu",
                               ble_status.is_fixed_pin ? "FIX" : "PIN",
                               static_cast<unsigned long>(ble_status.passkey));
             }
-            else if (has_ble_status && ble_status.requires_passkey)
+            else if (has_ble_status && ble_status.available && ble_status.requires_passkey)
             {
                 std::snprintf(line, sizeof(line), "BLE: ON %s",
                               ble_status.is_fixed_pin ? "FIXED" : "RANDOM");
             }
             else
             {
-                std::snprintf(line, sizeof(line), "BLE: %s", app()->isBleEnabled() ? "ON" : "OFF");
+                std::snprintf(line, sizeof(line), "BLE: %s", bleDisplayStateLabel(resolveBleDisplayState(app())));
             }
         }
         else if (i == 1)
@@ -3056,8 +3038,8 @@ void Runtime::renderInfoPage()
     char value[40] = {};
     std::snprintf(value, sizeof(value), "%s", protocolLabel(cfg.mesh_protocol));
     push_kv("PROTO", value);
-    push_kv("BLE", app()->isBleEnabled() ? "ON" : "OFF");
-    if (has_ble_status && ble_status.requires_passkey)
+    push_kv("BLE", bleDisplayStateLabel(resolveBleDisplayState(app())));
+    if (has_ble_status && ble_status.available && ble_status.requires_passkey)
     {
         push_kv("BLE MODE", blePairingModeLabel(ble_status));
         if (ble_status.passkey != 0)
@@ -3101,8 +3083,8 @@ void Runtime::renderInfoPage()
     }
 
     push_line("[SYSTEM]");
-    push_kv("BLE", app()->isBleEnabled() ? "ON" : "OFF");
-    if (has_ble_status && ble_status.requires_passkey)
+    push_kv("BLE", bleDisplayStateLabel(resolveBleDisplayState(app())));
+    if (has_ble_status && ble_status.available && ble_status.requires_passkey)
     {
         push_kv("BLE MODE", blePairingModeLabel(ble_status));
         if (ble_status.passkey != 0)
@@ -4070,205 +4052,6 @@ void Runtime::ensureSleepTimeout(InputAction action)
     enterPage(Page::Sleep);
 }
 
-void Runtime::adjustRadioSetting(int delta)
-{
-    if (!app())
-    {
-        return;
-    }
-
-    auto& cfg = app()->getConfig();
-    switch (radio_index_)
-    {
-    case 0:
-        app()->switchMeshProtocol(cfg.mesh_protocol == chat::MeshProtocol::Meshtastic
-                                      ? chat::MeshProtocol::MeshCore
-                                      : chat::MeshProtocol::Meshtastic,
-                                  false);
-        appendStatus(this, "proto %s", protocolShortLabel(app()->getConfig().mesh_protocol));
-        break;
-    case 1:
-        if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
-        {
-            size_t count = 0;
-            const auto* table = chat::meshtastic::getRegionTable(&count);
-            if (count > 0)
-            {
-                size_t index = 0;
-                for (size_t i = 0; i < count; ++i)
-                {
-                    if (table[i].code ==
-                        static_cast<meshtastic_Config_LoRaConfig_RegionCode>(cfg.meshtastic_config.region))
-                    {
-                        index = i;
-                        break;
-                    }
-                }
-                index = static_cast<size_t>(clampValue<int>(static_cast<int>(index) + delta, 0, static_cast<int>(count) - 1));
-                cfg.meshtastic_config.region = static_cast<uint8_t>(table[index].code);
-            }
-        }
-        else
-        {
-            size_t count = 0;
-            const auto* table = chat::meshcore::getRegionPresetTable(&count);
-            if (count > 0)
-            {
-                int index = -1;
-                for (size_t i = 0; i < count; ++i)
-                {
-                    if (table[i].id == cfg.meshcore_config.meshcore_region_preset)
-                    {
-                        index = static_cast<int>(i);
-                        break;
-                    }
-                }
-                index = clampValue(index + delta, 0, static_cast<int>(count) - 1);
-                cfg.meshcore_config.meshcore_region_preset = table[index].id;
-            }
-        }
-        appendStatus(this, "region %s", radioRegionLabel(cfg));
-        break;
-    case 2:
-        cfg.activeMeshConfig().tx_power = static_cast<int8_t>(clampValue<int>(
-            static_cast<int>(cfg.activeMeshConfig().tx_power) + delta,
-            static_cast<int>(app::AppConfig::kTxPowerMinDbm),
-            static_cast<int>(app::AppConfig::kTxPowerMaxDbm)));
-        appendStatus(this, "tx %ddBm", static_cast<int>(cfg.activeMeshConfig().tx_power));
-        break;
-    case 3:
-        if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
-        {
-            constexpr int kPresetMin = static_cast<int>(meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST);
-            constexpr int kPresetMax = static_cast<int>(meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO);
-            cfg.meshtastic_config.modem_preset = static_cast<uint8_t>(clampValue(
-                static_cast<int>(cfg.meshtastic_config.modem_preset) + delta, kPresetMin, kPresetMax));
-            cfg.meshtastic_config.use_preset = true;
-        }
-        else
-        {
-            size_t count = 0;
-            const auto* table = chat::meshcore::getRegionPresetTable(&count);
-            if (count > 0)
-            {
-                int index = -1;
-                for (size_t i = 0; i < count; ++i)
-                {
-                    if (table[i].id == cfg.meshcore_config.meshcore_region_preset)
-                    {
-                        index = static_cast<int>(i);
-                        break;
-                    }
-                }
-                index = clampValue(index + delta, 0, static_cast<int>(count) - 1);
-                cfg.meshcore_config.meshcore_region_preset = table[index].id;
-                cfg.meshcore_config.meshcore_freq_mhz = table[index].freq_mhz;
-                cfg.meshcore_config.meshcore_bw_khz = table[index].bw_khz;
-                cfg.meshcore_config.meshcore_sf = table[index].sf;
-                cfg.meshcore_config.meshcore_cr = table[index].cr;
-            }
-        }
-        if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
-        {
-            appendStatus(this, "modem %s",
-                         chat::meshtastic::presetDisplayName(
-                             static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset)));
-        }
-        else
-        {
-            appendStatus(this, "preset %s", radioRegionLabel(cfg));
-        }
-        break;
-    case 4:
-        if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
-        {
-            const int current = static_cast<int>(normalizedMeshtasticChannelNum(cfg.meshtastic_config.channel_num));
-            cfg.meshtastic_config.channel_num = static_cast<uint16_t>(clampValue<int>(
-                current + delta, 0, static_cast<int>(kMeshtasticChannelNumMax)));
-            if (cfg.meshtastic_config.channel_num == 0)
-            {
-                appendStatus(this, "channel auto");
-            }
-            else
-            {
-                appendStatus(this, "channel slot %u", static_cast<unsigned>(cfg.meshtastic_config.channel_num));
-            }
-        }
-        else
-        {
-            cfg.meshcore_config.meshcore_channel_slot = static_cast<uint8_t>(clampValue<int>(
-                static_cast<int>(cfg.meshcore_config.meshcore_channel_slot) + delta, 0, 15));
-            appendStatus(this, "slot %u", static_cast<unsigned>(cfg.meshcore_config.meshcore_channel_slot));
-        }
-        break;
-    case 5:
-        setEncryptEnabled(cfg, !encryptEnabled(cfg));
-        appendStatus(this, "encrypt %s", encryptEnabled(cfg) ? "on" : "off");
-        break;
-    default:
-        break;
-    }
-
-    commitConfig();
-}
-
-void Runtime::adjustDeviceSetting(int delta)
-{
-    if (!app())
-    {
-        return;
-    }
-
-    if (device_index_ == 0)
-    {
-        app()->setBleEnabled(!app()->isBleEnabled());
-        appendStatus(this, "ble %s", app()->isBleEnabled() ? "on" : "off");
-    }
-    else if (device_index_ == 1)
-    {
-        app()->getConfig().gps_mode = (app()->getConfig().gps_mode == 0) ? 1 : 0;
-        commitConfig();
-        appendStatus(this, "gps %s", app()->getConfig().gps_mode != 0 ? "on" : "off");
-    }
-    else if (device_index_ == 2)
-    {
-        app()->getConfig().gps_sat_mask = nextGpsSatMask(app()->getConfig().gps_sat_mask, delta);
-        commitConfig();
-        appendStatus(this, "sats %s", gpsSatMaskLabel(app()->getConfig().gps_sat_mask));
-    }
-    else if (device_index_ == 3)
-    {
-        static constexpr uint32_t kGpsIntervals[] = {15000UL, 30000UL, 60000UL, 300000UL, 600000UL};
-        size_t index = 0;
-        while (index + 1 < arrayCount(kGpsIntervals) &&
-               kGpsIntervals[index] < app()->getConfig().gps_interval_ms)
-        {
-            ++index;
-        }
-        const int next = clampValue<int>(static_cast<int>(index) + delta, 0, static_cast<int>(arrayCount(kGpsIntervals)) - 1);
-        app()->getConfig().gps_interval_ms = kGpsIntervals[next];
-        commitConfig();
-        appendStatus(this, "gps int %lus", static_cast<unsigned long>(app()->getConfig().gps_interval_ms / 1000UL));
-    }
-    else if (device_index_ == 4)
-    {
-        const uint32_t next = stepScreenTimeoutMs(platform::ui::screen::timeout_ms(), delta);
-        platform::ui::screen::set_timeout_ms(next);
-        char timeout_label[16] = {};
-        formatScreenTimeoutLabel(timeout_label, sizeof(timeout_label), next);
-        appendStatus(this, "screen %s", timeout_label);
-    }
-    else if (device_index_ == 5 && host_.timezone_offset_min_fn && host_.set_timezone_offset_min_fn)
-    {
-        const int current = host_.timezone_offset_min_fn();
-        const int next = clampValue(current + delta * kTimezoneStep, kTimezoneMin, kTimezoneMax);
-        host_.set_timezone_offset_min_fn(next);
-        char tz_label[16] = {};
-        formatTimezoneLabel(next, tz_label, sizeof(tz_label));
-        appendStatus(this, "tz %s", tz_label);
-    }
-}
-
 void Runtime::beginSettingPopup(Page owner, size_t index)
 {
     if (!app())
@@ -4302,6 +4085,28 @@ void Runtime::confirmSettingPopup()
         setting_popup_active_ = false;
         executeActionPageItem(action);
         return;
+    }
+
+    if (setting_popup_owner_ == Page::RadioSettings && setting_popup_index_ == 0)
+    {
+        sanitizeMeshtasticChannelNum(setting_popup_config_);
+        const chat::MeshProtocol target_protocol = setting_popup_config_.mesh_protocol;
+        if (target_protocol != app()->getConfig().mesh_protocol)
+        {
+            if (!app()->switchMeshProtocol(target_protocol, true))
+            {
+                appendStatus(this, "proto fail");
+                return;
+            }
+
+            setting_popup_config_ = app()->getConfig();
+            radio_index_ = 0;
+            char value[32] = {};
+            formatSettingPopupValue(value, sizeof(value));
+            appendStatus(this, "%s", value);
+            setting_popup_active_ = false;
+            return;
+        }
     }
 
     auto& cfg = app()->getConfig();

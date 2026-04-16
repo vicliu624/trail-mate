@@ -177,8 +177,6 @@ class Runtime : public chat::ChatService::IncomingTextObserver
     void commitConfig();
     void ensureBootExit();
     void ensureSleepTimeout(InputAction action);
-    void adjustRadioSetting(int delta);
-    void adjustDeviceSetting(int delta);
     void beginSettingPopup(Page owner, size_t index);
     void cancelSettingPopup();
     void confirmSettingPopup();
