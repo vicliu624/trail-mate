@@ -57,6 +57,7 @@ class ChatMessageListScreen
     size_t getItemCount() const { return items_.size(); }
     lv_obj_t* getItemButton(size_t index) const;
     int getSelectedIndex() const { return selected_index_; }
+
   private:
     enum class TimerDomain
     {

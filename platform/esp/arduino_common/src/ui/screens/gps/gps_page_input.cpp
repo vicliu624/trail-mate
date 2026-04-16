@@ -2,6 +2,7 @@
 #include "platform/ui/gps_runtime.h"
 #include "screen_sleep.h"
 #include "sys/clock.h"
+#include "ui/LV_Helper.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_modal.h"
@@ -10,7 +11,6 @@
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
-#include "ui/LV_Helper.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
 #include <algorithm>
@@ -118,7 +118,6 @@ bool map_input_step_from_key(lv_key_t key, InputStepMode mode, int32_t* out_step
             return true;
         }
         break;
-
     }
 
     return false;
@@ -441,12 +440,12 @@ void unbind_map_touch_input()
 
 static const char* event_input_model_label(lv_event_t* e)
 {
-    #ifdef USING_INPUT_DEV_TOUCHPAD
+#ifdef USING_INPUT_DEV_TOUCHPAD
     if (event_from_pointer(e))
     {
         return "touch";
     }
-    #endif
+#endif
     if (event_from_encoder(e))
     {
         return "encoder";

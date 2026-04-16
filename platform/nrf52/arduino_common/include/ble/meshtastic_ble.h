@@ -99,6 +99,7 @@ class MeshtasticBleService final : public BleService,
     void markConfigSavePending(bool bluetooth_changed, bool module_changed);
     void flushPendingConfigSaves(bool force = false);
     void applyBleSecurity();
+    void logFromRadioState(const char* tag) const;
     void requestPairingIfNeeded(uint16_t conn_handle);
     uint32_t effectivePasskey() const;
     void logDeferredBleEvents();

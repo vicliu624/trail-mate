@@ -21,9 +21,9 @@
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
-#include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 
 #ifndef CHAT_UI_LOG_ENABLE

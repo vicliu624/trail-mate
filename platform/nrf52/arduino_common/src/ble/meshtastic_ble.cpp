@@ -532,6 +532,22 @@ MeshtasticBleService::~MeshtasticBleService()
     stop();
 }
 
+void MeshtasticBleService::logFromRadioState(const char* tag) const
+{
+    bleLogBoth("[BLE][nrf52][mt] fromRadio tag=%s preloaded=%d consume_pending=%d "
+               "queue_count=%u queue_head=%u queue_tail=%u pending_from_num=%d "
+               "notify_enabled=%d connected=%d",
+               tag ? tag : "?",
+               from_radio_preloaded_valid_ ? 1 : 0,
+               from_radio_consume_pending_ ? 1 : 0,
+               static_cast<unsigned>(to_phone_count_),
+               static_cast<unsigned>(to_phone_head_),
+               static_cast<unsigned>(to_phone_tail_),
+               pending_from_num_valid_ ? 1 : 0,
+               from_num_notify_enabled_ ? 1 : 0,
+               connected_ ? 1 : 0);
+}
+
 void MeshtasticBleService::start()
 {
     s_active_service = this;
@@ -601,7 +617,7 @@ void MeshtasticBleService::start()
     pending_passkey_.store(0);
     syncMqttProxySettings();
     bleLogBoth("[BLE][nrf52][mt] service active");
-    logFromRadioState("start_done", this);
+    logFromRadioState("start_done");
 }
 
 void MeshtasticBleService::stop()
@@ -662,9 +678,9 @@ void MeshtasticBleService::update()
 
     if (from_radio_consume_pending_)
     {
-        logFromRadioState("update_before_consume", this);
+        logFromRadioState("update_before_consume");
         markReadableFromRadioConsumed();
-        logFromRadioState("update_after_consume", this);
+        logFromRadioState("update_after_consume");
     }
 
     handleToPhone();

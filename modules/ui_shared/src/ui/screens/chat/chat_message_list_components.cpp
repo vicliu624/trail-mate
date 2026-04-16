@@ -7,10 +7,10 @@
 #include "ui/screens/chat/chat_message_list_components.h"
 
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/components/info_card.h"
 #include "ui/screens/chat/chat_message_list_input.h"
 #include "ui/screens/chat/chat_message_list_layout.h"
 #include "ui/screens/chat/chat_message_list_styles.h"
-#include "ui/components/info_card.h"
 #include "ui/ui_common.h"
 
 #include <algorithm>
