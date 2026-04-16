@@ -18,6 +18,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
+#include "platform/ui/device_runtime.h"
 
 namespace platform::esp::idf_common::gps_runtime
 {
@@ -86,11 +87,6 @@ std::mutex s_mutex;
 uint32_t now_ms()
 {
     return static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
-}
-
-bool gps_available()
-{
-    return platform::esp::idf_common::bsp_runtime::gps_capable();
 }
 
 struct GpsUartPins
@@ -666,13 +662,13 @@ uint32_t last_motion_ms()
 bool is_enabled()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    return gps_available() && s_runtime.enabled;
+    return platform::ui::device::gps_supported() && s_runtime.enabled;
 }
 
 bool is_powered()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    return gps_available() && s_runtime.powered;
+    return platform::ui::device::gps_supported() && s_runtime.powered;
 }
 
 void set_collection_interval(uint32_t interval_ms)
@@ -697,7 +693,7 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     //   1 = Power Save
     //   2 = Fix Only
     // So all current values are active modes, not "off".
-    s_runtime.enabled = gps_available() && sat_mask != 0;
+    s_runtime.enabled = platform::ui::device::gps_supported() && sat_mask != 0;
     if (!s_runtime.enabled)
     {
         s_runtime.stop_requested = true;
@@ -740,7 +736,7 @@ TaskHandle_t get_task_handle()
 void request_startup_probe()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    if (!gps_available() || s_runtime.enabled || s_runtime.worker_handle != nullptr) return;
+    if (!platform::ui::device::gps_supported() || s_runtime.enabled || s_runtime.worker_handle != nullptr) return;
     s_runtime.probe_requested = true;
     s_runtime.probe_deadline_ms = now_ms() + kProbeWarmupMs + kProbeListenMs;
     ensure_worker_locked();

@@ -2,6 +2,7 @@
 #include "ui/screens/chat/chat_message_list_styles.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/fonts/fonts.h"
+#include "ui/components/info_card.h"
 #include "ui/components/two_pane_styles.h"
 
 namespace chat::ui::message_list::styles
@@ -51,6 +52,11 @@ void apply_filter_panel(lv_obj_t* obj)
 
 void apply_item_btn(lv_obj_t* btn)
 {
+    if (::ui::components::info_card::use_tdeck_layout())
+    {
+        ::ui::components::info_card::apply_item_style(btn);
+        return;
+    }
     ::ui::components::two_pane_styles::apply_list_item(btn);
 }
 

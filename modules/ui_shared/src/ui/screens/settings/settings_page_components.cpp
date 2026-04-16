@@ -20,6 +20,7 @@
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 #include "platform/ui/tracker_runtime.h"
+#include "ui/components/info_card.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
@@ -75,15 +76,12 @@ static size_t kMeshCoreRegionPresetOptionCount = 0;
 static settings::ui::SettingOption kTxPowerOptions[64] = {};
 static size_t kTxPowerOptionCount = 0;
 static char kTxPowerLabels[64][12] = {};
-constexpr lv_coord_t kStackedSectionPadX = 8;
-constexpr lv_coord_t kStackedSectionPadY = 3;
-constexpr lv_coord_t kStackedTitleInsetX = 8;
 
 static void update_item_value(settings::ui::ItemWidget& widget);
 
-static bool use_tdeck_stacked_item_layout()
+static bool use_tdeck_info_card_layout()
 {
-    return std::strcmp(::ui::page_profile::current().name, "tdeck") == 0;
+    return ::ui::components::info_card::use_tdeck_layout();
 }
 
 static constexpr bool use_touch_first_settings_mode()
@@ -95,17 +93,6 @@ static constexpr bool use_touch_first_settings_mode()
 #endif
 }
 
-static lv_coord_t resolve_settings_filter_button_height()
-{
-    const lv_coord_t base = ::ui::page_profile::resolve_control_button_height();
-    if (!use_touch_first_settings_mode())
-    {
-        return base;
-    }
-
-    return std::max<lv_coord_t>(34, base + 6);
-}
-
 static bool should_show_settings_list_back_button()
 {
     return !use_touch_first_settings_mode();
@@ -114,32 +101,26 @@ static bool should_show_settings_list_back_button()
 static lv_coord_t resolve_settings_list_item_height()
 {
     const lv_coord_t base = ::ui::page_profile::resolve_control_button_height();
-    if (!use_tdeck_stacked_item_layout())
+    if (!use_tdeck_info_card_layout())
     {
         return base;
     }
 
-    return std::max<lv_coord_t>(46, base + 10);
+    return ::ui::components::info_card::resolve_height(base);
 }
 
 static void configure_list_item_button(lv_obj_t* btn)
 {
-    lv_obj_set_size(btn, LV_PCT(100), resolve_settings_list_item_height());
-    lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
-
-    if (use_tdeck_stacked_item_layout())
+    if (use_tdeck_info_card_layout())
     {
-        lv_obj_set_style_pad_top(btn, 4, LV_PART_MAIN);
-        lv_obj_set_style_pad_bottom(btn, 4, LV_PART_MAIN);
-        lv_obj_set_style_pad_row(btn, 3, LV_PART_MAIN);
-        lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
-        lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START,
-                              LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+        ::ui::components::info_card::configure_item(
+            btn, ::ui::page_profile::resolve_control_button_height());
         return;
     }
 
+    lv_obj_set_size(btn, LV_PCT(100), resolve_settings_list_item_height());
+    lv_obj_set_style_pad_left(btn, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(btn, 10, LV_PART_MAIN);
     lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_SPACE_BETWEEN,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -147,37 +128,13 @@ static void configure_list_item_button(lv_obj_t* btn)
 
 static void create_item_content(settings::ui::ItemWidget& widget, lv_obj_t* btn)
 {
-    if (use_tdeck_stacked_item_layout())
+    if (use_tdeck_info_card_layout())
     {
-        lv_obj_t* title_row = lv_obj_create(btn);
-        lv_obj_set_size(title_row, LV_PCT(100), LV_SIZE_CONTENT);
-        lv_obj_clear_flag(title_row, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_bg_opa(title_row, LV_OPA_TRANSP, LV_PART_MAIN);
-        lv_obj_set_style_border_width(title_row, 0, LV_PART_MAIN);
-        lv_obj_set_style_radius(title_row, 0, LV_PART_MAIN);
-        lv_obj_set_style_pad_left(title_row, kStackedTitleInsetX, LV_PART_MAIN);
-        lv_obj_set_style_pad_right(title_row, kStackedTitleInsetX, LV_PART_MAIN);
-        lv_obj_set_style_pad_top(title_row, 0, LV_PART_MAIN);
-        lv_obj_set_style_pad_bottom(title_row, 0, LV_PART_MAIN);
+        const auto slots = ::ui::components::info_card::create_content(btn);
+        lv_label_set_text(slots.header_main_label, widget.def->label);
+        style::apply_label_primary(slots.header_main_label);
 
-        lv_obj_t* label = lv_label_create(title_row);
-        lv_obj_set_width(label, LV_PCT(100));
-        lv_label_set_text(label, widget.def->label);
-        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
-        style::apply_label_muted(label);
-
-        lv_obj_t* value_box = lv_obj_create(btn);
-        lv_obj_set_size(value_box, LV_PCT(100), LV_SIZE_CONTENT);
-        lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_pad_left(value_box, kStackedSectionPadX, LV_PART_MAIN);
-        lv_obj_set_style_pad_right(value_box, kStackedSectionPadX, LV_PART_MAIN);
-        lv_obj_set_style_pad_top(value_box, kStackedSectionPadY, LV_PART_MAIN);
-        lv_obj_set_style_pad_bottom(value_box, kStackedSectionPadY, LV_PART_MAIN);
-        style::apply_value_box(value_box);
-
-        widget.value_label = lv_label_create(value_box);
-        lv_obj_set_width(widget.value_label, LV_PCT(100));
-        lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_DOT);
+        widget.value_label = slots.body_main_label;
         style::apply_label_primary(widget.value_label);
         update_item_value(widget);
         return;
@@ -2353,7 +2310,7 @@ void create(lv_obj_t* parent)
     for (size_t i = 0; i < g_state.filter_count; ++i)
     {
         lv_obj_t* btn = lv_btn_create(g_state.filter_panel);
-        lv_obj_set_size(btn, LV_PCT(100), resolve_settings_filter_button_height());
+        lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::current().filter_button_height);
         style::apply_btn_filter(btn);
         if (!use_touch_first_settings_mode())
         {

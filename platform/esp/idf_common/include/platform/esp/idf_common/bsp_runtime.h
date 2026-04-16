@@ -12,7 +12,6 @@ bool set_display_brightness(int brightness_percent);
 bool wake_display();
 bool sleep_display();
 int default_awake_brightness_percent();
-bool gps_capable();
 bool sdcard_capable();
 
 } // namespace platform::esp::idf_common::bsp_runtime

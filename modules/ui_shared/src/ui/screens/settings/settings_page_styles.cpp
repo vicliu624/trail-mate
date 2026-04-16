@@ -4,6 +4,7 @@
  */
 
 #include "ui/screens/settings/settings_page_styles.h"
+#include "ui/components/info_card.h"
 #include "ui/components/two_pane_styles.h"
 
 namespace settings::ui::style
@@ -76,6 +77,11 @@ void apply_btn_filter(lv_obj_t* btn)
 
 void apply_list_item(lv_obj_t* item)
 {
+    if (::ui::components::info_card::use_tdeck_layout())
+    {
+        ::ui::components::info_card::apply_item_style(item);
+        return;
+    }
     ::ui::components::two_pane_styles::apply_list_item(item);
 }
 

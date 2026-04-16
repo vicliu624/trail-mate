@@ -28,6 +28,8 @@ namespace
 constexpr const char* kTag = "ui-menu-layout";
 #endif
 
+#define MENU_LAYOUT_DIAG(...) std::printf("[UI][Menu] " __VA_ARGS__)
+
 constexpr size_t kMaxMenuApps = 16;
 
 struct MenuAppUi
@@ -339,6 +341,16 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
         icon = lv_image_create(btn);
         lv_image_set_src(icon, image);
 
+        MENU_LAYOUT_DIAG("createAppButton idx=%u name=%s btn=%p icon=%p image=%p src=%p w=%d h=%d\n",
+                         static_cast<unsigned>(idx),
+                         name ? name : "(null)",
+                         btn,
+                         icon,
+                         image,
+                         lv_image_get_src(icon),
+                         static_cast<int>(lv_image_get_src_width(icon)),
+                         static_cast<int>(lv_image_get_src_height(icon)));
+
         if (profile.icon_scale != 256)
         {
             const lv_coord_t icon_width = lv_image_get_src_width(icon);
@@ -359,6 +371,13 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
         {
             lv_obj_center(icon);
         }
+    }
+    else
+    {
+        MENU_LAYOUT_DIAG("createAppButton idx=%u name=%s btn=%p icon=(null) image=(null)\n",
+                         static_cast<unsigned>(idx),
+                         name ? name : "(null)",
+                         btn);
     }
 
     if (profile.show_card_label && name && name[0] != '\0')
@@ -533,6 +552,7 @@ void createAppGrid()
     lv_obj_add_style(panel, &frameless_style, 0);
 
     const size_t app_count = ui::catalogCount(s_init_options.apps);
+    MENU_LAYOUT_DIAG("createAppGrid app_count=%u\n", static_cast<unsigned>(app_count));
     for (size_t index = 0; index < app_count && index < kMaxMenuApps; ++index)
     {
         AppScreen* app = ui::catalogAt(s_init_options.apps, index);

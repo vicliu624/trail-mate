@@ -1,9 +1,16 @@
 #include "ui/app_catalog_builder.h"
 
+#include <cstdio>
+
 #include "ui/app_runtime.h"
 #include "ui/assets/images.h"
 #include "ui/callback_app_screen.h"
 #include "ui/page/page_host.h"
+
+#if defined(ESP_PLATFORM)
+#include "esp_log.h"
+#endif
+
 #include "ui/screens/chat/chat_page_shell.h"
 #include "ui/screens/contacts/contacts_page_shell.h"
 #include "ui/screens/energy_sweep/energy_sweep_page_shell.h"
@@ -29,6 +36,8 @@ namespace
 {
 
 constexpr size_t kMaxMenuApps = 16;
+
+#define APP_CATALOG_LOG(...) std::printf("[UI][Catalog] " __VA_ARGS__)
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 constexpr bool kTab5SkipSkyPlot = true;
@@ -148,6 +157,9 @@ AppCatalog build(const FeatureFlags& flags)
         if (app != nullptr && count < kMaxMenuApps)
         {
             s_apps[count++] = app;
+            APP_CATALOG_LOG("add index=%u app=%s\n",
+                            static_cast<unsigned>(count - 1),
+                            app->name());
         }
     };
 
@@ -253,6 +265,7 @@ AppCatalog build(const FeatureFlags& flags)
         s_apps[index] = nullptr;
     }
     s_catalog_state.count = count;
+    APP_CATALOG_LOG("build complete count=%u\n", static_cast<unsigned>(count));
     return s_catalog;
 }
 

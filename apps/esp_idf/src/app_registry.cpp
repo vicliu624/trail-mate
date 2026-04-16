@@ -17,8 +17,8 @@ ui::app_catalog_builder::FeatureFlags buildFeatureFlags()
 {
     ui::app_catalog_builder::FeatureFlags flags{};
     flags.profile = ui::app_catalog_builder::CatalogProfile::IdfDefault;
-    flags.include_gps_map = platform::ui::device::gps_ready();
-    flags.include_gnss_skyplot = platform::ui::device::gps_ready();
+    flags.include_gps_map = platform::ui::device::gps_supported();
+    flags.include_gnss_skyplot = platform::ui::device::gps_supported();
     flags.include_energy_sweep = platform::ui::lora::is_supported();
     flags.include_tracker = platform::ui::route_storage::is_supported() || platform::ui::tracker::is_supported();
     flags.include_pc_link = platform::ui::hostlink::is_supported();

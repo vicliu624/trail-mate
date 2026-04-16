@@ -68,6 +68,7 @@ class TDeckProBoard : public BoardBase,
     bool isSDReady() const override { return sd_ready_; }
     bool isCardReady() override;
     bool isGPSReady() const override { return gps_ready_; }
+    bool hasGPSHardware() const override { return true; }
 
     void vibrator() override;
     void stopVibrator() override;

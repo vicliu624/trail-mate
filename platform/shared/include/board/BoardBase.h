@@ -54,6 +54,10 @@ class BoardBase
     virtual bool isSDReady() const = 0;
     virtual bool isCardReady() = 0;
     virtual bool isGPSReady() const = 0;
+    virtual bool hasGPSHardware() const
+    {
+        return false;
+    }
     virtual bool hasSstvAudioInput() const
     {
         return false;

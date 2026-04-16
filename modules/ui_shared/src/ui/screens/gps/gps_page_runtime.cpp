@@ -332,7 +332,7 @@ namespace gps::ui::runtime
 
 bool is_available()
 {
-    return true;
+    return platform::ui::device::gps_supported();
 }
 
 void enter(const shell::Host* host, lv_obj_t* parent)

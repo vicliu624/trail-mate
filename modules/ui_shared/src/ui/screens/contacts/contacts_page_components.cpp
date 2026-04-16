@@ -19,6 +19,7 @@
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
 #include "ui/screens/chat/chat_page_shell.h"
+#include "ui/components/info_card.h"
 #include "ui/screens/contacts/contacts_page_input.h"
 #include "ui/screens/contacts/contacts_page_layout.h"
 #include "ui/screens/contacts/contacts_page_styles.h"
@@ -83,6 +84,11 @@ static bool s_compose_is_team = false;
 static std::string s_last_sent_text;
 static uint32_t s_last_sent_ts = 0;
 static uint32_t s_team_msg_id = 1;
+
+static bool show_second_column_back()
+{
+    return !::ui::components::info_card::use_tdeck_layout();
+}
 
 lv_style_selector_t selector_for_state(lv_state_t state)
 {
@@ -2459,7 +2465,7 @@ void refresh_ui()
         (g_contacts_state.current_mode == ContactsMode::Ignored) ||
         (g_contacts_state.current_mode == ContactsMode::Broadcast) ||
         (g_contacts_state.current_mode == ContactsMode::Discover);
-    const bool append_back_item = use_scroll_list;
+    const bool append_back_item = use_scroll_list && show_second_column_back();
     if (append_back_item)
     {
         g_contacts_state.total_items += 1;
@@ -2608,13 +2614,25 @@ void refresh_ui()
             on_prev_clicked);
     }
 
-    if (g_contacts_state.back_btn == nullptr)
+    if (show_second_column_back() && g_contacts_state.back_btn == nullptr)
     {
         g_contacts_state.back_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Back",
             kColorAmber,
             on_back_clicked);
+    }
+
+    if (g_contacts_state.back_btn)
+    {
+        if (show_second_column_back())
+        {
+            lv_obj_clear_flag(g_contacts_state.back_btn, LV_OBJ_FLAG_HIDDEN);
+        }
+        else
+        {
+            lv_obj_add_flag(g_contacts_state.back_btn, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     if (g_contacts_state.bottom_container)
@@ -2640,7 +2658,10 @@ void refresh_ui()
         lv_obj_add_state(g_contacts_state.prev_btn, LV_STATE_DISABLED);
         lv_obj_add_state(g_contacts_state.next_btn, LV_STATE_DISABLED);
     }
-    lv_obj_clear_state(g_contacts_state.back_btn, LV_STATE_DISABLED);
+    if (g_contacts_state.back_btn)
+    {
+        lv_obj_clear_state(g_contacts_state.back_btn, LV_STATE_DISABLED);
+    }
 
     // Update filter highlights (visual-only, using CHECKED state).
     refresh_filter_checked_state();

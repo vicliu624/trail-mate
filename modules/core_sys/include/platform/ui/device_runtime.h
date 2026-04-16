@@ -26,7 +26,10 @@ void set_message_tone_volume(uint8_t volume_percent);
 void play_message_tone();
 bool sd_ready();
 bool card_ready();
+// Runtime state: GPS is currently online/powered/producing service.
 bool gps_ready();
+// Stable capability: this target has GPS hardware support and may expose GPS UI.
+bool gps_supported();
 int power_tier();
 
 } // namespace platform::ui::device
