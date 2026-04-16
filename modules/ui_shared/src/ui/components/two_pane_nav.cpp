@@ -604,6 +604,11 @@ static void root_key_event_cb(lv_event_t* e)
             return;
         }
 
+        if (activate_filter_button(binding, focused))
+        {
+            return;
+        }
+
         set_column(binding, FocusColumn::List);
         rebind_by_column(binding);
         return;

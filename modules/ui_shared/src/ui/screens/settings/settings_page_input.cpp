@@ -6,6 +6,7 @@
 #include "ui/screens/settings/settings_page_input.h"
 
 #include "ui/components/two_pane_nav.h"
+#include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_state.h"
 
 namespace settings
@@ -21,6 +22,15 @@ using Adapter = ::ui::components::two_pane_nav::Adapter;
 using BackPlacement = ::ui::components::two_pane_nav::BackPlacement;
 
 static ::ui::components::two_pane_nav::Controller s_controller{};
+
+static constexpr bool use_touch_first_settings_mode()
+{
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
+    return true;
+#else
+    return false;
+#endif
+}
 
 static lv_obj_t* get_key_target(void* /*ctx*/)
 {
@@ -67,6 +77,21 @@ static lv_obj_t* get_list_back_button(void* /*ctx*/)
     return g_state.list_back_btn;
 }
 
+static bool handle_filter_activate(void* /*ctx*/, lv_obj_t* filter_button)
+{
+    return settings::ui::components::activate_filter_button(filter_button);
+}
+
+static bool handle_list_activate(void* /*ctx*/, lv_obj_t* list_button)
+{
+    return settings::ui::components::activate_list_button(list_button);
+}
+
+static bool handle_list_back_activate(void* /*ctx*/, lv_obj_t* back_button)
+{
+    return settings::ui::components::activate_list_back_button(back_button);
+}
+
 static Adapter make_adapter()
 {
     Adapter adapter{};
@@ -79,6 +104,12 @@ static Adapter make_adapter()
     adapter.get_list_button = get_list_button;
     adapter.get_preferred_list_index = get_preferred_list_index;
     adapter.get_list_back_button = get_list_back_button;
+    if (use_touch_first_settings_mode())
+    {
+        adapter.handle_filter_activate = handle_filter_activate;
+        adapter.handle_list_activate = handle_list_activate;
+        adapter.handle_list_back_activate = handle_list_back_activate;
+    }
     adapter.filter_top_back_placement = BackPlacement::Leading;
     return adapter;
 }
