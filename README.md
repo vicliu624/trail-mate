@@ -4,7 +4,7 @@
 
 > A low-power, offline-first handheld device for outdoor navigation and communication
 
-[English](README.md) | [中文](README_CN.md)
+[English](README.md) | [中文](README_CN.md) | [Join Discord](https://discord.gg/87PVMVUP)
 
 ---
 
@@ -589,6 +589,7 @@ The system architecture, protocols, firmware design, and reference implementatio
 ## Contact
 
 * Email: **[vicliu@outlook.com](mailto:vicliu@outlook.com)**
+* Discord: **[Trail Mate Discord](https://discord.gg/87PVMVUP)**
 * WeChat: **vicliu890624**
 
 You may contact me for:
@@ -601,7 +602,7 @@ You may contact me for:
 * Field deployment guidance
 * Bug reports that are difficult to describe via Issues
 
-WeChat is preferred for real-time technical discussion.
+Discord or WeChat is preferred for real-time technical discussion.
 Email is preferred for formal or long-form communication.
 
 ---
