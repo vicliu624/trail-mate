@@ -220,7 +220,7 @@ ErrorCode send_team_mgmt_wire(team::TeamController* controller,
         {
             return ErrorCode::InvalidParam;
         }
-        ok = controller->onKick(msg, channel, to, want_response);
+        ok = controller->onKick(msg, channel, to, false, want_response);
         break;
     }
     case team::proto::TeamMgmtType::TransferLeader:
@@ -230,7 +230,7 @@ ErrorCode send_team_mgmt_wire(team::TeamController* controller,
         {
             return ErrorCode::InvalidParam;
         }
-        ok = controller->onTransferLeader(msg, channel, to, want_response);
+        ok = controller->onTransferLeader(msg, channel, to, false, want_response);
         break;
     }
     case team::proto::TeamMgmtType::KeyDist:
@@ -241,8 +241,8 @@ ErrorCode send_team_mgmt_wire(team::TeamController* controller,
             return ErrorCode::InvalidParam;
         }
         ok = prefer_plain
-                 ? controller->onKeyDistPlain(msg, channel, to, want_response)
-                 : controller->onKeyDist(msg, channel, to, want_response);
+                 ? controller->onKeyDistPlain(msg, channel, to, false, want_response)
+                 : controller->onKeyDist(msg, channel, to, false, want_response);
         break;
     }
     case team::proto::TeamMgmtType::Status:
@@ -253,8 +253,8 @@ ErrorCode send_team_mgmt_wire(team::TeamController* controller,
             return ErrorCode::InvalidParam;
         }
         ok = prefer_plain
-                 ? controller->onStatusPlain(msg, channel, to, want_response)
-                 : controller->onStatus(msg, channel, to, want_response);
+                 ? controller->onStatusPlain(msg, channel, to, false, want_response)
+                 : controller->onStatus(msg, channel, to, false, want_response);
         break;
     }
     default:
@@ -310,7 +310,7 @@ ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
             return ErrorCode::Internal;
         }
         std::vector<uint8_t> app_payload(payload, payload + payload_len);
-        return map_team_send_result(controller->onPosition(app_payload, ch, command.to, want_response),
+        return map_team_send_result(controller->onPosition(app_payload, ch, command.to, false, want_response),
                                     controller);
     }
     case team::proto::TEAM_WAYPOINT_APP:
@@ -324,7 +324,7 @@ ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
         {
             return ErrorCode::InvalidParam;
         }
-        return map_team_send_result(controller->onWaypoint(msg, ch, command.to, want_response),
+        return map_team_send_result(controller->onWaypoint(msg, ch, command.to, false, want_response),
                                     controller);
     }
     case team::proto::TEAM_TRACK_APP:
@@ -334,7 +334,7 @@ ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
             return ErrorCode::Internal;
         }
         std::vector<uint8_t> app_payload(payload, payload + payload_len);
-        return map_team_send_result(controller->onTrack(app_payload, ch, command.to, want_response),
+        return map_team_send_result(controller->onTrack(app_payload, ch, command.to, false, want_response),
                                     controller);
     }
     case team::proto::TEAM_CHAT_APP:
@@ -349,7 +349,7 @@ ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
         {
             return ErrorCode::InvalidParam;
         }
-        return map_team_send_result(controller->onChat(msg, ch, command.to, want_response), controller);
+        return map_team_send_result(controller->onChat(msg, ch, command.to, false, want_response), controller);
     }
     default:
         break;
@@ -360,7 +360,8 @@ ErrorCode execute_cmd_tx_app_data(const PendingCommand& command)
     {
         return ErrorCode::Internal;
     }
-    if (!mesh->sendAppData(ch, command.portnum, payload, payload_len, command.to, want_response))
+    if (!mesh->sendAppData(ch, command.portnum, payload, payload_len,
+                           command.to, false, 0, want_response))
     {
         return ErrorCode::Busy;
     }

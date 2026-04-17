@@ -299,6 +299,7 @@ MeshCapabilities MeshCoreAdapter::getCapabilities() const
     MeshCapabilities caps;
     caps.supports_unicast_text = true;
     caps.supports_unicast_appdata = true;
+    caps.supports_broadcast_appdata = true;
     caps.supports_appdata_ack = true;
     caps.provides_appdata_sender = true;
     caps.supports_node_info = true;

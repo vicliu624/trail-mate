@@ -77,6 +77,7 @@ MeshCoreRadioAdapter::MeshCoreRadioAdapter(const ::chat::runtime::SelfIdentityPr
 {
     ::chat::MeshCapabilities caps{};
     caps.supports_unicast_appdata = true;
+    caps.supports_broadcast_appdata = true;
     caps.supports_discovery_actions = true;
     return caps;
 }

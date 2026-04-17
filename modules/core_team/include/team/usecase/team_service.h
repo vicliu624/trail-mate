@@ -58,25 +58,35 @@ class TeamService
     }
 
     bool sendKick(const team::proto::TeamKick& msg,
-                  chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                  chat::ChannelId channel, chat::NodeId dest = 0,
+                  bool want_ack = false, bool want_response = false);
     bool sendTransferLeader(const team::proto::TeamTransferLeader& msg,
-                            chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                            chat::ChannelId channel, chat::NodeId dest = 0,
+                            bool want_ack = false, bool want_response = false);
     bool sendKeyDist(const team::proto::TeamKeyDist& msg,
-                     chat::ChannelId channel, chat::NodeId dest, bool want_ack = false);
+                     chat::ChannelId channel, chat::NodeId dest,
+                     bool want_ack = false, bool want_response = false);
     bool sendKeyDistPlain(const team::proto::TeamKeyDist& msg,
-                          chat::ChannelId channel, chat::NodeId dest, bool want_ack = false);
+                          chat::ChannelId channel, chat::NodeId dest,
+                          bool want_ack = false, bool want_response = false);
     bool sendStatus(const team::proto::TeamStatus& msg,
-                    chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                    chat::ChannelId channel, chat::NodeId dest = 0,
+                    bool want_ack = false, bool want_response = false);
     bool sendStatusPlain(const team::proto::TeamStatus& msg,
-                         chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                         chat::ChannelId channel, chat::NodeId dest = 0,
+                         bool want_ack = false, bool want_response = false);
     bool sendPosition(const std::vector<uint8_t>& payload,
-                      chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                      chat::ChannelId channel, chat::NodeId dest = 0,
+                      bool want_ack = false, bool want_response = false);
     bool sendWaypoint(const team::proto::TeamWaypointMessage& msg,
-                      chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                      chat::ChannelId channel, chat::NodeId dest = 0,
+                      bool want_ack = false, bool want_response = false);
     bool sendTrack(const std::vector<uint8_t>& payload,
-                   chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                   chat::ChannelId channel, chat::NodeId dest = 0,
+                   bool want_ack = false, bool want_response = false);
     bool sendChat(const team::proto::TeamChatMessage& msg,
-                  chat::ChannelId channel, chat::NodeId dest = 0, bool want_ack = false);
+                  chat::ChannelId channel, chat::NodeId dest = 0,
+                  bool want_ack = false, bool want_response = false);
     bool requestNodeInfo(chat::NodeId dest, bool want_response);
     bool startPkiVerification(chat::NodeId dest);
     bool submitPkiNumber(chat::NodeId dest, uint64_t nonce, uint32_t number);
@@ -92,6 +102,7 @@ class TeamService
     SendError last_send_error_ = SendError::None;
     std::vector<IncomingDataObserver*> incoming_data_observers_;
     UnhandledAppDataObserver* unhandled_app_data_observer_ = nullptr;
+    std::vector<chat::NodeId> team_member_ids_;
 
     bool decodeEncryptedPayload(const chat::MeshIncomingData& data,
                                 const uint8_t* key, size_t key_len,
@@ -106,11 +117,23 @@ class TeamService
 
     bool sendMgmtPlain(const team::proto::TeamMgmtType type,
                        const std::vector<uint8_t>& payload,
-                       chat::ChannelId channel, chat::NodeId dest, bool want_ack);
+                       chat::ChannelId channel, chat::NodeId dest,
+                       bool want_ack, bool want_response);
     bool sendMgmtEncrypted(const team::proto::TeamMgmtType type,
                            const std::vector<uint8_t>& payload,
-                           chat::ChannelId channel, chat::NodeId dest, bool want_ack);
+                           chat::ChannelId channel, chat::NodeId dest,
+                           bool want_ack, bool want_response);
     bool validateSendCapabilities(chat::NodeId dest, bool want_ack);
+    void rememberTeamMember(chat::NodeId node_id);
+    void updateTeamMemberRoster(const team::proto::TeamStatus& status,
+                                chat::NodeId sender_id);
+    bool sendMeshAppData(uint32_t portnum,
+                         const uint8_t* payload,
+                         size_t len,
+                         chat::ChannelId channel,
+                         chat::NodeId dest,
+                         bool want_ack,
+                         bool want_response);
 
     void emitError(const chat::MeshIncomingData& data,
                    team::TeamProtocolError error,

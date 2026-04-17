@@ -210,7 +210,7 @@ Compatibility:
 - Current firmware requires a full payload in one frame (`offset=0` and `chunk_len=total_len`) when using the compatibility layout.
 
 Flags:
-- bit0: `want_response` (forwarded to mesh adapter `want_ack`)
+- bit0: `want_response` (forwarded to mesh adapter `want_response`; independent from delivery ack)
 - bit1: `team_mgmt_plain` (only for Team mgmt `portnum=300`; forces plain mgmt send path)
 
 Behavior:

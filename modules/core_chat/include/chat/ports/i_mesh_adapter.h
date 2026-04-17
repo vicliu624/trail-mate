@@ -19,6 +19,7 @@ struct MeshCapabilities
 {
     bool supports_unicast_text = false;
     bool supports_unicast_appdata = false;
+    bool supports_broadcast_appdata = false;
     bool supports_appdata_ack = false;
     bool provides_appdata_sender = false;
     bool supports_node_info = false;

@@ -26,63 +26,73 @@ bool TeamController::setKeysFromPsk(const TeamId& team_id, uint32_t key_id,
 }
 
 bool TeamController::onKick(const team::proto::TeamKick& kick,
-                            chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                            chat::ChannelId channel, chat::NodeId dest,
+                            bool want_ack, bool want_response)
 {
-    return service_.sendKick(kick, channel, dest, want_ack);
+    return service_.sendKick(kick, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onTransferLeader(const team::proto::TeamTransferLeader& transfer,
-                                      chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                                      chat::ChannelId channel, chat::NodeId dest,
+                                      bool want_ack, bool want_response)
 {
-    return service_.sendTransferLeader(transfer, channel, dest, want_ack);
+    return service_.sendTransferLeader(transfer, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onKeyDist(const team::proto::TeamKeyDist& msg,
-                               chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                               chat::ChannelId channel, chat::NodeId dest,
+                               bool want_ack, bool want_response)
 {
-    return service_.sendKeyDist(msg, channel, dest, want_ack);
+    return service_.sendKeyDist(msg, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onKeyDistPlain(const team::proto::TeamKeyDist& msg,
-                                    chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                                    chat::ChannelId channel, chat::NodeId dest,
+                                    bool want_ack, bool want_response)
 {
-    return service_.sendKeyDistPlain(msg, channel, dest, want_ack);
+    return service_.sendKeyDistPlain(msg, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onStatus(const team::proto::TeamStatus& status,
-                              chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                              chat::ChannelId channel, chat::NodeId dest,
+                              bool want_ack, bool want_response)
 {
-    return service_.sendStatus(status, channel, dest, want_ack);
+    return service_.sendStatus(status, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onStatusPlain(const team::proto::TeamStatus& status,
-                                   chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                                   chat::ChannelId channel, chat::NodeId dest,
+                                   bool want_ack, bool want_response)
 {
-    return service_.sendStatusPlain(status, channel, dest, want_ack);
+    return service_.sendStatusPlain(status, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onPosition(const std::vector<uint8_t>& payload,
-                                chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                                chat::ChannelId channel, chat::NodeId dest,
+                                bool want_ack, bool want_response)
 {
-    return service_.sendPosition(payload, channel, dest, want_ack);
+    return service_.sendPosition(payload, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onWaypoint(const team::proto::TeamWaypointMessage& msg,
-                                chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                                chat::ChannelId channel, chat::NodeId dest,
+                                bool want_ack, bool want_response)
 {
-    return service_.sendWaypoint(msg, channel, dest, want_ack);
+    return service_.sendWaypoint(msg, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onTrack(const std::vector<uint8_t>& payload,
-                             chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                             chat::ChannelId channel, chat::NodeId dest,
+                             bool want_ack, bool want_response)
 {
-    return service_.sendTrack(payload, channel, dest, want_ack);
+    return service_.sendTrack(payload, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::onChat(const team::proto::TeamChatMessage& msg,
-                            chat::ChannelId channel, chat::NodeId dest, bool want_ack)
+                            chat::ChannelId channel, chat::NodeId dest,
+                            bool want_ack, bool want_response)
 {
-    return service_.sendChat(msg, channel, dest, want_ack);
+    return service_.sendChat(msg, channel, dest, want_ack, want_response);
 }
 
 bool TeamController::requestNodeInfo(chat::NodeId dest, bool want_response)

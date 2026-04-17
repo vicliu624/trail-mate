@@ -13,6 +13,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 namespace chat::reticulum
 {
@@ -598,18 +599,18 @@ bool tokenEncrypt(const uint8_t derived_key[kDerivedTokenKeySize],
         return false;
     }
 
-    uint8_t padded[kReticulumMtu] = {};
-    if (padded_len > sizeof(padded))
+    std::vector<uint8_t> padded(padded_len, 0);
+    if (padded.empty())
     {
-        return false;
+        padded.resize(kAesBlockSize, 0);
     }
-    if (pkcs7Pad(plaintext, plaintext_len, padded, sizeof(padded)) != padded_len)
+    if (pkcs7Pad(plaintext, plaintext_len, padded.data(), padded.size()) != padded_len)
     {
         return false;
     }
 
     memcpy(out_token, iv, kTokenIvSize);
-    aesCbcEncrypt(derived_key + 32, 32, iv, padded, padded_len, out_token + kTokenIvSize);
+    aesCbcEncrypt(derived_key + 32, 32, iv, padded.data(), padded_len, out_token + kTokenIvSize);
 
     uint8_t mac[kFullHashSize] = {};
     hmacSha256(derived_key, 32, out_token, kTokenIvSize + padded_len, mac);
@@ -644,14 +645,14 @@ bool tokenDecrypt(const uint8_t derived_key[kDerivedTokenKeySize],
         return false;
     }
 
-    uint8_t padded[kReticulumMtu] = {};
-    if (cipher_len > sizeof(padded))
+    std::vector<uint8_t> padded(cipher_len, 0);
+    if (padded.empty())
     {
         return false;
     }
 
-    aesCbcDecrypt(derived_key + 32, 32, iv, ciphertext, cipher_len, padded);
-    return pkcs7Unpad(padded, cipher_len, out_plaintext, inout_len);
+    aesCbcDecrypt(derived_key + 32, 32, iv, ciphertext, cipher_len, padded.data());
+    return pkcs7Unpad(padded.data(), cipher_len, out_plaintext, inout_len);
 }
 
 } // namespace chat::reticulum
