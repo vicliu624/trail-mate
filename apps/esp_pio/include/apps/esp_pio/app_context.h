@@ -221,6 +221,12 @@ class AppContext final : public IAppBleFacade
             config_.meshcore_config = chat::MeshConfig();
             config_.applyMeshCoreFactoryDefaults();
         }
+        else if (config_.mesh_protocol == chat::MeshProtocol::RNode ||
+                 config_.mesh_protocol == chat::MeshProtocol::LXMF)
+        {
+            config_.rnode_config = chat::MeshConfig();
+            config_.applyRNodeFactoryDefaults();
+        }
         else
         {
             config_.meshtastic_config = chat::MeshConfig();

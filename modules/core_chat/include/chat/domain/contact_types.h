@@ -21,7 +21,9 @@ enum class NodeProtocolType : uint8_t
 {
     Unknown = 0,
     Meshtastic = 1,
-    MeshCore = 2
+    MeshCore = 2,
+    RNode = 3,
+    LXMF = 4
 };
 
 /**

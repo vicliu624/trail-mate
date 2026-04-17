@@ -7,6 +7,7 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/screen_runtime.h"
@@ -128,6 +129,36 @@ std::string base_conversation_name(const chat::ConversationId& conv)
     char buf[16] = {};
     std::snprintf(buf, sizeof(buf), "%08lX", static_cast<unsigned long>(conv.peer));
     return buf;
+}
+
+chat::MeshCapabilities active_mesh_capabilities()
+{
+    chat::IMeshAdapter* adapter = app::messagingFacade().getMeshAdapter();
+    return adapter ? adapter->getCapabilities() : chat::MeshCapabilities{};
+}
+
+bool supports_local_text_chat()
+{
+    return active_mesh_capabilities().supports_unicast_text;
+}
+
+bool supports_team_chat()
+{
+    return active_mesh_capabilities().supports_unicast_appdata;
+}
+
+const char* local_text_chat_unavailable_message()
+{
+    return (active_mesh_protocol() == chat::MeshProtocol::RNode)
+               ? "RNode text chat runs on host"
+               : "Text chat unavailable";
+}
+
+const char* team_chat_unavailable_message()
+{
+    return (active_mesh_protocol() == chat::MeshProtocol::RNode)
+               ? "Team chat unavailable in RNode mode"
+               : "Team chat unavailable";
 }
 
 chat::ConversationId teamConversationId()
@@ -597,7 +628,9 @@ void UiController::switchToConversation(chat::ConversationId conv)
         conversation_->setActionCallback(handle_conversation_action, this);
         conversation_->setBackCallback(handle_conversation_back, this);
     }
-    const bool can_reply = team_conv_active_ || (conv.protocol == active_mesh_protocol());
+    const bool can_reply = team_conv_active_
+                               ? supports_team_chat()
+                               : (conv.protocol == active_mesh_protocol() && supports_local_text_chat());
     conversation_->setReplyEnabled(can_reply);
 
     if (team_conv_active_)
@@ -666,6 +699,16 @@ void UiController::switchToCompose(chat::ConversationId conv)
     if (!is_team_conv && conv.protocol != active_mesh_protocol())
     {
         ::ui::SystemNotification::show("Conversation protocol mismatch", 2000);
+        return;
+    }
+    if (!is_team_conv && !supports_local_text_chat())
+    {
+        ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+        return;
+    }
+    if (is_team_conv && !supports_team_chat())
+    {
+        ::ui::SystemNotification::show(team_chat_unavailable_message(), 2200);
         return;
     }
 
@@ -786,6 +829,11 @@ void UiController::handleSendMessage(const std::string& text)
     }
     if (team_conv_active_)
     {
+        return;
+    }
+    if (!supports_local_text_chat())
+    {
+        ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
         return;
     }
     service_.sendText(current_channel_, text, current_conv_.peer);
@@ -1871,6 +1919,16 @@ void UiController::handleConversationAction(ChatConversationScreen::ActionIntent
         if (!team_conv_active_ && current_conv_.protocol != active_mesh_protocol())
         {
             ::ui::SystemNotification::show("Reply disabled for this protocol", 2000);
+            return;
+        }
+        if (!team_conv_active_ && !supports_local_text_chat())
+        {
+            ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+            return;
+        }
+        if (team_conv_active_ && !supports_team_chat())
+        {
+            ::ui::SystemNotification::show(team_chat_unavailable_message(), 2200);
             return;
         }
         switchToCompose(current_conv_);

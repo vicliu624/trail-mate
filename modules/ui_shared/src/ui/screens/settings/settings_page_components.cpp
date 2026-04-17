@@ -11,6 +11,7 @@
 #include "app/app_facade_access.h"
 #include "board/BoardBase.h"
 #include "chat/domain/chat_types.h"
+#include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "meshtastic/config.pb.h"
@@ -399,12 +400,31 @@ static bool parse_float_text(const char* text, float* out_value)
     return true;
 }
 
+static chat::MeshProtocol selected_protocol()
+{
+    return static_cast<chat::MeshProtocol>(g_settings.chat_protocol);
+}
+
+static bool is_meshcore_protocol_selected()
+{
+    return selected_protocol() == chat::MeshProtocol::MeshCore;
+}
+
+static bool is_rnode_protocol_selected()
+{
+    return selected_protocol() == chat::MeshProtocol::RNode ||
+           selected_protocol() == chat::MeshProtocol::LXMF;
+}
+
 static void reset_mesh_settings()
 {
     app::IAppFacade& app_ctx = app::appFacade();
     app_ctx.getConfig().meshtastic_config = chat::MeshConfig();
     app_ctx.getConfig().meshtastic_config.region = app::AppConfig::kDefaultRegionCode;
     app_ctx.getConfig().meshcore_config = chat::MeshConfig();
+    app_ctx.getConfig().applyMeshCoreFactoryDefaults();
+    app_ctx.getConfig().rnode_config = chat::MeshConfig();
+    app_ctx.getConfig().applyRNodeFactoryDefaults();
     strncpy(app_ctx.getConfig().meshcore_config.meshcore_channel_name, "Public",
             sizeof(app_ctx.getConfig().meshcore_config.meshcore_channel_name) - 1);
     app_ctx.getConfig().meshcore_config.meshcore_channel_name[sizeof(app_ctx.getConfig().meshcore_config.meshcore_channel_name) - 1] = '\0';
@@ -417,12 +437,9 @@ static void reset_mesh_settings()
     g_settings.chat_psk[0] = '\0';
     g_settings.net_use_preset = app_ctx.getConfig().meshtastic_config.use_preset;
     g_settings.net_modem_preset = app_ctx.getConfig().meshtastic_config.modem_preset;
-    g_settings.net_tx_power = app_ctx.getConfig().meshtastic_config.tx_power;
+    g_settings.net_tx_power = app_ctx.getConfig().activeMeshConfig().tx_power;
     g_settings.net_hop_limit = app_ctx.getConfig().meshtastic_config.hop_limit;
-    const chat::MeshConfig& active_cfg =
-        (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
-            ? app_ctx.getConfig().meshcore_config
-            : app_ctx.getConfig().meshtastic_config;
+    const chat::MeshConfig& active_cfg = app_ctx.getConfig().activeMeshConfig();
     g_settings.net_tx_enabled = active_cfg.tx_enabled;
     g_settings.net_relay = app_ctx.getConfig().meshtastic_config.enable_relay;
     g_settings.net_duty_cycle = true;
@@ -576,12 +593,20 @@ static void settings_load()
     const app::AppConfig& cfg = app_ctx.getConfig();
     const chat::MeshConfig& mt_cfg = cfg.meshtastic_config;
     const chat::MeshConfig& mc_cfg = cfg.meshcore_config;
+    const chat::MeshConfig& rn_cfg = cfg.rnode_config;
 
     g_settings.chat_region = mt_cfg.region;
     g_settings.chat_channel = cfg.chat_channel;
-    const uint8_t* active_psk =
-        (cfg.mesh_protocol == chat::MeshProtocol::MeshCore) ? mc_cfg.secondary_key : mt_cfg.secondary_key;
-    if (is_zero_key(active_psk, sizeof(mt_cfg.secondary_key)))
+    const uint8_t* active_psk = nullptr;
+    if (cfg.mesh_protocol == chat::MeshProtocol::MeshCore)
+    {
+        active_psk = mc_cfg.secondary_key;
+    }
+    else if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
+    {
+        active_psk = mt_cfg.secondary_key;
+    }
+    if (!active_psk || is_zero_key(active_psk, sizeof(mt_cfg.secondary_key)))
     {
         g_settings.chat_psk[0] = '\0';
     }
@@ -593,24 +618,38 @@ static void settings_load()
                      sizeof(g_settings.chat_psk));
     }
 
-    g_settings.net_use_preset = mt_cfg.use_preset;
-    g_settings.net_modem_preset = mt_cfg.modem_preset;
-    g_settings.net_manual_bw = static_cast<int>(std::lround(mt_cfg.bandwidth_khz));
-    g_settings.net_manual_sf = mt_cfg.spread_factor;
-    g_settings.net_manual_cr = mt_cfg.coding_rate;
-    int tx_power = mt_cfg.tx_power;
+    if (cfg.mesh_protocol == chat::MeshProtocol::RNode ||
+        cfg.mesh_protocol == chat::MeshProtocol::LXMF)
+    {
+        g_settings.net_use_preset = 0;
+        g_settings.net_modem_preset = 0;
+        g_settings.net_manual_bw = static_cast<int>(std::lround(rn_cfg.bandwidth_khz));
+        g_settings.net_manual_sf = rn_cfg.spread_factor;
+        g_settings.net_manual_cr = rn_cfg.coding_rate;
+        float_to_text(rn_cfg.override_frequency_mhz, g_settings.net_override_freq,
+                      sizeof(g_settings.net_override_freq), 3);
+    }
+    else
+    {
+        g_settings.net_use_preset = mt_cfg.use_preset;
+        g_settings.net_modem_preset = mt_cfg.modem_preset;
+        g_settings.net_manual_bw = static_cast<int>(std::lround(mt_cfg.bandwidth_khz));
+        g_settings.net_manual_sf = mt_cfg.spread_factor;
+        g_settings.net_manual_cr = mt_cfg.coding_rate;
+        float_to_text(mt_cfg.override_frequency_mhz, g_settings.net_override_freq,
+                      sizeof(g_settings.net_override_freq), 3);
+    }
+
+    int tx_power = cfg.activeMeshConfig().tx_power;
     if (tx_power < kNetTxPowerMin) tx_power = kNetTxPowerMin;
     if (tx_power > kNetTxPowerMax) tx_power = kNetTxPowerMax;
     g_settings.net_tx_power = tx_power;
     g_settings.net_hop_limit = mt_cfg.hop_limit;
-    g_settings.net_tx_enabled = (cfg.mesh_protocol == chat::MeshProtocol::MeshCore)
-                                    ? mc_cfg.tx_enabled
-                                    : mt_cfg.tx_enabled;
+    g_settings.net_tx_enabled = cfg.activeMeshConfig().tx_enabled;
     g_settings.net_override_duty_cycle = mt_cfg.override_duty_cycle;
     g_settings.net_channel_num = mt_cfg.channel_num;
     g_settings.net_relay = mt_cfg.enable_relay;
     float_to_text(mt_cfg.frequency_offset_mhz, g_settings.net_freq_offset, sizeof(g_settings.net_freq_offset), 3);
-    float_to_text(mt_cfg.override_frequency_mhz, g_settings.net_override_freq, sizeof(g_settings.net_override_freq), 3);
     g_settings.net_duty_cycle = cfg.net_duty_cycle;
     g_settings.net_channel_util = cfg.net_channel_util;
 
@@ -900,7 +939,15 @@ static void on_text_save_clicked(lv_event_t* e)
                 modal_close();
                 return;
             }
-            app_ctx.getConfig().meshtastic_config.override_frequency_mhz = value;
+            if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::RNode ||
+                app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::LXMF)
+            {
+                app_ctx.getConfig().rnode_config.override_frequency_mhz = value;
+            }
+            else
+            {
+                app_ctx.getConfig().meshtastic_config.override_frequency_mhz = value;
+            }
             app_ctx.saveConfig();
             app_ctx.applyMeshConfig();
         }
@@ -1169,10 +1216,18 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_bw") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
-        app_ctx.getConfig().meshtastic_config.bandwidth_khz = static_cast<float>(payload->value);
-        app_ctx.getConfig().meshtastic_config.use_preset = false;
-        g_settings.net_use_preset = false;
-        prefs_put_int("net_use_preset", 0);
+        if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::RNode ||
+            app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::LXMF)
+        {
+            app_ctx.getConfig().rnode_config.bandwidth_khz = static_cast<float>(payload->value);
+        }
+        else
+        {
+            app_ctx.getConfig().meshtastic_config.bandwidth_khz = static_cast<float>(payload->value);
+            app_ctx.getConfig().meshtastic_config.use_preset = false;
+            g_settings.net_use_preset = false;
+            prefs_put_int("net_use_preset", 0);
+        }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
         rebuild_list = true;
@@ -1180,10 +1235,18 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_sf") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
-        app_ctx.getConfig().meshtastic_config.spread_factor = static_cast<uint8_t>(payload->value);
-        app_ctx.getConfig().meshtastic_config.use_preset = false;
-        g_settings.net_use_preset = false;
-        prefs_put_int("net_use_preset", 0);
+        if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::RNode ||
+            app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::LXMF)
+        {
+            app_ctx.getConfig().rnode_config.spread_factor = static_cast<uint8_t>(payload->value);
+        }
+        else
+        {
+            app_ctx.getConfig().meshtastic_config.spread_factor = static_cast<uint8_t>(payload->value);
+            app_ctx.getConfig().meshtastic_config.use_preset = false;
+            g_settings.net_use_preset = false;
+            prefs_put_int("net_use_preset", 0);
+        }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
         rebuild_list = true;
@@ -1191,10 +1254,18 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_cr") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
-        app_ctx.getConfig().meshtastic_config.coding_rate = static_cast<uint8_t>(payload->value);
-        app_ctx.getConfig().meshtastic_config.use_preset = false;
-        g_settings.net_use_preset = false;
-        prefs_put_int("net_use_preset", 0);
+        if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::RNode ||
+            app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::LXMF)
+        {
+            app_ctx.getConfig().rnode_config.coding_rate = static_cast<uint8_t>(payload->value);
+        }
+        else
+        {
+            app_ctx.getConfig().meshtastic_config.coding_rate = static_cast<uint8_t>(payload->value);
+            app_ctx.getConfig().meshtastic_config.use_preset = false;
+            g_settings.net_use_preset = false;
+            prefs_put_int("net_use_preset", 0);
+        }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
         rebuild_list = true;
@@ -1322,7 +1393,15 @@ static void on_option_clicked(lv_event_t* e)
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "net_tx_power") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
-        app_ctx.getConfig().meshtastic_config.tx_power = static_cast<int8_t>(payload->value);
+        if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::RNode ||
+            app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::LXMF)
+        {
+            app_ctx.getConfig().rnode_config.tx_power = static_cast<int8_t>(payload->value);
+        }
+        else
+        {
+            app_ctx.getConfig().meshtastic_config.tx_power = static_cast<int8_t>(payload->value);
+        }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
     }
@@ -1607,6 +1686,8 @@ static const settings::ui::SettingOption kChatChannelOptions[] = {
 static const settings::ui::SettingOption kChatProtocolOptions[] = {
     {"Meshtastic", static_cast<int>(chat::MeshProtocol::Meshtastic)},
     {"MeshCore", static_cast<int>(chat::MeshProtocol::MeshCore)},
+    {"LXMF", static_cast<int>(chat::MeshProtocol::LXMF)},
+    {"RNode Bridge", static_cast<int>(chat::MeshProtocol::RNode)},
 };
 
 static const settings::ui::SettingOption kNetPresetOptions[] = {
@@ -1801,7 +1882,7 @@ static settings::ui::SettingItem kMapItems[] = {
 static settings::ui::SettingItem kChatItems[] = {
     {"User Name", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.user_name, sizeof(g_settings.user_name), false, "chat_user"},
     {"Short Name", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.short_name, sizeof(g_settings.short_name), false, "chat_short"},
-    {"Protocol", settings::ui::SettingType::Enum, kChatProtocolOptions, 2, &g_settings.chat_protocol, nullptr, nullptr, 0, false, "mesh_protocol"},
+    {"Protocol", settings::ui::SettingType::Enum, kChatProtocolOptions, 4, &g_settings.chat_protocol, nullptr, nullptr, 0, false, "mesh_protocol"},
     {"Region", settings::ui::SettingType::Enum, kChatRegionOptions, 0, &g_settings.chat_region, nullptr, nullptr, 0, false, "chat_region"},
     {"Channel", settings::ui::SettingType::Enum, kChatChannelOptions, 2, &g_settings.chat_channel, nullptr, nullptr, 0, false, "chat_channel"},
     {"Channel Key / PSK", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.chat_psk, sizeof(g_settings.chat_psk), true, "chat_psk"},
@@ -1954,7 +2035,8 @@ static bool should_show_item(const settings::ui::SettingItem& item)
         return true;
     }
 
-    const bool meshcore = (g_settings.chat_protocol == static_cast<int>(chat::MeshProtocol::MeshCore));
+    const bool meshcore = is_meshcore_protocol_selected();
+    const bool rnode = is_rnode_protocol_selected();
 
     // Relay is currently not implemented as real forwarding in Meshtastic path.
     if (has_pref_key(item, "net_relay"))
@@ -1985,6 +2067,38 @@ static bool should_show_item(const settings::ui::SettingItem& item)
         if (has_pref_key(item, "net_channel_num")) return false;
         if (has_pref_key(item, "net_freq_offset")) return false;
         if (has_pref_key(item, "net_override_freq")) return false;
+    }
+    else if (rnode)
+    {
+        if (has_pref_key(item, "chat_region")) return false;
+        if (has_pref_key(item, "chat_channel")) return false;
+        if (has_pref_key(item, "chat_psk")) return false;
+        if (has_pref_key(item, "privacy_encrypt")) return false;
+        if (has_pref_key(item, "privacy_pki")) return false;
+
+        if (has_pref_key(item, "net_use_preset")) return false;
+        if (has_pref_key(item, "net_preset")) return false;
+        if (has_pref_key(item, "net_hop_limit")) return false;
+        if (has_pref_key(item, "net_override_duty")) return false;
+        if (has_pref_key(item, "net_channel_num")) return false;
+        if (has_pref_key(item, "net_freq_offset")) return false;
+        if (has_pref_key(item, "net_duty_cycle")) return false;
+        if (has_pref_key(item, "net_util")) return false;
+
+        if (has_pref_key(item, "mc_region_preset")) return false;
+        if (has_pref_key(item, "mc_freq")) return false;
+        if (has_pref_key(item, "mc_bw")) return false;
+        if (has_pref_key(item, "mc_sf")) return false;
+        if (has_pref_key(item, "mc_cr")) return false;
+        if (has_pref_key(item, "mc_tx_power")) return false;
+        if (has_pref_key(item, "mc_repeat")) return false;
+        if (has_pref_key(item, "mc_rx_delay")) return false;
+        if (has_pref_key(item, "mc_airtime")) return false;
+        if (has_pref_key(item, "mc_flood_max")) return false;
+        if (has_pref_key(item, "mc_multi_acks")) return false;
+        if (has_pref_key(item, "mc_channel_slot")) return false;
+        if (has_pref_key(item, "mc_channel_name")) return false;
+        if (has_pref_key(item, "mc_channel_key")) return false;
     }
     else
     {
@@ -2148,6 +2262,11 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
                 if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
                 {
                     app_ctx.getConfig().meshcore_config.tx_enabled = *item.bool_value;
+                }
+                else if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::RNode ||
+                         app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::LXMF)
+                {
+                    app_ctx.getConfig().rnode_config.tx_enabled = *item.bool_value;
                 }
                 else
                 {

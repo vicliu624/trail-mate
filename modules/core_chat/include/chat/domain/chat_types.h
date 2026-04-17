@@ -41,7 +41,9 @@ using MessageId = uint32_t;
 enum class MeshProtocol : uint8_t
 {
     Meshtastic = 1,
-    MeshCore = 2
+    MeshCore = 2,
+    RNode = 3,
+    LXMF = 4
 };
 
 /**

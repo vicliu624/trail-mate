@@ -2,6 +2,8 @@
 
 #if defined(ARDUINO) || defined(ESP_PLATFORM)
 
+#include "app/app_config.h"
+#include "app/app_facade_access.h"
 #include "platform/ui/hostlink_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/fonts.h"
@@ -37,8 +39,42 @@ void request_exit()
     ui_request_exit_to_menu();
 }
 
+bool use_rnode_bridge()
+{
+    return app::appFacade().getConfig().mesh_protocol == chat::MeshProtocol::RNode;
+}
+
+const char* page_title()
+{
+    return use_rnode_bridge() ? "RNode Bridge" : "Data Exchange";
+}
+
+const char* page_subtitle()
+{
+    return use_rnode_bridge() ? "USB CDC KISS modem for Reticulum" : "Data Exchange";
+}
+
 const char* status_text(platform::ui::hostlink::LinkState state)
 {
+    if (use_rnode_bridge())
+    {
+        switch (state)
+        {
+        case platform::ui::hostlink::LinkState::Stopped:
+        case platform::ui::hostlink::LinkState::Waiting:
+            return "Waiting for Reticulum host...";
+        case platform::ui::hostlink::LinkState::Connected:
+        case platform::ui::hostlink::LinkState::Handshaking:
+            return "Host connected, probing modem...";
+        case platform::ui::hostlink::LinkState::Ready:
+            return "RNode modem ready";
+        case platform::ui::hostlink::LinkState::Error:
+            return "Bridge error";
+        default:
+            return "Waiting for Reticulum host...";
+        }
+    }
+
     switch (state)
     {
     case platform::ui::hostlink::LinkState::Stopped:
@@ -133,7 +169,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
-    ::ui::widgets::top_bar_set_title(s_top_bar, "Data Exchange");
+    ::ui::widgets::top_bar_set_title(s_top_bar, page_title());
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
     if (s_top_bar.back_btn)
     {
@@ -173,7 +209,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_center(stack);
 
     lv_obj_t* title = lv_label_create(stack);
-    lv_label_set_text(title, "Data Exchange");
+    lv_label_set_text(title, page_subtitle());
     lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
 
     s_status_label = lv_label_create(stack);

@@ -99,6 +99,14 @@ void BleManager::restartService(chat::MeshProtocol protocol)
 
     shutdownNimble();
 
+    if (protocol == chat::MeshProtocol::RNode || protocol == chat::MeshProtocol::LXMF)
+    {
+        active_protocol_ = protocol;
+        Serial.printf("[BLE] protocol=%s has no BLE service yet\n",
+                      chat::infra::meshProtocolSlug(active_protocol_));
+        return;
+    }
+
     const std::string device_name = buildDeviceName(protocol);
 
     NimBLEDevice::init(device_name);

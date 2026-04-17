@@ -84,6 +84,7 @@ bool loadAppConfigFromPreferences(AppConfig& config, Preferences& prefs)
     auto& chat_policy = config.chat_policy;
     auto& meshtastic_config = config.meshtastic_config;
     auto& meshcore_config = config.meshcore_config;
+    auto& rnode_config = config.rnode_config;
     auto& mesh_protocol = config.mesh_protocol;
     auto& node_name = config.node_name;
     auto& short_name = config.short_name;
@@ -171,6 +172,13 @@ bool loadAppConfigFromPreferences(AppConfig& config, Preferences& prefs)
     meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
     prefs.getBytes("mc_ch_key", meshcore_config.secondary_key, sizeof(meshcore_config.secondary_key));
 
+    rnode_config.override_frequency_mhz = prefs.getFloat("rn_freq", rnode_config.override_frequency_mhz);
+    rnode_config.bandwidth_khz = prefs.getFloat("rn_bw", rnode_config.bandwidth_khz);
+    rnode_config.spread_factor = prefs.getUChar("rn_sf", rnode_config.spread_factor);
+    rnode_config.coding_rate = prefs.getUChar("rn_cr", rnode_config.coding_rate);
+    rnode_config.tx_power = prefs.getChar("rn_tx", rnode_config.tx_power);
+    rnode_config.tx_enabled = prefs.getBool("rn_tx_en", rnode_config.tx_enabled);
+
     uint8_t mesh_protocol_raw = prefs.getUChar("mesh_protocol", 0xFF);
     if (chat::infra::isValidMeshProtocolValue(mesh_protocol_raw))
     {
@@ -215,6 +223,7 @@ bool loadAppConfigFromPreferences(AppConfig& config, Preferences& prefs)
     };
     meshtastic_config.tx_power = clamp_tx_power(meshtastic_config.tx_power);
     meshcore_config.tx_power = clamp_tx_power(meshcore_config.tx_power);
+    rnode_config.tx_power = clamp_tx_power(rnode_config.tx_power);
 
     prefs.end();
 
@@ -309,6 +318,7 @@ bool saveAppConfigToPreferences(AppConfig& config, Preferences& prefs)
     auto& chat_policy = config.chat_policy;
     auto& meshtastic_config = config.meshtastic_config;
     auto& meshcore_config = config.meshcore_config;
+    auto& rnode_config = config.rnode_config;
     auto& mesh_protocol = config.mesh_protocol;
     auto& node_name = config.node_name;
     auto& short_name = config.short_name;
@@ -387,6 +397,13 @@ bool saveAppConfigToPreferences(AppConfig& config, Preferences& prefs)
     prefs.putBool("mc_tx_en", meshcore_config.tx_enabled);
     prefs.putString("mc_ch_name", meshcore_config.meshcore_channel_name);
     prefs.putBytes("mc_ch_key", meshcore_config.secondary_key, sizeof(meshcore_config.secondary_key));
+
+    prefs.putFloat("rn_freq", rnode_config.override_frequency_mhz);
+    prefs.putFloat("rn_bw", rnode_config.bandwidth_khz);
+    prefs.putUChar("rn_sf", rnode_config.spread_factor);
+    prefs.putUChar("rn_cr", rnode_config.coding_rate);
+    prefs.putChar("rn_tx", rnode_config.tx_power);
+    prefs.putBool("rn_tx_en", rnode_config.tx_enabled);
     // Remove first so legacy key type mismatches cannot block updating this value.
     prefs.remove("mesh_protocol");
     prefs.putUChar("mesh_protocol", static_cast<uint8_t>(mesh_protocol));

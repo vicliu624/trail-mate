@@ -62,6 +62,11 @@ struct AppConfig
     static constexpr uint8_t kMeshCoreDefaultSf = 11;
     static constexpr uint8_t kMeshCoreDefaultCr = 5;
     static constexpr int8_t kMeshCoreDefaultTxPowerDbm = 20;
+    static constexpr float kRNodeDefaultFreqMHz = 869.525f;
+    static constexpr float kRNodeDefaultBwKHz = 125.0f;
+    static constexpr uint8_t kRNodeDefaultSf = 9;
+    static constexpr uint8_t kRNodeDefaultCr = 5;
+    static constexpr int8_t kRNodeDefaultTxPowerDbm = 17;
     static constexpr int8_t kTxPowerMinDbm = -9;
 #if defined(TRAIL_MATE_LORA_TX_POWER_MAX_DBM)
     // Board/module capability must be declared per build target.
@@ -77,6 +82,7 @@ struct AppConfig
     chat::ChatPolicy chat_policy;
     chat::MeshConfig meshtastic_config;
     chat::MeshConfig meshcore_config;
+    chat::MeshConfig rnode_config;
     chat::MeshProtocol mesh_protocol;
 
     // Device settings
@@ -150,6 +156,8 @@ struct AppConfig
 
         meshcore_config = chat::MeshConfig();
         applyMeshCoreFactoryDefaults();
+        rnode_config = chat::MeshConfig();
+        applyRNodeFactoryDefaults();
         mesh_protocol = chat::MeshProtocol::Meshtastic;
         node_name[0] = '\0';
         short_name[0] = '\0';
@@ -209,14 +217,46 @@ struct AppConfig
         meshcore_config.meshcore_channel_name[sizeof(meshcore_config.meshcore_channel_name) - 1] = '\0';
     }
 
+    void applyRNodeFactoryDefaults()
+    {
+        rnode_config.use_preset = false;
+        rnode_config.bandwidth_khz = kRNodeDefaultBwKHz;
+        rnode_config.spread_factor = kRNodeDefaultSf;
+        rnode_config.coding_rate = kRNodeDefaultCr;
+        rnode_config.tx_power = kRNodeDefaultTxPowerDbm;
+        rnode_config.tx_enabled = true;
+        rnode_config.override_duty_cycle = false;
+        rnode_config.override_frequency_mhz = kRNodeDefaultFreqMHz;
+    }
+
     chat::MeshConfig& activeMeshConfig()
     {
-        return (mesh_protocol == chat::MeshProtocol::MeshCore) ? meshcore_config : meshtastic_config;
+        switch (mesh_protocol)
+        {
+        case chat::MeshProtocol::MeshCore:
+            return meshcore_config;
+        case chat::MeshProtocol::LXMF:
+        case chat::MeshProtocol::RNode:
+            return rnode_config;
+        case chat::MeshProtocol::Meshtastic:
+        default:
+            return meshtastic_config;
+        }
     }
 
     const chat::MeshConfig& activeMeshConfig() const
     {
-        return (mesh_protocol == chat::MeshProtocol::MeshCore) ? meshcore_config : meshtastic_config;
+        switch (mesh_protocol)
+        {
+        case chat::MeshProtocol::MeshCore:
+            return meshcore_config;
+        case chat::MeshProtocol::LXMF:
+        case chat::MeshProtocol::RNode:
+            return rnode_config;
+        case chat::MeshProtocol::Meshtastic:
+        default:
+            return meshtastic_config;
+        }
     }
 };
 

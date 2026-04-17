@@ -7,6 +7,7 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/domain/chat_types.h"
+#include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_layout.h"
@@ -51,7 +52,33 @@ void format_contacts_title(char* out, size_t out_len)
         snprintf(out, out_len, "Contacts (MeshCore)");
         return;
     }
-    snprintf(out, out_len, "Contacts");
+    if (protocol == chat::MeshProtocol::RNode)
+    {
+        const chat::MeshConfig& rnode = app_ctx.getConfig().rnode_config;
+        if (rnode.override_frequency_mhz > 0.0f)
+        {
+            snprintf(out, out_len, "Contacts (RNode - %.3fMHz)", rnode.override_frequency_mhz);
+        }
+        else
+        {
+            snprintf(out, out_len, "Contacts (RNode)");
+        }
+        return;
+    }
+    if (protocol == chat::MeshProtocol::LXMF)
+    {
+        const chat::MeshConfig& lxmf = app_ctx.getConfig().rnode_config;
+        if (lxmf.override_frequency_mhz > 0.0f)
+        {
+            snprintf(out, out_len, "Contacts (LXMF - %.3fMHz)", lxmf.override_frequency_mhz);
+        }
+        else
+        {
+            snprintf(out, out_len, "Contacts (LXMF)");
+        }
+        return;
+    }
+    snprintf(out, out_len, "Contacts (%s)", chat::infra::meshProtocolName(protocol));
 }
 
 } // namespace
