@@ -101,6 +101,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download firmware artifacts
         uses: actions/download-artifact@v4
         with:
@@ -110,11 +113,31 @@ jobs:
         run: |
           find dist -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.zip' \) -print | sort
 
+      - name: Extract changelog entry
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          iconv -f UTF-16LE -t UTF-8 CHANGELOG.md > CHANGELOG.utf8.md
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" {capture=1}
+            capture {
+              if ($0 ~ "^## \\[" && $0 !~ "^## \\[" version "\\]") exit
+              print
+            }
+          ' CHANGELOG.utf8.md > release_changelog.md
+
+          if [ ! -s release_changelog.md ]; then
+            echo "Failed to extract changelog entry for version ${VERSION}" >&2
+            exit 1
+          fi
+
+          cat release_changelog.md
+
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          body_path: release_changelog.md
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           overwrite_files: true
