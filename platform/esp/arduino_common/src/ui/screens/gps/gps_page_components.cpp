@@ -4,6 +4,7 @@
 #include "app/app_facade_access.h"
 #include "lvgl.h"
 #include "platform/ui/device_runtime.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_modal.h"
 #include "ui/screens/gps/gps_page_input.h"
@@ -18,6 +19,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #define GPS_DEBUG 0
 #if GPS_DEBUG
@@ -59,7 +61,7 @@ void show_loading()
     lv_obj_center(g_gps_state.loading_msgbox);
 
     lv_obj_t* loading_label = lv_label_create(g_gps_state.loading_msgbox);
-    lv_label_set_text(loading_label, "Loading...");
+    ::ui::i18n::set_label_text(loading_label, "Loading...");
     gps::ui::styles::apply_loading_label(loading_label);
     lv_obj_center(loading_label);
 }
@@ -113,7 +115,7 @@ void show_toast(const char* message, uint32_t duration_ms)
     lv_obj_center(g_gps_state.toast_msgbox);
 
     lv_obj_t* toast_label = lv_label_create(g_gps_state.toast_msgbox);
-    lv_label_set_text(toast_label, message);
+    ::ui::i18n::set_label_text(toast_label, message);
     gps::ui::styles::apply_toast_label(toast_label);
     lv_obj_center(toast_label);
 
@@ -323,9 +325,9 @@ void zoom_popup_sync_touch_selection_impl()
 
     if (g_gps_state.popup_label != nullptr)
     {
-        char summary[48];
-        std::snprintf(summary, sizeof(summary), "Selected level: %d", g_gps_state.popup_zoom);
-        lv_label_set_text(g_gps_state.popup_label, summary);
+        const std::string summary =
+            ::ui::i18n::format("Selected level: %d", g_gps_state.popup_zoom);
+        lv_label_set_text(g_gps_state.popup_label, summary.c_str());
     }
 
     const int selected_index = g_gps_state.popup_zoom - gps_ui::kMinZoom;
@@ -462,7 +464,7 @@ static void build_zoom_popup_ui(lv_obj_t* win)
         lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, 0);
 
         lv_obj_t* title_label = lv_label_create(title_bar);
-        lv_label_set_text(title_label, "select level");
+        ::ui::i18n::set_label_text(title_label, "Select level");
         gps::ui::styles::apply_zoom_popup_title_label(title_label);
         lv_obj_center(title_label);
 
@@ -491,7 +493,7 @@ static void build_zoom_popup_ui(lv_obj_t* win)
     lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, 0);
 
     lv_obj_t* title_label = lv_label_create(title_bar);
-    lv_label_set_text(title_label, "select level");
+    ::ui::i18n::set_label_text(title_label, "Select level");
     gps::ui::styles::apply_zoom_popup_title_label(title_label);
     lv_obj_center(title_label);
 
@@ -543,8 +545,7 @@ static void build_zoom_popup_ui(lv_obj_t* win)
                                                 : 58;
         for (int level = gps_ui::kMinZoom; level <= gps_ui::kMaxZoom; ++level)
         {
-            char level_text[24];
-            std::snprintf(level_text, sizeof(level_text), "Level %d", level);
+            const std::string level_text = ::ui::i18n::format("Level %d", level);
 
             lv_obj_t* btn = lv_btn_create(level_list);
             lv_obj_set_width(btn, LV_PCT(100));
@@ -554,7 +555,7 @@ static void build_zoom_popup_ui(lv_obj_t* win)
             gps::ui::styles::apply_control_button(btn);
 
             lv_obj_t* label = lv_label_create(btn);
-            lv_label_set_text(label, level_text);
+            lv_label_set_text(label, level_text.c_str());
             gps::ui::styles::apply_control_button_label(label);
             lv_obj_set_width(label, LV_PCT(100));
             lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
@@ -714,13 +715,14 @@ void refresh_layer_popup_labels()
 
     if (s_layer_source_label != nullptr)
     {
-        char text[48];
-        snprintf(text, sizeof(text), "Base: %s", map_source_label(map_source));
-        lv_label_set_text(s_layer_source_label, text);
+        const std::string text =
+            ::ui::i18n::format("Base: %s", map_source_label(map_source));
+        lv_label_set_text(s_layer_source_label, text.c_str());
     }
     if (s_layer_contour_label != nullptr)
     {
-        lv_label_set_text(s_layer_contour_label, contour ? "Contour: ON" : "Contour: OFF");
+        ::ui::i18n::set_label_text(s_layer_contour_label,
+                                   contour ? "Contour: ON" : "Contour: OFF");
     }
     for (uint8_t i = 0; i < 3; ++i)
     {
@@ -732,7 +734,7 @@ void refresh_layer_popup_labels()
         lv_obj_t* label = lv_obj_get_child(s_layer_contour_btn, 0);
         if (label != nullptr)
         {
-            lv_label_set_text(label, contour ? "Contour: ON" : "Contour: OFF");
+            ::ui::i18n::set_label_text(label, contour ? "Contour: ON" : "Contour: OFF");
         }
     }
 }
@@ -760,9 +762,9 @@ void layer_set_map_source(uint8_t map_source)
     }
     else if (!map_source_directory_available(normalized))
     {
-        char message[44];
-        snprintf(message, sizeof(message), "%s layer missing", map_source_label(normalized));
-        show_toast(message, 1600);
+        const std::string message =
+            ::ui::i18n::format("%s layer missing", map_source_label(normalized));
+        show_toast(message.c_str(), 1600);
     }
     refresh_layer_popup_labels();
 }
@@ -890,7 +892,7 @@ void show_layer_popup()
             lv_obj_set_size(btn, LV_PCT(100), 22);
             gps::ui::styles::apply_control_button(btn);
             lv_obj_t* label = lv_label_create(btn);
-            lv_label_set_text(label, text);
+            lv_label_set_text(label, ::ui::i18n::tr(text));
             gps::ui::styles::apply_control_button_label(label);
             lv_obj_center(label);
             lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, reinterpret_cast<void*>(user_data));
@@ -962,7 +964,7 @@ void show_layer_popup()
     else
     {
         lv_obj_t* title = lv_label_create(win);
-        lv_label_set_text(title, "Map Layer");
+        ::ui::i18n::set_label_text(title, "Map Layer");
         gps::ui::styles::apply_control_button_label(title);
         lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 4);
 
@@ -1097,19 +1099,22 @@ void refresh_route_popup_labels()
         char text[128];
         if (base != nullptr && base[0] != '\0')
         {
-            std::snprintf(text, sizeof(text), "Route: %s", base);
+            const std::string localized = ::ui::i18n::format("Route: %s", base);
+            std::snprintf(text, sizeof(text), "%s", localized.c_str());
         }
         else
         {
-            std::snprintf(text, sizeof(text), "Route configured");
+            std::snprintf(text, sizeof(text), "%s", ::ui::i18n::tr("Route configured"));
         }
         lv_label_set_text(s_route_info_label, text);
     }
 
     if (s_route_hint_label != nullptr)
     {
-        lv_label_set_text(s_route_hint_label,
-                          g_gps_state.route_overlay_active ? "Tap Center Route to focus the active route." : "Tap Center Route to load and focus the configured route.");
+        ::ui::i18n::set_label_text(
+            s_route_hint_label,
+            g_gps_state.route_overlay_active ? "Tap Center Route to focus the active route."
+                                             : "Tap Center Route to load and focus the configured route.");
     }
 }
 
@@ -1207,7 +1212,7 @@ void show_route_popup()
             lv_obj_set_size(btn, LV_PCT(100), 22);
             gps::ui::styles::apply_control_button(btn);
             lv_obj_t* label = lv_label_create(btn);
-            lv_label_set_text(label, text);
+            lv_label_set_text(label, ::ui::i18n::tr(text));
             gps::ui::styles::apply_control_button_label(label);
             lv_obj_center(label);
             lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
@@ -1246,7 +1251,7 @@ void show_route_popup()
     else
     {
         lv_obj_t* title = lv_label_create(win);
-        lv_label_set_text(title, "Route");
+        ::ui::i18n::set_label_text(title, "Route");
         gps::ui::styles::apply_control_button_label(title);
         lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 4);
 

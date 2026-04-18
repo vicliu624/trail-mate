@@ -7,6 +7,7 @@
 
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/fonts/fonts.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
 #include <algorithm>
@@ -331,7 +332,7 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
         LV_EVENT_KEY, this);
 
     candidates_label_ = lv_label_create(top_row_);
-    lv_label_set_text(candidates_label_, "English keyboard");
+    ::ui::i18n::set_label_text(candidates_label_, "English keyboard");
     lv_obj_set_flex_grow(candidates_label_, 1);
     lv_obj_set_style_text_align(candidates_label_, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_font(candidates_label_, &lv_font_noto_cjk_16_2bpp, 0);
@@ -798,7 +799,7 @@ void ImeWidget::refresh_labels()
 #if UI_SHARED_TOUCH_IME_ENABLED
         if (touch_keyboard_enabled_)
         {
-            lv_label_set_text(candidates_label_, "English keyboard");
+            ::ui::i18n::set_label_text(candidates_label_, "English keyboard");
             refresh_touch_keyboard();
             refresh_touch_candidates();
             return;
@@ -814,7 +815,7 @@ void ImeWidget::refresh_labels()
 #if UI_SHARED_TOUCH_IME_ENABLED
         if (touch_keyboard_enabled_)
         {
-            lv_label_set_text(candidates_label_, "Number keyboard");
+            ::ui::i18n::set_label_text(candidates_label_, "Number keyboard");
             refresh_touch_keyboard();
             refresh_touch_candidates();
             return;
@@ -828,7 +829,9 @@ void ImeWidget::refresh_labels()
 #if UI_SHARED_TOUCH_IME_ENABLED
     if (touch_keyboard_enabled_)
     {
-        std::string hint = ime_.hasBuffer() ? (std::string("Pinyin: ") + ime_.buffer()) : std::string("Pinyin keyboard");
+        std::string hint = ime_.hasBuffer()
+                               ? ::ui::i18n::format("Pinyin: %s", ime_.buffer().c_str())
+                               : std::string(::ui::i18n::tr("Pinyin keyboard"));
         lv_label_set_text(candidates_label_, hint.c_str());
         refresh_touch_keyboard();
         refresh_touch_candidates();

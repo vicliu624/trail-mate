@@ -20,6 +20,7 @@ constexpr const char* kTag = "ui-app-runtime";
 AppScreen* s_active_app = nullptr;
 AppScreen* s_pending_exit = nullptr;
 lv_timer_t* s_exit_timer = nullptr;
+lv_timer_t* s_rebuild_timer = nullptr;
 bool s_overlay_active = false;
 
 lv_anim_enable_t transition_anim()
@@ -121,6 +122,37 @@ void exit_to_menu_timer_cb(lv_timer_t* timer)
 #if defined(ESP_PLATFORM)
     ESP_LOGI(kTag, "exit_to_menu_timer_cb complete");
 #endif
+}
+
+void rebuild_active_app_timer_cb(lv_timer_t* timer)
+{
+#if LVGL_VERSION_MAJOR >= 9
+    auto* app = static_cast<AppScreen*>(timer ? lv_timer_get_user_data(timer) : nullptr);
+#else
+    auto* app = static_cast<AppScreen*>(timer ? timer->user_data : nullptr);
+#endif
+    if (timer)
+    {
+        lv_timer_del(timer);
+    }
+    s_rebuild_timer = nullptr;
+    if (app == nullptr || app != s_active_app || main_screen == nullptr)
+    {
+        return;
+    }
+
+    lv_obj_t* parent = lv_obj_get_child(main_screen, 1);
+    if (parent == nullptr)
+    {
+        return;
+    }
+
+    app->exit(parent);
+    if (parent != nullptr && child_count(parent) > 0)
+    {
+        lv_obj_clean(parent);
+    }
+    app->enter(parent);
 }
 } // namespace
 
@@ -231,6 +263,25 @@ void ui_request_exit_to_menu()
     if (s_exit_timer)
     {
         lv_timer_set_repeat_count(s_exit_timer, 1);
+    }
+}
+
+void ui_request_rebuild_active_app()
+{
+    AppScreen* app = s_active_app;
+    if (app == nullptr || s_pending_exit == app)
+    {
+        return;
+    }
+    if (s_rebuild_timer)
+    {
+        lv_timer_del(s_rebuild_timer);
+        s_rebuild_timer = nullptr;
+    }
+    s_rebuild_timer = lv_timer_create(rebuild_active_app_timer_cb, 1, app);
+    if (s_rebuild_timer)
+    {
+        lv_timer_set_repeat_count(s_rebuild_timer, 1);
     }
 }
 

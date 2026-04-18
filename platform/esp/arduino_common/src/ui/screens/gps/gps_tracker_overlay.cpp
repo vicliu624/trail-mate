@@ -2,6 +2,7 @@
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/tracker_runtime.h"
+#include "ui/localization.h"
 #include "ui/screens/gps/gps_modal.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
 #include "ui/screens/gps/gps_page_map.h"
@@ -441,7 +442,7 @@ void build_tracker_modal()
     else
     {
         lv_obj_t* title = lv_label_create(state.tracker_modal.win);
-        lv_label_set_text(title, "Select Track");
+        ::ui::i18n::set_label_text(title, "Select Track");
         lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
     }
 
@@ -473,7 +474,7 @@ void build_tracker_modal()
         lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, -4);
         gps::ui::styles::apply_control_button(close_btn);
         lv_obj_t* close_label = lv_label_create(close_btn);
-        lv_label_set_text(close_label, "Close");
+        ::ui::i18n::set_label_text(close_label, "Close");
         gps::ui::styles::apply_control_button_label(close_label);
         lv_obj_center(close_label);
         lv_obj_add_event_cb(close_btn, on_tracker_close_clicked, LV_EVENT_CLICKED, nullptr);
@@ -487,7 +488,7 @@ void build_tracker_modal()
     if (s_modal_names.empty())
     {
         lv_obj_t* label = lv_label_create(list);
-        lv_label_set_text(label, "No track files");
+        ::ui::i18n::set_label_text(label, "No track files");
         gps::ui::styles::apply_control_button_label(label);
         if (touch_layout)
         {

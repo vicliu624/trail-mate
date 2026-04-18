@@ -1,8 +1,11 @@
 #include "ui/screens/common/placeholder_page.h"
 
 #include "ui/app_runtime.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_theme.h"
+
+#include <string>
 
 namespace
 {
@@ -64,11 +67,12 @@ void show(State& state, lv_obj_t* parent)
     lv_obj_add_event_cb(back_btn, back_event_cb, LV_EVENT_CLICKED, &state);
 
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
+    const std::string back_text = std::string(LV_SYMBOL_LEFT " ") + ::ui::i18n::tr("Back");
+    ::ui::i18n::set_label_text_raw(back_label, back_text.c_str());
     lv_obj_center(back_label);
 
     lv_obj_t* title = lv_label_create(state.root);
-    lv_label_set_text(title, state.title ? state.title : "App");
+    ::ui::i18n::set_label_text(title, state.title ? state.title : "App");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title, ui::theme::text(), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 6);

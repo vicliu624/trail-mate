@@ -50,6 +50,17 @@ inline const lv_font_t* chat_content_font(const char* text)
 #endif
 }
 
+inline const lv_font_t* localized_font(const char* text, const lv_font_t* ascii_font)
+{
+    const lv_font_t* fallback = ascii_font ? ascii_font : ui_chrome_font();
+#if defined(GAT562_NO_CJK) && GAT562_NO_CJK
+    (void)text;
+    return fallback;
+#else
+    return utf8_has_non_ascii(text) ? &lv_font_noto_cjk_16_2bpp : fallback;
+#endif
+}
+
 inline void apply_font(lv_obj_t* label, const lv_font_t* font)
 {
     if (label && font)
@@ -66,6 +77,11 @@ inline void apply_ui_chrome_font(lv_obj_t* label)
 inline void apply_chat_content_font(lv_obj_t* label, const char* text)
 {
     apply_font(label, chat_content_font(text));
+}
+
+inline void apply_localized_font(lv_obj_t* label, const char* text, const lv_font_t* ascii_font)
+{
+    apply_font(label, localized_font(text, ascii_font));
 }
 
 } // namespace ui::fonts

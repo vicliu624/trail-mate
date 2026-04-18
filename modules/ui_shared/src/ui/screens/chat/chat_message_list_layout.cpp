@@ -9,6 +9,7 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_layout.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 
@@ -94,27 +95,27 @@ void format_time_hhmm(char out[16], uint32_t ts)
         uint32_t diff = now_secs - ts;
         if (diff < 60U)
         {
-            std::snprintf(out, 16, "now");
+            std::snprintf(out, 16, "%s", ::ui::i18n::tr("now"));
         }
         else if (diff < 3600U)
         {
-            std::snprintf(out, 16, "%um", static_cast<unsigned>(diff / 60U));
+            std::snprintf(out, 16, "%s", ::ui::i18n::format("%um", static_cast<unsigned>(diff / 60U)).c_str());
         }
         else if (diff < kSecondsPerDay)
         {
-            std::snprintf(out, 16, "%uh", static_cast<unsigned>(diff / 3600U));
+            std::snprintf(out, 16, "%s", ::ui::i18n::format("%uh", static_cast<unsigned>(diff / 3600U)).c_str());
         }
         else if (diff < kSecondsPerMonth)
         {
-            std::snprintf(out, 16, "%ud", static_cast<unsigned>(diff / kSecondsPerDay));
+            std::snprintf(out, 16, "%s", ::ui::i18n::format("%ud", static_cast<unsigned>(diff / kSecondsPerDay)).c_str());
         }
         else if (diff < kSecondsPerYear)
         {
-            std::snprintf(out, 16, "%umo", static_cast<unsigned>(diff / kSecondsPerMonth));
+            std::snprintf(out, 16, "%s", ::ui::i18n::format("%umo", static_cast<unsigned>(diff / kSecondsPerMonth)).c_str());
         }
         else
         {
-            std::snprintf(out, 16, "%uy", static_cast<unsigned>(diff / kSecondsPerYear));
+            std::snprintf(out, 16, "%s", ::ui::i18n::format("%uy", static_cast<unsigned>(diff / kSecondsPerYear)).c_str());
         }
         return;
     }
@@ -169,7 +170,7 @@ std::string compact_list_name(const std::string& name)
     }
 
     std::string compact = name;
-    replace_all(compact, "Broadcast", "Bcast");
+    replace_all(compact, ::ui::i18n::tr("Broadcast"), ::ui::i18n::tr("Bcast"));
     replace_all(compact, "Primary", "Pri");
     replace_all(compact, "Secondary", "Sec");
     return compact;
@@ -190,7 +191,7 @@ void style_filter_label(lv_obj_t* label)
 
     lv_obj_set_width(label, LV_PCT(100));
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-    ::ui::fonts::apply_ui_chrome_font(label);
+    ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), ::ui::fonts::ui_chrome_font());
     lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
 }
@@ -224,7 +225,7 @@ lv_obj_t* create_filter_panel(lv_obj_t* parent,
     lv_obj_set_size(direct, LV_PCT(100), metrics.filter_button_height);
     ::ui::components::two_pane_layout::make_non_scrollable(direct);
     lv_obj_t* direct_label = lv_label_create(direct);
-    lv_label_set_text(direct_label, "Direct");
+    ::ui::i18n::set_label_text(direct_label, "Direct");
     style_filter_label(direct_label);
     lv_obj_center(direct_label);
 
@@ -232,7 +233,7 @@ lv_obj_t* create_filter_panel(lv_obj_t* parent,
     lv_obj_set_size(broadcast, LV_PCT(100), metrics.filter_button_height);
     ::ui::components::two_pane_layout::make_non_scrollable(broadcast);
     lv_obj_t* broadcast_label = lv_label_create(broadcast);
-    lv_label_set_text(broadcast_label, broadcast_filter_text());
+    ::ui::i18n::set_label_text(broadcast_label, broadcast_filter_text());
     style_filter_label(broadcast_label);
     lv_obj_center(broadcast_label);
 
@@ -240,7 +241,7 @@ lv_obj_t* create_filter_panel(lv_obj_t* parent,
     lv_obj_set_size(team, LV_PCT(100), metrics.filter_button_height);
     ::ui::components::two_pane_layout::make_non_scrollable(team);
     lv_obj_t* team_label = lv_label_create(team);
-    lv_label_set_text(team_label, "Team");
+    ::ui::i18n::set_label_text(team_label, "Team");
     style_filter_label(team_label);
     lv_obj_center(team_label);
     lv_obj_add_flag(team, LV_OBJ_FLAG_HIDDEN);
@@ -342,7 +343,7 @@ void populate_message_item(const MessageItemWidgets& widgets,
     char time_buf[16];
     format_time_hhmm(time_buf, conv.last_timestamp);
     lv_label_set_text(widgets.time_label, time_buf);
-    ::ui::fonts::apply_ui_chrome_font(widgets.time_label);
+    ::ui::fonts::apply_localized_font(widgets.time_label, time_buf, ::ui::fonts::ui_chrome_font());
     if (use_info_card)
     {
         ::ui::components::info_card::apply_single_line_label(widgets.time_label);
@@ -358,7 +359,8 @@ void populate_message_item(const MessageItemWidgets& widgets,
     {
         lv_label_set_text(widgets.unread_label, "");
     }
-    ::ui::fonts::apply_ui_chrome_font(widgets.unread_label);
+    ::ui::fonts::apply_localized_font(
+        widgets.unread_label, lv_label_get_text(widgets.unread_label), ::ui::fonts::ui_chrome_font());
     if (use_info_card)
     {
         ::ui::components::info_card::apply_single_line_label(widgets.unread_label);

@@ -6,6 +6,7 @@
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/walkie_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/localization.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 #include "ui/widgets/top_bar.h"
@@ -97,7 +98,7 @@ void refresh_cb(lv_timer_t*)
     ui_update_top_bar_battery(s_top_bar);
     if (s_mode_label)
     {
-        lv_label_set_text(s_mode_label, st.tx ? "TALK" : "LISTEN");
+        ::ui::i18n::set_label_text(s_mode_label, st.tx ? "TALK" : "LISTEN");
     }
     update_vu(s_left_fill, st.tx ? st.tx_level : st.rx_level);
     update_vu(s_right_fill, st.tx ? st.tx_level : st.rx_level);
@@ -111,8 +112,8 @@ void refresh_cb(lv_timer_t*)
     {
         char buf[24];
         int vol = platform::ui::walkie::volume();
-        snprintf(buf, sizeof(buf), "VOL %d", vol);
-        lv_label_set_text(s_volume_label, buf);
+        snprintf(buf, sizeof(buf), "%s", ::ui::i18n::format("VOL %d", vol).c_str());
+        ::ui::i18n::set_label_text_raw(s_volume_label, buf);
     }
 }
 
@@ -131,22 +132,22 @@ void set_freq_text(float freq_mhz)
     {
         snprintf(buf, sizeof(buf), "%.3f MHz", static_cast<double>(freq_mhz));
     }
-    lv_label_set_text(s_freq_label, buf);
+    ::ui::i18n::set_label_text_raw(s_freq_label, buf);
 }
 
 void set_error_text(const char* message)
 {
     if (s_freq_label)
     {
-        lv_label_set_text(s_freq_label, "Walkie Talkie");
+        ::ui::i18n::set_label_text(s_freq_label, "Walkie Talkie");
     }
     if (s_mod_label)
     {
-        lv_label_set_text(s_mod_label, message ? message : "Walkie not available");
+        ::ui::i18n::set_label_text(s_mod_label, message ? message : "Walkie not available");
     }
     if (s_mode_label)
     {
-        lv_label_set_text(s_mode_label, "Press Back");
+        ::ui::i18n::set_label_text(s_mode_label, "Press Back");
     }
     update_vu(s_left_fill, 0);
     update_vu(s_right_fill, 0);
@@ -194,7 +195,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
-    ::ui::widgets::top_bar_set_title(s_top_bar, "Walkie Talkie");
+    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("Walkie Talkie"));
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
     if (s_top_bar.back_btn)
     {
@@ -234,17 +235,17 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_clear_flag(stack, LV_OBJ_FLAG_SCROLLABLE);
 
     s_freq_label = lv_label_create(stack);
-    lv_label_set_text(s_freq_label, "--.- MHz");
+    ::ui::i18n::set_label_text_raw(s_freq_label, "--.- MHz");
     lv_obj_set_style_text_font(s_freq_label, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_align(s_freq_label, LV_TEXT_ALIGN_CENTER, 0);
 
     s_mod_label = lv_label_create(stack);
-    lv_label_set_text(s_mod_label, "FSK Voice");
+    ::ui::i18n::set_label_text(s_mod_label, "FSK Voice");
     lv_obj_set_style_text_font(s_mod_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_align(s_mod_label, LV_TEXT_ALIGN_CENTER, 0);
 
     s_mode_label = lv_label_create(stack);
-    lv_label_set_text(s_mode_label, "LISTEN");
+    ::ui::i18n::set_label_text(s_mode_label, "LISTEN");
     lv_obj_set_style_text_font(s_mode_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(s_mode_label, LV_TEXT_ALIGN_CENTER, 0);
 
@@ -295,7 +296,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_clear_flag(vol_container, LV_OBJ_FLAG_SCROLLABLE);
 
     s_volume_label = lv_label_create(vol_container);
-    lv_label_set_text(s_volume_label, "VOL 80");
+    ::ui::i18n::set_label_text(s_volume_label, "VOL 80");
     lv_obj_set_style_text_font(s_volume_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_align(s_volume_label, LV_TEXT_ALIGN_CENTER, 0);
 

@@ -6,6 +6,7 @@
 #include "ui/screens/gps/gps_modal.h"
 #include "sys/clock.h"
 #include "ui/LV_Helper.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
 #include "ui/screens/gps/gps_page_styles.h"
@@ -82,7 +83,7 @@ lv_obj_t* modal_create_touch_title_bar(lv_obj_t* win, const char* title)
     lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, 0);
 
     lv_obj_t* title_label = lv_label_create(title_bar);
-    lv_label_set_text(title_label, title ? title : "");
+    ::ui::i18n::set_label_text(title_label, title ? title : "");
     gps::ui::styles::apply_zoom_popup_title_label(title_label);
     lv_obj_center(title_label);
     return title_bar;
@@ -137,7 +138,7 @@ lv_obj_t* modal_create_touch_action_button(lv_obj_t* parent,
     }
 
     lv_obj_t* label = lv_label_create(button);
-    lv_label_set_text(label, text ? text : "");
+    ::ui::i18n::set_label_text(label, text ? text : "");
     gps::ui::styles::apply_control_button_label(label);
     lv_obj_center(label);
     return button;

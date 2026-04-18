@@ -10,6 +10,7 @@
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "sys/clock.h"
+#include "ui/localization.h"
 #include "ui/ui_common.h"
 #include <algorithm>
 #include <array>
@@ -17,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
@@ -639,7 +641,7 @@ void set_scan_button_style()
     lv_obj_set_style_bg_color(s_ui.btn_scan, lv_color_hex(bg), 0);
     lv_obj_set_style_border_color(s_ui.btn_scan, lv_color_hex(border), 0);
     lv_obj_set_style_text_color(s_ui.btn_scan_label, lv_color_white(), 0);
-    lv_label_set_text(s_ui.btn_scan_label, s_state.scanning ? "STOP" : "SCAN");
+    ::ui::i18n::set_label_text(s_ui.btn_scan_label, s_state.scanning ? "STOP" : "SCAN");
     lv_obj_center(s_ui.btn_scan_label);
 }
 
@@ -684,14 +686,14 @@ void refresh_top_status()
         lv_obj_set_style_bg_color(s_ui.cad_chip, lv_color_hex(blink ? kColorInfo : 0x245B95), 0);
         lv_obj_set_style_border_color(s_ui.cad_chip, lv_color_hex(0x1C4B7F), 0);
         lv_obj_set_style_text_color(s_ui.cad_chip_label, lv_color_white(), 0);
-        lv_label_set_text(s_ui.cad_chip_label, "CAD");
+        ::ui::i18n::set_label_text(s_ui.cad_chip_label, "CAD");
     }
     else
     {
         lv_obj_set_style_bg_color(s_ui.cad_chip, lv_color_hex(0xD3C8AE), 0);
         lv_obj_set_style_border_color(s_ui.cad_chip, lv_color_hex(kColorLine), 0);
         lv_obj_set_style_text_color(s_ui.cad_chip_label, lv_color_hex(kColorTextDim), 0);
-        lv_label_set_text(s_ui.cad_chip_label, "SIM");
+        ::ui::i18n::set_label_text(s_ui.cad_chip_label, "SIM");
     }
 }
 
@@ -800,7 +802,8 @@ void refresh_right_panel_text()
     if (s_ui.rssi_label)
     {
         char buf[32];
-        snprintf(buf, sizeof(buf), "RSSI %.0f dBm", cursor_rssi);
+        const std::string text = ::ui::i18n::format("RSSI %.0f dBm", cursor_rssi);
+        snprintf(buf, sizeof(buf), "%s", text.c_str());
         lv_label_set_text(s_ui.rssi_label, buf);
         lv_obj_set_style_text_color(
             s_ui.rssi_label,
@@ -811,7 +814,8 @@ void refresh_right_panel_text()
     if (s_ui.noise_label)
     {
         char buf[32];
-        snprintf(buf, sizeof(buf), "NOISE %.0f dBm", s_state.noise_dbm);
+        const std::string text = ::ui::i18n::format("NOISE %.0f dBm", s_state.noise_dbm);
+        snprintf(buf, sizeof(buf), "%s", text.c_str());
         lv_label_set_text(s_ui.noise_label, buf);
     }
 
@@ -825,7 +829,8 @@ void refresh_right_panel_text()
     if (s_ui.best_snr)
     {
         char buf[24];
-        snprintf(buf, sizeof(buf), "SNR +%d", cleanliness);
+        const std::string text = ::ui::i18n::format("SNR +%d", cleanliness);
+        snprintf(buf, sizeof(buf), "%s", text.c_str());
         lv_label_set_text(s_ui.best_snr, buf);
     }
 
@@ -876,15 +881,19 @@ void refresh_scale_labels()
 
     if (step_int && bw_int)
     {
-        snprintf(mid, sizeof(mid), "STEP %.0fk | BW %.0fk",
-                 static_cast<double>(step_khz),
-                 static_cast<double>(s_band.bw_khz));
+        const std::string text =
+            ::ui::i18n::format("STEP %.0fk | BW %.0fk",
+                               static_cast<double>(step_khz),
+                               static_cast<double>(s_band.bw_khz));
+        snprintf(mid, sizeof(mid), "%s", text.c_str());
     }
     else
     {
-        snprintf(mid, sizeof(mid), "STEP %.1fk | BW %.1fk",
-                 static_cast<double>(step_khz),
-                 static_cast<double>(s_band.bw_khz));
+        const std::string text =
+            ::ui::i18n::format("STEP %.1fk | BW %.1fk",
+                               static_cast<double>(step_khz),
+                               static_cast<double>(s_band.bw_khz));
+        snprintf(mid, sizeof(mid), "%s", text.c_str());
     }
 
     lv_label_set_text(s_ui.scale_left, left);
@@ -1142,7 +1151,7 @@ void build_topbar(lv_obj_t* root)
     lv_obj_center(back_label);
 
     s_ui.title = lv_label_create(s_ui.topbar);
-    lv_label_set_text(s_ui.title, "SUB-GHz SCAN");
+    ::ui::i18n::set_label_text(s_ui.title, "SUB-GHz SCAN");
     lv_obj_set_style_text_font(s_ui.title, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(s_ui.title, lv_color_hex(kColorText), 0);
     lv_obj_set_pos(s_ui.title, 46, 0);
@@ -1159,7 +1168,7 @@ void build_topbar(lv_obj_t* root)
     lv_obj_clear_flag(s_ui.mode_chip, LV_OBJ_FLAG_SCROLLABLE);
 
     s_ui.mode_chip_label = lv_label_create(s_ui.mode_chip);
-    lv_label_set_text(s_ui.mode_chip_label, "MODE: RSSI");
+    ::ui::i18n::set_label_text(s_ui.mode_chip_label, "MODE: RSSI");
     lv_obj_set_style_text_font(s_ui.mode_chip_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_ui.mode_chip_label, lv_color_hex(kColorText), 0);
     lv_obj_center(s_ui.mode_chip_label);
@@ -1176,7 +1185,7 @@ void build_topbar(lv_obj_t* root)
     lv_obj_clear_flag(s_ui.cad_chip, LV_OBJ_FLAG_SCROLLABLE);
 
     s_ui.cad_chip_label = lv_label_create(s_ui.cad_chip);
-    lv_label_set_text(s_ui.cad_chip_label, "CAD");
+    ::ui::i18n::set_label_text(s_ui.cad_chip_label, "CAD");
     lv_obj_set_style_text_font(s_ui.cad_chip_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_ui.cad_chip_label, lv_color_white(), 0);
     lv_obj_center(s_ui.cad_chip_label);
@@ -1261,7 +1270,7 @@ void build_left_panel(lv_obj_t* root)
     lv_obj_set_pos(s_ui.scale_left, 2, 6);
 
     s_ui.scale_mid = lv_label_create(scale_bar);
-    lv_label_set_text(s_ui.scale_mid, "STEP -- | BW --");
+    ::ui::i18n::set_label_text(s_ui.scale_mid, "STEP -- | BW --");
     lv_obj_set_style_text_font(s_ui.scale_mid, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_ui.scale_mid, lv_color_hex(kColorTextDim), 0);
     lv_obj_align(s_ui.scale_mid, LV_ALIGN_CENTER, 0, 5);
@@ -1298,7 +1307,7 @@ void build_right_panel(lv_obj_t* root)
     lv_obj_clear_flag(sep1, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* title_cursor = lv_label_create(s_ui.right_panel);
-    lv_label_set_text(title_cursor, "CURSOR");
+    ::ui::i18n::set_label_text(title_cursor, "CURSOR");
     lv_obj_set_style_text_font(title_cursor, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title_cursor, lv_color_hex(kColorText), 0);
     lv_obj_set_pos(title_cursor, 8, 2);
@@ -1316,19 +1325,19 @@ void build_right_panel(lv_obj_t* root)
     lv_obj_set_pos(s_ui.cursor_unit, 84, 22);
 
     s_ui.rssi_label = lv_label_create(s_ui.right_panel);
-    lv_label_set_text(s_ui.rssi_label, "RSSI -92 dBm");
+    ::ui::i18n::set_label_text(s_ui.rssi_label, "RSSI -92 dBm");
     lv_obj_set_style_text_font(s_ui.rssi_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_ui.rssi_label, lv_color_hex(kColorText), 0);
     lv_obj_set_pos(s_ui.rssi_label, 8, 43);
 
     s_ui.noise_label = lv_label_create(s_ui.right_panel);
-    lv_label_set_text(s_ui.noise_label, "NOISE -104 dBm");
+    ::ui::i18n::set_label_text(s_ui.noise_label, "NOISE -104 dBm");
     lv_obj_set_style_text_font(s_ui.noise_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_ui.noise_label, lv_color_hex(kColorTextDim), 0);
     lv_obj_set_pos(s_ui.noise_label, 8, 60);
 
     lv_obj_t* title_best = lv_label_create(s_ui.right_panel);
-    lv_label_set_text(title_best, "BEST");
+    ::ui::i18n::set_label_text(title_best, "BEST");
     lv_obj_set_style_text_font(title_best, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title_best, lv_color_hex(kColorText), 0);
     lv_obj_set_pos(title_best, 8, 80);
@@ -1340,7 +1349,7 @@ void build_right_panel(lv_obj_t* root)
     lv_obj_set_pos(s_ui.best_freq, 8, 97);
 
     s_ui.best_snr = lv_label_create(s_ui.right_panel);
-    lv_label_set_text(s_ui.best_snr, "SNR +12");
+    ::ui::i18n::set_label_text(s_ui.best_snr, "SNR +12");
     lv_obj_set_style_text_font(s_ui.best_snr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_ui.best_snr, lv_color_hex(kColorTextDim), 0);
     lv_obj_set_pos(s_ui.best_snr, 8, 114);
@@ -1378,7 +1387,7 @@ void build_right_panel(lv_obj_t* root)
     lv_obj_add_event_cb(s_ui.btn_scan, scan_btn_key_event_cb, LV_EVENT_KEY, nullptr);
 
     s_ui.btn_scan_label = lv_label_create(s_ui.btn_scan);
-    lv_label_set_text(s_ui.btn_scan_label, "STOP");
+    ::ui::i18n::set_label_text(s_ui.btn_scan_label, "STOP");
     lv_obj_set_style_text_font(s_ui.btn_scan_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(s_ui.btn_scan_label, lv_color_white(), 0);
     lv_obj_center(s_ui.btn_scan_label);
@@ -1396,7 +1405,7 @@ void build_right_panel(lv_obj_t* root)
     lv_obj_add_event_cb(s_ui.btn_auto, auto_btn_key_event_cb, LV_EVENT_KEY, nullptr);
 
     s_ui.btn_auto_label = lv_label_create(s_ui.btn_auto);
-    lv_label_set_text(s_ui.btn_auto_label, "AUTO");
+    ::ui::i18n::set_label_text(s_ui.btn_auto_label, "AUTO");
     lv_obj_set_style_text_font(s_ui.btn_auto_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(s_ui.btn_auto_label, lv_color_hex(kColorInfo), 0);
     lv_obj_center(s_ui.btn_auto_label);

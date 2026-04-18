@@ -8,6 +8,7 @@
 
 #include "platform/ui/gps_runtime.h"
 #include "sys/clock.h"
+#include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
 
 namespace ui::menu::dashboard
@@ -50,7 +51,7 @@ void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::Gn
                 static_cast<double>(gnss.hdop));
 }
 
-void set_label_text_if_changed(lv_obj_t* label, const char* text)
+void set_label_text_if_changed_raw(lv_obj_t* label, const char* text)
 {
     if (label == nullptr || text == nullptr)
     {
@@ -59,7 +60,21 @@ void set_label_text_if_changed(lv_obj_t* label, const char* text)
     const char* current = lv_label_get_text(label);
     if (current == nullptr || std::strcmp(current, text) != 0)
     {
-        lv_label_set_text(label, text);
+        ::ui::i18n::set_label_text_raw(label, text);
+    }
+}
+
+void set_label_text_if_changed(lv_obj_t* label, const char* english)
+{
+    const char* localized = ::ui::i18n::tr(english);
+    if (label == nullptr || localized == nullptr)
+    {
+        return;
+    }
+    const char* current = lv_label_get_text(label);
+    if (current == nullptr || std::strcmp(current, localized) != 0)
+    {
+        ::ui::i18n::set_label_text_raw(label, localized);
     }
 }
 
@@ -115,12 +130,12 @@ void create_stat_tiles(GpsWidgetUi& gps_ui, lv_obj_t* body, lv_coord_t x, lv_coo
         gps_ui.stat_values[i] = lv_label_create(gps_ui.stat_tiles[i]);
         style_body_label(gps_ui.stat_values[i], &lv_font_montserrat_16, color_text());
         lv_obj_align(gps_ui.stat_values[i], LV_ALIGN_LEFT_MID, 0, -1);
-        lv_label_set_text(gps_ui.stat_values[i], "--");
+        ::ui::i18n::set_label_text_raw(gps_ui.stat_values[i], "--");
 
         gps_ui.stat_captions[i] = lv_label_create(gps_ui.stat_tiles[i]);
         style_body_label(gps_ui.stat_captions[i], &lv_font_montserrat_12, color_text_dim());
         lv_obj_align(gps_ui.stat_captions[i], LV_ALIGN_RIGHT_MID, 0, -1);
-        lv_label_set_text(gps_ui.stat_captions[i], kCaptions[i]);
+        ::ui::i18n::set_label_text(gps_ui.stat_captions[i], kCaptions[i]);
     }
 }
 
@@ -129,7 +144,7 @@ void create_stat_tiles(GpsWidgetUi& gps_ui, lv_obj_t* body, lv_coord_t x, lv_coo
 void create_gps_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
 {
     auto& gps_ui = dashboard_state().gps;
-    gps_ui.chrome = create_card_chrome(parent, "GPS Status", card_w, card_h);
+    gps_ui.chrome = create_card_chrome(parent, ::ui::i18n::tr("GPS Status"), card_w, card_h);
 
     const lv_coord_t body_w = lv_obj_get_width(gps_ui.chrome.body);
     const lv_coord_t body_h = lv_obj_get_height(gps_ui.chrome.body);
@@ -193,7 +208,7 @@ void create_gps_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
         lv_obj_set_style_pad_bottom(gps_ui.sat_use_tags[i], 1, 0);
         lv_obj_set_style_text_color(gps_ui.sat_use_tags[i], lv_color_white(), 0);
         lv_obj_set_style_text_font(gps_ui.sat_use_tags[i], &lv_font_montserrat_12, 0);
-        lv_label_set_text(gps_ui.sat_use_tags[i], "U");
+        ::ui::i18n::set_label_text(gps_ui.sat_use_tags[i], "U");
         lv_obj_add_flag(gps_ui.sat_use_tags[i], LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -203,7 +218,7 @@ void create_gps_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
     gps_ui.footer_label = lv_label_create(gps_ui.chrome.footer);
     style_footer_label(gps_ui.footer_label);
     lv_obj_align(gps_ui.footer_label, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_label_set_text(gps_ui.footer_label, "searching satellites");
+    ::ui::i18n::set_label_text(gps_ui.footer_label, "searching satellites");
 }
 
 void refresh_gps_widget()
@@ -233,11 +248,11 @@ void refresh_gps_widget()
     std::snprintf(used_buf, sizeof(used_buf), "%u/%u",
                   static_cast<unsigned>(has_snapshot ? gnss.sats_in_use : 0),
                   static_cast<unsigned>(has_snapshot ? sat_count : 0));
-    set_label_text_if_changed(gps_ui.stat_values[1], used_buf);
+    set_label_text_if_changed_raw(gps_ui.stat_values[1], used_buf);
 
     char hdop_buf[16];
     std::snprintf(hdop_buf, sizeof(hdop_buf), "%.1f", has_snapshot ? gnss.hdop : 0.0f);
-    set_label_text_if_changed(gps_ui.stat_values[2], hdop_buf);
+    set_label_text_if_changed_raw(gps_ui.stat_values[2], hdop_buf);
 
     std::array<gps::GnssSatInfo, gps::kMaxGnssSats> ranked{};
     for (size_t i = 0; i < sat_count && i < ranked.size(); ++i)
@@ -285,7 +300,7 @@ void refresh_gps_widget()
 
         char label_buf[8];
         std::snprintf(label_buf, sizeof(label_buf), "%u", static_cast<unsigned>(sat.id));
-        set_label_text_if_changed(gps_ui.sat_labels[i], label_buf);
+        set_label_text_if_changed_raw(gps_ui.sat_labels[i], label_buf);
 
         if (sat.used)
         {
@@ -307,10 +322,12 @@ void refresh_gps_widget()
     char footer[72];
     std::snprintf(footer,
                   sizeof(footer),
-                  "%s  |  %u in view",
-                  fix ? "position stream active" : "waiting for better sky view",
-                  static_cast<unsigned>(has_snapshot ? sat_count : 0));
-    set_label_text_if_changed(gps_ui.footer_label, footer);
+                  "%s",
+                  ::ui::i18n::format(
+                      fix ? "position stream active  |  %u in view" : "waiting for better sky view  |  %u in view",
+                      static_cast<unsigned>(has_snapshot ? sat_count : 0))
+                      .c_str());
+    set_label_text_if_changed_raw(gps_ui.footer_label, footer);
 }
 
 } // namespace ui::menu::dashboard

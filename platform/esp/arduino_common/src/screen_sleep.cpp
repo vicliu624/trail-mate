@@ -7,6 +7,7 @@
 
 #include <Preferences.h>
 #include <cstdio>
+#include <string>
 
 #include "board/BoardBase.h"
 #include "display/DisplayConfig.h"
@@ -14,6 +15,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lvgl.h"
+#include "ui/localization.h"
 
 namespace
 {
@@ -151,16 +153,15 @@ void screen_saver_refresh()
     lv_label_set_text(s_screen_saver_time_label, time_buf);
 
     const int unread = readUnreadCount();
-    char unread_buf[32];
     if (unread > 0)
     {
-        snprintf(unread_buf, sizeof(unread_buf), "Unread: %d", unread);
+        const std::string text = ::ui::i18n::format("Unread: %d", unread);
+        lv_label_set_text(s_screen_saver_unread_label, text.c_str());
     }
     else
     {
-        snprintf(unread_buf, sizeof(unread_buf), "Unread: 0");
+        ::ui::i18n::set_label_text(s_screen_saver_unread_label, "Unread: 0");
     }
-    lv_label_set_text(s_screen_saver_unread_label, unread_buf);
 }
 
 void screen_saver_timer_cb(lv_timer_t* /*timer*/)
@@ -208,16 +209,16 @@ void init_screen_saver()
     s_screen_saver_unread_label = lv_label_create(s_screen_saver_layer);
     lv_obj_set_style_text_color(s_screen_saver_unread_label, lv_color_hex(0x6B4A1E), 0);
     lv_obj_set_style_text_font(s_screen_saver_unread_label, &lv_font_montserrat_20, 0);
-    lv_label_set_text(s_screen_saver_unread_label, "Unread: 0");
+    ::ui::i18n::set_label_text(s_screen_saver_unread_label, "Unread: 0");
     lv_obj_align(s_screen_saver_unread_label, LV_ALIGN_CENTER, 0, 10);
 
     s_screen_saver_hint_label = lv_label_create(s_screen_saver_layer);
     lv_obj_set_style_text_color(s_screen_saver_hint_label, lv_color_hex(0x8A6A3A), 0);
     lv_obj_set_style_text_font(s_screen_saver_hint_label, &lv_font_montserrat_14, 0);
 #if defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
-    lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to resume");
+    ::ui::i18n::set_label_text(s_screen_saver_hint_label, "Press SPACE to resume");
 #else
-    lv_label_set_text(s_screen_saver_hint_label, "Press SPACE to resume");
+    ::ui::i18n::set_label_text(s_screen_saver_hint_label, "Press SPACE to resume");
 #endif
     lv_obj_align(s_screen_saver_hint_label, LV_ALIGN_CENTER, 0, 40);
 

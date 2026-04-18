@@ -6,12 +6,14 @@
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/sstv_runtime.h"
 #include "ui/LV_Helper.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
 #define lv_font_montserrat_12 lv_font_montserrat_14
@@ -141,7 +143,8 @@ void update_rx_button_label()
     {
         return;
     }
-    lv_label_set_text(s_ui.btn_rx_label, platform::ui::sstv::is_active() ? "STOP" : "RX");
+    ::ui::i18n::set_label_text(s_ui.btn_rx_label,
+                               platform::ui::sstv::is_active() ? "STOP" : "RX");
 }
 
 void on_rx_btn_clicked(lv_event_t*)
@@ -156,7 +159,7 @@ void on_rx_btn_clicked(lv_event_t*)
         if (!ok && s_ui.label_state_sub)
         {
             const char* err = platform::ui::sstv::last_error();
-            lv_label_set_text(s_ui.label_state_sub, err ? err : "SSTV start failed");
+            ::ui::i18n::set_label_text(s_ui.label_state_sub, err ? err : "SSTV start failed");
         }
     }
     update_rx_button_label();
@@ -214,11 +217,11 @@ void refresh_cb(lv_timer_t*)
             if (s_ui.label_state_sub)
             {
                 const char* err = platform::ui::sstv::last_error();
-                lv_label_set_text(s_ui.label_state_sub, err ? err : "Decoder error");
+                ::ui::i18n::set_label_text(s_ui.label_state_sub, err ? err : "Decoder error");
             }
             if (s_ui.label_ready)
             {
-                lv_label_set_text(s_ui.label_ready, "ERROR");
+                ::ui::i18n::set_label_text(s_ui.label_ready, "ERROR");
                 lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorWarn), 0);
             }
         }
@@ -229,9 +232,8 @@ void refresh_cb(lv_timer_t*)
         if (s_ui.label_state_sub)
         {
             int pct = static_cast<int>(st.progress * 100.0f + 0.5f);
-            char buf[32];
-            snprintf(buf, sizeof(buf), "Decoding: %d%%", pct);
-            lv_label_set_text(s_ui.label_state_sub, buf);
+            const std::string text = ::ui::i18n::format("Decoding: %d%%", pct);
+            lv_label_set_text(s_ui.label_state_sub, text.c_str());
         }
         ui_sstv_set_progress(st.progress);
     }
@@ -243,9 +245,8 @@ void refresh_cb(lv_timer_t*)
             const char* saved = platform::ui::sstv::last_saved_path();
             if (saved && saved[0] != '\0')
             {
-                char buf[80];
-                snprintf(buf, sizeof(buf), "Saved: %s", saved);
-                lv_label_set_text(s_ui.label_state_sub, buf);
+                const std::string text = ::ui::i18n::format("Saved: %s", saved);
+                lv_label_set_text(s_ui.label_state_sub, text.c_str());
             }
         }
     }
@@ -323,7 +324,7 @@ void build_top_bar(lv_obj_t* parent)
 {
     ::ui::widgets::TopBarConfig cfg;
     ::ui::widgets::top_bar_init(s_ui.top_bar, parent, cfg);
-    ::ui::widgets::top_bar_set_title(s_ui.top_bar, "SSTV RECEIVER");
+    ::ui::widgets::top_bar_set_title(s_ui.top_bar, ::ui::i18n::tr("SSTV RECEIVER"));
     ::ui::widgets::top_bar_set_back_callback(
         s_ui.top_bar, [](void*)
         { request_exit(); },
@@ -377,9 +378,9 @@ void build_main_area(lv_obj_t* parent)
     lv_obj_add_flag(s_ui.img, LV_OBJ_FLAG_HIDDEN);
 
     s_ui.img_placeholder = lv_label_create(s_ui.img_box);
-    lv_label_set_text(s_ui.img_placeholder, "No image");
-    lv_obj_center(s_ui.img_placeholder);
     apply_label_style(s_ui.img_placeholder, &lv_font_montserrat_12, kColorTextDim);
+    ::ui::i18n::set_label_text(s_ui.img_placeholder, "No image");
+    lv_obj_center(s_ui.img_placeholder);
 
     s_ui.info_area = lv_obj_create(main);
     lv_obj_set_size(s_ui.info_area, kInfoW, kInfoH);
@@ -419,8 +420,8 @@ void build_main_area(lv_obj_t* parent)
     lv_obj_set_style_border_color(s_ui.btn_rx, lv_color_hex(kColorLine), 0);
     lv_obj_set_style_radius(s_ui.btn_rx, 6, 0);
     lv_obj_t* rx_label = lv_label_create(s_ui.btn_rx);
-    lv_label_set_text(rx_label, "RX");
     apply_label_style(rx_label, &lv_font_montserrat_16, kColorText);
+    ::ui::i18n::set_label_text(rx_label, "RX");
     lv_obj_center(rx_label);
     s_ui.btn_rx_label = rx_label;
     lv_obj_add_event_cb(s_ui.btn_rx, on_rx_btn_clicked, LV_EVENT_CLICKED, nullptr);
@@ -506,7 +507,7 @@ void ui_sstv_enter(lv_obj_t* parent)
 {
     if (platform::ui::device::power_tier() >= 1)
     {
-        ui::SystemNotification::show("Low battery - audio disabled", 3000);
+        ui::SystemNotification::show(::ui::i18n::tr("Low battery - audio disabled"), 3000);
     }
 
     lv_group_t* prev_group = lv_group_get_default();
@@ -533,7 +534,7 @@ void ui_sstv_enter(lv_obj_t* parent)
 
     if (s_ui.label_state_sub)
     {
-        lv_label_set_text(s_ui.label_state_sub, "Press RX to start");
+        ::ui::i18n::set_label_text(s_ui.label_state_sub, "Press RX to start");
     }
     update_rx_button_label();
 
@@ -574,20 +575,20 @@ void ui_sstv_set_state(SstvState state)
     switch (state)
     {
     case SSTV_STATE_WAITING:
-        lv_label_set_text(s_ui.label_state_sub, "Listening for SSTV signal...");
-        lv_label_set_text(s_ui.label_ready, "SSTV RX READY");
+        ::ui::i18n::set_label_text(s_ui.label_state_sub, "Listening for SSTV signal...");
+        ::ui::i18n::set_label_text(s_ui.label_ready, "SSTV RX READY");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorText), 0);
         ui_sstv_set_image(nullptr);
         ui_sstv_set_progress(0.0f);
         break;
     case SSTV_STATE_RECEIVING:
-        lv_label_set_text(s_ui.label_state_sub, "Decoding: 0%");
-        lv_label_set_text(s_ui.label_ready, "RECEIVING");
+        ::ui::i18n::set_label_text(s_ui.label_state_sub, "Decoding: 0%");
+        ::ui::i18n::set_label_text(s_ui.label_ready, "RECEIVING");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
         break;
     case SSTV_STATE_COMPLETE:
-        lv_label_set_text(s_ui.label_state_sub, "Image received");
-        lv_label_set_text(s_ui.label_ready, "COMPLETE");
+        ::ui::i18n::set_label_text(s_ui.label_state_sub, "Image received");
+        ::ui::i18n::set_label_text(s_ui.label_ready, "COMPLETE");
         lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
         ui_sstv_set_progress(1.0f);
         break;
@@ -605,11 +606,12 @@ void ui_sstv_set_mode(const char* mode_str)
     char buf[48];
     if (!mode_str || mode_str[0] == '\0')
     {
-        snprintf(buf, sizeof(buf), "MODE: Auto");
+        snprintf(buf, sizeof(buf), "%s", ::ui::i18n::tr("MODE: Auto"));
     }
     else
     {
-        snprintf(buf, sizeof(buf), "MODE: %s", mode_str);
+        const std::string text = ::ui::i18n::format("MODE: %s", mode_str);
+        snprintf(buf, sizeof(buf), "%s", text.c_str());
     }
     lv_label_set_text(s_ui.label_mode, buf);
 }

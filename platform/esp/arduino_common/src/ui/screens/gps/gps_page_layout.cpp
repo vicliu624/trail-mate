@@ -1,4 +1,5 @@
 #include "ui/screens/gps/gps_page_layout.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
 namespace gps::ui::layout
@@ -131,7 +132,7 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     lv_obj_set_width(w.route_btn, LV_PCT(100));
     lv_obj_set_height(w.route_btn, spec.control_btn_h);
     w.route_label = lv_label_create(w.route_btn);
-    lv_label_set_text(w.route_label, touch_layout ? "Route" : "[R]oute");
+    lv_label_set_text(w.route_label, ::ui::i18n::tr(touch_layout ? "Route" : "[R]oute"));
     lv_obj_center(w.route_label);
 }
 

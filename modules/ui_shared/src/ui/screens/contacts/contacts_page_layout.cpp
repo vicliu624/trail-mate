@@ -11,6 +11,7 @@
 #include "chat/infra/meshtastic/mt_region.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_layout.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
 #include <cstdio>
@@ -44,12 +45,12 @@ void format_contacts_title(char* out, size_t out_len)
     {
         float freq_mhz =
             chat::meshtastic::estimateFrequencyMhz(config.region, config.modem_preset);
-        snprintf(out, out_len, "Contacts (Meshtastic - %.3fMHz)", freq_mhz);
+        snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (Meshtastic - %.3fMHz)", freq_mhz).c_str());
         return;
     }
     if (protocol == chat::MeshProtocol::MeshCore)
     {
-        snprintf(out, out_len, "Contacts (MeshCore)");
+        snprintf(out, out_len, "%s", ::ui::i18n::tr("Contacts (MeshCore)"));
         return;
     }
     if (protocol == chat::MeshProtocol::RNode)
@@ -57,11 +58,11 @@ void format_contacts_title(char* out, size_t out_len)
         const chat::MeshConfig& rnode = app_ctx.getConfig().rnode_config;
         if (rnode.override_frequency_mhz > 0.0f)
         {
-            snprintf(out, out_len, "Contacts (RNode - %.3fMHz)", rnode.override_frequency_mhz);
+            snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (RNode - %.3fMHz)", rnode.override_frequency_mhz).c_str());
         }
         else
         {
-            snprintf(out, out_len, "Contacts (RNode)");
+            snprintf(out, out_len, "%s", ::ui::i18n::tr("Contacts (RNode)"));
         }
         return;
     }
@@ -70,15 +71,15 @@ void format_contacts_title(char* out, size_t out_len)
         const chat::MeshConfig& lxmf = app_ctx.getConfig().rnode_config;
         if (lxmf.override_frequency_mhz > 0.0f)
         {
-            snprintf(out, out_len, "Contacts (LXMF - %.3fMHz)", lxmf.override_frequency_mhz);
+            snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (LXMF - %.3fMHz)", lxmf.override_frequency_mhz).c_str());
         }
         else
         {
-            snprintf(out, out_len, "Contacts (LXMF)");
+            snprintf(out, out_len, "%s", ::ui::i18n::tr("Contacts (LXMF)"));
         }
         return;
     }
-    snprintf(out, out_len, "Contacts (%s)", chat::infra::meshProtocolName(protocol));
+    snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (%s)", chat::infra::meshProtocolName(protocol)).c_str());
 }
 
 } // namespace
@@ -141,7 +142,7 @@ void create_filter_panel(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.contacts_btn);
     style::apply_btn_filter(g_contacts_state.contacts_btn);
     lv_obj_t* contacts_label = lv_label_create(g_contacts_state.contacts_btn);
-    lv_label_set_text(contacts_label, "Contacts");
+    ::ui::i18n::set_label_text(contacts_label, "Contacts");
     style::apply_label_primary(contacts_label);
     lv_obj_center(contacts_label);
 
@@ -150,7 +151,7 @@ void create_filter_panel(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.nearby_btn);
     style::apply_btn_filter(g_contacts_state.nearby_btn);
     lv_obj_t* nearby_label = lv_label_create(g_contacts_state.nearby_btn);
-    lv_label_set_text(nearby_label, "Nearby");
+    ::ui::i18n::set_label_text(nearby_label, "Nearby");
     style::apply_label_primary(nearby_label);
     lv_obj_center(nearby_label);
 
@@ -159,7 +160,7 @@ void create_filter_panel(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.ignored_btn);
     style::apply_btn_filter(g_contacts_state.ignored_btn);
     lv_obj_t* ignored_label = lv_label_create(g_contacts_state.ignored_btn);
-    lv_label_set_text(ignored_label, "Ignored");
+    ::ui::i18n::set_label_text(ignored_label, "Ignored");
     style::apply_label_primary(ignored_label);
     lv_obj_center(ignored_label);
 
@@ -168,7 +169,7 @@ void create_filter_panel(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.broadcast_btn);
     style::apply_btn_filter(g_contacts_state.broadcast_btn);
     lv_obj_t* broadcast_label = lv_label_create(g_contacts_state.broadcast_btn);
-    lv_label_set_text(broadcast_label, "Broadcast");
+    ::ui::i18n::set_label_text(broadcast_label, "Broadcast");
     style::apply_label_primary(broadcast_label);
     lv_obj_center(broadcast_label);
 
@@ -177,7 +178,7 @@ void create_filter_panel(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.team_btn);
     style::apply_btn_filter(g_contacts_state.team_btn);
     lv_obj_t* team_label = lv_label_create(g_contacts_state.team_btn);
-    lv_label_set_text(team_label, "Team");
+    ::ui::i18n::set_label_text(team_label, "Team");
     style::apply_label_primary(team_label);
     lv_obj_center(team_label);
     lv_obj_add_flag(g_contacts_state.team_btn, LV_OBJ_FLAG_HIDDEN);
@@ -187,7 +188,7 @@ void create_filter_panel(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.discover_btn);
     style::apply_btn_filter(g_contacts_state.discover_btn);
     lv_obj_t* discover_label = lv_label_create(g_contacts_state.discover_btn);
-    lv_label_set_text(discover_label, "Discover");
+    ::ui::i18n::set_label_text(discover_label, "Discover");
     style::apply_label_primary(discover_label);
     lv_obj_center(discover_label);
 
@@ -285,21 +286,21 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
     if (::ui::components::info_card::use_tdeck_layout())
     {
         const auto slots = ::ui::components::info_card::create_content(item);
-        lv_label_set_text(slots.header_main_label, display_name.c_str());
+        ::ui::i18n::set_label_text_raw(slots.header_main_label, display_name.c_str());
         style::apply_label_primary(slots.header_main_label);
 
-        lv_label_set_text(slots.body_main_label, status_text);
+        ::ui::i18n::set_label_text(slots.body_main_label, status_text);
         style::apply_label_muted(slots.body_main_label);
     }
     else
     {
         lv_obj_t* name_label = lv_label_create(item);
-        lv_label_set_text(name_label, display_name.c_str());
+        ::ui::i18n::set_label_text_raw(name_label, display_name.c_str());
         lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 10, 0);
         style::apply_label_primary(name_label);
 
         lv_obj_t* status_label = lv_label_create(item);
-        lv_label_set_text(status_label, status_text);
+        ::ui::i18n::set_label_text(status_label, status_text);
         lv_obj_align(status_label, LV_ALIGN_RIGHT_MID, -10, 0);
         style::apply_label_muted(status_label);
     }

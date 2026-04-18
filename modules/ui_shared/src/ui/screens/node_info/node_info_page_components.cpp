@@ -8,6 +8,7 @@
 #include "app/app_facade_access.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "sys/clock.h"
+#include "ui/localization.h"
 #include "ui/screens/node_info/node_info_page_layout.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/top_bar.h"
@@ -15,6 +16,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <string>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -192,11 +194,15 @@ void format_node_id(uint32_t node_id, char* out, size_t out_len)
     }
     if (node_id <= 0xFFFFFF)
     {
-        snprintf(out, out_len, "ID: !%06lx", static_cast<unsigned long>(node_id));
+        const std::string text =
+            ::ui::i18n::format("ID: !%06lx", static_cast<unsigned long>(node_id));
+        snprintf(out, out_len, "%s", text.c_str());
     }
     else
     {
-        snprintf(out, out_len, "ID: !%08lx", static_cast<unsigned long>(node_id));
+        const std::string text =
+            ::ui::i18n::format("ID: !%08lx", static_cast<unsigned long>(node_id));
+        snprintf(out, out_len, "%s", text.c_str());
     }
 }
 
@@ -208,32 +214,42 @@ void format_age(const char* prefix, uint32_t ts, char* out, size_t out_len)
     }
     if (ts == 0)
     {
-        snprintf(out, out_len, "%s -", prefix);
+        const std::string text = ::ui::i18n::format("%s -", prefix);
+        snprintf(out, out_len, "%s", text.c_str());
         return;
     }
     uint32_t now = sys::epoch_seconds_now();
     if (now < ts)
     {
-        snprintf(out, out_len, "%s 0s", prefix);
+        const std::string text = ::ui::i18n::format("%s 0s", prefix);
+        snprintf(out, out_len, "%s", text.c_str());
         return;
     }
     uint32_t age = now - ts;
     if (age < 60)
     {
-        snprintf(out, out_len, "%s %us", prefix, static_cast<unsigned>(age));
+        const std::string text =
+            ::ui::i18n::format("%s %us", prefix, static_cast<unsigned>(age));
+        snprintf(out, out_len, "%s", text.c_str());
         return;
     }
     if (age < 3600)
     {
-        snprintf(out, out_len, "%s %um", prefix, static_cast<unsigned>(age / 60));
+        const std::string text =
+            ::ui::i18n::format("%s %um", prefix, static_cast<unsigned>(age / 60));
+        snprintf(out, out_len, "%s", text.c_str());
         return;
     }
     if (age < 86400)
     {
-        snprintf(out, out_len, "%s %uh", prefix, static_cast<unsigned>(age / 3600));
+        const std::string text =
+            ::ui::i18n::format("%s %uh", prefix, static_cast<unsigned>(age / 3600));
+        snprintf(out, out_len, "%s", text.c_str());
         return;
     }
-    snprintf(out, out_len, "%s %ud", prefix, static_cast<unsigned>(age / 86400));
+    const std::string text =
+        ::ui::i18n::format("%s %ud", prefix, static_cast<unsigned>(age / 86400));
+    snprintf(out, out_len, "%s", text.c_str());
 }
 
 void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_len,
@@ -257,9 +273,9 @@ void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_le
     const chat::meshtastic::RegionInfo* region = chat::meshtastic::findRegion(region_code);
     if (!region)
     {
-        snprintf(ch_out, ch_len, "Ch: -");
-        snprintf(sf_out, sf_len, "SF: -");
-        snprintf(bw_out, bw_len, "BW: -");
+        snprintf(ch_out, ch_len, "%s", ::ui::i18n::tr("Ch: -"));
+        snprintf(sf_out, sf_len, "%s", ::ui::i18n::tr("SF: -"));
+        snprintf(bw_out, bw_len, "%s", ::ui::i18n::tr("BW: -"));
         return;
     }
 
@@ -314,16 +330,20 @@ void format_radio_params(char* ch_out, size_t ch_len, char* sf_out, size_t sf_le
         freq_mhz = region->freq_start_mhz + (bw_khz / 2000.0f);
     }
 
-    snprintf(ch_out, ch_len, "Ch: %.3f", static_cast<double>(freq_mhz));
-    snprintf(sf_out, sf_len, "SF: %u", static_cast<unsigned>(sf));
+    const std::string ch_text = ::ui::i18n::format("Ch: %.3f", static_cast<double>(freq_mhz));
+    const std::string sf_text = ::ui::i18n::format("SF: %u", static_cast<unsigned>(sf));
+    snprintf(ch_out, ch_len, "%s", ch_text.c_str());
+    snprintf(sf_out, sf_len, "%s", sf_text.c_str());
     float bw_round = std::round(bw_khz);
     if (std::fabs(bw_khz - bw_round) < 0.05f)
     {
-        snprintf(bw_out, bw_len, "BW: %.0fk", static_cast<double>(bw_khz));
+        const std::string bw_text = ::ui::i18n::format("BW: %.0fk", static_cast<double>(bw_khz));
+        snprintf(bw_out, bw_len, "%s", bw_text.c_str());
     }
     else
     {
-        snprintf(bw_out, bw_len, "BW: %.1fk", static_cast<double>(bw_khz));
+        const std::string bw_text = ::ui::i18n::format("BW: %.1fk", static_cast<double>(bw_khz));
+        snprintf(bw_out, bw_len, "%s", bw_text.c_str());
     }
 }
 
@@ -524,7 +544,7 @@ NodeInfoWidgets create(lv_obj_t* parent)
 
     ::ui::widgets::TopBarConfig cfg;
     ::ui::widgets::top_bar_init(s_top_bar, s_widgets.header, cfg);
-    ::ui::widgets::top_bar_set_title(s_top_bar, "NODE INFO");
+    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("NODE INFO"));
     ui_update_top_bar_battery(s_top_bar);
 
     s_widgets.back_btn = s_top_bar.back_btn;
@@ -748,7 +768,8 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     format_node_id(node.node_id, id_buf, sizeof(id_buf));
 
     char role_buf[32];
-    snprintf(role_buf, sizeof(role_buf), "Role: %s", role_to_text(node.role));
+    const std::string role_text = ::ui::i18n::format("Role: %s", role_to_text(node.role));
+    snprintf(role_buf, sizeof(role_buf), "%s", role_text.c_str());
 
     set_label_text(s_widgets.avatar_label, avatar_text);
     set_label_text(s_widgets.name_label, name.c_str());
@@ -779,11 +800,13 @@ void set_node_info(const chat::contacts::NodeInfo& node)
         char alt_buf[24];
         if (node.position.has_altitude)
         {
-            snprintf(alt_buf, sizeof(alt_buf), "Alt: %ld m", static_cast<long>(node.position.altitude));
+            const std::string text =
+                ::ui::i18n::format("Alt: %ld m", static_cast<long>(node.position.altitude));
+            snprintf(alt_buf, sizeof(alt_buf), "%s", text.c_str());
         }
         else
         {
-            snprintf(alt_buf, sizeof(alt_buf), "Alt: -");
+            snprintf(alt_buf, sizeof(alt_buf), "%s", ::ui::i18n::tr("Alt: -"));
         }
 
         set_label_text(s_widgets.coords_latlon_label, latlon_buf);
@@ -795,7 +818,7 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     {
         set_label_text(s_widgets.coords_latlon_label, "No position");
         set_label_text(s_widgets.coords_acc_label, "+/- -");
-        set_label_text(s_widgets.coords_alt_label, "Alt: -");
+        set_label_text(s_widgets.coords_alt_label, ::ui::i18n::tr("Alt: -"));
         set_label_text(s_widgets.map_label, "No map");
     }
 
@@ -804,15 +827,15 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     char link_title[48];
     if (node.protocol == chat::contacts::NodeProtocolType::Meshtastic)
     {
-        snprintf(link_title, sizeof(link_title), "Link / Meshtastic");
+        snprintf(link_title, sizeof(link_title), "%s", ::ui::i18n::tr("Link / Meshtastic"));
     }
     else if (node.protocol == chat::contacts::NodeProtocolType::MeshCore)
     {
-        snprintf(link_title, sizeof(link_title), "Link / MeshCore");
+        snprintf(link_title, sizeof(link_title), "%s", ::ui::i18n::tr("Link / MeshCore"));
     }
     else
     {
-        snprintf(link_title, sizeof(link_title), "Link");
+        snprintf(link_title, sizeof(link_title), "%s", ::ui::i18n::tr("Link"));
     }
     set_label_text(s_widgets.link_title_label, link_title);
 
@@ -820,21 +843,23 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     char rssi_buf[24];
     if (std::isnan(node.rssi))
     {
-        snprintf(rssi_buf, sizeof(rssi_buf), "RSSI: -");
+        snprintf(rssi_buf, sizeof(rssi_buf), "%s", ::ui::i18n::tr("RSSI: -"));
     }
     else
     {
-        snprintf(rssi_buf, sizeof(rssi_buf), "RSSI: %.0f dBm", node.rssi);
+        const std::string text = ::ui::i18n::format("RSSI: %.0f dBm", node.rssi);
+        snprintf(rssi_buf, sizeof(rssi_buf), "%s", text.c_str());
     }
     set_label_text(s_widgets.link_rssi_label, rssi_buf);
     char snr_buf[24];
     if (std::isnan(node.snr))
     {
-        snprintf(snr_buf, sizeof(snr_buf), "SNR: -");
+        snprintf(snr_buf, sizeof(snr_buf), "%s", ::ui::i18n::tr("SNR: -"));
     }
     else
     {
-        snprintf(snr_buf, sizeof(snr_buf), "SNR: %.1f dB", node.snr);
+        const std::string text = ::ui::i18n::format("SNR: %.1f dB", node.snr);
+        snprintf(snr_buf, sizeof(snr_buf), "%s", text.c_str());
     }
     set_label_text(s_widgets.link_snr_label, snr_buf);
     char ch_buf[32];
@@ -846,7 +871,7 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     set_label_text(s_widgets.link_bw_label, bw_buf);
 
     char last_heard_buf[64];
-    format_age("Last heard:", node.last_seen, last_heard_buf, sizeof(last_heard_buf));
+    format_age(::ui::i18n::tr("Last heard:"), node.last_seen, last_heard_buf, sizeof(last_heard_buf));
     char hop_buf[64];
     if (node.hops_away != 0xFF)
     {
@@ -860,18 +885,22 @@ void set_node_info(const chat::contacts::NodeInfo& node)
         }
         else
         {
-            snprintf(hop_buf, sizeof(hop_buf), "Hop: %u", static_cast<unsigned>(node.hops_away));
+            const std::string text =
+                ::ui::i18n::format("Hop: %u", static_cast<unsigned>(node.hops_away));
+            snprintf(hop_buf, sizeof(hop_buf), "%s", text.c_str());
         }
         set_label_text(s_widgets.link_hop_label, hop_buf);
     }
     else if (node.next_hop != 0)
     {
-        snprintf(hop_buf, sizeof(hop_buf), "Hop: - / NH: %02X", static_cast<unsigned>(node.next_hop));
+        const std::string text =
+            ::ui::i18n::format("Hop: - / NH: %02X", static_cast<unsigned>(node.next_hop));
+        snprintf(hop_buf, sizeof(hop_buf), "%s", text.c_str());
         set_label_text(s_widgets.link_hop_label, hop_buf);
     }
     else
     {
-        set_label_text(s_widgets.link_hop_label, "Hop: -");
+        set_label_text(s_widgets.link_hop_label, ::ui::i18n::tr("Hop: -"));
     }
 
     char status_buf[96];
@@ -887,15 +916,15 @@ void set_node_info(const chat::contacts::NodeInfo& node)
         char pk_buf[20];
         if (node.key_manually_verified)
         {
-            snprintf(pk_buf, sizeof(pk_buf), "PKI: verified");
+            snprintf(pk_buf, sizeof(pk_buf), "%s", ::ui::i18n::tr("PKI: verified"));
         }
         else if (node.has_public_key)
         {
-            snprintf(pk_buf, sizeof(pk_buf), "PKI: known");
+            snprintf(pk_buf, sizeof(pk_buf), "%s", ::ui::i18n::tr("PKI: known"));
         }
         else
         {
-            snprintf(pk_buf, sizeof(pk_buf), "PKI: -");
+            snprintf(pk_buf, sizeof(pk_buf), "%s", ::ui::i18n::tr("PKI: -"));
         }
 
         if (node.has_device_metrics && node.device_metrics.has_battery_level)

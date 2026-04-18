@@ -10,6 +10,8 @@
 #endif
 
 #include "ui/app_runtime.h"
+#include "ui/assets/fonts/font_utils.h"
+#include "ui/localization.h"
 #include "ui/menu/menu_dashboard.h"
 #include "ui/menu/menu_profile.h"
 #include "ui/menu/menu_runtime.h"
@@ -34,9 +36,11 @@ constexpr size_t kMaxMenuApps = 16;
 
 struct MenuAppUi
 {
+    AppScreen* app = nullptr;
     const char* name = nullptr;
     lv_obj_t* icon = nullptr;
     lv_obj_t* button = nullptr;
+    lv_obj_t* label = nullptr;
 };
 
 lv_obj_t* s_menu_panel = nullptr;
@@ -206,6 +210,8 @@ void menuNameLabelEventCallback(lv_event_t* e)
     if (value)
     {
         lv_label_set_text(lv_event_get_target_obj(e), value);
+        ::ui::fonts::apply_localized_font(
+            lv_event_get_target_obj(e), value, ui::menu_profile::current().desc_font);
     }
 #else
     (void)e;
@@ -383,24 +389,28 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     if (profile.show_card_label && name && name[0] != '\0')
     {
         lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, name);
+        ::ui::i18n::set_label_text_raw(label, name);
         lv_obj_set_width(label, width - (profile.variant == ui::menu_profile::LayoutVariant::LargeTouchGrid ? 16 : 4));
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_font(label, profile.card_label_font, 0);
         lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), 0);
         lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), LV_STATE_FOCUSED);
         lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        ::ui::fonts::apply_localized_font(label, name, profile.card_label_font);
+        s_menu_apps[idx].label = label;
     }
 
     if (idx < kMaxMenuApps)
     {
+        s_menu_apps[idx].app = app;
         s_menu_apps[idx].name = name;
         s_menu_apps[idx].icon = icon;
         s_menu_apps[idx].button = btn;
         lv_obj_set_user_data(btn, &s_menu_apps[idx]);
     }
 
-    if (icon != nullptr && name != nullptr && strcmp(name, "Chat") == 0)
+    if (icon != nullptr && app != nullptr && app->stable_id() != nullptr &&
+        std::strcmp(app->stable_id(), "chat") == 0)
     {
         lv_obj_t* badge = lv_obj_create(btn);
         lv_obj_set_size(badge, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -642,6 +652,38 @@ void bringContentToFront()
         lv_obj_move_foreground(s_node_id_label);
     }
     ui::menu::dashboard::bringToFront();
+}
+
+void refresh_localized_text()
+{
+    const auto& profile = ui::menu_profile::current();
+    for (auto& item : s_menu_apps)
+    {
+        if (item.app == nullptr)
+        {
+            continue;
+        }
+
+        item.name = item.app->name();
+        if (item.label != nullptr)
+        {
+            ::ui::i18n::set_label_text_raw(item.label, item.name);
+            ::ui::fonts::apply_localized_font(item.label, item.name, profile.card_label_font);
+        }
+    }
+
+    if (s_desc_label != nullptr && menu_g != nullptr)
+    {
+        lv_obj_t* focused = lv_group_get_focused(menu_g);
+        const int index = findMenuButtonIndex(focused);
+        if (index >= 0 && static_cast<size_t>(index) < kMaxMenuApps)
+        {
+            ::ui::i18n::set_label_text_raw(s_desc_label, s_menu_apps[index].name);
+            ::ui::fonts::apply_localized_font(s_desc_label, s_menu_apps[index].name, profile.desc_font);
+        }
+    }
+
+    ui::menu::dashboard::refresh_localized_text();
 }
 
 void setMenuVisible(bool visible)

@@ -21,7 +21,10 @@
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 #include "platform/ui/tracker_runtime.h"
+#include "ui/app_runtime.h"
 #include "ui/components/info_card.h"
+#include "ui/localization.h"
+#include "ui/menu/menu_layout.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
@@ -132,7 +135,7 @@ static void create_item_content(settings::ui::ItemWidget& widget, lv_obj_t* btn)
     if (use_tdeck_info_card_layout())
     {
         const auto slots = ::ui::components::info_card::create_content(btn);
-        lv_label_set_text(slots.header_main_label, widget.def->label);
+        ::ui::i18n::set_label_text(slots.header_main_label, widget.def->label);
         style::apply_label_primary(slots.header_main_label);
 
         widget.value_label = slots.body_main_label;
@@ -142,7 +145,7 @@ static void create_item_content(settings::ui::ItemWidget& widget, lv_obj_t* btn)
     }
 
     lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, widget.def->label);
+    ::ui::i18n::set_label_text(label, widget.def->label);
     style::apply_label_primary(label);
 
     widget.value_label = lv_label_create(btn);
@@ -490,7 +493,7 @@ static void reset_mesh_settings()
     prefs_remove_keys(kPrefsNs, kResetKeys, sizeof(kResetKeys) / sizeof(kResetKeys[0]));
 
     build_item_list();
-    ::ui::SystemNotification::show("Resetting...", 1500);
+    ::ui::SystemNotification::show(::ui::i18n::tr("Resetting..."), 1500);
     platform_delay_ms(300);
     platform_restart();
 }
@@ -500,14 +503,14 @@ static void reset_node_db()
     app::IAppFacade& app_ctx = app::appFacade();
     app_ctx.clearNodeDb();
     prefs_clear_ns("chat_pki");
-    ::ui::SystemNotification::show("Node DB reset", 3000);
+    ::ui::SystemNotification::show(::ui::i18n::tr("Node DB reset"), 3000);
 }
 
 static void clear_message_db()
 {
     app::IAppFacade& app_ctx = app::appFacade();
     app_ctx.clearMessageDb();
-    ::ui::SystemNotification::show("Message DB cleared", 3000);
+    ::ui::SystemNotification::show(::ui::i18n::tr("Message DB cleared"), 3000);
 }
 
 static void settings_load()
@@ -707,6 +710,7 @@ static void settings_load()
         g_settings.speaker_volume = 100;
     }
     apply_message_tone_volume(static_cast<uint8_t>(g_settings.speaker_volume));
+    g_settings.display_language = static_cast<int>(::ui::i18n::current_language());
 
     // BLE enable flag (System > Bluetooth toggle). Default ON so existing devices keep BLE active.
     g_settings.ble_enabled = prefs_get_bool("ble_enabled", true);
@@ -739,17 +743,17 @@ static void format_value(const settings::ui::SettingItem& item, char* out, size_
     switch (item.type)
     {
     case settings::ui::SettingType::Toggle:
-        snprintf(out, out_len, "%s", (item.bool_value && *item.bool_value) ? "ON" : "OFF");
+        snprintf(out, out_len, "%s", ::ui::i18n::tr((item.bool_value && *item.bool_value) ? "ON" : "OFF"));
         break;
     case settings::ui::SettingType::Enum:
     {
         int value = item.enum_value ? *item.enum_value : 0;
-        const char* label = "N/A";
+        const char* label = ::ui::i18n::tr("N/A");
         for (size_t i = 0; i < item.option_count; ++i)
         {
             if (item.options[i].value == value)
             {
-                label = item.options[i].label;
+                label = ::ui::i18n::tr(item.options[i].label);
                 break;
             }
         }
@@ -770,11 +774,11 @@ static void format_value(const settings::ui::SettingItem& item, char* out, size_
         }
         else
         {
-            snprintf(out, out_len, "Not set");
+            snprintf(out, out_len, "%s", ::ui::i18n::tr("Not set"));
         }
         break;
     case settings::ui::SettingType::Action:
-        snprintf(out, out_len, "Run");
+        snprintf(out, out_len, "%s", ::ui::i18n::tr("Run"));
         break;
     }
 }
@@ -900,7 +904,7 @@ static void on_text_save_clicked(lv_event_t* e)
             uint8_t key[16] = {};
             if (!parse_psk(g_state.editing_item->text_value, key, sizeof(key)))
             {
-                ::ui::SystemNotification::show("PSK must be 32 hex or 16 chars", 4000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("PSK must be 32 hex or 16 chars"), 4000);
                 modal_close();
                 return;
             }
@@ -921,7 +925,7 @@ static void on_text_save_clicked(lv_event_t* e)
             float value = 0.0f;
             if (!parse_float_text(g_state.editing_item->text_value, &value))
             {
-                ::ui::SystemNotification::show("Invalid frequency offset", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid frequency offset"), 3000);
                 modal_close();
                 return;
             }
@@ -935,7 +939,7 @@ static void on_text_save_clicked(lv_event_t* e)
             float value = 0.0f;
             if (!parse_float_text(g_state.editing_item->text_value, &value))
             {
-                ::ui::SystemNotification::show("Invalid frequency value", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid frequency value"), 3000);
                 modal_close();
                 return;
             }
@@ -957,7 +961,7 @@ static void on_text_save_clicked(lv_event_t* e)
             float value = 0.0f;
             if (!parse_float_text(g_state.editing_item->text_value, &value))
             {
-                ::ui::SystemNotification::show("Invalid MeshCore frequency", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid MeshCore frequency"), 3000);
                 modal_close();
                 return;
             }
@@ -974,7 +978,7 @@ static void on_text_save_clicked(lv_event_t* e)
             float value = 0.0f;
             if (!parse_float_text(g_state.editing_item->text_value, &value))
             {
-                ::ui::SystemNotification::show("Invalid MeshCore bandwidth", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid MeshCore bandwidth"), 3000);
                 modal_close();
                 return;
             }
@@ -991,7 +995,7 @@ static void on_text_save_clicked(lv_event_t* e)
             float value = 0.0f;
             if (!parse_float_text(g_state.editing_item->text_value, &value))
             {
-                ::ui::SystemNotification::show("Invalid RX delay", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid RX delay"), 3000);
                 modal_close();
                 return;
             }
@@ -1005,7 +1009,7 @@ static void on_text_save_clicked(lv_event_t* e)
             float value = 0.0f;
             if (!parse_float_text(g_state.editing_item->text_value, &value))
             {
-                ::ui::SystemNotification::show("Invalid airtime factor", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid airtime factor"), 3000);
                 modal_close();
                 return;
             }
@@ -1029,7 +1033,7 @@ static void on_text_save_clicked(lv_event_t* e)
             uint8_t key[16] = {};
             if (!parse_psk(g_state.editing_item->text_value, key, sizeof(key)))
             {
-                ::ui::SystemNotification::show("Key must be 32 hex or 16 chars", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Key must be 32 hex or 16 chars"), 3000);
                 modal_close();
                 return;
             }
@@ -1044,7 +1048,7 @@ static void on_text_save_clicked(lv_event_t* e)
             long value = strtol(g_state.editing_item->text_value, &end, 10);
             if (end == g_state.editing_item->text_value || (end && *end != '\0') || value <= 0 || value > 10000)
             {
-                ::ui::SystemNotification::show("Invalid design capacity (mAh)", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid design capacity (mAh)"), 3000);
                 modal_close();
                 return;
             }
@@ -1057,7 +1061,7 @@ static void on_text_save_clicked(lv_event_t* e)
             long value = strtol(g_state.editing_item->text_value, &end, 10);
             if (end == g_state.editing_item->text_value || (end && *end != '\0') || value <= 0 || value > 10000)
             {
-                ::ui::SystemNotification::show("Invalid full capacity (mAh)", 3000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("Invalid full capacity (mAh)"), 3000);
                 modal_close();
                 return;
             }
@@ -1084,7 +1088,7 @@ static void open_text_modal(const settings::ui::SettingItem& item, settings::ui:
     lv_obj_t* win = lv_obj_get_child(g_state.modal_root, 0);
 
     lv_obj_t* title = lv_label_create(win);
-    lv_label_set_text(title, item.label);
+    ::ui::i18n::set_label_text(title, item.label);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     g_state.modal_textarea = lv_textarea_create(win);
@@ -1116,14 +1120,14 @@ static void open_text_modal(const settings::ui::SettingItem& item, settings::ui:
     lv_obj_t* save_btn = lv_btn_create(btn_row);
     lv_obj_set_size(save_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
     lv_obj_t* save_label = lv_label_create(save_btn);
-    lv_label_set_text(save_label, "Save");
+    ::ui::i18n::set_label_text(save_label, "Save");
     lv_obj_center(save_label);
     lv_obj_add_event_cb(save_btn, on_text_save_clicked, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
     lv_obj_set_size(cancel_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, "Cancel");
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
     lv_obj_add_event_cb(cancel_btn, on_text_cancel_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1145,10 +1149,21 @@ static void on_option_clicked(lv_event_t* e)
     }
     bool restart_now = false;
     bool rebuild_list = false;
+    bool rebuild_active_app = false;
+    bool refresh_menu_labels = false;
     int previous_value = *payload->item->enum_value;
     *payload->item->enum_value = payload->value;
     prefs_put_int(payload->item->pref_key, payload->value);
     update_item_value(*payload->widget);
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "display_language") == 0)
+    {
+        const ::ui::i18n::Language target_language = ::ui::i18n::language_from_raw(payload->value);
+        if (::ui::i18n::set_language(target_language, true))
+        {
+            refresh_menu_labels = true;
+            rebuild_active_app = true;
+        }
+    }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "mesh_protocol") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
@@ -1158,12 +1173,12 @@ static void on_option_clicked(lv_event_t* e)
             *payload->item->enum_value = previous_value;
             prefs_put_int(payload->item->pref_key, previous_value);
             update_item_value(*payload->widget);
-            ::ui::SystemNotification::show("Protocol switch failed", 3000);
+            ::ui::SystemNotification::show(::ui::i18n::tr("Protocol switch failed"), 3000);
         }
         else
         {
             rebuild_list = true;
-            ::ui::SystemNotification::show("Protocol switched", 2000);
+            ::ui::SystemNotification::show(::ui::i18n::tr("Protocol switched"), 2000);
             restart_now = true;
         }
     }
@@ -1507,13 +1522,22 @@ static void on_option_clicked(lv_event_t* e)
         restart_now = true;
     }
     modal_close();
+    if (refresh_menu_labels)
+    {
+        ::ui::menu_layout::refresh_localized_text();
+    }
+    if (rebuild_active_app)
+    {
+        ui_request_rebuild_active_app();
+        return;
+    }
     if (rebuild_list)
     {
         build_item_list();
     }
     if (restart_now)
     {
-        ::ui::SystemNotification::show("Restarting...", 1500);
+        ::ui::SystemNotification::show(::ui::i18n::tr("Restarting..."), 1500);
         platform_delay_ms(300);
         platform_restart();
     }
@@ -1579,7 +1603,7 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
         lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
         style::apply_btn_modal(btn);
         lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, item.options[i].label);
+        ::ui::i18n::set_label_text(label, item.options[i].label);
         style::apply_label_primary(label);
         lv_obj_center(label);
 
@@ -1600,7 +1624,7 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
     lv_obj_set_size(back_btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
     style::apply_btn_modal(back_btn);
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "Back");
+    ::ui::i18n::set_label_text(back_label, "Back");
     style::apply_label_primary(back_label);
     lv_obj_center(back_label);
     lv_obj_add_event_cb(back_btn, on_option_modal_back_clicked, LV_EVENT_CLICKED, nullptr);
@@ -1832,6 +1856,11 @@ static const settings::ui::SettingOption kSpeakerVolumeOptions[] = {
     {"100%", 100},
 };
 
+static const settings::ui::SettingOption kLanguageOptions[] = {
+    {"English", static_cast<int>(::ui::i18n::Language::English)},
+    {"Chinese", static_cast<int>(::ui::i18n::Language::Chinese)},
+};
+
 static const settings::ui::SettingOption kTimeZoneOptions[] = {
     {"UTC", 0},
     {"Beijing (UTC+8)", 480},
@@ -1926,6 +1955,9 @@ static settings::ui::SettingItem kNetworkItems[] = {
 };
 
 static settings::ui::SettingItem kScreenItems[] = {
+    {"Display Language", settings::ui::SettingType::Enum, kLanguageOptions,
+     sizeof(kLanguageOptions) / sizeof(kLanguageOptions[0]), &g_settings.display_language, nullptr, nullptr, 0, false,
+     "display_language"},
     {"Screen Timeout", settings::ui::SettingType::Enum, kScreenTimeoutOptions, 4, &g_settings.screen_timeout_ms, nullptr, nullptr, 0, false, "screen_timeout"},
     {"Screen Brightness", settings::ui::SettingType::Enum, kScreenBrightnessOptions,
      sizeof(kScreenBrightnessOptions) / sizeof(kScreenBrightnessOptions[0]), &g_settings.screen_brightness, nullptr, nullptr, 0, false, "screen_brightness"},
@@ -2045,6 +2077,10 @@ static bool should_show_item(const settings::ui::SettingItem& item)
     }
 
     if (has_pref_key(item, "screen_brightness") && !device_runtime::supports_screen_brightness())
+    {
+        return false;
+    }
+    if (has_pref_key(item, "display_language") && !::ui::i18n::supports_chinese())
     {
         return false;
     }
@@ -2201,7 +2237,7 @@ static void build_item_list()
                               LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         style::apply_list_item(g_state.list_back_btn);
         lv_obj_t* back_label = lv_label_create(g_state.list_back_btn);
-        lv_label_set_text(back_label, "Back");
+        ::ui::i18n::set_label_text(back_label, "Back");
         style::apply_label_primary(back_label);
         lv_obj_add_event_cb(g_state.list_back_btn, on_list_back_clicked, LV_EVENT_CLICKED, nullptr);
         lv_obj_add_event_cb(g_state.list_back_btn, list_item_focused_cb, LV_EVENT_FOCUSED, nullptr);
@@ -2437,7 +2473,7 @@ void create(lv_obj_t* parent)
             lv_obj_add_event_cb(btn, on_filter_focused, LV_EVENT_FOCUSED, reinterpret_cast<void*>(i));
         }
         lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, kCategories[i].label);
+        ::ui::i18n::set_label_text(label, kCategories[i].label);
         style::apply_label_primary(label);
         lv_obj_center(label);
         g_state.filter_buttons[i] = btn;

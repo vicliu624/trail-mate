@@ -7,6 +7,7 @@
 #include "app/app_facade_access.h"
 #include "ble/ble_manager.h"
 #include "platform/ui/device_runtime.h"
+#include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_status.h"
@@ -16,7 +17,7 @@ namespace ui::menu::dashboard
 namespace
 {
 
-void set_label_text_if_changed(lv_obj_t* label, const char* text)
+void set_label_text_if_changed_raw(lv_obj_t* label, const char* text)
 {
     if (label == nullptr || text == nullptr)
     {
@@ -25,7 +26,21 @@ void set_label_text_if_changed(lv_obj_t* label, const char* text)
     const char* current = lv_label_get_text(label);
     if (current == nullptr || std::strcmp(current, text) != 0)
     {
-        lv_label_set_text(label, text);
+        ::ui::i18n::set_label_text_raw(label, text);
+    }
+}
+
+void set_label_text_if_changed(lv_obj_t* label, const char* english)
+{
+    const char* localized = ::ui::i18n::tr(english);
+    if (label == nullptr || localized == nullptr)
+    {
+        return;
+    }
+    const char* current = lv_label_get_text(label);
+    if (current == nullptr || std::strcmp(current, localized) != 0)
+    {
+        ::ui::i18n::set_label_text_raw(label, localized);
     }
 }
 
@@ -46,12 +61,12 @@ void create_stat_column(MeshWidgetUi& mesh, lv_obj_t* parent, lv_coord_t x, lv_c
         mesh.stat_values[i] = lv_label_create(mesh.stat_tiles[i]);
         style_body_label(mesh.stat_values[i], &lv_font_montserrat_16, color_text());
         lv_obj_align(mesh.stat_values[i], LV_ALIGN_TOP_LEFT, 0, 0);
-        lv_label_set_text(mesh.stat_values[i], "--");
+        ::ui::i18n::set_label_text_raw(mesh.stat_values[i], "--");
 
         mesh.stat_captions[i] = lv_label_create(mesh.stat_tiles[i]);
         style_body_label(mesh.stat_captions[i], &lv_font_montserrat_12, color_text_dim());
         lv_obj_align(mesh.stat_captions[i], LV_ALIGN_BOTTOM_LEFT, 0, 0);
-        lv_label_set_text(mesh.stat_captions[i], kCaptions[i]);
+        ::ui::i18n::set_label_text(mesh.stat_captions[i], kCaptions[i]);
     }
 }
 
@@ -60,7 +75,7 @@ void create_stat_column(MeshWidgetUi& mesh, lv_obj_t* parent, lv_coord_t x, lv_c
 void create_mesh_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
 {
     auto& mesh = dashboard_state().mesh;
-    mesh.chrome = create_card_chrome(parent, "Mesh Status", card_w, card_h);
+    mesh.chrome = create_card_chrome(parent, ::ui::i18n::tr("Mesh Status"), card_w, card_h);
 
     const lv_coord_t body_w = lv_obj_get_width(mesh.chrome.body);
     const lv_coord_t body_h = lv_obj_get_height(mesh.chrome.body);
@@ -85,12 +100,12 @@ void create_mesh_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
     mesh.hero_value = lv_label_create(mesh.orbit_core);
     style_body_label(mesh.hero_value, &lv_font_montserrat_16, lv_color_white());
     lv_obj_align(mesh.hero_value, LV_ALIGN_CENTER, 0, -8);
-    lv_label_set_text(mesh.hero_value, "MESH");
+    ::ui::i18n::set_label_text(mesh.hero_value, "MESH");
 
     mesh.hero_caption = lv_label_create(mesh.orbit_core);
     style_body_label(mesh.hero_caption, &lv_font_montserrat_12, lv_color_hex(0xFFF7E8));
     lv_obj_align(mesh.hero_caption, LV_ALIGN_CENTER, 0, 10);
-    lv_label_set_text(mesh.hero_caption, "online");
+    ::ui::i18n::set_label_text(mesh.hero_caption, "online");
 
     create_stat_column(mesh, mesh.chrome.body, hero_d + 16, body_h);
 
@@ -116,7 +131,7 @@ void create_mesh_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
     mesh.footer_label = lv_label_create(mesh.chrome.footer);
     style_footer_label(mesh.footer_label);
     lv_obj_align(mesh.footer_label, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_label_set_text(mesh.footer_label, "waiting for traffic");
+    ::ui::i18n::set_label_text(mesh.footer_label, "waiting for traffic");
 }
 
 void refresh_mesh_widget()
@@ -156,14 +171,14 @@ void refresh_mesh_widget()
 
     char team_buf[16];
     std::snprintf(team_buf, sizeof(team_buf), "%u", has_team ? static_cast<unsigned>(team_snap.members.size()) : 0U);
-    set_label_text_if_changed(mesh.stat_values[0], team_buf);
+    set_label_text_if_changed_raw(mesh.stat_values[0], team_buf);
 
     char unread_buf[16];
     std::snprintf(unread_buf, sizeof(unread_buf), "%d", unread);
-    set_label_text_if_changed(mesh.stat_values[1], unread_buf);
+    set_label_text_if_changed_raw(mesh.stat_values[1], unread_buf);
     lv_obj_set_style_text_color(mesh.stat_values[1], unread > 0 ? color_warn() : color_text(), 0);
 
-    set_label_text_if_changed(mesh.stat_values[2], power_buf);
+    set_label_text_if_changed_raw(mesh.stat_values[2], power_buf);
     lv_obj_set_style_text_color(mesh.stat_values[2], battery.charging ? color_info() : color_text(), 0);
 
     char footer[64];
@@ -180,10 +195,13 @@ void refresh_mesh_widget()
     }
     std::snprintf(footer,
                   sizeof(footer),
-                  "%s  |  %s",
-                  ble_linked ? "BLE linked" : (ble_active ? "BLE bridge ready" : "LoRa direct path"),
-                  unread > 0 ? "new activity" : "quiet net");
-    set_label_text_if_changed(mesh.footer_label, footer);
+                  "%s",
+                  ::ui::i18n::format(
+                      ble_linked ? "BLE linked  |  %s"
+                                 : (ble_active ? "BLE bridge ready  |  %s" : "LoRa direct path  |  %s"),
+                      unread > 0 ? ::ui::i18n::tr("new activity") : ::ui::i18n::tr("quiet net"))
+                      .c_str());
+    set_label_text_if_changed_raw(mesh.footer_label, footer);
 
     lv_obj_set_style_border_opa(mesh.orbit_outer, LV_OPA_60, 0);
     lv_obj_set_style_border_opa(mesh.orbit_mid, LV_OPA_COVER, 0);

@@ -6,6 +6,7 @@
 #include "ui/screens/chat/chat_compose_styles.h"
 
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/localization.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/toast/toast_widget.h"
@@ -95,8 +96,8 @@ static void set_btn_label_text(lv_obj_t* btn, const char* text)
     lv_obj_t* child = lv_obj_get_child(btn, 0);
     if (child && lv_obj_check_type(child, &lv_label_class))
     {
-        lv_label_set_text(child, text);
-        ::ui::fonts::apply_ui_chrome_font(child);
+        ::ui::i18n::set_label_text(child, text);
+        ::ui::fonts::apply_localized_font(child, lv_label_get_text(child), ::ui::fonts::ui_chrome_font());
     }
 }
 
@@ -147,7 +148,7 @@ void ChatComposeScreen::showSendToast(bool ok, bool timeout, const char* message
     else if (ok) type = ::ui::widgets::Toast::Type::Success;
     else type = ::ui::widgets::Toast::Type::Error;
 
-    ::ui::widgets::Toast::show(toastHost(), message ? message : "", type);
+    ::ui::widgets::Toast::show(toastHost(), ::ui::i18n::tr(message ? message : ""), type);
 }
 
 lv_timer_t* ChatComposeScreen::add_timer(ChatComposeScreen::Impl* impl,
@@ -343,7 +344,7 @@ void ChatComposeScreen::init_topbar()
 
     if (conv_.peer == 0)
     {
-        snprintf(title_buf, sizeof(title_buf), "Broadcast");
+        snprintf(title_buf, sizeof(title_buf), "%s", ::ui::i18n::tr("Broadcast"));
     }
     else
     {
@@ -448,7 +449,7 @@ void ChatComposeScreen::beginSend(chat::ChatService* service,
     setEnabled(false);
 
     // Optional lightweight toast hint while sending.
-    ::ui::widgets::Toast::show(toastHost(), "Sending...", ::ui::widgets::Toast::Type::Info);
+    ::ui::widgets::Toast::show(toastHost(), ::ui::i18n::tr("Sending..."), ::ui::widgets::Toast::Type::Info);
 
     if (impl_->send_timer)
     {
@@ -530,9 +531,12 @@ void ChatComposeScreen::refresh_len()
     size_t len = text ? strlen(text) : 0;
     size_t remaining = (len < kMaxInputBytes) ? (kMaxInputBytes - len) : 0;
 
-    char buf[16];
-    snprintf(buf, sizeof(buf), "Remain: %u", static_cast<unsigned int>(remaining));
-    lv_label_set_text(impl_->w.len_label, buf);
+    char buf[32];
+    snprintf(buf,
+             sizeof(buf),
+             "%s",
+             ::ui::i18n::format("Remain: %u", static_cast<unsigned int>(remaining)).c_str());
+    ::ui::i18n::set_label_text_raw(impl_->w.len_label, buf);
 }
 
 // ---------- LVGL callbacks ----------

@@ -5,6 +5,7 @@
 #include <Arduino.h>
 
 #include "input/morse_engine.h"
+#include "ui/localization.h"
 #include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
 #include <cstdio>
@@ -227,7 +228,7 @@ void ChatComposeScreen::showPreset()
     lv_obj_add_event_cb(back_btn, preset_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_set_user_data(back_btn, (void*)(intptr_t)-1);
     lv_obj_t* back_label = lv_label_create(back_btn);
-    lv_label_set_text(back_label, "Back");
+    ::ui::i18n::set_label_text(back_label, "Back");
     lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_text_color(back_label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
@@ -253,12 +254,12 @@ void ChatComposeScreen::showMorse()
     lv_obj_set_flex_align(content_, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
     morse_title_label_ = lv_label_create(content_);
-    lv_label_set_text(morse_title_label_, "Morse Input");
+    ::ui::i18n::set_label_text(morse_title_label_, "Morse Input");
     lv_obj_set_style_text_color(morse_title_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(morse_title_label_, &lv_font_montserrat_18, 0);
 
     morse_status_label_ = lv_label_create(content_);
-    lv_label_set_text(morse_status_label_, "Status: CALIB");
+    ::ui::i18n::set_label_text(morse_status_label_, "Status: CALIB");
     lv_obj_set_style_text_color(morse_status_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(morse_status_label_, &lv_font_montserrat_14, 0);
 
@@ -271,21 +272,21 @@ void ChatComposeScreen::showMorse()
     lv_obj_set_style_bg_color(morse_level_bar_, ::ui::theme::accent(), LV_PART_INDICATOR);
 
     morse_symbol_label_ = lv_label_create(content_);
-    lv_label_set_text(morse_symbol_label_, "Symbol: ");
+    ::ui::i18n::set_label_text(morse_symbol_label_, "Symbol: ");
     lv_obj_set_style_text_color(morse_symbol_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(morse_symbol_label_, &lv_font_montserrat_16, 0);
 
     morse_text_label_ = lv_label_create(content_);
     lv_obj_set_width(morse_text_label_, LV_PCT(100));
     lv_label_set_long_mode(morse_text_label_, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(morse_text_label_, "Text: ");
+    ::ui::i18n::set_label_text(morse_text_label_, "Text: ");
     lv_obj_set_style_text_color(morse_text_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(morse_text_label_, &lv_font_montserrat_16, 0);
 
     morse_hint_label_ = lv_label_create(content_);
     lv_obj_set_width(morse_hint_label_, LV_PCT(100));
     lv_label_set_long_mode(morse_hint_label_, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(morse_hint_label_, "Calibrating...");
+    ::ui::i18n::set_label_text(morse_hint_label_, "Calibrating...");
     lv_obj_set_style_text_color(morse_hint_label_, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(morse_hint_label_, &lv_font_montserrat_12, 0);
 
@@ -302,7 +303,7 @@ void ChatComposeScreen::showMorse()
     lv_obj_clear_flag(morse_back_btn_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(morse_back_btn_, morse_back_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_t* back_label = lv_label_create(morse_back_btn_);
-    lv_label_set_text(back_label, "Back");
+    ::ui::i18n::set_label_text(back_label, "Back");
     lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_text_color(back_label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
@@ -329,7 +330,7 @@ void ChatComposeScreen::showMorse()
     {
         delete morse_;
         morse_ = nullptr;
-        ::ui::SystemNotification::show("Mic init failed", 1200);
+        ::ui::SystemNotification::show(::ui::i18n::tr("Mic init failed"), 1200);
         showMain();
         return;
     }
@@ -399,7 +400,7 @@ void ChatComposeScreen::updateMorseUi()
 
     if (snap.calibrated)
     {
-        lv_label_set_text(morse_hint_label_, "Tap to input, idle 3s to send");
+        ::ui::i18n::set_label_text(morse_hint_label_, "Tap to input, idle 3s to send");
     }
     else
     {
@@ -413,7 +414,7 @@ void ChatComposeScreen::updateMorseUi()
             }
             else
             {
-                lv_label_set_text(morse_hint_label_, "Step 2/2: Tap long dashes");
+                ::ui::i18n::set_label_text(morse_hint_label_, "Step 2/2: Tap long dashes");
             }
         }
         else
@@ -425,7 +426,7 @@ void ChatComposeScreen::updateMorseUi()
             }
             else
             {
-                lv_label_set_text(morse_hint_label_, "Step 1/2: Tap short dots");
+                ::ui::i18n::set_label_text(morse_hint_label_, "Step 1/2: Tap short dots");
             }
         }
     }
@@ -468,7 +469,7 @@ void ChatComposeScreen::main_event_cb(lv_event_t* e)
     lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
     if (target == screen->mic_btn_)
     {
-        ::ui::SystemNotification::show("Mic TBD", 1200);
+        ::ui::SystemNotification::show(::ui::i18n::tr("Mic TBD"), 1200);
         return;
     }
     if (target == screen->morse_btn_)

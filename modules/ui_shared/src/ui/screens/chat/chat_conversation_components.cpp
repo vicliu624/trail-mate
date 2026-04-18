@@ -9,6 +9,7 @@
 #include "app/app_facade_access.h"
 #include "chat/usecase/contact_service.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/localization.h"
 #include "ui/screens/chat/chat_conversation_input.h"
 #include "ui/screens/chat/chat_conversation_layout.h"
 #include "ui/screens/chat/chat_conversation_styles.h"
@@ -118,30 +119,30 @@ static void format_message_time(char* out, size_t out_len, uint32_t ts)
     {
         if (diff < 60U)
         {
-            snprintf(out, out_len, "now");
+            snprintf(out, out_len, "%s", ::ui::i18n::tr("now"));
             return;
         }
         if (diff < 3600U)
         {
-            snprintf(out, out_len, "%um", static_cast<unsigned>(diff / 60U));
+            snprintf(out, out_len, "%s", ::ui::i18n::format("%um", static_cast<unsigned>(diff / 60U)).c_str());
             return;
         }
         if (diff < kSecondsPerDay)
         {
-            snprintf(out, out_len, "%uh", static_cast<unsigned>(diff / 3600U));
+            snprintf(out, out_len, "%s", ::ui::i18n::format("%uh", static_cast<unsigned>(diff / 3600U)).c_str());
             return;
         }
         if (diff < kSecondsPerMonth)
         {
-            snprintf(out, out_len, "%ud", static_cast<unsigned>(diff / kSecondsPerDay));
+            snprintf(out, out_len, "%s", ::ui::i18n::format("%ud", static_cast<unsigned>(diff / kSecondsPerDay)).c_str());
             return;
         }
         if (diff < kSecondsPerYear)
         {
-            snprintf(out, out_len, "%umo", static_cast<unsigned>(diff / kSecondsPerMonth));
+            snprintf(out, out_len, "%s", ::ui::i18n::format("%umo", static_cast<unsigned>(diff / kSecondsPerMonth)).c_str());
             return;
         }
-        snprintf(out, out_len, "%uy", static_cast<unsigned>(diff / kSecondsPerYear));
+        snprintf(out, out_len, "%s", ::ui::i18n::format("%uy", static_cast<unsigned>(diff / kSecondsPerYear)).c_str());
         return;
     }
 
@@ -245,13 +246,13 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     chat::ui::conversation::styles::apply_reply_btn(reply_btn_);
 
     // Reply label text + style
-    lv_label_set_text(w.reply_label, "Reply");
+    ::ui::i18n::set_label_text(w.reply_label, "Reply");
     chat::ui::conversation::styles::apply_reply_label(w.reply_label);
-    ::ui::fonts::apply_ui_chrome_font(w.reply_label);
+    ::ui::fonts::apply_localized_font(w.reply_label, lv_label_get_text(w.reply_label), ::ui::fonts::ui_chrome_font());
 
     // ----- Top bar (existing widget, unchanged behavior) -----
     ::ui::widgets::top_bar_init(top_bar_, container_);
-    const char* title = (conv_.peer == 0) ? "Broadcast" : "Direct";
+    const char* title = (conv_.peer == 0) ? ::ui::i18n::tr("Broadcast") : ::ui::i18n::tr("Direct");
     ::ui::widgets::top_bar_set_title(top_bar_, title);
     ::ui::widgets::top_bar_set_right_text(top_bar_, "");
     ::ui::widgets::top_bar_set_back_callback(top_bar_, handle_back, this);
@@ -366,14 +367,16 @@ bool ChatConversationScreen::updateMessageStatus(const chat::MessageId msg_id,
 
         if (status == MessageStatus::Failed)
         {
-            lv_label_set_text(item.status_label, "Failed");
-            ::ui::fonts::apply_ui_chrome_font(item.status_label);
+            ::ui::i18n::set_label_text(item.status_label, "Failed");
+            ::ui::fonts::apply_localized_font(
+                item.status_label, lv_label_get_text(item.status_label), ::ui::fonts::ui_chrome_font());
             lv_obj_clear_flag(item.status_label, LV_OBJ_FLAG_HIDDEN);
         }
         else
         {
             lv_label_set_text(item.status_label, "");
-            ::ui::fonts::apply_ui_chrome_font(item.status_label);
+            ::ui::fonts::apply_localized_font(
+                item.status_label, lv_label_get_text(item.status_label), ::ui::fonts::ui_chrome_font());
             lv_obj_add_flag(item.status_label, LV_OBJ_FLAG_HIDDEN);
         }
         return true;
@@ -503,7 +506,7 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
         }
         else if (msg.from == 0)
         {
-            sender = inferred_sender.empty() ? "Unknown" : inferred_sender;
+            sender = inferred_sender.empty() ? ::ui::i18n::tr("Unknown") : inferred_sender;
         }
         else
         {
@@ -517,13 +520,15 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
             }
         }
         std::string line = sender + " " + time_buf;
-        lv_label_set_text(item.time_label, line.c_str());
-        ::ui::fonts::apply_ui_chrome_font(item.time_label);
+        ::ui::i18n::set_label_text_raw(item.time_label, line.c_str());
+        ::ui::fonts::apply_localized_font(
+            item.time_label, lv_label_get_text(item.time_label), ::ui::fonts::ui_chrome_font());
     }
     else
     {
-        lv_label_set_text(item.time_label, time_buf);
-        ::ui::fonts::apply_ui_chrome_font(item.time_label);
+        ::ui::i18n::set_label_text_raw(item.time_label, time_buf);
+        ::ui::fonts::apply_localized_font(
+            item.time_label, lv_label_get_text(item.time_label), ::ui::fonts::ui_chrome_font());
     }
 
     if (team::proto::team_location_marker_icon_is_valid(msg.team_location_icon))
@@ -560,14 +565,16 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
     chat::ui::conversation::styles::apply_bubble_status(item.status_label);
     if (msg.status == MessageStatus::Failed)
     {
-        lv_label_set_text(item.status_label, "Failed");
-        ::ui::fonts::apply_ui_chrome_font(item.status_label);
+        ::ui::i18n::set_label_text(item.status_label, "Failed");
+        ::ui::fonts::apply_localized_font(
+            item.status_label, lv_label_get_text(item.status_label), ::ui::fonts::ui_chrome_font());
         lv_obj_clear_flag(item.status_label, LV_OBJ_FLAG_HIDDEN);
     }
     else
     {
         lv_label_set_text(item.status_label, "");
-        ::ui::fonts::apply_ui_chrome_font(item.status_label);
+        ::ui::fonts::apply_localized_font(
+            item.status_label, lv_label_get_text(item.status_label), ::ui::fonts::ui_chrome_font());
         lv_obj_add_flag(item.status_label, LV_OBJ_FLAG_HIDDEN);
     }
 

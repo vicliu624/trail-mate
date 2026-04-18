@@ -5,7 +5,9 @@
 
 #include "ui/widgets/system_notification.h"
 
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/fonts/fonts.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
 #include <cstring>
@@ -84,21 +86,27 @@ void SystemNotification::show(const char* text, uint32_t duration_ms)
         init();
     }
 
-    // Truncate text to 15 characters
-    char truncated[32];
-    size_t len = strlen(text);
+    const char* localized = ::ui::i18n::tr(text ? text : "");
+    const bool has_non_ascii = ::ui::fonts::utf8_has_non_ascii(localized);
+
+    // Keep the historical short-toast behavior for ASCII text, but avoid
+    // byte-splitting UTF-8 strings.
+    char truncated[96];
+    size_t len = strlen(localized);
     const size_t max_chars = ::ui::page_profile::current().large_touch_hitbox ? 30 : 15;
-    if (len > max_chars)
+    if (!has_non_ascii && len > max_chars)
     {
-        strncpy(truncated, text, max_chars);
+        strncpy(truncated, localized, max_chars);
         truncated[max_chars] = '\0';
     }
     else
     {
-        strcpy(truncated, text);
+        strncpy(truncated, localized, sizeof(truncated) - 1);
+        truncated[sizeof(truncated) - 1] = '\0';
     }
 
     lv_label_set_text(label_, truncated);
+    ::ui::fonts::apply_localized_font(label_, truncated, &lv_font_noto_cjk_16_2bpp);
 
     // Cancel existing timer if any
     if (hide_timer_)

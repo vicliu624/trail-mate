@@ -8,6 +8,7 @@
 
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/components/info_card.h"
+#include "ui/localization.h"
 #include "ui/screens/chat/chat_message_list_input.h"
 #include "ui/screens/chat/chat_message_list_layout.h"
 #include "ui/screens/chat/chat_message_list_styles.h"
@@ -270,7 +271,7 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
 
     // ---------- Top bar (existing widget, unchanged) ----------
     ::ui::widgets::top_bar_init(top_bar_, container_);
-    ::ui::widgets::top_bar_set_title(top_bar_, "MESSAGES");
+    ::ui::widgets::top_bar_set_title(top_bar_, ::ui::i18n::tr("MESSAGES"));
     ::ui::widgets::top_bar_set_right_text(top_bar_, "--:--  --%");
     ::ui::widgets::top_bar_set_back_callback(top_bar_, handle_back, this);
     if (top_bar_.container)
@@ -653,8 +654,8 @@ void ChatMessageListScreen::rebuildList()
     {
         lv_obj_t* placeholder = chat::ui::layout::create_placeholder(list_panel_);
         chat::ui::message_list::styles::apply_label_placeholder(placeholder);
-        lv_label_set_text(placeholder, "No messages");
-        ::ui::fonts::apply_ui_chrome_font(placeholder);
+        ::ui::i18n::set_label_text(placeholder, "No messages");
+        ::ui::fonts::apply_localized_font(placeholder, lv_label_get_text(placeholder), ::ui::fonts::ui_chrome_font());
     }
 
     if (show_second_column_back())
@@ -680,8 +681,8 @@ void ChatMessageListScreen::rebuildList()
         lv_obj_clear_state(list_back_btn_, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY));
         lv_obj_t* back_label = lv_label_create(list_back_btn_);
         lv_obj_add_flag(back_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-        lv_label_set_text(back_label, "Back");
-        ::ui::fonts::apply_ui_chrome_font(back_label);
+        ::ui::i18n::set_label_text(back_label, "Back");
+        ::ui::fonts::apply_localized_font(back_label, lv_label_get_text(back_label), ::ui::fonts::ui_chrome_font());
         chat::ui::message_list::styles::apply_label_name(back_label);
         lv_obj_center(back_label);
         lv_obj_add_event_cb(list_back_btn_, list_back_event_cb, LV_EVENT_CLICKED, this);

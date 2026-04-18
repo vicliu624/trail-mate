@@ -7,6 +7,7 @@
 #include "platform/ui/hostlink_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/fonts.h"
+#include "ui/localization.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/top_bar.h"
 
@@ -106,21 +107,27 @@ void refresh_status_cb(lv_timer_t* timer)
     if (st.state == platform::ui::hostlink::LinkState::Error && st.last_error != 0)
     {
         char err_buf[24];
-        snprintf(err_buf, sizeof(err_buf), "Error: %lu",
-                 static_cast<unsigned long>(st.last_error));
-        lv_label_set_text(s_status_label, err_buf);
+        snprintf(err_buf,
+                 sizeof(err_buf),
+                 "%s",
+                 ::ui::i18n::format("Error: %lu", static_cast<unsigned long>(st.last_error)).c_str());
+        ::ui::i18n::set_label_text_raw(s_status_label, err_buf);
     }
     else
     {
-        lv_label_set_text(s_status_label, status_text(st.state));
+        ::ui::i18n::set_label_text(s_status_label, status_text(st.state));
     }
     if (s_count_label)
     {
         char buf[32];
-        snprintf(buf, sizeof(buf), "RX: %lu  TX: %lu",
-                 static_cast<unsigned long>(st.rx_count),
-                 static_cast<unsigned long>(st.tx_count));
-        lv_label_set_text(s_count_label, buf);
+        snprintf(buf,
+                 sizeof(buf),
+                 "%s",
+                 ::ui::i18n::format("RX: %lu  TX: %lu",
+                                    static_cast<unsigned long>(st.rx_count),
+                                    static_cast<unsigned long>(st.tx_count))
+                     .c_str());
+        ::ui::i18n::set_label_text_raw(s_count_label, buf);
     }
 }
 
@@ -169,7 +176,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
-    ::ui::widgets::top_bar_set_title(s_top_bar, page_title());
+    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr(page_title()));
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
     if (s_top_bar.back_btn)
     {
@@ -209,15 +216,15 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_center(stack);
 
     lv_obj_t* title = lv_label_create(stack);
-    lv_label_set_text(title, page_subtitle());
+    ::ui::i18n::set_label_text(title, page_subtitle());
     lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
 
     s_status_label = lv_label_create(stack);
-    lv_label_set_text(s_status_label, "Waiting for host...");
+    ::ui::i18n::set_label_text(s_status_label, "Waiting for host...");
     lv_obj_set_style_text_font(s_status_label, &lv_font_montserrat_18, 0);
 
     s_count_label = lv_label_create(stack);
-    lv_label_set_text(s_count_label, "RX: 0  TX: 0");
+    ::ui::i18n::set_label_text(s_count_label, "RX: 0  TX: 0");
     lv_obj_set_style_text_font(s_count_label, &lv_font_montserrat_16, 0);
 
     if (!s_timer)

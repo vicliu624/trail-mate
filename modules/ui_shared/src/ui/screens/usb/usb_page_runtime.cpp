@@ -5,6 +5,7 @@
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/usb_support_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/localization.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/top_bar.h"
 
@@ -80,7 +81,7 @@ void show_loading(const char* message)
     lv_obj_clear_flag(s_loading_box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* label = lv_label_create(s_loading_box);
-    lv_label_set_text(label, message ? message : "Loading...");
+    ::ui::i18n::set_label_text(label, message ? message : "Loading...");
     lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_center(label);
@@ -95,7 +96,7 @@ void update_status_label()
 
     const platform::ui::usb_support::Status st = platform::ui::usb_support::get_status();
     const char* message = (st.message && st.message[0] != '\0') ? st.message : (st.active ? "USB Active" : "USB Idle");
-    lv_label_set_text(s_status_label, message);
+    ::ui::i18n::set_label_text(s_status_label, message);
 }
 
 void finish_exit_cb(lv_timer_t* timer)
@@ -140,7 +141,7 @@ void begin_exit()
     }
     s_exit_started = true;
 
-    show_loading("Exiting USB...");
+    show_loading(::ui::i18n::tr("Exiting USB..."));
     if (s_start_timer)
     {
         lv_timer_del(s_start_timer);
@@ -239,7 +240,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
-    ::ui::widgets::top_bar_set_title(s_top_bar, "USB Mass Storage");
+    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("USB Mass Storage"));
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, back_event_handler, nullptr);
     if (s_top_bar.back_btn)
     {
@@ -271,7 +272,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     if (!platform::ui::device::card_ready())
     {
         lv_obj_t* error_label = lv_label_create(s_content);
-        lv_label_set_text(error_label, "SD Card Not Found\nPlease insert SD card");
+        ::ui::i18n::set_label_text(error_label, "SD Card Not Found\nPlease insert SD card");
         lv_obj_center(error_label);
         lv_obj_set_style_text_font(error_label, &lv_font_montserrat_18, LV_PART_MAIN);
         lv_obj_set_style_text_color(error_label, lv_color_hex(0xCC0000), LV_PART_MAIN);
@@ -279,14 +280,14 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     }
 
     s_status_label = lv_label_create(s_content);
-    lv_label_set_text(s_status_label, "Initializing...");
+    ::ui::i18n::set_label_text(s_status_label, "Initializing...");
     lv_obj_center(s_status_label);
     lv_obj_set_style_text_font(s_status_label, &lv_font_montserrat_18, LV_PART_MAIN);
     lv_obj_set_style_text_color(s_status_label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
     lv_obj_set_style_text_align(s_status_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     lv_obj_t* info_label = lv_label_create(s_content);
-    lv_label_set_text(info_label, "Press Back to exit USB mode");
+    ::ui::i18n::set_label_text(info_label, "Press Back to exit USB mode");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_text_font(info_label, &lv_font_montserrat_14, LV_PART_MAIN);
     lv_obj_set_style_text_color(info_label, lv_color_hex(0x6A5646), LV_PART_MAIN);

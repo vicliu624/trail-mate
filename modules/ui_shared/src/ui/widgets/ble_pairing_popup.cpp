@@ -4,6 +4,9 @@
 #include <cstring>
 #include <string>
 
+#include "ui/assets/fonts/font_utils.h"
+#include "ui/localization.h"
+
 namespace ui
 {
 
@@ -77,7 +80,7 @@ void BlePairingPopup::ensureCreated()
     lv_obj_set_style_pad_row(panel_, 8, 0);
 
     title_label_ = lv_label_create(panel_);
-    lv_label_set_text(title_label_, "Bluetooth Pairing");
+    ::ui::i18n::set_label_text(title_label_, "Bluetooth Pairing");
     lv_obj_set_style_text_color(title_label_, lv_color_hex(kColorText), 0);
     lv_obj_set_style_text_font(title_label_, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_align(title_label_, LV_TEXT_ALIGN_CENTER, 0);
@@ -95,7 +98,7 @@ void BlePairingPopup::ensureCreated()
     lv_obj_set_style_radius(mode_label_, 10, 0);
 
     hint_label_ = lv_label_create(panel_);
-    lv_label_set_text(hint_label_, "Enter this 6-digit PIN on your phone");
+    ::ui::i18n::set_label_text(hint_label_, "Enter this 6-digit PIN on your phone");
     lv_obj_set_style_text_color(hint_label_, lv_color_hex(kColorTextDim), 0);
     lv_obj_set_style_text_font(hint_label_, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(hint_label_, LV_TEXT_ALIGN_CENTER, 0);
@@ -114,7 +117,7 @@ void BlePairingPopup::ensureCreated()
     lv_obj_set_width(device_label_, LV_PCT(100));
 
     footer_label_ = lv_label_create(panel_);
-    lv_label_set_text(footer_label_, "Closes automatically after pairing");
+    ::ui::i18n::set_label_text(footer_label_, "Closes automatically after pairing");
     lv_obj_set_style_text_color(footer_label_, lv_color_hex(kColorOk), 0);
     lv_obj_set_style_text_font(footer_label_, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(footer_label_, LV_TEXT_ALIGN_CENTER, 0);
@@ -179,19 +182,14 @@ void BlePairingPopup::show(uint32_t passkey, bool is_fixed_pin, const char* devi
              static_cast<unsigned long>(passkey / 1000U),
              static_cast<unsigned long>(passkey % 1000U));
     lv_label_set_text(pin_label_, pin_buf);
-    lv_label_set_text(mode_label_, is_fixed_pin ? "Fixed PIN" : "Random PIN");
+    ::ui::i18n::set_label_text(mode_label_, is_fixed_pin ? "Fixed PIN" : "Random PIN");
     lv_obj_set_style_bg_color(mode_label_, lv_color_hex(is_fixed_pin ? kColorOk : kColorInfo), 0);
 
-    std::string name_text = "Device: ";
-    if (device_name && device_name[0] != '\0')
-    {
-        name_text += device_name;
-    }
-    else
-    {
-        name_text += "Meshtastic";
-    }
+    std::string name_text = ::ui::i18n::format(
+        "Device: %s",
+        (device_name && device_name[0] != '\0') ? device_name : "Meshtastic");
     lv_label_set_text(device_label_, name_text.c_str());
+    ::ui::fonts::apply_localized_font(device_label_, name_text.c_str(), &lv_font_montserrat_18);
 
     lv_obj_clear_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(overlay_);

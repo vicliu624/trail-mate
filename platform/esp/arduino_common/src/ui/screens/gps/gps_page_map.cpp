@@ -8,6 +8,7 @@
 #include "screen_sleep.h"
 #include "sys/clock.h"
 #include "team/protocol/team_location_marker.h"
+#include "ui/localization.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_page_components.h"
 #include "ui/screens/gps/gps_page_lifetime.h"
@@ -23,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
+#include <string>
 
 // GPS marker icon (room-24px), defined in C image file
 extern "C"
@@ -551,11 +553,12 @@ void update_altitude_display(const GPSData& gps_data)
     char alt_text[32];
     if (gps_data.valid && gps_data.has_alt)
     {
-        snprintf(alt_text, sizeof(alt_text), "Alt: %.0f m", gps_data.alt_m);
+        const std::string text = ::ui::i18n::format("Alt: %.0f m", gps_data.alt_m);
+        snprintf(alt_text, sizeof(alt_text), "%s", text.c_str());
     }
     else
     {
-        snprintf(alt_text, sizeof(alt_text), "Alt: -- m");
+        snprintf(alt_text, sizeof(alt_text), "%s", ::ui::i18n::tr("Alt: -- m"));
     }
     lv_label_set_text(g_gps_state.altitude_label, alt_text);
 }
@@ -603,31 +606,34 @@ void update_title_and_status()
         char coord_buf[64];
         uint8_t coord_fmt = app::configFacade().getConfig().gps_coord_format;
         ui_format_coords(g_gps_state.lat, g_gps_state.lng, coord_fmt, coord_buf, sizeof(coord_buf));
-        snprintf(title_buffer, sizeof(title_buffer), "Map - %.48s", coord_buf);
+        const std::string text = ::ui::i18n::format("Map - %.48s", coord_buf);
+        snprintf(title_buffer, sizeof(title_buffer), "%s", text.c_str());
     }
     else if (!sd_ready)
     {
-        snprintf(title_buffer, sizeof(title_buffer), "Map - No SD Card");
+        snprintf(title_buffer, sizeof(title_buffer), "%s", ::ui::i18n::tr("Map - No SD Card"));
     }
     else if (!g_gps_state.has_visible_map_data)
     {
         uint8_t source = sanitize_map_source(app::configFacade().getConfig().map_source);
         if (!g_gps_state.has_fix)
         {
-            snprintf(title_buffer, sizeof(title_buffer), "Map - no gps data");
+            snprintf(title_buffer, sizeof(title_buffer), "%s", ::ui::i18n::tr("Map - no gps data"));
         }
         else if (map_source_directory_available(source))
         {
-            snprintf(title_buffer, sizeof(title_buffer), "Map - No Map Data");
+            snprintf(title_buffer, sizeof(title_buffer), "%s", ::ui::i18n::tr("Map - No Map Data"));
         }
         else
         {
-            snprintf(title_buffer, sizeof(title_buffer), "Map - %s Missing", map_source_label(source));
+            const std::string text =
+                ::ui::i18n::format("Map - %s Missing", map_source_label(source));
+            snprintf(title_buffer, sizeof(title_buffer), "%s", text.c_str());
         }
     }
     else
     {
-        snprintf(title_buffer, sizeof(title_buffer), "Map - no gps data");
+        snprintf(title_buffer, sizeof(title_buffer), "%s", ::ui::i18n::tr("Map - no gps data"));
     }
 
     GPS_LOG("[GPS] Setting page title to: '%s' (page=%p)\n",

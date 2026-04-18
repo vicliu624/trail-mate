@@ -5,9 +5,11 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "ui/localization.h"
 #include "ui/ui_common.h"
 #include "ui/ui_theme.h"
 #include <cstdio>
+#include <string>
 
 namespace
 {
@@ -249,25 +251,25 @@ void ChatMessageListScreen::rebuildMenu()
     char buf[32];
     if (direct_unread_ > 0)
     {
-        snprintf(buf, sizeof(buf), "Direct (%d)", direct_unread_);
-        lv_label_set_text(direct_label_, buf);
+        const std::string text = ::ui::i18n::format("Direct (%d)", direct_unread_);
+        lv_label_set_text(direct_label_, text.c_str());
     }
     else
     {
-        lv_label_set_text(direct_label_, "Direct");
+        ::ui::i18n::set_label_text(direct_label_, "Direct");
     }
 
     if (broadcast_unread_ > 0)
     {
-        snprintf(buf, sizeof(buf), "Broadcast (%d)", broadcast_unread_);
-        lv_label_set_text(broadcast_label_, buf);
+        const std::string text = ::ui::i18n::format("Broadcast (%d)", broadcast_unread_);
+        lv_label_set_text(broadcast_label_, text.c_str());
     }
     else
     {
-        lv_label_set_text(broadcast_label_, "Broadcast");
+        ::ui::i18n::set_label_text(broadcast_label_, "Broadcast");
     }
 
-    lv_label_set_text(back_label_, "Back");
+    ::ui::i18n::set_label_text(back_label_, "Back");
 
     if (!has_direct_)
     {
@@ -365,7 +367,7 @@ void ChatMessageListScreen::rebuildList()
         lv_obj_clear_flag(new_item.btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(new_item.btn, menu_event_cb, LV_EVENT_CLICKED, this);
         new_item.label = lv_label_create(new_item.btn);
-        lv_label_set_text(new_item.label, "New");
+        ::ui::i18n::set_label_text(new_item.label, "New");
         lv_obj_align(new_item.label, LV_ALIGN_LEFT_MID, 0, 0);
         lv_obj_set_style_text_color(new_item.label, ::ui::theme::white(), 0);
         lv_obj_set_style_text_font(new_item.label, &lv_font_montserrat_18, 0);
@@ -388,7 +390,7 @@ void ChatMessageListScreen::rebuildList()
     lv_obj_clear_flag(back_item.btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(back_item.btn, menu_event_cb, LV_EVENT_CLICKED, this);
     back_item.label = lv_label_create(back_item.btn);
-    lv_label_set_text(back_item.label, "Back");
+    ::ui::i18n::set_label_text(back_item.label, "Back");
     lv_obj_align(back_item.label, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_text_color(back_item.label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(back_item.label, &lv_font_montserrat_18, 0);

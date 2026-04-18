@@ -10,6 +10,7 @@ namespace ui::menu::dashboard
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
 void init(lv_obj_t* menu_panel, lv_obj_t* grid_panel, const ui::menu_layout::InitOptions& options);
 void bringToFront();
+void refresh_localized_text();
 void setActive(bool active);
 #else
 inline void init(lv_obj_t* menu_panel, lv_obj_t* grid_panel, const ui::menu_layout::InitOptions& options)
@@ -20,6 +21,10 @@ inline void init(lv_obj_t* menu_panel, lv_obj_t* grid_panel, const ui::menu_layo
 }
 
 inline void bringToFront()
+{
+}
+
+inline void refresh_localized_text()
 {
 }
 

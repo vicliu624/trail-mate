@@ -83,59 +83,59 @@ ui::page::Host make_menu_host()
 
 ui::page::Host s_menu_host = make_menu_host();
 
-ui::CallbackAppScreen s_chat_app("Chat", &Chat,
+ui::CallbackAppScreen s_chat_app("chat", "Chat", &Chat,
                                  chat::ui::shell::enter,
                                  chat::ui::shell::exit,
                                  &s_menu_host);
-ui::CallbackAppScreen s_gps_app("Map", &gps_icon,
+ui::CallbackAppScreen s_gps_app("map", "Map", &gps_icon,
                                 gps::ui::shell::enter,
                                 gps::ui::shell::exit,
                                 &s_menu_host);
-ui::CallbackAppScreen s_skyplot_app("Sky Plot", &Satellite,
+ui::CallbackAppScreen s_skyplot_app("sky_plot", "Sky Plot", &Satellite,
                                     gnss::ui::shell::enter,
                                     gnss::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_contacts_app("Contacts", &contact,
+ui::CallbackAppScreen s_contacts_app("contacts", "Contacts", &contact,
                                      contacts::ui::shell::enter,
                                      contacts::ui::shell::exit,
                                      &s_menu_host);
-ui::CallbackAppScreen s_energy_sweep_app("Energy Sweep", &Spectrum,
+ui::CallbackAppScreen s_energy_sweep_app("energy_sweep", "Energy Sweep", &Spectrum,
                                          energy_sweep::ui::shell::enter,
                                          energy_sweep::ui::shell::exit,
                                          &s_menu_host);
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-ui::CallbackAppScreen s_team_app("Team", &team_icon,
+ui::CallbackAppScreen s_team_app("team", "Team", &team_icon,
                                  team::ui::shell::enter,
                                  team::ui::shell::exit,
                                  &s_menu_host);
 #endif
-ui::CallbackAppScreen s_tracker_app("Tracker", &tracker_icon,
+ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", &tracker_icon,
                                     tracker::ui::shell::enter,
                                     tracker::ui::shell::exit,
                                     &s_menu_host);
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_pc_link_app("Data Exchange", &rf,
+ui::CallbackAppScreen s_pc_link_app("pc_link", "Data Exchange", &rf,
                                     pc_link::ui::shell::enter,
                                     pc_link::ui::shell::exit,
                                     &s_menu_host);
 #endif
 #if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
-ui::CallbackAppScreen s_sstv_app("SSTV", &sstv,
+ui::CallbackAppScreen s_sstv_app("sstv", "SSTV", &sstv,
                                  sstv_page::ui::shell::enter,
                                  sstv_page::ui::shell::exit,
                                  &s_menu_host);
 #endif
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_usb_app("USB Mass Storage", &img_usb,
+ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Mass Storage", &img_usb,
                                 usb_storage::ui::shell::enter,
                                 usb_storage::ui::shell::exit,
                                 &s_menu_host);
 #endif
-ui::CallbackAppScreen s_setting_app("Setting", &Setting,
+ui::CallbackAppScreen s_setting_app("settings", "Setting", &Setting,
                                     settings::ui::shell::enter,
                                     settings::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_walkie_app("Walkie Talkie", &walkie_talkie,
+ui::CallbackAppScreen s_walkie_app("walkie_talkie", "Walkie Talkie", &walkie_talkie,
                                    walkie_page::ui::shell::enter,
                                    walkie_page::ui::shell::exit,
                                    &s_menu_host);

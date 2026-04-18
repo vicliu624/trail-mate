@@ -5,6 +5,7 @@
 
 #include "ui/screens/settings/settings_page_layout.h"
 #include "ui/components/two_pane_layout.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
@@ -33,7 +34,7 @@ lv_obj_t* create_header(lv_obj_t* root, void (*back_callback)(void*), void* user
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = profile.top_bar_height;
     ::ui::widgets::top_bar_init(g_state.top_bar, header, cfg);
-    ::ui::widgets::top_bar_set_title(g_state.top_bar, "Settings");
+    ::ui::widgets::top_bar_set_title(g_state.top_bar, ::ui::i18n::tr("Settings"));
     ::ui::widgets::top_bar_set_back_callback(g_state.top_bar, back_callback, user_data);
     ui_update_top_bar_battery(g_state.top_bar);
     return header;

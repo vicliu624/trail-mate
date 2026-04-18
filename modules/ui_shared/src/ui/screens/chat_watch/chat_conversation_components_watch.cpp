@@ -2,6 +2,7 @@
 
 #include "ui/screens/chat_watch/chat_conversation_components_watch.h"
 
+#include "ui/localization.h"
 #include "ui/ui_theme.h"
 
 namespace
@@ -59,7 +60,7 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     lv_obj_set_style_radius(reply_btn_, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(reply_btn_, action_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_t* reply_label = lv_label_create(reply_btn_);
-    lv_label_set_text(reply_label, "Reply");
+    ::ui::i18n::set_label_text(reply_label, "Reply");
     lv_obj_center(reply_label);
     lv_obj_set_style_text_color(reply_label, ::ui::theme::white(), 0);
 
@@ -72,7 +73,7 @@ ChatConversationScreen::ChatConversationScreen(lv_obj_t* parent, chat::Conversat
     lv_obj_set_style_radius(back_btn_, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(back_btn_, back_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_t* back_label = lv_label_create(back_btn_);
-    lv_label_set_text(back_label, "Back");
+    ::ui::i18n::set_label_text(back_label, "Back");
     lv_obj_center(back_label);
     lv_obj_set_style_text_color(back_label, ::ui::theme::text(), 0);
 }

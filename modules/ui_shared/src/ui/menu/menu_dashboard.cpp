@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "platform/ui/orientation_runtime.h"
+#include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
 #include "ui/menu/dashboard/dashboard_widgets.h"
 #include "ui/menu/menu_profile.h"
@@ -131,6 +132,64 @@ void bringToFront()
     {
         lv_obj_move_foreground(dashboard.panel);
     }
+}
+
+void refresh_localized_text()
+{
+    auto& dashboard = dashboard_state();
+    if (dashboard.panel == nullptr)
+    {
+        return;
+    }
+
+    if (dashboard.mesh.chrome.title != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.mesh.chrome.title, "Mesh Status");
+    }
+    if (dashboard.mesh.stat_captions[0] != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.mesh.stat_captions[0], "Team");
+    }
+    if (dashboard.mesh.stat_captions[1] != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.mesh.stat_captions[1], "Unread");
+    }
+    if (dashboard.mesh.stat_captions[2] != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.mesh.stat_captions[2], "Power");
+    }
+
+    if (dashboard.gps.chrome.title != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.gps.chrome.title, "GPS Status");
+    }
+    if (dashboard.gps.stat_captions[0] != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.gps.stat_captions[0], "Fix");
+    }
+    if (dashboard.gps.stat_captions[1] != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.gps.stat_captions[1], "Used");
+    }
+    if (dashboard.gps.stat_captions[2] != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.gps.stat_captions[2], "HDOP");
+    }
+
+    if (dashboard.recent.chrome.title != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.recent.chrome.title, "Recent Activity");
+    }
+
+    if (dashboard.compass.chrome.title != nullptr)
+    {
+        ::ui::i18n::set_label_text(dashboard.compass.chrome.title, "Mini Compass");
+    }
+
+    refresh_compass_widget();
+    refresh_recent_widget();
+    refresh_gps_widget();
+    refresh_mesh_widget();
 }
 
 void setActive(bool active)

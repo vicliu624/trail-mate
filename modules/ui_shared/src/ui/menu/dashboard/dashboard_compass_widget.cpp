@@ -9,6 +9,7 @@
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/orientation_runtime.h"
+#include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
 #include "ui/screens/team/team_ui_store.h"
 
@@ -17,7 +18,7 @@ namespace ui::menu::dashboard
 namespace
 {
 
-void set_label_text_if_changed(lv_obj_t* label, const char* text)
+void set_label_text_if_changed_raw(lv_obj_t* label, const char* text)
 {
     if (label == nullptr || text == nullptr)
     {
@@ -26,7 +27,21 @@ void set_label_text_if_changed(lv_obj_t* label, const char* text)
     const char* current = lv_label_get_text(label);
     if (current == nullptr || std::strcmp(current, text) != 0)
     {
-        lv_label_set_text(label, text);
+        ::ui::i18n::set_label_text_raw(label, text);
+    }
+}
+
+void set_label_text_if_changed(lv_obj_t* label, const char* english)
+{
+    const char* localized = ::ui::i18n::tr(english);
+    if (label == nullptr || localized == nullptr)
+    {
+        return;
+    }
+    const char* current = lv_label_get_text(label);
+    if (current == nullptr || std::strcmp(current, localized) != 0)
+    {
+        ::ui::i18n::set_label_text_raw(label, localized);
     }
 }
 
@@ -40,7 +55,7 @@ std::string best_name_for(const chat::contacts::NodeInfo& info)
     {
         return info.short_name;
     }
-    return "Unknown";
+    return ::ui::i18n::tr("Unknown");
 }
 
 } // namespace
@@ -48,7 +63,7 @@ std::string best_name_for(const chat::contacts::NodeInfo& info)
 void create_compass_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
 {
     auto& compass = dashboard_state().compass;
-    compass.chrome = create_card_chrome(parent, "Mini Compass", card_w, card_h);
+    compass.chrome = create_card_chrome(parent, ::ui::i18n::tr("Mini Compass"), card_w, card_h);
 
     const lv_coord_t body_w = lv_obj_get_width(compass.chrome.body);
     const lv_coord_t body_h = lv_obj_get_height(compass.chrome.body);
@@ -115,23 +130,23 @@ void create_compass_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_
     style_body_label(compass.target_name, &lv_font_montserrat_16, color_text());
     lv_obj_set_width(compass.target_name, stats_w);
     lv_obj_set_pos(compass.target_name, stats_x, 4);
-    lv_label_set_text(compass.target_name, "No target");
+    ::ui::i18n::set_label_text(compass.target_name, "No target");
 
     compass.distance_value = lv_label_create(compass.chrome.body);
     style_body_label(compass.distance_value, &lv_font_montserrat_16, color_info());
     lv_obj_set_pos(compass.distance_value, stats_x, 34);
-    lv_label_set_text(compass.distance_value, "--");
+    ::ui::i18n::set_label_text_raw(compass.distance_value, "--");
 
     compass.bearing_value = lv_label_create(compass.chrome.body);
     style_body_label(compass.bearing_value, &lv_font_montserrat_12, color_text_dim());
     lv_obj_set_width(compass.bearing_value, stats_w);
     lv_obj_set_pos(compass.bearing_value, stats_x, 62);
-    lv_label_set_text(compass.bearing_value, "awaiting position");
+    ::ui::i18n::set_label_text(compass.bearing_value, "awaiting position");
 
     compass.footer_label = lv_label_create(compass.chrome.footer);
     style_footer_label(compass.footer_label);
     lv_obj_align(compass.footer_label, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_label_set_text(compass.footer_label, "compass wakes after GPS fix");
+    ::ui::i18n::set_label_text(compass.footer_label, "compass wakes after GPS fix");
 }
 
 void refresh_compass_widget()
@@ -204,7 +219,7 @@ void refresh_compass_widget()
         {
             std::snprintf(heading_buf, sizeof(heading_buf), "--");
         }
-        set_label_text_if_changed(compass.distance_value, heading.available ? heading_buf : "--");
+        set_label_text_if_changed_raw(compass.distance_value, heading.available ? heading_buf : "--");
         set_label_text_if_changed(compass.bearing_value,
                                   heading.available ? "magnetometer heading active" : "heading unlocks after first fix");
         set_label_text_if_changed(compass.footer_label,
@@ -225,14 +240,14 @@ void refresh_compass_widget()
         {
             char heading_buf[48];
             std::snprintf(heading_buf, sizeof(heading_buf), "%s  |  %03.0f deg", compass_rose(heading.heading_deg), heading.heading_deg);
-            set_label_text_if_changed(compass.distance_value, heading_buf);
+            set_label_text_if_changed_raw(compass.distance_value, heading_buf);
             set_label_text_if_changed(compass.bearing_value, "team member position will appear here");
             set_label_text_if_changed(compass.footer_label, "needle shows north until target lock");
             needle_bearing = normalize_degrees(360.0f - heading.heading_deg);
         }
         else
         {
-            set_label_text_if_changed(compass.distance_value, "--");
+            set_label_text_if_changed_raw(compass.distance_value, "--");
             set_label_text_if_changed(compass.bearing_value, "magnetometer still warming up");
             set_label_text_if_changed(compass.footer_label, "waiting for module GNSS compass");
         }
@@ -242,11 +257,11 @@ void refresh_compass_widget()
     }
 
     set_status_chip(compass.chrome, compass_rose(best_bearing), color_soft_green(), color_ok());
-    set_label_text_if_changed(compass.target_name, best_name.c_str());
+    set_label_text_if_changed_raw(compass.target_name, best_name.c_str());
 
     char distance_buf[24];
     format_distance(best_distance, distance_buf, sizeof(distance_buf));
-    set_label_text_if_changed(compass.distance_value, distance_buf);
+    set_label_text_if_changed_raw(compass.distance_value, distance_buf);
 
     char bearing_buf[48];
     if (heading.available)
@@ -264,18 +279,20 @@ void refresh_compass_widget()
         std::snprintf(bearing_buf, sizeof(bearing_buf), "%s  |  %03.0f deg", compass_rose(best_bearing), best_bearing);
         needle_bearing = best_bearing;
     }
-    set_label_text_if_changed(compass.bearing_value, bearing_buf);
+    set_label_text_if_changed_raw(compass.bearing_value, bearing_buf);
 
     char footer[64];
     if (heading.available)
     {
-        std::snprintf(footer, sizeof(footer), "peer lock  |  turn %03.0f deg", needle_bearing);
+        std::snprintf(
+            footer, sizeof(footer), "%s", ::ui::i18n::format("peer lock  |  turn %03.0f deg", needle_bearing).c_str());
     }
     else
     {
-        std::snprintf(footer, sizeof(footer), "nearest peer  |  %.0f m away", best_distance);
+        std::snprintf(
+            footer, sizeof(footer), "%s", ::ui::i18n::format("nearest peer  |  %.0f m away", best_distance).c_str());
     }
-    set_label_text_if_changed(compass.footer_label, footer);
+    set_label_text_if_changed_raw(compass.footer_label, footer);
 
     lv_obj_set_style_transform_rotation(compass.needle, static_cast<lv_coord_t>(needle_bearing * 10.0f), 0);
     lv_obj_set_style_bg_opa(compass.north_marker, LV_OPA_COVER, 0);

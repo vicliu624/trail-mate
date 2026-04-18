@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+
+#include "ui/localization.h"
 
 namespace
 {
@@ -207,7 +210,7 @@ void watch_face_create(lv_obj_t* parent)
     lv_obj_set_width(s_ui.node_id_label, LV_SIZE_CONTENT);
     lv_obj_set_style_text_align(s_ui.node_id_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_align(s_ui.node_id_label, LV_ALIGN_TOP_LEFT, 10, 10);
-    lv_label_set_text(s_ui.node_id_label, "ID: -");
+    ::ui::i18n::set_label_text(s_ui.node_id_label, "ID: -");
 
     s_ui.battery_label = lv_label_create(s_ui.root);
     apply_label_style(s_ui.battery_label, &lv_font_montserrat_14, kColorTextDim);
@@ -310,16 +313,16 @@ void watch_face_set_node_id(uint32_t node_id)
     {
         return;
     }
-    char buf[24];
     if (node_id != 0)
     {
-        snprintf(buf, sizeof(buf), "ID: !%08lX", static_cast<unsigned long>(node_id));
+        const std::string text =
+            ::ui::i18n::format("ID: !%08lX", static_cast<unsigned long>(node_id));
+        lv_label_set_text(s_ui.node_id_label, text.c_str());
     }
     else
     {
-        snprintf(buf, sizeof(buf), "ID: -");
+        ::ui::i18n::set_label_text(s_ui.node_id_label, "ID: -");
     }
-    lv_label_set_text(s_ui.node_id_label, buf);
 }
 
 void watch_face_set_placeholder()

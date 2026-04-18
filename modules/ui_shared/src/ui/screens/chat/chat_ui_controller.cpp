@@ -16,6 +16,7 @@
 #include "team/protocol/team_location_marker.h"
 #include "team/usecase/team_controller.h"
 #include "ui/assets/fonts/fonts.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
@@ -117,7 +118,7 @@ std::string base_conversation_name(const chat::ConversationId& conv)
 {
     if (conv.peer == 0)
     {
-        return "Broadcast";
+        return ::ui::i18n::tr("Broadcast");
     }
 
     std::string contact_name = app::messagingFacade().getContactService().getContactName(conv.peer);
@@ -298,7 +299,7 @@ std::string team_title_from_snapshot(const team::ui::TeamUiSnapshot& snap)
     {
         return snap.team_name;
     }
-    return "Team";
+    return ::ui::i18n::tr("Team");
 }
 
 void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
@@ -1132,17 +1133,17 @@ void UiController::updateTeamPositionPickerHint(uint8_t icon_id)
     }
     if (icon_id == 0)
     {
-        lv_label_set_text(team_position_picker_desc_, "Cancel");
+        ::ui::i18n::set_label_text(team_position_picker_desc_, "Cancel");
         return;
     }
     const TeamPositionIconOption* option = find_team_position_icon_option(icon_id);
     if (option)
     {
-        lv_label_set_text(team_position_picker_desc_, option->meaning);
+        ::ui::i18n::set_label_text(team_position_picker_desc_, option->meaning);
     }
     else
     {
-        lv_label_set_text(team_position_picker_desc_, "Select marker");
+        ::ui::i18n::set_label_text(team_position_picker_desc_, "Select marker");
     }
 }
 
@@ -1251,7 +1252,7 @@ void UiController::openTeamPositionPicker()
     lv_obj_clear_flag(title_bar, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* title = lv_label_create(title_bar);
-    lv_label_set_text(title, "Share Position Marker");
+    ::ui::i18n::set_label_text(title, "Share Position Marker");
     lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
     lv_obj_center(title);
 
@@ -1297,7 +1298,7 @@ void UiController::openTeamPositionPicker()
     }
 
     team_position_picker_desc_ = lv_label_create(team_position_picker_panel_);
-    lv_label_set_text(team_position_picker_desc_, "Select marker");
+    ::ui::i18n::set_label_text(team_position_picker_desc_, "Select marker");
     lv_obj_set_width(team_position_picker_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(team_position_picker_desc_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(team_position_picker_desc_, lv_color_hex(0x8A6A3A), 0);
@@ -1316,7 +1317,7 @@ void UiController::openTeamPositionPicker()
     lv_obj_clear_flag(cancel_btn, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, "Cancel");
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
     lv_obj_set_style_text_color(cancel_label, lv_color_hex(0x6B4A1E), 0);
     lv_obj_center(cancel_label);
 
@@ -1545,15 +1546,14 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     lv_obj_clear_flag(key_verify_panel_, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* title = lv_label_create(key_verify_panel_);
-    lv_label_set_text(title, "Key Verification");
+    ::ui::i18n::set_label_text(title, "Key Verification");
     lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
     lv_obj_set_style_text_font(title, &lv_font_noto_cjk_16_2bpp, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
-    std::string desc = "Enter number for ";
-    desc += resolve_contact_name(node_id);
+    std::string desc = ::ui::i18n::format("Enter number for %s", resolve_contact_name(node_id).c_str());
     key_verify_desc_ = lv_label_create(key_verify_panel_);
-    lv_label_set_text(key_verify_desc_, desc.c_str());
+    ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
     lv_obj_set_width(key_verify_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(key_verify_desc_, lv_color_hex(0x8A6A3A), 0);
@@ -1562,13 +1562,13 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     key_verify_textarea_ = lv_textarea_create(key_verify_panel_);
     lv_obj_set_width(key_verify_textarea_, LV_PCT(100));
     lv_textarea_set_one_line(key_verify_textarea_, true);
-    lv_textarea_set_placeholder_text(key_verify_textarea_, "6 digits");
+    lv_textarea_set_placeholder_text(key_verify_textarea_, ::ui::i18n::tr("6 digits"));
     lv_textarea_set_accepted_chars(key_verify_textarea_, "0123456789");
     lv_textarea_set_max_length(key_verify_textarea_, 6);
     lv_obj_align(key_verify_textarea_, LV_ALIGN_TOP_MID, 0, 72);
 
     key_verify_error_label_ = lv_label_create(key_verify_panel_);
-    lv_label_set_text(key_verify_error_label_, "");
+    ::ui::i18n::set_label_text_raw(key_verify_error_label_, "");
     lv_obj_set_width(key_verify_error_label_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_error_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(key_verify_error_label_, lv_color_hex(0xB94A2C), 0);
@@ -1578,14 +1578,14 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     lv_obj_set_size(submit_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
     lv_obj_align(submit_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_t* submit_label = lv_label_create(submit_btn);
-    lv_label_set_text(submit_label, "Submit");
+    ::ui::i18n::set_label_text(submit_label, "Submit");
     lv_obj_center(submit_label);
 
     lv_obj_t* cancel_btn = lv_btn_create(key_verify_panel_);
     lv_obj_set_size(cancel_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
     lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, "Cancel");
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
 
     lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_CLICKED, this);
@@ -1639,7 +1639,7 @@ void UiController::openKeyVerificationInfoModal(chat::NodeId node_id, uint32_t n
     lv_obj_center(key_verify_panel_);
 
     lv_obj_t* title = lv_label_create(key_verify_panel_);
-    lv_label_set_text(title, "Verification Number");
+    ::ui::i18n::set_label_text(title, "Verification Number");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     char num_buf[24] = {};
@@ -1649,9 +1649,9 @@ void UiController::openKeyVerificationInfoModal(chat::NodeId node_id, uint32_t n
                   static_cast<unsigned>(number / 1000U),
                   static_cast<unsigned>(number % 1000U));
     key_verify_desc_ = lv_label_create(key_verify_panel_);
-    std::string desc = resolve_contact_name(node_id) + "\nShare this number:\n";
+    std::string desc = resolve_contact_name(node_id) + "\n" + ::ui::i18n::tr("Share this number:\n");
     desc += num_buf;
-    lv_label_set_text(key_verify_desc_, desc.c_str());
+    ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
     lv_obj_set_width(key_verify_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(key_verify_desc_, LV_ALIGN_CENTER, 0, -12);
@@ -1660,7 +1660,7 @@ void UiController::openKeyVerificationInfoModal(chat::NodeId node_id, uint32_t n
     lv_obj_set_size(close_btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
     lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_t* close_label = lv_label_create(close_btn);
-    lv_label_set_text(close_label, "OK");
+    ::ui::i18n::set_label_text(close_label, "OK");
     lv_obj_center(close_label);
     lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
@@ -1700,16 +1700,17 @@ void UiController::openKeyVerificationFinalModal(chat::NodeId node_id, const cha
     lv_obj_center(key_verify_panel_);
 
     lv_obj_t* title = lv_label_create(key_verify_panel_);
-    lv_label_set_text(title, "Compare Verification Code");
+    ::ui::i18n::set_label_text(title, "Compare Verification Code");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     std::string desc = resolve_contact_name(node_id);
     desc += "\n";
-    desc += is_sender ? "Send this code and compare:\n" : "Confirm received code:\n";
+    desc += is_sender ? ::ui::i18n::tr("Send this code and compare:\n") : ::ui::i18n::tr("Confirm received code:\n");
     desc += (code && code[0] != '\0') ? code : "--------";
-    desc += "\n\nIf it matches, trust the key.";
+    desc += "\n\n";
+    desc += ::ui::i18n::tr("If it matches, trust the key.");
     key_verify_desc_ = lv_label_create(key_verify_panel_);
-    lv_label_set_text(key_verify_desc_, desc.c_str());
+    ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
     lv_obj_set_width(key_verify_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(key_verify_desc_, LV_ALIGN_CENTER, 0, -8);
@@ -1718,14 +1719,14 @@ void UiController::openKeyVerificationFinalModal(chat::NodeId node_id, const cha
     lv_obj_set_size(trust_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
     lv_obj_align(trust_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_t* trust_label = lv_label_create(trust_btn);
-    lv_label_set_text(trust_label, "Trust Key");
+    ::ui::i18n::set_label_text(trust_label, "Trust Key");
     lv_obj_center(trust_label);
 
     lv_obj_t* close_btn = lv_btn_create(key_verify_panel_);
     lv_obj_set_size(close_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
     lv_obj_align(close_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_t* close_label = lv_label_create(close_btn);
-    lv_label_set_text(close_label, "Later");
+    ::ui::i18n::set_label_text(close_label, "Later");
     lv_obj_center(close_label);
 
     lv_obj_add_event_cb(trust_btn, key_verify_trust_event_cb, LV_EVENT_CLICKED, this);
@@ -1751,7 +1752,7 @@ void UiController::submitKeyVerificationNumber()
     {
         if (key_verify_error_label_)
         {
-            lv_label_set_text(key_verify_error_label_, "Enter the 6-digit number");
+            ::ui::i18n::set_label_text(key_verify_error_label_, "Enter the 6-digit number");
         }
         return;
     }
@@ -1762,7 +1763,7 @@ void UiController::submitKeyVerificationNumber()
     {
         if (key_verify_error_label_)
         {
-            lv_label_set_text(key_verify_error_label_, "Invalid number");
+            ::ui::i18n::set_label_text(key_verify_error_label_, "Invalid number");
         }
         return;
     }
@@ -1772,7 +1773,7 @@ void UiController::submitKeyVerificationNumber()
     {
         if (key_verify_error_label_)
         {
-            lv_label_set_text(key_verify_error_label_, "Mesh unavailable");
+            ::ui::i18n::set_label_text(key_verify_error_label_, "Mesh unavailable");
         }
         return;
     }
@@ -1783,7 +1784,7 @@ void UiController::submitKeyVerificationNumber()
     {
         if (key_verify_error_label_)
         {
-            lv_label_set_text(key_verify_error_label_, "Submit failed");
+            ::ui::i18n::set_label_text(key_verify_error_label_, "Submit failed");
         }
         return;
     }

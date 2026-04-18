@@ -16,6 +16,7 @@
 #include "team/usecase/team_pairing_service.h"
 #include "team/usecase/team_service.h"
 #include "ui/chat_ui_runtime.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
@@ -134,16 +135,11 @@ bool append_key_event(TeamKeyEventType type, const std::vector<uint8_t>& payload
 
 void notify_send_failed(const char* action, bool needs_keys)
 {
-    const char* msg = "Send failed";
-    if (needs_keys)
-    {
-        msg = "Send failed (keys not ready)";
-    }
+    const char* msg = needs_keys ? "Send failed (keys not ready)" : "Send failed";
     if (action && action[0])
     {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%s: %s", action, msg);
-        ::ui::SystemNotification::show(buf, 2000);
+        const std::string notice = std::string(::ui::i18n::tr(action)) + ": " + ::ui::i18n::tr(msg);
+        ::ui::SystemNotification::show(notice.c_str(), 2000);
         return;
     }
     ::ui::SystemNotification::show(msg, 2000);
@@ -172,9 +168,9 @@ void notify_send_failed_detail(const char* action, team::TeamService::SendError 
     default:
         break;
     }
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%s: %s", action ? action : "Send", reason);
-    ::ui::SystemNotification::show(buf, 2000);
+    const char* action_text = (action && action[0]) ? action : "Send";
+    const std::string notice = std::string(::ui::i18n::tr(action_text)) + ": " + ::ui::i18n::tr(reason);
+    ::ui::SystemNotification::show(notice.c_str(), 2000);
 }
 
 struct KeyDistPending
@@ -524,7 +520,7 @@ int online_count()
 lv_obj_t* add_label(lv_obj_t* parent, const char* text, bool section = false, bool meta = false)
 {
     lv_obj_t* label = lv_label_create(parent);
-    lv_label_set_text(label, text);
+    ::ui::i18n::set_label_text_raw(label, text);
     lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label, LV_PCT(100));
     if (section)
@@ -545,7 +541,7 @@ lv_obj_t* create_fitted_button(lv_obj_t* parent, const char* text, lv_event_cb_t
     style::apply_button_secondary(btn);
     lv_obj_set_style_pad_hor(btn, kActionBtnPadH, LV_PART_MAIN);
     lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, text);
+    ::ui::i18n::set_label_text(label, text);
     lv_obj_update_layout(label);
     lv_coord_t width = lv_obj_get_width(label) + (kActionBtnPadH * 2);
     if (width < ::ui::page_profile::resolve_compact_button_min_width())
@@ -577,12 +573,12 @@ lv_obj_t* create_list_item(const char* left, const char* right)
     style::apply_list_item(btn);
 
     lv_obj_t* left_label = lv_label_create(btn);
-    lv_label_set_text(left_label, left);
+    ::ui::i18n::set_label_text_raw(left_label, left);
     lv_obj_set_width(left_label, LV_PCT(70));
     lv_label_set_long_mode(left_label, LV_LABEL_LONG_CLIP);
 
     lv_obj_t* right_label = lv_label_create(btn);
-    lv_label_set_text(right_label, right);
+    ::ui::i18n::set_label_text(right_label, right);
     lv_obj_set_width(right_label, LV_PCT(30));
     lv_label_set_long_mode(right_label, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_align(right_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -595,44 +591,38 @@ std::string format_last_seen(uint32_t last_seen_s)
 {
     if (last_seen_s == 0)
     {
-        return "Last seen --";
+        return ::ui::i18n::tr("Last seen --");
     }
     uint32_t now = now_secs();
     if (now <= last_seen_s)
     {
-        return "Online";
+        return ::ui::i18n::tr("Online");
     }
     uint32_t age = now - last_seen_s;
     if (age <= 120)
     {
-        return "Online";
+        return ::ui::i18n::tr("Online");
     }
     if (age < 3600)
     {
-        char buf[24];
-        snprintf(buf, sizeof(buf), "Last seen %um ago", (unsigned)(age / 60));
-        return std::string(buf);
+        return ::ui::i18n::format("Last seen %um ago", static_cast<unsigned>(age / 60));
     }
-    char buf[24];
-    snprintf(buf, sizeof(buf), "Last seen %uh ago", (unsigned)(age / 3600));
-    return std::string(buf);
+    return ::ui::i18n::format("Last seen %uh ago", static_cast<unsigned>(age / 3600));
 }
 
 std::string format_last_update(uint32_t last_update_s)
 {
     if (last_update_s == 0)
     {
-        return "Last update --";
+        return ::ui::i18n::tr("Last update --");
     }
     uint32_t now = now_secs();
     if (now <= last_update_s)
     {
-        return "Last update 0s ago";
+        return ::ui::i18n::tr("Last update 0s ago");
     }
     uint32_t age = now - last_update_s;
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Last update %us ago", (unsigned)age);
-    return std::string(buf);
+    return ::ui::i18n::format("Last update %us ago", static_cast<unsigned>(age));
 }
 
 std::string format_team_name_from_id(const TeamId& id)
@@ -1737,11 +1727,11 @@ void handle_leave(lv_event_t*)
     lv_obj_t* win = lv_obj_get_child(g_team_state.leave_confirm_modal, 0);
 
     lv_obj_t* title_label = lv_label_create(win);
-    lv_label_set_text(title_label, "Leave team?");
+    ::ui::i18n::set_label_text(title_label, "Leave team?");
     lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 0);
 
     lv_obj_t* desc_label = lv_label_create(win);
-    lv_label_set_text(desc_label, "This clears local keys.");
+    ::ui::i18n::set_label_text(desc_label, "This clears local keys.");
     lv_obj_align(desc_label, LV_ALIGN_TOP_MID, 0, ::ui::page_profile::current().large_touch_hitbox ? 40 : 28);
 
     lv_obj_t* btn_row = lv_obj_create(win);
@@ -1979,11 +1969,11 @@ void handle_kicked_ok(lv_event_t*)
 
 void render_status_not_in_team()
 {
-    update_top_bar_title("Team");
+    update_top_bar_title(::ui::i18n::tr("Team"));
 
-    add_label(g_team_state.body, "You are not in a team", true, false);
-    add_label(g_team_state.body, "- No shared map\n- No team awareness", false, true);
-    add_label(g_team_state.body, "Keep devices within 5m", false, false);
+    add_label(g_team_state.body, ::ui::i18n::tr("You are not in a team"), true, false);
+    add_label(g_team_state.body, ::ui::i18n::tr("- No shared map\n- No team awareness"), false, true);
+    add_label(g_team_state.body, ::ui::i18n::tr("Keep devices within 5m"), false, false);
 
     g_team_state.action_btns[0] = create_action_button("Create Team", handle_create);
     g_team_state.action_btns[1] = create_action_button("Join Team", handle_join);
@@ -1993,47 +1983,63 @@ void render_status_not_in_team()
 
 void render_status_in_team()
 {
-    update_top_bar_title("Team Status");
+    update_top_bar_title(::ui::i18n::tr("Team Status"));
 
-    char line[64];
     std::string team_name = current_team_name();
-    snprintf(line, sizeof(line), "Team: %s", team_name.c_str());
-    add_label(g_team_state.body, line, true, false);
-    snprintf(line, sizeof(line), "Role: %s", g_team_state.self_is_leader ? "Leader" : "Member");
-    add_label(g_team_state.body, line, false, true);
-    snprintf(line, sizeof(line), "Members: %u", (unsigned)g_team_state.members.size());
-    add_label(g_team_state.body, line, false, true);
-    snprintf(line, sizeof(line), "Online: %u", (unsigned)online_count());
-    add_label(g_team_state.body, line, false, true);
+    add_label(g_team_state.body, ::ui::i18n::format("Team: %s", team_name.c_str()).c_str(), true, false);
+    add_label(g_team_state.body,
+              ::ui::i18n::format("Role: %s",
+                                 ::ui::i18n::tr(g_team_state.self_is_leader ? "Leader" : "Member"))
+                  .c_str(),
+              false,
+              true);
+    add_label(g_team_state.body,
+              ::ui::i18n::format("Members: %u", static_cast<unsigned>(g_team_state.members.size())).c_str(),
+              false,
+              true);
+    add_label(g_team_state.body,
+              ::ui::i18n::format("Online: %u", static_cast<unsigned>(online_count())).c_str(),
+              false,
+              true);
     if (g_team_state.security_round == 0)
     {
-        snprintf(line, sizeof(line), "KeyId: --");
+        add_label(g_team_state.body, ::ui::i18n::tr("KeyId: --"), false, true);
     }
     else
     {
-        snprintf(line, sizeof(line), "KeyId: %u", (unsigned)g_team_state.security_round);
+        add_label(g_team_state.body,
+                  ::ui::i18n::format("KeyId: %u", static_cast<unsigned>(g_team_state.security_round)).c_str(),
+                  false,
+                  true);
     }
-    add_label(g_team_state.body, line, false, true);
     if (g_team_state.security_round == 0)
     {
-        snprintf(line, sizeof(line), "Security: OK (Round --)");
+        add_label(g_team_state.body, ::ui::i18n::tr("Security: OK (Round --)"), false, true);
     }
     else
     {
-        snprintf(line, sizeof(line), "Security: OK (Round %u)", (unsigned)g_team_state.security_round);
+        add_label(
+            g_team_state.body,
+            ::ui::i18n::format("Security: OK (Round %u)", static_cast<unsigned>(g_team_state.security_round)).c_str(),
+            false,
+            true);
     }
-    add_label(g_team_state.body, line, false, true);
     if (g_team_state.waiting_new_keys)
     {
-        add_label(g_team_state.body, "Waiting for new keys...", false, true);
+        add_label(g_team_state.body, ::ui::i18n::tr("Waiting for new keys..."), false, true);
     }
 
-    add_label(g_team_state.body, "Team Health", true, false);
+    add_label(g_team_state.body, ::ui::i18n::tr("Team Health"), true, false);
     std::string last_update = format_last_update(g_team_state.last_update_s);
+    const std::string leader_health = std::string("- ") + ::ui::i18n::tr("Leader online") +
+                                      "\n- " + last_update +
+                                      "\n- " + ::ui::i18n::tr("1 member stale");
+#if 0
     std::string health = std::string("鈼?Leader online\n") +
                          "鈼?" + last_update + "\n" +
                          "鈼?1 member stale";
-    add_label(g_team_state.body, health.c_str(), false, true);
+#endif
+    add_label(g_team_state.body, leader_health.c_str(), false, true);
 
     g_team_state.action_btns[0] = create_action_button("View Team", handle_view_team);
     if (g_team_state.self_is_leader)
@@ -2052,29 +2058,40 @@ void render_status_in_team()
 
 void render_team_home()
 {
-    update_top_bar_title(g_team_state.self_is_leader ? "Team 路 Leader" : "Team 路 Member");
+    // Replaced immediately below with a localized title, but keep this call out of the active path.
 
-    char line[64];
+    const std::string title = ::ui::i18n::format(
+        "Team / %s",
+        ::ui::i18n::tr(g_team_state.self_is_leader ? "Leader" : "Member"));
+    update_top_bar_title(title.c_str());
+
     std::string team_name = current_team_name();
-    snprintf(line, sizeof(line), "Team: %s", team_name.c_str());
-    add_label(g_team_state.body, line, true, false);
-    snprintf(line, sizeof(line), "Members: %u  Online: %u",
-             (unsigned)g_team_state.members.size(), (unsigned)online_count());
-    add_label(g_team_state.body, line, false, true);
+    add_label(g_team_state.body, ::ui::i18n::format("Team: %s", team_name.c_str()).c_str(), true, false);
+    add_label(g_team_state.body,
+              ::ui::i18n::format("Members: %u  Online: %u",
+                                 static_cast<unsigned>(g_team_state.members.size()),
+                                 static_cast<unsigned>(online_count()))
+                  .c_str(),
+              false,
+              true);
     if (g_team_state.security_round == 0)
     {
-        snprintf(line, sizeof(line), "Security Round: --");
+        add_label(g_team_state.body, ::ui::i18n::tr("Security Round: --"), false, true);
     }
     else
     {
-        snprintf(line, sizeof(line), "Security Round: %u", (unsigned)g_team_state.security_round);
+        add_label(g_team_state.body,
+                  ::ui::i18n::format("Security Round: %u",
+                                     static_cast<unsigned>(g_team_state.security_round))
+                      .c_str(),
+                  false,
+                  true);
     }
-    add_label(g_team_state.body, line, false, true);
 
-    add_label(g_team_state.body, "Members", true, false);
+    add_label(g_team_state.body, ::ui::i18n::tr("Members"), true, false);
     if (g_team_state.members.empty())
     {
-        add_label(g_team_state.body, "No members yet", false, true);
+        add_label(g_team_state.body, ::ui::i18n::tr("No members yet"), false, true);
     }
     else
     {
@@ -2093,7 +2110,7 @@ void render_team_home()
         for (const auto& m : g_team_state.members)
         {
             lv_obj_t* label = lv_label_create(row);
-            lv_label_set_text(label, m.name.c_str());
+            ::ui::i18n::set_label_text_raw(label, m.name.c_str());
             lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
             lv_obj_set_width(label, LV_PCT(24));
             lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
@@ -2137,16 +2154,16 @@ void render_join_pending()
     {
         title = "Pairing (Member)";
     }
-    update_top_bar_title(title);
+    update_top_bar_title(::ui::i18n::tr(title));
 
-    add_label(g_team_state.body, "Pairing in progress", true, false);
-    add_label(g_team_state.body, "Keep devices within 5m", false, true);
+    add_label(g_team_state.body, ::ui::i18n::tr("Pairing in progress"), true, false);
+    add_label(g_team_state.body, ::ui::i18n::tr("Keep devices within 5m"), false, true);
     if (g_team_state.pairing_role == TeamPairingRole::Leader)
     {
-        add_label(g_team_state.body, "Members", true, false);
+        add_label(g_team_state.body, ::ui::i18n::tr("Members"), true, false);
         if (g_team_state.members.empty())
         {
-            add_label(g_team_state.body, "No members yet", false, true);
+            add_label(g_team_state.body, ::ui::i18n::tr("No members yet"), false, true);
         }
         else
         {
@@ -2165,7 +2182,7 @@ void render_join_pending()
             for (const auto& m : g_team_state.members)
             {
                 lv_obj_t* label = lv_label_create(row);
-                lv_label_set_text(label, m.name.c_str());
+                ::ui::i18n::set_label_text_raw(label, m.name.c_str());
                 lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
                 lv_obj_set_width(label, LV_PCT(24));
                 lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
@@ -2187,13 +2204,13 @@ void render_join_pending()
         if (g_team_state.pairing_peer_id != 0)
         {
             std::string name = resolve_node_name(g_team_state.pairing_peer_id);
-            std::string paired = "Last paired: " + name;
+            std::string paired = ::ui::i18n::format("Last paired: %s", name.c_str());
             add_label(g_team_state.body, paired.c_str(), false, true);
         }
     }
     if (!g_team_state.pairing_team_name.empty())
     {
-        std::string line = "Target: " + g_team_state.pairing_team_name;
+        std::string line = ::ui::i18n::format("Target: %s", g_team_state.pairing_team_name.c_str());
         add_label(g_team_state.body, line.c_str(), false, true);
     }
 
@@ -2221,7 +2238,7 @@ void render_join_pending()
     default:
         break;
     }
-    add_label(g_team_state.body, state_line, false, true);
+    add_label(g_team_state.body, ::ui::i18n::tr(state_line), false, true);
 
     g_team_state.action_btns[0] = create_action_button("Cancel", handle_join_cancel);
     g_team_state.action_btns[1] = create_action_button("Retry", handle_join_retry);
@@ -2231,11 +2248,11 @@ void render_join_pending()
 
 void render_members()
 {
-    update_top_bar_title("Members");
+    update_top_bar_title(::ui::i18n::tr("Members"));
 
     if (g_team_state.members.empty())
     {
-        add_label(g_team_state.body, "No members yet", false, true);
+        add_label(g_team_state.body, ::ui::i18n::tr("No members yet"), false, true);
     }
     for (size_t i = 0; i < g_team_state.members.size(); ++i)
     {
@@ -2244,7 +2261,7 @@ void render_members()
         std::string left = std::string(dot) + m.name;
         if (m.leader)
         {
-            left += " (Leader)";
+            left += " (" + std::string(::ui::i18n::tr("Leader")) + ")";
         }
         lv_obj_t* item = create_list_item(left.c_str(), "Select");
         lv_obj_set_user_data(item, (void*)(intptr_t)i);
@@ -2263,19 +2280,23 @@ void render_member_detail()
     }
 
     const auto& member = g_team_state.members[g_team_state.selected_member_index];
-    std::string title = "Member: " + member.name;
+    std::string title = ::ui::i18n::format("Member: %s", member.name.c_str());
     update_top_bar_title(title.c_str());
 
     std::string status = member.online ? "Online" : format_last_seen(member.last_seen_s);
-    std::string role = member.leader ? "Leader" : "Member";
     char line[64];
-    snprintf(line, sizeof(line), "Status: %s", status.c_str());
+    snprintf(line, sizeof(line), "%s", ::ui::i18n::format("Status: %s", ::ui::i18n::tr(status.c_str())).c_str());
     add_label(g_team_state.body, line, true, false);
-    snprintf(line, sizeof(line), "Role: %s", role.c_str());
+    snprintf(line,
+             sizeof(line),
+             "%s",
+             ::ui::i18n::format("Role: %s", ::ui::i18n::tr(member.leader ? "Leader" : "Member")).c_str());
     add_label(g_team_state.body, line, false, true);
-    add_label(g_team_state.body, "Device: Pager", false, true);
-    add_label(g_team_state.body, "Capability:", true, false);
-    add_label(g_team_state.body, "- Position\n- Waypoint", false, true);
+    add_label(g_team_state.body, ::ui::i18n::format("Device: %s", "Pager").c_str(), false, true);
+    add_label(g_team_state.body, ::ui::i18n::tr("Capability:"), true, false);
+    const std::string capabilities = std::string("- ") + ::ui::i18n::tr("Position") +
+                                     "\n- " + ::ui::i18n::tr("Waypoint");
+    add_label(g_team_state.body, capabilities.c_str(), false, true);
 
     g_team_state.action_btns[0] = create_action_button("Kick", handle_kick);
     g_team_state.action_btns[1] = create_action_button("Transfer Leader", handle_transfer_leader);
@@ -2291,21 +2312,19 @@ void render_member_detail()
 
 void render_kick_confirm()
 {
-    update_top_bar_title("Kick Member");
+    update_top_bar_title(::ui::i18n::tr("Kick Member"));
 
-    std::string name = "member";
+    std::string name = ::ui::i18n::tr("member");
     if (g_team_state.selected_member_index >= 0 &&
         g_team_state.selected_member_index < (int)g_team_state.members.size())
     {
         name = g_team_state.members[g_team_state.selected_member_index].name;
     }
 
-    std::string line = "Remove " + name + " from team?";
+    std::string line = ::ui::i18n::format("Remove %s from team?", name.c_str());
     add_label(g_team_state.body, line.c_str(), true, false);
     add_label(g_team_state.body,
-              "This will update the security round.\n"
-              "The member will no longer receive\n"
-              "team messages or waypoints.",
+              ::ui::i18n::tr("This will update the security round.\nThe member will no longer receive\nteam messages or waypoints."),
               false, true);
 
     g_team_state.action_btns[0] = create_action_button("Cancel", handle_kick_cancel);
@@ -2316,10 +2335,10 @@ void render_kick_confirm()
 
 void render_kicked_out()
 {
-    update_top_bar_title("Team");
+    update_top_bar_title(::ui::i18n::tr("Team"));
 
-    add_label(g_team_state.body, "You are no longer in this team", true, false);
-    add_label(g_team_state.body, "Access to team data revoked", false, true);
+    add_label(g_team_state.body, ::ui::i18n::tr("You are no longer in this team"), true, false);
+    add_label(g_team_state.body, ::ui::i18n::tr("Access to team data revoked"), false, true);
 
     g_team_state.action_btns[0] = create_action_button("Pair Again", handle_kicked_join);
     g_team_state.action_btns[1] = create_action_button("OK", handle_kicked_ok);
@@ -2448,7 +2467,7 @@ void team_page_create(lv_obj_t* parent)
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::page_profile::current().top_bar_height;
     ::ui::widgets::top_bar_init(g_team_state.top_bar_widget, g_team_state.header, cfg);
-    update_top_bar_title("Team");
+    update_top_bar_title(::ui::i18n::tr("Team"));
     ::ui::widgets::top_bar_set_back_callback(g_team_state.top_bar_widget, top_bar_back, nullptr);
     ui_update_top_bar_battery(g_team_state.top_bar_widget);
 

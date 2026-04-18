@@ -6,6 +6,7 @@ using Host = gps::ui::shell::Host;
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_modal.h"
@@ -371,7 +372,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = ::ui::page_profile::current().top_bar_height;
     ::ui::widgets::top_bar_init(g_gps_state.top_bar, g_gps_state.header, cfg);
-    ::ui::widgets::top_bar_set_title(g_gps_state.top_bar, "Map");
+    ::ui::widgets::top_bar_set_title(g_gps_state.top_bar, ::ui::i18n::tr("Map"));
     ::ui::widgets::top_bar_set_back_callback(g_gps_state.top_bar, gps_top_bar_back, nullptr);
 
     // Ensure layout sizes are finalized before any tile calculations.
@@ -399,7 +400,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_label_set_text(g_gps_state.resolution_label, "");
     if (g_gps_state.altitude_label)
     {
-        lv_label_set_text(g_gps_state.altitude_label, "Alt: -- m");
+        ::ui::i18n::set_label_text(g_gps_state.altitude_label, "Alt: -- m");
     }
 
     bind_controls_and_group(app_g);

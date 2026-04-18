@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/app_screen.h"
+#include "ui/localization.h"
 
 namespace ui
 {
@@ -11,24 +12,32 @@ class CallbackAppScreen : public AppScreen
     using SimpleCallback = void (*)(lv_obj_t* parent);
     using Callback = void (*)(void* user_data, lv_obj_t* parent);
 
-    CallbackAppScreen(const char* name,
+    CallbackAppScreen(const char* stable_id,
+                      const char* name,
                       const lv_image_dsc_t* icon,
                       SimpleCallback enter,
                       SimpleCallback exit)
-        : name_(name), icon_(icon), simple_enter_(enter), simple_exit_(exit)
+        : stable_id_(stable_id), name_(name), icon_(icon), simple_enter_(enter), simple_exit_(exit)
     {
     }
 
-    CallbackAppScreen(const char* name,
+    CallbackAppScreen(const char* stable_id,
+                      const char* name,
                       const lv_image_dsc_t* icon,
                       Callback enter,
                       Callback exit,
                       void* user_data = nullptr)
-        : name_(name), icon_(icon), callback_enter_(enter), callback_exit_(exit), user_data_(user_data)
+        : stable_id_(stable_id),
+          name_(name),
+          icon_(icon),
+          callback_enter_(enter),
+          callback_exit_(exit),
+          user_data_(user_data)
     {
     }
 
-    const char* name() const override { return name_; }
+    const char* stable_id() const override { return stable_id_; }
+    const char* name() const override { return ::ui::i18n::tr(name_); }
     const lv_image_dsc_t* icon() const override { return icon_; }
 
     void enter(lv_obj_t* parent) override
@@ -58,6 +67,7 @@ class CallbackAppScreen : public AppScreen
     }
 
   private:
+    const char* stable_id_ = nullptr;
     const char* name_ = nullptr;
     const lv_image_dsc_t* icon_ = nullptr;
     SimpleCallback simple_enter_ = nullptr;

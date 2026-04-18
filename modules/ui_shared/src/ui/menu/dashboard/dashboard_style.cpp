@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "ui/assets/fonts/font_utils.h"
+
 namespace ui::menu::dashboard
 {
 namespace
@@ -75,6 +77,7 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
     lv_label_set_text(chrome.title, title);
     lv_obj_set_style_text_color(chrome.title, lv_color_hex(0x2A1A05), 0);
     lv_obj_set_style_text_font(chrome.title, &lv_font_montserrat_14, 0);
+    ::ui::fonts::apply_localized_font(chrome.title, title, &lv_font_montserrat_14);
     lv_obj_align(chrome.title, LV_ALIGN_LEFT_MID, 0, 0);
 
     chrome.status_chip = lv_obj_create(chrome.header);
@@ -94,6 +97,7 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
     lv_label_set_text(chrome.status_label, "--");
     lv_obj_set_style_text_color(chrome.status_label, color_text(), 0);
     lv_obj_set_style_text_font(chrome.status_label, &lv_font_montserrat_12, 0);
+    ::ui::fonts::apply_localized_font(chrome.status_label, "--", &lv_font_montserrat_12);
     lv_obj_center(chrome.status_label);
 
     chrome.body = lv_obj_create(chrome.card);
@@ -146,6 +150,7 @@ void set_status_chip(DashboardCardChrome& chrome, const char* text, lv_color_t b
     if (text != nullptr && (current == nullptr || std::strcmp(current, text) != 0))
     {
         lv_label_set_text(chrome.status_label, text);
+        ::ui::fonts::apply_localized_font(chrome.status_label, text, &lv_font_montserrat_12);
     }
 }
 
@@ -166,12 +171,14 @@ void style_body_label(lv_obj_t* label, const lv_font_t* font, lv_color_t color)
 {
     lv_obj_set_style_text_font(label, font, 0);
     lv_obj_set_style_text_color(label, color, 0);
+    ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), font);
 }
 
 void style_footer_label(lv_obj_t* label)
 {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(label, color_text_dim(), 0);
+    ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), &lv_font_montserrat_12);
 }
 
 void style_ring_object(lv_obj_t* obj, lv_coord_t diameter, lv_coord_t border, lv_color_t color)

@@ -12,6 +12,7 @@
 #include "sys/event_bus.h"
 #include "team/protocol/team_chat.h"
 #include "ui/chat_ui_runtime.h"
+#include "ui/localization.h"
 #include "ui/screens/team/team_page_shell.h"
 #include "ui/widgets/system_notification.h"
 
@@ -51,7 +52,7 @@ void handleTeamChatNotification(app::IAppFacade& app_context, const sys::TeamCha
 {
     triggerMessageFeedback(app_context);
 
-    std::string notice = "Team: ";
+    std::string notice = ::ui::i18n::tr("Team: ");
     const auto& msg = team_event.data.msg;
     if (msg.header.type == team::proto::TeamChatType::Text)
     {
@@ -68,11 +69,11 @@ void handleTeamChatNotification(app::IAppFacade& app_context, const sys::TeamCha
         if (team::proto::decodeTeamChatLocation(msg.payload.data(), msg.payload.size(), &loc) &&
             !loc.label.empty())
         {
-            notice += "Location: " + loc.label;
+            notice += ::ui::i18n::format("Location: %s", loc.label.c_str());
         }
         else
         {
-            notice += "Location";
+            notice += ::ui::i18n::tr("Location");
         }
     }
     else if (msg.header.type == team::proto::TeamChatType::Command)
@@ -80,32 +81,31 @@ void handleTeamChatNotification(app::IAppFacade& app_context, const sys::TeamCha
         team::proto::TeamChatCommand cmd;
         if (team::proto::decodeTeamChatCommand(msg.payload.data(), msg.payload.size(), &cmd))
         {
-            const char* name = "Command";
+            const char* name = ::ui::i18n::tr("Command");
             switch (cmd.cmd_type)
             {
             case team::proto::TeamCommandType::RallyTo:
-                name = "RallyTo";
+                name = ::ui::i18n::tr("RallyTo");
                 break;
             case team::proto::TeamCommandType::MoveTo:
-                name = "MoveTo";
+                name = ::ui::i18n::tr("MoveTo");
                 break;
             case team::proto::TeamCommandType::Hold:
-                name = "Hold";
+                name = ::ui::i18n::tr("Hold");
                 break;
             default:
                 break;
             }
-            notice += "Command: ";
-            notice += name;
+            notice += ::ui::i18n::format("Command: %s", name);
         }
         else
         {
-            notice += "Command";
+            notice += ::ui::i18n::tr("Command");
         }
     }
     else
     {
-        notice += "Message";
+        notice += ::ui::i18n::tr("Message");
     }
 
     ::ui::SystemNotification::show(notice.c_str(), 3000);
@@ -152,7 +152,9 @@ bool handleUiEvent(app::IAppFacade& app_context, sys::Event* event)
             return true;
         }
         auto* kv_event = static_cast<sys::KeyVerificationNumberRequestEvent*>(event);
-        std::string msg = "Key verify: enter number for " + resolveContactName(app_context, kv_event->node_id);
+        const std::string msg =
+            ::ui::i18n::format("Key verify: enter number for %s",
+                               resolveContactName(app_context, kv_event->node_id).c_str());
         ::ui::SystemNotification::show(msg.c_str(), 4000);
         delete event;
         return true;
@@ -170,7 +172,7 @@ bool handleUiEvent(app::IAppFacade& app_context, sys::Event* event)
         const uint32_t number = kv_event->security_number % 1000000;
         char number_buf[16];
         snprintf(number_buf, sizeof(number_buf), "%03u %03u", number / 1000, number % 1000);
-        std::string msg = "Key verify: " + name + " " + number_buf;
+        const std::string msg = ::ui::i18n::format("Key verify: %s %s", name.c_str(), number_buf);
         ::ui::SystemNotification::show(msg.c_str(), 5000);
         delete event;
         return true;
@@ -184,9 +186,13 @@ bool handleUiEvent(app::IAppFacade& app_context, sys::Event* event)
             return true;
         }
         auto* kv_event = static_cast<sys::KeyVerificationFinalEvent*>(event);
-        std::string msg = std::string("Key verify: ") + (kv_event->is_sender ? "send " : "confirm ") +
-                          kv_event->verification_code + " " +
-                          resolveContactName(app_context, kv_event->node_id);
+        const std::string msg = kv_event->is_sender
+                                    ? ::ui::i18n::format("Key verify: send %s %s",
+                                                         kv_event->verification_code,
+                                                         resolveContactName(app_context, kv_event->node_id).c_str())
+                                    : ::ui::i18n::format("Key verify: confirm %s %s",
+                                                         kv_event->verification_code,
+                                                         resolveContactName(app_context, kv_event->node_id).c_str());
         ::ui::SystemNotification::show(msg.c_str(), 5000);
         delete event;
         return true;

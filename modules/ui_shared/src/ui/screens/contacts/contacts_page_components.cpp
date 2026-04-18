@@ -16,6 +16,7 @@
 #include "team/protocol/team_position.h"
 #include "team/usecase/team_controller.h"
 #include "ui/components/info_card.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
@@ -216,7 +217,7 @@ static lv_obj_t* create_bottom_bar_button(lv_obj_t* parent,
     lv_obj_set_style_bg_color(btn, lv_color_hex(bg_color), LV_PART_MAIN);
 
     lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, text);
+    ::ui::i18n::set_label_text(label, text);
     apply_primary_text(label);
     lv_obj_update_layout(label);
     lv_coord_t width = lv_obj_get_width(label) + (kBottomBtnPadH * 2);
@@ -249,7 +250,7 @@ static std::string format_time_status(uint32_t last_seen)
     uint32_t now_secs = sys::epoch_seconds_now();
     if (now_secs < last_seen)
     {
-        return "Offline";
+        return ::ui::i18n::tr("Offline");
     }
 
     uint32_t age_secs = now_secs - last_seen;
@@ -257,49 +258,41 @@ static std::string format_time_status(uint32_t last_seen)
     // Online: 闂?2 minutes
     if (age_secs <= 120)
     {
-        return "Online";
+        return ::ui::i18n::tr("Online");
     }
 
     // Minutes: 3-59 minutes
     if (age_secs < 3600)
     {
         uint32_t minutes = age_secs / 60;
-        char buf[16];
-        snprintf(buf, sizeof(buf), "Seen %um", static_cast<unsigned>(minutes));
-        return std::string(buf);
+        return ::ui::i18n::format("Seen %um", static_cast<unsigned>(minutes));
     }
 
     // Hours: 1-23 hours
     if (age_secs < 86400)
     {
         uint32_t hours = age_secs / 3600;
-        char buf[16];
-        snprintf(buf, sizeof(buf), "Seen %uh", static_cast<unsigned>(hours));
-        return std::string(buf);
+        return ::ui::i18n::format("Seen %uh", static_cast<unsigned>(hours));
     }
 
     // Days: 1-6 days
     if (age_secs < 6 * 86400)
     {
         uint32_t days = age_secs / 86400;
-        char buf[16];
-        snprintf(buf, sizeof(buf), "Seen %ud", static_cast<unsigned>(days));
-        return std::string(buf);
+        return ::ui::i18n::format("Seen %ud", static_cast<unsigned>(days));
     }
 
     // > 6 days: should be filtered out
-    return "Offline";
+    return ::ui::i18n::tr("Offline");
 }
 
 [[maybe_unused]] static std::string format_snr(float snr)
 {
     if (snr == 0.0f)
     {
-        return "SNR -";
+        return ::ui::i18n::tr("SNR -");
     }
-    char buf[16];
-    snprintf(buf, sizeof(buf), "SNR %.0f", snr);
-    return std::string(buf);
+    return ::ui::i18n::format("SNR %.0f", snr);
 }
 
 static chat::MeshProtocol active_mesh_protocol()
@@ -505,15 +498,15 @@ static std::string format_broadcast_target_label(const BroadcastTargetSpec& spec
 {
     if (spec.protocol == chat::MeshProtocol::Meshtastic)
     {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "[MT] Slot %u", static_cast<unsigned>(spec.channel_index));
-        return std::string(buf);
+        return std::string("[MT] ") +
+               ::ui::i18n::format("Slot %u", static_cast<unsigned>(spec.channel_index));
     }
     if (spec.protocol == chat::MeshProtocol::RNode)
     {
-        return "[RN] Modem Bridge";
+        return std::string("[RN] ") + ::ui::i18n::tr("Modem Bridge");
     }
-    return (spec.channel == chat::ChannelId::SECONDARY) ? "[MC] Secondary" : "[MC] Primary";
+    return std::string("[MC] ") +
+           ::ui::i18n::tr((spec.channel == chat::ChannelId::SECONDARY) ? "Secondary" : "Primary");
 }
 
 static std::string format_broadcast_target_status(const BroadcastTargetSpec& spec)
@@ -522,23 +515,23 @@ static std::string format_broadcast_target_status(const BroadcastTargetSpec& spe
     {
         if (!spec.enabled)
         {
-            return "Disabled";
+            return ::ui::i18n::tr("Disabled");
         }
         if (spec.channel_index == 0)
         {
-            return "Primary";
+            return ::ui::i18n::tr("Primary");
         }
         if (spec.channel_index == 1)
         {
-            return "Secondary";
+            return ::ui::i18n::tr("Secondary");
         }
-        return spec.chat_supported ? "Ready" : "Slot";
+        return spec.chat_supported ? ::ui::i18n::tr("Ready") : ::ui::i18n::tr("Slot");
     }
     if (spec.protocol == chat::MeshProtocol::RNode)
     {
-        return "Host bridge";
+        return ::ui::i18n::tr("Host bridge");
     }
-    return "Ready";
+    return ::ui::i18n::tr("Ready");
 }
 
 static bool get_discovery_action_spec(int index, DiscoveryActionSpec* out)
@@ -603,15 +596,18 @@ static std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entr
             ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
             if (!loc.label.empty())
             {
-                snprintf(buf, sizeof(buf), "Location: %s %s", loc.label.c_str(), coord_buf);
+                snprintf(buf,
+                         sizeof(buf),
+                         "%s",
+                         ::ui::i18n::format("Location: %s %s", loc.label.c_str(), coord_buf).c_str());
             }
             else
             {
-                snprintf(buf, sizeof(buf), "Location: %s", coord_buf);
+                snprintf(buf, sizeof(buf), "%s", ::ui::i18n::format("Location: %s", coord_buf).c_str());
             }
             return std::string(buf);
         }
-        return "Location";
+        return ::ui::i18n::tr("Location");
     }
     if (entry.type == team::proto::TeamChatType::Command)
     {
@@ -629,28 +625,35 @@ static std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entr
             {
                 if (!cmd.note.empty())
                 {
-                    snprintf(buf, sizeof(buf), "Command: %s %s %s",
-                             name, coord_buf, cmd.note.c_str());
+                    snprintf(buf,
+                             sizeof(buf),
+                             "%s",
+                             ::ui::i18n::format("Command: %s %s %s", name, coord_buf, cmd.note.c_str()).c_str());
                 }
                 else
                 {
-                    snprintf(buf, sizeof(buf), "Command: %s %s",
-                             name, coord_buf);
+                    snprintf(buf,
+                             sizeof(buf),
+                             "%s",
+                             ::ui::i18n::format("Command: %s %s", name, coord_buf).c_str());
                 }
             }
             else if (!cmd.note.empty())
             {
-                snprintf(buf, sizeof(buf), "Command: %s %s", name, cmd.note.c_str());
+                snprintf(buf,
+                         sizeof(buf),
+                         "%s",
+                         ::ui::i18n::format("Command: %s %s", name, cmd.note.c_str()).c_str());
             }
             else
             {
-                snprintf(buf, sizeof(buf), "Command: %s", name);
+                snprintf(buf, sizeof(buf), "%s", ::ui::i18n::format("Command: %s", name).c_str());
             }
             return std::string(buf);
         }
-        return "Command";
+        return ::ui::i18n::tr("Command");
     }
-    return "Message";
+    return ::ui::i18n::tr("Message");
 }
 
 static void refresh_team_state_from_store()
@@ -1049,8 +1052,8 @@ static void open_add_edit_modal(bool is_edit)
     lv_obj_t* win = lv_obj_get_child(g_contacts_state.add_edit_modal, 0);
 
     lv_obj_t* title = lv_label_create(win);
-    lv_label_set_text(title, is_edit ? "Edit nickname" : "Enter nickname");
     apply_primary_text(title);
+    ::ui::i18n::set_label_text(title, is_edit ? "Edit nickname" : "Enter nickname");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     g_contacts_state.add_edit_textarea = lv_textarea_create(win);
@@ -1086,8 +1089,8 @@ static void open_add_edit_modal(bool is_edit)
     lv_obj_set_size(save_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
     contacts::ui::style::apply_btn_basic(save_btn);
     lv_obj_t* save_label = lv_label_create(save_btn);
-    lv_label_set_text(save_label, "Save");
     apply_primary_text(save_label);
+    ::ui::i18n::set_label_text(save_label, "Save");
     lv_obj_center(save_label);
     lv_obj_add_event_cb(save_btn, on_add_edit_save_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1095,8 +1098,8 @@ static void open_add_edit_modal(bool is_edit)
     lv_obj_set_size(cancel_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
     contacts::ui::style::apply_btn_basic(cancel_btn);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, "Cancel");
     apply_primary_text(cancel_label);
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
     lv_obj_add_event_cb(cancel_btn, on_add_edit_cancel_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1123,11 +1126,10 @@ static void open_delete_confirm_modal()
     g_contacts_state.del_confirm_modal = create_modal_root(280, 140);
     lv_obj_t* win = lv_obj_get_child(g_contacts_state.del_confirm_modal, 0);
 
-    char msg[64];
-    snprintf(msg, sizeof(msg), "Delete contact %s?", node->display_name.c_str());
+    const std::string msg = ::ui::i18n::format("Delete contact %s?", node->display_name.c_str());
     lv_obj_t* label = lv_label_create(win);
-    lv_label_set_text(label, msg);
     apply_primary_text(label);
+    ::ui::i18n::set_label_text_raw(label, msg.c_str());
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
 
     lv_obj_t* btn_row = lv_obj_create(win);
@@ -1145,8 +1147,8 @@ static void open_delete_confirm_modal()
     lv_obj_set_size(confirm_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
     contacts::ui::style::apply_btn_basic(confirm_btn);
     lv_obj_t* confirm_label = lv_label_create(confirm_btn);
-    lv_label_set_text(confirm_label, "Confirm");
     apply_primary_text(confirm_label);
+    ::ui::i18n::set_label_text(confirm_label, "Confirm");
     lv_obj_center(confirm_label);
     lv_obj_add_event_cb(confirm_btn, on_del_confirm_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1154,8 +1156,8 @@ static void open_delete_confirm_modal()
     lv_obj_set_size(cancel_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
     contacts::ui::style::apply_btn_basic(cancel_btn);
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, "Cancel");
     apply_primary_text(cancel_label);
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
     lv_obj_add_event_cb(cancel_btn, on_del_cancel_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1344,10 +1346,10 @@ static void open_chat_compose()
         if (node_protocol_to_mesh(node->protocol, &node_protocol) &&
             node_protocol != protocol)
         {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "Switch to %s to chat",
-                     chat::infra::meshProtocolName(node_protocol));
-            ::ui::SystemNotification::show(buf, 2200);
+            const std::string msg =
+                ::ui::i18n::format("Switch to %s to chat",
+                                   chat::infra::meshProtocolName(node_protocol));
+            ::ui::SystemNotification::show(msg.c_str(), 2200);
             return;
         }
         if (g_contacts_state.contact_service)
@@ -1931,13 +1933,13 @@ static void on_add_edit_save_clicked(lv_event_t* /*e*/)
     const char* nickname = lv_textarea_get_text(g_contacts_state.add_edit_textarea);
     if (!nickname || strlen(nickname) == 0)
     {
-        lv_label_set_text(g_contacts_state.add_edit_error_label, "Name required");
+        ::ui::i18n::set_label_text(g_contacts_state.add_edit_error_label, "Name required");
         lv_obj_clear_flag(g_contacts_state.add_edit_error_label, LV_OBJ_FLAG_HIDDEN);
         return;
     }
     if (strlen(nickname) > 12)
     {
-        lv_label_set_text(g_contacts_state.add_edit_error_label, "Name too long");
+        ::ui::i18n::set_label_text(g_contacts_state.add_edit_error_label, "Name too long");
         lv_obj_clear_flag(g_contacts_state.add_edit_error_label, LV_OBJ_FLAG_HIDDEN);
         return;
     }
@@ -1955,7 +1957,7 @@ static void on_add_edit_save_clicked(lv_event_t* /*e*/)
         }
         if (c.display_name == nickname)
         {
-            lv_label_set_text(g_contacts_state.add_edit_error_label, "Duplicate name not allowed");
+            ::ui::i18n::set_label_text(g_contacts_state.add_edit_error_label, "Duplicate name not allowed");
             lv_obj_clear_flag(g_contacts_state.add_edit_error_label, LV_OBJ_FLAG_HIDDEN);
             return;
         }
@@ -1973,7 +1975,7 @@ static void on_add_edit_save_clicked(lv_event_t* /*e*/)
 
     if (!ok)
     {
-        lv_label_set_text(g_contacts_state.add_edit_error_label, "Save failed");
+        ::ui::i18n::set_label_text(g_contacts_state.add_edit_error_label, "Save failed");
         lv_obj_clear_flag(g_contacts_state.add_edit_error_label, LV_OBJ_FLAG_HIDDEN);
         return;
     }
@@ -2103,11 +2105,11 @@ static void on_discovery_scan_done(lv_timer_t* timer)
     const size_t total = g_contacts_state.nearby_list.size();
     const size_t gained = (total > start_count) ? (total - start_count) : 0;
 
-    char msg[24] = {};
-    snprintf(msg, sizeof(msg), "Scan +%u/%u",
-             static_cast<unsigned>(gained),
-             static_cast<unsigned>(total));
-    ::ui::SystemNotification::show(msg, 2200);
+    const std::string msg =
+        ::ui::i18n::format("Scan +%u/%u",
+                           static_cast<unsigned>(gained),
+                           static_cast<unsigned>(total));
+    ::ui::SystemNotification::show(msg.c_str(), 2200);
 
     if (timer)
     {
@@ -2175,7 +2177,7 @@ static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text)
     lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmberDark), selector_for_state(LV_STATE_PRESSED));
 
     lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, text);
+    ::ui::i18n::set_label_text(label, text);
     apply_primary_text(label);
     lv_obj_center(label);
     return btn;
@@ -2293,14 +2295,14 @@ static void open_action_menu_modal()
         return;
     }
 
-    std::string title = "Actions";
+    std::string title = ::ui::i18n::tr("Actions");
     if (g_contacts_state.current_mode == ContactsMode::Team)
     {
-        title = "Team Actions";
+        title = ::ui::i18n::tr("Team Actions");
     }
     else if (g_contacts_state.current_mode == ContactsMode::Broadcast)
     {
-        title = "Channel Actions";
+        title = ::ui::i18n::tr("Channel Actions");
     }
     else if (const auto* node = get_selected_node())
     {
@@ -2311,7 +2313,7 @@ static void open_action_menu_modal()
         }
         if (!name.empty())
         {
-            title = "Actions: " + name;
+            title = ::ui::i18n::format("Actions: %s", name.c_str());
         }
     }
 
@@ -2322,7 +2324,7 @@ static void open_action_menu_modal()
     lv_obj_set_style_pad_row(win, 4, LV_PART_MAIN);
 
     lv_obj_t* title_label = lv_label_create(win);
-    lv_label_set_text(title_label, title.c_str());
+    ::ui::i18n::set_label_text_raw(title_label, title.c_str());
     apply_primary_text(title_label);
     lv_obj_set_width(title_label, LV_PCT(100));
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
@@ -2526,7 +2528,7 @@ void refresh_ui()
         team_node.is_contact = false;
         team_node.protocol = chat::contacts::NodeProtocolType::Unknown;
         team_node.display_name = team::ui::g_team_state.team_name.empty()
-                                     ? "Team"
+                                     ? ::ui::i18n::tr("Team")
                                      : team::ui::g_team_state.team_name;
         team_list.push_back(team_node);
         current_list = &team_list;
@@ -2537,7 +2539,7 @@ void refresh_ui()
         {
             chat::contacts::NodeInfo item{};
             item.node_id = static_cast<uint32_t>(i + 1);
-            item.display_name = kDiscoveryActionSpecs[i].label;
+            item.display_name = ::ui::i18n::tr(kDiscoveryActionSpecs[i].label);
             item.protocol = chat::contacts::NodeProtocolType::MeshCore;
             discover_list.push_back(item);
         }
@@ -2635,7 +2637,7 @@ void refresh_ui()
         }
         else if (g_contacts_state.current_mode == ContactsMode::Ignored)
         {
-            status_text = "Ignored";
+            status_text = ::ui::i18n::tr("Ignored");
             const std::string seen = format_time_status(node.last_seen);
             if (!seen.empty())
             {
@@ -2651,7 +2653,7 @@ void refresh_ui()
         }
         else if (g_contacts_state.current_mode == ContactsMode::Team)
         {
-            status_text = "Team";
+            status_text = ::ui::i18n::tr("Team");
         }
         else if (g_contacts_state.current_mode == ContactsMode::Discover)
         {
@@ -2662,7 +2664,7 @@ void refresh_ui()
             }
             else
             {
-                status_text = "Action";
+                status_text = ::ui::i18n::tr("Action");
             }
         }
         else
@@ -2674,7 +2676,7 @@ void refresh_ui()
             }
             else
             {
-                status_text = "Channel";
+                status_text = ::ui::i18n::tr("Channel");
             }
         }
 
@@ -2695,7 +2697,7 @@ void refresh_ui()
     if (append_back_item)
     {
         chat::contacts::NodeInfo back_node{};
-        back_node.display_name = "Back";
+        back_node.display_name = ::ui::i18n::tr("Back");
         lv_obj_t* back_item = contacts::ui::layout::create_list_item(
             g_contacts_state.sub_container,
             back_node,

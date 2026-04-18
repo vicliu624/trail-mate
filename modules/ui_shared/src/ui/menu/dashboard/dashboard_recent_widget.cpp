@@ -7,6 +7,7 @@
 #include "app/app_facade_access.h"
 #include "chat/domain/chat_types.h"
 #include "chat/usecase/chat_service.h"
+#include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
 
 namespace ui::menu::dashboard
@@ -16,7 +17,7 @@ namespace
 
 constexpr size_t kVisibleRows = 2;
 
-void set_label_text_if_changed(lv_obj_t* label, const char* text)
+void set_label_text_if_changed_raw(lv_obj_t* label, const char* text)
 {
     if (label == nullptr || text == nullptr)
     {
@@ -25,7 +26,21 @@ void set_label_text_if_changed(lv_obj_t* label, const char* text)
     const char* current = lv_label_get_text(label);
     if (current == nullptr || std::strcmp(current, text) != 0)
     {
-        lv_label_set_text(label, text);
+        ::ui::i18n::set_label_text_raw(label, text);
+    }
+}
+
+void set_label_text_if_changed(lv_obj_t* label, const char* english)
+{
+    const char* localized = ::ui::i18n::tr(english);
+    if (label == nullptr || localized == nullptr)
+    {
+        return;
+    }
+    const char* current = lv_label_get_text(label);
+    if (current == nullptr || std::strcmp(current, localized) != 0)
+    {
+        ::ui::i18n::set_label_text_raw(label, localized);
     }
 }
 
@@ -43,7 +58,7 @@ std::string trim_text(const std::string& text, size_t max_len)
 void create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
 {
     auto& recent = dashboard_state().recent;
-    recent.chrome = create_card_chrome(parent, "Recent Activity", card_w, card_h);
+    recent.chrome = create_card_chrome(parent, ::ui::i18n::tr("Recent Activity"), card_w, card_h);
 
     const lv_coord_t body_w = lv_obj_get_width(recent.chrome.body);
     const lv_coord_t body_h = lv_obj_get_height(recent.chrome.body);
@@ -78,14 +93,14 @@ void create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h
         lv_obj_set_width(recent.row_names[i], static_cast<lv_coord_t>(body_w - 80));
         lv_obj_align(recent.row_names[i], LV_ALIGN_TOP_LEFT, 18, 1);
         lv_label_set_long_mode(recent.row_names[i], LV_LABEL_LONG_CLIP);
-        lv_label_set_text(recent.row_names[i], "--");
+        ::ui::i18n::set_label_text_raw(recent.row_names[i], "--");
 
         recent.row_previews[i] = lv_label_create(recent.rows[i]);
         style_body_label(recent.row_previews[i], &lv_font_montserrat_12, color_text_dim());
         lv_obj_set_width(recent.row_previews[i], static_cast<lv_coord_t>(body_w - 80));
         lv_obj_align(recent.row_previews[i], LV_ALIGN_BOTTOM_LEFT, 18, -1);
         lv_label_set_long_mode(recent.row_previews[i], LV_LABEL_LONG_CLIP);
-        lv_label_set_text(recent.row_previews[i], "");
+        ::ui::i18n::set_label_text_raw(recent.row_previews[i], "");
 
         recent.row_badges[i] = lv_obj_create(recent.rows[i]);
         lv_obj_set_size(recent.row_badges[i], LV_SIZE_CONTENT, 16);
@@ -124,7 +139,7 @@ void create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h
     recent.footer_label = lv_label_create(recent.chrome.footer);
     style_footer_label(recent.footer_label);
     lv_obj_align(recent.footer_label, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_label_set_text(recent.footer_label, "no recent traffic");
+    ::ui::i18n::set_label_text(recent.footer_label, "no recent traffic");
 }
 
 void refresh_recent_widget()
@@ -149,9 +164,9 @@ void refresh_recent_widget()
         {
             const auto& conv = conversations[i];
             const std::string name = trim_text(conv.name, 16);
-            const std::string preview = trim_text(conv.preview.empty() ? "No preview" : conv.preview, 28);
-            set_label_text_if_changed(recent.row_names[i], name.c_str());
-            set_label_text_if_changed(recent.row_previews[i], preview.c_str());
+            const std::string preview = trim_text(conv.preview.empty() ? std::string(::ui::i18n::tr("No preview")) : conv.preview, 28);
+            set_label_text_if_changed_raw(recent.row_names[i], name.c_str());
+            set_label_text_if_changed_raw(recent.row_previews[i], preview.c_str());
             lv_obj_set_style_bg_color(recent.row_dots[i], conv.unread > 0 ? color_warn() : color_info(), 0);
 
             if (conv.unread > 0)
@@ -176,8 +191,9 @@ void refresh_recent_widget()
     }
 
     char footer[64];
-    std::snprintf(footer, sizeof(footer), "%u threads active", static_cast<unsigned>(total));
-    set_label_text_if_changed(recent.footer_label, footer);
+    std::snprintf(
+        footer, sizeof(footer), "%s", ::ui::i18n::format("%u threads active", static_cast<unsigned>(total)).c_str());
+    set_label_text_if_changed_raw(recent.footer_label, footer);
 
     // Keep the footer accent subtle; continuously animating it forces a redraw
     // every dashboard tick even when no conversation state changed.
