@@ -9,6 +9,7 @@
 #include "chat/domain/contact_types.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/time_utils.h"
+#include "platform/esp/arduino_common/app_tasks.h"
 #include "platform/esp/arduino_common/gps/gps_service_api.h"
 #include "sys/event_bus.h"
 #include "team/protocol/team_portnum.h"
@@ -473,15 +474,7 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         return false;
     }
 
-    int state = RADIOLIB_ERR_UNSUPPORTED;
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    // Other radio types - implement as needed
-    state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-
-    bool ok = (state == RADIOLIB_ERR_NONE);
+    bool ok = transmitWirePacket(wire_buffer, wire_size);
     mt_diag_log("[MT][TX] app id=%08lX dest=%08lX port=%u ok=%u air_ack=%u track_ack=%u len=%u\n",
                 static_cast<unsigned long>(msg_id),
                 static_cast<unsigned long>(dest_node),
@@ -502,8 +495,7 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         last_tx_ms_ = now_ms;
         if (track_ack)
         {
-            pending_ack_ms_[msg_id] = millis();
-            pending_ack_dest_[msg_id] = dest_node;
+            trackPendingAck(msg_id, dest_node, out_channel, channel_hash, wire_buffer, wire_size);
         }
         meshtastic_Data mqtt_data = meshtastic_Data_init_default;
         mqtt_data.portnum = static_cast<meshtastic_PortNum>(portnum);
@@ -519,7 +511,6 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         queueMqttProxyPublishFromWire(wire_buffer, wire_size,
                                       use_pki ? nullptr : &mqtt_data,
                                       out_channel);
-        startRadioReceive();
     }
     return ok;
 }
@@ -644,26 +635,19 @@ bool MtAdapter::sendMeshPacket(const meshtastic_MeshPacket& packet)
         return false;
     }
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-
-    if (state == RADIOLIB_ERR_NONE)
+    if (transmitWirePacket(wire_buffer, wire_size))
     {
         last_tx_ms_ = now_ms;
         last_send_error_ = meshtastic_Routing_Error_NONE;
         if (track_ack)
         {
-            pending_ack_ms_[msg_id] = millis();
-            pending_ack_dest_[msg_id] = dest;
+            trackPendingAck(msg_id, dest, (packet.channel == 1) ? ChannelId::SECONDARY : ChannelId::PRIMARY,
+                            channel_hash, wire_buffer, wire_size);
         }
         ChannelId mqtt_channel = (packet.channel == 1) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
         queueMqttProxyPublishFromWire(wire_buffer, wire_size,
                                       (packet.which_payload_variant == meshtastic_MeshPacket_decoded_tag) ? &data : nullptr,
                                       mqtt_channel);
-        startRadioReceive();
         return true;
     }
     last_send_error_ = meshtastic_Routing_Error_NO_INTERFACE;
@@ -1441,24 +1425,23 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
 
     if (header.from == node_id_)
     {
-        auto pending_it = pending_ack_ms_.find(header.id);
-        if (header.to == kBroadcastNodeId && pending_it != pending_ack_ms_.end())
+        auto pending_it = pending_ack_states_.find(header.id);
+        if (header.to == kBroadcastNodeId && pending_it != pending_ack_states_.end())
         {
-            ChannelId channel_id =
-                (header.channel == secondary_channel_hash_) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
+            const ChannelId channel_id = pending_it->second.channel;
+            const uint8_t channel_hash = pending_it->second.channel_hash;
             mt_diag_log("[MT][IMPLICIT_ACK] observed self-broadcast id=%08lX relay=%08lX next=%08lX ch=%u\n",
                         static_cast<unsigned long>(header.id),
                         static_cast<unsigned long>(header.relay_node),
                         static_cast<unsigned long>(header.next_hop),
                         static_cast<unsigned>(header.channel));
-            pending_ack_ms_.erase(pending_it);
-            pending_ack_dest_.erase(header.id);
+            pending_ack_states_.erase(pending_it);
             emitRoutingResultToPhone(header.id,
                                      meshtastic_Routing_Error_NONE,
                                      node_id_,
                                      node_id_,
                                      channel_id,
-                                     header.channel,
+                                     channel_hash,
                                      &rx_meta);
             return;
         }
@@ -1831,8 +1814,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                                  (unsigned long)header.from,
                                  routingErrorName(routing.error_reason));
                     }
-                    pending_ack_ms_.erase(decoded.request_id);
-                    pending_ack_dest_.erase(decoded.request_id);
+                    clearPendingAck(decoded.request_id);
                     mt_diag_log("[MT][ACK] req=%08lX from=%08lX reason=%u ok=%u\n",
                                 static_cast<unsigned long>(decoded.request_id),
                                 static_cast<unsigned long>(header.from),
@@ -2085,28 +2067,36 @@ void MtAdapter::processSendQueue()
 
     maybeBroadcastNodeInfo(now);
 
-    for (auto it = pending_ack_ms_.begin(); it != pending_ack_ms_.end();)
+    for (auto it = pending_ack_states_.begin(); it != pending_ack_states_.end();)
     {
-        if (now - it->second >= ACK_TIMEOUT_MS)
+        PendingAckState& pending = it->second;
+        if (now - pending.last_attempt_ms >= ACK_TIMEOUT_MS)
         {
-            const auto dest_it = pending_ack_dest_.find(it->first);
-            const uint32_t dest = (dest_it != pending_ack_dest_.end()) ? dest_it->second : 0;
-            mt_diag_log("[MT][ACK_TIMEOUT] req=%08lX dest=%08lX age_ms=%lu\n",
+            if (pending.retransmit_count < MAX_ACK_RETRIES)
+            {
+                retryPendingAck(it->first, pending);
+                ++it;
+                continue;
+            }
+
+            mt_diag_log("[MT][ACK_TIMEOUT] req=%08lX dest=%08lX age_ms=%lu retries=%u\n",
                         static_cast<unsigned long>(it->first),
-                        static_cast<unsigned long>(dest),
-                        static_cast<unsigned long>(now - it->second));
-            LORA_LOG("[LORA] RX ack timeout req=%08lX dest=%08lX\n",
+                        static_cast<unsigned long>(pending.dest),
+                        static_cast<unsigned long>(now - pending.last_attempt_ms),
+                        static_cast<unsigned>(pending.retransmit_count));
+            LORA_LOG("[LORA] RX ack timeout req=%08lX dest=%08lX retries=%u\n",
                      static_cast<unsigned long>(it->first),
-                     static_cast<unsigned long>(dest));
-            pending_ack_dest_.erase(it->first);
+                     static_cast<unsigned long>(pending.dest),
+                     static_cast<unsigned>(pending.retransmit_count));
+            last_send_error_ = meshtastic_Routing_Error_MAX_RETRANSMIT;
             emitRoutingResultToPhone(it->first,
                                      meshtastic_Routing_Error_MAX_RETRANSMIT,
                                      node_id_,
-                                     node_id_,
-                                     ChannelId::PRIMARY,
-                                     primary_channel_hash_,
+                                     pending.dest,
+                                     pending.channel,
+                                     pending.channel_hash,
                                      nullptr);
-            it = pending_ack_ms_.erase(it);
+            it = pending_ack_states_.erase(it);
             continue;
         }
         ++it;
@@ -2149,6 +2139,16 @@ void MtAdapter::processSendQueue()
             if (pending.retry_count > MAX_RETRIES)
             {
                 // Max retries reached, drop
+                const uint8_t channel_hash =
+                    (pending.channel == ChannelId::SECONDARY) ? secondary_channel_hash_ : primary_channel_hash_;
+                last_send_error_ = meshtastic_Routing_Error_NO_INTERFACE;
+                emitRoutingResultToPhone(pending.msg_id,
+                                         meshtastic_Routing_Error_NO_INTERFACE,
+                                         node_id_,
+                                         pending.dest,
+                                         pending.channel,
+                                         channel_hash,
+                                         nullptr);
                 send_queue_.pop();
             }
             else
@@ -2290,23 +2290,12 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     std::string tx_full_hex = toHex(wire_buffer, wire_size, wire_size);
     LORA_LOG("[LORA] TX full packet hex: %s\n", tx_full_hex.c_str());
 
-    // Send via LoRa using RadioLib
-    int state = RADIOLIB_ERR_NONE;
-
     if (!board_.isRadioOnline())
     {
         return false;
     }
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    // For now, send directly (in production, use task queue)
-    state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    // Other radio types - implement as needed
-    state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-
-    bool ok = (state == RADIOLIB_ERR_NONE);
+    bool ok = transmitWirePacket(wire_buffer, wire_size);
     LORA_LOG("[LORA] TX text id=%08lX ch=%u len=%u ok=%d\n",
              (unsigned long)pending.msg_id,
              static_cast<unsigned>(channel),
@@ -2314,15 +2303,13 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
              ok ? 1 : 0);
     if (ok && track_ack)
     {
-        pending_ack_ms_[pending.msg_id] = millis();
-        pending_ack_dest_[pending.msg_id] = dest;
+        trackPendingAck(pending.msg_id, dest, channel, channel_hash, wire_buffer, wire_size);
     }
     if (ok)
     {
         queueMqttProxyPublishFromWire(wire_buffer, wire_size,
                                       decoded_ok ? &decoded : nullptr,
                                       channel);
-        startRadioReceive();
     }
     return ok;
 }
@@ -2411,8 +2398,9 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response, ChannelId chan
         (channel == ChannelId::SECONDARY) ? secondary_psk_ : primary_psk_;
     size_t psk_len =
         (channel == ChannelId::SECONDARY) ? secondary_psk_len_ : primary_psk_len_;
+    const uint32_t msg_id = next_packet_id_++;
 
-    if (!buildWirePacket(data_buffer, data_size, node_id_, next_packet_id_++,
+    if (!buildWirePacket(data_buffer, data_size, node_id_, msg_id,
                          dest, channel_hash, hop_limit, want_ack,
                          psk, psk_len, wire_buffer, &wire_size))
     {
@@ -2431,20 +2419,11 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response, ChannelId chan
         return false;
     }
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-    bool ok = (state == RADIOLIB_ERR_NONE);
+    bool ok = transmitWirePacket(wire_buffer, wire_size);
     LORA_LOG("[LORA] TX nodeinfo id=%08lX len=%u ok=%d\n",
-             (unsigned long)(next_packet_id_ - 1),
+             (unsigned long)msg_id,
              (unsigned)wire_size,
              ok ? 1 : 0);
-    if (ok)
-    {
-        startRadioReceive();
-    }
     return ok;
 }
 
@@ -2826,15 +2805,90 @@ void MtAdapter::startRadioReceive()
 {
     if (!board_.isRadioOnline())
     {
+        app::AppTasks::requestRadioReceiveRestart();
         return;
     }
 #if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    app::AppTasks::requestRadioReceiveRestart();
     int state = board_.startRadioReceive();
-    if (state != RADIOLIB_ERR_NONE)
+    if (state == RADIOLIB_ERR_NONE)
     {
+        app::AppTasks::setRadioReceiveActive(true);
+    }
+    else
+    {
+        app::AppTasks::requestRadioReceiveRestart();
         LORA_LOG("[LORA] RX start fail state=%d\n", state);
     }
 #endif
+}
+
+bool MtAdapter::transmitWirePacket(const uint8_t* wire_data, size_t wire_size)
+{
+    if (!board_.isRadioOnline())
+    {
+        return false;
+    }
+
+    app::AppTasks::requestRadioReceiveRestart();
+
+#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
+    const int state = board_.transmitRadio(wire_data, wire_size);
+#else
+    const int state = RADIOLIB_ERR_UNSUPPORTED;
+#endif
+    const bool ok = (state == RADIOLIB_ERR_NONE);
+    if (ok)
+    {
+        startRadioReceive();
+    }
+    else
+    {
+        app::AppTasks::requestRadioReceiveRestart();
+    }
+    return ok;
+}
+
+void MtAdapter::trackPendingAck(uint32_t msg_id, uint32_t dest, ChannelId channel, uint8_t channel_hash,
+                                const uint8_t* wire_data, size_t wire_size)
+{
+    PendingAckState state;
+    state.dest = dest;
+    state.channel = channel;
+    state.channel_hash = channel_hash;
+    state.last_attempt_ms = millis();
+    state.retransmit_count = 0;
+    state.wire_packet.assign(wire_data, wire_data + wire_size);
+    pending_ack_states_[msg_id] = std::move(state);
+}
+
+void MtAdapter::clearPendingAck(uint32_t msg_id)
+{
+    pending_ack_states_.erase(msg_id);
+}
+
+void MtAdapter::retryPendingAck(uint32_t msg_id, PendingAckState& pending)
+{
+    pending.last_attempt_ms = millis();
+    ++pending.retransmit_count;
+    mt_diag_log("[MT][RETX] req=%08lX dest=%08lX try=%u len=%u\n",
+                static_cast<unsigned long>(msg_id),
+                static_cast<unsigned long>(pending.dest),
+                static_cast<unsigned>(pending.retransmit_count),
+                static_cast<unsigned>(pending.wire_packet.size()));
+    LORA_LOG("[LORA] TX retry req=%08lX dest=%08lX try=%u len=%u\n",
+             static_cast<unsigned long>(msg_id),
+             static_cast<unsigned long>(pending.dest),
+             static_cast<unsigned>(pending.retransmit_count),
+             static_cast<unsigned>(pending.wire_packet.size()));
+    if (transmitWirePacket(pending.wire_packet.data(), pending.wire_packet.size()))
+    {
+        last_tx_ms_ = pending.last_attempt_ms;
+        return;
+    }
+    LORA_LOG("[LORA] TX retry immediate fail req=%08lX try=%u\n",
+             static_cast<unsigned long>(msg_id),
+             static_cast<unsigned>(pending.retransmit_count));
 }
 
 bool MtAdapter::initPkiKeys()
@@ -3532,14 +3586,8 @@ bool MtAdapter::sendKeyVerificationPacket(uint32_t dest, const meshtastic_KeyVer
         return false;
     }
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-    if (state == RADIOLIB_ERR_NONE)
+    if (transmitWirePacket(wire_buffer, wire_size))
     {
-        startRadioReceive();
         return true;
     }
     return false;
@@ -3615,14 +3663,8 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
         std::string ack_full_hex = toHex(wire_buffer, wire_size, wire_size);
         LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-        int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-        int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-        if (state == RADIOLIB_ERR_NONE)
+        if (transmitWirePacket(wire_buffer, wire_size))
         {
-            startRadioReceive();
             return true;
         }
         return false;
@@ -3642,14 +3684,8 @@ bool MtAdapter::sendRoutingAck(uint32_t dest, uint32_t request_id, uint8_t chann
     std::string ack_full_hex = toHex(wire_buffer, wire_size, wire_size);
     LORA_LOG("[LORA] TX ack full packet hex: %s\n", ack_full_hex.c_str());
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-    if (state == RADIOLIB_ERR_NONE)
+    if (transmitWirePacket(wire_buffer, wire_size))
     {
-        startRadioReceive();
         return true;
     }
     return false;
@@ -3726,14 +3762,8 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
         std::string err_full_hex = toHex(wire_buffer, wire_size, wire_size);
         LORA_LOG("[LORA] TX routing error full packet hex: %s\n", err_full_hex.c_str());
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-        int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-        int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-        if (state == RADIOLIB_ERR_NONE)
+        if (transmitWirePacket(wire_buffer, wire_size))
         {
-            startRadioReceive();
             return true;
         }
         return false;
@@ -3753,14 +3783,8 @@ bool MtAdapter::sendRoutingError(uint32_t dest, uint32_t request_id, uint8_t cha
     std::string err_full_hex = toHex(wire_buffer, wire_size, wire_size);
     LORA_LOG("[LORA] TX routing error full packet hex: %s\n", err_full_hex.c_str());
 
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280)
-    int state = board_.transmitRadio(wire_buffer, wire_size);
-#else
-    int state = RADIOLIB_ERR_UNSUPPORTED;
-#endif
-    if (state == RADIOLIB_ERR_NONE)
+    if (transmitWirePacket(wire_buffer, wire_size))
     {
-        startRadioReceive();
         return true;
     }
     return false;

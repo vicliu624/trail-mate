@@ -25,6 +25,42 @@ namespace app
 
 namespace
 {
+uint32_t radio_rx_done_mask()
+{
+    uint32_t mask = 0;
+#if defined(RADIOLIB_SX126X_IRQ_RX_DONE)
+    mask |= RADIOLIB_SX126X_IRQ_RX_DONE;
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_RX_DONE)
+    mask |= RADIOLIB_SX128X_IRQ_RX_DONE;
+#endif
+    return mask;
+}
+
+uint32_t radio_terminal_irq_mask()
+{
+    uint32_t mask = radio_rx_done_mask();
+#if defined(RADIOLIB_SX126X_IRQ_CRC_ERR)
+    mask |= RADIOLIB_SX126X_IRQ_CRC_ERR;
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_HEADER_ERR)
+    mask |= RADIOLIB_SX126X_IRQ_HEADER_ERR;
+#endif
+#if defined(RADIOLIB_SX126X_IRQ_TIMEOUT)
+    mask |= RADIOLIB_SX126X_IRQ_TIMEOUT;
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_CRC_ERR)
+    mask |= RADIOLIB_SX128X_IRQ_CRC_ERR;
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_HEADER_ERR)
+    mask |= RADIOLIB_SX128X_IRQ_HEADER_ERR;
+#endif
+#if defined(RADIOLIB_SX128X_IRQ_TIMEOUT)
+    mask |= RADIOLIB_SX128X_IRQ_TIMEOUT;
+#endif
+    return mask;
+}
+
 void append_irq_flag(char* buf, size_t len, const char* name, bool set)
 {
     if (!set || !buf || len == 0)
@@ -109,11 +145,15 @@ TaskHandle_t AppTasks::mesh_task_handle_ = nullptr;
 LoraBoard* AppTasks::board_ = nullptr;
 chat::IMeshAdapter* AppTasks::adapter_ = nullptr;
 bool AppTasks::radio_tasks_paused_ = false;
+volatile bool AppTasks::radio_receive_active_ = false;
+volatile bool AppTasks::radio_receive_restart_pending_ = true;
 
 bool AppTasks::init(LoraBoard& board, chat::IMeshAdapter* adapter)
 {
     board_ = &board;
     adapter_ = adapter;
+    radio_receive_active_ = false;
+    radio_receive_restart_pending_ = true;
 
     // Create queues
     radio_tx_queue_ = xQueueCreate(RADIO_QUEUE_SIZE, sizeof(RadioPacket));
@@ -158,6 +198,7 @@ void AppTasks::pauseRadioTasks()
         return;
     }
     radio_tasks_paused_ = true;
+    requestRadioReceiveRestart();
 
     if (radio_task_handle_)
     {
@@ -198,6 +239,19 @@ void AppTasks::resumeRadioTasks()
     {
         vTaskResume(mesh_task_handle_);
     }
+    requestRadioReceiveRestart();
+}
+
+void AppTasks::setRadioReceiveActive(bool active)
+{
+    radio_receive_active_ = active;
+    radio_receive_restart_pending_ = !active;
+}
+
+void AppTasks::requestRadioReceiveRestart()
+{
+    radio_receive_active_ = false;
+    radio_receive_restart_pending_ = true;
 }
 
 void AppTasks::radioTask(void* pvParameters)
@@ -206,10 +260,13 @@ void AppTasks::radioTask(void* pvParameters)
 
     const TickType_t poll_delay = pdMS_TO_TICKS(10);
     uint8_t rx_buffer[255];
-    bool rx_started = false;
+    const uint32_t rx_done_mask = radio_rx_done_mask();
+    const uint32_t terminal_irq_mask = radio_terminal_irq_mask();
 
     while (true)
     {
+        bool should_restart_rx = radio_receive_restart_pending_;
+
         // Process TX queue
         RadioPacket tx_packet;
         if (xQueueReceive(radio_tx_queue_, &tx_packet, 0) == pdPASS)
@@ -219,6 +276,7 @@ void AppTasks::radioTask(void* pvParameters)
                 // Send packet
                 if (board_ && board_->isRadioOnline())
                 {
+                    requestRadioReceiveRestart();
                     int state = RADIOLIB_ERR_NONE;
                     state = board_->transmitRadio(tx_packet.data, tx_packet.size);
                     LORA_LOG("[LORA] TX queue len=%u state=%d\n", (unsigned)tx_packet.size, state);
@@ -227,46 +285,49 @@ void AppTasks::radioTask(void* pvParameters)
                         int rx_state = board_->startRadioReceive();
                         if (rx_state == RADIOLIB_ERR_NONE)
                         {
-                            rx_started = true;
+                            setRadioReceiveActive(true);
+                            should_restart_rx = false;
                         }
                         else
                         {
-                            rx_started = false;
+                            requestRadioReceiveRestart();
                             LORA_LOG("[LORA] RX start fail state=%d\n", rx_state);
                         }
                     }
-                    // Free buffer (if allocated)
-                    if (tx_packet.data)
+                    else
                     {
-                        free(tx_packet.data);
+                        requestRadioReceiveRestart();
                     }
                 }
                 else
                 {
                     LORA_LOG("[LORA] TX drop (radio offline) len=%u\n", (unsigned)tx_packet.size);
                 }
+                free(tx_packet.data);
             }
         }
 
         // Poll for RX (non-blocking)
         if (board_ && board_->isRadioOnline())
         {
-            if (!rx_started)
+            if (!radio_receive_active_ || radio_receive_restart_pending_ || should_restart_rx)
             {
                 int rx_state = board_->startRadioReceive();
                 if (rx_state == RADIOLIB_ERR_NONE)
                 {
-                    rx_started = true;
+                    setRadioReceiveActive(true);
+                    should_restart_rx = false;
                 }
                 else
                 {
+                    requestRadioReceiveRestart();
                     LORA_LOG("[LORA] RX start fail state=%d\n", rx_state);
                 }
             }
             // Check if data available using RadioLib IRQs
             int packet_length = 0;
             uint32_t irq = board_->getRadioIrqFlags();
-            if (irq & (RADIOLIB_SX126X_IRQ_RX_DONE | RADIOLIB_SX128X_IRQ_RX_DONE))
+            if ((irq & rx_done_mask) != 0)
             {
                 char irq_desc[96];
                 const char* flags = describe_irq_flags(irq, irq_desc, sizeof(irq_desc));
@@ -306,6 +367,8 @@ void AppTasks::radioTask(void* pvParameters)
                         board_->clearRadioIrqFlags(irq);
                     }
                 }
+                board_->clearRadioIrqFlags(irq);
+                should_restart_rx = true;
             }
             else if (irq)
             {
@@ -315,17 +378,22 @@ void AppTasks::radioTask(void* pvParameters)
                          static_cast<unsigned long>(irq),
                          flags);
                 board_->clearRadioIrqFlags(irq);
+                if ((irq & terminal_irq_mask) != 0)
+                {
+                    should_restart_rx = true;
+                }
             }
-            if (packet_length > 0)
+            if (packet_length > 0 || should_restart_rx)
             {
+                requestRadioReceiveRestart();
                 int rx_state = board_->startRadioReceive();
                 if (rx_state == RADIOLIB_ERR_NONE)
                 {
-                    rx_started = true;
+                    setRadioReceiveActive(true);
                 }
                 else
                 {
-                    rx_started = false;
+                    requestRadioReceiveRestart();
                     LORA_LOG("[LORA] RX restart fail state=%d\n", rx_state);
                 }
             }

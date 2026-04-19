@@ -23,6 +23,8 @@ constexpr uint8_t kTDeckKeyboardDefaultBrightnessCmd = 0x02;
 constexpr uint8_t kTDeckKeyboardModeRawCmd = 0x03;
 constexpr uint8_t kTDeckKeyboardModeKeyCmd = 0x04;
 constexpr uint32_t kTDeckKeyboardBootDelayMs = 500;
+constexpr float kTDeckRadioTcxoVoltage = 1.8f;
+constexpr float kTDeckRadioCurrentLimitMa = 140.0f;
 
 // Civil date to UNIX epoch days (UTC), based on Howard Hinnant's algorithm.
 int64_t days_from_civil(int year, unsigned month, unsigned day)
@@ -260,11 +262,23 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
 
     // Initialize radio before SD to align with the pager begin() sequence.
     radio_.reset();
-    int radio_state = radio_.begin();
+    int radio_state = radio_.begin(434.0f, 125.0f, 9, 7, RADIOLIB_SX126X_SYNC_WORD_PRIVATE,
+                                   10, 8, kTDeckRadioTcxoVoltage, false);
     if (radio_state == RADIOLIB_ERR_NONE)
     {
-        devices_probe_ |= HW_RADIO_ONLINE;
-        Serial.println("[TDeckBoard] radio init OK");
+        const int rf_switch_state = radio_.setDio2AsRfSwitch(true);
+        const int current_limit_state = radio_.setCurrentLimit(kTDeckRadioCurrentLimitMa);
+        if (rf_switch_state == RADIOLIB_ERR_NONE && current_limit_state == RADIOLIB_ERR_NONE)
+        {
+            devices_probe_ |= HW_RADIO_ONLINE;
+            Serial.println("[TDeckBoard] radio init OK");
+        }
+        else
+        {
+            Serial.printf("[TDeckBoard] radio post-init failed: rf_switch=%d current_limit=%d\n",
+                          rf_switch_state,
+                          current_limit_state);
+        }
     }
     else
     {
@@ -866,7 +880,7 @@ bool TDeckBoard::syncTimeFromGPS(uint32_t gps_task_interval_ms)
 int TDeckBoard::transmitRadio(const uint8_t* data, size_t len)
 {
     // Share the SPI bus with display to avoid tearing due to contention.
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         int rc = radio_.transmit(data, len);
         LilyGoDispArduinoSPI::unlock();
@@ -877,7 +891,7 @@ int TDeckBoard::transmitRadio(const uint8_t* data, size_t len)
 
 int TDeckBoard::startRadioReceive()
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         int rc = radio_.startReceive();
         LilyGoDispArduinoSPI::unlock();
@@ -888,7 +902,7 @@ int TDeckBoard::startRadioReceive()
 
 uint32_t TDeckBoard::getRadioIrqFlags()
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         uint32_t flags = radio_.getIrqFlags();
         LilyGoDispArduinoSPI::unlock();
@@ -899,7 +913,7 @@ uint32_t TDeckBoard::getRadioIrqFlags()
 
 int TDeckBoard::getRadioPacketLength(bool update)
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         int len = static_cast<int>(radio_.getPacketLength(update));
         LilyGoDispArduinoSPI::unlock();
@@ -910,7 +924,7 @@ int TDeckBoard::getRadioPacketLength(bool update)
 
 int TDeckBoard::readRadioData(uint8_t* buf, size_t len)
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(50)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         int rc = radio_.readData(buf, len);
         LilyGoDispArduinoSPI::unlock();
@@ -921,7 +935,7 @@ int TDeckBoard::readRadioData(uint8_t* buf, size_t len)
 
 void TDeckBoard::clearRadioIrqFlags(uint32_t flags)
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         radio_.clearIrqFlags(flags);
         LilyGoDispArduinoSPI::unlock();
@@ -930,7 +944,7 @@ void TDeckBoard::clearRadioIrqFlags(uint32_t flags)
 
 float TDeckBoard::getRadioRSSI()
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         float rssi = radio_.getRSSI();
         LilyGoDispArduinoSPI::unlock();
@@ -941,7 +955,7 @@ float TDeckBoard::getRadioRSSI()
 
 float TDeckBoard::getRadioSNR()
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         float snr = radio_.getSNR();
         LilyGoDispArduinoSPI::unlock();
@@ -964,8 +978,12 @@ void TDeckBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, ui
                                     int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                                     uint8_t crc_len)
 {
-    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(100)))
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
+#if defined(ARDUINO_LILYGO_LORA_SX1262)
+        radio_.setDio2AsRfSwitch(true);
+        radio_.setCurrentLimit(kTDeckRadioCurrentLimitMa);
+#endif
         radio_.setFrequency(freq_mhz);
         radio_.setBandwidth(bw_khz);
         radio_.setSpreadingFactor(sf);

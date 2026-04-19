@@ -131,8 +131,6 @@ class MtAdapter : public chat::IMeshAdapter
     std::map<uint32_t, ChannelId> node_last_channel_;
     std::map<uint32_t, uint32_t> nodeinfo_last_seen_ms_;
     uint32_t last_position_reply_ms_;
-    std::map<uint32_t, uint32_t> pending_ack_ms_;
-    std::map<uint32_t, uint32_t> pending_ack_dest_;
     std::map<uint32_t, std::string> node_long_names_;
     std::string user_long_name_;
     std::string user_short_name_;
@@ -142,6 +140,16 @@ class MtAdapter : public chat::IMeshAdapter
     uint32_t radio_bw_hz_ = 0;
     uint8_t radio_sf_ = 0;
     uint8_t radio_cr_ = 0;
+
+    struct PendingAckState
+    {
+        uint32_t dest = 0;
+        ChannelId channel = ChannelId::PRIMARY;
+        uint8_t channel_hash = 0;
+        uint32_t last_attempt_ms = 0;
+        uint8_t retransmit_count = 0;
+        std::vector<uint8_t> wire_packet;
+    };
 
     enum class KeyVerificationState : uint8_t
     {
@@ -182,16 +190,18 @@ class MtAdapter : public chat::IMeshAdapter
     std::queue<MeshIncomingData> app_receive_queue_;
     std::queue<meshtastic_MqttClientProxyMessage> mqtt_proxy_queue_;
     MqttProxySettings mqtt_proxy_settings_;
+    std::map<uint32_t, PendingAckState> pending_ack_states_;
 
     static constexpr size_t MAX_PACKET_SIZE = 255;
     static constexpr uint32_t RETRY_DELAY_MS = 1000;
-    static constexpr uint8_t MAX_RETRIES = 1;
+    static constexpr uint8_t MAX_RETRIES = 3;
     static constexpr uint32_t NODEINFO_INTERVAL_MS = 3 * 60 * 60 * 1000;
     static constexpr uint32_t NODEINFO_REPLY_SUPPRESS_MS = 12 * 60 * 60 * 1000;
     static constexpr uint32_t POSITION_REPLY_SUPPRESS_MS = 3 * 60 * 1000;
     static constexpr uint32_t PKI_BACKOFF_MS = 5 * 60 * 1000;
     static constexpr size_t MAX_APP_QUEUE = 10;
     static constexpr uint32_t ACK_TIMEOUT_MS = 15000;
+    static constexpr uint8_t MAX_ACK_RETRIES = 3;
     static constexpr size_t kMaxPkiNodes = 16;
     static constexpr const char* kPkiPrefsNs = "chat_pki";
     static constexpr const char* kPkiPrefsKey = "pki_nodes";
@@ -224,7 +234,12 @@ class MtAdapter : public chat::IMeshAdapter
     void configureRadio();
     void initNodeIdentity();
     void updateChannelKeys();
+    bool transmitWirePacket(const uint8_t* wire_data, size_t wire_size);
     void startRadioReceive();
+    void trackPendingAck(uint32_t msg_id, uint32_t dest, ChannelId channel, uint8_t channel_hash,
+                         const uint8_t* wire_data, size_t wire_size);
+    void clearPendingAck(uint32_t msg_id);
+    void retryPendingAck(uint32_t msg_id, PendingAckState& pending);
     bool initPkiKeys();
     void loadPkiNodeKeys();
     void savePkiNodeKey(uint32_t node_id, const uint8_t* key, size_t key_len);

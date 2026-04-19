@@ -84,6 +84,16 @@ class AppTasks
         return radio_tasks_paused_;
     }
 
+    /**
+     * @brief Record whether the shared radio receive path is currently armed.
+     */
+    static void setRadioReceiveActive(bool active);
+
+    /**
+     * @brief Ask the radio task to re-arm RX on its next poll cycle.
+     */
+    static void requestRadioReceiveRestart();
+
   private:
     static QueueHandle_t radio_tx_queue_;
     static QueueHandle_t radio_rx_queue_;
@@ -93,6 +103,8 @@ class AppTasks
     static LoraBoard* board_;
     static chat::IMeshAdapter* adapter_;
     static bool radio_tasks_paused_;
+    static volatile bool radio_receive_active_;
+    static volatile bool radio_receive_restart_pending_;
 };
 
 } // namespace app
