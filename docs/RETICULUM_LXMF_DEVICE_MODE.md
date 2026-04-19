@@ -1,5 +1,14 @@
 # Reticulum / LXMF Device Mode Plan
 
+> Note
+>
+> This document captures the earlier phase-based device-mode plan and remains
+> useful for historical context.
+>
+> The current authoritative implementation target is now documented in
+> [RETICULUM_LXMF_RUNTIME_ALIGNMENT_PLAN.md](RETICULUM_LXMF_RUNTIME_ALIGNMENT_PLAN.md),
+> which reflects the present codebase and the full runtime-alignment direction.
+
 ## Why this document exists
 
 Trail Mate already has two very different things under the "RNode" umbrella:
