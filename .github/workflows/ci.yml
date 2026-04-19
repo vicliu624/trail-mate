@@ -85,11 +85,21 @@ jobs:
             cp .pio/build/${{ matrix.env }}/firmware.bin dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.bin
           fi
 
+      - name: Prepare web flasher image
+        if: matrix.env == 'tlora_pager_sx1262' || matrix.env == 'tdeck' || matrix.env == 'lilygo_twatch_s3'
+        run: |
+          python scripts/prepare_webflash_release.py \
+            --env ${{ matrix.env }} \
+            --build-root .pio/build \
+            --dist dist \
+            --boot-app0 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            --esptool ~/.platformio/packages/tool-esptoolpy/esptool.py
+
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}
-          path: dist/trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}.*
+          path: dist/*
 
   release:
     name: Publish GitHub Release

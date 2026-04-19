@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trail Mate</title>
+    <meta
+      name="description"
+      content="Trail Mate is an offline-first handheld firmware project for navigation, LoRa messaging, and field communication on ESP32 hardware."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="icon" type="image/png" href="./assets/showcase/brand-logo.png">
+    <link rel="stylesheet" href="./styles.css">
+    <script
+      type="module"
+      src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+    ></script>
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="Trail Mate homepage">
+          <img
+            class="brand-logo"
+            src="./assets/showcase/brand-logo.png"
+            alt="Trail Mate logo"
+            width="608"
+            height="400"
+          >
+          <span class="brand-text">Trail Mate</span>
+        </a>
+        <nav class="nav">
+          <a href="#overview">Overview</a>
+          <a href="#webflasher">Web Flasher</a>
+          <a href="https://github.com/vicliu624/trail-mate">GitHub</a>
+          <a href="https://github.com/vicliu624/trail-mate/blob/main/README.md">Docs</a>
+          <a href="https://github.com/vicliu624/trail-mate/blob/main/README_CN.md">Chinese</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Offline Navigation + LoRa Communication</p>
+            <h1>Trail Mate turns ESP32 handhelds into field-ready offline tools.</h1>
+            <p class="lede">
+              A low-power firmware stack for outdoor navigation, GNSS diagnostics,
+              LoRa chat, team coordination, and protocol interoperability on
+              compact devices you can actually carry into the field.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#webflasher">Open Web Flasher</a>
+              <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate">
+                View Repository
+              </a>
+            </div>
+          </div>
+
+          <div class="hero-visual">
+            <div class="hero-screen">
+              <img
+                src="./assets/showcase/home-main.png"
+                alt="Trail Mate main menu screenshot"
+                loading="eager"
+              >
+            </div>
+            <div class="hero-note hero-note-release">
+              <p class="feature-kicker">Latest Release</p>
+              <p class="hero-note-value" data-release-version>Waiting for first tagged release</p>
+            </div>
+            <div class="hero-note hero-note-proof">
+              <p class="feature-kicker">Captured From Real UI</p>
+              <p class="hero-note-value">Every feature block below uses screens from the actual firmware.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="overview-ribbon" id="overview" aria-label="Project overview">
+          <p class="overview-copy">
+            Trail Mate is not a single-page radio demo. It is a compact offline field stack:
+            navigation, direct LoRa messaging, team coordination, RF diagnostics, and utility
+            tooling shaped for embedded hardware with tight power and UI constraints.
+          </p>
+          <div class="overview-tags">
+            <span>Offline Maps</span>
+            <span>GNSS Diagnostics</span>
+            <span>Mesh Chat</span>
+            <span>Team Mode</span>
+            <span>Sub-GHz Scan</span>
+            <span>PC Link</span>
+          </div>
+        </section>
+
+        <section class="story-stack" aria-label="Feature walkthrough">
+          <article class="story-section">
+            <div class="story-copy">
+              <p class="eyebrow">Navigation</p>
+              <h2>Offline mapping is a first-class workflow, not an afterthought.</h2>
+              <p class="story-lede">
+                The navigation side is built around field use on constrained hardware:
+                north-up rendering, SD card map tiles, simple visual hierarchy, and fast
+                satellite diagnostics without overloading the screen.
+              </p>
+              <ul class="story-points">
+                <li>North-up map orientation keeps movement reading predictable while walking.</li>
+                <li>OSM, terrain, and satellite layers cover different outdoor planning needs.</li>
+                <li>Sky plot and fix diagnostics make GNSS quality visible instead of opaque.</li>
+                <li>Tracker history and breadcrumb awareness stay available on-device.</li>
+              </ul>
+            </div>
+            <div class="story-media story-media-navigation">
+              <figure class="shot shot-wide">
+                <img src="./assets/showcase/nav-map-osm.png" alt="Offline OSM map view" loading="lazy">
+              </figure>
+              <figure class="shot">
+                <img src="./assets/showcase/nav-map-terrain.png" alt="Terrain map layer" loading="lazy">
+              </figure>
+              <figure class="shot">
+                <img src="./assets/showcase/nav-map-satellite.png" alt="Satellite map layer" loading="lazy">
+              </figure>
+              <figure class="shot shot-panel">
+                <img src="./assets/showcase/nav-skyplot.png" alt="GNSS sky plot screen" loading="lazy">
+              </figure>
+            </div>
+          </article>
+
+          <article class="story-section story-section-alt">
+            <div class="story-copy">
+              <p class="eyebrow">Communication</p>
+              <h2>Messaging and team coordination stay practical under low bandwidth.</h2>
+              <p class="story-lede">
+                Trail Mate focuses on short-form communication that still works when latency,
+                packet loss, and limited input make smartphone assumptions unrealistic.
+              </p>
+              <ul class="story-points">
+                <li>Compose and review LoRa messages directly on-device without a phone dependency.</li>
+                <li>Meshtastic and MeshCore compatibility keep it interoperable with existing networks.</li>
+                <li>Contact discovery, recent activity, and quick actions reduce menu friction.</li>
+                <li>ESP-NOW pairing plus LoRa runtime gives small teams shared identity and map context.</li>
+              </ul>
+            </div>
+            <div class="story-media story-media-communication">
+              <figure class="shot shot-tall">
+                <img src="./assets/showcase/chat-compose.png" alt="Message compose interface" loading="lazy">
+              </figure>
+              <figure class="shot shot-panel">
+                <img src="./assets/showcase/chat-messages.png" alt="Message history screen" loading="lazy">
+              </figure>
+              <figure class="shot shot-panel">
+                <img src="./assets/showcase/chat-contacts.png" alt="Contacts screen" loading="lazy">
+              </figure>
+              <figure class="shot">
+                <img src="./assets/showcase/team-join.png" alt="Team join screen" loading="lazy">
+              </figure>
+              <figure class="shot shot-wide">
+                <img src="./assets/showcase/team-map.png" alt="Team map interface" loading="lazy">
+              </figure>
+            </div>
+          </article>
+
+          <article class="story-section">
+            <div class="story-copy">
+              <p class="eyebrow">Field Utilities</p>
+              <h2>The firmware expands into a toolkit: scan, decode, sync, and inspect.</h2>
+              <p class="story-lede">
+                The project is broader than chat and maps. It already includes utility surfaces
+                for RF awareness, host integration, SSTV experimentation, and route or track review.
+              </p>
+              <ul class="story-points">
+                <li>Energy Sweep exposes Sub-GHz occupancy for quick in-field channel planning.</li>
+                <li>SSTV receive and on-device decoding add a real experimental radio workflow.</li>
+                <li>PC Link exports structured device data over USB for downstream integration.</li>
+                <li>Tracker views keep recorded movement accessible on the device itself.</li>
+              </ul>
+            </div>
+            <div class="story-media story-media-utilities">
+              <figure class="shot shot-panel">
+                <img src="./assets/showcase/utility-spectrum.png" alt="Sub-GHz energy sweep view" loading="lazy">
+              </figure>
+              <figure class="shot">
+                <img src="./assets/showcase/utility-sstv-page.jpg" alt="SSTV receiver screen" loading="lazy">
+              </figure>
+              <figure class="shot">
+                <img src="./assets/showcase/utility-sstv-result.jpg" alt="SSTV decode result" loading="lazy">
+              </figure>
+              <figure class="shot shot-panel">
+                <img src="./assets/showcase/utility-data-exchange.png" alt="USB data exchange screen" loading="lazy">
+              </figure>
+              <figure class="shot shot-wide">
+                <img src="./assets/showcase/utility-tracker.png" alt="Tracker overview screen" loading="lazy">
+              </figure>
+            </div>
+          </article>
+        </section>
+
+        <section class="install-section" id="webflasher">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Install</p>
+              <h2>Web Flasher</h2>
+            </div>
+            <p class="section-note">
+              Use Google Chrome or Microsoft Edge over HTTPS with a USB data cable.
+              The browser installer currently targets the ESP32-S3 builds.
+            </p>
+          </div>
+
+          <div class="install-grid">
+            <article class="board-card" data-board-id="tlora-pager-sx1262">
+              <p class="board-chip">ESP32-S3</p>
+              <h3>LilyGo T-LoRa Pager</h3>
+              <p class="board-copy">SX1262 build for the keyboard pager hardware.</p>
+              <div class="board-install" data-install-slot>
+                <p class="board-hint">Checking release assets...</p>
+              </div>
+              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
+                Open latest release
+              </a>
+            </article>
+
+            <article class="board-card" data-board-id="tdeck">
+              <p class="board-chip">ESP32-S3</p>
+              <h3>LilyGo T-Deck</h3>
+              <p class="board-copy">Keyboard + touch build tuned for the T-Deck layout.</p>
+              <div class="board-install" data-install-slot>
+                <p class="board-hint">Checking release assets...</p>
+              </div>
+              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
+                Open latest release
+              </a>
+            </article>
+
+            <article class="board-card" data-board-id="lilygo-twatch-s3">
+              <p class="board-chip">ESP32-S3</p>
+              <h3>LilyGo T-Watch-S3</h3>
+              <p class="board-copy">Touch-first watch build for compact field experiments.</p>
+              <div class="board-install" data-install-slot>
+                <p class="board-hint">Checking release assets...</p>
+              </div>
+              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
+                Open latest release
+              </a>
+            </article>
+
+            <article class="board-card board-card-muted">
+              <p class="board-chip">nRF52</p>
+              <h3>GAT562 Mesh EVB Pro</h3>
+              <p class="board-copy">
+                Browser flashing is not wired up for the nRF52 target yet. Use the
+                release package for manual flashing instead.
+              </p>
+              <div class="board-install">
+                <p class="board-hint">
+                  Download the packaged firmware from the latest GitHub release.
+                </p>
+              </div>
+              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
+                Open latest release
+              </a>
+            </article>
+          </div>
+
+          <div class="workflow-note">
+            <p>1. Connect the device with a USB data cable.</p>
+            <p>2. Put the board into download mode if your hardware requires it.</p>
+            <p>3. Choose the correct target above and let the browser flash the merged image.</p>
+          </div>
+        </section>
+
+        <section class="links-section" id="docs">
+          <article>
+            <p class="feature-kicker">Read More</p>
+            <h2>Architecture notes and device-specific details still live in the repo.</h2>
+            <p>
+              The homepage now shows the product surface directly, while the repository
+              keeps the deeper engineering material: architecture, BLE timing, map data
+              layout, team mode notes, and board-specific integration details.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate/blob/main/docs/ARCHITECTURE.md">
+                Architecture
+              </a>
+              <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate/tree/main/docs/devices">
+                Device Notes
+              </a>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
