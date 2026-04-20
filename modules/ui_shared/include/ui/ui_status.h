@@ -17,6 +17,7 @@ void register_menu_status_row(lv_obj_t* row,
                               lv_obj_t* route_icon,
                               lv_obj_t* tracker_icon,
                               lv_obj_t* gps_icon,
+                              lv_obj_t* wifi_icon,
                               lv_obj_t* team_icon,
                               lv_obj_t* msg_icon,
                               lv_obj_t* ble_icon);

@@ -329,6 +329,83 @@ dd {
   margin-top: 24px;
 }
 
+.language-section {
+  margin-top: 28px;
+  padding: 32px;
+  border-radius: 36px;
+  background:
+    radial-gradient(circle at top left, rgba(45, 111, 182, 0.07), transparent 28%),
+    linear-gradient(145deg, rgba(235, 163, 65, 0.18), rgba(250, 240, 216, 0.98)),
+    rgba(250, 240, 216, 0.98);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 64px rgba(107, 74, 30, 0.12);
+}
+
+.language-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.language-highlight,
+.language-pack-card {
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(235, 163, 65, 0.12), rgba(250, 240, 216, 0.94)),
+    rgba(250, 240, 216, 0.96);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgba(107, 74, 30, 0.1);
+}
+
+.language-highlight h3,
+.language-pack-card h3 {
+  font-size: 1.35rem;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.language-highlight p:last-child,
+.language-pack-summary {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.language-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.language-pack-meta,
+.language-pack-locales,
+.language-pack-profiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.language-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(235, 163, 65, 0.12);
+  border: 1px solid var(--line);
+  color: var(--amber-dark);
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  font-size: 0.77rem;
+}
+
+.language-pack-empty {
+  grid-column: 1 / -1;
+}
+
 .story-section {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -533,6 +610,8 @@ dd {
 @media (max-width: 960px) {
   .hero,
   .overview-ribbon,
+  .language-highlights,
+  .language-pack-grid,
   .story-section,
   .story-section-alt,
   .install-grid,
@@ -587,6 +666,7 @@ dd {
   .hero-copy,
   .hero-visual,
   .overview-ribbon,
+  .language-section,
   .story-section,
   .install-section,
   .board-card,

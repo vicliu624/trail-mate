@@ -232,10 +232,9 @@ void MeshCoreRadioAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t uti
     (void)util_percent;
 }
 
-void MeshCoreRadioAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MeshCoreRadioAdapter::setPrivacyConfig(uint8_t encrypt_mode)
 {
     (void)encrypt_mode;
-    (void)pki_enabled;
 }
 
 bool MeshCoreRadioAdapter::isReady() const

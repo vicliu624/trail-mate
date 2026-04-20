@@ -14,6 +14,7 @@ namespace settings::ui
 
 enum class SettingType
 {
+    Info,
     Toggle,
     Enum,
     Text,
@@ -101,7 +102,6 @@ struct SettingsData
 
     // Chat/GPS (privacy-related controls)
     int privacy_encrypt_mode = 1;
-    bool privacy_pki = false;
     int privacy_nmea_output = 0;
     int privacy_nmea_sentence = 0;
 
@@ -113,6 +113,13 @@ struct SettingsData
     int display_locale_index = 0;
     bool ble_enabled = true;
     bool vibration_enabled = true;
+
+    // Wi-Fi
+    bool wifi_enabled = false;
+    int wifi_network_index = -1;
+    char wifi_status[96] = "";
+    char wifi_ssid[33] = "";
+    char wifi_password[65] = "";
 
     // Power / Gauge (System)
     char gauge_design_mah[8] = "";

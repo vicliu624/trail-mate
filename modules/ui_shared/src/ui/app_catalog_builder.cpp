@@ -14,6 +14,7 @@
 #include "ui/screens/chat/chat_page_shell.h"
 #include "ui/screens/contacts/contacts_page_shell.h"
 #include "ui/screens/energy_sweep/energy_sweep_page_shell.h"
+#include "ui/screens/extensions/extensions_page_shell.h"
 #include "ui/screens/gnss/gnss_skyplot_page_shell.h"
 #include "ui/screens/gps/gps_page_shell.h"
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
@@ -63,6 +64,7 @@ extern "C"
     extern const lv_image_dsc_t sstv;
 #endif
     extern const lv_image_dsc_t Setting;
+    extern const lv_image_dsc_t ext;
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
     extern const lv_image_dsc_t img_usb;
 #endif
@@ -135,6 +137,10 @@ ui::CallbackAppScreen s_setting_app("settings", "Setting", &Setting,
                                     settings::ui::shell::enter,
                                     settings::ui::shell::exit,
                                     &s_menu_host);
+ui::CallbackAppScreen s_extensions_app("extensions", "Extensions", &ext,
+                                       extensions::ui::shell::enter,
+                                       extensions::ui::shell::exit,
+                                       &s_menu_host);
 ui::CallbackAppScreen s_walkie_app("walkie_talkie", "Walkie Talkie", &walkie_talkie,
                                    walkie_page::ui::shell::enter,
                                    walkie_page::ui::shell::exit,
@@ -214,6 +220,10 @@ AppCatalog build(const FeatureFlags& flags)
         if (flags.include_settings)
         {
             add(&s_setting_app);
+        }
+        if (flags.include_extensions)
+        {
+            add(&s_extensions_app);
         }
     };
 

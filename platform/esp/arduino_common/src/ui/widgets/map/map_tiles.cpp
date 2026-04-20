@@ -11,6 +11,7 @@
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "sys/clock.h"
 #include "ui/page/page_profile.h"
+#include "ui/runtime/memory_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/support/lvgl_fs_utils.h"
 #include <algorithm>
@@ -183,7 +184,10 @@ size_t tile_record_limit(const TileContext& ctx)
 size_t tile_decode_cache_limit(const TileContext& ctx)
 {
     const size_t desired = std::max<size_t>(TILE_CACHE_LIMIT, tile_object_cache_limit(ctx));
-    return std::min<size_t>(desired, static_cast<size_t>(TILE_DECODE_CACHE_SIZE));
+    const size_t profile_limit =
+        std::max<std::size_t>(1U, ::ui::runtime::current_memory_profile().max_map_decode_tiles);
+    return std::min<size_t>(std::min<size_t>(desired, profile_limit),
+                            static_cast<size_t>(TILE_DECODE_CACHE_SIZE));
 }
 
 const char* major_contour_profile_for_zoom(int z)
@@ -1964,10 +1968,15 @@ void cleanup_tiles(TileContext& ctx)
         reset_tile_runtime(tile);
     }
     ctx.tiles->clear();
-    // Keep vector capacity and decoded tile cache alive across page exits.
-    // Late LVGL draw work can still reference image internals for a short time,
-    // so aggressively freeing image caches here is unsafe.
-    release_tile_decode_cache_usage();
+    if (::ui::runtime::current_memory_profile().retain_map_decode_cache_on_page_exit)
+    {
+        // Extended-memory boards can keep decoded tiles hot across page exits.
+        release_tile_decode_cache_usage();
+    }
+    else
+    {
+        clear_tile_decode_cache();
+    }
     g_active_map_source = 0xFF;
     g_active_contour_enabled = false;
     g_missing_tile_notice_pending = false;

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import shutil
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+from build_pack_repository import build_pack_repository
 from webflash_targets import WEBFLASH_TARGETS
 
 SHOWCASE_IMAGES = (
@@ -58,10 +61,32 @@ def github_request(url: str) -> urllib.request.Request:
     return urllib.request.Request(url, headers=headers)
 
 
+def open_with_retries(
+    request: urllib.request.Request,
+    *,
+    attempts: int = 3,
+    timeout: int = 30,
+):
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return urllib.request.urlopen(request, timeout=timeout)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected) as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+            time.sleep(attempt)
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("open_with_retries reached an unexpected empty state")
+
+
 def fetch_latest_release(repo: str) -> dict | None:
     url = f"https://api.github.com/repos/{repo}/releases?per_page=10"
     try:
-        with urllib.request.urlopen(github_request(url)) as response:
+        with open_with_retries(github_request(url)) as response:
             releases = json.load(response)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -75,7 +100,7 @@ def fetch_latest_release(repo: str) -> dict | None:
 
 
 def download(url: str, destination: Path) -> None:
-    with urllib.request.urlopen(github_request(url)) as response:
+    with open_with_retries(github_request(url)) as response:
         destination.write_bytes(response.read())
 
 
@@ -134,6 +159,7 @@ def prepare_site(site_root: Path, release: dict | None) -> None:
     assets_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
     copy_showcase_images(site_root)
+    build_pack_repository(pack_root=Path("packs"), site_root=site_root)
 
     if release is None:
         write_json(data_dir / "latest-release.json", build_unavailable_metadata())

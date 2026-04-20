@@ -112,6 +112,15 @@ static const char* portName(uint32_t portnum)
     }
 }
 
+bool shouldRequireDirectPki(uint8_t encrypt_mode, uint32_t dest_node, uint32_t portnum)
+{
+    // Match upstream Meshtastic: direct unicast app traffic uses PKI outside
+    // cleartext/Ham-style operation, and must not silently fall back to channel crypto.
+    return encrypt_mode != 0 &&
+           dest_node != kBroadcastNodeId &&
+           allowPkiForPortnum(portnum);
+}
+
 void mt_diag_log(const char* fmt, ...)
 {
     char buf[192] = {};
@@ -120,6 +129,40 @@ void mt_diag_log(const char* fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
     Serial.print(buf);
+}
+
+void mt_diag_dropf(const chat::meshtastic::PacketHeaderWire* header,
+                   const char* reason,
+                   const char* fmt = nullptr,
+                   ...)
+{
+    char detail[96] = {};
+    if (fmt && fmt[0] != '\0')
+    {
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(detail, sizeof(detail), fmt, args);
+        va_end(args);
+    }
+
+    if (header)
+    {
+        mt_diag_log("[MT][RX_DROP] reason=%s from=%08lX to=%08lX id=%08lX ch=%u%s%s\n",
+                    reason ? reason : "unknown",
+                    static_cast<unsigned long>(header->from),
+                    static_cast<unsigned long>(header->to),
+                    static_cast<unsigned long>(header->id),
+                    static_cast<unsigned>(header->channel),
+                    detail[0] ? " " : "",
+                    detail);
+    }
+    else
+    {
+        mt_diag_log("[MT][RX_DROP] reason=%s%s%s\n",
+                    reason ? reason : "unknown",
+                    detail[0] ? " " : "",
+                    detail);
+    }
 }
 
 using chat::meshtastic::computeChannelHash;
@@ -329,7 +372,7 @@ bool MtAdapter::sendTextWithId(ChannelId channel, const std::string& text,
     pending.last_attempt = 0;
 
     send_queue_.push(pending);
-    mt_diag_log("[MT][TX] queue text id=%08lX dest=%08lX ch=%u len=%u\n",
+    mt_diag_log("[MT][TX] queue text id=%08lX dest=%08lX logical_ch=%u len=%u\n",
                 static_cast<unsigned long>(pending.msg_id),
                 static_cast<unsigned long>(pending.dest),
                 static_cast<unsigned>(out_channel),
@@ -418,11 +461,17 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
     const uint8_t* out_payload = data_buffer;
     size_t out_len = data_size;
     bool use_pki = false;
-    if (dest_node != 0xFFFFFFFF && pki_enabled_)
+    if (shouldRequireDirectPki(encrypt_mode_, dest_node, portnum))
     {
-        if (!pki_ready_ || !allowPkiForPortnum(portnum) ||
-            (node_public_keys_.find(dest_node) == node_public_keys_.end()))
+        const bool have_dest_key = node_public_keys_.find(dest_node) != node_public_keys_.end();
+        if (!pki_ready_ || !have_dest_key)
         {
+            const char* reason = !pki_ready_ ? "pki_not_ready" : "pki_key_missing";
+            mt_diag_log("[MT][TX_BLOCK] id=%08lX dest=%08lX port=%u reason=%s path=PKI\n",
+                        static_cast<unsigned long>(msg_id),
+                        static_cast<unsigned long>(dest_node),
+                        static_cast<unsigned>(portnum),
+                        reason);
             LORA_LOG("[LORA] TX app PKI required but unavailable dest=%08lX port=%u\n",
                      (unsigned long)dest_node,
                      (unsigned)portnum);
@@ -433,6 +482,10 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         size_t pki_len = sizeof(pki_buf);
         if (!encryptPkiPayload(dest_node, msg_id, data_buffer, data_size, pki_buf, &pki_len))
         {
+            mt_diag_log("[MT][TX_BLOCK] id=%08lX dest=%08lX port=%u reason=pki_encrypt_fail path=PKI\n",
+                        static_cast<unsigned long>(msg_id),
+                        static_cast<unsigned long>(dest_node),
+                        static_cast<unsigned>(portnum));
             LORA_LOG("[LORA] TX app PKI encrypt failed dest=%08lX port=%u\n",
                      (unsigned long)dest_node,
                      (unsigned)portnum);
@@ -462,6 +515,14 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
         }
     }
 
+    mt_diag_log("[MT][TX_ROUTE] id=%08lX dest=%08lX port=%u logical_ch=%u wire_ch=%u path=%s payload=%u\n",
+                static_cast<unsigned long>(msg_id),
+                static_cast<unsigned long>(dest_node),
+                static_cast<unsigned>(portnum),
+                static_cast<unsigned>(out_channel),
+                static_cast<unsigned>(channel_hash),
+                use_pki ? "PKI" : "CHANNEL",
+                static_cast<unsigned>(out_len));
     if (!buildWirePacket(out_payload, out_len, node_id_, msg_id,
                          dest_node, channel_hash, hop_limit, air_want_ack,
                          psk, psk_len, wire_buffer, &wire_size))
@@ -1266,14 +1327,9 @@ void MtAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent)
     }
 }
 
-void MtAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MtAdapter::setPrivacyConfig(uint8_t encrypt_mode)
 {
     encrypt_mode_ = encrypt_mode;
-    pki_enabled_ = pki_enabled;
-    if (encrypt_mode_ == 0)
-    {
-        pki_enabled_ = false;
-    }
 }
 
 void MtAdapter::setLastRxStats(float rssi, float snr)
@@ -1333,11 +1389,17 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     if (!parseWirePacket(data, size, &header, payload, &payload_size))
     {
         std::string raw_hex = toHex(data, size);
+        mt_diag_log("[MT][RX_DROP] reason=parse_fail len=%u\n",
+                    static_cast<unsigned>(size));
         LORA_LOG("[LORA] RX parse fail len=%u hex=%s\n",
                  (unsigned)size,
                  raw_hex.c_str());
         return;
     }
+
+    const bool matches_primary_channel = (header.channel == primary_channel_hash_);
+    const bool matches_secondary_channel =
+        (secondary_psk_len_ > 0 && header.channel == secondary_channel_hash_);
 
     std::string full_hex = toHex(data, size, size);
     LORA_LOG("[LORA] RX wire from=%08lX to=%08lX id=%08lX ch=0x%02X flags=0x%02X len=%u\n",
@@ -1348,17 +1410,17 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
              header.flags,
              (unsigned)payload_size);
     const char* channel_kind = "UNKNOWN";
-    if (header.channel == 0)
-    {
-        channel_kind = "PKI";
-    }
-    else if (header.channel == primary_channel_hash_)
+    if (matches_primary_channel)
     {
         channel_kind = "PRIMARY";
     }
-    else if (header.channel == secondary_channel_hash_)
+    else if (matches_secondary_channel)
     {
         channel_kind = "SECONDARY";
+    }
+    else if (header.channel == 0)
+    {
+        channel_kind = "ZERO_UNMATCHED";
     }
     LORA_LOG("[LORA] RX channel kind=%s hash=0x%02X\n", channel_kind, header.channel);
     LORA_LOG("[LORA] RX full packet hex: %s\n", full_hex.c_str());
@@ -1366,14 +1428,12 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     // Check for duplicates
     if (dedup_.isDuplicate(header.from, header.id))
     {
+        mt_diag_dropf(&header, "dedup");
         LORA_LOG("[LORA] RX dedup from=%08lX id=%08lX\n",
                  (unsigned long)header.from,
                  (unsigned long)header.id);
         return; // Duplicate, ignore
     }
-
-    // Mark as seen
-    dedup_.markSeen(header.from, header.id);
 
     chat::RxMeta rx_meta;
     rx_meta.rx_timestamp_ms = millis();
@@ -1446,6 +1506,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             return;
         }
 
+        mt_diag_dropf(&header, "self_echo");
         LORA_LOG("[LORA] RX self drop id=%08lX to=%08lX relay=%08lX ch=%u\n",
                  static_cast<unsigned long>(header.id),
                  static_cast<unsigned long>(header.to),
@@ -1461,15 +1522,179 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
     const uint8_t* psk = nullptr;
     size_t psk_len = 0;
 
-    bool unknown_channel = false;
+    meshtastic_Data decoded = meshtastic_Data_init_default;
+    ChannelId decoded_channel_id = ChannelId::PRIMARY;
+    bool used_pki_transport = false;
+    const bool can_try_pki =
+        (header.to == node_id_ && header.to != kBroadcastNodeId && payload_size > 12);
+    const char* last_drop_reason = nullptr;
+    char last_drop_detail[96] = {};
 
-    if (header.channel == 0)
+    auto note_drop = [&](const char* reason, const char* detail = nullptr)
     {
-        if (header.to != node_id_ || header.to == 0xFFFFFFFF || payload_size <= 12)
+        last_drop_reason = reason;
+        if (detail && detail[0] != '\0')
         {
-            return;
+            std::snprintf(last_drop_detail, sizeof(last_drop_detail), "%s", detail);
         }
-        if (!pki_ready_)
+        else
+        {
+            last_drop_detail[0] = '\0';
+        }
+    };
+
+    auto try_decode_candidate = [&](const char* path_name,
+                                    const uint8_t* candidate_psk,
+                                    size_t candidate_psk_len,
+                                    bool candidate_pki,
+                                    ChannelId candidate_channel) -> bool
+    {
+        uint8_t candidate_plaintext[256];
+        size_t candidate_plaintext_len = sizeof(candidate_plaintext);
+
+        if (candidate_pki)
+        {
+            if (!pki_ready_)
+            {
+                char detail[64];
+                std::snprintf(detail, sizeof(detail), "path=%s", path_name);
+                note_drop("pki_not_ready", detail);
+                return false;
+            }
+            if (!decryptPkiPayload(header.from,
+                                   header.id,
+                                   payload,
+                                   payload_size,
+                                   candidate_plaintext,
+                                   &candidate_plaintext_len))
+            {
+                char detail[64];
+                std::snprintf(detail, sizeof(detail), "path=%s", path_name);
+                note_drop("pki_decrypt_fail", detail);
+                return false;
+            }
+        }
+        else if (candidate_psk && candidate_psk_len > 0)
+        {
+            if (!decryptPayload(header,
+                                payload,
+                                payload_size,
+                                candidate_psk,
+                                candidate_psk_len,
+                                candidate_plaintext,
+                                &candidate_plaintext_len))
+            {
+                char detail[64];
+                std::snprintf(detail, sizeof(detail), "path=%s", path_name);
+                note_drop("channel_decrypt_fail", detail);
+                return false;
+            }
+        }
+        else
+        {
+            if (payload_size > sizeof(candidate_plaintext))
+            {
+                char detail[64];
+                std::snprintf(detail,
+                              sizeof(detail),
+                              "path=%s len=%u",
+                              path_name,
+                              static_cast<unsigned>(payload_size));
+                note_drop("payload_too_large", detail);
+                return false;
+            }
+            memcpy(candidate_plaintext, payload, payload_size);
+            candidate_plaintext_len = payload_size;
+        }
+
+        meshtastic_Data candidate_decoded = meshtastic_Data_init_default;
+        pb_istream_t candidate_stream =
+            pb_istream_from_buffer(candidate_plaintext, candidate_plaintext_len);
+        if (!pb_decode(&candidate_stream, meshtastic_Data_fields, &candidate_decoded))
+        {
+            char detail[64];
+            std::snprintf(detail, sizeof(detail), "path=%s", path_name);
+            note_drop("data_decode_fail", detail);
+            return false;
+        }
+
+        memcpy(plaintext, candidate_plaintext, candidate_plaintext_len);
+        plaintext_len = candidate_plaintext_len;
+        decoded = candidate_decoded;
+        psk = candidate_psk;
+        psk_len = candidate_psk_len;
+        decoded_channel_id = candidate_channel;
+        used_pki_transport = candidate_pki;
+        if (header.channel == 0)
+        {
+            mt_diag_log("[MT][RX_ROUTE] id=%08lX ch=0 path=%s port=%u\n",
+                        static_cast<unsigned long>(header.id),
+                        path_name,
+                        static_cast<unsigned>(decoded.portnum));
+        }
+        return true;
+    };
+
+    bool decoded_ok = false;
+    if (matches_primary_channel)
+    {
+        decoded_ok = try_decode_candidate("PRIMARY",
+                                          primary_psk_,
+                                          primary_psk_len_,
+                                          false,
+                                          ChannelId::PRIMARY);
+    }
+    if (!decoded_ok && matches_secondary_channel)
+    {
+        decoded_ok = try_decode_candidate("SECONDARY",
+                                          secondary_psk_,
+                                          secondary_psk_len_,
+                                          false,
+                                          ChannelId::SECONDARY);
+    }
+    if (!decoded_ok && can_try_pki)
+    {
+        decoded_ok = try_decode_candidate("PKI",
+                                          nullptr,
+                                          0,
+                                          true,
+                                          matches_secondary_channel ? ChannelId::SECONDARY
+                                                                    : ChannelId::PRIMARY);
+    }
+
+    if (!decoded_ok)
+    {
+        if (!(matches_primary_channel || matches_secondary_channel) && !can_try_pki)
+        {
+            char detail[64];
+            std::snprintf(detail,
+                          sizeof(detail),
+                          "primary=0x%02X secondary=0x%02X",
+                          static_cast<unsigned>(primary_channel_hash_),
+                          static_cast<unsigned>(secondary_channel_hash_));
+            note_drop("unknown_channel", detail);
+        }
+
+        if (last_drop_reason)
+        {
+            mt_diag_dropf(&header, last_drop_reason, "%s", last_drop_detail);
+        }
+        else
+        {
+            mt_diag_dropf(&header, "decode_failed");
+        }
+
+        std::string cipher_hex = toHex(payload, payload_size, payload_size);
+        if (!(matches_primary_channel || matches_secondary_channel) && !can_try_pki)
+        {
+            LORA_LOG("[LORA] RX unknown channel hash=0x%02X from=%08lX id=%08lX len=%u hex=%s (skip decode)\n",
+                     header.channel,
+                     (unsigned long)header.from,
+                     (unsigned long)header.id,
+                     (unsigned)payload_size,
+                     cipher_hex.c_str());
+        }
+        else if (last_drop_reason && std::strcmp(last_drop_reason, "pki_not_ready") == 0)
         {
             LORA_LOG("[LORA] RX PKI drop (not ready) from=%08lX id=%08lX len=%u\n",
                      (unsigned long)header.from,
@@ -1479,80 +1704,68 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             sendRoutingError(header.from, header.id, primary_channel_hash_,
                              primary_psk_, primary_psk_len_,
                              meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
-            return;
         }
-        if (!decryptPkiPayload(header.from, header.id, payload, payload_size, plaintext, &plaintext_len))
+        else if (last_drop_reason && std::strcmp(last_drop_reason, "pki_decrypt_fail") == 0)
         {
-            std::string cipher_hex = toHex(payload, payload_size);
+            forgetNodePublicKey(header.from);
+            sendNodeInfoTo(header.from, true, ChannelId::PRIMARY);
+            sendRoutingError(header.from, header.id, primary_channel_hash_,
+                             primary_psk_, primary_psk_len_,
+                             meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY);
+            mt_diag_log("[MT][PKI_RESYNC] node=%08lX action=forget_key+request_nodeinfo\n",
+                        static_cast<unsigned long>(header.from));
             LORA_LOG("[LORA] RX PKI decrypt fail from=%08lX id=%08lX len=%u hex=%s\n",
                      (unsigned long)header.from,
                      (unsigned long)header.id,
                      (unsigned)payload_size,
                      cipher_hex.c_str());
-            return;
         }
-    }
-    else
-    {
-        if (header.channel == primary_channel_hash_)
+        else if (last_drop_reason && std::strcmp(last_drop_reason, "channel_decrypt_fail") == 0)
         {
-            psk = primary_psk_;
-            psk_len = primary_psk_len_;
-        }
-        else if (header.channel == secondary_channel_hash_)
-        {
-            psk = secondary_psk_;
-            psk_len = secondary_psk_len_;
+            LORA_LOG("[LORA] RX decrypt fail id=%08lX ch=0x%02X psk=%u len=%u hex=%s\n",
+                     (unsigned long)header.id,
+                     header.channel,
+                     (unsigned)psk_len,
+                     (unsigned)payload_size,
+                     cipher_hex.c_str());
         }
         else
         {
-            std::string cipher_hex = toHex(payload, payload_size);
-            LORA_LOG("[LORA] RX unknown channel hash=0x%02X from=%08lX id=%08lX len=%u hex=%s (skip decode)\n",
-                     header.channel,
-                     (unsigned long)header.from,
+            LORA_LOG("[LORA] RX data decode fail id=%08lX len=%u hex=%s\n",
                      (unsigned long)header.id,
                      (unsigned)payload_size,
                      cipher_hex.c_str());
-            unknown_channel = true;
         }
-
-        if (unknown_channel)
-        {
-            return;
-        }
-
-        if (psk && psk_len > 0)
-        {
-            if (!decryptPayload(header, payload, payload_size, psk, psk_len, plaintext, &plaintext_len))
-            {
-                std::string cipher_hex = toHex(payload, payload_size, payload_size);
-                LORA_LOG("[LORA] RX decrypt fail id=%08lX ch=0x%02X psk=%u len=%u hex=%s\n",
-                         (unsigned long)header.id,
-                         header.channel,
-                         (unsigned)psk_len,
-                         (unsigned)payload_size,
-                         cipher_hex.c_str());
-                return;
-            }
-        }
-        else
-        {
-            memcpy(plaintext, payload, payload_size);
-            plaintext_len = payload_size;
-        }
-
-        // Log decrypted protobuf payload (meshtastic_Data wire format)
-        if (plaintext_len > 0)
-        {
-            std::string protobuf_hex = toHex(plaintext, plaintext_len, plaintext_len);
-            LORA_LOG("[LORA] RX protobuf hex: %s\n", protobuf_hex.c_str());
-        }
+        return;
     }
 
-    meshtastic_Data decoded = meshtastic_Data_init_default;
-    pb_istream_t stream = pb_istream_from_buffer(plaintext, plaintext_len);
-    if (pb_decode(&stream, meshtastic_Data_fields, &decoded))
+    // Only mark packets as seen after we have successfully identified and decoded them.
+    // This avoids poisoning dedup for retries when a packet failed due to stale PKI state.
+    dedup_.markSeen(header.from, header.id);
+
+    if (plaintext_len > 0)
     {
+        std::string protobuf_hex = toHex(plaintext, plaintext_len, plaintext_len);
+        LORA_LOG("[LORA] RX protobuf hex: %s\n", protobuf_hex.c_str());
+    }
+
+    {
+        const bool decoded_is_broadcast = (header.to == kBroadcastNodeId);
+        const bool decoded_want_response = decoded.want_response ||
+                                           (decoded.has_bitfield &&
+                                            ((decoded.bitfield & kBitfieldWantResponseMask) != 0));
+        mt_diag_log("[MT][RX_DECODE] from=%08lX to=%08lX id=%08lX ch=%u port=%u(%s) payload=%u bcast=%u resp=%u pki=%u\n",
+                    static_cast<unsigned long>(header.from),
+                    static_cast<unsigned long>(header.to),
+                    static_cast<unsigned long>(header.id),
+                    static_cast<unsigned>(header.channel),
+                    static_cast<unsigned>(decoded.portnum),
+                    portName(decoded.portnum),
+                    static_cast<unsigned>(decoded.payload.size),
+                    decoded_is_broadcast ? 1U : 0U,
+                    decoded_want_response ? 1U : 0U,
+                    used_pki_transport ? 1U : 0U);
+
         LORA_LOG("[LORA] RX data portnum=%u (%s) payload=%u\n",
                  (unsigned)decoded.portnum,
                  portName(decoded.portnum),
@@ -1671,11 +1884,19 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 bool published = sys::EventBus::publish(event, 0);
                 if (published)
                 {
+                    mt_diag_log("[MT][RX_NODEINFO] from=%08lX node=%08lX mode=nodeinfo published=1\n",
+                                static_cast<unsigned long>(header.from),
+                                static_cast<unsigned long>(node_id));
                     LORA_LOG("[LORA] NodeInfo event published node=%08lX\n",
                              (unsigned long)node_id);
                 }
                 else
                 {
+                    mt_diag_dropf(&header,
+                                  "nodeinfo_event_drop",
+                                  "node=%08lX pending=%u",
+                                  static_cast<unsigned long>(node_id),
+                                  static_cast<unsigned>(sys::EventBus::pendingCount()));
                     LORA_LOG("[LORA] NodeInfo event dropped node=%08lX pending=%u\n",
                              (unsigned long)node_id,
                              static_cast<unsigned>(sys::EventBus::pendingCount()));
@@ -1737,11 +1958,19 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     bool published = sys::EventBus::publish(event, 0);
                     if (published)
                     {
+                        mt_diag_log("[MT][RX_NODEINFO] from=%08lX node=%08lX mode=user published=1\n",
+                                    static_cast<unsigned long>(header.from),
+                                    static_cast<unsigned long>(node_id));
                         LORA_LOG("[LORA] NodeInfo event published node=%08lX\n",
                                  (unsigned long)node_id);
                     }
                     else
                     {
+                        mt_diag_dropf(&header,
+                                      "user_event_drop",
+                                      "node=%08lX pending=%u",
+                                      static_cast<unsigned long>(node_id),
+                                      static_cast<unsigned>(sys::EventBus::pendingCount()));
                         LORA_LOG("[LORA] NodeInfo event dropped node=%08lX pending=%u\n",
                                  (unsigned long)node_id,
                                  static_cast<unsigned>(sys::EventBus::pendingCount()));
@@ -1772,10 +2001,15 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
             if (pb_decode(&pstream, meshtastic_Position_fields, &pos))
             {
+                mt_diag_log("[MT][RX_POSITION] from=%08lX id=%08lX payload=%u\n",
+                            static_cast<unsigned long>(header.from),
+                            static_cast<unsigned long>(header.id),
+                            static_cast<unsigned>(decoded.payload.size));
                 publishPositionEvent(header.from, pos);
             }
             else
             {
+                mt_diag_dropf(&header, "position_decode_fail");
                 LORA_LOG("[LORA] RX Position decode fail from=%08lX err=%s\n",
                          (unsigned long)header.from,
                          PB_GET_ERROR(&pstream));
@@ -1844,6 +2078,12 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             meshtastic_KeyVerification kv = meshtastic_KeyVerification_init_default;
             if (decodeKeyVerificationMessage(plaintext, plaintext_len, &kv))
             {
+                mt_diag_log("[MT][KEY_VERIFY] from=%08lX id=%08lX stage=%s hash1=%u hash2=%u\n",
+                            static_cast<unsigned long>(header.from),
+                            static_cast<unsigned long>(header.id),
+                            keyVerificationStage(kv),
+                            static_cast<unsigned>(kv.hash1.size),
+                            static_cast<unsigned>(kv.hash2.size));
                 LORA_LOG("[LORA] RX key verification from=%08lX nonce=%llu hash1=%u hash2=%u stage=%s\n",
                          (unsigned long)header.from,
                          static_cast<unsigned long long>(kv.nonce),
@@ -1870,12 +2110,17 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                 }
                 if (!handled)
                 {
+                    mt_diag_log("[MT][KEY_VERIFY] from=%08lX id=%08lX handled=0 stage=%s\n",
+                                static_cast<unsigned long>(header.from),
+                                static_cast<unsigned long>(header.id),
+                                keyVerificationStage(kv));
                     LORA_LOG("[LORA] RX key verification ignored stage=%s\n",
                              keyVerificationStage(kv));
                 }
             }
             else
             {
+                mt_diag_dropf(&header, "key_verify_decode_fail");
                 LORA_LOG("[LORA] RX key verification decode fail from=%08lX\n",
                          (unsigned long)header.from);
             }
@@ -1892,8 +2137,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         bool is_nodeinfo_port = (decoded.portnum == meshtastic_PortNum_NODEINFO_APP);
         bool is_position_port = (decoded.portnum == meshtastic_PortNum_POSITION_APP);
         bool is_traceroute_port = (decoded.portnum == meshtastic_PortNum_TRACEROUTE_APP);
-        ChannelId channel_id =
-            (header.channel == secondary_channel_hash_) ? ChannelId::SECONDARY : ChannelId::PRIMARY;
+        ChannelId channel_id = decoded_channel_id;
         if (header.channel != 0 && header.from != node_id_)
         {
             node_last_channel_[header.from] = channel_id;
@@ -2015,48 +2259,67 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
             if (app_receive_queue_.size() < MAX_APP_QUEUE)
             {
                 app_receive_queue_.push(incoming);
+                mt_diag_log("[MT][RX_APP] from=%08lX to=%08lX id=%08lX port=%u(%s) queued=1 depth=%u\n",
+                            static_cast<unsigned long>(incoming.from),
+                            static_cast<unsigned long>(incoming.to),
+                            static_cast<unsigned long>(incoming.packet_id),
+                            static_cast<unsigned>(incoming.portnum),
+                            portName(incoming.portnum),
+                            static_cast<unsigned>(app_receive_queue_.size()));
+            }
+            else
+            {
+                mt_diag_dropf(&header,
+                              "app_queue_full",
+                              "port=%u depth=%u",
+                              static_cast<unsigned>(incoming.portnum),
+                              static_cast<unsigned>(app_receive_queue_.size()));
             }
         }
-    }
-    else
-    {
-        std::string plain_hex = toHex(plaintext, plaintext_len);
-        LORA_LOG("[LORA] RX data decode fail id=%08lX err=%s len=%u hex=%s\n",
-                 (unsigned long)header.id,
-                 PB_GET_ERROR(&stream),
-                 (unsigned)plaintext_len,
-                 plain_hex.c_str());
-    }
 
-    // Decode Data message
-    MeshIncomingText incoming;
-    if (decodeTextMessage(plaintext, plaintext_len, &incoming))
-    {
-        // Fill in packet info from header
-        incoming.from = header.from;
-        incoming.to = header.to;
-        incoming.msg_id = header.id;
-        if (header.channel == secondary_channel_hash_)
+        if (is_text_port)
         {
-            incoming.channel = ChannelId::SECONDARY;
-        }
-        else
-        {
-            incoming.channel = ChannelId::PRIMARY;
-        }
-        incoming.hop_limit = header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
-        incoming.encrypted = (psk != nullptr && psk_len > 0);
-        incoming.rx_meta = rx_meta;
+            MeshIncomingText incoming;
+            if (decodeTextPayload(decoded, &incoming))
+            {
+                incoming.from = header.from;
+                incoming.to = header.to;
+                incoming.msg_id = header.id;
+                incoming.channel = decoded_channel_id;
+                incoming.hop_limit = header.flags & PACKET_FLAGS_HOP_LIMIT_MASK;
+                incoming.encrypted = used_pki_transport || (psk != nullptr && psk_len > 0);
+                incoming.rx_meta = rx_meta;
 
-        receive_queue_.push(incoming);
-        LORA_LOG("[LORA] RX text from=%08lX id=%08lX ch=%u len=%u\n",
-                 (unsigned long)incoming.from,
-                 (unsigned long)incoming.msg_id,
-                 static_cast<unsigned>(incoming.channel),
-                 (unsigned)incoming.text.size());
-        if (!incoming.text.empty())
-        {
-            LORA_LOG("[LORA] RX text msg='%s'\n", incoming.text.c_str());
+                receive_queue_.push(incoming);
+                mt_diag_log("[MT][RX_TEXT] from=%08lX to=%08lX id=%08lX ch=%u len=%u\n",
+                            static_cast<unsigned long>(incoming.from),
+                            static_cast<unsigned long>(incoming.to),
+                            static_cast<unsigned long>(incoming.msg_id),
+                            static_cast<unsigned>(incoming.channel),
+                            static_cast<unsigned>(incoming.text.size()));
+                LORA_LOG("[LORA] RX text from=%08lX id=%08lX ch=%u len=%u\n",
+                         (unsigned long)incoming.from,
+                         (unsigned long)incoming.msg_id,
+                         static_cast<unsigned>(incoming.channel),
+                         (unsigned)incoming.text.size());
+                if (!incoming.text.empty())
+                {
+                    LORA_LOG("[LORA] RX text msg='%s'\n", incoming.text.c_str());
+                }
+            }
+            else
+            {
+                mt_diag_dropf(&header,
+                              "text_decode_fail",
+                              "port=%u payload=%u",
+                              static_cast<unsigned>(decoded.portnum),
+                              static_cast<unsigned>(decoded.payload.size));
+                LORA_LOG("[LORA] RX text decode fail from=%08lX id=%08lX port=%u payload=%u\n",
+                         (unsigned long)header.from,
+                         (unsigned long)header.id,
+                         static_cast<unsigned>(decoded.portnum),
+                         static_cast<unsigned>(decoded.payload.size));
+            }
         }
     }
 }
@@ -2214,17 +2477,24 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
     bool track_ack = true;
     bool air_want_ack = shouldSetAirWantAck(dest, track_ack);
 
-    // Try PKI encryption for direct messages when key is known
+    // Upstream Meshtastic requires PKI for direct unicast traffic on
+    // non-infrastructure ports and rejects legacy channel-encrypted DMs.
     const uint8_t* payload = data_buffer;
     size_t payload_len = data_size;
     const uint8_t* psk = nullptr;
     size_t psk_len = 0;
     bool use_pki = false;
-    if (dest != 0xFFFFFFFF && pki_enabled_)
+    if (shouldRequireDirectPki(encrypt_mode_, dest, pending.portnum))
     {
-        if (!pki_ready_ || !allowPkiForPortnum(pending.portnum) ||
-            (node_public_keys_.find(dest) == node_public_keys_.end()))
+        const bool have_dest_key = node_public_keys_.find(dest) != node_public_keys_.end();
+        if (!pki_ready_ || !have_dest_key)
         {
+            const char* reason = !pki_ready_ ? "pki_not_ready" : "pki_key_missing";
+            mt_diag_log("[MT][TX_BLOCK] id=%08lX dest=%08lX port=%u reason=%s path=PKI\n",
+                        static_cast<unsigned long>(pending.msg_id),
+                        static_cast<unsigned long>(dest),
+                        static_cast<unsigned>(pending.portnum),
+                        reason);
             LORA_LOG("[LORA] TX text PKI required but unavailable dest=%08lX\n",
                      (unsigned long)dest);
             return false;
@@ -2233,6 +2503,10 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
         size_t pki_len = sizeof(pki_buf);
         if (!encryptPkiPayload(dest, pending.msg_id, data_buffer, data_size, pki_buf, &pki_len))
         {
+            mt_diag_log("[MT][TX_BLOCK] id=%08lX dest=%08lX port=%u reason=pki_encrypt_fail path=PKI\n",
+                        static_cast<unsigned long>(pending.msg_id),
+                        static_cast<unsigned long>(dest),
+                        static_cast<unsigned>(pending.portnum));
             LORA_LOG("[LORA] TX text PKI encrypt failed dest=%08lX\n",
                      (unsigned long)dest);
             return false;
@@ -2272,6 +2546,14 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
              (unsigned)psk_len,
              (channel_hash == 0) ? 1U : 0U,
              (unsigned long)dest);
+    mt_diag_log("[MT][TX_ROUTE] id=%08lX dest=%08lX port=%u logical_ch=%u wire_ch=%u path=%s payload=%u\n",
+                static_cast<unsigned long>(pending.msg_id),
+                static_cast<unsigned long>(dest),
+                static_cast<unsigned>(pending.portnum),
+                static_cast<unsigned>(channel),
+                static_cast<unsigned>(channel_hash),
+                use_pki ? "PKI" : "CHANNEL",
+                static_cast<unsigned>(payload_len));
 
     if (!buildWirePacket(payload, payload_len, from_node, pending.msg_id,
                          dest, channel_hash, hop_limit, air_want_ack,
@@ -3153,15 +3435,26 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
 {
     if (!cipher || cipher_len <= 12 || !out_plain || !out_plain_len)
     {
+        mt_diag_log("[MT][PKI] decrypt_skip from=%08lX id=%08lX reason=bad_args len=%u\n",
+                    static_cast<unsigned long>(from),
+                    static_cast<unsigned long>(packet_id),
+                    static_cast<unsigned>(cipher_len));
         return false;
     }
     if (!pki_ready_)
     {
+        mt_diag_log("[MT][PKI] decrypt_skip from=%08lX id=%08lX reason=not_ready len=%u\n",
+                    static_cast<unsigned long>(from),
+                    static_cast<unsigned long>(packet_id),
+                    static_cast<unsigned>(cipher_len));
         return false;
     }
     auto it = node_public_keys_.find(from);
     if (it == node_public_keys_.end())
     {
+        mt_diag_log("[MT][PKI] decrypt_skip from=%08lX id=%08lX reason=key_missing\n",
+                    static_cast<unsigned long>(from),
+                    static_cast<unsigned long>(packet_id));
         LORA_LOG("[LORA] PKI key missing for %08lX\n", (unsigned long)from);
         sendNodeInfoTo(from, true, ChannelId::PRIMARY);
         sendRoutingError(from, packet_id, primary_channel_hash_,
@@ -3179,6 +3472,9 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     memcpy(local_priv, pki_private_key_.data(), sizeof(local_priv));
     if (!Curve25519::dh2(shared, local_priv))
     {
+        mt_diag_log("[MT][PKI] decrypt_fail from=%08lX id=%08lX reason=dh2\n",
+                    static_cast<unsigned long>(from),
+                    static_cast<unsigned long>(packet_id));
         return false;
     }
 
@@ -3187,6 +3483,7 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     const uint8_t* auth = cipher + (cipher_len - 12);
     uint32_t extra_nonce = 0;
     memcpy(&extra_nonce, auth + 8, sizeof(extra_nonce));
+    std::string key_fp = toHex(it->second.data(), it->second.size(), 8);
 
     uint8_t nonce[16];
     uint64_t packet_id64 = static_cast<uint64_t>(packet_id);
@@ -3196,12 +3493,22 @@ bool MtAdapter::decryptPkiPayload(uint32_t from, uint32_t packet_id,
     if (*out_plain_len < plain_len)
     {
         *out_plain_len = plain_len;
+        mt_diag_log("[MT][PKI] decrypt_skip from=%08lX id=%08lX reason=buffer_small need=%u\n",
+                    static_cast<unsigned long>(from),
+                    static_cast<unsigned long>(packet_id),
+                    static_cast<unsigned>(plain_len));
         return false;
     }
 
     if (!decryptPkiAesCcm(shared, sizeof(shared), nonce, 8,
                           cipher, plain_len, nullptr, 0, auth, out_plain))
     {
+        mt_diag_log("[MT][PKI] decrypt_fail from=%08lX id=%08lX reason=ccm_auth key=%s extra_nonce=%08lX len=%u\n",
+                    static_cast<unsigned long>(from),
+                    static_cast<unsigned long>(packet_id),
+                    key_fp.c_str(),
+                    static_cast<unsigned long>(extra_nonce),
+                    static_cast<unsigned>(cipher_len));
         return false;
     }
 

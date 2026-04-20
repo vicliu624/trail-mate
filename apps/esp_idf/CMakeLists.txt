@@ -1,5 +1,5 @@
-# Shared ESP-IDF application component.
-# This component builds the migrated shared modules plus the shared IDF app shell.
+#Shared ESP - IDF application component.
+#This component builds the migrated shared modules plus the shared IDF app shell.
 
 file(GLOB_RECURSE trail_mate_idf_local_sources
     ${CMAKE_CURRENT_LIST_DIR}/src/*.c
@@ -53,8 +53,12 @@ list(APPEND trail_mate_idf_external_sources
 set(trail_mate_idf_requires
     esp_app_format
     esp_common
+    esp_event
+    esp_http_client
     esp_lcd
+    esp_netif
     esp_timer
+    json
     log
     lvgl__lvgl
     nvs_flash
@@ -77,6 +81,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/app_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/app_catalog_builder.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/formatters.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/i18n/resource_pack_registry.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/loop_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/startup_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/menu/menu_runtime.cpp
@@ -89,10 +94,13 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/widgets/toast/toast_widget.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/widgets/ime/ime_widget.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/widgets/ime/pinyin_ime.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/fonts/font_utils.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_nav.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/page/page_profile.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/runtime/memory_profile.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/runtime/pack_repository.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/common/placeholder_page.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_compose_components.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_compose_input.cpp
@@ -125,6 +133,8 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/widgets/map/map_tiles.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/energy_sweep/energy_sweep_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/energy_sweep/energy_sweep_page_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/extensions/extensions_page_shell.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/extensions/extensions_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/sstv/sstv_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/sstv/sstv_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/pc_link/pc_link_page_shell.cpp
@@ -176,9 +186,11 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/route_topbar.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/team_topbar.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/tracker_topbar.c
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/wifi_topbar.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/ble_topbar.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Satellite.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/contact.c
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/ext.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/rally.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Spectrum.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/sos.c

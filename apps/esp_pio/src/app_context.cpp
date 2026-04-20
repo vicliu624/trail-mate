@@ -240,7 +240,7 @@ void AppContext::applyPrivacyConfig()
 {
     if (mesh_router_)
     {
-        mesh_router_->setPrivacyConfig(config_.privacy_encrypt_mode, config_.privacy_pki);
+        mesh_router_->setPrivacyConfig(config_.privacy_encrypt_mode);
     }
 }
 
@@ -311,7 +311,7 @@ bool AppContext::switchMeshProtocol(chat::MeshProtocol protocol, bool persist)
                          short_name, sizeof(short_name));
     backend->setUserInfo(long_name, short_name);
     backend->setNetworkLimits(config_.net_duty_cycle, config_.net_channel_util);
-    backend->setPrivacyConfig(config_.privacy_encrypt_mode, config_.privacy_pki);
+    backend->setPrivacyConfig(config_.privacy_encrypt_mode);
 
     if (!mesh_router_->installBackend(protocol, std::move(backend)))
     {

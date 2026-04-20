@@ -25,6 +25,7 @@ struct FeatureFlags
     bool include_sstv = true;
     bool include_usb = false;
     bool include_settings = true;
+    bool include_extensions = true;
     bool include_walkie_talkie = false;
 };
 

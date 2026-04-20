@@ -37,6 +37,7 @@
         </a>
         <nav class="nav">
           <a href="#overview">Overview</a>
+          <a href="#languages">Languages</a>
           <a href="#webflasher">Web Flasher</a>
           <a href="https://github.com/vicliu624/trail-mate">GitHub</a>
           <a href="https://github.com/vicliu624/trail-mate/blob/main/README.md">Docs</a>
@@ -51,8 +52,9 @@
             <h1>Trail Mate turns ESP32 handhelds into field-ready offline tools.</h1>
             <p class="lede">
               A low-power firmware stack for outdoor navigation, GNSS diagnostics,
-              LoRa chat, team coordination, and protocol interoperability on
-              compact devices you can actually carry into the field.
+              LoRa chat, installable multilingual UI support, team coordination,
+              and protocol interoperability on compact devices you can actually
+              carry into the field.
             </p>
             <div class="hero-actions">
               <a class="button button-primary" href="#webflasher">Open Web Flasher</a>
@@ -85,15 +87,72 @@
           <p class="overview-copy">
             Trail Mate is not a single-page radio demo. It is a compact offline field stack:
             navigation, direct LoRa messaging, team coordination, RF diagnostics, and utility
-            tooling shaped for embedded hardware with tight power and UI constraints.
+            tooling shaped for embedded hardware with tight power and UI constraints, now
+            with installable language packs that keep broader localization practical on
+            small devices.
           </p>
           <div class="overview-tags">
             <span>Offline Maps</span>
             <span>GNSS Diagnostics</span>
             <span>Mesh Chat</span>
             <span>Team Mode</span>
+            <span>Language Packs</span>
             <span>Sub-GHz Scan</span>
             <span>PC Link</span>
+          </div>
+        </section>
+
+        <section class="language-section" id="languages">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Localization</p>
+              <h2>Multilingual support stays installable, so devices only carry the language resources they actually need.</h2>
+            </div>
+            <p class="section-note">
+              English remains built in for safe defaults. Additional locale, font, and IME
+              resources are published as installable bundles, downloaded through the Extensions
+              app over Wi-Fi, and unpacked onto SD storage instead of being forced into every
+              firmware image.
+            </p>
+          </div>
+
+          <div class="language-highlights">
+            <article class="language-highlight">
+              <p class="feature-kicker">Built-In Default</p>
+              <h3>English is always available.</h3>
+              <p>
+                The device can boot, recover, and stay usable even when no external language
+                packs are installed on the SD card.
+              </p>
+            </article>
+
+            <article class="language-highlight">
+              <p class="feature-kicker">Pack Catalog</p>
+              <h3><span data-pack-count>0</span> bundles covering <span data-locale-count>0</span> installable locales.</h3>
+              <p>
+                Locale, font, and IME resources are shipped as packages so firmware builds
+                can stay lean while the installed language surface grows over time.
+              </p>
+            </article>
+
+            <article class="language-highlight">
+              <p class="feature-kicker">Mixed-Script UI</p>
+              <h3>Localized chrome and multilingual content can coexist.</h3>
+              <p>
+                External font coverage lets menus, contact names, and chat content stay
+                readable across scripts without recompiling the whole firmware.
+              </p>
+            </article>
+          </div>
+
+          <div class="language-pack-grid" data-pack-grid>
+            <article class="language-pack-card language-pack-empty">
+              <p class="feature-kicker">Catalog</p>
+              <h3>Loading package catalog...</h3>
+              <p class="language-pack-summary">
+                Published locale bundles from the current Pages build will appear here.
+              </p>
+            </article>
           </div>
         </section>
 

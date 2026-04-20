@@ -70,6 +70,13 @@ using ::chat::meshtastic::toHex;
 void logMeshtasticRx(const char* format, ...);
 uint32_t nowSeconds();
 
+bool shouldRequireDirectPki(uint8_t encrypt_mode, ::chat::NodeId dest_node, uint32_t portnum)
+{
+    return encrypt_mode != 0 &&
+           dest_node != kBroadcastNode &&
+           allowPkiForPortnum(portnum);
+}
+
 void logMeshtasticRx(const char* format, ...)
 {
     char buffer[192] = {};
@@ -513,7 +520,9 @@ bool MeshtasticRadioAdapter::sendTextWithId(::chat::ChannelId channel, const std
         out_channel = ::chat::ChannelId::PRIMARY;
     }
 
-    if (peer != 0 && pki_enabled_)
+    if (shouldRequireDirectPki(encrypt_mode_,
+                               (peer == 0) ? kBroadcastNode : peer,
+                               meshtastic_PortNum_TEXT_MESSAGE_APP))
     {
         const ::chat::MessageId packet_id = (forced_msg_id != 0) ? forced_msg_id : next_packet_id_;
         const bool ok = sendAppData(out_channel,
@@ -678,7 +687,7 @@ bool MeshtasticRadioAdapter::sendAppData(::chat::ChannelId channel, uint32_t por
     size_t wire_payload_len = data_pb_size;
     bool use_pki = false;
     bool track_ack = want_ack;
-    if (wire_dest != kBroadcastNode && pki_enabled_)
+    if (shouldRequireDirectPki(encrypt_mode_, wire_dest, portnum))
     {
         if (!pki_ready_ || !allowPkiForPortnum(portnum) || !hasPkiKey(wire_dest))
         {
@@ -821,14 +830,9 @@ void MeshtasticRadioAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t u
     (void)util_percent;
 }
 
-void MeshtasticRadioAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MeshtasticRadioAdapter::setPrivacyConfig(uint8_t encrypt_mode)
 {
     encrypt_mode_ = encrypt_mode;
-    pki_enabled_ = pki_enabled;
-    if (encrypt_mode_ == 0)
-    {
-        pki_enabled_ = false;
-    }
     if (!pki_ready_)
     {
         pki_ready_ = initPkiKeys();

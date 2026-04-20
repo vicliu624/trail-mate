@@ -606,7 +606,6 @@ void log_config_delta(const AppConfig& before, const AppConfig& after)
     log_change_u8("net_util", before.net_channel_util, after.net_channel_util, any_change);
 
     log_change_u8("privacy_encrypt_mode", before.privacy_encrypt_mode, after.privacy_encrypt_mode, any_change);
-    log_change_bool("privacy_pki", before.privacy_pki, after.privacy_pki, any_change);
     log_change_u8("privacy_nmea_output", before.privacy_nmea_output, after.privacy_nmea_output, any_change);
     log_change_u8("privacy_nmea_sentence", before.privacy_nmea_sentence, after.privacy_nmea_sentence, any_change);
 
@@ -669,12 +668,11 @@ void log_config_summary(const char* phase, const AppConfig& config)
                   static_cast<unsigned>(config.map_track_format),
                   bool_label(config.route_enabled),
                   config.route_path);
-    Serial.printf("[AppCfg][%s][privacy] duty_cycle=%s net_util=%u encrypt=%u pki=%s nmea=%u sentence=%u\n",
+    Serial.printf("[AppCfg][%s][privacy] duty_cycle=%s net_util=%u encrypt=%u nmea=%u sentence=%u\n",
                   safe_label(phase),
                   bool_label(config.net_duty_cycle),
                   static_cast<unsigned>(config.net_channel_util),
                   static_cast<unsigned>(config.privacy_encrypt_mode),
-                  bool_label(config.privacy_pki),
                   static_cast<unsigned>(config.privacy_nmea_output),
                   static_cast<unsigned>(config.privacy_nmea_sentence));
     Serial.printf("[AppCfg][%s][aprs] enabled=%s igate=%s-%u tocall=%s path=%s pos_interval=%u self=%s self_call=%s node_map_len=%u\n",
@@ -728,7 +726,6 @@ bool loadAppConfigFromPreferences(AppConfig& config,
     auto& net_duty_cycle = config.net_duty_cycle;
     auto& net_channel_util = config.net_channel_util;
     auto& privacy_encrypt_mode = config.privacy_encrypt_mode;
-    auto& privacy_pki = config.privacy_pki;
     auto& privacy_nmea_output = config.privacy_nmea_output;
     auto& privacy_nmea_sentence = config.privacy_nmea_sentence;
     auto& route_enabled = config.route_enabled;
@@ -933,7 +930,6 @@ bool loadAppConfigFromPreferences(AppConfig& config,
         net_duty_cycle = get_bool("net_duty_cycle", net_duty_cycle);
         net_channel_util = get_uchar("net_util", net_channel_util);
         privacy_encrypt_mode = get_uchar("privacy_encrypt", privacy_encrypt_mode);
-        privacy_pki = get_bool("privacy_pki", privacy_pki);
         privacy_nmea_output = get_uchar("privacy_nmea", privacy_nmea_output);
         privacy_nmea_sentence = get_uchar(kSettingsKeyPrivacyNmeaSentence, privacy_nmea_sentence);
         route_enabled = get_bool("route_enabled", route_enabled);
@@ -1043,7 +1039,6 @@ bool saveAppConfigToPreferences(AppConfig& config,
     auto& net_duty_cycle = config.net_duty_cycle;
     auto& net_channel_util = config.net_channel_util;
     auto& privacy_encrypt_mode = config.privacy_encrypt_mode;
-    auto& privacy_pki = config.privacy_pki;
     auto& privacy_nmea_output = config.privacy_nmea_output;
     auto& privacy_nmea_sentence = config.privacy_nmea_sentence;
     auto& route_enabled = config.route_enabled;
@@ -1214,7 +1209,7 @@ bool saveAppConfigToPreferences(AppConfig& config,
         put_bool("net_duty_cycle", net_duty_cycle);
         put_uchar("net_util", net_channel_util);
         put_uchar("privacy_encrypt", privacy_encrypt_mode);
-        put_bool("privacy_pki", privacy_pki);
+        ok = remove_key_logged(prefs, "settings", "privacy_pki", emit_logs) && ok;
         put_uchar("privacy_nmea", privacy_nmea_output);
         put_uchar(kSettingsKeyPrivacyNmeaSentence, privacy_nmea_sentence);
         put_bool("route_enabled", route_enabled);

@@ -6,9 +6,13 @@ on:
       - main
     paths:
       - site/**
+      - packs/**
       - docs/images/**
+      - scripts/build_pack_repository.py
       - scripts/prepare_pages_site.py
       - scripts/webflash_targets.py
+      - tools/generate_binfont_with_lv_font_conv.py
+      - tools/fonts/**
       - .github/workflows/ci.yml
       - .github/workflows/pages.yml
   release:
@@ -38,6 +42,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

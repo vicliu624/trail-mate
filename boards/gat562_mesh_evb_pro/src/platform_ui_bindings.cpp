@@ -115,6 +115,17 @@ BatteryInfo battery_info()
     return info;
 }
 
+MemoryStats memory_stats()
+{
+    MemoryStats stats{};
+    return stats;
+}
+
+const char* firmware_version()
+{
+    return "unknown";
+}
+
 void handle_low_battery(const BatteryInfo& info)
 {
     (void)info;

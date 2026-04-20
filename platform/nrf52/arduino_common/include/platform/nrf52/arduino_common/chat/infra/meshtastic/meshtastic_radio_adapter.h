@@ -60,7 +60,7 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     void applyConfig(const ::chat::MeshConfig& config) override;
     void setUserInfo(const char* long_name, const char* short_name) override;
     void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
-    void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled) override;
+    void setPrivacyConfig(uint8_t encrypt_mode) override;
     bool isReady() const override;
     ::chat::NodeId getNodeId() const override;
     void setMqttProxySettings(const MqttProxySettings& settings);
@@ -258,7 +258,6 @@ class MeshtasticRadioAdapter final : public ::chat::IMeshAdapter
     size_t last_raw_packet_len_ = 0;
     bool has_pending_raw_packet_ = false;
     uint8_t encrypt_mode_ = 1;
-    bool pki_enabled_ = false;
     bool pki_ready_ = false;
     std::array<uint8_t, 32> pki_public_key_{};
     std::array<uint8_t, 32> pki_private_key_{};

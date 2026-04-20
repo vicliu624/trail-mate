@@ -11,6 +11,7 @@
 #include "chat/usecase/chat_service.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/tracker_runtime.h"
+#include "platform/ui/wifi_runtime.h"
 #include "sys/clock.h"
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
 #include "ui/screens/team/team_ui_store.h"
@@ -23,6 +24,7 @@ extern "C"
     extern const lv_image_dsc_t gps_topbar;
     extern const lv_image_dsc_t message_topbar;
     extern const lv_image_dsc_t route_topbar;
+    extern const lv_image_dsc_t wifi_topbar;
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
     extern const lv_image_dsc_t team_topbar;
 #endif
@@ -42,6 +44,7 @@ struct StatusSnapshot
     bool route_active = false;
     bool track_recording = false;
     bool gps_enabled = false;
+    bool wifi_enabled = false;
     bool team_active = false;
     bool ble_enabled = false;
     int unread = 0;
@@ -60,6 +63,7 @@ lv_obj_t* s_menu_status_row = nullptr;
 lv_obj_t* s_menu_route_icon = nullptr;
 lv_obj_t* s_menu_tracker_icon = nullptr;
 lv_obj_t* s_menu_gps_icon = nullptr;
+lv_obj_t* s_menu_wifi_icon = nullptr;
 lv_obj_t* s_menu_team_icon = nullptr;
 lv_obj_t* s_menu_msg_icon = nullptr;
 lv_obj_t* s_menu_ble_icon = nullptr;
@@ -114,6 +118,7 @@ StatusSnapshot collect_status()
     snap.route_active = cfg.route_enabled && (cfg.route_path[0] != '\0');
     snap.track_recording = platform::ui::tracker::is_recording();
     snap.gps_enabled = platform::ui::gps::is_enabled();
+    snap.wifi_enabled = platform::ui::wifi::status().enabled;
     if (auto* ble = app::runtimeFacade().getBleManager())
     {
         snap.ble_enabled = ble->isEnabled();
@@ -156,6 +161,7 @@ void apply_menu_icons(const StatusSnapshot& snap)
     apply_icon(s_menu_route_icon, &route_topbar, snap.route_active);
     apply_icon(s_menu_tracker_icon, &tracker_topbar, snap.track_recording);
     apply_icon(s_menu_gps_icon, &gps_topbar, snap.gps_enabled);
+    apply_icon(s_menu_wifi_icon, &wifi_topbar, snap.wifi_enabled);
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
     apply_icon(s_menu_team_icon, &team_topbar, snap.team_active);
 #else
@@ -164,9 +170,9 @@ void apply_menu_icons(const StatusSnapshot& snap)
     apply_icon(s_menu_msg_icon, &message_topbar, snap.unread > 0);
     apply_icon(s_menu_ble_icon, &ble_topbar, snap.ble_enabled);
 
-    const bool any =
-        snap.route_active || snap.track_recording || snap.gps_enabled || snap.team_active ||
-        snap.ble_enabled || (snap.unread > 0);
+    const bool any = snap.route_active || snap.track_recording || snap.gps_enabled ||
+                     snap.wifi_enabled || snap.team_active || snap.ble_enabled ||
+                     (snap.unread > 0);
     if (any)
     {
         lv_obj_clear_flag(s_menu_status_row, LV_OBJ_FLAG_HIDDEN);
@@ -227,6 +233,7 @@ void register_menu_status_row(lv_obj_t* row,
                               lv_obj_t* route_icon,
                               lv_obj_t* tracker_icon,
                               lv_obj_t* gps_icon,
+                              lv_obj_t* wifi_icon,
                               lv_obj_t* team_icon,
                               lv_obj_t* msg_icon,
                               lv_obj_t* ble_icon)
@@ -235,6 +242,7 @@ void register_menu_status_row(lv_obj_t* row,
     s_menu_route_icon = route_icon;
     s_menu_tracker_icon = tracker_icon;
     s_menu_gps_icon = gps_icon;
+    s_menu_wifi_icon = wifi_icon;
     s_menu_team_icon = team_icon;
     s_menu_msg_icon = msg_icon;
     s_menu_ble_icon = ble_icon;

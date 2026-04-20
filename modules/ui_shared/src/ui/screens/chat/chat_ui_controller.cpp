@@ -18,6 +18,8 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/screens/chat/chat_protocol_support.h"
+#include "ui/screens/chat/chat_send_flow.h"
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
@@ -54,6 +56,8 @@ namespace ui
 
 namespace
 {
+namespace chat_support = chat::ui::support;
+
 constexpr uint8_t kTeamChatChannelRaw = 2;
 constexpr chat::ChannelId kTeamChatChannel =
     static_cast<chat::ChannelId>(kTeamChatChannelRaw);
@@ -92,11 +96,6 @@ const TeamPositionIconOption* find_team_position_icon_option(uint8_t icon_id)
     return nullptr;
 }
 
-chat::MeshProtocol active_mesh_protocol()
-{
-    return app::configFacade().getConfig().mesh_protocol;
-}
-
 const char* protocol_short_label(chat::MeshProtocol protocol)
 {
     return chat::infra::meshProtocolShortName(protocol);
@@ -132,39 +131,9 @@ std::string base_conversation_name(const chat::ConversationId& conv)
     return buf;
 }
 
-chat::MeshCapabilities active_mesh_capabilities()
-{
-    chat::IMeshAdapter* adapter = app::messagingFacade().getMeshAdapter();
-    return adapter ? adapter->getCapabilities() : chat::MeshCapabilities{};
-}
-
-bool supports_local_text_chat()
-{
-    return active_mesh_capabilities().supports_unicast_text;
-}
-
-bool supports_team_chat()
-{
-    return active_mesh_capabilities().supports_unicast_appdata;
-}
-
-const char* local_text_chat_unavailable_message()
-{
-    return (active_mesh_protocol() == chat::MeshProtocol::RNode)
-               ? "RNode text chat runs on host"
-               : "Text chat unavailable";
-}
-
-const char* team_chat_unavailable_message()
-{
-    return (active_mesh_protocol() == chat::MeshProtocol::RNode)
-               ? "Team chat unavailable in RNode mode"
-               : "Team chat unavailable";
-}
-
 chat::ConversationId teamConversationId()
 {
-    return chat::ConversationId(kTeamChatChannel, 0, active_mesh_protocol());
+    return chat::ConversationId(kTeamChatChannel, 0, chat_support::active_mesh_protocol());
 }
 
 bool isTeamConversationId(const chat::ConversationId& conv)
@@ -400,7 +369,7 @@ void handle_conversation_back(void* user_data)
 UiController::UiController(lv_obj_t* parent, chat::ChatService& service, chat::ChannelId initial_channel, ExitRequestCallback exit_request, void* exit_request_user_data)
     : parent_(parent), service_(service), state_(State::ChannelList),
       current_channel_(initial_channel),
-      current_conv_(chat::ConversationId(initial_channel, 0, active_mesh_protocol())),
+      current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
       exit_request_(exit_request), exit_request_user_data_(exit_request_user_data)
 {
 }
@@ -668,8 +637,9 @@ void UiController::switchToConversation(chat::ConversationId conv)
         conversation_->setBackCallback(handle_conversation_back, this);
     }
     const bool can_reply = team_conv_active_
-                               ? supports_team_chat()
-                               : (conv.protocol == active_mesh_protocol() && supports_local_text_chat());
+                               ? chat_support::supports_team_chat()
+                               : (conv.protocol == chat_support::active_mesh_protocol() &&
+                                  chat_support::supports_local_text_chat());
     conversation_->setReplyEnabled(can_reply);
 
     if (team_conv_active_)
@@ -735,19 +705,19 @@ void UiController::switchToCompose(chat::ConversationId conv)
 {
     closeTeamPositionPicker(true);
     const bool is_team_conv = isTeamConversation(conv);
-    if (!is_team_conv && conv.protocol != active_mesh_protocol())
+    if (!is_team_conv && conv.protocol != chat_support::active_mesh_protocol())
     {
         ::ui::SystemNotification::show("Conversation protocol mismatch", 2000);
         return;
     }
-    if (!is_team_conv && !supports_local_text_chat())
+    if (!is_team_conv && !chat_support::supports_local_text_chat())
     {
-        ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+        ::ui::SystemNotification::show(chat_support::local_text_chat_unavailable_message(), 2200);
         return;
     }
-    if (is_team_conv && !supports_team_chat())
+    if (is_team_conv && !chat_support::supports_team_chat())
     {
-        ::ui::SystemNotification::show(team_chat_unavailable_message(), 2200);
+        ::ui::SystemNotification::show(chat_support::team_chat_unavailable_message(), 2200);
         return;
     }
 
@@ -870,12 +840,36 @@ void UiController::handleSendMessage(const std::string& text)
     {
         return;
     }
-    if (!supports_local_text_chat())
+    if (!chat_support::supports_local_text_chat())
     {
-        ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+        ::ui::SystemNotification::show(chat_support::local_text_chat_unavailable_message(), 2200);
         return;
     }
-    service_.sendText(current_channel_, text, current_conv_.peer);
+    chat::ui::send_flow::begin_local_text_send(compose_.get(),
+                                               &service_,
+                                               current_conv_,
+                                               text,
+                                               UiController::handleComposeSendDoneCallback,
+                                               this);
+}
+
+void UiController::handleComposeSendDone(bool ok, bool timeout)
+{
+    (void)ok;
+    (void)timeout;
+    if (state_ == State::Compose)
+    {
+        switchToConversation(current_conv_);
+    }
+}
+
+void UiController::handleComposeSendDoneCallback(bool ok, bool timeout, void* user_data)
+{
+    auto* controller = static_cast<UiController*>(user_data);
+    if (controller)
+    {
+        controller->handleComposeSendDone(ok, timeout);
+    }
 }
 
 void UiController::refreshUnreadCounts()
@@ -1098,7 +1092,7 @@ void UiController::refreshTeamConversation()
         for (const auto& entry : entries)
         {
             chat::ChatMessage msg;
-            msg.protocol = active_mesh_protocol();
+            msg.protocol = chat_support::active_mesh_protocol();
             msg.channel = chat::ChannelId::PRIMARY;
             msg.peer = 0;
             msg.from = entry.incoming ? entry.peer_id : 0;
@@ -1955,19 +1949,19 @@ void UiController::handleConversationAction(ChatConversationScreen::ActionIntent
 {
     if (intent == ChatConversationScreen::ActionIntent::Reply)
     {
-        if (!team_conv_active_ && current_conv_.protocol != active_mesh_protocol())
+        if (!team_conv_active_ && current_conv_.protocol != chat_support::active_mesh_protocol())
         {
             ::ui::SystemNotification::show("Reply disabled for this protocol", 2000);
             return;
         }
-        if (!team_conv_active_ && !supports_local_text_chat())
+        if (!team_conv_active_ && !chat_support::supports_local_text_chat())
         {
-            ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+            ::ui::SystemNotification::show(chat_support::local_text_chat_unavailable_message(), 2200);
             return;
         }
-        if (team_conv_active_ && !supports_team_chat())
+        if (team_conv_active_ && !chat_support::supports_team_chat())
         {
-            ::ui::SystemNotification::show(team_chat_unavailable_message(), 2200);
+            ::ui::SystemNotification::show(chat_support::team_chat_unavailable_message(), 2200);
             return;
         }
         switchToCompose(current_conv_);
@@ -2078,6 +2072,7 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
         if (!text.empty())
         {
             handleSendMessage(text);
+            return;
         }
     }
     switchToConversation(current_conv_);

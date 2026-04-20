@@ -1,0 +1,5 @@
+Traditional Chinese installs the zh-Hant locale together with the zh-hant-cjk external
+font pack so the UI and mixed-language content can render Traditional Chinese correctly.
+
+This bundle is display-focused today. It does not add a dedicated Traditional Chinese IME
+yet, but it keeps rendering support fully external to the firmware image.

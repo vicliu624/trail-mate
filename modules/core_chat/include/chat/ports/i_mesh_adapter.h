@@ -203,10 +203,9 @@ class IMeshAdapter
     /**
      * @brief Apply privacy configuration
      */
-    virtual void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+    virtual void setPrivacyConfig(uint8_t encrypt_mode)
     {
         (void)encrypt_mode;
-        (void)pki_enabled;
     }
 
     /**

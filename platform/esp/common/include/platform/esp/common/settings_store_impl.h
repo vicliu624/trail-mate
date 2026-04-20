@@ -125,6 +125,12 @@ inline bool commit_and_close(nvs_handle_t handle)
     return ok;
 }
 
+inline bool erase_key_if_present(nvs_handle_t handle, const char* storage_key)
+{
+    const esp_err_t err = nvs_erase_key(handle, storage_key);
+    return err == ESP_OK || err == ESP_ERR_NVS_NOT_FOUND;
+}
+
 } // namespace platform::esp::common::settings_store_detail
 
 namespace platform::ui::settings_store
@@ -275,7 +281,7 @@ bool put_string(const char* ns, const char* key, const char* value)
     bool ok = false;
     if (value[0] == '\0')
     {
-        ok = nvs_erase_key(handle, storage_key) == ESP_OK;
+        ok = erase_key_if_present(handle, storage_key);
         if (ok)
         {
             ok = commit_and_close(handle);
@@ -338,7 +344,7 @@ bool put_blob(const char* ns, const char* key, const void* data, std::size_t len
     bool ok = false;
     if (len == 0)
     {
-        ok = nvs_erase_key(handle, storage_key) == ESP_OK;
+        ok = erase_key_if_present(handle, storage_key);
         if (ok)
         {
             ok = commit_and_close(handle);
@@ -638,7 +644,7 @@ void remove_keys(const char* ns, const char* const* keys, std::size_t key_count)
             continue;
         }
 
-        const bool ok = nvs_erase_key(handle, storage_key) == ESP_OK;
+        const bool ok = erase_key_if_present(handle, storage_key);
         changed = changed || ok;
         logf("[CfgStore][REMOVE] ns=%s key=%s storage_key=%s ok=%s\n",
              safe_label(ns),

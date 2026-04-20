@@ -1,0 +1,5 @@
+Korean installs the ko locale together with the ko-cjk external font pack so interface
+labels and Korean content can render correctly without carrying the glyph set in firmware.
+
+This bundle is currently display-only. It does not add a Korean IME yet, but it keeps
+Korean support available as an installable SD package.

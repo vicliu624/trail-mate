@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "lvgl.h"
 #include "ui/assets/fonts/fonts.h"
@@ -17,9 +18,16 @@
 namespace ui::fonts
 {
 
+enum class FontScope : uint8_t
+{
+    Ui = 0,
+    Content,
+};
+
 struct LocalizedFontBinding
 {
     const lv_font_t* base = nullptr;
+    FontScope scope = FontScope::Ui;
     lv_font_t composed{};
     bool used = false;
 };
@@ -80,18 +88,20 @@ inline void sync_localized_font_binding(LocalizedFontBinding& binding)
     }
 
     binding.composed = *binding.base;
-    const lv_font_t* fallback = ::ui::i18n::active_font_fallback();
+    const lv_font_t* fallback = binding.scope == FontScope::Content
+                                    ? ::ui::i18n::active_content_font_fallback()
+                                    : ::ui::i18n::active_ui_font_fallback();
     binding.composed.fallback = (fallback && fallback != binding.base) ? fallback : nullptr;
 }
 
-inline LocalizedFontBinding* find_localized_font_binding(const lv_font_t* base_font)
+inline LocalizedFontBinding* find_localized_font_binding(const lv_font_t* base_font, FontScope scope)
 {
     LocalizedFontBinding* bindings = localized_font_binding_storage();
     const std::size_t binding_count = localized_font_binding_storage_size();
     for (std::size_t index = 0; index < binding_count; ++index)
     {
         LocalizedFontBinding& binding = bindings[index];
-        if (binding.used && binding.base == base_font)
+        if (binding.used && binding.base == base_font && binding.scope == scope)
         {
             return &binding;
         }
@@ -99,7 +109,7 @@ inline LocalizedFontBinding* find_localized_font_binding(const lv_font_t* base_f
     return nullptr;
 }
 
-inline LocalizedFontBinding* acquire_localized_font_binding(const lv_font_t* base_font)
+inline LocalizedFontBinding* acquire_localized_font_binding(const lv_font_t* base_font, FontScope scope)
 {
     LocalizedFontBinding* bindings = localized_font_binding_storage();
     const std::size_t binding_count = localized_font_binding_storage_size();
@@ -110,6 +120,7 @@ inline LocalizedFontBinding* acquire_localized_font_binding(const lv_font_t* bas
         {
             binding.used = true;
             binding.base = base_font;
+            binding.scope = scope;
             sync_localized_font_binding(binding);
             return &binding;
         }
@@ -148,21 +159,28 @@ inline void refresh_locale_font_bindings()
     }
 }
 
-inline const lv_font_t* localized_font(const lv_font_t* ascii_font = nullptr)
+inline const lv_font_t* localized_font(FontScope scope,
+                                       const char* text,
+                                       const lv_font_t* ascii_font = nullptr)
 {
+    if (scope == FontScope::Content)
+    {
+        (void)::ui::i18n::ensure_content_font_for_text(text);
+    }
+
     const lv_font_t* base_font = unwrap_localized_font(ascii_font ? ascii_font : ui_chrome_font());
     if (!base_font)
     {
         base_font = ui_chrome_font();
     }
 
-    if (LocalizedFontBinding* existing = find_localized_font_binding(base_font))
+    if (LocalizedFontBinding* existing = find_localized_font_binding(base_font, scope))
     {
         sync_localized_font_binding(*existing);
         return &existing->composed;
     }
 
-    if (LocalizedFontBinding* created = acquire_localized_font_binding(base_font))
+    if (LocalizedFontBinding* created = acquire_localized_font_binding(base_font, scope))
     {
         return &created->composed;
     }
@@ -170,16 +188,24 @@ inline const lv_font_t* localized_font(const lv_font_t* ascii_font = nullptr)
     return base_font;
 }
 
+inline const lv_font_t* localized_font(const lv_font_t* ascii_font = nullptr)
+{
+    return localized_font(FontScope::Ui, nullptr, ascii_font);
+}
+
 inline const lv_font_t* localized_font(const char* text, const lv_font_t* ascii_font)
 {
-    (void)text;
-    return localized_font(ascii_font);
+    return localized_font(FontScope::Ui, text, ascii_font);
+}
+
+inline const lv_font_t* content_font(const char* text, const lv_font_t* ascii_font = nullptr)
+{
+    return localized_font(FontScope::Content, text, ascii_font ? ascii_font : ui_chrome_font());
 }
 
 inline const lv_font_t* chat_content_font(const char* text)
 {
-    (void)text;
-    return localized_font(ui_chrome_font());
+    return content_font(text, ui_chrome_font());
 }
 
 inline void apply_font(lv_obj_t* label, const lv_font_t* font)
@@ -195,14 +221,19 @@ inline void apply_ui_chrome_font(lv_obj_t* label)
     apply_font(label, localized_font(ui_chrome_font()));
 }
 
+inline void apply_content_font(lv_obj_t* label, const char* text, const lv_font_t* ascii_font = nullptr)
+{
+    apply_font(label, content_font(text, ascii_font));
+}
+
 inline void apply_chat_content_font(lv_obj_t* label, const char* text)
 {
-    apply_font(label, chat_content_font(text));
+    apply_content_font(label, text, ui_chrome_font());
 }
 
 inline void apply_localized_font(lv_obj_t* label, const char* text, const lv_font_t* ascii_font)
 {
-    apply_font(label, localized_font(text, ascii_font));
+    apply_font(label, localized_font(FontScope::Ui, text, ascii_font));
 }
 
 } // namespace ui::fonts

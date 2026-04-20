@@ -27,6 +27,7 @@ ui::app_catalog_builder::FeatureFlags buildFeatureFlags()
     flags.include_pc_link = platform::ui::hostlink::is_supported();
     flags.include_sstv = platform::ui::sstv::is_supported();
     flags.include_usb = platform::ui::usb_support::is_supported() && platform::ui::device::sd_ready();
+    flags.include_extensions = true;
     flags.include_walkie_talkie = platform::ui::walkie::is_supported();
     APP_REG_LOG(
         "flags gps_map=%d skyplot=%d tracker=%d chat=%d sweep=%d pc_link=%d sstv=%d usb=%d walkie=%d gps_supported=%d gps_ready=%d sd_ready=%d\n",

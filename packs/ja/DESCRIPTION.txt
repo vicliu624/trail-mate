@@ -1,0 +1,5 @@
+Japanese installs the ja locale together with the ja-cjk external font pack so menu text,
+labels, and received Japanese content can render without inflating the firmware image.
+
+This bundle is currently display-only. It does not add a Japanese IME yet, but it keeps
+Japanese coverage available as an installable package on SD storage.

@@ -1,0 +1,5 @@
+Simplified Chinese installs the zh-Hans locale, the zh-hans-cjk external CJK font pack,
+and the zh-hans-pinyin IME registration used by the built-in Pinyin input backend.
+
+Use this bundle when you want a Chinese interface, Chinese text entry, or reliable
+rendering of Chinese names and chat content while another locale remains active.

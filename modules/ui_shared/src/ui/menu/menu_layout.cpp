@@ -43,11 +43,20 @@ struct MenuAppUi
     lv_obj_t* label = nullptr;
 };
 
+struct BottomBarChipUi
+{
+    lv_obj_t* container = nullptr;
+    lv_obj_t* label = nullptr;
+};
+
 lv_obj_t* s_menu_panel = nullptr;
 lv_obj_t* s_app_panel = nullptr;
 lv_obj_t* s_grid_panel = nullptr;
 lv_obj_t* s_desc_label = nullptr;
-lv_obj_t* s_node_id_label = nullptr;
+lv_obj_t* s_bottom_bar = nullptr;
+BottomBarChipUi s_bottom_node_chip{};
+BottomBarChipUi s_bottom_ram_chip{};
+BottomBarChipUi s_bottom_psram_chip{};
 MenuAppUi s_menu_apps[kMaxMenuApps];
 InitOptions s_init_options{};
 
@@ -458,6 +467,66 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     lv_obj_add_event_cb(btn, menuButtonClickCallback, LV_EVENT_CLICKED, app);
 }
 
+BottomBarChipUi createBottomBarChip(lv_obj_t* parent,
+                                    const ui::menu_profile::MenuLayoutProfile& profile,
+                                    lv_color_t bg_color,
+                                    const char* text)
+{
+    BottomBarChipUi chip{};
+    chip.container = lv_obj_create(parent);
+    lv_obj_set_size(chip.container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(chip.container, bg_color, 0);
+    lv_obj_set_style_bg_opa(chip.container, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(chip.container, 0, 0);
+    lv_obj_set_style_radius(chip.container, 10, 0);
+    lv_obj_set_style_shadow_width(chip.container, 0, 0);
+    lv_obj_set_style_pad_left(chip.container, 8, 0);
+    lv_obj_set_style_pad_right(chip.container, 8, 0);
+    lv_obj_set_style_pad_top(chip.container, 3, 0);
+    lv_obj_set_style_pad_bottom(chip.container, 3, 0);
+    lv_obj_set_style_min_height(chip.container, profile.top_bar_height - 6, 0);
+    lv_obj_clear_flag(chip.container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(chip.container, LV_OBJ_FLAG_CLICKABLE);
+
+    chip.label = lv_label_create(chip.container);
+    lv_obj_set_width(chip.label, LV_SIZE_CONTENT);
+    lv_obj_set_style_text_align(chip.label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(chip.label, ui::theme::text(), 0);
+    lv_obj_set_style_bg_opa(chip.label, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_pad_all(chip.label, 0, 0);
+    lv_obj_set_style_text_font(chip.label, profile.node_id_font, 0);
+    lv_label_set_long_mode(chip.label, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(chip.label, text ? text : "");
+    lv_obj_center(chip.label);
+    return chip;
+}
+
+void setBottomBarChipText(const BottomBarChipUi& chip, const char* text)
+{
+    if (chip.label == nullptr)
+    {
+        return;
+    }
+    lv_label_set_text(chip.label, text ? text : "");
+}
+
+void setBottomBarChipVisible(const BottomBarChipUi& chip, bool visible)
+{
+    if (chip.container == nullptr)
+    {
+        return;
+    }
+
+    if (visible)
+    {
+        lv_obj_clear_flag(chip.container, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        lv_obj_add_flag(chip.container, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 void createPanels()
 {
     main_screen = lv_tileview_create(lv_screen_active());
@@ -582,28 +651,43 @@ void createAppGrid()
     lv_obj_set_style_text_font(s_desc_label, profile.desc_font, 0);
 
 #if !defined(ARDUINO_T_WATCH_S3)
-    s_node_id_label = lv_label_create(s_menu_panel);
-    lv_obj_set_width(s_node_id_label, LV_SIZE_CONTENT);
-    lv_obj_set_style_text_align(s_node_id_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(s_node_id_label, ui::theme::text_muted(), 0);
-    lv_obj_set_style_text_font(s_node_id_label, profile.node_id_font, 0);
-    lv_obj_align(s_node_id_label, LV_ALIGN_BOTTOM_LEFT, profile.node_id_offset_x, profile.node_id_offset_y);
+    s_bottom_bar = lv_obj_create(s_menu_panel);
+    lv_obj_set_size(s_bottom_bar, LV_PCT(100), profile.top_bar_height);
+    lv_obj_set_style_bg_color(s_bottom_bar, ui::theme::surface_alt(), 0);
+    lv_obj_set_style_bg_opa(s_bottom_bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_bottom_bar, 0, 0);
+    lv_obj_set_style_radius(s_bottom_bar, 0, 0);
+    lv_obj_set_style_shadow_width(s_bottom_bar, 0, 0);
+    lv_obj_set_style_pad_left(s_bottom_bar, profile.top_bar_side_inset, 0);
+    lv_obj_set_style_pad_right(s_bottom_bar, profile.top_bar_side_inset, 0);
+    lv_obj_set_style_pad_top(s_bottom_bar, 0, 0);
+    lv_obj_set_style_pad_bottom(s_bottom_bar, 0, 0);
+    lv_obj_set_style_pad_column(s_bottom_bar, 6, 0);
+    lv_obj_set_flex_flow(s_bottom_bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(s_bottom_bar, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_align(s_bottom_bar, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_clear_flag(s_bottom_bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(s_bottom_bar, LV_OBJ_FLAG_CLICKABLE);
     if (!profile.show_node_id)
     {
-        lv_obj_add_flag(s_node_id_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_bottom_bar, LV_OBJ_FLAG_HIDDEN);
     }
+
+    s_bottom_node_chip = createBottomBarChip(s_bottom_bar, profile, lv_color_hex(0xF1B75A), "-");
+    s_bottom_ram_chip = createBottomBarChip(s_bottom_bar, profile, lv_color_hex(0xCFE4FF), "--/--");
+    s_bottom_psram_chip = createBottomBarChip(s_bottom_bar, profile, lv_color_hex(0xD4F0D2), "--/--");
 
     char node_id_buf[24];
     const uint32_t self_id = s_init_options.messaging ? s_init_options.messaging->getSelfNodeId() : 0;
     if (self_id != 0)
     {
-        std::snprintf(node_id_buf, sizeof(node_id_buf), "ID: !%08lX", static_cast<unsigned long>(self_id));
+        std::snprintf(node_id_buf, sizeof(node_id_buf), "!%08lX", static_cast<unsigned long>(self_id));
     }
     else
     {
-        std::snprintf(node_id_buf, sizeof(node_id_buf), "ID: -");
+        std::snprintf(node_id_buf, sizeof(node_id_buf), "-");
     }
-    lv_label_set_text(s_node_id_label, node_id_buf);
+    setBottomBarChipText(s_bottom_node_chip, node_id_buf);
 #endif
 
     lv_label_set_long_mode(s_desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -647,9 +731,9 @@ void bringContentToFront()
     {
         lv_obj_move_foreground(s_desc_label);
     }
-    if (s_node_id_label != nullptr)
+    if (s_bottom_bar != nullptr)
     {
-        lv_obj_move_foreground(s_node_id_label);
+        lv_obj_move_foreground(s_bottom_bar);
     }
     ui::menu::dashboard::bringToFront();
 }
@@ -684,6 +768,26 @@ void refresh_localized_text()
     }
 
     ui::menu::dashboard::refresh_localized_text();
+}
+
+void set_bottom_bar_node_text(const char* text)
+{
+    setBottomBarChipText(s_bottom_node_chip, text);
+}
+
+void set_bottom_bar_ram_text(const char* text)
+{
+    setBottomBarChipText(s_bottom_ram_chip, text);
+}
+
+void set_bottom_bar_psram_text(const char* text)
+{
+    setBottomBarChipText(s_bottom_psram_chip, text);
+}
+
+void set_bottom_bar_psram_visible(bool visible)
+{
+    setBottomBarChipVisible(s_bottom_psram_chip, visible);
 }
 
 void setMenuVisible(bool visible)

@@ -1,19 +1,19 @@
 {
   "available": true,
-  "tag_name": "v0.1.16-alpha",
-  "release_url": "https://github.com/vicliu624/trail-mate/releases/tag/v0.1.16-alpha",
-  "published_at": "2026-04-17T06:20:17Z",
+  "tag_name": "v0.1.18-alpha",
+  "release_url": "https://github.com/vicliu624/trail-mate/releases/tag/v0.1.18-alpha",
+  "published_at": "2026-04-20T08:07:40Z",
   "targets": {
     "tlora-pager-sx1262": {
-      "available": false,
+      "available": true,
       "manifest_path": "manifests/tlora-pager-sx1262.json"
     },
     "tdeck": {
-      "available": false,
+      "available": true,
       "manifest_path": "manifests/tdeck.json"
     },
     "lilygo-twatch-s3": {
-      "available": false,
+      "available": true,
       "manifest_path": "manifests/lilygo-twatch-s3.json"
     }
   }

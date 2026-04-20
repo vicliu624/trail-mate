@@ -181,12 +181,12 @@ void MeshAdapterRouter::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_p
     }
 }
 
-void MeshAdapterRouter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MeshAdapterRouter::setPrivacyConfig(uint8_t encrypt_mode)
 {
     LockGuard lock(mutex_);
     if (lock.locked())
     {
-        core_.setPrivacyConfig(encrypt_mode, pki_enabled);
+        core_.setPrivacyConfig(encrypt_mode);
     }
 }
 

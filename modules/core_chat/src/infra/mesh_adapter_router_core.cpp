@@ -170,12 +170,12 @@ void MeshAdapterRouterCore::setNetworkLimits(bool duty_cycle_enabled, uint8_t ut
     }
 }
 
-void MeshAdapterRouterCore::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MeshAdapterRouterCore::setPrivacyConfig(uint8_t encrypt_mode)
 {
     IMeshAdapter* backend = activeBackend();
     if (backend)
     {
-        backend->setPrivacyConfig(encrypt_mode, pki_enabled);
+        backend->setPrivacyConfig(encrypt_mode);
     }
 }
 

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
@@ -21,6 +22,7 @@
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 #include "platform/ui/tracker_runtime.h"
+#include "platform/ui/wifi_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/components/info_card.h"
 #include "ui/localization.h"
@@ -47,9 +49,11 @@ namespace gps_runtime = ::platform::ui::gps;
 namespace screen_runtime = ::platform::ui::screen;
 namespace settings_store = ::platform::ui::settings_store;
 namespace tracker_runtime = ::platform::ui::tracker;
+namespace wifi_runtime = ::platform::ui::wifi;
 
 constexpr size_t kMaxItems = 32;
 constexpr size_t kMaxOptions = 40;
+constexpr size_t kMaxWifiNetworks = 24;
 constexpr const char* kPrefsNs = "settings";
 constexpr int kNetTxPowerMin = app::AppConfig::kTxPowerMinDbm;
 constexpr int kNetTxPowerMax = app::AppConfig::kTxPowerMaxDbm;
@@ -84,10 +88,75 @@ static char kTxPowerLabels[64][12] = {};
 static settings::ui::SettingOption kLocaleOptions[16] = {};
 static size_t kLocaleOptionCount = 0;
 static char kLocaleOptionLabels[16][48] = {};
+static settings::ui::SettingOption kWifiNetworkOptions[kMaxWifiNetworks] = {};
+static size_t kWifiNetworkOptionCount = 0;
+static char kWifiNetworkOptionLabels[kMaxWifiNetworks][64] = {};
+static wifi_runtime::ScanResult kWifiScanResults[kMaxWifiNetworks] = {};
 
 static void update_item_value(settings::ui::ItemWidget& widget);
 static void open_factory_reset_modal();
 static bool option_labels_are_translated(const settings::ui::SettingItem& item);
+static bool option_labels_use_content_font(const settings::ui::SettingItem& item);
+
+static void copy_bounded(char* out, size_t out_len, const char* text)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    std::snprintf(out, out_len, "%s", text ? text : "");
+}
+
+static void clear_wifi_scan_options()
+{
+    kWifiNetworkOptionCount = 0;
+    for (size_t i = 0; i < kMaxWifiNetworks; ++i)
+    {
+        kWifiNetworkOptions[i] = settings::ui::SettingOption{};
+        kWifiNetworkOptionLabels[i][0] = '\0';
+        kWifiScanResults[i] = wifi_runtime::ScanResult{};
+    }
+    g_settings.wifi_network_index = -1;
+}
+
+static void rebuild_wifi_scan_options(const std::vector<wifi_runtime::ScanResult>& results)
+{
+    clear_wifi_scan_options();
+
+    const size_t limit = results.size() < kMaxWifiNetworks ? results.size() : kMaxWifiNetworks;
+    for (size_t i = 0; i < limit; ++i)
+    {
+        kWifiScanResults[i] = results[i];
+        std::snprintf(kWifiNetworkOptionLabels[i],
+                      sizeof(kWifiNetworkOptionLabels[i]),
+                      "%s (%d dBm%s)",
+                      results[i].ssid,
+                      results[i].rssi,
+                      results[i].requires_password ? ", lock" : "");
+        kWifiNetworkOptions[i].label = kWifiNetworkOptionLabels[i];
+        kWifiNetworkOptions[i].value = static_cast<int>(i);
+    }
+    kWifiNetworkOptionCount = limit;
+}
+
+static void refresh_wifi_state_from_runtime()
+{
+    wifi_runtime::Config config{};
+    (void)wifi_runtime::load_config(config);
+
+    const wifi_runtime::Status status = wifi_runtime::status();
+    g_settings.wifi_enabled = config.enabled;
+    copy_bounded(g_settings.wifi_ssid, sizeof(g_settings.wifi_ssid), config.ssid);
+    copy_bounded(g_settings.wifi_password, sizeof(g_settings.wifi_password), config.password);
+    if (!status.supported && status.message[0] == '\0')
+    {
+        copy_bounded(g_settings.wifi_status, sizeof(g_settings.wifi_status), "Wi-Fi unsupported");
+    }
+    else
+    {
+        copy_bounded(g_settings.wifi_status, sizeof(g_settings.wifi_status), status.message);
+    }
+}
 
 static bool use_tdeck_info_card_layout()
 {
@@ -759,7 +828,6 @@ static void settings_load()
     }
 
     g_settings.privacy_encrypt_mode = cfg.privacy_encrypt_mode;
-    g_settings.privacy_pki = cfg.privacy_pki;
     g_settings.privacy_nmea_output = cfg.privacy_nmea_output;
     g_settings.privacy_nmea_sentence = cfg.privacy_nmea_sentence;
 
@@ -782,6 +850,7 @@ static void settings_load()
 
     g_settings.ble_enabled = cfg.ble_enabled;
     g_settings.vibration_enabled = prefs_get_bool("vibration_enabled", true);
+    refresh_wifi_state_from_runtime();
 
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
 
@@ -810,6 +879,16 @@ static void format_value(const settings::ui::SettingItem& item, char* out, size_
     out[0] = '\0';
     switch (item.type)
     {
+    case settings::ui::SettingType::Info:
+        if (item.text_value && item.text_value[0] != '\0')
+        {
+            std::snprintf(out, out_len, "%s", item.text_value);
+        }
+        else
+        {
+            std::snprintf(out, out_len, "%s", ::ui::i18n::tr("N/A"));
+        }
+        break;
     case settings::ui::SettingType::Toggle:
         snprintf(out, out_len, "%s", ::ui::i18n::tr((item.bool_value && *item.bool_value) ? "ON" : "OFF"));
         break;
@@ -861,7 +940,14 @@ static void update_item_value(settings::ui::ItemWidget& widget)
     }
     char value[48];
     format_value(*widget.def, value, sizeof(value));
-    ::ui::i18n::set_label_text_raw(widget.value_label, value);
+    if (option_labels_use_content_font(*widget.def))
+    {
+        ::ui::i18n::set_content_label_text_raw(widget.value_label, value);
+    }
+    else
+    {
+        ::ui::i18n::set_label_text_raw(widget.value_label, value);
+    }
 }
 
 static void modal_prepare_group()
@@ -1135,6 +1221,18 @@ static void on_text_save_clicked(lv_event_t* e)
             }
             prefs_put_uint_ns("power", "gauge_full_mah", static_cast<uint32_t>(value));
         }
+        if (g_state.editing_item->pref_key &&
+            (strcmp(g_state.editing_item->pref_key, "wifi_ssid") == 0 ||
+             strcmp(g_state.editing_item->pref_key, "wifi_password") == 0))
+        {
+            wifi_runtime::Config config{};
+            config.enabled = g_settings.wifi_enabled;
+            copy_bounded(config.ssid, sizeof(config.ssid), g_settings.wifi_ssid);
+            copy_bounded(config.password, sizeof(config.password), g_settings.wifi_password);
+            (void)wifi_runtime::save_config(config);
+            refresh_wifi_state_from_runtime();
+            update_item_value(*g_state.editing_widget);
+        }
     }
     modal_close();
 }
@@ -1239,6 +1337,23 @@ static void on_option_clicked(lv_event_t* e)
         }
         g_settings.display_locale_index = ::ui::i18n::current_locale_index();
         update_item_value(*payload->widget);
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "wifi_network") == 0)
+    {
+        if (payload->value >= 0 &&
+            static_cast<size_t>(payload->value) < kWifiNetworkOptionCount)
+        {
+            const wifi_runtime::ScanResult& result =
+                kWifiScanResults[static_cast<size_t>(payload->value)];
+            copy_bounded(g_settings.wifi_ssid, sizeof(g_settings.wifi_ssid), result.ssid);
+            wifi_runtime::Config config{};
+            config.enabled = g_settings.wifi_enabled;
+            copy_bounded(config.ssid, sizeof(config.ssid), g_settings.wifi_ssid);
+            copy_bounded(config.password, sizeof(config.password), g_settings.wifi_password);
+            (void)wifi_runtime::save_config(config);
+            refresh_wifi_state_from_runtime();
+            rebuild_list = true;
+        }
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "mesh_protocol") == 0)
     {
@@ -1749,7 +1864,14 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
         }
         else
         {
-            ::ui::i18n::set_label_text_raw(label, item.options[i].label);
+            if (option_labels_use_content_font(item))
+            {
+                ::ui::i18n::set_content_label_text_raw(label, item.options[i].label);
+            }
+            else
+            {
+                ::ui::i18n::set_label_text_raw(label, item.options[i].label);
+            }
         }
         style::apply_label_primary(label);
         lv_obj_center(label);
@@ -2058,7 +2180,6 @@ static settings::ui::SettingItem kChatItems[] = {
     {"Channel", settings::ui::SettingType::Enum, kChatChannelOptions, 2, &g_settings.chat_channel, nullptr, nullptr, 0, false, "chat_channel"},
     {"Channel Key / PSK", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.chat_psk, sizeof(g_settings.chat_psk), true, "chat_psk"},
     {"Encryption Mode", settings::ui::SettingType::Enum, kPrivacyEncryptOptions, 3, &g_settings.privacy_encrypt_mode, nullptr, nullptr, 0, false, "privacy_encrypt"},
-    {"PKI", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.privacy_pki, nullptr, 0, false, "privacy_pki"},
     {"Reset Mesh Profiles", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_mesh"},
     {"Reset Node DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_nodes"},
     {"Clear Message DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_clear_messages"},
@@ -2115,6 +2236,17 @@ static settings::ui::SettingItem kScreenItems[] = {
     {"Factory Reset", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "system_factory_reset"},
 };
 
+static settings::ui::SettingItem kWifiItems[] = {
+    {"Wi-Fi Enabled", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.wifi_enabled, nullptr, 0, false, "wifi_enabled"},
+    {"Status", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.wifi_status, sizeof(g_settings.wifi_status), false, "wifi_status"},
+    {"Scan Networks", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "wifi_scan"},
+    {"Detected Network", settings::ui::SettingType::Enum, kWifiNetworkOptions, 0, &g_settings.wifi_network_index, nullptr, nullptr, 0, false, "wifi_network"},
+    {"SSID", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.wifi_ssid, sizeof(g_settings.wifi_ssid), false, "wifi_ssid"},
+    {"Password", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.wifi_password, sizeof(g_settings.wifi_password), true, "wifi_password"},
+    {"Connect", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "wifi_connect"},
+    {"Disconnect", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "wifi_disconnect"},
+};
+
 static settings::ui::SettingItem kAdvancedItems[] = {
     {"Debug Logs", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.advanced_debug_logs, nullptr, 0, false, "adv_debug"},
 };
@@ -2125,6 +2257,7 @@ static const CategoryDef kCategories[] = {
     {"Chat", kChatItems, sizeof(kChatItems) / sizeof(kChatItems[0])},
     {"Network", kNetworkItems, sizeof(kNetworkItems) / sizeof(kNetworkItems[0])},
     {"System", kScreenItems, sizeof(kScreenItems) / sizeof(kScreenItems[0])},
+    {"Wi-Fi", kWifiItems, sizeof(kWifiItems) / sizeof(kWifiItems[0])},
     {"Advanced", kAdvancedItems, sizeof(kAdvancedItems) / sizeof(kAdvancedItems[0])},
 };
 
@@ -2205,7 +2338,14 @@ static bool has_pref_key(const settings::ui::SettingItem& item, const char* key)
 
 static bool option_labels_are_translated(const settings::ui::SettingItem& item)
 {
-    return !has_pref_key(item, "display_locale");
+    return !has_pref_key(item, "display_locale") &&
+           !has_pref_key(item, "wifi_network");
+}
+
+static bool option_labels_use_content_font(const settings::ui::SettingItem& item)
+{
+    return has_pref_key(item, "display_locale") ||
+           has_pref_key(item, "wifi_network");
 }
 
 static bool should_show_item(const settings::ui::SettingItem& item)
@@ -2213,6 +2353,18 @@ static bool should_show_item(const settings::ui::SettingItem& item)
     if (!item.pref_key)
     {
         return true;
+    }
+
+    if (has_pref_key(item, "wifi_network"))
+    {
+        return wifi_runtime::is_supported() && kWifiNetworkOptionCount > 0;
+    }
+    if ((has_pref_key(item, "wifi_scan") || has_pref_key(item, "wifi_connect") ||
+         has_pref_key(item, "wifi_disconnect") || has_pref_key(item, "wifi_ssid") ||
+         has_pref_key(item, "wifi_password") || has_pref_key(item, "wifi_enabled")) &&
+        !wifi_runtime::is_supported())
+    {
+        return false;
     }
 
     const bool meshcore = is_meshcore_protocol_selected();
@@ -2233,7 +2385,6 @@ static bool should_show_item(const settings::ui::SettingItem& item)
         if (has_pref_key(item, "chat_region")) return false;
         if (has_pref_key(item, "chat_channel")) return false;
         if (has_pref_key(item, "chat_psk")) return false;
-        if (has_pref_key(item, "privacy_pki")) return false;
 
         if (has_pref_key(item, "net_use_preset")) return false;
         if (has_pref_key(item, "net_preset")) return false;
@@ -2253,7 +2404,6 @@ static bool should_show_item(const settings::ui::SettingItem& item)
         if (has_pref_key(item, "chat_channel")) return false;
         if (has_pref_key(item, "chat_psk")) return false;
         if (has_pref_key(item, "privacy_encrypt")) return false;
-        if (has_pref_key(item, "privacy_pki")) return false;
 
         if (has_pref_key(item, "net_use_preset")) return false;
         if (has_pref_key(item, "net_preset")) return false;
@@ -2351,6 +2501,11 @@ static void build_item_list()
             const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kLocaleOptionCount;
         }
         if (widget.def && widget.def->pref_key &&
+            strcmp(widget.def->pref_key, "wifi_network") == 0)
+        {
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kWifiNetworkOptionCount;
+        }
+        if (widget.def && widget.def->pref_key &&
             (strcmp(widget.def->pref_key, "net_tx_power") == 0 || strcmp(widget.def->pref_key, "mc_tx_power") == 0))
         {
             const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kTxPowerOptionCount;
@@ -2406,6 +2561,10 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
     }
 
     const SettingItem& item = *widget.def;
+    if (item.type == settings::ui::SettingType::Info)
+    {
+        return false;
+    }
     if (item.type == settings::ui::SettingType::Toggle)
     {
         if (item.bool_value)
@@ -2484,19 +2643,30 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
                 app_ctx.saveConfig();
                 app_ctx.applyMeshConfig();
             }
-            if (item.pref_key && strcmp(item.pref_key, "privacy_pki") == 0)
-            {
-                app::IAppFacade& app_ctx = app::appFacade();
-                app_ctx.getConfig().privacy_pki = *item.bool_value;
-                app_ctx.saveConfig();
-                app_ctx.applyPrivacyConfig();
-            }
             if (item.pref_key && strcmp(item.pref_key, "ble_enabled") == 0)
             {
                 app::IAppFacade& app_ctx = app::appFacade();
                 app_ctx.getConfig().ble_enabled = *item.bool_value;
                 app_ctx.saveConfig();
                 app_ctx.setBleEnabled(*item.bool_value);
+            }
+            if (item.pref_key && strcmp(item.pref_key, "wifi_enabled") == 0)
+            {
+                wifi_runtime::Config config{};
+                config.enabled = *item.bool_value;
+                copy_bounded(config.ssid, sizeof(config.ssid), g_settings.wifi_ssid);
+                copy_bounded(config.password, sizeof(config.password), g_settings.wifi_password);
+                (void)wifi_runtime::save_config(config);
+                if (!wifi_runtime::apply_enabled(config.enabled) && config.enabled)
+                {
+                    ::ui::SystemNotification::show(::ui::i18n::tr("Wi-Fi start failed"), 3000);
+                }
+                if (!config.enabled)
+                {
+                    clear_wifi_scan_options();
+                }
+                refresh_wifi_state_from_runtime();
+                build_item_list();
             }
             if (item.pref_key && strcmp(item.pref_key, "vibration_enabled") == 0 && *item.bool_value)
             {
@@ -2532,6 +2702,52 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
         else if (item.pref_key && strcmp(item.pref_key, "system_factory_reset") == 0)
         {
             open_factory_reset_modal();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "wifi_scan") == 0)
+        {
+            std::vector<wifi_runtime::ScanResult> results;
+            if (!wifi_runtime::scan(results))
+            {
+                refresh_wifi_state_from_runtime();
+            }
+            else
+            {
+                rebuild_wifi_scan_options(results);
+                for (size_t i = 0; i < kWifiNetworkOptionCount; ++i)
+                {
+                    if (std::strcmp(kWifiScanResults[i].ssid, g_settings.wifi_ssid) == 0)
+                    {
+                        g_settings.wifi_network_index = static_cast<int>(i);
+                        break;
+                    }
+                }
+                refresh_wifi_state_from_runtime();
+            }
+            build_item_list();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "wifi_connect") == 0)
+        {
+            wifi_runtime::Config config{};
+            config.enabled = true;
+            copy_bounded(config.ssid, sizeof(config.ssid), g_settings.wifi_ssid);
+            copy_bounded(config.password, sizeof(config.password), g_settings.wifi_password);
+            g_settings.wifi_enabled = true;
+            (void)wifi_runtime::save_config(config);
+            if (!wifi_runtime::apply_enabled(true) || !wifi_runtime::connect(&config))
+            {
+                refresh_wifi_state_from_runtime();
+            }
+            else
+            {
+                refresh_wifi_state_from_runtime();
+            }
+            build_item_list();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "wifi_disconnect") == 0)
+        {
+            wifi_runtime::disconnect();
+            refresh_wifi_state_from_runtime();
+            build_item_list();
         }
         return true;
     }

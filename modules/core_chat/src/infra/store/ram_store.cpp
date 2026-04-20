@@ -168,6 +168,32 @@ bool RamStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
     return false;
 }
 
+bool RamStore::getMessage(MessageId msg_id, ChatMessage* out) const
+{
+    if (msg_id == 0)
+    {
+        return false;
+    }
+
+    for (const auto& pair : conversations_)
+    {
+        const ConversationStorage& storage = pair.second;
+        for (const auto& entry : storage.messages)
+        {
+            if (entry.message.msg_id != msg_id)
+            {
+                continue;
+            }
+            if (out)
+            {
+                *out = entry.message;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 void RamStore::evictOldestMessage()
 {
     auto oldest_it = conversations_.end();

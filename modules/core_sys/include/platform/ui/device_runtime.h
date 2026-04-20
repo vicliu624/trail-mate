@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace platform::ui::device
@@ -12,10 +13,21 @@ struct BatteryInfo
     int level = -1;
 };
 
+struct MemoryStats
+{
+    std::size_t ram_total_bytes = 0;
+    std::size_t ram_free_bytes = 0;
+    std::size_t psram_total_bytes = 0;
+    std::size_t psram_free_bytes = 0;
+    bool psram_available = false;
+};
+
 void delay_ms(uint32_t ms);
 void restart();
 bool rtc_ready();
 BatteryInfo battery_info();
+MemoryStats memory_stats();
+const char* firmware_version();
 void handle_low_battery(const BatteryInfo& info);
 bool supports_screen_brightness();
 uint8_t screen_brightness();

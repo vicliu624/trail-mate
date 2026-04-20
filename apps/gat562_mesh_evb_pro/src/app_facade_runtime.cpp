@@ -406,7 +406,7 @@ void AppFacadeRuntime::applyPrivacyConfig()
     }
     if (mesh_router_)
     {
-        mesh_router_->setPrivacyConfig(config_.privacy_encrypt_mode, config_.privacy_pki);
+        mesh_router_->setPrivacyConfig(config_.privacy_encrypt_mode);
     }
 }
 

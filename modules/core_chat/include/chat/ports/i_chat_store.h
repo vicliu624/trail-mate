@@ -79,6 +79,14 @@ class IChatStore
     virtual bool updateMessageStatus(MessageId msg_id, MessageStatus status) = 0;
 
     /**
+     * @brief Look up a stored message by message ID
+     * @param msg_id Message ID
+     * @param out Optional out-parameter populated on success
+     * @return true if found
+     */
+    virtual bool getMessage(MessageId msg_id, ChatMessage* out) const = 0;
+
+    /**
      * @brief Flush pending buffered writes to persistent storage
      *
      * Default implementation is a no-op for stores that do not buffer.

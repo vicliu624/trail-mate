@@ -1,0 +1,6 @@
+European Latin Extended adds a shared external font pack for common accented Latin text
+and installs locale packs for German, Spanish, French, Italian, Dutch, Polish, and
+Portuguese (Portugal).
+
+This bundle is designed to stay lightweight while still rendering mixed-language contact
+names, chat content, and localized UI labels cleanly across European languages.

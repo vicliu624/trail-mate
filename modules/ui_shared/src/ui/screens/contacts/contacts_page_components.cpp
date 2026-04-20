@@ -21,6 +21,8 @@
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
 #include "ui/screens/chat/chat_page_shell.h"
+#include "ui/screens/chat/chat_protocol_support.h"
+#include "ui/screens/chat/chat_send_flow.h"
 #include "ui/screens/contacts/contacts_page_input.h"
 #include "ui/screens/contacts/contacts_page_layout.h"
 #include "ui/screens/contacts/contacts_page_styles.h"
@@ -47,6 +49,7 @@
 #endif
 
 using namespace contacts::ui;
+namespace chat_support = chat::ui::support;
 
 static constexpr int kItemsPerPage = 4;
 static constexpr int kButtonHeight = 28;
@@ -295,11 +298,6 @@ static std::string format_time_status(uint32_t last_seen)
     return ::ui::i18n::format("SNR %.0f", snr);
 }
 
-static chat::MeshProtocol active_mesh_protocol()
-{
-    return app::appFacade().getConfig().mesh_protocol;
-}
-
 static const char* mesh_protocol_short_label(chat::MeshProtocol protocol)
 {
     return chat::infra::meshProtocolShortName(protocol);
@@ -378,36 +376,6 @@ static constexpr DiscoveryActionSpec kDiscoveryActionSpecs[] = {
     {"Cancel", "Back", DiscoveryActionCommand::Cancel},
 };
 
-static chat::MeshCapabilities active_mesh_capabilities()
-{
-    chat::IMeshAdapter* adapter = app::messagingFacade().getMeshAdapter();
-    return adapter ? adapter->getCapabilities() : chat::MeshCapabilities{};
-}
-
-static bool supports_local_text_chat()
-{
-    return active_mesh_capabilities().supports_unicast_text;
-}
-
-static bool supports_team_chat()
-{
-    return active_mesh_capabilities().supports_unicast_appdata;
-}
-
-static const char* local_text_chat_unavailable_message()
-{
-    return (active_mesh_protocol() == chat::MeshProtocol::RNode)
-               ? "RNode text chat runs on host"
-               : "Text chat unavailable";
-}
-
-static const char* team_chat_unavailable_message()
-{
-    return (active_mesh_protocol() == chat::MeshProtocol::RNode)
-               ? "Team chat unavailable in RNode mode"
-               : "Team chat unavailable";
-}
-
 static const char* broadcast_chat_unavailable_message(const BroadcastTargetSpec& spec)
 {
     if (spec.protocol == chat::MeshProtocol::Meshtastic)
@@ -423,7 +391,7 @@ static const char* broadcast_chat_unavailable_message(const BroadcastTargetSpec&
 
 static size_t get_broadcast_target_count()
 {
-    switch (active_mesh_protocol())
+    switch (chat_support::active_mesh_protocol())
     {
     case chat::MeshProtocol::Meshtastic:
         return 8U;
@@ -443,7 +411,7 @@ static bool get_broadcast_target_spec(int index, BroadcastTargetSpec* out)
         return false;
     }
 
-    if (active_mesh_protocol() == chat::MeshProtocol::Meshtastic)
+    if (chat_support::active_mesh_protocol() == chat::MeshProtocol::Meshtastic)
     {
         if (index >= 8)
         {
@@ -459,7 +427,7 @@ static bool get_broadcast_target_spec(int index, BroadcastTargetSpec* out)
         return true;
     }
 
-    if (active_mesh_protocol() == chat::MeshProtocol::RNode)
+    if (chat_support::active_mesh_protocol() == chat::MeshProtocol::RNode)
     {
         if (index != 0)
         {
@@ -1300,7 +1268,7 @@ static void open_chat_compose()
 
     chat::ChannelId channel = chat::ChannelId::PRIMARY;
     uint32_t peer_id = 0;
-    chat::MeshProtocol protocol = active_mesh_protocol();
+    chat::MeshProtocol protocol = chat_support::active_mesh_protocol();
     std::string title;
     if (g_contacts_state.current_mode == ContactsMode::Broadcast)
     {
@@ -1322,9 +1290,9 @@ static void open_chat_compose()
     }
     else if (g_contacts_state.current_mode == ContactsMode::Team)
     {
-        if (!supports_team_chat())
+        if (!chat_support::supports_team_chat())
         {
-            ::ui::SystemNotification::show(team_chat_unavailable_message(), 2200);
+            ::ui::SystemNotification::show(chat_support::team_chat_unavailable_message(), 2200);
             return;
         }
         channel = chat::ChannelId::PRIMARY;
@@ -1335,9 +1303,9 @@ static void open_chat_compose()
     }
     else
     {
-        if (!supports_local_text_chat())
+        if (!chat_support::supports_local_text_chat())
         {
-            ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+            ::ui::SystemNotification::show(chat_support::local_text_chat_unavailable_message(), 2200);
             return;
         }
         channel = chat::ChannelId::PRIMARY;
@@ -1621,16 +1589,16 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
             return;
         }
 
-        if (s_compose_protocol != active_mesh_protocol())
+        if (s_compose_protocol != chat_support::active_mesh_protocol())
         {
             ::ui::SystemNotification::show("Conversation protocol mismatch", 2000);
             close_chat_compose();
             return;
         }
 
-        if (!supports_local_text_chat())
+        if (!chat_support::supports_local_text_chat())
         {
-            ::ui::SystemNotification::show(local_text_chat_unavailable_message(), 2200);
+            ::ui::SystemNotification::show(chat_support::local_text_chat_unavailable_message(), 2200);
             close_chat_compose();
             return;
         }
@@ -1642,13 +1610,13 @@ static void on_compose_action(chat::ui::ChatComposeScreen::ActionIntent intent, 
             {
                 s_last_sent_text = text;
                 s_last_sent_ts = sys::epoch_seconds_now();
-                chat::MessageId msg_id = g_contacts_state.chat_service->sendText(
-                    s_compose_channel, text, s_compose_peer_id);
-                g_contacts_state.compose_screen->beginSend(
-                    g_contacts_state.chat_service,
-                    msg_id,
-                    on_compose_send_done,
-                    nullptr);
+                const chat::ConversationId conv(s_compose_channel, s_compose_peer_id, s_compose_protocol);
+                chat::ui::send_flow::begin_local_text_send(g_contacts_state.compose_screen,
+                                                           g_contacts_state.chat_service,
+                                                           conv,
+                                                           text,
+                                                           on_compose_send_done,
+                                                           nullptr);
                 return;
             }
         }
@@ -2051,7 +2019,7 @@ static void execute_discovery_command(uint8_t command_index)
         return;
     }
 
-    if (active_mesh_protocol() != chat::MeshProtocol::MeshCore || !g_contacts_state.chat_service)
+    if (chat_support::active_mesh_protocol() != chat::MeshProtocol::MeshCore || !g_contacts_state.chat_service)
     {
         ::ui::SystemNotification::show("MeshCore only", 2000);
         return;
@@ -2260,7 +2228,9 @@ static void open_action_menu_modal()
                               g_contacts_state.current_mode == ContactsMode::Nearby);
 
     const bool allow_chat_action =
-        (g_contacts_state.current_mode == ContactsMode::Team) ? supports_team_chat() : supports_local_text_chat();
+        (g_contacts_state.current_mode == ContactsMode::Team)
+            ? chat_support::supports_team_chat()
+            : chat_support::supports_local_text_chat();
     int action_count = allow_chat_action ? 2 : 1; // Chat + Cancel
     if (g_contacts_state.current_mode == ContactsMode::Contacts)
     {
@@ -2434,8 +2404,8 @@ void refresh_ui()
     }
     ::ui::components::air_status_footer::refresh(g_contacts_state.air_status_footer);
 
-    bool team_available = is_team_available() && supports_team_chat();
-    const bool meshcore_mode = (active_mesh_protocol() == chat::MeshProtocol::MeshCore);
+    bool team_available = is_team_available() && chat_support::supports_team_chat();
+    const bool meshcore_mode = (chat_support::active_mesh_protocol() == chat::MeshProtocol::MeshCore);
     if (g_contacts_state.team_btn)
     {
         if (team_available)

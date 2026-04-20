@@ -280,6 +280,44 @@ bool FlashStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
     return false;
 }
 
+bool FlashStore::getMessage(MessageId msg_id, ChatMessage* out) const
+{
+    if (!ready_ || msg_id == 0)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < count_; ++i)
+    {
+        size_t idx = (head_ + kMaxMessages - 1 - i) % kMaxMessages;
+        const Record& rec = records_[idx];
+        if (rec.text_len == 0)
+        {
+            continue;
+        }
+        if (rec.msg_id != msg_id)
+        {
+            continue;
+        }
+
+        if (out)
+        {
+            ChatMessage msg;
+            msg.protocol = static_cast<MeshProtocol>(rec.protocol);
+            msg.channel = static_cast<ChannelId>(rec.channel);
+            msg.from = rec.from;
+            msg.peer = rec.peer;
+            msg.msg_id = rec.msg_id;
+            msg.timestamp = rec.timestamp;
+            msg.text.assign(rec.text, rec.text_len);
+            msg.status = static_cast<MessageStatus>(rec.status);
+            *out = msg;
+        }
+        return true;
+    }
+    return false;
+}
+
 void FlashStore::loadFromPrefs()
 {
     uint8_t ver = prefs_.getUChar(kKeyVer, 0);

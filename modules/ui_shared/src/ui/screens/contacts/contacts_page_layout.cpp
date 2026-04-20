@@ -233,7 +233,7 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
     if (::ui::components::info_card::use_tdeck_layout())
     {
         const auto slots = ::ui::components::info_card::create_content(item);
-        ::ui::i18n::set_label_text_raw(slots.header_main_label, display_name.c_str());
+        ::ui::i18n::set_content_label_text_raw(slots.header_main_label, display_name.c_str());
         style::apply_label_primary(slots.header_main_label);
 
         ::ui::i18n::set_label_text(slots.body_main_label, status_text);
@@ -242,7 +242,7 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
     else
     {
         lv_obj_t* name_label = lv_label_create(item);
-        ::ui::i18n::set_label_text_raw(name_label, display_name.c_str());
+        ::ui::i18n::set_content_label_text_raw(name_label, display_name.c_str());
         lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 10, 0);
         style::apply_label_primary(name_label);
 

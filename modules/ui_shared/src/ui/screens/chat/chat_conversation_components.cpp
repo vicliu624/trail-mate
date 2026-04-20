@@ -520,9 +520,7 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
             }
         }
         std::string line = sender + " " + time_buf;
-        ::ui::i18n::set_label_text_raw(item.time_label, line.c_str());
-        ::ui::fonts::apply_localized_font(
-            item.time_label, lv_label_get_text(item.time_label), ::ui::fonts::ui_chrome_font());
+        ::ui::i18n::set_content_label_text_raw(item.time_label, line.c_str());
     }
     else
     {

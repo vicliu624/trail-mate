@@ -8,6 +8,7 @@
 #include "app/app_facade_access.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "sys/clock.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/screens/node_info/node_info_page_layout.h"
 #include "ui/ui_common.h"
@@ -175,6 +176,7 @@ lv_obj_t* create_label(lv_obj_t* parent, const char* text, const lv_font_t* font
     lv_label_set_text(label, text);
     lv_obj_set_style_text_font(label, font, 0);
     lv_obj_set_style_text_color(label, color, 0);
+    ::ui::fonts::apply_localized_font(label, text, font);
     return label;
 }
 
@@ -183,6 +185,7 @@ void set_label_text(lv_obj_t* label, const char* text)
     if (label && text)
     {
         lv_label_set_text(label, text);
+        ::ui::fonts::apply_localized_font(label, text, lv_obj_get_style_text_font(label, LV_PART_MAIN));
     }
 }
 
@@ -772,8 +775,8 @@ void set_node_info(const chat::contacts::NodeInfo& node)
     snprintf(role_buf, sizeof(role_buf), "%s", role_text.c_str());
 
     set_label_text(s_widgets.avatar_label, avatar_text);
-    set_label_text(s_widgets.name_label, name.c_str());
-    set_label_text(s_widgets.desc_label, long_name);
+    ::ui::i18n::set_content_label_text_raw(s_widgets.name_label, name.c_str());
+    ::ui::i18n::set_content_label_text_raw(s_widgets.desc_label, long_name);
     set_label_text(s_widgets.id_label, id_buf);
     set_label_text(s_widgets.role_label, role_buf);
 

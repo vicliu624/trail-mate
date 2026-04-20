@@ -50,6 +50,7 @@ class LogStore : public IChatStore
     void clearConversation(const ConversationId& conv) override;
     void clearAll() override;
     bool updateMessageStatus(MessageId msg_id, MessageStatus status) override;
+    bool getMessage(MessageId msg_id, ChatMessage* out) const override;
 
   private:
     fs::FS* fs_;

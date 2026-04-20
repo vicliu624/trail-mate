@@ -432,6 +432,80 @@ bool LogStore::updateMessageStatus(MessageId msg_id, MessageStatus status)
     return updated;
 }
 
+bool LogStore::getMessage(MessageId msg_id, ChatMessage* out) const
+{
+    if (!fs_ || msg_id == 0)
+    {
+        return false;
+    }
+
+    std::vector<IndexEntry> entries;
+    if (!const_cast<LogStore*>(this)->readIndex(entries))
+    {
+        return false;
+    }
+
+    for (const auto& entry : entries)
+    {
+        ConversationId conv(static_cast<ChannelId>(entry.channel),
+                            entry.peer,
+                            static_cast<MeshProtocol>(entry.protocol));
+        char path[64];
+        buildConversationPath(conv, path, sizeof(path));
+        if (!fs_->exists(path))
+        {
+            continue;
+        }
+
+        File rf = fs_->open(path, FILE_READ);
+        if (!rf)
+        {
+            continue;
+        }
+
+        FileHeader header{};
+        if (!const_cast<LogStore*>(this)->loadFileHeader(rf, header))
+        {
+            rf.close();
+            continue;
+        }
+
+        for (uint16_t i = 0; i < header.count; ++i)
+        {
+            uint16_t slot =
+                static_cast<uint16_t>((header.head + kMaxMessagesPerConv - header.count + i) %
+                                      kMaxMessagesPerConv);
+            Record rec{};
+            if (!const_cast<LogStore*>(this)->readRecord(rf, slot, rec))
+            {
+                continue;
+            }
+            if (rec.text_len == 0 || rec.msg_id != msg_id)
+            {
+                continue;
+            }
+
+            if (out)
+            {
+                ChatMessage msg;
+                msg.protocol = static_cast<MeshProtocol>(rec.protocol);
+                msg.channel = static_cast<ChannelId>(rec.channel);
+                msg.from = rec.from;
+                msg.peer = rec.peer;
+                msg.msg_id = rec.msg_id;
+                msg.timestamp = rec.timestamp;
+                msg.text.assign(rec.text, rec.text_len);
+                msg.status = static_cast<MessageStatus>(rec.status);
+                *out = msg;
+            }
+            rf.close();
+            return true;
+        }
+        rf.close();
+    }
+    return false;
+}
+
 bool LogStore::ensureDir()
 {
     if (!fs_) return false;

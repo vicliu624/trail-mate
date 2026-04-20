@@ -110,23 +110,22 @@ void ChatService::switchChannel(ChannelId channel)
 
 bool ChatService::resendFailed(MessageId msg_id)
 {
-    const ChatMessage* msg = model_.getMessage(msg_id);
-    if (!msg || msg->status != MessageStatus::Failed)
+    ChatMessage msg;
+    if (const ChatMessage* model_msg = model_.getMessage(msg_id))
+    {
+        msg = *model_msg;
+    }
+    else if (!store_.getMessage(msg_id, &msg))
     {
         return false;
     }
 
-    MessageId new_msg_id = 0;
-    if (adapter_.sendText(msg->channel, msg->text, &new_msg_id, msg->peer))
+    if (msg.status != MessageStatus::Failed)
     {
-        ChatMessage resend_msg = *msg;
-        resend_msg.msg_id = (new_msg_id != 0) ? new_msg_id : msg_id;
-        resend_msg.status = MessageStatus::Queued;
-        model_.onSendQueued(resend_msg);
-        return true;
+        return false;
     }
 
-    return false;
+    return sendText(msg.channel, msg.text, msg.peer) != 0;
 }
 
 std::vector<ChatMessage> ChatService::getRecentMessages(const ConversationId& conv, size_t limit) const
@@ -349,7 +348,15 @@ void ChatService::handleSendResult(MessageId msg_id, bool ok)
 
 const ChatMessage* ChatService::getMessage(MessageId msg_id) const
 {
-    return model_.getMessage(msg_id);
+    if (const ChatMessage* msg = model_.getMessage(msg_id))
+    {
+        return msg;
+    }
+    if (store_.getMessage(msg_id, &store_lookup_cache_))
+    {
+        return &store_lookup_cache_;
+    }
+    return nullptr;
 }
 
 void ChatService::setModelEnabled(bool enabled)

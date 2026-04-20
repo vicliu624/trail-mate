@@ -24,6 +24,7 @@ ui::app_catalog_builder::FeatureFlags buildFeatureFlags()
     flags.include_pc_link = platform::ui::hostlink::is_supported();
     flags.include_sstv = platform::ui::sstv::is_supported();
     flags.include_usb = platform::ui::usb_support::is_supported();
+    flags.include_extensions = true;
     flags.include_walkie_talkie = platform::ui::walkie::is_supported();
     return flags;
 }

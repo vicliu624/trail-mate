@@ -573,7 +573,7 @@ lv_obj_t* create_list_item(const char* left, const char* right)
     style::apply_list_item(btn);
 
     lv_obj_t* left_label = lv_label_create(btn);
-    ::ui::i18n::set_label_text_raw(left_label, left);
+    ::ui::i18n::set_content_label_text_raw(left_label, left);
     lv_obj_set_width(left_label, LV_PCT(70));
     lv_label_set_long_mode(left_label, LV_LABEL_LONG_CLIP);
 
@@ -2110,7 +2110,7 @@ void render_team_home()
         for (const auto& m : g_team_state.members)
         {
             lv_obj_t* label = lv_label_create(row);
-            ::ui::i18n::set_label_text_raw(label, m.name.c_str());
+            ::ui::i18n::set_content_label_text_raw(label, m.name.c_str());
             lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
             lv_obj_set_width(label, LV_PCT(24));
             lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
@@ -2182,7 +2182,7 @@ void render_join_pending()
             for (const auto& m : g_team_state.members)
             {
                 lv_obj_t* label = lv_label_create(row);
-                ::ui::i18n::set_label_text_raw(label, m.name.c_str());
+                ::ui::i18n::set_content_label_text_raw(label, m.name.c_str());
                 lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
                 lv_obj_set_width(label, LV_PCT(24));
                 lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);

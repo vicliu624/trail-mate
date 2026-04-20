@@ -1,6 +1,8 @@
 #include "platform/ui/device_runtime.h"
 
 #include "board/BoardBase.h"
+#include "esp_heap_caps.h"
+#include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -31,6 +33,23 @@ BatteryInfo battery_info()
     info.charging = board.isCharging();
     info.level = board.getBatteryLevel();
     return info;
+}
+
+MemoryStats memory_stats()
+{
+    MemoryStats stats{};
+    stats.ram_total_bytes = heap_caps_get_total_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    stats.ram_free_bytes = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    stats.psram_total_bytes = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    stats.psram_free_bytes = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    stats.psram_available = stats.psram_total_bytes > 0;
+    return stats;
+}
+
+const char* firmware_version()
+{
+    const esp_app_desc_t* desc = esp_ota_get_app_description();
+    return (desc && desc->version[0] != '\0') ? desc->version : "unknown";
 }
 
 void handle_low_battery(const BatteryInfo& info)

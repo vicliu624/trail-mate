@@ -33,7 +33,7 @@ class MeshCoreRadioAdapter final : public ::chat::IMeshAdapter, public ::chat::m
     void applyConfig(const ::chat::MeshConfig& config) override;
     void setUserInfo(const char* long_name, const char* short_name) override;
     void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
-    void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled) override;
+    void setPrivacyConfig(uint8_t encrypt_mode) override;
     bool isReady() const override;
     ::chat::NodeId getNodeId() const override;
     ::chat::meshcore::IMeshCoreBleBackend* asMeshCoreBleBackend() override { return this; }

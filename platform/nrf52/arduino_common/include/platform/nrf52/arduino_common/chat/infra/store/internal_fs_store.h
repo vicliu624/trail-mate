@@ -26,6 +26,7 @@ class InternalFsStore final : public ::chat::IChatStore
     void clearConversation(const ::chat::ConversationId& conv) override;
     void clearAll() override;
     bool updateMessageStatus(::chat::MessageId msg_id, ::chat::MessageStatus status) override;
+    bool getMessage(::chat::MessageId msg_id, ::chat::ChatMessage* out) const override;
     void flush() override;
 
   private:

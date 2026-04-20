@@ -15,7 +15,8 @@ struct LocaleInfo
     const char* id = nullptr;
     const char* display_name = nullptr;
     const char* native_name = nullptr;
-    const char* font_pack_id = nullptr;
+    const char* ui_font_pack_id = nullptr;
+    const char* content_font_pack_id = nullptr;
     const char* ime_pack_id = nullptr;
     bool builtin = true;
 };
@@ -28,8 +29,9 @@ const char* current_locale_id();
 const char* current_locale_display_name();
 bool set_locale(const char* locale_id, bool persist = true);
 bool set_locale_by_index(std::size_t index, bool persist = true);
-const char* active_font_pack_id();
-const lv_font_t* active_font_fallback();
+const lv_font_t* active_ui_font_fallback();
+const lv_font_t* active_content_font_fallback();
+bool ensure_content_font_for_text(const char* text);
 const char* active_ime_pack_id();
 bool active_locale_supports_script_input();
 const char* tr(const char* english);
@@ -38,6 +40,8 @@ std::string format(const char* english_fmt, ...);
 
 void set_label_text(lv_obj_t* label, const char* english);
 void set_label_text_raw(lv_obj_t* label, const char* text);
+void set_content_label_text(lv_obj_t* label, const char* english);
+void set_content_label_text_raw(lv_obj_t* label, const char* text);
 void set_label_text_fmt(lv_obj_t* label, const char* english_fmt, ...);
 
 } // namespace ui::i18n

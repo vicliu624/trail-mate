@@ -59,6 +59,83 @@ bool formatMenuTime(char* out, size_t out_len)
     return s_runtime.hooks.format_time ? s_runtime.hooks.format_time(out, out_len) : false;
 }
 
+std::size_t used_bytes(std::size_t total_bytes, std::size_t free_bytes)
+{
+    return total_bytes > free_bytes ? (total_bytes - free_bytes) : 0;
+}
+
+void format_memory_value(std::size_t bytes, char* out, std::size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+
+    if (bytes >= (1024U * 1024U))
+    {
+        const unsigned whole = static_cast<unsigned>(bytes / (1024U * 1024U));
+        const unsigned tenth =
+            static_cast<unsigned>((bytes % (1024U * 1024U)) * 10U / (1024U * 1024U));
+        if (tenth == 0U)
+        {
+            std::snprintf(out, out_len, "%uM", whole);
+        }
+        else
+        {
+            std::snprintf(out, out_len, "%u.%uM", whole, tenth);
+        }
+        return;
+    }
+
+    std::snprintf(out,
+                  out_len,
+                  "%luK",
+                  static_cast<unsigned long>((bytes + 1023U) / 1024U));
+}
+
+void refreshBottomBar()
+{
+    char node_text[24];
+    const uint32_t self_id = app::messagingFacade().getSelfNodeId();
+    if (self_id != 0)
+    {
+        std::snprintf(node_text, sizeof(node_text), "!%08lX", static_cast<unsigned long>(self_id));
+    }
+    else
+    {
+        std::snprintf(node_text, sizeof(node_text), "-");
+    }
+    ui::menu_layout::set_bottom_bar_node_text(node_text);
+
+    const platform::ui::device::MemoryStats stats = platform::ui::device::memory_stats();
+    char ram_used[16];
+    char ram_total[16];
+    char psram_used[16];
+    char psram_total[16];
+    char ram_text[32];
+    char psram_text[32];
+
+    format_memory_value(used_bytes(stats.ram_total_bytes, stats.ram_free_bytes), ram_used, sizeof(ram_used));
+    format_memory_value(stats.ram_total_bytes, ram_total, sizeof(ram_total));
+    std::snprintf(ram_text, sizeof(ram_text), "%s/%s", ram_used, ram_total);
+    ui::menu_layout::set_bottom_bar_ram_text(ram_text);
+
+    if (stats.psram_available && stats.psram_total_bytes > 0)
+    {
+        format_memory_value(used_bytes(stats.psram_total_bytes, stats.psram_free_bytes),
+                            psram_used,
+                            sizeof(psram_used));
+        format_memory_value(stats.psram_total_bytes, psram_total, sizeof(psram_total));
+        std::snprintf(psram_text, sizeof(psram_text), "%s/%s", psram_used, psram_total);
+        ui::menu_layout::set_bottom_bar_psram_text(psram_text);
+        ui::menu_layout::set_bottom_bar_psram_visible(true);
+    }
+    else
+    {
+        ui::menu_layout::set_bottom_bar_psram_visible(false);
+    }
+}
+
 void showMainMenu()
 {
 #if defined(ESP_PLATFORM)
@@ -219,6 +296,7 @@ void refreshBatteryLabel()
     }
 
     updateWatchFaceTime();
+    refreshBottomBar();
 }
 
 void createTopBar()
@@ -277,6 +355,7 @@ void createTopBar()
     lv_obj_t* menu_route_icon = nullptr;
     lv_obj_t* menu_tracker_icon = nullptr;
     lv_obj_t* menu_gps_icon = nullptr;
+    lv_obj_t* menu_wifi_icon = nullptr;
     lv_obj_t* menu_team_icon = nullptr;
     lv_obj_t* menu_msg_icon = nullptr;
     lv_obj_t* menu_ble_icon = nullptr;
@@ -285,12 +364,14 @@ void createTopBar()
         menu_route_icon = lv_image_create(menu_status_row);
         menu_tracker_icon = lv_image_create(menu_status_row);
         menu_gps_icon = lv_image_create(menu_status_row);
+        menu_wifi_icon = lv_image_create(menu_status_row);
         menu_team_icon = lv_image_create(menu_status_row);
         menu_msg_icon = lv_image_create(menu_status_row);
         menu_ble_icon = lv_image_create(menu_status_row);
         lv_obj_add_flag(menu_route_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_tracker_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_gps_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(menu_wifi_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_team_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_msg_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_ble_icon, LV_OBJ_FLAG_HIDDEN);
@@ -301,7 +382,14 @@ void createTopBar()
     }
 
     ui::status::register_menu_status_row(
-        menu_status_row, menu_route_icon, menu_tracker_icon, menu_gps_icon, menu_team_icon, menu_msg_icon, menu_ble_icon);
+        menu_status_row,
+        menu_route_icon,
+        menu_tracker_icon,
+        menu_gps_icon,
+        menu_wifi_icon,
+        menu_team_icon,
+        menu_msg_icon,
+        menu_ble_icon);
 }
 
 void initWatchFace()
@@ -359,6 +447,7 @@ void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, co
     createTimers();
     refreshTimeLabel();
     refreshBatteryLabel();
+    refreshBottomBar();
     setScene(Scene::Menu);
 }
 
@@ -418,6 +507,7 @@ void setMenuActive(bool active)
     {
         refreshTimeLabel();
         refreshBatteryLabel();
+        refreshBottomBar();
     }
 }
 

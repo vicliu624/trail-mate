@@ -77,7 +77,7 @@ class MtAdapter : public chat::IMeshAdapter
     void applyConfig(const MeshConfig& config) override;
     void setUserInfo(const char* long_name, const char* short_name) override;
     void setNetworkLimits(bool duty_cycle_enabled, uint8_t util_percent) override;
-    void setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled) override;
+    void setPrivacyConfig(uint8_t encrypt_mode) override;
     void setLastRxStats(float rssi, float snr) override;
     bool isReady() const override;
     NodeId getNodeId() const override { return node_id_; }
@@ -211,7 +211,6 @@ class MtAdapter : public chat::IMeshAdapter
     uint32_t min_tx_interval_ms_ = 0;
     uint32_t last_tx_ms_ = 0;
     uint8_t encrypt_mode_ = 1;
-    bool pki_enabled_ = false;
     meshtastic_Routing_Error last_send_error_ = meshtastic_Routing_Error_NONE;
 
     bool sendPacket(const PendingSend& pending);

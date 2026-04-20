@@ -3241,14 +3241,10 @@ void MeshCoreAdapter::setNetworkLimits(bool duty_cycle_enabled, uint8_t util_per
     }
 }
 
-void MeshCoreAdapter::setPrivacyConfig(uint8_t encrypt_mode, bool pki_enabled)
+void MeshCoreAdapter::setPrivacyConfig(uint8_t encrypt_mode)
 {
     encrypt_mode_ = encrypt_mode;
-    pki_enabled_ = pki_enabled;
-    if (encrypt_mode_ == 0)
-    {
-        pki_enabled_ = false;
-    }
+    pki_enabled_ = (encrypt_mode_ != 0);
     if (!pki_enabled_)
     {
         key_verify_session_ = KeyVerifySession{};

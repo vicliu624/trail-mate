@@ -125,7 +125,6 @@ struct AppConfig
 
     // Privacy settings
     uint8_t privacy_encrypt_mode;
-    bool privacy_pki;
     uint8_t privacy_nmea_output;
     uint8_t privacy_nmea_sentence;
 
@@ -190,7 +189,6 @@ struct AppConfig
         net_channel_util = 0;
 
         privacy_encrypt_mode = 1;
-        privacy_pki = false;
         privacy_nmea_output = 0;
         privacy_nmea_sentence = 0;
         route_enabled = false;
