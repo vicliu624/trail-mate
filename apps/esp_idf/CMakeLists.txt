@@ -179,7 +179,6 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/ble_topbar.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Satellite.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/contact.c
-    ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/assets/fonts/lv_font_noto_cjk_16_2bpp.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/rally.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Spectrum.c
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/sos.c

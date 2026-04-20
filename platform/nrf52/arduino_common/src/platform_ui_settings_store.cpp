@@ -27,6 +27,7 @@ enum class ValueType : uint8_t
     Bool = 2,
     Uint = 3,
     Blob = 4,
+    String = 5,
 };
 
 struct FileHeader
@@ -76,6 +77,12 @@ std::map<std::string, std::vector<uint8_t>>& blobStore()
     return store;
 }
 
+std::map<std::string, std::string>& stringStore()
+{
+    static std::map<std::string, std::string> store;
+    return store;
+}
+
 bool& loadedFlag()
 {
     static bool loaded = false;
@@ -88,6 +95,7 @@ void clearAllStores()
     boolStore().clear();
     uintStore().clear();
     blobStore().clear();
+    stringStore().clear();
 }
 
 template <typename T>
@@ -180,7 +188,7 @@ bool saveToFs()
     }
 
     const uint32_t record_count = static_cast<uint32_t>(
-        intStore().size() + boolStore().size() + uintStore().size() + blobStore().size());
+        intStore().size() + boolStore().size() + uintStore().size() + blobStore().size() + stringStore().size());
     uint32_t final_size = static_cast<uint32_t>(sizeof(FileHeader));
     FileHeader header{};
     header.record_count = record_count;
@@ -247,6 +255,24 @@ bool saveToFs()
         final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + entry.second.size());
     }
 
+    for (const auto& entry : stringStore())
+    {
+        if (!writeRecordHeader(file, ValueType::String, entry.first, static_cast<uint32_t>(entry.second.size())) ||
+            (!entry.second.empty() &&
+             !writeBytes(file,
+                         reinterpret_cast<const uint8_t*>(entry.second.data()),
+                         entry.second.size())))
+        {
+            file.close();
+            Serial.printf("%s string write failed key=%s len=%lu\n",
+                          kLogTag,
+                          entry.first.c_str(),
+                          static_cast<unsigned long>(entry.second.size()));
+            return false;
+        }
+        final_size += static_cast<uint32_t>(sizeof(RecordHeader) + entry.first.size() + entry.second.size());
+    }
+
     const bool trunc_ok = ::platform::nrf52::arduino_common::internal_fs::truncateAfterWrite(file, final_size);
     file.flush();
     file.close();
@@ -297,6 +323,7 @@ void ensureLoaded()
     std::map<std::string, bool> loaded_bools;
     std::map<std::string, uint32_t> loaded_uints;
     std::map<std::string, std::vector<uint8_t>> loaded_blobs;
+    std::map<std::string, std::string> loaded_strings;
 
     for (uint32_t i = 0; i < header.record_count; ++i)
     {
@@ -361,6 +388,18 @@ void ensureLoaded()
             loaded_blobs[key] = std::move(value);
             break;
         }
+        case ValueType::String:
+        {
+            std::string value(rec.value_len, '\0');
+            if (rec.value_len > 0 &&
+                !readBytes(file, reinterpret_cast<uint8_t*>(&value[0]), rec.value_len))
+            {
+                file.close();
+                return;
+            }
+            loaded_strings[key] = std::move(value);
+            break;
+        }
         default:
         {
             std::vector<uint8_t> skip(rec.value_len, 0);
@@ -379,6 +418,7 @@ void ensureLoaded()
     boolStore() = std::move(loaded_bools);
     uintStore() = std::move(loaded_uints);
     blobStore() = std::move(loaded_blobs);
+    stringStore() = std::move(loaded_strings);
 }
 
 } // namespace
@@ -417,6 +457,25 @@ void put_uint(const char* ns, const char* key, uint32_t value)
     ensureLoaded();
     uintStore()[makeScopedKey(ns, key)] = value;
     (void)saveToFs();
+}
+
+bool put_string(const char* ns, const char* key, const char* value)
+{
+    if (!key || !value)
+    {
+        return false;
+    }
+    ensureLoaded();
+    const std::string scoped = makeScopedKey(ns, key);
+    if (value[0] == '\0')
+    {
+        stringStore().erase(scoped);
+    }
+    else
+    {
+        stringStore()[scoped] = value;
+    }
+    return saveToFs();
 }
 
 bool put_blob(const char* ns, const char* key, const void* data, std::size_t len)
@@ -472,6 +531,23 @@ uint32_t get_uint(const char* ns, const char* key, uint32_t default_value)
     return it == uintStore().end() ? default_value : it->second;
 }
 
+bool get_string(const char* ns, const char* key, std::string& out)
+{
+    out.clear();
+    if (!key)
+    {
+        return false;
+    }
+    ensureLoaded();
+    const auto it = stringStore().find(makeScopedKey(ns, key));
+    if (it == stringStore().end())
+    {
+        return false;
+    }
+    out = it->second;
+    return true;
+}
+
 bool get_blob(const char* ns, const char* key, std::vector<uint8_t>& out)
 {
     out.clear();
@@ -507,6 +583,7 @@ void remove_keys(const char* ns, const char* const* keys, std::size_t key_count)
         boolStore().erase(scoped);
         uintStore().erase(scoped);
         blobStore().erase(scoped);
+        stringStore().erase(scoped);
     }
     (void)saveToFs();
 }
@@ -531,6 +608,10 @@ void clear_namespace(const char* ns)
     for (auto it = blobStore().begin(); it != blobStore().end();)
     {
         it = (it->first.rfind(prefix, 0) == 0) ? blobStore().erase(it) : std::next(it);
+    }
+    for (auto it = stringStore().begin(); it != stringStore().end();)
+    {
+        it = (it->first.rfind(prefix, 0) == 0) ? stringStore().erase(it) : std::next(it);
     }
     (void)saveToFs();
 }

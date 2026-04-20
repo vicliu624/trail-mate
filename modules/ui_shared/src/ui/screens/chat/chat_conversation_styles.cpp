@@ -1,6 +1,6 @@
 #if !defined(ARDUINO_T_WATCH_S3)
 #include "ui/screens/chat/chat_conversation_styles.h"
-#include "ui/assets/fonts/fonts.h"
+#include "ui/assets/fonts/font_utils.h"
 
 namespace chat::ui::conversation::styles
 {
@@ -81,7 +81,7 @@ void init_once()
 
     lv_style_init(&s_reply_label);
     lv_style_set_text_color(&s_reply_label, lv_color_hex(0x3A2A1A));
-    lv_style_set_text_font(&s_reply_label, &lv_font_noto_cjk_16_2bpp);
+    lv_style_set_text_font(&s_reply_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
 
     lv_style_init(&s_row);
     lv_style_set_bg_opa(&s_row, LV_OPA_TRANSP);
@@ -114,7 +114,7 @@ void init_once()
     lv_style_init(&s_bubble_text);
     lv_style_set_text_color(&s_bubble_text, kTextColor);
     lv_style_set_text_align(&s_bubble_text, LV_TEXT_ALIGN_LEFT);
-    lv_style_set_text_font(&s_bubble_text, &lv_font_noto_cjk_16_2bpp);
+    lv_style_set_text_font(&s_bubble_text, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
 
     lv_style_init(&s_bubble_time);
     lv_style_set_text_color(&s_bubble_time, lv_color_hex(0x6A5646));

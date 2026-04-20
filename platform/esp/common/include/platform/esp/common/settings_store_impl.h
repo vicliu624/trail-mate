@@ -21,7 +21,9 @@ struct StorageKeyAlias
 };
 
 constexpr StorageKeyAlias kStorageKeyAliases[] = {
+    // Legacy key kept for one-shot locale migration from int -> locale id.
     {"display_language", "disp_lang"},
+    {"display_locale", "disp_locale"},
     {"screen_brightness", "screen_bright"},
     {"vibration_enabled", "vibe_enabled"},
     {"gauge_design_mah", "gauge_dsgn"},
@@ -248,6 +250,69 @@ void put_uint(const char* ns, const char* key, uint32_t value)
          bool_label(ok));
 }
 
+bool put_string(const char* ns, const char* key, const char* value)
+{
+    using namespace ::platform::esp::common::settings_store_detail;
+
+    if (!key || !value)
+    {
+        return false;
+    }
+
+    const char* storage_key = resolve_storage_key(key);
+    if (!validate_storage_key("WRITE", ns, key, storage_key))
+    {
+        return false;
+    }
+
+    nvs_handle_t handle = 0;
+    if (!open_namespace(ns, false, &handle))
+    {
+        log_open_failure("WRITE", ns, key, storage_key);
+        return false;
+    }
+
+    bool ok = false;
+    if (value[0] == '\0')
+    {
+        ok = nvs_erase_key(handle, storage_key) == ESP_OK;
+        if (ok)
+        {
+            ok = commit_and_close(handle);
+        }
+        else
+        {
+            nvs_close(handle);
+        }
+
+        logf("[CfgStore][REMOVE] ns=%s key=%s storage_key=%s type=string ok=%s\n",
+             safe_label(ns),
+             safe_label(key),
+             safe_label(storage_key),
+             bool_label(ok));
+        return ok;
+    }
+
+    ok = nvs_set_str(handle, storage_key, value) == ESP_OK;
+    if (ok)
+    {
+        ok = commit_and_close(handle);
+    }
+    else
+    {
+        nvs_close(handle);
+    }
+
+    logf("[CfgStore][WRITE] ns=%s key=%s storage_key=%s type=string len=%lu value=%s ok=%s\n",
+         safe_label(ns),
+         safe_label(key),
+         safe_label(storage_key),
+         static_cast<unsigned long>(std::strlen(value)),
+         safe_label(value),
+         bool_label(ok));
+    return ok;
+}
+
 bool put_blob(const char* ns, const char* key, const void* data, std::size_t len)
 {
     using namespace ::platform::esp::common::settings_store_detail;
@@ -416,6 +481,74 @@ uint32_t get_uint(const char* ns, const char* key, uint32_t default_value)
          static_cast<unsigned long>(value),
          static_cast<unsigned long>(default_value));
     return value;
+}
+
+bool get_string(const char* ns, const char* key, std::string& out)
+{
+    using namespace ::platform::esp::common::settings_store_detail;
+
+    out.clear();
+    if (!key)
+    {
+        return false;
+    }
+
+    const char* storage_key = resolve_storage_key(key);
+    if (!validate_storage_key("READ", ns, key, storage_key))
+    {
+        return false;
+    }
+
+    nvs_handle_t handle = 0;
+    if (!open_namespace(ns, true, &handle))
+    {
+        log_open_failure("READ", ns, key, storage_key);
+        return false;
+    }
+
+    std::size_t len = 0;
+    const esp_err_t len_err = nvs_get_str(handle, storage_key, nullptr, &len);
+    if (len_err != ESP_OK || len == 0)
+    {
+        logf("[CfgStore][READ] ns=%s key=%s storage_key=%s type=string source=%s len=0\n",
+             safe_label(ns),
+             safe_label(key),
+             safe_label(storage_key),
+             len_err == ESP_OK ? "empty" : "missing");
+        nvs_close(handle);
+        return false;
+    }
+
+    std::string buffer(len, '\0');
+    std::size_t read = len;
+    const bool ok =
+        nvs_get_str(handle, storage_key, buffer.empty() ? nullptr : &buffer[0], &read) == ESP_OK &&
+        read == len;
+    nvs_close(handle);
+
+    if (!ok)
+    {
+        logf("[CfgStore][READ] ns=%s key=%s storage_key=%s type=string source=stored len=%lu ok=false\n",
+             safe_label(ns),
+             safe_label(key),
+             safe_label(storage_key),
+             static_cast<unsigned long>(len));
+        return false;
+    }
+
+    if (!buffer.empty() && buffer.back() == '\0')
+    {
+        buffer.pop_back();
+    }
+    out = std::move(buffer);
+
+    logf("[CfgStore][READ] ns=%s key=%s storage_key=%s type=string source=stored len=%lu value=%s ok=true\n",
+         safe_label(ns),
+         safe_label(key),
+         safe_label(storage_key),
+         static_cast<unsigned long>(out.size()),
+         safe_label(out.c_str()));
+    return true;
 }
 
 bool get_blob(const char* ns, const char* key, std::vector<uint8_t>& out)

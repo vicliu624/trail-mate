@@ -530,7 +530,7 @@
  *
  * Keep ESP-only fonts declared from ESP-owned paths so NRF builds don't
  * accidentally pull large bitmap assets into their source lists.*/
-#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(lv_font_noto_cjk_16_2bpp)
+#define LV_FONT_CUSTOM_DECLARE
 
 /*Always set a default font*/
 #define LV_FONT_DEFAULT &lv_font_montserrat_14

@@ -55,7 +55,6 @@ bool initializeMenuSkeleton(const Hooks& hooks)
     }
 
     lv_obj_t* active_screen = lv_screen_active();
-    ::ui::i18n::reload_language();
     lv_obj_set_style_bg_color(active_screen, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_radius(active_screen, 0, 0);
 

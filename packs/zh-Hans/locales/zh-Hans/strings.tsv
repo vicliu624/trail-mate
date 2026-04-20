@@ -1,0 +1,515 @@
+Action	操作
+Add	添加
+Advanced	高级
+Always	常亮
+Altitude	高度
+Altitude Reference	高度参考
+App	应用
+Area Cleared	区域清除
+Auto	自动
+Awaiting teammate	等待队友
+Back	返回
+Base Camp	营地
+Beijing (UTC+8)	北京 (UTC+8)
+BLE bridge ready  |  %s	BLE 桥接已就绪  |  %s
+BLE linked  |  %s	BLE 已连接  |  %s
+Bluetooth	蓝牙
+Bluetooth Pairing	蓝牙配对
+Bcast	广播
+Bridge error	桥接错误
+Broadcast	广播
+Cancel	取消
+Channel	信道
+Chat	聊天
+Chat unavailable	聊天不可用
+Chinese	中文
+Closes automatically after pairing	配对完成后将自动关闭
+Close	关闭
+Command	指令
+Command: %s	指令:%s
+Command: %s %s	指令:%s %s
+Command: %s %s %s	指令:%s %s %s
+Compare Verification Code	比对验证码
+Compass	指南针
+Connected	已连接
+Connected, handshaking...	已连接,正在握手...
+Contacts	联系人
+Contacts (%s)	联系人(%s)
+Contacts (LXMF)	联系人(LXMF)
+Contacts (LXMF - %.3fMHz)	联系人(LXMF - %.3fMHz)
+Contacts (MeshCore)	联系人(MeshCore)
+Contacts (Meshtastic - %.3fMHz)	联系人(Meshtastic - %.3fMHz)
+Contacts (RNode)	联系人(RNode)
+Contacts (RNode - %.3fMHz)	联系人(RNode - %.3fMHz)
+Conversation protocol mismatch	会话协议不匹配
+Data Exchange	数据交换
+Debug Logs	调试日志
+Decoding: %d%%	解码中:%d%%
+Decoding: 0%	解码中:0%
+Delete	删除
+Delete %s?	删除 %s?
+Delete contact %s?	删除联系人 %s?
+Delete failed	删除失败
+Device: %s	设备:%s
+Direct	私聊
+Disabled	已禁用
+Discover	发现
+Display Language	显示语言
+Duplicate name not allowed	名称不能重复
+Edit	编辑
+Edit nickname	编辑昵称
+Emergency SOS	紧急求救
+Energy Sweep	频谱扫描
+English	English
+English keyboard	英文键盘
+Enter nickname	输入昵称
+Enter number for %s	输入 %s 的校验数字
+Enter the 6-digit number	请输入 6 位数字
+Enter this 6-digit PIN on your phone	请在手机上输入这个 6 位 PIN 码
+Error	错误
+Error: %lu	错误:%lu
+FSK Voice	FSK 语音
+Failed	失败
+Fix	定位
+Fixed PIN	固定 PIN
+Gauge Design (mAh)	电池设计容量 (mAh)
+Gauge Full (mAh)	电池满充容量 (mAh)
+Good Find	发现目标
+GPS	GPS
+GPS Status	GPS 状态
+HDOP	HDOP
+Heading starting	航向启动中
+Hide	隐藏
+Host bridge	主机桥接
+Host connected, probing modem...	主机已连接,正在探测调制解调器...
+IDLE	空闲
+Ignored	已忽略
+Ignore	忽略
+Ignore unavailable	当前无法忽略
+Ignore update failed	忽略状态更新失败
+Image received	图像已接收
+Info	信息
+Initializing...	初始化中...
+Invalid airtime factor	空口系数无效
+Invalid design capacity (mAh)	设计容量 (mAh) 无效
+Invalid frequency offset	频偏无效
+Invalid frequency value	频率值无效
+Invalid full capacity (mAh)	满充容量 (mAh) 无效
+Invalid marker	无效标记
+Invalid MeshCore bandwidth	MeshCore 带宽无效
+Invalid MeshCore frequency	MeshCore 频率无效
+Invalid number	数字无效
+Invalid RX delay	接收延迟无效
+Key marked trusted	密钥已标记为可信
+Key must be 32 hex or 16 chars	密钥必须为 32 位十六进制或 16 个字符
+Key trust failed	密钥信任失败
+Key Verification	密钥校验
+LINKED	已组网
+LISTEN	监听
+LIVE	实时
+Loading...	加载中...
+Location	位置
+Location: %s	位置:%s
+Location: %s %s	位置:%s %s
+LoRa direct path  |  %s	LoRa 直连  |  %s
+Low battery - audio disabled	电量低,已禁用音频
+Map	地图
+Map Layer	地图图层
+MESH	网状
+Mesh Status	网状状态
+Mesh unavailable	Mesh 不可用
+MeshCore only	仅支持 MeshCore
+Message DB cleared	消息数据库已清空
+Messages	消息
+MESSAGES	消息
+Messages and broadcasts show here	消息和广播会显示在这里
+Mini Compass	迷你指南针
+MT send uses slot 0/1 only	Meshtastic 发送仅支持槽位 0/1
+N/A	不适用
+Nearby	附近
+Need local GPS	需要本机 GPS
+Network	网络
+New	新建
+new activity	有新动态
+Next	下一页
+No GPS fix	没有 GPS 定位
+No image	没有图像
+No messages	暂无消息
+No preview	无预览
+No recent traffic	暂无最近活动
+No response	无响应
+No route selected	未选择路线
+No target	没有目标
+No track files	没有轨迹文件
+Node DB reset	节点数据库已重置
+Node ignored	节点已忽略
+Node ignored and hidden	节点已忽略并隐藏
+Node unignored	已取消忽略节点
+North locked	北向已锁定
+Not set	未设置
+NO	否
+NO FIX	无定位
+Number keyboard	数字键盘
+OFF	关
+OK	确定
+ON	开
+online	在线
+Pairing	配对
+PC Link	电脑连接
+PC Link is unavailable on this target.	当前目标暂不支持电脑连接.
+peer lock  |  turn %03.0f deg	目标锁定  |  转向 %03.0f 度
+Pinyin keyboard	拼音键盘
+Pinyin: %s	拼音:%s
+Position	位置
+position stream active  |  %u in view	定位流活跃  |  可见 %u 颗
+Power	电量
+Press Back	按返回键
+Press RX to start	按 RX 开始
+Primary	主信道
+Protocol	协议
+Protocol switch failed	协议切换失败
+Protocol switched	协议已切换
+quiet net	网络安静
+Random PIN	随机 PIN
+Ready	就绪
+RECEIVING	接收中
+Recent Activity	最近活动
+Record	记录
+Recording	记录中
+Region	区域
+Remain: %u	剩余:%u
+Reply	回复
+Reply disabled for this protocol	此协议下不能回复
+Reset Mesh Profiles	重置 Mesh 配置
+Reset Node DB	重置节点数据库
+Resetting...	重置中...
+Return	返回
+Rally Point	集结点
+RNode Bridge	RNode Bridge
+RNode modem ready	RNode 调制解调器已就绪
+RNode text chat runs on host	RNode 文本聊天在主机侧运行
+Route	路线
+Run	执行
+RX	RX
+RX: %lu  TX: %lu	接收:%lu  发送:%lu
+RX: 0  TX: 0	接收:0  发送:0
+Save	保存
+Saved: %s	已保存:%s
+Scan failed	扫描失败
+Scan Local	本地扫描
+Scanning 5s...	扫描 5 秒中...
+Screen Brightness	屏幕亮度
+Screen Timeout	熄屏超时
+SEARCH	搜索中
+Secondary	次信道
+Select a route	请选择路线
+Select a track	请选择轨迹
+Select marker	选择标记
+Select Track	选择轨迹
+Selected: %s	已选:%s
+Send	发送
+Send failed	发送失败
+Send this code and compare:\n	发送这个验证码并比对:\n
+Send ID Broadcast	广播发送 ID
+Send ID Local	本地发送 ID
+Sending...	发送中...
+Sent	已发送
+Settings	设置
+Setting	设置
+Share Position Marker	分享位置标记
+Share this number:\n	请分享这个数字:\n
+Short Name	短名称
+SOLO	单机
+Speaker Volume	提示音音量
+Sky Plot	星图
+SSTV RX READY	SSTV 接收就绪
+SSTV start failed	SSTV 启动失败
+standing by	待命
+Status	状态
+Stopped	已停止
+Stop	停止
+Stop recording first	请先停止记录
+Submit	提交
+Submit failed	提交失败
+System	系统
+SATELLITE STATUS	卫星状态
+Talk	说话
+TALK	说话
+Team	团队
+TEAM	团队
+Team chat send failed	团队消息发送失败
+Team chat unavailable	团队聊天不可用
+Team chat unavailable in RNode mode	RNode 模式下团队聊天不可用
+team member position will appear here	队友位置会显示在这里
+Team keys not ready	团队密钥未就绪
+Team location encode failed	团队位置编码失败
+Text chat unavailable	文本聊天不可用
+threads active	活跃会话
+Time Zone	时区
+Tracker	轨迹
+traffic active	流量活跃
+Trust Key	信任密钥
+U	用
+Unignore	取消忽略
+Unread	未读
+Unknown	未知
+USB Mass Storage	USB 大容量存储
+USB Disk	USB存储
+USB Bridge	USB 桥接
+USB host bridge	USB 主机桥接
+USB Bridge is unavailable on this target.	当前目标暂不支持 USB 桥接.
+USB CDC KISS modem for Reticulum	面向 Reticulum 的 USB CDC KISS 调制解调器
+USE	用
+Used	已用
+User Name	用户名
+Verification Number	校验数字
+Verification number sent	校验数字已发送
+Vibration	振动
+VOL %d	音量 %d
+VOL 80	音量 80
+waiting for better sky view  |  %u in view	等待更好的天空视野  |  可见 %u 颗
+waiting for module GNSS compass	等待 GNSS/指南针模块
+waiting for traffic	等待流量
+Waiting for host...	等待主机连接...
+Waiting for Reticulum host...	等待 Reticulum 主机连接...
+WAIT IMU	等待 IMU
+Walkie not available	对讲功能不可用
+Walkie start failed	对讲启动失败
+Walkie Talkie	对讲机
+YES	是
+6 digits	6 位数字
+%u threads active	%u 个会话活跃
+%ud	%u天
+%uh	%u小时
+%um	%u分
+%umo	%u月
+%uy	%u年
+Confirm received code:\n	确认收到的验证码:\n
+device heading from 9-axis module	设备航向来自 9 轴模块
+heading unlocks after first fix	首次定位后解锁航向
+If it matches, trust the key.	如果一致,请信任此密钥。
+magnetometer heading active	磁力计航向已启用
+magnetometer still warming up	磁力计仍在预热
+needle shows north until target lock	锁定目标前指针指向北方
+nearest peer  |  %.0f m away	最近队友  |  距离 %.0f 米
+no recent traffic	暂无最近活动
+now	刚刚
+%s layer missing	%s 图层缺失
+Active: %s	已激活:%s
+Alt: %.0f m	高度:%.0f 米
+Alt: -- m	高度:-- 米
+Base: %s	底图:%s
+Battery critical	电池电量危险
+Broadcast (%d)	广播(%d)
+COMPLETE	已完成
+Calibrating...	校准中...
+Confirm	确认
+Contour: OFF	等高线:关
+Decoder error	解码错误
+Direct (%d)	私聊(%d)
+E	东
+ERROR	错误
+Exiting USB...	正在退出 USB...
+Hold	原地待命
+ID: !%08lX	ID: !%08lX
+ID: -	ID: -
+Key refresh not implemented	暂未实现密钥刷新
+Key verify: %s %s	密钥校验:%s %s
+Key verify: confirm %s %s	密钥校验:请确认 %s %s
+Key verify: enter number for %s	密钥校验:请为 %s 输入数字
+Key verify: send %s %s	密钥校验:请发送 %s %s
+Later	稍后
+Level %d	级别 %d
+Listening for SSTV signal...	正在监听 SSTV 信号...
+Low battery: %d%%	电量低:%d%%
+MODE: %s	模式:%s
+MODE: Auto	模式:自动
+Map - %.48s	地图 - %.48s
+Map - %s Missing	地图 - %s 缺失
+Map - No Map Data	地图 - 没有地图数据
+Map - No SD Card	地图 - 没有 SD 卡
+Map - no gps data	地图 - 没有 GPS 数据
+Message	消息
+Mic TBD	麦克风功能待定义
+Mic init failed	麦克风初始化失败
+Morse Input	摩斯电码输入
+MoveTo	移动到
+N	北
+NODE INFO	节点信息
+Name required	必须输入名称
+Name too long	名称过长
+No KML routes	没有 KML 路线
+No SD Card	没有 SD 卡
+No routes folder	没有 routes 文件夹
+No tracks yet	暂无轨迹
+Only leader can manage	只有队长可以管理
+Only leader can pair	只有队长可以配对
+Paired successfully	配对成功
+Pairing failed	配对失败
+Pairing init failed	配对初始化失败
+Pairing not available	当前无法配对
+Pairing not ready	配对尚未就绪
+Press Back to exit USB mode	按返回键退出 USB 模式
+Press SPACE to resume	按 SPACE 唤醒屏幕
+RallyTo	集结到
+Route configured	已配置路线
+Route: %s	路线:%s
+SD Card Not Found\nPlease insert SD card	未找到 SD 卡\n请插入 SD 卡
+SSTV RECEIVER	SSTV 接收器
+Save failed	保存失败
+Scan +%u/%u	扫描新增:+%u/%u
+Select level	选择级别
+Selected level: %d	已选级别:%d
+Shutting down to protect battery	正在关机以保护电池
+Status: CALIB	状态:校准
+Step 1/2: Tap short dots	第 1/2 步:点击短点
+Step 2/2: Tap long dashes	第 2/2 步:点击长线
+Switch to %s to chat	切换到 %s 以聊天
+Symbol: 	符号:
+Tap to input, idle 3s to send	点击输入,空闲 3 秒后发送
+Team keys mismatch	团队密钥不匹配
+Team: 	团队:
+Text: 	文本:
+Unread: %d	未读:%d
+Unread: 0	未读:0
+W	西
+0° Horizon	0° 地平线
+PSK must be 32 hex or 16 chars	PSK 必须是 32 位十六进制或 16 个字符
+Restarting...	正在重启...
+awaiting position	等待位置
+compass wakes after GPS fix	GPS 定位后指南针将启用
+searching satellites	正在搜索卫星
+%s -	%s -
+%s 0s	%s 0秒
+%s %us	%s %u秒
+%s %um	%s %u分
+%s %uh	%s %u小时
+%s %ud	%s %u天
+AUTO	自动
+Alt: %ld m	高度:%ld 米
+Alt: -	高度:-
+BEST	最佳
+BW: %.0fk	带宽:%.0fk
+BW: %.1fk	带宽:%.1fk
+BW: -	带宽:-
+CAD	CAD
+CURSOR	游标
+Ch: %.3f	信道:%.3f
+Ch: -	信道:-
+Hop: %u	跳数:%u
+Hop: -	跳数:-
+Hop: - / NH: %02X	跳数:- / 下一跳:%02X
+ID: !%06lx	ID: !%06lx
+ID: !%08lx	ID: !%08lx
+Last heard:	最后收到:
+Link	链路
+Link / MeshCore	链路 / MeshCore
+Link / Meshtastic	链路 / Meshtastic
+MODE: RSSI	模式:RSSI
+NOISE %.0f dBm	噪声 %.0f dBm
+NOISE -104 dBm	噪声 -104 dBm
+PKI: -	PKI:-
+PKI: known	PKI:已知
+PKI: verified	PKI:已验证
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI:%.0f dBm
+RSSI: -	RSSI:-
+Role: %s	角色:%s
+SCAN	扫描
+SF: %u	扩频因子:%u
+SF: -	扩频因子:-
+SIM	模拟
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR:%.1f dB
+SNR: -	SNR:-
+SNR %.0f	信噪比 %.0f
+SNR -	信噪比 -
+SNR Good	信噪比良好
+SNR Weak	信噪比较弱
+STEP %.0fk | BW %.0fk	步进 %.0fk | 带宽 %.0fk
+STEP %.1fk | BW %.1fk	步进 %.1fk | 带宽 %.1fk
+STEP -- | BW --	步进 -- | 带宽 --
+STOP	停止
+Slot	槽位
+Slot %u	槽位 %u
+SUB-GHz SCAN	Sub-GHz 扫描
+Actions	操作
+Actions: %s	操作:%s
+Access to team data revoked	队伍数据访问已撤销
+Capability:	能力:
+Channel Actions	频道操作
+Confirm Kick	确认移除
+Create Team	创建队伍
+ELEV	仰角
+Join Team	加入队伍
+In View	可见
+Keep devices within 5m	请将设备保持在 5 米内
+KeyDist	密钥分发
+KeyId: %u	密钥 ID:%u
+KeyId: --	密钥 ID:--
+Keys	密钥
+Kick	移除
+Kick Member	移除成员
+Last paired: %s	最近配对:%s
+Last seen %uh ago	上次在线 %u 小时前
+Last seen %um ago	上次在线 %u 分钟前
+Last seen --	上次在线:--
+Last update %us ago	上次更新 %u 秒前
+Last update --	上次更新:--
+Last update 0s ago	上次更新 0 秒前
+Leader	队长
+Leader online	队长在线
+Leave	离开
+Leave team?	离开队伍?
+Manage	管理
+Member: %s	成员:%s
+Members	成员
+Members: %u	成员数:%u
+Members: %u  Online: %u	成员:%u  在线:%u
+Modem Bridge	调制解调器桥接
+No members yet	暂无成员
+Not Used	未使用
+Offline	离线
+Online	在线
+Online: %u	在线:%u
+Pair Again	再次配对
+Pair Member	配对成员
+Pairing in progress	正在配对
+Prev	上一页
+Remove %s from team?	将 %s 移出队伍?
+Request Keys	请求密钥
+Retry	重试
+Security Round: %u	安全轮次:%u
+Security Round: --	安全轮次:--
+Security: OK (Round %u)	安全状态:正常(轮次 %u)
+Security: OK (Round --)	安全状态:正常(轮次 --)
+Seen %ud	%u 天前
+Seen %uh	%u 小时前
+Seen %um	%u 分钟前
+Send failed (keys not ready)	发送失败(密钥未就绪)
+Status: %s	状态:%s
+Target: %s	目标:%s
+Team / %s	队伍 / %s
+Team Actions	队伍操作
+Team Health	队伍状态
+Team Status	队伍状态
+Team: %s	队伍:%s
+This clears local keys.	这将清除本地密钥。
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	这将更新安全轮次。\n该成员将不再接收\n队伍消息或航点。
+Transfer	移交
+Transfer Leader	移交队长
+View Team	查看队伍
+Waiting for new keys...	正在等待新密钥...
+Waypoint	航点
+You are no longer in this team	你已不在此队伍中
+You are not in a team	你当前未加入队伍
+- No shared map\n- No team awareness	- 无共享地图\n- 无队伍态势
+1 member stale	1 名成员状态过期
+encrypt failed	加密失败
+member	成员
+queue full	队列已满
+unsupported protocol	协议不支持
+Factory Reset	恢复出厂设置
+Clear all settings and restart?	清空全部设置并重启?

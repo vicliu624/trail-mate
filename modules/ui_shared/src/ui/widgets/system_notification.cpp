@@ -6,7 +6,6 @@
 #include "ui/widgets/system_notification.h"
 
 #include "ui/assets/fonts/font_utils.h"
-#include "ui/assets/fonts/fonts.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
@@ -72,7 +71,7 @@ void SystemNotification::init()
     label_ = lv_label_create(container_);
     lv_label_set_text(label_, "");
     lv_obj_set_style_text_color(label_, lv_color_hex(0x3A2A1A), 0);
-    lv_obj_set_style_text_font(label_, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_flex_grow(label_, 1);
 
     // Initially hidden
@@ -106,7 +105,7 @@ void SystemNotification::show(const char* text, uint32_t duration_ms)
     }
 
     lv_label_set_text(label_, truncated);
-    ::ui::fonts::apply_localized_font(label_, truncated, &lv_font_noto_cjk_16_2bpp);
+    ::ui::fonts::apply_localized_font(label_, truncated, ::ui::fonts::ui_chrome_font());
 
     // Cancel existing timer if any
     if (hide_timer_)

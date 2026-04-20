@@ -81,9 +81,13 @@ static size_t kMeshCoreRegionPresetOptionCount = 0;
 static settings::ui::SettingOption kTxPowerOptions[64] = {};
 static size_t kTxPowerOptionCount = 0;
 static char kTxPowerLabels[64][12] = {};
+static settings::ui::SettingOption kLocaleOptions[16] = {};
+static size_t kLocaleOptionCount = 0;
+static char kLocaleOptionLabels[16][48] = {};
 
 static void update_item_value(settings::ui::ItemWidget& widget);
 static void open_factory_reset_modal();
+static bool option_labels_are_translated(const settings::ui::SettingItem& item);
 
 static bool use_tdeck_info_card_layout()
 {
@@ -609,6 +613,27 @@ static void settings_load()
         }
     }
 
+    kLocaleOptionCount = 0;
+    const size_t locale_limit = sizeof(kLocaleOptions) / sizeof(kLocaleOptions[0]);
+    for (size_t index = 0; index < ::ui::i18n::locale_count() && kLocaleOptionCount < locale_limit; ++index)
+    {
+        const ::ui::i18n::LocaleInfo* locale = ::ui::i18n::locale_at(index);
+        if (!locale)
+        {
+            continue;
+        }
+
+        const char* display_name =
+            (locale->native_name && locale->native_name[0] != '\0') ? locale->native_name : locale->display_name;
+        std::snprintf(kLocaleOptionLabels[kLocaleOptionCount],
+                      sizeof(kLocaleOptionLabels[kLocaleOptionCount]),
+                      "%s",
+                      display_name ? display_name : "");
+        kLocaleOptions[kLocaleOptionCount].label = kLocaleOptionLabels[kLocaleOptionCount];
+        kLocaleOptions[kLocaleOptionCount].value = static_cast<int>(index);
+        ++kLocaleOptionCount;
+    }
+
     app_ctx.getEffectiveUserInfo(g_settings.user_name,
                                  sizeof(g_settings.user_name),
                                  g_settings.short_name,
@@ -753,7 +778,7 @@ static void settings_load()
         g_settings.speaker_volume = 100;
     }
     apply_message_tone_volume(static_cast<uint8_t>(g_settings.speaker_volume));
-    g_settings.display_language = static_cast<int>(::ui::i18n::current_language());
+    g_settings.display_locale_index = ::ui::i18n::current_locale_index();
 
     g_settings.ble_enabled = cfg.ble_enabled;
     g_settings.vibration_enabled = prefs_get_bool("vibration_enabled", true);
@@ -796,7 +821,9 @@ static void format_value(const settings::ui::SettingItem& item, char* out, size_
         {
             if (item.options[i].value == value)
             {
-                label = ::ui::i18n::tr(item.options[i].label);
+                label = option_labels_are_translated(item)
+                            ? ::ui::i18n::tr(item.options[i].label)
+                            : (item.options[i].label ? item.options[i].label : "");
                 break;
             }
         }
@@ -1199,14 +1226,19 @@ static void on_option_clicked(lv_event_t* e)
         prefs_put_int(payload->item->pref_key, payload->value);
     }
     update_item_value(*payload->widget);
-    if (payload->item->pref_key && strcmp(payload->item->pref_key, "display_language") == 0)
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "display_locale") == 0)
     {
-        const ::ui::i18n::Language target_language = ::ui::i18n::language_from_raw(payload->value);
-        if (::ui::i18n::set_language(target_language, true))
+        if (::ui::i18n::set_locale_by_index(static_cast<size_t>(payload->value), true))
         {
             refresh_menu_labels = true;
             rebuild_active_app = true;
         }
+        else
+        {
+            *payload->item->enum_value = previous_value;
+        }
+        g_settings.display_locale_index = ::ui::i18n::current_locale_index();
+        update_item_value(*payload->widget);
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "mesh_protocol") == 0)
     {
@@ -1711,7 +1743,14 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
         lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
         style::apply_btn_modal(btn);
         lv_obj_t* label = lv_label_create(btn);
-        ::ui::i18n::set_label_text(label, item.options[i].label);
+        if (option_labels_are_translated(item))
+        {
+            ::ui::i18n::set_label_text(label, item.options[i].label);
+        }
+        else
+        {
+            ::ui::i18n::set_label_text_raw(label, item.options[i].label);
+        }
         style::apply_label_primary(label);
         lv_obj_center(label);
 
@@ -1964,11 +2003,6 @@ static const settings::ui::SettingOption kSpeakerVolumeOptions[] = {
     {"100%", 100},
 };
 
-static const settings::ui::SettingOption kLanguageOptions[] = {
-    {"English", static_cast<int>(::ui::i18n::Language::English)},
-    {"Chinese", static_cast<int>(::ui::i18n::Language::Chinese)},
-};
-
 static const settings::ui::SettingOption kTimeZoneOptions[] = {
     {"UTC", 0},
     {"Beijing (UTC+8)", 480},
@@ -2063,9 +2097,9 @@ static settings::ui::SettingItem kNetworkItems[] = {
 };
 
 static settings::ui::SettingItem kScreenItems[] = {
-    {"Display Language", settings::ui::SettingType::Enum, kLanguageOptions,
-     sizeof(kLanguageOptions) / sizeof(kLanguageOptions[0]), &g_settings.display_language, nullptr, nullptr, 0, false,
-     "display_language"},
+    {"Display Language", settings::ui::SettingType::Enum, kLocaleOptions,
+     0, &g_settings.display_locale_index, nullptr, nullptr, 0, false,
+     "display_locale"},
     {"Screen Timeout", settings::ui::SettingType::Enum, kScreenTimeoutOptions, 4, &g_settings.screen_timeout_ms, nullptr, nullptr, 0, false, "screen_timeout"},
     {"Screen Brightness", settings::ui::SettingType::Enum, kScreenBrightnessOptions,
      sizeof(kScreenBrightnessOptions) / sizeof(kScreenBrightnessOptions[0]), &g_settings.screen_brightness, nullptr, nullptr, 0, false, "screen_brightness"},
@@ -2169,6 +2203,11 @@ static bool has_pref_key(const settings::ui::SettingItem& item, const char* key)
     return item.pref_key && key && strcmp(item.pref_key, key) == 0;
 }
 
+static bool option_labels_are_translated(const settings::ui::SettingItem& item)
+{
+    return !has_pref_key(item, "display_locale");
+}
+
 static bool should_show_item(const settings::ui::SettingItem& item)
 {
     if (!item.pref_key)
@@ -2189,11 +2228,6 @@ static bool should_show_item(const settings::ui::SettingItem& item)
     {
         return false;
     }
-    if (has_pref_key(item, "display_language") && !::ui::i18n::supports_chinese())
-    {
-        return false;
-    }
-
     if (meshcore)
     {
         if (has_pref_key(item, "chat_region")) return false;
@@ -2310,6 +2344,11 @@ static void build_item_list()
         if (widget.def && widget.def->pref_key && strcmp(widget.def->pref_key, "mc_region_preset") == 0)
         {
             const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kMeshCoreRegionPresetOptionCount;
+        }
+        if (widget.def && widget.def->pref_key &&
+            strcmp(widget.def->pref_key, "display_locale") == 0)
+        {
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kLocaleOptionCount;
         }
         if (widget.def && widget.def->pref_key &&
             (strcmp(widget.def->pref_key, "net_tx_power") == 0 || strcmp(widget.def->pref_key, "mc_tx_power") == 0))

@@ -6,7 +6,6 @@
 #include "ui/widgets/ime/ime_widget.h"
 
 #include "ui/assets/fonts/font_utils.h"
-#include "ui/assets/fonts/fonts.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
@@ -24,6 +23,11 @@ namespace
 
 ImeWidget* s_active_ime = nullptr;
 static constexpr int kCandidatesPerPage = 12;
+
+bool script_input_available()
+{
+    return ::ui::i18n::active_locale_supports_script_input();
+}
 
 #if UI_SHARED_TOUCH_IME_ENABLED
 static const char* kTouchEnMap[] = {
@@ -103,7 +107,7 @@ void set_button_label(lv_obj_t* button, const char* text)
     {
         label = lv_label_create(button);
     }
-    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), 0);
     lv_label_set_text(label, text ? text : "");
     lv_obj_center(label);
@@ -246,7 +250,7 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
 
     toggle_label_ = lv_label_create(toggle_btn_);
     lv_label_set_text(toggle_label_, "EN");
-    lv_obj_set_style_text_font(toggle_label_, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(toggle_label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_style_text_color(toggle_label_, lv_color_hex(0x3A2A1A), 0);
     lv_obj_center(toggle_label_);
 
@@ -266,7 +270,7 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
 
     candidates_label_ = lv_label_create(container_);
     lv_label_set_text(candidates_label_, "");
-    lv_obj_set_style_text_font(candidates_label_, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(candidates_label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_style_text_color(candidates_label_, lv_color_hex(0x3A2A1A), 0);
     lv_obj_set_flex_grow(candidates_label_, 1);
     lv_obj_set_style_text_align(candidates_label_, LV_TEXT_ALIGN_RIGHT, 0);
@@ -335,7 +339,7 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     ::ui::i18n::set_label_text(candidates_label_, "English keyboard");
     lv_obj_set_flex_grow(candidates_label_, 1);
     lv_obj_set_style_text_align(candidates_label_, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_font(candidates_label_, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(candidates_label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_style_text_color(candidates_label_, lv_color_hex(0x6B4A1E), 0);
 
     candidate_row_ = lv_obj_create(container_);
@@ -362,7 +366,8 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
         set_button_label(candidate_btns_[i], "");
         apply_candidate_button_style(candidate_btns_[i], false);
         lv_obj_add_event_cb(candidate_btns_[i], on_candidate_clicked, LV_EVENT_CLICKED, this);
-        lv_obj_set_style_text_font(candidate_btns_[i], &lv_font_noto_cjk_16_2bpp, LV_PART_MAIN);
+        lv_obj_set_style_text_font(
+            candidate_btns_[i], ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), LV_PART_MAIN);
     }
 
     candidate_next_btn_ = lv_btn_create(candidate_row_);
@@ -420,6 +425,11 @@ void ImeWidget::detach()
 
 void ImeWidget::setMode(Mode mode)
 {
+    if (mode == Mode::CN && !script_input_available())
+    {
+        mode = Mode::EN;
+    }
+
     mode_ = mode;
     ime_.setEnabled(mode_ == Mode::CN);
     if (textarea_)
@@ -447,6 +457,12 @@ ImeWidget::Mode ImeWidget::mode() const
 
 void ImeWidget::cycleMode()
 {
+    if (!script_input_available())
+    {
+        setMode(mode_ == Mode::EN ? Mode::NUM : Mode::EN);
+        return;
+    }
+
     if (mode_ == Mode::EN)
     {
         setMode(Mode::CN);
@@ -769,6 +785,12 @@ void ImeWidget::refresh_labels()
     if (!toggle_label_ || !candidates_label_)
     {
         return;
+    }
+
+    if (mode_ == Mode::CN && !script_input_available())
+    {
+        mode_ = Mode::EN;
+        ime_.setEnabled(false);
     }
 
     if (textarea_)

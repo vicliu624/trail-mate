@@ -4,7 +4,7 @@
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/route_storage.h"
 #include "platform/ui/tracker_runtime.h"
-#include "ui/assets/fonts/fonts.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/tracker/tracker_page_input.h"
@@ -251,7 +251,7 @@ void init_button_styles()
 
     lv_style_init(&s_btn_label);
     lv_style_set_text_color(&s_btn_label, lv_color_hex(kPanelBtnText));
-    lv_style_set_text_font(&s_btn_label, &lv_font_noto_cjk_16_2bpp);
+    lv_style_set_text_font(&s_btn_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
 
     s_btn_styles_inited = true;
 }
@@ -414,7 +414,7 @@ lv_obj_t* create_list_item_button(const std::string& text, intptr_t user_data, b
     lv_obj_align(label, LV_ALIGN_LEFT_MID, 10, 0);
     lv_label_set_text(label, text.c_str());
     lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
-    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(label, LV_PCT(100));
 
@@ -751,7 +751,8 @@ void update_route_status()
     {
         return;
     }
-    lv_obj_set_style_text_font(state.status_label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(
+        state.status_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     if (state.mode == TrackerPageState::Mode::Route)
     {
         if (!state.active_route.empty())
@@ -1183,7 +1184,7 @@ void on_list_item_focused(lv_event_t* e)
         return;
     }
     lv_label_set_text(label, names[idx].c_str());
-    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
 }
 
@@ -1228,7 +1229,7 @@ void on_list_item_defocused(lv_event_t* e)
     std::string display_name = format_list_name(names[idx]);
     lv_label_set_text(label, display_name.c_str());
     lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
-    lv_obj_set_style_text_font(label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
 }
 
@@ -1527,7 +1528,8 @@ void init_page(lv_obj_t* parent)
     state.status_label = lv_label_create(state.list_panel);
     ::ui::i18n::set_label_text(state.status_label, "Stopped");
     lv_obj_set_width(state.status_label, LV_PCT(100));
-    lv_obj_set_style_text_font(state.status_label, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(
+        state.status_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_style_text_color(state.status_label, lv_color_hex(kPanelTextMuted), 0);
 
     state.list_container = layout::create_list_container(state.list_panel);

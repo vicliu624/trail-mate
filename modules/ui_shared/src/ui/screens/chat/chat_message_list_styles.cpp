@@ -1,7 +1,6 @@
 #if !defined(ARDUINO_T_WATCH_S3)
 #include "ui/screens/chat/chat_message_list_styles.h"
 #include "ui/assets/fonts/font_utils.h"
-#include "ui/assets/fonts/fonts.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_styles.h"
 
@@ -31,7 +30,7 @@ void init_once()
     lv_style_set_radius(&s_root, 0);
 
     lv_style_init(&s_label_font);
-    lv_style_set_text_font(&s_label_font, &lv_font_noto_cjk_16_2bpp);
+    lv_style_set_text_font(&s_label_font, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
 }
 
 void apply_root_container(lv_obj_t* obj)

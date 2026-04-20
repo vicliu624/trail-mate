@@ -4,6 +4,7 @@
 
 #include "lvgl.h"
 #include "ui/assets/fonts/fonts.h"
+#include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
 #if !defined(LV_FONT_MONTSERRAT_16) || !LV_FONT_MONTSERRAT_16
@@ -15,6 +16,16 @@
 
 namespace ui::fonts
 {
+
+struct LocalizedFontBinding
+{
+    const lv_font_t* base = nullptr;
+    lv_font_t composed{};
+    bool used = false;
+};
+
+LocalizedFontBinding* localized_font_binding_storage();
+std::size_t localized_font_binding_storage_size();
 
 inline bool utf8_has_non_ascii(const char* text)
 {
@@ -40,25 +51,135 @@ inline const lv_font_t* ui_chrome_font()
                : &lv_font_montserrat_16;
 }
 
-inline const lv_font_t* chat_content_font(const char* text)
+inline const lv_font_t* unwrap_localized_font(const lv_font_t* font)
 {
-#if defined(GAT562_NO_CJK) && GAT562_NO_CJK
-    (void)text;
-    return ui_chrome_font();
-#else
-    return utf8_has_non_ascii(text) ? &lv_font_noto_cjk_16_2bpp : ui_chrome_font();
-#endif
+    if (!font)
+    {
+        return nullptr;
+    }
+
+    LocalizedFontBinding* bindings = localized_font_binding_storage();
+    const std::size_t binding_count = localized_font_binding_storage_size();
+    for (std::size_t index = 0; index < binding_count; ++index)
+    {
+        const LocalizedFontBinding& binding = bindings[index];
+        if (binding.used && font == &binding.composed)
+        {
+            return binding.base;
+        }
+    }
+
+    return font;
+}
+
+inline void sync_localized_font_binding(LocalizedFontBinding& binding)
+{
+    if (!binding.base)
+    {
+        return;
+    }
+
+    binding.composed = *binding.base;
+    const lv_font_t* fallback = ::ui::i18n::active_font_fallback();
+    binding.composed.fallback = (fallback && fallback != binding.base) ? fallback : nullptr;
+}
+
+inline LocalizedFontBinding* find_localized_font_binding(const lv_font_t* base_font)
+{
+    LocalizedFontBinding* bindings = localized_font_binding_storage();
+    const std::size_t binding_count = localized_font_binding_storage_size();
+    for (std::size_t index = 0; index < binding_count; ++index)
+    {
+        LocalizedFontBinding& binding = bindings[index];
+        if (binding.used && binding.base == base_font)
+        {
+            return &binding;
+        }
+    }
+    return nullptr;
+}
+
+inline LocalizedFontBinding* acquire_localized_font_binding(const lv_font_t* base_font)
+{
+    LocalizedFontBinding* bindings = localized_font_binding_storage();
+    const std::size_t binding_count = localized_font_binding_storage_size();
+    for (std::size_t index = 0; index < binding_count; ++index)
+    {
+        LocalizedFontBinding& binding = bindings[index];
+        if (!binding.used)
+        {
+            binding.used = true;
+            binding.base = base_font;
+            sync_localized_font_binding(binding);
+            return &binding;
+        }
+    }
+    return nullptr;
+}
+
+inline void clear_locale_font_bindings()
+{
+    LocalizedFontBinding* bindings = localized_font_binding_storage();
+    const std::size_t binding_count = localized_font_binding_storage_size();
+    for (std::size_t index = 0; index < binding_count; ++index)
+    {
+        LocalizedFontBinding& binding = bindings[index];
+        if (!binding.used)
+        {
+            continue;
+        }
+        binding.composed = *binding.base;
+        binding.composed.fallback = nullptr;
+    }
+}
+
+inline void refresh_locale_font_bindings()
+{
+    LocalizedFontBinding* bindings = localized_font_binding_storage();
+    const std::size_t binding_count = localized_font_binding_storage_size();
+    for (std::size_t index = 0; index < binding_count; ++index)
+    {
+        LocalizedFontBinding& binding = bindings[index];
+        if (!binding.used)
+        {
+            continue;
+        }
+        sync_localized_font_binding(binding);
+    }
+}
+
+inline const lv_font_t* localized_font(const lv_font_t* ascii_font = nullptr)
+{
+    const lv_font_t* base_font = unwrap_localized_font(ascii_font ? ascii_font : ui_chrome_font());
+    if (!base_font)
+    {
+        base_font = ui_chrome_font();
+    }
+
+    if (LocalizedFontBinding* existing = find_localized_font_binding(base_font))
+    {
+        sync_localized_font_binding(*existing);
+        return &existing->composed;
+    }
+
+    if (LocalizedFontBinding* created = acquire_localized_font_binding(base_font))
+    {
+        return &created->composed;
+    }
+
+    return base_font;
 }
 
 inline const lv_font_t* localized_font(const char* text, const lv_font_t* ascii_font)
 {
-    const lv_font_t* fallback = ascii_font ? ascii_font : ui_chrome_font();
-#if defined(GAT562_NO_CJK) && GAT562_NO_CJK
     (void)text;
-    return fallback;
-#else
-    return utf8_has_non_ascii(text) ? &lv_font_noto_cjk_16_2bpp : fallback;
-#endif
+    return localized_font(ascii_font);
+}
+
+inline const lv_font_t* chat_content_font(const char* text)
+{
+    (void)text;
+    return localized_font(ui_chrome_font());
 }
 
 inline void apply_font(lv_obj_t* label, const lv_font_t* font)
@@ -71,7 +192,7 @@ inline void apply_font(lv_obj_t* label, const lv_font_t* font)
 
 inline void apply_ui_chrome_font(lv_obj_t* label)
 {
-    apply_font(label, ui_chrome_font());
+    apply_font(label, localized_font(ui_chrome_font()));
 }
 
 inline void apply_chat_content_font(lv_obj_t* label, const char* text)

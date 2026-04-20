@@ -15,7 +15,7 @@
 #include "sys/event_bus.h"
 #include "team/protocol/team_location_marker.h"
 #include "team/usecase/team_controller.h"
-#include "ui/assets/fonts/fonts.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/team/team_ui_store.h"
@@ -1586,7 +1586,7 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     lv_obj_t* title = lv_label_create(key_verify_panel_);
     ::ui::i18n::set_label_text(title, "Key Verification");
     lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
-    lv_obj_set_style_text_font(title, &lv_font_noto_cjk_16_2bpp, 0);
+    lv_obj_set_style_text_font(title, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     std::string desc = ::ui::i18n::format("Enter number for %s", resolve_contact_name(node_id).c_str());

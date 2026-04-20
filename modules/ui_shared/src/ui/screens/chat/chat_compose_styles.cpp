@@ -1,6 +1,6 @@
 #if !defined(ARDUINO_T_WATCH_S3)
 #include "ui/screens/chat/chat_compose_styles.h"
-#include "ui/assets/fonts/fonts.h"
+#include "ui/assets/fonts/font_utils.h"
 
 namespace chat::ui::compose::styles
 {
@@ -36,7 +36,7 @@ void init_once()
     lv_style_set_bg_color(&s_textarea, lv_color_hex(0xFFF7E9));
     lv_style_set_bg_opa(&s_textarea, LV_OPA_COVER);
     lv_style_set_text_color(&s_textarea, lv_color_hex(0x3A2A1A));
-    lv_style_set_text_font(&s_textarea, &lv_font_noto_cjk_16_2bpp);
+    lv_style_set_text_font(&s_textarea, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
     lv_style_set_border_width(&s_textarea, 1);
     lv_style_set_border_color(&s_textarea, lv_color_hex(0xD9B06A));
     lv_style_set_radius(&s_textarea, 6);

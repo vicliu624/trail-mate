@@ -104,7 +104,6 @@ void prepareBootUi(bool waking_from_sleep)
 
 void initializeShell(const Hooks& hooks)
 {
-    ::ui::i18n::reload_language();
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_radius(lv_screen_active(), 0, 0);
 

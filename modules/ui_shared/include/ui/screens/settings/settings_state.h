@@ -110,7 +110,7 @@ struct SettingsData
     int screen_brightness = 16;
     int timezone_offset_min = 0;
     int speaker_volume = 45;
-    int display_language = 0;
+    int display_locale_index = 0;
     bool ble_enabled = true;
     bool vibration_enabled = true;
 
