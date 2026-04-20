@@ -50,29 +50,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION=$(python3 - <<'PY'
-from pathlib import Path
-import re
-
-raw = Path("CHANGELOG.md").read_bytes()
-text = None
-for encoding in ("utf-8-sig", "utf-16le", "utf-16"):
-    try:
-        text = raw.decode(encoding)
-        break
-    except UnicodeDecodeError:
-        continue
-
-if text is None:
-    raise SystemExit("Failed to decode CHANGELOG.md")
-
-for line in text.splitlines():
-    match = re.match(r"^## \[([0-9][^]]*)\]", line)
-    if match:
-        print(match.group(1))
-        break
-PY
-)
+            VERSION=$(iconv -f UTF-16LE -t UTF-8 CHANGELOG.md | awk -F'[][]' '/^## \\[[0-9]/ {print $2; exit}')
           fi
           if [ -z "$VERSION" ]; then
             VERSION="unknown"
@@ -148,43 +126,14 @@ PY
       - name: Extract changelog entry
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          python3 - <<'PY'
-from pathlib import Path
-import os
-import re
-
-version = os.environ["VERSION"]
-raw = Path("CHANGELOG.md").read_bytes()
-text = None
-for encoding in ("utf-8-sig", "utf-16le", "utf-16"):
-    try:
-        text = raw.decode(encoding)
-        break
-    except UnicodeDecodeError:
-        continue
-
-if text is None:
-    raise SystemExit("Failed to decode CHANGELOG.md")
-
-lines = []
-capture = False
-header_re = re.compile(r"^## \[([^\]]+)\]")
-for line in text.splitlines():
-    match = header_re.match(line)
-    if match:
-        if capture and match.group(1) != version:
-            break
-        if match.group(1) == version:
-            capture = True
-    if capture:
-        lines.append(line)
-
-output = "\n".join(lines).strip()
-if not output:
-    raise SystemExit(f"Failed to extract changelog entry for version {version}")
-
-Path("release_changelog.md").write_text(output + "\n", encoding="utf-8")
-PY
+          iconv -f UTF-16LE -t UTF-8 CHANGELOG.md > CHANGELOG.utf8.md
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" {capture=1}
+            capture {
+              if ($0 ~ "^## \\[" && $0 !~ "^## \\[" version "\\]") exit
+              print
+            }
+          ' CHANGELOG.utf8.md > release_changelog.md
 
           if [ ! -s release_changelog.md ]; then
             echo "Failed to extract changelog entry for version ${VERSION}" >&2
