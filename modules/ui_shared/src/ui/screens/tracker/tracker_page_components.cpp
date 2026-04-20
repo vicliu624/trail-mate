@@ -575,8 +575,7 @@ void update_record_status()
     const bool recording = platform::ui::tracker::is_recording();
     if (state.mode == TrackerPageState::Mode::Record)
     {
-        lv_label_set_text(state.status_label,
-                          ::ui::i18n::tr(recording ? "Recording" : "Stopped"));
+        ::ui::i18n::set_label_text(state.status_label, recording ? "Recording" : "Stopped");
     }
 }
 
@@ -586,7 +585,7 @@ void update_start_stop_button()
     const bool recording = platform::ui::tracker::is_recording();
     if (state.start_stop_label)
     {
-        lv_label_set_text(state.start_stop_label, ::ui::i18n::tr(recording ? "Stop" : "New"));
+        ::ui::i18n::set_label_text(state.start_stop_label, recording ? "Stop" : "New");
     }
 }
 
@@ -758,16 +757,16 @@ void update_route_status()
         if (!state.active_route.empty())
         {
             const std::string text = ::ui::i18n::format("Active: %s", state.active_route.c_str());
-            lv_label_set_text(state.status_label, text.c_str());
+            ::ui::i18n::set_label_text_raw(state.status_label, text.c_str());
         }
         else if (!state.selected_route.empty())
         {
             const std::string text = ::ui::i18n::format("Selected: %s", state.selected_route.c_str());
-            lv_label_set_text(state.status_label, text.c_str());
+            ::ui::i18n::set_label_text_raw(state.status_label, text.c_str());
         }
         else
         {
-            lv_label_set_text(state.status_label, ::ui::i18n::tr("No route selected"));
+            ::ui::i18n::set_label_text(state.status_label, "No route selected");
         }
     }
 }
@@ -976,7 +975,7 @@ lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text)
     lv_obj_set_size(btn, LV_PCT(100), action_menu_button_height());
 
     lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, ::ui::i18n::tr(text));
+    ::ui::i18n::set_label_text(label, text);
     lv_obj_center(label);
     apply_action_button(btn, label);
     return btn;
@@ -1088,7 +1087,7 @@ void open_action_menu_modal()
 
     lv_obj_t* title_label = lv_label_create(win);
     const char* title = (state.mode == TrackerPageState::Mode::Record) ? "Track Actions" : "Route Actions";
-    lv_label_set_text(title_label, ::ui::i18n::tr(title));
+    ::ui::i18n::set_label_text(title_label, title);
     lv_obj_set_width(title_label, LV_PCT(100));
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -1162,7 +1161,7 @@ void on_list_item_focused(lv_event_t* e)
     {
         if (lv_obj_t* label = lv_obj_get_child(target, -1))
         {
-            lv_label_set_text(label, ::ui::i18n::tr("Back"));
+            ::ui::i18n::set_label_text(label, "Back");
             lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
         }
         return;
@@ -1278,7 +1277,7 @@ void on_route_load_clicked(lv_event_t*)
     {
         if (state.status_label)
         {
-            lv_label_set_text(state.status_label, ::ui::i18n::tr("Select a route"));
+            ::ui::i18n::set_label_text(state.status_label, "Select a route");
         }
         return;
     }
@@ -1336,7 +1335,7 @@ void on_del_confirm_clicked(lv_event_t*)
             {
                 if (state.status_label)
                 {
-                    lv_label_set_text(state.status_label, ::ui::i18n::tr("Stop recording first"));
+                    ::ui::i18n::set_label_text(state.status_label, "Stop recording first");
                 }
                 modal_close(state.del_confirm_modal);
                 return;
@@ -1382,7 +1381,7 @@ void on_del_confirm_clicked(lv_event_t*)
 
     if (!ok && state.status_label)
     {
-        lv_label_set_text(state.status_label, ::ui::i18n::tr("Delete failed"));
+        ::ui::i18n::set_label_text(state.status_label, "Delete failed");
     }
     modal_close(state.del_confirm_modal);
 }
@@ -1407,7 +1406,7 @@ void open_delete_confirm_modal()
         {
             if (state.status_label)
             {
-                lv_label_set_text(state.status_label, ::ui::i18n::tr("Select a track"));
+                ::ui::i18n::set_label_text(state.status_label, "Select a track");
             }
             return;
         }
@@ -1424,7 +1423,7 @@ void open_delete_confirm_modal()
         {
             if (state.status_label)
             {
-                lv_label_set_text(state.status_label, ::ui::i18n::tr("Select a route"));
+                ::ui::i18n::set_label_text(state.status_label, "Select a route");
             }
             return;
         }
@@ -1440,7 +1439,7 @@ void open_delete_confirm_modal()
 
     const std::string msg = ::ui::i18n::format("Delete %s?", state.pending_delete_name.c_str());
     lv_obj_t* label = lv_label_create(win);
-    lv_label_set_text(label, msg.c_str());
+    ::ui::i18n::set_label_text_raw(label, msg.c_str());
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
 
     lv_obj_t* btn_row = lv_obj_create(win);
@@ -1457,7 +1456,7 @@ void open_delete_confirm_modal()
     lv_obj_t* confirm_btn = lv_btn_create(btn_row);
     lv_obj_set_size(confirm_btn, modal_button_width(), action_menu_button_height());
     lv_obj_t* confirm_label = lv_label_create(confirm_btn);
-    lv_label_set_text(confirm_label, ::ui::i18n::tr("Confirm"));
+    ::ui::i18n::set_label_text(confirm_label, "Confirm");
     lv_obj_center(confirm_label);
     apply_action_button(confirm_btn, confirm_label);
     lv_obj_add_event_cb(confirm_btn, on_del_confirm_clicked, LV_EVENT_CLICKED, nullptr);
@@ -1465,7 +1464,7 @@ void open_delete_confirm_modal()
     lv_obj_t* cancel_btn = lv_btn_create(btn_row);
     lv_obj_set_size(cancel_btn, modal_button_width(), action_menu_button_height());
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    lv_label_set_text(cancel_label, ::ui::i18n::tr("Cancel"));
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
     lv_obj_center(cancel_label);
     apply_action_button(cancel_btn, cancel_label);
     lv_obj_add_event_cb(cancel_btn, on_del_cancel_clicked, LV_EVENT_CLICKED, nullptr);
@@ -1513,18 +1512,20 @@ void init_page(lv_obj_t* parent)
     lv_obj_set_width(state.mode_record_btn, LV_PCT(100));
     lv_obj_set_height(state.mode_record_btn, filter_button_height());
     state.mode_record_label = lv_label_create(state.mode_record_btn);
-    lv_label_set_text(state.mode_record_label, ::ui::i18n::tr("Record"));
+    lv_obj_add_style(state.mode_record_label, &s_btn_label, LV_PART_MAIN);
+    ::ui::i18n::set_label_text(state.mode_record_label, "Record");
     lv_obj_center(state.mode_record_label);
 
     state.mode_route_btn = lv_btn_create(state.filter_panel);
     lv_obj_set_width(state.mode_route_btn, LV_PCT(100));
     lv_obj_set_height(state.mode_route_btn, filter_button_height());
     state.mode_route_label = lv_label_create(state.mode_route_btn);
-    lv_label_set_text(state.mode_route_label, ::ui::i18n::tr("Route"));
+    lv_obj_add_style(state.mode_route_label, &s_btn_label, LV_PART_MAIN);
+    ::ui::i18n::set_label_text(state.mode_route_label, "Route");
     lv_obj_center(state.mode_route_label);
 
     state.status_label = lv_label_create(state.list_panel);
-    lv_label_set_text(state.status_label, ::ui::i18n::tr("Stopped"));
+    ::ui::i18n::set_label_text(state.status_label, "Stopped");
     lv_obj_set_width(state.status_label, LV_PCT(100));
     lv_obj_set_style_text_font(state.status_label, &lv_font_noto_cjk_16_2bpp, 0);
     lv_obj_set_style_text_color(state.status_label, lv_color_hex(kPanelTextMuted), 0);
