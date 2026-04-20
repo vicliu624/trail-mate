@@ -240,7 +240,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
     ::ui::widgets::top_bar_init(s_top_bar, s_root);
-    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("USB Mass Storage"));
+    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("USB Disk"));
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, back_event_handler, nullptr);
     if (s_top_bar.back_btn)
     {

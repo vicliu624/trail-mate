@@ -47,12 +47,12 @@ bool use_rnode_bridge()
 
 const char* page_title()
 {
-    return use_rnode_bridge() ? "RNode Bridge" : "Data Exchange";
+    return use_rnode_bridge() ? "RNode Bridge" : "PC Link";
 }
 
 const char* page_subtitle()
 {
-    return use_rnode_bridge() ? "USB CDC KISS modem for Reticulum" : "Data Exchange";
+    return use_rnode_bridge() ? "USB CDC KISS modem for Reticulum" : "Host bridge";
 }
 
 const char* status_text(platform::ui::hostlink::LinkState state)

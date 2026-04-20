@@ -8,6 +8,7 @@ namespace ui::components::info_card
 {
 namespace
 {
+constexpr lv_coord_t kTDeckBodyRowMinHeight = 18;
 
 bool s_inited = false;
 lv_style_t s_item_base;
@@ -194,6 +195,12 @@ ContentSlots create_content(lv_obj_t* parent, const ContentOptions& options)
 
     slots.body_row = lv_obj_create(parent);
     prepare_row(slots.body_row, true);
+    if (use_tdeck_layout())
+    {
+        lv_obj_set_style_min_height(slots.body_row, kTDeckBodyRowMinHeight, LV_PART_MAIN);
+        lv_obj_set_style_pad_top(slots.body_row, 1, LV_PART_MAIN);
+        lv_obj_set_style_pad_bottom(slots.body_row, 1, LV_PART_MAIN);
+    }
     slots.body_main_label = create_flex_label(slots.body_row, true, LV_TEXT_ALIGN_LEFT);
     if (options.body_meta)
     {

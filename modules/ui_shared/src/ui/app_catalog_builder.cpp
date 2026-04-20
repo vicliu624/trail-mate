@@ -114,7 +114,7 @@ ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", &tracker_icon,
                                     tracker::ui::shell::exit,
                                     &s_menu_host);
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_pc_link_app("pc_link", "Data Exchange", &rf,
+ui::CallbackAppScreen s_pc_link_app("pc_link", "PC Link", &rf,
                                     pc_link::ui::shell::enter,
                                     pc_link::ui::shell::exit,
                                     &s_menu_host);
@@ -126,7 +126,7 @@ ui::CallbackAppScreen s_sstv_app("sstv", "SSTV", &sstv,
                                  &s_menu_host);
 #endif
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Mass Storage", &img_usb,
+ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Disk", &img_usb,
                                 usb_storage::ui::shell::enter,
                                 usb_storage::ui::shell::exit,
                                 &s_menu_host);

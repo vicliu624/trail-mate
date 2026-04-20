@@ -2,6 +2,7 @@
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
@@ -520,7 +521,7 @@ void ensure_sat_dot(int index)
     dot.use_label = lv_label_create(dot.use_tag);
     ::ui::i18n::set_label_text(dot.use_label, "USE");
     lv_obj_set_style_text_color(dot.use_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(dot.use_label, s_layout.use_tag_font, 0);
+    ::ui::fonts::apply_localized_font(dot.use_label, lv_label_get_text(dot.use_label), s_layout.use_tag_font);
     lv_obj_center(dot.use_label);
 
     lv_obj_add_flag(dot.use_tag, LV_OBJ_FLAG_HIDDEN);
@@ -992,13 +993,13 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     lv_obj_move_background(center_dot);
 
     s_ui.label_n = lv_label_create(s_ui.panel_sky);
-    ::ui::i18n::set_label_text(s_ui.label_n, "N");
+    lv_label_set_text(s_ui.label_n, "N");
     lv_obj_set_style_text_color(s_ui.label_n, lv_color_hex(kColorText), 0);
     lv_obj_set_style_text_font(s_ui.label_n, s_layout.compass_font, 0);
     place_label_center_x(s_ui.label_n, center_x, s_layout.label_n_top);
 
     s_ui.label_e = lv_label_create(s_ui.panel_sky);
-    ::ui::i18n::set_label_text(s_ui.label_e, "E");
+    lv_label_set_text(s_ui.label_e, "E");
     lv_obj_set_style_text_color(s_ui.label_e, lv_color_hex(kColorText), 0);
     lv_obj_set_style_text_font(s_ui.label_e, s_layout.compass_font, 0);
     lv_obj_set_pos(s_ui.label_e,
@@ -1006,7 +1007,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
                    s_layout.sky_area_y + s_layout.sky_center - s_layout.label_e_y_adjust);
 
     s_ui.label_w = lv_label_create(s_ui.panel_sky);
-    ::ui::i18n::set_label_text(s_ui.label_w, "W");
+    lv_label_set_text(s_ui.label_w, "W");
     lv_obj_set_style_text_color(s_ui.label_w, lv_color_hex(kColorText), 0);
     lv_obj_set_style_text_font(s_ui.label_w, s_layout.compass_font, 0);
     lv_obj_set_pos(s_ui.label_w,
@@ -1034,7 +1035,8 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     s_ui.label_horizon = lv_label_create(s_ui.panel_sky);
     ::ui::i18n::set_label_text(s_ui.label_horizon, u8"0° Horizon");
     lv_obj_set_style_text_color(s_ui.label_horizon, lv_color_hex(kColorTextDim), 0);
-    lv_obj_set_style_text_font(s_ui.label_horizon, s_layout.horizon_font, 0);
+    ::ui::fonts::apply_localized_font(
+        s_ui.label_horizon, lv_label_get_text(s_ui.label_horizon), s_layout.horizon_font);
     place_label_center(s_ui.label_horizon, center_x, s_layout.sky_area_y + s_layout.sky_center + s_layout.horizon_offset_y);
 
     struct LegendSys
@@ -1095,7 +1097,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         lv_obj_t* label = lv_label_create(s_ui.panel_sky);
         ::ui::i18n::set_label_text(label, snr_legend[i].text);
         lv_obj_set_style_text_color(label, lv_color_hex(kColorTextDim), 0);
-        lv_obj_set_style_text_font(label, s_layout.legend_font, 0);
+        ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), s_layout.legend_font);
         lv_obj_set_pos(label, x + s_layout.legend_label_x_offset, y);
     }
 
@@ -1121,7 +1123,8 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     s_ui.status_header_label = lv_label_create(s_ui.status_header);
     ::ui::i18n::set_label_text(s_ui.status_header_label, "SATELLITE STATUS");
     lv_obj_set_style_text_color(s_ui.status_header_label, lv_color_hex(0x2A1A05), 0);
-    lv_obj_set_style_text_font(s_ui.status_header_label, s_layout.status_header_font, 0);
+    ::ui::fonts::apply_localized_font(
+        s_ui.status_header_label, lv_label_get_text(s_ui.status_header_label), s_layout.status_header_font);
     lv_obj_center(s_ui.status_header_label);
 
     s_ui.table_header = lv_obj_create(s_ui.panel_status);
@@ -1142,7 +1145,8 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         ::ui::i18n::set_label_text(s_ui.table_header_cells[i], header_texts[i]);
         lv_label_set_long_mode(s_ui.table_header_cells[i], LV_LABEL_LONG_CLIP);
         lv_obj_set_style_text_color(s_ui.table_header_cells[i], lv_color_hex(kColorTextDim), 0);
-        lv_obj_set_style_text_font(s_ui.table_header_cells[i], s_layout.table_header_font, 0);
+        ::ui::fonts::apply_localized_font(
+            s_ui.table_header_cells[i], lv_label_get_text(s_ui.table_header_cells[i]), s_layout.table_header_font);
         lv_obj_set_size(s_ui.table_header_cells[i], col_w[i], s_layout.table_header_h);
         lv_obj_set_style_text_align(s_ui.table_header_cells[i], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_pos(s_ui.table_header_cells[i], col_x, 0);

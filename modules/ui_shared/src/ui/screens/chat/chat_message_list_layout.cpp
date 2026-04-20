@@ -7,6 +7,7 @@
 #include "ui/screens/chat/chat_message_list_layout.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/components/air_status_footer.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_layout.h"
 #include "ui/localization.h"
@@ -140,7 +141,43 @@ std::string truncate_preview(const std::string& text)
         return text;
     }
 
-    std::string out = text.substr(0, kMaxPreviewBytes);
+    auto utf8_char_bytes = [](unsigned char lead) -> size_t
+    {
+        if ((lead & 0x80U) == 0)
+        {
+            return 1;
+        }
+        if ((lead & 0xE0U) == 0xC0U)
+        {
+            return 2;
+        }
+        if ((lead & 0xF0U) == 0xE0U)
+        {
+            return 3;
+        }
+        if ((lead & 0xF8U) == 0xF0U)
+        {
+            return 4;
+        }
+        return 1;
+    };
+
+    size_t safe_len = 0;
+    while (safe_len < text.size())
+    {
+        const size_t next = utf8_char_bytes(static_cast<unsigned char>(text[safe_len]));
+        if (safe_len + next > kMaxPreviewBytes)
+        {
+            break;
+        }
+        safe_len += next;
+    }
+    if (safe_len == 0)
+    {
+        safe_len = kMaxPreviewBytes;
+    }
+
+    std::string out = text.substr(0, safe_len);
     out.append("...");
     return out;
 }
@@ -274,6 +311,7 @@ MessageListLayout create_layout(lv_obj_t* parent)
     w.content = create_content(w.root);
     w.filter_panel = create_filter_panel(w.content, &w.direct_btn, &w.broadcast_btn, &w.team_btn);
     w.list_panel = create_list_panel(w.content);
+    w.air_status_footer = ::ui::components::air_status_footer::create(w.root);
     return w;
 }
 

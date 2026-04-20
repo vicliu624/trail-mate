@@ -2432,6 +2432,7 @@ void refresh_ui()
     {
         lv_obj_clear_flag(g_contacts_state.sub_container, LV_OBJ_FLAG_SCROLLABLE);
     }
+    ::ui::components::air_status_footer::refresh(g_contacts_state.air_status_footer);
 
     bool team_available = is_team_available() && supports_team_chat();
     const bool meshcore_mode = (active_mesh_protocol() == chat::MeshProtocol::MeshCore);

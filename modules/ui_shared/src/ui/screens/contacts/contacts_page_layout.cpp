@@ -4,17 +4,16 @@
  */
 
 #include "ui/screens/contacts/contacts_page_layout.h"
+
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/domain/chat_types.h"
-#include "chat/infra/mesh_protocol_utils.h"
-#include "chat/infra/meshtastic/mt_region.h"
+
+#include "ui/components/air_status_footer.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_layout.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
-
-#include <cstdio>
 
 using namespace contacts::ui;
 
@@ -28,61 +27,6 @@ namespace layout
 // Layout constants
 static constexpr int kButtonSpacing = 3;
 static constexpr int kPanelGap = 3; // Gap between filter and list columns
-
-namespace
-{
-
-void format_contacts_title(char* out, size_t out_len)
-{
-    if (!out || out_len == 0)
-    {
-        return;
-    }
-    app::IAppFacade& app_ctx = app::appFacade();
-    const chat::MeshConfig& config = app_ctx.getConfig().meshtastic_config;
-    chat::MeshProtocol protocol = app_ctx.getConfig().mesh_protocol;
-    if (protocol == chat::MeshProtocol::Meshtastic)
-    {
-        float freq_mhz =
-            chat::meshtastic::estimateFrequencyMhz(config.region, config.modem_preset);
-        snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (Meshtastic - %.3fMHz)", freq_mhz).c_str());
-        return;
-    }
-    if (protocol == chat::MeshProtocol::MeshCore)
-    {
-        snprintf(out, out_len, "%s", ::ui::i18n::tr("Contacts (MeshCore)"));
-        return;
-    }
-    if (protocol == chat::MeshProtocol::RNode)
-    {
-        const chat::MeshConfig& rnode = app_ctx.getConfig().rnode_config;
-        if (rnode.override_frequency_mhz > 0.0f)
-        {
-            snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (RNode - %.3fMHz)", rnode.override_frequency_mhz).c_str());
-        }
-        else
-        {
-            snprintf(out, out_len, "%s", ::ui::i18n::tr("Contacts (RNode)"));
-        }
-        return;
-    }
-    if (protocol == chat::MeshProtocol::LXMF)
-    {
-        const chat::MeshConfig& lxmf = app_ctx.getConfig().rnode_config;
-        if (lxmf.override_frequency_mhz > 0.0f)
-        {
-            snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (LXMF - %.3fMHz)", lxmf.override_frequency_mhz).c_str());
-        }
-        else
-        {
-            snprintf(out, out_len, "%s", ::ui::i18n::tr("Contacts (LXMF)"));
-        }
-        return;
-    }
-    snprintf(out, out_len, "%s", ::ui::i18n::format("Contacts (%s)", chat::infra::meshProtocolName(protocol)).c_str());
-}
-
-} // namespace
 
 lv_obj_t* create_root(lv_obj_t* parent)
 {
@@ -106,12 +50,15 @@ lv_obj_t* create_header(lv_obj_t* root,
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = profile.top_bar_height;
     ::ui::widgets::top_bar_init(g_contacts_state.top_bar, header, cfg);
-    char title[64];
-    format_contacts_title(title, sizeof(title));
-    ::ui::widgets::top_bar_set_title(g_contacts_state.top_bar, title);
+    ::ui::widgets::top_bar_set_title(g_contacts_state.top_bar, ::ui::i18n::tr("Contacts"));
     ::ui::widgets::top_bar_set_back_callback(g_contacts_state.top_bar, back_callback, user_data);
 
     return header;
+}
+
+void create_footer(lv_obj_t* root)
+{
+    g_contacts_state.air_status_footer = ::ui::components::air_status_footer::create(root);
 }
 
 lv_obj_t* create_content(lv_obj_t* root)

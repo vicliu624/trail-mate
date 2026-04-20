@@ -16,6 +16,7 @@ enum class Language : uint8_t
 };
 
 Language language_from_raw(int raw_value);
+void reload_language();
 Language current_language();
 bool set_language(Language language, bool persist = true);
 bool supports_chinese();

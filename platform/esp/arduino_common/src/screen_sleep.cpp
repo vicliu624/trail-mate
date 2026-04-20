@@ -5,7 +5,6 @@
 
 #include "screen_sleep.h"
 
-#include <Preferences.h>
 #include <cstdio>
 #include <string>
 
@@ -15,6 +14,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lvgl.h"
+#include "platform/ui/settings_store.h"
 #include "ui/localization.h"
 
 namespace
@@ -49,19 +49,14 @@ lv_timer_t* s_screen_saver_timer = nullptr;
 
 uint32_t readPersistedScreenTimeoutMs()
 {
-    Preferences prefs;
-    prefs.begin(kSettingsNs, true);
-    const uint32_t value = prefs.getUInt(kScreenTimeoutKey, 0);
-    prefs.end();
+    const uint32_t value =
+        ::platform::ui::settings_store::get_uint(kSettingsNs, kScreenTimeoutKey, 0);
     return clampScreenTimeoutMs(value);
 }
 
 void writePersistedScreenTimeoutMs(uint32_t timeout_ms)
 {
-    Preferences prefs;
-    prefs.begin(kSettingsNs, false);
-    prefs.putUInt(kScreenTimeoutKey, timeout_ms);
-    prefs.end();
+    ::platform::ui::settings_store::put_uint(kSettingsNs, kScreenTimeoutKey, timeout_ms);
 }
 
 void cacheScreenTimeoutMs(uint32_t timeout_ms)

@@ -12,6 +12,7 @@
 #include "chat/domain/chat_types.h"
 #include "chat_message_list_input.h"
 #include "lvgl.h"
+#include "ui/components/air_status_footer.h"
 #include "ui/widgets/top_bar.h"
 #include <string>
 #include <vector>
@@ -104,6 +105,7 @@ class ChatMessageListScreen
     lv_obj_t* broadcast_btn_ = nullptr;
     lv_obj_t* team_btn_ = nullptr;
     lv_obj_t* list_back_btn_ = nullptr;
+    ::ui::components::air_status_footer::Footer air_status_footer_{};
 
     int selected_index_ = -1;
     FilterMode filter_mode_ = FilterMode::Direct;

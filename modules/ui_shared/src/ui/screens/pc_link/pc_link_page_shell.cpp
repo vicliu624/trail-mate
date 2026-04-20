@@ -6,7 +6,9 @@
 namespace
 {
 
-auto s_placeholder_state = ::ui::page_shell_fallback::make_unavailable_state("Data Exchange", "Data Exchange is unavailable on this target.");
+auto s_placeholder_state =
+    ::ui::page_shell_fallback::make_unavailable_state("PC Link",
+                                                      "PC Link is unavailable on this target.");
 
 } // namespace
 

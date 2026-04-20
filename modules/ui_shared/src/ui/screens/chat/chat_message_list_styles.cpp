@@ -69,7 +69,7 @@ void apply_filter_label(lv_obj_t* label)
 {
     init_once();
     ::ui::components::two_pane_styles::apply_label_primary(label);
-    ::ui::fonts::apply_ui_chrome_font(label);
+    ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), ::ui::fonts::ui_chrome_font());
 }
 
 void apply_label_name(lv_obj_t* label)

@@ -129,6 +129,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
 
     lv_obj_t* content = contacts::ui::layout::create_content(g_contacts_state.root);
     g_contacts_state.page = content;
+    contacts::ui::layout::create_footer(g_contacts_state.root);
     ui_update_top_bar_battery(g_contacts_state.top_bar);
 
     create_filter_panel(content);

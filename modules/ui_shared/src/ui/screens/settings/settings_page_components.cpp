@@ -31,6 +31,7 @@
 #include "ui/screens/settings/settings_page_layout.h"
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
+#include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 #include "ui/widgets/top_bar.h"
@@ -82,6 +83,7 @@ static size_t kTxPowerOptionCount = 0;
 static char kTxPowerLabels[64][12] = {};
 
 static void update_item_value(settings::ui::ItemWidget& widget);
+static void open_factory_reset_modal();
 
 static bool use_tdeck_info_card_layout()
 {
@@ -223,6 +225,26 @@ static int prefs_get_int(const char* key, int default_value)
 static bool prefs_get_bool(const char* key, bool default_value)
 {
     return prefs_get_bool_ns(kPrefsNs, key, default_value);
+}
+
+static bool is_settings_store_owned_enum_setting(const char* key)
+{
+    if (!key)
+    {
+        return false;
+    }
+    return strcmp(key, "screen_brightness") == 0 ||
+           strcmp(key, "speaker_volume") == 0;
+}
+
+static bool is_settings_store_owned_toggle_setting(const char* key)
+{
+    if (!key)
+    {
+        return false;
+    }
+    return strcmp(key, "vibration_enabled") == 0 ||
+           strcmp(key, "adv_debug") == 0;
 }
 
 static uint8_t get_message_tone_volume_default()
@@ -448,11 +470,9 @@ static void reset_mesh_settings()
     g_settings.net_duty_cycle = true;
     g_settings.net_channel_util = 0;
     g_settings.mc_region_preset = app_ctx.getConfig().meshcore_config.meshcore_region_preset;
-    g_settings.needs_restart = false;
 
     static const char* kResetKeys[] = {
         "mesh_protocol",
-        "chat_region",
         "chat_channel",
         "chat_psk",
         "mc_channel_name",
@@ -467,10 +487,8 @@ static void reset_mesh_settings()
         "net_tx_power",
         "net_hop_limit",
         "net_tx_enabled",
-        "net_override_duty",
         "net_channel_num",
         "net_freq_offset",
-        "net_override_freq",
         "net_relay",
         "net_duty_cycle",
         "net_util",
@@ -478,7 +496,6 @@ static void reset_mesh_settings()
         "mc_bw",
         "mc_sf",
         "mc_cr",
-        "mc_region_preset",
         "mc_tx_power",
         "mc_tx",
         "mc_repeat",
@@ -488,7 +505,6 @@ static void reset_mesh_settings()
         "mc_multi_acks",
         "mc_channel_slot",
         "mc_ch_slot",
-        "needs_restart",
     };
     prefs_remove_keys(kPrefsNs, kResetKeys, sizeof(kResetKeys) / sizeof(kResetKeys[0]));
 
@@ -513,11 +529,33 @@ static void clear_message_db()
     ::ui::SystemNotification::show(::ui::i18n::tr("Message DB cleared"), 3000);
 }
 
+static void perform_factory_reset()
+{
+    static const char* kNamespacesToClear[] = {
+        "chat",
+        "gps",
+        "settings",
+        "aprs",
+        "power",
+        "chat_pki",
+    };
+
+    for (const char* ns : kNamespacesToClear)
+    {
+        prefs_clear_ns(ns);
+    }
+
+    team::ui::team_ui_get_store().clear();
+
+    ::ui::SystemNotification::show(::ui::i18n::tr("Resetting..."), 1500);
+    platform_delay_ms(300);
+    platform_restart();
+}
+
 static void settings_load()
 {
     app::IAppFacade& app_ctx = app::appFacade();
     g_settings.chat_protocol = static_cast<int>(app_ctx.getConfig().mesh_protocol);
-    g_settings.needs_restart = prefs_get_bool("needs_restart", false);
 
     if (kChatRegionOptionCount == 0)
     {
@@ -571,24 +609,6 @@ static void settings_load()
         }
     }
 
-    g_settings.gps_mode = prefs_get_int("gps_mode", 0);
-    g_settings.gps_sat_mask = prefs_get_int("gps_sat_mask", 0x1 | 0x8 | 0x4);
-    g_settings.gps_strategy = prefs_get_int("gps_strategy", 0);
-    g_settings.gps_interval = prefs_get_int("gps_interval", 1);
-    g_settings.gps_alt_ref = prefs_get_int("gps_alt_ref", 0);
-    g_settings.gps_coord_format = prefs_get_int("gps_coord_fmt", 0);
-
-    g_settings.map_coord_system = prefs_get_int("map_coord", 0);
-    g_settings.map_source = prefs_get_int("map_source", 0);
-    if (g_settings.map_source < 0 || g_settings.map_source > 2)
-    {
-        g_settings.map_source = 0;
-    }
-    g_settings.map_contour_enabled = prefs_get_bool("map_contour", false);
-    g_settings.map_track_enabled = prefs_get_bool("map_track", false);
-    g_settings.map_track_interval = prefs_get_int("map_track_interval", 1);
-    g_settings.map_track_format = prefs_get_int("map_track_format", 0);
-
     app_ctx.getEffectiveUserInfo(g_settings.user_name,
                                  sizeof(g_settings.user_name),
                                  g_settings.short_name,
@@ -597,6 +617,29 @@ static void settings_load()
     const chat::MeshConfig& mt_cfg = cfg.meshtastic_config;
     const chat::MeshConfig& mc_cfg = cfg.meshcore_config;
     const chat::MeshConfig& rn_cfg = cfg.rnode_config;
+
+    uint32_t gps_interval_seconds = cfg.gps_interval_ms / 1000U;
+    if (gps_interval_seconds == 0)
+    {
+        gps_interval_seconds = 1;
+    }
+    g_settings.gps_mode = cfg.gps_mode;
+    g_settings.gps_sat_mask = cfg.gps_sat_mask;
+    g_settings.gps_strategy = cfg.gps_strategy;
+    g_settings.gps_interval = static_cast<int>(gps_interval_seconds);
+    g_settings.gps_alt_ref = cfg.gps_alt_ref;
+    g_settings.gps_coord_format = cfg.gps_coord_format;
+
+    g_settings.map_coord_system = cfg.map_coord_system;
+    g_settings.map_source = cfg.map_source;
+    if (g_settings.map_source < 0 || g_settings.map_source > 2)
+    {
+        g_settings.map_source = 0;
+    }
+    g_settings.map_contour_enabled = cfg.map_contour_enabled;
+    g_settings.map_track_enabled = cfg.map_track_enabled;
+    g_settings.map_track_interval = cfg.map_track_interval;
+    g_settings.map_track_format = cfg.map_track_format;
 
     g_settings.chat_region = mt_cfg.region;
     g_settings.chat_channel = cfg.chat_channel;
@@ -695,7 +738,7 @@ static void settings_load()
     g_settings.privacy_nmea_output = cfg.privacy_nmea_output;
     g_settings.privacy_nmea_sentence = cfg.privacy_nmea_sentence;
 
-    g_settings.screen_timeout_ms = prefs_get_int("screen_timeout", static_cast<int>(screen_runtime::timeout_ms()));
+    g_settings.screen_timeout_ms = static_cast<int>(screen_runtime::timeout_ms());
     g_settings.screen_brightness = clamp_screen_brightness(
         prefs_get_int("screen_brightness", static_cast<int>(device_runtime::screen_brightness())));
     g_settings.timezone_offset_min = ::platform::ui::time::timezone_offset_min();
@@ -712,13 +755,13 @@ static void settings_load()
     apply_message_tone_volume(static_cast<uint8_t>(g_settings.speaker_volume));
     g_settings.display_language = static_cast<int>(::ui::i18n::current_language());
 
-    // BLE enable flag (System > Bluetooth toggle). Default ON so existing devices keep BLE active.
-    g_settings.ble_enabled = prefs_get_bool("ble_enabled", true);
+    g_settings.ble_enabled = cfg.ble_enabled;
     g_settings.vibration_enabled = prefs_get_bool("vibration_enabled", true);
 
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
 
-    // Gauge capacities (for System > Power settings). Load values from NVS \"power\" into text fields.
+    // Gauge capacities (for System > Power settings). Load values from the
+    // shared "power" settings namespace into the text fields.
     {
         uint32_t d = prefs_get_uint_ns("power", "gauge_design_mah", 1500);
         uint32_t f = prefs_get_uint_ns("power", "gauge_full_mah", 1500);
@@ -791,7 +834,7 @@ static void update_item_value(settings::ui::ItemWidget& widget)
     }
     char value[48];
     format_value(*widget.def, value, sizeof(value));
-    lv_label_set_text(widget.value_label, value);
+    ::ui::i18n::set_label_text_raw(widget.value_label, value);
 }
 
 static void modal_prepare_group()
@@ -968,7 +1011,6 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.getConfig().meshcore_config.meshcore_freq_mhz = value;
             app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
             g_settings.mc_region_preset = 0;
-            prefs_put_int("mc_region_preset", 0);
             app_ctx.saveConfig();
             app_ctx.applyMeshConfig();
         }
@@ -985,7 +1027,6 @@ static void on_text_save_clicked(lv_event_t* e)
             app_ctx.getConfig().meshcore_config.meshcore_bw_khz = value;
             app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
             g_settings.mc_region_preset = 0;
-            prefs_put_int("mc_region_preset", 0);
             app_ctx.saveConfig();
             app_ctx.applyMeshConfig();
         }
@@ -1043,7 +1084,7 @@ static void on_text_save_clicked(lv_event_t* e)
         }
         if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "gauge_design_mah") == 0)
         {
-            // Update gauge design capacity (mAh) and persist to NVS \"power\".
+            // Update gauge design capacity (mAh) in the shared "power" settings namespace.
             char* end = nullptr;
             long value = strtol(g_state.editing_item->text_value, &end, 10);
             if (end == g_state.editing_item->text_value || (end && *end != '\0') || value <= 0 || value > 10000)
@@ -1153,7 +1194,10 @@ static void on_option_clicked(lv_event_t* e)
     bool refresh_menu_labels = false;
     int previous_value = *payload->item->enum_value;
     *payload->item->enum_value = payload->value;
-    prefs_put_int(payload->item->pref_key, payload->value);
+    if (is_settings_store_owned_enum_setting(payload->item->pref_key))
+    {
+        prefs_put_int(payload->item->pref_key, payload->value);
+    }
     update_item_value(*payload->widget);
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "display_language") == 0)
     {
@@ -1171,7 +1215,6 @@ static void on_option_clicked(lv_event_t* e)
         if (!app_ctx.switchMeshProtocol(target, true))
         {
             *payload->item->enum_value = previous_value;
-            prefs_put_int(payload->item->pref_key, previous_value);
             update_item_value(*payload->widget);
             ::ui::SystemNotification::show(::ui::i18n::tr("Protocol switch failed"), 3000);
         }
@@ -1223,7 +1266,6 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.getConfig().meshtastic_config.modem_preset = static_cast<uint8_t>(payload->value);
         app_ctx.getConfig().meshtastic_config.use_preset = true;
         g_settings.net_use_preset = true;
-        prefs_put_int("net_use_preset", 1);
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
         rebuild_list = true;
@@ -1241,7 +1283,6 @@ static void on_option_clicked(lv_event_t* e)
             app_ctx.getConfig().meshtastic_config.bandwidth_khz = static_cast<float>(payload->value);
             app_ctx.getConfig().meshtastic_config.use_preset = false;
             g_settings.net_use_preset = false;
-            prefs_put_int("net_use_preset", 0);
         }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
@@ -1260,7 +1301,6 @@ static void on_option_clicked(lv_event_t* e)
             app_ctx.getConfig().meshtastic_config.spread_factor = static_cast<uint8_t>(payload->value);
             app_ctx.getConfig().meshtastic_config.use_preset = false;
             g_settings.net_use_preset = false;
-            prefs_put_int("net_use_preset", 0);
         }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
@@ -1279,7 +1319,6 @@ static void on_option_clicked(lv_event_t* e)
             app_ctx.getConfig().meshtastic_config.coding_rate = static_cast<uint8_t>(payload->value);
             app_ctx.getConfig().meshtastic_config.use_preset = false;
             g_settings.net_use_preset = false;
-            prefs_put_int("net_use_preset", 0);
         }
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
@@ -1431,7 +1470,6 @@ static void on_option_clicked(lv_event_t* e)
         }
         mc_cfg.meshcore_region_preset = preset_id;
         g_settings.mc_region_preset = preset_id;
-        prefs_put_int("mc_region_preset", preset_id);
         if (preset_id > 0)
         {
             const chat::meshcore::RegionPreset* preset = chat::meshcore::findRegionPresetById(preset_id);
@@ -1457,7 +1495,6 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.getConfig().meshcore_config.meshcore_sf = static_cast<uint8_t>(payload->value);
         app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
         g_settings.mc_region_preset = 0;
-        prefs_put_int("mc_region_preset", 0);
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
     }
@@ -1467,7 +1504,6 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.getConfig().meshcore_config.meshcore_cr = static_cast<uint8_t>(payload->value);
         app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
         g_settings.mc_region_preset = 0;
-        prefs_put_int("mc_region_preset", 0);
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
     }
@@ -1547,6 +1583,78 @@ static void on_option_modal_back_clicked(lv_event_t* e)
 {
     (void)e;
     modal_close();
+}
+
+static void on_factory_reset_confirm_clicked(lv_event_t* e)
+{
+    (void)e;
+    modal_close();
+    perform_factory_reset();
+}
+
+static void on_factory_reset_cancel_clicked(lv_event_t* e)
+{
+    (void)e;
+    modal_close();
+}
+
+static void open_factory_reset_modal()
+{
+    if (g_state.modal_root)
+    {
+        return;
+    }
+
+    modal_prepare_group();
+    g_state.modal_root = create_modal_root(300, 170);
+    lv_obj_t* win = lv_obj_get_child(g_state.modal_root, 0);
+
+    lv_obj_t* title = lv_label_create(win);
+    ::ui::i18n::set_label_text(title, "Factory Reset");
+    style::apply_label_primary(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+
+    lv_obj_t* body = lv_label_create(win);
+    lv_obj_set_width(body, LV_PCT(100));
+    ::ui::i18n::set_label_text(body, "Clear all settings and restart?");
+    style::apply_label_muted(body);
+    lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(body, LV_ALIGN_CENTER, 0, -8);
+
+    lv_obj_t* btn_row = lv_obj_create(win);
+    lv_obj_set_size(btn_row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_align(btn_row, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_row,
+                          LV_FLEX_ALIGN_SPACE_EVENLY,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(btn_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn_row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_row, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* cancel_btn = lv_btn_create(btn_row);
+    lv_obj_set_size(cancel_btn,
+                    ::ui::page_profile::resolve_control_button_min_width(),
+                    ::ui::page_profile::resolve_control_button_height());
+    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
+    lv_obj_center(cancel_label);
+    lv_obj_add_event_cb(cancel_btn, on_factory_reset_cancel_clicked, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t* confirm_btn = lv_btn_create(btn_row);
+    lv_obj_set_size(confirm_btn,
+                    ::ui::page_profile::resolve_control_button_min_width(),
+                    ::ui::page_profile::resolve_control_button_height());
+    lv_obj_t* confirm_label = lv_label_create(confirm_btn);
+    ::ui::i18n::set_label_text(confirm_label, "Factory Reset");
+    lv_obj_center(confirm_label);
+    lv_obj_add_event_cb(confirm_btn, on_factory_reset_confirm_clicked, LV_EVENT_CLICKED, nullptr);
+
+    lv_group_add_obj(g_state.modal_group, cancel_btn);
+    lv_group_add_obj(g_state.modal_group, confirm_btn);
+    lv_group_focus_obj(cancel_btn);
 }
 
 static void option_modal_focused_cb(lv_event_t* e)
@@ -1970,6 +2078,7 @@ static settings::ui::SettingItem kScreenItems[] = {
      g_settings.gauge_design_mah, sizeof(g_settings.gauge_design_mah), false, "gauge_design_mah"},
     {"Gauge Full (mAh)", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr,
      g_settings.gauge_full_mah, sizeof(g_settings.gauge_full_mah), false, "gauge_full_mah"},
+    {"Factory Reset", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "system_factory_reset"},
 };
 
 static settings::ui::SettingItem kAdvancedItems[] = {
@@ -2263,7 +2372,10 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
         if (item.bool_value)
         {
             *item.bool_value = !(*item.bool_value);
-            prefs_put_bool(item.pref_key, *item.bool_value);
+            if (is_settings_store_owned_toggle_setting(item.pref_key))
+            {
+                prefs_put_bool(item.pref_key, *item.bool_value);
+            }
             update_item_value(widget);
             if (item.pref_key && strcmp(item.pref_key, "net_relay") == 0)
             {
@@ -2343,6 +2455,8 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
             if (item.pref_key && strcmp(item.pref_key, "ble_enabled") == 0)
             {
                 app::IAppFacade& app_ctx = app::appFacade();
+                app_ctx.getConfig().ble_enabled = *item.bool_value;
+                app_ctx.saveConfig();
                 app_ctx.setBleEnabled(*item.bool_value);
             }
             if (item.pref_key && strcmp(item.pref_key, "vibration_enabled") == 0 && *item.bool_value)
@@ -2375,6 +2489,10 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
         else if (item.pref_key && strcmp(item.pref_key, "chat_clear_messages") == 0)
         {
             clear_message_db();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "system_factory_reset") == 0)
+        {
+            open_factory_reset_modal();
         }
         return true;
     }

@@ -248,6 +248,7 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
     direct_btn_ = w.direct_btn;
     broadcast_btn_ = w.broadcast_btn;
     team_btn_ = w.team_btn;
+    air_status_footer_ = w.air_status_footer;
 
     // ---------- Styles ----------
     chat::ui::message_list::styles::apply_root_container(container_);
@@ -544,6 +545,7 @@ void ChatMessageListScreen::updateBatteryFromBoard()
     {
         return;
     }
+    ::ui::components::air_status_footer::refresh(air_status_footer_);
     ui_update_top_bar_battery(top_bar_);
 }
 

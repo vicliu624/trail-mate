@@ -49,6 +49,11 @@ void top_bar_set_title(TopBar& bar, const char* title);
 void top_bar_set_right_text(TopBar& bar, const char* text);
 
 /**
+ * @brief Update right-side text using the top bar chrome font directly
+ */
+void top_bar_set_right_text_ascii(TopBar& bar, const char* text);
+
+/**
  * @brief Set back button callback
  */
 void top_bar_set_back_callback(TopBar& bar, void (*cb)(void*), void* user_data);

@@ -65,7 +65,6 @@ struct SettingsData
     int chat_region = 0;
     int chat_channel = 0;
     char chat_psk[33] = {};
-    bool needs_restart = false;
 
     // Network
     int net_use_preset = 1;

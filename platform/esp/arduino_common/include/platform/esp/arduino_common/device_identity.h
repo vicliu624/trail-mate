@@ -17,18 +17,6 @@
 namespace platform::esp::arduino_common::device_identity
 {
 
-inline bool loadBleEnabledPreference()
-{
-    Preferences prefs;
-    if (!prefs.begin("settings", true))
-    {
-        return true;
-    }
-    const bool enabled = prefs.getBool("ble_enabled", true);
-    prefs.end();
-    return enabled;
-}
-
 inline chat::NodeId getSelfNodeId()
 {
     static chat::NodeId cached_id = 0;

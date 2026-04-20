@@ -184,6 +184,24 @@ void top_bar_set_right_text(TopBar& bar, const char* text)
         bar.right_label, text, resolve_top_bar_font(lv_obj_get_height(bar.container)));
 }
 
+void top_bar_set_right_text_ascii(TopBar& bar, const char* text)
+{
+    if (bar.right_label == nullptr || text == nullptr)
+    {
+        return;
+    }
+
+    const char* current = lv_label_get_text(bar.right_label);
+    if (current != nullptr && std::strcmp(current, text) == 0)
+    {
+        return;
+    }
+
+    lv_label_set_text(bar.right_label, text);
+    ::ui::fonts::apply_font(
+        bar.right_label, resolve_top_bar_font(lv_obj_get_height(bar.container)));
+}
+
 void top_bar_set_back_callback(TopBar& bar, void (*cb)(void*), void* user_data)
 {
     bar.back_cb = cb;

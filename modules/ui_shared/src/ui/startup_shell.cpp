@@ -5,6 +5,7 @@
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/time_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_runtime.h"
 #include "ui/ui_boot.h"
@@ -93,6 +94,7 @@ platform::ui::screen::Hooks buildScreenSleepHooks(const Hooks& hooks)
 
 void prepareBootUi(bool waking_from_sleep)
 {
+    ::ui::i18n::reload_language();
     ui::SystemNotification::init();
     if (!waking_from_sleep)
     {
@@ -102,6 +104,7 @@ void prepareBootUi(bool waking_from_sleep)
 
 void initializeShell(const Hooks& hooks)
 {
+    ::ui::i18n::reload_language();
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_radius(lv_screen_active(), 0, 0);
 

@@ -36,13 +36,13 @@ void ui_update_top_bar_battery(ui::widgets::TopBar& bar)
     const platform::ui::device::BatteryInfo info = platform::ui::device::battery_info();
     if (info.level < 0)
     {
-        ui::widgets::top_bar_set_right_text(bar, info.charging ? "USB" : "--");
+        ui::widgets::top_bar_set_right_text_ascii(bar, info.charging ? "USB" : "--");
         return;
     }
 
     char battery_buf[32] = "--";
     ui_format_battery(info.level, info.charging, battery_buf, sizeof(battery_buf));
-    ui::widgets::top_bar_set_right_text(bar, battery_buf);
+    ui::widgets::top_bar_set_right_text_ascii(bar, battery_buf);
 }
 
 int ui_get_timezone_offset_min()

@@ -13,6 +13,7 @@ namespace layout
 
 lv_obj_t* create_root(lv_obj_t* parent);
 lv_obj_t* create_header(lv_obj_t* root, void (*back_callback)(void*), void* user_data);
+void create_footer(lv_obj_t* root);
 
 /**
  * Create the main two-pane content row for the Contacts page.

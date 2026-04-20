@@ -1,6 +1,7 @@
 #include "ui/startup_ui_shell.h"
 
 #include "ui/app_runtime.h"
+#include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/ui_boot.h"
 
@@ -28,6 +29,7 @@ void unlock_ui(const Hooks& hooks)
 
 bool prepareBootUi(const Hooks& hooks, bool waking_from_sleep)
 {
+    ::ui::i18n::reload_language();
     if (waking_from_sleep)
     {
         return true;
@@ -53,6 +55,7 @@ bool initializeMenuSkeleton(const Hooks& hooks)
     }
 
     lv_obj_t* active_screen = lv_screen_active();
+    ::ui::i18n::reload_language();
     lv_obj_set_style_bg_color(active_screen, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_radius(active_screen, 0, 0);
 

@@ -6,11 +6,11 @@
 #include "ui/ui_common.h"
 #include "board/BoardBase.h"
 #include "lvgl.h"
+#include "platform/ui/settings_store.h"
 #if LV_USE_SNAPSHOT
 extern "C" lv_draw_buf_t* lv_snapshot_take(lv_obj_t* obj, lv_color_format_t cf);
 extern "C" void lv_draw_buf_destroy(lv_draw_buf_t* draw_buf);
 #endif
-#include <Preferences.h>
 #include <SD.h>
 #include <cmath>
 #include <cstdio>
@@ -34,17 +34,14 @@ void ui_update_top_bar_battery(ui::widgets::TopBar& bar)
     int battery = board.getBatteryLevel();
     bool charging = board.isCharging();
     ui_format_battery(battery, charging, battery_buf, sizeof(battery_buf));
-    ui::widgets::top_bar_set_right_text(bar, battery_buf);
+    ui::widgets::top_bar_set_right_text_ascii(bar, battery_buf);
 }
 
 int ui_get_timezone_offset_min()
 {
     if (!s_tz_loaded)
     {
-        Preferences prefs;
-        prefs.begin(kPrefsNs, true);
-        s_tz_offset_min = prefs.getInt(kTimezoneKey, 0);
-        prefs.end();
+        s_tz_offset_min = ::platform::ui::settings_store::get_int(kPrefsNs, kTimezoneKey, 0);
         s_tz_loaded = true;
     }
     return s_tz_offset_min;
@@ -54,6 +51,7 @@ void ui_set_timezone_offset_min(int offset_min)
 {
     s_tz_offset_min = offset_min;
     s_tz_loaded = true;
+    ::platform::ui::settings_store::put_int(kPrefsNs, kTimezoneKey, offset_min);
 }
 
 time_t ui_apply_timezone_offset(time_t utc_seconds)

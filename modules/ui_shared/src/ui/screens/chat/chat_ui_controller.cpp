@@ -197,7 +197,45 @@ std::string truncate_text(const std::string& text, size_t max_len)
     {
         return text.substr(0, max_len);
     }
-    return text.substr(0, max_len - 3) + "...";
+
+    auto utf8_char_bytes = [](unsigned char lead) -> size_t
+    {
+        if ((lead & 0x80U) == 0)
+        {
+            return 1;
+        }
+        if ((lead & 0xE0U) == 0xC0U)
+        {
+            return 2;
+        }
+        if ((lead & 0xF0U) == 0xE0U)
+        {
+            return 3;
+        }
+        if ((lead & 0xF8U) == 0xF0U)
+        {
+            return 4;
+        }
+        return 1;
+    };
+
+    const size_t target_len = max_len - 3;
+    size_t safe_len = 0;
+    while (safe_len < text.size())
+    {
+        const size_t next = utf8_char_bytes(static_cast<unsigned char>(text[safe_len]));
+        if (safe_len + next > target_len)
+        {
+            break;
+        }
+        safe_len += next;
+    }
+    if (safe_len == 0)
+    {
+        safe_len = target_len;
+    }
+
+    return text.substr(0, safe_len) + "...";
 }
 
 std::string resolve_contact_name(chat::NodeId node_id)

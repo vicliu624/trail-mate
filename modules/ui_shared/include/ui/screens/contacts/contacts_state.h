@@ -7,6 +7,7 @@
 
 #include "chat/domain/contact_types.h"
 #include "lvgl.h"
+#include "ui/components/air_status_footer.h"
 #include "ui/widgets/top_bar.h"
 #include <vector>
 
@@ -54,6 +55,7 @@ struct ContactsPageState
     lv_obj_t* page = nullptr; // Main content row container
 
     ::ui::widgets::TopBar top_bar;
+    ::ui::components::air_status_footer::Footer air_status_footer;
 
     // First column: Filter buttons
     lv_obj_t* filter_panel = nullptr;

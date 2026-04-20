@@ -1,6 +1,7 @@
 #pragma once
 #include "chat/domain/chat_types.h"
 #include "lvgl.h"
+#include "ui/components/air_status_footer.h"
 
 namespace chat::ui::layout
 {
@@ -14,6 +15,7 @@ struct MessageListLayout
     lv_obj_t* direct_btn;
     lv_obj_t* broadcast_btn;
     lv_obj_t* team_btn;
+    ::ui::components::air_status_footer::Footer air_status_footer;
 };
 
 // split content (filter + list)
