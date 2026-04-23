@@ -5,7 +5,10 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/instrument_panel_layout.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -26,6 +29,8 @@
 
 namespace
 {
+namespace instrument_panel_layout = ::ui::presentation::instrument_panel_layout;
+
 const gnss::ui::shell::Host* s_host = nullptr;
 
 void request_exit()
@@ -264,26 +269,71 @@ SkyPlotLayout resolve_layout(lv_coord_t parent_w, lv_coord_t parent_h, lv_coord_
     return make_classic_layout(compact_layout, parent_w, parent_h);
 }
 
-constexpr uint32_t kColorAmber = 0xEBA341;
-constexpr uint32_t kColorAmberDark = 0xC98118;
-constexpr uint32_t kColorWarmBg = 0xF6E6C6;
-constexpr uint32_t kColorPanelBg = 0xFAF0D8;
-constexpr uint32_t kColorLine = 0xE7C98F;
-constexpr uint32_t kColorText = 0x6B4A1E;
-constexpr uint32_t kColorTextDim = 0x8A6A3A;
-constexpr uint32_t kColorWarn = 0xB94A2C;
-constexpr uint32_t kColorOk = 0x3E7D3E;
+void apply_component_profile(lv_obj_t* obj,
+                             ::ui::theme::ComponentSlot slot,
+                             lv_style_selector_t selector = 0)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_obj(obj, profile, selector);
+    }
+}
 
-constexpr uint32_t kColorSysGps = 0xE3B11F;
-constexpr uint32_t kColorSysGln = 0x2D6FB6;
-constexpr uint32_t kColorSysGal = 0x3E7D3E;
-constexpr uint32_t kColorSysBd = 0xB94A2C;
+lv_color_t resolve_component_text_color(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.text_color.present)
+    {
+        return profile.text_color.value;
+    }
+    return fallback;
+}
 
-constexpr uint32_t kColorSnrGood = 0x3E7D3E;
-constexpr uint32_t kColorSnrFair = 0x8FBF4D;
-constexpr uint32_t kColorSnrWeak = 0xC18B2C;
-constexpr uint32_t kColorSnrNotUsed = 0xB94A2C;
-constexpr uint32_t kColorSnrInView = 0x6E6E6E;
+lv_color_t theme_color(::ui::theme::ColorSlot slot)
+{
+    return ::ui::theme::color(slot);
+}
+
+uint32_t theme_hex(::ui::theme::ColorSlot slot)
+{
+    return lv_color_to_u32(theme_color(slot));
+}
+
+lv_color_t gnss_system_color_slot(SatInfo::Sys sys)
+{
+    switch (sys)
+    {
+    case SatInfo::GPS:
+        return theme_color(::ui::theme::ColorSlot::GnssSystemGps);
+    case SatInfo::GLN:
+        return theme_color(::ui::theme::ColorSlot::GnssSystemGln);
+    case SatInfo::GAL:
+        return theme_color(::ui::theme::ColorSlot::GnssSystemGal);
+    case SatInfo::BD:
+    default:
+        return theme_color(::ui::theme::ColorSlot::GnssSystemBd);
+    }
+}
+
+lv_color_t gnss_snr_color_slot(SatInfo::SNRState state)
+{
+    switch (state)
+    {
+    case SatInfo::GOOD:
+        return theme_color(::ui::theme::ColorSlot::GnssSnrGood);
+    case SatInfo::FAIR:
+        return theme_color(::ui::theme::ColorSlot::GnssSnrFair);
+    case SatInfo::WEAK:
+        return theme_color(::ui::theme::ColorSlot::GnssSnrWeak);
+    case SatInfo::NOT_USED:
+        return theme_color(::ui::theme::ColorSlot::GnssSnrNotUsed);
+    case SatInfo::IN_VIEW:
+    default:
+        return theme_color(::ui::theme::ColorSlot::GnssSnrInView);
+    }
+}
 
 struct SatDot
 {
@@ -342,18 +392,7 @@ static bool s_cached_status_valid = false;
 
 lv_color_t sys_color(SatInfo::Sys sys)
 {
-    switch (sys)
-    {
-    case SatInfo::GPS:
-        return lv_color_hex(kColorSysGps);
-    case SatInfo::GLN:
-        return lv_color_hex(kColorSysGln);
-    case SatInfo::GAL:
-        return lv_color_hex(kColorSysGal);
-    case SatInfo::BD:
-    default:
-        return lv_color_hex(kColorSysBd);
-    }
+    return gnss_system_color_slot(sys);
 }
 
 SatInfo::Sys map_sys(gps::GnssSystem sys)
@@ -391,26 +430,13 @@ const char* sys_text(SatInfo::Sys sys)
 
 lv_color_t snr_color(SatInfo::SNRState state)
 {
-    switch (state)
-    {
-    case SatInfo::GOOD:
-        return lv_color_hex(kColorSnrGood);
-    case SatInfo::FAIR:
-        return lv_color_hex(kColorSnrFair);
-    case SatInfo::WEAK:
-        return lv_color_hex(kColorSnrWeak);
-    case SatInfo::NOT_USED:
-        return lv_color_hex(kColorSnrNotUsed);
-    case SatInfo::IN_VIEW:
-    default:
-        return lv_color_hex(kColorSnrInView);
-    }
+    return gnss_snr_color_slot(state);
 }
 
 lv_color_t text_on_color(lv_color_t bg)
 {
     const uint8_t lum = lv_color_luminance(bg);
-    return lum > 160 ? lv_color_hex(kColorText) : lv_color_white();
+    return lum > 160 ? ::ui::theme::text() : theme_color(::ui::theme::ColorSlot::TextInverse);
 }
 
 void place_label_center(lv_obj_t* label, int center_x, int center_y)
@@ -466,7 +492,7 @@ lv_obj_t* create_ring(lv_obj_t* parent, int radius, int thickness)
     lv_obj_set_size(ring, size, size);
     lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(ring, thickness, 0);
-    lv_obj_set_style_border_color(ring, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_border_color(ring, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_pad_all(ring, 0, 0);
     lv_obj_clear_flag(ring, LV_OBJ_FLAG_SCROLLABLE);
@@ -477,7 +503,7 @@ lv_obj_t* create_axis_line(lv_obj_t* parent, const lv_point_precise_t* pts, uint
 {
     lv_obj_t* line = lv_line_create(parent);
     lv_line_set_points(line, pts, count);
-    lv_obj_set_style_line_color(line, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_line_color(line, ::ui::theme::border(), 0);
     lv_obj_set_style_line_width(line, s_layout.axis_line_width, 0);
     lv_obj_set_style_line_rounded(line, false, 0);
     return line;
@@ -508,7 +534,7 @@ void ensure_sat_dot(int index)
 
     dot.use_tag = lv_obj_create(s_ui.panel_sky);
     lv_obj_set_size(dot.use_tag, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_color(dot.use_tag, lv_color_hex(kColorOk), 0);
+    lv_obj_set_style_bg_color(dot.use_tag, theme_color(::ui::theme::ColorSlot::StateOk), 0);
     lv_obj_set_style_bg_opa(dot.use_tag, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(dot.use_tag, s_layout.use_tag_radius, 0);
     lv_obj_set_style_border_width(dot.use_tag, 0, 0);
@@ -520,9 +546,10 @@ void ensure_sat_dot(int index)
 
     dot.use_label = lv_label_create(dot.use_tag);
     ::ui::i18n::set_label_text(dot.use_label, "USE");
-    lv_obj_set_style_text_color(dot.use_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(dot.use_label, theme_color(::ui::theme::ColorSlot::TextInverse), 0);
     ::ui::fonts::apply_localized_font(dot.use_label, lv_label_get_text(dot.use_label), s_layout.use_tag_font);
     lv_obj_center(dot.use_label);
+    apply_component_profile(dot.use_tag, ::ui::theme::ComponentSlot::GnssSatelliteUseTag);
 
     lv_obj_add_flag(dot.use_tag, LV_OBJ_FLAG_HIDDEN);
 }
@@ -642,7 +669,11 @@ void update_table_rows()
             snprintf(buf, sizeof(buf), "%d", sat.snr);
             lv_label_set_text(r.cells[3], buf);
             ::ui::i18n::set_label_text(r.cells[4], sat.used ? "YES" : "NO");
-            lv_obj_set_style_text_color(r.cells[4], lv_color_hex(sat.used ? kColorOk : kColorWarn), 0);
+            lv_obj_set_style_text_color(
+                r.cells[4],
+                sat.used ? theme_color(::ui::theme::ColorSlot::StateOk)
+                         : theme_color(::ui::theme::ColorSlot::GnssSnrNotUsed),
+                0);
         }
         else
         {
@@ -651,7 +682,7 @@ void update_table_rows()
                 if (cell)
                 {
                     lv_label_set_text(cell, "");
-                    lv_obj_set_style_text_color(cell, lv_color_hex(kColorText), 0);
+                    lv_obj_set_style_text_color(cell, ::ui::theme::text(), 0);
                 }
             }
         }
@@ -691,9 +722,12 @@ void apply_topbar_summary(const GnssStatus& st)
     {
         fix_text = "3D";
     }
-    const uint32_t use_color = kColorText;
-    const uint32_t hdop_color = kColorAmberDark;
-    const uint32_t fix_color = (st.fix == GnssStatus::NOFIX) ? kColorWarn : kColorOk;
+    const uint32_t use_color = theme_hex(::ui::theme::ColorSlot::TextPrimary);
+    const uint32_t hdop_color = theme_hex(::ui::theme::ColorSlot::AccentStrong);
+    const uint32_t fix_color =
+        (st.fix == GnssStatus::NOFIX)
+            ? theme_hex(::ui::theme::ColorSlot::GnssSnrNotUsed)
+            : theme_hex(::ui::theme::ColorSlot::StateOk);
 
     char buf[128];
     snprintf(buf,
@@ -887,25 +921,28 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
     const lv_coord_t screen_w = s_layout.screen_w;
     const lv_coord_t screen_h = s_layout.screen_h;
+    const lv_coord_t body_h = screen_h - top_bar_h;
 
-    s_ui.root = lv_obj_create(parent);
-    lv_obj_set_size(s_ui.root, screen_w, screen_h);
-    lv_obj_set_style_bg_color(s_ui.root, lv_color_hex(kColorWarmBg), 0);
-    lv_obj_set_style_bg_opa(s_ui.root, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_ui.root, 0, 0);
-    lv_obj_set_style_pad_all(s_ui.root, 0, 0);
-    lv_obj_set_style_radius(s_ui.root, s_layout.root_radius, 0);
-    lv_obj_clear_flag(s_ui.root, LV_OBJ_FLAG_SCROLLABLE);
+    instrument_panel_layout::RootSpec root_spec{};
+    root_spec.width = screen_w;
+    root_spec.height = screen_h;
+    root_spec.bg_hex = theme_hex(::ui::theme::ColorSlot::PageBg);
+    root_spec.radius = s_layout.root_radius;
+    instrument_panel_layout::HeaderSpec header_spec{};
+    header_spec.height = top_bar_h;
+    instrument_panel_layout::BodySpec body_spec{};
+    body_spec.flow = LV_FLEX_FLOW_COLUMN;
+    instrument_panel_layout::RegionSpec surface_spec{};
+    surface_spec.width = LV_PCT(100);
+    surface_spec.height = body_h;
+
+    s_ui.root = instrument_panel_layout::create_root(parent, root_spec);
     lv_obj_add_flag(s_ui.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_ui.root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
-    s_ui.header = lv_obj_create(s_ui.root);
-    lv_obj_set_pos(s_ui.header, 0, 0);
-    lv_obj_set_size(s_ui.header, screen_w, top_bar_h);
-    lv_obj_set_style_bg_opa(s_ui.header, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_ui.header, 0, 0);
-    lv_obj_set_style_pad_all(s_ui.header, 0, 0);
-    lv_obj_clear_flag(s_ui.header, LV_OBJ_FLAG_SCROLLABLE);
+    s_ui.header = instrument_panel_layout::create_header_container(s_ui.root, header_spec);
+    lv_obj_t* body = instrument_panel_layout::create_body(s_ui.root, body_spec);
+    lv_obj_t* surface = instrument_panel_layout::create_canvas_region(body, surface_spec);
 
     ::ui::widgets::TopBarConfig cfg;
     cfg.height = top_bar_h;
@@ -921,9 +958,9 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     snprintf(title_buf,
              sizeof(title_buf),
              "#%06lX USE: --/--#|#%06lX HDOP: --#|#%06lX FIX: --#",
-             kColorText,
-             kColorAmberDark,
-             kColorTextDim);
+             theme_hex(::ui::theme::ColorSlot::TextPrimary),
+             theme_hex(::ui::theme::ColorSlot::AccentStrong),
+             theme_hex(::ui::theme::ColorSlot::TextMuted));
     ::ui::widgets::top_bar_set_title(s_ui.top_bar, title_buf);
     ::ui::widgets::top_bar_set_back_callback(
         s_ui.top_bar,
@@ -936,14 +973,15 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         lv_obj_add_event_cb(s_ui.top_bar.back_btn, back_btn_key_event_cb, LV_EVENT_KEY, nullptr);
     }
 
-    s_ui.panel_sky = lv_obj_create(s_ui.root);
-    lv_obj_set_pos(s_ui.panel_sky, s_layout.sky_panel_x, s_layout.sky_panel_y);
+    s_ui.panel_sky = lv_obj_create(surface);
+    lv_obj_set_pos(s_ui.panel_sky, s_layout.sky_panel_x, s_layout.sky_panel_y - top_bar_h);
     lv_obj_set_size(s_ui.panel_sky, s_layout.sky_panel_w, s_layout.sky_panel_h);
     apply_common_container_style(s_ui.panel_sky,
-                                 lv_color_hex(kColorPanelBg),
-                                 lv_color_hex(kColorAmberDark),
+                                 ::ui::theme::surface(),
+                                 theme_color(::ui::theme::ColorSlot::AccentStrong),
                                  s_layout.panel_radius,
                                  s_layout.panel_border_width);
+    apply_component_profile(s_ui.panel_sky, ::ui::theme::ComponentSlot::GnssSkyPanel);
 
     s_ui.sky_area = lv_obj_create(s_ui.panel_sky);
     lv_obj_set_pos(s_ui.sky_area, s_layout.sky_area_x, s_layout.sky_area_y);
@@ -985,7 +1023,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     lv_obj_set_pos(center_dot,
                    center_x - (s_layout.center_dot_size / 2),
                    center_y - (s_layout.center_dot_size / 2));
-    lv_obj_set_style_bg_color(center_dot, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_bg_color(center_dot, ::ui::theme::border(), 0);
     lv_obj_set_style_bg_opa(center_dot, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(center_dot, 0, 0);
     lv_obj_set_style_radius(center_dot, s_layout.center_dot_radius, 0);
@@ -994,13 +1032,13 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
     s_ui.label_n = lv_label_create(s_ui.panel_sky);
     lv_label_set_text(s_ui.label_n, "N");
-    lv_obj_set_style_text_color(s_ui.label_n, lv_color_hex(kColorText), 0);
+    lv_obj_set_style_text_color(s_ui.label_n, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(s_ui.label_n, s_layout.compass_font, 0);
     place_label_center_x(s_ui.label_n, center_x, s_layout.label_n_top);
 
     s_ui.label_e = lv_label_create(s_ui.panel_sky);
     lv_label_set_text(s_ui.label_e, "E");
-    lv_obj_set_style_text_color(s_ui.label_e, lv_color_hex(kColorText), 0);
+    lv_obj_set_style_text_color(s_ui.label_e, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(s_ui.label_e, s_layout.compass_font, 0);
     lv_obj_set_pos(s_ui.label_e,
                    s_layout.sky_area_x + s_layout.sky_area_size + s_layout.label_e_gap,
@@ -1008,7 +1046,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
     s_ui.label_w = lv_label_create(s_ui.panel_sky);
     lv_label_set_text(s_ui.label_w, "W");
-    lv_obj_set_style_text_color(s_ui.label_w, lv_color_hex(kColorText), 0);
+    lv_obj_set_style_text_color(s_ui.label_w, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(s_ui.label_w, s_layout.compass_font, 0);
     lv_obj_set_pos(s_ui.label_w,
                    s_layout.label_w_x,
@@ -1016,25 +1054,25 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
     s_ui.label_90 = lv_label_create(s_ui.panel_sky);
     ::ui::i18n::set_label_text_raw(s_ui.label_90, u8"90°");
-    lv_obj_set_style_text_color(s_ui.label_90, lv_color_hex(kColorTextDim), 0);
+    lv_obj_set_style_text_color(s_ui.label_90, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(s_ui.label_90, s_layout.ring_label_font, 0);
     place_label_diagonal_1030(s_ui.label_90, center_x, center_y, s_layout.sky_radius);
 
     s_ui.label_60 = lv_label_create(s_ui.panel_sky);
     ::ui::i18n::set_label_text_raw(s_ui.label_60, u8"60°");
-    lv_obj_set_style_text_color(s_ui.label_60, lv_color_hex(kColorTextDim), 0);
+    lv_obj_set_style_text_color(s_ui.label_60, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(s_ui.label_60, s_layout.ring_label_font, 0);
     place_label_diagonal_1030(s_ui.label_60, center_x, center_y, s_layout.sky_radius60);
 
     s_ui.label_30 = lv_label_create(s_ui.panel_sky);
     ::ui::i18n::set_label_text_raw(s_ui.label_30, u8"30°");
-    lv_obj_set_style_text_color(s_ui.label_30, lv_color_hex(kColorTextDim), 0);
+    lv_obj_set_style_text_color(s_ui.label_30, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(s_ui.label_30, s_layout.ring_label_font, 0);
     place_label_diagonal_1030(s_ui.label_30, center_x, center_y, s_layout.sky_radius30);
 
     s_ui.label_horizon = lv_label_create(s_ui.panel_sky);
     ::ui::i18n::set_label_text(s_ui.label_horizon, u8"0° Horizon");
-    lv_obj_set_style_text_color(s_ui.label_horizon, lv_color_hex(kColorTextDim), 0);
+    lv_obj_set_style_text_color(s_ui.label_horizon, ::ui::theme::text_muted(), 0);
     ::ui::fonts::apply_localized_font(
         s_ui.label_horizon, lv_label_get_text(s_ui.label_horizon), s_layout.horizon_font);
     place_label_center(s_ui.label_horizon, center_x, s_layout.sky_area_y + s_layout.sky_center + s_layout.horizon_offset_y);
@@ -1042,13 +1080,13 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     struct LegendSys
     {
         const char* text;
-        uint32_t color;
+        lv_color_t color;
     };
     const LegendSys sys_legend[] = {
-        {"GPS", kColorSysGps},
-        {"GLONASS", kColorSysGln},
-        {"Galileo", kColorSysGal},
-        {"BeiDou", kColorSysBd},
+        {"GPS", theme_color(::ui::theme::ColorSlot::GnssSystemGps)},
+        {"GLONASS", theme_color(::ui::theme::ColorSlot::GnssSystemGln)},
+        {"Galileo", theme_color(::ui::theme::ColorSlot::GnssSystemGal)},
+        {"BeiDou", theme_color(::ui::theme::ColorSlot::GnssSystemBd)},
     };
     for (int i = 0; i < 4; ++i)
     {
@@ -1057,7 +1095,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         lv_obj_t* block = lv_obj_create(s_ui.panel_sky);
         lv_obj_set_pos(block, x, y + s_layout.legend_block_y_offset);
         lv_obj_set_size(block, s_layout.legend_block_size, s_layout.legend_block_size);
-        lv_obj_set_style_bg_color(block, lv_color_hex(sys_legend[i].color), 0);
+        lv_obj_set_style_bg_color(block, sys_legend[i].color, 0);
         lv_obj_set_style_bg_opa(block, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(block, 0, 0);
         lv_obj_set_style_radius(block, s_layout.legend_block_radius, 0);
@@ -1065,7 +1103,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
         lv_obj_t* label = lv_label_create(s_ui.panel_sky);
         lv_label_set_text(label, sys_legend[i].text);
-        lv_obj_set_style_text_color(label, lv_color_hex(kColorText), 0);
+        lv_obj_set_style_text_color(label, ::ui::theme::text(), 0);
         lv_obj_set_style_text_font(label, s_layout.legend_font, 0);
         lv_obj_set_pos(label, x + s_layout.legend_label_x_offset, y);
     }
@@ -1073,13 +1111,13 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     struct LegendSnr
     {
         const char* text;
-        uint32_t color;
+        lv_color_t color;
     };
     const LegendSnr snr_legend[] = {
-        {"SNR Good", kColorSnrGood},
-        {"SNR Weak", kColorSnrWeak},
-        {"Not Used", kColorSnrNotUsed},
-        {"In View", kColorSnrInView},
+        {"SNR Good", theme_color(::ui::theme::ColorSlot::GnssSnrGood)},
+        {"SNR Weak", theme_color(::ui::theme::ColorSlot::GnssSnrWeak)},
+        {"Not Used", theme_color(::ui::theme::ColorSlot::GnssSnrNotUsed)},
+        {"In View", theme_color(::ui::theme::ColorSlot::GnssSnrInView)},
     };
     for (int i = 0; i < 4; ++i)
     {
@@ -1088,7 +1126,7 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         lv_obj_t* dot = lv_obj_create(s_ui.panel_sky);
         lv_obj_set_pos(dot, x, y + s_layout.legend_block_y_offset);
         lv_obj_set_size(dot, s_layout.legend_block_size, s_layout.legend_block_size);
-        lv_obj_set_style_bg_color(dot, lv_color_hex(snr_legend[i].color), 0);
+        lv_obj_set_style_bg_color(dot, snr_legend[i].color, 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(dot, 0, 0);
         lv_obj_set_style_radius(dot, s_layout.legend_block_size / 2, 0);
@@ -1096,33 +1134,38 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
         lv_obj_t* label = lv_label_create(s_ui.panel_sky);
         ::ui::i18n::set_label_text(label, snr_legend[i].text);
-        lv_obj_set_style_text_color(label, lv_color_hex(kColorTextDim), 0);
+        lv_obj_set_style_text_color(label, ::ui::theme::text_muted(), 0);
         ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), s_layout.legend_font);
         lv_obj_set_pos(label, x + s_layout.legend_label_x_offset, y);
     }
 
-    s_ui.panel_status = lv_obj_create(s_ui.root);
-    lv_obj_set_pos(s_ui.panel_status, s_layout.status_panel_x, s_layout.status_panel_y);
+    s_ui.panel_status = lv_obj_create(surface);
+    lv_obj_set_pos(s_ui.panel_status, s_layout.status_panel_x, s_layout.status_panel_y - top_bar_h);
     lv_obj_set_size(s_ui.panel_status, s_layout.status_panel_w, s_layout.status_panel_h);
     apply_common_container_style(s_ui.panel_status,
-                                 lv_color_hex(kColorPanelBg),
-                                 lv_color_hex(kColorAmberDark),
+                                 ::ui::theme::surface(),
+                                 theme_color(::ui::theme::ColorSlot::AccentStrong),
                                  s_layout.panel_radius,
                                  s_layout.panel_border_width);
+    apply_component_profile(s_ui.panel_status, ::ui::theme::ComponentSlot::GnssStatusPanel);
 
     s_ui.status_header = lv_obj_create(s_ui.panel_status);
     lv_obj_set_pos(s_ui.status_header, 0, 0);
     lv_obj_set_size(s_ui.status_header, s_layout.status_panel_w, s_layout.status_header_h);
-    lv_obj_set_style_bg_color(s_ui.status_header, lv_color_hex(kColorAmber), 0);
+    lv_obj_set_style_bg_color(s_ui.status_header, ::ui::theme::accent(), 0);
     lv_obj_set_style_bg_opa(s_ui.status_header, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.status_header, 0, 0);
     lv_obj_set_style_radius(s_ui.status_header, s_layout.panel_radius, 0);
     lv_obj_set_style_pad_all(s_ui.status_header, 0, 0);
     lv_obj_clear_flag(s_ui.status_header, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(s_ui.status_header, ::ui::theme::ComponentSlot::GnssStatusHeader);
 
     s_ui.status_header_label = lv_label_create(s_ui.status_header);
     ::ui::i18n::set_label_text(s_ui.status_header_label, "SATELLITE STATUS");
-    lv_obj_set_style_text_color(s_ui.status_header_label, lv_color_hex(0x2A1A05), 0);
+    lv_obj_set_style_text_color(
+        s_ui.status_header_label,
+        resolve_component_text_color(::ui::theme::ComponentSlot::GnssStatusHeader, ::ui::theme::text()),
+        0);
     ::ui::fonts::apply_localized_font(
         s_ui.status_header_label, lv_label_get_text(s_ui.status_header_label), s_layout.status_header_font);
     lv_obj_center(s_ui.status_header_label);
@@ -1130,11 +1173,12 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
     s_ui.table_header = lv_obj_create(s_ui.panel_status);
     lv_obj_set_pos(s_ui.table_header, 0, s_layout.table_header_y);
     lv_obj_set_size(s_ui.table_header, s_layout.status_panel_w, s_layout.table_header_h);
-    lv_obj_set_style_bg_color(s_ui.table_header, lv_color_hex(0xF2D9A5), 0);
+    lv_obj_set_style_bg_color(s_ui.table_header, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(s_ui.table_header, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.table_header, 0, 0);
     lv_obj_set_style_pad_all(s_ui.table_header, 0, 0);
     lv_obj_clear_flag(s_ui.table_header, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(s_ui.table_header, ::ui::theme::ComponentSlot::GnssTableHeader);
 
     const char* header_texts[5] = {"ID", "SYS", "ELEV", "SNR", "USE"};
     const int* col_w = s_layout.table_col_w;
@@ -1144,7 +1188,10 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         s_ui.table_header_cells[i] = lv_label_create(s_ui.table_header);
         ::ui::i18n::set_label_text(s_ui.table_header_cells[i], header_texts[i]);
         lv_label_set_long_mode(s_ui.table_header_cells[i], LV_LABEL_LONG_CLIP);
-        lv_obj_set_style_text_color(s_ui.table_header_cells[i], lv_color_hex(kColorTextDim), 0);
+        lv_obj_set_style_text_color(
+            s_ui.table_header_cells[i],
+            resolve_component_text_color(::ui::theme::ComponentSlot::GnssTableHeader, ::ui::theme::text_muted()),
+            0);
         ::ui::fonts::apply_localized_font(
             s_ui.table_header_cells[i], lv_label_get_text(s_ui.table_header_cells[i]), s_layout.table_header_font);
         lv_obj_set_size(s_ui.table_header_cells[i], col_w[i], s_layout.table_header_h);
@@ -1161,10 +1208,11 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
         lv_obj_set_size(r.row, s_layout.status_panel_w, s_layout.table_row_h);
         lv_obj_set_style_bg_opa(r.row, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(r.row, 1, 0);
-        lv_obj_set_style_border_color(r.row, lv_color_hex(kColorLine), 0);
+        lv_obj_set_style_border_color(r.row, ::ui::theme::border(), 0);
         lv_obj_set_style_border_side(r.row, LV_BORDER_SIDE_BOTTOM, 0);
         lv_obj_set_style_pad_all(r.row, 0, 0);
         lv_obj_clear_flag(r.row, LV_OBJ_FLAG_SCROLLABLE);
+        apply_component_profile(r.row, ::ui::theme::ComponentSlot::GnssTableRow);
 
         col_x = 0;
         for (int i = 0; i < 5; ++i)
@@ -1172,7 +1220,10 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
             r.cells[i] = lv_label_create(r.row);
             lv_label_set_text(r.cells[i], "");
             lv_label_set_long_mode(r.cells[i], LV_LABEL_LONG_CLIP);
-            lv_obj_set_style_text_color(r.cells[i], lv_color_hex(kColorText), 0);
+            lv_obj_set_style_text_color(
+                r.cells[i],
+                resolve_component_text_color(::ui::theme::ComponentSlot::GnssTableRow, ::ui::theme::text()),
+                0);
             lv_obj_set_style_text_font(r.cells[i], s_layout.table_row_font, 0);
             lv_obj_set_size(r.cells[i], col_w[i], s_layout.table_row_h);
             lv_obj_set_style_text_align(r.cells[i], LV_TEXT_ALIGN_CENTER, 0);
@@ -1189,22 +1240,28 @@ lv_obj_t* ui_gnss_skyplot_create(lv_obj_t* parent)
 
     if (s_ui.compact_layout)
     {
-        s_ui.status_toggle_btn = lv_btn_create(s_ui.root);
+        s_ui.status_toggle_btn = lv_btn_create(surface);
         lv_obj_set_size(s_ui.status_toggle_btn, s_layout.status_toggle_btn_w, s_layout.status_toggle_btn_h);
         lv_obj_set_pos(s_ui.status_toggle_btn,
                        screen_w - s_layout.status_toggle_btn_w - s_layout.status_panel_right_margin,
-                       screen_h - s_layout.status_toggle_btn_h - s_layout.status_toggle_btn_bottom_margin);
-        lv_obj_set_style_bg_color(s_ui.status_toggle_btn, lv_color_hex(kColorAmber), 0);
+                       body_h - s_layout.status_toggle_btn_h - s_layout.status_toggle_btn_bottom_margin);
+        lv_obj_set_style_bg_color(s_ui.status_toggle_btn, ::ui::theme::accent(), 0);
         lv_obj_set_style_bg_opa(s_ui.status_toggle_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(s_ui.status_toggle_btn, 1, 0);
-        lv_obj_set_style_border_color(s_ui.status_toggle_btn, lv_color_hex(kColorAmberDark), 0);
+        lv_obj_set_style_border_color(s_ui.status_toggle_btn,
+                                      theme_color(::ui::theme::ColorSlot::AccentStrong),
+                                      0);
         lv_obj_set_style_radius(s_ui.status_toggle_btn, s_layout.status_toggle_btn_radius, 0);
         lv_obj_set_style_pad_all(s_ui.status_toggle_btn, 0, 0);
         lv_obj_clear_flag(s_ui.status_toggle_btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(s_ui.status_toggle_btn, on_status_toggle_clicked, LV_EVENT_CLICKED, nullptr);
+        apply_component_profile(s_ui.status_toggle_btn, ::ui::theme::ComponentSlot::GnssStatusToggle);
 
         s_ui.status_toggle_label = lv_label_create(s_ui.status_toggle_btn);
-        lv_obj_set_style_text_color(s_ui.status_toggle_label, lv_color_hex(0x2A1A05), 0);
+        lv_obj_set_style_text_color(
+            s_ui.status_toggle_label,
+            resolve_component_text_color(::ui::theme::ComponentSlot::GnssStatusToggle, ::ui::theme::text()),
+            0);
         lv_obj_set_style_text_font(s_ui.status_toggle_label, &lv_font_montserrat_14, 0);
 
         set_status_overlay_visible(false);

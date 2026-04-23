@@ -8,21 +8,64 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/theme/theme_component_style.h"
+#include "ui/theme/theme_registry.h"
+#include "ui/ui_theme.h"
 
 #include <cstring>
+
+#if !defined(LV_FONT_MONTSERRAT_20) || !LV_FONT_MONTSERRAT_20
+#define lv_font_montserrat_20 lv_font_montserrat_18
+#endif
 
 namespace ui
 {
 
 lv_obj_t* SystemNotification::container_ = nullptr;
 lv_obj_t* SystemNotification::icon_ = nullptr;
+lv_obj_t* SystemNotification::icon_image_ = nullptr;
+lv_obj_t* SystemNotification::icon_fallback_label_ = nullptr;
 lv_obj_t* SystemNotification::label_ = nullptr;
 lv_timer_t* SystemNotification::hide_timer_ = nullptr;
 bool SystemNotification::visible_ = false;
+std::string SystemNotification::icon_path_;
 
-extern "C"
+void SystemNotification::refreshIcon()
 {
-    extern const lv_image_dsc_t alert;
+    if (!icon_ || !icon_image_ || !icon_fallback_label_)
+    {
+        return;
+    }
+
+    icon_path_.clear();
+    const bool has_external =
+        ::ui::theme::resolve_asset_path(::ui::theme::asset_slot_id(::ui::theme::AssetSlot::NotificationAlert),
+                                        icon_path_);
+    if (has_external)
+    {
+        lv_image_set_src(icon_image_, icon_path_.c_str());
+        lv_obj_clear_flag(icon_image_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(icon_fallback_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_center(icon_image_);
+        return;
+    }
+
+    if (const lv_image_dsc_t* builtin = ::ui::theme::builtin_asset(::ui::theme::AssetSlot::NotificationAlert))
+    {
+        lv_image_set_src(icon_image_, builtin);
+        lv_obj_clear_flag(icon_image_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(icon_fallback_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_center(icon_image_);
+        return;
+    }
+
+    lv_label_set_text(icon_fallback_label_, "!");
+    lv_obj_set_style_text_color(icon_fallback_label_,
+                                ::ui::theme::color(::ui::theme::ColorSlot::StateWarn),
+                                0);
+    lv_obj_add_flag(icon_image_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(icon_fallback_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_center(icon_fallback_label_);
 }
 
 void SystemNotification::init()
@@ -37,6 +80,9 @@ void SystemNotification::init()
 
     // Create container - with 30px margins on left and right
     container_ = lv_obj_create(top_layer);
+    ::ui::theme::ComponentProfile banner_profile{};
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::NotificationBanner,
+                                                 banner_profile);
     // Get screen width and calculate container width (screen width - 60px for 30px margins on each side)
     lv_coord_t screen_width = lv_display_get_physical_horizontal_resolution(NULL);
     const auto& profile = ::ui::page_profile::current();
@@ -44,7 +90,7 @@ void SystemNotification::init()
     lv_coord_t container_width = screen_width - (margin * 2);
     lv_obj_set_size(container_, container_width, profile.large_touch_hitbox ? 72 : 50);
     lv_obj_set_pos(container_, margin, profile.large_touch_hitbox ? -84 : -60);
-    lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF0D3), 0);
+    lv_obj_set_style_bg_color(container_, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);
     // Set radius for bottom corners only
     // Since LVGL doesn't support per-corner radius, we'll set a larger radius (20)
@@ -53,8 +99,9 @@ void SystemNotification::init()
     lv_obj_set_style_pad_all(container_, 8, 0);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_shadow_width(container_, 10, 0);
-    lv_obj_set_style_shadow_color(container_, lv_color_hex(0xD9B06A), 0);
+    lv_obj_set_style_shadow_color(container_, ::ui::theme::accent_strong(), 0);
     lv_obj_set_style_shadow_opa(container_, LV_OPA_50, 0);
+    ::ui::theme::apply_component_profile_to_obj(container_, banner_profile);
 
     // Create flex layout
     lv_obj_set_flex_flow(container_, LV_FLEX_FLOW_ROW);
@@ -62,15 +109,34 @@ void SystemNotification::init()
     lv_obj_set_style_pad_gap(container_, 8, 0);
 
     // Create icon
-    icon_ = lv_image_create(container_);
-    lv_image_set_src(icon_, &alert);
-    lv_obj_set_style_width(icon_, 24, 0);
-    lv_obj_set_style_height(icon_, 24, 0);
+    icon_ = lv_obj_create(container_);
+    lv_obj_set_size(icon_, 24, 24);
+    lv_obj_set_style_bg_opa(icon_, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(icon_, 0, 0);
+    lv_obj_set_style_pad_all(icon_, 0, 0);
+    lv_obj_set_style_radius(icon_, 0, 0);
+    lv_obj_set_style_shadow_width(icon_, 0, 0);
+    lv_obj_clear_flag(icon_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(icon_, LV_OBJ_FLAG_CLICKABLE);
+
+    icon_image_ = lv_image_create(icon_);
+    lv_obj_add_flag(icon_image_, LV_OBJ_FLAG_HIDDEN);
+
+    icon_fallback_label_ = lv_label_create(icon_);
+    lv_label_set_text(icon_fallback_label_, "");
+    lv_obj_set_style_text_font(icon_fallback_label_, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(icon_fallback_label_, ::ui::theme::color(::ui::theme::ColorSlot::StateWarn), 0);
+    lv_obj_add_flag(icon_fallback_label_, LV_OBJ_FLAG_HIDDEN);
+    refreshIcon();
 
     // Create label with larger font
     label_ = lv_label_create(container_);
     lv_label_set_text(label_, "");
-    lv_obj_set_style_text_color(label_, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(label_,
+                                banner_profile.text_color.present
+                                    ? banner_profile.text_color.value
+                                    : ::ui::theme::text(),
+                                0);
     lv_obj_set_style_text_font(label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_flex_grow(label_, 1);
 
@@ -106,6 +172,7 @@ void SystemNotification::show(const char* text, uint32_t duration_ms)
 
     lv_label_set_text(label_, truncated);
     ::ui::fonts::apply_localized_font(label_, truncated, ::ui::fonts::ui_chrome_font());
+    refreshIcon();
 
     // Cancel existing timer if any
     if (hide_timer_)

@@ -102,6 +102,20 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_nav.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/presentation_contract.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/chat_compose_scaffold.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/chat_thread_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/boot_splash_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/directory_browser_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/directory_browser_nav.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/instrument_panel_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/map_focus_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/menu_dashboard_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/presentation_registry.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/service_panel_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation/watch_face_layout.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/theme/theme_slots.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/theme/theme_registry.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/page/page_profile.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/runtime/memory_profile.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/runtime/pack_repository.cpp
@@ -179,34 +193,6 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/team/team_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/walkie_talkie/walkie_talkie_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/walkie_talkie/walkie_talkie_page_runtime.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/logo.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/alert.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/AreaCleared.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/BaseCamp.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Chat.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/GoodFind.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/gps.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/room-24px.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/gps_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/message_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/route_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/team_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/tracker_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/wifi_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/ble_topbar.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Satellite.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/contact.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/ext.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/rally.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Spectrum.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/sos.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/team.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/tracker.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/rf.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/sstv.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/img_usb.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/walkie_talkie.c
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/assets/Setting.c
 )
 
 set(trail_mate_idf_include_dirs

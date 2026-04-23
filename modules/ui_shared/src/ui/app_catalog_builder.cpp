@@ -46,31 +46,6 @@ constexpr bool kTab5SkipSkyPlot = true;
 constexpr bool kTab5SkipSkyPlot = false;
 #endif
 
-extern "C"
-{
-    extern const lv_image_dsc_t Chat;
-    extern const lv_image_dsc_t gps_icon;
-    extern const lv_image_dsc_t Satellite;
-    extern const lv_image_dsc_t contact;
-    extern const lv_image_dsc_t Spectrum;
-#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-    extern const lv_image_dsc_t team_icon;
-#endif
-    extern const lv_image_dsc_t tracker_icon;
-#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-    extern const lv_image_dsc_t rf;
-#endif
-#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
-    extern const lv_image_dsc_t sstv;
-#endif
-    extern const lv_image_dsc_t Setting;
-    extern const lv_image_dsc_t ext;
-#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-    extern const lv_image_dsc_t img_usb;
-#endif
-    extern const lv_image_dsc_t walkie_talkie;
-}
-
 void request_menu_exit(void*)
 {
     ui_request_exit_to_menu();
@@ -85,63 +60,63 @@ ui::page::Host make_menu_host()
 
 ui::page::Host s_menu_host = make_menu_host();
 
-ui::CallbackAppScreen s_chat_app("chat", "Chat", &Chat,
+ui::CallbackAppScreen s_chat_app("chat", "Chat", ui::theme::AssetSlot::MenuAppChat,
                                  chat::ui::shell::enter,
                                  chat::ui::shell::exit,
                                  &s_menu_host);
-ui::CallbackAppScreen s_gps_app("map", "Map", &gps_icon,
+ui::CallbackAppScreen s_gps_app("map", "Map", ui::theme::AssetSlot::MenuAppMap,
                                 gps::ui::shell::enter,
                                 gps::ui::shell::exit,
                                 &s_menu_host);
-ui::CallbackAppScreen s_skyplot_app("sky_plot", "Sky Plot", &Satellite,
+ui::CallbackAppScreen s_skyplot_app("sky_plot", "Sky Plot", ui::theme::AssetSlot::MenuAppSkyPlot,
                                     gnss::ui::shell::enter,
                                     gnss::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_contacts_app("contacts", "Contacts", &contact,
+ui::CallbackAppScreen s_contacts_app("contacts", "Contacts", ui::theme::AssetSlot::MenuAppContacts,
                                      contacts::ui::shell::enter,
                                      contacts::ui::shell::exit,
                                      &s_menu_host);
-ui::CallbackAppScreen s_energy_sweep_app("energy_sweep", "Energy Sweep", &Spectrum,
+ui::CallbackAppScreen s_energy_sweep_app("energy_sweep", "Energy Sweep", ui::theme::AssetSlot::MenuAppEnergySweep,
                                          energy_sweep::ui::shell::enter,
                                          energy_sweep::ui::shell::exit,
                                          &s_menu_host);
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-ui::CallbackAppScreen s_team_app("team", "Team", &team_icon,
+ui::CallbackAppScreen s_team_app("team", "Team", ui::theme::AssetSlot::MenuAppTeam,
                                  team::ui::shell::enter,
                                  team::ui::shell::exit,
                                  &s_menu_host);
 #endif
-ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", &tracker_icon,
+ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", ui::theme::AssetSlot::MenuAppTracker,
                                     tracker::ui::shell::enter,
                                     tracker::ui::shell::exit,
                                     &s_menu_host);
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_pc_link_app("pc_link", "PC Link", &rf,
+ui::CallbackAppScreen s_pc_link_app("pc_link", "PC Link", ui::theme::AssetSlot::MenuAppPcLink,
                                     pc_link::ui::shell::enter,
                                     pc_link::ui::shell::exit,
                                     &s_menu_host);
 #endif
 #if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
-ui::CallbackAppScreen s_sstv_app("sstv", "SSTV", &sstv,
+ui::CallbackAppScreen s_sstv_app("sstv", "SSTV", ui::theme::AssetSlot::MenuAppSstv,
                                  sstv_page::ui::shell::enter,
                                  sstv_page::ui::shell::exit,
                                  &s_menu_host);
 #endif
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Disk", &img_usb,
+ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Disk", ui::theme::AssetSlot::MenuAppUsb,
                                 usb_storage::ui::shell::enter,
                                 usb_storage::ui::shell::exit,
                                 &s_menu_host);
 #endif
-ui::CallbackAppScreen s_setting_app("settings", "Setting", &Setting,
+ui::CallbackAppScreen s_setting_app("settings", "Setting", ui::theme::AssetSlot::MenuAppSettings,
                                     settings::ui::shell::enter,
                                     settings::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_extensions_app("extensions", "Extensions", &ext,
+ui::CallbackAppScreen s_extensions_app("extensions", "Extensions", ui::theme::AssetSlot::MenuAppExtensions,
                                        extensions::ui::shell::enter,
                                        extensions::ui::shell::exit,
                                        &s_menu_host);
-ui::CallbackAppScreen s_walkie_app("walkie_talkie", "Walkie Talkie", &walkie_talkie,
+ui::CallbackAppScreen s_walkie_app("walkie_talkie", "Walkie Talkie", ui::theme::AssetSlot::MenuAppWalkieTalkie,
                                    walkie_page::ui::shell::enter,
                                    walkie_page::ui::shell::exit,
                                    &s_menu_host);

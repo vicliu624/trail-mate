@@ -5,12 +5,16 @@
 #include "platform/ui/route_storage.h"
 #include "platform/ui/tracker_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/components/two_pane_styles.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/directory_browser_layout.h"
 #include "ui/screens/tracker/tracker_page_input.h"
 #include "ui/screens/tracker/tracker_page_layout.h"
 #include "ui/screens/tracker/tracker_state.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 
 #include <algorithm>
 #include <cctype>
@@ -35,17 +39,12 @@ std::vector<std::string> s_record_names;
 std::string s_record_empty_text = "No tracks yet";
 std::string s_route_empty_text = "No KML routes";
 
-constexpr uint32_t kPanelBtnBg = 0xFAF0D8;
-constexpr uint32_t kPanelBtnBorder = 0xE7C98F;
-constexpr uint32_t kPanelBtnFocused = 0xEBA341;
-constexpr uint32_t kPanelBtnText = 0x6B4A1E;
-constexpr uint32_t kPanelTextMuted = 0x8A6A3A;
-
-bool s_btn_styles_inited = false;
-lv_style_t s_btn_main;
-lv_style_t s_btn_focused;
-lv_style_t s_btn_disabled;
-lv_style_t s_btn_label;
+bool s_action_styles_inited = false;
+uint32_t s_action_theme_revision = 0;
+lv_style_t s_action_main;
+lv_style_t s_action_focused;
+lv_style_t s_action_disabled;
+lv_style_t s_action_label;
 
 enum class ActionMenuCommand : uintptr_t
 {
@@ -87,6 +86,28 @@ void open_action_menu_modal();
 void clear_list_items();
 lv_obj_t* create_list_item_button(const std::string& text, intptr_t user_data, bool checked, bool disabled);
 void append_back_list_item();
+
+void apply_component_profile(lv_obj_t* obj,
+                             ::ui::theme::ComponentSlot slot,
+                             lv_style_selector_t selector = 0)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_obj(obj, profile, selector);
+    }
+}
+
+lv_color_t resolve_focus_accent(::ui::theme::ComponentSlot slot)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.accent_color.present)
+    {
+        return profile.accent_color.value;
+    }
+    return ::ui::theme::accent();
+}
 
 void on_back(void*)
 {
@@ -189,24 +210,26 @@ lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
     lv_obj_clear_flag(bg, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(bg, LV_OBJ_FLAG_CLICKABLE);
+    apply_component_profile(bg, ::ui::theme::ComponentSlot::ModalScrim, LV_PART_MAIN);
 
     const auto modal_size = ::ui::page_profile::resolve_modal_size(width, height, screen);
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, modal_size.width, modal_size.height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, ::ui::theme::border(), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, ::ui::page_profile::resolve_modal_pad(), LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(win, ::ui::theme::ComponentSlot::ModalWindow, LV_PART_MAIN);
 
     return bg;
 }
@@ -227,33 +250,62 @@ bool is_any_modal_open()
            g_tracker_state.action_menu_modal != nullptr;
 }
 
-void init_button_styles()
+void init_action_button_styles()
 {
-    if (s_btn_styles_inited)
+    const uint32_t active_revision = ::ui::theme::active_theme_revision();
+    if (s_action_styles_inited && s_action_theme_revision == active_revision)
     {
         return;
     }
-    lv_style_init(&s_btn_main);
-    lv_style_set_bg_color(&s_btn_main, lv_color_hex(kPanelBtnBg));
-    lv_style_set_bg_opa(&s_btn_main, LV_OPA_COVER);
-    lv_style_set_border_width(&s_btn_main, 1);
-    lv_style_set_border_color(&s_btn_main, lv_color_hex(kPanelBtnBorder));
-    lv_style_set_radius(&s_btn_main, 6);
-    lv_style_set_text_color(&s_btn_main, lv_color_hex(kPanelBtnText));
+    if (s_action_styles_inited)
+    {
+        lv_style_reset(&s_action_main);
+        lv_style_reset(&s_action_focused);
+        lv_style_reset(&s_action_disabled);
+        lv_style_reset(&s_action_label);
+    }
+    else
+    {
+        s_action_styles_inited = true;
+    }
+    s_action_theme_revision = active_revision;
 
-    lv_style_init(&s_btn_focused);
-    lv_style_set_bg_color(&s_btn_focused, lv_color_hex(kPanelBtnFocused));
-    lv_style_set_bg_opa(&s_btn_focused, LV_OPA_COVER);
-    lv_style_set_outline_width(&s_btn_focused, 0);
+    lv_style_init(&s_action_main);
+    lv_style_set_bg_color(&s_action_main, ::ui::theme::surface());
+    lv_style_set_bg_opa(&s_action_main, LV_OPA_COVER);
+    lv_style_set_border_width(&s_action_main, 1);
+    lv_style_set_border_color(&s_action_main, ::ui::theme::border());
+    lv_style_set_radius(&s_action_main, 6);
+    lv_style_set_text_color(&s_action_main, ::ui::theme::text());
+    {
+        ::ui::theme::ComponentProfile profile{};
+        if (::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::ActionButtonPrimary, profile))
+        {
+            ::ui::theme::apply_component_profile_to_style(&s_action_main, profile);
+        }
+    }
 
-    lv_style_init(&s_btn_disabled);
-    lv_style_set_bg_opa(&s_btn_disabled, LV_OPA_50);
+    lv_style_init(&s_action_focused);
+    lv_style_set_bg_color(&s_action_focused,
+                          resolve_focus_accent(::ui::theme::ComponentSlot::ActionButtonPrimary));
+    lv_style_set_bg_opa(&s_action_focused, LV_OPA_COVER);
+    lv_style_set_outline_width(&s_action_focused, 0);
 
-    lv_style_init(&s_btn_label);
-    lv_style_set_text_color(&s_btn_label, lv_color_hex(kPanelBtnText));
-    lv_style_set_text_font(&s_btn_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
+    lv_style_init(&s_action_disabled);
+    lv_style_set_bg_opa(&s_action_disabled, LV_OPA_50);
 
-    s_btn_styles_inited = true;
+    lv_style_init(&s_action_label);
+    lv_style_set_text_color(&s_action_label, ::ui::theme::text());
+    lv_style_set_text_font(&s_action_label,
+                           ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
+    {
+        ::ui::theme::ComponentProfile profile{};
+        if (::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::ActionButtonPrimary, profile) &&
+            profile.text_color.present)
+        {
+            lv_style_set_text_color(&s_action_label, profile.text_color.value);
+        }
+    }
 }
 
 void apply_action_button(lv_obj_t* btn, lv_obj_t* label)
@@ -262,13 +314,14 @@ void apply_action_button(lv_obj_t* btn, lv_obj_t* label)
     {
         return;
     }
-    init_button_styles();
-    lv_obj_add_style(btn, &s_btn_main, LV_PART_MAIN);
-    lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
-    lv_obj_add_style(btn, &s_btn_disabled, LV_PART_MAIN | LV_STATE_DISABLED);
+    init_action_button_styles();
+    lv_obj_add_style(btn, &s_action_main, LV_PART_MAIN);
+    lv_obj_add_style(btn, &s_action_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(btn, &s_action_focused, LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_add_style(btn, &s_action_disabled, LV_PART_MAIN | LV_STATE_DISABLED);
     if (label)
     {
-        lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
+        lv_obj_add_style(label, &s_action_label, LV_PART_MAIN);
     }
 }
 
@@ -278,34 +331,29 @@ void apply_list_button(lv_obj_t* btn)
     {
         return;
     }
-    init_button_styles();
-    lv_obj_add_style(btn, &s_btn_main, LV_PART_MAIN);
-    lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_FOCUSED);
-    lv_obj_add_style(btn, &s_btn_focused, LV_PART_MAIN | LV_STATE_CHECKED);
-    lv_obj_add_style(btn, &s_btn_disabled, LV_PART_MAIN | LV_STATE_DISABLED);
+    ::ui::components::two_pane_styles::apply_list_item(btn);
+    lv_obj_add_state(btn, LV_STATE_DEFAULT);
     if (lv_obj_t* label = lv_obj_get_child(btn, -1))
     {
-        lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
+        ::ui::components::two_pane_styles::apply_label_primary(label);
     }
 }
 
 void style_mode_button(lv_obj_t* btn, lv_obj_t* label, bool active)
 {
-    if (!btn)
+    if (!btn || !label)
     {
         return;
     }
-    lv_color_t bg = active ? lv_color_hex(0xEBA341) : lv_color_hex(0xFAF0D8);
-    lv_color_t fg = lv_color_hex(0x6B4A1E);
-    lv_obj_set_style_bg_color(btn, bg, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btn, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
-    lv_obj_set_style_radius(btn, 12, LV_PART_MAIN);
-    if (label)
+    if (active)
     {
-        lv_obj_set_style_text_color(label, fg, LV_PART_MAIN);
+        lv_obj_add_state(btn, LV_STATE_CHECKED);
     }
+    else
+    {
+        lv_obj_clear_state(btn, LV_STATE_CHECKED);
+    }
+    ::ui::components::two_pane_styles::apply_label_primary(label);
 }
 
 void update_mode_buttons()
@@ -413,7 +461,7 @@ lv_obj_t* create_list_item_button(const std::string& text, intptr_t user_data, b
     lv_obj_t* label = lv_label_create(btn);
     lv_obj_align(label, LV_ALIGN_LEFT_MID, 10, 0);
     lv_label_set_text(label, text.c_str());
-    lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
+    ::ui::components::two_pane_styles::apply_label_primary(label);
     lv_obj_set_style_text_font(label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(label, LV_PCT(100));
@@ -512,12 +560,12 @@ lv_obj_t* first_visible_list_item()
 
 void focus_mode_panel()
 {
-    tracker::ui::input::tracker_focus_to_filter();
+    tracker::ui::input::tracker_focus_to_selector();
 }
 
 void focus_main_panel()
 {
-    tracker::ui::input::tracker_focus_to_list();
+    tracker::ui::input::tracker_focus_to_content();
 }
 
 void set_mode(TrackerPageState::Mode mode)
@@ -1228,7 +1276,7 @@ void on_list_item_defocused(lv_event_t* e)
     }
     std::string display_name = format_list_name(names[idx]);
     lv_label_set_text(label, display_name.c_str());
-    lv_obj_add_style(label, &s_btn_label, LV_PART_MAIN);
+    ::ui::components::two_pane_styles::apply_label_primary(label);
     lv_obj_set_style_text_font(label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
 }
@@ -1507,21 +1555,35 @@ void init_page(lv_obj_t* parent)
     state.header = layout::create_header(state.root);
     state.content = layout::create_content(state.root);
     state.filter_panel = layout::create_filter_panel(state.content, filter_panel_width());
+    ::ui::presentation::directory_browser_layout::SelectorControlsSpec controls_spec{};
+    controls_spec.pad_row = page_profile().filter_panel_pad_row;
+    controls_spec.pad_column = page_profile().filter_panel_pad_row;
+    state.selector_controls =
+        ::ui::presentation::directory_browser_layout::create_selector_controls(state.filter_panel,
+                                                                               controls_spec);
     state.list_panel = layout::create_list_panel(state.content);
 
-    state.mode_record_btn = lv_btn_create(state.filter_panel);
-    lv_obj_set_width(state.mode_record_btn, LV_PCT(100));
-    lv_obj_set_height(state.mode_record_btn, filter_button_height());
+    ::ui::presentation::directory_browser_layout::SelectorButtonSpec button_spec{};
+    button_spec.height = filter_button_height();
+    button_spec.stacked_min_width = std::max<lv_coord_t>(filter_panel_width(), 100);
+
+    state.mode_record_btn = lv_btn_create(state.selector_controls ? state.selector_controls
+                                                                  : state.filter_panel);
+    ::ui::presentation::directory_browser_layout::configure_selector_button(state.mode_record_btn,
+                                                                            button_spec);
+    ::ui::components::two_pane_styles::apply_btn_filter(state.mode_record_btn);
     state.mode_record_label = lv_label_create(state.mode_record_btn);
-    lv_obj_add_style(state.mode_record_label, &s_btn_label, LV_PART_MAIN);
+    ::ui::components::two_pane_styles::apply_label_primary(state.mode_record_label);
     ::ui::i18n::set_label_text(state.mode_record_label, "Record");
     lv_obj_center(state.mode_record_label);
 
-    state.mode_route_btn = lv_btn_create(state.filter_panel);
-    lv_obj_set_width(state.mode_route_btn, LV_PCT(100));
-    lv_obj_set_height(state.mode_route_btn, filter_button_height());
+    state.mode_route_btn = lv_btn_create(state.selector_controls ? state.selector_controls
+                                                                 : state.filter_panel);
+    ::ui::presentation::directory_browser_layout::configure_selector_button(state.mode_route_btn,
+                                                                            button_spec);
+    ::ui::components::two_pane_styles::apply_btn_filter(state.mode_route_btn);
     state.mode_route_label = lv_label_create(state.mode_route_btn);
-    lv_obj_add_style(state.mode_route_label, &s_btn_label, LV_PART_MAIN);
+    ::ui::components::two_pane_styles::apply_label_primary(state.mode_route_label);
     ::ui::i18n::set_label_text(state.mode_route_label, "Route");
     lv_obj_center(state.mode_route_label);
 
@@ -1530,7 +1592,7 @@ void init_page(lv_obj_t* parent)
     lv_obj_set_width(state.status_label, LV_PCT(100));
     lv_obj_set_style_text_font(
         state.status_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
-    lv_obj_set_style_text_color(state.status_label, lv_color_hex(kPanelTextMuted), 0);
+    ::ui::components::two_pane_styles::apply_label_muted(state.status_label);
 
     state.list_container = layout::create_list_container(state.list_panel);
     lv_obj_add_flag(state.list_container, LV_OBJ_FLAG_SCROLLABLE);

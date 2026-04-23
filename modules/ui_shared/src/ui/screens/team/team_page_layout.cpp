@@ -36,6 +36,7 @@
 
 #include "ui/screens/team/team_page_layout.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/service_panel_layout.h"
 #include "ui/widgets/top_bar.h"
 
 namespace team
@@ -44,77 +45,56 @@ namespace ui
 {
 namespace layout
 {
+namespace service_panel_layout = ::ui::presentation::service_panel_layout;
 
 namespace
 {
-void make_non_scrollable(lv_obj_t* obj)
-{
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
-}
 } // namespace
 
 lv_obj_t* create_root(lv_obj_t* parent)
 {
-    const auto& profile = ::ui::page_profile::current();
-    lv_obj_t* root = lv_obj_create(parent);
-    lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(root, profile.top_content_gap, 0);
-    make_non_scrollable(root);
-    return root;
+    service_panel_layout::RootSpec spec{};
+    spec.pad_row = ::ui::page_profile::current().top_content_gap;
+    return service_panel_layout::create_root(parent, spec);
 }
 
 lv_obj_t* create_header(lv_obj_t* root)
 {
-    const auto& profile = ::ui::page_profile::current();
-    lv_obj_t* header = lv_obj_create(root);
-    lv_obj_set_size(header, LV_PCT(100), profile.top_bar_height);
-    make_non_scrollable(header);
-    return header;
+    service_panel_layout::HeaderSpec spec{};
+    spec.height = ::ui::page_profile::current().top_bar_height;
+    return service_panel_layout::create_header_container(root, spec);
 }
 
 lv_obj_t* create_content(lv_obj_t* root)
 {
     const auto& profile = ::ui::page_profile::current();
-    lv_obj_t* content = lv_obj_create(root);
-    lv_obj_set_size(content, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_grow(content, 1);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    service_panel_layout::BodySpec spec{};
+    spec.pad_row = profile.top_content_gap;
+    lv_obj_t* content = service_panel_layout::create_body(root, spec);
     lv_obj_set_style_pad_left(content, profile.content_pad_left, 0);
     lv_obj_set_style_pad_right(content, profile.content_pad_right, 0);
     lv_obj_set_style_pad_top(content, profile.content_pad_top, 0);
     lv_obj_set_style_pad_bottom(content, profile.content_pad_bottom, 0);
-    lv_obj_set_style_pad_row(content, profile.top_content_gap, 0);
-    make_non_scrollable(content);
     return content;
 }
 
 lv_obj_t* create_body(lv_obj_t* content)
 {
-    lv_obj_t* body = lv_obj_create(content);
-    lv_obj_set_width(body, LV_PCT(100));
-    lv_obj_set_flex_grow(body, 1);
-    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
-    return body;
+    return service_panel_layout::create_primary_panel(content);
 }
 
 lv_obj_t* create_actions(lv_obj_t* content)
 {
     const auto& profile = ::ui::page_profile::current();
-    lv_obj_t* actions = lv_obj_create(content);
     lv_coord_t action_height = profile.list_item_height;
     const lv_coord_t control_height = ::ui::page_profile::resolve_control_button_height();
     if (control_height > action_height)
     {
         action_height = control_height;
     }
-    lv_obj_set_width(actions, LV_PCT(100));
-    lv_obj_set_height(actions, action_height + 8);
-    lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    make_non_scrollable(actions);
-    return actions;
+    service_panel_layout::FooterActionsSpec spec{};
+    spec.height = action_height + 8;
+    return service_panel_layout::create_footer_actions(content, spec);
 }
 
 } // namespace layout

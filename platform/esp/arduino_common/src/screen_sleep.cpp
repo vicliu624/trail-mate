@@ -16,6 +16,7 @@
 #include "lvgl.h"
 #include "platform/ui/settings_store.h"
 #include "ui/localization.h"
+#include "ui/ui_theme.h"
 
 namespace
 {
@@ -194,25 +195,25 @@ void init_screen_saver()
     s_screen_saver_layer = lv_obj_create(lv_screen_active());
     lv_obj_set_size(s_screen_saver_layer, LV_PCT(100), LV_PCT(100));
     lv_obj_align(s_screen_saver_layer, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(s_screen_saver_layer, lv_color_hex(0xF6E6C6), 0);
+    lv_obj_set_style_bg_color(s_screen_saver_layer, ::ui::theme::page_bg(), 0);
     lv_obj_set_style_bg_opa(s_screen_saver_layer, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_screen_saver_layer, 0, 0);
     lv_obj_clear_flag(s_screen_saver_layer, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(s_screen_saver_layer, LV_OBJ_FLAG_CLICKABLE);
 
     s_screen_saver_time_label = lv_label_create(s_screen_saver_layer);
-    lv_obj_set_style_text_color(s_screen_saver_time_label, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_color(s_screen_saver_time_label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(s_screen_saver_time_label, &lv_font_montserrat_36, 0);
     lv_label_set_text(s_screen_saver_time_label, "--:--");
     lv_obj_align(s_screen_saver_time_label, LV_ALIGN_CENTER, 0, -26);
 
     s_screen_saver_unread_label = lv_label_create(s_screen_saver_layer);
-    lv_obj_set_style_text_color(s_screen_saver_unread_label, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_color(s_screen_saver_unread_label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(s_screen_saver_unread_label, &lv_font_montserrat_20, 0);
     lv_obj_align(s_screen_saver_unread_label, LV_ALIGN_CENTER, 0, 10);
 
     s_screen_saver_hint_label = lv_label_create(s_screen_saver_layer);
-    lv_obj_set_style_text_color(s_screen_saver_hint_label, lv_color_hex(0x8A6A3A), 0);
+    lv_obj_set_style_text_color(s_screen_saver_hint_label, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(s_screen_saver_hint_label, &lv_font_montserrat_14, 0);
     lv_obj_align(s_screen_saver_hint_label, LV_ALIGN_CENTER, 0, 40);
 

@@ -13,8 +13,8 @@ namespace settings::ui::input
 void init();
 void cleanup();
 void on_ui_refreshed();
-void focus_to_filter();
-void focus_to_list();
+void focus_to_selector();
+void focus_to_content();
 lv_group_t* get_group();
 
 } // namespace settings::ui::input

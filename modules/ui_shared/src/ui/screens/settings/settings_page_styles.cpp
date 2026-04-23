@@ -6,6 +6,7 @@
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_styles.h"
+#include "ui/ui_theme.h"
 
 #if defined(ESP_PLATFORM)
 #include "esp_log.h"
@@ -21,6 +22,7 @@ constexpr const char* kLogTag = "settings-style";
 #endif
 
 bool s_inited = false;
+uint32_t s_theme_revision = 0;
 lv_style_t s_modal_bg;
 lv_style_t s_modal_panel;
 lv_style_t s_modal_btn_checked;
@@ -31,8 +33,23 @@ lv_style_t s_value_box;
 void init_once()
 {
     ::ui::components::two_pane_styles::init_once();
-    if (s_inited) return;
-    s_inited = true;
+    const uint32_t active_revision = ::ui::theme::active_theme_revision();
+    if (s_inited && s_theme_revision == active_revision)
+    {
+        return;
+    }
+    if (s_inited)
+    {
+        lv_style_reset(&s_modal_bg);
+        lv_style_reset(&s_modal_panel);
+        lv_style_reset(&s_modal_btn_checked);
+        lv_style_reset(&s_value_box);
+    }
+    else
+    {
+        s_inited = true;
+    }
+    s_theme_revision = active_revision;
 
 #if defined(ESP_PLATFORM)
     ESP_LOGI(kLogTag, "init_once");
@@ -40,30 +57,24 @@ void init_once()
 
     lv_style_init(&s_modal_bg);
     lv_style_set_bg_opa(&s_modal_bg, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_modal_bg,
-                          lv_color_hex(::ui::components::two_pane_styles::kSidePanelBg));
+    lv_style_set_bg_color(&s_modal_bg, ::ui::theme::surface_alt());
 
     lv_style_init(&s_modal_panel);
     lv_style_set_bg_opa(&s_modal_panel, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_modal_panel,
-                          lv_color_hex(::ui::components::two_pane_styles::kMainPanelBg));
+    lv_style_set_bg_color(&s_modal_panel, ::ui::theme::surface());
     lv_style_set_border_width(&s_modal_panel, 2);
-    lv_style_set_border_color(&s_modal_panel,
-                              lv_color_hex(::ui::components::two_pane_styles::kBorder));
+    lv_style_set_border_color(&s_modal_panel, ::ui::theme::border());
     lv_style_set_radius(&s_modal_panel, 8);
 
     lv_style_init(&s_modal_btn_checked);
     lv_style_set_bg_opa(&s_modal_btn_checked, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_modal_btn_checked,
-                          lv_color_hex(::ui::components::two_pane_styles::kAccent));
+    lv_style_set_bg_color(&s_modal_btn_checked, ::ui::theme::accent());
 
     lv_style_init(&s_value_box);
     lv_style_set_bg_opa(&s_value_box, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_value_box,
-                          lv_color_hex(::ui::components::two_pane_styles::kSidePanelBg));
+    lv_style_set_bg_color(&s_value_box, ::ui::theme::surface_alt());
     lv_style_set_border_width(&s_value_box, 1);
-    lv_style_set_border_color(&s_value_box,
-                              lv_color_hex(::ui::components::two_pane_styles::kBorder));
+    lv_style_set_border_color(&s_value_box, ::ui::theme::border());
     lv_style_set_radius(&s_value_box, 8);
 }
 

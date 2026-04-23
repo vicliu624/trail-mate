@@ -6,23 +6,10 @@
 
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
+#include "ui/ui_theme.h"
 
 namespace ui
 {
-
-namespace
-{
-constexpr uint32_t kColorAmber = 0xEBA341;
-constexpr uint32_t kColorAmberDark = 0xC98118;
-constexpr uint32_t kColorWarmBg = 0xF6E6C6;
-constexpr uint32_t kColorPanelBg = 0xFAF0D8;
-constexpr uint32_t kColorLine = 0xE7C98F;
-constexpr uint32_t kColorText = 0x6B4A1E;
-constexpr uint32_t kColorTextDim = 0x8A6A3A;
-constexpr uint32_t kColorWarn = 0xB94A2C;
-constexpr uint32_t kColorOk = 0x3E7D3E;
-constexpr uint32_t kColorInfo = 0x2D6FB6;
-} // namespace
 
 lv_obj_t* BlePairingPopup::overlay_ = nullptr;
 lv_obj_t* BlePairingPopup::panel_ = nullptr;
@@ -52,7 +39,7 @@ void BlePairingPopup::ensureCreated()
     overlay_ = lv_obj_create(top);
     lv_obj_remove_style_all(overlay_);
     lv_obj_set_size(overlay_, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(overlay_, lv_color_hex(kColorWarmBg), 0);
+    lv_obj_set_style_bg_color(overlay_, ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim), 0);
     lv_obj_set_style_bg_opa(overlay_, LV_OPA_70, 0);
     lv_obj_set_style_border_width(overlay_, 0, 0);
     lv_obj_set_style_radius(overlay_, 0, 0);
@@ -62,17 +49,17 @@ void BlePairingPopup::ensureCreated()
     lv_obj_add_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
 
     panel_ = lv_obj_create(overlay_);
-    lv_obj_set_style_bg_color(panel_, lv_color_hex(kColorPanelBg), 0);
+    lv_obj_set_style_bg_color(panel_, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(panel_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(panel_, 2, 0);
-    lv_obj_set_style_border_color(panel_, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_border_color(panel_, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(panel_, 16, 0);
     lv_obj_set_style_pad_left(panel_, 18, 0);
     lv_obj_set_style_pad_right(panel_, 18, 0);
     lv_obj_set_style_pad_top(panel_, 16, 0);
     lv_obj_set_style_pad_bottom(panel_, 14, 0);
     lv_obj_set_style_shadow_width(panel_, 18, 0);
-    lv_obj_set_style_shadow_color(panel_, lv_color_hex(kColorAmberDark), 0);
+    lv_obj_set_style_shadow_color(panel_, ::ui::theme::accent_strong(), 0);
     lv_obj_set_style_shadow_opa(panel_, LV_OPA_20, 0);
     lv_obj_clear_flag(panel_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(panel_, LV_FLEX_FLOW_COLUMN);
@@ -81,15 +68,15 @@ void BlePairingPopup::ensureCreated()
 
     title_label_ = lv_label_create(panel_);
     ::ui::i18n::set_label_text(title_label_, "Bluetooth Pairing");
-    lv_obj_set_style_text_color(title_label_, lv_color_hex(kColorText), 0);
+    lv_obj_set_style_text_color(title_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(title_label_, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_align(title_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(title_label_, LV_PCT(100));
 
     mode_label_ = lv_label_create(panel_);
-    lv_obj_set_style_bg_color(mode_label_, lv_color_hex(kColorInfo), 0);
+    lv_obj_set_style_bg_color(mode_label_, ::ui::theme::color(::ui::theme::ColorSlot::StateInfo), 0);
     lv_obj_set_style_bg_opa(mode_label_, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(mode_label_, lv_color_hex(kColorPanelBg), 0);
+    lv_obj_set_style_text_color(mode_label_, ::ui::theme::white(), 0);
     lv_obj_set_style_text_font(mode_label_, &lv_font_montserrat_18, 0);
     lv_obj_set_style_pad_left(mode_label_, 10, 0);
     lv_obj_set_style_pad_right(mode_label_, 10, 0);
@@ -99,26 +86,26 @@ void BlePairingPopup::ensureCreated()
 
     hint_label_ = lv_label_create(panel_);
     ::ui::i18n::set_label_text(hint_label_, "Enter this 6-digit PIN on your phone");
-    lv_obj_set_style_text_color(hint_label_, lv_color_hex(kColorTextDim), 0);
+    lv_obj_set_style_text_color(hint_label_, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(hint_label_, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(hint_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(hint_label_, LV_PCT(100));
 
     pin_label_ = lv_label_create(panel_);
-    lv_obj_set_style_text_color(pin_label_, lv_color_hex(kColorAmberDark), 0);
+    lv_obj_set_style_text_color(pin_label_, ::ui::theme::accent_strong(), 0);
     lv_obj_set_style_text_font(pin_label_, &lv_font_montserrat_36, 0);
     lv_obj_set_style_text_align(pin_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(pin_label_, LV_PCT(100));
 
     device_label_ = lv_label_create(panel_);
-    lv_obj_set_style_text_color(device_label_, lv_color_hex(kColorText), 0);
+    lv_obj_set_style_text_color(device_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(device_label_, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(device_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(device_label_, LV_PCT(100));
 
     footer_label_ = lv_label_create(panel_);
     ::ui::i18n::set_label_text(footer_label_, "Closes automatically after pairing");
-    lv_obj_set_style_text_color(footer_label_, lv_color_hex(kColorOk), 0);
+    lv_obj_set_style_text_color(footer_label_, ::ui::theme::status_green(), 0);
     lv_obj_set_style_text_font(footer_label_, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(footer_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(footer_label_, LV_PCT(100));
@@ -183,7 +170,10 @@ void BlePairingPopup::show(uint32_t passkey, bool is_fixed_pin, const char* devi
              static_cast<unsigned long>(passkey % 1000U));
     lv_label_set_text(pin_label_, pin_buf);
     ::ui::i18n::set_label_text(mode_label_, is_fixed_pin ? "Fixed PIN" : "Random PIN");
-    lv_obj_set_style_bg_color(mode_label_, lv_color_hex(is_fixed_pin ? kColorOk : kColorInfo), 0);
+    lv_obj_set_style_bg_color(mode_label_,
+                              is_fixed_pin ? ::ui::theme::status_green()
+                                           : ::ui::theme::color(::ui::theme::ColorSlot::StateInfo),
+                              0);
 
     std::string name_text = ::ui::i18n::format(
         "Device: %s",

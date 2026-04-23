@@ -9,6 +9,7 @@
 #include "ui/screens/gps/gps_page_map.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/support/lvgl_fs_utils.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/map/map_tiles.h"
 
 #include <algorithm>
@@ -27,8 +28,6 @@ constexpr double kMinDistanceM = 2.0;
 constexpr int kMaxRoutePoints = 240;
 constexpr int kMaxDrawPoints = 180;
 constexpr int kDefaultRouteZoom = 16;
-constexpr uint32_t kRouteColor = 0xEBA341;
-
 struct RouteBounds
 {
     bool valid = false;
@@ -636,7 +635,7 @@ void gps_route_draw_event(lv_event_t* e)
 
     lv_draw_rect_dsc_t dot_dsc;
     lv_draw_rect_dsc_init(&dot_dsc);
-    dot_dsc.bg_color = lv_color_hex(kRouteColor);
+    dot_dsc.bg_color = ::ui::theme::map_route();
     dot_dsc.radius = LV_RADIUS_CIRCLE;
     dot_dsc.border_width = 0;
 

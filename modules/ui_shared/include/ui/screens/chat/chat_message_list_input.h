@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "ui/components/two_pane_nav.h"
+#include "ui/presentation/directory_browser_nav.h"
 
 namespace chat
 {
@@ -19,14 +19,14 @@ namespace message_list
 namespace input
 {
 
-using FocusColumn = ::ui::components::two_pane_nav::FocusColumn;
-using Controller = ::ui::components::two_pane_nav::Controller;
+using FocusRegion = ::ui::presentation::directory_browser_nav::FocusRegion;
+using Controller = ::ui::presentation::directory_browser_nav::Controller;
 
 void init(ChatMessageListScreen* screen, Controller* controller);
 void cleanup(Controller* controller);
 void on_ui_refreshed(Controller* controller);
-void focus_filter(Controller* controller);
-void focus_list(Controller* controller);
+void focus_selector(Controller* controller);
+void focus_content(Controller* controller);
 
 } // namespace input
 } // namespace message_list

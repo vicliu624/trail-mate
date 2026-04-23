@@ -8,6 +8,7 @@
 #include "lvgl.h"
 #include "team/domain/team_types.h"
 #include "team/protocol/team_mgmt.h"
+#include "ui/theme/theme_registry.h"
 #include "ui/widgets/top_bar.h"
 #include <array>
 #include <string>
@@ -20,20 +21,25 @@ namespace ui
 
 constexpr size_t kTeamMaxMembers = 4;
 constexpr uint8_t kTeamColorUnassigned = 0xFF;
-static constexpr uint32_t kTeamMemberColors[kTeamMaxMembers] = {
-    0xFF3B30, // red
-    0x34C759, // green
-    0x007AFF, // blue
-    0xFFCC00  // yellow
-};
 
-inline uint32_t team_color_from_index(uint8_t index)
+inline ::ui::theme::ColorSlot team_color_slot_from_index(uint8_t index)
 {
-    if (index >= kTeamMaxMembers)
+    switch (index)
     {
-        return kTeamMemberColors[0];
+    case 1:
+        return ::ui::theme::ColorSlot::TeamMember1;
+    case 2:
+        return ::ui::theme::ColorSlot::TeamMember2;
+    case 3:
+        return ::ui::theme::ColorSlot::TeamMember3;
+    default:
+        return ::ui::theme::ColorSlot::TeamMember0;
     }
-    return kTeamMemberColors[index];
+}
+
+inline lv_color_t team_color_from_index(uint8_t index)
+{
+    return ::ui::theme::color(team_color_slot_from_index(index));
 }
 
 inline uint8_t team_color_index_from_node_id(uint32_t node_id)

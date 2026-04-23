@@ -7,7 +7,9 @@
 #include "platform/ui/walkie_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
+#include "ui/presentation/instrument_panel_layout.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
 #include "ui/widgets/top_bar.h"
 
@@ -24,6 +26,7 @@ using Host = walkie_page::ui::shell::Host;
 
 namespace
 {
+namespace instrument_panel_layout = ::ui::presentation::instrument_panel_layout;
 
 const Host* s_host = nullptr;
 lv_obj_t* s_root = nullptr;
@@ -183,18 +186,20 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         s_root = nullptr;
     }
 
-    s_root = lv_obj_create(parent);
-    lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(s_root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(s_root, lv_color_hex(0xFFF3DF), 0);
-    lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_root, 0, 0);
-    lv_obj_set_style_pad_all(s_root, 0, 0);
-    lv_obj_set_style_pad_row(s_root, 0, 0);
-    lv_obj_clear_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
+    instrument_panel_layout::RootSpec root_spec{};
+    instrument_panel_layout::HeaderSpec header_spec{};
+    instrument_panel_layout::BodySpec body_spec{};
+    body_spec.flow = LV_FLEX_FLOW_COLUMN;
+    instrument_panel_layout::RegionSpec surface_spec{};
+    surface_spec.width = LV_PCT(100);
+    surface_spec.height = LV_PCT(100);
+    surface_spec.grow = true;
+
+    s_root = instrument_panel_layout::create_root(parent, root_spec);
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
-    ::ui::widgets::top_bar_init(s_top_bar, s_root);
+    lv_obj_t* header = instrument_panel_layout::create_header_container(s_root, header_spec);
+    ::ui::widgets::top_bar_init(s_top_bar, header);
     ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("Walkie Talkie"));
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
     if (s_top_bar.back_btn)
@@ -215,13 +220,8 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         set_default_group(prev_group);
     }
 
-    lv_obj_t* content = lv_obj_create(s_root);
-    lv_obj_set_size(content, LV_PCT(100), 0);
-    lv_obj_set_flex_grow(content, 1);
-    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(content, 0, 0);
-    lv_obj_set_style_pad_all(content, 0, 0);
-    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* body = instrument_panel_layout::create_body(s_root, body_spec);
+    lv_obj_t* content = instrument_panel_layout::create_canvas_region(body, surface_spec);
 
     lv_obj_t* stack = lv_obj_create(content);
     lv_obj_set_size(stack, LV_PCT(100), LV_SIZE_CONTENT);
@@ -237,16 +237,19 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_freq_label = lv_label_create(stack);
     ::ui::i18n::set_label_text_raw(s_freq_label, "--.- MHz");
     lv_obj_set_style_text_font(s_freq_label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(s_freq_label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_align(s_freq_label, LV_TEXT_ALIGN_CENTER, 0);
 
     s_mod_label = lv_label_create(stack);
     ::ui::i18n::set_label_text(s_mod_label, "FSK Voice");
     lv_obj_set_style_text_font(s_mod_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_mod_label, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_align(s_mod_label, LV_TEXT_ALIGN_CENTER, 0);
 
     s_mode_label = lv_label_create(stack);
     ::ui::i18n::set_label_text(s_mode_label, "LISTEN");
     lv_obj_set_style_text_font(s_mode_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(s_mode_label, ::ui::theme::text(), 0);
     lv_obj_set_style_text_align(s_mode_label, LV_TEXT_ALIGN_CENTER, 0);
 
     lv_obj_t* vu_left = lv_obj_create(content);
@@ -254,7 +257,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_align(vu_left, LV_ALIGN_LEFT_MID, 16, 0);
     lv_obj_set_style_bg_opa(vu_left, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(vu_left, 1, 0);
-    lv_obj_set_style_border_color(vu_left, lv_color_hex(0xD9B06A), 0);
+    lv_obj_set_style_border_color(vu_left, ::ui::theme::border_strong(), 0);
     lv_obj_set_style_pad_all(vu_left, 0, 0);
     lv_obj_clear_flag(vu_left, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -262,7 +265,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_set_width(s_left_fill, LV_PCT(100));
     lv_obj_set_height(s_left_fill, 0);
     lv_obj_align(s_left_fill, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_bg_color(s_left_fill, lv_color_hex(0x5BAF4A), 0);
+    lv_obj_set_style_bg_color(s_left_fill, ::ui::theme::status_green(), 0);
     lv_obj_set_style_border_width(s_left_fill, 0, 0);
     lv_obj_clear_flag(s_left_fill, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -271,7 +274,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_align(vu_right, LV_ALIGN_RIGHT_MID, -16, 0);
     lv_obj_set_style_bg_opa(vu_right, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(vu_right, 1, 0);
-    lv_obj_set_style_border_color(vu_right, lv_color_hex(0xD9B06A), 0);
+    lv_obj_set_style_border_color(vu_right, ::ui::theme::border_strong(), 0);
     lv_obj_set_style_pad_all(vu_right, 0, 0);
     lv_obj_clear_flag(vu_right, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -279,7 +282,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_set_width(s_right_fill, LV_PCT(100));
     lv_obj_set_height(s_right_fill, 0);
     lv_obj_align(s_right_fill, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_bg_color(s_right_fill, lv_color_hex(0x5BAF4A), 0);
+    lv_obj_set_style_bg_color(s_right_fill, ::ui::theme::status_green(), 0);
     lv_obj_set_style_border_width(s_right_fill, 0, 0);
     lv_obj_clear_flag(s_right_fill, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -298,16 +301,17 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_volume_label = lv_label_create(vol_container);
     ::ui::i18n::set_label_text(s_volume_label, "VOL 80");
     lv_obj_set_style_text_font(s_volume_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_volume_label, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_align(s_volume_label, LV_TEXT_ALIGN_CENTER, 0);
 
     s_volume_bar = lv_bar_create(vol_container);
     lv_obj_set_size(s_volume_bar, kVolumeBarWidth, kVolumeBarHeight);
     lv_bar_set_range(s_volume_bar, 0, 100);
     lv_bar_set_value(s_volume_bar, platform::ui::walkie::volume(), LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(s_volume_bar, lv_color_hex(0xFFF0D3), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_volume_bar, ::ui::theme::surface_alt(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(s_volume_bar, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(s_volume_bar, 4, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_volume_bar, lv_color_hex(0x5BAF4A), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_volume_bar, ::ui::theme::status_green(), LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(s_volume_bar, LV_OPA_COVER, LV_PART_INDICATOR);
     lv_obj_set_style_radius(s_volume_bar, 4, LV_PART_INDICATOR);
 

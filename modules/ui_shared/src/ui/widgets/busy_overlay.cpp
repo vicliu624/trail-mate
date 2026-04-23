@@ -5,6 +5,7 @@
 #include "lvgl.h"
 #include "platform/ui/screen_runtime.h"
 #include "ui/page/page_profile.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_theme.h"
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
@@ -23,7 +24,6 @@ constexpr lv_coord_t kRequestedWidth = 220;
 constexpr lv_coord_t kRequestedHeight = 118;
 constexpr lv_coord_t kBarHeight = 8;
 constexpr lv_coord_t kBarRadius = 4;
-constexpr uint32_t kOverlayBgColor = 0x1B1208;
 constexpr uint32_t kAnimTimeMs = 820;
 
 lv_obj_t* s_root = nullptr;
@@ -150,7 +150,7 @@ void ensure_overlay()
     s_root = lv_obj_create(parent);
     lv_obj_remove_style_all(s_root);
     lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(s_root, lv_color_hex(kOverlayBgColor), 0);
+    lv_obj_set_style_bg_color(s_root, ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim), 0);
     lv_obj_set_style_bg_opa(s_root, LV_OPA_50, 0);
     lv_obj_set_style_border_width(s_root, 0, 0);
     lv_obj_clear_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
@@ -159,6 +159,12 @@ void ensure_overlay()
 
     const auto size = ::ui::page_profile::resolve_modal_size(kRequestedWidth, kRequestedHeight, s_root);
     const lv_coord_t pad = ::ui::page_profile::resolve_modal_pad();
+    ::ui::theme::ComponentProfile panel_profile{};
+    ::ui::theme::ComponentProfile bar_profile{};
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::BusyOverlayPanel,
+                                                 panel_profile);
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::BusyOverlayProgressBar,
+                                                 bar_profile);
 
     s_panel = lv_obj_create(s_root);
     lv_obj_set_size(s_panel, size.width, size.height);
@@ -175,6 +181,7 @@ void ensure_overlay()
     lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_panel, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_panel, swallow_event_cb, LV_EVENT_ALL, nullptr);
+    ::ui::theme::apply_component_profile_to_obj(s_panel, panel_profile);
 
     s_title_label = lv_label_create(s_panel);
     lv_obj_set_width(s_title_label, LV_PCT(100));
@@ -198,8 +205,12 @@ void ensure_overlay()
     lv_obj_set_style_bg_opa(s_bar, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(s_bar, 0, LV_PART_MAIN);
     lv_obj_set_style_radius(s_bar, kBarRadius, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(s_bar, ::ui::theme::accent(), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_bar,
+                              bar_profile.accent_color.present ? bar_profile.accent_color.value
+                                                               : ::ui::theme::accent(),
+                              LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(s_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    ::ui::theme::apply_component_profile_to_obj(s_bar, bar_profile, LV_PART_MAIN);
 
     start_bar_animation();
     lv_obj_move_foreground(s_root);

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -77,6 +79,81 @@ def resolve_executable(candidate: str, fallback: str | None = None) -> str:
     raise FileNotFoundError(f"unable to resolve executable: {candidate}")
 
 
+def list_discovered_executables(name: str) -> list[str]:
+    discovered: list[str] = []
+    direct = shutil.which(name)
+    if direct:
+        discovered.append(str(Path(direct).resolve()))
+
+    if os.name == "nt":
+        try:
+            result = subprocess.run(
+                ["where.exe", name],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            for raw_line in result.stdout.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                path = Path(line)
+                if path.exists():
+                    discovered.append(str(path.resolve()))
+        except OSError:
+            pass
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in discovered:
+        normalized = os.path.normcase(item)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(item)
+    return unique
+
+
+def parse_version_tuple(text: str) -> tuple[int, ...]:
+    match = re.search(r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?", text.strip())
+    if not match:
+        return ()
+    parts = [int(group) for group in match.groups(default="0")]
+    return tuple(parts)
+
+
+def node_version_tuple(node_exe: str) -> tuple[int, ...]:
+    try:
+        result = subprocess.run(
+            [node_exe, "--version"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    return parse_version_tuple(result.stdout)
+
+
+def resolve_node_executable(candidate: str) -> str:
+    candidate_path = Path(candidate)
+    if candidate_path.exists() or any(sep in candidate for sep in ("\\", "/", ":")):
+        return resolve_executable(candidate)
+
+    candidates = list_discovered_executables(candidate)
+    if not candidates:
+        return resolve_executable(candidate)
+
+    ranked = sorted(
+        ((node_version_tuple(path), path) for path in candidates),
+        key=lambda item: (item[0], item[1]),
+        reverse=True,
+    )
+    return ranked[0][1]
+
+
 def infer_npm_from_node(node_exe: str) -> str | None:
     node_path = Path(node_exe)
     sibling = node_path.with_name("npm.cmd")
@@ -103,7 +180,7 @@ def main() -> int:
     parser.add_argument("--no-kerning", action="store_true", help="Disable kerning generation")
     args = parser.parse_args()
 
-    node_exe = resolve_executable(args.node_exe)
+    node_exe = resolve_node_executable(args.node_exe)
     npm_hint = args.npm_exe or infer_npm_from_node(node_exe) or "npm"
     npm_exe = resolve_executable(npm_hint)
 

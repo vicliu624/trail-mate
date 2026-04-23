@@ -14,6 +14,7 @@
 #include "ui/runtime/memory_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/support/lvgl_fs_utils.h"
+#include "ui/ui_theme.h"
 
 #include <algorithm>
 #include <cmath>
@@ -797,10 +798,10 @@ static void style_tile_obj(lv_obj_t* o)
 static void style_placeholder_card(lv_obj_t* card)
 {
     style_tile_obj(card);
-    lv_obj_set_style_bg_color(card, lv_color_hex(0xFFF9F3), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(card, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(card, LV_OPA_60, LV_PART_MAIN);
     lv_obj_set_style_border_width(card, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(card, lv_color_hex(0xEADFCF), LV_PART_MAIN);
+    lv_obj_set_style_border_color(card, ::ui::theme::border(), LV_PART_MAIN);
     lv_obj_set_style_border_opa(card, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_radius(card, 4, LV_PART_MAIN);
     lv_obj_set_style_pad_all(card, 4, LV_PART_MAIN);
@@ -809,7 +810,7 @@ static void style_placeholder_card(lv_obj_t* card)
 
 static void style_placeholder_text(lv_obj_t* label)
 {
-    lv_obj_set_style_text_color(label, lv_color_hex(0x8A7A68), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, ::ui::theme::text_muted(), LV_PART_MAIN);
     lv_obj_set_style_text_opa(label, LV_OPA_70, LV_PART_MAIN);
     lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);

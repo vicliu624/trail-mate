@@ -8,6 +8,7 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/ui_theme.h"
 
 #include <algorithm>
 #include <cctype>
@@ -112,7 +113,7 @@ void set_button_label(lv_obj_t* button, const char* text)
     {
         label = lv_label_create(button);
     }
-    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(label, ::ui::theme::text(), 0);
     ::ui::i18n::set_content_label_text_raw(label, text ? text : "");
     lv_obj_center(label);
 }
@@ -123,10 +124,14 @@ void apply_candidate_button_style(lv_obj_t* button, bool active)
     {
         return;
     }
-    lv_obj_set_style_bg_color(button, active ? lv_color_hex(0xEBA341) : lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(button,
+                              active ? ::ui::theme::accent() : ::ui::theme::surface(),
+                              LV_PART_MAIN);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(button, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(button, active ? lv_color_hex(0xC98118) : lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(button,
+                                  active ? ::ui::theme::accent_strong() : ::ui::theme::border_strong(),
+                                  LV_PART_MAIN);
     lv_obj_set_style_radius(button, 8, LV_PART_MAIN);
     lv_obj_set_style_outline_width(button, 0, static_cast<lv_style_selector_t>(static_cast<unsigned>(LV_PART_MAIN) | static_cast<unsigned>(LV_STATE_FOCUSED)));
 }
@@ -257,7 +262,7 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
     lv_obj_set_style_pad_left(container_, 4, 0);
     lv_obj_set_style_pad_right(container_, 4, 0);
     lv_obj_set_style_pad_column(container_, 4, 0);
-    lv_obj_set_style_bg_color(container_, lv_color_hex(0xFFF0D3), 0);
+    lv_obj_set_style_bg_color(container_, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_clear_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
@@ -265,16 +270,16 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
     toggle_btn_ = lv_btn_create(container_);
     lv_obj_set_size(toggle_btn_, 42, kCompactImeControlHeight);
     lv_obj_set_style_radius(toggle_btn_, 4, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(toggle_btn_, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(toggle_btn_, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(toggle_btn_, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(toggle_btn_, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(toggle_btn_, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(toggle_btn_, ::ui::theme::border_strong(), LV_PART_MAIN);
     lv_obj_add_event_cb(toggle_btn_, on_toggle_clicked, LV_EVENT_CLICKED, this);
 
     toggle_label_ = lv_label_create(toggle_btn_);
     lv_label_set_text(toggle_label_, "EN");
     lv_obj_set_style_text_font(toggle_label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
-    lv_obj_set_style_text_color(toggle_label_, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(toggle_label_, ::ui::theme::text(), 0);
     lv_obj_center(toggle_label_);
 
     focus_proxy_ = lv_btn_create(container_);
@@ -295,7 +300,7 @@ void ImeWidget::init_compact_ui(lv_obj_t* parent)
     set_candidates_label_text(candidates_label_, "");
     lv_obj_set_width(candidates_label_, 0);
     lv_obj_set_height(candidates_label_, kCompactImeControlHeight);
-    lv_obj_set_style_text_color(candidates_label_, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(candidates_label_, ::ui::theme::text(), 0);
     lv_obj_set_style_text_line_space(candidates_label_, 0, 0);
     lv_obj_set_flex_grow(candidates_label_, 1);
     lv_label_set_long_mode(candidates_label_, LV_LABEL_LONG_CLIP);
@@ -325,26 +330,26 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     lv_obj_set_style_pad_left(top_row_, 8, 0);
     lv_obj_set_style_pad_right(top_row_, 8, 0);
     lv_obj_set_style_pad_column(top_row_, 10, 0);
-    lv_obj_set_style_bg_color(top_row_, lv_color_hex(0xFFF0D3), 0);
+    lv_obj_set_style_bg_color(top_row_, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(top_row_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(top_row_, 1, 0);
-    lv_obj_set_style_border_color(top_row_, lv_color_hex(0xE7C98F), 0);
+    lv_obj_set_style_border_color(top_row_, ::ui::theme::separator(), 0);
     lv_obj_set_style_radius(top_row_, 10, 0);
     lv_obj_clear_flag(top_row_, LV_OBJ_FLAG_SCROLLABLE);
 
     toggle_btn_ = lv_btn_create(top_row_);
     lv_obj_set_size(toggle_btn_, profile.ime_toggle_width, std::max(profile.ime_toggle_height, profile.ime_bar_height - 8));
     lv_obj_set_style_radius(toggle_btn_, 8, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(toggle_btn_, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(toggle_btn_, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(toggle_btn_, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(toggle_btn_, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(toggle_btn_, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(toggle_btn_, ::ui::theme::border_strong(), LV_PART_MAIN);
     lv_obj_add_event_cb(toggle_btn_, on_toggle_clicked, LV_EVENT_CLICKED, this);
 
     toggle_label_ = lv_label_create(toggle_btn_);
     lv_label_set_text(toggle_label_, "EN");
     lv_obj_set_style_text_font(toggle_label_, ::ui::fonts::ui_chrome_font(), 0);
-    lv_obj_set_style_text_color(toggle_label_, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(toggle_label_, ::ui::theme::text(), 0);
     lv_obj_center(toggle_label_);
 
     focus_proxy_ = lv_btn_create(top_row_);
@@ -365,7 +370,7 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     set_candidates_label_text(candidates_label_, ::ui::i18n::tr("English keyboard"));
     lv_obj_set_flex_grow(candidates_label_, 1);
     lv_obj_set_style_text_align(candidates_label_, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(candidates_label_, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_color(candidates_label_, ::ui::theme::text_muted(), 0);
 
     candidate_row_ = lv_obj_create(container_);
     lv_obj_set_size(candidate_row_, LV_PCT(100), profile.ime_candidate_button_height);
@@ -404,19 +409,19 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     keyboard_matrix_ = lv_btnmatrix_create(container_);
     lv_obj_set_size(keyboard_matrix_, LV_PCT(100), profile.ime_keyboard_height);
     lv_obj_set_style_radius(keyboard_matrix_, 10, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(keyboard_matrix_, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(keyboard_matrix_, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(keyboard_matrix_, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(keyboard_matrix_, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(keyboard_matrix_, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(keyboard_matrix_, ::ui::theme::border_strong(), LV_PART_MAIN);
     lv_obj_set_style_pad_all(keyboard_matrix_, 6, LV_PART_MAIN);
     lv_obj_set_style_pad_row(keyboard_matrix_, 6, LV_PART_ITEMS);
     lv_obj_set_style_pad_column(keyboard_matrix_, 6, LV_PART_ITEMS);
     lv_obj_set_style_text_font(keyboard_matrix_, ::ui::fonts::ui_chrome_font(), LV_PART_ITEMS);
-    lv_obj_set_style_text_color(keyboard_matrix_, lv_color_hex(0x3A2A1A), LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(keyboard_matrix_, lv_color_hex(0xFFF7E9), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(keyboard_matrix_, ::ui::theme::text(), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(keyboard_matrix_, ::ui::theme::surface(), LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(keyboard_matrix_, LV_OPA_COVER, LV_PART_ITEMS);
     lv_obj_set_style_border_width(keyboard_matrix_, 1, LV_PART_ITEMS);
-    lv_obj_set_style_border_color(keyboard_matrix_, lv_color_hex(0xD9B06A), LV_PART_ITEMS);
+    lv_obj_set_style_border_color(keyboard_matrix_, ::ui::theme::border_strong(), LV_PART_ITEMS);
     lv_obj_set_style_radius(keyboard_matrix_, 8, LV_PART_ITEMS);
     lv_obj_clear_flag(keyboard_matrix_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(keyboard_matrix_, on_touch_key_event, LV_EVENT_VALUE_CHANGED, this);

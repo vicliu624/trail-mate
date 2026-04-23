@@ -9,6 +9,7 @@
 #include "ui/screens/gps/gps_page_styles.h"
 #include "ui/screens/gps/gps_state.h"
 #include "ui/support/lvgl_fs_utils.h"
+#include "ui/ui_theme.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
 
@@ -30,7 +31,6 @@ using gps::ui::lifetime::is_alive;
 constexpr double kMinDistanceM = 2.0;
 constexpr int kMaxDrawPoints = 150;
 constexpr int kDefaultTrackerZoom = 16;
-constexpr uint32_t kTrackColor = 0xFF2D55;
 std::vector<std::string> s_modal_names;
 
 double deg2rad(double deg)
@@ -638,7 +638,7 @@ void gps_tracker_draw_event(lv_event_t* e)
 
     lv_draw_rect_dsc_t dot_dsc;
     lv_draw_rect_dsc_init(&dot_dsc);
-    dot_dsc.bg_color = lv_color_hex(kTrackColor);
+    dot_dsc.bg_color = ::ui::theme::map_track();
     dot_dsc.radius = LV_RADIUS_CIRCLE;
     dot_dsc.border_width = 0;
 

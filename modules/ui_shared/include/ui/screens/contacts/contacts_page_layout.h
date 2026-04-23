@@ -21,12 +21,12 @@ void create_footer(lv_obj_t* root);
 lv_obj_t* create_content(lv_obj_t* root);
 
 /**
- * Create the left filter column.
+ * Create the selector-side panel for the directory browser scaffold.
  */
 void create_filter_panel(lv_obj_t* parent);
 
 /**
- * Create the main list column.
+ * Create the main content-side panel for the directory browser scaffold.
  */
 void create_list_panel(lv_obj_t* parent);
 

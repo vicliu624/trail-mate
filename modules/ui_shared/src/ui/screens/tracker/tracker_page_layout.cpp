@@ -1,12 +1,14 @@
 /**
- * Tracker layout aligned with contacts_page:
- * Root(COL) -> Header + Content(ROW)
- * Content -> Filter Panel | List Panel
- * List Panel -> Status Label + List Container + Bottom Bar
+ * Tracker directory-browser layout:
+ * Root(COL) -> Header + Body(ROW)
+ * Body -> Selector Panel | Content Panel
+ * Content Panel -> Status Label + List Container + Bottom Bar
  */
 
 #include "ui/screens/tracker/tracker_page_layout.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/directory_browser_layout.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/top_bar.h"
 
 namespace tracker
@@ -35,8 +37,7 @@ lv_coord_t panel_pad()
 
 inline void make_non_scrollable(lv_obj_t* obj)
 {
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
+    ::ui::presentation::directory_browser_layout::make_non_scrollable(obj);
 }
 
 inline void apply_base_container_style(lv_obj_t* obj)
@@ -51,79 +52,60 @@ inline void apply_base_container_style(lv_obj_t* obj)
 lv_obj_t* create_root(lv_obj_t* parent)
 {
     const auto& profile = page_profile();
-    lv_obj_t* root = lv_obj_create(parent);
-    lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(root, profile.top_content_gap, 0);
-    lv_obj_set_style_pad_all(root, 0, 0);
-    lv_obj_set_style_bg_opa(root, LV_OPA_TRANSP, 0);
-    apply_base_container_style(root);
-    return root;
+    ::ui::presentation::directory_browser_layout::RootSpec spec;
+    spec.pad_row = profile.top_content_gap;
+    return ::ui::presentation::directory_browser_layout::create_root(parent, spec);
 }
 
 lv_obj_t* create_header(lv_obj_t* root)
 {
     const auto& profile = page_profile();
-    lv_obj_t* header = lv_obj_create(root);
-    lv_obj_set_size(header, LV_PCT(100), profile.top_bar_height);
-    lv_obj_set_style_bg_color(header, lv_color_hex(0xF6E6C6), 0);
-    lv_obj_set_style_pad_all(header, 0, 0);
-    apply_base_container_style(header);
-    return header;
+    ::ui::presentation::directory_browser_layout::HeaderSpec spec;
+    spec.height = profile.top_bar_height;
+    spec.bg_hex = lv_color_to_u32(::ui::theme::page_bg());
+    spec.pad_all = 0;
+    return ::ui::presentation::directory_browser_layout::create_header_container(root, spec);
 }
 
 lv_obj_t* create_content(lv_obj_t* root)
 {
     const auto& profile = page_profile();
-    lv_obj_t* content = lv_obj_create(root);
-    lv_obj_set_width(content, LV_PCT(100));
-    lv_obj_set_height(content, 0);
-    lv_obj_set_flex_grow(content, 1);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_left(content, profile.content_pad_left, 0);
-    lv_obj_set_style_pad_right(content, profile.content_pad_right, 0);
-    lv_obj_set_style_pad_top(content, profile.content_pad_top, 0);
-    lv_obj_set_style_pad_bottom(content, profile.content_pad_bottom, 0);
-    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
-    apply_base_container_style(content);
-    return content;
+    ::ui::presentation::directory_browser_layout::BodySpec spec;
+    spec.pad_left = profile.content_pad_left;
+    spec.pad_right = profile.content_pad_right;
+    spec.pad_top = profile.content_pad_top;
+    spec.pad_bottom = profile.content_pad_bottom;
+    return ::ui::presentation::directory_browser_layout::create_body(root, spec);
 }
 
 lv_obj_t* create_filter_panel(lv_obj_t* content, int width)
 {
     const auto& profile = page_profile();
-    lv_obj_t* panel = lv_obj_create(content);
-    lv_obj_set_width(panel, width);
-    lv_obj_set_height(panel, LV_PCT(100));
-    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(panel, panel_pad(), LV_PART_MAIN);
-    lv_obj_set_style_pad_row(panel, profile.filter_panel_pad_row, LV_PART_MAIN);
-    lv_obj_set_style_margin_left(panel, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_right(panel, panel_gap(), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0xF6E6C6), 0);
-    apply_base_container_style(panel);
-    return panel;
+    ::ui::presentation::directory_browser_layout::SelectorPanelSpec spec;
+    spec.width = width;
+    spec.pad_all = panel_pad();
+    spec.pad_row = profile.filter_panel_pad_row;
+    spec.margin_left = 0;
+    spec.margin_right = panel_gap();
+    spec.bg_opa = LV_OPA_COVER;
+    spec.bg_hex = lv_color_to_u32(::ui::theme::surface_alt());
+    return ::ui::presentation::directory_browser_layout::create_selector_panel(content, spec);
 }
 
 lv_obj_t* create_list_panel(lv_obj_t* content)
 {
     const auto& profile = page_profile();
-    lv_obj_t* panel = lv_obj_create(content);
-    lv_obj_set_height(panel, LV_PCT(100));
-    lv_obj_set_width(panel, 0);
-    lv_obj_set_flex_grow(panel, 1);
-    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_left(panel, profile.list_panel_pad_left, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(panel, profile.list_panel_pad_right, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(panel, panel_pad(), LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(panel, panel_pad(), LV_PART_MAIN);
-    lv_obj_set_style_pad_row(panel, profile.list_panel_pad_row, LV_PART_MAIN);
-    lv_obj_set_style_margin_left(panel, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_right(panel, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0xFAF0D8), 0);
-    apply_base_container_style(panel);
-    return panel;
+    ::ui::presentation::directory_browser_layout::ContentPanelSpec spec;
+    spec.pad_left = profile.list_panel_pad_left;
+    spec.pad_right = profile.list_panel_pad_right;
+    spec.pad_top = panel_pad();
+    spec.pad_bottom = panel_pad();
+    spec.pad_row = profile.list_panel_pad_row;
+    spec.margin_left = 0;
+    spec.margin_right = 0;
+    spec.bg_opa = LV_OPA_COVER;
+    spec.bg_hex = lv_color_to_u32(::ui::theme::surface());
+    return ::ui::presentation::directory_browser_layout::create_content_panel(content, spec);
 }
 
 lv_obj_t* create_list_container(lv_obj_t* list_panel)
@@ -139,7 +121,7 @@ lv_obj_t* create_list_container(lv_obj_t* list_panel)
     lv_obj_set_style_pad_right(container, profile.list_panel_pad_right, LV_PART_MAIN);
     lv_obj_set_style_pad_top(container, panel_pad(), LV_PART_MAIN);
     lv_obj_set_style_pad_bottom(container, panel_pad(), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(container, lv_color_hex(0xFAF0D8), 0);
+    lv_obj_set_style_bg_color(container, ::ui::theme::surface(), 0);
     apply_base_container_style(container);
     return container;
 }
@@ -158,7 +140,7 @@ lv_obj_t* create_bottom_bar(lv_obj_t* list_panel)
     lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_EVENLY,
                           LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0xFAF0D8), 0);
+    lv_obj_set_style_bg_color(bar, ::ui::theme::surface(), 0);
     apply_base_container_style(bar);
     return bar;
 }

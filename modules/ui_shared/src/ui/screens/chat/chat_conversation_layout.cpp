@@ -42,127 +42,62 @@
  */
 
 #include "ui/screens/chat/chat_conversation_layout.h"
+#include "ui/presentation/chat_thread_layout.h"
 
 namespace chat::ui::layout
 {
-
-static void make_non_scrollable(lv_obj_t* obj)
-{
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
-}
+namespace thread_layout = ::ui::presentation::chat_thread_layout;
 
 ConversationWidgets create_conversation_base(lv_obj_t* parent)
 {
     ConversationWidgets w{};
 
-    // Root container (full screen, column)
-    w.root = lv_obj_create(parent);
-    lv_obj_set_size(w.root, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(w.root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(w.root, 0, 0);
-    make_non_scrollable(w.root);
-
-    // Msg list (scrollable, grow=1)
-    w.msg_list = lv_obj_create(w.root);
-    lv_obj_set_width(w.msg_list, LV_PCT(100));
-    lv_obj_set_flex_grow(w.msg_list, 1);
-    lv_obj_set_flex_flow(w.msg_list, LV_FLEX_FLOW_COLUMN);
-
-    // Allow vertical scroll only
-    lv_obj_set_scroll_dir(w.msg_list, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(w.msg_list, LV_SCROLLBAR_MODE_OFF);
-
-    // Action bar (fixed height)
-    w.action_bar = lv_obj_create(w.root);
-    lv_obj_set_size(w.action_bar, LV_PCT(100), 30);
-    lv_obj_set_flex_grow(w.action_bar, 0);
-    lv_obj_set_flex_flow(w.action_bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(w.action_bar,
-                          LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    make_non_scrollable(w.action_bar);
-
-    // Reply button
-    w.reply_btn = lv_btn_create(w.action_bar);
-    lv_obj_set_size(w.reply_btn, 120, 28);
-    make_non_scrollable(w.reply_btn);
-
-    w.reply_label = lv_label_create(w.reply_btn);
-    lv_obj_center(w.reply_label);
+    w.root = thread_layout::create_root(parent);
+    w.msg_list = thread_layout::create_thread_region(w.root);
+    w.action_bar = thread_layout::create_action_bar(w.root);
+    w.reply_btn = thread_layout::create_action_button(w.action_bar, w.reply_label);
 
     return w;
 }
 
 lv_obj_t* create_message_row(lv_obj_t* msg_list_parent)
 {
-    lv_obj_t* row = lv_obj_create(msg_list_parent);
-    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    make_non_scrollable(row);
-    return row;
+    return thread_layout::create_thread_row(msg_list_parent);
 }
 
 lv_obj_t* create_bubble(lv_obj_t* row_parent)
 {
-    lv_obj_t* bubble = lv_obj_create(row_parent);
-    lv_obj_set_flex_flow(bubble, LV_FLEX_FLOW_COLUMN);
-    lv_obj_clear_flag(bubble, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_width(bubble, LV_SIZE_CONTENT);
-    lv_obj_set_height(bubble, LV_SIZE_CONTENT);
-    lv_obj_set_flex_grow(bubble, 0);
-    return bubble;
+    return thread_layout::create_bubble(row_parent);
 }
 
 lv_obj_t* create_bubble_text(lv_obj_t* bubble_parent)
 {
-    lv_obj_t* label = lv_label_create(bubble_parent);
-    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(label, LV_SIZE_CONTENT);
-    return label;
+    return thread_layout::create_bubble_text(bubble_parent);
 }
 
 lv_obj_t* create_bubble_time(lv_obj_t* bubble_parent)
 {
-    lv_obj_t* label = lv_label_create(bubble_parent);
-    lv_obj_set_width(label, LV_SIZE_CONTENT);
-    return label;
+    return thread_layout::create_bubble_time(bubble_parent);
 }
 
 lv_obj_t* create_bubble_status(lv_obj_t* bubble_parent)
 {
-    lv_obj_t* label = lv_label_create(bubble_parent);
-    lv_obj_set_width(label, LV_SIZE_CONTENT);
-    return label;
+    return thread_layout::create_bubble_status(bubble_parent);
 }
 
 void align_message_row(lv_obj_t* row, bool is_self)
 {
-    // Match original behavior:
-    // self -> row aligns to END, other -> START
-    if (is_self)
-    {
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_END,
-                              LV_FLEX_ALIGN_CENTER,
-                              LV_FLEX_ALIGN_CENTER);
-    }
-    else
-    {
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START,
-                              LV_FLEX_ALIGN_CENTER,
-                              LV_FLEX_ALIGN_CENTER);
-    }
+    thread_layout::align_thread_row(row, is_self);
 }
 
 void set_bubble_max_width(lv_obj_t* bubble, lv_coord_t max_w)
 {
-    lv_obj_set_style_max_width(bubble, max_w, LV_PART_MAIN);
+    thread_layout::set_bubble_max_width(bubble, max_w);
 }
 
 lv_coord_t get_msg_list_content_width(lv_obj_t* msg_list)
 {
-    return lv_obj_get_content_width(msg_list);
+    return thread_layout::thread_content_width(msg_list);
 }
 
 } // namespace chat::ui::layout

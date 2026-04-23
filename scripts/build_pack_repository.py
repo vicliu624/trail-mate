@@ -16,13 +16,13 @@ PACKAGE_SCHEMA_VERSION = 1
 ARCHIVE_LAYOUT = "trailmate-pack-v1"
 FIXED_ZIP_DT = (2026, 1, 1, 0, 0, 0)
 TOP_LEVEL_PACKAGE_FILES = ("package.ini", "DESCRIPTION.txt", "README.md")
-PAYLOAD_GROUPS = ("fonts", "locales", "ime")
+PAYLOAD_GROUPS = ("fonts", "locales", "ime", "themes", "presentations")
 PACKAGE_EXCLUDE_NAMES = {".gitignore", "build.ini", "charset.txt"}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build installable locale-pack zip archives and a package catalog for GitHub Pages."
+        description="Build installable Trail Mate pack zip archives and a package catalog for GitHub Pages."
     )
     parser.add_argument("--pack-root", default="packs", help="Repository pack source root")
     parser.add_argument("--site-root", default="site", help="Pages site root")
@@ -365,6 +365,42 @@ def collect_ime_records(stage_bundle_dir: Path) -> list[dict[str, object]]:
     return records
 
 
+def collect_theme_records(stage_bundle_dir: Path) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    themes_root = stage_bundle_dir / "themes"
+    if not themes_root.is_dir():
+        return records
+
+    for manifest_path in sorted(themes_root.glob("*/manifest.ini")):
+        manifest = parse_key_value_file(manifest_path)
+        records.append(
+            {
+                "id": manifest.get("id", manifest_path.parent.name),
+                "display_name": manifest.get("display_name", manifest_path.parent.name),
+                "base_theme": manifest.get("base_theme", ""),
+            }
+        )
+    return records
+
+
+def collect_presentation_records(stage_bundle_dir: Path) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    presentations_root = stage_bundle_dir / "presentations"
+    if not presentations_root.is_dir():
+        return records
+
+    for manifest_path in sorted(presentations_root.glob("*/manifest.ini")):
+        manifest = parse_key_value_file(manifest_path)
+        records.append(
+            {
+                "id": manifest.get("id", manifest_path.parent.name),
+                "display_name": manifest.get("display_name", manifest_path.parent.name),
+                "base_presentation": manifest.get("base_presentation", ""),
+            }
+        )
+    return records
+
+
 def build_package_entry(
     stage_bundle_dir: Path,
     package_manifest: dict[str, str],
@@ -374,6 +410,8 @@ def build_package_entry(
     fonts = collect_font_records(stage_bundle_dir)
     locales = collect_locale_records(stage_bundle_dir)
     ime = collect_ime_records(stage_bundle_dir)
+    themes = collect_theme_records(stage_bundle_dir)
+    presentations = collect_presentation_records(stage_bundle_dir)
 
     description_text = read_package_text(stage_bundle_dir, package_manifest.get("description"))
     readme_path = package_manifest.get("readme")
@@ -395,6 +433,8 @@ def build_package_entry(
             "locales": locales,
             "fonts": fonts,
             "ime": ime,
+            "themes": themes,
+            "presentations": presentations,
         },
         "runtime": {
             "estimated_unique_font_ram_bytes": sum(
@@ -403,6 +443,8 @@ def build_package_entry(
             "locale_count": len(locales),
             "font_count": len(fonts),
             "ime_count": len(ime),
+            "theme_count": len(themes),
+            "presentation_count": len(presentations),
         },
         "archive": {
             "layout": ARCHIVE_LAYOUT,
@@ -420,9 +462,17 @@ def build_package_entry(
 
 def discover_source_bundles(pack_root: Path) -> list[Path]:
     bundles: list[Path] = []
-    for candidate in sorted(path for path in pack_root.iterdir() if path.is_dir()):
-        if (candidate / "package.ini").is_file():
-            bundles.append(candidate)
+    seen: set[Path] = set()
+    manifests = sorted(
+        pack_root.rglob("package.ini"),
+        key=lambda path: path.relative_to(pack_root).as_posix(),
+    )
+    for manifest in manifests:
+        bundle_root = manifest.parent
+        if bundle_root == pack_root or bundle_root in seen:
+            continue
+        seen.add(bundle_root)
+        bundles.append(bundle_root)
     return bundles
 
 

@@ -70,7 +70,7 @@ void create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h
         recent.rows[i] = lv_obj_create(recent.chrome.body);
         lv_obj_set_size(recent.rows[i], body_w, row_h);
         lv_obj_set_pos(recent.rows[i], 0, static_cast<lv_coord_t>(i * (row_h + gap)));
-        lv_obj_set_style_bg_color(recent.rows[i], i == 0 ? color_soft_amber() : lv_color_hex(0xF6E7C5), 0);
+        lv_obj_set_style_bg_color(recent.rows[i], i == 0 ? color_soft_amber() : color_panel_bg(), 0);
         lv_obj_set_style_bg_opa(recent.rows[i], LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(recent.rows[i], 0, 0);
         lv_obj_set_style_radius(recent.rows[i], 14, 0);

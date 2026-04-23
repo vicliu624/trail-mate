@@ -10,6 +10,7 @@
 
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/page/page_profile.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_theme.h"
 
 #if !defined(LV_FONT_MONTSERRAT_16) || !LV_FONT_MONTSERRAT_16
@@ -78,6 +79,18 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     const lv_coord_t back_btn_radius = std::max<lv_coord_t>(large_touch ? 16 : 10, back_btn_height / 2);
     const lv_coord_t right_label_width = large_touch ? 156 : (resolved_height >= 40 ? 120 : 90);
     const lv_font_t* text_font = resolve_top_bar_font(resolved_height);
+    ::ui::theme::ComponentProfile container_profile{};
+    ::ui::theme::ComponentProfile back_button_profile{};
+    ::ui::theme::ComponentProfile title_label_profile{};
+    ::ui::theme::ComponentProfile right_label_profile{};
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::TopBarContainer,
+                                                 container_profile);
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::TopBarBackButton,
+                                                 back_button_profile);
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::TopBarTitleLabel,
+                                                 title_label_profile);
+    (void)::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::TopBarRightLabel,
+                                                 right_label_profile);
 
     bar.container = lv_obj_create(parent);
     lv_obj_set_size(bar.container, LV_PCT(100), resolved_height);
@@ -95,6 +108,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_obj_set_flex_flow(bar.container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(bar.container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(bar.container, large_touch ? 12 : 6, 0);
+    ::ui::theme::apply_component_profile_to_obj(bar.container, container_profile);
 
     if (config.back_btn_override != nullptr)
     {
@@ -109,14 +123,25 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         lv_obj_set_style_border_width(bar.back_btn, 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(bar.back_btn, ui::theme::border(), LV_PART_MAIN);
         lv_obj_set_style_radius(bar.back_btn, back_btn_radius, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(bar.back_btn, ui::theme::accent(), LV_STATE_FOCUSED);
+        lv_obj_set_style_bg_color(bar.back_btn,
+                                  back_button_profile.accent_color.present
+                                      ? back_button_profile.accent_color.value
+                                      : ui::theme::accent(),
+                                  LV_STATE_FOCUSED);
         lv_obj_set_style_outline_width(bar.back_btn, 0, LV_STATE_FOCUSED);
+        ::ui::theme::apply_component_profile_to_obj(bar.back_btn,
+                                                    back_button_profile,
+                                                    LV_PART_MAIN);
         lv_obj_align(bar.back_btn, LV_ALIGN_LEFT_MID, 0, 0);
         lv_obj_add_event_cb(bar.back_btn, back_event_cb, LV_EVENT_CLICKED, &bar);
         lv_obj_t* back_label = lv_label_create(bar.back_btn);
         lv_label_set_text(back_label, LV_SYMBOL_LEFT);
         lv_obj_center(back_label);
-        lv_obj_set_style_text_color(back_label, ui::theme::text(), 0);
+        lv_obj_set_style_text_color(back_label,
+                                    back_button_profile.text_color.present
+                                        ? back_button_profile.text_color.value
+                                        : ui::theme::text(),
+                                    0);
         lv_obj_set_style_text_font(back_label, text_font, 0);
     }
 
@@ -129,8 +154,16 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         bar.title_label = lv_label_create(bar.container);
         lv_label_set_text(bar.title_label, "");
         lv_label_set_long_mode(bar.title_label, LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_color(bar.title_label, ui::theme::text(), 0);
+        lv_obj_set_style_text_color(bar.title_label,
+                                    title_label_profile.text_color.present
+                                        ? title_label_profile.text_color.value
+                                        : (container_profile.text_color.present
+                                               ? container_profile.text_color.value
+                                               : ui::theme::text()),
+                                    0);
         lv_obj_set_style_bg_opa(bar.title_label, LV_OPA_TRANSP, 0);
+        ::ui::theme::apply_component_profile_to_obj(bar.title_label,
+                                                    title_label_profile);
     }
     lv_obj_set_style_text_font(bar.title_label, text_font, 0);
     lv_obj_set_flex_grow(bar.title_label, 1);
@@ -142,10 +175,18 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_label_set_text(bar.right_label, "");
     lv_obj_set_width(bar.right_label, right_label_width);
     lv_label_set_long_mode(bar.right_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_color(bar.right_label, ui::theme::text_muted(), 0);
+    lv_obj_set_style_text_color(bar.right_label,
+                                right_label_profile.text_color.present
+                                    ? right_label_profile.text_color.value
+                                    : (container_profile.text_color.present
+                                           ? container_profile.text_color.value
+                                           : ui::theme::text_muted()),
+                                0);
     lv_obj_set_style_text_align(bar.right_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_style_text_font(bar.right_label, text_font, 0);
     lv_obj_set_style_bg_opa(bar.right_label, LV_OPA_TRANSP, 0);
+    ::ui::theme::apply_component_profile_to_obj(bar.right_label,
+                                                right_label_profile);
 }
 
 void top_bar_set_title(TopBar& bar, const char* title)

@@ -153,7 +153,7 @@ void create_gps_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
     gps_ui.radar = lv_obj_create(gps_ui.chrome.body);
     lv_obj_set_size(gps_ui.radar, radar_d, radar_d);
     lv_obj_align(gps_ui.radar, LV_ALIGN_LEFT_MID, 2, 0);
-    lv_obj_set_style_bg_color(gps_ui.radar, lv_color_hex(0xF7ECD2), 0);
+    lv_obj_set_style_bg_color(gps_ui.radar, color_panel_bg(), 0);
     lv_obj_set_style_bg_opa(gps_ui.radar, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(gps_ui.radar, 0, 0);
     lv_obj_set_style_radius(gps_ui.radar, LV_RADIUS_CIRCLE, 0);

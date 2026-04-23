@@ -5,6 +5,7 @@
 #include "ui/app_runtime.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 
 #include <memory>
 
@@ -61,7 +62,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
 
     s_chat_container = lv_obj_create(parent);
     lv_obj_set_size(s_chat_container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(s_chat_container, lv_color_hex(0xFFF3DF), 0);
+    lv_obj_set_style_bg_color(s_chat_container, ::ui::theme::page_bg(), 0);
     lv_obj_set_style_bg_opa(s_chat_container, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_chat_container, 0, 0);
     lv_obj_set_style_pad_all(s_chat_container, 0, 0);

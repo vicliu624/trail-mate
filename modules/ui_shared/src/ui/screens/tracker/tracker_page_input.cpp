@@ -1,16 +1,16 @@
 #include "ui/screens/tracker/tracker_page_input.h"
 
-#include "ui/components/two_pane_nav.h"
+#include "ui/presentation/directory_browser_nav.h"
 #include "ui/screens/tracker/tracker_state.h"
 
 namespace
 {
 
-using Adapter = ::ui::components::two_pane_nav::Adapter;
-using BackPlacement = ::ui::components::two_pane_nav::BackPlacement;
-using NavFocusColumn = ::ui::components::two_pane_nav::FocusColumn;
+using Adapter = ::ui::presentation::directory_browser_nav::Adapter;
+using BackPlacement = ::ui::presentation::directory_browser_nav::BackPlacement;
+using NavFocusRegion = ::ui::presentation::directory_browser_nav::FocusRegion;
 
-static ::ui::components::two_pane_nav::Controller s_controller{};
+static ::ui::presentation::directory_browser_nav::Controller s_controller{};
 static constexpr intptr_t kBackListItemUserData = -2;
 static constexpr intptr_t kListUserDataOffset = 1;
 
@@ -31,12 +31,12 @@ static lv_obj_t* get_top_back_button(void* /*ctx*/)
     return tracker::ui::g_tracker_state.top_bar.back_btn;
 }
 
-static size_t get_filter_count(void* /*ctx*/)
+static size_t get_selector_count(void* /*ctx*/)
 {
     return 2;
 }
 
-static lv_obj_t* get_filter_button(void* /*ctx*/, size_t index)
+static lv_obj_t* get_selector_button(void* /*ctx*/, size_t index)
 {
     auto& state = tracker::ui::g_tracker_state;
     switch (index)
@@ -50,7 +50,7 @@ static lv_obj_t* get_filter_button(void* /*ctx*/, size_t index)
     }
 }
 
-static int get_preferred_filter_index(void* /*ctx*/)
+static int get_preferred_selector_index(void* /*ctx*/)
 {
     return tracker::ui::g_tracker_state.mode == tracker::ui::TrackerPageState::Mode::Record ? 0 : 1;
 }
@@ -69,7 +69,7 @@ static bool is_focusable_list_child(lv_obj_t* obj)
     return raw != kBackListItemUserData;
 }
 
-static lv_obj_t* get_list_back_button(void* /*ctx*/)
+static lv_obj_t* get_content_back_button(void* /*ctx*/)
 {
     auto& state = tracker::ui::g_tracker_state;
     if (!state.list_container)
@@ -112,7 +112,7 @@ static bool include_start_stop_button()
     return true;
 }
 
-static size_t get_list_count(void* /*ctx*/)
+static size_t get_content_count(void* /*ctx*/)
 {
     auto& state = tracker::ui::g_tracker_state;
     size_t count = 0;
@@ -134,7 +134,7 @@ static size_t get_list_count(void* /*ctx*/)
     return count;
 }
 
-static lv_obj_t* get_list_button(void* /*ctx*/, size_t index)
+static lv_obj_t* get_content_button(void* /*ctx*/, size_t index)
 {
     auto& state = tracker::ui::g_tracker_state;
     size_t current = 0;
@@ -162,7 +162,7 @@ static lv_obj_t* get_list_button(void* /*ctx*/, size_t index)
     return nullptr;
 }
 
-static int get_preferred_list_index(void* /*ctx*/)
+static int get_preferred_content_index(void* /*ctx*/)
 {
     auto& state = tracker::ui::g_tracker_state;
     if (state.mode == tracker::ui::TrackerPageState::Mode::Record)
@@ -172,7 +172,7 @@ static int get_preferred_list_index(void* /*ctx*/)
     return state.selected_route_idx >= 0 ? state.selected_route_idx : -1;
 }
 
-static bool handle_list_enter(void* /*ctx*/, lv_obj_t* focused)
+static bool handle_content_enter(void* /*ctx*/, lv_obj_t* focused)
 {
     auto& state = tracker::ui::g_tracker_state;
     if (!focused || !lv_obj_is_valid(focused))
@@ -199,10 +199,10 @@ static bool handle_list_enter(void* /*ctx*/, lv_obj_t* focused)
     return false;
 }
 
-static void on_column_changed(void* /*ctx*/, NavFocusColumn column)
+static void on_focus_region_changed(void* /*ctx*/, NavFocusRegion region)
 {
     tracker::ui::g_tracker_state.focus_col =
-        (column == NavFocusColumn::Filter)
+        (region == NavFocusRegion::Selector)
             ? tracker::ui::TrackerPageState::FocusColumn::Mode
             : tracker::ui::TrackerPageState::FocusColumn::Main;
 }
@@ -213,16 +213,16 @@ static Adapter make_adapter()
     adapter.is_alive = is_alive;
     adapter.get_key_target = get_key_target;
     adapter.get_top_back_button = get_top_back_button;
-    adapter.get_filter_count = get_filter_count;
-    adapter.get_filter_button = get_filter_button;
-    adapter.get_preferred_filter_index = get_preferred_filter_index;
-    adapter.get_list_count = get_list_count;
-    adapter.get_list_button = get_list_button;
-    adapter.get_preferred_list_index = get_preferred_list_index;
-    adapter.get_list_back_button = get_list_back_button;
-    adapter.handle_list_enter = handle_list_enter;
-    adapter.on_column_changed = on_column_changed;
-    adapter.filter_top_back_placement = BackPlacement::Trailing;
+    adapter.get_selector_count = get_selector_count;
+    adapter.get_selector_button = get_selector_button;
+    adapter.get_preferred_selector_index = get_preferred_selector_index;
+    adapter.get_content_count = get_content_count;
+    adapter.get_content_button = get_content_button;
+    adapter.get_preferred_content_index = get_preferred_content_index;
+    adapter.get_content_back_button = get_content_back_button;
+    adapter.handle_content_enter = handle_content_enter;
+    adapter.on_focus_region_changed = on_focus_region_changed;
+    adapter.selector_top_back_placement = BackPlacement::Trailing;
     return adapter;
 }
 
@@ -250,14 +250,14 @@ void tracker_input_on_ui_refreshed()
     s_controller.on_ui_refreshed();
 }
 
-void tracker_focus_to_filter()
+void tracker_focus_to_selector()
 {
-    s_controller.focus_filter();
+    s_controller.focus_selector();
 }
 
-void tracker_focus_to_list()
+void tracker_focus_to_content()
 {
-    s_controller.focus_list();
+    s_controller.focus_content();
 }
 
 lv_group_t* tracker_input_get_group()

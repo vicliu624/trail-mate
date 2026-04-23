@@ -833,7 +833,7 @@ void ChatMessageListScreen::list_back_event_cb(lv_event_t* e)
     (void)lv_event_get_current_target(e);
     if (use_group_navigation() && !event_input_is_pointer(e))
     {
-        chat::ui::message_list::input::focus_filter(&screen->input_controller_);
+        chat::ui::message_list::input::focus_selector(&screen->input_controller_);
     }
 }
 
@@ -904,7 +904,7 @@ void ChatMessageListScreen::filter_click_cb(lv_event_t* e)
     log_obj_snapshot("filter_click.target", tgt);
     if (use_group_navigation() && !event_input_is_pointer(e))
     {
-        chat::ui::message_list::input::focus_list(&screen->input_controller_);
+        chat::ui::message_list::input::focus_content(&screen->input_controller_);
     }
 }
 

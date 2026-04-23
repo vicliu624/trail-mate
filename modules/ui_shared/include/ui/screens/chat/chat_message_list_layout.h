@@ -11,6 +11,7 @@ struct MessageListLayout
     lv_obj_t* root;
     lv_obj_t* content;
     lv_obj_t* filter_panel;
+    lv_obj_t* selector_controls;
     lv_obj_t* list_panel;
     lv_obj_t* direct_btn;
     lv_obj_t* broadcast_btn;
@@ -18,7 +19,7 @@ struct MessageListLayout
     ::ui::components::air_status_footer::Footer air_status_footer;
 };
 
-// split content (filter + list)
+// directory-browser content scaffold (selector + content panel)
 MessageListLayout create_layout(lv_obj_t* parent);
 
 // message list item (clickable row with labels)

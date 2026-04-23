@@ -6,7 +6,9 @@
 #include "platform/ui/usb_support_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
+#include "ui/presentation/service_panel_layout.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/top_bar.h"
 
 #if !defined(LV_FONT_MONTSERRAT_18) || !LV_FONT_MONTSERRAT_18
@@ -17,6 +19,7 @@ using Host = usb_storage::ui::shell::Host;
 
 namespace
 {
+namespace service_panel_layout = ::ui::presentation::service_panel_layout;
 
 const Host* s_host = nullptr;
 lv_obj_t* s_root = nullptr;
@@ -64,7 +67,9 @@ void show_loading(const char* message)
 
     s_loading_overlay = lv_obj_create(top_layer);
     lv_obj_set_size(s_loading_overlay, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(s_loading_overlay, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_loading_overlay,
+                              ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim),
+                              LV_PART_MAIN);
     lv_obj_set_style_bg_opa(s_loading_overlay, LV_OPA_70, LV_PART_MAIN);
     lv_obj_set_style_border_width(s_loading_overlay, 0, LV_PART_MAIN);
     lv_obj_clear_flag(s_loading_overlay, LV_OBJ_FLAG_SCROLLABLE);
@@ -73,16 +78,16 @@ void show_loading(const char* message)
     s_loading_box = lv_obj_create(s_loading_overlay);
     lv_obj_set_size(s_loading_box, 180, 80);
     lv_obj_center(s_loading_box);
-    lv_obj_set_style_bg_color(s_loading_box, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_loading_box, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(s_loading_box, LV_OPA_90, LV_PART_MAIN);
     lv_obj_set_style_border_width(s_loading_box, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(s_loading_box, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(s_loading_box, ::ui::theme::border_strong(), LV_PART_MAIN);
     lv_obj_set_style_radius(s_loading_box, 8, LV_PART_MAIN);
     lv_obj_clear_flag(s_loading_box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* label = lv_label_create(s_loading_box);
     ::ui::i18n::set_label_text(label, message ? message : "Loading...");
-    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, ::ui::theme::text(), LV_PART_MAIN);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_center(label);
 }
@@ -229,17 +234,16 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
 
-    s_root = lv_obj_create(parent);
-    lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(s_root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(s_root, lv_color_hex(0xFFF3DF), 0);
-    lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_root, 0, 0);
-    lv_obj_set_style_pad_all(s_root, 0, 0);
-    lv_obj_clear_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
+    service_panel_layout::RootSpec root_spec{};
+    service_panel_layout::HeaderSpec header_spec{};
+    service_panel_layout::BodySpec body_spec{};
+    service_panel_layout::PrimaryPanelSpec primary_spec{};
+
+    s_root = service_panel_layout::create_root(parent, root_spec);
     lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
-    ::ui::widgets::top_bar_init(s_top_bar, s_root);
+    lv_obj_t* header = service_panel_layout::create_header_container(s_root, header_spec);
+    ::ui::widgets::top_bar_init(s_top_bar, header);
     ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("USB Disk"));
     ::ui::widgets::top_bar_set_back_callback(s_top_bar, back_event_handler, nullptr);
     if (s_top_bar.back_btn)
@@ -261,19 +265,14 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         set_default_group(prev_group);
     }
 
-    s_content = lv_obj_create(s_root);
-    lv_obj_set_size(s_content, LV_PCT(100), 0);
-    lv_obj_set_flex_grow(s_content, 1);
-    lv_obj_set_style_bg_opa(s_content, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_content, 0, 0);
-    lv_obj_set_style_pad_all(s_content, 0, 0);
-    lv_obj_clear_flag(s_content, LV_OBJ_FLAG_SCROLLABLE);
+    s_content = service_panel_layout::create_body(s_root, body_spec);
+    s_content = service_panel_layout::create_primary_panel(s_content, primary_spec);
 
     if (!platform::ui::device::card_ready())
     {
         lv_obj_t* error_label = lv_label_create(s_content);
         lv_obj_set_style_text_font(error_label, &lv_font_montserrat_18, LV_PART_MAIN);
-        lv_obj_set_style_text_color(error_label, lv_color_hex(0xCC0000), LV_PART_MAIN);
+        lv_obj_set_style_text_color(error_label, ::ui::theme::error(), LV_PART_MAIN);
         ::ui::i18n::set_label_text(error_label, "SD Card Not Found\nPlease insert SD card");
         lv_obj_center(error_label);
         return;
@@ -281,14 +280,14 @@ void enter(const shell::Host* host, lv_obj_t* parent)
 
     s_status_label = lv_label_create(s_content);
     lv_obj_set_style_text_font(s_status_label, &lv_font_montserrat_18, LV_PART_MAIN);
-    lv_obj_set_style_text_color(s_status_label, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
+    lv_obj_set_style_text_color(s_status_label, ::ui::theme::text(), LV_PART_MAIN);
     lv_obj_set_style_text_align(s_status_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     ::ui::i18n::set_label_text(s_status_label, "Initializing...");
     lv_obj_center(s_status_label);
 
     lv_obj_t* info_label = lv_label_create(s_content);
     lv_obj_set_style_text_font(info_label, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(info_label, lv_color_hex(0x6A5646), LV_PART_MAIN);
+    lv_obj_set_style_text_color(info_label, ::ui::theme::text_muted(), LV_PART_MAIN);
     lv_obj_set_style_text_opa(info_label, LV_OPA_80, LV_PART_MAIN);
     ::ui::i18n::set_label_text(info_label, "Press Back to exit USB mode");
     lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -20);

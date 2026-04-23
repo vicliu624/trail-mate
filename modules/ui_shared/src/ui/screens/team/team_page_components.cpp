@@ -25,7 +25,9 @@
 #include "ui/screens/team/team_page_styles.h"
 #include "ui/screens/team/team_state.h"
 #include "ui/screens/team/team_ui_store.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
 
 #include <algorithm>
@@ -86,6 +88,17 @@ void sync_pairing_from_service();
 void update_team_name_from_id(const TeamId& id);
 void fill_status_members(team::proto::TeamStatus& status);
 void apply_member_list_from_status(const team::proto::TeamStatus& status);
+
+void apply_component_profile(lv_obj_t* obj,
+                             ::ui::theme::ComponentSlot slot,
+                             lv_style_selector_t selector = 0)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_obj(obj, profile, selector);
+    }
+}
 
 uint64_t team_id_to_u64(const TeamId& id)
 {
@@ -458,24 +471,26 @@ lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_hex(0x3A2A1A), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
     lv_obj_clear_flag(bg, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(bg, LV_OBJ_FLAG_CLICKABLE);
+    apply_component_profile(bg, ::ui::theme::ComponentSlot::ModalScrim, LV_PART_MAIN);
 
     const auto modal_size = ::ui::page_profile::resolve_modal_size(width, height, screen);
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, modal_size.width, modal_size.height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_hex(0xFFF7E9), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(0xD9B06A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, ::ui::theme::border(), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, ::ui::page_profile::resolve_modal_pad(), LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(win, ::ui::theme::ComponentSlot::ModalWindow, LV_PART_MAIN);
 
     return bg;
 }
@@ -2109,17 +2124,19 @@ void render_team_home()
 
         for (const auto& m : g_team_state.members)
         {
+            const lv_color_t chip_color = team_color_from_index(m.color_index);
             lv_obj_t* label = lv_label_create(row);
             ::ui::i18n::set_content_label_text_raw(label, m.name.c_str());
             lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
             lv_obj_set_width(label, LV_PCT(24));
             lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
-            lv_obj_set_style_bg_color(label, lv_color_hex(team_color_from_index(m.color_index)), 0);
+            lv_obj_set_style_bg_color(label, chip_color, 0);
             lv_obj_set_style_pad_hor(label, 4, 0);
             lv_obj_set_style_pad_ver(label, 3, 0);
             lv_obj_set_style_radius(label, 6, 0);
             lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-            if (m.color_index == 3)
+            apply_component_profile(label, ::ui::theme::ComponentSlot::TeamMemberChip);
+            if (lv_color_luminance(chip_color) > 160)
             {
                 lv_obj_set_style_text_color(label, lv_color_black(), 0);
             }
@@ -2181,17 +2198,19 @@ void render_join_pending()
 
             for (const auto& m : g_team_state.members)
             {
+                const lv_color_t chip_color = team_color_from_index(m.color_index);
                 lv_obj_t* label = lv_label_create(row);
                 ::ui::i18n::set_content_label_text_raw(label, m.name.c_str());
                 lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
                 lv_obj_set_width(label, LV_PCT(24));
                 lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
-                lv_obj_set_style_bg_color(label, lv_color_hex(team_color_from_index(m.color_index)), 0);
+                lv_obj_set_style_bg_color(label, chip_color, 0);
                 lv_obj_set_style_pad_hor(label, 4, 0);
                 lv_obj_set_style_pad_ver(label, 3, 0);
                 lv_obj_set_style_radius(label, 6, 0);
                 lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-                if (m.color_index == 3)
+                apply_component_profile(label, ::ui::theme::ComponentSlot::TeamMemberChip);
+                if (lv_color_luminance(chip_color) > 160)
                 {
                     lv_obj_set_style_text_color(label, lv_color_black(), 0);
                 }

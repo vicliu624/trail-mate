@@ -8,6 +8,7 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/toast/toast_widget.h"
 
@@ -86,7 +87,7 @@ static void set_btn_label_white(lv_obj_t* btn)
     lv_obj_t* child = lv_obj_get_child(btn, 0);
     if (child && lv_obj_check_type(child, &lv_label_class))
     {
-        lv_obj_set_style_text_color(child, lv_color_hex(0x3A2A1A), 0);
+        lv_obj_set_style_text_color(child, ::ui::theme::text(), 0);
     }
 }
 

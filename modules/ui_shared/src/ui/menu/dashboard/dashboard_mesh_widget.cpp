@@ -103,7 +103,7 @@ void create_mesh_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_h)
     ::ui::i18n::set_label_text(mesh.hero_value, "MESH");
 
     mesh.hero_caption = lv_label_create(mesh.orbit_core);
-    style_body_label(mesh.hero_caption, &lv_font_montserrat_12, lv_color_hex(0xFFF7E8));
+    style_body_label(mesh.hero_caption, &lv_font_montserrat_12, lv_color_white());
     lv_obj_align(mesh.hero_caption, LV_ALIGN_CENTER, 0, 10);
     ::ui::i18n::set_label_text(mesh.hero_caption, "online");
 

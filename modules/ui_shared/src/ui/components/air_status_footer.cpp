@@ -11,6 +11,7 @@
 #include "ui/components/two_pane_styles.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/ui_theme.h"
 
 #include <cmath>
 #include <cstdio>
@@ -169,10 +170,7 @@ Footer create(lv_obj_t* parent)
     ::ui::components::two_pane_layout::make_non_scrollable(footer.container);
     ::ui::components::two_pane_styles::apply_container_main(footer.container);
     lv_obj_set_style_border_width(footer.container, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(
-        footer.container,
-        lv_color_hex(::ui::components::two_pane_styles::kBorder),
-        LV_PART_MAIN);
+    lv_obj_set_style_border_color(footer.container, ::ui::theme::border(), LV_PART_MAIN);
     lv_obj_set_style_radius(footer.container, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_left(footer.container, profile.large_touch_hitbox ? 12 : 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(footer.container, profile.large_touch_hitbox ? 12 : 10, LV_PART_MAIN);

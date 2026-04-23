@@ -13,6 +13,8 @@
 #include "ui/screens/gps/gps_page_styles.h"
 #include "ui/screens/gps/gps_route_overlay.h"
 #include "ui/screens/gps/gps_state.h"
+#include "ui/theme/theme_registry.h"
+#include "ui/ui_theme.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
 #include "ui/widgets/map/map_viewport.h"
@@ -39,6 +41,22 @@
 extern GPSPageState g_gps_state;
 
 using gps::ui::lifetime::is_alive;
+
+namespace
+{
+
+lv_color_t resolve_map_control_accent()
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::MapControlButton, profile) &&
+        profile.accent_color.present)
+    {
+        return profile.accent_color.value;
+    }
+    return ::ui::theme::status_blue();
+}
+
+} // namespace
 
 // ============================================================================
 // Loading Component
@@ -305,7 +323,7 @@ void update_zoom_touch_level_btn_selected(lv_obj_t* btn, bool selected)
         return;
     }
     lv_obj_set_style_outline_width(btn, selected ? 2 : 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_color(btn, lv_color_hex(0x2F6FD6), LV_PART_MAIN);
+    lv_obj_set_style_outline_color(btn, resolve_map_control_accent(), LV_PART_MAIN);
     lv_obj_set_style_outline_pad(btn, 0, LV_PART_MAIN);
 }
 
@@ -705,7 +723,7 @@ void update_layer_btn_selected(lv_obj_t* btn, bool selected)
         return;
     }
     lv_obj_set_style_outline_width(btn, selected ? 2 : 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_color(btn, lv_color_hex(0x2F6FD6), LV_PART_MAIN);
+    lv_obj_set_style_outline_color(btn, resolve_map_control_accent(), LV_PART_MAIN);
     lv_obj_set_style_outline_pad(btn, 0, LV_PART_MAIN);
 }
 

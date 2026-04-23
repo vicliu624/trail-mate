@@ -15,6 +15,7 @@
 #include "ui/menu/dashboard/dashboard_style.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/node_info/node_info_page_layout.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_common.h"
 #include "ui/ui_theme.h"
 #include "ui/widgets/map/map_tiles.h"
@@ -107,45 +108,64 @@ struct ViewMetrics
 };
 
 constexpr uint32_t kLayerPopupDebounceMs = 300;
-
-constexpr uint32_t kHexAmber = 0xEBA341;
-constexpr uint32_t kHexAmberDark = 0xC98118;
-constexpr uint32_t kHexWarmBg = 0xF6E6C6;
-constexpr uint32_t kHexPanelBg = 0xFAF0D8;
-constexpr uint32_t kHexLine = 0xE7C98F;
-constexpr uint32_t kHexText = 0x6B4A1E;
-constexpr uint32_t kHexTextDim = 0x8A6A3A;
-constexpr uint32_t kHexWarn = 0xB94A2C;
-constexpr uint32_t kHexOk = 0x3E7D3E;
-constexpr uint32_t kHexInfo = 0x2D6FB6;
-constexpr uint32_t kHexReadoutAmber = 0xFFC75A;
-constexpr uint32_t kHexReadoutBlue = 0x68D5FF;
-constexpr uint32_t kHexReadoutGreen = 0x8BEA7B;
-constexpr uint32_t kHexReadoutLight = 0xFFF1D2;
-constexpr uint32_t kHexReadoutLightStrong = 0xFFE6A9;
 constexpr lv_coord_t kInfoPanelPadX = 8;
 constexpr lv_coord_t kInfoPanelPadY = 6;
 constexpr lv_coord_t kInfoPanelRadius = 8;
 
-static const lv_color_t kColorBackdrop = lv_color_hex(kHexWarmBg);
-static const lv_color_t kColorBackdropAlt = lv_color_hex(kHexPanelBg);
-static const lv_color_t kColorTextPrimary = lv_color_hex(kHexText);
-static const lv_color_t kColorId = lv_color_hex(kHexAmberDark);
-static const lv_color_t kColorLon = lv_color_hex(kHexInfo);
-static const lv_color_t kColorLat = lv_color_hex(kHexOk);
-static const lv_color_t kColorDistance = lv_color_hex(kHexAmberDark);
-static const lv_color_t kColorNodeMarker = lv_color_hex(kHexWarn);
-static const lv_color_t kColorSelfMarker = lv_color_hex(kHexInfo);
-static const lv_color_t kColorLink = lv_color_hex(kHexAmberDark);
-static const lv_color_t kColorMuted = lv_color_hex(kHexTextDim);
-static const lv_color_t kColorButtonBg = lv_color_hex(kHexPanelBg);
-static const lv_color_t kColorButtonDisabled = lv_color_hex(kHexLine);
-static const lv_color_t kColorButtonFocus = lv_color_hex(kHexAmber);
-static const lv_color_t kColorReadoutProtocol = lv_color_hex(kHexReadoutAmber);
-static const lv_color_t kColorReadoutRssi = lv_color_hex(kHexReadoutBlue);
-static const lv_color_t kColorReadoutSnr = lv_color_hex(kHexReadoutGreen);
-static const lv_color_t kColorReadoutSeen = lv_color_hex(kHexReadoutLight);
-static const lv_color_t kColorReadoutZoom = lv_color_hex(kHexReadoutLightStrong);
+void apply_component_profile(lv_obj_t* obj,
+                             ::ui::theme::ComponentSlot slot,
+                             lv_style_selector_t selector = 0)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_obj(obj, profile, selector);
+    }
+}
+
+lv_color_t resolve_component_bg(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.bg_color.present)
+    {
+        return profile.bg_color.value;
+    }
+    return fallback;
+}
+
+lv_color_t resolve_component_border(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.border_color.present)
+    {
+        return profile.border_color.value;
+    }
+    return fallback;
+}
+
+lv_color_t resolve_component_text(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.text_color.present)
+    {
+        return profile.text_color.value;
+    }
+    return fallback;
+}
+
+lv_color_t resolve_component_accent(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.accent_color.present)
+    {
+        return profile.accent_color.value;
+    }
+    return fallback;
+}
 
 bool is_hidden(lv_obj_t* obj)
 {
@@ -392,11 +412,12 @@ void apply_info_panel_style(lv_obj_t* panel)
     make_plain(panel);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(panel, kInfoPanelRadius, 0);
-    lv_obj_set_style_bg_color(panel, kColorBackdropAlt, 0);
+    lv_obj_set_style_bg_color(panel, ::ui::theme::surface(), 0);
     lv_obj_set_style_bg_opa(panel, LV_OPA_60, 0);
     lv_obj_set_style_border_width(panel, 0, 0);
     lv_obj_set_style_shadow_width(panel, 0, 0);
     lv_obj_set_style_outline_width(panel, 0, 0);
+    apply_component_profile(panel, ::ui::theme::ComponentSlot::MapInfoPanel);
 }
 
 void apply_zoom_button_style(lv_obj_t* button, lv_obj_t* label)
@@ -407,28 +428,40 @@ void apply_zoom_button_style(lv_obj_t* button, lv_obj_t* label)
     }
 
     lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(button, kColorButtonBg, 0);
+    lv_obj_set_style_bg_color(button, resolve_component_bg(::ui::theme::ComponentSlot::MapControlButton,
+                                                           ::ui::theme::surface()),
+                              0);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(button, 2, 0);
-    lv_obj_set_style_border_color(button, lv_color_hex(kHexAmberDark), 0);
+    lv_obj_set_style_border_color(
+        button,
+        resolve_component_border(::ui::theme::ComponentSlot::MapControlButton,
+                                 ::ui::theme::border_strong()),
+        0);
     lv_obj_set_style_shadow_width(button, 0, 0);
-    lv_obj_set_style_bg_color(button, kColorButtonDisabled, LV_STATE_DISABLED);
+    lv_obj_set_style_bg_color(button, ::ui::theme::separator(), LV_STATE_DISABLED);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_STATE_DISABLED);
-    lv_obj_set_style_border_color(button, lv_color_hex(kHexLine), LV_STATE_DISABLED);
+    lv_obj_set_style_border_color(button, ::ui::theme::separator(), LV_STATE_DISABLED);
     lv_obj_set_style_outline_width(button, 0, LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(button, 2, LV_STATE_FOCUSED);
     lv_obj_set_style_outline_width(button, 2, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_outline_color(button, kColorButtonFocus, LV_STATE_FOCUSED);
-    lv_obj_set_style_outline_color(button, kColorButtonFocus, LV_STATE_FOCUS_KEY);
+    const lv_color_t focus_accent =
+        resolve_component_accent(::ui::theme::ComponentSlot::MapControlButton, ::ui::theme::accent());
+    lv_obj_set_style_outline_color(button, focus_accent, LV_STATE_FOCUSED);
+    lv_obj_set_style_outline_color(button, focus_accent, LV_STATE_FOCUS_KEY);
     lv_obj_set_style_outline_pad(button, 1, LV_STATE_FOCUSED);
     lv_obj_set_style_outline_pad(button, 1, LV_STATE_FOCUS_KEY);
     lv_obj_clear_flag(button, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(button, LV_SCROLLBAR_MODE_OFF);
+    apply_component_profile(button, ::ui::theme::ComponentSlot::MapControlButton);
 
     if (label)
     {
         lv_obj_set_style_text_font(label, font_montserrat_22_safe(), 0);
-        lv_obj_set_style_text_color(label, kColorTextPrimary, 0);
+        lv_obj_set_style_text_color(label,
+                                    resolve_component_text(::ui::theme::ComponentSlot::MapControlButton,
+                                                           ::ui::theme::text()),
+                                    0);
         ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), font_montserrat_22_safe());
     }
 }
@@ -441,26 +474,38 @@ void apply_layer_button_style(lv_obj_t* button, lv_obj_t* label, bool compact)
     }
 
     lv_obj_set_style_radius(button, 12, 0);
-    lv_obj_set_style_bg_color(button, kColorButtonBg, 0);
+    lv_obj_set_style_bg_color(button, resolve_component_bg(::ui::theme::ComponentSlot::MapControlButton,
+                                                           ::ui::theme::surface()),
+                              0);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(button, 2, 0);
-    lv_obj_set_style_border_color(button, lv_color_hex(kHexAmberDark), 0);
+    lv_obj_set_style_border_color(
+        button,
+        resolve_component_border(::ui::theme::ComponentSlot::MapControlButton,
+                                 ::ui::theme::border_strong()),
+        0);
     lv_obj_set_style_shadow_width(button, 0, 0);
     lv_obj_set_style_outline_width(button, 0, LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(button, 2, LV_STATE_FOCUSED);
     lv_obj_set_style_outline_width(button, 2, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_outline_color(button, kColorButtonFocus, LV_STATE_FOCUSED);
-    lv_obj_set_style_outline_color(button, kColorButtonFocus, LV_STATE_FOCUS_KEY);
+    const lv_color_t focus_accent =
+        resolve_component_accent(::ui::theme::ComponentSlot::MapControlButton, ::ui::theme::accent());
+    lv_obj_set_style_outline_color(button, focus_accent, LV_STATE_FOCUSED);
+    lv_obj_set_style_outline_color(button, focus_accent, LV_STATE_FOCUS_KEY);
     lv_obj_set_style_outline_pad(button, 1, LV_STATE_FOCUSED);
     lv_obj_set_style_outline_pad(button, 1, LV_STATE_FOCUS_KEY);
     lv_obj_clear_flag(button, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(button, LV_SCROLLBAR_MODE_OFF);
+    apply_component_profile(button, ::ui::theme::ComponentSlot::MapControlButton);
 
     if (label)
     {
         const lv_font_t* font = compact ? font_montserrat_12_safe() : font_montserrat_14_safe();
         lv_obj_set_style_text_font(label, font, 0);
-        lv_obj_set_style_text_color(label, kColorTextPrimary, 0);
+        lv_obj_set_style_text_color(label,
+                                    resolve_component_text(::ui::theme::ComponentSlot::MapControlButton,
+                                                           ::ui::theme::text()),
+                                    0);
         ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), font);
     }
 }
@@ -472,17 +517,29 @@ void update_layer_popup_button_selected(lv_obj_t* btn, bool selected)
         return;
     }
 
-    lv_obj_set_style_bg_color(btn, selected ? lv_color_hex(kHexAmber) : kColorButtonBg, 0);
-    lv_obj_set_style_border_color(btn,
-                                  selected ? lv_color_hex(kHexAmberDark) : lv_color_hex(kHexLine),
-                                  0);
+    const lv_color_t selected_accent =
+        resolve_component_accent(::ui::theme::ComponentSlot::MapControlButton, ::ui::theme::accent());
+    lv_obj_set_style_bg_color(btn,
+                              selected ? selected_accent
+                                       : resolve_component_bg(::ui::theme::ComponentSlot::MapControlButton,
+                                                              ::ui::theme::surface()),
+                              0);
+    lv_obj_set_style_border_color(
+        btn,
+        selected ? ::ui::theme::accent_strong()
+                 : resolve_component_border(::ui::theme::ComponentSlot::MapControlButton,
+                                            ::ui::theme::border()),
+        0);
     lv_obj_set_style_outline_width(btn, selected ? 2 : 0, 0);
-    lv_obj_set_style_outline_color(btn, lv_color_hex(kHexAmberDark), 0);
+    lv_obj_set_style_outline_color(btn, ::ui::theme::accent_strong(), 0);
     lv_obj_set_style_outline_pad(btn, 0, 0);
 
     if (lv_obj_t* label = lv_obj_get_child(btn, 0))
     {
-        lv_obj_set_style_text_color(label, kColorTextPrimary, 0);
+        lv_obj_set_style_text_color(label,
+                                    resolve_component_text(::ui::theme::ComponentSlot::MapControlButton,
+                                                           ::ui::theme::text()),
+                                    0);
     }
 }
 
@@ -718,17 +775,24 @@ void open_layer_popup()
     lv_obj_set_size(s_layer_popup.bg, lv_obj_get_width(screen), lv_obj_get_height(screen));
     lv_obj_set_pos(s_layer_popup.bg, 0, 0);
     make_plain(s_layer_popup.bg);
-    lv_obj_set_style_bg_color(s_layer_popup.bg, lv_color_hex(kHexWarmBg), 0);
+    lv_obj_set_style_bg_color(s_layer_popup.bg, ::ui::theme::map_bg(), 0);
     lv_obj_set_style_bg_opa(s_layer_popup.bg, LV_OPA_20, 0);
     lv_obj_add_event_cb(s_layer_popup.bg, on_layer_popup_bg_clicked, LV_EVENT_CLICKED, nullptr);
 
     s_layer_popup.win = lv_obj_create(s_layer_popup.bg);
     lv_obj_set_size(s_layer_popup.win, modal_size.width, modal_size.height);
     make_plain(s_layer_popup.win);
-    lv_obj_set_style_bg_color(s_layer_popup.win, lv_color_hex(kHexPanelBg), 0);
+    lv_obj_set_style_bg_color(s_layer_popup.win,
+                              resolve_component_bg(::ui::theme::ComponentSlot::MapLayerPopupWindow,
+                                                   ::ui::theme::surface()),
+                              0);
     lv_obj_set_style_bg_opa(s_layer_popup.win, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_layer_popup.win, 2, 0);
-    lv_obj_set_style_border_color(s_layer_popup.win, lv_color_hex(kHexAmberDark), 0);
+    lv_obj_set_style_border_color(
+        s_layer_popup.win,
+        resolve_component_border(::ui::theme::ComponentSlot::MapLayerPopupWindow,
+                                 ::ui::theme::border_strong()),
+        0);
     lv_obj_set_style_radius(s_layer_popup.win, 10, 0);
     lv_obj_set_style_pad_all(s_layer_popup.win, touch_layout ? 12 : 6, 0);
     lv_obj_set_style_pad_row(s_layer_popup.win, touch_layout ? 8 : 3, 0);
@@ -737,13 +801,14 @@ void open_layer_popup()
                           LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
+    apply_component_profile(s_layer_popup.win, ::ui::theme::ComponentSlot::MapLayerPopupWindow);
     position_layer_popup_window(screen, s_layer_popup.win, modal_size.width, modal_size.height);
 
     lv_obj_t* title = lv_label_create(s_layer_popup.win);
     ::ui::i18n::set_label_text(title, "Map Layer");
     lv_obj_set_style_text_font(title, touch_layout ? font_montserrat_16_safe() : font_montserrat_14_safe(),
                                0);
-    lv_obj_set_style_text_color(title, kColorTextPrimary, 0);
+    lv_obj_set_style_text_color(title, ::ui::theme::text(), 0);
 
     s_layer_popup.summary_row = lv_obj_create(s_layer_popup.win);
     make_plain(s_layer_popup.summary_row);
@@ -760,14 +825,14 @@ void open_layer_popup()
     lv_obj_set_width(s_layer_popup.source_summary, LV_PCT(56));
     lv_label_set_long_mode(s_layer_popup.source_summary, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_font(s_layer_popup.source_summary, font_montserrat_12_safe(), 0);
-    lv_obj_set_style_text_color(s_layer_popup.source_summary, kColorMuted, 0);
+    lv_obj_set_style_text_color(s_layer_popup.source_summary, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_align(s_layer_popup.source_summary, LV_TEXT_ALIGN_LEFT, 0);
 
     s_layer_popup.contour_summary = lv_label_create(s_layer_popup.summary_row);
     lv_obj_set_width(s_layer_popup.contour_summary, LV_PCT(44));
     lv_label_set_long_mode(s_layer_popup.contour_summary, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_font(s_layer_popup.contour_summary, font_montserrat_12_safe(), 0);
-    lv_obj_set_style_text_color(s_layer_popup.contour_summary, kColorMuted, 0);
+    lv_obj_set_style_text_color(s_layer_popup.contour_summary, ::ui::theme::text_muted(), 0);
     lv_obj_set_style_text_align(s_layer_popup.contour_summary, LV_TEXT_ALIGN_RIGHT, 0);
 
     lv_obj_t* list = lv_obj_create(s_layer_popup.win);
@@ -1329,7 +1394,7 @@ void update_zoom_status_label(bool visible)
     char zoom_buf[24];
     std::snprintf(zoom_buf, sizeof(zoom_buf), "Zoom %d", s_state.zoom);
     set_label_text(s_widgets.zoom_status_label, zoom_buf);
-    lv_obj_set_style_text_color(s_widgets.zoom_status_label, kColorReadoutZoom, 0);
+    lv_obj_set_style_text_color(s_widgets.zoom_status_label, ::ui::theme::map_readout_zoom(), 0);
     set_hidden(s_widgets.zoom_status_label, false);
 }
 
@@ -1376,21 +1441,21 @@ void update_overlay_text()
     std::size_t line_count = 0;
     char line[128];
     build_protocol_line(node, line, sizeof(line));
-    append_info_line(line_count, line, kColorReadoutProtocol);
+    append_info_line(line_count, line, ::ui::theme::map_readout_protocol());
 
     if (build_rssi_line(node, line, sizeof(line)))
     {
-        append_info_line(line_count, line, kColorReadoutRssi);
+        append_info_line(line_count, line, ::ui::theme::map_readout_rssi());
     }
 
     if (build_snr_line(node, line, sizeof(line)))
     {
-        append_info_line(line_count, line, kColorReadoutSnr);
+        append_info_line(line_count, line, ::ui::theme::map_readout_snr());
     }
 
     if (build_seen_line(node, line, sizeof(line)))
     {
-        append_info_line(line_count, line, kColorReadoutSeen);
+        append_info_line(line_count, line, ::ui::theme::map_readout_seen());
     }
 
     hide_unused_info_lines(line_count);
@@ -1924,9 +1989,9 @@ NodeInfoWidgets create(lv_obj_t* parent)
     s_widgets.header = layout::create_header(s_widgets.root);
     s_widgets.content = layout::create_content(s_widgets.root);
 
-    lv_obj_set_style_bg_color(s_widgets.root, kColorBackdrop, 0);
+    lv_obj_set_style_bg_color(s_widgets.root, ::ui::theme::map_bg(), 0);
     lv_obj_set_style_bg_opa(s_widgets.root, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(s_widgets.content, kColorBackdropAlt, 0);
+    lv_obj_set_style_bg_color(s_widgets.content, ::ui::theme::surface(), 0);
     lv_obj_set_style_bg_opa(s_widgets.content, LV_OPA_COVER, 0);
     make_plain(s_widgets.root);
     make_plain(s_widgets.content);
@@ -1956,7 +2021,7 @@ NodeInfoWidgets create(lv_obj_t* parent)
     map_viewport::set_gesture_enabled(s_state.viewport, false);
 
     s_widgets.connection_line = lv_line_create(s_widgets.map_overlay_layer);
-    lv_obj_set_style_line_color(s_widgets.connection_line, kColorLink, 0);
+    lv_obj_set_style_line_color(s_widgets.connection_line, ::ui::theme::map_link(), 0);
     lv_obj_set_style_line_width(s_widgets.connection_line, 2, 0);
     lv_obj_set_style_line_rounded(s_widgets.connection_line, true, 0);
     set_hidden(s_widgets.connection_line, true);
@@ -1965,30 +2030,33 @@ NodeInfoWidgets create(lv_obj_t* parent)
     s_widgets.marker_node_dot = lv_obj_create(s_widgets.map_overlay_layer);
     s_widgets.marker_self_ring = lv_obj_create(s_widgets.map_overlay_layer);
     s_widgets.marker_self_dot = lv_obj_create(s_widgets.map_overlay_layer);
-    apply_marker_style(s_widgets.marker_node_ring, 22, kColorNodeMarker, false);
-    apply_marker_style(s_widgets.marker_node_dot, 10, kColorNodeMarker, true);
-    apply_marker_style(s_widgets.marker_self_ring, 18, kColorSelfMarker, false);
-    apply_marker_style(s_widgets.marker_self_dot, 8, kColorSelfMarker, true);
+    apply_marker_style(s_widgets.marker_node_ring, 22, ::ui::theme::map_node_marker(), false);
+    apply_marker_style(s_widgets.marker_node_dot, 10, ::ui::theme::map_node_marker(), true);
+    apply_marker_style(s_widgets.marker_self_ring, 18, ::ui::theme::map_self_marker(), false);
+    apply_marker_style(s_widgets.marker_self_dot, 8, ::ui::theme::map_self_marker(), true);
     set_hidden(s_widgets.marker_node_ring, true);
     set_hidden(s_widgets.marker_node_dot, true);
     set_hidden(s_widgets.marker_self_ring, true);
     set_hidden(s_widgets.marker_self_dot, true);
 
-    s_widgets.id_label = create_label(s_widgets.map_stage, "ID !000000", font_montserrat_14_safe(), kColorId);
+    s_widgets.id_label = create_label(
+        s_widgets.map_stage, "ID !000000", font_montserrat_14_safe(), ::ui::theme::map_readout_id());
     lv_label_set_long_mode(s_widgets.id_label, LV_LABEL_LONG_DOT);
 
-    s_widgets.lon_label = create_label(s_widgets.map_stage, "", font_montserrat_12_safe(), kColorLon);
-    s_widgets.lat_label = create_label(s_widgets.map_stage, "", font_montserrat_12_safe(), kColorLat);
+    s_widgets.lon_label =
+        create_label(s_widgets.map_stage, "", font_montserrat_12_safe(), ::ui::theme::map_readout_lon());
+    s_widgets.lat_label =
+        create_label(s_widgets.map_stage, "", font_montserrat_12_safe(), ::ui::theme::map_readout_lat());
     set_hidden(s_widgets.lon_label, true);
     set_hidden(s_widgets.lat_label, true);
 
-    s_widgets.no_position_label =
-        create_label(s_widgets.map_stage, "No position available", font_montserrat_14_safe(), kColorMuted);
+    s_widgets.no_position_label = create_label(
+        s_widgets.map_stage, "No position available", font_montserrat_14_safe(), ::ui::theme::text_muted());
     lv_obj_set_style_text_align(s_widgets.no_position_label, LV_TEXT_ALIGN_CENTER, 0);
     set_hidden(s_widgets.no_position_label, true);
 
-    s_widgets.distance_label =
-        create_label(s_widgets.map_overlay_layer, "", font_montserrat_12_safe(), kColorDistance);
+    s_widgets.distance_label = create_label(
+        s_widgets.map_overlay_layer, "", font_montserrat_12_safe(), ::ui::theme::map_readout_distance());
     set_hidden(s_widgets.distance_label, true);
 
     s_widgets.info_panel = lv_obj_create(s_widgets.map_overlay_layer);
@@ -2001,7 +2069,7 @@ NodeInfoWidgets create(lv_obj_t* parent)
             s_widgets.info_panel,
             "",
             font_montserrat_12_safe(),
-            kColorMuted);
+            ::ui::theme::text_muted());
         lv_label_set_long_mode(s_widgets.info_labels[index], LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_align(s_widgets.info_labels[index], LV_TEXT_ALIGN_RIGHT, 0);
         set_hidden(s_widgets.info_labels[index], true);
@@ -2014,7 +2082,7 @@ NodeInfoWidgets create(lv_obj_t* parent)
     s_widgets.zoom_out_label = lv_label_create(s_widgets.zoom_out_btn);
     lv_label_set_text(s_widgets.zoom_out_label, "-");
     s_widgets.zoom_status_label =
-        create_label(s_widgets.info_panel, "", font_montserrat_12_safe(), kColorMuted);
+        create_label(s_widgets.info_panel, "", font_montserrat_12_safe(), ::ui::theme::text_muted());
     lv_obj_set_style_text_align(s_widgets.zoom_status_label, LV_TEXT_ALIGN_RIGHT, 0);
     set_hidden(s_widgets.zoom_status_label, true);
     s_widgets.layer_btn = lv_btn_create(s_widgets.map_stage);

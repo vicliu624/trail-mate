@@ -6,6 +6,10 @@
 namespace ui::components::two_pane_layout
 {
 
+// Builtin presentation template for directory-browser style pages.
+// This module is an implementation detail of the default presentation layer,
+// not a firmware-owned semantic contract.
+
 struct RootSpec
 {
     int pad_row = 3;
@@ -14,7 +18,7 @@ struct RootSpec
 struct HeaderSpec
 {
     lv_coord_t height = 0;
-    uint32_t bg_hex = two_pane_styles::kSidePanelBg;
+    uint32_t bg_hex = two_pane_styles::side_panel_bg_hex();
     int pad_all = 0;
 };
 

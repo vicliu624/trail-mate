@@ -17,7 +17,9 @@
 #include "ui/screens/gps/gps_tracker_overlay.h"
 #include "ui/screens/team/team_state.h"
 #include "ui/screens/team/team_ui_store.h"
+#include "ui/theme/theme_asset_visuals.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/map/map_tiles.h"
 #include "ui/widgets/map/map_viewport.h"
 #include <algorithm>
@@ -26,17 +28,6 @@
 #include <cstdio>
 #include <ctime>
 #include <string>
-
-// GPS marker icon (room-24px), defined in C image file
-extern "C"
-{
-    extern const lv_image_dsc_t room_24px;
-    extern const lv_image_dsc_t AreaCleared;
-    extern const lv_image_dsc_t BaseCamp;
-    extern const lv_image_dsc_t GoodFind;
-    extern const lv_image_dsc_t rally;
-    extern const lv_image_dsc_t sos;
-}
 
 #define GPS_DEBUG 0
 #if GPS_DEBUG
@@ -117,8 +108,6 @@ constexpr int kTeamMarkerSize = 10;
 constexpr int kTeamMarkerLabelWidth = 44;
 constexpr int kTeamMarkerLabelOffsetX = 6;
 constexpr int kTeamMarkerLabelOffsetY = 0;
-constexpr uint32_t kTeamMarkerColor = 0x00AEEF;
-constexpr uint32_t kTeamMarkerBorder = 0xFFFFFF;
 constexpr uint32_t kTeamMarkerRefreshMs = 1000;
 constexpr int kTeamSignalMarkerSize = 24;
 constexpr int kTeamSignalLabelWidth = 108;
@@ -129,6 +118,12 @@ constexpr size_t kTeamSignalLoadCount = 80;
 constexpr size_t kTeamSignalMaxVisible = 12;
 constexpr uint32_t kMemberPanelRefreshMs = 2000;
 constexpr uint32_t kInvalidMemberId = 0xFFFFFFFFu;
+constexpr int kMapSelfMarkerSize = 24;
+
+uint32_t fallback_member_marker_hex()
+{
+    return lv_color_to_u32(::ui::theme::map_node_marker());
+}
 
 uint32_t hash_member_list(const std::vector<team::ui::TeamMemberUi>& members)
 {
@@ -221,13 +216,13 @@ uint32_t resolve_member_color(const std::vector<team::ui::TeamMemberUi>& members
                            });
     if (it == members.end())
     {
-        return kTeamMarkerColor;
+        return fallback_member_marker_hex();
     }
     if (it->color_index >= team::ui::kTeamMaxMembers)
     {
-        return kTeamMarkerColor;
+        return fallback_member_marker_hex();
     }
-    return team::ui::team_color_from_index(it->color_index);
+    return lv_color_to_u32(team::ui::team_color_from_index(it->color_index));
 }
 
 lv_color_t marker_text_color(uint32_t color)
@@ -285,7 +280,7 @@ lv_obj_t* create_team_marker_obj(uint32_t color)
     lv_obj_set_size(obj, kTeamMarkerSize, kTeamMarkerSize);
     lv_obj_set_style_bg_color(obj, lv_color_hex(color), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_color(obj, lv_color_hex(kTeamMarkerBorder), LV_PART_MAIN);
+    lv_obj_set_style_border_color(obj, ::ui::theme::map_marker_border(), LV_PART_MAIN);
     lv_obj_set_style_border_width(obj, 1, LV_PART_MAIN);
     lv_obj_set_style_radius(obj, LV_RADIUS_CIRCLE, LV_PART_MAIN);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
@@ -336,23 +331,70 @@ int find_team_marker_index(uint32_t member_id)
     return -1;
 }
 
-const lv_image_dsc_t* team_signal_icon_src(uint8_t icon_id)
+lv_obj_t* create_marker_icon_holder(lv_obj_t* parent, lv_coord_t size)
 {
-    switch (static_cast<team::proto::TeamLocationMarkerIcon>(icon_id))
+    if (!parent)
     {
-    case team::proto::TeamLocationMarkerIcon::AreaCleared:
-        return &AreaCleared;
-    case team::proto::TeamLocationMarkerIcon::BaseCamp:
-        return &BaseCamp;
-    case team::proto::TeamLocationMarkerIcon::GoodFind:
-        return &GoodFind;
-    case team::proto::TeamLocationMarkerIcon::Rally:
-        return &rally;
-    case team::proto::TeamLocationMarkerIcon::Sos:
-        return &sos;
-    default:
         return nullptr;
     }
+
+    lv_obj_t* holder = lv_obj_create(parent);
+    lv_obj_set_size(holder, size, size);
+    lv_obj_set_style_bg_opa(holder, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(holder, 0, 0);
+    lv_obj_set_style_pad_all(holder, 0, 0);
+    lv_obj_set_style_radius(holder, 0, 0);
+    lv_obj_clear_flag(holder, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_image_create(holder);
+    lv_obj_t* fallback_label = lv_label_create(holder);
+    lv_obj_set_style_text_font(fallback_label, &lv_font_montserrat_12, 0);
+    return holder;
+}
+
+void style_marker_icon_holder(lv_obj_t* holder, bool show_fallback, lv_color_t bg_color, lv_coord_t radius)
+{
+    if (!holder)
+    {
+        return;
+    }
+    lv_obj_set_style_bg_opa(holder, show_fallback ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_color(holder, bg_color, 0);
+    lv_obj_set_style_radius(holder, show_fallback ? radius : 0, 0);
+}
+
+void apply_team_signal_marker_visual(lv_obj_t* holder, uint8_t icon_id)
+{
+    if (!holder)
+    {
+        return;
+    }
+    ::ui::theme::AssetVisual visual{};
+    (void)::ui::theme::resolve_team_location_asset_visual(icon_id, visual);
+    lv_obj_t* image = lv_obj_get_child(holder, 0);
+    lv_obj_t* label = lv_obj_get_child(holder, 1);
+    ::ui::theme::apply_asset_visual(image, label, visual, kTeamSignalMarkerSize, ::ui::theme::white());
+    style_marker_icon_holder(holder,
+                             !::ui::theme::asset_visual_uses_image(visual),
+                             ::ui::theme::map_signal_label_bg(),
+                             4);
+}
+
+void apply_map_self_marker_visual(lv_obj_t* holder)
+{
+    if (!holder)
+    {
+        return;
+    }
+    ::ui::theme::AssetVisual visual{};
+    (void)::ui::theme::resolve_map_self_marker_asset_visual(visual);
+    lv_obj_t* image = lv_obj_get_child(holder, 0);
+    lv_obj_t* label = lv_obj_get_child(holder, 1);
+    ::ui::theme::apply_asset_visual(image, label, visual, kMapSelfMarkerSize, ::ui::theme::white());
+    style_marker_icon_holder(holder,
+                             !::ui::theme::asset_visual_uses_image(visual),
+                             ::ui::theme::map_self_marker(),
+                             LV_RADIUS_CIRCLE);
 }
 
 std::string format_signal_time(uint32_t ts)
@@ -378,17 +420,9 @@ lv_obj_t* create_team_signal_marker_obj(uint8_t icon_id)
     {
         return nullptr;
     }
-    const lv_image_dsc_t* src = team_signal_icon_src(icon_id);
-    if (!src)
-    {
-        return nullptr;
-    }
-    lv_obj_t* img = lv_image_create(g_gps_state.map);
-    lv_image_set_src(img, src);
-    lv_obj_set_size(img, kTeamSignalMarkerSize, kTeamSignalMarkerSize);
-    lv_image_set_inner_align(img, LV_IMAGE_ALIGN_CONTAIN);
-    lv_obj_clear_flag(img, LV_OBJ_FLAG_SCROLLABLE);
-    return img;
+    lv_obj_t* holder = create_marker_icon_holder(g_gps_state.map, kTeamSignalMarkerSize);
+    apply_team_signal_marker_visual(holder, icon_id);
+    return holder;
 }
 
 lv_obj_t* create_team_signal_marker_label(const std::string& text)
@@ -402,12 +436,12 @@ lv_obj_t* create_team_signal_marker_label(const std::string& text)
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(label, kTeamSignalLabelWidth);
     lv_obj_set_style_bg_opa(label, LV_OPA_70, 0);
-    lv_obj_set_style_bg_color(label, lv_color_hex(0x1F1F1F), 0);
+    lv_obj_set_style_bg_color(label, ::ui::theme::map_signal_label_bg(), 0);
     lv_obj_set_style_border_width(label, 0, 0);
     lv_obj_set_style_pad_hor(label, 3, 0);
     lv_obj_set_style_pad_ver(label, 1, 0);
     lv_obj_set_style_radius(label, 4, 0);
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, ::ui::theme::white(), 0);
     lv_obj_clear_flag(label, LV_OBJ_FLAG_SCROLLABLE);
     return label;
 }
@@ -748,7 +782,7 @@ void update_gps_marker_position()
     if (gps_screen_pos(g_gps_state.tile_ctx, map_lat, map_lon, screen_x, screen_y))
     {
         // Center marker on GPS position (marker is typically 24x24, so offset by half)
-        const int marker_size = 24;
+        const int marker_size = kMapSelfMarkerSize;
         lv_obj_set_pos(g_gps_state.gps_marker, screen_x - marker_size / 2, screen_y - marker_size / 2);
         lv_obj_clear_flag(g_gps_state.gps_marker, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(g_gps_state.gps_marker);
@@ -777,13 +811,8 @@ void create_gps_marker()
         return;
     }
 
-    // Create marker image with room icon
-    g_gps_state.gps_marker = lv_image_create(g_gps_state.map);
-    lv_image_set_src(g_gps_state.gps_marker, &room_24px);
-
-    // Set marker size (24x24 pixels)
-    lv_obj_set_size(g_gps_state.gps_marker, 24, 24);
-    lv_obj_clear_flag(g_gps_state.gps_marker, LV_OBJ_FLAG_SCROLLABLE);
+    g_gps_state.gps_marker = create_marker_icon_holder(g_gps_state.map, kMapSelfMarkerSize);
+    apply_map_self_marker_visual(g_gps_state.gps_marker);
 
     // Set initial position
     update_gps_marker_position();
@@ -871,7 +900,7 @@ static void update_member_button_states()
         }
         bool selected = (g_gps_state.member_btn_ids[i] == g_gps_state.selected_member_id);
         lv_obj_set_style_outline_width(btn, selected ? 2 : 0, LV_PART_MAIN);
-        lv_obj_set_style_outline_color(btn, lv_color_hex(kTeamMarkerBorder), LV_PART_MAIN);
+        lv_obj_set_style_outline_color(btn, ::ui::theme::map_marker_border(), LV_PART_MAIN);
     }
 }
 
@@ -946,7 +975,7 @@ static lv_obj_t* create_member_button(const team::ui::TeamMemberUi& member, uint
     lv_obj_set_style_bg_color(dot, lv_color_hex(color), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(dot, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(dot, lv_color_hex(kTeamMarkerBorder), LV_PART_MAIN);
+    lv_obj_set_style_border_color(dot, ::ui::theme::map_marker_border(), LV_PART_MAIN);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, LV_PART_MAIN);
     lv_obj_align(dot, LV_ALIGN_LEFT_MID, 3, 0);
 
@@ -1316,13 +1345,7 @@ void refresh_team_signal_markers_from_chatlog()
         {
             if (marker.obj)
             {
-                const lv_image_dsc_t* src = team_signal_icon_src(sample.icon_id);
-                if (src)
-                {
-                    lv_image_set_src(marker.obj, src);
-                    lv_obj_set_size(marker.obj, kTeamSignalMarkerSize, kTeamSignalMarkerSize);
-                    lv_image_set_inner_align(marker.obj, LV_IMAGE_ALIGN_CONTAIN);
-                }
+                apply_team_signal_marker_visual(marker.obj, sample.icon_id);
             }
             marker.icon_id = sample.icon_id;
         }

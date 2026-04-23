@@ -4,6 +4,7 @@
  */
 
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -30,13 +31,17 @@
 #include "ui/components/info_card.h"
 #include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
+#include "ui/menu/menu_runtime.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/directory_browser_layout.h"
+#include "ui/presentation/presentation_registry.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
 #include "ui/screens/settings/settings_page_layout.h"
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
 #include "ui/screens/team/team_ui_store.h"
+#include "ui/theme/theme_registry.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/busy_overlay.h"
 #include "ui/widgets/system_notification.h"
@@ -111,6 +116,14 @@ static char kTxPowerLabels[64][12] = {};
 static settings::ui::SettingOption kLocaleOptions[16] = {};
 static size_t kLocaleOptionCount = 0;
 static char kLocaleOptionLabels[16][48] = {};
+static settings::ui::SettingOption kThemeOptions[24] = {};
+static size_t kThemeOptionCount = 0;
+static char kThemeOptionLabels[24][48] = {};
+static char kThemeOptionIds[24][48] = {};
+static settings::ui::SettingOption kPresentationOptions[24] = {};
+static size_t kPresentationOptionCount = 0;
+static char kPresentationOptionLabels[24][48] = {};
+static char kPresentationOptionIds[24][48] = {};
 static settings::ui::SettingOption kWifiNetworkOptions[kMaxWifiNetworks] = {};
 static size_t kWifiNetworkOptionCount = 0;
 static char kWifiNetworkOptionLabels[kMaxWifiNetworks][64] = {};
@@ -126,6 +139,268 @@ static void open_enabled_imes_modal(settings::ui::ItemWidget& widget);
 static bool option_labels_are_translated(const settings::ui::SettingItem& item);
 static bool option_labels_use_content_font(const settings::ui::SettingItem& item);
 static void apply_locale_preview_font(lv_obj_t* label, const settings::ui::SettingItem& item, int value);
+
+static bool has_theme(const char* theme_id)
+{
+    ::ui::theme::ThemeInfo info{};
+    return ::ui::theme::describe_theme(theme_id, info);
+}
+
+static bool has_presentation(const char* presentation_id)
+{
+    ::ui::presentation::PresentationInfo info{};
+    return ::ui::presentation::describe_presentation(presentation_id, info);
+}
+
+static int theme_option_rank(const ::ui::theme::ThemeInfo& info)
+{
+    if (info.id && std::strcmp(info.id, ::ui::theme::kOfficialLegacyWarmThemeId) == 0)
+    {
+        return 0;
+    }
+    if (info.id && std::strcmp(info.id, ::ui::theme::kBuiltinLegacyWarmThemeId) == 0)
+    {
+        return has_theme(::ui::theme::kOfficialLegacyWarmThemeId) ? 4 : 0;
+    }
+    if (info.builtin)
+    {
+        return info.id && std::strcmp(info.id, ::ui::theme::kBuiltinAsciiThemeId) == 0 ? 3 : 4;
+    }
+    return 1;
+}
+
+static bool should_expose_theme_option(const ::ui::theme::ThemeInfo& info)
+{
+    if (info.id == nullptr)
+    {
+        return false;
+    }
+
+    if (std::strcmp(info.id, ::ui::theme::kBuiltinLegacyWarmThemeId) == 0 &&
+        has_theme(::ui::theme::kOfficialLegacyWarmThemeId))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static void rebuild_theme_options()
+{
+    kThemeOptionCount = 0;
+    const size_t limit = sizeof(kThemeOptions) / sizeof(kThemeOptions[0]);
+    std::vector<::ui::theme::ThemeInfo> themes;
+    themes.reserve(::ui::theme::theme_count());
+
+    for (size_t index = 0; index < ::ui::theme::theme_count(); ++index)
+    {
+        ::ui::theme::ThemeInfo info{};
+        if (!::ui::theme::theme_at(index, info) || !info.id || !info.display_name)
+        {
+            continue;
+        }
+
+        if (!should_expose_theme_option(info))
+        {
+            continue;
+        }
+
+        themes.push_back(info);
+    }
+
+    std::sort(themes.begin(),
+              themes.end(),
+              [](const ::ui::theme::ThemeInfo& lhs, const ::ui::theme::ThemeInfo& rhs)
+              {
+                  const int lhs_rank = theme_option_rank(lhs);
+                  const int rhs_rank = theme_option_rank(rhs);
+                  if (lhs_rank != rhs_rank)
+                  {
+                      return lhs_rank < rhs_rank;
+                  }
+                  const char* lhs_name = lhs.display_name ? lhs.display_name : "";
+                  const char* rhs_name = rhs.display_name ? rhs.display_name : "";
+                  return std::strcmp(lhs_name, rhs_name) < 0;
+              });
+
+    for (const ::ui::theme::ThemeInfo& info : themes)
+    {
+        if (kThemeOptionCount >= limit)
+        {
+            break;
+        }
+        std::snprintf(kThemeOptionLabels[kThemeOptionCount],
+                      sizeof(kThemeOptionLabels[kThemeOptionCount]),
+                      "%s",
+                      info.display_name);
+        std::snprintf(kThemeOptionIds[kThemeOptionCount],
+                      sizeof(kThemeOptionIds[kThemeOptionCount]),
+                      "%s",
+                      info.id);
+        kThemeOptions[kThemeOptionCount].label = kThemeOptionLabels[kThemeOptionCount];
+        kThemeOptions[kThemeOptionCount].value = static_cast<int>(kThemeOptionCount);
+        ++kThemeOptionCount;
+    }
+}
+
+static void rebuild_presentation_options()
+{
+    kPresentationOptionCount = 0;
+    const size_t limit = sizeof(kPresentationOptions) / sizeof(kPresentationOptions[0]);
+    std::vector<::ui::presentation::PresentationInfo> presentations;
+    presentations.reserve(::ui::presentation::presentation_count());
+
+    for (size_t index = 0; index < ::ui::presentation::presentation_count(); ++index)
+    {
+        ::ui::presentation::PresentationInfo info{};
+        if (!::ui::presentation::presentation_at(index, info) || !info.id || !info.display_name)
+        {
+            continue;
+        }
+
+        const bool hide_builtin_default =
+            std::strcmp(info.id, ::ui::presentation::kBuiltinDefaultPresentationId) == 0 &&
+            has_presentation(::ui::presentation::kOfficialDefaultPresentationId);
+        const bool hide_builtin_stacked =
+            std::strcmp(info.id, ::ui::presentation::kBuiltinDirectoryStackedPresentationId) == 0 &&
+            has_presentation(::ui::presentation::kOfficialDirectoryStackedPresentationId);
+        if (hide_builtin_default || hide_builtin_stacked)
+        {
+            continue;
+        }
+
+        presentations.push_back(info);
+    }
+
+    std::sort(presentations.begin(),
+              presentations.end(),
+              [](const ::ui::presentation::PresentationInfo& lhs,
+                 const ::ui::presentation::PresentationInfo& rhs)
+              {
+                  auto rank = [](const ::ui::presentation::PresentationInfo& info) -> int
+                  {
+                      if (info.id &&
+                          std::strcmp(info.id, ::ui::presentation::kOfficialDefaultPresentationId) == 0)
+                      {
+                          return 0;
+                      }
+                      if (info.id &&
+                          std::strcmp(info.id,
+                                      ::ui::presentation::kOfficialDirectoryStackedPresentationId) == 0)
+                      {
+                          return 1;
+                      }
+                      if (info.id &&
+                          std::strcmp(info.id, ::ui::presentation::kBuiltinDefaultPresentationId) == 0)
+                      {
+                          return has_presentation(::ui::presentation::kOfficialDefaultPresentationId)
+                                     ? 5
+                                     : 0;
+                      }
+                      if (info.id &&
+                          std::strcmp(info.id,
+                                      ::ui::presentation::kBuiltinDirectoryStackedPresentationId) == 0)
+                      {
+                          return has_presentation(::ui::presentation::kOfficialDirectoryStackedPresentationId)
+                                     ? 5
+                                     : 1;
+                      }
+                      return info.builtin ? 4 : 2;
+                  };
+
+                  const int lhs_rank = rank(lhs);
+                  const int rhs_rank = rank(rhs);
+                  if (lhs_rank != rhs_rank)
+                  {
+                      return lhs_rank < rhs_rank;
+                  }
+                  const char* lhs_name = lhs.display_name ? lhs.display_name : "";
+                  const char* rhs_name = rhs.display_name ? rhs.display_name : "";
+                  return std::strcmp(lhs_name, rhs_name) < 0;
+              });
+
+    for (const ::ui::presentation::PresentationInfo& info : presentations)
+    {
+        if (kPresentationOptionCount >= limit)
+        {
+            break;
+        }
+
+        std::snprintf(kPresentationOptionLabels[kPresentationOptionCount],
+                      sizeof(kPresentationOptionLabels[kPresentationOptionCount]),
+                      "%s",
+                      info.display_name);
+        std::snprintf(kPresentationOptionIds[kPresentationOptionCount],
+                      sizeof(kPresentationOptionIds[kPresentationOptionCount]),
+                      "%s",
+                      info.id);
+        kPresentationOptions[kPresentationOptionCount].label =
+            kPresentationOptionLabels[kPresentationOptionCount];
+        kPresentationOptions[kPresentationOptionCount].value =
+            static_cast<int>(kPresentationOptionCount);
+        ++kPresentationOptionCount;
+    }
+}
+
+static const char* theme_id_for_option_value(int value)
+{
+    if (value < 0 || static_cast<size_t>(value) >= kThemeOptionCount)
+    {
+        return nullptr;
+    }
+
+    const char* theme_id = kThemeOptionIds[value];
+    return (theme_id && theme_id[0] != '\0') ? theme_id : nullptr;
+}
+
+static const char* presentation_id_for_option_value(int value)
+{
+    if (value < 0 || static_cast<size_t>(value) >= kPresentationOptionCount)
+    {
+        return nullptr;
+    }
+
+    const char* presentation_id = kPresentationOptionIds[value];
+    return (presentation_id && presentation_id[0] != '\0') ? presentation_id : nullptr;
+}
+
+static int current_theme_option_index()
+{
+    const char* active_theme_id = ::ui::theme::active_theme_id();
+    if (!active_theme_id || !*active_theme_id)
+    {
+        return 0;
+    }
+
+    for (size_t index = 0; index < kThemeOptionCount; ++index)
+    {
+        if (std::strcmp(kThemeOptionIds[index], active_theme_id) == 0)
+        {
+            return static_cast<int>(index);
+        }
+    }
+
+    return 0;
+}
+
+static int current_presentation_option_index()
+{
+    const char* active_presentation_id = ::ui::presentation::active_presentation_id();
+    if (!active_presentation_id || !*active_presentation_id)
+    {
+        return 0;
+    }
+
+    for (size_t index = 0; index < kPresentationOptionCount; ++index)
+    {
+        if (std::strcmp(kPresentationOptionIds[index], active_presentation_id) == 0)
+        {
+            return static_cast<int>(index);
+        }
+    }
+
+    return 0;
+}
 
 static void copy_bounded(char* out, size_t out_len, const char* text)
 {
@@ -880,6 +1155,8 @@ static void settings_load()
         kLocaleOptions[kLocaleOptionCount].value = static_cast<int>(index);
         ++kLocaleOptionCount;
     }
+    rebuild_theme_options();
+    rebuild_presentation_options();
 
     app_ctx.getEffectiveUserInfo(g_settings.user_name,
                                  sizeof(g_settings.user_name),
@@ -1025,6 +1302,8 @@ static void settings_load()
     }
     apply_message_tone_volume(static_cast<uint8_t>(g_settings.speaker_volume));
     g_settings.display_locale_index = ::ui::i18n::current_locale_index();
+    g_settings.display_theme_index = current_theme_option_index();
+    g_settings.display_presentation_index = current_presentation_option_index();
 
     g_settings.ble_enabled = cfg.ble_enabled;
     g_settings.vibration_enabled = prefs_get_bool("vibration_enabled", true);
@@ -1521,6 +1800,7 @@ static void on_option_clicked(lv_event_t* e)
     bool rebuild_list = false;
     bool rebuild_active_app = false;
     bool refresh_menu_labels = false;
+    bool refresh_menu_theme = false;
     int previous_value = *payload->item->enum_value;
     *payload->item->enum_value = payload->value;
     if (is_settings_store_owned_enum_setting(payload->item->pref_key))
@@ -1541,6 +1821,39 @@ static void on_option_clicked(lv_event_t* e)
         }
         g_settings.display_locale_index = ::ui::i18n::current_locale_index();
         update_item_value(*payload->widget);
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "display_theme") == 0)
+    {
+        const char* theme_id = theme_id_for_option_value(payload->value);
+        if (theme_id && ::ui::theme::set_active_theme(theme_id))
+        {
+            (void)settings_store::put_string(kPrefsNs, "display_theme", theme_id);
+            g_settings.display_theme_index = current_theme_option_index();
+            update_item_value(*payload->widget);
+            refresh_menu_theme = true;
+            rebuild_active_app = true;
+        }
+        else
+        {
+            *payload->item->enum_value = previous_value;
+            update_item_value(*payload->widget);
+        }
+    }
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "display_presentation") == 0)
+    {
+        const char* presentation_id = presentation_id_for_option_value(payload->value);
+        if (presentation_id && ::ui::presentation::set_active_presentation(presentation_id))
+        {
+            (void)settings_store::put_string(kPrefsNs, "display_presentation", presentation_id);
+            g_settings.display_presentation_index = current_presentation_option_index();
+            update_item_value(*payload->widget);
+            rebuild_active_app = true;
+        }
+        else
+        {
+            *payload->item->enum_value = previous_value;
+            update_item_value(*payload->widget);
+        }
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "wifi_network") == 0)
     {
@@ -1909,6 +2222,11 @@ static void on_option_clicked(lv_event_t* e)
         restart_now = true;
     }
     modal_close();
+    if (refresh_menu_theme)
+    {
+        ::ui::menu_layout::refresh_theme();
+        ::ui::menu_runtime::refresh_theme();
+    }
     if (refresh_menu_labels)
     {
         ::ui::menu_layout::refresh_localized_text();
@@ -2582,6 +2900,12 @@ static settings::ui::SettingItem kScreenItems[] = {
     {"Display Language", settings::ui::SettingType::Enum, kLocaleOptions,
      0, &g_settings.display_locale_index, nullptr, nullptr, 0, false,
      "display_locale"},
+    {"Display Theme", settings::ui::SettingType::Enum, kThemeOptions,
+     0, &g_settings.display_theme_index, nullptr, nullptr, 0, false,
+     "display_theme"},
+    {"Display Presentation", settings::ui::SettingType::Enum, kPresentationOptions,
+     0, &g_settings.display_presentation_index, nullptr, nullptr, 0, false,
+     "display_presentation"},
     {"Enabled IMEs", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "enabled_imes"},
     {"Screen Timeout", settings::ui::SettingType::Enum, kScreenTimeoutOptions, 4, &g_settings.screen_timeout_ms, nullptr, nullptr, 0, false, "screen_timeout"},
     {"Screen Brightness", settings::ui::SettingType::Enum, kScreenBrightnessOptions,
@@ -2706,6 +3030,8 @@ static bool has_pref_key(const settings::ui::SettingItem& item, const char* key)
 static bool option_labels_are_translated(const settings::ui::SettingItem& item)
 {
     return !has_pref_key(item, "display_locale") &&
+           !has_pref_key(item, "display_theme") &&
+           !has_pref_key(item, "display_presentation") &&
            !has_pref_key(item, "wifi_network");
 }
 
@@ -2915,6 +3241,16 @@ static void build_item_list()
             strcmp(widget.def->pref_key, "display_locale") == 0)
         {
             const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kLocaleOptionCount;
+        }
+        if (widget.def && widget.def->pref_key &&
+            strcmp(widget.def->pref_key, "display_theme") == 0)
+        {
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kThemeOptionCount;
+        }
+        if (widget.def && widget.def->pref_key &&
+            strcmp(widget.def->pref_key, "display_presentation") == 0)
+        {
+            const_cast<settings::ui::SettingItem*>(widget.def)->option_count = kPresentationOptionCount;
         }
         if (widget.def && widget.def->pref_key &&
             strcmp(widget.def->pref_key, "wifi_network") == 0)
@@ -3246,7 +3582,7 @@ static void on_filter_clicked(lv_event_t* e)
     }
     if (select_filter_index(static_cast<int>(idx)))
     {
-        settings::ui::input::focus_to_list();
+        settings::ui::input::focus_to_content();
     }
 }
 
@@ -3337,8 +3673,13 @@ void create(lv_obj_t* parent)
                  static_cast<unsigned>(i),
                  kCategories[i].label ? kCategories[i].label : "<null>");
 #endif
-        lv_obj_t* btn = lv_btn_create(g_state.filter_panel);
-        lv_obj_set_size(btn, LV_PCT(100), ::ui::page_profile::current().filter_button_height);
+        lv_obj_t* button_parent = g_state.selector_controls ? g_state.selector_controls : g_state.filter_panel;
+        lv_obj_t* btn = lv_btn_create(button_parent);
+        ::ui::presentation::directory_browser_layout::SelectorButtonSpec button_spec{};
+        button_spec.height = ::ui::page_profile::current().filter_button_height;
+        button_spec.stacked_min_width =
+            std::max<lv_coord_t>(::ui::page_profile::current().filter_panel_width, 92);
+        ::ui::presentation::directory_browser_layout::configure_selector_button(btn, button_spec);
         style::apply_btn_filter(btn);
         if (!use_touch_first_settings_mode())
         {
@@ -3445,7 +3786,7 @@ bool activate_list_back_button(lv_obj_t* list_back_button)
         return false;
     }
 
-    settings::ui::input::focus_to_filter();
+    settings::ui::input::focus_to_selector();
     return true;
 }
 

@@ -40,6 +40,7 @@ void onWakeFromSleep();
 void setMenuActive(bool active);
 void setScene(Scene scene);
 Scene currentScene();
+void refresh_theme();
 
 } // namespace menu_runtime
 } // namespace ui

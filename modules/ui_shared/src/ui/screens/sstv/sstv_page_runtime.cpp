@@ -8,7 +8,10 @@
 #include "ui/LV_Helper.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/instrument_panel_layout.h"
+#include "ui/theme/theme_component_style.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
 #include <cstdio>
@@ -24,6 +27,8 @@
 
 namespace
 {
+namespace instrument_panel_layout = ::ui::presentation::instrument_panel_layout;
+
 const sstv_page::ui::shell::Host* s_host = nullptr;
 
 void request_exit()
@@ -73,16 +78,28 @@ constexpr lv_coord_t kMeterH = 120;
 constexpr lv_coord_t kMeterSegH = 8;
 constexpr lv_coord_t kMeterSegGap = 2;
 constexpr int kMeterSegments = 12;
-constexpr uint32_t kColorWarmBg = 0xF6E6C6;
-constexpr uint32_t kColorAccent = 0xEBA341;
-constexpr uint32_t kColorPanelBg = 0xFAF0D8;
-constexpr uint32_t kColorLine = 0xE7C98F;
-constexpr uint32_t kColorText = 0x6B4A1E;
-constexpr uint32_t kColorTextDim = 0x8A6A3A;
-constexpr uint32_t kColorOk = 0x3E7D3E;
-constexpr uint32_t kColorWarn = 0xB94A2C;
-constexpr uint32_t kColorGray = 0x6E6E6E;
-constexpr uint32_t kColorMeterMid = 0xC18B2C;
+
+void apply_component_profile(lv_obj_t* obj,
+                             ::ui::theme::ComponentSlot slot,
+                             lv_style_selector_t selector = 0)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_obj(obj, profile, selector);
+    }
+}
+
+lv_color_t resolve_component_text_color(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.text_color.present)
+    {
+        return profile.text_color.value;
+    }
+    return fallback;
+}
 
 struct SstvUi
 {
@@ -222,7 +239,9 @@ void refresh_cb(lv_timer_t*)
             if (s_ui.label_ready)
             {
                 ::ui::i18n::set_label_text(s_ui.label_ready, "ERROR");
-                lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorWarn), 0);
+                lv_obj_set_style_text_color(s_ui.label_ready,
+                                            ::ui::theme::color(::ui::theme::ColorSlot::StateWarn),
+                                            0);
             }
         }
     }
@@ -344,7 +363,7 @@ void build_main_area(lv_obj_t* parent)
 {
     lv_obj_t* main = lv_obj_create(parent);
     lv_obj_set_size(main, kScreenW, kMainHeight);
-    lv_obj_set_pos(main, 0, top_bar_height());
+    lv_obj_set_pos(main, 0, 0);
     lv_obj_set_style_bg_opa(main, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(main, 0, 0);
     lv_obj_set_style_pad_all(main, 0, 0);
@@ -355,30 +374,41 @@ void build_main_area(lv_obj_t* parent)
     lv_obj_set_pos(s_ui.progress, kInfoX, kProgressY);
     lv_bar_set_range(s_ui.progress, 0, 100);
     lv_bar_set_value(s_ui.progress, 0, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(s_ui.progress, lv_color_hex(kColorLine), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_ui.progress, ::ui::theme::separator(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(s_ui.progress, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(s_ui.progress, 4, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_ui.progress, lv_color_hex(kColorAccent), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_ui.progress, ::ui::theme::accent(), LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(s_ui.progress, LV_OPA_COVER, LV_PART_INDICATOR);
     lv_obj_set_style_radius(s_ui.progress, 4, LV_PART_INDICATOR);
+
+    apply_component_profile(s_ui.progress, ::ui::theme::ComponentSlot::SstvProgressBar, LV_PART_MAIN);
+    {
+        ::ui::theme::ComponentProfile progress_profile{};
+        if (::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::SstvProgressBar, progress_profile) &&
+            progress_profile.accent_color.present)
+        {
+            lv_obj_set_style_bg_color(s_ui.progress, progress_profile.accent_color.value, LV_PART_INDICATOR);
+        }
+    }
 
     s_ui.img_box = lv_obj_create(main);
     lv_obj_set_size(s_ui.img_box, kImgW, kImgH);
     lv_obj_set_pos(s_ui.img_box, kImgX, kImgY);
-    lv_obj_set_style_bg_color(s_ui.img_box, lv_color_hex(kColorPanelBg), 0);
+    lv_obj_set_style_bg_color(s_ui.img_box, ::ui::theme::surface(), 0);
     lv_obj_set_style_bg_opa(s_ui.img_box, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.img_box, 2, 0);
-    lv_obj_set_style_border_color(s_ui.img_box, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_border_color(s_ui.img_box, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(s_ui.img_box, 8, 0);
     lv_obj_set_style_pad_all(s_ui.img_box, 0, 0);
     lv_obj_clear_flag(s_ui.img_box, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(s_ui.img_box, ::ui::theme::ComponentSlot::SstvImagePanel);
 
     s_ui.img = lv_image_create(s_ui.img_box);
     lv_obj_center(s_ui.img);
     lv_obj_add_flag(s_ui.img, LV_OBJ_FLAG_HIDDEN);
 
     s_ui.img_placeholder = lv_label_create(s_ui.img_box);
-    apply_label_style(s_ui.img_placeholder, &lv_font_montserrat_12, kColorTextDim);
+    apply_label_style(s_ui.img_placeholder, &lv_font_montserrat_12, lv_color_to_u32(::ui::theme::text_muted()));
     ::ui::i18n::set_label_text(s_ui.img_placeholder, "No image");
     lv_obj_center(s_ui.img_placeholder);
 
@@ -395,33 +425,38 @@ void build_main_area(lv_obj_t* parent)
     lv_obj_set_width(s_ui.label_state_sub, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_state_sub, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_state_sub, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_state_sub, &lv_font_montserrat_14, kColorTextDim);
+    apply_label_style(s_ui.label_state_sub, &lv_font_montserrat_14, lv_color_to_u32(::ui::theme::text_muted()));
 
     s_ui.label_mode = lv_label_create(s_ui.info_area);
     lv_obj_set_pos(s_ui.label_mode, 0, 56);
     lv_obj_set_width(s_ui.label_mode, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_mode, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_mode, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_mode, &lv_font_montserrat_14, kColorTextDim);
+    apply_label_style(s_ui.label_mode, &lv_font_montserrat_14, lv_color_to_u32(::ui::theme::text_muted()));
 
     s_ui.label_ready = lv_label_create(s_ui.info_area);
     lv_obj_set_pos(s_ui.label_ready, 0, 128);
     lv_obj_set_width(s_ui.label_ready, kInfoTextW);
     lv_obj_set_style_text_align(s_ui.label_ready, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_long_mode(s_ui.label_ready, LV_LABEL_LONG_WRAP);
-    apply_label_style(s_ui.label_ready, &lv_font_montserrat_14, kColorText);
+    apply_label_style(s_ui.label_ready, &lv_font_montserrat_14, lv_color_to_u32(::ui::theme::text()));
 
     s_ui.btn_rx = lv_btn_create(s_ui.info_area);
     lv_obj_set_size(s_ui.btn_rx, 72, 22);
     lv_obj_set_pos(s_ui.btn_rx, 0, 150);
-    lv_obj_set_style_bg_color(s_ui.btn_rx, lv_color_hex(kColorPanelBg), 0);
+    lv_obj_set_style_bg_color(s_ui.btn_rx, ::ui::theme::surface(), 0);
     lv_obj_set_style_bg_opa(s_ui.btn_rx, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_ui.btn_rx, 1, 0);
-    lv_obj_set_style_border_color(s_ui.btn_rx, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_border_color(s_ui.btn_rx, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(s_ui.btn_rx, 6, 0);
     lv_obj_t* rx_label = lv_label_create(s_ui.btn_rx);
-    apply_label_style(rx_label, &lv_font_montserrat_16, kColorText);
+    apply_label_style(rx_label, &lv_font_montserrat_16, lv_color_to_u32(::ui::theme::text()));
     ::ui::i18n::set_label_text(rx_label, "RX");
+    apply_component_profile(s_ui.btn_rx, ::ui::theme::ComponentSlot::ActionButtonSecondary);
+    lv_obj_set_style_text_color(
+        rx_label,
+        resolve_component_text_color(::ui::theme::ComponentSlot::ActionButtonSecondary, ::ui::theme::text()),
+        0);
     lv_obj_center(rx_label);
     s_ui.btn_rx_label = rx_label;
     lv_obj_add_event_cb(s_ui.btn_rx, on_rx_btn_clicked, LV_EVENT_CLICKED, nullptr);
@@ -432,10 +467,11 @@ void build_main_area(lv_obj_t* parent)
     lv_obj_set_pos(s_ui.meter_box, kMeterX, kMeterY);
     lv_obj_set_style_bg_opa(s_ui.meter_box, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_ui.meter_box, 1, 0);
-    lv_obj_set_style_border_color(s_ui.meter_box, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_border_color(s_ui.meter_box, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(s_ui.meter_box, 2, 0);
     lv_obj_set_style_pad_all(s_ui.meter_box, 0, 0);
     lv_obj_clear_flag(s_ui.meter_box, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(s_ui.meter_box, ::ui::theme::ComponentSlot::SstvMeterBox);
 
     for (int i = 0; i < kMeterSegments; ++i)
     {
@@ -445,7 +481,7 @@ void build_main_area(lv_obj_t* parent)
         lv_obj_set_pos(seg, 2, y);
         lv_obj_set_style_border_width(seg, 0, 0);
         lv_obj_set_style_radius(seg, 2, 0);
-        lv_obj_set_style_bg_color(seg, lv_color_hex(kColorLine), 0);
+        lv_obj_set_style_bg_color(seg, ::ui::theme::separator(), 0);
         lv_obj_set_style_bg_opa(seg, LV_OPA_40, 0);
         lv_obj_clear_flag(seg, LV_OBJ_FLAG_SCROLLABLE);
         s_ui.meter_segments[i] = seg;
@@ -481,17 +517,23 @@ lv_obj_t* ui_sstv_create(lv_obj_t* parent)
         reset_ui_pointers();
     }
 
-    s_ui.root = lv_obj_create(parent);
-    lv_obj_set_size(s_ui.root, kScreenW, screen_height());
-    lv_obj_set_style_bg_color(s_ui.root, lv_color_hex(kColorWarmBg), 0);
-    lv_obj_set_style_bg_opa(s_ui.root, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_ui.root, 0, 0);
-    lv_obj_set_style_pad_all(s_ui.root, 0, 0);
-    lv_obj_clear_flag(s_ui.root, LV_OBJ_FLAG_SCROLLABLE);
+    instrument_panel_layout::RootSpec root_spec{};
+    root_spec.width = kScreenW;
+    root_spec.height = screen_height();
+    root_spec.bg_hex = lv_color_to_u32(::ui::theme::page_bg());
+    instrument_panel_layout::HeaderSpec header_spec{};
+    header_spec.height = top_bar_height();
+    instrument_panel_layout::BodySpec body_spec{};
+    body_spec.flow = LV_FLEX_FLOW_COLUMN;
+
+    s_ui.root = instrument_panel_layout::create_root(parent, root_spec);
     lv_obj_add_event_cb(s_ui.root, root_key_event_cb, LV_EVENT_KEY, nullptr);
 
-    build_top_bar(s_ui.root);
-    build_main_area(s_ui.root);
+    lv_obj_t* header = instrument_panel_layout::create_header_container(s_ui.root, header_spec);
+    lv_obj_t* body = instrument_panel_layout::create_body(s_ui.root, body_spec);
+
+    build_top_bar(header);
+    build_main_area(body);
 
     ui_sstv_set_state(SSTV_STATE_WAITING);
     ui_sstv_set_mode("Auto");
@@ -577,19 +619,23 @@ void ui_sstv_set_state(SstvState state)
     case SSTV_STATE_WAITING:
         ::ui::i18n::set_label_text(s_ui.label_state_sub, "Listening for SSTV signal...");
         ::ui::i18n::set_label_text(s_ui.label_ready, "SSTV RX READY");
-        lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorText), 0);
+        lv_obj_set_style_text_color(s_ui.label_ready, ::ui::theme::text(), 0);
         ui_sstv_set_image(nullptr);
         ui_sstv_set_progress(0.0f);
         break;
     case SSTV_STATE_RECEIVING:
         ::ui::i18n::set_label_text(s_ui.label_state_sub, "Decoding: 0%");
         ::ui::i18n::set_label_text(s_ui.label_ready, "RECEIVING");
-        lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
+        lv_obj_set_style_text_color(s_ui.label_ready,
+                                    ::ui::theme::color(::ui::theme::ColorSlot::StateOk),
+                                    0);
         break;
     case SSTV_STATE_COMPLETE:
         ::ui::i18n::set_label_text(s_ui.label_state_sub, "Image received");
         ::ui::i18n::set_label_text(s_ui.label_ready, "COMPLETE");
-        lv_obj_set_style_text_color(s_ui.label_ready, lv_color_hex(kColorOk), 0);
+        lv_obj_set_style_text_color(s_ui.label_ready,
+                                    ::ui::theme::color(::ui::theme::ColorSlot::StateOk),
+                                    0);
         ui_sstv_set_progress(1.0f);
         break;
     default:
@@ -653,27 +699,27 @@ void ui_sstv_set_audio_level(float level_0_1)
             continue;
         }
         bool on = (i < active);
-        uint32_t color = kColorLine;
+        lv_color_t color = ::ui::theme::separator();
         if (i >= 8)
         {
-            color = kColorWarn;
+            color = ::ui::theme::color(::ui::theme::ColorSlot::StateWarn);
         }
         else if (i >= 4)
         {
-            color = kColorMeterMid;
+            color = ::ui::theme::color(::ui::theme::ColorSlot::SstvMeterMid);
         }
         else
         {
-            color = kColorOk;
+            color = ::ui::theme::color(::ui::theme::ColorSlot::StateOk);
         }
         if (on)
         {
-            lv_obj_set_style_bg_color(seg, lv_color_hex(color), 0);
+            lv_obj_set_style_bg_color(seg, color, 0);
             lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
         }
         else
         {
-            lv_obj_set_style_bg_color(seg, lv_color_hex(kColorLine), 0);
+            lv_obj_set_style_bg_color(seg, ::ui::theme::separator(), 0);
             lv_obj_set_style_bg_opa(seg, LV_OPA_40, 0);
         }
     }

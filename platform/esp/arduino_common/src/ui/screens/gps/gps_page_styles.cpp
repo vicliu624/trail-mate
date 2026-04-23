@@ -1,5 +1,8 @@
 #include "ui/screens/gps/gps_page_styles.h"
 
+#include "ui/theme/theme_component_style.h"
+#include "ui/ui_theme.h"
+
 namespace gps::ui::styles
 {
 
@@ -7,6 +10,7 @@ namespace
 {
 
 bool s_inited = false;
+std::uint32_t s_theme_revision = 0;
 
 lv_style_t s_root_black;
 lv_style_t s_header_white;
@@ -43,23 +47,6 @@ lv_style_t s_zoom_value_label_focused;
 lv_style_t s_zoom_roller;
 lv_style_t s_zoom_roller_selected;
 
-constexpr uint32_t kBlack = 0xFFF3DF;
-constexpr uint32_t kWhite = 0xFFF7E9;
-constexpr uint32_t kPanelBtnBg = 0xFFF7E9;
-constexpr uint32_t kPanelBtnBorder = 0xD9B06A;
-constexpr uint32_t kPanelBtnFocused = 0xEBA341;
-constexpr uint32_t kPanelBtnPressed = 0xEBA341;
-constexpr uint32_t kPanelBtnText = 0x3A2A1A;
-constexpr uint32_t kResolutionText = 0x6A5646;
-constexpr uint32_t kIndicatorText = 0x2F6FD6;
-constexpr uint32_t kToastBg = 0xFFF0D3;
-constexpr uint32_t kToastBorder = 0xD9B06A;
-constexpr uint32_t kModalWinBorder = 0xD9B06A;
-constexpr uint32_t kZoomWinBg = 0xFFF7E9;
-constexpr uint32_t kZoomTitleBarBg = 0xEBA341;
-constexpr uint32_t kZoomValueText = 0x3A2A1A;
-constexpr uint32_t kZoomValueFocusedBg = 0xFFF0D3;
-
 const lv_font_t* font_montserrat_16_safe()
 {
 #if defined(LV_FONT_MONTSERRAT_16) && LV_FONT_MONTSERRAT_16
@@ -87,17 +74,107 @@ const lv_font_t* font_montserrat_48_safe()
 #endif
 }
 
+void apply_component_profile(lv_style_t* style, ::ui::theme::ComponentSlot slot)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_style(style, profile);
+    }
+}
+
+lv_color_t resolve_component_bg(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.bg_color.present)
+    {
+        return profile.bg_color.value;
+    }
+    return fallback;
+}
+
+lv_color_t resolve_component_text(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.text_color.present)
+    {
+        return profile.text_color.value;
+    }
+    return fallback;
+}
+
+lv_color_t resolve_component_accent(::ui::theme::ComponentSlot slot, lv_color_t fallback)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.accent_color.present)
+    {
+        return profile.accent_color.value;
+    }
+    return fallback;
+}
+
+void reset_style(lv_style_t& style)
+{
+    lv_style_reset(&style);
+}
+
+void reset_styles()
+{
+    reset_style(s_root_black);
+    reset_style(s_header_white);
+    reset_style(s_content_black);
+    reset_style(s_map_black);
+    reset_style(s_panel_transparent);
+    reset_style(s_resolution_label);
+    reset_style(s_altitude_label);
+    reset_style(s_control_btn_main);
+    reset_style(s_control_btn_focused);
+    reset_style(s_control_btn_pressed);
+    reset_style(s_control_btn_disabled);
+    reset_style(s_control_btn_label);
+    reset_style(s_loading_box);
+    reset_style(s_loading_label);
+    reset_style(s_toast_box);
+    reset_style(s_toast_label);
+    reset_style(s_indicator_label);
+    reset_style(s_tracker_list);
+    reset_style(s_modal_bg);
+    reset_style(s_modal_win);
+    reset_style(s_zoom_win);
+    reset_style(s_zoom_title_bar);
+    reset_style(s_zoom_title_label);
+    reset_style(s_zoom_content_area);
+    reset_style(s_zoom_value_label);
+    reset_style(s_zoom_value_label_focused);
+    reset_style(s_zoom_roller);
+    reset_style(s_zoom_roller_selected);
+}
+
 } // namespace
 
 void init_once()
 {
-    if (s_inited)
+    const std::uint32_t active_revision = ::ui::theme::active_theme_revision();
+    if (s_inited && s_theme_revision == active_revision)
     {
         return;
     }
 
+    if (s_inited)
+    {
+        reset_styles();
+    }
+    else
+    {
+        s_inited = true;
+    }
+    s_theme_revision = active_revision;
+
     lv_style_init(&s_root_black);
-    lv_style_set_bg_color(&s_root_black, lv_color_hex(kBlack));
+    lv_style_set_bg_color(&s_root_black, ::ui::theme::page_bg());
     lv_style_set_bg_opa(&s_root_black, LV_OPA_COVER);
     lv_style_set_border_width(&s_root_black, 0);
     lv_style_set_pad_all(&s_root_black, 0);
@@ -105,14 +182,14 @@ void init_once()
     lv_style_set_pad_row(&s_root_black, 0);
 
     lv_style_init(&s_header_white);
-    lv_style_set_bg_color(&s_header_white, lv_color_hex(kWhite));
+    lv_style_set_bg_color(&s_header_white, ::ui::theme::surface());
     lv_style_set_bg_opa(&s_header_white, LV_OPA_COVER);
     lv_style_set_border_width(&s_header_white, 0);
     lv_style_set_pad_all(&s_header_white, 0);
     lv_style_set_radius(&s_header_white, 0);
 
     lv_style_init(&s_content_black);
-    lv_style_set_bg_color(&s_content_black, lv_color_hex(kBlack));
+    lv_style_set_bg_color(&s_content_black, ::ui::theme::page_bg());
     lv_style_set_bg_opa(&s_content_black, LV_OPA_COVER);
     lv_style_set_border_width(&s_content_black, 0);
     lv_style_set_pad_all(&s_content_black, 0);
@@ -120,7 +197,7 @@ void init_once()
     lv_style_set_pad_row(&s_content_black, 0);
 
     lv_style_init(&s_map_black);
-    lv_style_set_bg_color(&s_map_black, lv_color_hex(kBlack));
+    lv_style_set_bg_color(&s_map_black, ::ui::theme::map_bg());
     lv_style_set_bg_opa(&s_map_black, LV_OPA_COVER);
     lv_style_set_border_width(&s_map_black, 0);
     lv_style_set_radius(&s_map_black, 0);
@@ -135,72 +212,91 @@ void init_once()
 
     lv_style_init(&s_resolution_label);
     lv_style_set_bg_opa(&s_resolution_label, LV_OPA_TRANSP);
-    lv_style_set_text_color(&s_resolution_label, lv_color_hex(kResolutionText));
+    lv_style_set_text_color(&s_resolution_label, ::ui::theme::text_muted());
     lv_style_set_text_font(&s_resolution_label, font_montserrat_16_safe());
     lv_style_set_text_opa(&s_resolution_label, LV_OPA_COVER);
 
     lv_style_init(&s_altitude_label);
     lv_style_set_bg_opa(&s_altitude_label, LV_OPA_TRANSP);
-    lv_style_set_text_color(&s_altitude_label, lv_color_hex(kResolutionText));
+    lv_style_set_text_color(&s_altitude_label, ::ui::theme::text_muted());
     lv_style_set_text_font(&s_altitude_label, font_montserrat_16_safe());
     lv_style_set_text_opa(&s_altitude_label, LV_OPA_COVER);
     lv_style_set_text_align(&s_altitude_label, LV_TEXT_ALIGN_CENTER);
 
     lv_style_init(&s_control_btn_main);
-    lv_style_set_bg_color(&s_control_btn_main, lv_color_hex(kPanelBtnBg));
+    lv_style_set_bg_color(&s_control_btn_main, ::ui::theme::surface());
     lv_style_set_bg_opa(&s_control_btn_main, LV_OPA_COVER);
     lv_style_set_border_width(&s_control_btn_main, 1);
-    lv_style_set_border_color(&s_control_btn_main, lv_color_hex(kPanelBtnBorder));
+    lv_style_set_border_color(&s_control_btn_main, ::ui::theme::border());
     lv_style_set_radius(&s_control_btn_main, 6);
+    apply_component_profile(&s_control_btn_main, ::ui::theme::ComponentSlot::MapControlButton);
 
     lv_style_init(&s_control_btn_focused);
-    lv_style_set_bg_color(&s_control_btn_focused, lv_color_hex(kPanelBtnFocused));
+    lv_style_set_bg_color(
+        &s_control_btn_focused,
+        resolve_component_accent(::ui::theme::ComponentSlot::MapControlButton, ::ui::theme::accent()));
     lv_style_set_bg_opa(&s_control_btn_focused, LV_OPA_COVER);
     lv_style_set_border_width(&s_control_btn_focused, 1);
     lv_style_set_outline_width(&s_control_btn_focused, 0);
     lv_style_set_outline_pad(&s_control_btn_focused, 0);
 
     lv_style_init(&s_control_btn_pressed);
-    lv_style_set_bg_color(&s_control_btn_pressed, lv_color_hex(kPanelBtnPressed));
+    lv_style_set_bg_color(
+        &s_control_btn_pressed,
+        resolve_component_accent(::ui::theme::ComponentSlot::MapControlButton, ::ui::theme::accent()));
     lv_style_set_border_width(&s_control_btn_pressed, 1);
 
     lv_style_init(&s_control_btn_disabled);
     lv_style_set_bg_opa(&s_control_btn_disabled, LV_OPA_50);
 
     lv_style_init(&s_control_btn_label);
-    lv_style_set_text_color(&s_control_btn_label, lv_color_hex(kPanelBtnText));
+    lv_style_set_text_color(&s_control_btn_label,
+                            resolve_component_text(::ui::theme::ComponentSlot::MapControlButton,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_control_btn_label, font_montserrat_16_safe());
 
     lv_style_init(&s_loading_box);
-    lv_style_set_bg_color(&s_loading_box, lv_color_hex(kBlack));
+    lv_style_set_bg_color(&s_loading_box, ::ui::theme::page_bg());
     lv_style_set_bg_opa(&s_loading_box, LV_OPA_90);
     lv_style_set_border_width(&s_loading_box, 2);
-    lv_style_set_border_color(&s_loading_box, lv_color_hex(kWhite));
+    lv_style_set_border_color(&s_loading_box, ::ui::theme::white());
+    lv_style_set_radius(&s_loading_box, 8);
     lv_style_set_pad_all(&s_loading_box, 20);
+    apply_component_profile(&s_loading_box, ::ui::theme::ComponentSlot::GpsLoadingBox);
 
     lv_style_init(&s_loading_label);
-    lv_style_set_text_color(&s_loading_label, lv_color_hex(0x3A2A1A));
+    lv_style_set_text_color(&s_loading_label,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsLoadingLabel,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_loading_label, font_montserrat_16_safe());
+    apply_component_profile(&s_loading_label, ::ui::theme::ComponentSlot::GpsLoadingLabel);
 
     lv_style_init(&s_toast_box);
-    lv_style_set_bg_color(&s_toast_box, lv_color_hex(kToastBg));
+    lv_style_set_bg_color(&s_toast_box, ::ui::theme::surface_alt());
     lv_style_set_bg_opa(&s_toast_box, LV_OPA_90);
     lv_style_set_border_width(&s_toast_box, 1);
-    lv_style_set_border_color(&s_toast_box, lv_color_hex(kToastBorder));
+    lv_style_set_border_color(&s_toast_box, ::ui::theme::border());
     lv_style_set_radius(&s_toast_box, 8);
     lv_style_set_pad_all(&s_toast_box, 12);
+    apply_component_profile(&s_toast_box, ::ui::theme::ComponentSlot::GpsToastBox);
 
     lv_style_init(&s_toast_label);
-    lv_style_set_text_color(&s_toast_label, lv_color_hex(0x3A2A1A));
+    lv_style_set_text_color(&s_toast_label,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsToastLabel,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_toast_label, font_montserrat_16_safe());
     lv_style_set_text_align(&s_toast_label, LV_TEXT_ALIGN_CENTER);
+    apply_component_profile(&s_toast_label, ::ui::theme::ComponentSlot::GpsToastLabel);
 
     lv_style_init(&s_indicator_label);
-    lv_style_set_text_color(&s_indicator_label, lv_color_hex(kIndicatorText));
+    lv_style_set_text_color(&s_indicator_label,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsIndicatorLabel,
+                                                   ::ui::theme::status_blue()));
     lv_style_set_text_font(&s_indicator_label, font_montserrat_16_safe());
     lv_style_set_text_align(&s_indicator_label, LV_TEXT_ALIGN_CENTER);
     lv_style_set_bg_opa(&s_indicator_label, LV_OPA_TRANSP);
     lv_style_set_pad_all(&s_indicator_label, 8);
+    apply_component_profile(&s_indicator_label, ::ui::theme::ComponentSlot::GpsIndicatorLabel);
 
     lv_style_init(&s_tracker_list);
     lv_style_set_pad_top(&s_tracker_list, 8);
@@ -210,39 +306,48 @@ void init_once()
     lv_style_set_border_width(&s_tracker_list, 0);
 
     lv_style_init(&s_modal_bg);
-    lv_style_set_bg_color(&s_modal_bg, lv_color_hex(kBlack));
+    lv_style_set_bg_color(&s_modal_bg, ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim));
     lv_style_set_bg_opa(&s_modal_bg, LV_OPA_50);
     lv_style_set_border_width(&s_modal_bg, 0);
     lv_style_set_pad_all(&s_modal_bg, 0);
+    apply_component_profile(&s_modal_bg, ::ui::theme::ComponentSlot::ModalScrim);
 
     lv_style_init(&s_modal_win);
-    lv_style_set_bg_color(&s_modal_win, lv_color_hex(kWhite));
+    lv_style_set_bg_color(&s_modal_win, ::ui::theme::surface());
     lv_style_set_bg_opa(&s_modal_win, LV_OPA_COVER);
     lv_style_set_border_width(&s_modal_win, 2);
-    lv_style_set_border_color(&s_modal_win, lv_color_hex(kModalWinBorder));
+    lv_style_set_border_color(&s_modal_win, ::ui::theme::border());
     lv_style_set_radius(&s_modal_win, 10);
     lv_style_set_pad_all(&s_modal_win, 10);
+    apply_component_profile(&s_modal_win, ::ui::theme::ComponentSlot::ModalWindow);
 
     lv_style_init(&s_zoom_win);
-    lv_style_set_bg_color(&s_zoom_win, lv_color_hex(kZoomWinBg));
+    lv_style_set_bg_color(&s_zoom_win, ::ui::theme::surface());
     lv_style_set_bg_opa(&s_zoom_win, LV_OPA_COVER);
     lv_style_set_border_width(&s_zoom_win, 2);
-    lv_style_set_border_color(&s_zoom_win, lv_color_hex(kWhite));
+    lv_style_set_border_color(&s_zoom_win, ::ui::theme::white());
     lv_style_set_radius(&s_zoom_win, 10);
     lv_style_set_pad_all(&s_zoom_win, 10);
     lv_style_set_outline_width(&s_zoom_win, 2);
-    lv_style_set_outline_color(&s_zoom_win, lv_color_hex(kIndicatorText));
+    lv_style_set_outline_color(
+        &s_zoom_win,
+        resolve_component_accent(::ui::theme::ComponentSlot::GpsZoomWindow, ::ui::theme::status_blue()));
+    apply_component_profile(&s_zoom_win, ::ui::theme::ComponentSlot::GpsZoomWindow);
 
     lv_style_init(&s_zoom_title_bar);
-    lv_style_set_bg_color(&s_zoom_title_bar, lv_color_hex(kZoomTitleBarBg));
+    lv_style_set_bg_color(&s_zoom_title_bar, ::ui::theme::accent());
     lv_style_set_bg_opa(&s_zoom_title_bar, LV_OPA_COVER);
     lv_style_set_border_width(&s_zoom_title_bar, 0);
     lv_style_set_pad_all(&s_zoom_title_bar, 8);
     lv_style_set_radius(&s_zoom_title_bar, 0);
+    apply_component_profile(&s_zoom_title_bar, ::ui::theme::ComponentSlot::GpsZoomTitleBar);
 
     lv_style_init(&s_zoom_title_label);
-    lv_style_set_text_color(&s_zoom_title_label, lv_color_hex(0x3A2A1A));
+    lv_style_set_text_color(&s_zoom_title_label,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsZoomTitleLabel,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_zoom_title_label, font_montserrat_18_safe());
+    apply_component_profile(&s_zoom_title_label, ::ui::theme::ComponentSlot::GpsZoomTitleLabel);
 
     lv_style_init(&s_zoom_content_area);
     lv_style_set_bg_opa(&s_zoom_content_area, LV_OPA_TRANSP);
@@ -250,41 +355,56 @@ void init_once()
     lv_style_set_pad_all(&s_zoom_content_area, 0);
 
     lv_style_init(&s_zoom_value_label);
-    lv_style_set_text_color(&s_zoom_value_label, lv_color_hex(kZoomValueText));
+    lv_style_set_text_color(&s_zoom_value_label,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsZoomValueLabel,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_zoom_value_label, font_montserrat_48_safe());
     lv_style_set_text_align(&s_zoom_value_label, LV_TEXT_ALIGN_CENTER);
     lv_style_set_bg_opa(&s_zoom_value_label, LV_OPA_TRANSP);
+    apply_component_profile(&s_zoom_value_label, ::ui::theme::ComponentSlot::GpsZoomValueLabel);
 
     lv_style_init(&s_zoom_value_label_focused);
-    lv_style_set_bg_color(&s_zoom_value_label_focused, lv_color_hex(kZoomValueFocusedBg));
+    lv_style_set_bg_color(&s_zoom_value_label_focused,
+                          resolve_component_bg(::ui::theme::ComponentSlot::GpsZoomValueLabel,
+                                               ::ui::theme::surface_alt()));
     lv_style_set_bg_opa(&s_zoom_value_label_focused, LV_OPA_COVER);
     lv_style_set_outline_width(&s_zoom_value_label_focused, 3);
-    lv_style_set_outline_color(&s_zoom_value_label_focused, lv_color_hex(kIndicatorText));
+    lv_style_set_outline_color(
+        &s_zoom_value_label_focused,
+        resolve_component_accent(::ui::theme::ComponentSlot::GpsZoomValueLabel,
+                                 ::ui::theme::status_blue()));
     lv_style_set_outline_pad(&s_zoom_value_label_focused, 6);
     lv_style_set_radius(&s_zoom_value_label_focused, 8);
 
     lv_style_init(&s_zoom_roller);
-    lv_style_set_bg_color(&s_zoom_roller, lv_color_hex(kWhite));
+    lv_style_set_bg_color(&s_zoom_roller,
+                          resolve_component_bg(::ui::theme::ComponentSlot::GpsZoomRoller,
+                                               ::ui::theme::surface()));
     lv_style_set_bg_opa(&s_zoom_roller, LV_OPA_COVER);
     lv_style_set_border_width(&s_zoom_roller, 1);
-    lv_style_set_border_color(&s_zoom_roller, lv_color_hex(kPanelBtnBorder));
+    lv_style_set_border_color(&s_zoom_roller, ::ui::theme::border());
     lv_style_set_radius(&s_zoom_roller, 10);
     lv_style_set_pad_top(&s_zoom_roller, 10);
     lv_style_set_pad_bottom(&s_zoom_roller, 10);
-    lv_style_set_text_color(&s_zoom_roller, lv_color_hex(kZoomValueText));
+    lv_style_set_text_color(&s_zoom_roller,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsZoomRoller,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_zoom_roller, font_montserrat_18_safe());
     lv_style_set_text_align(&s_zoom_roller, LV_TEXT_ALIGN_CENTER);
+    apply_component_profile(&s_zoom_roller, ::ui::theme::ComponentSlot::GpsZoomRoller);
 
     lv_style_init(&s_zoom_roller_selected);
-    lv_style_set_bg_color(&s_zoom_roller_selected, lv_color_hex(kZoomValueFocusedBg));
+    lv_style_set_bg_color(&s_zoom_roller_selected,
+                          resolve_component_bg(::ui::theme::ComponentSlot::GpsZoomValueLabel,
+                                               ::ui::theme::surface_alt()));
     lv_style_set_bg_opa(&s_zoom_roller_selected, LV_OPA_COVER);
     lv_style_set_border_width(&s_zoom_roller_selected, 0);
     lv_style_set_radius(&s_zoom_roller_selected, 8);
-    lv_style_set_text_color(&s_zoom_roller_selected, lv_color_hex(kZoomValueText));
+    lv_style_set_text_color(&s_zoom_roller_selected,
+                            resolve_component_text(::ui::theme::ComponentSlot::GpsZoomValueLabel,
+                                                   ::ui::theme::text()));
     lv_style_set_text_font(&s_zoom_roller_selected, font_montserrat_48_safe());
     lv_style_set_text_align(&s_zoom_roller_selected, LV_TEXT_ALIGN_CENTER);
-
-    s_inited = true;
 }
 
 void apply_control_button(lv_obj_t* btn)

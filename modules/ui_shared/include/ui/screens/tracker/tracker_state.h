@@ -26,6 +26,7 @@ struct TrackerPageState
     lv_obj_t* header = nullptr;
     lv_obj_t* content = nullptr;
     lv_obj_t* filter_panel = nullptr;
+    lv_obj_t* selector_controls = nullptr;
     lv_obj_t* list_panel = nullptr;
     lv_obj_t* list_container = nullptr;
     lv_obj_t* bottom_bar = nullptr;

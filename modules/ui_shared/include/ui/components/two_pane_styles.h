@@ -1,16 +1,21 @@
 #pragma once
 
 #include "lvgl.h"
+#include "ui/ui_theme.h"
 
 namespace ui::components::two_pane_styles
 {
 
-static constexpr uint32_t kSidePanelBg = 0xF6E6C6;
-static constexpr uint32_t kMainPanelBg = 0xFAF0D8;
-static constexpr uint32_t kBorder = 0xE7C98F;
-static constexpr uint32_t kAccent = 0xEBA341;
-static constexpr uint32_t kTextPrimary = 0x6B4A1E;
-static constexpr uint32_t kTextMuted = 0x8A6A3A;
+// Style helpers for the builtin split-sidebar directory presentation.
+// Public semantics live in ui::presentation contracts; these names describe a
+// concrete presentation implementation.
+
+inline uint32_t side_panel_bg_hex() { return lv_color_to_u32(::ui::theme::surface_alt()); }
+inline uint32_t main_panel_bg_hex() { return lv_color_to_u32(::ui::theme::surface()); }
+inline uint32_t border_hex() { return lv_color_to_u32(::ui::theme::border()); }
+inline uint32_t accent_hex() { return lv_color_to_u32(::ui::theme::accent()); }
+inline uint32_t text_primary_hex() { return lv_color_to_u32(::ui::theme::text()); }
+inline uint32_t text_muted_hex() { return lv_color_to_u32(::ui::theme::text_muted()); }
 
 void init_once();
 

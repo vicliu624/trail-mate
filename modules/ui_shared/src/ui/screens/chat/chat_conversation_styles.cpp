@@ -1,6 +1,8 @@
 #if !defined(ARDUINO_T_WATCH_S3)
 #include "ui/screens/chat/chat_conversation_styles.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/theme/theme_component_style.h"
+#include "ui/ui_theme.h"
 
 namespace chat::ui::conversation::styles
 {
@@ -31,9 +33,35 @@ static constexpr lv_coord_t kBubblePadX = 10;
 static constexpr lv_coord_t kBubblePadY = 6;
 static constexpr lv_coord_t kBubbleRadius = 12;
 
-static const lv_color_t kBubbleOther = lv_color_hex(0xFFF7E9);
-static const lv_color_t kBubbleSelf = lv_color_hex(0xFFF0D3);
-static const lv_color_t kTextColor = lv_color_hex(0x3A2A1A);
+void apply_theme_profile(lv_style_t* style, ::ui::theme::ComponentSlot slot)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_style(style, profile);
+    }
+}
+
+void apply_theme_text_color(lv_style_t* style, ::ui::theme::ComponentSlot slot)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.text_color.present)
+    {
+        lv_style_set_text_color(style, profile.text_color.value);
+    }
+}
+
+lv_color_t resolve_focus_accent(::ui::theme::ComponentSlot slot)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile) &&
+        profile.accent_color.present)
+    {
+        return profile.accent_color.value;
+    }
+    return ::ui::theme::accent();
+}
 
 void init_once()
 {
@@ -41,14 +69,15 @@ void init_once()
     inited = true;
 
     lv_style_init(&s_root);
-    lv_style_set_bg_color(&s_root, lv_color_hex(0xFFF3DF));
+    lv_style_set_bg_color(&s_root, ::ui::theme::page_bg());
     lv_style_set_bg_opa(&s_root, LV_OPA_COVER);
     lv_style_set_border_width(&s_root, 0);
     lv_style_set_pad_all(&s_root, 0);
     lv_style_set_radius(&s_root, 0);
+    apply_theme_profile(&s_root, ::ui::theme::ComponentSlot::ChatConversationRoot);
 
     lv_style_init(&s_msg_list);
-    lv_style_set_bg_color(&s_msg_list, lv_color_hex(0xFFF3DF));
+    lv_style_set_bg_color(&s_msg_list, ::ui::theme::page_bg());
     lv_style_set_bg_opa(&s_msg_list, LV_OPA_COVER);
     lv_style_set_border_width(&s_msg_list, 0);
     lv_style_set_pad_left(&s_msg_list, kPadX);
@@ -57,31 +86,36 @@ void init_once()
     lv_style_set_pad_bottom(&s_msg_list, kPadY);
     lv_style_set_pad_row(&s_msg_list, kGapY);
     lv_style_set_radius(&s_msg_list, 0);
+    apply_theme_profile(&s_msg_list, ::ui::theme::ComponentSlot::ChatConversationThreadRegion);
 
     lv_style_init(&s_action_bar);
-    lv_style_set_bg_color(&s_action_bar, lv_color_hex(0xFFF0D3));
+    lv_style_set_bg_color(&s_action_bar, ::ui::theme::surface_alt());
     lv_style_set_bg_opa(&s_action_bar, LV_OPA_COVER);
     lv_style_set_border_width(&s_action_bar, 0);
     lv_style_set_pad_left(&s_action_bar, 10);
     lv_style_set_pad_right(&s_action_bar, 10);
     lv_style_set_pad_top(&s_action_bar, 4);
     lv_style_set_pad_bottom(&s_action_bar, 4);
+    apply_theme_profile(&s_action_bar, ::ui::theme::ComponentSlot::ChatConversationActionBar);
 
     lv_style_init(&s_reply_btn);
-    lv_style_set_bg_color(&s_reply_btn, lv_color_hex(0xFFF7E9));
+    lv_style_set_bg_color(&s_reply_btn, ::ui::theme::surface());
     lv_style_set_bg_opa(&s_reply_btn, LV_OPA_COVER);
     lv_style_set_border_width(&s_reply_btn, 1);
-    lv_style_set_border_color(&s_reply_btn, lv_color_hex(0xD9B06A));
+    lv_style_set_border_color(&s_reply_btn, ::ui::theme::border());
     lv_style_set_radius(&s_reply_btn, 6);
-    lv_style_set_text_color(&s_reply_btn, lv_color_hex(0x3A2A1A));
+    lv_style_set_text_color(&s_reply_btn, ::ui::theme::text());
+    apply_theme_profile(&s_reply_btn, ::ui::theme::ComponentSlot::ActionButtonPrimary);
 
     lv_style_init(&s_reply_btn_focused);
-    lv_style_set_bg_color(&s_reply_btn_focused, lv_color_hex(0xEBA341));
+    lv_style_set_bg_color(&s_reply_btn_focused,
+                          resolve_focus_accent(::ui::theme::ComponentSlot::ActionButtonPrimary));
     lv_style_set_outline_width(&s_reply_btn_focused, 0);
 
     lv_style_init(&s_reply_label);
-    lv_style_set_text_color(&s_reply_label, lv_color_hex(0x3A2A1A));
+    lv_style_set_text_color(&s_reply_label, ::ui::theme::text());
     lv_style_set_text_font(&s_reply_label, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
+    apply_theme_text_color(&s_reply_label, ::ui::theme::ComponentSlot::ActionButtonPrimary);
 
     lv_style_init(&s_row);
     lv_style_set_bg_opa(&s_row, LV_OPA_TRANSP);
@@ -106,25 +140,30 @@ void init_once()
     lv_style_set_bg_grad_dir(&s_bubble_base, LV_GRAD_DIR_NONE);
 
     lv_style_init(&s_bubble_self);
-    lv_style_set_bg_color(&s_bubble_self, kBubbleSelf);
+    lv_style_set_bg_color(&s_bubble_self, ::ui::theme::surface_alt());
+    apply_theme_profile(&s_bubble_self, ::ui::theme::ComponentSlot::ChatBubbleSelf);
 
     lv_style_init(&s_bubble_other);
-    lv_style_set_bg_color(&s_bubble_other, kBubbleOther);
+    lv_style_set_bg_color(&s_bubble_other, ::ui::theme::surface());
+    apply_theme_profile(&s_bubble_other, ::ui::theme::ComponentSlot::ChatBubblePeer);
 
     lv_style_init(&s_bubble_text);
-    lv_style_set_text_color(&s_bubble_text, kTextColor);
+    lv_style_set_text_color(&s_bubble_text, ::ui::theme::text());
     lv_style_set_text_align(&s_bubble_text, LV_TEXT_ALIGN_LEFT);
     lv_style_set_text_font(&s_bubble_text, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()));
+    apply_theme_text_color(&s_bubble_text, ::ui::theme::ComponentSlot::ChatBubbleText);
 
     lv_style_init(&s_bubble_time);
-    lv_style_set_text_color(&s_bubble_time, lv_color_hex(0x6A5646));
+    lv_style_set_text_color(&s_bubble_time, ::ui::theme::text_muted());
     lv_style_set_text_align(&s_bubble_time, LV_TEXT_ALIGN_LEFT);
     lv_style_set_text_font(&s_bubble_time, &lv_font_montserrat_14);
+    apply_theme_text_color(&s_bubble_time, ::ui::theme::ComponentSlot::ChatBubbleTime);
 
     lv_style_init(&s_bubble_status);
-    lv_style_set_text_color(&s_bubble_status, lv_color_hex(0xCC0000));
+    lv_style_set_text_color(&s_bubble_status, ::ui::theme::error());
     lv_style_set_text_align(&s_bubble_status, LV_TEXT_ALIGN_LEFT);
     lv_style_set_text_font(&s_bubble_status, &lv_font_montserrat_14);
+    apply_theme_text_color(&s_bubble_status, ::ui::theme::ComponentSlot::ChatBubbleStatus);
 }
 
 void apply_root(lv_obj_t* root)

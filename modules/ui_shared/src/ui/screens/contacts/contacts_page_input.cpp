@@ -5,16 +5,16 @@
 
 #include "ui/screens/contacts/contacts_page_input.h"
 
-#include "ui/components/two_pane_nav.h"
+#include "ui/presentation/directory_browser_nav.h"
 #include "ui/screens/contacts/contacts_state.h"
 
 namespace
 {
 
-using Adapter = ::ui::components::two_pane_nav::Adapter;
-using BackPlacement = ::ui::components::two_pane_nav::BackPlacement;
+using Adapter = ::ui::presentation::directory_browser_nav::Adapter;
+using BackPlacement = ::ui::presentation::directory_browser_nav::BackPlacement;
 
-static ::ui::components::two_pane_nav::Controller s_controller{};
+static ::ui::presentation::directory_browser_nav::Controller s_controller{};
 
 static int mode_to_index(contacts::ui::ContactsMode mode)
 {
@@ -48,12 +48,12 @@ static lv_obj_t* get_top_back_button(void* /*ctx*/)
     return contacts::ui::g_contacts_state.top_bar.back_btn;
 }
 
-static size_t get_filter_count(void* /*ctx*/)
+static size_t get_selector_count(void* /*ctx*/)
 {
     return 6;
 }
 
-static lv_obj_t* get_filter_button(void* /*ctx*/, size_t index)
+static lv_obj_t* get_selector_button(void* /*ctx*/, size_t index)
 {
     using namespace contacts::ui;
     switch (index)
@@ -75,34 +75,34 @@ static lv_obj_t* get_filter_button(void* /*ctx*/, size_t index)
     }
 }
 
-static int get_preferred_filter_index(void* /*ctx*/)
+static int get_preferred_selector_index(void* /*ctx*/)
 {
     return mode_to_index(contacts::ui::g_contacts_state.current_mode);
 }
 
-static size_t get_list_count(void* /*ctx*/)
+static size_t get_content_count(void* /*ctx*/)
 {
     return contacts::ui::g_contacts_state.list_items.size();
 }
 
-static lv_obj_t* get_list_button(void* /*ctx*/, size_t index)
+static lv_obj_t* get_content_button(void* /*ctx*/, size_t index)
 {
     auto& items = contacts::ui::g_contacts_state.list_items;
     return (index < items.size()) ? items[index] : nullptr;
 }
 
-static int get_preferred_list_index(void* /*ctx*/)
+static int get_preferred_content_index(void* /*ctx*/)
 {
     const int selected = contacts::ui::g_contacts_state.selected_index;
     return selected >= 0 ? selected : -1;
 }
 
-static lv_obj_t* get_list_back_button(void* /*ctx*/)
+static lv_obj_t* get_content_back_button(void* /*ctx*/)
 {
     return contacts::ui::g_contacts_state.back_btn;
 }
 
-static bool handle_list_enter(void* /*ctx*/, lv_obj_t* focused)
+static bool handle_content_enter(void* /*ctx*/, lv_obj_t* focused)
 {
     using namespace contacts::ui;
     if (!focused || !lv_obj_is_valid(focused))
@@ -132,15 +132,15 @@ static Adapter make_adapter()
     Adapter adapter{};
     adapter.get_key_target = get_key_target;
     adapter.get_top_back_button = get_top_back_button;
-    adapter.get_filter_count = get_filter_count;
-    adapter.get_filter_button = get_filter_button;
-    adapter.get_preferred_filter_index = get_preferred_filter_index;
-    adapter.get_list_count = get_list_count;
-    adapter.get_list_button = get_list_button;
-    adapter.get_preferred_list_index = get_preferred_list_index;
-    adapter.get_list_back_button = get_list_back_button;
-    adapter.handle_list_enter = handle_list_enter;
-    adapter.filter_top_back_placement = BackPlacement::Trailing;
+    adapter.get_selector_count = get_selector_count;
+    adapter.get_selector_button = get_selector_button;
+    adapter.get_preferred_selector_index = get_preferred_selector_index;
+    adapter.get_content_count = get_content_count;
+    adapter.get_content_button = get_content_button;
+    adapter.get_preferred_content_index = get_preferred_content_index;
+    adapter.get_content_back_button = get_content_back_button;
+    adapter.handle_content_enter = handle_content_enter;
+    adapter.selector_top_back_placement = BackPlacement::Trailing;
     return adapter;
 }
 
@@ -161,14 +161,14 @@ void contacts_input_on_ui_refreshed()
     s_controller.on_ui_refreshed();
 }
 
-void contacts_focus_to_filter()
+void contacts_focus_to_selector()
 {
-    s_controller.focus_filter();
+    s_controller.focus_selector();
 }
 
-void contacts_focus_to_list()
+void contacts_focus_to_content()
 {
-    s_controller.focus_list();
+    s_controller.focus_content();
 }
 
 lv_group_t* contacts_input_get_group()

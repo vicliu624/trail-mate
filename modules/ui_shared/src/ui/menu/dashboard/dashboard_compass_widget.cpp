@@ -72,7 +72,7 @@ void create_compass_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_t card_
     compass.dial = lv_obj_create(compass.chrome.body);
     lv_obj_set_size(compass.dial, dial_d, dial_d);
     lv_obj_align(compass.dial, LV_ALIGN_LEFT_MID, 2, 0);
-    lv_obj_set_style_bg_color(compass.dial, lv_color_hex(0xF7ECD2), 0);
+    lv_obj_set_style_bg_color(compass.dial, color_panel_bg(), 0);
     lv_obj_set_style_bg_opa(compass.dial, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(compass.dial, 0, 0);
     lv_obj_set_style_radius(compass.dial, LV_RADIUS_CIRCLE, 0);

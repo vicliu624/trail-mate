@@ -7,18 +7,16 @@
 #include <string>
 
 #include "ui/localization.h"
+#include "ui/presentation/watch_face_layout.h"
+#include "ui/theme/theme_component_style.h"
+#include "ui/ui_theme.h"
 
 namespace
 {
-constexpr uint32_t kColorWarmBg = 0xF6E6C6;
-constexpr uint32_t kColorText = 0x6B4A1E;
-constexpr uint32_t kColorTextDim = 0x8A6A3A;
-constexpr uint32_t kColorAmber = 0xEBA341;
-constexpr uint32_t kColorLine = 0xE7C98F;
-
 struct WatchFaceUi
 {
     lv_obj_t* root = nullptr;
+    lv_obj_t* primary_panel = nullptr;
     lv_obj_t* node_id_label = nullptr;
     lv_obj_t* battery_label = nullptr;
     lv_obj_t* hour_label = nullptr;
@@ -66,17 +64,26 @@ const char* battery_symbol_for_level(int percent)
     return LV_SYMBOL_BATTERY_EMPTY;
 }
 
-void apply_label_style(lv_obj_t* label, const lv_font_t* font, uint32_t color)
+void apply_label_style(lv_obj_t* label, const lv_font_t* font, lv_color_t color)
 {
     if (!label)
     {
         return;
     }
     lv_obj_set_style_text_font(label, font, 0);
-    lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+    lv_obj_set_style_text_color(label, color, 0);
     lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(label, 0, 0);
     lv_obj_clear_flag(label, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+void apply_component_profile(lv_obj_t* obj, ::ui::theme::ComponentSlot slot)
+{
+    ::ui::theme::ComponentProfile profile{};
+    if (::ui::theme::resolve_component_profile(slot, profile))
+    {
+        ::ui::theme::apply_component_profile_to_obj(obj, profile);
+    }
 }
 
 void watch_face_event_cb(lv_event_t* e)
@@ -190,60 +197,62 @@ void watch_face_create(lv_obj_t* parent)
         return;
     }
 
-    s_ui.root = lv_obj_create(parent);
-    lv_obj_set_size(s_ui.root, LV_PCT(100), LV_PCT(100));
-    lv_obj_align(s_ui.root, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(s_ui.root, lv_color_hex(kColorWarmBg), 0);
-    lv_obj_set_style_bg_opa(s_ui.root, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_ui.root, 0, 0);
-    lv_obj_set_style_radius(s_ui.root, 0, 0);
-    lv_obj_set_style_pad_all(s_ui.root, 0, 0);
-    lv_obj_clear_flag(s_ui.root, LV_OBJ_FLAG_SCROLLABLE);
+    ui::presentation::watch_face_layout::RootSpec root_spec{};
+    root_spec.bg_hex = lv_color_to_u32(::ui::theme::page_bg());
+    s_ui.root = ui::presentation::watch_face_layout::create_root(parent, root_spec);
     lv_obj_add_flag(s_ui.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_ui.root, watch_face_event_cb, LV_EVENT_GESTURE, nullptr);
     lv_obj_add_event_cb(s_ui.root, watch_face_event_cb, LV_EVENT_PRESSED, nullptr);
     lv_obj_add_event_cb(s_ui.root, watch_face_event_cb, LV_EVENT_PRESSING, nullptr);
     lv_obj_add_event_cb(s_ui.root, watch_face_event_cb, LV_EVENT_RELEASED, nullptr);
 
-    s_ui.node_id_label = lv_label_create(s_ui.root);
-    apply_label_style(s_ui.node_id_label, &lv_font_montserrat_14, kColorTextDim);
+    s_ui.primary_panel = ui::presentation::watch_face_layout::create_primary_region(s_ui.root);
+
+    s_ui.node_id_label = lv_label_create(s_ui.primary_panel);
+    apply_label_style(s_ui.node_id_label, &lv_font_montserrat_14, ::ui::theme::text_muted());
+    apply_component_profile(s_ui.node_id_label, ::ui::theme::ComponentSlot::WatchFaceNodeId);
     lv_obj_set_width(s_ui.node_id_label, LV_SIZE_CONTENT);
     lv_obj_set_style_text_align(s_ui.node_id_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_align(s_ui.node_id_label, LV_ALIGN_TOP_LEFT, 10, 10);
     ::ui::i18n::set_label_text(s_ui.node_id_label, "ID: -");
 
-    s_ui.battery_label = lv_label_create(s_ui.root);
-    apply_label_style(s_ui.battery_label, &lv_font_montserrat_14, kColorTextDim);
+    s_ui.battery_label = lv_label_create(s_ui.primary_panel);
+    apply_label_style(s_ui.battery_label, &lv_font_montserrat_14, ::ui::theme::text_muted());
+    apply_component_profile(s_ui.battery_label, ::ui::theme::ComponentSlot::WatchFaceBattery);
     lv_obj_set_width(s_ui.battery_label, LV_SIZE_CONTENT);
     lv_obj_set_style_text_align(s_ui.battery_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align(s_ui.battery_label, LV_ALIGN_TOP_RIGHT, -10, 10);
     lv_label_set_text(s_ui.battery_label, "--");
 
-    s_ui.hour_label = lv_label_create(s_ui.root);
-    apply_label_style(s_ui.hour_label, &lv_font_montserrat_48, kColorText);
+    s_ui.hour_label = lv_label_create(s_ui.primary_panel);
+    apply_label_style(s_ui.hour_label, &lv_font_montserrat_48, ::ui::theme::text());
+    apply_component_profile(s_ui.hour_label, ::ui::theme::ComponentSlot::WatchFaceClockHour);
     lv_obj_set_width(s_ui.hour_label, LV_PCT(100));
     lv_obj_set_style_text_align(s_ui.hour_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_ui.hour_label, LV_ALIGN_TOP_MID, 0, 52);
     lv_label_set_text(s_ui.hour_label, "--");
 
-    s_ui.minute_label = lv_label_create(s_ui.root);
-    apply_label_style(s_ui.minute_label, &lv_font_montserrat_48, kColorText);
+    s_ui.minute_label = lv_label_create(s_ui.primary_panel);
+    apply_label_style(s_ui.minute_label, &lv_font_montserrat_48, ::ui::theme::text());
+    apply_component_profile(s_ui.minute_label, ::ui::theme::ComponentSlot::WatchFaceClockMinute);
     lv_obj_set_width(s_ui.minute_label, LV_PCT(100));
     lv_obj_set_style_text_align(s_ui.minute_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_ui.minute_label, LV_ALIGN_TOP_MID, 0, 118);
     lv_label_set_text(s_ui.minute_label, "--");
 
-    s_ui.sep_line = lv_obj_create(s_ui.root);
+    s_ui.sep_line = lv_obj_create(s_ui.primary_panel);
     lv_obj_set_size(s_ui.sep_line, 160, 1);
-    lv_obj_set_style_bg_color(s_ui.sep_line, lv_color_hex(kColorLine), 0);
+    lv_obj_set_style_bg_color(s_ui.sep_line, ::ui::theme::separator(), 0);
     lv_obj_set_style_bg_opa(s_ui.sep_line, LV_OPA_60, 0);
     lv_obj_set_style_border_width(s_ui.sep_line, 0, 0);
     lv_obj_set_style_radius(s_ui.sep_line, 0, 0);
     lv_obj_clear_flag(s_ui.sep_line, LV_OBJ_FLAG_SCROLLABLE);
+    apply_component_profile(s_ui.sep_line, ::ui::theme::ComponentSlot::WatchFaceClockSeparator);
     lv_obj_align(s_ui.sep_line, LV_ALIGN_TOP_MID, 0, 102);
 
-    s_ui.date_label = lv_label_create(s_ui.root);
-    apply_label_style(s_ui.date_label, &lv_font_montserrat_18, kColorTextDim);
+    s_ui.date_label = lv_label_create(s_ui.primary_panel);
+    apply_label_style(s_ui.date_label, &lv_font_montserrat_18, ::ui::theme::text_muted());
+    apply_component_profile(s_ui.date_label, ::ui::theme::ComponentSlot::WatchFaceDate);
     lv_obj_set_width(s_ui.date_label, LV_PCT(100));
     lv_obj_set_style_text_align(s_ui.date_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_ui.date_label, LV_ALIGN_BOTTOM_MID, 0, -18);
@@ -293,7 +302,7 @@ void watch_face_set_time(int hour, int minute, int month, int day, const char* w
     if (level < 0)
     {
         lv_label_set_text(s_ui.battery_label, "--");
-        lv_obj_set_style_text_color(s_ui.battery_label, lv_color_hex(kColorTextDim), 0);
+        lv_obj_set_style_text_color(s_ui.battery_label, ::ui::theme::text_muted(), 0);
         return;
     }
     if (level > 100)
@@ -303,8 +312,10 @@ void watch_face_set_time(int hour, int minute, int month, int day, const char* w
     const char* symbol = battery_symbol_for_level(level);
     snprintf(buf, sizeof(buf), "%s %d%%", symbol, level);
     lv_label_set_text(s_ui.battery_label, buf);
-    uint32_t battery_color = level < 20 ? kColorAmber : kColorTextDim;
-    lv_obj_set_style_text_color(s_ui.battery_label, lv_color_hex(battery_color), 0);
+    const lv_color_t battery_color =
+        level < 20 ? ::ui::theme::color(::ui::theme::ColorSlot::StateWarn)
+                   : lv_obj_get_style_text_color(s_ui.battery_label, 0);
+    lv_obj_set_style_text_color(s_ui.battery_label, battery_color, 0);
 }
 
 void watch_face_set_node_id(uint32_t node_id)
@@ -335,7 +346,7 @@ void watch_face_set_placeholder()
     lv_label_set_text(s_ui.minute_label, "--");
     lv_label_set_text(s_ui.date_label, "--.-- ---");
     lv_label_set_text(s_ui.battery_label, "--");
-    lv_obj_set_style_text_color(s_ui.battery_label, lv_color_hex(kColorTextDim), 0);
+    lv_obj_set_style_text_color(s_ui.battery_label, ::ui::theme::text_muted(), 0);
 }
 
 void watch_face_show(bool show)

@@ -1,30 +1,38 @@
 # UI/UX Specification Index
 
-`docs/uiux` 按“对象类型”而不是按文件历史堆叠组织。
+`docs/uiux` is organized by object type rather than by implementation history.
 
-当前目录约束如下：
+Current directory rules:
 
 - `foundation/`
-  - 放全局风格、视觉语言、跨页面共享的设计基线。
-  - 这里的文档不能偷带某个具体页面的布局细节。
+  Cross-page design language, presentation system rules, public contracts, and authoring guidance.
 - `pages/`
-  - 放页面级规格。
-  - 每个文件只解释一个页面对象，不解释可复用组件本体。
+  Page-level specifications. A page document should explain one page object and should not redefine shared component contracts.
 - `components/`
-  - 放组件级规格与组件实现规格。
-  - 这里只定义组件边界、职责、状态与实现约束，不反向定义页面。
+  Shared component specifications and implementation constraints. A component document should explain one reusable object and should not silently redefine page semantics.
 
-当前文件归属：
+Current foundation documents:
 
 - `foundation/firmware_visual_style.md`
+- `foundation/theme_system_spec.md`
+- `foundation/theme_delivery_plan.md`
+- `foundation/theme_authoring_guide.md`
+- `foundation/theme_slot_inventory.md`
+- `foundation/presentation_contract_inventory.md`
+
+Current page documents:
+
 - `pages/node_info_page.md`
 - `pages/node_info_page_layer_popup_addendum.md`
+
+Current component documents:
+
 - `components/shared_map_viewport.md`
 - `components/shared_map_viewport_impl.md`
 - `components/shared_map_viewport_layer_popup_addendum.md`
 
-如果后续新增文档，必须先判断它属于哪一类对象，再落目录：
+When adding a new UI/UX document, decide the object boundary first:
 
-1. 它描述的是全局视觉语言，还是某个页面，还是某个组件。
-2. 如果它同时想定义页面和组件，说明文档边界还没切开，应先拆分。
-3. 不允许继续把页面规格、组件规格、全局风格规格平铺在同一层目录。
+1. Is it about global visual/presentation rules, one page, or one reusable component?
+2. If it tries to define both page semantics and component contracts at once, the boundary is probably still mixed and should be split first.
+3. Do not keep flattening page specs, component specs, and foundation contracts into one directory level.

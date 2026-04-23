@@ -28,7 +28,7 @@ expects Chinese glyph coverage to be generated into external font packs.
 The reference bundle lives under:
 
 ```text
-packs/zh-Hans
+packs/locale-bundles/zh-Hans
 ```
 
 Typical flow:
@@ -42,21 +42,21 @@ python tools/extract_pinyin_chars.py
 2. Generate the core pack subset:
 
 ```bash
-python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-id zh-hans-core
+python tools/build_locale_pack_charset.py --pack-root packs/locale-bundles/zh-Hans --font-pack-id zh-hans-core
 ```
 
 3. Generate the extension pack subset:
 
 ```bash
-python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-id zh-hans-ext
+python tools/build_locale_pack_charset.py --pack-root packs/locale-bundles/zh-Hans --font-pack-id zh-hans-ext
 ```
 
 4. Generate `font.bin` files with `lv_font_conv` using:
 
 - font source: `tools/fonts/NotoSansCJKsc-Regular.otf`
 - glyph subsets:
-  - `packs/zh-Hans/fonts/zh-hans-core/charset.txt`
-  - `packs/zh-Hans/fonts/zh-hans-ext/charset.txt`
+  - `packs/locale-bundles/zh-Hans/fonts/zh-hans-core/charset.txt`
+  - `packs/locale-bundles/zh-Hans/fonts/zh-hans-ext/charset.txt`
 - output format: `bin`
 - size: `16`
 - bpp: `2`

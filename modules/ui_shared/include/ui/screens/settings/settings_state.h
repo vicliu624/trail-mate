@@ -111,6 +111,8 @@ struct SettingsData
     int timezone_offset_min = 0;
     int speaker_volume = 45;
     int display_locale_index = 0;
+    int display_theme_index = 0;
+    int display_presentation_index = 0;
     bool ble_enabled = true;
     bool vibration_enabled = true;
 
@@ -145,6 +147,7 @@ struct UiState
     lv_obj_t* root = nullptr;
     lv_obj_t* content = nullptr;
     lv_obj_t* filter_panel = nullptr;
+    lv_obj_t* selector_controls = nullptr;
     lv_obj_t* list_panel = nullptr;
     lv_obj_t* list_back_btn = nullptr;
     ::ui::widgets::TopBar top_bar;

@@ -1,17 +1,21 @@
 #include "ui/startup_shell.h"
 
+#include <cstring>
 #include <ctime>
 
 #include "lvgl.h"
 #include "platform/ui/screen_runtime.h"
+#include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_runtime.h"
+#include "ui/presentation/presentation_registry.h"
 #include "ui/ui_boot.h"
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
+#include "ui/theme/theme_registry.h"
 #include "ui/watch_face.h"
 #include "ui/widgets/system_notification.h"
 
@@ -19,6 +23,53 @@ namespace ui::startup_shell
 {
 namespace
 {
+
+constexpr const char* kSettingsNs = "settings";
+constexpr const char* kDisplayThemeKey = "display_theme";
+constexpr const char* kDisplayPresentationKey = "display_presentation";
+
+void restore_theme_preference()
+{
+    std::string theme_id;
+    if (::platform::ui::settings_store::get_string(kSettingsNs, kDisplayThemeKey, theme_id) &&
+        !theme_id.empty() &&
+        ::ui::theme::set_active_theme(theme_id.c_str()))
+    {
+        const char* resolved_theme_id = ::ui::theme::active_theme_id();
+        if (resolved_theme_id && std::strcmp(resolved_theme_id, theme_id.c_str()) != 0)
+        {
+            (void)::platform::ui::settings_store::put_string(kSettingsNs,
+                                                             kDisplayThemeKey,
+                                                             resolved_theme_id);
+        }
+        return;
+    }
+
+    ::ui::theme::reset_active_theme();
+}
+
+void restore_presentation_preference()
+{
+    std::string presentation_id;
+    if (::platform::ui::settings_store::get_string(kSettingsNs,
+                                                   kDisplayPresentationKey,
+                                                   presentation_id) &&
+        !presentation_id.empty() &&
+        ::ui::presentation::set_active_presentation(presentation_id.c_str()))
+    {
+        const char* resolved_presentation_id = ::ui::presentation::active_presentation_id();
+        if (resolved_presentation_id &&
+            std::strcmp(resolved_presentation_id, presentation_id.c_str()) != 0)
+        {
+            (void)::platform::ui::settings_store::put_string(kSettingsNs,
+                                                             kDisplayPresentationKey,
+                                                             resolved_presentation_id);
+        }
+        return;
+    }
+
+    ::ui::presentation::reset_active_presentation();
+}
 
 bool resolve_display_time(struct tm* out_tm)
 {
@@ -134,6 +185,8 @@ platform::ui::screen::Hooks buildScreenSleepHooks(const Hooks& hooks)
 
 void prepareBootUi(bool waking_from_sleep)
 {
+    restore_theme_preference();
+    restore_presentation_preference();
     if (!waking_from_sleep)
     {
         ui::boot::show();

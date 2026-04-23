@@ -1,0 +1,1 @@
+Official full-coverage presentation bundle containing the reference default presentation and the reference directory-stacked presentation. The bundle explicitly covers all public presentation archetypes so third-party authors can start from a complete, installable example instead of a partial fragment.

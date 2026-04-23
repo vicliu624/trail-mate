@@ -34,6 +34,7 @@ struct RuntimeState
     lv_obj_t* screen_root = nullptr;
     lv_obj_t* main_screen = nullptr;
     lv_obj_t* menu_panel = nullptr;
+    lv_obj_t* menu_topbar = nullptr;
     lv_obj_t* time_label = nullptr;
     lv_obj_t* battery_label = nullptr;
     lv_timer_t* time_timer = nullptr;
@@ -52,6 +53,31 @@ bool use_menu_status_icons()
 #else
     return true;
 #endif
+}
+
+lv_obj_t* create_status_icon_holder(lv_obj_t* parent, const ui::menu_profile::MenuLayoutProfile& profile)
+{
+    lv_obj_t* holder = lv_obj_create(parent);
+    lv_obj_set_size(holder, 18, 18);
+    lv_obj_set_style_bg_opa(holder, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(holder, 0, 0);
+    lv_obj_set_style_pad_all(holder, 0, 0);
+    lv_obj_set_style_radius(holder, 0, 0);
+    lv_obj_set_style_shadow_width(holder, 0, 0);
+    lv_obj_clear_flag(holder, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(holder, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t* image = lv_image_create(holder);
+    lv_obj_add_flag(image, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_center(image);
+
+    lv_obj_t* label = lv_label_create(holder);
+    lv_label_set_text(label, "");
+    lv_obj_set_style_text_font(label, profile.top_bar_font, 0);
+    lv_obj_set_style_text_color(label, ui::theme::text(), 0);
+    lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_center(label);
+    return holder;
 }
 
 bool formatMenuTime(char* out, size_t out_len)
@@ -318,18 +344,18 @@ void refreshBatteryLabel()
 void createTopBar()
 {
     const auto& profile = ui::menu_profile::current();
-    lv_obj_t* menu_topbar = lv_obj_create(s_runtime.menu_panel);
-    lv_obj_set_size(menu_topbar, LV_PCT(100), profile.top_bar_height);
-    lv_obj_align(menu_topbar, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(menu_topbar, ui::theme::accent(), 0);
-    lv_obj_set_style_bg_opa(menu_topbar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(menu_topbar, 0, 0);
-    lv_obj_set_style_radius(menu_topbar, 0, 0);
-    lv_obj_set_style_shadow_width(menu_topbar, 0, 0);
-    lv_obj_set_style_pad_all(menu_topbar, 0, 0);
-    lv_obj_clear_flag(menu_topbar, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(menu_topbar, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_move_background(menu_topbar);
+    s_runtime.menu_topbar = lv_obj_create(s_runtime.menu_panel);
+    lv_obj_set_size(s_runtime.menu_topbar, LV_PCT(100), profile.top_bar_height);
+    lv_obj_align(s_runtime.menu_topbar, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_color(s_runtime.menu_topbar, ui::theme::accent(), 0);
+    lv_obj_set_style_bg_opa(s_runtime.menu_topbar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_runtime.menu_topbar, 0, 0);
+    lv_obj_set_style_radius(s_runtime.menu_topbar, 0, 0);
+    lv_obj_set_style_shadow_width(s_runtime.menu_topbar, 0, 0);
+    lv_obj_set_style_pad_all(s_runtime.menu_topbar, 0, 0);
+    lv_obj_clear_flag(s_runtime.menu_topbar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(s_runtime.menu_topbar, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_move_background(s_runtime.menu_topbar);
 
     s_runtime.time_label = lv_label_create(s_runtime.menu_panel);
     lv_obj_set_width(s_runtime.time_label, LV_SIZE_CONTENT);
@@ -377,13 +403,13 @@ void createTopBar()
     lv_obj_t* menu_ble_icon = nullptr;
     if (use_menu_status_icons())
     {
-        menu_route_icon = lv_image_create(menu_status_row);
-        menu_tracker_icon = lv_image_create(menu_status_row);
-        menu_gps_icon = lv_image_create(menu_status_row);
-        menu_wifi_icon = lv_image_create(menu_status_row);
-        menu_team_icon = lv_image_create(menu_status_row);
-        menu_msg_icon = lv_image_create(menu_status_row);
-        menu_ble_icon = lv_image_create(menu_status_row);
+        menu_route_icon = create_status_icon_holder(menu_status_row, profile);
+        menu_tracker_icon = create_status_icon_holder(menu_status_row, profile);
+        menu_gps_icon = create_status_icon_holder(menu_status_row, profile);
+        menu_wifi_icon = create_status_icon_holder(menu_status_row, profile);
+        menu_team_icon = create_status_icon_holder(menu_status_row, profile);
+        menu_msg_icon = create_status_icon_holder(menu_status_row, profile);
+        menu_ble_icon = create_status_icon_holder(menu_status_row, profile);
         lv_obj_add_flag(menu_route_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_tracker_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(menu_gps_icon, LV_OBJ_FLAG_HIDDEN);
@@ -546,6 +572,23 @@ void setScene(Scene scene)
 Scene currentScene()
 {
     return s_runtime.scene;
+}
+
+void refresh_theme()
+{
+    if (s_runtime.menu_topbar != nullptr)
+    {
+        lv_obj_set_style_bg_color(s_runtime.menu_topbar, ui::theme::accent(), 0);
+    }
+    if (s_runtime.time_label != nullptr)
+    {
+        lv_obj_set_style_text_color(s_runtime.time_label, ui::theme::text(), 0);
+    }
+    if (s_runtime.battery_label != nullptr)
+    {
+        lv_obj_set_style_text_color(s_runtime.battery_label, ui::theme::text(), 0);
+    }
+    ui::status::force_update();
 }
 
 } // namespace menu_runtime

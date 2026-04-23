@@ -37,22 +37,36 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation/chat_compose_scaffold.h"
+#include "ui/ui_theme.h"
 
 namespace chat::ui::compose::layout
 {
+namespace compose_layout = ::ui::presentation::chat_compose_scaffold;
 
-static lv_obj_t* create_btn_with_label(lv_obj_t* parent, int w, int h, const char* text)
+static lv_obj_t* create_btn_with_label(lv_obj_t* parent,
+                                       int w,
+                                       int h,
+                                       const char* text,
+                                       compose_layout::ActionButtonRole role)
 {
-    lv_obj_t* btn = lv_btn_create(parent);
-    lv_obj_set_size(btn, w, h);
-
-    lv_obj_t* label = lv_label_create(btn);
+    compose_layout::ActionButtonSpec button_spec{};
+    button_spec.width = w;
+    button_spec.height = h;
+    lv_obj_t* label = nullptr;
+    lv_obj_t* btn = compose_layout::create_action_button(parent, label, role, button_spec);
+    ::ui::theme::ComponentProfile profile{};
+    (void)::ui::theme::resolve_component_profile(
+        role == compose_layout::ActionButtonRole::Primary
+            ? ::ui::theme::ComponentSlot::ActionButtonPrimary
+            : ::ui::theme::ComponentSlot::ActionButtonSecondary,
+        profile);
     ::ui::i18n::set_label_text(label, text);
-    lv_obj_set_width(label, LV_PCT(100));
-    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(label, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(label,
+                                profile.text_color.present ? profile.text_color.value
+                                                           : ::ui::theme::text(),
+                                0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
-    lv_obj_center(label);
     return btn;
 }
 
@@ -70,54 +84,57 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     const int action_pad_tb = std::max(spec.action_pad_tb, profile.large_touch_hitbox ? 6 : spec.action_pad_tb);
     const int button_gap = std::max(spec.btn_gap, profile.large_touch_hitbox ? 12 : spec.btn_gap);
 
-    w.container = lv_obj_create(parent);
-    lv_obj_set_size(w.container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(w.container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(w.container, 0, 0);
+    compose_layout::RootSpec root_spec{};
+    compose_layout::HeaderSpec header_spec{};
+    compose_layout::ContentSpec content_spec{};
+    compose_layout::EditorSpec editor_spec{};
+    compose_layout::ActionBarSpec action_bar_spec{};
+
+    w.container = compose_layout::create_root(parent, root_spec);
+    lv_obj_t* header = compose_layout::create_header_container(w.container, header_spec);
 
     ::ui::widgets::TopBarConfig top_bar_cfg{};
     top_bar_cfg.height = profile.top_bar_height;
-    ::ui::widgets::top_bar_init(w.top_bar, w.container, top_bar_cfg);
+    ::ui::widgets::top_bar_init(w.top_bar, header, top_bar_cfg);
 
-    w.content = lv_obj_create(w.container);
-    lv_obj_set_size(w.content, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_grow(w.content, 1);
-    lv_obj_set_flex_flow(w.content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(w.content, content_row_pad, 0);
-    lv_obj_set_style_pad_all(w.content, content_pad, 0);
-    lv_obj_clear_flag(w.content, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scrollbar_mode(w.content, LV_SCROLLBAR_MODE_OFF);
+    content_spec.pad_all = content_pad;
+    content_spec.pad_row = content_row_pad;
+    w.content = compose_layout::create_content_region(w.container, content_spec);
 
-    w.textarea = lv_textarea_create(w.content);
-    lv_obj_set_width(w.textarea, LV_PCT(100));
-    lv_obj_set_flex_grow(w.textarea, 1);
+    editor_spec.grow = true;
+    w.textarea = compose_layout::create_editor(w.content, editor_spec);
 
-    w.action_bar = lv_obj_create(w.container);
-    lv_obj_set_size(w.action_bar, LV_PCT(100), action_bar_height);
-    lv_obj_set_style_pad_left(w.action_bar, action_pad_lr, 0);
-    lv_obj_set_style_pad_right(w.action_bar, action_pad_lr, 0);
-    lv_obj_set_style_pad_top(w.action_bar, action_pad_tb, 0);
-    lv_obj_set_style_pad_bottom(w.action_bar, action_pad_tb, 0);
+    action_bar_spec.height = action_bar_height;
+    action_bar_spec.pad_left = action_pad_lr;
+    action_bar_spec.pad_right = action_pad_lr;
+    action_bar_spec.pad_top = action_pad_tb;
+    action_bar_spec.pad_bottom = action_pad_tb;
+    action_bar_spec.pad_column = button_gap;
+    w.action_bar = compose_layout::create_action_bar(w.container, action_bar_spec);
 
-    lv_obj_set_flex_flow(w.action_bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(w.action_bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    w.send_btn = create_btn_with_label(w.action_bar,
+                                       send_width,
+                                       button_height,
+                                       "Send",
+                                       compose_layout::ActionButtonRole::Primary);
 
-    w.send_btn = create_btn_with_label(w.action_bar, send_width, button_height, "Send");
-    lv_obj_set_style_pad_right(w.send_btn, button_gap, 0);
+    w.position_btn = create_btn_with_label(w.action_bar,
+                                           position_width,
+                                           button_height,
+                                           "Position",
+                                           compose_layout::ActionButtonRole::Secondary);
 
-    w.position_btn = create_btn_with_label(w.action_bar, position_width, button_height, "Position");
-    lv_obj_set_style_pad_right(w.position_btn, button_gap, 0);
+    w.cancel_btn = create_btn_with_label(w.action_bar,
+                                         cancel_width,
+                                         button_height,
+                                         "Cancel",
+                                         compose_layout::ActionButtonRole::Secondary);
 
-    w.cancel_btn = create_btn_with_label(w.action_bar, cancel_width, button_height, "Cancel");
-
-    lv_obj_t* spacer = lv_obj_create(w.action_bar);
-    lv_obj_set_size(spacer, 1, 1);
-    lv_obj_set_flex_grow(spacer, 1);
-    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* spacer = compose_layout::create_flex_spacer(w.action_bar);
 
     w.len_label = lv_label_create(w.action_bar);
     ::ui::i18n::set_label_text_fmt(w.len_label, "Remain: %u", 233U);
-    lv_obj_set_style_text_color(w.len_label, lv_color_hex(0x6A5646), 0);
+    lv_obj_set_style_text_color(w.len_label, ::ui::theme::text_muted(), 0);
 }
 
 } // namespace chat::ui::compose::layout

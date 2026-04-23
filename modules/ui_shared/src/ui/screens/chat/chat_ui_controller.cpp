@@ -22,6 +22,8 @@
 #include "ui/screens/chat/chat_send_flow.h"
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
+#include "ui/theme/theme_asset_visuals.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
 #include <cmath>
@@ -39,15 +41,6 @@
 #else
 #define CHAT_UI_LOG(...)
 #endif
-
-extern "C"
-{
-    extern const lv_image_dsc_t AreaCleared;
-    extern const lv_image_dsc_t BaseCamp;
-    extern const lv_image_dsc_t GoodFind;
-    extern const lv_image_dsc_t rally;
-    extern const lv_image_dsc_t sos;
-}
 
 namespace chat
 {
@@ -69,20 +62,19 @@ struct TeamPositionIconOption
 {
     uint8_t icon_id;
     const char* meaning;
-    const lv_image_dsc_t* image;
 };
 
 const TeamPositionIconOption kTeamPositionIconOptions[] = {
     {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::AreaCleared),
-     "Area Cleared", &AreaCleared},
+     "Area Cleared"},
     {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::BaseCamp),
-     "Base Camp", &BaseCamp},
+     "Base Camp"},
     {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::GoodFind),
-     "Good Find", &GoodFind},
+     "Good Find"},
     {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::Rally),
-     "Rally Point", &rally},
+     "Rally Point"},
     {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::Sos),
-     "Emergency SOS", &sos}};
+     "Emergency SOS"}};
 
 const TeamPositionIconOption* find_team_position_icon_option(uint8_t icon_id)
 {
@@ -1266,17 +1258,17 @@ void UiController::openTeamPositionPicker()
     team_position_picker_panel_ = lv_obj_create(team_position_picker_overlay_);
     lv_obj_set_size(team_position_picker_panel_, modal_size.width, modal_size.height);
     lv_obj_center(team_position_picker_panel_);
-    lv_obj_set_style_bg_color(team_position_picker_panel_, lv_color_hex(0xFAF0D8), 0);
+    lv_obj_set_style_bg_color(team_position_picker_panel_, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(team_position_picker_panel_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(team_position_picker_panel_, 1, 0);
-    lv_obj_set_style_border_color(team_position_picker_panel_, lv_color_hex(0xE7C98F), 0);
+    lv_obj_set_style_border_color(team_position_picker_panel_, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(team_position_picker_panel_, 10, 0);
     lv_obj_set_style_pad_all(team_position_picker_panel_, ::ui::page_profile::resolve_modal_pad(), 0);
     lv_obj_clear_flag(team_position_picker_panel_, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* title_bar = lv_obj_create(team_position_picker_panel_);
     lv_obj_set_size(title_bar, LV_PCT(100), title_bar_height);
-    lv_obj_set_style_bg_color(title_bar, lv_color_hex(0xEBA341), 0);
+    lv_obj_set_style_bg_color(title_bar, ::ui::theme::accent(), 0);
     lv_obj_set_style_bg_opa(title_bar, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(title_bar, 0, 0);
     lv_obj_set_style_radius(title_bar, 6, 0);
@@ -1285,7 +1277,7 @@ void UiController::openTeamPositionPicker()
 
     lv_obj_t* title = lv_label_create(title_bar);
     ::ui::i18n::set_label_text(title, "Share Position Marker");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_color(title, ::ui::theme::text(), 0);
     lv_obj_center(title);
 
     lv_obj_t* icon_row = lv_obj_create(team_position_picker_panel_);
@@ -1304,18 +1296,24 @@ void UiController::openTeamPositionPicker()
     {
         lv_obj_t* btn = lv_btn_create(icon_row);
         lv_obj_set_size(btn, icon_button_size, icon_button_size);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(0xF6E6C6), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(btn, ::ui::theme::surface(), LV_PART_MAIN);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN);
         lv_obj_set_style_border_width(btn, 1, LV_PART_MAIN);
-        lv_obj_set_style_border_color(btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
+        lv_obj_set_style_border_color(btn, ::ui::theme::border(), LV_PART_MAIN);
         lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
         lv_obj_set_style_outline_width(btn, 2, LV_PART_MAIN | LV_STATE_FOCUSED);
-        lv_obj_set_style_outline_color(btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_FOCUSED);
+        lv_obj_set_style_outline_color(btn, ::ui::theme::accent(), LV_PART_MAIN | LV_STATE_FOCUSED);
         lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_t* img = lv_image_create(btn);
-        lv_image_set_src(img, option.image);
-        lv_obj_center(img);
+        lv_obj_t* fallback_label = lv_label_create(btn);
+        lv_obj_set_style_text_font(fallback_label, &lv_font_montserrat_12, 0);
+        ::ui::theme::AssetVisual visual{};
+        if (::ui::theme::resolve_team_location_asset_visual(option.icon_id, visual))
+        {
+            ::ui::theme::apply_asset_visual(
+                img, fallback_label, visual, icon_button_size - 12, ::ui::theme::text());
+        }
 
         auto* ctx = new TeamPositionIconEventCtx();
         ctx->controller = this;
@@ -1333,24 +1331,24 @@ void UiController::openTeamPositionPicker()
     ::ui::i18n::set_label_text(team_position_picker_desc_, "Select marker");
     lv_obj_set_width(team_position_picker_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(team_position_picker_desc_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(team_position_picker_desc_, lv_color_hex(0x8A6A3A), 0);
+    lv_obj_set_style_text_color(team_position_picker_desc_, ::ui::theme::text_muted(), 0);
     lv_obj_align(team_position_picker_desc_, LV_ALIGN_TOP_MID, 0, profile.large_touch_hitbox ? (title_bar_height + icon_button_size + 28) : 104);
 
     lv_obj_t* cancel_btn = lv_btn_create(team_position_picker_panel_);
     lv_obj_set_size(cancel_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0xF6E6C6), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(cancel_btn, ::ui::theme::surface(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(cancel_btn, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(cancel_btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
+    lv_obj_set_style_border_color(cancel_btn, ::ui::theme::border(), LV_PART_MAIN);
     lv_obj_set_style_radius(cancel_btn, 6, LV_PART_MAIN);
     lv_obj_set_style_outline_width(cancel_btn, 2, LV_PART_MAIN | LV_STATE_FOCUSED);
-    lv_obj_set_style_outline_color(cancel_btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_set_style_outline_color(cancel_btn, ::ui::theme::accent(), LV_PART_MAIN | LV_STATE_FOCUSED);
     lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_MID, 0, profile.large_touch_hitbox ? -12 : -6);
     lv_obj_clear_flag(cancel_btn, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* cancel_label = lv_label_create(cancel_btn);
     ::ui::i18n::set_label_text(cancel_label, "Cancel");
-    lv_obj_set_style_text_color(cancel_label, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_color(cancel_label, ::ui::theme::text(), 0);
     lv_obj_center(cancel_label);
 
     lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_CLICKED, this);
@@ -1569,17 +1567,17 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     key_verify_panel_ = lv_obj_create(key_verify_overlay_);
     lv_obj_set_size(key_verify_panel_, modal_size.width, modal_size.height);
     lv_obj_center(key_verify_panel_);
-    lv_obj_set_style_bg_color(key_verify_panel_, lv_color_hex(0xFAF0D8), 0);
+    lv_obj_set_style_bg_color(key_verify_panel_, ::ui::theme::surface_alt(), 0);
     lv_obj_set_style_bg_opa(key_verify_panel_, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(key_verify_panel_, 1, 0);
-    lv_obj_set_style_border_color(key_verify_panel_, lv_color_hex(0xE7C98F), 0);
+    lv_obj_set_style_border_color(key_verify_panel_, ::ui::theme::border(), 0);
     lv_obj_set_style_radius(key_verify_panel_, 10, 0);
     lv_obj_set_style_pad_all(key_verify_panel_, ::ui::page_profile::resolve_modal_pad(), 0);
     lv_obj_clear_flag(key_verify_panel_, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* title = lv_label_create(key_verify_panel_);
     ::ui::i18n::set_label_text(title, "Key Verification");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
+    lv_obj_set_style_text_color(title, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(title, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
@@ -1588,7 +1586,7 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
     lv_obj_set_width(key_verify_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(key_verify_desc_, lv_color_hex(0x8A6A3A), 0);
+    lv_obj_set_style_text_color(key_verify_desc_, ::ui::theme::text_muted(), 0);
     lv_obj_align(key_verify_desc_, LV_ALIGN_TOP_MID, 0, 34);
 
     key_verify_textarea_ = lv_textarea_create(key_verify_panel_);
@@ -1603,7 +1601,7 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     ::ui::i18n::set_label_text_raw(key_verify_error_label_, "");
     lv_obj_set_width(key_verify_error_label_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_error_label_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(key_verify_error_label_, lv_color_hex(0xB94A2C), 0);
+    lv_obj_set_style_text_color(key_verify_error_label_, ::ui::theme::error(), 0);
     lv_obj_align(key_verify_error_label_, LV_ALIGN_TOP_MID, 0, 110);
 
     lv_obj_t* submit_btn = lv_btn_create(key_verify_panel_);

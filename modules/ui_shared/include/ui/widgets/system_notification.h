@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "lvgl.h"
 
 namespace ui
@@ -43,12 +45,16 @@ class SystemNotification
   private:
     static void hideTimerCallback(lv_timer_t* timer);
     static void animReadyCallback(lv_anim_t* anim);
+    static void refreshIcon();
 
     static lv_obj_t* container_;
     static lv_obj_t* icon_;
+    static lv_obj_t* icon_image_;
+    static lv_obj_t* icon_fallback_label_;
     static lv_obj_t* label_;
     static lv_timer_t* hide_timer_;
     static bool visible_;
+    static std::string icon_path_;
 };
 
 } // namespace ui

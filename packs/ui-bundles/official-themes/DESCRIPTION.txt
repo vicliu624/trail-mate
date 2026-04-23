@@ -1,0 +1,1 @@
+Official external theme bundle containing the reference warm Trail Mate theme. It externalizes the currently supported runtime theme surface: all public color tokens plus the semantic image asset slots that are already wired through the theme registry.

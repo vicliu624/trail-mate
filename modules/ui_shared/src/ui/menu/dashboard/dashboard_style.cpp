@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/ui_theme.h"
 
 namespace ui::menu::dashboard
 {
@@ -26,19 +27,19 @@ float rad_to_deg(float value)
 
 } // namespace
 
-lv_color_t color_amber() { return lv_color_hex(0xEBA341); }
-lv_color_t color_amber_dark() { return lv_color_hex(0xC98118); }
-lv_color_t color_panel_bg() { return lv_color_hex(0xFAF0D8); }
-lv_color_t color_line() { return lv_color_hex(0xE7C98F); }
-lv_color_t color_text() { return lv_color_hex(0x6B4A1E); }
-lv_color_t color_text_dim() { return lv_color_hex(0x8A6A3A); }
-lv_color_t color_warn() { return lv_color_hex(0xB94A2C); }
-lv_color_t color_ok() { return lv_color_hex(0x3E7D3E); }
-lv_color_t color_info() { return lv_color_hex(0x2D6FB6); }
-lv_color_t color_soft_amber() { return lv_color_hex(0xF3D39C); }
-lv_color_t color_soft_blue() { return lv_color_hex(0xDCE8F7); }
-lv_color_t color_soft_green() { return lv_color_hex(0xDCEFD8); }
-lv_color_t color_soft_warn() { return lv_color_hex(0xF5D9D1); }
+lv_color_t color_amber() { return ::ui::theme::accent(); }
+lv_color_t color_amber_dark() { return ::ui::theme::accent_strong(); }
+lv_color_t color_panel_bg() { return ::ui::theme::surface_alt(); }
+lv_color_t color_line() { return ::ui::theme::separator(); }
+lv_color_t color_text() { return ::ui::theme::text(); }
+lv_color_t color_text_dim() { return ::ui::theme::text_muted(); }
+lv_color_t color_warn() { return ::ui::theme::error(); }
+lv_color_t color_ok() { return ::ui::theme::status_green(); }
+lv_color_t color_info() { return ::ui::theme::status_blue(); }
+lv_color_t color_soft_amber() { return lv_color_mix(::ui::theme::accent(), ::ui::theme::surface_alt(), 96); }
+lv_color_t color_soft_blue() { return lv_color_mix(::ui::theme::status_blue(), ::ui::theme::surface_alt(), 72); }
+lv_color_t color_soft_green() { return lv_color_mix(::ui::theme::status_green(), ::ui::theme::surface_alt(), 72); }
+lv_color_t color_soft_warn() { return lv_color_mix(::ui::theme::error(), ::ui::theme::surface_alt(), 72); }
 
 DashboardCardChrome create_card_chrome(lv_obj_t* parent,
                                        const char* title,
@@ -75,7 +76,7 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
 
     chrome.title = lv_label_create(chrome.header);
     lv_label_set_text(chrome.title, title);
-    lv_obj_set_style_text_color(chrome.title, lv_color_hex(0x2A1A05), 0);
+    lv_obj_set_style_text_color(chrome.title, color_text(), 0);
     lv_obj_set_style_text_font(chrome.title, &lv_font_montserrat_14, 0);
     ::ui::fonts::apply_localized_font(chrome.title, title, &lv_font_montserrat_14);
     lv_obj_align(chrome.title, LV_ALIGN_LEFT_MID, 0, 0);

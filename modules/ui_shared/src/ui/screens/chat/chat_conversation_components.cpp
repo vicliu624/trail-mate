@@ -14,6 +14,8 @@
 #include "ui/screens/chat/chat_conversation_layout.h"
 #include "ui/screens/chat/chat_conversation_styles.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
+#include "ui/theme/theme_asset_visuals.h"
 
 #include "sys/clock.h"
 #include "team/protocol/team_location_marker.h"
@@ -33,15 +35,6 @@
 #define CHAT_CONVERSATION_LOG(...)
 #endif
 
-extern "C"
-{
-    extern const lv_image_dsc_t AreaCleared;
-    extern const lv_image_dsc_t BaseCamp;
-    extern const lv_image_dsc_t GoodFind;
-    extern const lv_image_dsc_t rally;
-    extern const lv_image_dsc_t sos;
-}
-
 namespace chat
 {
 namespace ui
@@ -59,25 +52,6 @@ constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
 constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
 constexpr size_t kMaxPrefixedSenderLen = 20;
 } // namespace
-
-static const lv_image_dsc_t* team_location_icon_src(uint8_t icon_id)
-{
-    switch (static_cast<team::proto::TeamLocationMarkerIcon>(icon_id))
-    {
-    case team::proto::TeamLocationMarkerIcon::AreaCleared:
-        return &AreaCleared;
-    case team::proto::TeamLocationMarkerIcon::BaseCamp:
-        return &BaseCamp;
-    case team::proto::TeamLocationMarkerIcon::GoodFind:
-        return &GoodFind;
-    case team::proto::TeamLocationMarkerIcon::Rally:
-        return &rally;
-    case team::proto::TeamLocationMarkerIcon::Sos:
-        return &sos;
-    default:
-        return nullptr;
-    }
-}
 
 static bool is_valid_epoch_ts(uint32_t ts)
 {
@@ -531,14 +505,23 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
 
     if (team::proto::team_location_marker_icon_is_valid(msg.team_location_icon))
     {
-        const lv_image_dsc_t* icon = team_location_icon_src(msg.team_location_icon);
-        if (icon)
+        ::ui::theme::AssetVisual visual{};
+        if (::ui::theme::resolve_team_location_asset_visual(msg.team_location_icon, visual))
         {
-            lv_obj_t* marker_icon = lv_image_create(bubble);
-            lv_image_set_src(marker_icon, icon);
-            lv_obj_set_size(marker_icon, kTeamLocationIconSize, kTeamLocationIconSize);
-            lv_image_set_inner_align(marker_icon, LV_IMAGE_ALIGN_CONTAIN);
-            lv_obj_set_style_pad_bottom(marker_icon, 2, 0);
+            lv_obj_t* marker_holder = lv_obj_create(bubble);
+            lv_obj_set_size(marker_holder, kTeamLocationIconSize, kTeamLocationIconSize);
+            lv_obj_set_style_bg_opa(marker_holder, LV_OPA_TRANSP, 0);
+            lv_obj_set_style_border_width(marker_holder, 0, 0);
+            lv_obj_set_style_pad_all(marker_holder, 0, 0);
+            lv_obj_set_style_radius(marker_holder, 0, 0);
+            lv_obj_set_style_pad_bottom(marker_holder, 2, 0);
+            lv_obj_clear_flag(marker_holder, LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t* marker_image = lv_image_create(marker_holder);
+            lv_obj_t* marker_label = lv_label_create(marker_holder);
+            lv_obj_set_style_text_font(marker_label, &lv_font_montserrat_12, 0);
+            ::ui::theme::apply_asset_visual(
+                marker_image, marker_label, visual, kTeamLocationIconSize, ::ui::theme::accent());
         }
     }
 

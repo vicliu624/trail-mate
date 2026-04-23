@@ -136,7 +136,12 @@ def write_ranges(path: Path, chars: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build charset files for a locale/font pack bundle.")
-    parser.add_argument("--pack-root", type=Path, required=True, help="Pack bundle root, for example packs/zh-Hans")
+    parser.add_argument(
+        "--pack-root",
+        type=Path,
+        required=True,
+        help="Pack bundle root, for example packs/locale-bundles/zh-Hans",
+    )
     parser.add_argument(
         "--font-pack-id",
         default=None,

@@ -31,6 +31,7 @@
 #include "ui/screens/team/team_state.h"
 #include "ui/screens/team/team_ui_store.h"
 #include "ui/ui_common.h"
+#include "ui/ui_theme.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
 
@@ -58,14 +59,6 @@ static constexpr int kButtonHeight = 28;
 static constexpr int kBottomBtnMinWidth = 50;
 static constexpr int kBottomBtnPadH = 8;
 static constexpr intptr_t kBackListItemUserData = -2;
-
-// UI color tokens (must align with docs/skyplot.md)
-static constexpr uint32_t kColorAmber = 0xEBA341;
-static constexpr uint32_t kColorAmberDark = 0xC98118;
-static constexpr uint32_t kColorPanelBg = 0xFAF0D8;
-static constexpr uint32_t kColorLine = 0xE7C98F;
-static constexpr uint32_t kColorText = 0x6B4A1E;
-static constexpr uint32_t kColorWarn = 0xB94A2C;
 
 static lv_group_t* s_compose_group = nullptr;
 static lv_group_t* s_compose_prev_group = nullptr;
@@ -212,14 +205,14 @@ static void refresh_filter_checked_state()
 
 static lv_obj_t* create_bottom_bar_button(lv_obj_t* parent,
                                           const char* text,
-                                          uint32_t bg_color,
+                                          lv_color_t bg_color,
                                           lv_event_cb_t cb)
 {
     lv_obj_t* btn = lv_btn_create(parent);
     lv_obj_set_height(btn, page_button_height());
     lv_obj_set_style_pad_hor(btn, kBottomBtnPadH, LV_PART_MAIN);
     contacts::ui::style::apply_btn_basic(btn);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(bg_color), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn, bg_color, LV_PART_MAIN);
 
     lv_obj_t* label = lv_label_create(btn);
     ::ui::i18n::set_label_text(label, text);
@@ -771,7 +764,7 @@ static void on_filter_clicked(lv_event_t* e)
     }
 
     // Press on filter mode button: move focus to List column
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_list_item_clicked(lv_event_t* e)
@@ -781,7 +774,7 @@ static void on_list_item_clicked(lv_event_t* e)
     if (g_contacts_state.selected_index == static_cast<int>(kBackListItemUserData))
     {
         g_contacts_state.selected_index = -1;
-        contacts_focus_to_filter();
+        contacts_focus_to_selector();
         return;
     }
     if (g_contacts_state.current_mode == ContactsMode::Discover)
@@ -828,7 +821,7 @@ static void on_prev_clicked(lv_event_t* /*e*/)
     }
     g_contacts_state.selected_index = -1;
     refresh_ui();
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_next_clicked(lv_event_t* /*e*/)
@@ -845,12 +838,12 @@ static void on_next_clicked(lv_event_t* /*e*/)
     }
     g_contacts_state.selected_index = -1;
     refresh_ui();
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_back_clicked(lv_event_t* /*e*/)
 {
-    contacts_focus_to_filter();
+    contacts_focus_to_selector();
 }
 
 static const chat::contacts::NodeInfo* get_selected_node()
@@ -963,7 +956,7 @@ static lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* bg = lv_obj_create(screen);
     lv_obj_set_size(bg, screen_w, screen_h);
     lv_obj_set_pos(bg, 0, 0);
-    lv_obj_set_style_bg_color(bg, lv_color_hex(kColorText), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bg, ::ui::theme::color(::ui::theme::ColorSlot::OverlayScrim), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bg, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
@@ -973,10 +966,10 @@ static lv_obj_t* create_modal_root(int width, int height)
     lv_obj_t* win = lv_obj_create(bg);
     lv_obj_set_size(win, width, height);
     lv_obj_center(win);
-    lv_obj_set_style_bg_color(win, lv_color_hex(kColorPanelBg), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(win, ::ui::theme::surface_alt(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(win, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(win, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(win, lv_color_hex(kColorLine), LV_PART_MAIN);
+    lv_obj_set_style_border_color(win, ::ui::theme::separator(), LV_PART_MAIN);
     lv_obj_set_style_radius(win, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(win, 8, LV_PART_MAIN);
     lv_obj_clear_flag(win, LV_OBJ_FLAG_SCROLLABLE);
@@ -1040,7 +1033,7 @@ static void open_add_edit_modal(bool is_edit)
 
     g_contacts_state.add_edit_error_label = lv_label_create(win);
     lv_label_set_text(g_contacts_state.add_edit_error_label, "");
-    lv_obj_set_style_text_color(g_contacts_state.add_edit_error_label, lv_color_hex(kColorWarn), 0);
+    lv_obj_set_style_text_color(g_contacts_state.add_edit_error_label, ::ui::theme::error(), 0);
     lv_obj_align(g_contacts_state.add_edit_error_label, LV_ALIGN_TOP_MID, 0, 52);
     lv_obj_add_flag(g_contacts_state.add_edit_error_label, LV_OBJ_FLAG_HIDDEN);
 
@@ -1294,8 +1287,8 @@ static void close_node_info_screen()
 
     CONTACTS_NODE_INFO_LOG("close refresh_ui\n");
     refresh_ui();
-    CONTACTS_NODE_INFO_LOG("close contacts_focus_to_list\n");
-    contacts_focus_to_list();
+    CONTACTS_NODE_INFO_LOG("close contacts_focus_to_content\n");
+    contacts_focus_to_content();
     CONTACTS_NODE_INFO_LOG("close complete\n");
 }
 
@@ -1515,7 +1508,7 @@ static void close_chat_compose()
             set_default_group(s_compose_prev_group);
         }
         s_compose_prev_group = nullptr;
-        contacts_focus_to_list();
+        contacts_focus_to_content();
         refresh_ui();
     }
 }
@@ -1858,7 +1851,7 @@ static void close_team_conversation()
         set_default_group(contacts_group);
     }
     s_conv_prev_group = nullptr;
-    contacts_focus_to_list();
+    contacts_focus_to_content();
     refresh_ui();
 }
 
@@ -2026,7 +2019,7 @@ static void on_add_edit_save_clicked(lv_event_t* /*e*/)
     g_contacts_state.selected_index = -1;
     refresh_contacts_data();
     refresh_ui();
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_add_edit_cancel_clicked(lv_event_t* /*e*/)
@@ -2034,7 +2027,7 @@ static void on_add_edit_cancel_clicked(lv_event_t* /*e*/)
     g_contacts_state.add_edit_textarea = nullptr;
     g_contacts_state.add_edit_error_label = nullptr;
     modal_close(g_contacts_state.add_edit_modal);
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_del_confirm_clicked(lv_event_t* /*e*/)
@@ -2048,13 +2041,13 @@ static void on_del_confirm_clicked(lv_event_t* /*e*/)
     g_contacts_state.selected_index = -1;
     refresh_contacts_data();
     refresh_ui();
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_del_cancel_clicked(lv_event_t* /*e*/)
 {
     modal_close(g_contacts_state.del_confirm_modal);
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static void on_node_info_back_clicked(lv_event_t* /*e*/)
@@ -2082,7 +2075,7 @@ static void execute_discovery_command(uint8_t command_index)
         g_contacts_state.current_page = 0;
         g_contacts_state.selected_index = -1;
         refresh_ui();
-        contacts_focus_to_filter();
+        contacts_focus_to_selector();
         return;
     }
 
@@ -2174,7 +2167,7 @@ static void toggle_selected_node_ignore()
     if (!node || !g_contacts_state.contact_service)
     {
         ::ui::SystemNotification::show("Ignore unavailable", 1800);
-        contacts_focus_to_list();
+        contacts_focus_to_content();
         return;
     }
 
@@ -2183,7 +2176,7 @@ static void toggle_selected_node_ignore()
     if (!g_contacts_state.contact_service->setNodeIgnored(node->node_id, ignored))
     {
         ::ui::SystemNotification::show("Ignore update failed", 1800);
-        contacts_focus_to_list();
+        contacts_focus_to_content();
         return;
     }
 
@@ -2197,7 +2190,7 @@ static void toggle_selected_node_ignore()
     {
         ::ui::SystemNotification::show(ignored ? "Node ignored" : "Node unignored", 1800);
     }
-    contacts_focus_to_list();
+    contacts_focus_to_content();
 }
 
 static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text)
@@ -2206,10 +2199,10 @@ static lv_obj_t* create_action_menu_button(lv_obj_t* parent, const char* text)
     lv_obj_set_size(btn, LV_PCT(100), page_button_height());
     contacts::ui::style::apply_btn_basic(btn);
     // Keep default neutral background and highlight strictly by focus state.
-    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorPanelBg), selector_for_state(LV_STATE_DEFAULT));
-    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmber), selector_for_state(LV_STATE_FOCUSED));
-    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmber), selector_for_state(LV_STATE_FOCUS_KEY));
-    lv_obj_set_style_bg_color(btn, lv_color_hex(kColorAmberDark), selector_for_state(LV_STATE_PRESSED));
+    lv_obj_set_style_bg_color(btn, ::ui::theme::surface_alt(), selector_for_state(LV_STATE_DEFAULT));
+    lv_obj_set_style_bg_color(btn, ::ui::theme::accent(), selector_for_state(LV_STATE_FOCUSED));
+    lv_obj_set_style_bg_color(btn, ::ui::theme::accent(), selector_for_state(LV_STATE_FOCUS_KEY));
+    lv_obj_set_style_bg_color(btn, ::ui::theme::accent_strong(), selector_for_state(LV_STATE_PRESSED));
 
     lv_obj_t* label = lv_label_create(btn);
     ::ui::i18n::set_label_text(label, text);
@@ -2224,7 +2217,7 @@ static void on_action_menu_key(lv_event_t* e)
     if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE)
     {
         modal_close(g_contacts_state.action_menu_modal);
-        contacts_focus_to_list();
+        contacts_focus_to_content();
     }
 }
 
@@ -2269,7 +2262,7 @@ static void on_action_menu_item_clicked(lv_event_t* e)
         break;
     case ActionMenuCommand::Cancel:
     default:
-        contacts_focus_to_list();
+        contacts_focus_to_content();
         break;
     }
 }
@@ -2752,7 +2745,7 @@ void refresh_ui()
         g_contacts_state.next_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Next",
-            kColorAmber,
+            ::ui::theme::accent(),
             on_next_clicked);
     }
 
@@ -2761,7 +2754,7 @@ void refresh_ui()
         g_contacts_state.prev_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Prev",
-            kColorPanelBg,
+            ::ui::theme::surface_alt(),
             on_prev_clicked);
     }
 
@@ -2770,7 +2763,7 @@ void refresh_ui()
         g_contacts_state.back_btn = create_bottom_bar_button(
             g_contacts_state.bottom_container,
             "Back",
-            kColorAmber,
+            ::ui::theme::accent(),
             on_back_clicked);
     }
 

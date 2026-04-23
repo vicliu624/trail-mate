@@ -1,5 +1,6 @@
 #include "ui/widgets/toast/toast_widget.h"
 #include "sys/clock.h"
+#include "ui/ui_theme.h"
 
 #include <algorithm>
 
@@ -64,7 +65,7 @@ void Toast::show(lv_obj_t* parent, const char* text, Type type, const Options& o
     impl->label = lv_label_create(impl->root);
     lv_label_set_text(impl->label, text);
     lv_label_set_long_mode(impl->label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_color(impl->label, lv_color_hex(0x3A2A1A), 0);
+    lv_obj_set_style_text_color(impl->label, ::ui::theme::text(), 0);
 
     // Compute max width based on screen width (more stable across layouts).
     // Use the active screen width as the device-screen reference.
@@ -153,12 +154,12 @@ lv_color_t Toast::bgColor(Type type)
     switch (type)
     {
     case Type::Success:
-        return lv_color_hex(0xE3F3D8);
+        return lv_color_mix(::ui::theme::status_green(), ::ui::theme::surface_alt(), 64);
     case Type::Error:
-        return lv_color_hex(0xF5D6D6);
+        return lv_color_mix(::ui::theme::error(), ::ui::theme::surface_alt(), 64);
     case Type::Info:
     default:
-        return lv_color_hex(0xFFF0D3);
+        return lv_color_mix(::ui::theme::accent(), ::ui::theme::surface_alt(), 48);
     }
 }
 

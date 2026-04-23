@@ -1,6 +1,6 @@
 /**
  * @file contacts_page_input.h
- * @brief Contacts page input handling for the shared two-pane navigator
+ * @brief Contacts page input handling for the shared directory browser interaction
  */
 
 #pragma once
@@ -16,11 +16,11 @@ void cleanup_contacts_input();
 void contacts_input_on_ui_refreshed();
 
 /**
- * Move focus to the filter column or the list column.
- * The filter column contains the visible mode buttons plus the top back button.
- * The list column contains list items, the inline list Back item, and optional pager buttons.
+ * Move focus to the selector region or the content region.
+ * The selector region contains the visible mode buttons plus the top back button.
+ * The content region contains list items, the inline list Back item, and optional pager buttons.
  */
-void contacts_focus_to_filter();
-void contacts_focus_to_list();
+void contacts_focus_to_selector();
+void contacts_focus_to_content();
 
 lv_group_t* contacts_input_get_group();

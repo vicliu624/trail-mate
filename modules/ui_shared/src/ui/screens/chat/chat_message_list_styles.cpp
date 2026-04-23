@@ -3,6 +3,7 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/components/info_card.h"
 #include "ui/components/two_pane_styles.h"
+#include "ui/ui_theme.h"
 
 namespace chat::ui::message_list::styles
 {
@@ -23,8 +24,7 @@ void init_once()
 
     lv_style_init(&s_root);
     lv_style_set_bg_opa(&s_root, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_root,
-                          lv_color_hex(::ui::components::two_pane_styles::kSidePanelBg));
+    lv_style_set_bg_color(&s_root, ::ui::theme::surface_alt());
     lv_style_set_border_width(&s_root, 0);
     lv_style_set_pad_all(&s_root, 0);
     lv_style_set_radius(&s_root, 0);

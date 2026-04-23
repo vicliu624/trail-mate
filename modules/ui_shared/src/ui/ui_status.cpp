@@ -16,21 +16,11 @@
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
 #include "ui/screens/team/team_ui_store.h"
 #endif
+#include "ui/ui_theme.h"
+#include "ui/theme/theme_registry.h"
 
 #include <cstdio>
-
-extern "C"
-{
-    extern const lv_image_dsc_t gps_topbar;
-    extern const lv_image_dsc_t message_topbar;
-    extern const lv_image_dsc_t route_topbar;
-    extern const lv_image_dsc_t wifi_topbar;
-#if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-    extern const lv_image_dsc_t team_topbar;
-#endif
-    extern const lv_image_dsc_t tracker_topbar;
-    extern const lv_image_dsc_t ble_topbar;
-}
+#include <string>
 
 namespace ui
 {
@@ -72,10 +62,76 @@ lv_obj_t* s_chat_badge_label = nullptr;
 TeamSnapshotCache s_team_cache;
 constexpr uint32_t kTeamSnapshotRefreshMs = 5000;
 bool s_menu_active = true;
+std::string s_route_icon_path;
+std::string s_tracker_icon_path;
+std::string s_gps_icon_path;
+std::string s_wifi_icon_path;
+std::string s_team_icon_path;
+std::string s_msg_icon_path;
+std::string s_ble_icon_path;
 
 bool obj_valid(lv_obj_t* obj)
 {
     return obj && lv_obj_is_valid(obj);
+}
+
+lv_obj_t* holder_image(lv_obj_t* holder)
+{
+    return holder ? lv_obj_get_child(holder, 0) : nullptr;
+}
+
+lv_obj_t* holder_label(lv_obj_t* holder)
+{
+    return holder ? lv_obj_get_child(holder, 1) : nullptr;
+}
+
+const char* status_fallback_text(::ui::theme::AssetSlot slot)
+{
+    switch (slot)
+    {
+    case ::ui::theme::AssetSlot::StatusRoute:
+        return "R";
+    case ::ui::theme::AssetSlot::StatusTracker:
+        return "T";
+    case ::ui::theme::AssetSlot::StatusGps:
+        return "G";
+    case ::ui::theme::AssetSlot::StatusWifi:
+        return "W";
+    case ::ui::theme::AssetSlot::StatusTeam:
+        return "TM";
+    case ::ui::theme::AssetSlot::StatusMessage:
+        return "M";
+    case ::ui::theme::AssetSlot::StatusBle:
+        return "B";
+    default:
+        return nullptr;
+    }
+}
+
+void show_holder_image(lv_obj_t* holder, lv_obj_t* image_obj, lv_obj_t* label_obj)
+{
+    if (!obj_valid(holder) || !obj_valid(image_obj) || !obj_valid(label_obj))
+    {
+        return;
+    }
+    lv_obj_clear_flag(image_obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(label_obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_center(image_obj);
+    lv_obj_clear_flag(holder, LV_OBJ_FLAG_HIDDEN);
+}
+
+void show_holder_label(lv_obj_t* holder, lv_obj_t* image_obj, lv_obj_t* label_obj, const char* text)
+{
+    if (!obj_valid(holder) || !obj_valid(image_obj) || !obj_valid(label_obj))
+    {
+        return;
+    }
+    lv_label_set_text(label_obj, text ? text : "");
+    lv_obj_set_style_text_color(label_obj, ::ui::theme::text(), 0);
+    lv_obj_add_flag(image_obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(label_obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_center(label_obj);
+    lv_obj_clear_flag(holder, LV_OBJ_FLAG_HIDDEN);
 }
 
 void refresh_team_cache(bool force = false)
@@ -131,15 +187,51 @@ StatusSnapshot collect_status()
     return snap;
 }
 
-void apply_icon(lv_obj_t* icon, const lv_image_dsc_t* src, bool visible)
+void apply_icon(lv_obj_t* icon,
+                ::ui::theme::AssetSlot slot,
+                std::string& backing_path,
+                bool visible)
 {
     if (!obj_valid(icon))
     {
         return;
     }
-    if (src)
+
+    lv_obj_t* image_obj = holder_image(icon);
+    lv_obj_t* label_obj = holder_label(icon);
+    if (!obj_valid(image_obj) || !obj_valid(label_obj))
     {
-        lv_image_set_src(icon, src);
+        if (visible)
+        {
+            lv_obj_clear_flag(icon, LV_OBJ_FLAG_HIDDEN);
+        }
+        else
+        {
+            lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+        }
+        return;
+    }
+
+    backing_path.clear();
+    const bool has_external =
+        ::ui::theme::resolve_asset_path(::ui::theme::asset_slot_id(slot), backing_path);
+    if (has_external)
+    {
+        lv_image_set_src(image_obj, backing_path.c_str());
+        show_holder_image(icon, image_obj, label_obj);
+    }
+    else
+    {
+        const lv_image_dsc_t* src = ::ui::theme::builtin_asset(slot);
+        if (src)
+        {
+            lv_image_set_src(image_obj, src);
+            show_holder_image(icon, image_obj, label_obj);
+        }
+        else if (const char* fallback = status_fallback_text(slot))
+        {
+            show_holder_label(icon, image_obj, label_obj, fallback);
+        }
     }
     if (visible)
     {
@@ -158,17 +250,41 @@ void apply_menu_icons(const StatusSnapshot& snap)
         return;
     }
 
-    apply_icon(s_menu_route_icon, &route_topbar, snap.route_active);
-    apply_icon(s_menu_tracker_icon, &tracker_topbar, snap.track_recording);
-    apply_icon(s_menu_gps_icon, &gps_topbar, snap.gps_enabled);
-    apply_icon(s_menu_wifi_icon, &wifi_topbar, snap.wifi_enabled);
+    apply_icon(s_menu_route_icon,
+               ::ui::theme::AssetSlot::StatusRoute,
+               s_route_icon_path,
+               snap.route_active);
+    apply_icon(s_menu_tracker_icon,
+               ::ui::theme::AssetSlot::StatusTracker,
+               s_tracker_icon_path,
+               snap.track_recording);
+    apply_icon(s_menu_gps_icon,
+               ::ui::theme::AssetSlot::StatusGps,
+               s_gps_icon_path,
+               snap.gps_enabled);
+    apply_icon(s_menu_wifi_icon,
+               ::ui::theme::AssetSlot::StatusWifi,
+               s_wifi_icon_path,
+               snap.wifi_enabled);
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-    apply_icon(s_menu_team_icon, &team_topbar, snap.team_active);
+    apply_icon(s_menu_team_icon,
+               ::ui::theme::AssetSlot::StatusTeam,
+               s_team_icon_path,
+               snap.team_active);
 #else
-    apply_icon(s_menu_team_icon, nullptr, false);
+    apply_icon(s_menu_team_icon,
+               ::ui::theme::AssetSlot::StatusTeam,
+               s_team_icon_path,
+               false);
 #endif
-    apply_icon(s_menu_msg_icon, &message_topbar, snap.unread > 0);
-    apply_icon(s_menu_ble_icon, &ble_topbar, snap.ble_enabled);
+    apply_icon(s_menu_msg_icon,
+               ::ui::theme::AssetSlot::StatusMessage,
+               s_msg_icon_path,
+               snap.unread > 0);
+    apply_icon(s_menu_ble_icon,
+               ::ui::theme::AssetSlot::StatusBle,
+               s_ble_icon_path,
+               snap.ble_enabled);
 
     const bool any = snap.route_active || snap.track_recording || snap.gps_enabled ||
                      snap.wifi_enabled || snap.team_active || snap.ble_enabled ||

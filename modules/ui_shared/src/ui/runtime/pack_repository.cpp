@@ -14,8 +14,10 @@
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/wifi_runtime.h"
 #include "ui/localization.h"
+#include "ui/presentation/presentation_registry.h"
 #include "ui/runtime/memory_profile.h"
 #include "ui/support/lvgl_fs_utils.h"
+#include "ui/theme/theme_registry.h"
 
 #if defined(ESP_PLATFORM) || defined(ARDUINO_ARCH_ESP32)
 
@@ -1836,6 +1838,8 @@ bool remove_package_payload(const PackageRecord& package,
         {"locales", &package.provided_locale_ids, "locale"},
         {"fonts", &package.provided_font_ids, "font"},
         {"ime", &package.provided_ime_ids, "IME"},
+        {"themes", &package.provided_theme_ids, "theme"},
+        {"presentations", &package.provided_presentation_ids, "presentation"},
     };
     const char* pack_root = storage_pack_root(storage);
 
@@ -1952,6 +1956,8 @@ bool fetch_catalog(std::vector<PackageRecord>& out_packages, std::string& out_er
         collect_provided_ids(provides, "locales", "id", package.provided_locale_ids);
         collect_provided_ids(provides, "fonts", "id", package.provided_font_ids);
         collect_provided_ids(provides, "ime", "id", package.provided_ime_ids);
+        collect_provided_ids(provides, "themes", "id", package.provided_theme_ids);
+        collect_provided_ids(provides, "presentations", "id", package.provided_presentation_ids);
 
         package.compatible_memory_profile = compatible_with_profile(package);
         package.compatible_firmware = compatible_with_firmware(package);
@@ -2094,6 +2100,8 @@ bool install_package(const PackageRecord& package, std::string& out_error)
 #endif
 
     ::ui::i18n::reload_language();
+    ::ui::theme::reload_installed_themes();
+    ::ui::presentation::reload_installed_presentations();
     return true;
 }
 
@@ -2144,6 +2152,8 @@ bool uninstall_package(const PackageRecord& package, std::string& out_error)
     }
 
     ::ui::i18n::reload_language();
+    ::ui::theme::reload_installed_themes();
+    ::ui::presentation::reload_installed_presentations();
     return true;
 }
 

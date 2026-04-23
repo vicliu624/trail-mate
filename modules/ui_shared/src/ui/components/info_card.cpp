@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include "ui/components/two_pane_styles.h"
+#include "ui/theme/theme_component_style.h"
+#include "ui/ui_theme.h"
 
 namespace ui::components::info_card
 {
@@ -11,6 +13,7 @@ namespace
 constexpr lv_coord_t kTDeckBodyRowMinHeight = 18;
 
 bool s_inited = false;
+uint32_t s_theme_revision = 0;
 lv_style_t s_item_base;
 lv_style_t s_item_active;
 lv_style_t s_header_row;
@@ -19,32 +22,57 @@ void init_once()
 {
     if (s_inited)
     {
-        return;
+        if (s_theme_revision == ::ui::theme::active_theme_revision())
+        {
+            return;
+        }
+
+        lv_style_reset(&s_item_base);
+        lv_style_reset(&s_item_active);
+        lv_style_reset(&s_header_row);
     }
-    s_inited = true;
+    else
+    {
+        s_inited = true;
+    }
+    s_theme_revision = ::ui::theme::active_theme_revision();
 
     lv_style_init(&s_item_base);
     lv_style_set_bg_opa(&s_item_base, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_item_base, lv_color_hex(::ui::components::two_pane_styles::kSidePanelBg));
+    lv_style_set_bg_color(&s_item_base, ::ui::theme::surface_alt());
     lv_style_set_border_width(&s_item_base, 1);
-    lv_style_set_border_color(&s_item_base, lv_color_hex(::ui::components::two_pane_styles::kBorder));
+    lv_style_set_border_color(&s_item_base, ::ui::theme::border());
     lv_style_set_radius(&s_item_base, 10);
+    ::ui::theme::ComponentProfile item_profile{};
+    if (::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::InfoCardBase,
+                                               item_profile))
+    {
+        ::ui::theme::apply_component_profile_to_style(&s_item_base, item_profile);
+    }
 
     lv_style_init(&s_item_active);
     lv_style_set_bg_opa(&s_item_active, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_item_active, lv_color_hex(::ui::components::two_pane_styles::kMainPanelBg));
+    lv_style_set_bg_color(&s_item_active, ::ui::theme::surface());
     lv_style_set_border_width(&s_item_active, 2);
-    lv_style_set_border_color(&s_item_active, lv_color_hex(::ui::components::two_pane_styles::kAccent));
+    lv_style_set_border_color(&s_item_active,
+                              item_profile.accent_color.present ? item_profile.accent_color.value
+                                                                : ::ui::theme::accent());
 
     lv_style_init(&s_header_row);
     lv_style_set_bg_opa(&s_header_row, LV_OPA_COVER);
-    lv_style_set_bg_color(&s_header_row, lv_color_hex(::ui::components::two_pane_styles::kAccent));
+    lv_style_set_bg_color(&s_header_row, ::ui::theme::accent());
     lv_style_set_border_width(&s_header_row, 0);
     lv_style_set_radius(&s_header_row, 8);
     lv_style_set_pad_left(&s_header_row, 8);
     lv_style_set_pad_right(&s_header_row, 8);
     lv_style_set_pad_top(&s_header_row, 2);
     lv_style_set_pad_bottom(&s_header_row, 2);
+    ::ui::theme::ComponentProfile header_profile{};
+    if (::ui::theme::resolve_component_profile(::ui::theme::ComponentSlot::InfoCardHeader,
+                                               header_profile))
+    {
+        ::ui::theme::apply_component_profile_to_style(&s_header_row, header_profile);
+    }
 }
 
 void prepare_row(lv_obj_t* row, bool transparent_background)

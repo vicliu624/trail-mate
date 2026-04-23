@@ -8,7 +8,7 @@
 
 - 固件里的 i18n 运行时
 - SD / Flash 上的 runtime pack 载荷
-- 仓库中的 `packs/<bundle-id>/` 源包
+- 仓库中的 `packs/locale-bundles/<bundle-id>/` 源包
 - GitHub Pages 发布出来的 zip 分发包
 - 远程 catalog 元数据
 - 已安装索引 `installed.json`
@@ -82,7 +82,7 @@ Runtime pack 载荷是运行时真正扫描和消费的已解包目录树。
 
 ### 3.3 仓库源包
 
-仓库中的 `packs/<bundle-id>/` 是源码形态，不是运行时形态。
+仓库中的 `packs/locale-bundles/<bundle-id>/` 是源码形态，不是运行时形态。
 
 它可以包含：
 
@@ -480,7 +480,7 @@ English 必须在没有任何外部 pack 的情况下仍可工作。
 
 1. `docs/LOCALIZATION_SPEC.md`
 2. `docs/LOCALE_PACKS.md`
-3. 各 `packs/<bundle-id>/README.md`
+3. 各 `packs/locale-bundles/<bundle-id>/README.md`
 4. `docs/ui_localization_plan.md`
 
 其中：

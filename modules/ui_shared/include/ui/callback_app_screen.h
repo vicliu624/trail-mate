@@ -2,6 +2,7 @@
 
 #include "ui/app_screen.h"
 #include "ui/localization.h"
+#include "ui/theme/theme_registry.h"
 
 namespace ui
 {
@@ -23,6 +24,20 @@ class CallbackAppScreen : public AppScreen
 
     CallbackAppScreen(const char* stable_id,
                       const char* name,
+                      ::ui::theme::AssetSlot icon_slot,
+                      SimpleCallback enter,
+                      SimpleCallback exit)
+        : stable_id_(stable_id),
+          name_(name),
+          icon_slot_(icon_slot),
+          icon_slot_bound_(true),
+          simple_enter_(enter),
+          simple_exit_(exit)
+    {
+    }
+
+    CallbackAppScreen(const char* stable_id,
+                      const char* name,
                       const lv_image_dsc_t* icon,
                       Callback enter,
                       Callback exit,
@@ -36,9 +51,32 @@ class CallbackAppScreen : public AppScreen
     {
     }
 
+    CallbackAppScreen(const char* stable_id,
+                      const char* name,
+                      ::ui::theme::AssetSlot icon_slot,
+                      Callback enter,
+                      Callback exit,
+                      void* user_data = nullptr)
+        : stable_id_(stable_id),
+          name_(name),
+          icon_slot_(icon_slot),
+          icon_slot_bound_(true),
+          callback_enter_(enter),
+          callback_exit_(exit),
+          user_data_(user_data)
+    {
+    }
+
     const char* stable_id() const override { return stable_id_; }
     const char* name() const override { return ::ui::i18n::tr(name_); }
-    const lv_image_dsc_t* icon() const override { return icon_; }
+    const lv_image_dsc_t* icon() const override
+    {
+        if (icon_slot_bound_)
+        {
+            return ::ui::theme::builtin_asset(icon_slot_);
+        }
+        return icon_;
+    }
 
     void enter(lv_obj_t* parent) override
     {
@@ -70,6 +108,8 @@ class CallbackAppScreen : public AppScreen
     const char* stable_id_ = nullptr;
     const char* name_ = nullptr;
     const lv_image_dsc_t* icon_ = nullptr;
+    ::ui::theme::AssetSlot icon_slot_ = ::ui::theme::AssetSlot::BootLogo;
+    bool icon_slot_bound_ = false;
     SimpleCallback simple_enter_ = nullptr;
     SimpleCallback simple_exit_ = nullptr;
     Callback callback_enter_ = nullptr;

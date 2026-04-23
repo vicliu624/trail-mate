@@ -6,6 +6,7 @@
 #include "ui/screens/node_info/node_info_page_layout.h"
 
 #include "ui/page/page_profile.h"
+#include "ui/presentation/map_focus_layout.h"
 #include "ui/widgets/top_bar.h"
 
 namespace node_info
@@ -14,6 +15,7 @@ namespace ui
 {
 namespace layout
 {
+namespace map_focus_layout = ::ui::presentation::map_focus_layout;
 
 namespace
 {
@@ -48,13 +50,6 @@ lv_coord_t resolve_parent_height(lv_obj_t* parent)
     return height > 0 ? height : 240;
 }
 
-lv_coord_t top_bar_height()
-{
-    const auto& profile = ::ui::page_profile::current();
-    return profile.top_bar_height > 0 ? profile.top_bar_height
-                                      : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
-}
-
 void make_plain(lv_obj_t* obj)
 {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
@@ -68,8 +63,10 @@ void make_plain(lv_obj_t* obj)
 
 lv_obj_t* create_root(lv_obj_t* parent)
 {
-    lv_obj_t* root = lv_obj_create(parent);
-    lv_obj_set_size(root, resolve_parent_width(parent), resolve_parent_height(parent));
+    map_focus_layout::RootSpec spec{};
+    spec.width = resolve_parent_width(parent);
+    spec.height = resolve_parent_height(parent);
+    lv_obj_t* root = map_focus_layout::create_root(parent, spec);
     lv_obj_set_pos(root, 0, 0);
     make_plain(root);
     return root;
@@ -77,9 +74,12 @@ lv_obj_t* create_root(lv_obj_t* parent)
 
 lv_obj_t* create_header(lv_obj_t* root)
 {
-    const lv_coord_t root_w = resolve_parent_width(root);
-    lv_obj_t* header = lv_obj_create(root);
-    lv_obj_set_size(header, root_w, top_bar_height());
+    map_focus_layout::HeaderSpec spec{};
+    spec.height = ::ui::page_profile::current().top_bar_height > 0
+                      ? ::ui::page_profile::current().top_bar_height
+                      : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
+    lv_obj_t* header = map_focus_layout::create_header_container(root, spec);
+    lv_obj_set_width(header, resolve_parent_width(root));
     lv_obj_set_pos(header, 0, 0);
     make_plain(header);
     return header;
@@ -87,11 +87,12 @@ lv_obj_t* create_header(lv_obj_t* root)
 
 lv_obj_t* create_content(lv_obj_t* root)
 {
-    const lv_coord_t root_w = resolve_parent_width(root);
-    const lv_coord_t root_h = resolve_parent_height(root);
-    const lv_coord_t header_h = top_bar_height();
-    lv_obj_t* content = lv_obj_create(root);
-    lv_obj_set_size(content, root_w, root_h - header_h);
+    const lv_coord_t header_h = ::ui::page_profile::current().top_bar_height > 0
+                                    ? ::ui::page_profile::current().top_bar_height
+                                    : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
+    map_focus_layout::ContentSpec spec{};
+    lv_obj_t* content = map_focus_layout::create_content(root, spec);
+    lv_obj_set_size(content, resolve_parent_width(root), resolve_parent_height(root) - header_h);
     lv_obj_set_pos(content, 0, header_h);
     make_plain(content);
     return content;

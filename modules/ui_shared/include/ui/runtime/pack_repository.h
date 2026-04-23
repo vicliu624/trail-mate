@@ -33,6 +33,8 @@ struct PackageRecord
     std::vector<std::string> provided_locale_ids;
     std::vector<std::string> provided_font_ids;
     std::vector<std::string> provided_ime_ids;
+    std::vector<std::string> provided_theme_ids;
+    std::vector<std::string> provided_presentation_ids;
     std::size_t estimated_unique_font_ram_bytes = 0;
     std::size_t archive_size_bytes = 0;
     std::string archive_path;
