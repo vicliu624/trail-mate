@@ -735,6 +735,15 @@ float TDeckProBoard::getRadioRSSI()
     return rssi;
 }
 
+float TDeckProBoard::getRadioInstantRSSI()
+{
+    sharedSpiLock();
+    sharedSpiPrepareDevice(profile().lora.cs);
+    const float rssi = radio_.getRSSI(false);
+    sharedSpiUnlock();
+    return rssi;
+}
+
 float TDeckProBoard::getRadioSNR()
 {
     sharedSpiLock();

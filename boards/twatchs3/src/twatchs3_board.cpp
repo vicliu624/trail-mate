@@ -388,6 +388,11 @@ float TWatchS3Board::getRadioRSSI()
     return radio_.getRSSI();
 }
 
+float TWatchS3Board::getRadioInstantRSSI()
+{
+    return radio_.getRSSI(false);
+}
+
 float TWatchS3Board::getRadioSNR()
 {
     return radio_.getSNR();

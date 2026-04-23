@@ -59,7 +59,7 @@ bool configure_receive(float freq_mhz, const ReceiveConfig& config)
                                         config.crc_len);
 }
 
-float read_rssi()
+float read_instant_rssi()
 {
     const float rssi = radio().readRssi();
     return std::isfinite(rssi) ? rssi : std::numeric_limits<float>::quiet_NaN();

@@ -1367,6 +1367,17 @@ float TLoRaPagerBoard::getRadioRSSI()
     return std::numeric_limits<float>::quiet_NaN();
 }
 
+float TLoRaPagerBoard::getRadioInstantRSSI()
+{
+    if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))
+    {
+        const float rssi = radio_.getRSSI(false);
+        LilyGoDispArduinoSPI::unlock();
+        return rssi;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
 float TLoRaPagerBoard::getRadioSNR()
 {
     if (LilyGoDispArduinoSPI::lock(pdMS_TO_TICKS(20)))

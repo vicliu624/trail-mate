@@ -1023,6 +1023,17 @@ float TDeckBoard::getRadioRSSI()
     return std::numeric_limits<float>::quiet_NaN();
 }
 
+float TDeckBoard::getRadioInstantRSSI()
+{
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
+    {
+        const float rssi = radio_.getRSSI(false);
+        LilyGoDispArduinoSPI::unlock();
+        return rssi;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
 float TDeckBoard::getRadioSNR()
 {
     if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
