@@ -77,6 +77,8 @@ TRAIL_MATE_FBDEV=/dev/fb0 ./build/device/trailmate_cardputer_zero_device
 
 - This shell is intentionally thin. It should own device lifecycle and device
   adapters, not duplicate the simulator tooling.
+- The thin framebuffer shell now reuses the same shared boot splash, boot log,
+  and menu-shell startup flow as the desktop simulator.
 - The `SConstruct` path is the preferred direction for real `Cardputer Zero`
   hardware adaptation because it rides on the vendor Linux SDK instead of
   re-solving LVGL and device-driver plumbing from scratch.

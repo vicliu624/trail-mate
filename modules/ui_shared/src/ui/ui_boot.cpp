@@ -15,7 +15,9 @@ namespace
 {
 
 constexpr uint32_t kFadeMs = 900;
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+#if defined(TRAIL_MATE_BOOT_MIN_SHOW_MS)
+constexpr uint32_t kMinShowMs = TRAIL_MATE_BOOT_MIN_SHOW_MS;
+#elif defined(TRAIL_MATE_ESP_BOARD_TAB5)
 constexpr uint32_t kMinShowMs = 900;
 #else
 constexpr uint32_t kMinShowMs = 3000;

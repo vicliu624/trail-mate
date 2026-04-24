@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -26,10 +27,46 @@ using core::rgba;
 
 constexpr int kDeviceWidth = 800;
 constexpr int kDeviceHeight = 520;
-constexpr int kScreenX = 198;
-constexpr int kScreenY = 52;
 constexpr int kScreenWidth = core::kDisplayWidth;
 constexpr int kScreenHeight = core::kDisplayHeight;
+constexpr int kScreenFrameRectX = 180;
+constexpr int kScreenFrameRectY = 26;
+constexpr int kScreenFrameRectWidth = 374;
+constexpr int kScreenFrameRectHeight = 202;
+constexpr int kScreenLipInsetX = 9;
+constexpr int kScreenLipInsetY = 11;
+constexpr int kScreenLipInsetBottom = 9;
+constexpr int kScreenLipWidth = kScreenFrameRectWidth - (kScreenLipInsetX * 2);
+constexpr int kScreenLipHeight = kScreenFrameRectHeight - kScreenLipInsetY - kScreenLipInsetBottom;
+constexpr int kScreenOpeningInset = 6;
+constexpr int kScreenOpeningWidth = kScreenWidth + (kScreenOpeningInset * 2);
+constexpr int kScreenOpeningHeight = kScreenHeight + (kScreenOpeningInset * 2);
+constexpr int kScreenOpeningX = kScreenFrameRectX + kScreenLipInsetX + ((kScreenLipWidth - kScreenOpeningWidth) / 2);
+constexpr int kScreenOpeningY = kScreenFrameRectY + kScreenLipInsetY + ((kScreenLipHeight - kScreenOpeningHeight) / 2);
+constexpr int kScreenX = kScreenOpeningX + kScreenOpeningInset;
+constexpr int kScreenY = kScreenOpeningY + kScreenOpeningInset;
+constexpr int kRightPanelX = 592;
+constexpr int kRightPanelY = 24;
+constexpr int kRightPanelWidth = 166;
+constexpr int kRightPanelHeight = 226;
+constexpr int kPowerSwitchWidth = 58;
+constexpr int kPowerSwitchHeight = 34;
+constexpr int kPowerSwitchX = kRightPanelX + ((kRightPanelWidth - kPowerSwitchWidth) / 2);
+constexpr int kPowerSwitchY = 54;
+constexpr int kPanelButtonWidth = 62;
+constexpr int kPanelButtonHeight = 22;
+constexpr int kPanelButtonGap = 8;
+constexpr int kPanelButtonsTotalWidth = (kPanelButtonWidth * 2) + kPanelButtonGap;
+constexpr int kHomeButtonX = kRightPanelX + ((kRightPanelWidth - kPanelButtonsTotalWidth) / 2);
+constexpr int kNextButtonX = kHomeButtonX + kPanelButtonWidth + kPanelButtonGap;
+constexpr int kPanelButtonsY = 185;
+constexpr int kKeyboardDeckX = 18;
+constexpr int kKeyboardDeckY = 240;
+constexpr int kKeyboardDeckWidth = 740;
+constexpr int kKeyboardDeckHeight = 242;
+constexpr int kKeyboardDeckSeparatorInset = 18;
+constexpr int kKeyboardDeckSeparatorX = kKeyboardDeckX + kKeyboardDeckSeparatorInset;
+constexpr int kKeyboardDeckSeparatorWidth = kKeyboardDeckWidth - (kKeyboardDeckSeparatorInset * 2);
 constexpr int kKeyUnitWidth = 54;
 constexpr int kKeyGap = 8;
 constexpr int kKeyAreaHeight = 42;
@@ -61,6 +98,12 @@ enum class ButtonStyle {
     Keyboard,
     Panel,
     Switch,
+};
+
+enum class LatchMode {
+    None,
+    OneShot,
+    Sticky,
 };
 
 enum class LegendSymbol {
@@ -101,6 +144,7 @@ struct VirtualButton {
     std::vector<std::string> highlight_aliases{};
     ButtonStyle style{ButtonStyle::Keyboard};
     std::chrono::steady_clock::time_point pressed_until{};
+    LatchMode latch_mode{LatchMode::None};
 };
 
 [[nodiscard]] std::string upperCopy(std::string_view value)
@@ -147,6 +191,24 @@ struct SdlSimulator::Impl {
     std::vector<app::InputEvent> input_queue{};
     std::vector<VirtualButton> buttons{};
 };
+
+[[nodiscard]] bool isModifierKey(app::InputKey key) noexcept
+{
+    switch (key) {
+    case app::InputKey::Fn:
+    case app::InputKey::Ctrl:
+    case app::InputKey::Alt:
+    case app::InputKey::Shift:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] bool isModifierButton(const VirtualButton& button) noexcept
+{
+    return isModifierKey(button.event.key);
+}
 
 [[nodiscard]] KeyboardLegend textLegend(std::string text, core::Color color = kLabelDark)
 {
@@ -337,9 +399,27 @@ void buildKeyboardButtons(std::vector<VirtualButton>& buttons)
 
 void buildPanelButtons(std::vector<VirtualButton>& buttons)
 {
-    addPanelButton(buttons, Rect{668, 54, 58, 34}, "ON", app::InputEvent{app::InputKey::Power, "POWER", '\0'}, ButtonStyle::Switch, {"POWER"});
-    addPanelButton(buttons, Rect{631, 185, 66, 22}, "HOME", app::InputEvent{app::InputKey::Home, "HOME", '\0'}, ButtonStyle::Panel, {"HOME"});
-    addPanelButton(buttons, Rect{703, 185, 66, 22}, "NEXT", app::InputEvent{app::InputKey::Next, "NEXT", '\0'}, ButtonStyle::Panel, {"NEXT"});
+    addPanelButton(
+        buttons,
+        Rect{kPowerSwitchX, kPowerSwitchY, kPowerSwitchWidth, kPowerSwitchHeight},
+        "ON",
+        app::InputEvent{app::InputKey::Power, "POWER", '\0'},
+        ButtonStyle::Switch,
+        {"POWER"});
+    addPanelButton(
+        buttons,
+        Rect{kHomeButtonX, kPanelButtonsY, kPanelButtonWidth, kPanelButtonHeight},
+        "HOME",
+        app::InputEvent{app::InputKey::Home, "HOME", '\0'},
+        ButtonStyle::Panel,
+        {"HOME"});
+    addPanelButton(
+        buttons,
+        Rect{kNextButtonX, kPanelButtonsY, kPanelButtonWidth, kPanelButtonHeight},
+        "NEXT",
+        app::InputEvent{app::InputKey::Next, "NEXT", '\0'},
+        ButtonStyle::Panel,
+        {"NEXT"});
 }
 
 [[nodiscard]] std::vector<VirtualButton> buildButtons()
@@ -356,9 +436,29 @@ void markPressed(VirtualButton& button)
     button.pressed_until = std::chrono::steady_clock::now() + kPressFlash;
 }
 
+void clearLatch(VirtualButton& button) noexcept
+{
+    button.latch_mode = LatchMode::None;
+}
+
+void setOneShotLatch(VirtualButton& button) noexcept
+{
+    button.latch_mode = LatchMode::OneShot;
+}
+
+void toggleStickyLatch(VirtualButton& button) noexcept
+{
+    button.latch_mode = button.latch_mode == LatchMode::Sticky ? LatchMode::None : LatchMode::Sticky;
+}
+
+[[nodiscard]] bool isLatched(const VirtualButton& button) noexcept
+{
+    return button.latch_mode != LatchMode::None;
+}
+
 [[nodiscard]] bool isPressed(const VirtualButton& button) noexcept
 {
-    return std::chrono::steady_clock::now() < button.pressed_until;
+    return isLatched(button) || std::chrono::steady_clock::now() < button.pressed_until;
 }
 
 [[nodiscard]] int centeredTextX(std::string_view text, int scale, int left, int width) noexcept
@@ -550,29 +650,35 @@ void drawLeftPanel(core::Canvas& canvas)
 
 void drawRightPanel(core::Canvas& canvas)
 {
-    canvas.fillRoundedRect(586, 24, 190, 226, 18, kInset);
-    drawLabelBlock(canvas, 615, 100, "POWER", kLabelDark, 2);
-    drawLabelBlock(canvas, 620, 120, "SWITCH", kLabelDark, 1);
-    drawLabelBlock(canvas, 690, 130, "USB-C", kAccentOrange, 1);
-    drawLabelBlock(canvas, 684, 144, "LINUX", kAccentBlue, 1);
-    drawLabelBlock(canvas, 650, 159, "CARDPUTER ZERO", kAccentPink, 1);
-    drawLabelBlock(canvas, 639, 214, "HOME", kLabelDark, 1);
-    drawLabelBlock(canvas, 711, 214, "NEXT", kLabelDark, 1);
+    canvas.fillRoundedRect(kRightPanelX, kRightPanelY, kRightPanelWidth, kRightPanelHeight, 18, kInset);
+    drawLabelBlock(canvas, centeredTextX("POWER", 2, kRightPanelX, kRightPanelWidth), 100, "POWER", kLabelDark, 2);
+    drawLabelBlock(canvas, centeredTextX("SWITCH", 1, kRightPanelX, kRightPanelWidth), 120, "SWITCH", kLabelDark, 1);
+    drawLabelBlock(canvas, centeredTextX("USB-C", 1, kRightPanelX, kRightPanelWidth), 130, "USB-C", kAccentOrange, 1);
+    drawLabelBlock(canvas, centeredTextX("LINUX", 1, kRightPanelX, kRightPanelWidth), 144, "LINUX", kAccentBlue, 1);
+    drawLabelBlock(canvas, centeredTextX("CARDPUTER ZERO", 1, kRightPanelX, kRightPanelWidth), 159, "CARDPUTER ZERO", kAccentPink, 1);
+    drawLabelBlock(canvas, centeredTextX("HOME", 1, kHomeButtonX, kPanelButtonWidth), 214, "HOME", kLabelDark, 1);
+    drawLabelBlock(canvas, centeredTextX("NEXT", 1, kNextButtonX, kPanelButtonWidth), 214, "NEXT", kLabelDark, 1);
 }
 
 void drawScreenFrame(core::Canvas& canvas)
 {
-    canvas.fillRoundedRect(180, 26, 374, 202, 18, kScreenFrame);
-    canvas.fillRoundedRect(189, 37, 356, 182, 12, kScreenLip);
-    canvas.fillRect(kScreenX - 6, kScreenY - 6, kScreenWidth + 12, kScreenHeight + 12, rgba(0, 0, 0));
+    canvas.fillRoundedRect(kScreenFrameRectX, kScreenFrameRectY, kScreenFrameRectWidth, kScreenFrameRectHeight, 18, kScreenFrame);
+    canvas.fillRoundedRect(
+        kScreenFrameRectX + kScreenLipInsetX,
+        kScreenFrameRectY + kScreenLipInsetY,
+        kScreenLipWidth,
+        kScreenLipHeight,
+        12,
+        kScreenLip);
+    canvas.fillRect(kScreenOpeningX, kScreenOpeningY, kScreenOpeningWidth, kScreenOpeningHeight, rgba(0, 0, 0));
 }
 
 void drawKeyboardDeck(core::Canvas& canvas)
 {
-    canvas.fillRoundedRect(18, 240, 764, 242, 18, rgba(230, 232, 234));
-    canvas.fillRect(36, 306, 730, 2, rgba(205, 207, 209));
-    canvas.fillRect(36, 360, 730, 2, rgba(205, 207, 209));
-    canvas.fillRect(36, 414, 730, 2, rgba(205, 207, 209));
+    canvas.fillRoundedRect(kKeyboardDeckX, kKeyboardDeckY, kKeyboardDeckWidth, kKeyboardDeckHeight, 18, rgba(230, 232, 234));
+    canvas.fillRect(kKeyboardDeckSeparatorX, 306, kKeyboardDeckSeparatorWidth, 2, rgba(205, 207, 209));
+    canvas.fillRect(kKeyboardDeckSeparatorX, 360, kKeyboardDeckSeparatorWidth, 2, rgba(205, 207, 209));
+    canvas.fillRect(kKeyboardDeckSeparatorX, 414, kKeyboardDeckSeparatorWidth, 2, rgba(205, 207, 209));
 }
 
 void drawShell(core::Canvas& canvas, const core::Canvas& screen_canvas, const std::vector<VirtualButton>& buttons)
@@ -620,6 +726,102 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
         | (static_cast<std::uint32_t>(color.b) << 16U)
         | (static_cast<std::uint32_t>(color.g) << 8U)
         | static_cast<std::uint32_t>(color.r);
+}
+
+[[nodiscard]] std::string characterLabel(char ch)
+{
+    if (ch == ' ') {
+        return "SPACE";
+    }
+
+    std::string label{};
+    label.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    return label;
+}
+
+[[nodiscard]] std::optional<app::InputEvent> eventFromLegend(const KeyboardLegend& legend)
+{
+    switch (legend.symbol) {
+    case LegendSymbol::ArrowLeft:
+        return app::InputEvent{app::InputKey::Left, "LEFT", '\0'};
+    case LegendSymbol::ArrowRight:
+        return app::InputEvent{app::InputKey::Right, "RIGHT", '\0'};
+    case LegendSymbol::ArrowUp:
+        return app::InputEvent{app::InputKey::Up, "UP", '\0'};
+    case LegendSymbol::ArrowDown:
+        return app::InputEvent{app::InputKey::Down, "DOWN", '\0'};
+    case LegendSymbol::None:
+    case LegendSymbol::BackArrow:
+    case LegendSymbol::SpaceBar:
+        break;
+    }
+
+    if (legend.text.empty()) {
+        return std::nullopt;
+    }
+
+    const auto normalized = upperCopy(legend.text);
+    if (normalized == "ALT") {
+        return app::InputEvent{app::InputKey::Alt, "ALT", '\0'};
+    }
+    if (normalized == "DEL") {
+        return app::InputEvent{app::InputKey::Backspace, "DEL", '\0'};
+    }
+    if (normalized == "OK") {
+        return app::InputEvent{app::InputKey::Enter, "OK", '\0'};
+    }
+    if (legend.text.size() == 1U) {
+        return app::makeCharacterInput(legend.text.front(), characterLabel(legend.text.front()));
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] app::InputEvent resolveButtonEvent(const VirtualButton& button, const std::vector<VirtualButton>& buttons)
+{
+    bool shift_active = false;
+    bool fn_active = false;
+
+    for (const auto& candidate : buttons) {
+        if (!isLatched(candidate)) {
+            continue;
+        }
+
+        if (candidate.event.key == app::InputKey::Shift) {
+            shift_active = true;
+        } else if (candidate.event.key == app::InputKey::Fn) {
+            fn_active = true;
+        }
+    }
+
+    if (fn_active) {
+        if (const auto alternate = eventFromLegend(button.secondary_legend)) {
+            return *alternate;
+        }
+    }
+
+    if (shift_active && button.event.key == app::InputKey::Character && button.event.text != '\0') {
+        const unsigned char value = static_cast<unsigned char>(button.event.text);
+        if (std::isalpha(value)) {
+            const char shifted = static_cast<char>(std::toupper(value));
+            return app::makeCharacterInput(shifted, characterLabel(shifted));
+        }
+
+        if (const auto alternate = eventFromLegend(button.secondary_legend)) {
+            return *alternate;
+        }
+    }
+
+    return button.event;
+}
+
+void consumeOneShotModifiers(std::vector<VirtualButton>& buttons) noexcept
+{
+    for (auto& button : buttons) {
+        if (button.latch_mode == LatchMode::OneShot) {
+            clearLatch(button);
+        }
+    }
 }
 
 void enqueueSpecial(
@@ -723,7 +925,7 @@ void handleMouseClick(
     const SDL_MouseButtonEvent& event,
     int scale)
 {
-    if (event.button != SDL_BUTTON_LEFT) {
+    if (event.button != SDL_BUTTON_LEFT && event.button != SDL_BUTTON_RIGHT) {
         return;
     }
 
@@ -736,7 +938,23 @@ void handleMouseClick(
         }
 
         markPressed(button);
-        queue.push_back(button.event);
+
+        if (isModifierButton(button)) {
+            if (event.button == SDL_BUTTON_RIGHT) {
+                toggleStickyLatch(button);
+                if (button.latch_mode == LatchMode::Sticky) {
+                    markPressed(button);
+                }
+            } else {
+                if (button.latch_mode != LatchMode::Sticky) {
+                    setOneShotLatch(button);
+                }
+            }
+            break;
+        }
+
+        queue.push_back(resolveButtonEvent(button, buttons));
+        consumeOneShotModifiers(buttons);
         break;
     }
 }

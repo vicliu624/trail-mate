@@ -11,6 +11,7 @@ include(CTest)
 set(TRAIL_MATE_CARDPUTER_ZERO_COMMON_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/../../platform/linux/common/include")
 set(TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT "${PROJECT_SOURCE_DIR}/../../platform/linux/common/src")
 set(TRAIL_MATE_CORE_SYS_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/../../modules/core_sys/include")
+set(TRAIL_MATE_CORE_CHAT_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/../../modules/core_chat/include")
 set(TRAIL_MATE_CORE_GPS_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/../../modules/core_gps/include")
 set(TRAIL_MATE_CORE_HOSTLINK_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/../../modules/core_hostlink/include")
 set(TRAIL_MATE_UI_SHARED_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/../../modules/ui_shared/include")
@@ -81,7 +82,7 @@ add_executable(trailmate_cardputer_zero_simulator
 target_include_directories(trailmate_cardputer_zero_simulator PRIVATE "${PROJECT_SOURCE_DIR}/src")
 target_link_libraries(trailmate_cardputer_zero_simulator PRIVATE trailmate_cardputer_zero_linux_common SDL3::SDL3)
 
-set(LV_BUILD_CONF_PATH "${PROJECT_SOURCE_DIR}/lv_conf.h" CACHE PATH "" FORCE)
+set(LV_BUILD_CONF_PATH "${PROJECT_SOURCE_DIR}/../../platform/linux/common/include/lv_conf.h" CACHE PATH "" FORCE)
 set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
@@ -96,6 +97,8 @@ FetchContent_MakeAvailable(lvgl)
 add_library(trailmate_cardputer_zero_ui_shell
     "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}/ui/localization.cpp"
     "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}/ui/menu_runtime.cpp"
+    "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}/ui/shared_ui_shell.cpp"
+    "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}/ui/shell_ui_runner.cpp"
     "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}/ui/ui_common.cpp"
     "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}/ui/ui_status.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/app_runtime.cpp"
@@ -111,19 +114,19 @@ add_library(trailmate_cardputer_zero_ui_shell
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/page/page_profile.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/startup_ui_shell.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/ui_boot.cpp"
-    src/ui_shell/shell_ui_runner.cpp
-    src/ui_shell/shared_ui_shell.cpp
 )
 target_include_directories(trailmate_cardputer_zero_ui_shell
     PUBLIC
         "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_INCLUDE_ROOT}"
         "${TRAIL_MATE_CARDPUTER_ZERO_COMMON_ROOT}"
+        "${TRAIL_MATE_CORE_CHAT_INCLUDE_ROOT}"
         "${TRAIL_MATE_UI_SHARED_INCLUDE_ROOT}"
         "${TRAIL_MATE_CORE_SYS_INCLUDE_ROOT}"
     PRIVATE
         "${PROJECT_SOURCE_DIR}/src"
 )
 target_compile_features(trailmate_cardputer_zero_ui_shell PUBLIC cxx_std_20)
+target_compile_definitions(trailmate_cardputer_zero_ui_shell PRIVATE TRAIL_MATE_BOOT_MIN_SHOW_MS=1200)
 target_link_libraries(trailmate_cardputer_zero_ui_shell
     PUBLIC
         lvgl

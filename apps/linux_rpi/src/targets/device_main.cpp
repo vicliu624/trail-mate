@@ -4,8 +4,8 @@
 #include <string>
 #include <string_view>
 
-#include "app/demo_app_runner.h"
 #include "platform/device/linux_framebuffer_platform.h"
+#include "ui/shell_ui_runner.h"
 
 namespace {
 
@@ -36,7 +36,7 @@ int main(int argc, char** argv)
 {
     try {
         trailmate::cardputer_zero::platform::device::LinuxFramebufferPlatform device{parseFramebufferPath(argc, argv)};
-        trailmate::cardputer_zero::app::runDemoApp(device);
+        trailmate::cardputer_zero::linux_ui::runShellUi(device);
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "Device startup failed: " << ex.what() << '\n';

@@ -37,9 +37,7 @@ Linux-safe code they both use now lives under
 
 - `CMakeLists.txt`: standalone simulator shell build
 - `CMakePresets.json`: Windows/Linux presets for simulator and tests
-- `lv_conf.h`: LVGL offscreen configuration for the shell-integrated shared UI
 - `src/platform/simulator`: SDL front-view device simulator
-- `src/ui_shell`: shared-ui shell bootstrap, offscreen LVGL runner, and placeholder app catalog
 - `src/targets`: simulator entrypoints
 - `tests`: smoke tests for the Linux-safe shared slice
 - `scripts`: helper scripts for build/run/dev-container flows
@@ -70,7 +68,12 @@ bash scripts/run-simulator.sh
 
 The main simulator target is now the shared-ui milestone: it keeps the original
 device shell and injects the real `ui_shared` menu shell into the simulated
-screen, while individual apps are still placeholder pages.
+screen, shows the shared boot splash and boot log, and still uses placeholder
+pages for individual apps.
+
+Virtual keyboard note:
+- left-click on `Fn` / `Shift` / `Ctrl` / `Alt` arms a one-shot modifier for the next key
+- right-click on those modifier buttons toggles a sticky hold state so combos can be clicked with the mouse
 
 ### WSL validation
 

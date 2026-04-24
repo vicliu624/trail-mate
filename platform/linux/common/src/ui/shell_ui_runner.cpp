@@ -1,4 +1,4 @@
-#include "ui_shell/shell_ui_runner.h"
+#include "ui/shell_ui_runner.h"
 
 #include <chrono>
 #include <cstdint>
@@ -12,9 +12,9 @@
 #include "app/input_event.h"
 #include "core/canvas.h"
 #include "core/display_profile.h"
-#include "ui_shell/shared_ui_shell.h"
+#include "ui/shared_ui_shell.h"
 
-namespace trailmate::cardputer_zero::simulator::ui_shell {
+namespace trailmate::cardputer_zero::linux_ui {
 namespace {
 
 using clock = std::chrono::steady_clock;
@@ -100,7 +100,7 @@ public:
 
         display_ = lv_display_create(core::kDisplayWidth, core::kDisplayHeight);
         if (display_ == nullptr) {
-            throw std::runtime_error("Failed to create LVGL display for the shell simulator.");
+            throw std::runtime_error("Failed to create LVGL display for the Linux shell.");
         }
 
         lv_display_set_default(display_);
@@ -116,7 +116,7 @@ public:
 
         keypad_ = lv_indev_create();
         if (keypad_ == nullptr) {
-            throw std::runtime_error("Failed to create LVGL keypad input for the shell simulator.");
+            throw std::runtime_error("Failed to create LVGL keypad input for the Linux shell.");
         }
 
         lv_indev_set_type(keypad_, LV_INDEV_TYPE_KEYPAD);
@@ -124,8 +124,8 @@ public:
         lv_indev_set_user_data(keypad_, this);
         lv_indev_set_read_cb(keypad_, readInputCallback);
 
-        if (!initialize()) {
-            throw std::runtime_error("Failed to initialize the shared UI shell.");
+        if (!startup_.begin()) {
+            throw std::runtime_error("Failed to begin the shared UI startup sequence.");
         }
 
         render();
@@ -159,6 +159,10 @@ public:
 
     void render()
     {
+        if (!startup_.tick()) {
+            throw std::runtime_error("Shared UI startup sequence failed.");
+        }
+
         lv_timer_handler();
         if (dirty_) {
             copyFrameBufferToCanvas();
@@ -223,6 +227,7 @@ private:
     core::Canvas canvas_;
     std::vector<std::uint16_t> frame_buffer_{};
     std::deque<QueuedKeyEvent> key_events_{};
+    SharedUiShellStartup startup_{};
     bool dirty_{true};
 };
 
@@ -254,4 +259,4 @@ void runShellUi(platform::SurfacePresenter& presenter, std::chrono::milliseconds
     }
 }
 
-} // namespace trailmate::cardputer_zero::simulator::ui_shell
+} // namespace trailmate::cardputer_zero::linux_ui

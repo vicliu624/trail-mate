@@ -1,4 +1,4 @@
-#include "ui_shell/shared_ui_shell.h"
+#include "ui/shared_ui_shell.h"
 
 #include <cstdio>
 #include <string>
@@ -9,23 +9,20 @@
 #include "ui/callback_app_screen.h"
 #include "ui/localization.h"
 #include "ui/startup_ui_shell.h"
+#include "ui/ui_boot.h"
 #include "ui/ui_theme.h"
 
-namespace trailmate::cardputer_zero::simulator::ui_shell
-{
-namespace
-{
+namespace trailmate::cardputer_zero::linux_ui {
+namespace {
 
-extern "C"
-{
-    extern const lv_image_dsc_t Chat;
-    extern const lv_image_dsc_t gps_icon;
-    extern const lv_image_dsc_t Setting;
-    extern const lv_image_dsc_t ext;
+extern "C" {
+extern const lv_image_dsc_t Chat;
+extern const lv_image_dsc_t gps_icon;
+extern const lv_image_dsc_t Setting;
+extern const lv_image_dsc_t ext;
 }
 
-struct PlaceholderPageSpec
-{
+struct PlaceholderPageSpec {
     const char* stable_id = nullptr;
     const char* title = nullptr;
     const char* body = nullptr;
@@ -35,69 +32,63 @@ struct PlaceholderPageSpec
     bool show_runtime_snapshot = false;
 };
 
-std::string format_bytes_mib(std::size_t bytes)
+std::string formatBytesMib(std::size_t bytes)
 {
     char buffer[32];
     const unsigned long mib_whole = static_cast<unsigned long>(bytes / (1024U * 1024U));
     const unsigned long mib_tenth =
         static_cast<unsigned long>((bytes % (1024U * 1024U)) * 10U / (1024U * 1024U));
-    if (mib_tenth == 0U)
-    {
+    if (mib_tenth == 0U) {
         std::snprintf(buffer, sizeof(buffer), "%lu MiB", mib_whole);
-    }
-    else
-    {
+    } else {
         std::snprintf(buffer, sizeof(buffer), "%lu.%lu MiB", mib_whole, mib_tenth);
     }
     return buffer;
 }
 
-std::string build_runtime_snapshot()
+std::string buildRuntimeSnapshot()
 {
     const auto battery = ::platform::ui::device::battery_info();
     const auto memory = ::platform::ui::device::memory_stats();
 
     char buffer[512];
     std::snprintf(buffer,
-                  sizeof(buffer),
-                  "Firmware: %s\nBattery: %s\nGPS capability: %s\nGPS ready: %s\nSD ready: %s\nRAM total: %s\nPSRAM: %s",
-                  ::platform::ui::device::firmware_version(),
-                  battery.level >= 0 ? (battery.charging ? "charging" : "available") : "unknown",
-                  ::platform::ui::device::gps_supported() ? "yes" : "no",
-                  ::platform::ui::device::gps_ready() ? "yes" : "no",
-                  ::platform::ui::device::sd_ready() ? "yes" : "no",
-                  format_bytes_mib(memory.ram_total_bytes).c_str(),
-                  memory.psram_available ? format_bytes_mib(memory.psram_total_bytes).c_str() : "not present");
+        sizeof(buffer),
+        "Firmware: %s\nBattery: %s\nGPS capability: %s\nGPS ready: %s\nSD ready: %s\nRAM total: %s\nPSRAM: %s",
+        ::platform::ui::device::firmware_version(),
+        battery.level >= 0 ? (battery.charging ? "charging" : "available") : "unknown",
+        ::platform::ui::device::gps_supported() ? "yes" : "no",
+        ::platform::ui::device::gps_ready() ? "yes" : "no",
+        ::platform::ui::device::sd_ready() ? "yes" : "no",
+        formatBytesMib(memory.ram_total_bytes).c_str(),
+        memory.psram_available ? formatBytesMib(memory.psram_total_bytes).c_str() : "not present");
     return buffer;
 }
 
-void request_exit()
+void requestExit()
 {
     ui_request_exit_to_menu();
 }
 
-void back_button_event_cb(lv_event_t* event)
+void backButtonEventCb(lv_event_t* event)
 {
     const lv_event_code_t code = lv_event_get_code(event);
-    if (code == LV_EVENT_CLICKED)
-    {
-        request_exit();
+    if (code == LV_EVENT_CLICKED) {
+        requestExit();
         return;
     }
 
-    if (code != LV_EVENT_KEY)
-    {
+    if (code != LV_EVENT_KEY) {
         return;
     }
 
     const uint32_t key = lv_event_get_key(event);
-    if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE || key == LV_KEY_LEFT)
-    {
-        request_exit();
+    if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE || key == LV_KEY_LEFT) {
+        requestExit();
     }
 }
 
-lv_obj_t* create_chip(lv_obj_t* parent, const PlaceholderPageSpec& spec)
+lv_obj_t* createChip(lv_obj_t* parent, const PlaceholderPageSpec& spec)
 {
     lv_obj_t* chip = lv_obj_create(parent);
     lv_obj_set_size(chip, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -120,11 +111,10 @@ lv_obj_t* create_chip(lv_obj_t* parent, const PlaceholderPageSpec& spec)
     return chip;
 }
 
-void placeholder_enter(void* user_data, lv_obj_t* parent)
+void placeholderEnter(void* user_data, lv_obj_t* parent)
 {
     auto* spec = static_cast<PlaceholderPageSpec*>(user_data);
-    if (spec == nullptr || parent == nullptr)
-    {
+    if (spec == nullptr || parent == nullptr) {
         return;
     }
 
@@ -162,8 +152,8 @@ void placeholder_enter(void* user_data, lv_obj_t* parent)
     lv_obj_set_style_bg_color(back_btn, ui::theme::surface_alt(), 0);
     lv_obj_set_style_border_width(back_btn, 0, 0);
     lv_obj_set_style_radius(back_btn, 10, 0);
-    lv_obj_add_event_cb(back_btn, back_button_event_cb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_add_event_cb(back_btn, back_button_event_cb, LV_EVENT_KEY, nullptr);
+    lv_obj_add_event_cb(back_btn, backButtonEventCb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(back_btn, backButtonEventCb, LV_EVENT_KEY, nullptr);
 
     lv_obj_t* back_label = lv_label_create(back_btn);
     lv_obj_set_style_text_color(back_label, ui::theme::text(), 0);
@@ -194,9 +184,9 @@ void placeholder_enter(void* user_data, lv_obj_t* parent)
     lv_obj_t* subtitle = lv_label_create(title_wrap);
     lv_obj_set_style_text_color(subtitle, ui::theme::text_muted(), 0);
     lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_12, 0);
-    ::ui::i18n::set_label_text(subtitle, "Shared UI shell inside the device simulator");
+    ::ui::i18n::set_label_text(subtitle, "Shared UI shell inside the Linux shell");
 
-    create_chip(header, *spec);
+    createChip(header, *spec);
 
     lv_obj_t* body_card = lv_obj_create(page);
     lv_obj_set_width(body_card, LV_PCT(100));
@@ -220,14 +210,13 @@ void placeholder_enter(void* user_data, lv_obj_t* parent)
     lv_obj_set_style_text_font(body, &lv_font_montserrat_14, 0);
     ::ui::i18n::set_content_label_text(body, spec->body);
 
-    if (spec->show_runtime_snapshot)
-    {
+    if (spec->show_runtime_snapshot) {
         lv_obj_t* snapshot = lv_label_create(body_card);
         lv_obj_set_width(snapshot, LV_PCT(100));
         lv_label_set_long_mode(snapshot, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_color(snapshot, ui::theme::text_muted(), 0);
         lv_obj_set_style_text_font(snapshot, &lv_font_montserrat_12, 0);
-        const std::string snapshot_text = build_runtime_snapshot();
+        const std::string snapshot_text = buildRuntimeSnapshot();
         ::ui::i18n::set_content_label_text_raw(snapshot, snapshot_text.c_str());
     }
 
@@ -241,11 +230,10 @@ void placeholder_enter(void* user_data, lv_obj_t* parent)
         "Press Esc / Backspace or use the back button to return to the menu.");
 }
 
-void placeholder_exit(void* user_data, lv_obj_t* parent)
+void placeholderExit(void* user_data, lv_obj_t* parent)
 {
     (void)user_data;
-    if (parent != nullptr)
-    {
+    if (parent != nullptr) {
         lv_obj_clean(parent);
     }
     set_default_group(menu_g);
@@ -303,8 +291,8 @@ ui::CallbackAppScreen s_chat_app{
     s_chat_spec.stable_id,
     s_chat_spec.title,
     s_chat_spec.icon,
-    placeholder_enter,
-    placeholder_exit,
+    placeholderEnter,
+    placeholderExit,
     &s_chat_spec,
 };
 
@@ -312,8 +300,8 @@ ui::CallbackAppScreen s_gps_app{
     s_gps_spec.stable_id,
     s_gps_spec.title,
     s_gps_spec.icon,
-    placeholder_enter,
-    placeholder_exit,
+    placeholderEnter,
+    placeholderExit,
     &s_gps_spec,
 };
 
@@ -321,8 +309,8 @@ ui::CallbackAppScreen s_settings_app{
     s_settings_spec.stable_id,
     s_settings_spec.title,
     s_settings_spec.icon,
-    placeholder_enter,
-    placeholder_exit,
+    placeholderEnter,
+    placeholderExit,
     &s_settings_spec,
 };
 
@@ -330,8 +318,8 @@ ui::CallbackAppScreen s_system_app{
     s_system_spec.stable_id,
     s_system_spec.title,
     s_system_spec.icon,
-    placeholder_enter,
-    placeholder_exit,
+    placeholderEnter,
+    placeholderExit,
     &s_system_spec,
 };
 
@@ -342,30 +330,86 @@ AppScreen* s_apps[] = {
     &s_system_app,
 };
 
-ui::StaticAppCatalogState& catalog_state()
+ui::StaticAppCatalogState& catalogState()
 {
     static ui::StaticAppCatalogState state = ui::makeStaticAppCatalogState(s_apps);
     return state;
 }
 
-} // namespace
-
-bool initialize()
+[[nodiscard]] ui::startup_ui_shell::Hooks buildHooks()
 {
     ui::startup_ui_shell::Hooks hooks{};
-    hooks.apps = ui::makeStaticAppCatalog(&catalog_state());
-
-    if (!ui::startup_ui_shell::prepareBootUi(hooks, true))
-    {
-        return false;
-    }
-
-    if (!ui::startup_ui_shell::initializeMenuSkeleton(hooks))
-    {
-        return false;
-    }
-
-    return ui::startup_ui_shell::finalizeStartup(hooks, true);
+    hooks.apps = ui::makeStaticAppCatalog(&catalogState());
+    return hooks;
 }
 
-} // namespace trailmate::cardputer_zero::simulator::ui_shell
+constexpr unsigned int kMenuBuildDelayMs = 140U;
+constexpr unsigned int kThemeReadyDelayMs = 280U;
+constexpr unsigned int kFinalizeDelayMs = 420U;
+
+} // namespace
+
+bool SharedUiShellStartup::begin()
+{
+    if (phase_ != Phase::Idle) {
+        return true;
+    }
+
+    started_at_ms_ = lv_tick_get();
+    if (!ui::startup_ui_shell::prepareBootUi(buildHooks(), false)) {
+        return false;
+    }
+
+    phase_ = Phase::BootVisible;
+    return true;
+}
+
+bool SharedUiShellStartup::runPhase(Phase next_phase, const char* log_line)
+{
+    if (log_line != nullptr && log_line[0] != '\0') {
+        ui::boot::set_log_line(log_line);
+    }
+    phase_ = next_phase;
+    return true;
+}
+
+bool SharedUiShellStartup::tick()
+{
+    if (phase_ == Phase::Idle) {
+        return begin();
+    }
+
+    if (phase_ == Phase::Finalized) {
+        return true;
+    }
+
+    const unsigned int elapsed = lv_tick_elaps(started_at_ms_);
+    if (phase_ == Phase::BootVisible && elapsed >= kMenuBuildDelayMs) {
+        ui::boot::set_log_line("Building menu shell...");
+        if (!ui::startup_ui_shell::initializeMenuSkeleton(buildHooks())) {
+            return false;
+        }
+        return runPhase(Phase::MenuBuilt, nullptr);
+    }
+
+    if (phase_ == Phase::MenuBuilt && elapsed >= kThemeReadyDelayMs) {
+        return runPhase(Phase::ThemeReady, "Preparing navigation and apps...");
+    }
+
+    if (phase_ == Phase::ThemeReady && elapsed >= kFinalizeDelayMs) {
+        ui::boot::set_log_line("Starting Trail Mate...");
+        if (!ui::startup_ui_shell::finalizeStartup(buildHooks(), false)) {
+            return false;
+        }
+        return runPhase(Phase::Finalized, nullptr);
+    }
+
+    return true;
+}
+
+bool SharedUiShellStartup::ready() const noexcept
+{
+    return phase_ == Phase::Finalized;
+}
+
+} // namespace trailmate::cardputer_zero::linux_ui

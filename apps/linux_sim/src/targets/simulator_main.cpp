@@ -7,7 +7,7 @@
 #include <string_view>
 
 #include "platform/simulator/sdl_simulator.h"
-#include "ui_shell/shell_ui_runner.h"
+#include "ui/shell_ui_runner.h"
 
 namespace {
 
@@ -51,7 +51,7 @@ int main(int argc, char** argv)
     try {
         const auto options = parseOptions(argc, argv);
         trailmate::cardputer_zero::platform::simulator::SdlSimulator simulator{options.scale};
-        trailmate::cardputer_zero::simulator::ui_shell::runShellUi(
+        trailmate::cardputer_zero::linux_ui::runShellUi(
             simulator,
             std::chrono::milliseconds{options.auto_exit_ms});
         return 0;

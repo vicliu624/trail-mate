@@ -4,10 +4,10 @@
 
 #include "platform/surface_presenter.h"
 
-namespace trailmate::cardputer_zero::simulator::ui_shell {
+namespace trailmate::cardputer_zero::linux_ui {
 
 void runShellUi(
     platform::SurfacePresenter& presenter,
     std::chrono::milliseconds auto_exit_after = std::chrono::milliseconds::zero());
 
-} // namespace trailmate::cardputer_zero::simulator::ui_shell
+} // namespace trailmate::cardputer_zero::linux_ui
