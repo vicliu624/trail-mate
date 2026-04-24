@@ -1,0 +1,60 @@
+name: Cardputer Zero Linux
+
+on:
+  push:
+    paths:
+      - "apps/linux_sim/**"
+      - "apps/linux_rpi/**"
+      - "platform/linux/**"
+      - ".github/workflows/cardputer-zero-linux.yml"
+  pull_request:
+    paths:
+      - "apps/linux_sim/**"
+      - "apps/linux_rpi/**"
+      - "platform/linux/**"
+      - ".github/workflows/cardputer-zero-linux.yml"
+
+jobs:
+  linux-shell:
+    name: Linux Simulator Shell
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux simulator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols
+
+      - name: Configure simulator
+        working-directory: apps/linux_sim
+        run: cmake --preset linux-simulator-debug
+
+      - name: Build simulator
+        working-directory: apps/linux_sim
+        run: cmake --build --preset linux-simulator-debug-build
+
+      - name: Configure smoke tests
+        working-directory: apps/linux_sim
+        run: cmake --preset linux-test-debug
+
+      - name: Build smoke tests
+        working-directory: apps/linux_sim
+        run: cmake --build --preset linux-test-debug-build
+
+      - name: Run smoke tests
+        working-directory: apps/linux_sim
+        run: ctest --preset linux-debug-test
+
+      - name: Configure Pi OS device shell
+        working-directory: apps/linux_rpi
+        run: cmake --preset linux-device-debug
+
+      - name: Build Pi OS device shell
+        working-directory: apps/linux_rpi
+        run: cmake --build --preset linux-device-debug-build
+
+      - name: Verify split Linux workflow from WSL-style entrypoint
+        working-directory: apps/linux_sim
+        run: bash scripts/wsl-validate.sh

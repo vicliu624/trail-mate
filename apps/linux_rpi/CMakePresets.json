@@ -1,0 +1,35 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-device-debug",
+      "displayName": "Linux Debug Device",
+      "description": "Configure the Pi OS framebuffer device target for Cardputer Zero bring-up.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/device",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-device-debug-build",
+      "displayName": "Build Linux Device",
+      "configurePreset": "linux-device-debug",
+      "targets": [
+        "trailmate_cardputer_zero_device"
+      ]
+    }
+  ]
+}
