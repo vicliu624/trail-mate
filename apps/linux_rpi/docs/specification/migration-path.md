@@ -4,6 +4,10 @@ This note captures the recommended way to adapt `Cardputer Zero` into the
 current `Trail Mate` repository without damaging the existing ESP/PlatformIO
 mainline.
 
+This document is subordinate to
+[cardputer-zero-adaptation-spec.md](./cardputer-zero-adaptation-spec.md).
+It describes migration sequencing, not the architectural source of truth.
+
 ## Why not bolt Linux onto the current root build
 
 The current root build is still split between:
@@ -41,14 +45,26 @@ The recommended sequence is:
 1. Keep `apps/linux_sim` as the simulator and developer-tooling shell.
 2. Keep `apps/linux_rpi` as the real Pi OS device shell, and let its preferred
    device-facing path use `M5Stack_Linux_Libs`.
-3. Extract shared logic from the current repository into `platform/linux/common`
-   in vertical slices.
-4. Only move code into truly shared `modules/*` after the slice is Linux-safe
-   beyond the Linux bring-up pair.
+3. Establish and obey the final-shape architectural boundaries before feature
+   migration starts defining them by accident.
+4. Extract shared logic from the current repository into `platform/linux/common`
+   and purified `modules/*` only after the responsible layer is explicit.
 
-## Extraction order
+## Structural order before feature order
 
-Use this order when porting real Trail Mate features into the Linux shell:
+Before choosing the first real feature page, the migration should first do:
+
+1. normalize platform contracts
+2. remove ESP-only dependencies from `ui_shared`
+3. split platform-specific tails out of `core_*` module locations
+4. keep Linux shared shell code in `platform/linux/common`
+
+Only then should feature verification slices begin.
+
+## Feature verification order
+
+Use this order when porting real Trail Mate features into the Linux shell after
+the structural program above:
 
 1. runtime and input contracts
 2. presentation-independent app state

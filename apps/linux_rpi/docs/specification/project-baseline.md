@@ -1,5 +1,9 @@
 # Trail Mate Cardputer Zero Linux Baseline
 
+This document describes the Linux baseline and development stance.
+The authoritative final-shape constraint document is
+[cardputer-zero-adaptation-spec.md](./cardputer-zero-adaptation-spec.md).
+
 ## 1. Current Confusions
 
 - `Cardputer Zero` is a Linux handheld running Pi OS, so it should not be modeled
@@ -62,7 +66,7 @@
   `apps/linux_rpi` and do not replace the repository-root ESP-IDF build
 - Shared Linux slice: `platform/linux/common`
 
-## 5. Current Specification Baseline
+## 5. Current Baseline
 
 - The simulator must build on both Windows and Linux.
 - The framebuffer device target must build on Linux and be usable on Pi OS.
@@ -73,6 +77,8 @@
 - Final Cardputer Zero feature work should migrate reusable logic out of this
   shell split into the main repository structure instead of letting either shell
   become a permanent fork.
+- Feature-first execution is not allowed to redefine the architecture; feature
+  slices must validate the final-shape specification instead.
 
 ## 6. Minimal Externalization
 

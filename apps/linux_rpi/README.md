@@ -2,6 +2,9 @@
 
 `apps/linux_rpi` is the real Pi OS device shell for `Cardputer Zero`.
 
+The authoritative architecture constraint for this line is
+[docs/specification/cardputer-zero-adaptation-spec.md](./docs/specification/cardputer-zero-adaptation-spec.md).
+
 This directory now has two responsibilities that should stay distinct:
 
 - a repo-local thin Linux bring-up shell for neutral experiments
@@ -35,6 +38,8 @@ in [`platform/linux/common`](../../platform/linux/common/README.md).
   the engineering template for this repository.
 - New Cardputer Zero work should prefer the SDK-backed path over extending the
   custom framebuffer shell when the work is truly device-facing.
+- Feature slices must validate the adaptation specification rather than define
+  the architecture retroactively.
 
 ## Quick Start
 

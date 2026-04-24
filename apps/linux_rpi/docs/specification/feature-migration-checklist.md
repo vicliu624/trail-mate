@@ -3,6 +3,10 @@
 This checklist turns the current Cardputer Zero assessment into a concrete
 implementation order.
 
+It is subordinate to
+[cardputer-zero-adaptation-spec.md](./cardputer-zero-adaptation-spec.md).
+This checklist must validate that specification, not redefine it.
+
 It is intentionally opinionated:
 
 - build the real device shell on top of `M5Stack_Linux_Libs`
@@ -60,7 +64,21 @@ These pieces should not be treated as the Linux foundation:
 - `platform/shared/include/board/*.h`
   still useful for MCU board families, but not the primary Linux seam
 
-## 2. First Linux Runtime Slice
+## 2. Structural Compliance Before First Feature Slice
+
+Before choosing the first true page migration, these structural tasks come
+first:
+
+1. make the `platform::ui::*` contract set explicit and complete
+2. remove ESP Arduino include roots and `Preferences` dependence from
+   `modules/ui_shared`
+3. relocate or split platform-specific code that still lives under `core_*`
+   module trees
+4. keep shared Linux shell/session code in `platform/linux/common` instead of
+   app-shell private directories
+5. only then select the first verification slice, likely `Settings`
+
+## 3. First Linux Runtime Slice
 
 Build these Linux implementations first under `platform/linux/common`:
 
@@ -76,7 +94,7 @@ Build these Linux implementations first under `platform/linux/common`:
 This is the minimum slice needed to stop `ui_shared` from depending on ESP-only
 runtime code for basic shell behavior.
 
-## 3. First-Batch UI Targets
+## 4. First-Batch UI Targets
 
 ### Enable First
 
@@ -121,7 +139,7 @@ These should start disabled with explicit `is_supported() == false` behavior:
 The rule is simple: if the hardware or transport does not exist on Cardputer
 Zero yet, do not fake a partial port just to keep a menu item visible.
 
-## 4. Second Slice After Runtime
+## 5. Second Slice After Runtime
 
 Once the first runtime slice is in place, build the next layer in this order:
 
@@ -136,7 +154,7 @@ Once the first runtime slice is in place, build the next layer in this order:
 This sequence keeps the shared business code moving before the high-risk
 hardware work starts.
 
-## 5. Cardputer Zero Specific Work
+## 6. Cardputer Zero Specific Work
 
 These are inherently target-facing and should be implemented specifically for
 the Cardputer Zero shell:
@@ -150,11 +168,12 @@ the Cardputer Zero shell:
 `M5Stack_Linux_Libs` should own as much of this generic Linux device plumbing as
 possible.
 
-## 6. Current Start Line
+## 7. Current Start Line
 
 The current repository should proceed from here:
 
-1. finish the Linux runtime slice in `platform/linux/common`
-2. keep `apps/linux_rpi` on the `M5Stack_Linux_Libs` device shell path
-3. add a Linux-safe shell build that can compile the runtime slice without ESP
-4. begin feature migration only after the runtime contracts are real
+1. land the final-shape specification and make migration docs obey it
+2. finish structural compliance on `ui_shared`, contracts, and misplaced
+   platform tails
+3. keep `apps/linux_rpi` on the `M5Stack_Linux_Libs` device shell path
+4. begin feature verification only after the structural program is credible
