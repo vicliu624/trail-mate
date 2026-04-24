@@ -11,7 +11,7 @@
 #include "team/protocol/team_mgmt.h"
 #include "team/protocol/team_portnum.h"
 #include "team/protocol/team_waypoint.h"
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 
 #include <algorithm>
 #include <string>

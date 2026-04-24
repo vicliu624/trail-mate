@@ -1,4 +1,7 @@
-#include "ui/runtime/pack_repository.h"
+#include "platform/ui/pack_repository_runtime.h"
+
+// ESP-specific package repository backend kept out of ui_shared so the shared
+// presentation layer no longer owns storage/network implementation details.
 
 #include <algorithm>
 #include <cctype>
@@ -28,7 +31,13 @@
 #ifdef INADDR_NONE
 #undef INADDR_NONE
 #endif
+#if __has_include(<miniz.h>)
+#include <miniz.h>
+#elif __has_include(<rom/miniz.h>)
 #include <rom/miniz.h>
+#else
+#error "A compatible miniz header is required for pack_repository.cpp"
+#endif
 
 #define UI_PACKS_HAVE_CRT_BUNDLE 1
 

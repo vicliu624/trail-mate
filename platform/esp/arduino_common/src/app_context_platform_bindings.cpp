@@ -25,7 +25,7 @@
 #include "platform/esp/arduino_common/team_platform_bundle.h"
 #include "team/usecase/team_controller.h"
 #include "team/usecase/team_track_sampler.h"
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/ui_common.h"
 
 namespace

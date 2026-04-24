@@ -9,10 +9,12 @@
 
 #include "lvgl.h"
 
+#include "app/linux_app_facade.h"
 #include "app/input_event.h"
 #include "core/canvas.h"
 #include "core/display_profile.h"
 #include "ui/shared_ui_shell.h"
+#include "ui/screens/team/team_page_shell.h"
 
 namespace trailmate::cardputer_zero::linux_ui {
 namespace {
@@ -27,6 +29,11 @@ struct QueuedKeyEvent {
     std::uint32_t key{};
     lv_indev_state_t state{LV_INDEV_STATE_RELEASED};
 };
+
+bool dispatchTeamUiEvent(sys::Event* event)
+{
+    return team::ui::shell::handle_event(nullptr, event);
+}
 
 [[nodiscard]] std::uint32_t mapInputEvent(const app::InputEvent& event) noexcept
 {
@@ -124,6 +131,11 @@ public:
         lv_indev_set_user_data(keypad_, this);
         lv_indev_set_read_cb(keypad_, readInputCallback);
 
+        if (!app_facade_.initialize()) {
+            throw std::runtime_error("Failed to bind the Linux app facade for the shared shell.");
+        }
+        setTeamUiEventDispatcher(dispatchTeamUiEvent);
+
         if (!startup_.begin()) {
             throw std::runtime_error("Failed to begin the shared UI startup sequence.");
         }
@@ -141,7 +153,9 @@ public:
             lv_display_delete(display_);
             display_ = nullptr;
         }
+        setTeamUiEventDispatcher(nullptr);
         lv_deinit();
+        app_facade_.shutdown();
     }
 
     void enqueueInputs(const std::vector<app::InputEvent>& events)
@@ -162,6 +176,10 @@ public:
         if (!startup_.tick()) {
             throw std::runtime_error("Shared UI startup sequence failed.");
         }
+
+        app_facade_.updateCoreServices();
+        app_facade_.tickEventRuntime();
+        app_facade_.dispatchPendingEvents();
 
         lv_timer_handler();
         if (dirty_) {
@@ -228,6 +246,7 @@ private:
     std::vector<std::uint16_t> frame_buffer_{};
     std::deque<QueuedKeyEvent> key_events_{};
     SharedUiShellStartup startup_{};
+    MinimalLinuxAppFacade app_facade_{};
     bool dirty_{true};
 };
 

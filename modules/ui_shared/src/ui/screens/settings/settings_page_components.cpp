@@ -36,7 +36,7 @@
 #include "ui/screens/settings/settings_page_layout.h"
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/busy_overlay.h"
 #include "ui/widgets/system_notification.h"

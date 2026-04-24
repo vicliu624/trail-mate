@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gps_page_layout.h"
+#include "ui/screens/gps/gps_page_layout.h"
 #include "lvgl.h"
 
 namespace gps::ui::styles

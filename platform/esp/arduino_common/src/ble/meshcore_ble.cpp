@@ -423,7 +423,7 @@ class MeshCoreServerCallbacks : public NimBLEServerCallbacks
 MeshCoreBleService::MeshCoreBleService(app::IAppBleFacade& ctx, const std::string& device_name)
     : ctx_(ctx),
       device_name_(device_name),
-      shared_core_(new MeshCorePhoneCore(ctx, device_name, this))
+      shared_core_(new MeshCorePhoneCore(*this, device_name, this))
 {
     loadBlePin();
     loadManualContacts();
@@ -611,24 +611,31 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
         return false;
     }
 
-    auto& cfg = ctx_.getConfig();
+    auto mesh_cfg = getMeshCorePhoneConfig();
+    auto mt_cfg = getMeshtasticPhoneConfig();
     bool save_cfg = false;
     bool apply_mesh = false;
     bool apply_user = false;
     bool apply_position = false;
     bool save_ble = false;
+    bool save_mesh_cfg = false;
+    bool save_mt_cfg = false;
 
     if (strcmp(key, "node_name") == 0)
     {
-        copyBounded(cfg.node_name, sizeof(cfg.node_name), value);
+        copyBounded(mesh_cfg.node_name, sizeof(mesh_cfg.node_name), value);
+        copyBounded(mt_cfg.node_name, sizeof(mt_cfg.node_name), value);
         save_cfg = true;
+        save_mesh_cfg = true;
+        save_mt_cfg = true;
         apply_user = true;
     }
     else if (strcmp(key, "channel_name") == 0)
     {
-        copyBounded(cfg.meshcore_config.meshcore_channel_name,
-                    sizeof(cfg.meshcore_config.meshcore_channel_name), value);
+        copyBounded(mesh_cfg.mesh.meshcore_channel_name,
+                    sizeof(mesh_cfg.mesh.meshcore_channel_name), value);
         save_cfg = true;
+        save_mesh_cfg = true;
         apply_mesh = true;
     }
     else if (strcmp(key, "ble_pin") == 0)
@@ -702,9 +709,10 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
         {
             return false;
         }
-        cfg.meshcore_config.meshcore_multi_acks = parsed;
+        mesh_cfg.mesh.meshcore_multi_acks = parsed;
         multi_acks_ = parsed ? 1 : 0;
         save_cfg = true;
+        save_mesh_cfg = true;
         apply_mesh = true;
         save_ble = true;
     }
@@ -717,16 +725,17 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
         }
         if (parsed)
         {
-            if (cfg.gps_strategy == 2)
+            if (mt_cfg.gps_strategy == 2)
             {
-                cfg.gps_strategy = 0;
+                mt_cfg.gps_strategy = 0;
             }
         }
         else
         {
-            cfg.gps_strategy = 2;
+            mt_cfg.gps_strategy = 2;
         }
         save_cfg = true;
+        save_mt_cfg = true;
         apply_position = true;
     }
     else
@@ -737,6 +746,14 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
     if (save_ble)
     {
         saveBlePin();
+    }
+    if (save_mesh_cfg)
+    {
+        setMeshCorePhoneConfig(mesh_cfg);
+    }
+    if (save_mt_cfg)
+    {
+        setMeshtasticPhoneConfig(mt_cfg);
     }
     if (save_cfg)
     {
@@ -753,7 +770,7 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
     if (apply_position)
     {
         ctx_.applyPositionConfig();
-        gps::gps_set_power_strategy(cfg.gps_strategy);
+        gps::gps_set_power_strategy(mt_cfg.gps_strategy);
     }
     return true;
 }
@@ -778,7 +795,7 @@ void MeshCoreBleService::enqueueRawDataPush(const uint8_t* payload, size_t len, 
 chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter()
 {
     auto* adapter = ctx_.getMeshAdapter();
-    if (!adapter || ctx_.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    if (!adapter || getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
     {
         return nullptr;
     }
@@ -790,7 +807,7 @@ chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter()
 const chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter() const
 {
     const auto* adapter = ctx_.getMeshAdapter();
-    if (!adapter || ctx_.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    if (!adapter || getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
     {
         return nullptr;
     }
@@ -828,7 +845,7 @@ bool MeshCoreBleService::start()
     }
     startAdvertising();
 
-    multi_acks_ = ctx_.getConfig().meshcore_config.meshcore_multi_acks ? 1 : 0;
+    multi_acks_ = getMeshCorePhoneConfig().mesh.meshcore_multi_acks ? 1 : 0;
 
     ctx_.getChatService().addIncomingTextObserver(this);
     if (auto* team = ctx_.getTeamService())

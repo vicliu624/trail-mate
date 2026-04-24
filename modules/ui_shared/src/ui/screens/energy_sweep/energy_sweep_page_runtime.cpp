@@ -1,6 +1,6 @@
 #include "ui/screens/energy_sweep/energy_sweep_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
@@ -10,6 +10,7 @@
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "sys/clock.h"
+#include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/ui_common.h"
 #include <algorithm>

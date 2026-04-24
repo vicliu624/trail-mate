@@ -1,6 +1,9 @@
 #include "ui/screens/tracker/tracker_page_runtime.h"
 
 #include "app/app_facade_access.h"
+#include "platform/ui/route_storage.h"
+#include "platform/ui/tracker_runtime.h"
+#include "ui/app_runtime.h"
 #include "ui/screens/tracker/tracker_page_components.h"
 #include "ui/screens/tracker/tracker_page_input.h"
 #include "ui/ui_common.h"
@@ -10,7 +13,8 @@ namespace tracker::ui::runtime
 
 bool is_available()
 {
-    return app::hasAppFacade();
+    return app::hasAppFacade() &&
+           (::platform::ui::tracker::is_supported() || ::platform::ui::route_storage::is_supported());
 }
 
 void enter(const shell::Host* host, lv_obj_t* parent)

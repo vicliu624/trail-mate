@@ -22,6 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify shared/platform UI boundaries
+        run: python3 scripts/check_platform_ui_boundaries.py
+
       - name: Install Linux simulator dependencies
         run: |
           sudo apt-get update

@@ -8,6 +8,16 @@
 #include <cstddef>
 #include <cstdint>
 
+#if defined(_MSC_VER)
+#define TRAILMATE_PACK_PUSH __pragma(pack(push, 1))
+#define TRAILMATE_PACK_POP __pragma(pack(pop))
+#define TRAILMATE_PACKED
+#else
+#define TRAILMATE_PACK_PUSH
+#define TRAILMATE_PACK_POP
+#define TRAILMATE_PACKED __attribute__((packed))
+#endif
+
 namespace chat
 {
 namespace contacts
@@ -25,13 +35,15 @@ enum class NodeBlobValidation
     TooManyEntries,
 };
 
+TRAILMATE_PACK_PUSH
 struct NodeStoreSdHeader
 {
     uint8_t ver;
     uint8_t reserved[3];
     uint32_t crc;
     uint32_t count;
-} __attribute__((packed));
+} TRAILMATE_PACKED;
+TRAILMATE_PACK_POP
 
 bool isValidNodeBlobSize(size_t len);
 size_t nodeBlobEntryCount(size_t len);
@@ -47,3 +59,7 @@ NodeBlobValidation validateNodeStoreSdBlob(const NodeStoreSdHeader& header,
 
 } // namespace contacts
 } // namespace chat
+
+#undef TRAILMATE_PACK_PUSH
+#undef TRAILMATE_PACK_POP
+#undef TRAILMATE_PACKED

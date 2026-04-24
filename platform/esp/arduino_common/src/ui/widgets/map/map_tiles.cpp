@@ -270,6 +270,16 @@ bool build_base_tile_path(int z, int x, int y, uint8_t map_source, char* out_pat
     return true;
 }
 
+bool base_tile_available(int z, int x, int y, uint8_t map_source)
+{
+    char path[96];
+    if (!build_base_tile_path(z, x, y, map_source, path, sizeof(path)))
+    {
+        return false;
+    }
+    return ui::fs::file_exists(path);
+}
+
 bool build_contour_tile_path(int z, int x, int y, char* out_path, size_t out_size)
 {
     if (out_path == NULL || out_size == 0)

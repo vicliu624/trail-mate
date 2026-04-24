@@ -2,8 +2,6 @@
 
 #include "ui/screens/chat_watch/chat_compose_components_watch.h"
 
-#include <Arduino.h>
-
 #include "input/morse_engine.h"
 #include "ui/localization.h"
 #include "ui/ui_theme.h"

@@ -299,6 +299,11 @@ const app::AppConfig& AppFacadeRuntime::getConfig() const
     return config_;
 }
 
+chat::MeshProtocol AppFacadeRuntime::getMeshProtocol() const
+{
+    return config_.mesh_protocol;
+}
+
 void AppFacadeRuntime::saveConfig()
 {
     ScopedGpsSuspend suspend_gps(board_);

@@ -1,14 +1,21 @@
 /**
- * @file team_ui_store.h
- * @brief Team UI snapshot store interface (platform-neutral)
+ * @file team_ui_store_runtime.h
+ * @brief Platform-facing Team UI persistence contract consumed by shared UI
  */
 
 #pragma once
 
+#include "platform/ui/team_ui_types.h"
+#include "team/domain/team_types.h"
 #include "team/protocol/team_chat.h"
+#include "team/protocol/team_mgmt.h"
 #include "team/protocol/team_track.h"
-#include "team_state.h"
+
+#include <array>
 #include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace team
 {

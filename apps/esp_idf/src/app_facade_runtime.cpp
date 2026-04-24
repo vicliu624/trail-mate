@@ -20,7 +20,7 @@
 #include "team/usecase/team_service.h"
 #include "ui/chat_ui_runtime.h"
 #include "ui/screens/team/team_page_shell.h"
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 
 #include <algorithm>
 #include <array>
@@ -1020,6 +1020,11 @@ class MinimalAppFacade final : public app::IAppFacade
     const app::AppConfig& getConfig() const override
     {
         return config_;
+    }
+
+    chat::MeshProtocol getMeshProtocol() const override
+    {
+        return config_.mesh_protocol;
     }
 
     void saveConfig() override {}

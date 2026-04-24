@@ -1,13 +1,21 @@
 #include "ui/shared_ui_shell.h"
 
-#include <cstdio>
-#include <string>
-
-#include "platform/ui/device_runtime.h"
 #include "ui/app_catalog.h"
 #include "ui/app_runtime.h"
 #include "ui/callback_app_screen.h"
 #include "ui/localization.h"
+#include "ui/screens/chat/chat_page_shell.h"
+#include "ui/screens/contacts/contacts_page_shell.h"
+#include "ui/screens/energy_sweep/energy_sweep_page_shell.h"
+#include "ui/screens/extensions/extensions_page_shell.h"
+#include "ui/screens/gnss/gnss_skyplot_page_shell.h"
+#include "ui/screens/gps/gps_page_shell.h"
+#include "ui/screens/pc_link/pc_link_page_shell.h"
+#include "ui/screens/settings/settings_page_shell.h"
+#include "ui/screens/sstv/sstv_page_shell.h"
+#include "ui/screens/team/team_page_shell.h"
+#include "ui/screens/tracker/tracker_page_shell.h"
+#include "ui/screens/walkie_talkie/walkie_talkie_page_shell.h"
 #include "ui/startup_ui_shell.h"
 #include "ui/ui_boot.h"
 #include "ui/ui_theme.h"
@@ -17,9 +25,17 @@ namespace {
 
 extern "C" {
 extern const lv_image_dsc_t Chat;
+extern const lv_image_dsc_t contact;
 extern const lv_image_dsc_t gps_icon;
+extern const lv_image_dsc_t Satellite;
 extern const lv_image_dsc_t Setting;
+extern const lv_image_dsc_t Spectrum;
+extern const lv_image_dsc_t rf;
+extern const lv_image_dsc_t sstv;
+extern const lv_image_dsc_t team_icon;
+extern const lv_image_dsc_t tracker_icon;
 extern const lv_image_dsc_t ext;
+extern const lv_image_dsc_t walkie_talkie;
 }
 
 struct PlaceholderPageSpec {
@@ -29,41 +45,7 @@ struct PlaceholderPageSpec {
     const char* chip = nullptr;
     const lv_image_dsc_t* icon = nullptr;
     uint32_t chip_color = 0xEBA341;
-    bool show_runtime_snapshot = false;
 };
-
-std::string formatBytesMib(std::size_t bytes)
-{
-    char buffer[32];
-    const unsigned long mib_whole = static_cast<unsigned long>(bytes / (1024U * 1024U));
-    const unsigned long mib_tenth =
-        static_cast<unsigned long>((bytes % (1024U * 1024U)) * 10U / (1024U * 1024U));
-    if (mib_tenth == 0U) {
-        std::snprintf(buffer, sizeof(buffer), "%lu MiB", mib_whole);
-    } else {
-        std::snprintf(buffer, sizeof(buffer), "%lu.%lu MiB", mib_whole, mib_tenth);
-    }
-    return buffer;
-}
-
-std::string buildRuntimeSnapshot()
-{
-    const auto battery = ::platform::ui::device::battery_info();
-    const auto memory = ::platform::ui::device::memory_stats();
-
-    char buffer[512];
-    std::snprintf(buffer,
-        sizeof(buffer),
-        "Firmware: %s\nBattery: %s\nGPS capability: %s\nGPS ready: %s\nSD ready: %s\nRAM total: %s\nPSRAM: %s",
-        ::platform::ui::device::firmware_version(),
-        battery.level >= 0 ? (battery.charging ? "charging" : "available") : "unknown",
-        ::platform::ui::device::gps_supported() ? "yes" : "no",
-        ::platform::ui::device::gps_ready() ? "yes" : "no",
-        ::platform::ui::device::sd_ready() ? "yes" : "no",
-        formatBytesMib(memory.ram_total_bytes).c_str(),
-        memory.psram_available ? formatBytesMib(memory.psram_total_bytes).c_str() : "not present");
-    return buffer;
-}
 
 void requestExit()
 {
@@ -210,16 +192,6 @@ void placeholderEnter(void* user_data, lv_obj_t* parent)
     lv_obj_set_style_text_font(body, &lv_font_montserrat_14, 0);
     ::ui::i18n::set_content_label_text(body, spec->body);
 
-    if (spec->show_runtime_snapshot) {
-        lv_obj_t* snapshot = lv_label_create(body_card);
-        lv_obj_set_width(snapshot, LV_PCT(100));
-        lv_label_set_long_mode(snapshot, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_text_color(snapshot, ui::theme::text_muted(), 0);
-        lv_obj_set_style_text_font(snapshot, &lv_font_montserrat_12, 0);
-        const std::string snapshot_text = buildRuntimeSnapshot();
-        ::ui::i18n::set_content_label_text_raw(snapshot, snapshot_text.c_str());
-    }
-
     lv_obj_t* footer = lv_label_create(page);
     lv_obj_set_width(footer, LV_PCT(100));
     lv_obj_set_style_text_color(footer, ui::theme::text_muted(), 0);
@@ -248,86 +220,238 @@ PlaceholderPageSpec s_chat_spec{
     .chip = "Phase 1",
     .icon = &Chat,
     .chip_color = 0xF1B75A,
-    .show_runtime_snapshot = false,
 };
 
 PlaceholderPageSpec s_gps_spec{
-    .stable_id = "gps",
-    .title = "GPS",
+    .stable_id = "map",
+    .title = "Map",
     .body =
         "GPS runtime is still a Linux stub on Cardputer Zero. "
         "Bringing this page up next will mean replacing this placeholder with the shared GPS layout plus Linux adapters.",
     .chip = "Stubbed",
     .icon = &gps_icon,
     .chip_color = 0xCFE4FF,
-    .show_runtime_snapshot = false,
 };
 
-PlaceholderPageSpec s_settings_spec{
-    .stable_id = "settings",
-    .title = "Settings",
+PlaceholderPageSpec s_contacts_spec{
+    .stable_id = "contacts",
+    .title = "Contacts",
     .body =
-        "File-backed settings_store is already live on Linux. "
-        "This page is the next good candidate for replacing the placeholder with a real shared screen.",
-    .chip = "Next",
-    .icon = &Setting,
-    .chip_color = 0xD4F0D2,
-    .show_runtime_snapshot = false,
-};
-
-PlaceholderPageSpec s_system_spec{
-    .stable_id = "system",
-    .title = "System",
-    .body =
-        "This preview app is fed by the Linux runtime layer rather than hardcoded UI state. "
-        "It is useful for validating that the simulator and future Pi OS shell see the same platform contract.",
-    .chip = "Runtime",
-    .icon = &ext,
+        "Contacts is part of the shared product shape, but the Linux-side local data store is still being brought up. "
+        "This placeholder keeps the menu structure aligned while that seam is being implemented.",
+    .chip = "Planned",
+    .icon = &contact,
     .chip_color = 0xF8D6B5,
-    .show_runtime_snapshot = true,
+};
+
+PlaceholderPageSpec s_sky_plot_spec{
+    .stable_id = "sky_plot",
+    .title = "Sky Plot",
+    .body =
+        "Sky Plot belongs in the Linux product shape, but the shared GNSS skyplot page still needs Linux-side data plumbing. "
+        "This placeholder keeps the menu structure aligned until that adapter is brought up.",
+    .chip = "Planned",
+    .icon = &Satellite,
+    .chip_color = 0xD8ECFF,
+};
+
+PlaceholderPageSpec s_team_spec{
+    .stable_id = "team",
+    .title = "Team",
+    .body =
+        "Team mode is a real product entry and should appear in the Linux menu. "
+        "The page is still waiting on Linux-side team runtime and storage integration, so it stays as a placeholder for now.",
+    .chip = "Planned",
+    .icon = &team_icon,
+    .chip_color = 0xD4F0D2,
+};
+
+PlaceholderPageSpec s_tracker_spec{
+    .stable_id = "tracker",
+    .title = "Tracker",
+    .body =
+        "Tracker is part of the full Cardputer Zero menu. "
+        "The Linux storage/runtime seam for routes and tracks is still being completed, so this entry is placeholder-backed for now.",
+    .chip = "Planned",
+    .icon = &tracker_icon,
+    .chip_color = 0xD9F1C9,
+};
+
+PlaceholderPageSpec s_pc_link_spec{
+    .stable_id = "pc_link",
+    .title = "PC Link",
+    .body =
+        "PC Link is reserved here as a real product entry. "
+        "The Linux-side host link runtime is still a stub, so this page is currently a placeholder.",
+    .chip = "Stubbed",
+    .icon = &rf,
+    .chip_color = 0xD9E7FF,
+};
+
+PlaceholderPageSpec s_sstv_spec{
+    .stable_id = "sstv",
+    .title = "SSTV",
+    .body =
+        "SSTV is included in the full menu shape even though Cardputer Zero does not have the runtime adapter yet. "
+        "This placeholder will be replaced once the Linux-side feature seam is ready.",
+    .chip = "Planned",
+    .icon = &sstv,
+    .chip_color = 0xFFE4B8,
+};
+
+PlaceholderPageSpec s_energy_sweep_spec{
+    .stable_id = "energy_sweep",
+    .title = "Energy Sweep",
+    .body =
+        "Energy Sweep belongs to the shared product menu, but Linux still needs a real RF/runtime implementation before this page can become functional.",
+    .chip = "Stubbed",
+    .icon = &Spectrum,
+    .chip_color = 0xF8D6B5,
+};
+
+PlaceholderPageSpec s_extensions_spec{
+    .stable_id = "extensions",
+    .title = "Extensions",
+    .body =
+        "Extensions will eventually host Linux-side package and add-on workflows. "
+        "The entry belongs in the menu now even though the actual page logic has not been migrated yet.",
+    .chip = "Planned",
+    .icon = &ext,
+    .chip_color = 0xF3D8FF,
+};
+
+PlaceholderPageSpec s_walkie_spec{
+    .stable_id = "walkie_talkie",
+    .title = "Walkie Talkie",
+    .body =
+        "Walkie Talkie is part of the 12-entry product menu. "
+        "The Linux audio/radio runtime is not connected yet, so this stays as a placeholder until that seam is implemented.",
+    .chip = "Planned",
+    .icon = &walkie_talkie,
+    .chip_color = 0xFFD8E4,
 };
 
 ui::CallbackAppScreen s_chat_app{
     s_chat_spec.stable_id,
     s_chat_spec.title,
     s_chat_spec.icon,
-    placeholderEnter,
-    placeholderExit,
-    &s_chat_spec,
+    chat::ui::shell::enter,
+    chat::ui::shell::exit,
+    nullptr,
 };
 
 ui::CallbackAppScreen s_gps_app{
     s_gps_spec.stable_id,
     s_gps_spec.title,
     s_gps_spec.icon,
-    placeholderEnter,
-    placeholderExit,
-    &s_gps_spec,
+    gps::ui::shell::enter,
+    gps::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_contacts_app{
+    s_contacts_spec.stable_id,
+    s_contacts_spec.title,
+    s_contacts_spec.icon,
+    contacts::ui::shell::enter,
+    contacts::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_sky_plot_app{
+    s_sky_plot_spec.stable_id,
+    s_sky_plot_spec.title,
+    s_sky_plot_spec.icon,
+    gnss::ui::shell::enter,
+    gnss::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_team_app{
+    s_team_spec.stable_id,
+    s_team_spec.title,
+    s_team_spec.icon,
+    team::ui::shell::enter,
+    team::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_tracker_app{
+    s_tracker_spec.stable_id,
+    s_tracker_spec.title,
+    s_tracker_spec.icon,
+    tracker::ui::shell::enter,
+    tracker::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_pc_link_app{
+    s_pc_link_spec.stable_id,
+    s_pc_link_spec.title,
+    s_pc_link_spec.icon,
+    pc_link::ui::shell::enter,
+    pc_link::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_sstv_app{
+    s_sstv_spec.stable_id,
+    s_sstv_spec.title,
+    s_sstv_spec.icon,
+    sstv_page::ui::shell::enter,
+    sstv_page::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_energy_sweep_app{
+    s_energy_sweep_spec.stable_id,
+    s_energy_sweep_spec.title,
+    s_energy_sweep_spec.icon,
+    energy_sweep::ui::shell::enter,
+    energy_sweep::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_extensions_app{
+    s_extensions_spec.stable_id,
+    s_extensions_spec.title,
+    s_extensions_spec.icon,
+    extensions::ui::shell::enter,
+    extensions::ui::shell::exit,
+    nullptr,
+};
+
+ui::CallbackAppScreen s_walkie_app{
+    s_walkie_spec.stable_id,
+    s_walkie_spec.title,
+    s_walkie_spec.icon,
+    walkie_page::ui::shell::enter,
+    walkie_page::ui::shell::exit,
+    nullptr,
 };
 
 ui::CallbackAppScreen s_settings_app{
-    s_settings_spec.stable_id,
-    s_settings_spec.title,
-    s_settings_spec.icon,
-    placeholderEnter,
-    placeholderExit,
-    &s_settings_spec,
-};
-
-ui::CallbackAppScreen s_system_app{
-    s_system_spec.stable_id,
-    s_system_spec.title,
-    s_system_spec.icon,
-    placeholderEnter,
-    placeholderExit,
-    &s_system_spec,
+    "settings",
+    "Settings",
+    &Setting,
+    settings::ui::shell::enter,
+    settings::ui::shell::exit,
+    nullptr,
 };
 
 AppScreen* s_apps[] = {
     &s_chat_app,
     &s_gps_app,
+    &s_sky_plot_app,
+    &s_contacts_app,
+    &s_team_app,
+    &s_tracker_app,
+    &s_pc_link_app,
+    &s_sstv_app,
+    &s_energy_sweep_app,
+    &s_walkie_app,
+    &s_extensions_app,
     &s_settings_app,
-    &s_system_app,
 };
 
 ui::StaticAppCatalogState& catalogState()

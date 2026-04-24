@@ -17,6 +17,7 @@ constexpr const char* kFirmwareVersionEnv = "TRAIL_MATE_FIRMWARE_VERSION";
 constexpr const char* kBatteryLevelEnv = "TRAIL_MATE_BATTERY_LEVEL";
 constexpr const char* kBatteryChargingEnv = "TRAIL_MATE_BATTERY_CHARGING";
 constexpr const char* kSdRootEnv = "TRAIL_MATE_SD_ROOT";
+constexpr const char* kSettingsRootEnv = "TRAIL_MATE_SETTINGS_ROOT";
 constexpr const char* kGpsSupportedEnv = "TRAIL_MATE_GPS_SUPPORTED";
 constexpr const char* kGpsReadyEnv = "TRAIL_MATE_GPS_READY";
 constexpr const char* kPowerTierEnv = "TRAIL_MATE_POWER_TIER";
@@ -34,6 +35,16 @@ bool env_flag_enabled(const char* name)
     return std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0 ||
            std::strcmp(value, "TRUE") == 0 || std::strcmp(value, "yes") == 0 ||
            std::strcmp(value, "YES") == 0;
+}
+
+bool env_flag_or_default(const char* name, bool fallback)
+{
+    const char* value = std::getenv(name);
+    if (!value || value[0] == '\0')
+    {
+        return fallback;
+    }
+    return env_flag_enabled(name);
 }
 
 int env_int_or_default(const char* name, int fallback)
@@ -62,6 +73,52 @@ bool path_exists_from_env(const char* name)
     }
     std::error_code ec;
     return std::filesystem::exists(std::filesystem::path(value), ec);
+}
+
+std::filesystem::path default_storage_root()
+{
+    if (const char* configured = std::getenv(kSdRootEnv))
+    {
+        if (configured[0] != '\0')
+        {
+            return std::filesystem::path(configured);
+        }
+    }
+
+    if (const char* configured = std::getenv(kSettingsRootEnv))
+    {
+        if (configured[0] != '\0')
+        {
+            return std::filesystem::path(configured) / "sdcard";
+        }
+    }
+
+#if defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA"))
+    {
+        if (appdata[0] != '\0')
+        {
+            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard";
+        }
+    }
+#endif
+
+    if (const char* home = std::getenv("HOME"))
+    {
+        if (home[0] != '\0')
+        {
+            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard";
+        }
+    }
+
+    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard";
+}
+
+bool ensure_storage_root()
+{
+    std::error_code ec;
+    std::filesystem::create_directories(default_storage_root(), ec);
+    return !ec;
 }
 
 #if defined(__linux__)
@@ -193,7 +250,7 @@ void play_message_tone()
 
 bool sd_ready()
 {
-    return path_exists_from_env(kSdRootEnv);
+    return path_exists_from_env(kSdRootEnv) || ensure_storage_root();
 }
 
 bool card_ready()
@@ -203,12 +260,12 @@ bool card_ready()
 
 bool gps_ready()
 {
-    return env_flag_enabled(kGpsReadyEnv);
+    return env_flag_or_default(kGpsReadyEnv, true);
 }
 
 bool gps_supported()
 {
-    return env_flag_enabled(kGpsSupportedEnv);
+    return env_flag_or_default(kGpsSupportedEnv, true);
 }
 
 int power_tier()

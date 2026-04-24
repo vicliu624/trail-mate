@@ -3,7 +3,7 @@
 
 #include "lvgl.h"
 
-typedef struct
+struct Modal
 {
     lv_obj_t* bg;
     lv_obj_t* win;
@@ -13,7 +13,7 @@ typedef struct
     bool open;
 
     bool is_open() const { return open; }
-} Modal;
+};
 
 void bind_navigation_inputs_to_group(lv_group_t* g);
 

@@ -1,6 +1,5 @@
 #include "ble/ble_manager.h"
 
-#include "app/app_config.h"
 #include "ble/ble_uuids.h"
 #include "ble/meshcore_ble.h"
 #include "ble/meshtastic_ble.h"
@@ -47,7 +46,7 @@ bool has_ble_startup_headroom()
 
 BleManager::BleManager(app::IAppBleFacade& ctx)
     : ctx_(ctx),
-      active_protocol_(ctx.getConfig().mesh_protocol)
+      active_protocol_(ctx.getMeshProtocol())
 {
 }
 
@@ -68,7 +67,7 @@ void BleManager::begin()
 
 void BleManager::update()
 {
-    const auto current_protocol = ctx_.getConfig().mesh_protocol;
+    const auto current_protocol = ctx_.getMeshProtocol();
     if (current_protocol != active_protocol_)
     {
         applyProtocol(current_protocol);
@@ -104,7 +103,7 @@ void BleManager::setEnabled(bool enabled)
     {
         if (!service_)
         {
-            restartService(ctx_.getConfig().mesh_protocol);
+            restartService(ctx_.getMeshProtocol());
         }
     }
     else

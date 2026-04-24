@@ -9,7 +9,7 @@
 #include "platform/ui/device_runtime.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/ui_status.h"
 
 namespace ui::menu::dashboard

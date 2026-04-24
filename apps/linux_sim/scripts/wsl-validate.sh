@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$ROOT_DIR/../.." && pwd)"
 BUILD_TYPE="${BUILD_TYPE:-Debug}"
 TEST_BUILD_DIR="${WSL_TEST_BUILD_DIR:-$ROOT_DIR/build/wsl/test}"
 SIM_BUILD_DIR="${WSL_SIM_BUILD_DIR:-$ROOT_DIR/build/wsl/simulator}"
@@ -33,6 +34,7 @@ fi
 require_command cmake
 require_command ctest
 require_command git
+require_command python3
 
 if command -v pkg-config >/dev/null 2>&1; then
   REQUIRED_PKGCONFIG_MODULES=(
@@ -66,6 +68,9 @@ if command -v pkg-config >/dev/null 2>&1; then
     exit 1
   fi
 fi
+
+print_step "Verifying shared/platform UI boundaries"
+python3 "$REPO_ROOT/scripts/check_platform_ui_boundaries.py"
 
 print_step "Configuring Linux-shell tests into $TEST_BUILD_DIR"
 cmake -S "$ROOT_DIR" -B "$TEST_BUILD_DIR" "${GENERATOR_ARGS[@]}" \

@@ -1,13 +1,11 @@
 #include "chat/ble/meshcore_phone_core.h"
 
-#include "app/app_config.h"
 #include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
 #include "sys/clock.h"
 
-#include <Arduino.h>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -134,10 +132,10 @@ uint32_t nowSeconds()
     return sys::epoch_seconds_now();
 }
 
-chat::meshcore::IMeshCoreBleBackend* resolveMeshCoreAdapter(app::IAppBleFacade& ctx)
+chat::meshcore::IMeshCoreBleBackend* resolveMeshCoreAdapter(IPhoneRuntimeContext& ctx)
 {
     auto* adapter = ctx.getMeshAdapter();
-    if (!adapter || ctx.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    if (!adapter || ctx.getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
     {
         return nullptr;
     }
@@ -152,7 +150,7 @@ chat::meshcore::IMeshCoreBleBackend* resolveMeshCoreAdapter(app::IAppBleFacade& 
 
 } // namespace
 
-MeshCorePhoneCore::MeshCorePhoneCore(app::IAppBleFacade& ctx, const std::string& device_name, MeshCorePhoneHooks* hooks)
+MeshCorePhoneCore::MeshCorePhoneCore(IPhoneRuntimeContext& ctx, const std::string& device_name, MeshCorePhoneHooks* hooks)
     : ctx_(ctx), device_name_(device_name), hooks_(hooks) {}
 
 void MeshCorePhoneCore::reset()
@@ -315,7 +313,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 {
     const uint8_t cmd = data[0];
     chat::IMeshAdapter* adapter = ctx_.getMeshAdapter();
-    auto& cfg = ctx_.getConfig();
+    auto cfg = ctx_.getMeshCorePhoneConfig();
     auto* backend = resolveMeshCoreAdapter(ctx_);
 
     if (cmd == CMD_DEVICE_QEURY && len >= 2)
@@ -346,8 +344,8 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         size_t index = 0;
         out[index++] = RESP_CODE_SELF_INFO;
         out[index++] = ADV_TYPE_CHAT;
-        out[index++] = static_cast<uint8_t>(cfg.meshcore_config.tx_power);
-        out[index++] = static_cast<uint8_t>(app::AppConfig::kTxPowerMaxDbm);
+        out[index++] = static_cast<uint8_t>(cfg.mesh.tx_power);
+        out[index++] = static_cast<uint8_t>(cfg.tx_power_max_dbm);
 
         uint8_t pubkey[chat::meshcore::kMeshCorePubKeySize] = {};
         if (backend)
@@ -365,19 +363,19 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         std::memcpy(&out[index], &lon, sizeof(lon));
         index += sizeof(lon);
 
-        out[index++] = cfg.meshcore_config.meshcore_multi_acks ? 1U : 0U;
+        out[index++] = cfg.mesh.meshcore_multi_acks ? 1U : 0U;
         out[index++] = hooks_ ? hooks_->getAdvertLocationPolicy() : 0U;
         out[index++] = hooks_ ? hooks_->getTelemetryModeBits() : 0U;
         out[index++] = (hooks_ && hooks_->getManualAddContacts()) ? 1U : 0U;
 
-        const uint32_t freq = static_cast<uint32_t>(cfg.meshcore_config.meshcore_freq_mhz * 1000.0f);
-        const uint32_t bw = static_cast<uint32_t>(cfg.meshcore_config.meshcore_bw_khz * 1000.0f);
+        const uint32_t freq = static_cast<uint32_t>(cfg.mesh.meshcore_freq_mhz * 1000.0f);
+        const uint32_t bw = static_cast<uint32_t>(cfg.mesh.meshcore_bw_khz * 1000.0f);
         std::memcpy(&out[index], &freq, sizeof(freq));
         index += sizeof(freq);
         std::memcpy(&out[index], &bw, sizeof(bw));
         index += sizeof(bw);
-        out[index++] = cfg.meshcore_config.meshcore_sf;
-        out[index++] = cfg.meshcore_config.meshcore_cr;
+        out[index++] = cfg.mesh.meshcore_sf;
+        out[index++] = cfg.mesh.meshcore_cr;
 
         char long_name[32] = {};
         char short_name[16] = {};
@@ -613,6 +611,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         const size_t nlen = std::min(len - 1, sizeof(cfg.node_name) - 1);
         std::memcpy(cfg.node_name, &data[1], nlen);
         cfg.node_name[nlen] = '\0';
+        ctx_.setMeshCorePhoneConfig(cfg);
         ctx_.saveConfig();
         ctx_.applyUserInfo();
         enqueueSentOk();
@@ -827,10 +826,11 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             enqueueErr(ERR_CODE_ILLEGAL_ARG);
             return;
         }
-        cfg.meshcore_config.meshcore_freq_mhz = static_cast<float>(freq) / 1000.0f;
-        cfg.meshcore_config.meshcore_bw_khz = static_cast<float>(bw) / 1000.0f;
-        cfg.meshcore_config.meshcore_sf = sf;
-        cfg.meshcore_config.meshcore_cr = cr;
+        cfg.mesh.meshcore_freq_mhz = static_cast<float>(freq) / 1000.0f;
+        cfg.mesh.meshcore_bw_khz = static_cast<float>(bw) / 1000.0f;
+        cfg.mesh.meshcore_sf = sf;
+        cfg.mesh.meshcore_cr = cr;
+        ctx_.setMeshCorePhoneConfig(cfg);
         ctx_.saveConfig();
         ctx_.applyMeshConfig();
         enqueueSentOk();
@@ -840,12 +840,13 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
     if (cmd == CMD_SET_RADIO_TX_POWER && len >= 2)
     {
         const int8_t tx = static_cast<int8_t>(data[1]);
-        if (tx < app::AppConfig::kTxPowerMinDbm || tx > app::AppConfig::kTxPowerMaxDbm)
+        if (tx < cfg.tx_power_min_dbm || tx > cfg.tx_power_max_dbm)
         {
             enqueueErr(ERR_CODE_ILLEGAL_ARG);
             return;
         }
-        cfg.meshcore_config.tx_power = tx;
+        cfg.mesh.tx_power = tx;
+        ctx_.setMeshCorePhoneConfig(cfg);
         ctx_.saveConfig();
         ctx_.applyMeshConfig();
         enqueueSentOk();
@@ -927,16 +928,16 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         out[index++] = channel_idx;
         if (channel_idx == 0U)
         {
-            copyBounded(reinterpret_cast<char*>(&out[index]), 32, cfg.meshcore_config.meshcore_channel_name);
+            copyBounded(reinterpret_cast<char*>(&out[index]), 32, cfg.mesh.meshcore_channel_name);
             index += 32;
-            std::memcpy(&out[index], cfg.meshcore_config.primary_key, 16);
+            std::memcpy(&out[index], cfg.mesh.primary_key, 16);
             index += 16;
         }
         else
         {
             copyBounded(reinterpret_cast<char*>(&out[index]), 32, "Secondary");
             index += 32;
-            std::memcpy(&out[index], cfg.meshcore_config.secondary_key, 16);
+            std::memcpy(&out[index], cfg.mesh.secondary_key, 16);
             index += 16;
         }
         enqueueFrame(out, index);
@@ -995,7 +996,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint8_t req_data[9] = {};
         req_data[0] = 0x03;
         req_data[1] = static_cast<uint8_t>(~0x01U);
-        const uint32_t nonce = static_cast<uint32_t>(millis());
+        const uint32_t nonce = sys::millis_now();
         std::memcpy(&req_data[5], &nonce, sizeof(nonce));
 
         uint32_t tag = 0;
@@ -1299,7 +1300,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             return;
         }
         enqueueSentOk();
-        delay(100);
+        sys::sleep_ms(100);
         ctx_.restartDevice();
         return;
     }
@@ -1411,15 +1412,16 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         }
         if (channel_idx == 0U)
         {
-            copyBounded(cfg.meshcore_config.meshcore_channel_name,
-                        sizeof(cfg.meshcore_config.meshcore_channel_name),
+            copyBounded(cfg.mesh.meshcore_channel_name,
+                        sizeof(cfg.mesh.meshcore_channel_name),
                         reinterpret_cast<const char*>(&data[2]));
-            std::memcpy(cfg.meshcore_config.primary_key, &data[34], 16);
+            std::memcpy(cfg.mesh.primary_key, &data[34], 16);
         }
         else
         {
-            std::memcpy(cfg.meshcore_config.secondary_key, &data[34], 16);
+            std::memcpy(cfg.mesh.secondary_key, &data[34], 16);
         }
+        ctx_.setMeshCorePhoneConfig(cfg);
         ctx_.saveConfig();
         ctx_.applyMeshConfig();
         enqueueSentOk();
@@ -1565,7 +1567,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             out[index++] = STATS_TYPE_CORE;
             const auto battery = hooks_ ? hooks_->getBatteryInfo() : MeshCorePhoneBatteryInfo{};
             const uint16_t mv = battery.millivolts;
-            const uint32_t uptime = millis() / 1000U;
+            const uint32_t uptime = sys::uptime_seconds_now();
             const uint16_t err_flags = 0;
             const uint8_t queue_len = static_cast<uint8_t>(tx_queue_.size());
             std::memcpy(&out[index], &mv, sizeof(mv));
@@ -1661,7 +1663,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         sign_data_.clear();
         sign_active_ = false;
         enqueueSentOk();
-        delay(100);
+        sys::sleep_ms(100);
         ctx_.restartDevice();
         return;
     }

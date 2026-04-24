@@ -1,10 +1,11 @@
 #include "ble/meshtastic_ble.h"
 
-#include "app/app_config.h"
 #include "board/BoardBase.h"
 #include "chat/ble/meshtastic_defaults.h"
-#include "chat/infra/meshtastic/mt_region.h"
+#include "chat/ble/meshtastic_phone_config_bridge.h"
 #include "platform/esp/arduino_common/chat/infra/meshtastic/mt_adapter.h"
+#include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
+#include "platform/shared/ble/meshtastic_phone_runtime_bridge.h"
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -21,36 +22,6 @@ constexpr const char* kBlePinKey = "pin";
 
 constexpr const char* kModulePrefsNs = "mt_mod";
 constexpr const char* kModuleBlobKey = "cfg";
-constexpr uint32_t kModuleConfigVersion = 1;
-
-constexpr uint32_t kDefaultDetectionMinBroadcastSecs = 45;
-constexpr uint32_t kDefaultAmbientCurrent = 10;
-
-bool isValidBlePin(uint32_t pin)
-{
-    return pin == 0 || (pin >= 100000 && pin <= 999999);
-}
-
-template <typename T>
-void zeroInit(T& value)
-{
-    std::memset(&value, 0, sizeof(value));
-}
-
-void copyBounded(char* dst, size_t dst_len, const char* src)
-{
-    if (!dst || dst_len == 0)
-    {
-        return;
-    }
-    if (!src)
-    {
-        dst[0] = '\0';
-        return;
-    }
-    std::strncpy(dst, src, dst_len - 1);
-    dst[dst_len - 1] = '\0';
-}
 
 chat::meshtastic::MtAdapter* getMeshtasticBackend(app::IAppBleFacade& ctx)
 {
@@ -62,19 +33,6 @@ chat::meshtastic::MtAdapter* getMeshtasticBackend(app::IAppBleFacade& ctx)
     auto* backend = adapter->backendForProtocol(adapter->backendProtocol());
     return static_cast<chat::meshtastic::MtAdapter*>(backend);
 }
-
-std::string channelDisplayName(app::IAppBleFacade& ctx, uint8_t idx)
-{
-    const auto& cfg = ctx.getConfig();
-    if (idx == 1)
-    {
-        return "Secondary";
-    }
-    auto preset = static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.meshtastic_config.modem_preset);
-    return cfg.meshtastic_config.use_preset
-               ? std::string(chat::meshtastic::presetDisplayName(preset))
-               : std::string("Custom");
-}
 } // namespace
 
 bool MeshtasticBleService::isBleConnected() const
@@ -84,37 +42,20 @@ bool MeshtasticBleService::isBleConnected() const
 
 bool MeshtasticBleService::loadBluetoothConfig(meshtastic_Config_BluetoothConfig* out) const
 {
-    if (!out)
-    {
-        return false;
-    }
-    *out = ble_config_;
-    return true;
+    return meshtastic_config_bridge::loadBluetoothConfigView(ble_config_, ctx_.isBleEnabled(), out);
 }
 
 void MeshtasticBleService::saveBluetoothConfig(const meshtastic_Config_BluetoothConfig& config)
 {
     ble_config_ = config;
+    meshtastic_config_bridge::normalizeBluetoothConfig(&ble_config_);
     saveBleConfig();
 }
 
 bool MeshtasticBleService::loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const
 {
-    if (!out)
-    {
-        return false;
-    }
-    meshtastic_DeviceConnectionStatus status = meshtastic_DeviceConnectionStatus_init_zero;
-    *out = status;
-    out->has_bluetooth = true;
-    out->bluetooth.pin = (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN)
-                             ? ble_config_.fixed_pin
-                         : (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
-                             ? 0
-                             : pending_passkey_.load();
-    out->bluetooth.rssi = 0;
-    out->bluetooth.is_connected = connected_;
-    return true;
+    const uint32_t passkey = meshtastic_config_bridge::resolveBlePasskey(ble_config_, pending_passkey_.load());
+    return meshtastic_config_bridge::fillDeviceConnectionStatus(passkey, connected_, out);
 }
 
 bool MeshtasticBleService::loadModuleConfig(meshtastic_LocalModuleConfig* out) const
@@ -124,13 +65,60 @@ bool MeshtasticBleService::loadModuleConfig(meshtastic_LocalModuleConfig* out) c
         return false;
     }
     *out = module_config_;
+    meshtastic_config_bridge::normalizeModuleConfig(out);
     return true;
 }
 
 void MeshtasticBleService::saveModuleConfig(const meshtastic_LocalModuleConfig& config)
 {
     module_config_ = config;
+    meshtastic_config_bridge::normalizeModuleConfig(&module_config_);
     saveModuleConfig();
+}
+
+bool MeshtasticBleService::loadTimezoneTzdef(char* out, size_t out_len) const
+{
+    return platform::shared::ble_bridge::loadTimezoneTzdefFromSettings(out, out_len);
+}
+
+void MeshtasticBleService::saveTimezoneTzdef(const char* tzdef)
+{
+    platform::shared::ble_bridge::saveTimezoneTzdefToSettings(tzdef);
+}
+
+int MeshtasticBleService::getTimezoneOffsetMinutes() const
+{
+    return platform::shared::ble_bridge::getTimezoneOffsetMinutes();
+}
+
+void MeshtasticBleService::setTimezoneOffsetMinutes(int offset_min)
+{
+    platform::shared::ble_bridge::setTimezoneOffsetMinutes(offset_min);
+}
+
+bool MeshtasticBleService::getGpsFix(MeshtasticGpsFix* out) const
+{
+    return platform::shared::ble_bridge::fillMeshtasticGpsFixFromUiRuntime(out);
+}
+
+MeshtasticPhoneConfigSnapshot MeshtasticBleService::getMeshtasticPhoneConfig() const
+{
+    return platform::shared::ble_bridge::makeMeshtasticPhoneConfigSnapshot(ctx_.getConfig());
+}
+
+void MeshtasticBleService::setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config)
+{
+    platform::shared::ble_bridge::applyMeshtasticPhoneConfigSnapshot(ctx_.getConfig(), config);
+}
+
+MeshCorePhoneConfigSnapshot MeshtasticBleService::getMeshCorePhoneConfig() const
+{
+    return platform::shared::ble_bridge::makeMeshCorePhoneConfigSnapshot(ctx_.getConfig());
+}
+
+void MeshtasticBleService::setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config)
+{
+    platform::shared::ble_bridge::applyMeshCorePhoneConfigSnapshot(ctx_.getConfig(), config);
 }
 
 bool MeshtasticBleService::handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg)
@@ -176,16 +164,13 @@ void MeshtasticBleService::loadBleConfig()
             }
         }
         uint32_t pin = prefs.getUInt(kBlePinKey, 0);
-        if (isValidBlePin(pin))
+        if (meshtastic_config_bridge::isValidBlePin(pin))
         {
             ble_config_.fixed_pin = pin;
         }
         prefs.end();
     }
-    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
-    {
-        ble_config_.fixed_pin = 0;
-    }
+    meshtastic_config_bridge::normalizeBluetoothConfig(&ble_config_);
 }
 
 void MeshtasticBleService::saveBleConfig()
@@ -227,55 +212,7 @@ void MeshtasticBleService::loadModuleConfig()
 {
     auto init_defaults = [&]()
     {
-        zeroInit(module_config_);
-        module_config_.version = kModuleConfigVersion;
-        module_config_.has_mqtt = true;
-        module_config_.has_serial = true;
-        module_config_.has_external_notification = true;
-        module_config_.has_store_forward = true;
-        module_config_.has_range_test = true;
-        module_config_.has_telemetry = true;
-        module_config_.has_canned_message = true;
-        module_config_.has_audio = true;
-        module_config_.has_remote_hardware = true;
-        module_config_.has_neighbor_info = true;
-        module_config_.has_ambient_lighting = true;
-        module_config_.has_detection_sensor = true;
-        module_config_.has_paxcounter = true;
-
-        copyBounded(module_config_.mqtt.address, sizeof(module_config_.mqtt.address), meshtastic_defaults::kDefaultMqttAddress);
-        copyBounded(module_config_.mqtt.username, sizeof(module_config_.mqtt.username), meshtastic_defaults::kDefaultMqttUsername);
-        copyBounded(module_config_.mqtt.password, sizeof(module_config_.mqtt.password), meshtastic_defaults::kDefaultMqttPassword);
-        copyBounded(module_config_.mqtt.root, sizeof(module_config_.mqtt.root), meshtastic_defaults::kDefaultMqttRoot);
-        module_config_.mqtt.encryption_enabled = meshtastic_defaults::kDefaultMqttEncryptionEnabled;
-        module_config_.mqtt.tls_enabled = meshtastic_defaults::kDefaultMqttTlsEnabled;
-        module_config_.mqtt.has_map_report_settings = true;
-        module_config_.mqtt.map_report_settings.publish_interval_secs = meshtastic_defaults::kDefaultMapPublishIntervalSecs;
-        module_config_.mqtt.map_report_settings.position_precision = 0;
-        module_config_.mqtt.map_report_settings.should_report_location = false;
-
-        module_config_.neighbor_info.enabled = false;
-        module_config_.neighbor_info.update_interval = 0;
-        module_config_.neighbor_info.transmit_over_lora = false;
-
-        module_config_.telemetry.device_update_interval = 3600;
-        module_config_.telemetry.device_telemetry_enabled = true;
-        module_config_.telemetry.environment_update_interval = 0;
-        module_config_.telemetry.environment_measurement_enabled = false;
-        module_config_.telemetry.power_update_interval = 0;
-        module_config_.telemetry.health_update_interval = 0;
-        module_config_.telemetry.air_quality_interval = 0;
-
-        module_config_.detection_sensor.enabled = false;
-        module_config_.detection_sensor.detection_trigger_type =
-            meshtastic_ModuleConfig_DetectionSensorConfig_TriggerType_LOGIC_HIGH;
-        module_config_.detection_sensor.minimum_broadcast_secs = kDefaultDetectionMinBroadcastSecs;
-
-        module_config_.ambient_lighting.current = kDefaultAmbientCurrent;
-        uint32_t node_id = ctx_.getSelfNodeId();
-        module_config_.ambient_lighting.red = (node_id >> 16) & 0xFF;
-        module_config_.ambient_lighting.green = (node_id >> 8) & 0xFF;
-        module_config_.ambient_lighting.blue = node_id & 0xFF;
+        meshtastic_config_bridge::initDefaultModuleConfig(&module_config_, ctx_.getSelfNodeId());
 
 #if defined(ROTARY_A) && defined(ROTARY_B) && defined(ROTARY_C)
         module_config_.canned_message.updown1_enabled = true;
@@ -298,15 +235,21 @@ void MeshtasticBleService::loadModuleConfig()
     {
         size_t len = prefs.getBytes(kModuleBlobKey, &module_config_, sizeof(module_config_));
         prefs.end();
-        if (len != sizeof(module_config_) || module_config_.version != kModuleConfigVersion)
+        if (len != sizeof(module_config_) ||
+            module_config_.version != ble::meshtastic_defaults::kModuleConfigVersion)
         {
             init_defaults();
+        }
+        else
+        {
+            meshtastic_config_bridge::normalizeModuleConfig(&module_config_);
         }
     }
 }
 
 void MeshtasticBleService::saveModuleConfig()
 {
+    meshtastic_config_bridge::normalizeModuleConfig(&module_config_);
     Preferences prefs;
     if (prefs.begin(kModulePrefsNs, false))
     {
@@ -357,18 +300,9 @@ void MeshtasticBleService::syncMqttProxySettings()
         return;
     }
 
-    const auto& cfg = ctx_.getConfig();
+    const auto cfg = getMeshtasticPhoneConfig();
     chat::meshtastic::MtAdapter::MqttProxySettings settings;
-    settings.enabled = module_config_.has_mqtt && module_config_.mqtt.enabled;
-    settings.proxy_to_client_enabled = module_config_.has_mqtt && module_config_.mqtt.proxy_to_client_enabled;
-    settings.encryption_enabled = module_config_.has_mqtt ? module_config_.mqtt.encryption_enabled : true;
-    settings.primary_uplink_enabled = cfg.primary_uplink_enabled;
-    settings.primary_downlink_enabled = cfg.primary_downlink_enabled;
-    settings.secondary_uplink_enabled = cfg.secondary_uplink_enabled;
-    settings.secondary_downlink_enabled = cfg.secondary_downlink_enabled;
-    settings.root = module_config_.mqtt.root[0] ? module_config_.mqtt.root : meshtastic_defaults::kDefaultMqttRoot;
-    settings.primary_channel_id = channelDisplayName(ctx_, 0);
-    settings.secondary_channel_id = channelDisplayName(ctx_, 1);
+    platform::shared::ble_bridge::applyMeshtasticMqttProxySettings(settings, module_config_, cfg);
     mt->setMqttProxySettings(settings);
 }
 

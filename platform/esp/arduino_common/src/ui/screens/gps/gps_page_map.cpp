@@ -16,7 +16,7 @@
 #include "ui/screens/gps/gps_state.h"
 #include "ui/screens/gps/gps_tracker_overlay.h"
 #include "ui/screens/team/team_state.h"
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_tiles.h"
 #include "ui/widgets/map/map_viewport.h"

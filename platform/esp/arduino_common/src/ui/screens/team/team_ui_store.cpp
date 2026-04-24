@@ -1,9 +1,9 @@
 /**
  * @file team_ui_store.cpp
- * @brief Team UI snapshot store (SD-only, persist.md format)
+ * @brief ESP/SD-backed Team UI snapshot store (kept outside ui_shared)
  */
 
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 
 #include "sys/clock.h"
 #include <SD.h>

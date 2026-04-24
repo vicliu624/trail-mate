@@ -9,6 +9,7 @@
 
 #define LV_USE_OS LV_OS_NONE
 
+#define LV_FONT_MONTSERRAT_10 1
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1
@@ -17,5 +18,20 @@
 #define LV_FONT_MONTSERRAT_24 1
 
 #define LV_USE_SDL 0
+
+#if defined(_WIN32)
+#define LV_USE_FS_WIN32 1
+#define LV_FS_WIN32_LETTER 'A'
+#define LV_FS_WIN32_PATH ""
+#define LV_FS_WIN32_CACHE_SIZE 0
+#else
+#define LV_USE_FS_POSIX 1
+#define LV_FS_POSIX_LETTER 'A'
+#define LV_FS_POSIX_PATH ""
+#define LV_FS_POSIX_CACHE_SIZE 0
+#endif
+
+#define LV_USE_LODEPNG 1
+#define LV_USE_TJPGD 1
 
 #endif // LV_CONF_H

@@ -6,7 +6,7 @@
 #pragma once
 
 #include "lvgl.h"
-#include "team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 
 namespace sys
 {

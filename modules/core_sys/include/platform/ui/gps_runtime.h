@@ -12,6 +12,8 @@ namespace platform::ui::gps
 using GpsState = ::gps::GpsState;
 using GnssSatInfo = ::gps::GnssSatInfo;
 using GnssStatus = ::gps::GnssStatus;
+using GnssFix = ::gps::GnssFix;
+using GnssSystem = ::gps::GnssSystem;
 
 GpsState get_data();
 bool get_gnss_snapshot(GnssSatInfo* out, std::size_t max, std::size_t* out_count, GnssStatus* status);

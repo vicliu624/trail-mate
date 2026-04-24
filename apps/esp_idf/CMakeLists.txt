@@ -104,7 +104,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_nav.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/page/page_profile.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/runtime/memory_profile.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/runtime/pack_repository.cpp
+    ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/runtime/pack_repository.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/common/placeholder_page.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_compose_components.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_compose_input.cpp
