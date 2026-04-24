@@ -6,8 +6,8 @@
 #include <string>
 #include <string_view>
 
-#include "app/demo_app_runner.h"
 #include "platform/simulator/sdl_simulator.h"
+#include "ui_shell/shell_ui_runner.h"
 
 namespace {
 
@@ -51,7 +51,9 @@ int main(int argc, char** argv)
     try {
         const auto options = parseOptions(argc, argv);
         trailmate::cardputer_zero::platform::simulator::SdlSimulator simulator{options.scale};
-        trailmate::cardputer_zero::app::runDemoApp(simulator, std::chrono::milliseconds{options.auto_exit_ms});
+        trailmate::cardputer_zero::simulator::ui_shell::runShellUi(
+            simulator,
+            std::chrono::milliseconds{options.auto_exit_ms});
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "Simulator startup failed: " << ex.what() << '\n';

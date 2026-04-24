@@ -18,7 +18,8 @@ workflow remain in [`apps/linux_sim`](../linux_sim/README.md).
 - `SConstruct`: `M5Stack_Linux_Libs` backed device build entrypoint
 - `config_defaults.mk`: default SDK configuration for LVGL 9.5 + fbdev + evdev
 - `main`: clean SDK project component for the real device shell
-- `docs/specification`: current Cardputer Zero boundaries and migration notes
+- `docs/specification`: current Cardputer Zero boundaries, migration notes, and
+  feature migration checklist
 - `src/targets`: thin device entrypoint
 - `scripts`: Linux helper scripts for build and run
 

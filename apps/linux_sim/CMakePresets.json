@@ -91,7 +91,8 @@
       "configurePreset": "windows-vs2022-test-debug",
       "configuration": "Debug",
       "targets": [
-        "trailmate_cardputer_zero_smoke"
+        "trailmate_cardputer_zero_smoke",
+        "trailmate_cardputer_zero_runtime_smoke"
       ]
     },
     {
@@ -107,7 +108,8 @@
       "displayName": "Build Linux Tests",
       "configurePreset": "linux-test-debug",
       "targets": [
-        "trailmate_cardputer_zero_smoke"
+        "trailmate_cardputer_zero_smoke",
+        "trailmate_cardputer_zero_runtime_smoke"
       ]
     }
   ],

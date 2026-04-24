@@ -7,7 +7,7 @@ This directory intentionally preserves the `LoFiBox-Zero` workflow model for
 desktop development:
 
 - a self-contained `CMake` workspace
-- a Windows/Linux `SDL3` desktop simulator for fast iteration
+- a Windows/Linux `SDL3` front-view device simulator that now boots the real shared-ui shell
 - scripted build/run flows for Windows, Linux, WSL, and a Linux GUI dev container
 - smoke tests for the extracted Linux-safe shared slice
 
@@ -37,8 +37,10 @@ Linux-safe code they both use now lives under
 
 - `CMakeLists.txt`: standalone simulator shell build
 - `CMakePresets.json`: Windows/Linux presets for simulator and tests
+- `lv_conf.h`: LVGL offscreen configuration for the shell-integrated shared UI
 - `src/platform/simulator`: SDL front-view device simulator
-- `src/targets`: simulator entrypoint
+- `src/ui_shell`: shared-ui shell bootstrap, offscreen LVGL runner, and placeholder app catalog
+- `src/targets`: simulator entrypoints
 - `tests`: smoke tests for the Linux-safe shared slice
 - `scripts`: helper scripts for build/run/dev-container flows
 - `docker`: Linux GUI dev-container assets
@@ -65,6 +67,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\open-windows-solution.ps1
 bash scripts/build-simulator.sh
 bash scripts/run-simulator.sh
 ```
+
+The main simulator target is now the shared-ui milestone: it keeps the original
+device shell and injects the real `ui_shared` menu shell into the simulated
+screen, while individual apps are still placeholder pages.
 
 ### WSL validation
 
