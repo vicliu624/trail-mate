@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$ROOT_DIR/../.." && pwd)"
 IMAGE_TAG="${DEV_CONTAINER_IMAGE:-trailmate-cardputer-zero/dev-simulator:trixie}"
 BUILD_TYPE="${DEV_CONTAINER_BUILD_TYPE:-Debug}"
 BUILD_VOLUME_NAME="${DEV_CONTAINER_BUILD_VOLUME:-trailmate-cardputer-zero-dev-build}"
@@ -93,7 +94,7 @@ fi
 RUN_ARGS=(
   run
   --rm
-  -v "$ROOT_DIR:/workspace/trail-mate/apps/linux_sim"
+  -v "$REPO_ROOT:/workspace/trail-mate"
   -v "$BUILD_VOLUME_NAME:$CONTAINER_BUILD_ROOT"
   -w /workspace/trail-mate/apps/linux_sim
   -e "TRAIL_MATE_CONTAINER_BUILD_TYPE=$BUILD_TYPE"
@@ -106,7 +107,7 @@ elif [[ -t 0 && -t 1 ]]; then
   RUN_ARGS+=(-it)
 fi
 
-if command -v id >/dev/null 2>&1 && [[ "$ROOT_DIR" != /mnt/* ]]; then
+if command -v id >/dev/null 2>&1 && [[ "$REPO_ROOT" != /mnt/* ]]; then
   RUN_ARGS+=(--user "$(id -u):$(id -g)")
 fi
 
