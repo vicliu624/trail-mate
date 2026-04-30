@@ -29,18 +29,19 @@ class GpsService
     GpsState getData();
     bool getGnssSnapshot(GnssSatInfo* out, size_t max, size_t* out_count, GnssStatus* status);
     uint32_t getCollectionInterval() const;
+    void setEnabled(bool enabled);
     void setCollectionInterval(uint32_t interval_ms);
     void setPowerStrategy(uint8_t strategy);
     void setTeamModeActive(bool active);
     void setGnssConfig(uint8_t mode, uint8_t sat_mask);
-    void setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
+    void setExternalNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
     MotionConfig getMotionConfig() const { return motion_config_; }
     void setMotionConfig(const MotionConfig& config);
     void setMotionIdleTimeout(uint32_t timeout_ms);
     void setMotionSensorId(uint8_t sensor_id);
     TaskHandle_t getTaskHandle() const { return gps_task_handle_; }
     TaskHandle_t getMotionTaskHandle() const { return motion_task_handle_; }
-    bool isEnabled() const { return !gps_disabled_ && gps_ready_; }
+    bool isEnabled() const { return !gps_disabled_ && user_enabled_; }
     bool isPowered() const { return gps_powered_; }
     uint32_t getLastMotionMs() const;
 
@@ -55,7 +56,7 @@ class GpsService
     void setGPSPowerState(bool enable);
     void updateMotionState(uint32_t now_ms);
     void applyGnssConfig();
-    void applyNmeaConfig();
+    void applyInternalNmeaConfig();
 
     GpsBoard* gps_board_ = nullptr;
     MotionBoard* motion_board_ = nullptr;
@@ -73,6 +74,7 @@ class GpsService
     bool gps_time_synced_ = false;
     bool gps_powered_ = false;
     bool gps_disabled_ = false;
+    bool user_enabled_ = true;
     bool gps_ready_ = false;
 
     MotionConfig motion_config_{};

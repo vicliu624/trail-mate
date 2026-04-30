@@ -10,13 +10,7 @@
                                 "-I../../modules/core_chat/include",
                                 "-I../../modules/core_gps/include",
                                 "-I../../modules/core_hostlink/include",
-                                "-I../../modules/core_team/include",
-                                "-I../../platform/esp/arduino_common/include"
+                                "-I../../modules/core_team/include"
                             ]
-              },
-    "dependencies":  [
-                         {
-                             "name":  "Preferences"
-                         }
-                     ]
+              }
 }

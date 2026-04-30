@@ -9,9 +9,9 @@
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/orientation_runtime.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
-#include "ui/screens/team/team_ui_store.h"
 
 namespace ui::menu::dashboard
 {

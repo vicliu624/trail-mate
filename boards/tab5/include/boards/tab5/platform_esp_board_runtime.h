@@ -14,8 +14,6 @@
 extern "C"
 {
 #include "bsp/trail_mate_tab5_runtime.h"
-
-    void bsp_set_ext_5v_en(bool en);
 }
 
 namespace platform::esp::boards::detail
@@ -84,7 +82,7 @@ inline void initializeDisplay()
     if (trail_mate_tab5_display_runtime_init())
     {
         ESP_LOGI(kTag, "Tab5 display runtime initialized");
-        bsp_set_ext_5v_en(true);
+        trail_mate_tab5_set_ext_5v_enabled(true);
         vTaskDelay(pdMS_TO_TICKS(300));
         ESP_LOGI(kTag, "Tab5 M5-Bus Ext5V enabled for GNSS/LoRa modules");
     }
@@ -112,12 +110,12 @@ inline AppContextInitHandles resolveAppContextInitHandles()
 
 inline bool lockDisplay(uint32_t timeout_ms)
 {
-    return bsp_display_lock(timeout_ms);
+    return trail_mate_tab5_display_lock(timeout_ms);
 }
 
 inline void unlockDisplay()
 {
-    bsp_display_unlock();
+    trail_mate_tab5_display_unlock();
 }
 
 inline bool syncSystemTimeFromBoardRtc()

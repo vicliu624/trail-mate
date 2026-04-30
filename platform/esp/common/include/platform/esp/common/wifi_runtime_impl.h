@@ -25,7 +25,7 @@
 #endif
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-#include "bsp/m5stack_tab5.h"
+#include "bsp/trail_mate_tab5_runtime.h"
 #endif
 
 namespace platform::ui::wifi
@@ -378,7 +378,7 @@ bool ensure_stack_ready()
     }
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    bsp_set_wifi_power_enable(true);
+    trail_mate_tab5_set_wifi_power_enabled(true);
 #endif
 
     const esp_err_t netif_err = esp_netif_init();
@@ -595,7 +595,7 @@ bool ensure_wifi_started()
     }
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-    bsp_set_wifi_power_enable(true);
+    trail_mate_tab5_set_wifi_power_enabled(true);
 #endif
 
     const esp_err_t start_err = esp_wifi_start();
@@ -670,7 +670,7 @@ bool apply_enabled(bool enabled)
             }
         }
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-        bsp_set_wifi_power_enable(false);
+        trail_mate_tab5_set_wifi_power_enabled(false);
 #endif
         s_runtime.wifi_started = false;
         s_runtime.wifi_initialized = false;

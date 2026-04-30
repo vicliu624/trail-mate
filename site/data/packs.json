@@ -1,8 +1,69 @@
 {
   "schema_version": 1,
   "archive_layout": "trailmate-pack-v1",
-  "generated_at": "2026-04-21T02:00:30.208708Z",
+  "generated_at": "2026-04-30T18:27:38.871955Z",
   "packages": [
+    {
+      "id": "europe-cyrillic-ext",
+      "package_type": "locale-bundle",
+      "version": "1.0.0",
+      "display_name": "European Cyrillic Extended",
+      "summary": "Shared Cyrillic font coverage plus the Russian locale pack.",
+      "description": "European Cyrillic Extended installs the Russian locale together with a shared\nCyrillic external font pack so interface labels and Russian content can render\nwithout inflating the firmware image.\n\nThis bundle is display-only today. It does not add a Russian IME, but it keeps\nRussian UI support available as an installable SD package.\n\nCredits: Russian translations were contributed by polarikus, based on the\npolarikus/trail-mate Russian localization PR.",
+      "author": "Trail Mate",
+      "homepage": "https://vicliu624.github.io/trail-mate/",
+      "min_firmware_version": "0.1.20-alpha",
+      "supported_memory_profiles": [
+        "constrained",
+        "standard",
+        "extended"
+      ],
+      "tags": [
+        "language",
+        "cyrillic",
+        "europe",
+        "russian"
+      ],
+      "provides": {
+        "locales": [
+          {
+            "id": "ru",
+            "display_name": "Russian",
+            "native_name": "Русский",
+            "ui_font_pack_id": "cyrillic-eu",
+            "content_font_pack_id": "cyrillic-eu",
+            "preferred_content_supplement_pack_ids": [],
+            "ime_pack_id": ""
+          }
+        ],
+        "fonts": [
+          {
+            "id": "cyrillic-eu",
+            "display_name": "Cyrillic EU",
+            "usage": "both",
+            "estimated_ram_bytes": 12000
+          }
+        ],
+        "ime": []
+      },
+      "runtime": {
+        "estimated_unique_font_ram_bytes": 12000,
+        "locale_count": 1,
+        "font_count": 1,
+        "ime_count": 0
+      },
+      "archive": {
+        "layout": "trailmate-pack-v1",
+        "path": "assets/packs/europe-cyrillic-ext-1.0.0.zip",
+        "size_bytes": 7235,
+        "sha256": "9fb6cb4f8a426e1d9c268fa9a6e2a3152631c4f0ae38715c11fae1cb6ac1ac56"
+      },
+      "files": {
+        "package_manifest": "package.ini",
+        "description": "DESCRIPTION.txt",
+        "readme": "README.md"
+      }
+    },
     {
       "id": "europe-latin-ext",
       "package_type": "locale-bundle",
@@ -12,7 +73,7 @@
       "description": "European Latin Extended adds a shared external font pack for common accented Latin text\nand installs locale packs for German, Spanish, French, Italian, Dutch, Polish, and\nPortuguese (Portugal).\n\nThis bundle is designed to stay lightweight while still rendering mixed-language contact\nnames, chat content, and localized UI labels cleanly across European languages.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.20-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -108,8 +169,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/europe-latin-ext-1.0.0.zip",
-        "size_bytes": 12326,
-        "sha256": "b5eae5d57ac3cf6cb367268abc87cec3cd66f53429b8dbc2a239b4f6ecfd9c81"
+        "size_bytes": 15938,
+        "sha256": "b5be900dfda5aa0fd3ca1e54b2efadfa708f253b86b675d73e166c8f25cfb50a"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -126,7 +187,7 @@
       "description": "Japanese installs the ja locale together with the ja-cjk external font pack so menu text,\nlabels, and received Japanese content can render without inflating the firmware image.\n\nThis bundle is currently display-only. It does not add a Japanese IME yet, but it keeps\nJapanese coverage available as an installable package on SD storage.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.20-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -168,8 +229,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/ja-1.0.0.zip",
-        "size_bytes": 11246,
-        "sha256": "c559c456d613be3befdbac0f77050468fd2346e0ccda5492ebe40762a8f5b5c6"
+        "size_bytes": 11858,
+        "sha256": "b4dd1b960c5cc57ebdb5dbb46374302fe86ec0afb313ca1781f15c6448fa495a"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -186,7 +247,7 @@
       "description": "Korean installs the ko locale together with the ko-cjk external font pack so interface\nlabels and Korean content can render correctly without carrying the glyph set in firmware.\n\nThis bundle is currently display-only. It does not add a Korean IME yet, but it keeps\nKorean support available as an installable SD package.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.20-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -228,8 +289,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/ko-1.0.0.zip",
-        "size_bytes": 8470,
-        "sha256": "153d8bd1ffacb75a08f8be7483e50c4e559b949dea7a7b0f08cb592718f29dd3"
+        "size_bytes": 9055,
+        "sha256": "33ee5a0c52f47f85683a92ad89238f2789ca48051cb15c4a79ae6c219cfd7ddc"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -246,7 +307,7 @@
       "description": "Simplified Chinese installs the zh-Hans locale, a tiered two-pack font stack, and the\nzh-hans-pinyin IME registration used by the built-in Pinyin input backend.\n\nThe bundle ships:\n- zh-hans-core: the common-glyph UI/content font loaded first for fast startup and lower steady-state RAM use\n- zh-hans-ext: the remaining Chinese glyph coverage that the runtime can load on demand as a content supplement\n- zh-hans-pinyin: the built-in Pinyin IME registration layer\n\nUse this bundle when you want a Chinese interface, Chinese text entry, or reliable\nrendering of Chinese names and chat content while another locale remains active, without\npaying the full monolithic CJK font cost up front.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.20-alpha",
       "supported_memory_profiles": [
         "standard",
         "extended"
@@ -302,8 +363,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/zh-Hans-1.0.0.zip",
-        "size_bytes": 338342,
-        "sha256": "a598cd28e5b601d261b8a70c435d107e034ef8967b4fd85ae4978361f99fc85b"
+        "size_bytes": 338880,
+        "sha256": "561ca049a7d127ecb4f963c019b25d3117640e86d8f32f32b4e41faf79f38491"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -320,7 +381,7 @@
       "description": "Traditional Chinese installs the zh-Hant locale together with the zh-hant-cjk external\nfont pack so the UI and mixed-language content can render Traditional Chinese correctly.\n\nThis bundle is display-focused today. It does not add a dedicated Traditional Chinese IME\nyet, but it keeps rendering support fully external to the firmware image.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.20-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -362,8 +423,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/zh-Hant-1.0.0.zip",
-        "size_bytes": 11411,
-        "sha256": "334b4504a3e6e8c504f63fcabcd15994f8a2f1338dd11c775081b15a843d108e"
+        "size_bytes": 11973,
+        "sha256": "5fd0dc34f1c5fda439888680d4f43042697b68d108cff385e47d73d62f53b1db"
       },
       "files": {
         "package_manifest": "package.ini",

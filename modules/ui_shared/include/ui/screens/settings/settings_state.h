@@ -44,6 +44,7 @@ struct SettingItem
 struct SettingsData
 {
     // GPS
+    bool gps_enabled = true;
     int gps_mode = 0;
     int gps_sat_mask = 0x1 | 0x8 | 0x4;
     int gps_strategy = 0;
@@ -100,10 +101,10 @@ struct SettingsData
     char mc_channel_name[32] = "Public";
     char mc_channel_key[65] = {};
 
-    // Chat/GPS (privacy-related controls)
+    // Chat/privacy controls
     int privacy_encrypt_mode = 1;
-    int privacy_nmea_output = 0;
-    int privacy_nmea_sentence = 0;
+    int external_nmea_output_hz = 0;
+    int external_nmea_sentence_mask = 0;
 
     // Screen
     int screen_timeout_ms = 30000;

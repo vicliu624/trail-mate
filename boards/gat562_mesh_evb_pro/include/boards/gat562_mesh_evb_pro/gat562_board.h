@@ -145,9 +145,10 @@ class Gat562Board final : public BoardBase
                          std::size_t* out_count,
                          ::gps::GnssStatus* status) const;
     void setGpsCollectionInterval(uint32_t interval_ms);
+    void setGpsEnabled(bool enabled);
     void setGpsPowerStrategy(uint8_t strategy);
     void setGpsConfig(uint8_t mode, uint8_t sat_mask);
-    void setGpsNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
+    void setGpsExternalNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
     void setGpsMotionIdleTimeout(uint32_t timeout_ms);
     void setGpsMotionSensorId(uint8_t sensor_id);
     void suspendGps();

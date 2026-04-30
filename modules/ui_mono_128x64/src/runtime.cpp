@@ -2883,7 +2883,7 @@ void Runtime::renderDeviceSettings()
         }
         else if (i == 1)
         {
-            std::snprintf(line, sizeof(line), "GPS: %s", app()->getConfig().gps_mode != 0 ? "ON" : "OFF");
+            std::snprintf(line, sizeof(line), "GPS: %s", app()->getConfig().gps_enabled ? "ON" : "OFF");
         }
         else if (i == 2)
         {
@@ -3131,7 +3131,7 @@ void Runtime::renderInfoPage()
     }
 
     push_line("[GPS]");
-    push_kv("GPS", cfg.gps_mode != 0 ? "ON" : "OFF");
+    push_kv("GPS", cfg.gps_enabled ? "ON" : "OFF");
     push_kv("SATS", gpsSatMaskLabel(cfg.gps_sat_mask));
     std::snprintf(value, sizeof(value), "%lus", static_cast<unsigned long>(cfg.gps_interval_ms / 1000UL));
     push_kv("INT", value);
@@ -4120,6 +4120,10 @@ void Runtime::confirmSettingPopup()
     platform::ui::screen::set_timeout_ms(setting_popup_screen_timeout_ms_);
     app()->setBleEnabled(setting_popup_ble_enabled_);
     app()->saveConfig();
+    if (setting_popup_owner_ == Page::DeviceSettings)
+    {
+        app()->applyPositionConfig();
+    }
 
     char value[32] = {};
     formatSettingPopupValue(value, sizeof(value));
@@ -4260,7 +4264,7 @@ void Runtime::adjustSettingPopup(int delta)
             setting_popup_ble_enabled_ = !setting_popup_ble_enabled_;
             break;
         case 1:
-            setting_popup_config_.gps_mode = (setting_popup_config_.gps_mode == 0) ? 1 : 0;
+            setting_popup_config_.gps_enabled = !setting_popup_config_.gps_enabled;
             break;
         case 2:
             setting_popup_config_.gps_sat_mask = nextGpsSatMask(setting_popup_config_.gps_sat_mask, delta);
@@ -4352,7 +4356,7 @@ void Runtime::formatSettingPopupValue(char* out, size_t out_len) const
             std::snprintf(out, out_len, "%s", setting_popup_ble_enabled_ ? "ON" : "OFF");
             return;
         case 1:
-            std::snprintf(out, out_len, "%s", setting_popup_config_.gps_mode != 0 ? "ON" : "OFF");
+            std::snprintf(out, out_len, "%s", setting_popup_config_.gps_enabled ? "ON" : "OFF");
             return;
         case 2:
             std::snprintf(out, out_len, "%s", gpsSatMaskLabel(setting_popup_config_.gps_sat_mask));

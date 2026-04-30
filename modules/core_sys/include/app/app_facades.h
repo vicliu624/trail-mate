@@ -57,6 +57,7 @@ class IAppConfigFacade
     virtual void applyNetworkLimits() = 0;
     virtual void applyPrivacyConfig() = 0;
     virtual void applyChatDefaults() = 0;
+    virtual chat::MeshProtocol getMeshProtocol() const = 0;
     virtual void getEffectiveUserInfo(char* out_long, std::size_t long_len, char* out_short, std::size_t short_len) const = 0;
     virtual bool switchMeshProtocol(chat::MeshProtocol protocol, bool persist = true) = 0;
 };

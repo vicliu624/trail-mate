@@ -143,6 +143,58 @@ function Resolve-Port($Settings, [string]$RequestedPort) {
     return 'COM6'
 }
 
+function Get-CacheEntryValue([string]$CachePath, [string]$Key) {
+    if (-not (Test-Path $CachePath)) {
+        return $null
+    }
+
+    $prefix = "${Key}:"
+    foreach ($line in Get-Content $CachePath) {
+        if ($line.StartsWith($prefix)) {
+            $parts = $line.Split('=', 2)
+            if ($parts.Length -eq 2) {
+                return $parts[1]
+            }
+        }
+    }
+    return $null
+}
+
+function Reset-StaleIdfBuildDir([string]$RepoRoot, [string]$BuildDir, [string]$IdfPath) {
+    $buildDirPath = if ([System.IO.Path]::IsPathRooted($BuildDir)) {
+        $BuildDir
+    } else {
+        Join-Path $RepoRoot $BuildDir
+    }
+
+    if (-not (Test-Path $buildDirPath)) {
+        return
+    }
+
+    $cacheFiles = @(
+        Join-Path $buildDirPath 'CMakeCache.txt'
+        Join-Path $buildDirPath 'bootloader\CMakeCache.txt'
+    )
+
+    $normalizedCurrent = $IdfPath.TrimEnd('\', '/')
+    foreach ($cachePath in $cacheFiles) {
+        $cachedIdfPath = Get-CacheEntryValue $cachePath 'IDF_PATH'
+        if (-not $cachedIdfPath) {
+            continue
+        }
+
+        $normalizedCached = $cachedIdfPath.TrimEnd('\', '/')
+        if ($normalizedCached -ne $normalizedCurrent) {
+            Write-Warning "Stale ESP-IDF cache detected in $buildDirPath"
+            Write-Warning "Cached IDF_PATH: $normalizedCached"
+            Write-Warning "Current IDF_PATH: $normalizedCurrent"
+            Write-Host "[trail-mate] Removing stale build directory $buildDirPath"
+            Remove-Item -LiteralPath $buildDirPath -Recurse -Force
+            return
+        }
+    }
+}
+
 $repoRoot = Get-RepoRoot
 $settings = Get-WorkspaceSettings $repoRoot
 $idfPath = Resolve-IdfPath $repoRoot $settings
@@ -153,6 +205,8 @@ $portValue = Resolve-Port $settings $Port
 if (-not $BuildDir) {
     $BuildDir = "build.$Target"
 }
+
+Reset-StaleIdfBuildDir $repoRoot $BuildDir $idfPath
 
 $env:IDF_PATH = $idfPath
 $env:IDF_PYTHON_ENV_PATH = Split-Path -Parent (Split-Path -Parent $pythonExe)

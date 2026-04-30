@@ -25,6 +25,81 @@ constexpr uint8_t kTDeckKeyboardModeKeyCmd = 0x04;
 constexpr uint32_t kTDeckKeyboardBootDelayMs = 500;
 constexpr float kTDeckRadioTcxoVoltage = 1.8f;
 constexpr float kTDeckRadioCurrentLimitMa = 140.0f;
+constexpr uint8_t kTDeckBacklightStepMax = 16;
+constexpr uint32_t kTDeckBacklightOffDelayMs = 3;
+constexpr uint32_t kTDeckBacklightWakeDelayUs = 30;
+uint8_t s_backlight_level = 0;
+
+#if DEVICE_MAX_BRIGHTNESS_LEVEL > 0
+constexpr uint32_t kBacklightLevelMax = DEVICE_MAX_BRIGHTNESS_LEVEL;
+#else
+constexpr uint32_t kBacklightLevelMax = 1;
+#endif
+
+uint8_t clamp_brightness_level(uint8_t level)
+{
+    return level > DEVICE_MAX_BRIGHTNESS_LEVEL ? DEVICE_MAX_BRIGHTNESS_LEVEL : level;
+}
+
+uint8_t brightness_level_to_backlight_step(uint8_t level)
+{
+    const uint8_t clamped = clamp_brightness_level(level);
+    if (clamped == 0)
+    {
+        return 0;
+    }
+
+    const uint32_t scaled =
+        (static_cast<uint32_t>(clamped) * kTDeckBacklightStepMax + (kBacklightLevelMax / 2U)) /
+        kBacklightLevelMax;
+    const uint8_t step = static_cast<uint8_t>(scaled);
+    if (step == 0)
+    {
+        return 1;
+    }
+    return step > kTDeckBacklightStepMax ? kTDeckBacklightStepMax : step;
+}
+
+void write_backlight_level(uint8_t level)
+{
+#if defined(DISP_BL)
+    if (DISP_BL < 0)
+    {
+        return;
+    }
+
+    const uint8_t target = brightness_level_to_backlight_step(level);
+    pinMode(DISP_BL, OUTPUT);
+
+    // T-Deck uses the vendor backlight chip's pulse protocol rather than a raw PWM duty signal.
+    if (target == 0)
+    {
+        digitalWrite(DISP_BL, LOW);
+        delay(kTDeckBacklightOffDelayMs);
+        s_backlight_level = 0;
+        return;
+    }
+
+    if (s_backlight_level == 0)
+    {
+        digitalWrite(DISP_BL, HIGH);
+        s_backlight_level = kTDeckBacklightStepMax;
+        delayMicroseconds(kTDeckBacklightWakeDelayUs);
+    }
+
+    const int from = kTDeckBacklightStepMax - s_backlight_level;
+    const int to = kTDeckBacklightStepMax - target;
+    const int pulses = (kTDeckBacklightStepMax + to - from) % kTDeckBacklightStepMax;
+    for (int i = 0; i < pulses; ++i)
+    {
+        digitalWrite(DISP_BL, LOW);
+        digitalWrite(DISP_BL, HIGH);
+    }
+    s_backlight_level = target;
+#else
+    (void)level;
+#endif
+}
 
 // Civil date to UNIX epoch days (UTC), based on Howard Hinnant's algorithm.
 int64_t days_from_civil(int year, unsigned month, unsigned day)
@@ -150,14 +225,23 @@ TDeckBoard* TDeckBoard::getInstance()
 
 bool TDeckBoard::initGPS()
 {
-    // T-Deck examples wire GPS to UART on pins 43/44.
+    // Board init owns the physical UART. Receiver probing/configuration is runtime-owned.
+    Serial1.end();
     Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
-    delay(50);
+    delay(100);
+    gps_.attach(&Serial1);
+    setGPSOnline(true);
+    Serial.printf("[TDeckBoard] GPS UART ready baud=%lu rx=%d tx=%d\n",
+                  38400UL,
+                  GPS_RX,
+                  GPS_TX);
+    return true;
+}
 
-    bool ok = gps_.init(&Serial1);
-    setGPSOnline(ok);
-    Serial.printf("[TDeckBoard] GPS init: %s\n", ok ? "OK" : "FAIL");
-    return ok;
+void TDeckBoard::deinitGPS()
+{
+    Serial1.end();
+    setGPSOnline(false);
 }
 
 uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
@@ -218,15 +302,9 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     if (DISP_BL >= 0)
     {
         pinMode(DISP_BL, OUTPUT);
-        // Blink backlight briefly as a visual heartbeat.
         digitalWrite(DISP_BL, LOW);
-        delay(60);
-        digitalWrite(DISP_BL, HIGH);
-        delay(60);
-        digitalWrite(DISP_BL, LOW);
-        delay(60);
-        digitalWrite(DISP_BL, HIGH);
-        Serial.println("[TDeckBoard] backlight blinked");
+        s_backlight_level = 0;
+        Serial.println("[TDeckBoard] backlight held off during display init");
     }
 #endif
 
@@ -255,6 +333,7 @@ uint32_t TDeckBoard::begin(uint32_t disable_hw_init)
     LilyGoDispArduinoSPI::setRotation(1);
     rotation_ = LilyGoDispArduinoSPI::getRotation();
     display_ready_ = true;
+    setBrightness(brightness_);
     Serial.printf("[TDeckBoard] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
 #else
     Serial.println("[TDeckBoard] display init skipped: missing DISP_* pins");
@@ -635,18 +714,18 @@ int TDeckBoard::getBatteryLevel()
 
 void TDeckBoard::setBrightness(uint8_t level)
 {
-    brightness_ = level;
+    const uint8_t clamped_level = clamp_brightness_level(level);
+    brightness_ = clamped_level;
     if (!display_ready_)
     {
         return;
     }
 
-    LilyGoDispArduinoSPI::setBrightness(level);
+    LilyGoDispArduinoSPI::setBrightness(clamped_level);
 #if defined(DISP_BL)
     if (DISP_BL >= 0)
     {
-        pinMode(DISP_BL, OUTPUT);
-        digitalWrite(DISP_BL, (level > 0) ? HIGH : LOW);
+        write_backlight_level(clamped_level);
     }
 #endif
 }
@@ -947,6 +1026,17 @@ float TDeckBoard::getRadioRSSI()
     if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
     {
         float rssi = radio_.getRSSI();
+        LilyGoDispArduinoSPI::unlock();
+        return rssi;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+float TDeckBoard::getRadioInstantRSSI()
+{
+    if (LilyGoDispArduinoSPI::lock(portMAX_DELAY))
+    {
+        const float rssi = radio_.getRSSI(false);
         LilyGoDispArduinoSPI::unlock();
         return rssi;
     }

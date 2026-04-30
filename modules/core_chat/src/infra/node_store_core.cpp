@@ -7,6 +7,16 @@
 #include <cstring>
 #include <limits>
 
+#if defined(_MSC_VER)
+#define TRAILMATE_PACK_PUSH __pragma(pack(push, 1))
+#define TRAILMATE_PACK_POP __pragma(pack(pop))
+#define TRAILMATE_PACKED
+#else
+#define TRAILMATE_PACK_PUSH
+#define TRAILMATE_PACK_POP
+#define TRAILMATE_PACKED __attribute__((packed))
+#endif
+
 namespace chat
 {
 namespace contacts
@@ -14,6 +24,7 @@ namespace contacts
 
 namespace
 {
+TRAILMATE_PACK_PUSH
 struct PersistedNodeEntryV6
 {
     uint32_t node_id;
@@ -28,11 +39,13 @@ struct PersistedNodeEntryV6
     uint8_t protocol;
     uint8_t role;
     uint8_t hw_model;
-} __attribute__((packed));
+} TRAILMATE_PACKED;
+TRAILMATE_PACK_POP
 
 static_assert(sizeof(PersistedNodeEntryV6) == NodeStoreCore::kLegacySerializedEntrySize,
               "PersistedNodeEntryV6 size changed");
 
+TRAILMATE_PACK_PUSH
 struct PersistedNodeEntryV7
 {
     uint32_t node_id;
@@ -59,11 +72,13 @@ struct PersistedNodeEntryV7
     uint32_t position_hdop;
     uint32_t position_vdop;
     uint32_t position_gps_accuracy_mm;
-} __attribute__((packed));
+} TRAILMATE_PACKED;
+TRAILMATE_PACK_POP
 
 static_assert(sizeof(PersistedNodeEntryV7) == NodeStoreCore::kSerializedEntrySize,
               "PersistedNodeEntryV7 size changed");
 
+TRAILMATE_PACK_PUSH
 struct PersistedNodeEntryV8
 {
     uint32_t node_id;
@@ -108,7 +123,8 @@ struct PersistedNodeEntryV8
     float metrics_channel_utilization;
     float metrics_air_util_tx;
     uint32_t metrics_uptime_seconds;
-} __attribute__((packed));
+} TRAILMATE_PACKED;
+TRAILMATE_PACK_POP
 
 static_assert(sizeof(PersistedNodeEntryV8) == NodeStoreCore::kSerializedEntrySizeV8,
               "PersistedNodeEntryV8 size changed");
@@ -763,3 +779,7 @@ size_t NodeStoreCore::selectEvictionIndex() const
 
 } // namespace contacts
 } // namespace chat
+
+#undef TRAILMATE_PACK_PUSH
+#undef TRAILMATE_PACK_POP
+#undef TRAILMATE_PACKED

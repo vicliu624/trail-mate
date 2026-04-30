@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "platform/ui/device_runtime.h"
+#include "platform/ui/pack_repository_runtime.h"
 #include "platform/ui/wifi_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/components/info_card.h"
@@ -14,7 +15,6 @@
 #include "ui/components/two_pane_styles.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
-#include "ui/runtime/pack_repository.h"
 #include "ui/ui_theme.h"
 #include "ui/widgets/busy_overlay.h"
 #include "ui/widgets/system_notification.h"

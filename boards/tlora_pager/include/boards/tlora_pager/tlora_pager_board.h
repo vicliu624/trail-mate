@@ -116,6 +116,7 @@ class TLoRaPagerBoard : public BoardBase,
     // Hardware initialization functions
     bool initPMU();
     bool initGPS() override;
+    void deinitGPS() override;
     bool initLoRa();
     bool initNFC();
     bool initKeyboard();
@@ -318,6 +319,7 @@ class TLoRaPagerBoard : public BoardBase,
     int readRadioData(uint8_t* buf, size_t len) override;
     void clearRadioIrqFlags(uint32_t flags) override;
     float getRadioRSSI() override;
+    float getRadioInstantRSSI() override;
     float getRadioSNR() override;
     void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                             int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,

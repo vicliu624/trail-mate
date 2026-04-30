@@ -1,0 +1,111 @@
+# Russian translations contributed by polarikus.
+Action	Действие
+Add	Добавить
+Advanced	Расширенные
+Always	Всегда
+App	Приложение
+Auto	Авто
+Back	Назад
+Bluetooth	Bluetooth
+Bluetooth Pairing	Сопряжение Bluetooth
+Cancel	Отмена
+Channel	Канал
+Chat	Чат
+Chinese	Китайский
+Close	Закрыть
+Contacts	Контакты
+Data Exchange	Обмен данными
+Delete	Удалить
+Disabled	Отключено
+Discover	Обнаружить
+Display Language	Язык интерфейса
+Edit	Редактировать
+Energy Sweep	Сканирование RF
+English	Английский
+English keyboard	Английская клавиатура
+Error	Ошибка
+Factory Reset	Сброс до заводских настроек
+GPS	GPS
+Extensions	Расширения
+Language	Язык
+Package Details	Информация о пакете
+Back to list	Вернуться к списку
+Install	Установить
+Update	Обновить
+Uninstall	Удалить
+Incompatible	Несовместимо
+Compatible with this device	Совместимо с этим устройством
+Compatibility: %s	Совместимость: %s
+memory profile mismatch	несоответствие профиля памяти
+needs %s	требуется %s
+Update available: %s	Доступно обновление: %s
+Installed	Установлено
+Installed: %s	Установлено: %s
+Available to install	Доступно для установки
+Blocked	Заблокировано
+%lu locales  %lu fonts  %lu IME  %s	%lu языков  %lu шрифтов  %lu IME  %s
+No Wi-Fi	Нет Wi-Fi
+Installing package...	Установка пакета...
+Package installed	Пакет установлен
+Uninstalling package...	Удаление пакета...
+Package uninstalled	Пакет удалён
+No language packs available	Нет доступных языковых пакетов
+Available language packs: %lu	Доступно языковых пакетов: %lu
+About	О программе
+Package Info	Информация о пакете
+Contents	Содержимое
+Source	Источник
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	Архив: %s\nДополнительная ОЗУ шрифтов: %s\nПрофили: %s\n%s
+Locales: %s\nFonts: %s\nIME: %s	Языки: %s\nШрифты: %s\nIME: %s
+Author: %s\nHomepage: %s	Автор: %s\nHomepage: %s
+None	Нет
+GPS Status	Статус GPS
+Hide	Скрыть
+Info	Инфо
+Loading...	Загрузка...
+Map	Карта
+Map Layer	Слой карты
+Nearby	Поблизости
+Network	Сеть
+New	Новые
+No messages	Нет сообщений
+No recent traffic	Нет недавней активности
+Not set	Не задано
+Number keyboard	Цифровая клавиатура
+OFF	ВЫКЛ
+OK	ОК
+ON	ВКЛ
+Pairing	Сопряжение
+PC Link	Связь с ПК
+Power	Питание
+Protocol	Протокол
+Ready	Готово
+Recent Activity	Недавняя активность
+Reply	Ответить
+Run	Запустить
+Save	Сохранить
+Scan failed	Сканирование не удалось
+Scan Local	Локальное сканирование
+Scanning 5s...	Сканирование 5 сек...
+SEARCH	ПОИСК
+Screen Brightness	Яркость экрана
+Screen Timeout	Тайм-аут экрана
+Settings	Настройки
+Setting	Настройка
+Sky Plot	Диаграмма неба
+Speaker Volume	Громкость динамика
+Status	Статус
+Stopped	Остановлено
+Stop	Остановить
+Submit	Подтвердить
+System	Система
+Team	Команда
+Team Status	Статус команды
+Time Zone	Часовой пояс
+Tracker	Трекер
+Unknown	Неизвестно
+USB Disk	USB-диск
+User Name	Имя пользователя
+Verification Number	Код подтверждения
+Vibration	Вибрация
+Clear all settings and restart?	Сбросить все настройки и перезагрузить?

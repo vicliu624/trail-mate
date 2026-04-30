@@ -1,0 +1,135 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-vs2022-debug",
+      "displayName": "Windows VS2022 Debug Simulator",
+      "description": "Generate a Visual Studio 2022 solution for the Cardputer Zero simulator.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/simulator",
+      "architecture": {
+        "value": "x64"
+      },
+      "cacheVariables": {
+        "BUILD_TESTING": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-vs2022-test-debug",
+      "displayName": "Windows VS2022 Debug Tests",
+      "description": "Generate a Visual Studio 2022 solution for Linux-shell smoke tests.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/test",
+      "architecture": {
+        "value": "x64"
+      },
+      "cacheVariables": {
+        "BUILD_TESTING": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "linux-simulator-debug",
+      "displayName": "Linux Debug Simulator",
+      "description": "Configure the Cardputer Zero desktop simulator on Linux.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/simulator",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-test-debug",
+      "displayName": "Linux Debug Tests",
+      "description": "Configure Linux-shell smoke tests on Linux.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/test",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-vs2022-debug-build-simulator",
+      "displayName": "Build Windows Simulator",
+      "configurePreset": "windows-vs2022-debug",
+      "configuration": "Debug",
+      "targets": [
+        "trailmate_cardputer_zero_simulator"
+      ]
+    },
+    {
+      "name": "windows-vs2022-debug-build-tests",
+      "displayName": "Build Windows Tests",
+      "configurePreset": "windows-vs2022-test-debug",
+      "configuration": "Debug",
+      "targets": [
+        "trailmate_cardputer_zero_smoke",
+        "trailmate_cardputer_zero_runtime_smoke"
+      ]
+    },
+    {
+      "name": "linux-simulator-debug-build",
+      "displayName": "Build Linux Simulator",
+      "configurePreset": "linux-simulator-debug",
+      "targets": [
+        "trailmate_cardputer_zero_simulator"
+      ]
+    },
+    {
+      "name": "linux-test-debug-build",
+      "displayName": "Build Linux Tests",
+      "configurePreset": "linux-test-debug",
+      "targets": [
+        "trailmate_cardputer_zero_smoke",
+        "trailmate_cardputer_zero_runtime_smoke"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-vs2022-debug-test",
+      "displayName": "Run Windows Tests",
+      "configurePreset": "windows-vs2022-test-debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-debug-test",
+      "displayName": "Run Linux Tests",
+      "configurePreset": "linux-test-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

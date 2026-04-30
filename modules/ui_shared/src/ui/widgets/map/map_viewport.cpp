@@ -716,25 +716,10 @@ bool focus_tile_available(const Model& model)
     latLngToTile(transformed.lat, transformed.lon, model.zoom, tile_x, tile_y);
     normalize_tile(model.zoom, tile_x, tile_y);
 
-    char path[96];
-    if (!build_base_tile_path(model.zoom,
-                              tile_x,
-                              tile_y,
-                              sanitize_map_source(model.map_source),
-                              path,
-                              sizeof(path)))
-    {
-        return false;
-    }
-
-    lv_fs_file_t file;
-    const lv_fs_res_t res = lv_fs_open(&file, path, LV_FS_MODE_RD);
-    if (res != LV_FS_RES_OK)
-    {
-        return false;
-    }
-    lv_fs_close(&file);
-    return true;
+    return base_tile_available(model.zoom,
+                               tile_x,
+                               tile_y,
+                               sanitize_map_source(model.map_source));
 }
 
 Status status(const Runtime& runtime)

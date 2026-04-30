@@ -38,13 +38,13 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
     if (gps_disabled_)
     {
         gps_ready_ = false;
+        user_enabled_ = false;
         return;
     }
     gps_ready_ = gps_adapter_.isReady();
     if (!gps_ready_)
     {
-        Serial.printf("[GPS] service inactive reason=adapter_not_ready\n");
-        return;
+        Serial.printf("[GPS] service starting reason=adapter_not_ready_waiting_retry\n");
     }
 
     motion_adapter_.begin(motion_board);
@@ -95,8 +95,6 @@ void GpsService::begin(GpsBoard& gps_board, MotionBoard& motion_board,
             log_d("Motion manager task created successfully");
         }
     }
-
-    updateMotionState(millis());
 }
 
 GpsState GpsService::getData()
@@ -174,6 +172,32 @@ uint32_t GpsService::getLastMotionMs() const
     return motion_policy_.lastMotionMs();
 }
 
+void GpsService::setEnabled(bool enabled)
+{
+    if (gps_disabled_)
+    {
+        user_enabled_ = false;
+        return;
+    }
+
+    user_enabled_ = enabled;
+    if (!enabled)
+    {
+        setGPSPowerState(false);
+        if (gps_data_mutex_ != NULL && xSemaphoreTake(gps_data_mutex_, portMAX_DELAY) == pdTRUE)
+        {
+            gps_state_ = GpsState{};
+            gnss_sat_count_ = 0;
+            gnss_status_ = GnssStatus{};
+            gps_last_update_time_ = 0;
+            xSemaphoreGive(gps_data_mutex_);
+        }
+        return;
+    }
+
+    updateMotionState(millis());
+}
+
 void GpsService::setCollectionInterval(uint32_t interval_ms)
 {
     interval_ms = normalizeCollectionInterval(interval_ms);
@@ -236,19 +260,10 @@ void GpsService::setGnssConfig(uint8_t mode, uint8_t sat_mask)
     }
 }
 
-void GpsService::setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
+void GpsService::setExternalNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
 {
-    runtime_config_.setNmeaConfig(output_hz, sentence_mask);
-
-    if (!isEnabled() || gps_board_ == nullptr)
-    {
-        return;
-    }
-
-    if (gps_powered_)
-    {
-        applyNmeaConfig();
-    }
+    runtime_config_.setExternalNmeaConfig(output_hz, sentence_mask);
+    runtime_config_.markExternalNmeaConfigApplied();
 }
 
 void GpsService::setMotionConfig(const MotionConfig& config)
@@ -303,22 +318,16 @@ void GpsService::applyGnssConfig()
     runtime_config_.markGnssConfigApplied();
 }
 
-void GpsService::applyNmeaConfig()
+void GpsService::applyInternalNmeaConfig()
 {
-    if (!runtime_config_.hasPendingNmeaConfig())
-    {
-        return;
-    }
     if (!isEnabled() || gps_board_ == nullptr)
     {
         return;
     }
-    const NmeaRuntimeConfig& nmea_config = runtime_config_.nmeaConfig();
-    if (!gps_adapter_.applyNmeaConfig(nmea_config.output_hz, nmea_config.sentence_mask))
+    if (!gps_adapter_.applyNmeaConfig(1, 0))
     {
         return;
     }
-    runtime_config_.markNmeaConfigApplied();
 }
 
 void GpsService::setMotionIdleTimeout(uint32_t timeout_ms)
@@ -358,6 +367,7 @@ void GpsService::gpsTask(void* pvParameters)
         loop_count++;
         uint32_t now_ms = millis();
         bool gps_ready = service->gps_adapter_.isReady();
+        service->gps_ready_ = gps_ready;
 
         if (service->motion_adapter_.isReady() && service->motion_policy_.isEnabled())
         {
@@ -535,11 +545,15 @@ void GpsService::gpsTask(void* pvParameters)
                 if (retry_result)
                 {
                     GPS_TASK_LOG("[GPS Task] *** GPS REINITIALIZATION SUCCESSFUL *** (loop %lu)\n", loop_count);
+                    service->gps_ready_ = true;
+                    const GnssRuntimeConfig gnss_config = service->runtime_config_.gnssConfig();
+                    service->runtime_config_.setGnssConfig(gnss_config.mode, gnss_config.sat_mask);
                     service->applyGnssConfig();
-                    service->applyNmeaConfig();
+                    service->applyInternalNmeaConfig();
                 }
                 else
                 {
+                    service->gps_ready_ = false;
                     GPS_TASK_LOG("[GPS Task] GPS reinitialization failed, will retry in %lu ms (loop %lu)\n",
                                  RETRY_INTERVAL_MS, loop_count);
                 }
@@ -598,10 +612,16 @@ void GpsService::setGPSPowerState(bool enable)
         gps_adapter_.powerOn();
         gps_powered_ = true;
         bool init_ok = gps_adapter_.init();
+        gps_ready_ = gps_adapter_.isReady() || init_ok;
         Serial.printf("[GPS] init: %s\n", init_ok ? "OK" : "FAIL");
         setCollectionInterval(kMinGpsCollectionIntervalMs);
-        applyGnssConfig();
-        applyNmeaConfig();
+        if (gps_ready_)
+        {
+            const GnssRuntimeConfig gnss_config = runtime_config_.gnssConfig();
+            runtime_config_.setGnssConfig(gnss_config.mode, gnss_config.sat_mask);
+            applyGnssConfig();
+            applyInternalNmeaConfig();
+        }
         if (gps_task_handle_ != nullptr)
         {
             vTaskResume(gps_task_handle_);
@@ -619,12 +639,13 @@ void GpsService::setGPSPowerState(bool enable)
         }
         gps_adapter_.powerOff();
         gps_powered_ = false;
+        gps_ready_ = false;
     }
 }
 
 void GpsService::updateMotionState(uint32_t now_ms)
 {
-    if (gps_disabled_ || gps_board_ == nullptr)
+    if (gps_disabled_ || !user_enabled_ || gps_board_ == nullptr)
     {
         return;
     }

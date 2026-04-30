@@ -2,7 +2,6 @@
 
 #include "board/GpsBoard.h"
 #include "board/TLoRaPagerTypes.h"
-#include "pins_arduino.h"
 #include "platform/esp/arduino_common/gps/GPS.h"
 
 namespace hal
@@ -43,9 +42,8 @@ void HalGps::powerOff()
     {
         return;
     }
-    Serial1.end();
+    board_->deinitGPS();
     board_->powerControl(POWER_GPS, false);
-    board_->setGPSOnline(false);
 }
 
 uint32_t HalGps::loop()

@@ -141,3 +141,23 @@ extern "C" bool trail_mate_tab5_display_runtime_is_ready(void)
 {
     return s_ready;
 }
+
+extern "C" bool trail_mate_tab5_display_lock(uint32_t timeout_ms)
+{
+    return bsp_display_lock(timeout_ms);
+}
+
+extern "C" void trail_mate_tab5_display_unlock(void)
+{
+    bsp_display_unlock();
+}
+
+extern "C" void trail_mate_tab5_set_ext_5v_enabled(bool enabled)
+{
+    bsp_set_ext_5v_en(enabled);
+}
+
+extern "C" void trail_mate_tab5_set_wifi_power_enabled(bool enabled)
+{
+    bsp_set_wifi_power_enable(enabled);
+}

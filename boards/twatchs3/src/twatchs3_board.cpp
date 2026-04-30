@@ -101,6 +101,7 @@ uint32_t TWatchS3Board::begin(uint32_t disable_hw_init)
     LilyGoDispArduinoSPI::setRotation(2);
     rotation_ = LilyGoDispArduinoSPI::getRotation();
     display_ready_ = true;
+    setBrightness(brightness_);
     Serial.printf("[TWatchS3Board] display init OK: %ux%u\n", LilyGoDispArduinoSPI::_width, LilyGoDispArduinoSPI::_height);
 #else
     Serial.println("[TWatchS3Board] display init skipped: missing DISP_* pins");
@@ -385,6 +386,11 @@ void TWatchS3Board::clearRadioIrqFlags(uint32_t flags)
 float TWatchS3Board::getRadioRSSI()
 {
     return radio_.getRSSI();
+}
+
+float TWatchS3Board::getRadioInstantRSSI()
+{
+    return radio_.getRSSI(false);
 }
 
 float TWatchS3Board::getRadioSNR()

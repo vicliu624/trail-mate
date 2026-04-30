@@ -469,7 +469,7 @@ bool MeshtasticBleService::start()
         team->addIncomingDataObserver(this);
     }
 
-    phone_session_.reset(new MeshtasticPhoneSession(ctx_, *this, this));
+    phone_session_.reset(new MeshtasticPhoneSession(*this, *this, this, this, this, this, this, this));
     if (!phone_session_)
     {
         ble_log("start failed reason=phone_session_alloc");

@@ -1,4 +1,4 @@
-#if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4) || defined(TRAIL_MATE_ESP_BOARD_TAB5)
 
 #include "platform/ui/wifi_runtime.h"
 
@@ -16,7 +16,13 @@ constexpr const char* kSettingsNs = "settings";
 constexpr const char* kWifiEnabledKey = "wifi_enabled";
 constexpr const char* kWifiSsidKey = "wifi_ssid";
 constexpr const char* kWifiPasswordKey = "wifi_password";
-constexpr const char* kUnsupportedMessage = "Wi-Fi is handled by the external C6 firmware on T-Display-P4";
+#if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+constexpr const char* kUnsupportedMessage =
+    "Wi-Fi is handled by the external C6 firmware on T-Display-P4";
+#else
+constexpr const char* kUnsupportedMessage =
+    "Wi-Fi is not wired into the current Tab5 ESP-IDF target";
+#endif
 
 void copy_text(char* out, std::size_t out_len, const char* text)
 {

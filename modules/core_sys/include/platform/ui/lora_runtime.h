@@ -20,7 +20,7 @@ bool is_supported();
 bool acquire();
 bool is_online();
 bool configure_receive(float freq_mhz, const ReceiveConfig& config);
-float read_rssi();
+float read_instant_rssi();
 void release();
 
 } // namespace platform::ui::lora

@@ -2,6 +2,7 @@
 
 #include "ble/ble_uuids.h"
 #include "ble/bluefruit_runtime.h"
+#include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
 
 #include <Arduino.h>
 #include <cstdlib>
@@ -146,7 +147,7 @@ MeshCoreBleService::MeshCoreBleService(app::IAppBleFacade& ctx, const std::strin
       service_(::BLEUuid(NUS_SERVICE_UUID)),
       rx_char_(::BLEUuid(NUS_CHAR_RX_UUID)),
       tx_char_(::BLEUuid(NUS_CHAR_TX_UUID)),
-      core_(new MeshCorePhoneCore(ctx, device_name, this))
+      core_(new MeshCorePhoneCore(*this, device_name, this))
 {
 }
 
@@ -296,11 +297,12 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
 
     out->clear();
 
-    const auto& cfg = ctx_.getConfig();
-    appendCustomVar(*out, "node_name", cfg.node_name);
-    appendCustomVar(*out, "channel_name", cfg.meshcore_config.meshcore_channel_name);
-    appendCustomVar(*out, "multi_acks", cfg.meshcore_config.meshcore_multi_acks ? "1" : "0");
-    appendCustomVar(*out, "gps", cfg.gps_strategy == 2 ? "0" : "1");
+    const auto mesh_cfg = getMeshCorePhoneConfig();
+    const auto mt_cfg = getMeshtasticPhoneConfig();
+    appendCustomVar(*out, "node_name", mesh_cfg.node_name);
+    appendCustomVar(*out, "channel_name", mesh_cfg.mesh.meshcore_channel_name);
+    appendCustomVar(*out, "multi_acks", mesh_cfg.mesh.meshcore_multi_acks ? "1" : "0");
+    appendCustomVar(*out, "gps", mt_cfg.gps_enabled ? "1" : "0");
 
     // Keep the variable surface compatible with the MeshCore app even if
     // nRF52 doesn't implement every extended option yet.
@@ -321,28 +323,36 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
         return false;
     }
 
-    auto& cfg = ctx_.getConfig();
+    auto mesh_cfg = getMeshCorePhoneConfig();
+    auto mt_cfg = getMeshtasticPhoneConfig();
     bool changed = false;
+    bool mesh_changed = false;
+    bool mt_changed = false;
+    bool position_changed = false;
 
     if (std::strcmp(key, "node_name") == 0)
     {
-        char next[sizeof(cfg.node_name)] = {};
+        char next[sizeof(mesh_cfg.node_name)] = {};
         copyBounded(next, sizeof(next), value);
-        if (std::strcmp(cfg.node_name, next) != 0)
+        if (std::strcmp(mesh_cfg.node_name, next) != 0)
         {
-            copyBounded(cfg.node_name, sizeof(cfg.node_name), next);
+            copyBounded(mesh_cfg.node_name, sizeof(mesh_cfg.node_name), next);
+            copyBounded(mt_cfg.node_name, sizeof(mt_cfg.node_name), next);
             changed = true;
+            mesh_changed = true;
+            mt_changed = true;
         }
     }
     else if (std::strcmp(key, "channel_name") == 0)
     {
-        char next[sizeof(cfg.meshcore_config.meshcore_channel_name)] = {};
+        char next[sizeof(mesh_cfg.mesh.meshcore_channel_name)] = {};
         copyBounded(next, sizeof(next), value);
-        if (std::strcmp(cfg.meshcore_config.meshcore_channel_name, next) != 0)
+        if (std::strcmp(mesh_cfg.mesh.meshcore_channel_name, next) != 0)
         {
-            copyBounded(cfg.meshcore_config.meshcore_channel_name,
-                        sizeof(cfg.meshcore_config.meshcore_channel_name), next);
+            copyBounded(mesh_cfg.mesh.meshcore_channel_name,
+                        sizeof(mesh_cfg.mesh.meshcore_channel_name), next);
             changed = true;
+            mesh_changed = true;
         }
     }
     else if (std::strcmp(key, "multi_acks") == 0)
@@ -352,10 +362,11 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
         {
             return false;
         }
-        if (cfg.meshcore_config.meshcore_multi_acks != parsed)
+        if (mesh_cfg.mesh.meshcore_multi_acks != parsed)
         {
-            cfg.meshcore_config.meshcore_multi_acks = parsed;
+            mesh_cfg.mesh.meshcore_multi_acks = parsed;
             changed = true;
+            mesh_changed = true;
         }
     }
     else if (std::strcmp(key, "gps") == 0)
@@ -365,11 +376,12 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
         {
             return false;
         }
-        const uint8_t next_strategy = parsed ? (cfg.gps_strategy == 2 ? 0 : cfg.gps_strategy) : 2;
-        if (cfg.gps_strategy != next_strategy)
+        if (mt_cfg.gps_enabled != parsed)
         {
-            cfg.gps_strategy = next_strategy;
+            mt_cfg.gps_enabled = parsed;
             changed = true;
+            mt_changed = true;
+            position_changed = true;
         }
     }
     else if (std::strcmp(key, "manual_add_contacts") == 0 ||
@@ -390,9 +402,41 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
 
     if (changed)
     {
+        if (mesh_changed)
+        {
+            setMeshCorePhoneConfig(mesh_cfg);
+        }
+        if (mt_changed)
+        {
+            setMeshtasticPhoneConfig(mt_cfg);
+        }
         ctx_.saveConfig();
     }
+    if (position_changed)
+    {
+        ctx_.applyPositionConfig();
+    }
     return true;
+}
+
+MeshtasticPhoneConfigSnapshot MeshCoreBleService::getMeshtasticPhoneConfig() const
+{
+    return platform::shared::ble_bridge::makeMeshtasticPhoneConfigSnapshot(ctx_.getConfig());
+}
+
+void MeshCoreBleService::setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config)
+{
+    platform::shared::ble_bridge::applyMeshtasticPhoneConfigSnapshot(ctx_.getConfig(), config);
+}
+
+MeshCorePhoneConfigSnapshot MeshCoreBleService::getMeshCorePhoneConfig() const
+{
+    return platform::shared::ble_bridge::makeMeshCorePhoneConfigSnapshot(ctx_.getConfig());
+}
+
+void MeshCoreBleService::setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config)
+{
+    platform::shared::ble_bridge::applyMeshCorePhoneConfigSnapshot(ctx_.getConfig(), config);
 }
 
 } // namespace ble

@@ -641,6 +641,13 @@ void Gat562Board::setGpsCollectionInterval(uint32_t interval_ms)
         gps_runtime_->setCollectionInterval(interval_ms);
     }
 }
+void Gat562Board::setGpsEnabled(bool enabled)
+{
+    if (gps_runtime_)
+    {
+        gps_runtime_->setEnabled(enabled);
+    }
+}
 void Gat562Board::setGpsPowerStrategy(uint8_t strategy)
 {
     if (gps_runtime_)
@@ -655,11 +662,11 @@ void Gat562Board::setGpsConfig(uint8_t mode, uint8_t sat_mask)
         gps_runtime_->setConfig(mode, sat_mask);
     }
 }
-void Gat562Board::setGpsNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
+void Gat562Board::setGpsExternalNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
 {
     if (gps_runtime_)
     {
-        gps_runtime_->setNmeaConfig(output_hz, sentence_mask);
+        gps_runtime_->setExternalNmeaConfig(output_hz, sentence_mask);
     }
 }
 void Gat562Board::setGpsMotionIdleTimeout(uint32_t timeout_ms)

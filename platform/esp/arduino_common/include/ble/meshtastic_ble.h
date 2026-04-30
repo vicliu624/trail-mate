@@ -29,7 +29,13 @@ class MeshtasticBleService : public BleService,
                              public chat::ChatService::OutgoingTextObserver,
                              public team::TeamService::IncomingDataObserver,
                              public MeshtasticPhoneTransport,
-                             public MeshtasticPhoneHooks
+                             public MeshtasticPhoneBluetoothConfigHooks,
+                             public MeshtasticPhoneModuleConfigHooks,
+                             public MeshtasticPhoneConfigLifecycleHooks,
+                             public MeshtasticPhoneStatusHooks,
+                             public MeshtasticPhoneMqttHooks,
+                             public MeshtasticPhoneDeviceRuntimeHooks,
+                             public IPhoneRuntimeContext
 {
   public:
     MeshtasticBleService(app::IAppBleFacade& ctx, const std::string& device_name);
@@ -49,6 +55,44 @@ class MeshtasticBleService : public BleService,
     bool loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const override;
     bool loadModuleConfig(meshtastic_LocalModuleConfig* out) const override;
     void saveModuleConfig(const meshtastic_LocalModuleConfig& config) override;
+    bool loadTimezoneTzdef(char* out, size_t out_len) const override;
+    void saveTimezoneTzdef(const char* tzdef) override;
+    int getTimezoneOffsetMinutes() const override;
+    void setTimezoneOffsetMinutes(int offset_min) override;
+    bool getGpsFix(MeshtasticGpsFix* out) const override;
+    MeshtasticPhoneConfigSnapshot getMeshtasticPhoneConfig() const override;
+    void setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config) override;
+    MeshCorePhoneConfigSnapshot getMeshCorePhoneConfig() const override;
+    void setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config) override;
+    void saveConfig() override { ctx_.saveConfig(); }
+    void applyMeshConfig() override { ctx_.applyMeshConfig(); }
+    void applyUserInfo() override { ctx_.applyUserInfo(); }
+    void applyPositionConfig() override { ctx_.applyPositionConfig(); }
+    void getEffectiveUserInfo(char* out_long,
+                              std::size_t long_len,
+                              char* out_short,
+                              std::size_t short_len) const override
+    {
+        ctx_.getEffectiveUserInfo(out_long, long_len, out_short, short_len);
+    }
+    chat::ChatService& getChatService() override { return ctx_.getChatService(); }
+    chat::contacts::ContactService& getContactService() override { return ctx_.getContactService(); }
+    chat::IMeshAdapter* getMeshAdapter() override { return ctx_.getMeshAdapter(); }
+    const chat::IMeshAdapter* getMeshAdapter() const override { return ctx_.getMeshAdapter(); }
+    chat::contacts::INodeStore* getNodeStore() override { return ctx_.getNodeStore(); }
+    const chat::contacts::INodeStore* getNodeStore() const override { return ctx_.getNodeStore(); }
+    chat::NodeId getSelfNodeId() const override { return ctx_.getSelfNodeId(); }
+    bool isBleEnabled() const override { return ctx_.isBleEnabled(); }
+    void setBleEnabled(bool enabled) override { ctx_.setBleEnabled(enabled); }
+    bool getDeviceMacAddress(uint8_t out_mac[6]) const override { return ctx_.getDeviceMacAddress(out_mac); }
+    bool syncCurrentEpochSeconds(uint32_t epoch_seconds) override
+    {
+        return ctx_.syncCurrentEpochSeconds(epoch_seconds);
+    }
+    void resetMeshConfig() override { ctx_.resetMeshConfig(); }
+    void clearNodeDb() override { ctx_.clearNodeDb(); }
+    void clearMessageDb() override { ctx_.clearMessageDb(); }
+    void restartDevice() override { ctx_.restartDevice(); }
     bool handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg) override;
     bool pollMqttProxyToPhone(meshtastic_MqttClientProxyMessage* out) override;
     void onConfigStart() override;

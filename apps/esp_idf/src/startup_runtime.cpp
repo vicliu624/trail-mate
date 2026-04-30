@@ -44,22 +44,28 @@ void applyPlatformRuntimeConfig(const RuntimeConfig& config)
     }
 
     const app::AppConfig& app_config = app::appFacade().getConfig();
+    platform::ui::gps::set_enabled(app_config.gps_enabled);
     platform::ui::gps::set_collection_interval(app_config.gps_interval_ms);
     platform::ui::gps::set_power_strategy(app_config.gps_strategy);
     platform::ui::gps::set_gnss_config(app_config.gps_mode, app_config.gps_sat_mask);
-    platform::ui::gps::set_nmea_config(app_config.privacy_nmea_output, app_config.privacy_nmea_sentence);
+    platform::ui::gps::set_external_nmea_config(app_config.external_nmea_output_hz,
+                                                app_config.external_nmea_sentence_mask);
     platform::ui::gps::set_motion_idle_timeout(app_config.motion_config.idle_timeout_ms);
     platform::ui::gps::set_motion_sensor_id(app_config.motion_config.sensor_id);
-    platform::esp::idf_common::gps_runtime::request_startup_probe();
+    if (app_config.gps_enabled)
+    {
+        platform::esp::idf_common::gps_runtime::request_startup_probe();
+    }
 
     ESP_LOGI(config.log_tag,
-             "GNSS runtime config applied: interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u nmea=%u/%u motion_idle_ms=%lu sensor=%u",
+             "GNSS runtime config applied: enabled=%d interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u external_nmea=%u/%u motion_idle_ms=%lu sensor=%u",
+             app_config.gps_enabled ? 1 : 0,
              static_cast<unsigned long>(app_config.gps_interval_ms),
              app_config.gps_mode,
              app_config.gps_sat_mask,
              app_config.gps_strategy,
-             app_config.privacy_nmea_output,
-             app_config.privacy_nmea_sentence,
+             app_config.external_nmea_output_hz,
+             app_config.external_nmea_sentence_mask,
              static_cast<unsigned long>(app_config.motion_config.idle_timeout_ms),
              app_config.motion_config.sensor_id);
 }

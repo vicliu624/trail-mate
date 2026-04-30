@@ -81,7 +81,9 @@ bool LilyGoDispArduinoSPI::init(int sck,
     if (_backlight != -1)
     {
         pinMode(_backlight, OUTPUT);
-        digitalWrite(_backlight, HIGH);
+        // Keep the panel dark until init commands and the first clear frame finish,
+        // otherwise some ST77xx boards briefly show uninitialized garbage.
+        digitalWrite(_backlight, LOW);
     }
 
     _spi->begin(sck, miso, mosi);
@@ -101,6 +103,10 @@ bool LilyGoDispArduinoSPI::init(int sck,
 
     std::vector<uint16_t> draw_buf(_width * _height, 0x0000);
     pushColors(0, 0, _width, _height, draw_buf.data());
+    if (_backlight != -1)
+    {
+        digitalWrite(_backlight, (_brightness > 0) ? HIGH : LOW);
+    }
     xSemaphoreGive(_lock);
     return true;
 }

@@ -93,12 +93,14 @@ class TDeckProBoard : public BoardBase,
     int readRadioData(uint8_t* buf, size_t len) override;
     void clearRadioIrqFlags(uint32_t flags) override;
     float getRadioRSSI() override;
+    float getRadioInstantRSSI() override;
     float getRadioSNR() override;
     void configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf, uint8_t cr_denom,
                             int8_t tx_power, uint16_t preamble_len, uint8_t sync_word,
                             uint8_t crc_len) override;
 
     bool initGPS() override;
+    void deinitGPS() override;
     void setGPSOnline(bool online) override { gps_ready_ = online; }
     GPS& getGPS() override { return gps_; }
     void powerControl(PowerCtrlChannel_t ch, bool enable) override;
