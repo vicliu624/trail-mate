@@ -6,6 +6,7 @@
 #include "ui/localization.h"
 #include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
+#include <Arduino.h>
 #include <cstdio>
 
 namespace
