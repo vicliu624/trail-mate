@@ -79,6 +79,7 @@ cmake -S "$ROOT_DIR" -B "$TEST_BUILD_DIR" "${GENERATOR_ARGS[@]}" \
 
 print_step "Building Linux-shell tests"
 cmake --build "$TEST_BUILD_DIR" --target trailmate_cardputer_zero_smoke --config "$BUILD_TYPE"
+cmake --build "$TEST_BUILD_DIR" --target trailmate_cardputer_zero_runtime_smoke --config "$BUILD_TYPE"
 
 print_step "Running Linux-shell tests"
 ctest --test-dir "$TEST_BUILD_DIR" --build-config "$BUILD_TYPE" --output-on-failure
