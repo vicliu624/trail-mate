@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -18,7 +18,8 @@ namespace platform::ui::settings_store
 namespace
 {
 
-enum class ValueKind : char {
+enum class ValueKind : char
+{
     Int = 'i',
     Bool = 'b',
     Uint = 'u',

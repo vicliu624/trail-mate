@@ -5,7 +5,8 @@
 #include <cstring>
 #include <unistd.h>
 
-namespace {
+namespace
+{
 
 const char* getenvDefault(const char* name, const char* fallback)
 {
@@ -15,25 +16,30 @@ const char* getenvDefault(const char* name, const char* fallback)
 
 int detectSt7789vFramebuffer(char* dev_path, std::size_t buf_size)
 {
-    if (dev_path == nullptr || buf_size == 0U) {
+    if (dev_path == nullptr || buf_size == 0U)
+    {
         return -1;
     }
 
     FILE* fp = std::fopen("/proc/fb", "r");
-    if (fp == nullptr) {
+    if (fp == nullptr)
+    {
         return -1;
     }
 
     char line[256];
     int fb_num = -1;
-    while (std::fgets(line, sizeof(line), fp) != nullptr) {
-        if (std::strstr(line, "fb_st7789v") != nullptr && std::sscanf(line, "%d", &fb_num) == 1) {
+    while (std::fgets(line, sizeof(line), fp) != nullptr)
+    {
+        if (std::strstr(line, "fb_st7789v") != nullptr && std::sscanf(line, "%d", &fb_num) == 1)
+        {
             break;
         }
     }
 
     std::fclose(fp);
-    if (fb_num < 0) {
+    if (fb_num < 0)
+    {
         return -1;
     }
 
@@ -66,8 +72,7 @@ void createBringupUi()
         body,
         "This shell intentionally uses M5Stack_Linux_Libs for device-facing LVGL, "
         "fbdev and input bring-up. Trail Mate feature migration will layer on top "
-        "of this SDK-backed runtime instead of copying UserDemo's app structure."
-    );
+        "of this SDK-backed runtime instead of copying UserDemo's app structure.");
     lv_obj_set_style_text_color(body, lv_color_hex(0xCBD5E1), 0);
     lv_obj_set_style_text_font(body, &lv_font_montserrat_14, 0);
     lv_obj_align(body, LV_ALIGN_TOP_LEFT, 14, 66);
@@ -78,8 +83,7 @@ void createBringupUi()
     lv_label_set_text(
         hint,
         "Set LV_LINUX_FBDEV_DEVICE or let the runtime auto-detect fb_st7789v. "
-        "Set LV_LINUX_KEYBOARD_DEVICE if evdev keyboard probing needs override."
-    );
+        "Set LV_LINUX_KEYBOARD_DEVICE if evdev keyboard probing needs override.");
     lv_obj_set_style_text_color(hint, lv_color_hex(0xFCD34D), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_12, 0);
     lv_obj_align(hint, LV_ALIGN_BOTTOM_LEFT, 14, -12);
@@ -89,16 +93,17 @@ void createBringupUi()
 void initLinuxInput(lv_display_t* display)
 {
     const char* pointer_device = std::getenv("LV_LINUX_MOUSE_DEVICE");
-    if (pointer_device != nullptr && pointer_device[0] != '\0') {
+    if (pointer_device != nullptr && pointer_device[0] != '\0')
+    {
         lv_indev_t* pointer = lv_evdev_create(LV_INDEV_TYPE_POINTER, pointer_device);
         lv_indev_set_display(pointer, display);
     }
 
     const char* keyboard_device = getenvDefault(
         "LV_LINUX_KEYBOARD_DEVICE",
-        "/dev/input/by-path/platform-3f804000.i2c-event"
-    );
-    if (keyboard_device != nullptr && keyboard_device[0] != '\0') {
+        "/dev/input/by-path/platform-3f804000.i2c-event");
+    if (keyboard_device != nullptr && keyboard_device[0] != '\0')
+    {
         lv_indev_t* keyboard = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, keyboard_device);
         lv_indev_set_display(keyboard, display);
     }
@@ -110,16 +115,19 @@ void initLinuxDisplay()
 {
     char detected_path[64] = {0};
     const char* device = std::getenv("LV_LINUX_FBDEV_DEVICE");
-    if ((device == nullptr || device[0] == '\0') && detectSt7789vFramebuffer(detected_path, sizeof(detected_path)) == 0) {
+    if ((device == nullptr || device[0] == '\0') && detectSt7789vFramebuffer(detected_path, sizeof(detected_path)) == 0)
+    {
         device = detected_path;
     }
-    if (device == nullptr || device[0] == '\0') {
+    if (device == nullptr || device[0] == '\0')
+    {
         device = "/dev/fb0";
     }
 
     std::printf("Using framebuffer device: %s\n", device);
     lv_display_t* display = lv_linux_fbdev_create();
-    if (display == nullptr) {
+    if (display == nullptr)
+    {
         std::fprintf(stderr, "Failed to create Linux fbdev display\n");
         std::exit(1);
     }
@@ -137,7 +145,8 @@ void initLinuxDisplay()
     const int height = std::atoi(getenvDefault("LV_SDL_VIDEO_HEIGHT", "170"));
 
     lv_display_t* display = lv_sdl_window_create(width, height);
-    if (display == nullptr) {
+    if (display == nullptr)
+    {
         std::fprintf(stderr, "Failed to create SDL display\n");
         std::exit(1);
     }
@@ -157,7 +166,8 @@ int main()
     initLinuxDisplay();
     createBringupUi();
 
-    while (true) {
+    while (true)
+    {
         lv_timer_handler();
         usleep(1000);
     }

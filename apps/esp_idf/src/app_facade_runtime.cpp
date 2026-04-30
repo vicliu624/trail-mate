@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "platform/esp/boards/board_runtime.h"
 #include "platform/ui/gps_runtime.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "sys/clock.h"
 #include "sys/event_bus.h"
 #include "team/usecase/team_controller.h"
@@ -21,7 +22,6 @@
 #include "team/usecase/team_service.h"
 #include "ui/chat_ui_runtime.h"
 #include "ui/screens/team/team_page_shell.h"
-#include "platform/ui/team_ui_store_runtime.h"
 
 #include <algorithm>
 #include <array>

@@ -1177,7 +1177,6 @@ void setup_radio_context()
         s_radio.cr = (mesh.coding_rate >= 5 && mesh.coding_rate <= 8) ? mesh.coding_rate : 5;
         s_radio.tx_power = mesh.tx_power;
     }
-
 }
 
 void teardown_radio_context()

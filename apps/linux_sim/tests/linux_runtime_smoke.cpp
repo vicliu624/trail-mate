@@ -1,7 +1,6 @@
 #include "app/linux_app_facade.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
-#include "platform/ui/team_ui_store_runtime.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/firmware_update_runtime.h"
 #include "platform/ui/gps_runtime.h"
@@ -12,6 +11,7 @@
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/sstv_runtime.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "platform/ui/time_runtime.h"
 #include "platform/ui/tracker_runtime.h"
 #include "platform/ui/usb_support_runtime.h"
@@ -22,8 +22,8 @@
 
 #include <cassert>
 #include <cmath>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <ctime>
 #include <filesystem>
 #include <fstream>

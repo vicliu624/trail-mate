@@ -7,11 +7,11 @@
 #include "hostlink/hostlink_event_codec.h"
 #include "hostlink/hostlink_types.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_service.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "team/protocol/team_chat.h"
 #include "team/protocol/team_mgmt.h"
 #include "team/protocol/team_portnum.h"
 #include "team/protocol/team_waypoint.h"
-#include "platform/ui/team_ui_store_runtime.h"
 
 #include <algorithm>
 #include <string>

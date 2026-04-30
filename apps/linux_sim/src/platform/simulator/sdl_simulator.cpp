@@ -1,8 +1,8 @@
 #include "platform/simulator/sdl_simulator.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
@@ -20,8 +20,10 @@
 #include "core/canvas.h"
 #include "core/display_profile.h"
 
-namespace trailmate::cardputer_zero::platform::simulator {
-namespace {
+namespace trailmate::cardputer_zero::platform::simulator
+{
+namespace
+{
 
 using core::rgba;
 
@@ -94,19 +96,22 @@ constexpr auto kPowerRed = rgba(221, 69, 63);
 constexpr auto kPowerRedPressed = rgba(245, 96, 88);
 constexpr auto kPanelDark = rgba(70, 74, 79);
 
-enum class ButtonStyle {
+enum class ButtonStyle
+{
     Keyboard,
     Panel,
     Switch,
 };
 
-enum class LatchMode {
+enum class LatchMode
+{
     None,
     OneShot,
     Sticky,
 };
 
-enum class LegendSymbol {
+enum class LegendSymbol
+{
     None,
     ArrowLeft,
     ArrowRight,
@@ -116,7 +121,8 @@ enum class LegendSymbol {
     SpaceBar,
 };
 
-struct Rect {
+struct Rect
+{
     int x{};
     int y{};
     int width{};
@@ -128,7 +134,8 @@ struct Rect {
     }
 };
 
-struct KeyboardLegend {
+struct KeyboardLegend
+{
     std::string text{};
     core::Color color{rgba(40, 43, 47)};
     LegendSymbol symbol{LegendSymbol::None};
@@ -136,7 +143,8 @@ struct KeyboardLegend {
     core::Color badge_fill{rgba(0, 0, 0, 0)};
 };
 
-struct VirtualButton {
+struct VirtualButton
+{
     Rect bounds{};
     app::InputEvent event{};
     KeyboardLegend primary_legend{};
@@ -152,7 +160,8 @@ struct VirtualButton {
     std::string result{};
     result.reserve(value.size());
 
-    for (const char ch : value) {
+    for (const char ch : value)
+    {
         result.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
     }
 
@@ -161,7 +170,8 @@ struct VirtualButton {
 
 void requireSdl(bool condition, std::string_view step)
 {
-    if (!condition) {
+    if (!condition)
+    {
         throw std::runtime_error(std::string(step) + ": " + SDL_GetError());
     }
 }
@@ -169,7 +179,8 @@ void requireSdl(bool condition, std::string_view step)
 template <typename T>
 T* requireSdl(T* pointer, std::string_view step)
 {
-    if (!pointer) {
+    if (!pointer)
+    {
         throw std::runtime_error(std::string(step) + ": " + SDL_GetError());
     }
 
@@ -178,7 +189,8 @@ T* requireSdl(T* pointer, std::string_view step)
 
 } // namespace
 
-struct SdlSimulator::Impl {
+struct SdlSimulator::Impl
+{
     SDL_Window* window{};
     SDL_Renderer* renderer{};
     SDL_Texture* texture{};
@@ -194,7 +206,8 @@ struct SdlSimulator::Impl {
 
 [[nodiscard]] bool isModifierKey(app::InputKey key) noexcept
 {
-    switch (key) {
+    switch (key)
+    {
     case app::InputKey::Fn:
     case app::InputKey::Ctrl:
     case app::InputKey::Alt:
@@ -240,10 +253,12 @@ void addKeyboardButton(
     button.secondary_legend = std::move(secondary_legend);
     button.style = ButtonStyle::Keyboard;
     button.event = std::move(event);
-    if (!button.event.label.empty()) {
+    if (!button.event.label.empty())
+    {
         button.highlight_aliases.push_back(button.event.label);
     }
-    for (const auto alias : aliases) {
+    for (const auto alias : aliases)
+    {
         button.highlight_aliases.emplace_back(alias);
     }
     buttons.push_back(std::move(button));
@@ -262,7 +277,8 @@ void addPanelButton(
     button.primary_legend = textLegend(std::move(primary), rgba(247, 247, 247));
     button.style = style;
     button.event = std::move(event);
-    for (const auto alias : aliases) {
+    for (const auto alias : aliases)
+    {
         button.highlight_aliases.emplace_back(alias);
     }
     buttons.push_back(std::move(button));
@@ -270,7 +286,8 @@ void addPanelButton(
 
 void buildKeyboardButtons(std::vector<VirtualButton>& buttons)
 {
-    const auto key_x = [](int column) noexcept {
+    const auto key_x = [](int column) noexcept
+    {
         return kKeyboardRowStartX + (column * (kKeyUnitWidth + kKeyGap));
     };
 
@@ -478,7 +495,8 @@ void drawLabelBlock(core::Canvas& canvas, int x, int y, std::string_view text, c
 
 [[nodiscard]] int symbolWidth(LegendSymbol symbol) noexcept
 {
-    switch (symbol) {
+    switch (symbol)
+    {
     case LegendSymbol::ArrowLeft:
     case LegendSymbol::ArrowRight:
     case LegendSymbol::ArrowUp:
@@ -498,13 +516,17 @@ void drawLabelBlock(core::Canvas& canvas, int x, int y, std::string_view text, c
 [[nodiscard]] int legendWidth(const KeyboardLegend& legend) noexcept
 {
     int width = 0;
-    if (!legend.text.empty()) {
+    if (!legend.text.empty())
+    {
         width = core::bitmap_font::measureText(legend.text, 1);
-    } else if (legend.symbol != LegendSymbol::None) {
+    }
+    else if (legend.symbol != LegendSymbol::None)
+    {
         width = symbolWidth(legend.symbol);
     }
 
-    if (legend.badge) {
+    if (legend.badge)
+    {
         width += 8;
     }
 
@@ -513,7 +535,8 @@ void drawLabelBlock(core::Canvas& canvas, int x, int y, std::string_view text, c
 
 void drawLegendSymbol(core::Canvas& canvas, int x, int y, LegendSymbol symbol, core::Color color)
 {
-    switch (symbol) {
+    switch (symbol)
+    {
     case LegendSymbol::ArrowLeft:
         canvas.fillRect(x + 3, y + 3, 8, 1, color);
         canvas.fillRect(x + 2, y + 2, 1, 3, color);
@@ -557,18 +580,21 @@ void drawLegendSymbol(core::Canvas& canvas, int x, int y, LegendSymbol symbol, c
 
 void drawKeyboardLegend(core::Canvas& canvas, int x, int y, const KeyboardLegend& legend)
 {
-    if (!hasLegend(legend)) {
+    if (!hasLegend(legend))
+    {
         return;
     }
 
     int content_x = x;
-    if (legend.badge) {
+    if (legend.badge)
+    {
         const int badge_width = legendWidth(legend);
         canvas.fillRect(x, y - 2, badge_width, 15, legend.badge_fill);
         content_x += 4;
     }
 
-    if (legend.symbol != LegendSymbol::None) {
+    if (legend.symbol != LegendSymbol::None)
+    {
         drawLegendSymbol(canvas, content_x, y + 1, legend.symbol, legend.color);
         return;
     }
@@ -591,7 +617,8 @@ void drawKeyboardButton(core::Canvas& canvas, const VirtualButton& button)
     int legend_x = button.bounds.x + ((button.bounds.width - legend_total_width) / 2);
 
     drawKeyboardLegend(canvas, legend_x, button.bounds.y, button.primary_legend);
-    if (has_secondary) {
+    if (has_secondary)
+    {
         legend_x += primary_width + legend_gap;
         drawKeyboardLegend(canvas, legend_x, button.bounds.y, button.secondary_legend);
     }
@@ -606,10 +633,13 @@ void drawPanelButton(core::Canvas& canvas, const VirtualButton& button)
     auto fill = kPanelDark;
     auto text = rgba(247, 247, 247);
 
-    if (button.style == ButtonStyle::Switch) {
+    if (button.style == ButtonStyle::Switch)
+    {
         fill = pressed ? kPowerRedPressed : kPowerRed;
         text = rgba(255, 255, 255);
-    } else if (pressed) {
+    }
+    else if (pressed)
+    {
         fill = rgba(90, 98, 110);
     }
 
@@ -625,10 +655,14 @@ void drawPanelButton(core::Canvas& canvas, const VirtualButton& button)
 
 void drawButtons(core::Canvas& canvas, const std::vector<VirtualButton>& buttons)
 {
-    for (const auto& button : buttons) {
-        if (button.style == ButtonStyle::Keyboard) {
+    for (const auto& button : buttons)
+    {
+        if (button.style == ButtonStyle::Keyboard)
+        {
             drawKeyboardButton(canvas, button);
-        } else {
+        }
+        else
+        {
             drawPanelButton(canvas, button);
         }
     }
@@ -701,9 +735,12 @@ void drawShell(core::Canvas& canvas, const core::Canvas& screen_canvas, const st
 void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view label)
 {
     const auto normalized = upperCopy(label);
-    for (auto& button : buttons) {
-        for (const auto& alias : button.highlight_aliases) {
-            if (upperCopy(alias) == normalized) {
+    for (auto& button : buttons)
+    {
+        for (const auto& alias : button.highlight_aliases)
+        {
+            if (upperCopy(alias) == normalized)
+            {
                 markPressed(button);
                 return;
             }
@@ -713,7 +750,8 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
 
 [[nodiscard]] int toDeviceCoordinate(float coordinate, int scale) noexcept
 {
-    if (scale <= 1) {
+    if (scale <= 1)
+    {
         return static_cast<int>(coordinate);
     }
 
@@ -722,15 +760,13 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
 
 [[nodiscard]] std::uint32_t packPixel(core::Color color) noexcept
 {
-    return (static_cast<std::uint32_t>(color.a) << 24U)
-        | (static_cast<std::uint32_t>(color.b) << 16U)
-        | (static_cast<std::uint32_t>(color.g) << 8U)
-        | static_cast<std::uint32_t>(color.r);
+    return (static_cast<std::uint32_t>(color.a) << 24U) | (static_cast<std::uint32_t>(color.b) << 16U) | (static_cast<std::uint32_t>(color.g) << 8U) | static_cast<std::uint32_t>(color.r);
 }
 
 [[nodiscard]] std::string characterLabel(char ch)
 {
-    if (ch == ' ') {
+    if (ch == ' ')
+    {
         return "SPACE";
     }
 
@@ -741,7 +777,8 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
 
 [[nodiscard]] std::optional<app::InputEvent> eventFromLegend(const KeyboardLegend& legend)
 {
-    switch (legend.symbol) {
+    switch (legend.symbol)
+    {
     case LegendSymbol::ArrowLeft:
         return app::InputEvent{app::InputKey::Left, "LEFT", '\0'};
     case LegendSymbol::ArrowRight:
@@ -756,21 +793,26 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
         break;
     }
 
-    if (legend.text.empty()) {
+    if (legend.text.empty())
+    {
         return std::nullopt;
     }
 
     const auto normalized = upperCopy(legend.text);
-    if (normalized == "ALT") {
+    if (normalized == "ALT")
+    {
         return app::InputEvent{app::InputKey::Alt, "ALT", '\0'};
     }
-    if (normalized == "DEL") {
+    if (normalized == "DEL")
+    {
         return app::InputEvent{app::InputKey::Backspace, "DEL", '\0'};
     }
-    if (normalized == "OK") {
+    if (normalized == "OK")
+    {
         return app::InputEvent{app::InputKey::Enter, "OK", '\0'};
     }
-    if (legend.text.size() == 1U) {
+    if (legend.text.size() == 1U)
+    {
         return app::makeCharacterInput(legend.text.front(), characterLabel(legend.text.front()));
     }
 
@@ -782,32 +824,42 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
     bool shift_active = false;
     bool fn_active = false;
 
-    for (const auto& candidate : buttons) {
-        if (!isLatched(candidate)) {
+    for (const auto& candidate : buttons)
+    {
+        if (!isLatched(candidate))
+        {
             continue;
         }
 
-        if (candidate.event.key == app::InputKey::Shift) {
+        if (candidate.event.key == app::InputKey::Shift)
+        {
             shift_active = true;
-        } else if (candidate.event.key == app::InputKey::Fn) {
+        }
+        else if (candidate.event.key == app::InputKey::Fn)
+        {
             fn_active = true;
         }
     }
 
-    if (fn_active) {
-        if (const auto alternate = eventFromLegend(button.secondary_legend)) {
+    if (fn_active)
+    {
+        if (const auto alternate = eventFromLegend(button.secondary_legend))
+        {
             return *alternate;
         }
     }
 
-    if (shift_active && button.event.key == app::InputKey::Character && button.event.text != '\0') {
+    if (shift_active && button.event.key == app::InputKey::Character && button.event.text != '\0')
+    {
         const unsigned char value = static_cast<unsigned char>(button.event.text);
-        if (std::isalpha(value)) {
+        if (std::isalpha(value))
+        {
             const char shifted = static_cast<char>(std::toupper(value));
             return app::makeCharacterInput(shifted, characterLabel(shifted));
         }
 
-        if (const auto alternate = eventFromLegend(button.secondary_legend)) {
+        if (const auto alternate = eventFromLegend(button.secondary_legend))
+        {
             return *alternate;
         }
     }
@@ -817,8 +869,10 @@ void highlightByLabel(std::vector<VirtualButton>& buttons, std::string_view labe
 
 void consumeOneShotModifiers(std::vector<VirtualButton>& buttons) noexcept
 {
-    for (auto& button : buttons) {
-        if (button.latch_mode == LatchMode::OneShot) {
+    for (auto& button : buttons)
+    {
+        if (button.latch_mode == LatchMode::OneShot)
+        {
             clearLatch(button);
         }
     }
@@ -839,11 +893,13 @@ void handleKeyboardEvent(
     std::vector<VirtualButton>& buttons,
     const SDL_KeyboardEvent& event)
 {
-    if (event.repeat) {
+    if (event.repeat)
+    {
         return;
     }
 
-    switch (event.key) {
+    switch (event.key)
+    {
     case SDLK_BACKSPACE:
         enqueueSpecial(queue, buttons, app::InputKey::Backspace, "DEL");
         break;
@@ -896,21 +952,27 @@ void handleTextInput(
     std::vector<VirtualButton>& buttons,
     const SDL_TextInputEvent& event)
 {
-    if (!event.text) {
+    if (!event.text)
+    {
         return;
     }
 
-    for (const char* current = event.text; *current != '\0'; ++current) {
+    for (const char* current = event.text; *current != '\0'; ++current)
+    {
         const unsigned char value = static_cast<unsigned char>(*current);
-        if (value > 127U || !std::isprint(value)) {
+        if (value > 127U || !std::isprint(value))
+        {
             continue;
         }
 
         const char ch = static_cast<char>(value);
         std::string label{};
-        if (ch == ' ') {
+        if (ch == ' ')
+        {
             label = "SPACE";
-        } else {
+        }
+        else
+        {
             label.push_back(static_cast<char>(std::toupper(value)));
         }
 
@@ -925,28 +987,37 @@ void handleMouseClick(
     const SDL_MouseButtonEvent& event,
     int scale)
 {
-    if (event.button != SDL_BUTTON_LEFT && event.button != SDL_BUTTON_RIGHT) {
+    if (event.button != SDL_BUTTON_LEFT && event.button != SDL_BUTTON_RIGHT)
+    {
         return;
     }
 
     const int device_x = toDeviceCoordinate(event.x, scale);
     const int device_y = toDeviceCoordinate(event.y, scale);
 
-    for (auto& button : buttons) {
-        if (!button.bounds.contains(device_x, device_y)) {
+    for (auto& button : buttons)
+    {
+        if (!button.bounds.contains(device_x, device_y))
+        {
             continue;
         }
 
         markPressed(button);
 
-        if (isModifierButton(button)) {
-            if (event.button == SDL_BUTTON_RIGHT) {
+        if (isModifierButton(button))
+        {
+            if (event.button == SDL_BUTTON_RIGHT)
+            {
                 toggleStickyLatch(button);
-                if (button.latch_mode == LatchMode::Sticky) {
+                if (button.latch_mode == LatchMode::Sticky)
+                {
                     markPressed(button);
                 }
-            } else {
-                if (button.latch_mode != LatchMode::Sticky) {
+            }
+            else
+            {
+                if (button.latch_mode != LatchMode::Sticky)
+                {
                     setOneShotLatch(button);
                 }
             }
@@ -984,13 +1055,16 @@ SdlSimulator::SdlSimulator(int scale)
 
 SdlSimulator::~SdlSimulator()
 {
-    if (impl_->texture) {
+    if (impl_->texture)
+    {
         SDL_DestroyTexture(impl_->texture);
     }
-    if (impl_->renderer) {
+    if (impl_->renderer)
+    {
         SDL_DestroyRenderer(impl_->renderer);
     }
-    if (impl_->window) {
+    if (impl_->window)
+    {
         SDL_DestroyWindow(impl_->window);
     }
 
@@ -1000,20 +1074,25 @@ SdlSimulator::~SdlSimulator()
 bool SdlSimulator::pump()
 {
     SDL_Event event{};
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_EVENT_QUIT)
+        {
             impl_->running = false;
             continue;
         }
-        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+        {
             handleMouseClick(impl_->input_queue, impl_->buttons, event.button, impl_->scale);
             continue;
         }
-        if (event.type == SDL_EVENT_KEY_DOWN) {
+        if (event.type == SDL_EVENT_KEY_DOWN)
+        {
             handleKeyboardEvent(impl_->input_queue, impl_->buttons, event.key);
             continue;
         }
-        if (event.type == SDL_EVENT_TEXT_INPUT) {
+        if (event.type == SDL_EVENT_TEXT_INPUT)
+        {
             handleTextInput(impl_->input_queue, impl_->buttons, event.text);
         }
     }
@@ -1033,7 +1112,8 @@ void SdlSimulator::present(const core::Canvas& canvas)
     drawShell(impl_->device_canvas, canvas, impl_->buttons);
 
     const auto& pixels = impl_->device_canvas.pixels();
-    for (std::size_t i = 0; i < pixels.size(); ++i) {
+    for (std::size_t i = 0; i < pixels.size(); ++i)
+    {
         impl_->staging[i] = packPixel(pixels[i]);
     }
 

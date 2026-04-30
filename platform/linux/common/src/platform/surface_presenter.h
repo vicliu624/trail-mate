@@ -5,10 +5,12 @@
 #include "app/input_event.h"
 #include "core/canvas.h"
 
-namespace trailmate::cardputer_zero::platform {
+namespace trailmate::cardputer_zero::platform
+{
 
-class SurfacePresenter {
-public:
+class SurfacePresenter
+{
+  public:
     virtual ~SurfacePresenter() = default;
 
     [[nodiscard]] virtual bool pump() = 0;

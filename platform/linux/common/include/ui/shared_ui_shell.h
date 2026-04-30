@@ -1,9 +1,11 @@
 #pragma once
 
-namespace trailmate::cardputer_zero::linux_ui {
+namespace trailmate::cardputer_zero::linux_ui
+{
 
-class SharedUiShellStartup {
-public:
+class SharedUiShellStartup
+{
+  public:
     SharedUiShellStartup() = default;
 
     bool begin();
@@ -11,8 +13,9 @@ public:
 
     [[nodiscard]] bool ready() const noexcept;
 
-private:
-    enum class Phase {
+  private:
+    enum class Phase
+    {
         Idle,
         BootVisible,
         MenuBuilt,

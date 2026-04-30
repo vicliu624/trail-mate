@@ -4,10 +4,12 @@
 
 #include "core/color.h"
 
-namespace trailmate::cardputer_zero::core {
+namespace trailmate::cardputer_zero::core
+{
 
-class Canvas {
-public:
+class Canvas
+{
+  public:
     Canvas(int width, int height);
 
     [[nodiscard]] int width() const noexcept;
@@ -23,7 +25,7 @@ public:
     [[nodiscard]] const Color& pixel(int x, int y) const noexcept;
     [[nodiscard]] const std::vector<Color>& pixels() const noexcept;
 
-private:
+  private:
     [[nodiscard]] int indexOf(int x, int y) const noexcept;
 
     int width_{};

@@ -7,8 +7,10 @@
 #include "core/bitmap_font.h"
 #include "core/display_profile.h"
 
-namespace trailmate::cardputer_zero::app {
-namespace {
+namespace trailmate::cardputer_zero::app
+{
+namespace
+{
 
 using core::rgba;
 
@@ -32,7 +34,8 @@ int centeredX(std::string_view text, int scale) noexcept
 
 std::string clippedTail(const std::string& value, std::size_t max_length)
 {
-    if (value.size() <= max_length) {
+    if (value.size() <= max_length)
+    {
         return value;
     }
 
@@ -48,14 +51,18 @@ DemoApp::DemoApp()
 
 void DemoApp::handleInput(const InputEvent& event) noexcept
 {
-    if (!event.label.empty()) {
+    if (!event.label.empty())
+    {
         last_key_label_ = event.label;
     }
 
-    switch (event.key) {
+    switch (event.key)
+    {
     case InputKey::Character:
-        if (event.text != '\0') {
-            if (typed_text_.size() >= 26) {
+        if (event.text != '\0')
+        {
+            if (typed_text_.size() >= 26)
+            {
                 typed_text_.erase(0, 1);
             }
             typed_text_.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(event.text))));
@@ -63,7 +70,8 @@ void DemoApp::handleInput(const InputEvent& event) noexcept
         }
         break;
     case InputKey::Backspace:
-        if (!typed_text_.empty()) {
+        if (!typed_text_.empty())
+        {
             typed_text_.pop_back();
         }
         status_text_ = "DELETE LAST CHARACTER";
@@ -72,7 +80,8 @@ void DemoApp::handleInput(const InputEvent& event) noexcept
         status_text_ = "ENTER PRESSED";
         break;
     case InputKey::Tab:
-        if (typed_text_.size() < 25) {
+        if (typed_text_.size() < 25)
+        {
             typed_text_ += ' ';
         }
         status_text_ = "TAB INSERTED SPACE";
@@ -150,7 +159,8 @@ void DemoApp::render(core::Canvas& canvas) const noexcept
 
     core::bitmap_font::drawText(canvas, "SIM  WIN  WSL  DOCKER  PI OS", 31, 152, kWarn, 1);
 
-    if (blinkOn()) {
+    if (blinkOn())
+    {
         canvas.fillRect(265, 75, 12, 4, kAccent);
     }
 }

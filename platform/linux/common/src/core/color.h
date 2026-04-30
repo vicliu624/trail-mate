@@ -2,9 +2,11 @@
 
 #include <cstdint>
 
-namespace trailmate::cardputer_zero::core {
+namespace trailmate::cardputer_zero::core
+{
 
-struct Color {
+struct Color
+{
     std::uint8_t r{};
     std::uint8_t g{};
     std::uint8_t b{};
@@ -28,10 +30,7 @@ constexpr Color rgba(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_
 
 constexpr std::uint32_t pack_key(Color color) noexcept
 {
-    return (static_cast<std::uint32_t>(color.r) << 24U)
-        | (static_cast<std::uint32_t>(color.g) << 16U)
-        | (static_cast<std::uint32_t>(color.b) << 8U)
-        | static_cast<std::uint32_t>(color.a);
+    return (static_cast<std::uint32_t>(color.r) << 24U) | (static_cast<std::uint32_t>(color.g) << 16U) | (static_cast<std::uint32_t>(color.b) << 8U) | static_cast<std::uint32_t>(color.a);
 }
 
 } // namespace trailmate::cardputer_zero::core

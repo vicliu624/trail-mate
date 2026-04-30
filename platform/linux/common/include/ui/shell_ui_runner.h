@@ -4,7 +4,8 @@
 
 #include "platform/surface_presenter.h"
 
-namespace trailmate::cardputer_zero::linux_ui {
+namespace trailmate::cardputer_zero::linux_ui
+{
 
 void runShellUi(
     platform::SurfacePresenter& presenter,

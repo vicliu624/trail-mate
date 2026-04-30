@@ -9,15 +9,17 @@
 
 #include "lvgl.h"
 
-#include "app/linux_app_facade.h"
 #include "app/input_event.h"
+#include "app/linux_app_facade.h"
 #include "core/canvas.h"
 #include "core/display_profile.h"
-#include "ui/shared_ui_shell.h"
 #include "ui/screens/team/team_page_shell.h"
+#include "ui/shared_ui_shell.h"
 
-namespace trailmate::cardputer_zero::linux_ui {
-namespace {
+namespace trailmate::cardputer_zero::linux_ui
+{
+namespace
+{
 
 using clock = std::chrono::steady_clock;
 
@@ -25,7 +27,8 @@ constexpr auto kFrameTime = std::chrono::milliseconds(16);
 
 std::chrono::steady_clock::time_point g_lvgl_start_time = clock::now();
 
-struct QueuedKeyEvent {
+struct QueuedKeyEvent
+{
     std::uint32_t key{};
     lv_indev_state_t state{LV_INDEV_STATE_RELEASED};
 };
@@ -37,7 +40,8 @@ bool dispatchTeamUiEvent(sys::Event* event)
 
 [[nodiscard]] std::uint32_t mapInputEvent(const app::InputEvent& event) noexcept
 {
-    switch (event.key) {
+    switch (event.key)
+    {
     case app::InputKey::Character:
         return event.text == '\0' ? 0U : static_cast<std::uint8_t>(event.text);
     case app::InputKey::Backspace:
@@ -95,8 +99,9 @@ bool dispatchTeamUiEvent(sys::Event* event)
         std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - g_lvgl_start_time).count());
 }
 
-class ShellUiRuntime {
-public:
+class ShellUiRuntime
+{
+  public:
     ShellUiRuntime()
         : canvas_(core::kDisplayWidth, core::kDisplayHeight),
           frame_buffer_(static_cast<std::size_t>(core::kDisplayWidth * core::kDisplayHeight), 0)
@@ -106,7 +111,8 @@ public:
         lv_tick_set_cb(tickNow);
 
         display_ = lv_display_create(core::kDisplayWidth, core::kDisplayHeight);
-        if (display_ == nullptr) {
+        if (display_ == nullptr)
+        {
             throw std::runtime_error("Failed to create LVGL display for the Linux shell.");
         }
 
@@ -122,7 +128,8 @@ public:
         lv_display_set_flush_cb(display_, flushCallback);
 
         keypad_ = lv_indev_create();
-        if (keypad_ == nullptr) {
+        if (keypad_ == nullptr)
+        {
             throw std::runtime_error("Failed to create LVGL keypad input for the Linux shell.");
         }
 
@@ -131,12 +138,14 @@ public:
         lv_indev_set_user_data(keypad_, this);
         lv_indev_set_read_cb(keypad_, readInputCallback);
 
-        if (!app_facade_.initialize()) {
+        if (!app_facade_.initialize())
+        {
             throw std::runtime_error("Failed to bind the Linux app facade for the shared shell.");
         }
         setTeamUiEventDispatcher(dispatchTeamUiEvent);
 
-        if (!startup_.begin()) {
+        if (!startup_.begin())
+        {
             throw std::runtime_error("Failed to begin the shared UI startup sequence.");
         }
 
@@ -145,11 +154,13 @@ public:
 
     ~ShellUiRuntime()
     {
-        if (keypad_ != nullptr) {
+        if (keypad_ != nullptr)
+        {
             lv_indev_delete(keypad_);
             keypad_ = nullptr;
         }
-        if (display_ != nullptr) {
+        if (display_ != nullptr)
+        {
             lv_display_delete(display_);
             display_ = nullptr;
         }
@@ -160,9 +171,11 @@ public:
 
     void enqueueInputs(const std::vector<app::InputEvent>& events)
     {
-        for (const auto& event : events) {
+        for (const auto& event : events)
+        {
             const std::uint32_t mapped = mapInputEvent(event);
-            if (mapped == 0U) {
+            if (mapped == 0U)
+            {
                 continue;
             }
 
@@ -173,7 +186,8 @@ public:
 
     void render()
     {
-        if (!startup_.tick()) {
+        if (!startup_.tick())
+        {
             throw std::runtime_error("Shared UI startup sequence failed.");
         }
 
@@ -182,7 +196,8 @@ public:
         app_facade_.dispatchPendingEvents();
 
         lv_timer_handler();
-        if (dirty_) {
+        if (dirty_)
+        {
             copyFrameBufferToCanvas();
             dirty_ = false;
         }
@@ -193,14 +208,15 @@ public:
         return canvas_;
     }
 
-private:
+  private:
     static void flushCallback(lv_display_t* display, const lv_area_t* area, std::uint8_t* px_map)
     {
         LV_UNUSED(area);
         LV_UNUSED(px_map);
 
         auto* runtime = static_cast<ShellUiRuntime*>(lv_display_get_user_data(display));
-        if (runtime != nullptr) {
+        if (runtime != nullptr)
+        {
             runtime->dirty_ = true;
         }
 
@@ -210,7 +226,8 @@ private:
     static void readInputCallback(lv_indev_t* indev, lv_indev_data_t* data)
     {
         auto* runtime = static_cast<ShellUiRuntime*>(lv_indev_get_user_data(indev));
-        if (runtime == nullptr || data == nullptr) {
+        if (runtime == nullptr || data == nullptr)
+        {
             return;
         }
 
@@ -218,7 +235,8 @@ private:
         data->key = 0U;
         data->continue_reading = false;
 
-        if (runtime->key_events_.empty()) {
+        if (runtime->key_events_.empty())
+        {
             return;
         }
 
@@ -232,8 +250,10 @@ private:
 
     void copyFrameBufferToCanvas()
     {
-        for (int y = 0; y < core::kDisplayHeight; ++y) {
-            for (int x = 0; x < core::kDisplayWidth; ++x) {
+        for (int y = 0; y < core::kDisplayHeight; ++y)
+        {
+            for (int x = 0; x < core::kDisplayWidth; ++x)
+            {
                 const auto index = static_cast<std::size_t>((y * core::kDisplayWidth) + x);
                 canvas_.setPixel(x, y, rgb565ToColor(frame_buffer_[index]));
             }
@@ -259,10 +279,12 @@ void runShellUi(platform::SurfacePresenter& presenter, std::chrono::milliseconds
     auto next_frame = clock::now();
     const auto started_at = next_frame;
 
-    while (presenter.pump()) {
+    while (presenter.pump())
+    {
         runtime.enqueueInputs(presenter.drainInput());
 
-        if (auto_exit_after > std::chrono::milliseconds::zero() && (clock::now() - started_at) >= auto_exit_after) {
+        if (auto_exit_after > std::chrono::milliseconds::zero() && (clock::now() - started_at) >= auto_exit_after)
+        {
             break;
         }
 
@@ -272,7 +294,8 @@ void runShellUi(platform::SurfacePresenter& presenter, std::chrono::milliseconds
         next_frame += kFrameTime;
         std::this_thread::sleep_until(next_frame);
 
-        if (clock::now() > next_frame + std::chrono::milliseconds(250)) {
+        if (clock::now() > next_frame + std::chrono::milliseconds(250))
+        {
             next_frame = clock::now();
         }
     }

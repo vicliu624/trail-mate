@@ -6,16 +6,18 @@
 #include "app/input_event.h"
 #include "core/canvas.h"
 
-namespace trailmate::cardputer_zero::app {
+namespace trailmate::cardputer_zero::app
+{
 
-class DemoApp {
-public:
+class DemoApp
+{
+  public:
     DemoApp();
 
     void handleInput(const InputEvent& event) noexcept;
     void render(core::Canvas& canvas) const noexcept;
 
-private:
+  private:
     [[nodiscard]] bool blinkOn() const noexcept;
     [[nodiscard]] bool hasTypedText() const noexcept;
     [[nodiscard]] std::string visibleInput() const;

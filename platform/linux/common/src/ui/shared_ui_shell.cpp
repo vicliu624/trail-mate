@@ -20,25 +20,29 @@
 #include "ui/ui_boot.h"
 #include "ui/ui_theme.h"
 
-namespace trailmate::cardputer_zero::linux_ui {
-namespace {
+namespace trailmate::cardputer_zero::linux_ui
+{
+namespace
+{
 
-extern "C" {
-extern const lv_image_dsc_t Chat;
-extern const lv_image_dsc_t contact;
-extern const lv_image_dsc_t gps_icon;
-extern const lv_image_dsc_t Satellite;
-extern const lv_image_dsc_t Setting;
-extern const lv_image_dsc_t Spectrum;
-extern const lv_image_dsc_t rf;
-extern const lv_image_dsc_t sstv;
-extern const lv_image_dsc_t team_icon;
-extern const lv_image_dsc_t tracker_icon;
-extern const lv_image_dsc_t ext;
-extern const lv_image_dsc_t walkie_talkie;
+extern "C"
+{
+    extern const lv_image_dsc_t Chat;
+    extern const lv_image_dsc_t contact;
+    extern const lv_image_dsc_t gps_icon;
+    extern const lv_image_dsc_t Satellite;
+    extern const lv_image_dsc_t Setting;
+    extern const lv_image_dsc_t Spectrum;
+    extern const lv_image_dsc_t rf;
+    extern const lv_image_dsc_t sstv;
+    extern const lv_image_dsc_t team_icon;
+    extern const lv_image_dsc_t tracker_icon;
+    extern const lv_image_dsc_t ext;
+    extern const lv_image_dsc_t walkie_talkie;
 }
 
-struct PlaceholderPageSpec {
+struct PlaceholderPageSpec
+{
     const char* stable_id = nullptr;
     const char* title = nullptr;
     const char* body = nullptr;
@@ -55,17 +59,20 @@ void requestExit()
 void backButtonEventCb(lv_event_t* event)
 {
     const lv_event_code_t code = lv_event_get_code(event);
-    if (code == LV_EVENT_CLICKED) {
+    if (code == LV_EVENT_CLICKED)
+    {
         requestExit();
         return;
     }
 
-    if (code != LV_EVENT_KEY) {
+    if (code != LV_EVENT_KEY)
+    {
         return;
     }
 
     const uint32_t key = lv_event_get_key(event);
-    if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE || key == LV_KEY_LEFT) {
+    if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE || key == LV_KEY_LEFT)
+    {
         requestExit();
     }
 }
@@ -96,7 +103,8 @@ lv_obj_t* createChip(lv_obj_t* parent, const PlaceholderPageSpec& spec)
 void placeholderEnter(void* user_data, lv_obj_t* parent)
 {
     auto* spec = static_cast<PlaceholderPageSpec*>(user_data);
-    if (spec == nullptr || parent == nullptr) {
+    if (spec == nullptr || parent == nullptr)
+    {
         return;
     }
 
@@ -205,7 +213,8 @@ void placeholderEnter(void* user_data, lv_obj_t* parent)
 void placeholderExit(void* user_data, lv_obj_t* parent)
 {
     (void)user_data;
-    if (parent != nullptr) {
+    if (parent != nullptr)
+    {
         lv_obj_clean(parent);
     }
     set_default_group(menu_g);
@@ -475,12 +484,14 @@ constexpr unsigned int kFinalizeDelayMs = 420U;
 
 bool SharedUiShellStartup::begin()
 {
-    if (phase_ != Phase::Idle) {
+    if (phase_ != Phase::Idle)
+    {
         return true;
     }
 
     started_at_ms_ = lv_tick_get();
-    if (!ui::startup_ui_shell::prepareBootUi(buildHooks(), false)) {
+    if (!ui::startup_ui_shell::prepareBootUi(buildHooks(), false))
+    {
         return false;
     }
 
@@ -490,7 +501,8 @@ bool SharedUiShellStartup::begin()
 
 bool SharedUiShellStartup::runPhase(Phase next_phase, const char* log_line)
 {
-    if (log_line != nullptr && log_line[0] != '\0') {
+    if (log_line != nullptr && log_line[0] != '\0')
+    {
         ui::boot::set_log_line(log_line);
     }
     phase_ = next_phase;
@@ -499,30 +511,37 @@ bool SharedUiShellStartup::runPhase(Phase next_phase, const char* log_line)
 
 bool SharedUiShellStartup::tick()
 {
-    if (phase_ == Phase::Idle) {
+    if (phase_ == Phase::Idle)
+    {
         return begin();
     }
 
-    if (phase_ == Phase::Finalized) {
+    if (phase_ == Phase::Finalized)
+    {
         return true;
     }
 
     const unsigned int elapsed = lv_tick_elaps(started_at_ms_);
-    if (phase_ == Phase::BootVisible && elapsed >= kMenuBuildDelayMs) {
+    if (phase_ == Phase::BootVisible && elapsed >= kMenuBuildDelayMs)
+    {
         ui::boot::set_log_line("Building menu shell...");
-        if (!ui::startup_ui_shell::initializeMenuSkeleton(buildHooks())) {
+        if (!ui::startup_ui_shell::initializeMenuSkeleton(buildHooks()))
+        {
             return false;
         }
         return runPhase(Phase::MenuBuilt, nullptr);
     }
 
-    if (phase_ == Phase::MenuBuilt && elapsed >= kThemeReadyDelayMs) {
+    if (phase_ == Phase::MenuBuilt && elapsed >= kThemeReadyDelayMs)
+    {
         return runPhase(Phase::ThemeReady, "Preparing navigation and apps...");
     }
 
-    if (phase_ == Phase::ThemeReady && elapsed >= kFinalizeDelayMs) {
+    if (phase_ == Phase::ThemeReady && elapsed >= kFinalizeDelayMs)
+    {
         ui::boot::set_log_line("Starting Trail Mate...");
-        if (!ui::startup_ui_shell::finalizeStartup(buildHooks(), false)) {
+        if (!ui::startup_ui_shell::finalizeStartup(buildHooks(), false))
+        {
             return false;
         }
         return runPhase(Phase::Finalized, nullptr);

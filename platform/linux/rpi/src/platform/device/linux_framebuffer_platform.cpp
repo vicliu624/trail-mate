@@ -15,8 +15,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-namespace trailmate::cardputer_zero::platform::device {
-namespace {
+namespace trailmate::cardputer_zero::platform::device
+{
+namespace
+{
 
 std::atomic_bool g_running{true};
 
@@ -27,7 +29,8 @@ void stopSignalHandler(int)
 
 std::uint32_t scaleChannel(std::uint8_t value, const fb_bitfield& bitfield) noexcept
 {
-    if (bitfield.length == 0U) {
+    if (bitfield.length == 0U)
+    {
         return 0U;
     }
 
@@ -38,10 +41,7 @@ std::uint32_t scaleChannel(std::uint8_t value, const fb_bitfield& bitfield) noex
 
 std::uint32_t packNativePixel(core::Color color, const fb_var_screeninfo& vinfo) noexcept
 {
-    return scaleChannel(color.r, vinfo.red)
-        | scaleChannel(color.g, vinfo.green)
-        | scaleChannel(color.b, vinfo.blue)
-        | scaleChannel(color.a, vinfo.transp);
+    return scaleChannel(color.r, vinfo.red) | scaleChannel(color.g, vinfo.green) | scaleChannel(color.b, vinfo.blue) | scaleChannel(color.a, vinfo.transp);
 }
 
 std::runtime_error makeSystemError(const std::string& step)
@@ -51,7 +51,8 @@ std::runtime_error makeSystemError(const std::string& step)
 
 } // namespace
 
-struct LinuxFramebufferPlatform::Impl {
+struct LinuxFramebufferPlatform::Impl
+{
     explicit Impl(std::string framebuffer_path_in)
         : framebuffer_path(std::move(framebuffer_path_in))
     {
@@ -60,26 +61,31 @@ struct LinuxFramebufferPlatform::Impl {
         std::signal(SIGTERM, stopSignalHandler);
 
         file_descriptor = ::open(framebuffer_path.c_str(), O_RDWR);
-        if (file_descriptor < 0) {
+        if (file_descriptor < 0)
+        {
             throw makeSystemError("open framebuffer");
         }
 
-        if (::ioctl(file_descriptor, FBIOGET_FSCREENINFO, &finfo) == -1) {
+        if (::ioctl(file_descriptor, FBIOGET_FSCREENINFO, &finfo) == -1)
+        {
             throw makeSystemError("FBIOGET_FSCREENINFO");
         }
-        if (::ioctl(file_descriptor, FBIOGET_VSCREENINFO, &vinfo) == -1) {
+        if (::ioctl(file_descriptor, FBIOGET_VSCREENINFO, &vinfo) == -1)
+        {
             throw makeSystemError("FBIOGET_VSCREENINFO");
         }
 
         bytes_per_pixel = static_cast<int>(vinfo.bits_per_pixel / 8U);
-        if (bytes_per_pixel < 2 || bytes_per_pixel > 4) {
+        if (bytes_per_pixel < 2 || bytes_per_pixel > 4)
+        {
             throw std::runtime_error("unsupported framebuffer pixel depth");
         }
 
         const auto mapped_size = static_cast<std::size_t>(finfo.line_length) * static_cast<std::size_t>(vinfo.yres_virtual);
         framebuffer_size = mapped_size;
         void* mapped = ::mmap(nullptr, framebuffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, file_descriptor, 0);
-        if (mapped == MAP_FAILED) {
+        if (mapped == MAP_FAILED)
+        {
             framebuffer_memory = nullptr;
             throw makeSystemError("mmap framebuffer");
         }
@@ -89,10 +95,12 @@ struct LinuxFramebufferPlatform::Impl {
 
     ~Impl()
     {
-        if (framebuffer_memory) {
+        if (framebuffer_memory)
+        {
             ::munmap(framebuffer_memory, framebuffer_size);
         }
-        if (file_descriptor >= 0) {
+        if (file_descriptor >= 0)
+        {
             ::close(file_descriptor);
         }
     }
@@ -101,10 +109,10 @@ struct LinuxFramebufferPlatform::Impl {
     {
         const int pixel_x = x + static_cast<int>(vinfo.xoffset);
         const int pixel_y = y + static_cast<int>(vinfo.yoffset);
-        const std::size_t offset = static_cast<std::size_t>(pixel_y) * static_cast<std::size_t>(finfo.line_length)
-            + static_cast<std::size_t>(pixel_x) * static_cast<std::size_t>(bytes_per_pixel);
+        const std::size_t offset = static_cast<std::size_t>(pixel_y) * static_cast<std::size_t>(finfo.line_length) + static_cast<std::size_t>(pixel_x) * static_cast<std::size_t>(bytes_per_pixel);
 
-        for (int byte_index = 0; byte_index < bytes_per_pixel; ++byte_index) {
+        for (int byte_index = 0; byte_index < bytes_per_pixel; ++byte_index)
+        {
             framebuffer_memory[offset + static_cast<std::size_t>(byte_index)] =
                 static_cast<std::byte>((packed >> (byte_index * 8)) & 0xFFU);
         }
@@ -144,7 +152,8 @@ void LinuxFramebufferPlatform::present(const core::Canvas& canvas)
     const int scale_y = physical_height / canvas.height();
     const int scale = std::min(scale_x, scale_y);
 
-    if (scale <= 0) {
+    if (scale <= 0)
+    {
         throw std::runtime_error("framebuffer is smaller than the logical display");
     }
 
@@ -155,12 +164,16 @@ void LinuxFramebufferPlatform::present(const core::Canvas& canvas)
 
     std::memset(impl_->framebuffer_memory, 0, impl_->framebuffer_size);
 
-    for (int y = 0; y < canvas.height(); ++y) {
-        for (int x = 0; x < canvas.width(); ++x) {
+    for (int y = 0; y < canvas.height(); ++y)
+    {
+        for (int x = 0; x < canvas.width(); ++x)
+        {
             const std::uint32_t packed = packNativePixel(canvas.pixel(x, y), impl_->vinfo);
 
-            for (int dy = 0; dy < scale; ++dy) {
-                for (int dx = 0; dx < scale; ++dx) {
+            for (int dy = 0; dy < scale; ++dy)
+            {
+                for (int dx = 0; dx < scale; ++dx)
+                {
                     impl_->writePackedPixel(offset_x + (x * scale) + dx, offset_y + (y * scale) + dy, packed);
                 }
             }

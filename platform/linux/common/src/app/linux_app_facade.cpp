@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -35,8 +35,8 @@
 #include "team/ports/i_team_pairing_transport.h"
 #include "team/ports/i_team_runtime.h"
 #include "team/ports/i_team_track_source.h"
-#include "team/protocol/team_position.h"
 #include "team/protocol/team_pairing_wire.h"
+#include "team/protocol/team_position.h"
 #include "team/usecase/team_controller.h"
 #include "team/usecase/team_pairing_coordinator.h"
 #include "team/usecase/team_pairing_service.h"
@@ -277,25 +277,25 @@ class LinuxLoopbackMeshAdapter final : public ::chat::IMeshAdapter
         else if (peer != 0)
         {
             scheduleIncomingText({
-                .channel = channel,
-                .from = peer,
-                .to = self_node_id_,
-                .msg_id = nextMessageId(),
-                .timestamp = sys::epoch_seconds_now(),
-                .text = makeAutoReplyText(peer, text),
-            },
+                                     .channel = channel,
+                                     .from = peer,
+                                     .to = self_node_id_,
+                                     .msg_id = nextMessageId(),
+                                     .timestamp = sys::epoch_seconds_now(),
+                                     .text = makeAutoReplyText(peer, text),
+                                 },
                                  kAutoReplyDelayMs);
         }
         else
         {
             scheduleIncomingText({
-                .channel = channel,
-                .from = kDemoBroadcastNodeId,
-                .to = 0,
-                .msg_id = nextMessageId(),
-                .timestamp = sys::epoch_seconds_now(),
-                .text = "Broadcast heard: " + text.substr(0, std::min<std::size_t>(text.size(), 32U)),
-            },
+                                     .channel = channel,
+                                     .from = kDemoBroadcastNodeId,
+                                     .to = 0,
+                                     .msg_id = nextMessageId(),
+                                     .timestamp = sys::epoch_seconds_now(),
+                                     .text = "Broadcast heard: " + text.substr(0, std::min<std::size_t>(text.size(), 32U)),
+                                 },
                                  kAutoReplyDelayMs + 120U);
         }
 

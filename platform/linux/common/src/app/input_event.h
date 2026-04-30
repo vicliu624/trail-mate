@@ -3,9 +3,11 @@
 #include <string>
 #include <utility>
 
-namespace trailmate::cardputer_zero::app {
+namespace trailmate::cardputer_zero::app
+{
 
-enum class InputKey {
+enum class InputKey
+{
     Unknown = 0,
     Character,
     Backspace,
@@ -24,7 +26,8 @@ enum class InputKey {
     Down,
 };
 
-struct InputEvent {
+struct InputEvent
+{
     InputKey key{InputKey::Unknown};
     std::string label{};
     char text{'\0'};

@@ -6,6 +6,7 @@
 #include "ui/screens/team/team_page_components.h"
 #include "app/app_facade_access.h"
 #include "chat/usecase/contact_service.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "sys/clock.h"
 #include "sys/event_bus.h"
 #include "team/protocol/team_mgmt.h"
@@ -25,7 +26,6 @@
 #include "ui/screens/team/team_page_layout.h"
 #include "ui/screens/team/team_page_styles.h"
 #include "ui/screens/team/team_state.h"
-#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
 

@@ -30,33 +30,40 @@ int main()
     std::size_t frame_delta = 0;
     std::unordered_set<std::uint32_t> palette{};
 
-    for (std::size_t index = 0; index < canvas.pixels().size(); ++index) {
+    for (std::size_t index = 0; index < canvas.pixels().size(); ++index)
+    {
         const auto& pixel = canvas.pixels()[index];
-        if (pixel != background) {
+        if (pixel != background)
+        {
             ++changed_pixels;
         }
         palette.insert(trailmate::cardputer_zero::core::pack_key(pixel));
-        if (pixel != baseline_pixels[index]) {
+        if (pixel != baseline_pixels[index])
+        {
             ++frame_delta;
         }
     }
 
-    if (changed_pixels < 1000) {
+    if (changed_pixels < 1000)
+    {
         std::cerr << "Expected the demo screen to render more than a trivial number of pixels.\n";
         return 1;
     }
 
-    if (palette.size() < 4) {
+    if (palette.size() < 4)
+    {
         std::cerr << "Expected multiple colors in the rendered demo screen.\n";
         return 1;
     }
 
-    if (canvas.pixel(12, 12) == background) {
+    if (canvas.pixel(12, 12) == background)
+    {
         std::cerr << "Expected the framed application panel to differ from the outer background.\n";
         return 1;
     }
 
-    if (frame_delta == 0) {
+    if (frame_delta == 0)
+    {
         std::cerr << "Expected the rendered frame to change after simulated input.\n";
         return 1;
     }

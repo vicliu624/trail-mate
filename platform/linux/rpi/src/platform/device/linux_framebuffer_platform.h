@@ -6,10 +6,12 @@
 
 #include "platform/surface_presenter.h"
 
-namespace trailmate::cardputer_zero::platform::device {
+namespace trailmate::cardputer_zero::platform::device
+{
 
-class LinuxFramebufferPlatform : public SurfacePresenter {
-public:
+class LinuxFramebufferPlatform : public SurfacePresenter
+{
+  public:
     explicit LinuxFramebufferPlatform(std::string framebuffer_path);
     ~LinuxFramebufferPlatform() override;
 
@@ -17,7 +19,7 @@ public:
     [[nodiscard]] std::vector<app::InputEvent> drainInput() override;
     void present(const core::Canvas& canvas) override;
 
-private:
+  private:
     struct Impl;
     std::unique_ptr<Impl> impl_{};
 };

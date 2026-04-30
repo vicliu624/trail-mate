@@ -4,7 +4,8 @@
 
 #include "platform/surface_presenter.h"
 
-namespace trailmate::cardputer_zero::app {
+namespace trailmate::cardputer_zero::app
+{
 
 void runDemoApp(
     platform::SurfacePresenter& presenter,

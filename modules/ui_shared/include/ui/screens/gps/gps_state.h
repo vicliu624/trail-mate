@@ -6,9 +6,9 @@
 #ifndef GPS_STATE_H
 #define GPS_STATE_H
 
+#include "lvgl.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/screens/gps/gps_modal.h"
-#include "lvgl.h"
 #include "ui/widgets/map/map_tiles.h"
 #include "ui/widgets/top_bar.h"
 #include <cstdint>

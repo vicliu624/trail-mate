@@ -173,7 +173,8 @@ bool save_frame_locked()
         return false;
     }
 
-    stream << "P6\n" << kFrameWidth << " " << kFrameHeight << "\n255\n";
+    stream << "P6\n"
+           << kFrameWidth << " " << kFrameHeight << "\n255\n";
     for (uint16_t pixel : s_frame)
     {
         const uint8_t red = expand5(static_cast<uint16_t>((pixel >> 11U) & 0x1FU));
