@@ -32,6 +32,11 @@ bool gps_is_powered()
     return platform::esp::idf_common::gps_runtime::is_powered();
 }
 
+void gps_set_enabled(bool enabled)
+{
+    platform::esp::idf_common::gps_runtime::set_enabled(enabled);
+}
+
 void gps_set_collection_interval(uint32_t interval_ms)
 {
     platform::esp::idf_common::gps_runtime::set_collection_interval(interval_ms);
@@ -47,9 +52,9 @@ void gps_set_gnss_config(uint8_t mode, uint8_t sat_mask)
     platform::esp::idf_common::gps_runtime::set_gnss_config(mode, sat_mask);
 }
 
-void gps_set_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+void gps_set_external_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
 {
-    platform::esp::idf_common::gps_runtime::set_nmea_config(output_hz, sentence_mask);
+    platform::esp::idf_common::gps_runtime::set_external_nmea_config(output_hz, sentence_mask);
 }
 
 void gps_set_motion_idle_timeout(uint32_t timeout_ms)

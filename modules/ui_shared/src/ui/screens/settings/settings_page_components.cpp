@@ -895,12 +895,15 @@ static void settings_load()
     {
         gps_interval_seconds = 1;
     }
+    g_settings.gps_enabled = cfg.gps_enabled;
     g_settings.gps_mode = cfg.gps_mode;
     g_settings.gps_sat_mask = cfg.gps_sat_mask;
     g_settings.gps_strategy = cfg.gps_strategy;
     g_settings.gps_interval = static_cast<int>(gps_interval_seconds);
     g_settings.gps_alt_ref = cfg.gps_alt_ref;
     g_settings.gps_coord_format = cfg.gps_coord_format;
+    g_settings.external_nmea_output_hz = cfg.external_nmea_output_hz;
+    g_settings.external_nmea_sentence_mask = cfg.external_nmea_sentence_mask;
 
     g_settings.map_coord_system = cfg.map_coord_system;
     g_settings.map_source = cfg.map_source;
@@ -1006,8 +1009,6 @@ static void settings_load()
     }
 
     g_settings.privacy_encrypt_mode = cfg.privacy_encrypt_mode;
-    g_settings.privacy_nmea_output = cfg.privacy_nmea_output;
-    g_settings.privacy_nmea_sentence = cfg.privacy_nmea_sentence;
 
     g_settings.screen_timeout_ms = static_cast<int>(screen_runtime::timeout_ms());
     g_settings.screen_brightness = clamp_screen_brightness(
@@ -1886,21 +1887,21 @@ static void on_option_clicked(lv_event_t* e)
         app_ctx.saveConfig();
         app_ctx.applyPrivacyConfig();
     }
-    if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_nmea") == 0)
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "external_nmea") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
-        app_ctx.getConfig().privacy_nmea_output = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().external_nmea_output_hz = static_cast<uint8_t>(payload->value);
         app_ctx.saveConfig();
-        gps_runtime::set_nmea_config(app_ctx.getConfig().privacy_nmea_output,
-                                     app_ctx.getConfig().privacy_nmea_sentence);
+        gps_runtime::set_external_nmea_config(app_ctx.getConfig().external_nmea_output_hz,
+                                              app_ctx.getConfig().external_nmea_sentence_mask);
     }
-    if (payload->item->pref_key && strcmp(payload->item->pref_key, "privacy_nmea_sent") == 0)
+    if (payload->item->pref_key && strcmp(payload->item->pref_key, "external_nmea_sent") == 0)
     {
         app::IAppFacade& app_ctx = app::appFacade();
-        app_ctx.getConfig().privacy_nmea_sentence = static_cast<uint8_t>(payload->value);
+        app_ctx.getConfig().external_nmea_sentence_mask = static_cast<uint8_t>(payload->value);
         app_ctx.saveConfig();
-        gps_runtime::set_nmea_config(app_ctx.getConfig().privacy_nmea_output,
-                                     app_ctx.getConfig().privacy_nmea_sentence);
+        gps_runtime::set_external_nmea_config(app_ctx.getConfig().external_nmea_output_hz,
+                                              app_ctx.getConfig().external_nmea_sentence_mask);
     }
     if (payload->item->pref_key && strcmp(payload->item->pref_key, "timezone_offset") == 0)
     {
@@ -2450,12 +2451,12 @@ static const settings::ui::SettingOption kPrivacyEncryptOptions[] = {
     {"PSK", 1},
     {"PKI", 2},
 };
-static const settings::ui::SettingOption kPrivacyNmeaOptions[] = {
+static const settings::ui::SettingOption kExternalNmeaOptions[] = {
     {"OFF", 0},
     {"1Hz", 1},
     {"5Hz", 5},
 };
-static const settings::ui::SettingOption kPrivacyNmeaSentenceOptions[] = {
+static const settings::ui::SettingOption kExternalNmeaSentenceOptions[] = {
     {"GGA+RMC+GSV", 0},
     {"RMC+GSV", 1},
     {"GGA+RMC", 2},
@@ -2516,14 +2517,15 @@ static const settings::ui::SettingOption kTimeZoneOptions[] = {
 };
 
 static settings::ui::SettingItem kGpsItems[] = {
+    {"GPS Enabled", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.gps_enabled, nullptr, 0, false, "gps_enabled"},
     {"Location Mode", settings::ui::SettingType::Enum, kGpsModeOptions, 3, &g_settings.gps_mode, nullptr, nullptr, 0, false, "gps_mode"},
     {"Satellite Systems", settings::ui::SettingType::Enum, kGpsSatOptions, 5, &g_settings.gps_sat_mask, nullptr, nullptr, 0, false, "gps_sat_mask"},
     {"Position Strategy", settings::ui::SettingType::Enum, kGpsStrategyOptions, 3, &g_settings.gps_strategy, nullptr, nullptr, 0, false, "gps_strategy"},
     {"Update Interval", settings::ui::SettingType::Enum, kGpsIntervalOptions, 4, &g_settings.gps_interval, nullptr, nullptr, 0, false, "gps_interval"},
     {"Altitude Reference", settings::ui::SettingType::Enum, kGpsAltOptions, 2, &g_settings.gps_alt_ref, nullptr, nullptr, 0, false, "gps_alt_ref"},
     {"Coordinate Format", settings::ui::SettingType::Enum, kGpsCoordOptions, 3, &g_settings.gps_coord_format, nullptr, nullptr, 0, false, "gps_coord_fmt"},
-    {"NMEA Output", settings::ui::SettingType::Enum, kPrivacyNmeaOptions, 3, &g_settings.privacy_nmea_output, nullptr, nullptr, 0, false, "privacy_nmea"},
-    {"NMEA Sentences", settings::ui::SettingType::Enum, kPrivacyNmeaSentenceOptions, 3, &g_settings.privacy_nmea_sentence, nullptr, nullptr, 0, false, "privacy_nmea_sent"},
+    {"NMEA Export", settings::ui::SettingType::Enum, kExternalNmeaOptions, 3, &g_settings.external_nmea_output_hz, nullptr, nullptr, 0, false, "external_nmea"},
+    {"NMEA Sentences", settings::ui::SettingType::Enum, kExternalNmeaSentenceOptions, 3, &g_settings.external_nmea_sentence_mask, nullptr, nullptr, 0, false, "external_nmea_sent"},
 };
 
 static settings::ui::SettingItem kMapItems[] = {
@@ -3031,6 +3033,13 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
                 app::IAppFacade& app_ctx = app::appFacade();
                 app_ctx.getConfig().map_contour_enabled = *item.bool_value;
                 app_ctx.saveConfig();
+            }
+            if (item.pref_key && strcmp(item.pref_key, "gps_enabled") == 0)
+            {
+                app::IAppFacade& app_ctx = app::appFacade();
+                app_ctx.getConfig().gps_enabled = *item.bool_value;
+                app_ctx.saveConfig();
+                gps_runtime::set_enabled(*item.bool_value);
             }
             if (item.pref_key && strcmp(item.pref_key, "net_duty_cycle") == 0)
             {

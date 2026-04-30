@@ -1587,6 +1587,14 @@ void MinimalLinuxAppFacade::applyUserInfo()
 
 void MinimalLinuxAppFacade::applyPositionConfig()
 {
+    platform::ui::gps::set_enabled(config_.gps_enabled);
+    platform::ui::gps::set_collection_interval(config_.gps_interval_ms);
+    platform::ui::gps::set_power_strategy(config_.gps_strategy);
+    platform::ui::gps::set_gnss_config(config_.gps_mode, config_.gps_sat_mask);
+    platform::ui::gps::set_external_nmea_config(config_.external_nmea_output_hz,
+                                                config_.external_nmea_sentence_mask);
+    platform::ui::gps::set_motion_idle_timeout(config_.motion_config.idle_timeout_ms);
+    platform::ui::gps::set_motion_sensor_id(config_.motion_config.sensor_id);
 }
 
 void MinimalLinuxAppFacade::applyNetworkLimits()

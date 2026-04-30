@@ -225,14 +225,23 @@ TDeckBoard* TDeckBoard::getInstance()
 
 bool TDeckBoard::initGPS()
 {
-    // T-Deck examples wire GPS to UART on pins 43/44.
+    // Board init owns the physical UART. Receiver probing/configuration is runtime-owned.
+    Serial1.end();
     Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
-    delay(50);
+    delay(100);
+    gps_.attach(&Serial1);
+    setGPSOnline(true);
+    Serial.printf("[TDeckBoard] GPS UART ready baud=%lu rx=%d tx=%d\n",
+                  38400UL,
+                  GPS_RX,
+                  GPS_TX);
+    return true;
+}
 
-    bool ok = gps_.init(&Serial1);
-    setGPSOnline(ok);
-    Serial.printf("[TDeckBoard] GPS init: %s\n", ok ? "OK" : "FAIL");
-    return ok;
+void TDeckBoard::deinitGPS()
+{
+    Serial1.end();
+    setGPSOnline(false);
 }
 
 uint32_t TDeckBoard::begin(uint32_t disable_hw_init)

@@ -772,11 +772,23 @@ void TDeckProBoard::configureLoraRadio(float freq_mhz, float bw_khz, uint8_t sf,
 
 bool TDeckProBoard::initGPS()
 {
+    Serial2.end();
     Serial2.begin(profile().gps.uart.baud, SERIAL_8N1, profile().gps.uart.rx, profile().gps.uart.tx);
-    delay(50);
-    gps_ready_ = gps_.init(&Serial2);
-    Serial.printf("[%s] gps init %s\n", kTag, gps_ready_ ? "ok" : "fail");
+    delay(100);
+    gps_.attach(&Serial2);
+    gps_ready_ = true;
+    Serial.printf("[%s] gps uart ready baud=%lu rx=%d tx=%d\n",
+                  kTag,
+                  static_cast<unsigned long>(profile().gps.uart.baud),
+                  profile().gps.uart.rx,
+                  profile().gps.uart.tx);
     return gps_ready_;
+}
+
+void TDeckProBoard::deinitGPS()
+{
+    Serial2.end();
+    gps_ready_ = false;
 }
 
 void TDeckProBoard::powerControl(PowerCtrlChannel_t ch, bool enable)

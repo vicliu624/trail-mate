@@ -116,6 +116,7 @@ class TLoRaPagerBoard : public BoardBase,
     // Hardware initialization functions
     bool initPMU();
     bool initGPS() override;
+    void deinitGPS() override;
     bool initLoRa();
     bool initNFC();
     bool initKeyboard();

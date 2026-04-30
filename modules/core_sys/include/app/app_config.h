@@ -100,6 +100,7 @@ struct AppConfig
     uint8_t secondary_key[16]; // PSK for secondary channel
 
     // GPS settings
+    bool gps_enabled;
     uint32_t gps_interval_ms;
     uint8_t gps_mode;
     uint8_t gps_sat_mask;
@@ -107,6 +108,8 @@ struct AppConfig
     uint8_t gps_alt_ref;
     uint8_t gps_coord_format;
     gps::MotionConfig motion_config;
+    uint8_t external_nmea_output_hz;
+    uint8_t external_nmea_sentence_mask;
 
     // Map settings
     uint8_t map_coord_system;
@@ -125,8 +128,6 @@ struct AppConfig
 
     // Privacy settings
     uint8_t privacy_encrypt_mode;
-    uint8_t privacy_nmea_output;
-    uint8_t privacy_nmea_sentence;
 
     // Tracker route settings
     bool route_enabled;
@@ -168,6 +169,7 @@ struct AppConfig
         secondary_uplink_enabled = false;
         secondary_downlink_enabled = false;
         memset(secondary_key, 0, 16);
+        gps_enabled = true;
         gps_interval_ms = 60000;
         gps_mode = 0;
         gps_sat_mask = 0x1 | 0x8 | 0x4;
@@ -175,6 +177,8 @@ struct AppConfig
         gps_alt_ref = 0;
         gps_coord_format = 0;
         motion_config = gps::MotionConfig();
+        external_nmea_output_hz = 0;
+        external_nmea_sentence_mask = 0;
 
         map_coord_system = 0;
         map_source = 0;
@@ -189,8 +193,6 @@ struct AppConfig
         net_channel_util = 0;
 
         privacy_encrypt_mode = 1;
-        privacy_nmea_output = 0;
-        privacy_nmea_sentence = 0;
         route_enabled = false;
         route_path[0] = '\0';
         aprs = AprsConfig();

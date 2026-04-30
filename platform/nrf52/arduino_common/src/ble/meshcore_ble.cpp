@@ -302,7 +302,7 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
     appendCustomVar(*out, "node_name", mesh_cfg.node_name);
     appendCustomVar(*out, "channel_name", mesh_cfg.mesh.meshcore_channel_name);
     appendCustomVar(*out, "multi_acks", mesh_cfg.mesh.meshcore_multi_acks ? "1" : "0");
-    appendCustomVar(*out, "gps", mt_cfg.gps_strategy == 2 ? "0" : "1");
+    appendCustomVar(*out, "gps", mt_cfg.gps_enabled ? "1" : "0");
 
     // Keep the variable surface compatible with the MeshCore app even if
     // nRF52 doesn't implement every extended option yet.
@@ -328,6 +328,7 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
     bool changed = false;
     bool mesh_changed = false;
     bool mt_changed = false;
+    bool position_changed = false;
 
     if (std::strcmp(key, "node_name") == 0)
     {
@@ -375,12 +376,12 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
         {
             return false;
         }
-        const uint8_t next_strategy = parsed ? (mt_cfg.gps_strategy == 2 ? 0 : mt_cfg.gps_strategy) : 2;
-        if (mt_cfg.gps_strategy != next_strategy)
+        if (mt_cfg.gps_enabled != parsed)
         {
-            mt_cfg.gps_strategy = next_strategy;
+            mt_cfg.gps_enabled = parsed;
             changed = true;
             mt_changed = true;
+            position_changed = true;
         }
     }
     else if (std::strcmp(key, "manual_add_contacts") == 0 ||
@@ -410,6 +411,10 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
             setMeshtasticPhoneConfig(mt_cfg);
         }
         ctx_.saveConfig();
+    }
+    if (position_changed)
+    {
+        ctx_.applyPositionConfig();
     }
     return true;
 }

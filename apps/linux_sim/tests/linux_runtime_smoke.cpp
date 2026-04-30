@@ -242,9 +242,13 @@ int main()
     ui_gps::set_collection_interval(1000U);
     ui_gps::set_power_strategy(1U);
     ui_gps::set_gnss_config(1U, 0xFFU);
-    ui_gps::set_nmea_config(1U, 0x01U);
+    ui_gps::set_external_nmea_config(1U, 0x01U);
     ui_gps::set_motion_idle_timeout(30000U);
     ui_gps::set_motion_sensor_id(2U);
+    ui_gps::set_enabled(false);
+    assert(!ui_gps::is_enabled());
+    ui_gps::set_enabled(true);
+    assert(ui_gps::is_enabled());
     ui_gps::suspend_runtime();
     assert(!ui_gps::is_enabled());
     assert(!ui_gps::is_powered());

@@ -52,15 +52,21 @@ void init_gps_runtime(GpsBoard* gps_board,
                       disable_hw_init,
                       config.gps_interval_ms,
                       config.motion_config);
+    gps_service.setEnabled(config.gps_enabled);
+    gps_service.setCollectionInterval(config.gps_interval_ms);
     gps_service.setPowerStrategy(config.gps_strategy);
     gps_service.setGnssConfig(config.gps_mode, config.gps_sat_mask);
-    gps_service.setNmeaConfig(config.privacy_nmea_output, config.privacy_nmea_sentence);
+    gps_service.setExternalNmeaConfig(config.external_nmea_output_hz, config.external_nmea_sentence_mask);
 }
 
 void apply_position_config(const app::AppConfig& config)
 {
+    gps::GpsService::getInstance().setEnabled(config.gps_enabled);
     gps::GpsService::getInstance().setCollectionInterval(config.gps_interval_ms);
+    gps::GpsService::getInstance().setPowerStrategy(config.gps_strategy);
     gps::GpsService::getInstance().setGnssConfig(config.gps_mode, config.gps_sat_mask);
+    gps::GpsService::getInstance().setExternalNmeaConfig(config.external_nmea_output_hz,
+                                                         config.external_nmea_sentence_mask);
 }
 
 void init_track_recorder(const app::AppConfig& config)

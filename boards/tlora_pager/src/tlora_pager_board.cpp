@@ -1202,24 +1202,19 @@ bool TLoRaPagerBoard::initGPS()
     // This ensures we don't have stale state if reinitializing
     devices_probe &= ~HW_GPS_ONLINE;
 
+    Serial1.end();
     Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
     delay(100); // Give Serial1 time to initialize
-    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] Serial1 opened, calling gps.init(&Serial1)...\n");
-    bool result = gps.init(&Serial1);
-    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] gps.init() returned: %d\n", result);
-    if (result)
-    {
-        GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] GPS initialized successfully, model: %s\n", gps.getModel().c_str());
-        devices_probe |= HW_GPS_ONLINE;
-        GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] Set HW_GPS_ONLINE flag, devices_probe=0x%08X\n", devices_probe);
-    }
-    else
-    {
-        GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] GPS initialization FAILED\n");
-        // Ensure flag is cleared on failure
-        devices_probe &= ~HW_GPS_ONLINE;
-    }
-    return result;
+    gps.attach(&Serial1);
+    devices_probe |= HW_GPS_ONLINE;
+    GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] GPS UART ready, devices_probe=0x%08X\n", devices_probe);
+    return true;
+}
+
+void TLoRaPagerBoard::deinitGPS()
+{
+    Serial1.end();
+    devices_probe &= ~HW_GPS_ONLINE;
 }
 
 void TLoRaPagerBoard::setBrightness(uint8_t level)

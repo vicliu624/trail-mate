@@ -42,6 +42,7 @@ inline ::ble::MeshtasticPhoneConfigSnapshot makeMeshtasticPhoneConfigSnapshot(co
     snapshot.primary_downlink_enabled = cfg.primary_downlink_enabled;
     snapshot.secondary_uplink_enabled = cfg.secondary_uplink_enabled;
     snapshot.secondary_downlink_enabled = cfg.secondary_downlink_enabled;
+    snapshot.gps_enabled = cfg.gps_enabled;
     snapshot.gps_mode = cfg.gps_mode;
     snapshot.gps_interval_ms = cfg.gps_interval_ms;
     snapshot.gps_strategy = cfg.gps_strategy;
@@ -61,6 +62,7 @@ inline void applyMeshtasticPhoneConfigSnapshot(app::AppConfig& cfg,
     cfg.primary_downlink_enabled = snapshot.primary_downlink_enabled;
     cfg.secondary_uplink_enabled = snapshot.secondary_uplink_enabled;
     cfg.secondary_downlink_enabled = snapshot.secondary_downlink_enabled;
+    cfg.gps_enabled = snapshot.gps_enabled;
     cfg.gps_mode = snapshot.gps_mode;
     cfg.gps_interval_ms = snapshot.gps_interval_ms;
     cfg.gps_strategy = snapshot.gps_strategy;

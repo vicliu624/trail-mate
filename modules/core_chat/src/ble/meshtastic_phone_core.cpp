@@ -801,7 +801,7 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
             logDual("[BLE][mtcore] set_config lora post-apply\n");
             break;
         case meshtastic_Config_position_tag:
-            cfg.gps_mode = req.set_config.payload_variant.position.gps_enabled ? 1 : 0;
+            cfg.gps_enabled = req.set_config.payload_variant.position.gps_enabled;
             cfg.gps_interval_ms = req.set_config.payload_variant.position.gps_update_interval * 1000U;
             ctx_.setMeshtasticPhoneConfig(cfg);
             ctx_.saveConfig();
@@ -1837,9 +1837,9 @@ void MeshtasticPhoneCore::fillConfig(meshtastic_AdminMessage_ConfigType type, me
             cfg_out.payload_variant.position = position;
         }
         cfg_out.payload_variant.position.position_broadcast_secs = 900;
-        cfg_out.payload_variant.position.gps_enabled = (cfg.gps_mode != 0);
+        cfg_out.payload_variant.position.gps_enabled = cfg.gps_enabled;
         cfg_out.payload_variant.position.gps_update_interval = cfg.gps_interval_ms / 1000U;
-        cfg_out.payload_variant.position.gps_mode = (cfg.gps_mode != 0)
+        cfg_out.payload_variant.position.gps_mode = cfg.gps_enabled
                                                         ? meshtastic_Config_PositionConfig_GpsMode_ENABLED
                                                         : meshtastic_Config_PositionConfig_GpsMode_DISABLED;
         break;

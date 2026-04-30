@@ -95,12 +95,13 @@ struct RuntimeState
 };
 
 bool s_suspended = false;
+bool s_enabled = true;
 uint32_t s_collection_interval_ms = 1000;
 uint8_t s_power_strategy = 0;
 uint8_t s_gnss_mode = 0;
 uint8_t s_gnss_sat_mask = 0xFF;
-uint8_t s_nmea_output_hz = 0;
-uint8_t s_nmea_sentence_mask = 0;
+uint8_t s_external_nmea_output_hz = 0;
+uint8_t s_external_nmea_sentence_mask = 0;
 uint32_t s_motion_idle_timeout_ms = 30000;
 uint8_t s_motion_sensor_id = 0;
 RuntimeState s_runtime{};
@@ -192,7 +193,7 @@ std::array<GnssSatInfo, 10> default_satellites()
 
 bool runtime_active()
 {
-    return !s_suspended && env_flag_or_default(kGpsEnabledEnv, true) &&
+    return !s_suspended && s_enabled && env_flag_or_default(kGpsEnabledEnv, true) &&
            env_flag_or_default(kGpsPoweredEnv, true);
 }
 
@@ -1057,12 +1058,22 @@ uint32_t last_motion_ms()
 
 bool is_enabled()
 {
-    return !s_suspended && env_flag_or_default(kGpsEnabledEnv, true);
+    return !s_suspended && s_enabled && env_flag_or_default(kGpsEnabledEnv, true);
 }
 
 bool is_powered()
 {
-    return !s_suspended && env_flag_or_default(kGpsPoweredEnv, true);
+    return !s_suspended && s_enabled && env_flag_or_default(kGpsPoweredEnv, true);
+}
+
+void set_enabled(bool enabled)
+{
+    s_enabled = enabled;
+    if (!enabled)
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        clear_payload_locked();
+    }
 }
 
 void set_collection_interval(uint32_t interval_ms)
@@ -1081,10 +1092,10 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     s_gnss_sat_mask = sat_mask;
 }
 
-void set_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+void set_external_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
 {
-    s_nmea_output_hz = output_hz;
-    s_nmea_sentence_mask = sentence_mask;
+    s_external_nmea_output_hz = output_hz;
+    s_external_nmea_sentence_mask = sentence_mask;
 }
 
 void set_motion_idle_timeout(uint32_t timeout_ms)

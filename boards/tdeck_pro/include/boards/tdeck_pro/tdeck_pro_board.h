@@ -100,6 +100,7 @@ class TDeckProBoard : public BoardBase,
                             uint8_t crc_len) override;
 
     bool initGPS() override;
+    void deinitGPS() override;
     void setGPSOnline(bool online) override { gps_ready_ = online; }
     GPS& getGPS() override { return gps_; }
     void powerControl(PowerCtrlChannel_t ch, bool enable) override;

@@ -105,6 +105,7 @@ class TDeckBoard : public BoardBase,
 
     // GpsBoard
     bool initGPS() override;
+    void deinitGPS() override;
     void setGPSOnline(bool online) override
     {
         if (online)

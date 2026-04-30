@@ -32,9 +32,10 @@ class GpsRuntime
                       ::gps::GnssStatus* status) const;
 
     void setCollectionInterval(uint32_t interval_ms);
+    void setEnabled(bool enabled);
     void setPowerStrategy(uint8_t strategy);
     void setConfig(uint8_t mode, uint8_t sat_mask);
-    void setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
+    void setExternalNmeaConfig(uint8_t output_hz, uint8_t sentence_mask);
     void setMotionIdleTimeout(uint32_t timeout_ms);
     void setMotionSensorId(uint8_t sensor_id);
     void suspend();

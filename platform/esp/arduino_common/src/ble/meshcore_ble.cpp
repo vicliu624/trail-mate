@@ -6,7 +6,6 @@
 #include "chat/domain/contact_types.h"
 #include "display/DisplayConfig.h"
 #include "platform/esp/arduino_common/chat/infra/meshcore/meshcore_adapter.h"
-#include "platform/esp/arduino_common/gps/gps_service_api.h"
 #include "ui/widgets/ble_pairing_popup.h"
 #include <Arduino.h>
 #include <Preferences.h>
@@ -723,17 +722,7 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
         {
             return false;
         }
-        if (parsed)
-        {
-            if (mt_cfg.gps_strategy == 2)
-            {
-                mt_cfg.gps_strategy = 0;
-            }
-        }
-        else
-        {
-            mt_cfg.gps_strategy = 2;
-        }
+        mt_cfg.gps_enabled = parsed;
         save_cfg = true;
         save_mt_cfg = true;
         apply_position = true;
@@ -770,7 +759,6 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
     if (apply_position)
     {
         ctx_.applyPositionConfig();
-        gps::gps_set_power_strategy(mt_cfg.gps_strategy);
     }
     return true;
 }

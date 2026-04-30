@@ -27,9 +27,9 @@ constexpr const char* kChatKeyPrimaryDownlink = "pri_downlink";
 constexpr const char* kChatKeySecondaryUplink = "sec_uplink";
 constexpr const char* kChatKeySecondaryDownlink = "sec_downlink";
 constexpr const char* kGpsKeyMotionSensorId = "motion_sensor";
+constexpr const char* kGpsKeyExternalNmeaSentence = "ext_nmea_sent";
 constexpr const char* kSettingsKeyMapTrackInterval = "map_track_int";
 constexpr const char* kSettingsKeyMapTrackFormat = "map_track_fmt";
-constexpr const char* kSettingsKeyPrivacyNmeaSentence = "priv_nmea_sent";
 
 const char* safe_label(const char* value)
 {
@@ -583,6 +583,7 @@ void log_config_delta(const AppConfig& before, const AppConfig& after)
     log_change_bool("secondary_uplink", before.secondary_uplink_enabled, after.secondary_uplink_enabled, any_change);
     log_change_bool("secondary_downlink", before.secondary_downlink_enabled, after.secondary_downlink_enabled, any_change);
 
+    log_change_bool("gps_enabled", before.gps_enabled, after.gps_enabled, any_change);
     log_change_u32("gps_interval_ms", before.gps_interval_ms, after.gps_interval_ms, any_change);
     log_change_u8("gps_mode", before.gps_mode, after.gps_mode, any_change);
     log_change_u8("gps_sat_mask", before.gps_sat_mask, after.gps_sat_mask, any_change);
@@ -593,6 +594,10 @@ void log_config_delta(const AppConfig& before, const AppConfig& after)
                    after.motion_config.idle_timeout_ms, any_change);
     log_change_u8("motion_sensor_id", before.motion_config.sensor_id,
                   after.motion_config.sensor_id, any_change);
+    log_change_u8("external_nmea_output_hz", before.external_nmea_output_hz,
+                  after.external_nmea_output_hz, any_change);
+    log_change_u8("external_nmea_sentence_mask", before.external_nmea_sentence_mask,
+                  after.external_nmea_sentence_mask, any_change);
 
     log_change_u8("map_coord_system", before.map_coord_system, after.map_coord_system, any_change);
     log_change_u8("map_source", before.map_source, after.map_source, any_change);
@@ -606,8 +611,6 @@ void log_config_delta(const AppConfig& before, const AppConfig& after)
     log_change_u8("net_util", before.net_channel_util, after.net_channel_util, any_change);
 
     log_change_u8("privacy_encrypt_mode", before.privacy_encrypt_mode, after.privacy_encrypt_mode, any_change);
-    log_change_u8("privacy_nmea_output", before.privacy_nmea_output, after.privacy_nmea_output, any_change);
-    log_change_u8("privacy_nmea_sentence", before.privacy_nmea_sentence, after.privacy_nmea_sentence, any_change);
 
     log_change_bool("route_enabled", before.route_enabled, after.route_enabled, any_change);
     log_change_text("route_path", before.route_path, after.route_path, any_change);
@@ -648,8 +651,9 @@ void log_config_summary(const char* phase, const AppConfig& config)
                   static_cast<int>(config.meshtastic_config.tx_power),
                   static_cast<int>(config.meshcore_config.tx_power),
                   static_cast<int>(config.rnode_config.tx_power));
-    Serial.printf("[AppCfg][%s][gps] interval_ms=%lu mode=%u sat_mask=%u strategy=%u alt_ref=%u coord_fmt=%u motion_idle_ms=%lu sensor_id=%u\n",
+    Serial.printf("[AppCfg][%s][gps] enabled=%s interval_ms=%lu mode=%u sat_mask=%u strategy=%u alt_ref=%u coord_fmt=%u motion_idle_ms=%lu sensor_id=%u external_nmea=%u sentence=%u\n",
                   safe_label(phase),
+                  bool_label(config.gps_enabled),
                   static_cast<unsigned long>(config.gps_interval_ms),
                   static_cast<unsigned>(config.gps_mode),
                   static_cast<unsigned>(config.gps_sat_mask),
@@ -657,7 +661,9 @@ void log_config_summary(const char* phase, const AppConfig& config)
                   static_cast<unsigned>(config.gps_alt_ref),
                   static_cast<unsigned>(config.gps_coord_format),
                   static_cast<unsigned long>(config.motion_config.idle_timeout_ms),
-                  static_cast<unsigned>(config.motion_config.sensor_id));
+                  static_cast<unsigned>(config.motion_config.sensor_id),
+                  static_cast<unsigned>(config.external_nmea_output_hz),
+                  static_cast<unsigned>(config.external_nmea_sentence_mask));
     Serial.printf("[AppCfg][%s][map] coord=%u source=%u contour=%s track=%s track_interval=%u track_format=%u route=%s route_path=%s\n",
                   safe_label(phase),
                   static_cast<unsigned>(config.map_coord_system),
@@ -668,13 +674,11 @@ void log_config_summary(const char* phase, const AppConfig& config)
                   static_cast<unsigned>(config.map_track_format),
                   bool_label(config.route_enabled),
                   config.route_path);
-    Serial.printf("[AppCfg][%s][privacy] duty_cycle=%s net_util=%u encrypt=%u nmea=%u sentence=%u\n",
+    Serial.printf("[AppCfg][%s][privacy] duty_cycle=%s net_util=%u encrypt=%u\n",
                   safe_label(phase),
                   bool_label(config.net_duty_cycle),
                   static_cast<unsigned>(config.net_channel_util),
-                  static_cast<unsigned>(config.privacy_encrypt_mode),
-                  static_cast<unsigned>(config.privacy_nmea_output),
-                  static_cast<unsigned>(config.privacy_nmea_sentence));
+                  static_cast<unsigned>(config.privacy_encrypt_mode));
     Serial.printf("[AppCfg][%s][aprs] enabled=%s igate=%s-%u tocall=%s path=%s pos_interval=%u self=%s self_call=%s node_map_len=%u\n",
                   safe_label(phase),
                   bool_label(config.aprs.enabled),
@@ -708,6 +712,7 @@ bool loadAppConfigFromPreferences(AppConfig& config,
     auto& secondary_uplink_enabled = config.secondary_uplink_enabled;
     auto& secondary_downlink_enabled = config.secondary_downlink_enabled;
     auto& secondary_key = config.secondary_key;
+    auto& gps_enabled = config.gps_enabled;
     auto& gps_interval_ms = config.gps_interval_ms;
     auto& gps_mode = config.gps_mode;
     auto& gps_sat_mask = config.gps_sat_mask;
@@ -715,6 +720,8 @@ bool loadAppConfigFromPreferences(AppConfig& config,
     auto& gps_alt_ref = config.gps_alt_ref;
     auto& gps_coord_format = config.gps_coord_format;
     auto& motion_config = config.motion_config;
+    auto& external_nmea_output_hz = config.external_nmea_output_hz;
+    auto& external_nmea_sentence_mask = config.external_nmea_sentence_mask;
     auto& map_coord_system = config.map_coord_system;
     auto& map_source = config.map_source;
     auto& map_contour_enabled = config.map_contour_enabled;
@@ -726,8 +733,6 @@ bool loadAppConfigFromPreferences(AppConfig& config,
     auto& net_duty_cycle = config.net_duty_cycle;
     auto& net_channel_util = config.net_channel_util;
     auto& privacy_encrypt_mode = config.privacy_encrypt_mode;
-    auto& privacy_nmea_output = config.privacy_nmea_output;
-    auto& privacy_nmea_sentence = config.privacy_nmea_sentence;
     auto& route_enabled = config.route_enabled;
     auto& route_path = config.route_path;
     auto& aprs = config.aprs;
@@ -880,6 +885,10 @@ bool loadAppConfigFromPreferences(AppConfig& config,
 
     if (begin_namespace(prefs, "gps", true, "LOAD", emit_logs))
     {
+        auto get_bool = [&](const char* key, bool default_value) -> bool
+        {
+            return get_bool_logged(prefs, "gps", key, default_value, emit_logs);
+        };
         auto get_uchar = [&](const char* key, uint8_t default_value) -> uint8_t
         {
             return get_uchar_logged(prefs, "gps", key, default_value, emit_logs);
@@ -889,6 +898,7 @@ bool loadAppConfigFromPreferences(AppConfig& config,
             return get_uint_logged(prefs, "gps", key, default_value, emit_logs);
         };
 
+        gps_enabled = get_bool("gps_enabled", gps_enabled);
         gps_interval_ms = get_uint("gps_interval", gps_interval_ms);
         gps_mode = get_uchar("gps_mode", gps_mode);
         gps_sat_mask = get_uchar("gps_sat_mask", gps_sat_mask);
@@ -897,6 +907,8 @@ bool loadAppConfigFromPreferences(AppConfig& config,
         gps_coord_format = get_uchar("gps_coord_fmt", gps_coord_format);
         motion_config.idle_timeout_ms = get_uint("motion_idle_ms", motion_config.idle_timeout_ms);
         motion_config.sensor_id = get_uchar(kGpsKeyMotionSensorId, motion_config.sensor_id);
+        external_nmea_output_hz = get_uchar("ext_nmea", external_nmea_output_hz);
+        external_nmea_sentence_mask = get_uchar(kGpsKeyExternalNmeaSentence, external_nmea_sentence_mask);
         prefs.end();
     }
 
@@ -930,8 +942,6 @@ bool loadAppConfigFromPreferences(AppConfig& config,
         net_duty_cycle = get_bool("net_duty_cycle", net_duty_cycle);
         net_channel_util = get_uchar("net_util", net_channel_util);
         privacy_encrypt_mode = get_uchar("privacy_encrypt", privacy_encrypt_mode);
-        privacy_nmea_output = get_uchar("privacy_nmea", privacy_nmea_output);
-        privacy_nmea_sentence = get_uchar(kSettingsKeyPrivacyNmeaSentence, privacy_nmea_sentence);
         route_enabled = get_bool("route_enabled", route_enabled);
         String path = get_string("route_path", route_path);
         strncpy(route_path, path.c_str(), sizeof(route_path) - 1);
@@ -1021,6 +1031,7 @@ bool saveAppConfigToPreferences(AppConfig& config,
     auto& secondary_uplink_enabled = config.secondary_uplink_enabled;
     auto& secondary_downlink_enabled = config.secondary_downlink_enabled;
     auto& secondary_key = config.secondary_key;
+    auto& gps_enabled = config.gps_enabled;
     auto& gps_interval_ms = config.gps_interval_ms;
     auto& gps_mode = config.gps_mode;
     auto& gps_sat_mask = config.gps_sat_mask;
@@ -1028,6 +1039,8 @@ bool saveAppConfigToPreferences(AppConfig& config,
     auto& gps_alt_ref = config.gps_alt_ref;
     auto& gps_coord_format = config.gps_coord_format;
     auto& motion_config = config.motion_config;
+    auto& external_nmea_output_hz = config.external_nmea_output_hz;
+    auto& external_nmea_sentence_mask = config.external_nmea_sentence_mask;
     auto& map_coord_system = config.map_coord_system;
     auto& map_source = config.map_source;
     auto& map_contour_enabled = config.map_contour_enabled;
@@ -1039,8 +1052,6 @@ bool saveAppConfigToPreferences(AppConfig& config,
     auto& net_duty_cycle = config.net_duty_cycle;
     auto& net_channel_util = config.net_channel_util;
     auto& privacy_encrypt_mode = config.privacy_encrypt_mode;
-    auto& privacy_nmea_output = config.privacy_nmea_output;
-    auto& privacy_nmea_sentence = config.privacy_nmea_sentence;
     auto& route_enabled = config.route_enabled;
     auto& route_path = config.route_path;
     auto& aprs = config.aprs;
@@ -1160,6 +1171,10 @@ bool saveAppConfigToPreferences(AppConfig& config,
         return false;
     }
     {
+        auto put_bool = [&](const char* key, bool value)
+        {
+            ok = put_bool_logged(prefs, "gps", key, value, emit_logs) && ok;
+        };
         auto put_uchar = [&](const char* key, uint8_t value)
         {
             ok = put_uchar_logged(prefs, "gps", key, value, emit_logs) && ok;
@@ -1169,6 +1184,7 @@ bool saveAppConfigToPreferences(AppConfig& config,
             ok = put_uint_logged(prefs, "gps", key, value, emit_logs) && ok;
         };
 
+        put_bool("gps_enabled", gps_enabled);
         put_uint("gps_interval", gps_interval_ms);
         put_uchar("gps_mode", gps_mode);
         put_uchar("gps_sat_mask", gps_sat_mask);
@@ -1177,6 +1193,8 @@ bool saveAppConfigToPreferences(AppConfig& config,
         put_uchar("gps_coord_fmt", gps_coord_format);
         put_uint("motion_idle_ms", motion_config.idle_timeout_ms);
         put_uchar(kGpsKeyMotionSensorId, motion_config.sensor_id);
+        put_uchar("ext_nmea", external_nmea_output_hz);
+        put_uchar(kGpsKeyExternalNmeaSentence, external_nmea_sentence_mask);
     }
     prefs.end();
 
@@ -1210,8 +1228,6 @@ bool saveAppConfigToPreferences(AppConfig& config,
         put_uchar("net_util", net_channel_util);
         put_uchar("privacy_encrypt", privacy_encrypt_mode);
         ok = remove_key_logged(prefs, "settings", "privacy_pki", emit_logs) && ok;
-        put_uchar("privacy_nmea", privacy_nmea_output);
-        put_uchar(kSettingsKeyPrivacyNmeaSentence, privacy_nmea_sentence);
         put_bool("route_enabled", route_enabled);
         put_string("route_path", route_path);
     }

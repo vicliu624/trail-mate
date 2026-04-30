@@ -32,6 +32,7 @@ struct MeshtasticPhoneConfigSnapshot
     bool primary_downlink_enabled = false;
     bool secondary_uplink_enabled = false;
     bool secondary_downlink_enabled = false;
+    bool gps_enabled = true;
     uint8_t gps_mode = 0;
     uint32_t gps_interval_ms = 0;
     uint8_t gps_strategy = 0;
