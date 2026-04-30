@@ -6,8 +6,11 @@
 #include "ui/localization.h"
 #include "ui/ui_theme.h"
 #include "ui/widgets/system_notification.h"
-#include <Arduino.h>
 #include <cstdio>
+
+#if !defined(TRAIL_MATE_WATCH_MORSE_PDM_SCK) || !defined(TRAIL_MATE_WATCH_MORSE_PDM_DATA)
+#error "T-Watch S3 Morse input requires board-provided PDM pin definitions"
+#endif
 
 namespace
 {
@@ -309,8 +312,8 @@ void ChatComposeScreen::showMorse()
 
     morse_ = new input::MorseEngine();
     input::MorseEngine::Config cfg;
-    cfg.pin_sck = PDM_SCK;
-    cfg.pin_data = PDM_DATA;
+    cfg.pin_sck = TRAIL_MATE_WATCH_MORSE_PDM_SCK;
+    cfg.pin_data = TRAIL_MATE_WATCH_MORSE_PDM_DATA;
     cfg.input_gain = 3;
     cfg.min_high = 90;
     cfg.min_low = 45;
