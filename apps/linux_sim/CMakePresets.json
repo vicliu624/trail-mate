@@ -92,7 +92,8 @@
       "configuration": "Debug",
       "targets": [
         "trailmate_cardputer_zero_smoke",
-        "trailmate_cardputer_zero_runtime_smoke"
+        "trailmate_cardputer_zero_runtime_smoke",
+        "trailmate_cardputer_zero_path_safety_smoke"
       ]
     },
     {
@@ -109,7 +110,8 @@
       "configurePreset": "linux-test-debug",
       "targets": [
         "trailmate_cardputer_zero_smoke",
-        "trailmate_cardputer_zero_runtime_smoke"
+        "trailmate_cardputer_zero_runtime_smoke",
+        "trailmate_cardputer_zero_path_safety_smoke"
       ]
     }
   ],

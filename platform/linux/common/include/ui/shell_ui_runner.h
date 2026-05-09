@@ -10,18 +10,7 @@
 #include "core/canvas.h"
 #include "platform/surface_presenter.h"
 
-// LVGL types used by value in this header are forward-declared.
-// The concrete LVGL callbacks live entirely inside shell_ui_runner.cpp
-// so that this header only needs the callback type, not the full LVGL tree.
-struct _lv_disp_t;
-struct _lv_indev_t;
-struct _lv_area_t;
-struct _lv_indev_data_t;
-typedef _lv_disp_t lv_display_t;
-typedef _lv_indev_t lv_indev_t;
-typedef _lv_area_t lv_area_t;
-typedef _lv_indev_data_t lv_indev_data_t;
-typedef uint8_t lv_indev_state_t;
+#include "lvgl.h"
 
 namespace trailmate::cardputer_zero
 {
