@@ -1,10 +1,13 @@
 #include "platform/gtk/gtk_uconsole_app.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <future>
 #include <memory>
 #include <set>
@@ -16,6 +19,7 @@
 #include <gtk/gtk.h>
 
 #include "app/linux_app_services.h"
+#include "chat/infra/mesh_protocol_utils.h"
 #include "platform/linux/runtime_packet_log.h"
 #include "uconsole/uconsole_chat_workspace_model.h"
 #include "uconsole/uconsole_dashboard_model.h"
@@ -216,27 +220,60 @@ window {
   background: #315f5e;
   color: #ecf4ef;
 }
-.map-controls {
-  padding: 4px 0;
+.map-canvas {
+  background: #26312d;
 }
 .map-grid {
-  background: #d4dad4;
-  border: 1px solid #b9c3ba;
+  background: #b8c4ba;
+  padding: 0;
+}
+.tile-cell {
+  background: #b8c4ba;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+.map-tile-pending {
+  background: #cbd5cc;
+}
+.map-overlay-panel {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(87, 103, 96, 0.35);
   border-radius: 6px;
   padding: 8px;
 }
-.tile-cell {
-  background: #f7f8f4;
-  border: 1px solid #c7d1c8;
-  border-radius: 4px;
-  padding: 4px;
+.map-tool-row {
+  padding: 0;
 }
-.tile-center {
-  border-color: #2f7368;
+.map-marker {
+  background: rgba(223, 247, 239, 0.9);
+  color: #0e3e37;
+  border: 2px solid #1d685e;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-weight: 700;
 }
 .source-button-active {
   background: #d7e8df;
   color: #15251f;
+}
+.settings-section {
+  margin-bottom: 6px;
+}
+.settings-row {
+  background: #f6f8f5;
+  border-radius: 6px;
+  padding: 8px;
+}
+.settings-control {
+  min-width: 160px;
+}
+.settings-actions {
+  padding: 4px 0;
+}
+.settings-status {
+  color: #315f5e;
+  font-size: 12px;
 }
 .log-toolbar {
   padding: 4px 0;
@@ -407,6 +444,128 @@ std::string formatBytes(std::uint64_t bytes)
     return std::to_string(bytes) + " B";
 }
 
+constexpr std::array<::chat::MeshProtocol, 4> kSettingsProtocols{{
+    ::chat::MeshProtocol::Meshtastic,
+    ::chat::MeshProtocol::MeshCore,
+    ::chat::MeshProtocol::RNode,
+    ::chat::MeshProtocol::LXMF,
+}};
+
+int protocolIndex(::chat::MeshProtocol protocol)
+{
+    for (std::size_t index = 0; index < kSettingsProtocols.size(); ++index)
+    {
+        if (kSettingsProtocols[index] == protocol)
+        {
+            return static_cast<int>(index);
+        }
+    }
+    return 0;
+}
+
+::chat::MeshProtocol protocolFromIndex(int index)
+{
+    if (index < 0 ||
+        static_cast<std::size_t>(index) >= kSettingsProtocols.size())
+    {
+        return ::chat::MeshProtocol::Meshtastic;
+    }
+    return kSettingsProtocols[static_cast<std::size_t>(index)];
+}
+
+void copyBounded(char* out, std::size_t out_len, const char* text)
+{
+    if (out == nullptr || out_len == 0U)
+    {
+        return;
+    }
+    if (text == nullptr)
+    {
+        out[0] = '\0';
+        return;
+    }
+    std::snprintf(out, out_len, "%s", text);
+}
+
+::chat::MeshConfig& meshConfigForProtocol(::app::AppConfig& config,
+                                          ::chat::MeshProtocol protocol)
+{
+    switch (protocol)
+    {
+    case ::chat::MeshProtocol::MeshCore:
+        return config.meshcore_config;
+    case ::chat::MeshProtocol::RNode:
+    case ::chat::MeshProtocol::LXMF:
+        return config.rnode_config;
+    case ::chat::MeshProtocol::Meshtastic:
+    default:
+        return config.meshtastic_config;
+    }
+}
+
+const ::chat::MeshConfig& meshConfigForProtocol(
+    const ::app::AppConfig& config,
+    ::chat::MeshProtocol protocol)
+{
+    switch (protocol)
+    {
+    case ::chat::MeshProtocol::MeshCore:
+        return config.meshcore_config;
+    case ::chat::MeshProtocol::RNode:
+    case ::chat::MeshProtocol::LXMF:
+        return config.rnode_config;
+    case ::chat::MeshProtocol::Meshtastic:
+    default:
+        return config.meshtastic_config;
+    }
+}
+
+float displayFrequencyMhz(const ::chat::MeshConfig& mesh)
+{
+    if (mesh.override_frequency_mhz > 0.0F)
+    {
+        return mesh.override_frequency_mhz;
+    }
+    if (mesh.meshcore_freq_mhz > 0.0F && mesh.meshcore_freq_mhz < 1000.0F)
+    {
+        return mesh.meshcore_freq_mhz;
+    }
+    return 433.175F;
+}
+
+float displayBandwidthKHz(const ::chat::MeshConfig& mesh,
+                          ::chat::MeshProtocol protocol)
+{
+    if (protocol == ::chat::MeshProtocol::MeshCore &&
+        mesh.meshcore_bw_khz > 0.0F)
+    {
+        return mesh.meshcore_bw_khz;
+    }
+    return mesh.bandwidth_khz;
+}
+
+std::uint8_t displaySpreadFactor(const ::chat::MeshConfig& mesh,
+                                 ::chat::MeshProtocol protocol)
+{
+    if (protocol == ::chat::MeshProtocol::MeshCore &&
+        mesh.meshcore_sf >= 5U && mesh.meshcore_sf <= 12U)
+    {
+        return mesh.meshcore_sf;
+    }
+    return mesh.spread_factor;
+}
+
+std::uint8_t displayCodingRate(const ::chat::MeshConfig& mesh,
+                               ::chat::MeshProtocol protocol)
+{
+    if (protocol == ::chat::MeshProtocol::MeshCore &&
+        mesh.meshcore_cr >= 5U && mesh.meshcore_cr <= 8U)
+    {
+        return mesh.meshcore_cr;
+    }
+    return mesh.coding_rate;
+}
+
 const HardwareStatusItem* findHardware(const UConsoleDashboardSnapshot& snapshot,
                                        const char* name)
 {
@@ -521,6 +680,38 @@ struct GtkUConsoleAppState
     GtkWidget* logs_source_gps = nullptr;
     GtkWidget* logs_source_lora = nullptr;
     GtkWidget* settings_page_box = nullptr;
+    GtkWidget* settings_node_name = nullptr;
+    GtkWidget* settings_short_name = nullptr;
+    GtkWidget* settings_protocol = nullptr;
+    GtkWidget* settings_lora_freq = nullptr;
+    GtkWidget* settings_lora_bw = nullptr;
+    GtkWidget* settings_lora_sf = nullptr;
+    GtkWidget* settings_lora_cr = nullptr;
+    GtkWidget* settings_lora_tx = nullptr;
+    GtkWidget* settings_hop_limit = nullptr;
+    GtkWidget* settings_tx_enabled = nullptr;
+    GtkWidget* settings_chat_channel = nullptr;
+    GtkWidget* settings_relay_enabled = nullptr;
+    GtkWidget* settings_ack_broadcast = nullptr;
+    GtkWidget* settings_ack_squad = nullptr;
+    GtkWidget* settings_tx_retries = nullptr;
+    GtkWidget* settings_max_channels = nullptr;
+    GtkWidget* settings_gps_enabled = nullptr;
+    GtkWidget* settings_gps_interval = nullptr;
+    GtkWidget* settings_gps_mode = nullptr;
+    GtkWidget* settings_gps_strategy = nullptr;
+    GtkWidget* settings_external_nmea_hz = nullptr;
+    GtkWidget* settings_external_nmea_mask = nullptr;
+    GtkWidget* settings_map_source = nullptr;
+    GtkWidget* settings_map_zoom = nullptr;
+    GtkWidget* settings_map_contour = nullptr;
+    GtkWidget* settings_map_track = nullptr;
+    GtkWidget* settings_map_track_interval = nullptr;
+    GtkWidget* settings_map_track_format = nullptr;
+    GtkWidget* settings_net_duty_cycle = nullptr;
+    GtkWidget* settings_net_channel_util = nullptr;
+    GtkWidget* settings_privacy_encrypt_mode = nullptr;
+    GtkWidget* settings_status = nullptr;
     ::platform::linux_runtime::PacketLogSource logs_source =
         ::platform::linux_runtime::PacketLogSource::Lora;
 
@@ -534,6 +725,7 @@ struct GtkUConsoleAppState
 
     GtkWidget* map_title = nullptr;
     GtkWidget* map_meta = nullptr;
+    GtkWidget* map_canvas = nullptr;
     GtkWidget* map_grid = nullptr;
     GtkWidget* map_status = nullptr;
     GtkWidget* map_cache_status = nullptr;
@@ -544,11 +736,21 @@ struct GtkUConsoleAppState
     std::future<::platform::linux_runtime::MapTileResult> map_fetch_future{};
     std::set<std::string> map_failed_tiles{};
     std::string map_fetch_status{};
+    std::string settings_notice{};
+    int settings_notice_ticks = 0;
 
     guint refresh_source = 0;
 };
 
 void refreshUi(GtkUConsoleAppState& state);
+void populateSettingsControls(GtkUConsoleAppState& state);
+
+void showSettingsNotice(GtkUConsoleAppState& state, const char* text)
+{
+    state.settings_notice = text ? text : "";
+    state.settings_notice_ticks = 8;
+    setLabel(state.settings_status, state.settings_notice);
+}
 
 void setActiveNav(GtkUConsoleAppState& state, const char* page)
 {
@@ -646,7 +848,9 @@ void onLogsClicked(GtkButton*, gpointer data)
 
 void onSettingsClicked(GtkButton*, gpointer data)
 {
-    showPage(*static_cast<GtkUConsoleAppState*>(data), "settings");
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    populateSettingsControls(state);
+    showPage(state, "settings");
 }
 
 void onConversationActivated(GtkListBox*,
@@ -714,6 +918,367 @@ void onLogsSourceLoraClicked(GtkButton*, gpointer data)
     auto& state = *static_cast<GtkUConsoleAppState*>(data);
     state.logs_source = ::platform::linux_runtime::PacketLogSource::Lora;
     refreshUi(state);
+}
+
+void populateSettingsControls(GtkUConsoleAppState& state)
+{
+    const auto& config = state.services.config();
+    const auto mesh = config.activeMeshConfig();
+    const auto protocol = config.mesh_protocol;
+
+    if (state.settings_node_name != nullptr)
+    {
+        gtk_editable_set_text(GTK_EDITABLE(state.settings_node_name),
+                              config.node_name);
+    }
+    if (state.settings_short_name != nullptr)
+    {
+        gtk_editable_set_text(GTK_EDITABLE(state.settings_short_name),
+                              config.short_name);
+    }
+    if (state.settings_protocol != nullptr)
+    {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(state.settings_protocol),
+                                 protocolIndex(config.mesh_protocol));
+    }
+    if (state.settings_lora_freq != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_freq),
+                                  displayFrequencyMhz(mesh));
+    }
+    if (state.settings_lora_bw != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_bw),
+                                  displayBandwidthKHz(mesh, protocol));
+    }
+    if (state.settings_lora_sf != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_sf),
+                                  displaySpreadFactor(mesh, protocol));
+    }
+    if (state.settings_lora_cr != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_cr),
+                                  displayCodingRate(mesh, protocol));
+    }
+    if (state.settings_lora_tx != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_tx),
+                                  mesh.tx_power);
+    }
+    if (state.settings_hop_limit != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_hop_limit),
+                                  mesh.hop_limit);
+    }
+    if (state.settings_tx_enabled != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_tx_enabled),
+                              mesh.tx_enabled);
+    }
+    if (state.settings_chat_channel != nullptr)
+    {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(state.settings_chat_channel),
+                                 std::clamp<int>(config.chat_channel, 0, 1));
+    }
+    if (state.settings_relay_enabled != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_relay_enabled),
+                              config.chat_policy.enable_relay);
+    }
+    if (state.settings_ack_broadcast != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_ack_broadcast),
+                              config.chat_policy.ack_for_broadcast);
+    }
+    if (state.settings_ack_squad != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_ack_squad),
+                              config.chat_policy.ack_for_squad);
+    }
+    if (state.settings_tx_retries != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_tx_retries),
+                                  config.chat_policy.max_tx_retries);
+    }
+    if (state.settings_max_channels != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_max_channels),
+                                  config.chat_policy.max_channels);
+    }
+    if (state.settings_gps_enabled != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_gps_enabled),
+                              config.gps_enabled);
+    }
+    if (state.settings_gps_interval != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_gps_interval),
+                                  config.gps_interval_ms);
+    }
+    if (state.settings_gps_mode != nullptr)
+    {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(state.settings_gps_mode),
+                                 std::clamp<int>(config.gps_mode, 0, 2));
+    }
+    if (state.settings_gps_strategy != nullptr)
+    {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(state.settings_gps_strategy),
+                                 std::clamp<int>(config.gps_strategy, 0, 2));
+    }
+    if (state.settings_external_nmea_hz != nullptr)
+    {
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(state.settings_external_nmea_hz),
+            config.external_nmea_output_hz);
+    }
+    if (state.settings_external_nmea_mask != nullptr)
+    {
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(state.settings_external_nmea_mask),
+            config.external_nmea_sentence_mask);
+    }
+    if (state.settings_map_source != nullptr)
+    {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(state.settings_map_source),
+                                 std::clamp<int>(config.map_source, 0, 2));
+    }
+    if (state.settings_map_zoom != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_map_zoom),
+                                  state.map_model.snapshot().zoom);
+    }
+    if (state.settings_map_contour != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_map_contour),
+                              config.map_contour_enabled);
+    }
+    if (state.settings_map_track != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_map_track),
+                              config.map_track_enabled);
+    }
+    if (state.settings_map_track_interval != nullptr)
+    {
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(state.settings_map_track_interval),
+            config.map_track_interval);
+    }
+    if (state.settings_map_track_format != nullptr)
+    {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(state.settings_map_track_format),
+                                 std::clamp<int>(config.map_track_format, 0, 2));
+    }
+    if (state.settings_net_duty_cycle != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_net_duty_cycle),
+                              config.net_duty_cycle);
+    }
+    if (state.settings_net_channel_util != nullptr)
+    {
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(state.settings_net_channel_util),
+            config.net_channel_util);
+    }
+    if (state.settings_privacy_encrypt_mode != nullptr)
+    {
+        gtk_combo_box_set_active(
+            GTK_COMBO_BOX(state.settings_privacy_encrypt_mode),
+            std::clamp<int>(config.privacy_encrypt_mode, 0, 2));
+    }
+    showSettingsNotice(state, "Settings loaded.");
+}
+
+void onSettingsProtocolChanged(GtkComboBox*, gpointer data)
+{
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    const int index = gtk_combo_box_get_active(
+        GTK_COMBO_BOX(state.settings_protocol));
+    const auto protocol = protocolFromIndex(index);
+    const auto& mesh = meshConfigForProtocol(state.services.config(), protocol);
+    if (state.settings_lora_freq != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_freq),
+                                  displayFrequencyMhz(mesh));
+    }
+    if (state.settings_lora_bw != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_bw),
+                                  displayBandwidthKHz(mesh, protocol));
+    }
+    if (state.settings_lora_sf != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_sf),
+                                  displaySpreadFactor(mesh, protocol));
+    }
+    if (state.settings_lora_cr != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_cr),
+                                  displayCodingRate(mesh, protocol));
+    }
+    if (state.settings_lora_tx != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_lora_tx),
+                                  mesh.tx_power);
+    }
+    if (state.settings_hop_limit != nullptr)
+    {
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_hop_limit),
+                                  mesh.hop_limit);
+    }
+    if (state.settings_tx_enabled != nullptr)
+    {
+        gtk_switch_set_active(GTK_SWITCH(state.settings_tx_enabled),
+                              mesh.tx_enabled);
+    }
+}
+
+void onSettingsApplyClicked(GtkButton*, gpointer data)
+{
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    auto& config = state.services.config();
+
+    copyBounded(config.node_name,
+                sizeof(config.node_name),
+                gtk_editable_get_text(GTK_EDITABLE(state.settings_node_name)));
+    copyBounded(config.short_name,
+                sizeof(config.short_name),
+                gtk_editable_get_text(GTK_EDITABLE(state.settings_short_name)));
+
+    const auto protocol = protocolFromIndex(
+        gtk_combo_box_get_active(GTK_COMBO_BOX(state.settings_protocol)));
+    config.mesh_protocol = protocol;
+    auto& mesh = meshConfigForProtocol(config, protocol);
+    mesh.use_preset = false;
+    mesh.override_frequency_mhz = static_cast<float>(
+        gtk_spin_button_get_value(GTK_SPIN_BUTTON(state.settings_lora_freq)));
+    mesh.meshcore_freq_mhz = mesh.override_frequency_mhz;
+    const float bandwidth_khz = static_cast<float>(
+        gtk_spin_button_get_value(GTK_SPIN_BUTTON(state.settings_lora_bw)));
+    const auto spread_factor = static_cast<std::uint8_t>(
+        gtk_spin_button_get_value_as_int(
+            GTK_SPIN_BUTTON(state.settings_lora_sf)));
+    const auto coding_rate = static_cast<std::uint8_t>(
+        gtk_spin_button_get_value_as_int(
+            GTK_SPIN_BUTTON(state.settings_lora_cr)));
+    mesh.bandwidth_khz = bandwidth_khz;
+    mesh.spread_factor = spread_factor;
+    mesh.coding_rate = coding_rate;
+    mesh.meshcore_bw_khz = bandwidth_khz;
+    mesh.meshcore_sf = spread_factor;
+    mesh.meshcore_cr = coding_rate;
+    mesh.tx_power = static_cast<std::int8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_lora_tx)),
+                   static_cast<int>(::app::AppConfig::kTxPowerMinDbm),
+                   static_cast<int>(::app::AppConfig::kTxPowerMaxDbm)));
+    mesh.hop_limit = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_hop_limit)),
+                   1,
+                   7));
+    mesh.tx_enabled =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_tx_enabled));
+
+    config.chat_channel = static_cast<std::uint8_t>(std::clamp(
+        gtk_combo_box_get_active(GTK_COMBO_BOX(state.settings_chat_channel)),
+        0,
+        1));
+    config.chat_policy.enable_relay =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_relay_enabled));
+    config.chat_policy.ack_for_broadcast =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_ack_broadcast));
+    config.chat_policy.ack_for_squad =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_ack_squad));
+    config.chat_policy.max_tx_retries = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_tx_retries)),
+                   0,
+                   5));
+    config.chat_policy.max_channels = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_max_channels)),
+                   1,
+                   3));
+    mesh.enable_relay = config.chat_policy.enable_relay;
+
+    config.gps_enabled =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_gps_enabled));
+    config.gps_interval_ms = static_cast<std::uint32_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_gps_interval)),
+                   1000,
+                   3600000));
+    config.gps_mode = static_cast<std::uint8_t>(std::clamp(
+        gtk_combo_box_get_active(GTK_COMBO_BOX(state.settings_gps_mode)),
+        0,
+        2));
+    config.gps_strategy = static_cast<std::uint8_t>(std::clamp(
+        gtk_combo_box_get_active(GTK_COMBO_BOX(state.settings_gps_strategy)),
+        0,
+        2));
+    config.external_nmea_output_hz = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_external_nmea_hz)),
+                   0,
+                   10));
+    config.external_nmea_sentence_mask = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_external_nmea_mask)),
+                   0,
+                   255));
+
+    const int map_source =
+        gtk_combo_box_get_active(GTK_COMBO_BOX(state.settings_map_source));
+    state.map_model.setSource(
+        ::platform::linux_runtime::sanitize_map_base_source(
+            static_cast<std::uint8_t>(std::clamp(map_source, 0, 2))));
+    state.map_model.setZoom(gtk_spin_button_get_value_as_int(
+        GTK_SPIN_BUTTON(state.settings_map_zoom)));
+    config.map_contour_enabled =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_map_contour));
+    config.map_track_enabled =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_map_track));
+    config.map_track_interval = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_map_track_interval)),
+                   1,
+                   99));
+    config.map_track_format = static_cast<std::uint8_t>(std::clamp(
+        gtk_combo_box_get_active(GTK_COMBO_BOX(state.settings_map_track_format)),
+        0,
+        2));
+    config.net_duty_cycle =
+        gtk_switch_get_active(GTK_SWITCH(state.settings_net_duty_cycle));
+    config.net_channel_util = static_cast<std::uint8_t>(
+        std::clamp(gtk_spin_button_get_value_as_int(
+                       GTK_SPIN_BUTTON(state.settings_net_channel_util)),
+                   0,
+                   100));
+    config.privacy_encrypt_mode = static_cast<std::uint8_t>(std::clamp(
+        gtk_combo_box_get_active(
+            GTK_COMBO_BOX(state.settings_privacy_encrypt_mode)),
+        0,
+        2));
+    mesh.override_duty_cycle = !config.net_duty_cycle;
+
+    state.services.applyUserInfo();
+    state.services.applyMeshConfig();
+    state.services.applyPositionConfig();
+    state.services.applyChatDefaults();
+    state.services.applyNetworkLimits();
+    state.services.applyPrivacyConfig();
+    state.services.saveConfig();
+    state.map_failed_tiles.clear();
+    state.map_fetch_status.clear();
+    showSettingsNotice(state, "Settings saved.");
+    refreshUi(state);
+}
+
+void onSettingsReloadClicked(GtkButton*, gpointer data)
+{
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    populateSettingsControls(state);
 }
 
 gboolean onRefresh(gpointer data)
@@ -987,67 +1552,87 @@ GtkWidget* buildMapSourceButton(GtkUConsoleAppState& state,
 
 GtkWidget* buildMap(GtkUConsoleAppState& state)
 {
-    GtkWidget* root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-    gtk_widget_set_hexpand(root, TRUE);
-    gtk_widget_set_vexpand(root, TRUE);
+    state.map_canvas = gtk_overlay_new();
+    gtk_widget_add_css_class(state.map_canvas, "map-canvas");
+    gtk_widget_set_hexpand(state.map_canvas, TRUE);
+    gtk_widget_set_vexpand(state.map_canvas, TRUE);
+    gtk_widget_set_overflow(state.map_canvas, GTK_OVERFLOW_HIDDEN);
 
-    state.map_title = makeLabel("Map workspace", "workspace-title");
-    state.map_meta = makeLabel("", "workspace-subtitle");
-    gtk_box_append(GTK_BOX(root), state.map_title);
-    gtk_box_append(GTK_BOX(root), state.map_meta);
+    state.map_grid = gtk_grid_new();
+    gtk_widget_add_css_class(state.map_grid, "map-grid");
+    gtk_widget_set_size_request(state.map_grid, 1, 1);
+    gtk_grid_set_row_spacing(GTK_GRID(state.map_grid), 0);
+    gtk_grid_set_column_spacing(GTK_GRID(state.map_grid), 0);
+    gtk_grid_set_row_homogeneous(GTK_GRID(state.map_grid), TRUE);
+    gtk_grid_set_column_homogeneous(GTK_GRID(state.map_grid), TRUE);
+    gtk_widget_set_hexpand(state.map_grid, TRUE);
+    gtk_widget_set_vexpand(state.map_grid, TRUE);
 
-    GtkWidget* controls = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    gtk_widget_add_css_class(controls, "map-controls");
-    gtk_widget_set_hexpand(controls, TRUE);
-    gtk_box_append(GTK_BOX(controls),
+    GtkWidget* map_frame = gtk_aspect_frame_new(0.5F, 0.5F, 5.0F / 3.0F, FALSE);
+    gtk_widget_set_hexpand(map_frame, TRUE);
+    gtk_widget_set_vexpand(map_frame, TRUE);
+    gtk_aspect_frame_set_child(GTK_ASPECT_FRAME(map_frame), state.map_grid);
+    gtk_overlay_set_child(GTK_OVERLAY(state.map_canvas), map_frame);
+
+    GtkWidget* controls = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(controls, "map-overlay-panel");
+    gtk_widget_set_halign(controls, GTK_ALIGN_START);
+    gtk_widget_set_valign(controls, GTK_ALIGN_START);
+    gtk_widget_set_margin_start(controls, 12);
+    gtk_widget_set_margin_top(controls, 12);
+    gtk_widget_set_size_request(controls, 420, -1);
+    state.map_title = makeLabel("OSM map", "row-title");
+    gtk_box_append(GTK_BOX(controls), state.map_title);
+    state.map_meta = makeLabel("", "row-meta", true);
+    gtk_box_append(GTK_BOX(controls), state.map_meta);
+
+    GtkWidget* source_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_add_css_class(source_row, "map-tool-row");
+    gtk_box_append(GTK_BOX(source_row),
                    buildMapSourceButton(
                        state,
                        &state.map_source_osm,
                        "OSM",
                        ::platform::linux_runtime::MapBaseSource::Osm));
-    gtk_box_append(GTK_BOX(controls),
+    gtk_box_append(GTK_BOX(source_row),
                    buildMapSourceButton(
                        state,
                        &state.map_source_terrain,
                        "Terrain",
                        ::platform::linux_runtime::MapBaseSource::Terrain));
-    gtk_box_append(GTK_BOX(controls),
+    gtk_box_append(GTK_BOX(source_row),
                    buildMapSourceButton(
                        state,
                        &state.map_source_satellite,
                        "Satellite",
                        ::platform::linux_runtime::MapBaseSource::Satellite));
-
-    GtkWidget* spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_hexpand(spacer, TRUE);
-    gtk_box_append(GTK_BOX(controls), spacer);
-
     GtkWidget* zoom_out = gtk_button_new_with_label("-");
     gtk_widget_add_css_class(zoom_out, "nav-button");
     g_signal_connect(zoom_out, "clicked", G_CALLBACK(onMapZoomOutClicked),
                      &state);
-    gtk_box_append(GTK_BOX(controls), zoom_out);
+    gtk_box_append(GTK_BOX(source_row), zoom_out);
 
     GtkWidget* zoom_in = gtk_button_new_with_label("+");
     gtk_widget_add_css_class(zoom_in, "nav-button");
     g_signal_connect(zoom_in, "clicked", G_CALLBACK(onMapZoomInClicked),
                      &state);
-    gtk_box_append(GTK_BOX(controls), zoom_in);
-    gtk_box_append(GTK_BOX(root), controls);
+    gtk_box_append(GTK_BOX(source_row), zoom_in);
+    gtk_box_append(GTK_BOX(controls), source_row);
+    gtk_overlay_add_overlay(GTK_OVERLAY(state.map_canvas), controls);
 
-    state.map_grid = gtk_grid_new();
-    gtk_widget_add_css_class(state.map_grid, "map-grid");
-    gtk_grid_set_row_spacing(GTK_GRID(state.map_grid), 6);
-    gtk_grid_set_column_spacing(GTK_GRID(state.map_grid), 6);
-    gtk_widget_set_hexpand(state.map_grid, TRUE);
-    gtk_widget_set_vexpand(state.map_grid, TRUE);
-    gtk_box_append(GTK_BOX(root), state.map_grid);
-
+    GtkWidget* status_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+    gtk_widget_add_css_class(status_panel, "map-overlay-panel");
+    gtk_widget_set_halign(status_panel, GTK_ALIGN_START);
+    gtk_widget_set_valign(status_panel, GTK_ALIGN_END);
+    gtk_widget_set_margin_start(status_panel, 12);
+    gtk_widget_set_margin_bottom(status_panel, 12);
+    gtk_widget_set_size_request(status_panel, 620, -1);
     state.map_status = makeLabel("", "row-meta", true);
-    gtk_box_append(GTK_BOX(root), state.map_status);
+    gtk_box_append(GTK_BOX(status_panel), state.map_status);
     state.map_cache_status = makeLabel("", "row-meta", true);
-    gtk_box_append(GTK_BOX(root), state.map_cache_status);
-    return root;
+    gtk_box_append(GTK_BOX(status_panel), state.map_cache_status);
+    gtk_overlay_add_overlay(GTK_OVERLAY(state.map_canvas), status_panel);
+    return state.map_canvas;
 }
 
 GtkWidget* buildDetailsWorkspace(const char* title,
@@ -1133,12 +1718,326 @@ GtkWidget* buildLogs(GtkUConsoleAppState& state)
     return root;
 }
 
+GtkWidget* makeSettingsSection(const char* title)
+{
+    GtkWidget* section = makePanel();
+    gtk_widget_add_css_class(section, "settings-section");
+    gtk_box_append(GTK_BOX(section), makeLabel(title, "row-title"));
+    return section;
+}
+
+GtkWidget* makeSettingsRow(const char* title,
+                           const char* detail,
+                           GtkWidget* control)
+{
+    GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_add_css_class(row, "settings-row");
+    gtk_widget_set_hexpand(row, TRUE);
+
+    GtkWidget* text = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(text, TRUE);
+    gtk_box_append(GTK_BOX(text), makeLabel(title, "row-title"));
+    if (detail != nullptr && detail[0] != '\0')
+    {
+        gtk_box_append(GTK_BOX(text), makeLabel(detail, "row-meta", true));
+    }
+    gtk_box_append(GTK_BOX(row), text);
+
+    if (control != nullptr)
+    {
+        gtk_widget_add_css_class(control, "settings-control");
+        gtk_widget_set_valign(control, GTK_ALIGN_CENTER);
+        gtk_box_append(GTK_BOX(row), control);
+    }
+    return row;
+}
+
+GtkWidget* makeCombo(const std::vector<const char*>& labels, int active)
+{
+    GtkWidget* combo = gtk_combo_box_text_new();
+    for (const char* label : labels)
+    {
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), label);
+    }
+    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active);
+    return combo;
+}
+
+GtkWidget* makeSpin(double min, double max, double step, double value)
+{
+    GtkWidget* spin = gtk_spin_button_new_with_range(min, max, step);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin), value);
+    return spin;
+}
+
+GtkWidget* makeSwitch(bool active)
+{
+    GtkWidget* sw = gtk_switch_new();
+    gtk_switch_set_active(GTK_SWITCH(sw), active);
+    return sw;
+}
+
 GtkWidget* buildSettings(GtkUConsoleAppState& state)
 {
-    return buildDetailsWorkspace(
-        "Settings",
-        "Current read-only runtime configuration for this build.",
-        &state.settings_page_box);
+    GtkWidget* root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_hexpand(root, TRUE);
+    gtk_widget_set_vexpand(root, TRUE);
+
+    GtkWidget* actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_add_css_class(actions, "settings-actions");
+    state.settings_status = makeLabel("", "settings-status", true);
+    gtk_widget_set_hexpand(state.settings_status, TRUE);
+    gtk_box_append(GTK_BOX(actions), state.settings_status);
+    GtkWidget* reload = gtk_button_new_with_label("Reload");
+    gtk_widget_add_css_class(reload, "nav-button");
+    g_signal_connect(reload, "clicked", G_CALLBACK(onSettingsReloadClicked),
+                     &state);
+    gtk_box_append(GTK_BOX(actions), reload);
+    GtkWidget* apply = gtk_button_new_with_label("Save");
+    gtk_widget_add_css_class(apply, "send");
+    g_signal_connect(apply, "clicked", G_CALLBACK(onSettingsApplyClicked),
+                     &state);
+    gtk_box_append(GTK_BOX(actions), apply);
+    gtk_box_append(GTK_BOX(root), actions);
+
+    state.settings_page_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_hexpand(state.settings_page_box, TRUE);
+
+    const auto& config = state.services.config();
+    const auto& mesh = config.activeMeshConfig();
+    const auto protocol = config.mesh_protocol;
+
+    GtkWidget* identity = makeSettingsSection("Identity");
+    state.settings_node_name = gtk_entry_new();
+    gtk_editable_set_text(GTK_EDITABLE(state.settings_node_name),
+                          config.node_name);
+    gtk_box_append(GTK_BOX(identity),
+                   makeSettingsRow("Node name",
+                                   "Broadcast name stored in local config.",
+                                   state.settings_node_name));
+    state.settings_short_name = gtk_entry_new();
+    gtk_editable_set_text(GTK_EDITABLE(state.settings_short_name),
+                          config.short_name);
+    gtk_box_append(GTK_BOX(identity),
+                   makeSettingsRow("Short name",
+                                   "Compact display name for status and packets.",
+                                   state.settings_short_name));
+    gtk_box_append(GTK_BOX(state.settings_page_box), identity);
+
+    GtkWidget* radio = makeSettingsSection("Radio");
+    std::vector<const char*> protocols{};
+    protocols.reserve(kSettingsProtocols.size());
+    for (auto protocol : kSettingsProtocols)
+    {
+        protocols.push_back(::chat::infra::meshProtocolName(protocol));
+    }
+    state.settings_protocol =
+        makeCombo(protocols, protocolIndex(config.mesh_protocol));
+    g_signal_connect(state.settings_protocol,
+                     "changed",
+                     G_CALLBACK(onSettingsProtocolChanged),
+                     &state);
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Protocol",
+                                   "Active mesh protocol used by chat transport.",
+                                   state.settings_protocol));
+    state.settings_lora_freq =
+        makeSpin(137.0, 1020.0, 0.001, displayFrequencyMhz(mesh));
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(state.settings_lora_freq), 3);
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Frequency MHz",
+                                   "SX1262 carrier frequency.",
+                                   state.settings_lora_freq));
+    state.settings_lora_bw =
+        makeSpin(7.8, 500.0, 1.0, displayBandwidthKHz(mesh, protocol));
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(state.settings_lora_bw), 1);
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Bandwidth kHz",
+                                   "LoRa bandwidth written into active mesh config.",
+                                   state.settings_lora_bw));
+    state.settings_lora_sf =
+        makeSpin(5.0, 12.0, 1.0, displaySpreadFactor(mesh, protocol));
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Spread factor",
+                                   "LoRa SF, persisted with the active protocol.",
+                                   state.settings_lora_sf));
+    state.settings_lora_cr =
+        makeSpin(5.0, 8.0, 1.0, displayCodingRate(mesh, protocol));
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Coding rate",
+                                   "LoRa coding rate denominator.",
+                                   state.settings_lora_cr));
+    state.settings_lora_tx = makeSpin(::app::AppConfig::kTxPowerMinDbm,
+                                      ::app::AppConfig::kTxPowerMaxDbm,
+                                      1.0,
+                                      mesh.tx_power);
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("TX power dBm",
+                                   "Transmit power clamped to build target limits.",
+                                   state.settings_lora_tx));
+    state.settings_hop_limit = makeSpin(1.0, 7.0, 1.0, mesh.hop_limit);
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Hop limit",
+                                   "Maximum relay hop count for outgoing packets.",
+                                   state.settings_hop_limit));
+    state.settings_tx_enabled = makeSwitch(mesh.tx_enabled);
+    gtk_box_append(GTK_BOX(radio),
+                   makeSettingsRow("Transmit",
+                                   "Controls whether the active mesh config allows TX.",
+                                   state.settings_tx_enabled));
+    gtk_box_append(GTK_BOX(state.settings_page_box), radio);
+
+    GtkWidget* chat = makeSettingsSection("Chat / Policy");
+    state.settings_chat_channel =
+        makeCombo({"Primary", "Secondary"},
+                  std::clamp<int>(config.chat_channel, 0, 1));
+    gtk_box_append(GTK_BOX(chat),
+                   makeSettingsRow("Default channel",
+                                   "Channel used by outgoing chat messages.",
+                                   state.settings_chat_channel));
+    state.settings_relay_enabled =
+        makeSwitch(config.chat_policy.enable_relay);
+    gtk_box_append(GTK_BOX(chat),
+                   makeSettingsRow("Relay",
+                                   "Allows this node to forward mesh traffic.",
+                                   state.settings_relay_enabled));
+    state.settings_ack_broadcast =
+        makeSwitch(config.chat_policy.ack_for_broadcast);
+    gtk_box_append(GTK_BOX(chat),
+                   makeSettingsRow("Broadcast ACK",
+                                   "Requests ACK for broadcast messages.",
+                                   state.settings_ack_broadcast));
+    state.settings_ack_squad = makeSwitch(config.chat_policy.ack_for_squad);
+    gtk_box_append(GTK_BOX(chat),
+                   makeSettingsRow("Squad ACK",
+                                   "Requests ACK for direct or squad messages.",
+                                   state.settings_ack_squad));
+    state.settings_tx_retries =
+        makeSpin(0.0, 5.0, 1.0, config.chat_policy.max_tx_retries);
+    gtk_box_append(GTK_BOX(chat),
+                   makeSettingsRow("TX retries",
+                                   "Retry budget used by chat policy.",
+                                   state.settings_tx_retries));
+    state.settings_max_channels =
+        makeSpin(1.0, 3.0, 1.0, config.chat_policy.max_channels);
+    gtk_box_append(GTK_BOX(chat),
+                   makeSettingsRow("Max channels",
+                                   "Maximum chat channels exposed by policy.",
+                                   state.settings_max_channels));
+    gtk_box_append(GTK_BOX(state.settings_page_box), chat);
+
+    GtkWidget* gps = makeSettingsSection("GPS");
+    state.settings_gps_enabled = makeSwitch(config.gps_enabled);
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow("GPS enabled",
+                                   "Applies to the Linux GPS runtime.",
+                                   state.settings_gps_enabled));
+    state.settings_gps_interval =
+        makeSpin(1000.0, 3600000.0, 1000.0, config.gps_interval_ms);
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow("Interval ms",
+                                   "GPS collection interval persisted in AppConfig.",
+                                   state.settings_gps_interval));
+    state.settings_gps_mode =
+        makeCombo({"High accuracy", "Power save", "Fix only"},
+                  std::clamp<int>(config.gps_mode, 0, 2));
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow("Location mode",
+                                   "GNSS mode applied to the Linux GPS runtime.",
+                                   state.settings_gps_mode));
+    state.settings_gps_strategy =
+        makeCombo({"Continuous", "Motion wake", "Low power off"},
+                  std::clamp<int>(config.gps_strategy, 0, 2));
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow("Position strategy",
+                                   "Power strategy used by GPS collection.",
+                                   state.settings_gps_strategy));
+    state.settings_external_nmea_hz =
+        makeSpin(0.0, 10.0, 1.0, config.external_nmea_output_hz);
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow("NMEA export Hz",
+                                   "0 disables external NMEA output.",
+                                   state.settings_external_nmea_hz));
+    state.settings_external_nmea_mask =
+        makeSpin(0.0, 255.0, 1.0, config.external_nmea_sentence_mask);
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow("NMEA sentence mask",
+                                   "Raw sentence mask persisted for GPS output.",
+                                   state.settings_external_nmea_mask));
+    gtk_box_append(GTK_BOX(state.settings_page_box), gps);
+
+    GtkWidget* map = makeSettingsSection("Map");
+    state.settings_map_source = makeCombo({"OSM", "Terrain", "Satellite"},
+                                          std::clamp<int>(config.map_source,
+                                                          0,
+                                                          2));
+    gtk_box_append(GTK_BOX(map),
+                   makeSettingsRow("Base map",
+                                   "Default map source for the uConsole map view.",
+                                   state.settings_map_source));
+    state.settings_map_zoom =
+        makeSpin(1.0, 18.0, 1.0, state.map_model.snapshot().zoom);
+    gtk_box_append(GTK_BOX(map),
+                   makeSettingsRow("Zoom",
+                                   "Map zoom used by the GTK map canvas.",
+                                   state.settings_map_zoom));
+    state.settings_map_contour = makeSwitch(config.map_contour_enabled);
+    gtk_box_append(GTK_BOX(map),
+                   makeSettingsRow("Contour overlay",
+                                   "Persists contour overlay preference.",
+                                   state.settings_map_contour));
+    state.settings_map_track = makeSwitch(config.map_track_enabled);
+    gtk_box_append(GTK_BOX(map),
+                   makeSettingsRow("Track recording",
+                                   "Persists local track recording preference.",
+                                   state.settings_map_track));
+    state.settings_map_track_interval =
+        makeSpin(1.0, 99.0, 1.0, config.map_track_interval);
+    gtk_box_append(GTK_BOX(map),
+                   makeSettingsRow("Track interval",
+                                   "Track interval seconds, 99 means distance mode.",
+                                   state.settings_map_track_interval));
+    state.settings_map_track_format =
+        makeCombo({"GPX", "CSV", "Binary"},
+                  std::clamp<int>(config.map_track_format, 0, 2));
+    gtk_box_append(GTK_BOX(map),
+                   makeSettingsRow("Track format",
+                                   "Format for future local track exports.",
+                                   state.settings_map_track_format));
+    gtk_box_append(GTK_BOX(state.settings_page_box), map);
+
+    GtkWidget* network = makeSettingsSection("Network / Privacy");
+    state.settings_net_duty_cycle = makeSwitch(config.net_duty_cycle);
+    gtk_box_append(GTK_BOX(network),
+                   makeSettingsRow("Duty cycle limits",
+                                   "Keeps airtime throttling enabled for normal TX.",
+                                   state.settings_net_duty_cycle));
+    state.settings_net_channel_util =
+        makeSpin(0.0, 100.0, 25.0, config.net_channel_util);
+    gtk_box_append(GTK_BOX(network),
+                   makeSettingsRow("Channel utilization %",
+                                   "0 leaves utilization control automatic.",
+                                   state.settings_net_channel_util));
+    state.settings_privacy_encrypt_mode =
+        makeCombo({"Off", "PSK", "PKI"},
+                  std::clamp<int>(config.privacy_encrypt_mode, 0, 2));
+    gtk_box_append(GTK_BOX(network),
+                   makeSettingsRow("Encryption mode",
+                                   "Persists local privacy mode selection.",
+                                   state.settings_privacy_encrypt_mode));
+    gtk_box_append(GTK_BOX(state.settings_page_box), network);
+
+    GtkWidget* scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll),
+                                  state.settings_page_box);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                   GTK_POLICY_AUTOMATIC,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_hexpand(scroll, TRUE);
+    gtk_widget_set_vexpand(scroll, TRUE);
+    gtk_box_append(GTK_BOX(root), scroll);
+    showSettingsNotice(state, "Settings loaded.");
+    return root;
 }
 
 GtkWidget* buildStatusBar(GtkUConsoleAppState& state)
@@ -1243,9 +2142,9 @@ void refreshLocationMiniMap(GtkUConsoleAppState& state,
     }
 
     const MapTileItem* center_tile = nullptr;
-    if (map_snapshot.tiles.size() > 4U)
+    if (map_snapshot.center_tile_index < map_snapshot.tiles.size())
     {
-        center_tile = &map_snapshot.tiles[4U];
+        center_tile = &map_snapshot.tiles[map_snapshot.center_tile_index];
     }
 
     if (center_tile != nullptr && center_tile->available)
@@ -1437,33 +2336,23 @@ void refreshSettingsPage(GtkUConsoleAppState& state,
                          const UConsoleDashboardSnapshot& dashboard,
                          const MapWorkspaceSnapshot& map_snapshot)
 {
-    clearBox(state.settings_page_box);
-    const auto& config = state.services.config();
-    gtk_box_append(GTK_BOX(state.settings_page_box),
-                   buildDetailRow("Identity",
-                                  std::string(config.node_name) + " / " +
-                                      config.short_name + " / node " +
-                                      dashboard.self_node));
-    gtk_box_append(GTK_BOX(state.settings_page_box),
-                   buildDetailRow("Mesh protocol", dashboard.mesh_protocol));
-    gtk_box_append(GTK_BOX(state.settings_page_box),
-                   buildDetailRow("GPS",
-                                  std::string(config.gps_enabled ? "enabled"
-                                                                 : "disabled") +
-                                      " / interval " +
-                                      std::to_string(config.gps_interval_ms) +
-                                      " ms"));
-    gtk_box_append(GTK_BOX(state.settings_page_box),
-                   buildDetailRow("Map",
-                                  map_snapshot.source_label + " / z" +
-                                      std::to_string(map_snapshot.zoom)));
-    gtk_box_append(GTK_BOX(state.settings_page_box),
-                   buildDetailRow("BLE",
-                                  "not used on Linux/uConsole"));
-    gtk_box_append(GTK_BOX(state.settings_page_box),
-                   buildDetailRow("Settings surface",
-                                  "Read-only for this slice. Editable controls will be added when the corresponding Linux runtime actions are wired.",
-                                  true));
+    if (state.settings_status == nullptr)
+    {
+        return;
+    }
+
+    if (!state.settings_notice.empty() && state.settings_notice_ticks > 0)
+    {
+        setLabel(state.settings_status, state.settings_notice);
+        --state.settings_notice_ticks;
+        return;
+    }
+    state.settings_notice.clear();
+
+    const std::string status =
+        dashboard.self_node + " / " + dashboard.mesh_protocol + " / " +
+        map_snapshot.source_label + " z" + std::to_string(map_snapshot.zoom);
+    setLabel(state.settings_status, status);
 }
 
 GtkWidget* buildPacketLogEntry(
@@ -1675,37 +2564,37 @@ void maybeStartMapFetch(GtkUConsoleAppState& state,
 
 GtkWidget* buildTileCell(const MapTileItem& item, bool center)
 {
-    GtkWidget* cell = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    GtkWidget* cell = gtk_overlay_new();
     gtk_widget_add_css_class(cell, "tile-cell");
-    if (center)
-    {
-        gtk_widget_add_css_class(cell, "tile-center");
-    }
-    gtk_widget_set_size_request(cell, 156, 156);
+    gtk_widget_set_size_request(cell, 1, 1);
     gtk_widget_set_hexpand(cell, TRUE);
     gtk_widget_set_vexpand(cell, TRUE);
 
+    GtkWidget* content = nullptr;
     if (item.available)
     {
-        GtkWidget* picture =
+        content =
             gtk_picture_new_for_filename(item.path.string().c_str());
-        gtk_picture_set_content_fit(GTK_PICTURE(picture),
-                                    GTK_CONTENT_FIT_COVER);
-        gtk_widget_set_size_request(picture, 148, 128);
-        gtk_widget_set_hexpand(picture, TRUE);
-        gtk_widget_set_vexpand(picture, TRUE);
-        gtk_box_append(GTK_BOX(cell), picture);
+        gtk_picture_set_content_fit(GTK_PICTURE(content),
+                                    GTK_CONTENT_FIT_FILL);
     }
     else
     {
-        gtk_widget_set_vexpand(cell, TRUE);
-        gtk_box_append(GTK_BOX(cell), makeLabel("Queued", "row-title"));
+        content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+        gtk_widget_add_css_class(content, "map-tile-pending");
     }
+    gtk_widget_set_size_request(content, 1, 1);
+    gtk_widget_set_hexpand(content, TRUE);
+    gtk_widget_set_vexpand(content, TRUE);
+    gtk_overlay_set_child(GTK_OVERLAY(cell), content);
 
-    const std::string meta = "z" + std::to_string(item.id.z) + " " +
-                             std::to_string(item.id.x) + "/" +
-                             std::to_string(item.id.y);
-    gtk_box_append(GTK_BOX(cell), makeLabel(meta.c_str(), "row-meta"));
+    if (center)
+    {
+        GtkWidget* marker = makeLabel("+", "map-marker");
+        gtk_widget_set_halign(marker, GTK_ALIGN_CENTER);
+        gtk_widget_set_valign(marker, GTK_ALIGN_CENTER);
+        gtk_overlay_add_overlay(GTK_OVERLAY(cell), marker);
+    }
     return cell;
 }
 
@@ -1763,10 +2652,12 @@ void refreshMap(GtkUConsoleAppState& state)
     {
         for (std::size_t index = 0; index < snapshot.tiles.size(); ++index)
         {
-            const int col = static_cast<int>(index % 3U);
-            const int row = static_cast<int>(index / 3U);
+            const auto columns = std::max<std::size_t>(1U, snapshot.columns);
+            const int col = static_cast<int>(index % columns);
+            const int row = static_cast<int>(index / columns);
             gtk_grid_attach(GTK_GRID(state.map_grid),
-                            buildTileCell(snapshot.tiles[index], index == 4U),
+                            buildTileCell(snapshot.tiles[index],
+                                          index == snapshot.center_tile_index),
                             col,
                             row,
                             1,
@@ -1818,6 +2709,7 @@ void onActivate(GtkApplication* app, gpointer data)
 
     state.window = gtk_application_window_new(app);
     gtk_window_set_title(GTK_WINDOW(state.window), state.options.title.c_str());
+    gtk_window_set_resizable(GTK_WINDOW(state.window), TRUE);
     gtk_window_set_default_size(GTK_WINDOW(state.window),
                                 std::max(320, state.options.width),
                                 std::max(240, state.options.height));

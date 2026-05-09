@@ -51,12 +51,22 @@ int main()
     assert(std::abs(snapshot.lat) < 0.000001);
     assert(std::abs(snapshot.lon) < 0.000001);
     assert(snapshot.source_label == "OSM");
-    assert(snapshot.tiles.size() == 9U);
+    assert(snapshot.columns == 5U);
+    assert(snapshot.rows == 3U);
+    assert(snapshot.center_tile_index == 7U);
+    assert(snapshot.tiles.size() == 15U);
     for (const auto& tile : snapshot.tiles)
     {
         assert(tile.id.source == ::platform::linux_runtime::MapBaseSource::Osm);
         assert(tile.id.z == 2);
     }
+
+    set_env_var("TRAIL_MATE_MAP_LAT", "31.2304");
+    set_env_var("TRAIL_MATE_MAP_LNG", "121.4737");
+    model.setZoom(20);
+    assert(model.snapshot().zoom == 18);
+    model.setZoom(0);
+    assert(model.snapshot().zoom == 1);
 
     std::filesystem::remove_all(root, ec);
     return 0;

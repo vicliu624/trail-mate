@@ -1655,6 +1655,7 @@ bool LinuxAppServices::initialize()
     syncLocalIdentity();
     applyMeshConfig();
     applyPositionConfig();
+    applyChatDefaults();
     initialized_ = true;
     return true;
 }
@@ -1760,6 +1761,10 @@ void LinuxAppServices::applyChatDefaults()
     if (config_.chat_channel > 1U)
     {
         config_.chat_channel = 0U;
+    }
+    if (impl_)
+    {
+        impl_->chat_model.setPolicy(config_.chat_policy);
     }
 }
 

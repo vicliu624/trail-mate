@@ -7,8 +7,8 @@ namespace trailmate::uconsole::gtk
 
 struct GtkUConsoleOptions
 {
-    int width = 1280;
-    int height = 720;
+    int width = 1180;
+    int height = 650;
     bool fullscreen = false;
     std::string title = "Trail Mate uConsole";
 };

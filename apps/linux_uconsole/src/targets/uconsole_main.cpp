@@ -79,9 +79,13 @@ LaunchOptions parseOptions(int argc, char** argv)
     }
 
     const int default_width =
-        options.backend == Backend::Framebuffer ? 720 : 1280;
+        options.backend == Backend::Framebuffer ? 720
+        : options.backend == Backend::GtkWindow ? 1180
+                                                : 1280;
     const int default_height =
-        options.backend == Backend::Framebuffer ? 1280 : 720;
+        options.backend == Backend::Framebuffer ? 1280
+        : options.backend == Backend::GtkWindow ? 650
+                                                : 720;
     options.shell.width =
         envInt("TRAIL_MATE_UCONSOLE_WIDTH", default_width);
     options.shell.height =

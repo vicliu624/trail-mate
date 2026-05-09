@@ -14,8 +14,9 @@ primary uConsole interface.
 - central operational workspace
 - Overview workspace with location/map context, hardware state, message status,
   team activity timeline, and runtime details
-- Hardware, Data, and Settings workspaces are clickable and show current
-  read-only runtime state until their edit/control actions are wired
+- Hardware and Data workspaces are clickable runtime inspection surfaces;
+  Settings is a writable GTK control plane for identity, radio, GPS, map,
+  chat policy, network, and privacy configuration
 - SQLite-backed Linux local state
 - online XYZ map tile fetch with local file cache
 
@@ -73,8 +74,9 @@ The package installs the app as:
 trailmate-uconsole
 ```
 
-The default desktop surface is `1280x720`, matching the current uConsole desktop
-session orientation. Override it with:
+The default GTK desktop window is `1180x650`, leaving room for the window
+decorations and desktop panel on the uConsole `1280x720` landscape session.
+Override it with:
 
 ```sh
 TRAIL_MATE_UCONSOLE_WIDTH=960 TRAIL_MATE_UCONSOLE_HEIGHT=540 trailmate-uconsole
@@ -110,7 +112,8 @@ TRAIL_MATE_MAP_LAT=31.2304 TRAIL_MATE_MAP_LNG=121.4737 trailmate-uconsole
 ```
 
 Downloaded base tiles are cached in the same XYZ layout used by the SD-card map
-runtime:
+runtime. The GTK map renders those tiles as one continuous landscape map surface;
+individual tile cache entries are not exposed as bordered UI cards:
 
 ```text
 $TRAIL_MATE_SD_ROOT/maps/base/osm/{z}/{x}/{y}.png

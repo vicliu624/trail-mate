@@ -39,6 +39,9 @@ struct MapWorkspaceSnapshot
     int zoom = 14;
     std::string source_label{};
     std::string fix_label{};
+    std::size_t columns = 0;
+    std::size_t rows = 0;
+    std::size_t center_tile_index = 0;
     std::vector<MapTileItem> tiles{};
     ::platform::linux_runtime::MapTileCacheStats cache_stats{};
 };
@@ -53,6 +56,7 @@ class UConsoleMapWorkspaceModel final
         const ::platform::linux_runtime::MapTileId& tile) const;
 
     void setSource(::platform::linux_runtime::MapBaseSource source);
+    void setZoom(int zoom);
     void zoomIn();
     void zoomOut();
 

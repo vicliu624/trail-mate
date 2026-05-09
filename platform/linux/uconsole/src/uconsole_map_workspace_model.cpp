@@ -24,6 +24,8 @@ constexpr int kMaxZoom = 18;
 constexpr int kDefaultWorldZoom = 2;
 constexpr double kDefaultWorldLat = 0.0;
 constexpr double kDefaultWorldLon = 0.0;
+constexpr int kLandscapeTileRadiusX = 2;
+constexpr int kLandscapeTileRadiusY = 1;
 
 bool parse_env_double(const char* name, double& out)
 {
@@ -142,8 +144,19 @@ MapWorkspaceSnapshot UConsoleMapWorkspaceModel::snapshot() const
         return out;
     }
 
+    out.columns = static_cast<std::size_t>(kLandscapeTileRadiusX * 2 + 1);
+    out.rows = static_cast<std::size_t>(kLandscapeTileRadiusY * 2 + 1);
+    out.center_tile_index =
+        static_cast<std::size_t>(kLandscapeTileRadiusY) * out.columns +
+        static_cast<std::size_t>(kLandscapeTileRadiusX);
+
     const auto ids = ::platform::linux_runtime::map_tiles_around(
-        out.lat, out.lon, out.zoom, source(), 1, 1);
+        out.lat,
+        out.lon,
+        out.zoom,
+        source(),
+        kLandscapeTileRadiusX,
+        kLandscapeTileRadiusY);
     out.tiles.reserve(ids.size());
     for (const auto& id : ids)
     {
@@ -171,16 +184,20 @@ void UConsoleMapWorkspaceModel::setSource(
     services_.saveConfig();
 }
 
+void UConsoleMapWorkspaceModel::setZoom(int zoom)
+{
+    zoom_ = std::clamp(zoom, kMinZoom, kMaxZoom);
+    persistZoom();
+}
+
 void UConsoleMapWorkspaceModel::zoomIn()
 {
-    zoom_ = std::clamp(zoom_ + 1, kMinZoom, kMaxZoom);
-    persistZoom();
+    setZoom(zoom_ + 1);
 }
 
 void UConsoleMapWorkspaceModel::zoomOut()
 {
-    zoom_ = std::clamp(zoom_ - 1, kMinZoom, kMaxZoom);
-    persistZoom();
+    setZoom(zoom_ - 1);
 }
 
 ::platform::linux_runtime::MapBaseSource
