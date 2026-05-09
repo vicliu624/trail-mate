@@ -8,11 +8,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-
-#include "platform/linux/capability_status.h"
-#include "platform/linux/runtime_paths.h"
-
-using namespace ::platform::linux_runtime;
 #include <mutex>
 #include <string>
 #include <vector>
@@ -61,16 +56,61 @@ uint16_t rgb565(uint8_t red, uint8_t green, uint8_t blue)
     return static_cast<uint16_t>((r << 11U) | (g << 5U) | b);
 }
 
-// Use platform::linux_runtime::resolve_paths() for canonical path resolution.
 std::filesystem::path default_storage_root()
 {
     if (const char* configured = std::getenv(kOutputDirEnv))
     {
         if (configured[0] != '\0')
+        {
             return std::filesystem::path(configured);
+        }
     }
-    return ::platform::linux_runtime::resolve_paths().sd_root / "sstv";
+
+    if (const char* configured = std::getenv(kSdRootEnv))
+    {
+        if (configured[0] != '\0')
+        {
+            return std::filesystem::path(configured) / "sstv";
+        }
+    }
+
+    if (const char* configured = std::getenv(kSettingsRootEnv))
+    {
+        if (configured[0] != '\0')
+        {
+            return std::filesystem::path(configured) / "sdcard" / "sstv";
+        }
+    }
+
+#if defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA"))
+    {
+        if (appdata[0] != '\0')
+        {
+            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard" / "sstv";
+        }
+    }
+#endif
+
+    if (const char* home = std::getenv("HOME"))
+    {
+        if (home[0] != '\0')
+        {
+            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard" / "sstv";
+        }
+    }
+
+    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard" / "sstv";
 }
+
+std::string env_or_default(const char* name, const char* fallback)
+{
+    const char* value = std::getenv(name);
+    if (!value || value[0] == '\0')
+    {
+        return std::string(fallback);
+    }
+    return std::string(value);
 }
 
 void ensure_frame_locked()
@@ -236,12 +276,6 @@ Status current_status_locked()
 bool is_supported()
 {
     return true;
-}
-
-CapabilityStatus capability_status()
-{
-    return {CapabilityState::Simulated,
-            "Generated PPM test frame. No real SSTV decoder."};
 }
 
 bool start()
