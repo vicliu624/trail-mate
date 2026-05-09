@@ -96,6 +96,8 @@ The structure must allow:
 - `linux_sim` first
 - then `linux_rpi`
 - then `linux_unoq`
+- and, when introduced, a uConsole/AIO2 desktop-class Linux handheld target
+  governed by [uconsole-aio2-linux.md](./specs/uconsole-aio2-linux.md)
 
 without forcing another repository split.
 
@@ -567,4 +569,3 @@ That is the only sustainable way for Trail Mate to support:
 - future Raspberry Pi and UNO Q devices
 
 without turning repository maintenance into duplicated work.
-
