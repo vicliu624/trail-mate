@@ -53,6 +53,11 @@ const char* current_locale_display_name()
     return kEnglishLocale.display_name;
 }
 
+const char* current_locale_direction()
+{
+    return "ltr";
+}
+
 bool set_locale(const char* locale_id, bool persist)
 {
     (void)persist;

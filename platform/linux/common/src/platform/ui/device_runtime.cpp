@@ -8,10 +8,15 @@
 #include <string>
 #include <thread>
 
+#include "platform/linux/env_config.h"
+#include "platform/linux/runtime_paths.h"
+
 namespace platform::ui::device
 {
 namespace
 {
+
+using namespace ::platform::linux_runtime;
 
 constexpr const char* kFirmwareVersionEnv = "TRAIL_MATE_FIRMWARE_VERSION";
 constexpr const char* kBatteryLevelEnv = "TRAIL_MATE_BATTERY_LEVEL";
@@ -25,45 +30,6 @@ constexpr const char* kPowerTierEnv = "TRAIL_MATE_POWER_TIER";
 uint8_t s_screen_brightness = 0;
 uint8_t s_message_tone_volume = 45;
 
-bool env_flag_enabled(const char* name)
-{
-    const char* value = std::getenv(name);
-    if (!value || value[0] == '\0')
-    {
-        return false;
-    }
-    return std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0 ||
-           std::strcmp(value, "TRUE") == 0 || std::strcmp(value, "yes") == 0 ||
-           std::strcmp(value, "YES") == 0;
-}
-
-bool env_flag_or_default(const char* name, bool fallback)
-{
-    const char* value = std::getenv(name);
-    if (!value || value[0] == '\0')
-    {
-        return fallback;
-    }
-    return env_flag_enabled(name);
-}
-
-int env_int_or_default(const char* name, int fallback)
-{
-    const char* value = std::getenv(name);
-    if (!value || value[0] == '\0')
-    {
-        return fallback;
-    }
-
-    char* end = nullptr;
-    const long parsed = std::strtol(value, &end, 10);
-    if (end == value || (end && *end != '\0'))
-    {
-        return fallback;
-    }
-    return static_cast<int>(parsed);
-}
-
 bool path_exists_from_env(const char* name)
 {
     const char* value = std::getenv(name);
@@ -75,50 +41,10 @@ bool path_exists_from_env(const char* name)
     return std::filesystem::exists(std::filesystem::path(value), ec);
 }
 
-std::filesystem::path default_storage_root()
-{
-    if (const char* configured = std::getenv(kSdRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured);
-        }
-    }
-
-    if (const char* configured = std::getenv(kSettingsRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured) / "sdcard";
-        }
-    }
-
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"))
-    {
-        if (appdata[0] != '\0')
-        {
-            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard";
-        }
-    }
-#endif
-
-    if (const char* home = std::getenv("HOME"))
-    {
-        if (home[0] != '\0')
-        {
-            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard";
-        }
-    }
-
-    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard";
-}
-
 bool ensure_storage_root()
 {
-    std::error_code ec;
-    std::filesystem::create_directories(default_storage_root(), ec);
-    return !ec;
+    const auto paths = ::platform::linux_runtime::resolve_paths();
+    return ::platform::linux_runtime::ensure_directory(paths.sd_root);
 }
 
 #if defined(__linux__)
@@ -175,10 +101,10 @@ bool rtc_ready()
 BatteryInfo battery_info()
 {
     BatteryInfo info{};
-    const int level = env_int_or_default(kBatteryLevelEnv, -1);
+    const int level = platform::linux_runtime::env_int(kBatteryLevelEnv, -1);
     info.available = level >= 0;
     info.level = level;
-    info.charging = env_flag_enabled(kBatteryChargingEnv);
+    info.charging = platform::linux_runtime::env_flag(kBatteryChargingEnv);
     return info;
 }
 
@@ -260,17 +186,17 @@ bool card_ready()
 
 bool gps_ready()
 {
-    return env_flag_or_default(kGpsReadyEnv, true);
+    return platform::linux_runtime::env_flag(kGpsReadyEnv, true);
 }
 
 bool gps_supported()
 {
-    return env_flag_or_default(kGpsSupportedEnv, true);
+    return platform::linux_runtime::env_flag(kGpsSupportedEnv, true);
 }
 
 int power_tier()
 {
-    return env_int_or_default(kPowerTierEnv, 0);
+    return platform::linux_runtime::env_int(kPowerTierEnv, 0);
 }
 
 } // namespace platform::ui::device

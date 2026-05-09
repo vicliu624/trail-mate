@@ -69,13 +69,13 @@ These pieces should not be treated as the Linux foundation:
 Before choosing the first true page migration, these structural tasks come
 first:
 
-1. make the `platform::ui::*` contract set explicit and complete
+1. make the `platform::ui::*` contract set explicit and complete — DONE
 2. remove ESP Arduino include roots and `Preferences` dependence from
-   `modules/ui_shared`
+   `modules/ui_shared` — DONE (2026-05-07, verified by boundary checker)
 3. relocate or split platform-specific code that still lives under `core_*`
-   module trees
+   module trees — DONE (2026-05-07, BLE files cleaned, boundary checker passes)
 4. keep shared Linux shell/session code in `platform/linux/common` instead of
-   app-shell private directories
+   app-shell private directories — DONE (ShellSession/CanvasLvglHost in common)
 5. only then select the first verification slice, likely `Settings`
 
 ## 3. First Linux Runtime Slice

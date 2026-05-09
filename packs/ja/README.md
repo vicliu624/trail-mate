@@ -65,7 +65,7 @@ Notes:
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/ja-1.0.0.zip`
+- `site/assets/packs/ja-1.1.0.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact for a future Extensions downloader. Its `payload/` directory unpacks into `/trailmate/packs/...`.
@@ -82,4 +82,4 @@ Copy the bundle contents so the SD card ends up with:
 /trailmate/packs/locales/ja/strings.tsv
 ```
 
-After reboot, `日本語` appears in Settings. The font is loaded only when Japanese becomes the active locale or when Japanese content requires it.
+After reboot, `日本語` appears in Settings only after the locale is promoted to `translation_status=release`. While it is in `review`, the runtime can install and index the pack but will not offer it as a selectable UI language.

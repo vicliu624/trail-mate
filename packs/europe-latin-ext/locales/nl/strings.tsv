@@ -2,48 +2,99 @@ Action	Actie
 Add	Toevoegen
 Advanced	Geavanceerd
 Always	Altijd
+Altitude	Hoogte
+Altitude Reference	Hoogteref.
 App	App
-Auto	Auto
+Area Cleared	Gebied vrij
+Auto	Automatisch
+Awaiting teammate	Wacht op team
 Back	Terug
+Base Camp	Basiskamp
+Beijing (UTC+8)	Peking (UTC+8)
+BLE bridge ready  |  %s	BLE-brug klaar  |  %s
+BLE linked  |  %s	BLE gekoppeld  |  %s
 Bluetooth	Bluetooth
 Bluetooth Pairing	Bluetooth-koppeling
+Bcast	Uitzending
+Bridge error	Brugfout
+Broadcast	Uitzending
 Cancel	Annuleren
 Channel	Kanaal
-Chat	Chat
+Chat	Chatten
+Chat unavailable	Chat niet beschikbaar
 Chinese	Chinees
+Closes automatically after pairing	Sluit na koppelen
 Close	Sluiten
+Command	Opdracht
+Command: %s	Opdracht: %s
+Command: %s %s	Opdracht: %s %s
+Command: %s %s %s	Opdracht: %s %s %s
+Compare Verification Code	Code vergelijken
+Compass	Kompas
+Connected	Verbonden
+Connected, handshaking...	Verbonden, handshake...
 Contacts	Contacten
-Data Exchange	Gegevenslink
+Contacts (%s)	Contacten (%s)
+Contacts (LXMF)	Contacten (LXMF)
+Contacts (LXMF - %.3fMHz)	Contacten (LXMF - %.3fMHz)
+Contacts (MeshCore)	Contacten (MeshCore)
+Contacts (Meshtastic - %.3fMHz)	Contacten (Meshtastic - %.3fMHz)
+Contacts (RNode)	Contacten (RNode)
+Contacts (RNode - %.3fMHz)	Contacten (RNode - %.3fMHz)
+Conversation protocol mismatch	Gespreksprotocol komt niet overeen
+Data Exchange	Gegevensuitwisseling
+Debug Logs	Foutopsporingslogboeken
+Decoding: %d%%	Decodering: %d%%
+Decoding: 0%	Decodering: 0%
 Delete	Verwijderen
+Delete %s?	%s verwijderen?
+Delete contact %s?	Contactpersoon %s verwijderen?
+Delete failed	Verwijderen mislukt
+Device: %s	Apparaat: %s
+Direct	Direct
 Disabled	Uitgeschakeld
-Discover	Ontdekken
-Display Language	Schermtaal
+Discover	Ontdek
+Display Language	Weergavetaal
+Duplicate name not allowed	Dubbele naam niet toegestaan
 Edit	Bewerken
-Energy Sweep	RF-scan
+Edit nickname	Bijnaam bewerken
+Emergency SOS	Nood-SOS
+Energy Sweep	Energieopruiming
 English	Engels
 English keyboard	Engels toetsenbord
+Enter nickname	Voer bijnaam in
+Enter number for %s	Voer nummer in voor %s
+Enter the 6-digit number	Voer het 6-cijferige nummer in
+Enter this 6-digit PIN on your phone	Voer deze 6-cijferige pincode in op uw telefoon
 Error	Fout
-Factory Reset	Fabrieksreset
+Error: %lu	Fout: %lu
+FSK Voice	FSK-stem
+Failed	Mislukt
+Fix	Herstel
+Fixed PIN	Vaste pincode
+Gauge Design (mAh)	Manometerontwerp (mAh)
+Gauge Full (mAh)	Meter vol (mAh)
+Good Find	Goede vondst
 GPS	GPS
 Extensions	Extensies
 Language	Taal
 Package Details	Pakketdetails
 Back to list	Terug naar lijst
 Install	Installeren
-Update	Bijwerken
+Update	Bijgewerkt
 Uninstall	Verwijderen
-Incompatible	Niet compatibel
+Incompatible	Incompatibel
 Compatible with this device	Compatibel met dit apparaat
 Compatibility: %s	Compatibiliteit: %s
 memory profile mismatch	geheugenprofiel komt niet overeen
-needs %s	vereist %s
+needs %s	heeft %s nodig
 Update available: %s	Update beschikbaar: %s
 Installed	Geïnstalleerd
 Installed: %s	Geïnstalleerd: %s
-Available to install	Beschikbaar om te installeren
+Available to install	Beschikbaar voor installatie
 Blocked	Geblokkeerd
-%lu locales  %lu fonts  %lu IME  %s	%lu talen  %lu lettertypen  %lu IME  %s
-No Wi-Fi	Geen Wi-Fi
+%lu locales  %lu fonts  %lu IME  %s	%lu landinstellingen %lu lettertypen %lu IME %s
+No Wi-Fi	Nee Wi-Fi
 Installing package...	Pakket installeren...
 Package installed	Pakket geïnstalleerd
 Uninstalling package...	Pakket verwijderen...
@@ -54,57 +105,514 @@ About	Over
 Package Info	Pakketinformatie
 Contents	Inhoud
 Source	Bron
-Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	Archief: %s\nExtra lettertype-RAM: %s\nProfielen: %s\n%s
-Locales: %s\nFonts: %s\nIME: %s	Talen: %s\nLettertypen: %s\nIME: %s
-Author: %s\nHomepage: %s	Auteur: %s\nHomepage: %s
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	Archief: %s\nExtra lettertype RAM: %s\nProfielen: %s\n%s
+Locales: %s\nFonts: %s\nIME: %s	Landinstellingen: %s\nLettertypen: %s\nIME: %s
+Author: %s\nHomepage: %s	Auteur: %s\nHomepagina: %s
 None	Geen
-GPS Status	GPS-status
+GPS Status	GPS Status
+HDOP	HDOP
+Heading starting	Koers begint
 Hide	Verbergen
+Host bridge	Hostbridge
+Host connected, probing modem...	Host aangesloten, modem aan het onderzoeken...
+IDLE	IDLE
+Ignored	Genegeerd
+Ignore	Negeren
+Ignore unavailable	Negeren niet beschikbaar
+Ignore update failed	Update negeren mislukt
+Image received	Afbeelding ontvangen
 Info	Info
-Loading...	Laden...
+Initializing...	Initialiseren...
+Invalid airtime factor	Ongeldige zendtijdfactor
+Invalid design capacity (mAh)	Ongeldige ontwerpcapaciteit (mAh)
+Invalid frequency offset	Ongeldige frequentie-offset
+Invalid frequency value	Ongeldige frequentiewaarde
+Invalid full capacity (mAh)	Ongeldige volledige capaciteit (mAh)
+Invalid marker	Ongeldige markering
+Invalid MeshCore bandwidth	Ongeldige MeshCore bandbreedte
+Invalid MeshCore frequency	Ongeldige MeshCore frequentie
+Invalid number	Ongeldig nummer
+Invalid RX delay	Ongeldige RX vertraging
+Key marked trusted	Sleutel gemarkeerd als vertrouwd
+Key must be 32 hex or 16 chars	De sleutel moet 32 hexadecimale tekens of 16 tekens bevatten
+Key trust failed	Sleutelvertrouwen mislukt
+Key Verification	Sleutelverificatie
+LINKED	GEKOPPELD
+LISTEN	LUISTER
+LIVE	LIVE
+Loading...	Bezig met laden...
+Location	Locatie
+Location: %s	Locatie: %s
+Location: %s %s	Locatie: %s %s
+LoRa direct path  |  %s	LoRa direct pad |  %s
+Low battery - audio disabled	Batterij bijna leeg - audio uitgeschakeld
 Map	Kaart
 Map Layer	Kaartlaag
-Nearby	Dichtbij
+MESH	GAAS
+Mesh Status	Meshstatus
+Mesh unavailable	Mesh niet beschikbaar
+MeshCore only	alleen MeshCore
+Message DB cleared	Bericht-DB gewist
+Messages	Berichten
+MESSAGES	BERICHTEN
+Messages and broadcasts show here	Berichten en uitzendingen worden hier weergegeven
+Mini Compass	Mini-kompas
+MT send uses slot 0/1 only	MT-verzending gebruikt alleen slot 0/1
+N/A	N.v.t
+Nearby	In de buurt
+Need local GPS	Lokale GPS nodig
 Network	Netwerk
 New	Nieuw
+new activity	nieuwe activiteit
+Next	Volgende
+No GPS fix	Geen GPS oplossing
+No image	Geen afbeelding
 No messages	Geen berichten
+No preview	Geen voorbeeld
 No recent traffic	Geen recent verkeer
+No response	Geen reactie
+No route selected	Geen route geselecteerd
+No target	Geen doel
+No track files	Geen trackbestanden
+Node DB reset	Knooppunt-DB opnieuw ingesteld
+Node ignored	Knooppunt genegeerd
+Node ignored and hidden	Knooppunt genegeerd en verborgen
+Node unignored	Knooppunt niet genegeerd
+North locked	Noord vergrendeld
 Not set	Niet ingesteld
+NO	NR
+NO FIX	GEEN OPLOSSING
 Number keyboard	Cijfertoetsenbord
 OFF	UIT
-OK	OK
+OK	Oké
 ON	AAN
+online	online
 Pairing	Koppelen
-PC Link	PC-koppeling
-Power	Voeding
+PC Link	PC-link
+PC Link is unavailable on this target.	PC Link is niet beschikbaar op dit doel.
+peer lock  |  turn %03.0f deg	peer-lock |  draai %03.0f graden
+Pinyin keyboard	Pinyin-toetsenbord
+Pinyin: %s	Pinyin: %s
+Position	Positie
+position stream active  |  %u in view	positiestream actief |  %u in zicht
+Power	Vermogen
+Press Back	Druk op Terug
+Press RX to start	Druk op RX om te starten
+Primary	Primair
 Protocol	Protocol
+Protocol switch failed	Protocolwisseling mislukt
+Protocol switched	Protocol geschakeld
+quiet net	stil net
+Random PIN	Willekeurige pincode
 Ready	Klaar
+RECEIVING	ONTVANGEN
 Recent Activity	Recente activiteit
-Reply	Antwoorden
+Record	Opnemen
+Recording	Opname
+Region	Regio
+Remain: %u	Rest: %u
+Reply	Beantwoorden
+Reply disabled for this protocol	Antwoord uitgeschakeld voor dit protocol
+Reset Mesh Profiles	Mesh-profielen opnieuw instellen
+Reset Node DB	Knooppunt-DB opnieuw instellen
+Resetting...	Opnieuw instellen...
+Return	Terug
+Rally Point	Verzamelpunt
+RNode Bridge	RNode Brug
+RNode modem ready	RNode modem gereed
+RNode text chat runs on host	RNode tekstchat draait op de host
+Route	Routebeschrijving
 Run	Uitvoeren
+RX	RX
+RX: %lu  TX: %lu	RX: %lu TX: %lu
+RX: 0  TX: 0	RX: 0 TX: 0
 Save	Opslaan
+Saved: %s	Opgeslagen: %s
 Scan failed	Scannen mislukt
 Scan Local	Lokaal scannen
-Scanning 5s...	5 s scannen...
-SEARCH	ZOEKEN
+Scanning 5s...	Scannen 5s...
 Screen Brightness	Schermhelderheid
-Screen Timeout	Schermtimeout
+Screen Timeout	Schermtime-out
+SEARCH	ZOEKEN
+Secondary	Secundair
+Select a route	Selecteer een route
+Select a track	Selecteer een nummer
+Select marker	Selecteer markering
+Select Track	Selecteer Nummer
+Selected: %s	Geselecteerd: %s
+Send	Verzenden
+Send failed	Verzenden mislukt
+Send this code and compare:\n	Verstuur deze code en vergelijk:\n
+Send ID Broadcast	Verzend ID uitzending
+Send ID Local	Verzend ID Lokaal
+Sending...	Verzenden...
+Sent	Verzonden
 Settings	Instellingen
 Setting	Instelling
-Sky Plot	Sky Plot
+Share Position Marker	Aandeelpositiemarkering
+Share this number:\n	Deel dit nummer:\n
+Short Name	Korte naam
+SOLO	SOLO
 Speaker Volume	Luidsprekervolume
+Sky Plot	Luchtplot
+SSTV RX READY	SSTV RX KLAAR
+SSTV start failed	SSTV-start mislukt
+standing by	paraat
 Status	Status
 Stopped	Gestopt
-Stop	Stoppen
+Stop	Stop
+Stop recording first	Stop eerst met opnemen
 Submit	Verzenden
+Submit failed	Verzenden mislukt
 System	Systeem
+SATELLITE STATUS	SATELLIETATUS
+Talk	Praat
+TALK	PRATEN
 Team	Team
-Team Status	Teamstatus
+TEAM	TEAM
+Team chat send failed	Verzenden van teamchat mislukt
+Team chat unavailable	Teamchat niet beschikbaar
+Team chat unavailable in RNode mode	Teamchat niet beschikbaar in de modus RNode
+team member position will appear here	De positie van het teamlid wordt hier weergegeven
+Team keys not ready	Teamsleutels niet gereed
+Team location encode failed	Coderen van teamlocatie mislukt
+Text chat unavailable	Tekstchat niet beschikbaar
+threads active	discussies actief
 Time Zone	Tijdzone
 Tracker	Tracker
+traffic active	verkeer actief
+Trust Key	Vertrouwenssleutel
+U	U
+Unignore	Niet negeren
+Unread	Ongelezen
 Unknown	Onbekend
-USB Disk	USB-schijf
+USB Mass Storage	USB Massaopslag
+USB Disk	USB Schijf
+USB Bridge	USB Brug
+USB host bridge	USB hostbridge
+USB Bridge is unavailable on this target.	USB Bridge is niet beschikbaar op dit doel.
+USB CDC KISS modem for Reticulum	USB CDC KISS-modem voor Reticulum
+USE	GEBRUIK
+Used	Gebruikt
 User Name	Gebruikersnaam
 Verification Number	Verificatienummer
-Vibration	Trilling
-Clear all settings and restart?	Alle instellingen wissen en herstarten?
+Verification number sent	Verificatienummer verzonden
+Vibration	Trillingen
+VOL %d	VOL %d
+VOL 80	VOL 80
+waiting for better sky view  |  %u in view	wachtend op beter zicht op de hemel |  %u in zicht
+waiting for module GNSS compass	wacht op module GNSS kompas
+waiting for traffic	wachtend op verkeer
+Waiting for host...	Wachten op host...
+Waiting for Reticulum host...	Wachten op Reticulum host...
+WAIT IMU	WACHT IMU
+Walkie not available	Walkie niet beschikbaar
+Walkie start failed	Walkie-start mislukt
+Walkie Talkie	Walkietalkie
+YES	JA
+6 digits	6 cijfers
+%u threads active	%u discussies actief
+%ud	%ud
+%uh	%uh
+%um	%um
+%umo	%umo
+%uy	%uy
+Confirm received code:\n	Ontvangen code bevestigen:\n
+device heading from 9-axis module	apparaatrichting van 9-assige module
+heading unlocks after first fix	kop ontgrendelt na eerste correctie
+If it matches, trust the key.	Als deze overeenkomt, vertrouw dan op de sleutel.
+magnetometer heading active	richting van de magnetometer actief
+magnetometer still warming up	magnetometer is nog steeds aan het opwarmen
+needle shows north until target lock	naald wijst naar het noorden tot doelvergrendeling
+nearest peer  |  %.0f m away	dichtstbijzijnde collega |  %.0f m afstand
+no recent traffic	geen recent verkeer
+now	nu
+%s layer missing	%s laag ontbreekt
+Active: %s	Actief: %s
+Alt: %.0f m	Alt: %.0f m
+Alt: -- m	Alt: -- m
+Base: %s	Basis: %s
+Battery critical	Batterij kritiek
+Broadcast (%d)	Uitzending (%d)
+COMPLETE	COMPLEET
+Calibrating...	Kalibreren...
+Confirm	Bevestig
+Contour: OFF	Contour: UIT
+Decoder error	Decoderfout
+Direct (%d)	Direct (%d)
+E	E
+ERROR	FOUT
+Exiting USB...	USB afsluiten...
+Hold	Wacht
+ID: !%08lX	ID: !%08lX
+ID: -	ID: -
+Key refresh not implemented	Sleutelvernieuwing niet geïmplementeerd
+Key verify: %s %s	Sleutelverificatie: %s %s
+Key verify: confirm %s %s	Sleutel verifiëren: bevestigen %s %s
+Key verify: enter number for %s	Sleutelverificatie: voer nummer in voor %s
+Key verify: send %s %s	Sleutelverificatie: verzend %s %s
+Later	Later
+Level %d	Niveau %d
+Listening for SSTV signal...	Luisteren naar SSTV-signaal...
+Low battery: %d%%	Batterij bijna leeg: %d%%
+MODE: %s	MODUS: %s
+MODE: Auto	MODUS: Automatisch
+Map - %.48s	Kaart - %.48s
+Map - %s Missing	Kaart - %s Ontbreekt
+Map - No Map Data	Kaart - Geen kaartgegevens
+Map - No SD Card	Kaart - Geen SD kaart
+Map - no gps data	Kaart - geen GPS-gegevens
+Message	Bericht
+Mic TBD	Microfoon nader vast te stellen
+Mic init failed	Mic-initialisatie mislukt
+Morse Input	Morse-invoer
+MoveTo	Verplaats naar
+N	N
+NODE INFO	NODE-INFO
+Name required	Naam vereist
+Name too long	Naam te lang
+No KML routes	Geen KML-routes
+No SD Card	Geen SD kaart
+No routes folder	Geen routesmap
+No tracks yet	Nog geen nummers
+Only leader can manage	Alleen leider kan beheren
+Only leader can pair	Alleen leider kan paren
+Paired successfully	Succesvol gekoppeld
+Pairing failed	Koppelen mislukt
+Pairing init failed	Koppelingsinit mislukt
+Pairing not available	Koppelen niet beschikbaar
+Pairing not ready	Koppelen niet gereed
+Press Back to exit USB mode	Druk op Terug om de modus USB te verlaten
+Press SPACE to resume	Druk op SPACE om door te gaan
+RallyTo	RallyTo
+Route configured	Route geconfigureerd
+Route: %s	Route: %s
+SD Card Not Found\nPlease insert SD card	SD Kaart niet gevonden\nPlaats een SD kaart
+SSTV RECEIVER	SSTV-ONTVANGER
+Save failed	Opslaan mislukt
+Scan +%u/%u	Scannen +%u/%u
+Select level	Selecteer niveau
+Selected level: %d	Geselecteerd niveau: %d
+Shutting down to protect battery	Afsluiten om de batterij te beschermen
+Status: CALIB	Status: KALIBR
+Step 1/2: Tap short dots	Stap 1/2: Tik op korte stippen
+Step 2/2: Tap long dashes	Stap 2/2: Tik op lange streepjes
+Switch to %s to chat	Schakel over naar %s om te chatten
+Symbol: 	Symbool:
+Tap to input, idle 3s to send	Tik om in te voeren, 3s inactief om te verzenden
+Team keys mismatch	Teamsleutels komen niet overeen
+Team: 	Team:
+Text: 	Tekst:
+Unread: %d	Ongelezen: %d
+Unread: 0	Ongelezen: 0
+W	W
+0° Horizon	0° Horizon
+PSK must be 32 hex or 16 chars	PSK moet 32 hexadecimale tekens of 16 tekens bevatten
+Restarting...	Opnieuw opstarten...
+awaiting position	in afwachting van positie
+compass wakes after GPS fix	kompas wordt geactiveerd na GPS fix
+searching satellites	zoeken naar satellieten
+%s -	%s -
+%s 0s	%s 0s
+%s %us	%s %us
+%s %um	%s %um
+%s %uh	%s %uh
+%s %ud	%s %ud
+AUTO	AUTOMATISCH
+Alt: %ld m	Alt: %ld m
+Alt: -	Alt: -
+BEST	BESTE
+BW: %.0fk	BW: %.0fk
+BW: %.1fk	BW: %.1fk
+BW: -	BW: -
+CAD	CAD
+CURSOR	CURSOR
+Ch: %.3f	Kanaal: %.3f
+Ch: -	Kanaal: -
+Hop: %u	Hop: %u
+Hop: -	Hop: -
+Hop: - / NH: %02X	Hop: - / NH: %02X
+ID: !%06lx	ID: !%06lx
+ID: !%08lx	ID: !%08lx
+Last heard:	Laatst gehoord:
+Link	Link
+Link / MeshCore	Link / MeshCore
+Link / Meshtastic	Link / Meshtastic
+MODE: RSSI	MODUS: RSSI
+NOISE %.0f dBm	GELUID %.0f dBm
+NOISE -104 dBm	GELUID -104 dBm
+PKI: -	PKI: -
+PKI: known	PKI: bekend
+PKI: verified	PKI: geverifieerd
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI: %.0f dBm
+RSSI: -	RSSI: -
+Role: %s	Rol: %s
+SCAN	SCANNEN
+SF: %u	SF: %u
+SF: -	SF: -
+SIM	SIM-kaart
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR: %.1f dB
+SNR: -	SNR: -
+SNR %.0f	SNR %.0f
+SNR -	SNR -
+SNR Good	SNR Goed
+SNR Weak	SNR Zwak
+STEP %.0fk | BW %.0fk	STAP %.0fk | BW %.0fk
+STEP %.1fk | BW %.1fk	STAP %.1fk | BW %.1fk
+STEP -- | BW --	STAP -- | BW --
+STOP	STOP
+Slot	Sleuf
+Slot %u	Slot %u
+SUB-GHz SCAN	SUB-GHz SCANNEN
+Actions	Acties
+Actions: %s	Acties: %s
+Access to team data revoked	Toegang tot teamgegevens ingetrokken
+Capability:	Mogelijkheid:
+Channel Actions	Kanaalacties
+Confirm Kick	Kick bevestigen
+Create Team	Team aanmaken
+ELEV	ELEV
+Join Team	Sluit je aan bij het team
+In View	In beeld
+Keep devices within 5m	Houd apparaten binnen 5 meter afstand
+KeyDist	KeyDist
+KeyId: %u	SleutelId: %u
+KeyId: --	SleutelID: --
+Keys	Toetsen
+Kick	Schop
+Kick Member	Kick-lid
+Last paired: %s	Laatst gekoppeld: %s
+Last seen %uh ago	Laatst gezien %uu geleden
+Last seen %um ago	Laatst gezien %um geleden
+Last seen --	Laatst gezien --
+Last update %us ago	Laatste update %us geleden
+Last update --	Laatste update --
+Last update 0s ago	Laatste update 0s geleden
+Leader	Leider
+Leader online	Leider online
+Leave	Vertrekken
+Leave team?	Team verlaten?
+Manage	Beheren
+Member: %s	Lid: %s
+Members	Leden
+Members: %u	Leden: %u
+Members: %u  Online: %u	Leden: %u Online: %u
+Modem Bridge	Modembrug
+No members yet	Nog geen leden
+Not Used	Niet gebruikt
+Offline	Offline
+Online	Online
+Online: %u	Online: %u
+Pair Again	Opnieuw koppelen
+Pair Member	Paarlid
+Pairing in progress	Bezig met koppelen
+Prev	Vorige
+Remove %s from team?	%s uit team verwijderen?
+Request Keys	Sleutels aanvragen
+Retry	Opnieuw proberen
+Security Round: %u	Beveiligingsronde: %u
+Security Round: --	Beveiligingsronde: --
+Security: OK (Round %u)	Beveiliging: OK (rond %u)
+Security: OK (Round --)	Beveiliging: OK (rond --)
+Seen %ud	Gezien %ud
+Seen %uh	Gezien %uh
+Seen %um	Gezien %um
+Send failed (keys not ready)	Verzenden mislukt (sleutels niet gereed)
+Status: %s	Status: %s
+Target: %s	Doel: %s
+Team / %s	Team / %s
+Team Actions	Teamacties
+Team Health	Teamgezondheid
+Team Status	Teamstatus
+Team: %s	Team: %s
+This clears local keys.	Hiermee worden lokale sleutels gewist.
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	Hiermee wordt de beveiligingsronde bijgewerkt.\nHet lid ontvangt niet langer\nteamberichten of waypoints.
+Transfer	Overdracht
+Transfer Leader	Transferleider
+View Team	Bekijk team
+Waiting for new keys...	Wachten op nieuwe sleutels...
+Waypoint	Waypoint
+You are no longer in this team	Je maakt niet langer deel uit van dit team
+You are not in a team	Je zit niet in een team
+- No shared map\n- No team awareness	- Geen gedeelde kaart\n- Geen teambewustzijn
+1 member stale	1 lid oud
+encrypt failed	codering mislukt
+member	lid
+queue full	wachtrij vol
+unsupported protocol	niet-ondersteund protocol
+Factory Reset	Fabrieksreset
+Clear all settings and restart?	Alle instellingen wissen en opnieuw opstarten?
+Terrain	Terrein
+Satellite	Satelliet
+Contour: ON	Contour: AAN
+Contour data missing	Contourgegevens ontbreken
+%d enabled	%d ingeschakeld
+%s  %s	%s %s
+Channel Key / PSK	Kanaalsleutel / PSK
+Channel Slot	Kanaalslot
+Channel Utilization	Kanaalgebruik
+Check for Updates	Controleer op updates
+Clear Message DB	Bericht-DB wissen
+Connect	Verbinden
+Contour Overlay	Contour-overlay
+Coordinate Format	Coördinaatformaat
+Coordinate System	Coördinatensysteem
+Current Version	Huidige versie
+Detected Network	Gedetecteerd netwerk
+Disconnect	Verbinding verbreken
+Duty Cycle Limit	Inschakelduurlimiet
+Enabled IMEs	Ingeschakeld IMEs
+Encryption Mode	Coderingsmodus
+Freq Offset (MHz)	Freq-offset (MHz)
+GPS Enabled	GPS Ingeschakeld
+Hop Limit	Hoplimiet
+IME setting update failed	IME update van instelling mislukt
+Install Update	Update installeren
+Latest Version	Nieuwste versie
+Layer	Laag
+Location Mode	Locatiemodus
+MC Airtime Factor	MC-zendtijdfactor
+MC Bandwidth (kHz)	MC-bandbreedte (kHz)
+MC Channel Key	MC-kanaaltoets
+MC Channel Name	MC-kanaalnaam
+MC Channel Slot	MC-kanaalsleuf
+MC Coding Rate	MC-coderingssnelheid
+MC Flood Max	MC Overstroming Max
+MC Frequency (MHz)	MC-frequentie (MHz)
+MC Multi ACKs	MC Multi ACK's
+MC RX Delay Base	MC RX Vertragingsbasis
+MC Region Preset	MC-regiovoorinstelling
+MC Repeat	MC-herhaling
+MC Spread Factor	MC-spreidingsfactor
+MC TX Power	MC TX Vermogen
+Manual BW	Handleiding BW
+Manual CR	Handleiding CR
+Manual SF	Handleiding SF
+Map Source	Kaartbron
+Modem Preset	Modemvoorinstelling
+NMEA Export	NMEA Exporteren
+NMEA Sentences	NMEA Zinnen
+No IME packs installed	Geen IME pakketten geïnstalleerd
+No position available	Geen positie beschikbaar
+OTA Status	OTA Status
+Override Duty Cycle	Werkcyclus negeren
+Override Freq (MHz)	Overschrijffrequentie (MHz)
+Password	Wachtwoord
+Position Strategy	Positiestrategie
+SSID	SSID
+Satellite Systems	Satellietsysteemms
+Scan Networks	Netwerken scannen
+TX Enabled	TX Ingeschakeld
+TX Power	TX Kracht
+Track Format	Trackformaat
+Track Interval	Trackinterval
+Track Recording	Trackopname
+Unavailable	Niet beschikbaar
+Update Interval	Update-interval
+Use Preset	Voorinstelling gebruiken
+Wi-Fi Enabled	Wi-Fi Ingeschakeld
+Wi-Fi start failed	Wi-Fi starten mislukt

@@ -9,6 +9,8 @@
 #include <limits>
 #include <mutex>
 
+#include "platform/linux/capability_status.h"
+
 namespace platform::ui::lora
 {
 namespace
@@ -103,6 +105,12 @@ float current_rssi_locked()
 bool is_supported()
 {
     return true;
+}
+
+CapabilityStatus capability_status()
+{
+    return {CapabilityState::Simulated,
+            "Synthetic RSSI generator. No real LoRa radio driver."};
 }
 
 bool acquire()

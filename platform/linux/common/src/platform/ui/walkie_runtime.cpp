@@ -9,6 +9,10 @@
 #include <mutex>
 #include <string>
 
+#include "platform/linux/capability_status.h"
+
+using namespace ::platform::linux_runtime;
+
 namespace platform::ui::walkie
 {
 namespace
@@ -113,6 +117,12 @@ Status current_status_locked()
 bool is_supported()
 {
     return true;
+}
+
+CapabilityStatus capability_status()
+{
+    return {CapabilityState::Simulated,
+            "Synthetic walkie-talkie audio. No real audio/radio path."};
 }
 
 bool start()

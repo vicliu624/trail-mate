@@ -58,6 +58,18 @@ int main(int argc, char** argv)
     try
     {
         const auto options = parseOptions(argc, argv);
+
+        // Simulator defaults to demo mode (synthetic peers, loopback mesh).
+        // Only set when the user has not already specified a mode.
+        if (!std::getenv("TRAIL_MATE_RUNTIME_MODE"))
+        {
+#if defined(_WIN32)
+            _putenv_s("TRAIL_MATE_RUNTIME_MODE", "demo");
+#else
+            setenv("TRAIL_MATE_RUNTIME_MODE", "demo", 1);
+#endif
+        }
+
         trailmate::cardputer_zero::platform::simulator::SdlSimulator simulator{options.scale};
         trailmate::cardputer_zero::linux_ui::runShellUi(
             simulator,

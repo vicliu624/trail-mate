@@ -338,6 +338,8 @@ def collect_locale_records(stage_bundle_dir: Path) -> list[dict[str, object]]:
                 "content_font_pack_id": manifest.get(
                     "content_font_pack", manifest.get("ui_font_pack", "")
                 ),
+                "translation_status": manifest.get("translation_status", "release"),
+                "direction": manifest.get("direction", "ltr"),
                 "preferred_content_supplement_pack_ids": split_csv(
                     manifest.get("preferred_content_supplement_packs", manifest.get("content_supplement_packs", ""))
                 ),

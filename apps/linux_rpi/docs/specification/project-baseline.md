@@ -66,14 +66,28 @@ The authoritative final-shape constraint document is
   `apps/linux_rpi` and do not replace the repository-root ESP-IDF build
 - Shared Linux slice: `platform/linux/common`
 
-## 5. Current Baseline
+## 5. Current Baseline (updated 2026-05-08)
 
-- The simulator must build on both Windows and Linux.
-- The framebuffer device target must build on Linux and be usable on Pi OS.
+- The simulator must build on both Windows and Linux. — TARGET (structural work
+  in progress; build gate needs re-verification after P0-P6 changes)
+- The framebuffer device target must build on Linux and be usable on Pi OS. —
+  NOT YET VALIDATED (CMake restructured, evdev adapter wired, but not yet
+  built/run on real Pi OS)
 - The real device adaptation should prefer the vendor Linux SDK over custom
   framebuffer code whenever the SDK already owns the problem well.
 - The baseline app must stay tiny and intentionally generic.
-- The Linux-safe shared slice belongs in `platform/linux/common`.
+- The Linux-safe shared slice belongs in `platform/linux/common`. — DONE
+- Platform boundary violations in `ui_shared/library.json` and `core_chat/src/ble/` —
+  RESOLVED (2026-05-07, verified by boundary checker)
+- LVGL ownership split (ShellSession / CanvasLvglHost / NativeLvglHost) —
+  PARTIAL (structure in place, need build verification and input callback fix)
+- evdev input adapter — PARTIAL (code written, need rpi CMake wiring and real
+  device key sampling)
+- Runtime path/env/capability centralization — PARTIAL (helpers created,
+  route/tracker/dev/settings migrated, remaining runtimes not yet unified)
+- Demo world extraction — PARTIAL (DemoWorld class created, facade still
+  contains legacy loopback mesh and demo seeding; runtime_mode not yet driving
+  composition)
 - Final Cardputer Zero feature work should migrate reusable logic out of this
   shell split into the main repository structure instead of letting either shell
   become a permanent fork.

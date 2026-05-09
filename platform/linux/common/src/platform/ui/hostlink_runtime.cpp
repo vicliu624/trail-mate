@@ -8,6 +8,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+
+#include "platform/linux/runtime_paths.h"
 #include <mutex>
 #include <string>
 #include <thread>
@@ -65,65 +67,14 @@ uint32_t now_ms()
         std::chrono::duration_cast<std::chrono::milliseconds>(clock::now().time_since_epoch()).count());
 }
 
-std::filesystem::path default_storage_root()
-{
-    if (const char* configured = std::getenv(kSdRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured);
-        }
-    }
-
-    if (const char* configured = std::getenv(kSettingsRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured) / "sdcard";
-        }
-    }
-
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"))
-    {
-        if (appdata[0] != '\0')
-        {
-            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard";
-        }
-    }
-#endif
-
-    if (const char* home = std::getenv("HOME"))
-    {
-        if (home[0] != '\0')
-        {
-            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard";
-        }
-    }
-
-    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard";
-}
-
 std::filesystem::path hostlink_dir()
 {
-    return default_storage_root() / "hostlink";
+    return ::platform::linux_runtime::resolve_paths().sd_root / "hostlink";
 }
 
 bool ensure_hostlink_dir()
 {
-    std::error_code ec;
-    std::filesystem::create_directories(hostlink_dir(), ec);
-    return !ec;
-}
-
-std::string env_or_default(const char* name, const char* fallback)
-{
-    const char* value = std::getenv(name);
-    if (!value || value[0] == '\0')
-    {
-        return std::string(fallback);
-    }
-    return std::string(value);
+    return ::platform::linux_runtime::ensure_directory(hostlink_dir());
 }
 
 uint16_t configured_port()
@@ -270,7 +221,12 @@ SocketHandle open_listen_socket(std::string& endpoint_out)
     }
 #endif
 
-    const std::string bind_address = env_or_default(kBindAddressEnv, "0.0.0.0");
+    // Default to loopback for safety.  Use TRAIL_MATE_HOSTLINK_BIND=0.0.0.0
+    // to explicitly enable external access on real devices.
+    const char* bind_addr = std::getenv(kBindAddressEnv);
+    const std::string bind_address = (bind_addr && bind_addr[0] != '\0')
+                                         ? std::string(bind_addr)
+                                         : std::string("127.0.0.1");
     const uint16_t base_port = configured_port();
 
     for (uint16_t offset = 0; offset < kFallbackPortCount; ++offset)

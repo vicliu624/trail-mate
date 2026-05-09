@@ -1,113 +1,618 @@
-Action	操作
+Action	アクション
 Add	追加
-Advanced	詳細
-Always	常時
+Advanced	上級者向け
+Always	いつも
+Altitude	高度
+Altitude Reference	高度リファレンス
 App	アプリ
+Area Cleared	エリアをクリアしました
 Auto	自動
+Awaiting teammate	チームメイトを待っています
 Back	戻る
+Base Camp	ベースキャンプ
+Beijing (UTC+8)	北京 (UTC+8)
+BLE bridge ready  |  %s	BLE ブリッジの準備ができました |  %s
+BLE linked  |  %s	BLE リンク済み |  %s
 Bluetooth	Bluetooth
-Bluetooth Pairing	Bluetoothペアリング
+Bluetooth Pairing	Bluetooth ペアリング
+Bcast	Bキャスト
+Bridge error	ブリッジエラー
+Broadcast	ブロードキャスト
 Cancel	キャンセル
 Channel	チャンネル
 Chat	チャット
+Chat unavailable	チャットは利用できません
 Chinese	中国語
+Closes automatically after pairing	ペアリング後は自動的に閉じます
 Close	閉じる
+Command	コマンド
+Command: %s	コマンド: %s
+Command: %s %s	コマンド: %s %s
+Command: %s %s %s	コマンド: %s %s %s
+Compare Verification Code	検証コードの比較
+Compass	コンパス
+Connected	接続されました
+Connected, handshaking...	接続されました、ハンドシェイク中...
 Contacts	連絡先
+Contacts (%s)	連絡先 (%s)
+Contacts (LXMF)	連絡先 (LXMF)
+Contacts (LXMF - %.3fMHz)	連絡先 (LXMF - %.3fMHz)
+Contacts (MeshCore)	連絡先 (MeshCore)
+Contacts (Meshtastic - %.3fMHz)	連絡先 (Meshtastic - %.3fMHz)
+Contacts (RNode)	連絡先 (RNode)
+Contacts (RNode - %.3fMHz)	連絡先 (RNode - %.3fMHz)
+Conversation protocol mismatch	会話プロトコルが一致しません
 Data Exchange	データ交換
+Debug Logs	デバッグ ログ
+Decoding: %d%%	デコード: %d%%
+Decoding: 0%	デコード: 0%
 Delete	削除
+Delete %s?	%s を削除しますか?
+Delete contact %s?	連絡先 %s を削除しますか?
+Delete failed	削除に失敗しました
+Device: %s	デバイス: %s
+Direct	直接
 Disabled	無効
-Discover	検出
+Discover	発見する
 Display Language	表示言語
+Duplicate name not allowed	重複した名前は許可されません
 Edit	編集
-Energy Sweep	周波数スイープ
+Edit nickname	ニックネームの編集
+Emergency SOS	緊急 SOS
+Energy Sweep	エネルギースイープ
 English	英語
 English keyboard	英語キーボード
+Enter nickname	ニックネームを入力してください
+Enter number for %s	%s の番号を入力してください
+Enter the 6-digit number	6桁の数字を入力してください
+Enter this 6-digit PIN on your phone	この 6 桁の PIN を携帯電話に入力してください
 Error	エラー
-Factory Reset	工場出荷時設定
+Error: %lu	エラー: %lu
+FSK Voice	FSK音声
+Failed	失敗しました
+Fix	修正
+Fixed PIN	固定PIN
+Gauge Design (mAh)	ゲージ設計 (mAh)
+Gauge Full (mAh)	ゲージフル (mAh)
+Good Find	良い発見
 GPS	GPS
 Extensions	拡張機能
 Language	言語
 Package Details	パッケージ詳細
-Back to list	一覧に戻る
+Back to list	リストに戻る
 Install	インストール
-Update	更新
+Update	アップデート
 Uninstall	アンインストール
-Incompatible	非互換
-Compatible with this device	このデバイスに対応
+Incompatible	互換性がありません
+Compatible with this device	このデバイスと互換性があります
 Compatibility: %s	互換性: %s
-memory profile mismatch	メモリプロファイル不一致
-needs %s	%s が必要
-Update available: %s	更新あり: %s
-Installed	インストール済み
+memory profile mismatch	メモリ プロファイルの不一致
+needs %s	には %s が必要です
+Update available: %s	利用可能なアップデート: %s
+Installed	インストールされました
 Installed: %s	インストール済み: %s
 Available to install	インストール可能
-Blocked	ブロック
-%lu locales  %lu fonts  %lu IME  %s	%lu ロケール  %lu フォント  %lu IME  %s
-No Wi-Fi	Wi-Fi なし
-Installing package...	パッケージをインストール中...
-Package installed	パッケージをインストールしました
-Uninstalling package...	パッケージをアンインストール中...
-Package uninstalled	パッケージをアンインストールしました
+Blocked	ブロックされました
+%lu locales  %lu fonts  %lu IME  %s	%lu ロケール %lu フォント %lu IME %s
+No Wi-Fi	いいえ Wi-Fi
+Installing package...	パッケージをインストールしています...
+Package installed	パッケージがインストールされました
+Uninstalling package...	パッケージをアンインストールしています...
+Package uninstalled	パッケージがアンインストールされました
 No language packs available	利用可能な言語パックはありません
 Available language packs: %lu	利用可能な言語パック: %lu
 About	概要
 Package Info	パッケージ情報
-Contents	内容
-Source	提供元
-Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	アーカイブ: %s\n追加フォント RAM: %s\nプロファイル: %s\n%s
+Contents	目次
+Source	ソース
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	アーカイブ: %s\n追加フォント RAM: %s\n プロファイル: %s\n%s
 Locales: %s\nFonts: %s\nIME: %s	ロケール: %s\nフォント: %s\nIME: %s
-Author: %s\nHomepage: %s	作者: %s\nホームページ: %s
+Author: %s\nHomepage: %s	著者: %s\nホームページ: %s
 None	なし
-GPS Status	GPS状態
+GPS Status	GPS ステータス
+HDOP	HDOP
+Heading starting	見出し開始
 Hide	隠す
+Host bridge	ホストブリッジ
+Host connected, probing modem...	ホストが接続され、モデムを調査中...
+IDLE	IDLE
+Ignored	無視されました
+Ignore	無視
+Ignore unavailable	利用不可を無視
+Ignore update failed	アップデートの無視が失敗しました
+Image received	画像を受信しました
 Info	情報
-Japanese	日本語
-Korean	韓国語
+Initializing...	初期化中...
+Invalid airtime factor	無効な通信時間係数です
+Invalid design capacity (mAh)	無効な設計容量 (mAh)
+Invalid frequency offset	無効な周波数オフセットです
+Invalid frequency value	無効な周波数値です
+Invalid full capacity (mAh)	無効な全容量 (mAh)
+Invalid marker	無効なマーカーです
+Invalid MeshCore bandwidth	無効な MeshCore 帯域幅です
+Invalid MeshCore frequency	無効な MeshCore 頻度です
+Invalid number	無効な番号です
+Invalid RX delay	無効な RX 遅延です
+Key marked trusted	信頼できるとマークされたキー
+Key must be 32 hex or 16 chars	キーは 32 進数または 16 文字である必要があります
+Key trust failed	キーの信頼に失敗しました
+Key Verification	キーの検証
+LINKED	リンク済み
+LISTEN	聞いてください
+LIVE	ライブ
 Loading...	読み込み中...
+Location	場所
+Location: %s	場所: %s
+Location: %s %s	場所: %s %s
+LoRa direct path  |  %s	LoRa ダイレクト パス |  %s
+Low battery - audio disabled	バッテリー残量低下 - オーディオが無効になっています
 Map	地図
-Map Layer	地図レイヤー
-Nearby	近く
+Map Layer	マップレイヤー
+MESH	メッシュ
+Mesh Status	メッシュステータス
+Mesh unavailable	メッシュは使用できません
+MeshCore only	MeshCore のみ
+Message DB cleared	メッセージ DB がクリアされました
+Messages	メッセージ
+MESSAGES	メッセージ
+Messages and broadcasts show here	メッセージとブロードキャストがここに表示されます
+Mini Compass	ミニコンパス
+MT send uses slot 0/1 only	MT 送信はスロット 0/1 のみを使用します
+N/A	該当なし
+Nearby	近くにあります
+Need local GPS	ローカル GPS が必要です
 Network	ネットワーク
 New	新規
-No messages	メッセージなし
-No recent traffic	最近の通信なし
+new activity	新しいアクティビティ
+Next	次へ
+No GPS fix	GPS 修正はありません
+No image	画像がありません
+No messages	メッセージはありません
+No preview	プレビューなし
+No recent traffic	最近のトラフィックはありません
+No response	応答なし
+No route selected	ルートが選択されていません
+No target	ターゲットなし
+No track files	トラック ファイルがありません
+Node DB reset	ノード DB リセット
+Node ignored	ノードは無視されました
+Node ignored and hidden	ノードは無視され、非表示になりました
+Node unignored	ノードは無視されません
+North locked	北側ロック
 Not set	未設定
+NO	いいえ
+NO FIX	修正なし
 Number keyboard	数字キーボード
-OFF	OFF
+OFF	オフ
 OK	OK
-ON	ON
+ON	オン
+online	オンライン
 Pairing	ペアリング
-PC Link	PC接続
-Power	電源
+PC Link	PCリンク
+PC Link is unavailable on this target.	PC リンクはこのターゲットでは使用できません。
+peer lock  |  turn %03.0f deg	ピアロック |  %03.0f 度回転します
+Pinyin keyboard	ピンイン キーボード
+Pinyin: %s	ピンイン: %s
+Position	ポジション
+position stream active  |  %u in view	位置ストリームがアクティブ |  %u が表示されています
+Power	パワー
+Press Back	戻るを押してください
+Press RX to start	RX を押して開始してください
+Primary	プライマリ
 Protocol	プロトコル
+Protocol switch failed	プロトコル切り替えに失敗しました
+Protocol switched	プロトコルが切り替えられました
+quiet net	クワイエットネット
+Random PIN	ランダム PIN
 Ready	準備完了
+RECEIVING	受信中
 Recent Activity	最近のアクティビティ
+Record	レコード
+Recording	録音
+Region	地域
+Remain: %u	残り: %u
 Reply	返信
-Run	実行
+Reply disabled for this protocol	このプロトコルでは応答が無効になっています
+Reset Mesh Profiles	メッシュ プロファイルをリセット
+Reset Node DB	ノード DB をリセット
+Resetting...	リセット中...
+Return	戻る
+Rally Point	ラリーポイント
+RNode Bridge	RNode ブリッジ
+RNode modem ready	RNode モデムの準備ができました
+RNode text chat runs on host	RNode テキスト チャットがホストで実行されます
+Route	ルート
+Run	走る
+RX	RX
+RX: %lu  TX: %lu	RX: %lu TX: %lu
+RX: 0  TX: 0	RX: 0 TX: 0
 Save	保存
-Scan failed	スキャン失敗
+Saved: %s	保存しました: %s
+Scan failed	スキャンに失敗しました
 Scan Local	ローカルスキャン
-Scanning 5s...	5秒スキャン中...
-SEARCH	検索
+Scanning 5s...	5 秒間スキャン中...
 Screen Brightness	画面の明るさ
 Screen Timeout	画面タイムアウト
+SEARCH	検索
+Secondary	二次
+Select a route	ルートを選択してください
+Select a track	トラックを選択してください
+Select marker	マーカーを選択
+Select Track	トラックを選択
+Selected: %s	選択済み: %s
+Send	送信
+Send failed	送信に失敗しました
+Send this code and compare:\n	このコードを送信して比較してください:\n
+Send ID Broadcast	ID ブロードキャストを送信
+Send ID Local	ID をローカルに送信
+Sending...	送信中...
+Sent	送信済み
 Settings	設定
 Setting	設定
-Sky Plot	スカイプロット
+Share Position Marker	シェアポジションマーカー
+Share this number:\n	この番号を共有します:\n
+Short Name	短縮名
+SOLO	ソロ
 Speaker Volume	スピーカー音量
-Status	状態
-Stopped	停止済み
+Sky Plot	スカイプロット
+SSTV RX READY	SSTV RX 準備完了
+SSTV start failed	SSTV の開始に失敗しました
+standing by	スタンバイ
+Status	ステータス
+Stopped	停止しました
 Stop	停止
+Stop recording first	まず録音を停止してください
 Submit	送信
+Submit failed	送信できませんでした
 System	システム
+SATELLITE STATUS	衛星ステータス
+Talk	トーク
+TALK	トーク
 Team	チーム
-Team Status	チーム状態
+TEAM	チーム
+Team chat send failed	チームチャットの送信に失敗しました
+Team chat unavailable	チームチャットは使用できません
+Team chat unavailable in RNode mode	RNode モードではチーム チャットが利用できません
+team member position will appear here	チームメンバーの位置がここに表示されます
+Team keys not ready	チームキーの準備ができていません
+Team location encode failed	チームの位置エンコードに失敗しました
+Text chat unavailable	テキストチャットは利用できません
+threads active	スレッドがアクティブです
 Time Zone	タイムゾーン
-Tracker	軌跡
-Traditional Chinese	繁体字中国語
+Tracker	トラッカー
+traffic active	トラフィックがアクティブです
+Trust Key	トラストキー
+U	U
+Unignore	無視しない
+Unread	未読
 Unknown	不明
-USB Disk	USBストレージ
+USB Mass Storage	USB 大容量ストレージ
+USB Disk	USB ディスク
+USB Bridge	USB ブリッジ
+USB host bridge	USB ホスト ブリッジ
+USB Bridge is unavailable on this target.	USB ブリッジはこのターゲットでは使用できません。
+USB CDC KISS modem for Reticulum	USB Reticulum 用の CDC KISS モデム
+USE	使用
+Used	中古
 User Name	ユーザー名
-Verification Number	確認番号
-Vibration	バイブレーション
-Clear all settings and restart?	すべての設定を消去して再起動しますか？
+Verification Number	認証番号
+Verification number sent	認証番号を送信しました
+Vibration	振動
+VOL %d	VOL %d
+VOL 80	VOL 80
+waiting for better sky view  |  %u in view	より良い空の眺めを待っています |  %u が表示されています
+waiting for module GNSS compass	モジュール GNSS コンパスを待っています
+waiting for traffic	トラフィックを待っています
+Waiting for host...	ホストを待機しています...
+Waiting for Reticulum host...	Reticulum ホストを待機しています...
+WAIT IMU	待ってください、イム
+Walkie not available	トランシーバーは利用できません
+Walkie start failed	トランシーバーの起動に失敗しました
+Walkie Talkie	トランシーバー
+YES	はい
+6 digits	6桁
+%u threads active	%u スレッドがアクティブです
+%ud	%ud
+%uh	%uh
+%um	%um
+%umo	%umo
+%uy	%uy
+Confirm received code:\n	受信したコードを確認します:\n
+device heading from 9-axis module	9 軸モジュールからのデバイス ヘディング
+heading unlocks after first fix	最初の修正後に見出しのロックが解除される
+If it matches, trust the key.	一致する場合、そのキーを信頼します。
+magnetometer heading active	磁力計の進行方向がアクティブです
+magnetometer still warming up	磁力計はまだウォームアップ中です
+needle shows north until target lock	目標ロックまで針は北を示します
+nearest peer  |  %.0f m away	最も近いピア |  %.0f メートル離れたところ
+no recent traffic	最近のトラフィックはありません
+now	現在
+%s layer missing	%s 層がありません
+Active: %s	アクティブ: %s
+Alt: %.0f m	代替: %.0f m
+Alt: -- m	Alt: --m
+Base: %s	ベース: %s
+Battery critical	バッテリーが異常です
+Broadcast (%d)	ブロードキャスト (%d)
+COMPLETE	完了
+Calibrating...	校正中...
+Confirm	確認
+Contour: OFF	輪郭: オフ
+Decoder error	デコーダーエラー
+Direct (%d)	直接 (%d)
+E	E
+ERROR	エラー
+Exiting USB...	USB を終了しています...
+Hold	保留
+ID: !%08lX	ID: !%08lX
+ID: -	ID: -
+Key refresh not implemented	キーのリフレッシュは実装されていません
+Key verify: %s %s	キーの検証: %s %s
+Key verify: confirm %s %s	キーの検証: %s %s を確認します
+Key verify: enter number for %s	キーの検証: %s の番号を入力してください
+Key verify: send %s %s	キーの検証: %s %s を送信します
+Later	後で
+Level %d	レベル %d
+Listening for SSTV signal...	SSTV 信号を受信しています...
+Low battery: %d%%	バッテリー残量低下: %d%%
+MODE: %s	モード: %s
+MODE: Auto	モード: 自動
+Map - %.48s	マップ - %.48s
+Map - %s Missing	マップ - %s がありません
+Map - No Map Data	地図 - 地図データなし
+Map - No SD Card	マップ - SD カードなし
+Map - no gps data	地図 - GPS データなし
+Message	メッセージ
+Mic TBD	マイク未定
+Mic init failed	マイクの初期化に失敗しました
+Morse Input	モールス入力
+MoveTo	移動先
+N	N
+NODE INFO	ノード情報
+Name required	名前は必須です
+Name too long	名前が長すぎます
+No KML routes	KML ルートがありません
+No SD Card	SD カードがありません
+No routes folder	ルートフォルダーがありません
+No tracks yet	トラックはまだありません
+Only leader can manage	リーダーのみが管理可能
+Only leader can pair	ペアリングできるのはリーダーだけです
+Paired successfully	ペアリングに成功しました
+Pairing failed	ペアリングに失敗しました
+Pairing init failed	ペアリングの初期化に失敗しました
+Pairing not available	ペアリングできません
+Pairing not ready	ペアリングの準備ができていません
+Press Back to exit USB mode	[戻る] を押して USB モードを終了します
+Press SPACE to resume	再開するにはスペースを押してください
+RallyTo	ラリーへ
+Route configured	ルートが設定されました
+Route: %s	ルート: %s
+SD Card Not Found\nPlease insert SD card	SD カードが見つかりません\nSD カードを挿入してください
+SSTV RECEIVER	SSTV 受信機
+Save failed	保存に失敗しました
+Scan +%u/%u	+%u/%u をスキャンします
+Select level	レベルの選択
+Selected level: %d	選択されたレベル: %d
+Shutting down to protect battery	バッテリーを保護するためにシャットダウンしています
+Status: CALIB	ステータス: CALIB
+Step 1/2: Tap short dots	ステップ 1/2: 短いドットをタップします
+Step 2/2: Tap long dashes	ステップ 2/2: 長いダッシュをタップします
+Switch to %s to chat	%s に切り替えてチャットしてください
+Symbol: 	シンボル:
+Tap to input, idle 3s to send	タップして入力、3 秒間放置して送信
+Team keys mismatch	チームキーが一致しません
+Team: 	チーム:
+Text: 	テキスト:
+Unread: %d	未読: %d
+Unread: 0	未読: 0
+W	W
+0° Horizon	0° 地平線
+PSK must be 32 hex or 16 chars	PSK は 32 進数または 16 文字でなければなりません
+Restarting...	再起動しています...
+awaiting position	ポジション待ち
+compass wakes after GPS fix	GPS 修正後にコンパスが起動する
+searching satellites	衛星を検索しています
+%s -	%s -
+%s 0s	%s 0s
+%s %us	%s %us
+%s %um	%s %um
+%s %uh	%s %uh
+%s %ud	%s %ud
+AUTO	自動
+Alt: %ld m	代替: %ld m
+Alt: -	代替: -
+BEST	BEST
+BW: %.0fk	BW: %.0fk
+BW: %.1fk	BW: %.1fk
+BW: -	BW: -
+CAD	CAD
+CURSOR	カーソル
+Ch: %.3f	Ch: %.3f
+Ch: -	章: -
+Hop: %u	ホップ: %u
+Hop: -	ホップ: -
+Hop: - / NH: %02X	ホップ: - / NH: %02X
+ID: !%06lx	ID: !%06lx
+ID: !%08lx	ID: !%08lx
+Last heard:	最後に聞いた内容:
+Link	リンク
+Link / MeshCore	リンク / MeshCore
+Link / Meshtastic	リンク / Meshtastic
+MODE: RSSI	モード: RSSI
+NOISE %.0f dBm	ノイズ %.0f dBm
+NOISE -104 dBm	ノイズ -104 dBm
+PKI: -	PKI:-
+PKI: known	PKI: 既知
+PKI: verified	PKI: 確認済み
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI:%.0f dBm
+RSSI: -	RSSI:-
+Role: %s	役割: %s
+SCAN	スキャン
+SF: %u	扩频因子:%u
+SF: -	扩频因子:-
+SIM	SIM
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR: %.1f dB
+SNR: -	SNR:-
+SNR %.0f	信噪比 %.0f
+SNR -	SNR -
+SNR Good	SNR 良い
+SNR Weak	SNR 弱い
+STEP %.0fk | BW %.0fk	ステップ %.0fk | BW %.0fk
+STEP %.1fk | BW %.1fk	ステップ %.1fk | BW %.1fk
+STEP -- | BW --	ステップ -- | BW --
+STOP	停止
+Slot	スロット
+Slot %u	スロット %u
+SUB-GHz SCAN	サブ GHz スキャン
+Actions	アクション
+Actions: %s	アクション: %s
+Access to team data revoked	チームデータへのアクセスが取り消されました
+Capability:	能力:
+Channel Actions	チャネルアクション
+Confirm Kick	キック確定
+Create Team	チームの作成
+ELEV	エレブ
+Join Team	チームに参加する
+In View	表示中
+Keep devices within 5m	デバイスは 5 メートル以内に配置してください
+KeyDist	KeyDist
+KeyId: %u	キー ID: %u
+KeyId: --	キー ID: --
+Keys	キー
+Kick	キック
+Kick Member	キックメンバー
+Last paired: %s	最後にペアリングされました: %s
+Last seen %uh ago	最後に確認されたのは %u 時間前
+Last seen %um ago	最後に確認されたのは%u分前です
+Last seen --	最後に見た --
+Last update %us ago	最終更新日 %u 秒前
+Last update --	最終更新 --
+Last update 0s ago	最終更新 0 秒前
+Leader	リーダー
+Leader online	リーダーオンライン
+Leave	退出
+Leave team?	チームを辞めますか?
+Manage	管理
+Member: %s	メンバー: %s
+Members	メンバー
+Members: %u	メンバー: %u
+Members: %u  Online: %u	メンバー: %u オンライン: %u
+Modem Bridge	モデムブリッジ
+No members yet	メンバーはまだいません
+Not Used	未使用
+Offline	オフライン
+Online	オンライン
+Online: %u	オンライン: %u
+Pair Again	再度ペアリングします
+Pair Member	ペアメンバー
+Pairing in progress	ペアリング中です
+Prev	前へ
+Remove %s from team?	%s をチームから削除しますか?
+Request Keys	キーのリクエスト
+Retry	再試行
+Security Round: %u	セキュリティ ラウンド: %u
+Security Round: --	セキュリティラウンド: --
+Security: OK (Round %u)	セキュリティ: OK (%u ラウンド)
+Security: OK (Round --)	セキュリティ：OK（丸--）
+Seen %ud	%ud を確認しました
+Seen %uh	%uh を確認しました
+Seen %um	%um を確認しました
+Send failed (keys not ready)	送信失敗 (キーの準備ができていません)
+Status: %s	ステータス: %s
+Target: %s	ターゲット: %s
+Team / %s	チーム / %s
+Team Actions	チームの行動
+Team Health	チームの健康
+Team Status	チームステータス
+Team: %s	チーム: %s
+This clears local keys.	これにより、ローカルキーがクリアされます。
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	これにより、セキュリティ ラウンドが更新されます。\nメンバーは\nチーム メッセージやウェイポイントを受信しなくなります。
+Transfer	転送
+Transfer Leader	転送リーダー
+View Team	チームを見る
+Waiting for new keys...	新しいキーを待っています...
+Waypoint	ウェイポイント
+You are no longer in this team	あなたはもうこのチームのメンバーではありません
+You are not in a team	あなたはチームに属していません
+- No shared map\n- No team awareness	- 共有マップなし\n- チーム認識なし
+1 member stale	1 メンバーが無効です
+encrypt failed	暗号化に失敗しました
+member	メンバー
+queue full	キューがいっぱいです
+unsupported protocol	サポートされていないプロトコル
+Factory Reset	工場出荷時設定にリセット
+Clear all settings and restart?	すべての設定をクリアして再起動しますか?
+Terrain	地形
+Satellite	衛星
+Contour: ON	輪郭: オン
+Contour data missing	等高線データがありません
+%d enabled	%d が有効になりました
+%s  %s	%s %s
+Channel Key / PSK	Channel Key / PSK
+Channel Slot	チャネルスロット
+Channel Utilization	チャネル使用率
+Check for Updates	アップデートを確認する
+Clear Message DB	クリアメッセージDB
+Connect	接続する
+Contour Overlay	輪郭オーバーレイ
+Coordinate Format	座標形式
+Coordinate System	座標系
+Current Version	現在のバージョン
+Detected Network	検出されたネットワーク
+Disconnect	切断
+Duty Cycle Limit	デューティ サイクル制限
+Enabled IMEs	IMEs が有効になりました
+Encryption Mode	暗号化モード
+Freq Offset (MHz)	周波数オフセット (MHz)
+GPS Enabled	GPS 有効
+Hop Limit	ホップ制限
+IME setting update failed	IME 設定の更新に失敗しました
+Install Update	アップデートのインストール
+Latest Version	最新バージョン
+Layer	レイヤー
+Location Mode	位置情報モード
+MC Airtime Factor	MC 通信時間係数
+MC Bandwidth (kHz)	MC 帯域幅 (kHz)
+MC Channel Key	MCチャンネルキー
+MC Channel Name	MC チャンネル名
+MC Channel Slot	MC チャンネルスロット
+MC Coding Rate	MC 符号化率
+MC Flood Max	MCフラッドマックス
+MC Frequency (MHz)	MC 周波数 (MHz)
+MC Multi ACKs	MC マルチ ACK
+MC RX Delay Base	MC RX 遅延ベース
+MC Region Preset	MC リージョン プリセット
+MC Repeat	MCリピート
+MC Spread Factor	MC スプレッドファクター
+MC TX Power	MC TX パワー
+Manual BW	マニュアル BW
+Manual CR	マニュアル CR
+Manual SF	マニュアル SF
+Map Source	マップソース
+Modem Preset	モデム プリセット
+NMEA Export	NMEA エクスポート
+NMEA Sentences	NMEA 文
+No IME packs installed	IME パックがインストールされていません
+No position available	ポジションがありません
+OTA Status	OTA ステータス
+Override Duty Cycle	デューティ サイクルをオーバーライド
+Override Freq (MHz)	オーバーライド頻度 (MHz)
+Password	パスワード
+Position Strategy	ポジション戦略
+SSID	SSID
+Satellite Systems	衛星システムms
+Scan Networks	スキャンネットワーク
+TX Enabled	TX 有効
+TX Power	TX パワー
+Track Format	トラックフォーマット
+Track Interval	トラック間隔
+Track Recording	トラック録音
+Unavailable	利用不可
+Update Interval	更新間隔
+Use Preset	プリセットを使用する
+Wi-Fi Enabled	Wi-Fi 有効
+Wi-Fi start failed	Wi-Fi の開始に失敗しました

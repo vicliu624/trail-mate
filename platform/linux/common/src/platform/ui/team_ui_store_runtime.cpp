@@ -1,5 +1,6 @@
 #include "platform/ui/team_ui_store_runtime.h"
 
+#include "platform/linux/runtime_paths.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -40,41 +41,7 @@ uint64_t team_id_to_u64(const TeamId& id)
 
 std::filesystem::path default_storage_root()
 {
-    if (const char* configured = std::getenv(kSdRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured);
-        }
-    }
-
-    if (const char* configured = std::getenv(kSettingsRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured) / "sdcard";
-        }
-    }
-
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"))
-    {
-        if (appdata[0] != '\0')
-        {
-            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard";
-        }
-    }
-#endif
-
-    if (const char* home = std::getenv("HOME"))
-    {
-        if (home[0] != '\0')
-        {
-            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard";
-        }
-    }
-
-    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard";
+    return ::platform::linux_runtime::resolve_paths().sd_root;
 }
 
 std::string base32_from_u64(uint64_t value)

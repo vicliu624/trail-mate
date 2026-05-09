@@ -13,6 +13,7 @@
 #include "esp_ldo_regulator.h"
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hi8561_driver.h"
@@ -34,8 +35,11 @@ constexpr int kStartupBrightnessPercent = 10;
 constexpr int kBacklightPwmHz = 2000;
 constexpr ledc_channel_t kBacklightChannel = LEDC_CHANNEL_0;
 constexpr ledc_timer_t kBacklightTimer = LEDC_TIMER_0;
-constexpr uint32_t kTouchI2cLockTimeoutMs = 5;
-constexpr uint32_t kTouchI2cTransactionTimeoutMs = 5;
+// Conservative I2C timeouts for touch — avoids random read failures
+// when the bus is contended by expander / RTC / GPS/LoRa prepare.
+// These will be tightened once the system I2C lock ordering is stable.
+constexpr uint32_t kTouchI2cLockTimeoutMs = 50;
+constexpr uint32_t kTouchI2cTransactionTimeoutMs = 30;
 
 constexpr uint32_t kHi8561MemoryAddressEram = 0x20011000;
 constexpr uint8_t kHi8561MaxDsramNum = 25;
@@ -409,6 +413,24 @@ bool read_gt9895_touch(int32_t* out_x, int32_t* out_y, bool* out_pressed)
     return true;
 }
 
+bool s_touch_was_pressed = false;
+std::uint32_t s_last_activity_note_ms = 0;
+
+void note_touch_activity(bool pressed)
+{
+    const std::uint32_t now = static_cast<std::uint32_t>(esp_timer_get_time() / 1000ULL);
+    const bool first_touch = pressed && !s_touch_was_pressed;
+    const bool throttle_ok = pressed && (now - s_last_activity_note_ms) >= 500U;
+
+    s_touch_was_pressed = pressed;
+
+    if (pressed && (first_touch || throttle_ok))
+    {
+        s_last_activity_note_ms = now;
+        trail_mate_idf_note_user_activity();
+    }
+}
+
 void touch_read_cb(lv_indev_t* indev, lv_indev_data_t* data)
 {
     (void)indev;
@@ -420,6 +442,7 @@ void touch_read_cb(lv_indev_t* indev, lv_indev_data_t* data)
 
     if (!ok || !pressed)
     {
+        note_touch_activity(false);
         data->state = LV_INDEV_STATE_RELEASED;
         return;
     }
@@ -427,7 +450,12 @@ void touch_read_cb(lv_indev_t* indev, lv_indev_data_t* data)
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = x;
     data->point.y = y;
-    trail_mate_idf_note_user_activity();
+
+    // Debounce user-activity notification: only fire on the first touch
+    // press edge, then at most once every 500 ms while the finger stays
+    // down.  Without this throttle, every LVGL input poll (~50-100 Hz)
+    // would hit the screen_sleep runtime and risk re-entrant UI updates.
+    note_touch_activity(true);
 }
 
 bool create_touch_indev()

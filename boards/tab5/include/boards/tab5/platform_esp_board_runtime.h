@@ -82,9 +82,18 @@ inline void initializeDisplay()
     if (trail_mate_tab5_display_runtime_init())
     {
         ESP_LOGI(kTag, "Tab5 display runtime initialized");
-        trail_mate_tab5_set_ext_5v_enabled(true);
-        vTaskDelay(pdMS_TO_TICKS(300));
-        ESP_LOGI(kTag, "Tab5 M5-Bus Ext5V enabled for GNSS/LoRa modules");
+        // Use a permanent board lease instead of the direct BSP setter.
+        // This keeps the Ext5V rail owned by the board's lease model so
+        // that GPS/LoRa/heading runtimes can later acquire their own
+        // named leases without racing against an un-owned BSP call.
+        if (::boards::tab5::Tab5Board::instance().acquireExt5vRail("idf-startup"))
+        {
+            ESP_LOGI(kTag, "Tab5 M5-Bus Ext5V lease acquired for startup");
+        }
+        else
+        {
+            ESP_LOGW(kTag, "Tab5 M5-Bus Ext5V lease unavailable; rail may already be on");
+        }
     }
     else
     {

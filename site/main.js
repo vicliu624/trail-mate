@@ -83,9 +83,12 @@ function createPackCard(pack) {
   const runtime = pack.runtime ?? {};
   const fontCount = runtime.font_count ?? (pack.provides?.fonts?.length ?? 0);
   const imeCount = runtime.ime_count ?? (pack.provides?.ime?.length ?? 0);
+  const statuses = Array.from(
+    new Set(locales.map((locale) => locale.translation_status || "release").filter(Boolean)),
+  );
 
   const card = createElement("article", "language-pack-card");
-  card.append(createElement("p", "feature-kicker", "Locale Bundle"));
+  card.append(createElement("p", "feature-kicker", statuses.includes("release") ? "Release Bundle" : "Review Bundle"));
   card.append(createElement("h3", "", pack.display_name || pack.id || "Unnamed package"));
   card.append(createElement("p", "language-pack-summary", pack.summary || "No summary available."));
 
@@ -93,12 +96,17 @@ function createPackCard(pack) {
   meta.append(createPill(`${locales.length} locale${locales.length === 1 ? "" : "s"}`));
   meta.append(createPill(`${fontCount} font pack${fontCount === 1 ? "" : "s"}`));
   meta.append(createPill(`${imeCount} IME${imeCount === 1 ? "" : "s"}`));
+  statuses.forEach((status) => {
+    meta.append(createPill(status));
+  });
   card.append(meta);
 
   if (locales.length > 0) {
     const localeRow = createElement("div", "language-pack-locales");
     locales.slice(0, 7).forEach((locale) => {
-      localeRow.append(createPill(locale.display_name || locale.id || "Locale"));
+      const status = locale.translation_status || "release";
+      const label = locale.display_name || locale.id || "Locale";
+      localeRow.append(createPill(status === "release" ? label : `${label} (${status})`));
     });
     if (locales.length > 7) {
       localeRow.append(createPill(`+${locales.length - 7} more`));

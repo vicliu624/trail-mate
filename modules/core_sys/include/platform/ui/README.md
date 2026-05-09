@@ -21,6 +21,10 @@ They must not depend on concrete implementations under `platform/esp/*`,
 
 ## Current contract set
 
+- `capability_status.h`
+  Shared `CapabilityState` / `CapabilityStatus` types used by all runtime
+  contracts to honestly signal Unsupported / Simulated / Available / Degraded /
+  Error.  Every runtime that exposes `capability_status()` includes this header.
 - `device_runtime.h`
   Device identity, delay/restart, battery/memory stats, haptics, storage
   presence, and basic capability/state helpers.
@@ -60,6 +64,9 @@ They must not depend on concrete implementations under `platform/esp/*`,
   USB support reporting and page-facing lifecycle hooks.
 - `walkie_runtime.h`
   Walkie-talkie support/state lifecycle.
+- `resource_owner.h`
+  Shared `ResourceKind` / `OwnerToken` vocabulary for radio, display,
+  power rail, I2C/SPI bus, GPS, and audio ownership across Linux and IDF.
 - `wifi_runtime.h`
   Wi-Fi config persistence, scan/connect lifecycle, and status.
 

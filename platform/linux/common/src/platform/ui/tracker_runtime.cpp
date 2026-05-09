@@ -9,13 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "platform/linux/runtime_paths.h"
+
 namespace platform::ui::tracker
 {
 namespace
 {
-
-constexpr const char* kSdRootEnv = "TRAIL_MATE_SD_ROOT";
-constexpr const char* kSettingsRootEnv = "TRAIL_MATE_SETTINGS_ROOT";
 
 bool s_recording = false;
 std::string s_current_path{};
@@ -25,48 +24,9 @@ bool s_distance_only = false;
 Format s_format = Format::GPX;
 std::string s_track_dir_cache{};
 
-std::filesystem::path default_storage_root()
-{
-    if (const char* configured = std::getenv(kSdRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured);
-        }
-    }
-
-    if (const char* configured = std::getenv(kSettingsRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured) / "sdcard";
-        }
-    }
-
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"))
-    {
-        if (appdata[0] != '\0')
-        {
-            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard";
-        }
-    }
-#endif
-
-    if (const char* home = std::getenv("HOME"))
-    {
-        if (home[0] != '\0')
-        {
-            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard";
-        }
-    }
-
-    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard";
-}
-
 std::filesystem::path track_dir_path()
 {
-    return default_storage_root() / "tracks";
+    return ::platform::linux_runtime::resolve_paths().sd_root / "tracks";
 }
 
 bool ensure_track_dir()
@@ -100,18 +60,9 @@ std::string make_track_file_name()
 {
     using clock = std::chrono::system_clock;
     const auto now = clock::now();
-    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    const auto seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
     return "track-" + std::to_string(seconds) + extension_for_format(s_format);
-}
-
-std::filesystem::path resolve_track_path(const std::string& path_or_name)
-{
-    std::filesystem::path candidate(path_or_name);
-    if (candidate.is_absolute())
-    {
-        return candidate;
-    }
-    return track_dir_path() / candidate;
 }
 
 } // namespace
@@ -176,17 +127,11 @@ bool list_tracks(std::vector<std::string>& out_tracks, std::size_t max_count)
     }
 
     std::error_code ec;
-    for (std::filesystem::directory_iterator it(track_dir_path(), ec), end; !ec && it != end;
-         it.increment(ec))
+    for (std::filesystem::directory_iterator it(track_dir_path(), ec), end;
+         !ec && it != end; it.increment(ec))
     {
-        if (ec)
-        {
-            break;
-        }
-        if (!it->is_regular_file(ec) || ec)
-        {
-            continue;
-        }
+        if (ec) break;
+        if (!it->is_regular_file(ec) || ec) continue;
         out_tracks.push_back(it->path().filename().string());
     }
 
@@ -200,8 +145,15 @@ bool list_tracks(std::vector<std::string>& out_tracks, std::size_t max_count)
 
 bool remove_track(const std::string& path)
 {
+    // Containment check against the tracks directory.
+    std::filesystem::path resolved;
+    if (!::platform::linux_runtime::resolve_child_under_root(
+            track_dir_path(), path, resolved))
+    {
+        return false;
+    }
+
     std::error_code ec;
-    const std::filesystem::path resolved = resolve_track_path(path);
     return std::filesystem::remove(resolved, ec) && !ec;
 }
 
@@ -214,24 +166,9 @@ const char* track_dir()
     return s_track_dir_cache.c_str();
 }
 
-void set_auto_recording(bool enabled)
-{
-    s_auto_recording = enabled;
-}
-
-void set_interval_seconds(uint32_t seconds)
-{
-    s_interval_seconds = seconds;
-}
-
-void set_distance_only(bool enabled)
-{
-    s_distance_only = enabled;
-}
-
-void set_format(Format format)
-{
-    s_format = format;
-}
+void set_auto_recording(bool enabled) { s_auto_recording = enabled; }
+void set_interval_seconds(uint32_t seconds) { s_interval_seconds = seconds; }
+void set_distance_only(bool enabled) { s_distance_only = enabled; }
+void set_format(Format format) { s_format = format; }
 
 } // namespace platform::ui::tracker

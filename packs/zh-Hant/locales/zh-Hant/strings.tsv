@@ -2,112 +2,617 @@ Action	操作
 Add	新增
 Advanced	進階
 Always	常亮
-App	應用
+Altitude	高度
+Altitude Reference	高度參考
+App	應用程式
+Area Cleared	區域清除
 Auto	自動
+Awaiting teammate	等待隊友
 Back	返回
+Base Camp	營地
+Beijing (UTC+8)	北京 (UTC+8)
+BLE bridge ready  |  %s	BLE 橋接已就緒  |  %s
+BLE linked  |  %s	BLE 已連線  |  %s
 Bluetooth	藍牙
 Bluetooth Pairing	藍牙配對
+Bcast	廣播
+Bridge error	橋接錯誤
+Broadcast	廣播
 Cancel	取消
 Channel	頻道
 Chat	聊天
+Chat unavailable	聊天不可用
 Chinese	中文
+Closes automatically after pairing	配對完成後將自動關閉
 Close	關閉
+Command	指令
+Command: %s	指令:%s
+Command: %s %s	指令:%s %s
+Command: %s %s %s	指令:%s %s %s
+Compare Verification Code	比對驗證碼
+Compass	指南針
+Connected	已連線
+Connected, handshaking...	已連線,正在握手...
 Contacts	聯絡人
+Contacts (%s)	聯絡人(%s)
+Contacts (LXMF)	聯絡人(LXMF)
+Contacts (LXMF - %.3fMHz)	聯絡人(LXMF - %.3fMHz)
+Contacts (MeshCore)	聯絡人(MeshCore)
+Contacts (Meshtastic - %.3fMHz)	聯絡人(Meshtastic - %.3fMHz)
+Contacts (RNode)	聯絡人(RNode)
+Contacts (RNode - %.3fMHz)	聯絡人(RNode - %.3fMHz)
+Conversation protocol mismatch	會話協議不匹配
 Data Exchange	資料交換
+Debug Logs	除錯日誌
+Decoding: %d%%	解碼中:%d%%
+Decoding: 0%	解碼中:0%
 Delete	刪除
+Delete %s?	刪除 %s?
+Delete contact %s?	刪除聯絡人 %s?
+Delete failed	刪除失敗
+Device: %s	裝置:%s
+Direct	私聊
 Disabled	已停用
 Discover	發現
 Display Language	顯示語言
+Duplicate name not allowed	名稱不能重複
 Edit	編輯
+Edit nickname	編輯暱稱
+Emergency SOS	緊急求救
 Energy Sweep	頻譜掃描
 English	English
 English keyboard	英文鍵盤
+Enter nickname	輸入暱稱
+Enter number for %s	輸入 %s 的校驗數字
+Enter the 6-digit number	請輸入 6 位數字
+Enter this 6-digit PIN on your phone	請在手機上輸入這個 6 位 PIN 碼
 Error	錯誤
-Factory Reset	恢復原廠
+Error: %lu	錯誤:%lu
+FSK Voice	FSK 語音
+Failed	失敗
+Fix	定位
+Fixed PIN	固定 PIN
+Gauge Design (mAh)	電池設計容量 (mAh)
+Gauge Full (mAh)	電池滿充容量 (mAh)
+Good Find	發現目標
 GPS	GPS
-Extensions	擴充
+Extensions	擴充套件
 Language	語言
-Package Details	套件詳情
-Back to list	返回清單
+Package Details	套件詳細資料
+Back to list	返回列表
 Install	安裝
 Update	更新
 Uninstall	解除安裝
 Incompatible	不相容
 Compatible with this device	與此裝置相容
 Compatibility: %s	相容性：%s
-memory profile mismatch	記憶體設定檔不相符
+memory profile mismatch	記憶體配置不匹配
 needs %s	需要 %s
 Update available: %s	有可用更新：%s
 Installed	已安裝
 Installed: %s	已安裝：%s
 Available to install	可安裝
-Blocked	已封鎖
+Blocked	已阻止
 %lu locales  %lu fonts  %lu IME  %s	%lu 個語言  %lu 個字型  %lu 個輸入法  %s
 No Wi-Fi	無 Wi-Fi
-Installing package...	正在安裝套件...
+Installing package...	正在安裝軟體包...
 Package installed	套件已安裝
-Uninstalling package...	正在解除安裝套件...
-Package uninstalled	套件已解除安裝
+Uninstalling package...	正在解除安裝軟體包...
+Package uninstalled	套件已移除
 No language packs available	沒有可用語言包
-Available language packs: %lu	可用語言包：%lu
+Available language packs: %lu	可用語言套件：%lu
 About	關於
 Package Info	套件資訊
 Contents	內容
 Source	來源
-Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	封存檔：%s\n額外字型 RAM：%s\n設定檔：%s\n%s
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	壓縮包：%s\n額外字型 RAM：%s\n配置：%s\n%s
 Locales: %s\nFonts: %s\nIME: %s	語言：%s\n字型：%s\n輸入法：%s
-Author: %s\nHomepage: %s	作者：%s\n首頁：%s
+Author: %s\nHomepage: %s	作者：%s\n主頁：%s
 None	無
 GPS Status	GPS 狀態
+HDOP	HDOP
+Heading starting	航向啟動中
 Hide	隱藏
+Host bridge	主機橋接
+Host connected, probing modem...	主機已連線，正在偵測數據機...
+IDLE	空閒
+Ignored	已忽略
+Ignore	忽略
+Ignore unavailable	當前無法忽略
+Ignore update failed	忽略狀態更新失敗
+Image received	影象已接收
 Info	資訊
-Japanese	日文
-Korean	韓文
+Initializing...	初始化中...
+Invalid airtime factor	空中時間係數無效
+Invalid design capacity (mAh)	設計容量 (mAh) 無效
+Invalid frequency offset	頻偏無效
+Invalid frequency value	頻率值無效
+Invalid full capacity (mAh)	滿充容量 (mAh) 無效
+Invalid marker	無效標記
+Invalid MeshCore bandwidth	MeshCore 頻寬無效
+Invalid MeshCore frequency	MeshCore 頻率無效
+Invalid number	數字無效
+Invalid RX delay	接收延遲無效
+Key marked trusted	金鑰已標記為可信
+Key must be 32 hex or 16 chars	金鑰必須為 32 位十六進位制或 16 個字元
+Key trust failed	金鑰信任失敗
+Key Verification	金鑰校驗
+LINKED	已組網
+LISTEN	監聽
+LIVE	實時
 Loading...	載入中...
+Location	位置
+Location: %s	位置:%s
+Location: %s %s	位置:%s %s
+LoRa direct path  |  %s	LoRa 直連  |  %s
+Low battery - audio disabled	電量低,已禁用音訊
 Map	地圖
 Map Layer	地圖圖層
+MESH	網狀
+Mesh Status	網狀狀態
+Mesh unavailable	Mesh 不可用
+MeshCore only	僅支援 MeshCore
+Message DB cleared	訊息資料庫已清除
+Messages	訊息
+MESSAGES	訊息
+Messages and broadcasts show here	訊息和廣播會顯示在這裡
+Mini Compass	迷你指南針
+MT send uses slot 0/1 only	Meshtastic 傳送僅支援槽位 0/1
+N/A	不適用
 Nearby	附近
+Need local GPS	需要本機 GPS
 Network	網路
 New	新建
-No messages	沒有訊息
+new activity	有新動態
+Next	下一頁
+No GPS fix	尚無 GPS 定位
+No image	沒有影象
+No messages	暫無訊息
+No preview	無預覽
 No recent traffic	暫無最近活動
+No response	無響應
+No route selected	未選擇路線
+No target	沒有目標
+No track files	沒有軌跡檔案
+Node DB reset	節點資料庫已重置
+Node ignored	節點已忽略
+Node ignored and hidden	節點已忽略並隱藏
+Node unignored	已取消忽略節點
+North locked	北向已鎖定
 Not set	未設定
+NO	否
+NO FIX	無定位
 Number keyboard	數字鍵盤
 OFF	關
 OK	確定
 ON	開
+online	線上
 Pairing	配對
 PC Link	電腦連線
-Power	電源
+PC Link is unavailable on this target.	當前目標暫不支援電腦連線.
+peer lock  |  turn %03.0f deg	目標鎖定  |  轉向 %03.0f 度
+Pinyin keyboard	拼音鍵盤
+Pinyin: %s	拼音：%s
+Position	位置
+position stream active  |  %u in view	定位流活躍  |  可見 %u 顆
+Power	電量
+Press Back	按返回鍵
+Press RX to start	按 RX 開始
+Primary	主通道
 Protocol	協議
+Protocol switch failed	協議切換失敗
+Protocol switched	協議已切換
+quiet net	網路安靜
+Random PIN	隨機 PIN
 Ready	就緒
+RECEIVING	接收中
 Recent Activity	最近活動
+Record	記錄
+Recording	記錄中
+Region	區域
+Remain: %u	剩餘:%u
 Reply	回覆
+Reply disabled for this protocol	此協議下不能回覆
+Reset Mesh Profiles	重置 Mesh 配置
+Reset Node DB	重置節點資料庫
+Resetting...	重置中...
+Return	返回
+Rally Point	集結點
+RNode Bridge	RNode Bridge
+RNode modem ready	RNode 數據機就緒
+RNode text chat runs on host	RNode 文字聊天在主機側執行
+Route	路線
 Run	執行
+RX	RX
+RX: %lu  TX: %lu	接收:%lu  傳送:%lu
+RX: 0  TX: 0	接收:0  傳送:0
 Save	儲存
+Saved: %s	已儲存:%s
 Scan failed	掃描失敗
 Scan Local	本地掃描
-Scanning 5s...	掃描 5 秒...
-SEARCH	搜尋
+Scanning 5s...	掃描 5 秒中...
 Screen Brightness	螢幕亮度
-Screen Timeout	螢幕逾時
+Screen Timeout	螢幕關閉時間
+SEARCH	搜尋中
+Secondary	次通道
+Select a route	請選擇路線
+Select a track	請選擇軌跡
+Select marker	選擇標記
+Select Track	選擇軌跡
+Selected: %s	已選:%s
+Send	傳送
+Send failed	傳送失敗
+Send this code and compare:\n	傳送這個驗證碼並比對:\n
+Send ID Broadcast	廣播傳送 ID
+Send ID Local	本地傳送 ID
+Sending...	傳送中...
+Sent	已傳送
 Settings	設定
 Setting	設定
-Sky Plot	星圖
+Share Position Marker	分享位置標記
+Share this number:\n	請分享這個數字:\n
+Short Name	短名稱
+SOLO	單機
 Speaker Volume	喇叭音量
+Sky Plot	星圖
+SSTV RX READY	SSTV 接收就緒
+SSTV start failed	SSTV 啟動失敗
+standing by	待命
 Status	狀態
 Stopped	已停止
 Stop	停止
+Stop recording first	請先停止記錄
 Submit	提交
+Submit failed	提交失敗
 System	系統
+SATELLITE STATUS	衛星狀態
+Talk	說話
+TALK	說話
 Team	團隊
-Team Status	團隊狀態
+TEAM	團隊
+Team chat send failed	團隊訊息傳送失敗
+Team chat unavailable	團隊聊天不可用
+Team chat unavailable in RNode mode	RNode 模式下團隊聊天不可用
+team member position will appear here	隊友位置會顯示在這裡
+Team keys not ready	團隊金鑰未就緒
+Team location encode failed	團隊位置編碼失敗
+Text chat unavailable	文字聊天不可用
+threads active	活躍會話
 Time Zone	時區
-Tracker	軌跡
-Traditional Chinese	繁體中文
+Tracker	追蹤
+traffic active	流量活躍
+Trust Key	信任金鑰
+U	用
+Unignore	取消忽略
+Unread	未讀
 Unknown	未知
-USB Disk	USB儲存
+USB Mass Storage	USB 大容量儲存
+USB Disk	USB 儲存
+USB Bridge	USB 橋接
+USB host bridge	USB 主機橋接
+USB Bridge is unavailable on this target.	當前目標暫不支援 USB 橋接.
+USB CDC KISS modem for Reticulum	面向 Reticulum 的 USB CDC KISS 調變解調器
+USE	使用
+Used	已使用
 User Name	使用者名稱
-Verification Number	驗證號碼
-Vibration	震動
+Verification Number	校驗數字
+Verification number sent	校驗數字已傳送
+Vibration	振動
+VOL %d	音量 %d
+VOL 80	音量 80
+waiting for better sky view  |  %u in view	等待更好的天空視野  |  可見 %u 顆
+waiting for module GNSS compass	等待 GNSS/指南針模組
+waiting for traffic	等待流量
+Waiting for host...	等待主機連線...
+Waiting for Reticulum host...	等待 Reticulum 主機連線...
+WAIT IMU	等待 IMU
+Walkie not available	對講功能不可用
+Walkie start failed	對講啟動失敗
+Walkie Talkie	對講機
+YES	是
+6 digits	6 位數字
+%u threads active	%u 個會話活躍
+%ud	%u天
+%uh	%u小時
+%um	%u分
+%umo	%u月
+%uy	%u年
+Confirm received code:\n	確認收到的驗證碼:\n
+device heading from 9-axis module	裝置航向來自 9 軸模組
+heading unlocks after first fix	首次定位後解鎖航向
+If it matches, trust the key.	如果一致,請信任此金鑰。
+magnetometer heading active	磁力計航向已啟用
+magnetometer still warming up	磁力計仍在預熱
+needle shows north until target lock	鎖定目標前指標指向北方
+nearest peer  |  %.0f m away	最近隊友  |  距離 %.0f 米
+no recent traffic	暫無最近活動
+now	剛剛
+%s layer missing	%s 圖層缺失
+Active: %s	已啟用:%s
+Alt: %.0f m	高度:%.0f 米
+Alt: -- m	高度:-- 米
+Base: %s	底圖:%s
+Battery critical	電池電量危險
+Broadcast (%d)	廣播(%d)
+COMPLETE	已完成
+Calibrating...	校準中...
+Confirm	確認
+Contour: OFF	等高線:關
+Decoder error	解碼錯誤
+Direct (%d)	私聊(%d)
+E	東
+ERROR	錯誤
+Exiting USB...	正在退出 USB...
+Hold	原地待命
+ID: !%08lX	ID: !%08lX
+ID: -	ID: -
+Key refresh not implemented	暫未實現金鑰重新整理
+Key verify: %s %s	金鑰校驗:%s %s
+Key verify: confirm %s %s	金鑰校驗:請確認 %s %s
+Key verify: enter number for %s	金鑰校驗:請為 %s 輸入數字
+Key verify: send %s %s	金鑰校驗:請傳送 %s %s
+Later	稍後
+Level %d	級別 %d
+Listening for SSTV signal...	正在監聽 SSTV 訊號...
+Low battery: %d%%	電量低:%d%%
+MODE: %s	模式:%s
+MODE: Auto	模式:自動
+Map - %.48s	地圖 - %.48s
+Map - %s Missing	地圖 - %s 缺失
+Map - No Map Data	地圖 - 沒有地圖資料
+Map - No SD Card	地圖 - 沒有 SD 卡
+Map - no gps data	地圖 - 沒有 GPS 資料
+Message	訊息
+Mic TBD	麥克風功能待定義
+Mic init failed	麥克風初始化失敗
+Morse Input	摩斯電碼輸入
+MoveTo	移動到
+N	北
+NODE INFO	節點資訊
+Name required	必須輸入名稱
+Name too long	名稱過長
+No KML routes	沒有 KML 路線
+No SD Card	沒有 SD 卡
+No routes folder	沒有 routes 資料夾
+No tracks yet	暫無軌跡
+Only leader can manage	只有隊長可以管理
+Only leader can pair	只有隊長可以配對
+Paired successfully	配對成功
+Pairing failed	配對失敗
+Pairing init failed	配對初始化失敗
+Pairing not available	當前無法配對
+Pairing not ready	配對尚未就緒
+Press Back to exit USB mode	按返回鍵退出 USB 模式
+Press SPACE to resume	按 SPACE 喚醒螢幕
+RallyTo	集結到
+Route configured	已配置路線
+Route: %s	路線:%s
+SD Card Not Found\nPlease insert SD card	未找到 SD 卡\n請插入 SD 卡
+SSTV RECEIVER	SSTV 接收器
+Save failed	儲存失敗
+Scan +%u/%u	掃描新增:+%u/%u
+Select level	選擇級別
+Selected level: %d	已選級別:%d
+Shutting down to protect battery	正在關機以保護電池
+Status: CALIB	狀態:校準
+Step 1/2: Tap short dots	第 1/2 步:點選短點
+Step 2/2: Tap long dashes	第 2/2 步:點選長線
+Switch to %s to chat	切換到 %s 以聊天
+Symbol: 	符號:
+Tap to input, idle 3s to send	點選輸入,空閒 3 秒後傳送
+Team keys mismatch	團隊金鑰不匹配
+Team: 	團隊:
+Text: 	文字:
+Unread: %d	未讀:%d
+Unread: 0	未讀:0
+W	西
+0° Horizon	0° 地平線
+PSK must be 32 hex or 16 chars	PSK 必須是 32 位十六進位制或 16 個字元
+Restarting...	正在重啟...
+awaiting position	等待位置
+compass wakes after GPS fix	GPS 定位後指南針將啟用
+searching satellites	正在搜尋衛星
+%s -	%s -
+%s 0s	%s 0秒
+%s %us	%s %u秒
+%s %um	%s %u分
+%s %uh	%s %u小時
+%s %ud	%s %u天
+AUTO	自動
+Alt: %ld m	高度:%ld 米
+Alt: -	高度:-
+BEST	最佳
+BW: %.0fk	頻寬:%.0fk
+BW: %.1fk	頻寬:%.1fk
+BW: -	頻寬:-
+CAD	CAD
+CURSOR	遊標
+Ch: %.3f	通道:%.3f
+Ch: -	通道:-
+Hop: %u	跳數:%u
+Hop: -	跳數:-
+Hop: - / NH: %02X	跳數:- / 下一跳:%02X
+ID: !%06lx	ID: !%06lx
+ID: !%08lx	ID: !%08lx
+Last heard:	最後收到:
+Link	鏈路
+Link / MeshCore	鏈路 / MeshCore
+Link / Meshtastic	鏈路 / Meshtastic
+MODE: RSSI	模式:RSSI
+NOISE %.0f dBm	噪聲 %.0f dBm
+NOISE -104 dBm	噪聲 -104 dBm
+PKI: -	PKI:-
+PKI: known	PKI:已知
+PKI: verified	PKI:已驗證
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI:%.0f dBm
+RSSI: -	RSSI:-
+Role: %s	角色:%s
+SCAN	掃描
+SF: %u	擴頻因子:%u
+SF: -	擴頻因子:-
+SIM	模擬
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR:%.1f dB
+SNR: -	SNR:-
+SNR %.0f	訊雜比 %.0f
+SNR -	訊雜比 -
+SNR Good	訊雜比良好
+SNR Weak	訊雜比較弱
+STEP %.0fk | BW %.0fk	步進 %.0fk | 頻寬 %.0fk
+STEP %.1fk | BW %.1fk	步進 %.1fk | 頻寬 %.1fk
+STEP -- | BW --	步進 -- | 頻寬 --
+STOP	停止
+Slot	槽位
+Slot %u	槽位 %u
+SUB-GHz SCAN	Sub-GHz 掃描
+Actions	操作
+Actions: %s	操作:%s
+Access to team data revoked	隊伍資料訪問已撤銷
+Capability:	能力:
+Channel Actions	頻道操作
+Confirm Kick	確認移除
+Create Team	建立隊伍
+ELEV	仰角
+Join Team	加入隊伍
+In View	可見
+Keep devices within 5m	請將裝置保持在 5 米內
+KeyDist	金鑰分發
+KeyId: %u	金鑰 ID:%u
+KeyId: --	金鑰 ID:--
+Keys	金鑰
+Kick	移除
+Kick Member	移除成員
+Last paired: %s	最近配對:%s
+Last seen %uh ago	上次線上 %u 小時前
+Last seen %um ago	上次線上 %u 分鐘前
+Last seen --	上次線上:--
+Last update %us ago	上次更新 %u 秒前
+Last update --	上次更新:--
+Last update 0s ago	上次更新 0 秒前
+Leader	隊長
+Leader online	隊長線上
+Leave	離開
+Leave team?	離開隊伍?
+Manage	管理
+Member: %s	成員:%s
+Members	成員
+Members: %u	成員數:%u
+Members: %u  Online: %u	成員:%u  線上:%u
+Modem Bridge	數據機橋接
+No members yet	暫無成員
+Not Used	未使用
+Offline	離線
+Online	線上
+Online: %u	線上:%u
+Pair Again	再次配對
+Pair Member	配對成員
+Pairing in progress	正在配對
+Prev	上一頁
+Remove %s from team?	將 %s 移出隊伍?
+Request Keys	請求金鑰
+Retry	重試
+Security Round: %u	安全輪次:%u
+Security Round: --	安全輪次:--
+Security: OK (Round %u)	安全狀態:正常(輪次 %u)
+Security: OK (Round --)	安全狀態:正常(輪次 --)
+Seen %ud	%u 天前
+Seen %uh	%u 小時前
+Seen %um	%u 分鐘前
+Send failed (keys not ready)	傳送失敗(金鑰未就緒)
+Status: %s	狀態:%s
+Target: %s	目標:%s
+Team / %s	隊伍 / %s
+Team Actions	隊伍操作
+Team Health	團隊狀態
+Team Status	團隊狀態
+Team: %s	隊伍:%s
+This clears local keys.	這將清除本地金鑰。
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	這將更新安全輪次。\n該成員將不再接收\n隊伍訊息或航點。
+Transfer	移交
+Transfer Leader	移交隊長
+View Team	檢視隊伍
+Waiting for new keys...	正在等待新金鑰...
+Waypoint	航點
+You are no longer in this team	你已不在此隊伍中
+You are not in a team	你當前未加入隊伍
+- No shared map\n- No team awareness	- 無共享地圖\n- 無隊伍態勢
+1 member stale	1 名成員狀態過期
+encrypt failed	加密失敗
+member	成員
+queue full	佇列已滿
+unsupported protocol	協議不支援
+Factory Reset	恢復原廠設定
 Clear all settings and restart?	清除所有設定並重新啟動？
+Terrain	地形圖
+Satellite	衛星圖
+Contour: ON	等高線:開
+Contour data missing	缺少等高線資料
+%d enabled	已啟用 %d 個
+%s  %s	%s  %s
+Channel Key / PSK	頻道金鑰 / PSK
+Channel Slot	頻道槽
+Channel Utilization	頻道使用率
+Check for Updates	檢查更新
+Clear Message DB	清除訊息資料庫
+Connect	連線
+Contour Overlay	等高線疊加
+Coordinate Format	座標格式
+Coordinate System	座標系統
+Current Version	目前版本
+Detected Network	偵測到的網路
+Disconnect	中斷連線
+Duty Cycle Limit	占空比限制
+Enabled IMEs	已啟用的輸入法
+Encryption Mode	加密模式
+Freq Offset (MHz)	頻率偏移 (MHz)
+GPS Enabled	啟用 GPS
+Hop Limit	跳數限制
+IME setting update failed	輸入法設定更新失敗
+Install Update	安裝更新
+Latest Version	最新版本
+Layer	圖層
+Location Mode	定位模式
+MC Airtime Factor	MC 空中時間係數
+MC Bandwidth (kHz)	MC 頻寬 (kHz)
+MC Channel Key	MC 頻道金鑰
+MC Channel Name	MC 頻道名稱
+MC Channel Slot	MC 頻道槽
+MC Coding Rate	MC 編碼率
+MC Flood Max	MC 最大泛洪數
+MC Frequency (MHz)	MC 頻率 (MHz)
+MC Multi ACKs	MC 多重 ACK
+MC RX Delay Base	MC 接收延遲基準
+MC Region Preset	MC 區域預設
+MC Repeat	MC 中繼
+MC Spread Factor	MC 展頻因子
+MC TX Power	MC 發射功率
+Manual BW	手動頻寬
+Manual CR	手動編碼率
+Manual SF	手動展頻因子
+Map Source	地圖來源
+Modem Preset	數據機預設
+NMEA Export	NMEA 匯出
+NMEA Sentences	NMEA 語句
+No IME packs installed	尚未安裝輸入法套件
+No position available	無可用位置
+OTA Status	OTA 狀態
+Override Duty Cycle	覆寫占空比
+Override Freq (MHz)	覆寫頻率 (MHz)
+Password	密碼
+Position Strategy	定位策略
+SSID	SSID
+Satellite Systems	衛星系統
+Scan Networks	掃描網路
+TX Enabled	啟用發射
+TX Power	發射功率
+Track Format	軌跡格式
+Track Interval	軌跡間隔
+Track Recording	軌跡記錄
+Unavailable	無法使用
+Update Interval	更新間隔
+Use Preset	使用預設
+Wi-Fi Enabled	啟用 Wi-Fi
+Wi-Fi start failed	Wi-Fi 啟動失敗

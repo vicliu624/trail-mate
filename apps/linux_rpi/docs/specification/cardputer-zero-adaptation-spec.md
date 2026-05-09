@@ -270,22 +270,22 @@ More explicitly:
 These are not abstract concerns; the repository already contains concrete
 violations that this specification treats as real debt.
 
-### `ui_shared` still knows ESP Arduino build details
+### RESOLVED (2026-05-07): `ui_shared` ESP Arduino build dependency
 
-`modules/ui_shared/library.json` currently includes
-`../../platform/esp/arduino_common/include` and depends on `Preferences`.
+Previously `modules/ui_shared/library.json` included
+`../../platform/esp/arduino_common/include` and depended on `Preferences`.
+This has been fixed: `library.json` now only references `platform/shared`,
+`core_sys`, `core_chat`, `core_gps`, `core_hostlink`, and `core_team`.
+The boundary checker (`scripts/check_platform_ui_boundaries.py`) confirms this
+passes.
 
-That makes `ui_shared` a platform-dependent package, which violates Layer B.
+### RESOLVED (2026-05-07): `core_chat` BLE platform-specific tails
 
-### `core_chat` still contains platform-specific BLE tails
+Previously `modules/core_chat/src/ble/*` included `Arduino.h` and
+FreeRTOS-related headers. Those files have been cleaned up and no longer
+contain platform-specific includes. All core module boundary checks pass.
 
-Examples under `modules/core_chat/src/ble/*` still include `Arduino.h` and
-FreeRTOS-related headers.
-
-That means those files are not valid Layer A code even if they live inside a
-core module tree today.
-
-### `BoardBase` is not the Linux seam
+### `BoardBase` is not the Linux seam (OPEN)
 
 `platform/shared/include/board/BoardBase.h` remains useful for MCU board
 families.

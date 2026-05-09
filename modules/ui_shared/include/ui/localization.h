@@ -18,6 +18,7 @@ struct LocaleInfo
     const char* ui_font_pack_id = nullptr;
     const char* content_font_pack_id = nullptr;
     const char* ime_pack_id = nullptr;
+    const char* direction = nullptr; // "ltr" (default) or "rtl"
     bool builtin = true;
 };
 
@@ -35,6 +36,7 @@ const LocaleInfo* locale_at(std::size_t index);
 int current_locale_index();
 const char* current_locale_id();
 const char* current_locale_display_name();
+const char* current_locale_direction();
 bool set_locale(const char* locale_id, bool persist = true);
 bool set_locale_by_index(std::size_t index, bool persist = true);
 const lv_font_t* active_ui_font_fallback();

@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <memory>
 #include <random>
 #include <string>
 #include <type_traits>
@@ -15,14 +16,17 @@
 #include <vector>
 
 #include "app/app_facade_access.h"
+#include "app/linux_demo_world.h"
 #include "chat/domain/chat_model.h"
 #include "chat/infra/contact_store_core.h"
 #include "chat/infra/node_store_core.h"
 #include "chat/infra/store/ram_store.h"
+#include "chat/linux_noop_mesh_adapter.h"
 #include "chat/ports/i_contact_blob_store.h"
 #include "chat/ports/i_node_blob_store.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
+#include "platform/linux/runtime_mode.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/settings_store.h"
@@ -61,6 +65,7 @@ constexpr const char* kNodeStoreKey = "nodes_v1";
 constexpr const char* kContactStoreNamespace = "linux_contact_names";
 constexpr const char* kContactStoreKey = "contacts_v1";
 
+// Demo node IDs are now sourced from DemoWorld.
 constexpr ::chat::NodeId kDemoAlphaNodeId = 0x435A1001U;
 constexpr ::chat::NodeId kDemoBravoNodeId = 0x435A1002U;
 constexpr ::chat::NodeId kDemoScoutNodeId = 0x435A1003U;
@@ -68,6 +73,11 @@ constexpr ::chat::NodeId kDemoNearbyNodeId = 0x435A1004U;
 constexpr ::chat::NodeId kDemoBroadcastNodeId = kDemoAlphaNodeId;
 constexpr ::chat::NodeId kSyntheticPairLeaderNodeId = kDemoAlphaNodeId;
 constexpr ::chat::NodeId kSyntheticPairMemberNodeId = kDemoBravoNodeId;
+
+static_assert(kDemoAlphaNodeId == DemoWorld::alphaNodeId());
+static_assert(kDemoBravoNodeId == DemoWorld::bravoNodeId());
+static_assert(kDemoScoutNodeId == DemoWorld::scoutNodeId());
+static_assert(kDemoNearbyNodeId == DemoWorld::nearbyNodeId());
 
 constexpr std::array<uint8_t, 6> kSyntheticLeaderMac{{0x43, 0x5A, 0x20, 0x01, 0x00, 0x01}};
 constexpr std::array<uint8_t, 6> kSyntheticMemberMac{{0x43, 0x5A, 0x20, 0x01, 0x00, 0x02}};
@@ -79,67 +89,28 @@ constexpr uint32_t kAutoReplyDelayMs = 700U;
 
 team::TeamId makeSyntheticPairTeamId()
 {
-    team::TeamId team_id{};
-    const std::array<uint8_t, 8> bytes{{'C', 'Z', 'T', 'E', 'A', 'M', '0', '1'}};
-    for (size_t i = 0; i < team_id.size() && i < bytes.size(); ++i)
-    {
-        team_id[i] = bytes[i];
-    }
-    return team_id;
+    return DemoWorld::syntheticPairTeamId();
 }
 
 std::array<uint8_t, team::proto::kTeamChannelPskSize> makeSyntheticPairPsk()
 {
-    std::array<uint8_t, team::proto::kTeamChannelPskSize> psk{};
-    for (size_t i = 0; i < psk.size(); ++i)
-    {
-        psk[i] = static_cast<uint8_t>(0x30U + (i * 7U + 3U) % 0x4FU);
-    }
-    return psk;
+    return DemoWorld::syntheticPairPsk();
 }
 
 const char* syntheticPairTeamName()
 {
-    return "Field Team";
+    return DemoWorld::syntheticPairTeamName();
 }
 
 std::string makeAutoReplyText(::chat::NodeId peer, const std::string& text)
 {
-    const std::string trimmed = text.substr(0, std::min<std::size_t>(text.size(), 28U));
-    switch (peer)
-    {
-    case kDemoAlphaNodeId:
-        return "Alice copied: " + trimmed;
-    case kDemoBravoNodeId:
-        return "Bravo link OK: " + trimmed;
-    case kDemoScoutNodeId:
-        return "Scout received your ping.";
-    default:
-        return "Peer ack: " + trimmed;
-    }
+    return DemoWorld::autoReplyText(peer, text);
 }
 
-struct DemoPeerSeed
-{
-    ::chat::NodeId node_id = 0;
-    const char* short_name = nullptr;
-    const char* long_name = nullptr;
-    const char* nickname = nullptr;
-    bool ignored = false;
-    float snr = 0.0f;
-    float rssi = 0.0f;
-    int32_t lat_e7 = 0;
-    int32_t lon_e7 = 0;
-};
-
+// Demo peer seeds now come from DemoWorld.
 std::array<DemoPeerSeed, 4> demoPeerSeeds()
 {
-    return {{
-        {kDemoAlphaNodeId, "ALFA", "Alice Local", "Alice", false, 11.2f, -72.0f, 311214000, 1214737000},
-        {kDemoBravoNodeId, "BRAV", "Bravo Pager", "Bravo", false, 8.6f, -79.0f, 311218500, 1214749000},
-        {kDemoScoutNodeId, "SCOT", "Scout Relay", nullptr, true, 4.1f, -94.0f, 311227000, 1214762000},
-        {kDemoNearbyNodeId, "NBY1", "Nearby Relay", nullptr, false, 6.8f, -88.0f, 311231200, 1214756000},
-    }};
+    return DemoWorld::peerSeeds();
 }
 
 struct PersistedConfigBlob
@@ -1368,8 +1339,14 @@ struct MinimalLinuxAppFacade::Implementation
           contact_service(node_store, contact_store),
           chat_model(),
           chat_store(),
-          mesh_adapter(self_node_id),
-          chat_service(chat_model, mesh_adapter, chat_store),
+          mode(::platform::linux_runtime::resolve_runtime_mode()),
+          demo_mesh_adapter(self_node_id),
+          noop_mesh_adapter(std::make_unique<LinuxNoopMeshAdapter>()),
+          mesh_adapter(
+              ::platform::linux_runtime::demo_world_enabled(mode)
+                  ? static_cast<::chat::IMeshAdapter*>(&demo_mesh_adapter)
+                  : static_cast<::chat::IMeshAdapter*>(noop_mesh_adapter.get())),
+          chat_service(chat_model, *mesh_adapter, chat_store),
           chat_event_bridge(chat_service),
           team_runtime(),
           team_crypto(),
@@ -1378,7 +1355,7 @@ struct MinimalLinuxAppFacade::Implementation
           pairing_transport(),
           pairing_service(team_runtime, pairing_event_sink, pairing_transport),
           track_source(),
-          team_service(team_crypto, mesh_adapter, team_event_sink, team_runtime),
+          team_service(team_crypto, *mesh_adapter, team_event_sink, team_runtime),
           team_controller(team_service),
           team_track_sampler(team_runtime, track_source)
     {
@@ -1388,18 +1365,29 @@ struct MinimalLinuxAppFacade::Implementation
     {
         if (started)
         {
-            mesh_adapter.setSelfNodeId(self_node_id);
+            if (::platform::linux_runtime::demo_world_enabled(mode))
+                demo_mesh_adapter.setSelfNodeId(self_node_id);
+            else
+                noop_mesh_adapter->setSelfNodeId(self_node_id);
             return;
         }
 
-        mesh_adapter.setSelfNodeId(self_node_id);
+        if (::platform::linux_runtime::demo_world_enabled(mode))
+            demo_mesh_adapter.setSelfNodeId(self_node_id);
+        else
+            noop_mesh_adapter->setSelfNodeId(self_node_id);
         node_store.setProtectedNodeChecker(
             [self_node_id](uint32_t node_id)
             {
                 return node_id == self_node_id;
             });
         contact_service.begin();
-        seedDemoWorld(self_node_id);
+
+        if (::platform::linux_runtime::demo_world_enabled(mode))
+        {
+            seedDemoWorld(self_node_id);
+        }
+
         started = true;
     }
 
@@ -1454,7 +1442,7 @@ struct MinimalLinuxAppFacade::Implementation
 
         (void)contact_service.setNodeKeyManuallyVerified(kDemoAlphaNodeId, true);
 
-        mesh_adapter.queueIncomingText({
+        demo_mesh_adapter.queueIncomingText({
             .channel = ::chat::ChannelId::PRIMARY,
             .from = kDemoAlphaNodeId,
             .to = self_node_id,
@@ -1462,7 +1450,7 @@ struct MinimalLinuxAppFacade::Implementation
             .timestamp = now_secs,
             .text = "Alice: local link ready.",
         });
-        mesh_adapter.queueIncomingText({
+        demo_mesh_adapter.queueIncomingText({
             .channel = ::chat::ChannelId::PRIMARY,
             .from = kDemoBravoNodeId,
             .to = self_node_id,
@@ -1470,7 +1458,7 @@ struct MinimalLinuxAppFacade::Implementation
             .timestamp = now_secs,
             .text = "Bravo: route package synced.",
         });
-        mesh_adapter.queueIncomingText({
+        demo_mesh_adapter.queueIncomingText({
             .channel = ::chat::ChannelId::PRIMARY,
             .from = kDemoBroadcastNodeId,
             .to = 0,
@@ -1488,7 +1476,12 @@ struct MinimalLinuxAppFacade::Implementation
     ::chat::contacts::ContactService contact_service;
     ::chat::ChatModel chat_model;
     ::chat::RamStore chat_store;
-    LinuxLoopbackMeshAdapter mesh_adapter;
+
+    ::platform::linux_runtime::LinuxRuntimeMode mode{::platform::linux_runtime::LinuxRuntimeMode::DeviceLocal};
+    LinuxLoopbackMeshAdapter demo_mesh_adapter;
+    std::unique_ptr<LinuxNoopMeshAdapter> noop_mesh_adapter;
+    ::chat::IMeshAdapter* mesh_adapter; // points to demo_ or noop_ based on mode
+
     ::chat::ChatService chat_service;
     LinuxChatEventBusBridge chat_event_bridge;
     LinuxTeamRuntime team_runtime;
@@ -1575,7 +1568,7 @@ void MinimalLinuxAppFacade::applyMeshConfig()
 {
     ensureServicesReady();
     ::chat::MeshConfig mesh_config{};
-    impl().mesh_adapter.applyConfig(mesh_config);
+    impl().mesh_adapter->applyConfig(mesh_config);
     impl().chat_service.setActiveProtocol(config_.mesh_protocol);
 }
 
@@ -1797,7 +1790,8 @@ void MinimalLinuxAppFacade::dispatchPendingEvents(std::size_t max_events)
         return;
     }
 
-    impl_->mesh_adapter.tick();
+    if (::platform::linux_runtime::demo_world_enabled(impl_->mode))
+        impl_->demo_mesh_adapter.tick();
     impl_->chat_service.processIncoming();
     impl_->team_service.processIncoming();
 
@@ -1805,7 +1799,8 @@ void MinimalLinuxAppFacade::dispatchPendingEvents(std::size_t max_events)
     {
         ::chat::MessageId msg_id = 0;
         bool ok = false;
-        if (!impl_->mesh_adapter.takePendingSendResult(msg_id, ok))
+        if (!::platform::linux_runtime::demo_world_enabled(impl_->mode) ||
+            !impl_->demo_mesh_adapter.takePendingSendResult(msg_id, ok))
         {
             break;
         }
@@ -1875,7 +1870,7 @@ void MinimalLinuxAppFacade::seedDefaultIdentity()
 void MinimalLinuxAppFacade::syncLocalIdentity()
 {
     ensureServicesReady();
-    impl().mesh_adapter.setUserInfo(config_.node_name, config_.short_name);
+    impl().mesh_adapter->setUserInfo(config_.node_name, config_.short_name);
     impl().chat_service.setActiveProtocol(config_.mesh_protocol);
     impl().contact_service.updateNodeInfo(getSelfNodeId(),
                                           config_.short_name,

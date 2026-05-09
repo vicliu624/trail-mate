@@ -95,6 +95,7 @@ struct LocalePackRecord
     std::string content_font_pack_id;
     std::vector<std::string> preferred_content_supplement_pack_ids;
     std::string ime_pack_id;
+    std::string direction; // "ltr" (default) or "rtl"
     bool builtin = false;
     std::vector<std::pair<std::string, std::string>> translations;
 };
@@ -308,7 +309,7 @@ std::string join_path(const std::string& base, const std::string& child)
     return base + "/" + child;
 }
 
-std::string normalize_dir_entry(std::string name)
+[[maybe_unused]] std::string normalize_dir_entry(std::string name)
 {
     while (!name.empty() && (name.front() == '/' || name.front() == '\\'))
     {
@@ -535,7 +536,10 @@ void append_unique_string(std::vector<std::string>& values, const std::string& v
 
 bool ime_backend_supports_runtime_input(const ImePackRecord& pack)
 {
-    return pack.backend == "builtin-pinyin";
+    // The current widget has one real conversion engine and dictionary:
+    // Simplified Chinese Pinyin. Other manifests may still be cataloged as
+    // pack metadata, but exposing them would route users into the wrong script.
+    return pack.id == "zh-hans-pinyin" && pack.backend == "builtin-pinyin";
 }
 
 bool ime_backend_can_be_enabled(const ImePackRecord& pack)
@@ -1352,6 +1356,7 @@ void rebuild_locale_views()
         view.ui_font_pack_id = pack.ui_font_pack_id.c_str();
         view.content_font_pack_id = pack.content_font_pack_id.c_str();
         view.ime_pack_id = pack.ime_pack_id.empty() ? nullptr : pack.ime_pack_id.c_str();
+        view.direction = pack.direction.empty() ? nullptr : pack.direction.c_str();
         view.builtin = pack.builtin;
         s_locale_views.push_back(view);
     }
@@ -1631,6 +1636,17 @@ bool catalog_external_locale_pack(const std::string& pack_dir)
         return false;
     }
 
+    const char* translation_status = manifest_value(manifest, "translation_status");
+    if (translation_status && translation_status[0] != '\0' &&
+        lowercase_ascii(translation_status) != "release")
+    {
+        std::printf("%s skip locale pack id=%s reason=translation_status status=%s\n",
+                    kLogTag,
+                    id,
+                    translation_status);
+        return false;
+    }
+
     LocalePackRecord pack{};
     pack.id = id;
     if (const char* display_name = manifest_value(manifest, "display_name"))
@@ -1683,6 +1699,11 @@ bool catalog_external_locale_pack(const std::string& pack_dir)
     if (const char* ime_pack = manifest_value(manifest, "ime_pack"))
     {
         pack.ime_pack_id = ime_pack;
+    }
+
+    if (const char* dir = manifest_value(manifest, "direction"))
+    {
+        pack.direction = dir;
     }
 
     const char* strings_value = manifest_value(manifest, "strings");
@@ -2179,6 +2200,16 @@ const char* current_locale_display_name()
                                                 : s_active_locale->native_name.c_str();
 }
 
+const char* current_locale_direction()
+{
+    ensure_registry();
+    if (s_active_locale == nullptr || s_active_locale->direction.empty())
+    {
+        return "ltr";
+    }
+    return s_active_locale->direction.c_str();
+}
+
 bool set_locale(const char* locale_id, bool persist)
 {
     ensure_registry();
@@ -2357,7 +2388,10 @@ const char* active_ime_pack_id()
 
 bool active_locale_supports_script_input()
 {
-    return any_enabled_script_input();
+    ensure_registry();
+    return s_active_ime_pack != nullptr &&
+           string_list_contains(s_enabled_ime_ids, s_active_ime_pack->id.c_str()) &&
+           ime_backend_supports_runtime_input(*s_active_ime_pack);
 }
 
 const char* tr(const char* english)

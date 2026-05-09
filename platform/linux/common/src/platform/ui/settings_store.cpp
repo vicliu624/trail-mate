@@ -1,7 +1,6 @@
 #include "platform/ui/settings_store.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -12,6 +11,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "platform/linux/runtime_paths.h"
 
 namespace platform::ui::settings_store
 {
@@ -37,70 +38,14 @@ using NamespaceMap = std::unordered_map<std::string, StoredValue>;
 
 std::mutex s_store_mutex;
 
-std::string sanitize_component(const char* value)
-{
-    if (!value || value[0] == '\0')
-    {
-        return "default";
-    }
-
-    std::string out;
-    out.reserve(std::strlen(value));
-    for (const unsigned char ch : std::string(value))
-    {
-        if (std::isalnum(ch) || ch == '_' || ch == '-')
-        {
-            out.push_back(static_cast<char>(ch));
-        }
-        else
-        {
-            out.push_back('_');
-        }
-    }
-    return out.empty() ? "default" : out;
-}
-
-std::filesystem::path storage_root()
-{
-    if (const char* configured = std::getenv("TRAIL_MATE_SETTINGS_ROOT"))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured);
-        }
-    }
-
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"))
-    {
-        if (appdata[0] != '\0')
-        {
-            return std::filesystem::path(appdata) / "TrailMateCardputerZero";
-        }
-    }
-#endif
-
-    if (const char* home = std::getenv("HOME"))
-    {
-        if (home[0] != '\0')
-        {
-            return std::filesystem::path(home) / ".trailmate_cardputer_zero";
-        }
-    }
-
-    return std::filesystem::current_path() / ".trailmate_cardputer_zero";
-}
-
 std::filesystem::path namespace_path(const char* ns)
 {
-    return storage_root() / "settings" / (sanitize_component(ns) + ".kv");
+    return ::platform::linux_runtime::settings_file(ns);
 }
 
 bool ensure_parent_directory(const std::filesystem::path& file_path)
 {
-    std::error_code ec;
-    std::filesystem::create_directories(file_path.parent_path(), ec);
-    return !ec;
+    return ::platform::linux_runtime::ensure_directory(file_path.parent_path());
 }
 
 std::string hex_encode(const uint8_t* data, std::size_t len)

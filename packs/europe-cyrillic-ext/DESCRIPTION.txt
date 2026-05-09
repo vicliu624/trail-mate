@@ -2,8 +2,8 @@ European Cyrillic Extended installs the Russian locale together with a shared
 Cyrillic external font pack so interface labels and Russian content can render
 without inflating the firmware image.
 
-This bundle is display-only today. It does not add a Russian IME, but it keeps
-Russian UI support available as an installable SD package.
+This bundle is display-only today. It does not add a Russian IME, and the locale
+remains in review status until native-language review is complete.
 
 Credits: Russian translations were contributed by polarikus, based on the
 polarikus/trail-mate Russian localization PR.

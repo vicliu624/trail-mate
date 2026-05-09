@@ -1,0 +1,10 @@
+# Arabic (core letters, diacritics, digits, punctuation)
+0600-06FF
+# Arabic Supplement
+0750-077F
+# Arabic Presentation Forms-A (ligatures, contextual)
+FB50-FDFF
+# Arabic Presentation Forms-B (isolated/final/medial/initial)
+FE70-FEFF
+# Basic Latin (for mixed-script UI: numbers, punctuation, Latin text)
+0020-007F

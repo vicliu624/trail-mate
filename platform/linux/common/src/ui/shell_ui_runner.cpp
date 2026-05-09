@@ -27,23 +27,17 @@ constexpr auto kFrameTime = std::chrono::milliseconds(16);
 
 std::chrono::steady_clock::time_point g_lvgl_start_time = clock::now();
 
-struct QueuedKeyEvent
-{
-    std::uint32_t key{};
-    lv_indev_state_t state{LV_INDEV_STATE_RELEASED};
-};
-
-bool dispatchTeamUiEvent(sys::Event* event)
-{
-    return team::ui::shell::handle_event(nullptr, event);
-}
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
 
 [[nodiscard]] std::uint32_t mapInputEvent(const app::InputEvent& event) noexcept
 {
     switch (event.key)
     {
     case app::InputKey::Character:
-        return event.text == '\0' ? 0U : static_cast<std::uint8_t>(event.text);
+        return event.text == '\0' ? 0U
+                                  : static_cast<std::uint8_t>(event.text);
     case app::InputKey::Backspace:
         return LV_KEY_BACKSPACE;
     case app::InputKey::Enter:
@@ -71,7 +65,6 @@ bool dispatchTeamUiEvent(sys::Event* event)
     case app::InputKey::Shift:
         return 0U;
     }
-
     return 0U;
 }
 
@@ -96,208 +89,258 @@ bool dispatchTeamUiEvent(sys::Event* event)
 [[nodiscard]] std::uint32_t tickNow() noexcept
 {
     return static_cast<std::uint32_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - g_lvgl_start_time).count());
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            clock::now() - g_lvgl_start_time)
+            .count());
 }
 
-class ShellUiRuntime
+struct QueuedKeyEvent
 {
-  public:
-    ShellUiRuntime()
-        : canvas_(core::kDisplayWidth, core::kDisplayHeight),
-          frame_buffer_(static_cast<std::size_t>(core::kDisplayWidth * core::kDisplayHeight), 0)
-    {
-        g_lvgl_start_time = clock::now();
-        lv_init();
-        lv_tick_set_cb(tickNow);
-
-        display_ = lv_display_create(core::kDisplayWidth, core::kDisplayHeight);
-        if (display_ == nullptr)
-        {
-            throw std::runtime_error("Failed to create LVGL display for the Linux shell.");
-        }
-
-        lv_display_set_default(display_);
-        lv_display_set_user_data(display_, this);
-        lv_display_set_color_format(display_, LV_COLOR_FORMAT_RGB565);
-        lv_display_set_buffers(
-            display_,
-            frame_buffer_.data(),
-            nullptr,
-            static_cast<std::uint32_t>(frame_buffer_.size() * sizeof(std::uint16_t)),
-            LV_DISPLAY_RENDER_MODE_DIRECT);
-        lv_display_set_flush_cb(display_, flushCallback);
-
-        keypad_ = lv_indev_create();
-        if (keypad_ == nullptr)
-        {
-            throw std::runtime_error("Failed to create LVGL keypad input for the Linux shell.");
-        }
-
-        lv_indev_set_type(keypad_, LV_INDEV_TYPE_KEYPAD);
-        lv_indev_set_display(keypad_, display_);
-        lv_indev_set_user_data(keypad_, this);
-        lv_indev_set_read_cb(keypad_, readInputCallback);
-
-        if (!app_facade_.initialize())
-        {
-            throw std::runtime_error("Failed to bind the Linux app facade for the shared shell.");
-        }
-        setTeamUiEventDispatcher(dispatchTeamUiEvent);
-
-        if (!startup_.begin())
-        {
-            throw std::runtime_error("Failed to begin the shared UI startup sequence.");
-        }
-
-        render();
-    }
-
-    ~ShellUiRuntime()
-    {
-        if (keypad_ != nullptr)
-        {
-            lv_indev_delete(keypad_);
-            keypad_ = nullptr;
-        }
-        if (display_ != nullptr)
-        {
-            lv_display_delete(display_);
-            display_ = nullptr;
-        }
-        setTeamUiEventDispatcher(nullptr);
-        lv_deinit();
-        app_facade_.shutdown();
-    }
-
-    void enqueueInputs(const std::vector<app::InputEvent>& events)
-    {
-        for (const auto& event : events)
-        {
-            const std::uint32_t mapped = mapInputEvent(event);
-            if (mapped == 0U)
-            {
-                continue;
-            }
-
-            key_events_.push_back(QueuedKeyEvent{mapped, LV_INDEV_STATE_PRESSED});
-            key_events_.push_back(QueuedKeyEvent{mapped, LV_INDEV_STATE_RELEASED});
-        }
-    }
-
-    void render()
-    {
-        if (!startup_.tick())
-        {
-            throw std::runtime_error("Shared UI startup sequence failed.");
-        }
-
-        app_facade_.updateCoreServices();
-        app_facade_.tickEventRuntime();
-        app_facade_.dispatchPendingEvents();
-
-        lv_timer_handler();
-        if (dirty_)
-        {
-            copyFrameBufferToCanvas();
-            dirty_ = false;
-        }
-    }
-
-    [[nodiscard]] const core::Canvas& canvas() const noexcept
-    {
-        return canvas_;
-    }
-
-  private:
-    static void flushCallback(lv_display_t* display, const lv_area_t* area, std::uint8_t* px_map)
-    {
-        LV_UNUSED(area);
-        LV_UNUSED(px_map);
-
-        auto* runtime = static_cast<ShellUiRuntime*>(lv_display_get_user_data(display));
-        if (runtime != nullptr)
-        {
-            runtime->dirty_ = true;
-        }
-
-        lv_display_flush_ready(display);
-    }
-
-    static void readInputCallback(lv_indev_t* indev, lv_indev_data_t* data)
-    {
-        auto* runtime = static_cast<ShellUiRuntime*>(lv_indev_get_user_data(indev));
-        if (runtime == nullptr || data == nullptr)
-        {
-            return;
-        }
-
-        data->state = LV_INDEV_STATE_RELEASED;
-        data->key = 0U;
-        data->continue_reading = false;
-
-        if (runtime->key_events_.empty())
-        {
-            return;
-        }
-
-        const QueuedKeyEvent next = runtime->key_events_.front();
-        runtime->key_events_.pop_front();
-
-        data->state = next.state;
-        data->key = next.key;
-        data->continue_reading = !runtime->key_events_.empty();
-    }
-
-    void copyFrameBufferToCanvas()
-    {
-        for (int y = 0; y < core::kDisplayHeight; ++y)
-        {
-            for (int x = 0; x < core::kDisplayWidth; ++x)
-            {
-                const auto index = static_cast<std::size_t>((y * core::kDisplayWidth) + x);
-                canvas_.setPixel(x, y, rgb565ToColor(frame_buffer_[index]));
-            }
-        }
-    }
-
-    lv_display_t* display_{};
-    lv_indev_t* keypad_{};
-    core::Canvas canvas_;
-    std::vector<std::uint16_t> frame_buffer_{};
-    std::deque<QueuedKeyEvent> key_events_{};
-    SharedUiShellStartup startup_{};
-    MinimalLinuxAppFacade app_facade_{};
-    bool dirty_{true};
+    std::uint32_t key{};
+    lv_indev_state_t state{LV_INDEV_STATE_RELEASED};
 };
+
+bool dispatchTeamUiEvent(sys::Event* event)
+{
+    return team::ui::shell::handle_event(nullptr, event);
+}
 
 } // namespace
 
-void runShellUi(platform::SurfacePresenter& presenter, std::chrono::milliseconds auto_exit_after)
+// ===================================================================
+// ShellSession
+// ===================================================================
+
+struct ShellSession::Impl
 {
-    ShellUiRuntime runtime{};
+    SharedUiShellStartup startup{};
+    std::deque<QueuedKeyEvent> key_events{};
+};
+
+ShellSession::ShellSession() : impl_(std::make_unique<Impl>()) {}
+
+ShellSession::~ShellSession()
+{
+    if (initialized_)
+    {
+        setTeamUiEventDispatcher(nullptr);
+        app_facade_.shutdown();
+    }
+}
+
+bool ShellSession::begin()
+{
+    if (initialized_) return true;
+    if (!app_facade_.initialize()) return false;
+    setTeamUiEventDispatcher(dispatchTeamUiEvent);
+    if (!impl_->startup.begin()) return false;
+    initialized_ = true;
+    return true;
+}
+
+void ShellSession::tick()
+{
+    if (!initialized_) return;
+    if (!impl_->startup.tick())
+        throw std::runtime_error("Shared UI startup sequence failed.");
+    app_facade_.updateCoreServices();
+    app_facade_.tickEventRuntime();
+    app_facade_.dispatchPendingEvents();
+}
+
+bool ShellSession::ready() const noexcept
+{
+    return initialized_ && impl_->startup.ready();
+}
+
+void ShellSession::enqueueInputs(const std::vector<app::InputEvent>& events)
+{
+    for (const auto& event : events)
+    {
+        const std::uint32_t mapped = mapInputEvent(event);
+        if (mapped == 0U) continue;
+        impl_->key_events.push_back(
+            QueuedKeyEvent{mapped, LV_INDEV_STATE_PRESSED});
+        impl_->key_events.push_back(
+            QueuedKeyEvent{mapped, LV_INDEV_STATE_RELEASED});
+    }
+}
+
+bool ShellSession::dequeueKeyEvent(std::uint32_t* key, lv_indev_state_t* state)
+{
+    if (impl_->key_events.empty()) return false;
+    const QueuedKeyEvent next = impl_->key_events.front();
+    impl_->key_events.pop_front();
+    *key = next.key;
+    *state = next.state;
+    return true;
+}
+
+bool ShellSession::hasPendingKeyEvent() const noexcept
+{
+    return !impl_->key_events.empty();
+}
+
+// ===================================================================
+// CanvasLvglHost
+// ===================================================================
+
+CanvasLvglHost::CanvasLvglHost(ShellSession& shell)
+    : shell_(shell),
+      canvas_(core::kDisplayWidth, core::kDisplayHeight),
+      frame_buffer_(
+          static_cast<std::size_t>(core::kDisplayWidth * core::kDisplayHeight),
+          0)
+{
+    g_lvgl_start_time = clock::now();
+    lv_init();
+    lv_tick_set_cb(tickNow);
+
+    display_ = lv_display_create(core::kDisplayWidth, core::kDisplayHeight);
+    if (display_ == nullptr)
+        throw std::runtime_error(
+            "Failed to create LVGL display for the Linux shell.");
+
+    lv_display_set_default(display_);
+    lv_display_set_user_data(display_, this);
+    lv_display_set_color_format(display_, LV_COLOR_FORMAT_RGB565);
+    lv_display_set_buffers(
+        display_,
+        frame_buffer_.data(),
+        nullptr,
+        static_cast<std::uint32_t>(frame_buffer_.size() * sizeof(std::uint16_t)),
+        LV_DISPLAY_RENDER_MODE_DIRECT);
+    lv_display_set_flush_cb(display_, flushCb);
+
+    keypad_ = lv_indev_create();
+    if (keypad_ == nullptr)
+        throw std::runtime_error(
+            "Failed to create LVGL keypad input for the Linux shell.");
+
+    lv_indev_set_type(keypad_, LV_INDEV_TYPE_KEYPAD);
+    lv_indev_set_display(keypad_, display_);
+    lv_indev_set_user_data(keypad_, this);
+    lv_indev_set_read_cb(keypad_, readInputCb);
+
+    // Render the first frame before the main loop starts.
+    tick();
+}
+
+CanvasLvglHost::~CanvasLvglHost()
+{
+    if (keypad_ != nullptr)
+    {
+        lv_indev_delete(keypad_);
+        keypad_ = nullptr;
+    }
+    if (display_ != nullptr)
+    {
+        lv_display_delete(display_);
+        display_ = nullptr;
+    }
+    lv_deinit();
+}
+
+void CanvasLvglHost::tick()
+{
+    shell_.tick();
+    lv_timer_handler();
+    if (dirty_)
+    {
+        copyFrameBufferToCanvas();
+        dirty_ = false;
+    }
+}
+
+const core::Canvas& CanvasLvglHost::canvas() const noexcept
+{
+    return canvas_;
+}
+
+// ---------------------------------------------------------------------------
+// Static LVGL callbacks (cast void* args back to typed pointers)
+// ---------------------------------------------------------------------------
+
+void CanvasLvglHost::flushCb(lv_display_t* display,
+                             const lv_area_t* /*area*/,
+                             uint8_t* /*px_map*/)
+{
+    auto* host = static_cast<CanvasLvglHost*>(
+        lv_display_get_user_data(display));
+    if (host != nullptr) host->dirty_ = true;
+    lv_display_flush_ready(display);
+}
+
+void CanvasLvglHost::readInputCb(lv_indev_t* indev, lv_indev_data_t* d)
+{
+    auto* host = static_cast<CanvasLvglHost*>(lv_indev_get_user_data(indev));
+    if (host == nullptr || d == nullptr) return;
+
+    d->state = LV_INDEV_STATE_RELEASED;
+    d->key = 0U;
+
+    std::uint32_t key = 0U;
+    lv_indev_state_t state = LV_INDEV_STATE_RELEASED;
+    if (!host->shell_.dequeueKeyEvent(&key, &state)) return;
+
+    d->state = state;
+    d->key = key;
+    // Peek the queue without consuming the next event.
+    d->continue_reading = host->shell_.hasPendingKeyEvent();
+}
+
+// ---------------------------------------------------------------------------
+// Framebuffer -> Canvas copy
+// ---------------------------------------------------------------------------
+
+void CanvasLvglHost::copyFrameBufferToCanvas()
+{
+    for (int y = 0; y < core::kDisplayHeight; ++y)
+    {
+        for (int x = 0; x < core::kDisplayWidth; ++x)
+        {
+            const auto index =
+                static_cast<std::size_t>((y * core::kDisplayWidth) + x);
+            canvas_.setPixel(x, y, rgb565ToColor(frame_buffer_[index]));
+        }
+    }
+}
+
+// ===================================================================
+// runShellUi (backward-compatible convenience)
+// ===================================================================
+
+void runShellUi(platform::SurfacePresenter& presenter,
+                std::chrono::milliseconds auto_exit_after)
+{
+    ShellSession shell;
+    if (!shell.begin())
+        throw std::runtime_error(
+            "Failed to begin ShellSession for the shared UI shell.");
+
+    CanvasLvglHost host{shell};
 
     auto next_frame = clock::now();
     const auto started_at = next_frame;
 
     while (presenter.pump())
     {
-        runtime.enqueueInputs(presenter.drainInput());
+        shell.enqueueInputs(presenter.drainInput());
 
-        if (auto_exit_after > std::chrono::milliseconds::zero() && (clock::now() - started_at) >= auto_exit_after)
+        if (auto_exit_after > std::chrono::milliseconds::zero() &&
+            (clock::now() - started_at) >= auto_exit_after)
         {
             break;
         }
 
-        runtime.render();
-        presenter.present(runtime.canvas());
+        host.tick();
+        presenter.present(host.canvas());
 
         next_frame += kFrameTime;
         std::this_thread::sleep_until(next_frame);
 
         if (clock::now() > next_frame + std::chrono::milliseconds(250))
-        {
             next_frame = clock::now();
-        }
     }
 }
 

@@ -22,6 +22,7 @@ namespace
 // dashboard aggressively while the menu grid is also visible. A slower cadence
 // keeps the dashboard useful without continuously forcing large redraws.
 constexpr uint32_t kDashboardTimerMs = 1000;
+constexpr bool kEnableTab5Dashboard = false;
 
 bool is_tab5_profile()
 {
@@ -57,7 +58,7 @@ void refresh_dashboard(lv_timer_t* timer)
 void init(lv_obj_t* menu_panel, lv_obj_t* grid_panel, const ui::menu_layout::InitOptions& options)
 {
     (void)options;
-    if (!is_tab5_profile() || menu_panel == nullptr || grid_panel == nullptr)
+    if (!kEnableTab5Dashboard || !is_tab5_profile() || menu_panel == nullptr || grid_panel == nullptr)
     {
         return;
     }

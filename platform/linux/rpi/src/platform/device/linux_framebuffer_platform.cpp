@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cerrno>
 #include <csignal>
+#include <cstdio>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -14,6 +15,8 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#include "platform/device/evdev_input.h"
 
 namespace trailmate::cardputer_zero::platform::device
 {
@@ -59,6 +62,14 @@ struct LinuxFramebufferPlatform::Impl
         g_running.store(true);
         std::signal(SIGINT, stopSignalHandler);
         std::signal(SIGTERM, stopSignalHandler);
+
+        if (!evdev_input.isOpen())
+        {
+            std::fprintf(stderr,
+                         "[device] No keyboard input available; UI will display "
+                         "but cannot accept keyboard input. "
+                         "Set TRAIL_MATE_INPUT_DEVICE to override.\n");
+        }
 
         file_descriptor = ::open(framebuffer_path.c_str(), O_RDWR);
         if (file_descriptor < 0)
@@ -125,6 +136,7 @@ struct LinuxFramebufferPlatform::Impl
     fb_var_screeninfo vinfo{};
     std::size_t framebuffer_size{};
     std::byte* framebuffer_memory{};
+    EvdevInput evdev_input{};
 };
 
 LinuxFramebufferPlatform::LinuxFramebufferPlatform(std::string framebuffer_path)
@@ -141,7 +153,7 @@ bool LinuxFramebufferPlatform::pump()
 
 std::vector<app::InputEvent> LinuxFramebufferPlatform::drainInput()
 {
-    return {};
+    return impl_->evdev_input.drainInput();
 }
 
 void LinuxFramebufferPlatform::present(const core::Canvas& canvas)

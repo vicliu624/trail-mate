@@ -2,109 +2,617 @@ Action	Ação
 Add	Adicionar
 Advanced	Avançado
 Always	Sempre
-App	App
-Auto	Auto
+Altitude	Altitude
+Altitude Reference	Ref. altitude
+App	Aplicativo
+Area Cleared	Área limpa
+Auto	Automático
+Awaiting teammate	Aguardando equipa
 Back	Voltar
+Base Camp	Acampamento base
+Beijing (UTC+8)	Pequim (UTC+8)
+BLE bridge ready  |  %s	Ponte BLE pronta  |  %s
+BLE linked  |  %s	BLE ligado  |  %s
 Bluetooth	Bluetooth
-Bluetooth Pairing	Emparelhamento Bluetooth
+Bluetooth Pairing	Emparelhar Bluetooth
+Bcast	Difusão
+Bridge error	Erro de ponte
+Broadcast	Difusão
 Cancel	Cancelar
 Channel	Canal
-Chat	Chat
+Chat	Bate-papo
+Chat unavailable	Chat indisponível
 Chinese	Chinês
+Closes automatically after pairing	Fecha após emparelhar
 Close	Fechar
+Command	Comando
+Command: %s	Comando: %s
+Command: %s %s	Comando: %s %s
+Command: %s %s %s	Comando: %s %s %s
+Compare Verification Code	Comparar código
+Compass	Bússola
+Connected	Conectado
+Connected, handshaking...	Conectado, handshake...
 Contacts	Contactos
-Data Exchange	Troca dados
-Delete	Eliminar
+Contacts (%s)	Contactos (%s)
+Contacts (LXMF)	Contatos (LXMF)
+Contacts (LXMF - %.3fMHz)	Contatos (LXMF - %.3fMHz)
+Contacts (MeshCore)	Contatos (MeshCore)
+Contacts (Meshtastic - %.3fMHz)	Contatos (Meshtastic - %.3fMHz)
+Contacts (RNode)	Contatos (RNode)
+Contacts (RNode - %.3fMHz)	Contatos (RNode - %.3fMHz)
+Conversation protocol mismatch	Incompatibilidade de protocolo de conversação
+Data Exchange	Troca de dados
+Debug Logs	Logs de depuração
+Decoding: %d%%	Decodificação: %d%%
+Decoding: 0%	Decodificação: 0%
+Delete	Excluir
+Delete %s?	Excluir %s?
+Delete contact %s?	Excluir contato %s?
+Delete failed	Falha na exclusão
+Device: %s	Dispositivo: %s
+Direct	Direto
 Disabled	Desativado
 Discover	Descobrir
-Display Language	Idioma do ecrã
+Display Language	Idioma de exibição
+Duplicate name not allowed	Nome duplicado não permitido
 Edit	Editar
-Energy Sweep	Varrimento RF
+Edit nickname	Editar apelido
+Emergency SOS	SOS de Emergência
+Energy Sweep	Varredura de Energia
 English	Inglês
 English keyboard	Teclado inglês
+Enter nickname	Insira o apelido
+Enter number for %s	Insira o número para %s
+Enter the 6-digit number	Insira o número de 6 dígitos
+Enter this 6-digit PIN on your phone	Insira este PIN de 6 dígitos em seu telefone
 Error	Erro
-Factory Reset	Repor de fábrica
+Error: %lu	Erro: %lu
+FSK Voice	Voz FSK
+Failed	Falha
+Fix	Correção
+Fixed PIN	PIN fixo
+Gauge Design (mAh)	Design do medidor (mAh)
+Gauge Full (mAh)	Medidor cheio (mAh)
+Good Find	Boa descoberta
 GPS	GPS
 Extensions	Extensões
 Language	Idioma
 Package Details	Detalhes do pacote
 Back to list	Voltar à lista
 Install	Instalar
-Update	Atualizar
+Update	Atualização
 Uninstall	Desinstalar
 Incompatible	Incompatível
 Compatible with this device	Compatível com este dispositivo
 Compatibility: %s	Compatibilidade: %s
-memory profile mismatch	perfil de memória incompatível
-needs %s	requer %s
+memory profile mismatch	incompatibilidade de perfil de memória
+needs %s	precisa de %s
 Update available: %s	Atualização disponível: %s
 Installed	Instalado
 Installed: %s	Instalado: %s
-Available to install	Disponível para instalar
+Available to install	Disponível para instalação
 Blocked	Bloqueado
-%lu locales  %lu fonts  %lu IME  %s	%lu idiomas  %lu tipos de letra  %lu IME  %s
-No Wi-Fi	Sem Wi-Fi
-Installing package...	A instalar pacote...
+%lu locales  %lu fonts  %lu IME  %s	%lu localidades %lu fontes %lu IME %s
+No Wi-Fi	Não Wi-Fi
+Installing package...	Instalando pacote...
 Package installed	Pacote instalado
-Uninstalling package...	A desinstalar pacote...
+Uninstalling package...	Desinstalando pacote...
 Package uninstalled	Pacote desinstalado
-No language packs available	Sem pacotes de idioma disponíveis
-Available language packs: %lu	Pacotes de idioma disponíveis: %lu
+No language packs available	Nenhum pacote de idiomas disponível
+Available language packs: %lu	Pacotes de idiomas disponíveis: %lu
 About	Sobre
-Package Info	Informação do pacote
+Package Info	Informações do pacote
 Contents	Conteúdo
-Source	Origem
-Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	Arquivo: %s\nRAM extra de tipos de letra: %s\nPerfis: %s\n%s
-Locales: %s\nFonts: %s\nIME: %s	Idiomas: %s\nTipos de letra: %s\nIME: %s
+Source	Fonte
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	Arquivo: %s\nFonte extra RAM: %s\nPerfis: %s\n%s
+Locales: %s\nFonts: %s\nIME: %s	Locais: %s\nFontes: %s\nIME: %s
 Author: %s\nHomepage: %s	Autor: %s\nPágina inicial: %s
 None	Nenhum
-GPS Status	Estado GPS
+GPS Status	GPS Status
+HDOP	HDOP
+Heading starting	Início da direção
 Hide	Ocultar
-Info	Info
-Loading...	A carregar...
+Host bridge	Ponte hospedeira
+Host connected, probing modem...	Host conectado, testando modem...
+IDLE	IDLE
+Ignored	Ignorado
+Ignore	Ignorar
+Ignore unavailable	Ignorar indisponível
+Ignore update failed	Falha ao ignorar atualização
+Image received	Imagem recebida
+Info	Informações
+Initializing...	Inicializando...
+Invalid airtime factor	Fator de tempo de antena inválido
+Invalid design capacity (mAh)	Capacidade de design inválida (mAh)
+Invalid frequency offset	Deslocamento de frequência inválido
+Invalid frequency value	Valor de frequência inválido
+Invalid full capacity (mAh)	Capacidade total inválida (mAh)
+Invalid marker	Marcador inválido
+Invalid MeshCore bandwidth	Largura de banda MeshCore inválida
+Invalid MeshCore frequency	Frequência MeshCore inválida
+Invalid number	Número inválido
+Invalid RX delay	Atraso RX inválido
+Key marked trusted	Chave marcada como confiável
+Key must be 32 hex or 16 chars	A chave deve ter 32 hexadecimais ou 16 caracteres
+Key trust failed	Falha na confiança da chave
+Key Verification	Verificação de chave
+LINKED	VINCULADO
+LISTEN	ESCUTAR
+LIVE	AO VIVO
+Loading...	Carregando...
+Location	Localização
+Location: %s	Local: %s
+Location: %s %s	Localização: %s %s
+LoRa direct path  |  %s	Caminho direto LoRa |  %s
+Low battery - audio disabled	Bateria fraca - áudio desativado
 Map	Mapa
-Map Layer	Camada do mapa
-Nearby	Próximo
+Map Layer	Camada do Mapa
+MESH	MALHA
+Mesh Status	Status da malha
+Mesh unavailable	Malha indisponível
+MeshCore only	MeshCore somente
+Message DB cleared	Banco de dados de mensagens limpo
+Messages	Mensagens
+MESSAGES	MENSAGENS
+Messages and broadcasts show here	Mensagens e transmissões são mostradas aqui
+Mini Compass	Mini Bússola
+MT send uses slot 0/1 only	O envio MT usa apenas o slot 0/1
+N/A	N/A
+Nearby	Perto
+Need local GPS	Precisa de GPS local
 Network	Rede
 New	Novo
-No messages	Sem mensagens
-No recent traffic	Sem tráfego recente
+new activity	nova atividade
+Next	Próximo
+No GPS fix	Nenhuma correção GPS
+No image	Sem imagem
+No messages	Nenhuma mensagem
+No preview	Sem visualização
+No recent traffic	Nenhum tráfego recente
+No response	Sem resposta
+No route selected	Nenhuma rota selecionada
+No target	Sem meta
+No track files	Nenhum arquivo de rastreamento
+Node DB reset	Redefinição do banco de dados do nó
+Node ignored	Nó ignorado
+Node ignored and hidden	Nó ignorado e oculto
+Node unignored	Nó não ignorado
+North locked	Norte bloqueado
 Not set	Não definido
+NO	NÃO
+NO FIX	SEM CORREÇÃO
 Number keyboard	Teclado numérico
-OFF	DESL
+OFF	DESLIGADO
 OK	OK
-ON	LIG
-Pairing	Emparelhar
-PC Link	Ligação PC
-Power	Alimentação
+ON	ATIVADO
+online	on-line
+Pairing	Emparelhamento
+PC Link	Link PC
+PC Link is unavailable on this target.	PC Link não está disponível neste destino.
+peer lock  |  turn %03.0f deg	bloqueio de ponto |  gire %03.0f graus
+Pinyin keyboard	Teclado Pinyin
+Pinyin: %s	Pinyin: %s
+Position	Posição
+position stream active  |  %u in view	fluxo de posição ativo |  %u em exibição
+Power	Potência
+Press Back	Pressione Voltar
+Press RX to start	Pressione RX para iniciar
+Primary	Primário
 Protocol	Protocolo
+Protocol switch failed	Falha na troca de protocolo
+Protocol switched	Protocolo trocado
+quiet net	rede silenciosa
+Random PIN	PIN aleatório
 Ready	Pronto
+RECEIVING	RECEBENDO
 Recent Activity	Atividade recente
+Record	Registro
+Recording	Gravação
+Region	Região
+Remain: %u	Permanecer: %u
 Reply	Responder
+Reply disabled for this protocol	Resposta desabilitada para este protocolo
+Reset Mesh Profiles	Redefinir perfis de malha
+Reset Node DB	Redefinir banco de dados do nó
+Resetting...	Reinicializando...
+Return	Retorno
+Rally Point	Ponto de Encontro
+RNode Bridge	RNode Ponte
+RNode modem ready	RNode modem pronto
+RNode text chat runs on host	RNode o chat de texto é executado no host
+Route	Rota
 Run	Executar
-Save	Guardar
-Scan failed	Varrimento falhou
-Scan Local	Varrimento local
-Scanning 5s...	A varrer 5 s...
+RX	RX
+RX: %lu  TX: %lu	RX: %lu TX: %lu
+RX: 0  TX: 0	RX: 0 TX: 0
+Save	Salvar
+Saved: %s	Salvo: %s
+Scan failed	Falha na verificação
+Scan Local	Digitalizar Local
+Scanning 5s...	Digitalizando 5s...
+Screen Brightness	Brilho da tela
+Screen Timeout	Tempo limite da tela
 SEARCH	PESQUISA
-Screen Brightness	Brilho do ecrã
-Screen Timeout	Tempo do ecrã
-Settings	Definições
-Setting	Definição
-Sky Plot	Céu GPS
-Speaker Volume	Volume do altifalante
+Secondary	Secundário
+Select a route	Selecione uma rota
+Select a track	Selecione uma faixa
+Select marker	Selecionar marcador
+Select Track	Selecionar trilha
+Selected: %s	Selecionado: %s
+Send	Enviar
+Send failed	Falha no envio
+Send this code and compare:\n	Envie este código e compare:\n
+Send ID Broadcast	Enviar ID Transmissão
+Send ID Local	Enviar ID Local
+Sending...	Enviando...
+Sent	Enviado
+Settings	Configurações
+Setting	Configuração
+Share Position Marker	Marcador de posição de compartilhamento
+Share this number:\n	Compartilhe este número:\n
+Short Name	Nome abreviado
+SOLO	SOZINHO
+Speaker Volume	Volume do alto-falante
+Sky Plot	Gráfico do Céu
+SSTV RX READY	SSTV RX PRONTO
+SSTV start failed	Falha no início do SSTV
+standing by	aguardando
 Status	Estado
 Stopped	Parado
 Stop	Parar
+Stop recording first	Pare a gravação primeiro
 Submit	Enviar
+Submit failed	Falha no envio
 System	Sistema
-Team	Equipa
-Team Status	Estado da equipa
+SATELLITE STATUS	STATUS DO SATÉLITE
+Talk	Conversar
+TALK	FALAR
+Team	Equipe
+TEAM	EQUIPE
+Team chat send failed	Falha no envio do bate-papo da equipe
+Team chat unavailable	Bate-papo da equipe indisponível
+Team chat unavailable in RNode mode	Bate-papo em equipe indisponível no modo RNode
+team member position will appear here	a posição do membro da equipe aparecerá aqui
+Team keys not ready	As chaves da equipe não estão prontas
+Team location encode failed	Falha na codificação do local da equipe
+Text chat unavailable	Bate-papo por texto indisponível
+threads active	encadeamentos ativos
 Time Zone	Fuso horário
-Tracker	Seguimento
+Tracker	Rastreador
+traffic active	tráfego ativo
+Trust Key	Chave de confiança
+U	U
+Unignore	Designorar
+Unread	Não lido
 Unknown	Desconhecido
-USB Disk	Disco USB
-User Name	Nome de utilizador
+USB Mass Storage	USB Mass Storage
+USB Disk	USB Disco
+USB Bridge	USB Ponte
+USB host bridge	USB ponte de host
+USB Bridge is unavailable on this target.	USB Bridge não está disponível neste destino.
+USB CDC KISS modem for Reticulum	USB Modem CDC KISS para Reticulum
+USE	USO
+Used	Usado
+User Name	Nome de usuário
 Verification Number	Número de verificação
+Verification number sent	Número de verificação enviado
 Vibration	Vibração
-Clear all settings and restart?	Limpar todas as definições e reiniciar?
+VOL %d	VOL%d
+VOL 80	VOL 80
+waiting for better sky view  |  %u in view	esperando por uma melhor visão do céu |  %u em exibição
+waiting for module GNSS compass	aguardando módulo GNSS bússola
+waiting for traffic	aguardando trânsito
+Waiting for host...	Aguardando anfitrião...
+Waiting for Reticulum host...	Aguardando host Reticulum...
+WAIT IMU	ESPERE IMU
+Walkie not available	Walkie não disponível
+Walkie start failed	Falha na inicialização do walkie
+Walkie Talkie	Walkie Talkie
+YES	SIM
+6 digits	6 dígitos
+%u threads active	%u tópicos ativos
+%ud	%ud
+%uh	%uh
+%um	%um
+%umo	%umo
+%uy	%uy
+Confirm received code:\n	Confirme o código recebido:\n
+device heading from 9-axis module	cabeçalho do dispositivo do módulo de 9 eixos
+heading unlocks after first fix	título é desbloqueado após a primeira correção
+If it matches, trust the key.	Se corresponder, confie na chave.
+magnetometer heading active	rumo do magnetômetro ativo
+magnetometer still warming up	magnetômetro ainda aquecendo
+needle shows north until target lock	agulha mostra o norte até o alvo travado
+nearest peer  |  %.0f m away	par mais próximo |  %.0f m de distância
+no recent traffic	nenhum tráfego recente
+now	agora
+%s layer missing	%s camada ausente
+Active: %s	Ativo: %s
+Alt: %.0f m	Alt: %.0fm
+Alt: -- m	Alt: --m
+Base: %s	Base: %s
+Battery critical	Bateria crítica
+Broadcast (%d)	Transmissão (%d)
+COMPLETE	CONCLUÍDO
+Calibrating...	Calibrando...
+Confirm	Confirmar
+Contour: OFF	Contorno: DESLIGADO
+Decoder error	Erro do decodificador
+Direct (%d)	Direto (%d)
+E	E
+ERROR	ERRO
+Exiting USB...	Saindo de USB...
+Hold	Espera
+ID: !%08lX	ID: !%08lX
+ID: -	ID: -
+Key refresh not implemented	Atualização de chave não implementada
+Key verify: %s %s	Verificação de chave: %s %s
+Key verify: confirm %s %s	Verificação de chave: confirme %s %s
+Key verify: enter number for %s	Verificação de chave: insira o número para %s
+Key verify: send %s %s	Verificação de chave: enviar %s %s
+Later	Mais tarde
+Level %d	Nível %d
+Listening for SSTV signal...	Ouvindo sinal SSTV...
+Low battery: %d%%	Bateria fraca: %d%%
+MODE: %s	MODO: %s
+MODE: Auto	MODO: Automático
+Map - %.48s	Mapa - %.48s
+Map - %s Missing	Mapa - %s Ausente
+Map - No Map Data	Mapa - Sem dados de mapa
+Map - No SD Card	Mapa - Sem cartão SD
+Map - no gps data	Mapa - sem dados de GPS
+Message	Mensagem
+Mic TBD	Microfone a definir
+Mic init failed	Falha na inicialização do microfone
+Morse Input	Entrada Morse
+MoveTo	Mover para
+N	N
+NODE INFO	INFORMAÇÕES DO NÓ
+Name required	Nome obrigatório
+Name too long	Nome muito longo
+No KML routes	Nenhuma rota KML
+No SD Card	Sem cartão SD
+No routes folder	Nenhuma pasta de rotas
+No tracks yet	Nenhuma faixa ainda
+Only leader can manage	Somente o líder pode gerenciar
+Only leader can pair	Somente o líder pode emparelhar
+Paired successfully	Emparelhado com sucesso
+Pairing failed	Falha no emparelhamento
+Pairing init failed	Falha na inicialização do emparelhamento
+Pairing not available	Emparelhamento não disponível
+Pairing not ready	O emparelhamento não está pronto
+Press Back to exit USB mode	Pressione Voltar para sair do modo USB
+Press SPACE to resume	Pressione ESPAÇO para continuar
+RallyTo	RallyTo
+Route configured	Rota configurada
+Route: %s	Rota: %s
+SD Card Not Found\nPlease insert SD card	SD Cartão não encontrado\nInsira o cartão SD
+SSTV RECEIVER	RECEPTOR SSTV
+Save failed	Falha ao salvar
+Scan +%u/%u	Digitalizar +%u/%u
+Select level	Selecione o nível
+Selected level: %d	Nível selecionado: %d
+Shutting down to protect battery	Desligando para proteger a bateria
+Status: CALIB	Status: CALIB
+Step 1/2: Tap short dots	Etapa 1/2: Toque nos pontos curtos
+Step 2/2: Tap long dashes	Etapa 2/2: Toque em traços longos
+Switch to %s to chat	Mude para %s para conversar
+Symbol: 	Símbolo:
+Tap to input, idle 3s to send	Toque para inserir, inativo 3s para enviar
+Team keys mismatch	Incompatibilidade de chaves de equipe
+Team: 	Equipe:
+Text: 	Texto:
+Unread: %d	Não lido: %d
+Unread: 0	Não lido: 0
+W	W
+0° Horizon	Horizonte 0°
+PSK must be 32 hex or 16 chars	PSK deve ter 32 hexadecimais ou 16 caracteres
+Restarting...	Reiniciando...
+awaiting position	aguardando posição
+compass wakes after GPS fix	bússola desperta após correção de GPS
+searching satellites	pesquisando satélites
+%s -	%s -
+%s 0s	%s 0s
+%s %us	%s %us
+%s %um	%s %um
+%s %uh	%s %uh
+%s %ud	%s %ud
+AUTO	AUTOMÁTICO
+Alt: %ld m	Alt: %ldm
+Alt: -	Alt: -
+BEST	MELHOR
+BW: %.0fk	BW: %.0fk
+BW: %.1fk	BW: %.1fk
+BW: -	BW: -
+CAD	CAD
+CURSOR	CURSOR
+Ch: %.3f	Canal: %.3f
+Ch: -	Ch: -
+Hop: %u	Salto: %u
+Hop: -	Pulo: -
+Hop: - / NH: %02X	Pulo: - / NH: %02X
+ID: !%06lx	ID: !%06lx
+ID: !%08lx	ID: !%08lx
+Last heard:	Ouvido pela última vez:
+Link	Link
+Link / MeshCore	Link / MeshCore
+Link / Meshtastic	Link / Meshtastic
+MODE: RSSI	MODO: RSSI
+NOISE %.0f dBm	RUÍDO %.0f dBm
+NOISE -104 dBm	RUÍDO -104 dBm
+PKI: -	PKI: -
+PKI: known	PKI: conhecido
+PKI: verified	PKI: verificado
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI: %.0f dBm
+RSSI: -	RSSI: -
+Role: %s	Função: %s
+SCAN	VERIFICAR
+SF: %u	SF: %u
+SF: -	SF: -
+SIM	SIM
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR: %.1f dB
+SNR: -	SNR: -
+SNR %.0f	SNR %.0f
+SNR -	SNR -
+SNR Good	SNR Bom
+SNR Weak	SNR Fraco
+STEP %.0fk | BW %.0fk	ETAPA %.0fk | BW %.0fk
+STEP %.1fk | BW %.1fk	ETAPA %.1fk | BW %.1fk
+STEP -- | BW --	ETAPA -- | BW --
+STOP	PARAR
+Slot	Slot
+Slot %u	Slot %u
+SUB-GHz SCAN	VARREDURA SUB-GHz
+Actions	Ações
+Actions: %s	Ações: %s
+Access to team data revoked	Acesso aos dados da equipe revogado
+Capability:	Capacidade:
+Channel Actions	Ações do canal
+Confirm Kick	Confirmar chute
+Create Team	Criar equipe
+ELEV	ELEV
+Join Team	Junte-se à equipe
+In View	Na visualização
+Keep devices within 5m	Mantenha os dispositivos dentro de 5m
+KeyDist	KeyDist
+KeyId: %u	KeyId: %u
+KeyId: --	KeyId: --
+Keys	Chaves
+Kick	Chute
+Kick Member	Expulsar Membro
+Last paired: %s	Último pareamento: %s
+Last seen %uh ago	Visto pela última vez há %uh
+Last seen %um ago	Visto pela última vez há %um
+Last seen --	Visto pela última vez --
+Last update %us ago	Última atualização há %us
+Last update --	Última atualização --
+Last update 0s ago	Última atualização há 0s
+Leader	Líder
+Leader online	Líder on-line
+Leave	Sair
+Leave team?	Sair da equipe?
+Manage	Gerenciar
+Member: %s	Membro: %s
+Members	Membros
+Members: %u	Membros: %u
+Members: %u  Online: %u	Membros: %u On-line: %u
+Modem Bridge	Ponte de modem
+No members yet	Ainda não há membros
+Not Used	Não usado
+Offline	Off-line
+Online	On-line
+Online: %u	On-line: %u
+Pair Again	Emparelhar novamente
+Pair Member	Membro do Par
+Pairing in progress	Emparelhamento em andamento
+Prev	Anterior
+Remove %s from team?	Remover %s da equipe?
+Request Keys	Chaves de solicitação
+Retry	Tentar novamente
+Security Round: %u	Rodada de Segurança: %u
+Security Round: --	Rodada de Segurança: --
+Security: OK (Round %u)	Segurança: OK (Rodada %u)
+Security: OK (Round --)	Segurança: OK (Rodada --)
+Seen %ud	Visto %ud
+Seen %uh	Visto %uh
+Seen %um	Visto %um
+Send failed (keys not ready)	Falha no envio (chaves não prontas)
+Status: %s	Status: %s
+Target: %s	Alvo: %s
+Team / %s	Equipe / %s
+Team Actions	Ações da equipe
+Team Health	Saúde da Equipe
+Team Status	Status da equipe
+Team: %s	Equipe: %s
+This clears local keys.	Isso limpa as chaves locais.
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	Isso atualizará a rodada de segurança.\nO membro não receberá mais\nmensagens da equipe ou pontos de referência.
+Transfer	Transferência
+Transfer Leader	Líder de transferência
+View Team	Ver Equipe
+Waiting for new keys...	Aguardando novas chaves...
+Waypoint	Ponto de referência
+You are no longer in this team	Você não está mais nesta equipe
+You are not in a team	Você não está em uma equipe
+- No shared map\n- No team awareness	- Nenhum mapa compartilhado\n- Sem conhecimento da equipe
+1 member stale	1 estado membro
+encrypt failed	falha na criptografia
+member	membro
+queue full	fila cheia
+unsupported protocol	protocolo não suportado
+Factory Reset	Redefinição de fábrica
+Clear all settings and restart?	Limpar todas as configurações e reiniciar?
+Terrain	Terreno
+Satellite	Satélite
+Contour: ON	Contorno: LIGADO
+Contour data missing	Dados de contorno ausentes
+%d enabled	%d ativado
+%s  %s	%s %s
+Channel Key / PSK	Chave do canal / PSK
+Channel Slot	Slot de canal
+Channel Utilization	Utilização do canal
+Check for Updates	Verificar atualizações
+Clear Message DB	Limpar banco de dados de mensagens
+Connect	Conectar
+Contour Overlay	Sobreposição de contorno
+Coordinate Format	Formato de coordenadas
+Coordinate System	Sistema de Coordenadas
+Current Version	Versão Atual
+Detected Network	Rede detectada
+Disconnect	Desconectar
+Duty Cycle Limit	Limite do Ciclo de Trabalho
+Enabled IMEs	Ativado IMEs
+Encryption Mode	Modo de criptografia
+Freq Offset (MHz)	Compensação de frequência (MHz)
+GPS Enabled	GPS Ativado
+Hop Limit	Limite de salto
+IME setting update failed	IME falha na atualização da configuração
+Install Update	Instalar atualização
+Latest Version	Versão mais recente
+Layer	Camada
+Location Mode	Modo de localização
+MC Airtime Factor	Fator de tempo de transmissão do MC
+MC Bandwidth (kHz)	Largura de banda MC (kHz)
+MC Channel Key	Chave do canal MC
+MC Channel Name	Nome do canal MC
+MC Channel Slot	Slot de canal MC
+MC Coding Rate	Taxa de codificação MC
+MC Flood Max	MC Inundação Máx.
+MC Frequency (MHz)	Frequência MC (MHz)
+MC Multi ACKs	MC Multi ACKs
+MC RX Delay Base	MC RX Base de atraso
+MC Region Preset	Predefinição de região MC
+MC Repeat	MC Repetir
+MC Spread Factor	Fator de propagação MC
+MC TX Power	MC TX Poder
+Manual BW	Manual BW
+Manual CR	Manual CR
+Manual SF	Manual SF
+Map Source	Fonte do mapa
+Modem Preset	Predefinição do modem
+NMEA Export	NMEA Exportar
+NMEA Sentences	NMEA Frases
+No IME packs installed	Nenhum pacote IME instalado
+No position available	Nenhuma vaga disponível
+OTA Status	OTA Status
+Override Duty Cycle	Ciclo de trabalho de substituição
+Override Freq (MHz)	Frequência de substituição (MHz)
+Password	Senha
+Position Strategy	Estratégia de Posição
+SSID	SSID
+Satellite Systems	Sistema Satélitems
+Scan Networks	Digitalizar redes
+TX Enabled	TX Ativado
+TX Power	TX Potência
+Track Format	Formato da trilha
+Track Interval	Intervalo de rastreamento
+Track Recording	Gravação de trilha
+Unavailable	Indisponível
+Update Interval	Intervalo de atualização
+Use Preset	Usar predefinição
+Wi-Fi Enabled	Wi-Fi Ativado
+Wi-Fi start failed	Wi-Fi falha na inicialização

@@ -69,13 +69,13 @@ Notes:
 - `build.ini` is the source-of-truth for generating `font.bin` during Pages/package builds.
 - `font.bin` is ignored by Git. Regenerate it whenever the subset changes.
 - `ranges.txt` and `estimated_ram_bytes` let the runtime decide whether the pack fits the active memory profile.
-- The locale string table is intentionally partial. Missing keys fall back to built-in English.
+- The locale string table is structurally complete, but the locale remains in `translation_status=review` until native-language review is complete.
 
 ## Distribution Package
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/europe-cyrillic-ext-1.0.0.zip`
+- `site/assets/packs/europe-cyrillic-ext-1.1.0.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact for a future Extensions downloader. Its `payload/` directory unpacks into `/trailmate/packs/...`.
@@ -92,4 +92,4 @@ Copy the bundle contents so the SD card ends up with:
 /trailmate/packs/locales/ru/strings.tsv
 ```
 
-After reboot, `Русский` appears in Settings. The font is loaded only when Russian becomes the active locale or when Russian content requires it.
+After reboot, `Русский` appears in Settings only after the locale is promoted to `translation_status=release`. While it is in `review`, the runtime can install and index the pack but will not offer it as a selectable UI language.

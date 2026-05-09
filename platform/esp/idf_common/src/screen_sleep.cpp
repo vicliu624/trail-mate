@@ -14,7 +14,9 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
+#include "platform/esp/idf_common/ui_dispatcher.h"
 #include "platform/ui/device_runtime.h"
+#include "platform/ui/screen_runtime.h"
 #include "platform/ui/settings_store.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
@@ -102,10 +104,10 @@ void sleep_display_locked()
 
 void notify_wake()
 {
-    if (s_hooks.on_wake_from_sleep)
-    {
-        s_hooks.on_wake_from_sleep();
-    }
+    // Post to UI dispatcher instead of calling LVGL hooks directly.
+    // The drain timer runs in LVGL task context where it is safe.
+    platform::esp::idf_common::ui_dispatcher::post(
+        platform::esp::idf_common::ui_dispatcher::Event::WakeFromSleep);
 }
 
 bool wake_requested_by_touch_irq_locked()
@@ -198,6 +200,18 @@ void setScreenSleepTimeout(uint32_t timeout_ms)
 void initScreenSleepRuntime(const ScreenSleepHooks& hooks)
 {
     platform::esp::idf_common::bsp_runtime::ensure_nvs_ready();
+
+    // Bridge the legacy hooks into the UI dispatcher so that wake/saver
+    // events are serialised through the LVGL task instead of being called
+    // directly from the screen-sleep FreeRTOS task.
+    {
+        platform::esp::idf_common::ui_dispatcher::Hooks dispatch_hooks{};
+        dispatch_hooks.on_wake_from_sleep = hooks.on_wake_from_sleep;
+        dispatch_hooks.show_main_menu = hooks.show_main_menu;
+        platform::esp::idf_common::ui_dispatcher::init(dispatch_hooks);
+        (void)platform::esp::idf_common::ui_dispatcher::ensure_drain_timer();
+    }
+
     s_hooks = hooks;
     ensure_mutex();
 
@@ -268,10 +282,8 @@ void wakeScreenSaver()
 void enterFromScreenSaver()
 {
     updateUserActivity();
-    if (s_hooks.show_main_menu)
-    {
-        s_hooks.show_main_menu();
-    }
+    platform::esp::idf_common::ui_dispatcher::post(
+        platform::esp::idf_common::ui_dispatcher::Event::ShowMainMenu);
 }
 
 void updateUserActivity()
@@ -325,3 +337,42 @@ void enableScreenSleep()
         xSemaphoreGive(s_mutex);
     }
 }
+
+// ===================================================================
+// platform::ui::screen contract — implemented directly here to
+// eliminate the adapt_hooks() pass-through layer that previously
+// lived in platform_ui_screen_runtime.cpp.
+// ===================================================================
+
+namespace platform::ui::screen
+{
+namespace
+{
+
+ScreenSleepHooks adapt_hooks(const Hooks& hooks)
+{
+    ScreenSleepHooks adapted{};
+    adapted.format_time = hooks.format_time;
+    adapted.read_unread_count = hooks.read_unread_count;
+    adapted.show_main_menu = hooks.show_main_menu;
+    adapted.on_wake_from_sleep = hooks.on_wake_from_sleep;
+    return adapted;
+}
+
+} // namespace
+
+uint32_t clamp_timeout_ms(uint32_t timeout_ms) { return clampScreenTimeoutMs(timeout_ms); }
+uint32_t timeout_ms() { return getScreenSleepTimeout(); }
+uint16_t timeout_secs() { return readScreenTimeoutSecs(); }
+void set_timeout_ms(uint32_t t) { setScreenSleepTimeout(t); }
+void init(const Hooks& h) { initScreenSleepRuntime(adapt_hooks(h)); }
+bool is_sleeping() { return isScreenSleeping(); }
+bool is_sleep_disabled() { return isScreenSleepDisabled(); }
+bool is_saver_active() { return isScreenSaverActive(); }
+void wake_saver() { wakeScreenSaver(); }
+void enter_from_saver() { enterFromScreenSaver(); }
+void update_user_activity() { updateUserActivity(); }
+void disable_sleep() { disableScreenSleep(); }
+void enable_sleep() { enableScreenSleep(); }
+
+} // namespace platform::ui::screen

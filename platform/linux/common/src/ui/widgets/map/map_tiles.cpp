@@ -16,13 +16,13 @@
 #include <filesystem>
 #include <string>
 
+#include "platform/linux/runtime_paths.h"
+
 namespace
 {
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kMaxMercatorLat = 85.05112878;
-constexpr const char* kSdRootEnv = "TRAIL_MATE_SD_ROOT";
-constexpr const char* kSettingsRootEnv = "TRAIL_MATE_SETTINGS_ROOT";
 
 uint8_t g_requested_map_source = 0;
 bool g_requested_contour_enabled = false;
@@ -43,41 +43,7 @@ uint32_t now_ms()
 
 std::filesystem::path default_storage_root()
 {
-    if (const char* configured = std::getenv(kSdRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured);
-        }
-    }
-
-    if (const char* configured = std::getenv(kSettingsRootEnv))
-    {
-        if (configured[0] != '\0')
-        {
-            return std::filesystem::path(configured) / "sdcard";
-        }
-    }
-
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA"))
-    {
-        if (appdata[0] != '\0')
-        {
-            return std::filesystem::path(appdata) / "TrailMateCardputerZero" / "sdcard";
-        }
-    }
-#endif
-
-    if (const char* home = std::getenv("HOME"))
-    {
-        if (home[0] != '\0')
-        {
-            return std::filesystem::path(home) / ".trailmate_cardputer_zero" / "sdcard";
-        }
-    }
-
-    return std::filesystem::current_path() / ".trailmate_cardputer_zero" / "sdcard";
+    return ::platform::linux_runtime::resolve_paths().sd_root;
 }
 
 std::filesystem::path build_base_tile_actual_path(int z, int x, int y, uint8_t map_source)

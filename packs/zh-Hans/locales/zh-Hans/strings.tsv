@@ -550,3 +550,69 @@ Terrain	地形图
 Satellite	卫星图
 Contour: ON	等高线:开
 Contour data missing	缺少等高线数据
+%d enabled	已启用 %d 个
+%s  %s	%s  %s
+Channel Key / PSK	频道金钥 / PSK
+Channel Slot	频道槽
+Channel Utilization	频道使用率
+Check for Updates	检查更新
+Clear Message DB	清除讯息资料库
+Connect	连线
+Contour Overlay	等高线叠加
+Coordinate Format	座标格式
+Coordinate System	座标系统
+Current Version	目前版本
+Detected Network	侦测到的网路
+Disconnect	中断连线
+Duty Cycle Limit	占空比限制
+Enabled IMEs	已启用的输入法
+Encryption Mode	加密模式
+Freq Offset (MHz)	频率偏移 (MHz)
+GPS Enabled	启用 GPS
+Hop Limit	跳数限制
+IME setting update failed	输入法设定更新失败
+Install Update	安装更新
+Latest Version	最新版本
+Layer	图层
+Location Mode	定位模式
+MC Airtime Factor	MC 空中时间系数
+MC Bandwidth (kHz)	MC 频宽 (kHz)
+MC Channel Key	MC 频道金钥
+MC Channel Name	MC 频道名称
+MC Channel Slot	MC 频道槽
+MC Coding Rate	MC 编码率
+MC Flood Max	MC 最大泛洪数
+MC Frequency (MHz)	MC 频率 (MHz)
+MC Multi ACKs	MC 多重 ACK
+MC RX Delay Base	MC 接收延迟基准
+MC Region Preset	MC 区域预设
+MC Repeat	MC 中继
+MC Spread Factor	MC 展频因子
+MC TX Power	MC 发射功率
+Manual BW	手动频宽
+Manual CR	手动编码率
+Manual SF	手动展频因子
+Map Source	地图来源
+Modem Preset	数据机预设
+NMEA Export	NMEA 汇出
+NMEA Sentences	NMEA 语句
+No IME packs installed	尚未安装输入法套件
+No position available	无可用位置
+OTA Status	OTA 状态
+Override Duty Cycle	覆写占空比
+Override Freq (MHz)	覆写频率 (MHz)
+Password	密码
+Position Strategy	定位策略
+SSID	SSID
+Satellite Systems	卫星系统
+Scan Networks	扫描网路
+TX Enabled	启用发射
+TX Power	发射功率
+Track Format	轨迹格式
+Track Interval	轨迹间隔
+Track Recording	轨迹记录
+Unavailable	无法使用
+Update Interval	更新间隔
+Use Preset	使用预设
+Wi-Fi Enabled	启用 Wi-Fi
+Wi-Fi start failed	Wi-Fi 启动失败
