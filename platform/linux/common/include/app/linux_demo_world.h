@@ -23,8 +23,6 @@ namespace trailmate::cardputer_zero::linux_ui
 // be active on a real device except with explicit opt-in (TRAIL_MATE_DEMO_WORLD=1).
 // ---------------------------------------------------------------------------
 
-class LinuxLoopbackMeshAdapter;
-
 struct DemoPeerSeed
 {
     ::chat::NodeId node_id = 0;

@@ -279,9 +279,9 @@ std::string DemoWorld::autoReplyText(::chat::NodeId peer,
     return id;
 }
 
-std::array<uint8_t, ::team::proto::kTeamChannelPskSize> DemoWorld::syntheticPairPsk()
+std::array<uint8_t, 32> DemoWorld::syntheticPairPsk()
 {
-    std::array<uint8_t, ::team::proto::kTeamChannelPskSize> psk{};
+    std::array<uint8_t, 32> psk{};
     for (size_t i = 0; i < psk.size(); ++i)
         psk[i] = static_cast<uint8_t>(0x30U + (i * 7U + 3U) % 0x4FU);
     return psk;
