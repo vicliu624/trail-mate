@@ -1,0 +1,30 @@
+from pathlib import Path
+import os
+
+
+def resolve_sdk_path(project_root: Path) -> Path:
+    configured = os.environ.get("TRAIL_MATE_M5STACK_LINUX_LIBS_PATH") or os.environ.get("M5STACK_LINUX_LIBS_PATH")
+    if configured:
+        return Path(configured).expanduser().resolve()
+
+    local_tmp = project_root.parent.parent / ".tmp" / "M5Stack_Linux_Libs"
+    if local_tmp.exists():
+        return local_tmp.resolve()
+
+    raise RuntimeError(
+        "M5Stack_Linux_Libs SDK not found. Set TRAIL_MATE_M5STACK_LINUX_LIBS_PATH "
+        "to your SDK checkout before running scons."
+    )
+
+
+project_root = Path(os.getcwd()).resolve()
+sdk_path = resolve_sdk_path(project_root)
+
+os.environ["SDK_PATH"] = str(sdk_path)
+os.environ["EXT_COMPONENTS_PATH"] = str(sdk_path.parent / "ext_components")
+
+env = SConscript(
+    str(sdk_path / "tools" / "scons" / "project.py"),
+    variant_dir=os.getcwd(),
+    duplicate=0,
+)

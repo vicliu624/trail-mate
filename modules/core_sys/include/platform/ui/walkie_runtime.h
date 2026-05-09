@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "platform/ui/capability_status.h"
+
 namespace platform::ui::walkie
 {
 
@@ -21,5 +23,9 @@ bool is_active();
 int volume();
 Status get_status();
 const char* last_error();
+
+/// Honest capability status for the current target.
+/// May return Unsupported, Simulated, Available, Degraded, or Error.
+CapabilityStatus capability_status();
 
 } // namespace platform::ui::walkie

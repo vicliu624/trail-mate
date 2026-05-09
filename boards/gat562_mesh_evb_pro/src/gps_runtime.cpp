@@ -347,8 +347,8 @@ struct GpsRuntime::Impl
     uint8_t power_strategy = 0;
     uint8_t gnss_mode = 0;
     uint8_t sat_mask = 0;
-    uint8_t nmea_output_hz = 0;
-    uint8_t nmea_sentence_mask = 0;
+    uint8_t external_nmea_output_hz = 0;
+    uint8_t external_nmea_sentence_mask = 0;
     uint8_t motion_sensor_id = 0;
     uint32_t epoch_base_s = 0;
     uint32_t epoch_base_ms = 0;
@@ -364,6 +364,7 @@ struct GpsRuntime::Impl
     std::size_t sat_count = 0;
     std::size_t used_sat_count = 0;
     std::size_t nmea_line_len = 0;
+    bool user_enabled = true;
     bool enabled = true;
     bool powered = false;
     bool initialized = false;
@@ -1002,13 +1003,17 @@ bool GpsRuntime::start(const app::AppConfig& config)
 
 bool GpsRuntime::begin(const app::AppConfig& config)
 {
-    (void)config;
     auto& s = *impl();
+    s.user_enabled = config.gps_enabled;
+    s.enabled = s.user_enabled;
     if (!s.initialized)
     {
-        beginGpsSerial();
         s.initialized = true;
-        s.powered = true;
+        if (s.enabled)
+        {
+            beginGpsSerial();
+            s.powered = true;
+        }
         s.logMemoryLayout("begin");
     }
     return true;
@@ -1021,11 +1026,12 @@ void GpsRuntime::applyConfig(const app::AppConfig& config)
     s.power_strategy = config.gps_strategy;
     s.gnss_mode = config.gps_mode;
     s.sat_mask = config.gps_sat_mask;
-    s.nmea_output_hz = config.privacy_nmea_output;
-    s.nmea_sentence_mask = config.privacy_nmea_sentence;
+    s.external_nmea_output_hz = config.external_nmea_output_hz;
+    s.external_nmea_sentence_mask = config.external_nmea_sentence_mask;
     s.motion_idle_timeout_ms = config.motion_config.idle_timeout_ms;
     s.motion_sensor_id = config.motion_config.sensor_id;
-    s.enabled = (config.gps_mode != 0);
+    s.user_enabled = config.gps_enabled;
+    s.enabled = s.user_enabled;
     if (!s.enabled)
     {
         if (s.powered)
@@ -1041,14 +1047,14 @@ void GpsRuntime::applyConfig(const app::AppConfig& config)
         s.powered = true;
     }
     Serial.printf(
-        "[gat562][gps] config enabled=%u interval_ms=%lu strategy=%u mode=%u sat_mask=0x%02X nmea_hz=%u nmea_mask=0x%02X motion_idle_ms=%lu motion_sensor=%u\n",
+        "[gat562][gps] config enabled=%u interval_ms=%lu strategy=%u mode=%u sat_mask=0x%02X external_nmea_hz=%u external_nmea_mask=0x%02X motion_idle_ms=%lu motion_sensor=%u\n",
         static_cast<unsigned>(s.enabled ? 1 : 0),
         static_cast<unsigned long>(s.collection_interval_ms),
         static_cast<unsigned>(s.power_strategy),
         static_cast<unsigned>(s.gnss_mode),
         static_cast<unsigned>(s.sat_mask),
-        static_cast<unsigned>(s.nmea_output_hz),
-        static_cast<unsigned>(s.nmea_sentence_mask),
+        static_cast<unsigned>(s.external_nmea_output_hz),
+        static_cast<unsigned>(s.external_nmea_sentence_mask),
         static_cast<unsigned long>(s.motion_idle_timeout_ms),
         static_cast<unsigned>(s.motion_sensor_id));
 }
@@ -1165,22 +1171,39 @@ bool GpsRuntime::gnssSnapshot(::gps::GnssSatInfo* out,
 void GpsRuntime::setCollectionInterval(uint32_t interval_ms) { impl()->collection_interval_ms = interval_ms; }
 void GpsRuntime::setPowerStrategy(uint8_t strategy) { impl()->power_strategy = strategy; }
 
+void GpsRuntime::setEnabled(bool enabled)
+{
+    auto& s = *impl();
+    s.user_enabled = enabled;
+    s.enabled = enabled;
+    if (!s.enabled)
+    {
+        if (s.powered)
+        {
+            endGpsSerial();
+            s.powered = false;
+        }
+        s.clearObservations();
+        return;
+    }
+    if (s.initialized && !s.powered)
+    {
+        beginGpsSerial();
+        s.powered = true;
+    }
+}
+
 void GpsRuntime::setConfig(uint8_t mode, uint8_t sat_mask)
 {
     auto& s = *impl();
     s.gnss_mode = mode;
     s.sat_mask = sat_mask;
-    s.enabled = (mode != 0);
-    if (!s.enabled)
-    {
-        s.clearObservations();
-    }
 }
 
-void GpsRuntime::setNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
+void GpsRuntime::setExternalNmeaConfig(uint8_t output_hz, uint8_t sentence_mask)
 {
-    impl()->nmea_output_hz = output_hz;
-    impl()->nmea_sentence_mask = sentence_mask;
+    impl()->external_nmea_output_hz = output_hz;
+    impl()->external_nmea_sentence_mask = sentence_mask;
 }
 
 void GpsRuntime::setMotionIdleTimeout(uint32_t timeout_ms) { impl()->motion_idle_timeout_ms = timeout_ms; }
@@ -1201,7 +1224,7 @@ void GpsRuntime::suspend()
 void GpsRuntime::resume()
 {
     auto& s = *impl();
-    s.enabled = (s.gnss_mode != 0);
+    s.enabled = s.user_enabled;
     if (!s.enabled)
     {
         s.clearObservations();

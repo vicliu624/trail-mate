@@ -1,8 +1,8 @@
 #include "ble/meshcore_ble.h"
 
-#include "app/app_config.h"
 #include "board/BoardBase.h"
 #include "platform/esp/arduino_common/gps/gps_service_api.h"
+#include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
 #include "sys/clock.h"
 
 #include <Arduino.h>
@@ -33,6 +33,21 @@ int estimateBatteryMv(int percent)
 bool isConfiguredBlePin(uint32_t pin)
 {
     return pin == 0 || (pin >= 100000 && pin <= 999999);
+}
+
+void copyBounded(char* dst, size_t dst_len, const char* src)
+{
+    if (!dst || dst_len == 0)
+    {
+        return;
+    }
+    if (!src)
+    {
+        dst[0] = '\0';
+        return;
+    }
+    std::strncpy(dst, src, dst_len - 1);
+    dst[dst_len - 1] = '\0';
 }
 
 int8_t encodeSnrQdb(int16_t snr_x10)
@@ -396,9 +411,10 @@ bool MeshCoreBleService::popOfflineMessage(uint8_t* out, size_t* out_len)
 
 bool MeshCoreBleService::setTuningParams(const MeshCorePhoneTuningParams& params)
 {
-    auto& cfg = ctx_.getConfig();
-    cfg.meshcore_config.meshcore_rx_delay_base = static_cast<float>(params.rx_delay_base_ms) / 1000.0f;
-    cfg.meshcore_config.meshcore_airtime_factor = static_cast<float>(params.airtime_factor_milli) / 1000.0f;
+    auto cfg = getMeshCorePhoneConfig();
+    cfg.mesh.meshcore_rx_delay_base = static_cast<float>(params.rx_delay_base_ms) / 1000.0f;
+    cfg.mesh.meshcore_airtime_factor = static_cast<float>(params.airtime_factor_milli) / 1000.0f;
+    setMeshCorePhoneConfig(cfg);
     ctx_.saveConfig();
     ctx_.applyMeshConfig();
     return true;
@@ -410,9 +426,9 @@ bool MeshCoreBleService::getTuningParams(MeshCorePhoneTuningParams* out) const
     {
         return false;
     }
-    const auto& cfg = ctx_.getConfig();
-    out->rx_delay_base_ms = static_cast<uint32_t>(cfg.meshcore_config.meshcore_rx_delay_base * 1000.0f);
-    out->airtime_factor_milli = static_cast<uint32_t>(cfg.meshcore_config.meshcore_airtime_factor * 1000.0f);
+    const auto cfg = getMeshCorePhoneConfig();
+    out->rx_delay_base_ms = static_cast<uint32_t>(cfg.mesh.meshcore_rx_delay_base * 1000.0f);
+    out->airtime_factor_milli = static_cast<uint32_t>(cfg.mesh.meshcore_airtime_factor * 1000.0f);
     return true;
 }
 
@@ -426,9 +442,10 @@ bool MeshCoreBleService::setOtherParams(uint8_t manual_add_contacts, uint8_t tel
     advert_loc_policy_ = advert_loc_policy;
     if (has_multi_acks)
     {
-        auto& cfg = ctx_.getConfig();
-        cfg.meshcore_config.meshcore_multi_acks = (multi_acks != 0);
-        multi_acks_ = multi_acks;
+        auto cfg = getMeshCorePhoneConfig();
+        cfg.mesh.meshcore_multi_acks = (multi_acks != 0);
+        setMeshCorePhoneConfig(cfg);
+        multi_acks_ = (multi_acks != 0) ? 1U : 0U;
         ctx_.saveConfig();
         ctx_.applyMeshConfig();
     }
@@ -463,9 +480,9 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
     {
         appendCustomVar(*out, "gps", gps::gps_is_powered() ? "1" : "0");
     }
-    const auto& cfg = ctx_.getConfig();
+    const auto cfg = getMeshCorePhoneConfig();
     appendCustomVar(*out, "node_name", cfg.node_name);
-    appendCustomVar(*out, "channel_name", cfg.meshcore_config.meshcore_channel_name);
+    appendCustomVar(*out, "channel_name", cfg.mesh.meshcore_channel_name);
     std::snprintf(buf, sizeof(buf), "%lu", static_cast<unsigned long>(ble_pin_));
     appendCustomVar(*out, "ble_pin", buf);
     appendCustomVar(*out, "manual_add_contacts", manual_add_contacts_ ? "1" : "0");
@@ -477,13 +494,33 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
     appendCustomVar(*out, "telemetry_env", buf);
     std::snprintf(buf, sizeof(buf), "%u", static_cast<unsigned>(advert_loc_policy_));
     appendCustomVar(*out, "advert_loc_policy", buf);
-    appendCustomVar(*out, "multi_acks", cfg.meshcore_config.meshcore_multi_acks ? "1" : "0");
+    appendCustomVar(*out, "multi_acks", cfg.mesh.meshcore_multi_acks ? "1" : "0");
     return true;
 }
 
 bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
 {
     return handleCustomVarSet(key, value);
+}
+
+MeshtasticPhoneConfigSnapshot MeshCoreBleService::getMeshtasticPhoneConfig() const
+{
+    return platform::shared::ble_bridge::makeMeshtasticPhoneConfigSnapshot(ctx_.getConfig());
+}
+
+void MeshCoreBleService::setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config)
+{
+    platform::shared::ble_bridge::applyMeshtasticPhoneConfigSnapshot(ctx_.getConfig(), config);
+}
+
+MeshCorePhoneConfigSnapshot MeshCoreBleService::getMeshCorePhoneConfig() const
+{
+    return platform::shared::ble_bridge::makeMeshCorePhoneConfigSnapshot(ctx_.getConfig());
+}
+
+void MeshCoreBleService::setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config)
+{
+    platform::shared::ble_bridge::applyMeshCorePhoneConfigSnapshot(ctx_.getConfig(), config);
 }
 
 void MeshCoreBleService::onFactoryReset()

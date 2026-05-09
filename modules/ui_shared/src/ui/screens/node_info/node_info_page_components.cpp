@@ -10,6 +10,7 @@
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/gps_runtime.h"
 #include "sys/clock.h"
+#include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_style.h"

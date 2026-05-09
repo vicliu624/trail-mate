@@ -23,6 +23,8 @@ void run()
                              { return millis(); });
     sys::set_epoch_seconds_provider([]() -> uint32_t
                                     { return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().currentEpochSeconds(); });
+    sys::set_sleep_provider([](uint32_t ms)
+                            { delay(ms); });
     ui_runtime::initialize();
     ui_runtime::appendBootLog("startup begin");
     ui_runtime::appendBootLog("board/input ok");

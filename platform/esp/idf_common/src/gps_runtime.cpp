@@ -62,8 +62,8 @@ struct RuntimeState
     uint8_t power_strategy = 0;
     uint8_t gnss_mode = 0;
     uint8_t gnss_sat_mask = 0;
-    uint8_t nmea_output_hz = 0;
-    uint8_t nmea_sentence_mask = 0;
+    uint8_t external_nmea_output_hz = 0;
+    uint8_t external_nmea_sentence_mask = 0;
     uint32_t motion_idle_timeout_ms = 0;
     uint8_t motion_sensor_id = 0;
     TaskHandle_t worker_handle = nullptr;
@@ -768,36 +768,49 @@ void set_power_strategy(uint8_t strategy)
     s_runtime.power_strategy = strategy;
 }
 
-void set_gnss_config(uint8_t mode, uint8_t sat_mask)
+void set_enabled(bool enabled)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    s_runtime.gnss_mode = mode;
-    s_runtime.gnss_sat_mask = sat_mask;
-    // Shared settings use:
-    //   0 = High Accuracy
-    //   1 = Power Save
-    //   2 = Fix Only
-    // So all current values are active modes, not "off".
-    s_runtime.enabled = platform::ui::device::gps_supported() && sat_mask != 0;
+    s_runtime.enabled = platform::ui::device::gps_supported() && enabled;
     if (!s_runtime.enabled)
     {
         s_runtime.stop_requested = true;
         clear_payload_locked();
-        ESP_LOGI(kTag, "GNSS runtime disabled: mode=%u sat_mask=0x%02X", mode, sat_mask);
+        ESP_LOGI(kTag, "GNSS runtime disabled");
         return;
     }
     s_runtime.probe_requested = false;
     s_runtime.probe_deadline_ms = 0;
     s_runtime.time_sync_committed = is_valid_epoch(std::time(nullptr));
     ensure_worker_locked();
-    ESP_LOGI(kTag, "GNSS runtime enabled: interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u", static_cast<unsigned long>(s_runtime.collection_interval_ms), s_runtime.gnss_mode, s_runtime.gnss_sat_mask, s_runtime.power_strategy);
+    ESP_LOGI(kTag,
+             "GNSS runtime enabled: interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u",
+             static_cast<unsigned long>(s_runtime.collection_interval_ms),
+             s_runtime.gnss_mode,
+             s_runtime.gnss_sat_mask,
+             s_runtime.power_strategy);
 }
 
-void set_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+void set_gnss_config(uint8_t mode, uint8_t sat_mask)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    s_runtime.nmea_output_hz = output_hz;
-    s_runtime.nmea_sentence_mask = sentence_mask;
+    s_runtime.gnss_mode = mode;
+    s_runtime.gnss_sat_mask = sat_mask;
+    if (s_runtime.enabled)
+    {
+        ensure_worker_locked();
+    }
+    ESP_LOGI(kTag, "GNSS receiver config: mode=%u sat_mask=0x%02X enabled=%d",
+             s_runtime.gnss_mode,
+             s_runtime.gnss_sat_mask,
+             s_runtime.enabled ? 1 : 0);
+}
+
+void set_external_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    s_runtime.external_nmea_output_hz = output_hz;
+    s_runtime.external_nmea_sentence_mask = sentence_mask;
 }
 
 void set_motion_idle_timeout(uint32_t timeout_ms)

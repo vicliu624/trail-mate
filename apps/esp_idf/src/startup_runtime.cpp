@@ -9,12 +9,9 @@
 #include "esp_log.h"
 #include "platform/esp/boards/board_runtime.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
-#include "platform/esp/idf_common/gps_runtime.h"
 #include "platform/esp/idf_common/startup_support.h"
-#include "platform/esp/idf_common/sx126x_radio.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
-#include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "ui/app_registry.h"
@@ -44,41 +41,25 @@ void applyPlatformRuntimeConfig(const RuntimeConfig& config)
     }
 
     const app::AppConfig& app_config = app::appFacade().getConfig();
+    platform::ui::gps::set_enabled(app_config.gps_enabled);
     platform::ui::gps::set_collection_interval(app_config.gps_interval_ms);
     platform::ui::gps::set_power_strategy(app_config.gps_strategy);
     platform::ui::gps::set_gnss_config(app_config.gps_mode, app_config.gps_sat_mask);
-    platform::ui::gps::set_nmea_config(app_config.privacy_nmea_output, app_config.privacy_nmea_sentence);
+    platform::ui::gps::set_external_nmea_config(app_config.external_nmea_output_hz,
+                                                app_config.external_nmea_sentence_mask);
     platform::ui::gps::set_motion_idle_timeout(app_config.motion_config.idle_timeout_ms);
     platform::ui::gps::set_motion_sensor_id(app_config.motion_config.sensor_id);
-    platform::esp::idf_common::gps_runtime::request_startup_probe();
-
     ESP_LOGI(config.log_tag,
-             "GNSS runtime config applied: interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u nmea=%u/%u motion_idle_ms=%lu sensor=%u",
+             "GNSS runtime config applied: enabled=%d interval_ms=%lu mode=%u sat_mask=0x%02X strategy=%u external_nmea=%u/%u motion_idle_ms=%lu sensor=%u startup_probe=deferred",
+             app_config.gps_enabled ? 1 : 0,
              static_cast<unsigned long>(app_config.gps_interval_ms),
              app_config.gps_mode,
              app_config.gps_sat_mask,
              app_config.gps_strategy,
-             app_config.privacy_nmea_output,
-             app_config.privacy_nmea_sentence,
+             app_config.external_nmea_output_hz,
+             app_config.external_nmea_sentence_mask,
              static_cast<unsigned long>(app_config.motion_config.idle_timeout_ms),
              app_config.motion_config.sensor_id);
-}
-
-void probeExternalModules(const RuntimeConfig& config)
-{
-    if (platform::ui::lora::is_supported())
-    {
-        auto& radio = platform::esp::idf_common::Sx126xRadio::instance();
-        const bool online = platform::ui::lora::acquire();
-        ESP_LOGI(config.log_tag,
-                 "LoRa startup probe: supported=1 online=%d error=%s",
-                 online ? 1 : 0,
-                 radio.lastError());
-        if (online)
-        {
-            platform::ui::lora::release();
-        }
-    }
 }
 
 ui::startup_shell::Hooks buildShellHooks()
@@ -137,7 +118,7 @@ void run(const RuntimeConfig& config)
 
     app_runtime_access::initialize(config);
     applyPlatformRuntimeConfig(config);
-    probeExternalModules(config);
+
     const ui::startup_shell::Hooks shell_hooks = buildShellHooks();
 
     const size_t app_count = ui::catalogCount(shell_hooks.apps);
@@ -161,10 +142,8 @@ void run(const RuntimeConfig& config)
              runtime_status.lifecycle_ready ? 1 : 0,
              runtime_status.app_context_bound ? 1 : 0);
 
-    loop_runtime::start(config);
-
     ESP_LOGI(config.log_tag, "finalizeStartup begin waking=%d", waking_from_sleep ? 1 : 0);
-    if (lockUi(1000))
+    if (lockUi(5000))
     {
         ui::startup_shell::finalizeStartup(waking_from_sleep);
         unlockUi();
@@ -174,6 +153,8 @@ void run(const RuntimeConfig& config)
     {
         ESP_LOGW(config.log_tag, "finalizeStartup failed to acquire LVGL lock");
     }
+
+    loop_runtime::start(config);
 
     ESP_LOGI(config.log_tag, "%s startup runtime initialized", config.target_name);
 }

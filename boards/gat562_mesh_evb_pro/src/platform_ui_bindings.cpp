@@ -301,6 +301,11 @@ bool is_powered()
     return ::boards::gat562_mesh_evb_pro::Gat562Board::instance().gpsPowered();
 }
 
+void set_enabled(bool enabled)
+{
+    ::boards::gat562_mesh_evb_pro::Gat562Board::instance().setGpsEnabled(enabled);
+}
+
 void set_collection_interval(uint32_t interval_ms)
 {
     ::boards::gat562_mesh_evb_pro::Gat562Board::instance().setGpsCollectionInterval(interval_ms);
@@ -316,9 +321,9 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     ::boards::gat562_mesh_evb_pro::Gat562Board::instance().setGpsConfig(mode, sat_mask);
 }
 
-void set_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+void set_external_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
 {
-    ::boards::gat562_mesh_evb_pro::Gat562Board::instance().setGpsNmeaConfig(output_hz, sentence_mask);
+    ::boards::gat562_mesh_evb_pro::Gat562Board::instance().setGpsExternalNmeaConfig(output_hz, sentence_mask);
 }
 
 void set_motion_idle_timeout(uint32_t timeout_ms)

@@ -1,18 +1,144 @@
 {
   "schema_version": 1,
   "archive_layout": "trailmate-pack-v1",
-  "generated_at": "2026-04-21T02:00:30.208708Z",
+  "generated_at": "2026-05-09T03:51:33.335618Z",
   "packages": [
+    {
+      "id": "ar",
+      "package_type": "locale-bundle",
+      "version": "1.1.0",
+      "display_name": "Arabic",
+      "summary": "Arabic review locale bundle with Naskh font coverage for RTL UI text and mixed-script content rendering; display-only until Arabic input is implemented.",
+      "description": "Arabic locale bundle for Trail Mate.\n\nIncludes:\n- ar-naskh font (Noto Naskh Arabic, 16px, 2bpp)\n  Covers Arabic core (0600-06FF), Supplement (0750-077F),\n  Presentation Forms-A (FB50-FDFF) and Forms-B (FE70-FEFF)\n  for correct contextual letter shaping without HarfBuzz.\n- Arabic translations (ar locale)\n- RTL direction support (direction=rtl in manifest)\n- Display-only review status; Arabic input is not implemented yet\n\nFont dependency: tools/fonts/NotoNaskhArabic-Regular.otf",
+      "author": "Trail Mate",
+      "homepage": "https://vicliu624.github.io/trail-mate/",
+      "min_firmware_version": "0.1.24-alpha",
+      "supported_memory_profiles": [
+        "standard",
+        "extended"
+      ],
+      "tags": [
+        "language",
+        "arabic",
+        "rtl",
+        "review"
+      ],
+      "provides": {
+        "locales": [
+          {
+            "id": "ar",
+            "display_name": "Arabic",
+            "native_name": "العربية",
+            "ui_font_pack_id": "ar-naskh",
+            "content_font_pack_id": "ar-naskh",
+            "translation_status": "review",
+            "direction": "rtl",
+            "preferred_content_supplement_pack_ids": [],
+            "ime_pack_id": ""
+          }
+        ],
+        "fonts": [
+          {
+            "id": "ar-naskh",
+            "display_name": "Arabic Naskh",
+            "usage": "both",
+            "estimated_ram_bytes": 18432
+          }
+        ],
+        "ime": []
+      },
+      "runtime": {
+        "estimated_unique_font_ram_bytes": 18432,
+        "locale_count": 1,
+        "font_count": 1,
+        "ime_count": 0
+      },
+      "archive": {
+        "layout": "trailmate-pack-v1",
+        "path": "assets/packs/ar-1.1.0.zip",
+        "size_bytes": 32415,
+        "sha256": "0c23d1a1a29d9ee01804d4018b87c302ed00566c09e18640a823c20410b3aa8f"
+      },
+      "files": {
+        "package_manifest": "package.ini",
+        "description": "DESCRIPTION.txt",
+        "readme": "README.md"
+      }
+    },
+    {
+      "id": "europe-cyrillic-ext",
+      "package_type": "locale-bundle",
+      "version": "1.1.0",
+      "display_name": "European Cyrillic Extended",
+      "summary": "Shared Cyrillic font coverage plus a Russian review locale pack; display-only until native review is complete.",
+      "description": "European Cyrillic Extended installs the Russian locale together with a shared\nCyrillic external font pack so interface labels and Russian content can render\nwithout inflating the firmware image.\n\nThis bundle is display-only today. It does not add a Russian IME, and the locale\nremains in review status until native-language review is complete.\n\nCredits: Russian translations were contributed by polarikus, based on the\npolarikus/trail-mate Russian localization PR.",
+      "author": "Trail Mate",
+      "homepage": "https://vicliu624.github.io/trail-mate/",
+      "min_firmware_version": "0.1.24-alpha",
+      "supported_memory_profiles": [
+        "constrained",
+        "standard",
+        "extended"
+      ],
+      "tags": [
+        "language",
+        "cyrillic",
+        "europe",
+        "russian",
+        "review"
+      ],
+      "provides": {
+        "locales": [
+          {
+            "id": "ru",
+            "display_name": "Russian",
+            "native_name": "Русский",
+            "ui_font_pack_id": "cyrillic-eu",
+            "content_font_pack_id": "cyrillic-eu",
+            "translation_status": "review",
+            "direction": "ltr",
+            "preferred_content_supplement_pack_ids": [],
+            "ime_pack_id": ""
+          }
+        ],
+        "fonts": [
+          {
+            "id": "cyrillic-eu",
+            "display_name": "Cyrillic EU",
+            "usage": "both",
+            "estimated_ram_bytes": 12000
+          }
+        ],
+        "ime": []
+      },
+      "runtime": {
+        "estimated_unique_font_ram_bytes": 12000,
+        "locale_count": 1,
+        "font_count": 1,
+        "ime_count": 0
+      },
+      "archive": {
+        "layout": "trailmate-pack-v1",
+        "path": "assets/packs/europe-cyrillic-ext-1.1.0.zip",
+        "size_bytes": 15564,
+        "sha256": "e2afc57f55da1228178428f18447c452ea3036e3ef11953915b46c9de4ee36eb"
+      },
+      "files": {
+        "package_manifest": "package.ini",
+        "description": "DESCRIPTION.txt",
+        "readme": "README.md"
+      }
+    },
     {
       "id": "europe-latin-ext",
       "package_type": "locale-bundle",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "display_name": "European Latin Extended",
-      "summary": "Shared Latin-Extended font coverage plus German, Spanish, French, Italian, Dutch, Polish, and Portuguese locale packs.",
-      "description": "European Latin Extended adds a shared external font pack for common accented Latin text\nand installs locale packs for German, Spanish, French, Italian, Dutch, Polish, and\nPortuguese (Portugal).\n\nThis bundle is designed to stay lightweight while still rendering mixed-language contact\nnames, chat content, and localized UI labels cleanly across European languages.",
+      "summary": "Shared Latin-Extended font coverage plus German, Spanish, French, Italian, Dutch, Polish, and Portuguese review locale packs.",
+      "description": "European Latin Extended adds a shared external font pack for common accented Latin text\nand installs locale packs for German, Spanish, French, Italian, Dutch, Polish, and\nPortuguese (Portugal).\n\nThis bundle is designed to stay lightweight while still rendering mixed-language contact\nnames, chat content, and localized UI labels cleanly across European languages. The\nlocales are review-status until native-language review is complete.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.24-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -21,7 +147,8 @@
       "tags": [
         "language",
         "latin",
-        "europe"
+        "europe",
+        "review"
       ],
       "provides": {
         "locales": [
@@ -31,6 +158,8 @@
             "native_name": "Deutsch",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
@@ -40,6 +169,8 @@
             "native_name": "Español",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
@@ -49,6 +180,8 @@
             "native_name": "Français",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
@@ -58,6 +191,8 @@
             "native_name": "Italiano",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
@@ -67,6 +202,8 @@
             "native_name": "Nederlands",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
@@ -76,6 +213,8 @@
             "native_name": "Polski",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
@@ -85,6 +224,8 @@
             "native_name": "Português (Portugal)",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
@@ -107,9 +248,9 @@
       },
       "archive": {
         "layout": "trailmate-pack-v1",
-        "path": "assets/packs/europe-latin-ext-1.0.0.zip",
-        "size_bytes": 12326,
-        "sha256": "b5eae5d57ac3cf6cb367268abc87cec3cd66f53429b8dbc2a239b4f6ecfd9c81"
+        "path": "assets/packs/europe-latin-ext-1.1.0.zip",
+        "size_bytes": 63949,
+        "sha256": "a87371e15c33ccfbeb08c7fef4c4b94e6a91cffd16370c55890ea292decb4d81"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -120,13 +261,13 @@
     {
       "id": "ja",
       "package_type": "locale-bundle",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "display_name": "Japanese",
-      "summary": "Japanese locale bundle with external CJK font coverage for UI text and mixed-language content.",
+      "summary": "Japanese review locale bundle with external CJK font coverage for UI text and mixed-language content; display-only until Japanese input is implemented.",
       "description": "Japanese installs the ja locale together with the ja-cjk external font pack so menu text,\nlabels, and received Japanese content can render without inflating the firmware image.\n\nThis bundle is currently display-only. It does not add a Japanese IME yet, but it keeps\nJapanese coverage available as an installable package on SD storage.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.24-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -135,7 +276,8 @@
       "tags": [
         "language",
         "cjk",
-        "japanese"
+        "japanese",
+        "review"
       ],
       "provides": {
         "locales": [
@@ -145,6 +287,8 @@
             "native_name": "日本語",
             "ui_font_pack_id": "ja-cjk",
             "content_font_pack_id": "ja-cjk",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
@@ -167,9 +311,9 @@
       },
       "archive": {
         "layout": "trailmate-pack-v1",
-        "path": "assets/packs/ja-1.0.0.zip",
-        "size_bytes": 11246,
-        "sha256": "c559c456d613be3befdbac0f77050468fd2346e0ccda5492ebe40762a8f5b5c6"
+        "path": "assets/packs/ja-1.1.0.zip",
+        "size_bytes": 19497,
+        "sha256": "24d2eac7276425ddb3fb7258b46a48d0ae850d2f650d908d48a81395e25db6fb"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -180,13 +324,13 @@
     {
       "id": "ko",
       "package_type": "locale-bundle",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "display_name": "Korean",
-      "summary": "Korean locale bundle with external CJK font coverage for UI text and mixed-language content.",
+      "summary": "Korean review locale bundle with external CJK font coverage for UI text and mixed-language content; display-only until Korean input is implemented.",
       "description": "Korean installs the ko locale together with the ko-cjk external font pack so interface\nlabels and Korean content can render correctly without carrying the glyph set in firmware.\n\nThis bundle is currently display-only. It does not add a Korean IME yet, but it keeps\nKorean support available as an installable SD package.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.24-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -195,7 +339,8 @@
       "tags": [
         "language",
         "cjk",
-        "korean"
+        "korean",
+        "review"
       ],
       "provides": {
         "locales": [
@@ -205,6 +350,8 @@
             "native_name": "한국어",
             "ui_font_pack_id": "ko-cjk",
             "content_font_pack_id": "ko-cjk",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
@@ -227,9 +374,9 @@
       },
       "archive": {
         "layout": "trailmate-pack-v1",
-        "path": "assets/packs/ko-1.0.0.zip",
-        "size_bytes": 8470,
-        "sha256": "153d8bd1ffacb75a08f8be7483e50c4e559b949dea7a7b0f08cb592718f29dd3"
+        "path": "assets/packs/ko-1.1.0.zip",
+        "size_bytes": 16312,
+        "sha256": "e666160147fdd97c71e80ee2b07981b88e0a8d9ec4cfc5e133a29b0d8a3d1c74"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -240,13 +387,13 @@
     {
       "id": "zh-Hans",
       "package_type": "locale-bundle",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "display_name": "Simplified Chinese",
       "summary": "Tiered Simplified Chinese locale bundle with a fast core font, an on-demand extension font, and the built-in Pinyin IME backend.",
       "description": "Simplified Chinese installs the zh-Hans locale, a tiered two-pack font stack, and the\nzh-hans-pinyin IME registration used by the built-in Pinyin input backend.\n\nThe bundle ships:\n- zh-hans-core: the common-glyph UI/content font loaded first for fast startup and lower steady-state RAM use\n- zh-hans-ext: the remaining Chinese glyph coverage that the runtime can load on demand as a content supplement\n- zh-hans-pinyin: the built-in Pinyin IME registration layer\n\nUse this bundle when you want a Chinese interface, Chinese text entry, or reliable\nrendering of Chinese names and chat content while another locale remains active, without\npaying the full monolithic CJK font cost up front.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.24-alpha",
       "supported_memory_profiles": [
         "standard",
         "extended"
@@ -265,6 +412,8 @@
             "native_name": "简体中文",
             "ui_font_pack_id": "zh-hans-core",
             "content_font_pack_id": "zh-hans-core",
+            "translation_status": "release",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [
               "zh-hans-ext"
             ],
@@ -301,9 +450,9 @@
       },
       "archive": {
         "layout": "trailmate-pack-v1",
-        "path": "assets/packs/zh-Hans-1.0.0.zip",
-        "size_bytes": 338342,
-        "sha256": "a598cd28e5b601d261b8a70c435d107e034ef8967b4fd85ae4978361f99fc85b"
+        "path": "assets/packs/zh-Hans-1.1.0.zip",
+        "size_bytes": 339707,
+        "sha256": "0a5f4f3db7d2dc563509e8da6ba77aa53dfe42fe1b0553a7ba4fad630bcfe194"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -314,13 +463,13 @@
     {
       "id": "zh-Hant",
       "package_type": "locale-bundle",
-      "version": "1.0.0",
-      "display_name": "Traditional Chinese",
-      "summary": "Traditional Chinese locale bundle with external CJK font coverage for UI and mixed-script content rendering.",
+      "version": "1.1.0",
+      "display_name": "Traditional Chinese (Taiwan)",
+      "summary": "Traditional Chinese (Taiwan) review locale bundle with CJK font coverage; display-only until native review and a real Zhuyin-focused IME are available.",
       "description": "Traditional Chinese installs the zh-Hant locale together with the zh-hant-cjk external\nfont pack so the UI and mixed-language content can render Traditional Chinese correctly.\n\nThis bundle is display-focused today. It does not add a dedicated Traditional Chinese IME\nyet, but it keeps rendering support fully external to the firmware image.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.18-alpha",
+      "min_firmware_version": "0.1.24-alpha",
       "supported_memory_profiles": [
         "constrained",
         "standard",
@@ -329,16 +478,20 @@
       "tags": [
         "language",
         "cjk",
-        "chinese"
+        "chinese",
+        "taiwan",
+        "review"
       ],
       "provides": {
         "locales": [
           {
             "id": "zh-Hant",
-            "display_name": "Traditional Chinese",
-            "native_name": "繁體中文",
+            "display_name": "Traditional Chinese (Taiwan)",
+            "native_name": "繁體中文（台灣）",
             "ui_font_pack_id": "zh-hant-cjk",
             "content_font_pack_id": "zh-hant-cjk",
+            "translation_status": "review",
+            "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
@@ -361,9 +514,9 @@
       },
       "archive": {
         "layout": "trailmate-pack-v1",
-        "path": "assets/packs/zh-Hant-1.0.0.zip",
-        "size_bytes": 11411,
-        "sha256": "334b4504a3e6e8c504f63fcabcd15994f8a2f1338dd11c775081b15a843d108e"
+        "path": "assets/packs/zh-Hant-1.1.0.zip",
+        "size_bytes": 19026,
+        "sha256": "55f5b4f6dc5e19d9097cfa90b9680b8288bc17d6a3b986e9053c2b009747a683"
       },
       "files": {
         "package_manifest": "package.ini",

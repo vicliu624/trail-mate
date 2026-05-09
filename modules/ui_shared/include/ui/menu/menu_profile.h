@@ -69,6 +69,7 @@ struct MenuLayoutProfile
 
     lv_coord_t title_offset_x = 0;
     lv_coord_t title_offset_y = 0;
+    lv_coord_t card_label_width_inset = 4;
     uint8_t max_columns = 0;
 
     bool wrap_grid = false;
@@ -81,6 +82,8 @@ struct MenuLayoutProfile
     bool show_card_label = false;
     bool show_desc_label = true;
     bool show_node_id = true;
+    bool show_memory_stats = true;
+    bool scroll_card_label = false;
     bool large_touch_hitbox = false;
 
     const lv_font_t* card_label_font = &lv_font_montserrat_14;

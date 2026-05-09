@@ -1,5 +1,27 @@
 #pragma once
 
+/**
+ * I2C lock ordering on T-Display P4 (MUST be respected by all callers):
+ *
+ * The system I2C bus is shared by the XL9535 expander (touch reset, GPIO,
+ * power control), the touch controller (Hi8561 / GT9895), RTC, and
+ * potentially GPS/LoRa prepare paths.
+ *
+ * Lock order:
+ *   1.  resource_mutex_     (board device registry)
+ *   2.  system_i2c_mutex_   (bus-level mutual exclusion)
+ *
+ * Rules:
+ *   - Touch read callbacks may only take system_i2c_mutex_; they must NOT
+ *     touch resource_mutex_ (no device creation / reset in the hot path).
+ *   - Device creation (getManagedSystemI2cDevice) may take both, in order.
+ *   - Never hold system_i2c_mutex_ while waiting on resource_mutex_.
+ *   - High-frequency touch reads use a 50 ms lock timeout (raised from the
+ *     original 5 ms to avoid spurious failures under bus contention).
+ *
+ * See also: platform/esp/idf_components/t_display_p4/trail_mate_t_display_p4_runtime.cpp
+ */
+
 #include <array>
 #include <cstddef>
 #include <cstdint>

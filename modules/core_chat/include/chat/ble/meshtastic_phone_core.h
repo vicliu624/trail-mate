@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "app/app_facades.h"
+#include "chat/ble/phone_runtime_context.h"
 #include "chat/domain/chat_types.h"
 #include "chat/ports/i_node_store.h"
 #include "meshtastic/admin.pb.h"
@@ -24,6 +24,20 @@ struct MeshtasticBleFrame
     uint8_t buf[meshtastic_FromRadio_size] = {};
 };
 
+struct MeshtasticGpsFix
+{
+    bool valid = false;
+    double lat = 0.0;
+    double lng = 0.0;
+    bool has_alt = false;
+    double alt_m = 0.0;
+    bool has_speed = false;
+    double speed_mps = 0.0;
+    bool has_course = false;
+    double course_deg = 0.0;
+    uint8_t satellites = 0;
+};
+
 class MeshtasticPhoneTransport
 {
   public:
@@ -32,10 +46,10 @@ class MeshtasticPhoneTransport
     virtual void notifyFromNum(uint32_t from_num) = 0;
 };
 
-class MeshtasticPhoneHooks
+class MeshtasticPhoneBluetoothConfigHooks
 {
   public:
-    virtual ~MeshtasticPhoneHooks() = default;
+    virtual ~MeshtasticPhoneBluetoothConfigHooks() = default;
     virtual bool loadBluetoothConfig(meshtastic_Config_BluetoothConfig* out) const
     {
         (void)out;
@@ -45,11 +59,12 @@ class MeshtasticPhoneHooks
     {
         (void)config;
     }
-    virtual bool loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const
-    {
-        (void)out;
-        return false;
-    }
+};
+
+class MeshtasticPhoneModuleConfigHooks
+{
+  public:
+    virtual ~MeshtasticPhoneModuleConfigHooks() = default;
     virtual bool loadModuleConfig(meshtastic_LocalModuleConfig* out) const
     {
         (void)out;
@@ -59,6 +74,31 @@ class MeshtasticPhoneHooks
     {
         (void)config;
     }
+};
+
+class MeshtasticPhoneConfigLifecycleHooks
+{
+  public:
+    virtual ~MeshtasticPhoneConfigLifecycleHooks() = default;
+    virtual void onConfigStart() {}
+    virtual void onConfigComplete() {}
+};
+
+class MeshtasticPhoneStatusHooks
+{
+  public:
+    virtual ~MeshtasticPhoneStatusHooks() = default;
+    virtual bool loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const
+    {
+        (void)out;
+        return false;
+    }
+};
+
+class MeshtasticPhoneMqttHooks
+{
+  public:
+    virtual ~MeshtasticPhoneMqttHooks() = default;
     virtual bool handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg)
     {
         (void)msg;
@@ -69,15 +109,51 @@ class MeshtasticPhoneHooks
         (void)out;
         return false;
     }
-    virtual void onConfigStart() {}
-    virtual void onConfigComplete() {}
+};
+
+class MeshtasticPhoneDeviceRuntimeHooks
+{
+  public:
+    virtual ~MeshtasticPhoneDeviceRuntimeHooks() = default;
+    virtual bool loadTimezoneTzdef(char* out, size_t out_len) const
+    {
+        (void)out;
+        (void)out_len;
+        return false;
+    }
+    virtual void saveTimezoneTzdef(const char* tzdef)
+    {
+        (void)tzdef;
+    }
+    virtual int getTimezoneOffsetMinutes() const
+    {
+        return 0;
+    }
+    virtual void setTimezoneOffsetMinutes(int offset_min)
+    {
+        (void)offset_min;
+    }
+    virtual bool getGpsFix(MeshtasticGpsFix* out) const
+    {
+        if (!out)
+        {
+            return false;
+        }
+        *out = {};
+        return false;
+    }
 };
 
 class MeshtasticPhoneCore
 {
   public:
-    MeshtasticPhoneCore(app::IAppBleFacade& ctx, MeshtasticPhoneTransport& transport,
-                        MeshtasticPhoneHooks* hooks = nullptr);
+    MeshtasticPhoneCore(IPhoneRuntimeContext& ctx, MeshtasticPhoneTransport& transport,
+                        MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks = nullptr,
+                        MeshtasticPhoneModuleConfigHooks* module_config_hooks = nullptr,
+                        MeshtasticPhoneConfigLifecycleHooks* config_lifecycle_hooks = nullptr,
+                        MeshtasticPhoneStatusHooks* status_hooks = nullptr,
+                        MeshtasticPhoneMqttHooks* mqtt_hooks = nullptr,
+                        MeshtasticPhoneDeviceRuntimeHooks* device_runtime_hooks = nullptr);
 
     void reset();
     void pumpIncomingAppData();
@@ -119,9 +195,14 @@ class MeshtasticPhoneCore
     meshtastic_MeshPacket buildPacketFromText(const chat::MeshIncomingText& msg) const;
     meshtastic_MeshPacket buildPacketFromData(const chat::MeshIncomingData& msg) const;
 
-    app::IAppBleFacade& ctx_;
+    IPhoneRuntimeContext& ctx_;
     MeshtasticPhoneTransport& transport_;
-    MeshtasticPhoneHooks* hooks_ = nullptr;
+    MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks_ = nullptr;
+    MeshtasticPhoneModuleConfigHooks* module_config_hooks_ = nullptr;
+    MeshtasticPhoneConfigLifecycleHooks* config_lifecycle_hooks_ = nullptr;
+    MeshtasticPhoneStatusHooks* status_hooks_ = nullptr;
+    MeshtasticPhoneMqttHooks* mqtt_hooks_ = nullptr;
+    MeshtasticPhoneDeviceRuntimeHooks* device_runtime_hooks_ = nullptr;
     uint32_t config_nonce_ = 0;
     size_t config_node_index_ = 0;
     uint8_t config_channel_index_ = 0;

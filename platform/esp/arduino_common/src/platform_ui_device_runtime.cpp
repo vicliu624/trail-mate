@@ -5,6 +5,7 @@
 #include "board/BoardBase.h"
 #include "esp_heap_caps.h"
 #include "esp_ota_ops.h"
+#include "esp_rom_sys.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,6 +15,23 @@
 namespace platform::ui::device
 {
 
+namespace
+{
+
+constexpr uint32_t kRestartBlackoutDelayUs = 50000;
+
+void prepare_for_restart()
+{
+    if (board.hasKeyboard())
+    {
+        board.keyboardSetBrightness(0);
+    }
+    board.setBrightness(0);
+    esp_rom_delay_us(kRestartBlackoutDelayUs);
+}
+
+} // namespace
+
 void delay_ms(uint32_t ms)
 {
     vTaskDelay(pdMS_TO_TICKS(ms));
@@ -21,6 +39,7 @@ void delay_ms(uint32_t ms)
 
 void restart()
 {
+    prepare_for_restart();
     esp_restart();
 }
 

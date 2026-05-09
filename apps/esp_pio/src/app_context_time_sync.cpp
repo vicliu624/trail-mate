@@ -1,5 +1,6 @@
 #include "apps/esp_pio/app_context.h"
 #include "platform/esp/arduino_common/device_identity.h"
+#include "platform/ui/device_runtime.h"
 
 #include <ctime>
 
@@ -48,7 +49,7 @@ bool AppContext::syncCurrentEpochSeconds(uint32_t epoch_seconds)
 void AppContext::restartDevice()
 {
 #if __has_include(<Arduino.h>)
-    ESP.restart();
+    platform::ui::device::restart();
 #endif
 }
 

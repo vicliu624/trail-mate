@@ -3,9 +3,21 @@
 namespace ble
 {
 
-MeshtasticPhoneSession::MeshtasticPhoneSession(app::IAppBleFacade& ctx, MeshtasticPhoneTransport& transport,
-                                               MeshtasticPhoneHooks* hooks)
-    : core_(ctx, transport, hooks)
+MeshtasticPhoneSession::MeshtasticPhoneSession(IPhoneRuntimeContext& ctx, MeshtasticPhoneTransport& transport,
+                                               MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks,
+                                               MeshtasticPhoneModuleConfigHooks* module_config_hooks,
+                                               MeshtasticPhoneConfigLifecycleHooks* config_lifecycle_hooks,
+                                               MeshtasticPhoneStatusHooks* status_hooks,
+                                               MeshtasticPhoneMqttHooks* mqtt_hooks,
+                                               MeshtasticPhoneDeviceRuntimeHooks* device_runtime_hooks)
+    : core_(ctx,
+            transport,
+            bluetooth_config_hooks,
+            module_config_hooks,
+            config_lifecycle_hooks,
+            status_hooks,
+            mqtt_hooks,
+            device_runtime_hooks)
 {
 }
 

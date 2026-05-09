@@ -1,0 +1,618 @@
+Action	إجراء
+Add	إضافة
+Advanced	متقدم
+Always	دائماً
+Altitude	الارتفاع
+Altitude Reference	مرجع الارتفاع
+App	تطبيق
+Area Cleared	منطقة ممسوحة
+Auto	تلقائي
+Awaiting teammate	بانتظار الزميل
+Back	رجوع
+Base Camp	معسكر القاعدة
+Beijing (UTC+8)	بكين (UTC+8)
+BLE bridge ready  |  %s	جسر BLE جاهز  |  %s
+BLE linked  |  %s	BLE متصل  |  %s
+Bluetooth	بلوتوث
+Bluetooth Pairing	اقتران بلوتوث
+Bcast	بث
+Bridge error	خطأ في الجسر
+Broadcast	بث
+Cancel	إلغاء
+Channel	قناة
+Chat	محادثة
+Chat unavailable	المحادثة غير متاحة
+Chinese	الصينية
+Closes automatically after pairing	يغلق تلقائياً بعد الاقتران
+Close	إغلاق
+Command	أمر
+Command: %s	أمر: %s
+Command: %s %s	أمر: %s %s
+Command: %s %s %s	أمر: %s %s %s
+Compare Verification Code	مقارنة رمز التحقق
+Compass	بوصلة
+Connected	متصل
+Connected, handshaking...	متصل، جار المصافحة...
+Contacts	جهات الاتصال
+Contacts (%s)	جهات الاتصال (%s)
+Contacts (LXMF)	جهات الاتصال (LXMF)
+Contacts (LXMF - %.3fMHz)	جهات الاتصال (LXMF - %.3fMHz)
+Contacts (MeshCore)	جهات الاتصال (MeshCore)
+Contacts (Meshtastic - %.3fMHz)	جهات الاتصال (Meshtastic - %.3fMHz)
+Contacts (RNode)	جهات الاتصال (RNode)
+Contacts (RNode - %.3fMHz)	جهات الاتصال (RNode - %.3fMHz)
+Conversation protocol mismatch	عدم تطابق بروتوكول المحادثة
+Data Exchange	تبادل البيانات
+Debug Logs	سجلات التصحيح
+Decoding: %d%%	فك التشفير: %d%%
+Decoding: 0%	فك التشفير: 0%
+Delete	حذف
+Delete %s?	حذف %s؟
+Delete contact %s?	حذف جهة الاتصال %s؟
+Delete failed	فشل الحذف
+Device: %s	الجهاز: %s
+Direct	مباشر
+Disabled	معطل
+Discover	اكتشاف
+Display Language	لغة العرض
+Duplicate name not allowed	الاسم المكرر غير مسموح
+Edit	تحرير
+Edit nickname	تحرير اللقب
+Emergency SOS	طوارئ SOS
+Energy Sweep	مسح الطاقة
+English	الإنجليزية
+English keyboard	لوحة مفاتيح إنجليزية
+Enter nickname	أدخل اللقب
+Enter number for %s	أدخل الرقم لـ %s
+Enter the 6-digit number	أدخل الرقم المكون من 6 خانات
+Enter this 6-digit PIN on your phone	أدخل رمز PIN المكون من 6 خانات على هاتفك
+Error	خطأ
+Error: %lu	خطأ: %lu
+FSK Voice	صوت FSK
+Failed	فشل
+Fix	تثبيت
+Fixed PIN	PIN ثابت
+Gauge Design (mAh)	السعة التصميمية (mAh)
+Gauge Full (mAh)	السعة الكاملة (mAh)
+Good Find	هدف مكتشف
+GPS	GPS
+Extensions	ملحقات
+Language	لغة
+Package Details	تفاصيل الحزمة
+Back to list	عودة للقائمة
+Install	تثبيت
+Update	تحديث
+Uninstall	إلغاء التثبيت
+Incompatible	غير متوافق
+Compatible with this device	متوافق مع هذا الجهاز
+Compatibility: %s	التوافق: %s
+memory profile mismatch	عدم تطابق ملف الذاكرة
+needs %s	يحتاج %s
+Update available: %s	تحديث متاح: %s
+Installed	مثبت
+Installed: %s	مثبت: %s
+Available to install	متاح للتثبيت
+Blocked	محظور
+%lu locales  %lu fonts  %lu IME  %s	%lu لغة  %lu خط  %lu إدخال  %s
+No Wi-Fi	لا يوجد Wi-Fi
+Installing package...	جار تثبيت الحزمة...
+Package installed	تم تثبيت الحزمة
+Uninstalling package...	جار إلغاء تثبيت الحزمة...
+Package uninstalled	تم إلغاء تثبيت الحزمة
+No language packs available	لا توجد حزم لغات متاحة
+Available language packs: %lu	حزم اللغات المتاحة: %lu
+About	حول
+Package Info	معلومات الحزمة
+Contents	المحتويات
+Source	المصدر
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	الأرشيف: %s\nذاكرة الخط الإضافية: %s\nالملفات: %s\n%s
+Locales: %s\nFonts: %s\nIME: %s	اللغات: %s\nالخطوط: %s\nالإدخال: %s
+Author: %s\nHomepage: %s	المؤلف: %s\nالموقع: %s
+None	لا شيء
+GPS Status	حالة GPS
+HDOP	HDOP
+Heading starting	بدء التوجيه
+Hide	إخفاء
+Host bridge	جسر المضيف
+Host connected, probing modem...	المضيف متصل، جار فحص المودم...
+IDLE	خامل
+Ignored	متجاهل
+Ignore	تجاهل
+Ignore unavailable	التجاهل غير متاح
+Ignore update failed	فشل تحديث التجاهل
+Image received	تم استلام الصورة
+Info	معلومات
+Initializing...	جار التهيئة...
+Invalid airtime factor	معامل وقت البث غير صالح
+Invalid design capacity (mAh)	السعة التصميمية (mAh) غير صالحة
+Invalid frequency offset	إزاحة التردد غير صالحة
+Invalid frequency value	قيمة التردد غير صالحة
+Invalid full capacity (mAh)	السعة الكاملة (mAh) غير صالحة
+Invalid marker	علامة غير صالحة
+Invalid MeshCore bandwidth	عرض نطاق MeshCore غير صالح
+Invalid MeshCore frequency	تردد MeshCore غير صالح
+Invalid number	رقم غير صالح
+Invalid RX delay	تأخير الاستقبال غير صالح
+Key marked trusted	تم وضع علامة ثقة على المفتاح
+Key must be 32 hex or 16 chars	يجب أن يكون المفتاح 32 خانة ست عشرية أو 16 حرفاً
+Key trust failed	فشلت الثقة بالمفتاح
+Key Verification	التحقق من المفتاح
+LINKED	متصل
+LISTEN	استماع
+LIVE	مباشر
+Loading...	جار التحميل...
+Location	الموقع
+Location: %s	الموقع: %s
+Location: %s %s	الموقع: %s %s
+LoRa direct path  |  %s	مسار LoRa مباشر  |  %s
+Low battery - audio disabled	بطارية منخفضة - الصوت معطل
+Map	خريطة
+Map Layer	طبقة الخريطة
+MESH	شبكي
+Mesh Status	حالة الشبكة
+Mesh unavailable	الشبكة غير متاحة
+MeshCore only	MeshCore فقط
+Message DB cleared	تم مسح قاعدة بيانات الرسائل
+Messages	رسائل
+MESSAGES	رسائل
+Messages and broadcasts show here	الرسائل والبث يظهر هنا
+Mini Compass	بوصلة مصغرة
+MT send uses slot 0/1 only	إرسال Meshtastic يستخدم الفتحة 0/1 فقط
+N/A	غير متاح
+Nearby	قريب
+Need local GPS	يلزم GPS محلي
+Network	شبكة
+New	جديد
+new activity	نشاط جديد
+Next	التالي
+No GPS fix	لا يوجد تثبيت GPS
+No image	لا توجد صورة
+No messages	لا توجد رسائل
+No preview	لا توجد معاينة
+No recent traffic	لا توجد حركة حديثة
+No response	لا استجابة
+No route selected	لم يتم تحديد مسار
+No target	لا يوجد هدف
+No track files	لا توجد ملفات مسار
+Node DB reset	تم إعادة ضبط قاعدة بيانات العقد
+Node ignored	تم تجاهل العقدة
+Node ignored and hidden	تم تجاهل العقدة وإخفاؤها
+Node unignored	تم إلغاء تجاهل العقدة
+North locked	الشمال مثبت
+Not set	غير محدد
+NO	لا
+NO FIX	لا تثبيت
+Number keyboard	لوحة مفاتيح رقمية
+OFF	إيقاف
+OK	موافق
+ON	تشغيل
+online	متصل
+Pairing	اقتران
+PC Link	رابط الحاسوب
+PC Link is unavailable on this target.	رابط الحاسوب غير متاح على هذا الهدف.
+peer lock  |  turn %03.0f deg	قفل النظير  |  انعطف %03.0f درجة
+Pinyin keyboard	لوحة مفاتيح بينيين
+Pinyin: %s	بينيين: %s
+Position	الموقع
+position stream active  |  %u in view	دفق الموقع نشط  |  %u مرئي
+Power	طاقة
+Press Back	اضغط رجوع
+Press RX to start	اضغط RX للبدء
+Primary	أساسي
+Protocol	بروتوكول
+Protocol switch failed	فشل تبديل البروتوكول
+Protocol switched	تم تبديل البروتوكول
+quiet net	شبكة هادئة
+Random PIN	PIN عشوائي
+Ready	جاهز
+RECEIVING	استلام
+Recent Activity	نشاط حديث
+Record	تسجيل
+Recording	جار التسجيل
+Region	منطقة
+Remain: %u	متبقي: %u
+Reply	رد
+Reply disabled for this protocol	الرد معطل لهذا البروتوكول
+Reset Mesh Profiles	إعادة ضبط ملفات الشبكة
+Reset Node DB	إعادة ضبط قاعدة بيانات العقد
+Resetting...	جار إعادة الضبط...
+Return	عودة
+Rally Point	نقطة التجمع
+RNode Bridge	جسر RNode
+RNode modem ready	مودم RNode جاهز
+RNode text chat runs on host	دردشة RNode النصية تعمل على المضيف
+Route	مسار
+Run	تشغيل
+RX	RX
+RX: %lu  TX: %lu	استلام: %lu  إرسال: %lu
+RX: 0  TX: 0	استلام: 0  إرسال: 0
+Save	حفظ
+Saved: %s	تم الحفظ: %s
+Scan failed	فشل المسح
+Scan Local	مسح محلي
+Scanning 5s...	المسح 5 ثوان...
+Screen Brightness	سطوع الشاشة
+Screen Timeout	مهلة الشاشة
+SEARCH	بحث
+Secondary	ثانوي
+Select a route	اختر مساراً
+Select a track	اختر مساراً
+Select marker	اختر علامة
+Select Track	اختيار المسار
+Selected: %s	المحدد: %s
+Send	إرسال
+Send failed	فشل الإرسال
+Send this code and compare:\n	أرسل هذا الرمز وقارن:\n
+Send ID Broadcast	إرسال بث الهوية
+Send ID Local	إرسال هوية محلي
+Sending...	جار الإرسال...
+Sent	تم الإرسال
+Settings	الإعدادات
+Setting	إعداد
+Share Position Marker	مشاركة علامة الموقع
+Share this number:\n	شارك هذا الرقم:\n
+Short Name	الاسم المختصر
+SOLO	منفرد
+Speaker Volume	مستوى صوت السماعة
+Sky Plot	مخطط السماء
+SSTV RX READY	SSTV استلام جاهز
+SSTV start failed	فشل بدء SSTV
+standing by	في الانتظار
+Status	الحالة
+Stopped	متوقف
+Stop	إيقاف
+Stop recording first	أوقف التسجيل أولاً
+Submit	إرسال
+Submit failed	فشل الإرسال
+System	نظام
+SATELLITE STATUS	حالة الأقمار
+Talk	تحدث
+TALK	تحدث
+Team	فريق
+TEAM	فريق
+Team chat send failed	فشل إرسال رسالة الفريق
+Team chat unavailable	دردشة الفريق غير متاحة
+Team chat unavailable in RNode mode	دردشة الفريق غير متاحة في وضع RNode
+team member position will appear here	موقع عضو الفريق سيظهر هنا
+Team keys not ready	مفاتيح الفريق غير جاهزة
+Team location encode failed	فشل ترميز موقع الفريق
+Text chat unavailable	الدردشة النصية غير متاحة
+threads active	جلسات نشطة
+Time Zone	منطقة زمنية
+Tracker	متتبع
+traffic active	حركة نشطة
+Trust Key	توثيق المفتاح
+U	استخدم
+Unignore	إلغاء التجاهل
+Unread	غير مقروء
+Unknown	غير معروف
+USB Mass Storage	تخزين USB كبير
+USB Disk	قرص USB
+USB Bridge	جسر USB
+USB host bridge	جسر مضيف USB
+USB Bridge is unavailable on this target.	جسر USB غير متاح على هذا الهدف.
+USB CDC KISS modem for Reticulum	مودم USB CDC KISS لـ Reticulum
+USE	استخدم
+Used	مستخدم
+User Name	اسم المستخدم
+Verification Number	رقم التحقق
+Verification number sent	تم إرسال رقم التحقق
+Vibration	اهتزاز
+VOL %d	الصوت %d
+VOL 80	الصوت 80
+waiting for better sky view  |  %u in view	بانتظار رؤية أفضل للسماء  |  %u مرئي
+waiting for module GNSS compass	بانتظار وحدة GNSS/البوصلة
+waiting for traffic	بانتظار الحركة
+Waiting for host...	بانتظار المضيف...
+Waiting for Reticulum host...	بانتظار مضيف Reticulum...
+WAIT IMU	بانتظار IMU
+Walkie not available	جهاز الاتصال غير متاح
+Walkie start failed	فشل بدء جهاز الاتصال
+Walkie Talkie	جهاز اتصال
+YES	نعم
+6 digits	6 خانات
+%u threads active	%u جلسة نشطة
+%ud	%u يوم
+%uh	%u ساعة
+%um	%u دقيقة
+%umo	%u شهر
+%uy	%u سنة
+Confirm received code:\n	تأكيد الرمز المستلم:\n
+device heading from 9-axis module	اتجاه الجهاز من وحدة 9 محاور
+heading unlocks after first fix	يفتح الاتجاه بعد أول تثبيت
+If it matches, trust the key.	إذا تطابق، وثق المفتاح.
+magnetometer heading active	اتجاه المغنطومتر نشط
+magnetometer still warming up	المغنطومتر لا يزال في مرحلة الإحماء
+needle shows north until target lock	الإبرة تشير للشمال حتى قفل الهدف
+nearest peer  |  %.0f m away	أقرب نظير  |  على بعد %.0f متر
+no recent traffic	لا توجد حركة حديثة
+now	الآن
+%s layer missing	طبقة %s مفقودة
+Active: %s	نشط: %s
+Alt: %.0f m	الارتفاع: %.0f م
+Alt: -- m	الارتفاع: -- م
+Base: %s	الأساس: %s
+Battery critical	البطارية حرجة
+Broadcast (%d)	بث (%d)
+COMPLETE	مكتمل
+Calibrating...	جار المعايرة...
+Confirm	تأكيد
+Contour: OFF	الخطوط الكنتورية: إيقاف
+Decoder error	خطأ في فك التشفير
+Direct (%d)	مباشر (%d)
+E	ش
+ERROR	خطأ
+Exiting USB...	جار الخروج من USB...
+Hold	انتظار
+ID: !%08lX	الهوية: !%08lX
+ID: -	الهوية: -
+Key refresh not implemented	تحديث المفتاح غير منفذ
+Key verify: %s %s	تحقق المفتاح: %s %s
+Key verify: confirm %s %s	تحقق المفتاح: تأكيد %s %s
+Key verify: enter number for %s	تحقق المفتاح: أدخل الرقم لـ %s
+Key verify: send %s %s	تحقق المفتاح: أرسل %s %s
+Later	لاحقاً
+Level %d	المستوى %d
+Listening for SSTV signal...	جار الاستماع لإشارة SSTV...
+Low battery: %d%%	بطارية منخفضة: %d%%
+MODE: %s	الوضع: %s
+MODE: Auto	الوضع: تلقائي
+Map - %.48s	خريطة - %.48s
+Map - %s Missing	خريطة - %s مفقودة
+Map - No Map Data	خريطة - لا توجد بيانات
+Map - No SD Card	خريطة - لا توجد بطاقة SD
+Map - no gps data	خريطة - لا توجد بيانات GPS
+Message	رسالة
+Mic TBD	الميكروفون قيد التعريف
+Mic init failed	فشل تهيئة الميكروفون
+Morse Input	إدخال مورس
+MoveTo	انتقل إلى
+N	ش
+NODE INFO	معلومات العقدة
+Name required	الاسم مطلوب
+Name too long	الاسم طويل جداً
+No KML routes	لا توجد مسارات KML
+No SD Card	لا توجد بطاقة SD
+No routes folder	لا يوجد مجلد مسارات
+No tracks yet	لا توجد مسارات بعد
+Only leader can manage	القائد فقط يمكنه الإدارة
+Only leader can pair	القائد فقط يمكنه الاقتران
+Paired successfully	تم الاقتران بنجاح
+Pairing failed	فشل الاقتران
+Pairing init failed	فشل بدء الاقتران
+Pairing not available	الاقتران غير متاح
+Pairing not ready	الاقتران غير جاهز
+Press Back to exit USB mode	اضغط رجوع للخروج من وضع USB
+Press SPACE to resume	اضغط SPACE للاستئناف
+RallyTo	تجمع إلى
+Route configured	تم تكوين المسار
+Route: %s	المسار: %s
+SD Card Not Found\nPlease insert SD card	لم يتم العثور على بطاقة SD\nالرجاء إدخال بطاقة SD
+SSTV RECEIVER	مستقبل SSTV
+Save failed	فشل الحفظ
+Scan +%u/%u	مسح +%u/%u
+Select level	اختر المستوى
+Selected level: %d	المستوى المحدد: %d
+Shutting down to protect battery	جار إيقاف التشغيل لحماية البطارية
+Status: CALIB	الحالة: معايرة
+Step 1/2: Tap short dots	الخطوة 1/2: انقر النقاط القصيرة
+Step 2/2: Tap long dashes	الخطوة 2/2: انقر الخطوط الطويلة
+Switch to %s to chat	انتقل إلى %s للدردشة
+Symbol: 	الرمز:
+Tap to input, idle 3s to send	انقر للإدخال، انتظر 3 ثوان للإرسال
+Team keys mismatch	عدم تطابق مفاتيح الفريق
+Team: 	الفريق:
+Text: 	النص:
+Unread: %d	غير مقروء: %d
+Unread: 0	غير مقروء: 0
+W	غ
+0° Horizon	0° أفق
+PSK must be 32 hex or 16 chars	يجب أن يكون PSK 32 خانة ست عشرية أو 16 حرفاً
+Restarting...	جار إعادة التشغيل...
+awaiting position	بانتظار الموقع
+compass wakes after GPS fix	البوصلة تستيقظ بعد تثبيت GPS
+searching satellites	جار البحث عن الأقمار
+%s -	%s -
+%s 0s	%s 0 ثانية
+%s %us	%s %u ثانية
+%s %um	%s %u دقيقة
+%s %uh	%s %u ساعة
+%s %ud	%s %u يوم
+AUTO	تلقائي
+Alt: %ld m	الارتفاع: %ld م
+Alt: -	الارتفاع: -
+BEST	الأفضل
+BW: %.0fk	عرض النطاق: %.0fk
+BW: %.1fk	عرض النطاق: %.1fk
+BW: -	عرض النطاق: -
+CAD	CAD
+CURSOR	مؤشر
+Ch: %.3f	القناة: %.3f
+Ch: -	القناة: -
+Hop: %u	قفزة: %u
+Hop: -	قفزة: -
+Hop: - / NH: %02X	قفزة: - / القادم: %02X
+ID: !%06lx	هوية: !%06lx
+ID: !%08lx	هوية: !%08lx
+Last heard:	آخر سماع:
+Link	رابط
+Link / MeshCore	رابط / MeshCore
+Link / Meshtastic	رابط / Meshtastic
+MODE: RSSI	الوضع: RSSI
+NOISE %.0f dBm	ضوضاء %.0f dBm
+NOISE -104 dBm	ضوضاء -104 dBm
+PKI: -	PKI: -
+PKI: known	PKI: معروف
+PKI: verified	PKI: موثق
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI: %.0f dBm
+RSSI: -	RSSI: -
+Role: %s	الدور: %s
+SCAN	مسح
+SF: %u	SF: %u
+SF: -	SF: -
+SIM	محاكاة
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR: %.1f ديسيبل
+SNR: -	SNR: -
+SNR %.0f	SNR %.0f
+SNR -	SNR -
+SNR Good	SNR جيد
+SNR Weak	SNR ضعيف
+STEP %.0fk | BW %.0fk	خطوة %.0fk | عرض %.0fk
+STEP %.1fk | BW %.1fk	خطوة %.1fk | عرض %.1fk
+STEP -- | BW --	خطوة -- | عرض --
+STOP	إيقاف
+Slot	فتحة
+Slot %u	فتحة %u
+SUB-GHz SCAN	مسح Sub-GHz
+Actions	إجراءات
+Actions: %s	إجراءات: %s
+Access to team data revoked	تم إلغاء الوصول إلى بيانات الفريق
+Capability:	القدرة:
+Channel Actions	إجراءات القناة
+Confirm Kick	تأكيد الطرد
+Create Team	إنشاء فريق
+ELEV	ارتفاع
+Join Team	انضمام لفريق
+In View	مرئي
+Keep devices within 5m	أبق الأجهزة ضمن مسافة 5 أمتار
+KeyDist	توزيع المفاتيح
+KeyId: %u	معرف المفتاح: %u
+KeyId: --	معرف المفتاح: --
+Keys	مفاتيح
+Kick	طرد
+Kick Member	طرد عضو
+Last paired: %s	آخر اقتران: %s
+Last seen %uh ago	آخر ظهور قبل %u ساعة
+Last seen %um ago	آخر ظهور قبل %u دقيقة
+Last seen --	آخر ظهور: --
+Last update %us ago	آخر تحديث قبل %u ثانية
+Last update --	آخر تحديث: --
+Last update 0s ago	آخر تحديث قبل 0 ثانية
+Leader	قائد
+Leader online	القائد متصل
+Leave	مغادرة
+Leave team?	مغادرة الفريق؟
+Manage	إدارة
+Member: %s	عضو: %s
+Members	أعضاء
+Members: %u	الأعضاء: %u
+Members: %u  Online: %u	الأعضاء: %u  متصل: %u
+Modem Bridge	جسر المودم
+No members yet	لا أعضاء بعد
+Not Used	غير مستخدم
+Offline	غير متصل
+Online	متصل
+Online: %u	متصل: %u
+Pair Again	اقتران مرة أخرى
+Pair Member	اقتران عضو
+Pairing in progress	الاقتران قيد التقدم
+Prev	السابق
+Remove %s from team?	إزالة %s من الفريق؟
+Request Keys	طلب مفاتيح
+Retry	إعادة المحاولة
+Security Round: %u	جولة الأمان: %u
+Security Round: --	جولة الأمان: --
+Security: OK (Round %u)	الأمان: جيد (جولة %u)
+Security: OK (Round --)	الأمان: جيد (جولة --)
+Seen %ud	ظهور قبل %u يوم
+Seen %uh	ظهور قبل %u ساعة
+Seen %um	ظهور قبل %u دقيقة
+Send failed (keys not ready)	فشل الإرسال (المفاتيح غير جاهزة)
+Status: %s	الحالة: %s
+Target: %s	الهدف: %s
+Team / %s	فريق / %s
+Team Actions	إجراءات الفريق
+Team Health	صحة الفريق
+Team Status	حالة الفريق
+Team: %s	الفريق: %s
+This clears local keys.	هذا يمسح المفاتيح المحلية.
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	هذا سيحدث جولة الأمان.\nلن يتلقى العضو بعد ذلك\nرسائل الفريق أو نقاط الطريق.
+Transfer	نقل
+Transfer Leader	نقل القيادة
+View Team	عرض الفريق
+Waiting for new keys...	بانتظار مفاتيح جديدة...
+Waypoint	نقطة طريق
+You are no longer in this team	لم تعد في هذا الفريق
+You are not in a team	أنت لست في فريق
+- No shared map\n- No team awareness	- لا خريطة مشتركة\n- لا وعي بالفريق
+1 member stale	عضو واحد منتهي الصلاحية
+encrypt failed	فشل التشفير
+member	عضو
+queue full	الطابور ممتلئ
+unsupported protocol	بروتوكول غير مدعوم
+Factory Reset	إعادة ضبط المصنع
+Clear all settings and restart?	مسح جميع الإعدادات وإعادة التشغيل؟
+Terrain	تضاريس
+Satellite	قمر صناعي
+Contour: ON	الخطوط الكنتورية: تشغيل
+Contour data missing	بيانات الخطوط الكنتورية مفقودة
+%d enabled	%d تم تمكينه
+%s  %s	%s %s
+Channel Key / PSK	مفتاح القناة / PSK
+Channel Slot	فتحة القناة
+Channel Utilization	استخدام القناة
+Check for Updates	التحقق من وجود تحديثات
+Clear Message DB	مسح قاعدة بيانات الرسالة
+Connect	الاتصال
+Contour Overlay	تراكب محيطي
+Coordinate Format	تنسيق الإحداثيات
+Coordinate System	نظام الإحداثيات
+Current Version	الإصدار الحالي
+Detected Network	الشبكة التي تم اكتشافها
+Disconnect	قطع الاتصال
+Duty Cycle Limit	حد دورة العمل
+Enabled IMEs	تم التمكين IMEs
+Encryption Mode	وضع التشفير
+Freq Offset (MHz)	إزاحة التكرار (MHz)
+GPS Enabled	GPS ممكّن
+Hop Limit	حد القفز
+IME setting update failed	IME فشل تحديث الإعداد
+Install Update	قم بتثبيت التحديث
+Latest Version	أحدث إصدار
+Layer	الطبقة
+Location Mode	وضع الموقع
+MC Airtime Factor	عامل وقت البث MC
+MC Bandwidth (kHz)	عرض النطاق الترددي للMC (kHz)
+MC Channel Key	مفتاح قناة MC
+MC Channel Name	اسم قناة MC
+MC Channel Slot	فتحة قناة MC
+MC Coding Rate	معدل تشفير MC
+MC Flood Max	MC فيضان ماكس
+MC Frequency (MHz)	تردد MC (MHz)
+MC Multi ACKs	MC متعدد الإقرارات
+MC RX Delay Base	MC RX قاعدة التأخير
+MC Region Preset	منطقة MC محددة مسبقًا
+MC Repeat	كرر MC
+MC Spread Factor	عامل انتشار MC
+MC TX Power	MC TX الطاقة
+Manual BW	دليل BW
+Manual CR	دليل CR
+Manual SF	دليل SF
+Map Source	مصدر الخريطة
+Modem Preset	الإعداد المسبق للمودم
+NMEA Export	NMEA تصدير
+NMEA Sentences	NMEA الجمل
+No IME packs installed	لم يتم تثبيت حزم IME
+No position available	لا يوجد منصب متاح
+OTA Status	OTA الحالة
+Override Duty Cycle	تجاوز دورة العمل
+Override Freq (MHz)	تجاوز التكرار (MHz)
+Password	كلمة المرور
+Position Strategy	إستراتيجية الموقف
+SSID	SSID
+Satellite Systems	نظام القمر الصناعيms
+Scan Networks	مسح الشبكات
+TX Enabled	TX ممكّن
+TX Power	TX الطاقة
+Track Format	تنسيق المسار
+Track Interval	الفاصل الزمني للمسار
+Track Recording	تسجيل المسار
+Unavailable	غير متاح
+Update Interval	الفاصل الزمني للتحديث
+Use Preset	استخدم الإعداد المسبق
+Wi-Fi Enabled	Wi-Fi ممكّن
+Wi-Fi start failed	Wi-Fi فشل البدء

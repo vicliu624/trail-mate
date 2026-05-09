@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app/app_facades.h"
+#include "chat/ble/phone_runtime_context.h"
 #include "chat/domain/chat_types.h"
 
 #include <array>
@@ -119,7 +119,7 @@ class MeshCorePhoneHooks
 class MeshCorePhoneCore
 {
   public:
-    MeshCorePhoneCore(app::IAppBleFacade& ctx, const std::string& device_name,
+    MeshCorePhoneCore(IPhoneRuntimeContext& ctx, const std::string& device_name,
                       MeshCorePhoneHooks* hooks = nullptr);
 
     void reset();
@@ -138,7 +138,7 @@ class MeshCorePhoneCore
     uint32_t resolveNodeIdFromPrefix(const uint8_t* prefix, size_t len) const;
     bool buildContactFromNode(const chat::contacts::NodeEntry& entry, uint8_t code, MeshCoreBleFrame& out) const;
 
-    app::IAppBleFacade& ctx_;
+    IPhoneRuntimeContext& ctx_;
     std::string device_name_;
     MeshCorePhoneHooks* hooks_ = nullptr;
     std::deque<MeshCoreBleFrame> tx_queue_;

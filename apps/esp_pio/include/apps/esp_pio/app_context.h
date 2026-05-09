@@ -127,6 +127,11 @@ class AppContext final : public IAppBleFacade
         return config_;
     }
 
+    chat::MeshProtocol getMeshProtocol() const override
+    {
+        return config_.mesh_protocol;
+    }
+
     chat::NodeId getSelfNodeId() const override;
 
     chat::IMeshAdapter* getMeshAdapter() override;

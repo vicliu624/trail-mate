@@ -59,9 +59,9 @@ bool configure_receive(float freq_mhz, const ReceiveConfig& config)
     return true;
 }
 
-float read_rssi()
+float read_instant_rssi()
 {
-    return s_lora ? s_lora->getRadioRSSI() : std::numeric_limits<float>::quiet_NaN();
+    return s_lora ? s_lora->getRadioInstantRSSI() : std::numeric_limits<float>::quiet_NaN();
 }
 
 void release()

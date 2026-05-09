@@ -141,3 +141,30 @@ extern "C" bool trail_mate_tab5_display_runtime_is_ready(void)
 {
     return s_ready;
 }
+
+extern "C" bool trail_mate_tab5_display_lock(uint32_t timeout_ms)
+{
+    return bsp_display_lock(timeout_ms);
+}
+
+extern "C" void trail_mate_tab5_display_unlock(void)
+{
+    bsp_display_unlock();
+}
+
+extern "C" void trail_mate_tab5_set_ext_5v_enabled(bool enabled)
+{
+    // Direct BSP setter retained for internal / legacy callers.
+    // New code should use Tab5Board::acquireExt5vRail() / releaseExt5vRail()
+    // so that the rail is owned by a named lease rather than toggled ad-hoc.
+    ESP_LOGW("tab5-bsp",
+             "Direct Ext5V setter called (enabled=%d). "
+             "Prefer Tab5Board::acquireExt5vRail() for named ownership.",
+             enabled ? 1 : 0);
+    bsp_set_ext_5v_en(enabled);
+}
+
+extern "C" void trail_mate_tab5_set_wifi_power_enabled(bool enabled)
+{
+    bsp_set_wifi_power_enable(enabled);
+}

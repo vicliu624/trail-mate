@@ -67,6 +67,8 @@ uint32_t s_name_change_id = 0;
 #endif
 AppScreen* s_pending_app_launch = nullptr;
 
+void syncFocusedDescLabel();
+
 lv_obj_t* firstMenuButton()
 {
     for (const auto& item : s_menu_apps)
@@ -79,9 +81,111 @@ lv_obj_t* firstMenuButton()
     return nullptr;
 }
 
+lv_obj_t* lastMenuButton()
+{
+    for (size_t i = kMaxMenuApps; i > 0; --i)
+    {
+        const auto& item = s_menu_apps[i - 1];
+        if (item.button != nullptr && !lv_obj_has_flag(item.button, LV_OBJ_FLAG_HIDDEN))
+        {
+            return item.button;
+        }
+    }
+    return nullptr;
+}
+
+size_t visibleMenuButtonCount()
+{
+    size_t count = 0;
+    for (const auto& item : s_menu_apps)
+    {
+        if (item.button != nullptr && !lv_obj_has_flag(item.button, LV_OBJ_FLAG_HIDDEN))
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+lv_obj_t* cyclicMenuButtonByOffset(lv_obj_t* current, int delta)
+{
+    if (delta == 0)
+    {
+        return current;
+    }
+
+    const size_t visible_count = visibleMenuButtonCount();
+    if (visible_count == 0)
+    {
+        return nullptr;
+    }
+
+    int current_visible_index = -1;
+    int scan_index = 0;
+    for (size_t i = 0; i < kMaxMenuApps; ++i)
+    {
+        if (s_menu_apps[i].button == nullptr || lv_obj_has_flag(s_menu_apps[i].button, LV_OBJ_FLAG_HIDDEN))
+        {
+            continue;
+        }
+        if (s_menu_apps[i].button == current)
+        {
+            current_visible_index = scan_index;
+            break;
+        }
+        ++scan_index;
+    }
+
+    if (current_visible_index < 0)
+    {
+        return delta > 0 ? firstMenuButton() : lastMenuButton();
+    }
+
+    const int wrapped_index =
+        (current_visible_index + delta + static_cast<int>(visible_count)) % static_cast<int>(visible_count);
+
+    scan_index = 0;
+    for (size_t i = 0; i < kMaxMenuApps; ++i)
+    {
+        if (s_menu_apps[i].button == nullptr || lv_obj_has_flag(s_menu_apps[i].button, LV_OBJ_FLAG_HIDDEN))
+        {
+            continue;
+        }
+        if (scan_index == wrapped_index)
+        {
+            return s_menu_apps[i].button;
+        }
+        ++scan_index;
+    }
+
+    return nullptr;
+}
+
 bool usesDirectionalMenuKeys()
 {
     return ui::menu_profile::current().directional_key_nav;
+}
+
+bool labelNeedsScroll(lv_obj_t* label)
+{
+    if (label == nullptr)
+    {
+        return false;
+    }
+
+    const char* text = lv_label_get_text(label);
+    if (text == nullptr || text[0] == '\0')
+    {
+        return false;
+    }
+
+    lv_point_t text_size{};
+    const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+    const int32_t letter_space = lv_obj_get_style_text_letter_space(label, LV_PART_MAIN);
+    const int32_t line_space = lv_obj_get_style_text_line_space(label, LV_PART_MAIN);
+    lv_text_get_size(
+        &text_size, text, font, letter_space, line_space, LV_COORD_MAX, LV_TEXT_FLAG_EXPAND);
+    return text_size.x > lv_obj_get_width(label);
 }
 
 int findMenuButtonIndex(lv_obj_t* obj)
@@ -157,6 +261,22 @@ lv_obj_t* findMenuNeighbor(lv_obj_t* current, uint32_t key)
     return best;
 }
 
+void focusMenuButton(lv_obj_t* target, lv_anim_enable_t anim = LV_ANIM_OFF)
+{
+    if (target == nullptr || menu_g == nullptr)
+    {
+        return;
+    }
+
+    lv_group_focus_obj(target);
+    syncFocusedDescLabel();
+
+    if (ui::menu_profile::current().snap_center)
+    {
+        lv_obj_scroll_to_view(target, anim);
+    }
+}
+
 void ensureMenuFocus()
 {
     if (menu_g == nullptr)
@@ -172,7 +292,34 @@ void ensureMenuFocus()
 
     if (lv_obj_t* first = firstMenuButton())
     {
-        lv_group_focus_obj(first);
+        focusMenuButton(first, LV_ANIM_OFF);
+    }
+}
+
+void syncFocusedDescLabel()
+{
+    if (s_desc_label == nullptr || menu_g == nullptr)
+    {
+        return;
+    }
+
+    lv_obj_t* focused = lv_group_get_focused(menu_g);
+    int index = findMenuButtonIndex(focused);
+    if (index < 0)
+    {
+        for (size_t i = 0; i < kMaxMenuApps; ++i)
+        {
+            if (s_menu_apps[i].button != nullptr && !lv_obj_has_flag(s_menu_apps[i].button, LV_OBJ_FLAG_HIDDEN))
+            {
+                index = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    if (index >= 0 && static_cast<size_t>(index) < kMaxMenuApps)
+    {
+        ::ui::i18n::set_label_text(s_desc_label, s_menu_apps[index].name);
     }
 }
 
@@ -229,18 +376,50 @@ void menuNameLabelEventCallback(lv_event_t* e)
 
 void menuButtonFocusCallback(lv_event_t* e)
 {
-    if (lv_event_get_code(e) != LV_EVENT_FOCUSED || s_desc_label == nullptr)
+    if (lv_event_get_code(e) != LV_EVENT_FOCUSED)
     {
         return;
     }
 
     auto* data = static_cast<MenuAppUi*>(lv_event_get_user_data(e));
+    if (data != nullptr && data->label != nullptr)
+    {
+        const auto& profile = ui::menu_profile::current();
+        lv_label_set_long_mode(
+            data->label,
+            (profile.scroll_card_label && labelNeedsScroll(data->label)) ? LV_LABEL_LONG_SCROLL_CIRCULAR
+                                                                         : LV_LABEL_LONG_DOT);
+        ::ui::i18n::set_label_text(data->label, data->name);
+    }
+
+    if (s_desc_label == nullptr)
+    {
+        return;
+    }
+
     const char* text = data ? data->name : nullptr;
 #if LVGL_VERSION_MAJOR == 9
     lv_obj_send_event(s_desc_label, static_cast<lv_event_code_t>(s_name_change_id), (void*)text);
 #else
     (void)text;
 #endif
+}
+
+void menuButtonDefocusCallback(lv_event_t* e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_DEFOCUSED)
+    {
+        return;
+    }
+
+    auto* data = static_cast<MenuAppUi*>(lv_event_get_user_data(e));
+    if (data == nullptr || data->label == nullptr)
+    {
+        return;
+    }
+
+    lv_label_set_long_mode(data->label, LV_LABEL_LONG_DOT);
+    ::ui::i18n::set_label_text(data->label, data->name);
 }
 
 void menuButtonKeyCallback(lv_event_t* e)
@@ -256,11 +435,47 @@ void menuButtonKeyCallback(lv_event_t* e)
         return;
     }
 
-    lv_obj_t* current = lv_event_get_target_obj(e);
-    if (lv_obj_t* next = findMenuNeighbor(current, key))
+    uint32_t nav_key = key;
+    const auto& profile = ui::menu_profile::current();
+    if (!profile.wrap_grid && !profile.vertical_scroll)
     {
-        lv_group_focus_obj(next);
-        lv_obj_scroll_to_view(next, LV_ANIM_OFF);
+        if (nav_key == LV_KEY_UP)
+        {
+            nav_key = LV_KEY_LEFT;
+        }
+        else if (nav_key == LV_KEY_DOWN)
+        {
+            nav_key = LV_KEY_RIGHT;
+        }
+    }
+
+    lv_obj_t* current = lv_event_get_target_obj(e);
+    lv_obj_t* next = nullptr;
+    if (!profile.wrap_grid && !profile.vertical_scroll)
+    {
+        const int delta = (nav_key == LV_KEY_LEFT || nav_key == LV_KEY_UP) ? -1 : 1;
+        next = cyclicMenuButtonByOffset(current, delta);
+    }
+    else
+    {
+        next = findMenuNeighbor(current, nav_key);
+    }
+
+    if (next == nullptr)
+    {
+        if (nav_key == LV_KEY_LEFT || nav_key == LV_KEY_UP)
+        {
+            next = lastMenuButton();
+        }
+        else if (nav_key == LV_KEY_RIGHT || nav_key == LV_KEY_DOWN)
+        {
+            next = firstMenuButton();
+        }
+    }
+
+    if (next != nullptr)
+    {
+        focusMenuButton(next, LV_ANIM_OFF);
     }
 }
 
@@ -398,12 +613,23 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     if (profile.show_card_label && name && name[0] != '\0')
     {
         lv_obj_t* label = lv_label_create(btn);
-        lv_obj_set_width(label, width - (profile.variant == ui::menu_profile::LayoutVariant::LargeTouchGrid ? 16 : 4));
+        const lv_coord_t label_width = width -
+                                       (profile.variant == ui::menu_profile::LayoutVariant::LargeTouchGrid
+                                            ? 16
+                                            : profile.card_label_width_inset);
+        const lv_coord_t line_height =
+            static_cast<lv_coord_t>(lv_font_get_line_height(profile.card_label_font));
+        lv_obj_set_width(label, label_width);
+        lv_obj_set_height(label, line_height);
+        lv_obj_set_style_max_height(label, line_height, 0);
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_font(label, profile.card_label_font, 0);
         lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), 0);
         lv_obj_set_style_text_color(label, lv_color_hex(0x6B4A1E), LV_STATE_FOCUSED);
-        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        lv_obj_set_style_pad_all(label, 0, 0);
+        lv_label_set_long_mode(
+            label,
+            profile.scroll_card_label ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT);
         ::ui::i18n::set_label_text(label, name);
         s_menu_apps[idx].label = label;
     }
@@ -458,6 +684,7 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     if (idx < kMaxMenuApps)
     {
         lv_obj_add_event_cb(btn, menuButtonFocusCallback, LV_EVENT_FOCUSED, &s_menu_apps[idx]);
+        lv_obj_add_event_cb(btn, menuButtonDefocusCallback, LV_EVENT_DEFOCUSED, &s_menu_apps[idx]);
     }
     if (usesDirectionalMenuKeys())
     {
@@ -706,12 +933,18 @@ void createAppGrid()
     }
 
     s_bottom_bar_left = createBottomBarGroup(s_bottom_bar);
-    createBottomBarSpacer(s_bottom_bar);
-    s_bottom_bar_right = createBottomBarGroup(s_bottom_bar);
-
+    s_bottom_bar_right = nullptr;
+    s_bottom_node_chip = {};
+    s_bottom_ram_chip = {};
+    s_bottom_psram_chip = {};
     s_bottom_node_chip = createBottomBarChip(s_bottom_bar_left, profile, lv_color_hex(0xF1B75A), "-");
-    s_bottom_ram_chip = createBottomBarChip(s_bottom_bar_right, profile, lv_color_hex(0xCFE4FF), "--/--");
-    s_bottom_psram_chip = createBottomBarChip(s_bottom_bar_right, profile, lv_color_hex(0xD4F0D2), "--/--");
+    if (profile.show_memory_stats)
+    {
+        createBottomBarSpacer(s_bottom_bar);
+        s_bottom_bar_right = createBottomBarGroup(s_bottom_bar);
+        s_bottom_ram_chip = createBottomBarChip(s_bottom_bar_right, profile, lv_color_hex(0xCFE4FF), "--/--");
+        s_bottom_psram_chip = createBottomBarChip(s_bottom_bar_right, profile, lv_color_hex(0xD4F0D2), "--/--");
+    }
 
     char node_id_buf[24];
     const uint32_t self_id = s_init_options.messaging ? s_init_options.messaging->getSelfNodeId() : 0;
@@ -734,6 +967,7 @@ void createAppGrid()
 #endif
 
     ensureMenuFocus();
+    syncFocusedDescLabel();
     lv_obj_update_snap(panel, LV_ANIM_ON);
 }
 

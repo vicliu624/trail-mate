@@ -1,15 +1,16 @@
 #include "ui/screens/sstv/sstv_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/sstv_runtime.h"
-#include "ui/LV_Helper.h"
+#include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/system_notification.h"
+#include "ui/widgets/top_bar.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>

@@ -1,0 +1,618 @@
+Action	Действие
+Add	Добавить
+Advanced	Расширенные
+Always	Всегда
+Altitude	Высота
+Altitude Reference	Ориентир высоты
+App	Приложение
+Area Cleared	Зона очищена
+Auto	Авто
+Awaiting teammate	Ожидание напарника
+Back	Назад
+Base Camp	Базовый лагерь
+Beijing (UTC+8)	Пекин (UTC+8)
+BLE bridge ready  |  %s	BLE мост готов  |  %s
+BLE linked  |  %s	BLE подключён  |  %s
+Bluetooth	Bluetooth
+Bluetooth Pairing	Сопряжение Bluetooth
+Bcast	Широковещ.
+Bridge error	Ошибка моста
+Broadcast	Широковещание
+Cancel	Отмена
+Channel	Канал
+Chat	Чат
+Chat unavailable	Чат недоступен
+Chinese	Китайский
+Closes automatically after pairing	Закрывается после сопряжения
+Close	Закрыть
+Command	Команда
+Command: %s	Команда: %s
+Command: %s %s	Команда: %s %s
+Command: %s %s %s	Команда: %s %s %s
+Compare Verification Code	Сравнить код
+Compass	Компас
+Connected	Подключено
+Connected, handshaking...	Подключено, рукопожатие...
+Contacts	Контакты
+Contacts (%s)	Контакты (%s)
+Contacts (LXMF)	Контакты (LXMF)
+Contacts (LXMF - %.3fMHz)	Контакты (LXMF - %.3fМГц)
+Contacts (MeshCore)	Контакты (MeshCore)
+Contacts (Meshtastic - %.3fMHz)	Контакты (Meshtastic - %.3fМГц)
+Contacts (RNode)	Контакты (RNode)
+Contacts (RNode - %.3fMHz)	Контакты (RNode - %.3fМГц)
+Conversation protocol mismatch	Несовпадение протокола
+Data Exchange	Обмен данными
+Debug Logs	Журналы отладки
+Decoding: %d%%	Декодирование: %d%%
+Decoding: 0%	Декодирование: 0%
+Delete	Удалить
+Delete %s?	Удалить %s?
+Delete contact %s?	Удалить контакт %s?
+Delete failed	Ошибка удаления
+Device: %s	Устройство: %s
+Direct	Напрямую
+Disabled	Отключено
+Discover	Обнаружить
+Display Language	Язык экрана
+Duplicate name not allowed	Повтор имени запрещён
+Edit	Изменить
+Edit nickname	Изменить псевдоним
+Emergency SOS	Экстренный SOS
+Energy Sweep	Сканирование
+English	Английский
+English keyboard	Англ. клавиатура
+Enter nickname	Ввести псевдоним
+Enter number for %s	Ввести номер для %s
+Enter the 6-digit number	Введите 6-значный номер
+Enter this 6-digit PIN on your phone	Введите 6-значный PIN на телефоне
+Error	Ошибка
+Error: %lu	Ошибка: %lu
+FSK Voice	FSK голос
+Failed	Не удалось
+Fix	Фикс.
+Fixed PIN	Фикс. PIN
+Gauge Design (mAh)	Ёмкость проект. (мАч)
+Gauge Full (mAh)	Полная ёмкость (мАч)
+Good Find	Хорошая находка
+GPS	GPS
+Extensions	Расширения
+Language	Язык
+Package Details	Детали пакета
+Back to list	Назад к списку
+Install	Установить
+Update	Обновить
+Uninstall	Удалить
+Incompatible	Несовместимо
+Compatible with this device	Совместимо с устройством
+Compatibility: %s	Совместимость: %s
+memory profile mismatch	Несовпадение профиля памяти
+needs %s	требуется %s
+Update available: %s	Доступно обновление: %s
+Installed	Установлено
+Installed: %s	Установлено: %s
+Available to install	Доступно для установки
+Blocked	Заблокировано
+%lu locales  %lu fonts  %lu IME  %s	%lu языков  %lu шрифтов  %lu IME  %s
+No Wi-Fi	Нет Wi-Fi
+Installing package...	Установка пакета...
+Package installed	Пакет установлен
+Uninstalling package...	Удаление пакета...
+Package uninstalled	Пакет удалён
+No language packs available	Нет языковых пакетов
+Available language packs: %lu	Доступно языковых пакетов: %lu
+About	О программе
+Package Info	Инфо пакета
+Contents	Содержимое
+Source	Источник
+Archive: %s\nExtra font RAM: %s\nProfiles: %s\n%s	Архив: %s\nДополнительный шрифт RAM: %s\nПрофили: %s\n%s
+Locales: %s\nFonts: %s\nIME: %s	Локали: %s\nШрифты: %s\nIME: %s
+Author: %s\nHomepage: %s	Автор: %s\nДомашняя страница: %s
+None	Нет
+GPS Status	Состояние GPS
+HDOP	HDOP
+Heading starting	Начало заголовка
+Hide	Скрыть
+Host bridge	Хост-мост
+Host connected, probing modem...	Хост подключен, проверка модема...
+IDLE	IDLE
+Ignored	Игнорируется
+Ignore	Игнорировать
+Ignore unavailable	Игнорировать недоступно
+Ignore update failed	Игнорировать обновление не удалось
+Image received	Изображение получено
+Info	Информация
+Initializing...	Инициализация...
+Invalid airtime factor	Неверный коэффициент эфирного времени
+Invalid design capacity (mAh)	Неверная расчетная емкость (мАч)
+Invalid frequency offset	Неверное смещение частоты
+Invalid frequency value	Неверное значение частоты.
+Invalid full capacity (mAh)	Неверная полная емкость (мАч)
+Invalid marker	Неверный маркер
+Invalid MeshCore bandwidth	Неверная пропускная способность MeshCore
+Invalid MeshCore frequency	Неверная частота MeshCore
+Invalid number	Неверный номер
+Invalid RX delay	Неверная задержка RX
+Key marked trusted	Ключ помечен как доверенный
+Key must be 32 hex or 16 chars	Ключ должен иметь длину 32 шестнадцатеричных или 16 символов.
+Key trust failed	Не удалось установить доверие к ключу
+Key Verification	Проверка ключа
+LINKED	СВЯЗАН
+LISTEN	СЛУШАТЬ
+LIVE	ПРЯМОЙ ЭФИР
+Loading...	Загрузка...
+Location	Местоположение
+Location: %s	Местоположение: %s
+Location: %s %s	Местоположение: %s %s
+LoRa direct path  |  %s	Прямой путь LoRa |  %s
+Low battery - audio disabled	Низкий заряд батареи – звук отключен
+Map	Карта
+Map Layer	Слой карты
+MESH	СЕТКА
+Mesh Status	Статус сетки
+Mesh unavailable	Сетка недоступна
+MeshCore only	только MeshCore
+Message DB cleared	База данных сообщений очищена
+Messages	Сообщения
+MESSAGES	СООБЩЕНИЯ
+Messages and broadcasts show here	Здесь отображаются сообщения и трансляции
+Mini Compass	Мини-компас
+MT send uses slot 0/1 only	Отправка MT использует только слот 0/1
+N/A	Н/Д
+Nearby	Рядом
+Need local GPS	Нужен локальный GPS
+Network	Сеть
+New	Новый
+new activity	новая деятельность
+Next	Далее
+No GPS fix	Нет исправления GPS
+No image	Нет изображения
+No messages	Нет сообщений
+No preview	Нет предварительного просмотра
+No recent traffic	Нет недавнего трафика
+No response	Нет ответа
+No route selected	Маршрут не выбран
+No target	Нет цели
+No track files	Нет файлов треков
+Node DB reset	Сброс базы данных узла
+Node ignored	Узел игнорируется
+Node ignored and hidden	Узел игнорируется и скрыт
+Node unignored	Узел не игнорируется
+North locked	Север заблокирован
+Not set	Не установлено
+NO	НЕТ
+NO FIX	НЕТ ИСПРАВЛЕНИЯ
+Number keyboard	Цифровая клавиатура
+OFF	ВЫКЛ.
+OK	ОК
+ON	ВКЛ.
+online	онлайн
+Pairing	Сопряжение
+PC Link	Ссылка на ПК
+PC Link is unavailable on this target.	PC Link недоступна для этой цели.
+peer lock  |  turn %03.0f deg	одноранговая блокировка |  повернуть на %03.0f град.
+Pinyin keyboard	Клавиатура пиньинь
+Pinyin: %s	Пиньинь: %s
+Position	Позиция
+position stream active  |  %u in view	поток позиций активен |  %u на виду
+Power	Мощность
+Press Back	Нажмите Назад
+Press RX to start	Нажмите RX, чтобы начать
+Primary	Первичный
+Protocol	Протокол
+Protocol switch failed	Не удалось переключить протокол.
+Protocol switched	Протокол переключен
+quiet net	тихая сеть
+Random PIN	Случайный PIN-код
+Ready	Готово
+RECEIVING	ПОЛУЧЕНИЕ
+Recent Activity	Недавняя активность
+Record	Запись
+Recording	Запись
+Region	Регион
+Remain: %u	Осталось: %u
+Reply	Ответить
+Reply disabled for this protocol	Ответ отключен для этого протокола
+Reset Mesh Profiles	Сбросить профили сетки
+Reset Node DB	Сброс базы данных узла
+Resetting...	Сброс...
+Return	Возврат
+Rally Point	Точка сбора
+RNode Bridge	RNode Мост
+RNode modem ready	RNode модем готов
+RNode text chat runs on host	RNode текстовый чат запускается на хосте
+Route	Маршрут
+Run	Запуск
+RX	RX
+RX: %lu  TX: %lu	RX: %lu TX: %lu
+RX: 0  TX: 0	RX: 0 TX: 0
+Save	Сохранить
+Saved: %s	Сохранено: %s
+Scan failed	Сканирование не удалось
+Scan Local	Сканировать локально
+Scanning 5s...	Сканирование 5 секунд...
+Screen Brightness	Яркость экрана
+Screen Timeout	Тайм-аут экрана
+SEARCH	ПОИСК
+Secondary	Вторичный
+Select a route	Выберите маршрут
+Select a track	Выберите трек
+Select marker	Выбрать маркер
+Select Track	Выбор трека
+Selected: %s	Выбрано: %s
+Send	Отправить
+Send failed	Не удалось отправить
+Send this code and compare:\n	Отправьте этот код и сравните:\n
+Send ID Broadcast	Отправить ID трансляцию
+Send ID Local	Отправить ID локальный
+Sending...	Отправка...
+Sent	Отправлено
+Settings	Настройки
+Setting	Настройка
+Share Position Marker	Маркер позиции акции
+Share this number:\n	Поделитесь этим номером:\n
+Short Name	Краткое имя
+SOLO	СОЛО
+Speaker Volume	Громкость динамика
+Sky Plot	Небесный сюжет
+SSTV RX READY	SSTV RX ГОТОВО
+SSTV start failed	Не удалось запустить SSTV
+standing by	готов
+Status	Статус
+Stopped	Остановлено
+Stop	Стоп
+Stop recording first	Сначала остановите запись
+Submit	Отправить
+Submit failed	Не удалось отправить
+System	Система
+SATELLITE STATUS	СТАТУС СПУТНИКА
+Talk	Обсуждение
+TALK	РАЗГОВОР
+Team	Команда
+TEAM	КОМАНДА
+Team chat send failed	Ошибка отправки в командный чат
+Team chat unavailable	Командный чат недоступен
+Team chat unavailable in RNode mode	Командный чат недоступен в режиме RNode
+team member position will appear here	здесь появится позиция члена команды
+Team keys not ready	Ключи команды не готовы
+Team location encode failed	Не удалось закодировать местоположение команды
+Text chat unavailable	Текстовый чат недоступен
+threads active	темы активны
+Time Zone	Часовой пояс
+Tracker	Трекер
+traffic active	трафик активен
+Trust Key	Ключ доверия
+U	У
+Unignore	Не игнорировать
+Unread	Непрочитано
+Unknown	Неизвестно
+USB Mass Storage	USB Накопитель большой емкости
+USB Disk	USB Диск
+USB Bridge	USB Мост
+USB host bridge	USB хост-мост
+USB Bridge is unavailable on this target.	USB Мост недоступен для этой цели.
+USB CDC KISS modem for Reticulum	USB Модем CDC KISS для Reticulum
+USE	ИСПОЛЬЗОВАНИЕ
+Used	Используется
+User Name	Имя пользователя
+Verification Number	Номер подтверждения
+Verification number sent	Номер подтверждения отправлен
+Vibration	Вибрация
+VOL %d	ТОМ %d
+VOL 80	ТОМ 80
+waiting for better sky view  |  %u in view	ждем лучшего вида на небо |  %u на виду
+waiting for module GNSS compass	ожидание модуля GNSS компаса
+waiting for traffic	ожидание трафика
+Waiting for host...	Ожидание хоста...
+Waiting for Reticulum host...	Ожидание хоста Reticulum...
+WAIT IMU	ПОДОЖДИТЕ IMU
+Walkie not available	Рация недоступна
+Walkie start failed	Не удалось запустить рацию
+Walkie Talkie	Рация
+YES	ДА
+6 digits	6 цифр
+%u threads active	%u активных потоков
+%ud	%ud
+%uh	%uh
+%um	%um
+%umo	%umo
+%uy	%uy
+Confirm received code:\n	Подтвердите полученный код:\n
+device heading from 9-axis module	заголовок устройства из 9-осевого модуля
+heading unlocks after first fix	заголовок разблокируется после первого исправления
+If it matches, trust the key.	Если он совпадает, ключ доверяется.
+magnetometer heading active	курс магнитометра активен
+magnetometer still warming up	Магнитометр все еще прогревается
+needle shows north until target lock	стрелка показывает север до фиксации цели
+nearest peer  |  %.0f m away	ближайший узел |  %.0f м отсюда
+no recent traffic	нет недавнего трафика
+now	сейчас
+%s layer missing	Слой %s отсутствует
+Active: %s	Активен: %s
+Alt: %.0f m	Альтернатива: %.0f м
+Alt: -- m	Альтернатива: -- м
+Base: %s	База: %s
+Battery critical	Батарея критическая
+Broadcast (%d)	Трансляция (%d)
+COMPLETE	ЗАВЕРШЕНО
+Calibrating...	Калибровка...
+Confirm	Подтвердить
+Contour: OFF	Контур: ВЫКЛ.
+Decoder error	Ошибка декодера
+Direct (%d)	Прямой (%d)
+E	Е
+ERROR	ОШИБКА
+Exiting USB...	Выход из USB...
+Hold	Удерживать
+ID: !%08lX	ID: !%08lX
+ID: -	ID: -
+Key refresh not implemented	Обновление ключа не реализовано
+Key verify: %s %s	Проверка ключа: %s %s
+Key verify: confirm %s %s	Проверка ключа: подтвердите %s %s
+Key verify: enter number for %s	Проверка ключа: введите номер для %s
+Key verify: send %s %s	Проверка ключа: отправьте %s %s
+Later	Позже
+Level %d	Уровень %d
+Listening for SSTV signal...	Прослушивание сигнала SSTV...
+Low battery: %d%%	Низкий заряд батареи: %d%%
+MODE: %s	РЕЖИМ: %s
+MODE: Auto	РЕЖИМ: Авто
+Map - %.48s	Карта — %.48s
+Map - %s Missing	Карта — %s отсутствует
+Map - No Map Data	Карта – нет картографических данных
+Map - No SD Card	Карта — нет карты SD
+Map - no gps data	Карта – нет данных GPS
+Message	Сообщение
+Mic TBD	Микрофон подлежит уточнению
+Mic init failed	Ошибка инициализации микрофона
+Morse Input	Ввод Морзе
+MoveTo	Переместить
+N	Н
+NODE INFO	ИНФОРМАЦИЯ ОБ УЗЛЕ
+Name required	Требуется имя
+Name too long	Имя слишком длинное
+No KML routes	Нет маршрутов KML
+No SD Card	Нет карты SD
+No routes folder	Нет папки маршрутов
+No tracks yet	Треков пока нет
+Only leader can manage	Только лидер может управлять
+Only leader can pair	Только лидер может создать пару
+Paired successfully	Сопряжение успешно выполнено
+Pairing failed	Не удалось выполнить сопряжение
+Pairing init failed	Не удалось инициализировать сопряжение
+Pairing not available	Сопряжение недоступно
+Pairing not ready	Сопряжение не готово
+Press Back to exit USB mode	Нажмите «Назад», чтобы выйти из режима USB.
+Press SPACE to resume	Нажмите ПРОБЕЛ, чтобы возобновить работу.
+RallyTo	РаллиТо
+Route configured	Маршрут настроен
+Route: %s	Маршрут: %s
+SD Card Not Found\nPlease insert SD card	SD Карта не найдена\nПожалуйста, вставьте карту SD
+SSTV RECEIVER	ПРИЕМНИК SSTV
+Save failed	Не удалось сохранить
+Scan +%u/%u	Сканировать +%u/%u
+Select level	Выбор уровня
+Selected level: %d	Выбранный уровень: %d
+Shutting down to protect battery	Выключение для защиты аккумулятора
+Status: CALIB	Статус: КАЛИБ.
+Step 1/2: Tap short dots	Шаг 1/2: коснитесь коротких точек
+Step 2/2: Tap long dashes	Шаг 2/2: нажмите длинные тире
+Switch to %s to chat	Чтобы начать чат, переключитесь на %s.
+Symbol: 	Символ:
+Tap to input, idle 3s to send	Нажмите для ввода, бездействуйте 3 секунды для отправки
+Team keys mismatch	Несовпадение командных ключей
+Team: 	Команда:
+Text: 	Текст:
+Unread: %d	Непрочитано: %d
+Unread: 0	Непрочитано: 0
+W	Вт
+0° Horizon	0° горизонта
+PSK must be 32 hex or 16 chars	PSK должен содержать 32 шестнадцатеричных или 16 символов.
+Restarting...	Перезапуск...
+awaiting position	ожидание позиции
+compass wakes after GPS fix	компас просыпается после исправления GPS
+searching satellites	поиск спутников
+%s -	%s -
+%s 0s	%s 0 с
+%s %us	%s %us
+%s %um	%s %um
+%s %uh	%s %uh
+%s %ud	%s %ud
+AUTO	АВТО
+Alt: %ld m	Альтернатива: %ld м
+Alt: -	Альтернатива: -
+BEST	ЛУЧШИЙ
+BW: %.0fk	BW: %.0fk
+BW: %.1fk	BW: %.1fk
+BW: -	BW: -
+CAD	CAD
+CURSOR	КУРСОР
+Ch: %.3f	Ch: %.3f
+Ch: -	Глава: -
+Hop: %u	Переход: %u
+Hop: -	Хоп: -
+Hop: - / NH: %02X	Переход: - / NH: %02X
+ID: !%06lx	ID: !%06lx
+ID: !%08lx	ID: !%08lx
+Last heard:	Последнее сообщение:
+Link	Ссылка
+Link / MeshCore	Ссылка / MeshCore
+Link / Meshtastic	Ссылка / Meshtastic
+MODE: RSSI	РЕЖИМ: RSSI
+NOISE %.0f dBm	ШУМ %.0f dBm
+NOISE -104 dBm	ШУМ -104 dBm
+PKI: -	PKI: -
+PKI: known	PKI: известно
+PKI: verified	PKI: проверено
+RSSI %.0f dBm	RSSI %.0f dBm
+RSSI -92 dBm	RSSI -92 dBm
+RSSI: %.0f dBm	RSSI: %.0f dBm
+RSSI: -	RSSI: -
+Role: %s	Роль: %s
+SCAN	СКАНИРОВАНИЕ
+SF: %u	SF: %u
+SF: -	SF: -
+SIM	SIM-карта
+SNR +%d	SNR +%d
+SNR +12	SNR +12
+SNR: %.1f dB	SNR: %.1f дБ
+SNR: -	SNR: -
+SNR %.0f	SNR %.0f
+SNR -	SNR -
+SNR Good	SNR Хорошо
+SNR Weak	SNR Слабый
+STEP %.0fk | BW %.0fk	ШАГ %.0fk | BW %.0fk
+STEP %.1fk | BW %.1fk	ШАГ %.1fk | BW %.1fk
+STEP -- | BW --	ШАГ -- | BW --
+STOP	СТОП
+Slot	Слот
+Slot %u	Слот %u
+SUB-GHz SCAN	СКАНИРОВАНИЕ СУБГГЦ
+Actions	Действия
+Actions: %s	Действия: %s
+Access to team data revoked	Доступ к данным команды отозван
+Capability:	Возможности:
+Channel Actions	Действия канала
+Confirm Kick	Подтвердить удаление
+Create Team	Создать команду
+ELEV	ПОДЪЕМ
+Join Team	Присоединяйтесь к команде
+In View	На виду
+Keep devices within 5m	Держите устройства на расстоянии не более 5 м.
+KeyDist	KeyDist
+KeyId: %u	Идентификатор ключа: %u
+KeyId: --	Идентификатор ключа: --
+Keys	Ключи
+Kick	Удар
+Kick Member	Удалить участника
+Last paired: %s	Последняя пара: %s
+Last seen %uh ago	Последний раз был замечен %uч назад
+Last seen %um ago	Последний раз был замечен %uм назад
+Last seen --	Последний раз видели --
+Last update %us ago	Последнее обновление %u с. назад
+Last update --	Последнее обновление --
+Last update 0s ago	Последнее обновление 0 с назад
+Leader	Лидер
+Leader online	Лидер онлайн
+Leave	Уйти
+Leave team?	Покинуть команду?
+Manage	Управление
+Member: %s	Участник: %s
+Members	Участники
+Members: %u	Участники: %u
+Members: %u  Online: %u	Участники: %u В сети: %u
+Modem Bridge	Модемный мост
+No members yet	Пока нет участников
+Not Used	Не используется
+Offline	Не в сети
+Online	Онлайн
+Online: %u	Онлайн: %u
+Pair Again	Повторное сопряжение
+Pair Member	Член пары
+Pairing in progress	Выполняется сопряжение
+Prev	Предыдущий
+Remove %s from team?	Удалить %s из команды?
+Request Keys	Запросить ключи
+Retry	Повторить попытку
+Security Round: %u	Раунд безопасности: %u
+Security Round: --	Раунд безопасности: --
+Security: OK (Round %u)	Безопасность: ОК (раунд %u)
+Security: OK (Round --)	Безопасность: ОК (круглый --)
+Seen %ud	Виден %ud
+Seen %uh	Виден %uh
+Seen %um	Просмотрено %uм
+Send failed (keys not ready)	Отправка не удалась (ключи не готовы)
+Status: %s	Статус: %s
+Target: %s	Цель: %s
+Team / %s	Команда / %s
+Team Actions	Действия команды
+Team Health	Здоровье команды
+Team Status	Статус команды
+Team: %s	Команда: %s
+This clears local keys.	При этом локальные ключи очищаются.
+This will update the security round.\nThe member will no longer receive\nteam messages or waypoints.	Это обновит раунд безопасности.\nУчастник больше не будет получать\nкомандные сообщения или путевые точки.
+Transfer	Передача
+Transfer Leader	Руководитель трансфера
+View Team	Посмотреть команду
+Waiting for new keys...	Ждем новых ключей...
+Waypoint	Маршрутная точка
+You are no longer in this team	Вы больше не в этой команде
+You are not in a team	Вы не в команде
+- No shared map\n- No team awareness	- Нет общей карты\n- Нет информации о команде
+1 member stale	1 участник устарел
+encrypt failed	шифрование не выполнено.
+member	член
+queue full	очередь заполнена
+unsupported protocol	неподдерживаемый протокол
+Factory Reset	Сброс к заводским настройкам
+Clear all settings and restart?	Очистить все настройки и перезапустить?
+Terrain	Местность
+Satellite	Спутник
+Contour: ON	Контур: ВКЛ.
+Contour data missing	Отсутствуют данные контура
+%d enabled	%d включен
+%s  %s	%s %s
+Channel Key / PSK	Ключ канала / PSK
+Channel Slot	Слот канала
+Channel Utilization	Использование канала
+Check for Updates	Проверить наличие обновлений
+Clear Message DB	Очистить базу данных сообщений
+Connect	Подключиться
+Contour Overlay	Наложение контура
+Coordinate Format	Формат координат
+Coordinate System	Система координат
+Current Version	Текущая версия
+Detected Network	Обнаруженная сеть
+Disconnect	Отключение
+Duty Cycle Limit	Предел рабочего цикла
+Enabled IMEs	Включено IMEs
+Encryption Mode	Режим шифрования
+Freq Offset (MHz)	Смещение частоты (MHz)
+GPS Enabled	GPS Включено
+Hop Limit	Предел переходов
+IME setting update failed	IME не удалось обновить настройку
+Install Update	Установить обновление
+Latest Version	Последняя версия
+Layer	Слой
+Location Mode	Режим определения местоположения
+MC Airtime Factor	Коэффициент эфирного времени MC
+MC Bandwidth (kHz)	Пропускная способность MC (kHz)
+MC Channel Key	Ключ канала MC
+MC Channel Name	Имя канала MC
+MC Channel Slot	Слот канала MC
+MC Coding Rate	Скорость кодирования MC
+MC Flood Max	MC Наводнение Макс.
+MC Frequency (MHz)	Частота MC (MHz)
+MC Multi ACKs	Мультиподтверждения MC
+MC RX Delay Base	MC RX База задержки
+MC Region Preset	Предустановка региона MC
+MC Repeat	Повтор MC
+MC Spread Factor	Коэффициент распространения MC
+MC TX Power	MC TX Питание
+Manual BW	Руководство BW
+Manual CR	Руководство CR
+Manual SF	Руководство SF
+Map Source	Источник карты
+Modem Preset	Предварительная настройка модема
+NMEA Export	NMEA Экспорт
+NMEA Sentences	NMEA Предложения
+No IME packs installed	Пакеты IME не установлены
+No position available	Вакансий нет
+OTA Status	OTA Статус
+Override Duty Cycle	Изменение рабочего цикла
+Override Freq (MHz)	Частота переопределения (MHz)
+Password	Пароль
+Position Strategy	Стратегия позиции
+SSID	SSID
+Satellite Systems	Спутниковая системаms
+Scan Networks	Сканирование сетей
+TX Enabled	TX Включено
+TX Power	TX Питание
+Track Format	Формат трека
+Track Interval	Интервал отслеживания
+Track Recording	Запись трека
+Unavailable	Недоступно
+Update Interval	Интервал обновления
+Use Preset	Использовать предустановку
+Wi-Fi Enabled	Wi-Fi Включено
+Wi-Fi start failed	Wi-Fi не удалось запустить

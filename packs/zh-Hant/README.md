@@ -65,7 +65,7 @@ Notes:
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/zh-Hant-1.0.0.zip`
+- `site/assets/packs/zh-Hant-1.1.0.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact for a future Extensions downloader. Its `payload/` directory unpacks into `/trailmate/packs/...`.
@@ -82,4 +82,4 @@ Copy the bundle contents so the SD card ends up with:
 /trailmate/packs/locales/zh-Hant/strings.tsv
 ```
 
-After reboot, `繁體中文` appears in Settings. The font stays unloaded until the locale is activated or Traditional Chinese content needs coverage.
+After reboot, `繁體中文（台灣）` appears in Settings only after the locale is promoted to `translation_status=release`. While it is in `review`, the runtime can install and index the pack but will not offer it as a selectable UI language.

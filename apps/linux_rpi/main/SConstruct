@@ -1,0 +1,45 @@
+import os
+
+Import("env")
+with open(env["PROJECT_TOOL_S"]) as f:
+    exec(f.read())
+
+
+SRCS = Glob("src/*.c*")
+INCLUDE = [ADir("."), ADir("include")]
+PRIVATE_INCLUDE = []
+REQUIREMENTS = ["lvgl_component", "pthread"]
+STATIC_LIB = []
+DYNAMIC_LIB = []
+DEFINITIONS = []
+DEFINITIONS_PRIVATE = []
+LDFLAGS = []
+LINK_SEARCH_PATH = []
+STATIC_FILES = []
+
+lvgl_component = list(
+    filter(lambda component: component["target"] == "lvgl_component", env["COMPONENTS"])
+)[0]
+if "CONFIG_V9_5_LV_USE_SDL" in os.environ:
+    lvgl_component["REQUIREMENTS"] += ["SDL2"]
+    lvgl_component["INCLUDE"] += ["/usr/include/SDL2"]
+    lvgl_component["DEFINITIONS"] += ["-D_REENTRANT"]
+
+
+env["COMPONENTS"].append(
+    {
+        "target": "trailmate_cardputer_zero_m5sdk",
+        "SRCS": SRCS,
+        "INCLUDE": INCLUDE,
+        "PRIVATE_INCLUDE": PRIVATE_INCLUDE,
+        "REQUIREMENTS": REQUIREMENTS,
+        "STATIC_LIB": STATIC_LIB,
+        "DYNAMIC_LIB": DYNAMIC_LIB,
+        "DEFINITIONS": DEFINITIONS,
+        "DEFINITIONS_PRIVATE": DEFINITIONS_PRIVATE,
+        "LDFLAGS": LDFLAGS,
+        "LINK_SEARCH_PATH": LINK_SEARCH_PATH,
+        "STATIC_FILES": STATIC_FILES,
+        "REGISTER": "project",
+    }
+)

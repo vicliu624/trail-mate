@@ -30,6 +30,11 @@ bool gps_is_powered()
     return GpsService::getInstance().isPowered();
 }
 
+void gps_set_enabled(bool enabled)
+{
+    GpsService::getInstance().setEnabled(enabled);
+}
+
 void gps_set_collection_interval(uint32_t interval_ms)
 {
     GpsService::getInstance().setCollectionInterval(interval_ms);
@@ -45,9 +50,9 @@ void gps_set_gnss_config(uint8_t mode, uint8_t sat_mask)
     GpsService::getInstance().setGnssConfig(mode, sat_mask);
 }
 
-void gps_set_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+void gps_set_external_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
 {
-    GpsService::getInstance().setNmeaConfig(output_hz, sentence_mask);
+    GpsService::getInstance().setExternalNmeaConfig(output_hz, sentence_mask);
 }
 
 void gps_set_motion_idle_timeout(uint32_t timeout_ms)

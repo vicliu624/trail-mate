@@ -64,13 +64,13 @@ Notes:
 - `font.bin` is ignored by Git. Keep it locally or regenerate it when the subset changes.
 - `build.ini` is the source-of-truth for generating `font.bin` during Pages/package builds.
 - `ranges.txt` and `estimated_ram_bytes` are used by the runtime to decide whether the pack fits the current memory profile.
-- The locale string tables are intentionally partial. Missing keys fall back to built-in English.
+- The locale string tables are structurally complete, but these locale packs remain in `translation_status=review` until native-language review is complete.
 
 ## Distribution Package
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/europe-latin-ext-1.0.0.zip`
+- `site/assets/packs/europe-latin-ext-1.1.0.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact for a future Extensions downloader. Its `payload/` directory unpacks into `/trailmate/packs/...`.
@@ -99,4 +99,4 @@ Copy the bundle contents so the SD card ends up with:
 /trailmate/packs/locales/pt-PT/strings.tsv
 ```
 
-After reboot, these locales are cataloged immediately, but the external font is only loaded when one of them becomes active or is needed as content coverage.
+After reboot, these locales are cataloged immediately, but they appear in Settings only after being promoted to `translation_status=release`. The external font is loaded only when a release locale becomes active or when the pack is needed as content coverage.

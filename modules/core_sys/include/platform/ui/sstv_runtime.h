@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "platform/ui/capability_status.h"
+
 namespace platform::ui::sstv
 {
 
@@ -34,5 +36,9 @@ const char* mode_name();
 const uint16_t* framebuffer();
 uint16_t frame_width();
 uint16_t frame_height();
+
+/// Honest capability status for the current target.
+/// May return Unsupported, Simulated, Available, Degraded, or Error.
+CapabilityStatus capability_status();
 
 } // namespace platform::ui::sstv

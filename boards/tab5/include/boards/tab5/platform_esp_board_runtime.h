@@ -14,8 +14,6 @@
 extern "C"
 {
 #include "bsp/trail_mate_tab5_runtime.h"
-
-    void bsp_set_ext_5v_en(bool en);
 }
 
 namespace platform::esp::boards::detail
@@ -84,9 +82,18 @@ inline void initializeDisplay()
     if (trail_mate_tab5_display_runtime_init())
     {
         ESP_LOGI(kTag, "Tab5 display runtime initialized");
-        bsp_set_ext_5v_en(true);
-        vTaskDelay(pdMS_TO_TICKS(300));
-        ESP_LOGI(kTag, "Tab5 M5-Bus Ext5V enabled for GNSS/LoRa modules");
+        // Use a permanent board lease instead of the direct BSP setter.
+        // This keeps the Ext5V rail owned by the board's lease model so
+        // that GPS/LoRa/heading runtimes can later acquire their own
+        // named leases without racing against an un-owned BSP call.
+        if (::boards::tab5::Tab5Board::instance().acquireExt5vRail("idf-startup"))
+        {
+            ESP_LOGI(kTag, "Tab5 M5-Bus Ext5V lease acquired for startup");
+        }
+        else
+        {
+            ESP_LOGW(kTag, "Tab5 M5-Bus Ext5V lease unavailable; rail may already be on");
+        }
     }
     else
     {
@@ -112,12 +119,12 @@ inline AppContextInitHandles resolveAppContextInitHandles()
 
 inline bool lockDisplay(uint32_t timeout_ms)
 {
-    return bsp_display_lock(timeout_ms);
+    return trail_mate_tab5_display_lock(timeout_ms);
 }
 
 inline void unlockDisplay()
 {
-    bsp_display_unlock();
+    trail_mate_tab5_display_unlock();
 }
 
 inline bool syncSystemTimeFromBoardRtc()

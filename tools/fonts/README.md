@@ -9,6 +9,13 @@ This directory stores source vector fonts used to generate Trail Mate font asset
   `https://github.com/notofonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf`
 - License: SIL Open Font License 1.1 (OFL)
 
+## Noto Naskh Arabic
+
+- File: `NotoNaskhArabic-Regular.otf`
+- Source:
+  `https://raw.githubusercontent.com/googlefonts/noto-fonts/main/unhinted/otf/NotoNaskhArabic/NotoNaskhArabic-Regular.otf`
+- License: SIL Open Font License 1.1 (OFL)
+
 ## Bitmap Compression Tool
 
 Use the in-repo tool to convert an existing LVGL bitmap font (`lv_font_conv` output)

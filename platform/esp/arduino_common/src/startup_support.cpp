@@ -20,6 +20,11 @@ uint32_t platform_epoch_seconds_now()
     return now < 0 ? 0U : static_cast<uint32_t>(now);
 }
 
+void platform_sleep_ms(uint32_t ms)
+{
+    delay(ms);
+}
+
 } // namespace
 
 namespace platform::esp::arduino_common::startup_support
@@ -29,6 +34,7 @@ void initializeClockProviders()
 {
     sys::set_millis_provider(platform_millis_now);
     sys::set_epoch_seconds_provider(platform_epoch_seconds_now);
+    sys::set_sleep_provider(platform_sleep_ms);
 }
 
 esp_sleep_wakeup_cause_t detectWakeupCause()

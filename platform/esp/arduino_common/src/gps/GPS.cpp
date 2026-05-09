@@ -30,12 +30,17 @@ GPS::~GPS()
 {
 }
 
+void GPS::attach(Stream* stream)
+{
+    _stream = stream;
+    assert(_stream);
+}
+
 bool GPS::init(Stream* stream)
 {
     struct uBloxGnssModelInfo info;
 
-    _stream = stream;
-    assert(_stream);
+    attach(stream);
 
     GPS_LOG("[GPS::init] Starting GPS initialization, stream=%p\n", stream);
 

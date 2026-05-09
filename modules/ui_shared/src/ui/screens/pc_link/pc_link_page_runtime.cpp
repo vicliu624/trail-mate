@@ -1,8 +1,5 @@
 #include "ui/screens/pc_link/pc_link_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM)
-
-#include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "platform/ui/hostlink_runtime.h"
 #include "ui/app_runtime.h"
@@ -42,7 +39,7 @@ void request_exit()
 
 bool use_rnode_bridge()
 {
-    return app::appFacade().getConfig().mesh_protocol == chat::MeshProtocol::RNode;
+    return app::hasAppFacade() && app::appFacade().getMeshProtocol() == chat::MeshProtocol::RNode;
 }
 
 const char* page_title()
@@ -255,28 +252,3 @@ void exit(lv_obj_t* parent)
 }
 
 } // namespace pc_link::ui::runtime
-
-#else
-
-namespace pc_link::ui::runtime
-{
-
-bool is_available()
-{
-    return false;
-}
-
-void enter(const shell::Host* host, lv_obj_t* parent)
-{
-    (void)host;
-    (void)parent;
-}
-
-void exit(lv_obj_t* parent)
-{
-    (void)parent;
-}
-
-} // namespace pc_link::ui::runtime
-
-#endif

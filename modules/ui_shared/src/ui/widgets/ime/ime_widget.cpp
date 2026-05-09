@@ -29,7 +29,7 @@ static constexpr lv_coord_t kCompactImeControlHeight = 18;
 
 bool script_input_available()
 {
-    return ::ui::i18n::any_enabled_script_input();
+    return ::ui::i18n::active_locale_supports_script_input();
 }
 
 #if UI_SHARED_TOUCH_IME_ENABLED

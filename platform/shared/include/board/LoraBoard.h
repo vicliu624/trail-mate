@@ -18,6 +18,10 @@ class LoraBoard
     virtual int readRadioData(uint8_t* buf, size_t len) = 0;
     virtual void clearRadioIrqFlags(uint32_t flags) = 0;
     virtual float getRadioRSSI() = 0;
+    virtual float getRadioInstantRSSI()
+    {
+        return getRadioRSSI();
+    }
     virtual float getRadioSNR() = 0;
 
     // Board-specific LoRa configuration without exposing SX126x types.

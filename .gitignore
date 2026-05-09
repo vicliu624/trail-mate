@@ -6,6 +6,11 @@ libdeps/
 test/
 .trunk/
 
+.wolf/
+.claude/
+
+CLAUDE.md
+
 # Compiled Object files
 *.o
 *.a

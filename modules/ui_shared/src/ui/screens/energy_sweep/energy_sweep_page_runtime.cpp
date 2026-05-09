@@ -1,6 +1,6 @@
 #include "ui/screens/energy_sweep/energy_sweep_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
@@ -10,6 +10,7 @@
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "sys/clock.h"
+#include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/ui_common.h"
 #include <algorithm>
@@ -81,14 +82,22 @@ constexpr int kSampleSettleMs = 2;
 constexpr int kSampleCount = 5;
 constexpr int kSampleGapMs = 1;
 
-constexpr float kRssiFloor = -125.0f;
-constexpr float kRssiCeil = -80.0f;
 constexpr float kNoiseEmaPrev = 0.7f;
 constexpr float kNoiseEmaNew = 0.3f;
 constexpr float kSweepEmaNew = 0.6f;
 constexpr float kSweepEmaPrev = 0.4f;
 constexpr float kHotEnterMarginDb = 10.0f;
 constexpr float kHotExitMarginDb = 7.0f;
+constexpr float kViewFloorHardMinDbm = -140.0f;
+constexpr float kViewFloorHardMaxDbm = -100.0f;
+constexpr float kViewCeilHardMinDbm = -90.0f;
+constexpr float kViewCeilHardMaxDbm = -25.0f;
+constexpr float kViewFloorMarginDb = 10.0f;
+constexpr float kViewPeakMarginDb = 8.0f;
+constexpr float kViewNoiseHeadroomDb = 18.0f;
+constexpr float kViewMinSpanDb = 32.0f;
+constexpr float kViewEmaPrev = 0.75f;
+constexpr float kViewEmaNew = 0.25f;
 
 constexpr int kBestGuardBins = 2;
 
@@ -153,7 +162,7 @@ struct RadioContext
 
 struct SweepState
 {
-    bool scanning = true;
+    bool scanning = false;
     bool auto_applied = false;
     int cursor_index = 0;
     int scan_index = 0;
@@ -163,6 +172,9 @@ struct SweepState
     int best_index = 0;
     float noise_dbm = -104.0f;
     bool noise_valid = false;
+    float view_floor_dbm = -130.0f;
+    float view_ceil_dbm = -60.0f;
+    bool view_valid = false;
     std::array<float, kMaxBins> rssi{};
     std::array<float, kMaxBins> smooth{};
     std::array<uint8_t, kMaxBins> hot{};
@@ -223,6 +235,19 @@ int clamp_index(int idx)
         return bins - 1;
     }
     return idx;
+}
+
+float clamp_float(float value, float low, float high)
+{
+    if (value < low)
+    {
+        return low;
+    }
+    if (value > high)
+    {
+        return high;
+    }
+    return value;
 }
 
 float bin_to_freq_mhz(int idx)
@@ -445,7 +470,7 @@ float sample_hw_rssi(int idx)
     int valid = 0;
     for (int i = 0; i < kSampleCount; ++i)
     {
-        const float rssi = platform::ui::lora::read_rssi();
+        const float rssi = platform::ui::lora::read_instant_rssi();
         if (std::isfinite(rssi) && rssi < 0.0f && rssi > -180.0f)
         {
             values[valid++] = rssi;
@@ -558,6 +583,64 @@ void recompute_noise_and_hot(int available)
     }
 }
 
+void recompute_view_range(int available)
+{
+    const int bins = active_bin_count();
+    available = std::max(1, std::min(available, bins));
+
+    float observed_min = 0.0f;
+    float observed_max = 0.0f;
+    bool have_observation = false;
+    for (int i = 0; i < available; ++i)
+    {
+        const float value = display_value_for_bin(i);
+        if (!std::isfinite(value))
+        {
+            continue;
+        }
+        if (!have_observation)
+        {
+            observed_min = value;
+            observed_max = value;
+            have_observation = true;
+            continue;
+        }
+        observed_min = std::min(observed_min, value);
+        observed_max = std::max(observed_max, value);
+    }
+
+    if (!have_observation)
+    {
+        return;
+    }
+
+    float target_floor = std::min(observed_min - 4.0f, s_state.noise_dbm - kViewFloorMarginDb);
+    target_floor = clamp_float(target_floor, kViewFloorHardMinDbm, kViewFloorHardMaxDbm);
+
+    float target_ceil = std::max(observed_max + kViewPeakMarginDb, s_state.noise_dbm + kViewNoiseHeadroomDb);
+    target_ceil = clamp_float(target_ceil, kViewCeilHardMinDbm, kViewCeilHardMaxDbm);
+
+    if ((target_ceil - target_floor) < kViewMinSpanDb)
+    {
+        target_ceil = std::min(kViewCeilHardMaxDbm, target_floor + kViewMinSpanDb);
+    }
+    if ((target_ceil - target_floor) < kViewMinSpanDb)
+    {
+        target_floor = std::max(kViewFloorHardMinDbm, target_ceil - kViewMinSpanDb);
+    }
+
+    if (!s_state.view_valid)
+    {
+        s_state.view_floor_dbm = target_floor;
+        s_state.view_ceil_dbm = target_ceil;
+        s_state.view_valid = true;
+        return;
+    }
+
+    s_state.view_floor_dbm = (kViewEmaPrev * s_state.view_floor_dbm) + (kViewEmaNew * target_floor);
+    s_state.view_ceil_dbm = (kViewEmaPrev * s_state.view_ceil_dbm) + (kViewEmaNew * target_ceil);
+}
+
 void recompute_best(int available)
 {
     const int bins = active_bin_count();
@@ -625,6 +708,7 @@ void process_scan_step()
 
     const int available = available_bins_for_metrics();
     recompute_noise_and_hot(available);
+    recompute_view_range(available);
     recompute_best(available);
     s_state.sim_phase += 0.17f;
 }
@@ -688,12 +772,19 @@ void refresh_top_status()
         lv_obj_set_style_text_color(s_ui.cad_chip_label, lv_color_white(), 0);
         ::ui::i18n::set_label_text(s_ui.cad_chip_label, "CAD");
     }
-    else
+    else if (s_state.scanning)
     {
         lv_obj_set_style_bg_color(s_ui.cad_chip, lv_color_hex(0xD3C8AE), 0);
         lv_obj_set_style_border_color(s_ui.cad_chip, lv_color_hex(kColorLine), 0);
         lv_obj_set_style_text_color(s_ui.cad_chip_label, lv_color_hex(kColorTextDim), 0);
         ::ui::i18n::set_label_text(s_ui.cad_chip_label, "SIM");
+    }
+    else
+    {
+        lv_obj_set_style_bg_color(s_ui.cad_chip, lv_color_hex(0xD6E3D2), 0);
+        lv_obj_set_style_border_color(s_ui.cad_chip, lv_color_hex(0x7E9A76), 0);
+        lv_obj_set_style_text_color(s_ui.cad_chip_label, lv_color_hex(kColorOk), 0);
+        ::ui::i18n::set_label_text(s_ui.cad_chip_label, "MESH");
     }
 }
 
@@ -721,7 +812,10 @@ void refresh_plot()
         lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
 
         const float v = display_value_for_bin(i);
-        float t = (v - kRssiFloor) / (kRssiCeil - kRssiFloor);
+        const float view_floor = s_state.view_valid ? s_state.view_floor_dbm : -130.0f;
+        const float view_ceil = s_state.view_valid ? s_state.view_ceil_dbm : -60.0f;
+        const float view_span = std::max(1.0f, view_ceil - view_floor);
+        float t = (v - view_floor) / view_span;
         if (t < 0.0f)
         {
             t = 0.0f;
@@ -928,20 +1022,62 @@ void apply_auto_choice()
     }
 }
 
+void reset_scan_progress()
+{
+    s_state.scan_index = 0;
+    s_state.scanned_bins = 0;
+    s_state.completed_cycles = 0;
+    s_state.progress = 0.0f;
+}
+
+bool acquire_radio_runtime(float freq_mhz)
+{
+    if (s_radio.use_hw)
+    {
+        return platform::ui::lora::configure_receive(freq_mhz, make_receive_config());
+    }
+
+    if (!platform::ui::lora::acquire() || !platform::ui::lora::is_online())
+    {
+        s_radio.use_hw = false;
+        return false;
+    }
+
+    s_radio.use_hw = true;
+    if (platform::ui::lora::configure_receive(freq_mhz, make_receive_config()))
+    {
+        return true;
+    }
+
+    platform::ui::lora::release();
+    s_radio.use_hw = false;
+    return false;
+}
+
+void release_radio_runtime()
+{
+    if (!s_radio.use_hw)
+    {
+        return;
+    }
+
+    platform::ui::lora::release();
+    s_radio.use_hw = false;
+}
+
 void on_scan_btn_clicked(lv_event_t*)
 {
     s_state.auto_applied = false;
     if (s_state.scanning)
     {
         s_state.scanning = false;
+        release_radio_runtime();
     }
     else
     {
+        reset_scan_progress();
+        (void)acquire_radio_runtime(s_band.freq_start_mhz);
         s_state.scanning = true;
-        s_state.scan_index = 0;
-        s_state.scanned_bins = 0;
-        s_state.completed_cycles = 0;
-        s_state.progress = 0.0f;
     }
     refresh_all_ui();
 }
@@ -1041,29 +1177,11 @@ void setup_radio_context()
         s_radio.cr = (mesh.coding_rate >= 5 && mesh.coding_rate <= 8) ? mesh.coding_rate : 5;
         s_radio.tx_power = mesh.tx_power;
     }
-
-    if (!platform::ui::lora::acquire() || !platform::ui::lora::is_online())
-    {
-        return;
-    }
-
-    s_radio.use_hw = true;
-    platform::ui::lora::configure_receive(s_band.freq_start_mhz, make_receive_config());
 }
 
 void teardown_radio_context()
 {
-    if (!s_radio.use_hw)
-    {
-        s_radio = {};
-        return;
-    }
-
-    if (s_radio.use_hw)
-    {
-        platform::ui::lora::release();
-    }
-
+    release_radio_runtime();
     s_radio = {};
 }
 
@@ -1071,9 +1189,12 @@ void init_sweep_state()
 {
     s_state = {};
     const int bins = active_bin_count();
-    s_state.scanning = true;
+    s_state.scanning = false;
     s_state.noise_dbm = -104.0f;
     s_state.noise_valid = true;
+    s_state.view_floor_dbm = -130.0f;
+    s_state.view_ceil_dbm = -60.0f;
+    s_state.view_valid = true;
     s_state.rand_state ^= static_cast<uint32_t>(sys::millis_now());
     s_state.sim_phase = random_unit() * 37.0f;
     s_state.cursor_index = bins / 2;
@@ -1098,6 +1219,7 @@ void init_sweep_state()
     s_state.scan_index = 0;
     s_state.progress = 0.0f;
     recompute_noise_and_hot(bins);
+    recompute_view_range(bins);
     recompute_best(bins);
 }
 

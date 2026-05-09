@@ -3,4 +3,5 @@ and installs locale packs for German, Spanish, French, Italian, Dutch, Polish, a
 Portuguese (Portugal).
 
 This bundle is designed to stay lightweight while still rendering mixed-language contact
-names, chat content, and localized UI labels cleanly across European languages.
+names, chat content, and localized UI labels cleanly across European languages. The
+locales are review-status until native-language review is complete.

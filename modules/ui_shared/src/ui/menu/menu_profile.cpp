@@ -4,6 +4,10 @@
 #define lv_font_montserrat_12 lv_font_montserrat_14
 #endif
 
+#if !defined(LV_FONT_MONTSERRAT_10) || !LV_FONT_MONTSERRAT_10
+#define lv_font_montserrat_10 lv_font_montserrat_12
+#endif
+
 #if !defined(LV_FONT_MONTSERRAT_16) || !LV_FONT_MONTSERRAT_16
 #define lv_font_montserrat_16 lv_font_montserrat_14
 #endif
@@ -187,6 +191,39 @@ MenuLayoutProfile make_tab5_profile()
     return profile;
 }
 
+MenuLayoutProfile make_cardputer_zero_profile()
+{
+    MenuLayoutProfile profile = make_pager_profile();
+    profile.name = "cardputer_zero";
+    profile.input_mode = InputMode::Hybrid;
+    profile.directional_key_nav = true;
+    profile.show_top_bar = true;
+    profile.show_memory_stats = false;
+    profile.card_width = 112;
+    profile.card_height = 80;
+    profile.icon_scale = 208;
+    profile.grid_height_pct = 50;
+    profile.grid_top_offset = 28;
+    profile.grid_pad_column = 8;
+    profile.grid_pad_left = 6;
+    profile.grid_pad_right = 6;
+    profile.top_bar_height = 26;
+    profile.top_bar_side_inset = 4;
+    profile.top_bar_text_pad = 3;
+    profile.status_row_offset_y = 1;
+    profile.desc_offset = -2;
+    profile.node_id_offset_x = 4;
+    profile.node_id_offset_y = -8;
+    profile.badge_min_size = 18;
+    profile.badge_pad_h = 5;
+    profile.badge_pad_v = 2;
+    profile.desc_font = &lv_font_montserrat_12;
+    profile.node_id_font = &lv_font_montserrat_12;
+    profile.top_bar_font = &lv_font_montserrat_12;
+    profile.badge_font = &lv_font_montserrat_12;
+    return profile;
+}
+
 MenuLayoutProfile make_default_profile(lv_coord_t width, lv_coord_t height)
 {
     if (width >= 700 || height >= 700)
@@ -210,6 +247,8 @@ const MenuLayoutProfile& current()
         return make_pager_profile();
 #elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
         return make_tdeck_profile();
+#elif defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        return make_cardputer_zero_profile();
 #else
         return make_default_profile(display_width(), display_height());
 #endif

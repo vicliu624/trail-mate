@@ -30,6 +30,7 @@ class GPS : public TinyGPSPlus
 
     ~GPS();
 
+    void attach(Stream* stream);
     bool init(Stream* stream);
     bool factory();
     bool configureGnss(uint8_t sat_mask);
@@ -41,6 +42,11 @@ class GPS : public TinyGPSPlus
 
     uint32_t loop(bool debug = false)
     {
+        if (_stream == nullptr)
+        {
+            return charsProcessed();
+        }
+
         static uint32_t loop_count = 0;
         static uint32_t last_log_ms = 0;
         uint32_t now = millis();
@@ -119,7 +125,7 @@ class GPS : public TinyGPSPlus
     int allocSatellite();
     void recalcCounts();
 
-    Stream* _stream;
+    Stream* _stream = nullptr;
     String model;
 
     SatEntry sats_[gps::kMaxGnssSats]{};

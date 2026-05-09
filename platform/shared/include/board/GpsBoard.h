@@ -12,6 +12,7 @@ class GpsBoard
 
     virtual bool initGPS() = 0;
     virtual void setGPSOnline(bool online) = 0;
+    virtual void deinitGPS() { setGPSOnline(false); }
     virtual GPS& getGPS() = 0;
     virtual bool isGPSReady() const = 0;
     virtual void powerControl(PowerCtrlChannel_t ch, bool enable) = 0;

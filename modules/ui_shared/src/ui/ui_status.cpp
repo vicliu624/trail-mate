@@ -14,7 +14,7 @@
 #include "platform/ui/wifi_runtime.h"
 #include "sys/clock.h"
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-#include "ui/screens/team/team_ui_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #endif
 
 #include <cstdio>

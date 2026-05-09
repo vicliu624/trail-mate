@@ -4,6 +4,7 @@
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/route_storage.h"
 #include "platform/ui/tracker_runtime.h"
+#include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"

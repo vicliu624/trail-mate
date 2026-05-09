@@ -52,6 +52,7 @@ class AppFacadeRuntime final : public app::IAppBleFacade,
 
     app::AppConfig& getConfig() override;
     const app::AppConfig& getConfig() const override;
+    chat::MeshProtocol getMeshProtocol() const override;
     void saveConfig() override;
     void applyMeshConfig() override;
     void applyUserInfo() override;

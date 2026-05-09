@@ -1,6 +1,6 @@
 #include "ui/screens/walkie_talkie/walkie_talkie_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/screen_runtime.h"

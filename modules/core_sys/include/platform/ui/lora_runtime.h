@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "platform/ui/capability_status.h"
+
 namespace platform::ui::lora
 {
 
@@ -20,7 +22,11 @@ bool is_supported();
 bool acquire();
 bool is_online();
 bool configure_receive(float freq_mhz, const ReceiveConfig& config);
-float read_rssi();
+float read_instant_rssi();
 void release();
+
+/// Honest capability status for the current target.
+/// May return Unsupported, Simulated, Available, Degraded, or Error.
+CapabilityStatus capability_status();
 
 } // namespace platform::ui::lora

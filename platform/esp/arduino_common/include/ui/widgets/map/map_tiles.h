@@ -158,6 +158,11 @@ const char* map_source_label(uint8_t map_source);
 bool build_base_tile_path(int z, int x, int y, uint8_t map_source, char* out_path, size_t out_size);
 
 /**
+ * Check whether the selected base tile file exists.
+ */
+bool base_tile_available(int z, int x, int y, uint8_t map_source);
+
+/**
  * Build contour tile path for current zoom (major contour profile only).
  * Returns false when contour should not be shown at this zoom.
  */

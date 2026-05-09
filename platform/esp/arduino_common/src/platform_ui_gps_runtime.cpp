@@ -30,6 +30,11 @@ bool is_powered()
     return ::gps::gps_is_powered();
 }
 
+void set_enabled(bool enabled)
+{
+    ::gps::gps_set_enabled(enabled);
+}
+
 void set_collection_interval(uint32_t interval_ms)
 {
     ::gps::gps_set_collection_interval(interval_ms);
@@ -45,9 +50,9 @@ void set_gnss_config(uint8_t mode, uint8_t sat_mask)
     ::gps::gps_set_gnss_config(mode, sat_mask);
 }
 
-void set_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
+void set_external_nmea_config(uint8_t output_hz, uint8_t sentence_mask)
 {
-    ::gps::gps_set_nmea_config(output_hz, sentence_mask);
+    ::gps::gps_set_external_nmea_config(output_hz, sentence_mask);
 }
 
 void set_motion_idle_timeout(uint32_t timeout_ms)

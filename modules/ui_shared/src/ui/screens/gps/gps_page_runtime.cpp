@@ -601,23 +601,313 @@ void exit(lv_obj_t* parent)
 
 #else
 
+using Host = gps::ui::shell::Host;
+
+#include "app/app_config.h"
+#include "app/app_facade_access.h"
+#include "platform/ui/device_runtime.h"
+#include "platform/ui/gps_runtime.h"
+#include "ui/app_runtime.h"
+#include "ui/localization.h"
+#include "ui/screens/gps/gps_constants.h"
+#include "ui/ui_common.h"
+#include "ui/widgets/map/map_viewport.h"
+#include "ui/widgets/top_bar.h"
+
+#include <algorithm>
+#include <cstdio>
+
+#if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
+#define lv_font_montserrat_12 lv_font_montserrat_14
+#endif
+
+namespace
+{
+
+constexpr lv_coord_t kCompactTopBarHeight = 26;
+constexpr lv_coord_t kCompactTopBarBackWidth = 34;
+constexpr lv_coord_t kCompactTopBarBackHeight = 18;
+constexpr lv_coord_t kCompactTopBarRightWidth = 56;
+constexpr int kCardputerZeroMapDefaultZoom = 7;
+
+const Host* s_host = nullptr;
+lv_obj_t* s_root = nullptr;
+lv_timer_t* s_timer = nullptr;
+::ui::widgets::TopBar s_top_bar;
+::ui::widgets::map::Runtime s_map_runtime;
+int s_map_zoom = kCardputerZeroMapDefaultZoom;
+int s_map_pan_x = 0;
+int s_map_pan_y = 0;
+
+void request_exit()
+{
+    if (s_host)
+    {
+        ::ui::page::request_exit(s_host);
+        return;
+    }
+    ui_request_exit_to_menu();
+}
+
+::ui::widgets::map::Model build_map_model(const platform::ui::gps::GpsState& gps_data)
+{
+    const auto& config = app::configFacade().getConfig();
+
+    ::ui::widgets::map::Model model{};
+    model.focus_point.valid = gps_data.valid;
+    model.focus_point.lat = gps_data.lat;
+    model.focus_point.lon = gps_data.lng;
+    model.zoom = s_map_zoom;
+    model.pan_x = s_map_pan_x;
+    model.pan_y = s_map_pan_y;
+    model.map_source = config.map_source;
+    model.contour_enabled = config.map_contour_enabled;
+    model.coord_system = config.map_coord_system;
+    return model;
+}
+
+void apply_compact_top_bar_style(::ui::widgets::TopBar& bar)
+{
+    if (!bar.container || !lv_obj_is_valid(bar.container))
+    {
+        return;
+    }
+
+    lv_obj_set_height(bar.container, kCompactTopBarHeight);
+    lv_obj_set_style_pad_left(bar.container, 8, 0);
+    lv_obj_set_style_pad_right(bar.container, 8, 0);
+    lv_obj_set_style_pad_top(bar.container, 2, 0);
+    lv_obj_set_style_pad_bottom(bar.container, 2, 0);
+    lv_obj_set_style_pad_column(bar.container, 4, 0);
+
+    if (bar.back_btn && lv_obj_is_valid(bar.back_btn))
+    {
+        lv_obj_set_size(bar.back_btn, kCompactTopBarBackWidth, kCompactTopBarBackHeight);
+        lv_obj_set_style_radius(bar.back_btn, kCompactTopBarBackHeight / 2, LV_PART_MAIN);
+        lv_obj_set_style_text_font(bar.back_btn, &lv_font_montserrat_12, 0);
+        lv_obj_t* back_label = lv_obj_get_child(bar.back_btn, 0);
+        if (back_label && lv_obj_is_valid(back_label))
+        {
+            lv_obj_set_style_text_font(back_label, &lv_font_montserrat_12, 0);
+        }
+    }
+
+    if (bar.title_label && lv_obj_is_valid(bar.title_label))
+    {
+        lv_obj_set_style_text_font(bar.title_label, &lv_font_montserrat_12, 0);
+    }
+    if (bar.right_label && lv_obj_is_valid(bar.right_label))
+    {
+        lv_obj_set_width(bar.right_label, kCompactTopBarRightWidth);
+        lv_obj_set_style_text_font(bar.right_label, &lv_font_montserrat_12, 0);
+    }
+}
+
+void refresh_view()
+{
+    if (!s_root)
+    {
+        return;
+    }
+
+    ui_update_top_bar_battery(s_top_bar);
+    apply_compact_top_bar_style(s_top_bar);
+
+    const platform::ui::gps::GpsState gps_data = platform::ui::gps::get_data();
+
+    if (gps_data.valid)
+    {
+        ::ui::widgets::map::apply_model(s_map_runtime, build_map_model(gps_data));
+    }
+    else
+    {
+        ::ui::widgets::map::clear(s_map_runtime);
+    }
+}
+
+void refresh_timer_cb(lv_timer_t* timer)
+{
+    (void)timer;
+    refresh_view();
+}
+
+void consume_key_event(lv_event_t* e)
+{
+    if (!e)
+    {
+        return;
+    }
+
+    lv_event_stop_bubbling(e);
+    lv_event_stop_processing(e);
+    if (lv_indev_t* indev = lv_event_get_indev(e))
+    {
+        lv_indev_stop_processing(indev);
+    }
+}
+
+bool handle_map_key(uint32_t key, lv_event_t* e)
+{
+    switch (key)
+    {
+    case LV_KEY_LEFT:
+        s_map_pan_x -= gps_ui::kMapPanStep;
+        break;
+    case LV_KEY_RIGHT:
+        s_map_pan_x += gps_ui::kMapPanStep;
+        break;
+    case LV_KEY_UP:
+        s_map_pan_y += gps_ui::kMapPanStep;
+        break;
+    case LV_KEY_DOWN:
+        s_map_pan_y -= gps_ui::kMapPanStep;
+        break;
+    case '+':
+    case '=':
+        s_map_zoom = std::min(s_map_zoom + 1, ::ui::widgets::map::kMaxZoom);
+        break;
+    case '-':
+    case '_':
+        s_map_zoom = std::max(s_map_zoom - 1, ::ui::widgets::map::kMinZoom);
+        break;
+    default:
+        return false;
+    }
+
+    refresh_view();
+    consume_key_event(e);
+    return true;
+}
+
+void on_back(void*)
+{
+    request_exit();
+}
+
+void root_key_event_cb(lv_event_t* e)
+{
+    const uint32_t key = lv_event_get_key(e);
+    if (handle_map_key(key, e))
+    {
+        return;
+    }
+    if (key == LV_KEY_BACKSPACE)
+    {
+        consume_key_event(e);
+        request_exit();
+    }
+}
+
+} // namespace
+
 namespace gps::ui::runtime
 {
 
 bool is_available()
 {
-    return false;
+    return platform::ui::device::gps_supported();
 }
 
 void enter(const shell::Host* host, lv_obj_t* parent)
 {
-    (void)host;
-    (void)parent;
+    s_host = host;
+    s_map_zoom = kCardputerZeroMapDefaultZoom;
+    s_map_pan_x = 0;
+    s_map_pan_y = 0;
+
+    lv_group_t* prev_group = lv_group_get_default();
+    set_default_group(nullptr);
+
+    s_root = lv_obj_create(parent);
+    lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_flex_flow(s_root, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_color(s_root, lv_color_hex(0xFFF3DF), 0);
+    lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_root, 0, 0);
+    lv_obj_set_style_pad_all(s_root, 0, 0);
+    lv_obj_set_style_pad_row(s_root, 0, 0);
+    lv_obj_clear_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_root, root_key_event_cb, LV_EVENT_KEY, nullptr);
+
+    ::ui::widgets::TopBarConfig top_bar_config{};
+    top_bar_config.height = kCompactTopBarHeight;
+    ::ui::widgets::top_bar_init(s_top_bar, s_root, top_bar_config);
+    ::ui::widgets::top_bar_set_title(s_top_bar, ::ui::i18n::tr("Map"));
+    ::ui::widgets::top_bar_set_back_callback(s_top_bar, on_back, nullptr);
+    if (s_top_bar.back_btn)
+    {
+        lv_obj_add_event_cb(s_top_bar.back_btn, root_key_event_cb, LV_EVENT_KEY, nullptr);
+    }
+    ui_update_top_bar_battery(s_top_bar);
+    apply_compact_top_bar_style(s_top_bar);
+
+    if (app_g && s_top_bar.back_btn)
+    {
+        lv_group_remove_all_objs(app_g);
+        lv_group_add_obj(app_g, s_top_bar.back_btn);
+        lv_group_focus_obj(s_top_bar.back_btn);
+        set_default_group(app_g);
+        lv_group_set_editing(app_g, false);
+    }
+    else
+    {
+        set_default_group(prev_group);
+    }
+
+    lv_obj_t* content = lv_obj_create(s_root);
+    lv_obj_set_size(content, LV_PCT(100), 0);
+    lv_obj_set_flex_grow(content, 1);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(content, 0, 0);
+    lv_obj_set_style_pad_all(content, 0, 0);
+    lv_obj_set_style_pad_row(content, 0, 0);
+    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* viewport = lv_obj_create(content);
+    lv_obj_set_size(viewport, LV_PCT(100), 0);
+    lv_obj_set_flex_grow(viewport, 1);
+    lv_obj_set_style_bg_color(viewport, lv_color_hex(0xEAD9B2), 0);
+    lv_obj_set_style_bg_opa(viewport, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(viewport, 0, 0);
+    lv_obj_set_style_radius(viewport, 0, 0);
+    lv_obj_set_style_pad_all(viewport, 0, 0);
+    lv_obj_clear_flag(viewport, LV_OBJ_FLAG_SCROLLABLE);
+
+    const auto map_widgets = ::ui::widgets::map::create(s_map_runtime, viewport, 180);
+    lv_obj_update_layout(content);
+    lv_obj_update_layout(viewport);
+    ::ui::widgets::map::set_size(s_map_runtime,
+                                 lv_obj_get_content_width(viewport),
+                                 lv_obj_get_content_height(viewport));
+    if (map_widgets.root)
+    {
+        lv_obj_align(map_widgets.root, LV_ALIGN_CENTER, 0, 0);
+    }
+
+    refresh_view();
+    if (!s_timer)
+    {
+        s_timer = lv_timer_create(refresh_timer_cb, 750, nullptr);
+    }
 }
 
 void exit(lv_obj_t* parent)
 {
     (void)parent;
+
+    if (s_timer)
+    {
+        lv_timer_del(s_timer);
+        s_timer = nullptr;
+    }
+    ::ui::widgets::map::destroy(s_map_runtime);
+    if (s_root)
+    {
+        lv_obj_del(s_root);
+        s_root = nullptr;
+    }
+    s_host = nullptr;
 }
 
 } // namespace gps::ui::runtime

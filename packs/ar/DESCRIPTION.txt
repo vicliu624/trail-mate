@@ -1,0 +1,12 @@
+Arabic locale bundle for Trail Mate.
+
+Includes:
+- ar-naskh font (Noto Naskh Arabic, 16px, 2bpp)
+  Covers Arabic core (0600-06FF), Supplement (0750-077F),
+  Presentation Forms-A (FB50-FDFF) and Forms-B (FE70-FEFF)
+  for correct contextual letter shaping without HarfBuzz.
+- Arabic translations (ar locale)
+- RTL direction support (direction=rtl in manifest)
+- Display-only review status; Arabic input is not implemented yet
+
+Font dependency: tools/fonts/NotoNaskhArabic-Regular.otf

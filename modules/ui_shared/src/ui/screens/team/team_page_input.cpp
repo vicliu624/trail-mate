@@ -4,6 +4,7 @@
  */
 
 #include "ui/screens/team/team_page_input.h"
+#include "ui/app_runtime.h"
 #include "ui/screens/team/team_state.h"
 #include "ui/ui_common.h"
 

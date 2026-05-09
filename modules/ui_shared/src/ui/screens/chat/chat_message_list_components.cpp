@@ -6,6 +6,7 @@
 
 #include "ui/screens/chat/chat_message_list_components.h"
 
+#include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/components/info_card.h"
 #include "ui/localization.h"
