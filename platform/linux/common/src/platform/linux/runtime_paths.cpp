@@ -119,6 +119,12 @@ std::filesystem::path settings_file(const char* ns)
            (sanitize_component(ns) + ".kv");
 }
 
+std::filesystem::path sqlite_database_path()
+{
+    const RuntimePaths paths = resolve_paths();
+    return paths.settings_root / "trailmate.sqlite3";
+}
+
 std::filesystem::path sd_child(std::string_view relative)
 {
     const RuntimePaths paths = resolve_paths();

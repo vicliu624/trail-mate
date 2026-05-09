@@ -2,6 +2,7 @@
 
 #include "app/app_config.h"
 #include "app/app_facades.h"
+#include "app/linux_app_services.h"
 
 #include <memory>
 
@@ -78,19 +79,8 @@ class MinimalLinuxAppFacade final : public ::app::IAppFacade
     void dispatchPendingEvents(std::size_t max_events = 32) override;
 
   private:
-    struct Implementation;
-
-    Implementation& impl();
-    const Implementation& impl() const;
-    void loadPersistedConfig();
-    void seedDefaultIdentity();
-    void syncLocalIdentity();
-    void ensureServicesReady();
-
-    ::app::AppConfig config_{};
-    std::unique_ptr<Implementation> impl_;
+    ::trailmate::linux_app::LinuxAppServices services_;
     ::chat::ui::IChatUiRuntime* chat_ui_runtime_ = nullptr;
-    bool initialized_ = false;
 };
 
 } // namespace trailmate::cardputer_zero::linux_ui

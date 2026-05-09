@@ -1,16 +1,13 @@
 #include "platform/ui/settings_store.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <mutex>
-#include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
+
+#include <sqlite3.h>
 
 #include "platform/linux/runtime_paths.h"
 
@@ -28,174 +25,240 @@ enum class ValueKind : char
     Blob = 'x',
 };
 
-struct StoredValue
-{
-    ValueKind kind = ValueKind::Int;
-    std::string payload{};
-};
-
-using NamespaceMap = std::unordered_map<std::string, StoredValue>;
-
 std::mutex s_store_mutex;
-
-std::filesystem::path namespace_path(const char* ns)
-{
-    return ::platform::linux_runtime::settings_file(ns);
-}
 
 bool ensure_parent_directory(const std::filesystem::path& file_path)
 {
     return ::platform::linux_runtime::ensure_directory(file_path.parent_path());
 }
 
-std::string hex_encode(const uint8_t* data, std::size_t len)
+sqlite3* open_database()
 {
-    static constexpr char kHex[] = "0123456789ABCDEF";
-
-    std::string out;
-    out.reserve(len * 2U);
-    for (std::size_t index = 0; index < len; ++index)
+    const std::filesystem::path db_path =
+        ::platform::linux_runtime::sqlite_database_path();
+    if (!ensure_parent_directory(db_path))
     {
-        const uint8_t value = data[index];
-        out.push_back(kHex[(value >> 4) & 0x0F]);
-        out.push_back(kHex[value & 0x0F]);
+        return nullptr;
     }
-    return out;
+
+    sqlite3* db = nullptr;
+    const int rc = sqlite3_open_v2(db_path.string().c_str(),
+                                   &db,
+                                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
+                                       SQLITE_OPEN_FULLMUTEX,
+                                   nullptr);
+    if (rc != SQLITE_OK)
+    {
+        if (db != nullptr)
+        {
+            sqlite3_close(db);
+        }
+        return nullptr;
+    }
+
+    sqlite3_busy_timeout(db, 5000);
+    return db;
 }
 
-bool decode_hex_nibble(char ch, uint8_t* out)
+bool exec_sql(sqlite3* db, const char* sql)
 {
-    if (!out)
-    {
-        return false;
-    }
-    if (ch >= '0' && ch <= '9')
-    {
-        *out = static_cast<uint8_t>(ch - '0');
-        return true;
-    }
-    if (ch >= 'A' && ch <= 'F')
-    {
-        *out = static_cast<uint8_t>(10 + (ch - 'A'));
-        return true;
-    }
-    if (ch >= 'a' && ch <= 'f')
-    {
-        *out = static_cast<uint8_t>(10 + (ch - 'a'));
-        return true;
-    }
-    return false;
-}
-
-bool hex_decode(const std::string& hex, std::vector<uint8_t>* out)
-{
-    if (!out || (hex.size() % 2U) != 0U)
+    if (db == nullptr || sql == nullptr)
     {
         return false;
     }
 
-    out->clear();
-    out->reserve(hex.size() / 2U);
-    for (std::size_t index = 0; index < hex.size(); index += 2U)
+    char* error = nullptr;
+    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &error);
+    if (error != nullptr)
     {
-        uint8_t high = 0;
-        uint8_t low = 0;
-        if (!decode_hex_nibble(hex[index], &high) || !decode_hex_nibble(hex[index + 1U], &low))
-        {
-            out->clear();
-            return false;
-        }
-        out->push_back(static_cast<uint8_t>((high << 4) | low));
+        sqlite3_free(error);
     }
-    return true;
+    return rc == SQLITE_OK;
 }
 
-NamespaceMap load_namespace_map(const char* ns)
+bool ensure_schema(sqlite3* db)
 {
-    NamespaceMap map;
-
-    const std::filesystem::path path = namespace_path(ns);
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream.is_open())
-    {
-        return map;
-    }
-
-    std::string line;
-    while (std::getline(stream, line))
-    {
-        const std::size_t first = line.find('|');
-        const std::size_t second = (first == std::string::npos) ? std::string::npos : line.find('|', first + 1U);
-        if (first == std::string::npos || second == std::string::npos || first == 0U || second <= first + 1U)
-        {
-            continue;
-        }
-
-        StoredValue value{};
-        value.kind = static_cast<ValueKind>(line[first + 1U]);
-        value.payload = line.substr(second + 1U);
-        map[line.substr(0, first)] = std::move(value);
-    }
-
-    return map;
+    return exec_sql(db, "PRAGMA busy_timeout=5000;") &&
+           exec_sql(db, "PRAGMA journal_mode=WAL;") &&
+           exec_sql(db,
+                    "CREATE TABLE IF NOT EXISTS settings ("
+                    "namespace TEXT NOT NULL,"
+                    "key TEXT NOT NULL,"
+                    "kind TEXT NOT NULL,"
+                    "payload BLOB NOT NULL,"
+                    "updated_at INTEGER NOT NULL DEFAULT "
+                    "(CAST(strftime('%s','now') AS INTEGER)),"
+                    "PRIMARY KEY(namespace, key)"
+                    ");");
 }
 
-bool save_namespace_map(const char* ns, const NamespaceMap& map)
+struct DatabaseHandle
 {
-    const std::filesystem::path path = namespace_path(ns);
-    if (!ensure_parent_directory(path))
+    sqlite3* db = nullptr;
+
+    DatabaseHandle()
+    {
+        db = open_database();
+        if (db != nullptr && !ensure_schema(db))
+        {
+            sqlite3_close(db);
+            db = nullptr;
+        }
+    }
+
+    ~DatabaseHandle()
+    {
+        if (db != nullptr)
+        {
+            sqlite3_close(db);
+        }
+    }
+
+    DatabaseHandle(const DatabaseHandle&) = delete;
+    DatabaseHandle& operator=(const DatabaseHandle&) = delete;
+
+    explicit operator bool() const noexcept
+    {
+        return db != nullptr;
+    }
+};
+
+bool bind_text(sqlite3_stmt* stmt, int index, const char* text)
+{
+    return sqlite3_bind_text(stmt, index, text ? text : "", -1,
+                             SQLITE_TRANSIENT) == SQLITE_OK;
+}
+
+bool upsert_value(const char* ns,
+                  const char* key,
+                  ValueKind kind,
+                  const void* payload,
+                  std::size_t payload_len)
+{
+    if (!ns || !key || key[0] == '\0' ||
+        (payload_len > 0U && payload == nullptr))
     {
         return false;
     }
 
-    if (map.empty())
+    DatabaseHandle handle;
+    if (!handle)
     {
-        std::error_code ec;
-        std::filesystem::remove(path, ec);
-        return true;
+        return false;
     }
 
-    const std::filesystem::path temp_path = path.string() + ".tmp";
+    sqlite3_stmt* stmt = nullptr;
+    constexpr const char* kSql =
+        "INSERT INTO settings(namespace, key, kind, payload, updated_at) "
+        "VALUES(?1, ?2, ?3, ?4, CAST(strftime('%s','now') AS INTEGER)) "
+        "ON CONFLICT(namespace, key) DO UPDATE SET "
+        "kind=excluded.kind, "
+        "payload=excluded.payload, "
+        "updated_at=excluded.updated_at;";
+    if (sqlite3_prepare_v2(handle.db, kSql, -1, &stmt, nullptr) != SQLITE_OK)
     {
-        std::ofstream stream(temp_path, std::ios::binary | std::ios::trunc);
-        if (!stream.is_open())
-        {
-            return false;
-        }
+        return false;
+    }
 
-        std::vector<std::string> keys;
-        keys.reserve(map.size());
-        for (const auto& entry : map)
-        {
-            keys.push_back(entry.first);
-        }
-        std::sort(keys.begin(), keys.end());
+    const char kind_text[2] = {static_cast<char>(kind), '\0'};
+    bool ok = bind_text(stmt, 1, ns) && bind_text(stmt, 2, key) &&
+              bind_text(stmt, 3, kind_text) &&
+              sqlite3_bind_blob(stmt,
+                                4,
+                                payload,
+                                static_cast<int>(payload_len),
+                                SQLITE_TRANSIENT) == SQLITE_OK;
+    ok = ok && sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
 
-        for (const auto& key : keys)
+bool remove_key(sqlite3* db, const char* ns, const char* key)
+{
+    if (db == nullptr || !ns || !key || key[0] == '\0')
+    {
+        return false;
+    }
+
+    sqlite3_stmt* stmt = nullptr;
+    constexpr const char* kSql =
+        "DELETE FROM settings WHERE namespace=?1 AND key=?2;";
+    if (sqlite3_prepare_v2(db, kSql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        return false;
+    }
+
+    const bool ok = bind_text(stmt, 1, ns) && bind_text(stmt, 2, key) &&
+                    sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool load_value(const char* ns,
+                const char* key,
+                ValueKind expected_kind,
+                std::vector<uint8_t>& out)
+{
+    out.clear();
+    if (!ns || !key)
+    {
+        return false;
+    }
+
+    DatabaseHandle handle;
+    if (!handle)
+    {
+        return false;
+    }
+
+    sqlite3_stmt* stmt = nullptr;
+    constexpr const char* kSql =
+        "SELECT kind, payload FROM settings WHERE namespace=?1 AND key=?2;";
+    if (sqlite3_prepare_v2(handle.db, kSql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        return false;
+    }
+
+    bool ok = bind_text(stmt, 1, ns) && bind_text(stmt, 2, key);
+    if (ok && sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        const unsigned char* kind_text = sqlite3_column_text(stmt, 0);
+        if (kind_text != nullptr &&
+            kind_text[0] == static_cast<unsigned char>(expected_kind))
         {
-            const auto found = map.find(key);
-            if (found == map.end())
+            const void* blob = sqlite3_column_blob(stmt, 1);
+            const int len = sqlite3_column_bytes(stmt, 1);
+            if (len > 0 && blob != nullptr)
             {
-                continue;
+                const auto* bytes = static_cast<const uint8_t*>(blob);
+                out.assign(bytes, bytes + len);
             }
-            stream << key << "|" << static_cast<char>(found->second.kind) << "|" << found->second.payload << "\n";
+            else
+            {
+                out.clear();
+            }
+            ok = true;
+        }
+        else
+        {
+            ok = false;
         }
     }
-
-    std::error_code ec;
-    std::filesystem::remove(path, ec);
-    ec.clear();
-    std::filesystem::rename(temp_path, path, ec);
-    if (ec)
+    else
     {
-        std::filesystem::remove(temp_path, ec);
-        return false;
+        ok = false;
     }
 
-    return true;
+    sqlite3_finalize(stmt);
+    return ok;
 }
 
-bool parse_int_value(const std::string& payload, int* out)
+std::string bytes_to_string(const std::vector<uint8_t>& bytes)
+{
+    return std::string(bytes.begin(), bytes.end());
+}
+
+bool parse_int_value(const std::vector<uint8_t>& payload, int* out)
 {
     if (!out)
     {
@@ -203,7 +266,7 @@ bool parse_int_value(const std::string& payload, int* out)
     }
     try
     {
-        *out = std::stoi(payload);
+        *out = std::stoi(bytes_to_string(payload));
         return true;
     }
     catch (...)
@@ -212,7 +275,7 @@ bool parse_int_value(const std::string& payload, int* out)
     }
 }
 
-bool parse_uint_value(const std::string& payload, uint32_t* out)
+bool parse_uint_value(const std::vector<uint8_t>& payload, uint32_t* out)
 {
     if (!out)
     {
@@ -220,7 +283,7 @@ bool parse_uint_value(const std::string& payload, uint32_t* out)
     }
     try
     {
-        *out = static_cast<uint32_t>(std::stoul(payload));
+        *out = static_cast<uint32_t>(std::stoul(bytes_to_string(payload)));
         return true;
     }
     catch (...)
@@ -229,34 +292,30 @@ bool parse_uint_value(const std::string& payload, uint32_t* out)
     }
 }
 
-void upsert_numeric_value(const char* ns, const char* key, ValueKind kind, const std::string& payload)
+void put_numeric_value(const char* ns,
+                       const char* key,
+                       ValueKind kind,
+                       const std::string& payload)
 {
-    if (!ns || !key || key[0] == '\0')
-    {
-        return;
-    }
-
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    NamespaceMap map = load_namespace_map(ns);
-    map[std::string(key)] = StoredValue{kind, payload};
-    (void)save_namespace_map(ns, map);
+    (void)upsert_value(ns, key, kind, payload.data(), payload.size());
 }
 
 } // namespace
 
 void put_int(const char* ns, const char* key, int value)
 {
-    upsert_numeric_value(ns, key, ValueKind::Int, std::to_string(value));
+    put_numeric_value(ns, key, ValueKind::Int, std::to_string(value));
 }
 
 void put_bool(const char* ns, const char* key, bool value)
 {
-    upsert_numeric_value(ns, key, ValueKind::Bool, value ? "1" : "0");
+    put_numeric_value(ns, key, ValueKind::Bool, value ? "1" : "0");
 }
 
 void put_uint(const char* ns, const char* key, uint32_t value)
 {
-    upsert_numeric_value(ns, key, ValueKind::Uint, std::to_string(value));
+    put_numeric_value(ns, key, ValueKind::Uint, std::to_string(value));
 }
 
 bool put_string(const char* ns, const char* key, const char* value)
@@ -267,140 +326,91 @@ bool put_string(const char* ns, const char* key, const char* value)
     }
 
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    NamespaceMap map = load_namespace_map(ns);
     if (value[0] == '\0')
     {
-        map.erase(std::string(key));
+        DatabaseHandle handle;
+        return handle ? remove_key(handle.db, ns, key) : false;
     }
-    else
-    {
-        const auto encoded = hex_encode(reinterpret_cast<const uint8_t*>(value), std::strlen(value));
-        map[std::string(key)] = StoredValue{ValueKind::String, encoded};
-    }
-    return save_namespace_map(ns, map);
+
+    return upsert_value(ns,
+                        key,
+                        ValueKind::String,
+                        value,
+                        std::strlen(value));
 }
 
 bool put_blob(const char* ns, const char* key, const void* data, std::size_t len)
 {
-    if (!ns || !key)
-    {
-        return false;
-    }
-    if (len > 0U && data == nullptr)
+    if (!ns || !key || (len > 0U && data == nullptr))
     {
         return false;
     }
 
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    NamespaceMap map = load_namespace_map(ns);
     if (len == 0U)
     {
-        map.erase(std::string(key));
+        DatabaseHandle handle;
+        return handle ? remove_key(handle.db, ns, key) : false;
     }
-    else
-    {
-        const auto* bytes = static_cast<const uint8_t*>(data);
-        map[std::string(key)] = StoredValue{ValueKind::Blob, hex_encode(bytes, len)};
-    }
-    return save_namespace_map(ns, map);
+
+    return upsert_value(ns, key, ValueKind::Blob, data, len);
 }
 
 int get_int(const char* ns, const char* key, int default_value)
 {
-    if (!ns || !key)
-    {
-        return default_value;
-    }
-
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    const NamespaceMap map = load_namespace_map(ns);
-    const auto found = map.find(key);
-    if (found == map.end() || found->second.kind != ValueKind::Int)
+    std::vector<uint8_t> payload;
+    if (!load_value(ns, key, ValueKind::Int, payload))
     {
         return default_value;
     }
 
     int parsed = default_value;
-    return parse_int_value(found->second.payload, &parsed) ? parsed : default_value;
+    return parse_int_value(payload, &parsed) ? parsed : default_value;
 }
 
 bool get_bool(const char* ns, const char* key, bool default_value)
 {
-    if (!ns || !key)
+    std::lock_guard<std::mutex> lock(s_store_mutex);
+    std::vector<uint8_t> payload;
+    if (!load_value(ns, key, ValueKind::Bool, payload))
     {
         return default_value;
     }
 
-    std::lock_guard<std::mutex> lock(s_store_mutex);
-    const NamespaceMap map = load_namespace_map(ns);
-    const auto found = map.find(key);
-    if (found == map.end() || found->second.kind != ValueKind::Bool)
-    {
-        return default_value;
-    }
-    return found->second.payload == "1";
+    return bytes_to_string(payload) == "1";
 }
 
 uint32_t get_uint(const char* ns, const char* key, uint32_t default_value)
 {
-    if (!ns || !key)
-    {
-        return default_value;
-    }
-
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    const NamespaceMap map = load_namespace_map(ns);
-    const auto found = map.find(key);
-    if (found == map.end() || found->second.kind != ValueKind::Uint)
+    std::vector<uint8_t> payload;
+    if (!load_value(ns, key, ValueKind::Uint, payload))
     {
         return default_value;
     }
 
     uint32_t parsed = default_value;
-    return parse_uint_value(found->second.payload, &parsed) ? parsed : default_value;
+    return parse_uint_value(payload, &parsed) ? parsed : default_value;
 }
 
 bool get_string(const char* ns, const char* key, std::string& out)
 {
-    if (!ns || !key)
-    {
-        return false;
-    }
-
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    const NamespaceMap map = load_namespace_map(ns);
-    const auto found = map.find(key);
-    if (found == map.end() || found->second.kind != ValueKind::String)
+    std::vector<uint8_t> payload;
+    if (!load_value(ns, key, ValueKind::String, payload))
     {
         return false;
     }
 
-    std::vector<uint8_t> decoded;
-    if (!hex_decode(found->second.payload, &decoded))
-    {
-        return false;
-    }
-
-    out.assign(decoded.begin(), decoded.end());
+    out.assign(payload.begin(), payload.end());
     return true;
 }
 
 bool get_blob(const char* ns, const char* key, std::vector<uint8_t>& out)
 {
-    if (!ns || !key)
-    {
-        return false;
-    }
-
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    const NamespaceMap map = load_namespace_map(ns);
-    const auto found = map.find(key);
-    if (found == map.end() || found->second.kind != ValueKind::Blob)
-    {
-        return false;
-    }
-
-    return hex_decode(found->second.payload, &out);
+    return load_value(ns, key, ValueKind::Blob, out);
 }
 
 void remove_keys(const char* ns, const char* const* keys, std::size_t key_count)
@@ -411,15 +421,21 @@ void remove_keys(const char* ns, const char* const* keys, std::size_t key_count)
     }
 
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    NamespaceMap map = load_namespace_map(ns);
+    DatabaseHandle handle;
+    if (!handle)
+    {
+        return;
+    }
+
+    (void)exec_sql(handle.db, "BEGIN IMMEDIATE;");
     for (std::size_t index = 0; index < key_count; ++index)
     {
         if (keys[index] && keys[index][0] != '\0')
         {
-            map.erase(std::string(keys[index]));
+            (void)remove_key(handle.db, ns, keys[index]);
         }
     }
-    (void)save_namespace_map(ns, map);
+    (void)exec_sql(handle.db, "COMMIT;");
 }
 
 void clear_namespace(const char* ns)
@@ -430,8 +446,20 @@ void clear_namespace(const char* ns)
     }
 
     std::lock_guard<std::mutex> lock(s_store_mutex);
-    std::error_code ec;
-    std::filesystem::remove(namespace_path(ns), ec);
+    DatabaseHandle handle;
+    if (handle)
+    {
+        sqlite3_stmt* stmt = nullptr;
+        constexpr const char* kSql =
+            "DELETE FROM settings WHERE namespace=?1;";
+        if (sqlite3_prepare_v2(handle.db, kSql, -1, &stmt, nullptr) ==
+            SQLITE_OK)
+        {
+            (void)(bind_text(stmt, 1, ns) &&
+                   sqlite3_step(stmt) == SQLITE_DONE);
+        }
+        sqlite3_finalize(stmt);
+    }
 }
 
 } // namespace platform::ui::settings_store

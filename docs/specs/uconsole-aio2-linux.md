@@ -170,8 +170,27 @@ The following cuts are explicitly invalid:
   building a rich uConsole UI.
 - The existing `MinimalLinuxAppFacade` may remain as a compatibility adapter for
   the current LVGL shared shell.
+- `LinuxAppServices` is the current Linux app service composition boundary;
+  uConsole work should depend on it or presentation models above it, while
+  compact shells use `MinimalLinuxAppFacade` as a compatibility adapter.
+- UI toolkit choice is a shell/platform decision, not an app-service boundary.
+- Linux/uConsole local state is persisted through SQLite, not ad hoc per-file
+  key/value stores.
+- Linux/uConsole map base tiles may be fetched online and cached locally using
+  the existing `maps/base/{osm,terrain,satellite}/{z}/{x}/{y}` layout, with
+  cache metadata stored in SQLite.
+- BLE is not a Linux/uConsole product capability; Linux shells must report it
+  as unused/unsupported rather than exposing a disabled fake toggle.
 - A future uConsole shell should depend on presentation models/actions, not on
   the compact handheld page implementation.
+- The current LVGL uConsole shell is a bring-up and fallback shell. It is not a
+  commitment that the long-term uConsole product UI must stay on LVGL.
+- `UConsoleChatWorkspaceModel` is the first concrete uConsole presentation/action
+  slice; future GTK work should reuse this boundary before adding toolkit
+  objects.
+- The current verified uConsole framebuffer reports `720x1280`; the fallback
+  LVGL shell should default to that physical orientation until a rotation-aware
+  display adapter exists.
 - The likely app shell name is `apps/linux_uconsole`. Using
   `apps/linux_unoq` for this target requires an explicit decision that UNO Q and
   uConsole/AIO2 are the same product target in this repository.
@@ -263,6 +282,13 @@ Rule:
 - Sharing presentation state is encouraged. Forcing identical layout structure is
   not.
 
+Packaging rule:
+
+- Linux device shells should provide standard Debian packages when targeting
+  Debian-family handheld environments. The package should install a normal
+  command under `/usr/bin` and keep launch/runtime options explicit rather than
+  hiding framebuffer, input, or capability assumptions in ad hoc scripts.
+
 ### Layer E: AIO2 Platform Adapters
 
 Likely future locations:
@@ -305,6 +331,7 @@ Allowed examples:
 - search/indexing services over local stores
 - background import/export workers
 - advanced map package management
+- online map tile fetch/cache workers with SQLite metadata
 - diagnostic log viewers
 - Linux host integration helpers
 
@@ -395,7 +422,96 @@ Non-goals:
 - decorative dashboard cards that reduce operational density
 - forcing every page into the current compact 12-entry app menu model
 
-## 9. Migration Program
+## 9. UI Technology Assessment
+
+The UI technology is replaceable only if the service and presentation layers stay
+free of toolkit objects. A uConsole shell may be implemented with LVGL, Qt, GTK,
+Slint, or a web runtime, but none of those choices may define chat/contact/team
+service ownership or presentation-model contracts.
+
+### LVGL
+
+LVGL remains useful for:
+
+- fast bring-up on a raw framebuffer
+- CI smoke coverage with a small dependency surface
+- compact Linux and MCU-adjacent UI parity checks
+- fallback shells when no desktop session, compositor, GPU path, or package
+  stack is available
+
+LVGL should not be treated as the default long-term uConsole product UI when the
+product starts requiring richer desktop behavior. It is weaker for dense tables,
+complex text input, native keyboard shortcuts, accessibility, advanced
+windowing, theming, inspectors, large searchable lists, and long-running
+desktop-style workflows.
+
+Decision rule:
+
+- keep LVGL when the requirement is direct framebuffer, minimal dependencies,
+  compact-shell parity, or hardware bring-up;
+- evaluate a native Linux UI stack when requirements include rich search,
+  editable tables/lists, multi-pane operational views, diagnostics, import/export
+  managers, larger local datasets, shortcut-heavy keyboard workflows, or desktop
+  accessibility/window integration.
+
+### GTK 4
+
+GTK 4 is the preferred long-term candidate for a production uConsole
+desktop-class UI when the target runs a conventional Linux user session with
+Wayland or X11 available.
+
+Reasons:
+
+- it fits the user's desired desktop-software direction better than a compact
+  firmware-style shell
+- it is native to the Linux desktop ecosystem
+- it supports dense lists, search, forms, dialogs, keyboard shortcuts, and
+  conventional app workflows more naturally than LVGL
+- it keeps the product direction aligned with Linux application behavior instead
+  of embedded-widget parity
+
+Costs:
+
+- direct C++ integration will need either plain C bindings, gtkmm, or a thin C
+  adapter layer
+- deployment should assume a compositor/session unless a separate embedded GTK
+  strategy is proven
+- it is not the right fallback for raw framebuffer bring-up
+
+### Slint
+
+Slint is a plausible lighter alternative if GTK deployment, compositor
+requirements, or C++ binding strategy become too costly. It fits embedded Linux
+and C++ integration better than many desktop toolkits, but its ecosystem and
+widget depth are smaller. It is worth evaluating after the first real
+presentation-model slice exists.
+
+### Qt 6 / QML
+
+Qt 6/QML remains technically strong for embedded Linux, GPU-backed UIs, and C++
+service bindings, but it is not the preferred direction for this project because
+the user does not want the uConsole product UI to be Qt-based. It should only be
+reopened if GTK and Slint both fail hard requirements.
+
+### Web Runtime
+
+A web UI, Tauri, or Electron-like stack gives high UI velocity and rich layout
+capability. It should be considered only if storage, memory, startup time,
+battery, packaging, and offline deployment budgets are acceptable for the actual
+uConsole/AIO2 environment.
+
+### Current Recommendation
+
+- Keep the LVGL uConsole shell as the first buildable target and fallback.
+- Do not deepen dependencies on compact LVGL pages or the compact app grid.
+- Move real feature work through `LinuxAppServices` and presentation models so a
+  later GTK/Slint/web shell can reuse the same app surface.
+- Evaluate GTK 4 first when the product requirements move from shell bring-up
+  into rich desktop workflows.
+- Use Slint as the lighter second candidate if GTK's deployment or binding cost
+  is unacceptable.
+
+## 10. Migration Program
 
 Future implementation should proceed in this order.
 
@@ -415,7 +531,7 @@ Future implementation should proceed in this order.
 9. Add CI/build smoke for the new app shell only after the target structure is
    real enough to compile.
 
-## 10. Acceptance Checks
+## 11. Acceptance Checks
 
 The uConsole/AIO2 work is aligned with this specification only when these
 statements are becoming true:
@@ -435,8 +551,12 @@ statements are becoming true:
   express scale, indexing, background jobs, and desktop-class workflows.
 - Capability state is honest: unsupported, simulated, and real hardware-backed
   behavior are distinguishable.
+- Replacing the uConsole UI toolkit does not require rewriting app services or
+  presentation models.
+- The uConsole Linux app can be installed through a standard `.deb` package, not
+  only by copying a build artifact by hand.
 
-## 11. Drift Checks for Future Agents
+## 12. Drift Checks for Future Agents
 
 Before implementing any uConsole/AIO2 slice, check these questions:
 
@@ -452,18 +572,20 @@ Before implementing any uConsole/AIO2 slice, check these questions:
 - Is this change treating MCU feature parity as the ceiling for Linux?
 - Is this change pushing Linux-only scale or background-job assumptions into
   shared MCU-compatible modules?
+- Is this change letting LVGL, Qt, GTK, Slint, or a web runtime leak into service
+  composition or presentation-model contracts?
 
 If the answer to any of these is yes, the implementation is drifting away from
 this specification.
 
-## 12. Open Engineer Decisions
+## 13. Open Engineer Decisions
 
 These points are intentionally not decided by this document:
 
 - Whether the target directory should be `apps/linux_uconsole` or whether
   `apps/linux_unoq` should be redefined to cover uConsole/AIO2.
-- Whether the first desktop-class shell should use LVGL, a native Linux UI
-  toolkit, or another rendering approach.
+- Which long-term UI stack should back the production uConsole desktop-class
+  shell after the LVGL bring-up shell exposes enough requirements.
 - Which AIO2 capabilities are mandatory for the first buildable slice.
 - Which feature provides the first presentation-model slice.
 - Which Linux-native feature module should be introduced first.
@@ -473,8 +595,11 @@ The current recommendation is:
 
 - use `apps/linux_uconsole` unless UNO Q and uConsole/AIO2 are explicitly
   declared to be the same target;
-- start with LVGL only if it accelerates the first shell without forcing compact
-  UI structure;
+- keep LVGL as the buildable bring-up/fallback shell, without forcing compact UI
+  structure;
+- evaluate GTK 4 first for the long-term uConsole product UI once rich
+  desktop workflows become concrete;
+- evaluate Slint if GTK's deployment or binding cost is too high;
 - use Chat or Contacts as the first presentation-model slice because they expose
   service/UI coupling quickly without requiring real hardware;
 - introduce Linux-native extensions after the service/presentation boundary is

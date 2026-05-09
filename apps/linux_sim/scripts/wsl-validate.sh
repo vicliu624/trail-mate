@@ -8,6 +8,8 @@ TEST_BUILD_DIR="${WSL_TEST_BUILD_DIR:-$ROOT_DIR/build/wsl/test}"
 SIM_BUILD_DIR="${WSL_SIM_BUILD_DIR:-$ROOT_DIR/build/wsl/simulator}"
 RPI_ROOT_DIR="$(cd "$ROOT_DIR/../linux_rpi" && pwd)"
 DEVICE_BUILD_DIR="${WSL_DEVICE_BUILD_DIR:-$RPI_ROOT_DIR/build/wsl/device}"
+UCONSOLE_ROOT_DIR="$(cd "$ROOT_DIR/../linux_uconsole" && pwd)"
+UCONSOLE_BUILD_DIR="${WSL_UCONSOLE_BUILD_DIR:-$UCONSOLE_ROOT_DIR/build/wsl/uconsole}"
 
 require_command() {
   local command_name="$1"
@@ -39,8 +41,11 @@ require_command python3
 if command -v pkg-config >/dev/null 2>&1; then
   REQUIRED_PKGCONFIG_MODULES=(
     alsa
+    libcurl
+    sqlite3
     wayland-client
     xkbcommon
+    gtk4
     x11
     xrandr
     xrender
@@ -100,9 +105,17 @@ cmake -S "$RPI_ROOT_DIR" -B "$DEVICE_BUILD_DIR" "${GENERATOR_ARGS[@]}" \
 print_step "Building Linux framebuffer device shell"
 cmake --build "$DEVICE_BUILD_DIR" --target trailmate_cardputer_zero_device --config "$BUILD_TYPE"
 
+print_step "Configuring uConsole Linux shell into $UCONSOLE_BUILD_DIR"
+cmake -S "$UCONSOLE_ROOT_DIR" -B "$UCONSOLE_BUILD_DIR" "${GENERATOR_ARGS[@]}" \
+  -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+
+print_step "Building uConsole Linux shell"
+cmake --build "$UCONSOLE_BUILD_DIR" --target trailmate_uconsole --config "$BUILD_TYPE"
+
 printf '\nWSL validation completed successfully.\n'
 printf '  Tests build dir: %s\n' "$TEST_BUILD_DIR"
 printf '  Simulator build dir: %s\n' "$SIM_BUILD_DIR"
 printf '  Device build dir: %s\n' "$DEVICE_BUILD_DIR"
+printf '  uConsole build dir: %s\n' "$UCONSOLE_BUILD_DIR"
 printf '  To launch the Linux simulator from WSL later:\n'
 printf '    %s\n' "\"$SIM_BUILD_DIR/trailmate_cardputer_zero_simulator\" --scale 1"

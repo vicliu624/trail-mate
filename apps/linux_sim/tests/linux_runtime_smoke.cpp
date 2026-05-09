@@ -1,6 +1,9 @@
 #include "app/linux_app_facade.h"
+#include "app/linux_app_services.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
+#include "platform/linux/map_tile_cache.h"
+#include "platform/linux/runtime_paths.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/firmware_update_runtime.h"
 #include "platform/ui/gps_runtime.h"
@@ -66,6 +69,36 @@ int main()
 
     settings_store::clear_namespace("settings");
     settings_store::clear_namespace("runtime_smoke");
+    settings_store::clear_namespace("linux_contact_nodes");
+    settings_store::clear_namespace("linux_contact_names");
+    settings_store::clear_namespace("linux_app_facade");
+
+    set_env_var("TRAIL_MATE_RUNTIME_MODE", "local");
+    {
+        trailmate::linux_app::LinuxAppServices local_services;
+        assert(local_services.initialize());
+        local_services.dispatchPendingEvents();
+        assert(!local_services.isBleEnabled());
+        local_services.setBleEnabled(true);
+        assert(!local_services.isBleEnabled());
+
+        const auto contacts = local_services.contacts().getContacts();
+        const auto nearby = local_services.contacts().getNearby();
+        const auto ignored = local_services.contacts().getIgnoredNodes();
+        assert(contacts.empty());
+        assert(nearby.empty());
+        assert(ignored.size() <= 1U);
+
+        std::size_t total_conversations = 0;
+        const auto conversations =
+            local_services.chat().getConversations(0, 8, &total_conversations);
+        assert(total_conversations == 0U);
+        assert(conversations.empty());
+        local_services.shutdown();
+    }
+    settings_store::clear_namespace("linux_contact_nodes");
+    settings_store::clear_namespace("linux_contact_names");
+    settings_store::clear_namespace("linux_app_facade");
 
     settings_store::put_int("runtime_smoke", "answer", 42);
     settings_store::put_bool("runtime_smoke", "enabled", true);
@@ -85,6 +118,12 @@ int main()
     assert(greeting_out == greeting);
     assert(settings_store::get_blob("runtime_smoke", "blob", blob_out));
     assert(blob_out == blob_in);
+    assert(std::filesystem::exists(platform::linux_runtime::sqlite_database_path()));
+
+    platform::linux_runtime::MapTileCache tile_cache;
+    const auto tile_stats = tile_cache.stats();
+    assert(tile_stats.database == platform::linux_runtime::sqlite_database_path());
+    assert(!tile_stats.root.empty());
 
     screen::set_timeout_ms(45000U);
     assert(screen::clamp_timeout_ms(45000U) == 45000U);
@@ -292,6 +331,7 @@ int main()
     lora::release();
     assert(!lora::is_online());
 
+    set_env_var("TRAIL_MATE_RUNTIME_MODE", "demo");
     MinimalLinuxAppFacade facade;
     assert(facade.initialize());
     facade.dispatchPendingEvents();

@@ -16,3 +16,5 @@ For Linux bring-up:
 
 - `apps/linux_sim` is the simulator and developer-tooling shell
 - `apps/linux_rpi` is the real Pi OS device shell for Cardputer Zero
+- `apps/linux_uconsole` is the desktop-class Linux handheld shell for
+  uConsole/AIO2-class targets

@@ -10,6 +10,8 @@ This layer is the neutral meeting point for:
 - Linux-safe surface presentation contracts
 - Linux implementations of shared `platform::ui::*` runtime contracts such as
   settings, time, screen timeout, and generic device state
+- SQLite-backed Linux runtime state shared by simulator/device/uConsole shells
+- Linux map tile cache plumbing for online fetch plus local XYZ file cache
 - the shared Linux boot/menu shell session used by both the simulator and the
   thin framebuffer device shell
 

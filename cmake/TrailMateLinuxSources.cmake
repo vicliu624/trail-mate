@@ -1,8 +1,8 @@
 # TrailMateLinuxSources.cmake
 #
-# Shared source lists and helper functions for the Cardputer Zero Linux line.
-# Both apps/linux_sim and apps/linux_rpi include this file so that a single
-# source list drives the common, core-module, and ui_shell targets.
+# Shared source lists and helper functions for the Trail Mate Linux line.
+# apps/linux_sim, apps/linux_rpi, and apps/linux_uconsole include this file so
+# that a single source list drives common app services and core-module targets.
 #
 # Usage from an app CMakeLists.txt:
 #
@@ -77,6 +77,7 @@ _trailmate_set_linux_paths()
 
 set(TRAIL_MATE_LINUX_COMMON_SOURCES
     # app facade
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_app_services.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_app_facade.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_demo_world.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_noop_mesh_adapter.cpp"
@@ -88,6 +89,7 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     # platform/linux shared infrastructure (P4)
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/runtime_paths.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/env_config.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/map_tile_cache.cpp"
     # platform::ui::* runtime implementations
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/device_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/firmware_update_runtime.cpp"
@@ -312,6 +314,9 @@ function(trailmate_apply_linux_common_warnings target_name)
 endfunction()
 
 function(trailmate_add_linux_common target_name)
+    find_package(CURL REQUIRED)
+    find_package(SQLite3 REQUIRED)
+
     add_library(${target_name}
         ${TRAIL_MATE_LINUX_COMMON_SOURCES}
     )
@@ -322,7 +327,12 @@ function(trailmate_add_linux_common target_name)
     target_compile_definitions(${target_name}
         PUBLIC TRAIL_MATE_LORA_TX_POWER_MAX_DBM=22
     )
-    target_link_libraries(${target_name} PUBLIC Threads::Threads)
+    target_link_libraries(${target_name}
+        PUBLIC
+            Threads::Threads
+            CURL::libcurl
+            SQLite::SQLite3
+    )
     if(WIN32)
         target_link_libraries(${target_name} PUBLIC ws2_32)
     endif()

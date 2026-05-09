@@ -56,7 +56,7 @@ bool LinuxNoopMeshAdapter::submitKeyVerificationNumber(::chat::NodeId,
 
 ::chat::NodeId LinuxNoopMeshAdapter::getNodeId() const
 {
-    return 0;
+    return self_id_;
 }
 
 bool LinuxNoopMeshAdapter::isPkiReady() const

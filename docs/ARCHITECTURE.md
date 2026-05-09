@@ -123,6 +123,7 @@ trail-mate/
     linux_sim/
     linux_rpi/
     linux_unoq/
+    linux_uconsole/
 
   modules/
     core_sys/
@@ -146,6 +147,7 @@ trail-mate/
       common/
       rpi/
       unoq/
+      uconsole/
 
   docs/
   tools/
@@ -408,6 +410,26 @@ Purpose:
 - provide actual Linux device targets after the simulator proves the shared core is portable
 
 The platform differences here should stay in `platform/linux/*`, not leak back into shared modules.
+
+## `apps/linux_uconsole`
+
+Purpose:
+
+- provide the desktop-class Linux handheld shell for uConsole/AIO2-class targets
+- preserve a separate interaction model from compact Cardputer Zero shells
+- consume Linux app services and presentation models instead of compact LVGL pages
+- leave room for Linux-native search, diagnostics, data/package management, and background-job workflows
+- use SQLite-backed local state and Linux-native map tile cache/indexing where
+  those capabilities are outside MCU constraints
+
+AIO2 support belongs below this app shell in platform/runtime adapters. The UI
+may report AIO2 capability status, but AIO2 must not become the product
+navigation or layout boundary.
+
+The current Linux service composition entrypoint is `LinuxAppServices` under
+`platform/linux/common`. Compact LVGL shells use `MinimalLinuxAppFacade` as an
+adapter over those services; uConsole shells should depend on
+`LinuxAppServices` and presentation models directly.
 
 ---
 

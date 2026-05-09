@@ -43,6 +43,10 @@ RuntimePaths resolve_paths();
 /// Returns <settings_root>/settings/<sanitized_ns>.kv
 std::filesystem::path settings_file(const char* ns);
 
+/// Convenience: SQLite database used by Linux runtime state.
+/// Returns <settings_root>/trailmate.sqlite3
+std::filesystem::path sqlite_database_path();
+
 /// Convenience: child path under sd_root.
 std::filesystem::path sd_child(std::string_view relative);
 
