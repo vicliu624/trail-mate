@@ -7,7 +7,7 @@
 
 #include "chat/domain/chat_model.h"
 #include "chat/ports/i_mesh_adapter.h"
-#include "team/domain/team_domain.h"
+#include "team/domain/team_types.h"
 
 namespace trailmate::cardputer_zero::linux_ui
 {
