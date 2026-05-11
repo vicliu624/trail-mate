@@ -512,10 +512,10 @@ GtkWidget* buildNodeInfoMapStage(GtkUConsoleAppState& state,
     double node_x = 0.5;
     double node_y = 0.5;
     static_cast<void>(projectNodeInfoMapPoint(snapshot,
-                                             detail.lat,
-                                             detail.lon,
-                                             node_x,
-                                             node_y));
+                                              detail.lat,
+                                              detail.lon,
+                                              node_x,
+                                              node_y));
 
     double self_x = 0.0;
     double self_y = 0.0;

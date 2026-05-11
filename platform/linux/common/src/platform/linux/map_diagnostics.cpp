@@ -1,8 +1,8 @@
 #include "platform/linux/map_diagnostics.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>

@@ -399,7 +399,7 @@ void pushTimeline(std::vector<TimelineCandidate>& out,
 
     out.push_back(TimelineCandidate{.timestamp = timestamp,
                                     .item = {.title = std::move(title),
-                                     .detail = std::move(detail),
+                                             .detail = std::move(detail),
                                              .attention = attention}});
 }
 

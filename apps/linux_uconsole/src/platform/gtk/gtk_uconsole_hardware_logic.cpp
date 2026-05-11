@@ -28,7 +28,7 @@ GtkWidget* buildHardwareCard(const HardwareStatusItem& item)
     return card;
 }
 static void refreshHardwarePage(GtkUConsoleAppState& state,
-                         const UConsoleDashboardSnapshot& snapshot)
+                                const UConsoleDashboardSnapshot& snapshot)
 {
     clearBox(state.hardware_page_box);
 

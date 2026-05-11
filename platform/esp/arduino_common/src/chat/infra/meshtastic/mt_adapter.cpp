@@ -24,8 +24,8 @@
 #define TEST_CURVE25519_FIELD_OPS
 #include "../../internal/blob_store_io.h"
 #include "board/TLoRaPagerTypes.h"
-#include "chat/infra/meshtastic/mt_pki_crypto.h"
 #include "chat/infra/meshtastic/mt_node_payload.h"
+#include "chat/infra/meshtastic/mt_pki_crypto.h"
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/infra/meshtastic/mt_region.h"

@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstring>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -2072,19 +2072,19 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
                 "Meshtastic nodeinfo decode failed",
                 "NODEINFO_APP payload was neither Meshtastic NodeInfo nor legacy User.",
                 {{
-                    .kind =
-                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
-                    .label = "reason",
-                    .text = reason,
-                },
-                {
-                    .kind =
-                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
-                    .label = "payload",
-                    .text = ::platform::linux_runtime::hex_bytes(
-                        decoded.payload.bytes,
-                        decoded.payload.size),
-                }});
+                     .kind =
+                         ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                     .label = "reason",
+                     .text = reason,
+                 },
+                 {
+                     .kind =
+                         ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                     .label = "payload",
+                     .text = ::platform::linux_runtime::hex_bytes(
+                         decoded.payload.bytes,
+                         decoded.payload.size),
+                 }});
         }
         return true;
     }
@@ -2143,19 +2143,19 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
                 "Meshtastic position decode failed",
                 "POSITION_APP payload did not contain a valid latitude and longitude.",
                 {{
-                    .kind =
-                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
-                    .label = "reason",
-                    .text = reason,
-                },
-                {
-                    .kind =
-                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
-                    .label = "payload",
-                    .text = ::platform::linux_runtime::hex_bytes(
-                        decoded.payload.bytes,
-                        decoded.payload.size),
-                }});
+                     .kind =
+                         ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                     .label = "reason",
+                     .text = reason,
+                 },
+                 {
+                     .kind =
+                         ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                     .label = "payload",
+                     .text = ::platform::linux_runtime::hex_bytes(
+                         decoded.payload.bytes,
+                         decoded.payload.size),
+                 }});
         }
         return true;
     }

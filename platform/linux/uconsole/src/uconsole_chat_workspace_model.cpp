@@ -918,11 +918,11 @@ ChatWorkspaceSnapshot UConsoleChatWorkspaceModel::snapshot(
     for (const auto& conversation : conversations)
     {
         ChatConversationItem item = makeConversationItem(conversation,
-                                                        active_conversation_,
-                                                        contacts,
-                                                        has_local_gps,
-                                                        local_lat,
-                                                        local_lon);
+                                                         active_conversation_,
+                                                         contacts,
+                                                         has_local_gps,
+                                                         local_lat,
+                                                         local_lon);
         item.unread_source =
             unreadSenderSummary(services_.chat(), conversation, contacts);
         out.conversations.push_back(std::move(item));
@@ -945,7 +945,7 @@ ChatWorkspaceSnapshot UConsoleChatWorkspaceModel::snapshot(
     else
     {
         out.active_title = titleForConversation(active_conversation_, {},
-                                               contacts);
+                                                contacts);
         out.active_meta = protocolLabel(active_conversation_.protocol);
     }
 
@@ -1242,8 +1242,8 @@ bool UConsoleChatWorkspaceModel::selectConversationAt(
 
     std::size_t total = 0;
     auto conversations = loadConversationPage(conversation_limit,
-                                             &total,
-                                             sort_mode);
+                                              &total,
+                                              sort_mode);
     if (conversations.empty() && index == 0)
     {
         return selectPrimaryConversation();
@@ -1451,8 +1451,8 @@ bool UConsoleChatWorkspaceModel::selectNodeConversation(::chat::NodeId node_id)
     }
     const ::chat::ChannelId channel = active_conversation_.channel;
     return selectConversation(::chat::ConversationId(channel,
-                                                    node_id,
-                                                    services_.meshProtocol()));
+                                                     node_id,
+                                                     services_.meshProtocol()));
 }
 
 bool UConsoleChatWorkspaceModel::addNodeAsContact(::chat::NodeId node_id)

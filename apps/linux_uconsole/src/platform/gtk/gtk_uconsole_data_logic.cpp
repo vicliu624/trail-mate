@@ -7,8 +7,8 @@ namespace trailmate::uconsole::gtk
 {
 
 static void refreshDataPage(GtkUConsoleAppState& state,
-                     const UConsoleDashboardSnapshot& dashboard,
-                     const MapWorkspaceSnapshot& map_snapshot)
+                            const UConsoleDashboardSnapshot& dashboard,
+                            const MapWorkspaceSnapshot& map_snapshot)
 {
     clearBox(state.data_page_box);
 

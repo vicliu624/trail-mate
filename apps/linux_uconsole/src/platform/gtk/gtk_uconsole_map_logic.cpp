@@ -1,6 +1,6 @@
-﻿#include "platform/gtk/gtk_uconsole_pages.h"
-#include "platform/gtk/gtk_uconsole_layout_spec.h"
+﻿#include "platform/gtk/gtk_uconsole_layout_spec.h"
 #include "platform/gtk/gtk_uconsole_mqtt_settings.h"
+#include "platform/gtk/gtk_uconsole_pages.h"
 #include "platform/gtk/gtk_uconsole_shell.h"
 #include "platform/gtk/gtk_uconsole_widgets.h"
 #include "sys/clock.h"
@@ -388,10 +388,10 @@ MapCoordinate coordinateAtPointer(GtkUConsoleAppState& state,
                            : 0;
     const MapWorkspaceSnapshot snapshot = state.map_model.snapshot();
     return state.map_model.coordinateAtDisplayPoint(snapshot,
-                                                   x,
-                                                   y,
-                                                   width,
-                                                   height);
+                                                    x,
+                                                    y,
+                                                    width,
+                                                    height);
 }
 
 void onMapContextPressed(GtkGestureClick* gesture,
@@ -1292,7 +1292,7 @@ void refreshMap(GtkUConsoleAppState& state,
         gtk_widget_set_sensitive(
             state.map_measure_clear,
             state.map_measure_has_start || state.map_measure_has_end ? TRUE
-                                                                      : FALSE);
+                                                                     : FALSE);
     }
     updateMapMeasureStatus(state);
 

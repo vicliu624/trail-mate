@@ -1,5 +1,5 @@
-﻿#include "platform/gtk/gtk_uconsole_pages.h"
-#include "platform/gtk/gtk_uconsole_mqtt_settings.h"
+﻿#include "platform/gtk/gtk_uconsole_mqtt_settings.h"
+#include "platform/gtk/gtk_uconsole_pages.h"
 #include "platform/gtk/gtk_uconsole_shell.h"
 #include "platform/gtk/gtk_uconsole_widgets.h"
 
@@ -1114,8 +1114,8 @@ void onSettingsReloadClicked(GtkButton*, gpointer data)
     populateSettingsControls(state);
 }
 static void refreshSettingsPage(GtkUConsoleAppState& state,
-                         const UConsoleDashboardSnapshot& dashboard,
-                         const MapWorkspaceSnapshot& map_snapshot)
+                                const UConsoleDashboardSnapshot& dashboard,
+                                const MapWorkspaceSnapshot& map_snapshot)
 {
     if (state.settings_status == nullptr)
     {

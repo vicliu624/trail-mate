@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "platform/gtk/gtk_uconsole_pages.h"
 #include "platform/gtk/gtk_uconsole_layout_spec.h"
+#include "platform/gtk/gtk_uconsole_pages.h"
 #include "platform/gtk/gtk_uconsole_widgets.h"
 
 namespace trailmate::uconsole::gtk
