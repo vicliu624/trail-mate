@@ -1,0 +1,133 @@
+target: "linux-uconsole-ascii"
+status: "draft"
+
+product:
+  family: "trail-mate"
+  form_factor: "linux_handheld"
+  interaction_class: "ascii_tui"
+
+platform:
+  kind: "linux"
+  sdk: "linux_posix"
+  memory_tier: "large"
+  filesystem: "posix"
+  dynamic_allocation: "allowed"
+
+board:
+  id: "uconsole_aio2"
+  package: "platform/linux/uconsole"
+
+runtime:
+  scheduler: "linux_event_loop"
+  ui_thread: "terminal_loop"
+  radio_thread: "event_loop"
+  gps_thread: "event_loop"
+  ble_thread: "none"
+  isr_policy: "not_applicable"
+  lock_policy: "single_owner_or_mutex"
+
+ui:
+  shell: "ascii"
+  renderer: "ascii_canvas"
+  presentation_model_host: "linux"
+  layout_profile: "terminal_panel"
+  input_model: "keyboard"
+
+execution:
+  app_host: "linux"
+  mesh_core_host: "linux"
+  gps_core_host: "linux"
+  phone_core_host: "linux"
+  hostlink_core_host: "linux"
+  ui_host: "linux"
+
+authorities:
+  identity: "linux"
+  peer_key_store: "linux"
+  node_store: "linux"
+  message_store: "linux"
+  location: "linux"
+  time: "linux"
+  config: "linux"
+  device_status: "linux"
+  ui_state: "linux"
+
+capabilities:
+  lora:
+    state: "unbound"
+    endpoint_host: "linux"
+    mode: "local_radio"
+  gps:
+    state: "unbound"
+    endpoint_host: "linux"
+    mode: "local_uart"
+  ble:
+    state: "unsupported"
+    endpoint_host: "none"
+    stack: "none"
+    roles:
+      meshtastic_phone: "disabled"
+      meshcore_phone: "disabled"
+      trailmate_control: "disabled"
+  storage:
+    state: "ready"
+    endpoint_host: "linux"
+  display:
+    state: "ready"
+    endpoint_host: "linux"
+  input:
+    state: "ready"
+    endpoint_host: "linux"
+  battery:
+    state: "unbound"
+    endpoint_host: "linux"
+
+capability_bindings:
+  lora:
+    board_provider: "uconsole_aio2.spi_radio"
+    platform_driver: "linux_sx1262_packet_radio"
+    runtime_owner: "linux_event_loop"
+    protocol_consumers: ["meshtastic", "meshcore"]
+  gps:
+    board_provider: "uconsole_aio2.serial_gps"
+    platform_driver: "linux_serial_gnss"
+    runtime_owner: "linux_event_loop"
+    protocol_consumers: ["nmea"]
+
+protocols:
+  meshtastic:
+    enabled: true
+    radio_profile_source: "shared_core"
+    ble_phone_core: "shared_core"
+  meshcore:
+    enabled: true
+    radio_profile_source: "shared_core"
+    ble_phone_core: "shared_core"
+  hostlink:
+    enabled: true
+    frame_core: "shared_core"
+
+storage:
+  backend: "sqlite_and_files"
+  identity: "sqlite"
+  peer_keys: "sqlite"
+  config: "sqlite_or_file"
+  messages: "sqlite"
+  node_store: "sqlite"
+
+race_policy:
+  app_to_ui: "snapshot"
+  radio_to_app: "event_queue"
+  gps_to_app: "event_queue"
+  ble_to_app: "none"
+  isr_to_driver: "not_applicable"
+  store_access: "single_owner_or_mutex"
+  ui_update: "ui_thread_only"
+
+build:
+  app: "apps/linux_uconsole"
+  board_package: "platform/linux/uconsole"
+  cmake_presets: ["linux-uconsole-debug", "linux-uconsole-release"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_sys", "core_team", "ui_shared"]
+  disabled_modules: []
+

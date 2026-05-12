@@ -1,0 +1,85 @@
+board: "t_deck"
+platform: "esp32"
+status: "draft"
+
+source:
+  package: "boards/tdeck"
+  variant: "variants/tdeck"
+  board_json: "boards/T-Deck.json"
+
+facts:
+  display:
+    present: true
+    width: 320
+    height: 240
+    logical_width: 320
+    logical_height: 240
+    rotation: 0
+    driver: "st7789"
+    spi_bus: "shared_spi"
+    cs_pin: 12
+    dc_pin: 11
+    backlight_pin: 42
+
+  input:
+    keyboard: true
+    buttons: true
+    touch: true
+    encoder: false
+    trackball: true
+    touch_interrupt_pin: 16
+    trackball_up_pin: 3
+    trackball_down_pin: 15
+    trackball_left_pin: 1
+    trackball_right_pin: 2
+    trackball_click_pin: 0
+
+  lora:
+    present: true
+    chip: "sx1262"
+    spi_bus: "shared_spi"
+    sck_pin: 40
+    miso_pin: 38
+    mosi_pin: 41
+    cs_pin: 9
+    reset_pin: 17
+    busy_pin: 13
+    dio1_pin: 45
+    power_enable_pin: null
+    dio2_as_rf_switch: true
+    dio3_tcxo_voltage: 1.8
+
+  gps:
+    present: true
+    uart: "uart1"
+    tx_pin: 43
+    rx_pin: 44
+    power_enable_pin: null
+    pps_pin: null
+
+  storage:
+    sd: true
+    sd_cs_pin: 39
+    internal_flash: true
+
+  power:
+    battery: true
+    charger: true
+    deep_sleep: true
+    board_power_enable_pin: 10
+    battery_adc_pin: 4
+
+  peripherals:
+    audio_codec: true
+    rtc: "unknown"
+    motion_sensor: "unknown"
+
+draft_notes:
+  - "SD socket and charger facts should be confirmed against the exact T-Deck hardware revision."
+
+forbidden_content:
+  - "business behavior"
+  - "direct message policy"
+  - "Meshtastic or MeshCore phone protocol"
+  - "UI page state"
+

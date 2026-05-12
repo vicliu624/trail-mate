@@ -9,6 +9,7 @@
                   "srcDir":  "src",
                   "flags":  [
                                 "-I../../modules/ui_shared/include",
+                                "-I../../modules/core_device/include",
                                 "-I../../modules/core_sys/include",
                                 "-I../../modules/core_chat/include",
                                 "-I../../modules/core_gps/include",
@@ -18,6 +19,9 @@
                             ]
               },
     "dependencies":  [
+                         {
+                             "name":  "core_device"
+                         },
                          {
                              "name":  "esp_arduino_common"
                          },

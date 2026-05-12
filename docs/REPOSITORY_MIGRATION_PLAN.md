@@ -19,6 +19,50 @@ Current status snapshot:
 - phases 0 / 1 / 2 / 3 / 5 / 6 in `docs/UI_SHARED_IDF_PHASE_PLAN.md` are now complete
 - phase 4 remains the active workstream for finishing the remaining business-page migrations
 
+## Cross-platform product architecture baseline
+
+Phase 1 of the product architecture work is now defined as:
+
+```text
+Phase 1: Establish the cross-platform product architecture baseline.
+```
+
+This phase does not extract LoRa, GPS, BLE, or UI behavior. It establishes the
+shared language and review surface that later extractions must use:
+
+- `docs/specification/CROSS_PLATFORM_PRODUCT_ARCHITECTURE_SPEC.md`
+- `docs/specification/CAPABILITY_AUTHORITY_GLOSSARY.md`
+- `docs/specification/TARGET_MANIFEST_SPEC.md`
+- `docs/specification/BOARD_PACKAGE_SPEC.md`
+- `docs/specification/RUNTIME_CONCURRENCY_SPEC.md`
+- `docs/specification/UI_PRESENTATION_ARCHITECTURE_SPEC.md`
+- draft target manifests under `docs/targets/`
+- draft board manifests under `docs/boards/`
+- vocabulary-only device types under `modules/core_device/`
+- review checklist under `docs/review/`
+- non-blocking boundary report under `tools/architecture/`
+
+The operating rule for all later migration steps is:
+
+```text
+Target chooses.
+Board describes.
+Platform adapts.
+Runtime schedules.
+Capability provides.
+Protocol interprets.
+UseCase decides.
+AppService coordinates.
+PresentationModel projects.
+Renderer draws.
+CompositionRoot wires.
+```
+
+The new boundary checker is intentionally report-only during Phase 1. Known
+historical drift is recorded in
+`tools/architecture/KNOWN_PRODUCT_ARCHITECTURE_VIOLATIONS.md` and must be paid
+down in later phases rather than hidden inside this baseline step.
+
 ## Current authoritative layout
 
 Today, the repository is still primarily organized around a single `src/` tree plus root-level build entrypoints:

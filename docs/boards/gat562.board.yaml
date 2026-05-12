@@ -1,0 +1,88 @@
+board: "gat562"
+platform: "nrf52"
+status: "draft"
+
+source:
+  package: "boards/gat562_mesh_evb_pro"
+  variant: "variants/gat562_mesh_evb_pro"
+  board_json: "boards/gat562_mesh_evb_pro.json"
+
+facts:
+  display:
+    present: true
+    width: 128
+    height: 64
+    rotation: 0
+    driver: "ssd1306"
+    i2c_bus: "i2c0"
+    i2c_address: 0x3C
+    sda_pin: 13
+    scl_pin: 14
+
+  input:
+    keyboard: false
+    buttons: true
+    touch: false
+    encoder: false
+    trackball: false
+    joystick: true
+    button_primary_pin: 9
+    button_secondary_pin: 12
+    joystick_up_pin: 28
+    joystick_down_pin: 4
+    joystick_left_pin: 30
+    joystick_right_pin: 31
+    joystick_press_pin: 26
+
+  lora:
+    present: true
+    chip: "sx1262"
+    spi_bus: "spi0"
+    sck_pin: 43
+    miso_pin: 45
+    mosi_pin: 44
+    cs_pin: 42
+    reset_pin: 38
+    busy_pin: 46
+    dio1_pin: 47
+    power_enable_pin: 37
+    dio2_as_rf_switch: true
+    dio3_tcxo_voltage: 1.8
+
+  gps:
+    present: true
+    uart: "uart0"
+    tx_pin: 16
+    rx_pin: 15
+    aux_pin: null
+    pps_pin: 17
+    baud_rate: 9600
+
+  storage:
+    sd: false
+    internal_flash: true
+    max_flash_size: 815104
+    max_ram_size: 248832
+
+  power:
+    battery: true
+    charger: "unknown"
+    deep_sleep: true
+    battery_adc_pin: 5
+    peripheral_3v3_enable_pin: 34
+
+  peripherals:
+    buzzer: true
+    buzzer_pin: 21
+    status_led_pin: 35
+    notification_led_pin: 36
+    jlink_cdc_uart:
+      rx_pin: 8
+      tx_pin: 6
+
+forbidden_content:
+  - "business behavior"
+  - "direct message policy"
+  - "Meshtastic or MeshCore phone protocol"
+  - "UI page state"
+

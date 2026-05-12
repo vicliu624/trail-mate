@@ -1,0 +1,47 @@
+board: "t_lora_pager"
+platform: "esp32"
+status: "draft"
+
+facts:
+  display:
+    present: true
+    width: 222
+    height: 480
+    rotation: 90
+    driver: "st7796"
+
+  input:
+    keyboard: false
+    buttons: true
+    touch: false
+    encoder: false
+    trackball: false
+
+  lora:
+    present: true
+    chip: "sx1262"
+    spi_bus: "spi2"
+    reset_pin: 8
+    busy_pin: 7
+    dio1_pin: 33
+    power_enable_pin: null
+    dio2_as_rf_switch: true
+    dio3_tcxo_voltage: 1.8
+
+  gps:
+    present: true
+    uart: "uart1"
+    tx_pin: null
+    rx_pin: null
+    power_enable_pin: 21
+    pps_pin: null
+
+  storage:
+    sd: true
+    internal_flash: true
+
+  power:
+    battery: true
+    charger: true
+    deep_sleep: true
+

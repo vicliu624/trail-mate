@@ -1,0 +1,66 @@
+board: "uconsole_aio2"
+platform: "linux"
+status: "draft"
+
+source:
+  package: "platform/linux/uconsole"
+  hardware_probe: "platform/linux/uconsole/src/uconsole_hardware_probe.cpp"
+
+facts:
+  display:
+    present: true
+    width: "host_window_or_framebuffer"
+    height: "host_window_or_framebuffer"
+    rotation: "host_configured"
+    driver: "gtk_or_linux_framebuffer"
+
+  input:
+    keyboard: true
+    buttons: false
+    touch: "host_dependent"
+    encoder: false
+    trackball: false
+    pointer: true
+
+  lora:
+    present: "optional"
+    chip: "sx1262"
+    spi_bus: "/dev/spidev1.0"
+    reset_pin: "aio2_control_plane"
+    busy_pin: "aio2_control_plane"
+    dio1_pin: "aio2_control_plane"
+    power_enable_pin: "aio2_control_plane"
+    dio2_as_rf_switch: true
+    dio3_tcxo_voltage: 1.8
+
+  gps:
+    present: "optional"
+    uart: "/dev/serial/by-id/*ClockworkPI*uConsole* or configured path"
+    power_enable_pin: "aio2_control_plane_or_none"
+    pps_pin: null
+
+  storage:
+    sd: "host_dependent"
+    internal_flash: false
+    posix_filesystem: true
+
+  power:
+    battery: "os_reported_or_unknown"
+    charger: "os_reported_or_unknown"
+    deep_sleep: false
+
+  linux_devices:
+    serial_auto_detect: "/dev/serial/by-id"
+    spi_default: "/dev/spidev1.0"
+    gps_env_override: "TRAIL_MATE_GPS_DEVICE"
+    lora_env_override: "TRAIL_MATE_LORA_SPI"
+
+draft_notes:
+  - "This manifest records Linux-visible AIO2 endpoints, not low-level HAT schematic truth."
+
+forbidden_content:
+  - "business behavior"
+  - "direct message policy"
+  - "Meshtastic or MeshCore phone protocol"
+  - "GTK page state"
+

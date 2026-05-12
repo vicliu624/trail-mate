@@ -1,0 +1,82 @@
+board: "t_lora_pager"
+platform: "esp32"
+status: "draft"
+
+source:
+  package: "boards/tlora_pager"
+  variant: "variants/lilygo_tlora_pager"
+  board_json: "boards/lilygo-t-lora-pager.json"
+
+facts:
+  display:
+    present: true
+    width: 222
+    height: 480
+    logical_width: 480
+    logical_height: 222
+    rotation: 90
+    driver: "st7796"
+    spi_bus: "shared_spi"
+    cs_pin: 38
+    dc_pin: 37
+    backlight_pin: 42
+
+  input:
+    keyboard: true
+    buttons: true
+    touch: false
+    encoder: true
+    trackball: false
+    keyboard_interrupt_pin: 6
+    rotary_a_pin: 40
+    rotary_b_pin: 41
+    rotary_click_pin: 7
+
+  lora:
+    present: true
+    chip: "sx1262_or_sx1280_by_build_env"
+    spi_bus: "shared_spi"
+    sck_pin: 35
+    miso_pin: 33
+    mosi_pin: 34
+    cs_pin: 36
+    reset_pin: 47
+    busy_pin: 48
+    dio1_pin: 14
+    power_enable_pin: "xl9555:3"
+    dio2_as_rf_switch: true
+    dio3_tcxo_voltage: 1.8
+
+  gps:
+    present: true
+    uart: "uart1"
+    tx_pin: 12
+    rx_pin: 4
+    power_enable_pin: "xl9555:4"
+    reset_pin: "xl9555:7"
+    pps_pin: 13
+
+  storage:
+    sd: true
+    sd_cs_pin: 21
+    internal_flash: true
+
+  power:
+    battery: true
+    charger: true
+    deep_sleep: true
+    power_key_pin: 0
+
+  peripherals:
+    nfc: true
+    audio_codec: true
+    motion_sensor: true
+    rtc: true
+    gpio_expander: true
+
+forbidden_content:
+  - "business behavior"
+  - "direct message policy"
+  - "Meshtastic or MeshCore phone protocol"
+  - "UI page state"
+

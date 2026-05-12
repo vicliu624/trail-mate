@@ -1,0 +1,133 @@
+target: "linux-headless"
+status: "draft"
+
+product:
+  family: "trail-mate"
+  form_factor: "headless"
+  interaction_class: "headless"
+
+platform:
+  kind: "linux"
+  sdk: "linux_posix"
+  memory_tier: "large"
+  filesystem: "posix"
+  dynamic_allocation: "allowed"
+
+board:
+  id: "none"
+  package: "none"
+
+runtime:
+  scheduler: "linux_event_loop"
+  ui_thread: "none"
+  radio_thread: "event_loop"
+  gps_thread: "event_loop"
+  ble_thread: "none"
+  isr_policy: "not_applicable"
+  lock_policy: "single_owner_or_mutex"
+
+ui:
+  shell: "headless"
+  renderer: "none"
+  presentation_model_host: "linux"
+  layout_profile: "none"
+  input_model: "none"
+
+execution:
+  app_host: "linux"
+  mesh_core_host: "linux"
+  gps_core_host: "linux"
+  phone_core_host: "linux"
+  hostlink_core_host: "linux"
+  ui_host: "none"
+
+authorities:
+  identity: "linux"
+  peer_key_store: "linux"
+  node_store: "linux"
+  message_store: "linux"
+  location: "linux"
+  time: "linux"
+  config: "linux"
+  device_status: "linux"
+  ui_state: "none"
+
+capabilities:
+  lora:
+    state: "simulated"
+    endpoint_host: "linux"
+    mode: "packet_proxy"
+  gps:
+    state: "simulated"
+    endpoint_host: "linux"
+    mode: "simulated"
+  ble:
+    state: "unsupported"
+    endpoint_host: "none"
+    stack: "none"
+    roles:
+      meshtastic_phone: "disabled"
+      meshcore_phone: "disabled"
+      trailmate_control: "disabled"
+  storage:
+    state: "ready"
+    endpoint_host: "linux"
+  display:
+    state: "unsupported"
+    endpoint_host: "none"
+  input:
+    state: "unsupported"
+    endpoint_host: "none"
+  battery:
+    state: "unsupported"
+    endpoint_host: "none"
+
+capability_bindings:
+  lora:
+    board_provider: "none"
+    platform_driver: "linux_packet_proxy_or_fake_radio"
+    runtime_owner: "linux_event_loop"
+    protocol_consumers: ["meshtastic", "meshcore"]
+  gps:
+    board_provider: "none"
+    platform_driver: "linux_fake_or_file_gnss"
+    runtime_owner: "linux_event_loop"
+    protocol_consumers: ["nmea"]
+
+protocols:
+  meshtastic:
+    enabled: true
+    radio_profile_source: "shared_core"
+    ble_phone_core: "disabled"
+  meshcore:
+    enabled: true
+    radio_profile_source: "shared_core"
+    ble_phone_core: "disabled"
+  hostlink:
+    enabled: true
+    frame_core: "shared_core"
+
+storage:
+  backend: "sqlite_and_files"
+  identity: "sqlite"
+  peer_keys: "sqlite"
+  config: "file_or_sqlite"
+  messages: "sqlite"
+  node_store: "sqlite"
+
+race_policy:
+  app_to_ui: "snapshot"
+  radio_to_app: "event_queue"
+  gps_to_app: "event_queue"
+  ble_to_app: "none"
+  isr_to_driver: "not_applicable"
+  store_access: "single_owner_or_mutex"
+  ui_update: "none"
+
+build:
+  app: "apps/linux_sim"
+  board_package: "none"
+  cmake_presets: ["linux-sim-debug"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_sys", "core_team"]
+  disabled_modules: ["ui_shared_renderer"]
+

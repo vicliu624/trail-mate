@@ -1,0 +1,9 @@
+{
+  "name": "core_device",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}
+

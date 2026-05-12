@@ -1,0 +1,141 @@
+target: "esp-t-lora-pager-lvgl"
+status: "draft"
+
+product:
+  family: "trail-mate"
+  form_factor: "handheld"
+  interaction_class: "embedded_lvgl"
+
+platform:
+  kind: "esp32"
+  sdk: "arduino_esp32"
+  memory_tier: "small"
+  filesystem: "sd"
+  dynamic_allocation: "limited"
+
+board:
+  id: "t_lora_pager"
+  package: "boards/tlora_pager"
+
+runtime:
+  scheduler: "freertos"
+  ui_thread: "main_task"
+  radio_thread: "radio_task"
+  gps_thread: "gps_task"
+  ble_thread: "stack_callback"
+  isr_policy: "defer_to_queue"
+  lock_policy: "message_passing"
+
+ui:
+  shell: "lvgl"
+  renderer: "lvgl"
+  presentation_model_host: "esp32"
+  layout_profile: "compact_handheld"
+  input_model: "buttons_keyboard_rotary"
+
+execution:
+  app_host: "esp32"
+  mesh_core_host: "esp32"
+  gps_core_host: "esp32"
+  phone_core_host: "esp32"
+  hostlink_core_host: "esp32"
+  ui_host: "esp32"
+
+authorities:
+  identity: "esp32"
+  peer_key_store: "esp32"
+  node_store: "esp32"
+  message_store: "esp32"
+  location: "esp32"
+  time: "esp32"
+  config: "esp32"
+  device_status: "esp32"
+  ui_state: "esp32"
+
+capabilities:
+  lora:
+    state: "ready"
+    endpoint_host: "esp32"
+    mode: "local_radio"
+  gps:
+    state: "ready"
+    endpoint_host: "esp32"
+    mode: "local_uart"
+  ble:
+    state: "ready"
+    endpoint_host: "esp32"
+    stack: "nimble"
+    roles:
+      meshtastic_phone: "server"
+      meshcore_phone: "server"
+      trailmate_control: "server"
+  storage:
+    state: "ready"
+    endpoint_host: "esp32"
+  display:
+    state: "ready"
+    endpoint_host: "esp32"
+  input:
+    state: "ready"
+    endpoint_host: "esp32"
+  battery:
+    state: "ready"
+    endpoint_host: "esp32"
+
+capability_bindings:
+  lora:
+    board_provider: "t_lora_pager.radio"
+    platform_driver: "esp_radiolib_sx1262_packet_radio"
+    runtime_owner: "radio_task"
+    protocol_consumers: ["meshtastic", "meshcore"]
+  gps:
+    board_provider: "t_lora_pager.gps"
+    platform_driver: "esp_uart_gnss"
+    runtime_owner: "gps_task"
+    protocol_consumers: ["nmea"]
+  ble:
+    board_provider: "esp32.integrated_ble"
+    platform_driver: "nimble_gatt_host"
+    runtime_owner: "stack_callback"
+    protocol_consumers: ["meshtastic_phone", "meshcore_phone"]
+
+protocols:
+  meshtastic:
+    enabled: true
+    radio_profile_source: "shared_core"
+    ble_phone_core: "shared_core"
+  meshcore:
+    enabled: true
+    radio_profile_source: "shared_core"
+    ble_phone_core: "shared_core"
+  hostlink:
+    enabled: true
+    frame_core: "shared_core"
+
+storage:
+  backend: "esp_nvs_and_sd"
+  identity: "esp_nvs"
+  peer_keys: "esp_nvs"
+  config: "esp_nvs"
+  messages: "sd_or_flash"
+  node_store: "sd_or_flash"
+
+race_policy:
+  app_to_ui: "snapshot"
+  radio_to_app: "event_queue"
+  gps_to_app: "event_queue"
+  ble_to_app: "command_queue"
+  isr_to_driver: "defer_only"
+  store_access: "single_owner_or_mutex"
+  ui_update: "ui_thread_only"
+
+build:
+  app: "apps/esp_pio"
+  board_package: "boards/tlora_pager"
+  platformio_envs: ["tlora_pager_sx1262", "tlora_pager_sx1280"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_sys", "core_team", "ui_shared"]
+  disabled_modules: []
+
+draft_notes:
+  - "SX1280 env is still represented by the same target family; split later if product policy diverges."
+
