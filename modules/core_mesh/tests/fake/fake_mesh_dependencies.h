@@ -35,6 +35,10 @@ class FakeCryptoProvider final : public ICryptoProvider
         {
             return CryptoResult::fail(CryptoFailure::InvalidInput);
         }
+        if (!random_result.ok)
+        {
+            return random_result;
+        }
         for (size_t index = 0; index < len; ++index)
         {
             out[index] = static_cast<uint8_t>(index + 1);
@@ -94,6 +98,7 @@ class FakeCryptoProvider final : public ICryptoProvider
     }
 
     int random_count = 0;
+    CryptoResult random_result = CryptoResult::success();
 };
 
 class FakeLocalIdentityStore final : public ILocalIdentityStore

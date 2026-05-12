@@ -25,6 +25,22 @@ struct Harness
 
 int main()
 {
+    mesh::RadioRxPacket packet{};
+    packet.bytes[0] = 1;
+    packet.size = 1;
+
+    Harness message;
+    message.protocol.next_event.kind = mesh::MeshProtocolEventKind::MessageReceived;
+    message.protocol.next_event.peer = mesh::NodeId{0x1101};
+    message.receive.onRadioPacket(packet);
+    assert(message.events.count(mesh::MeshEventKind::MessageReceived) == 1);
+
+    Harness discovered;
+    discovered.protocol.next_event.kind = mesh::MeshProtocolEventKind::PeerDiscovered;
+    discovered.protocol.next_event.peer = mesh::NodeId{0x1201};
+    discovered.receive.onRadioPacket(packet);
+    assert(discovered.events.count(mesh::MeshEventKind::PeerDiscovered) == 1);
+
     Harness learned;
     learned.clock.now_ms = 500;
     learned.protocol.next_event.kind = mesh::MeshProtocolEventKind::PeerKeyLearned;
@@ -32,9 +48,6 @@ int main()
     learned.protocol.next_event.peer_key = mesh::tests::makePeerKey(0x2201, false);
     learned.protocol.next_event.peer_key.updated_at_ms = 0;
 
-    mesh::RadioRxPacket packet{};
-    packet.bytes[0] = 1;
-    packet.size = 1;
     learned.receive.onRadioPacket(packet);
     assert(learned.events.count(mesh::MeshEventKind::PeerKeyLearned) == 1);
 

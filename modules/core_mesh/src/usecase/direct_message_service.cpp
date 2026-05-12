@@ -56,6 +56,7 @@ SendResult DirectMessageService::sendDirect(const DirectMessageCommand& command)
                                static_cast<int>(built.failure)});
         if (built.failure == ProtocolFailure::MissingPeerKey)
         {
+            events_.emit(MeshEvent{MeshEventKind::PeerKeyMissing, command.to, 0});
             return SendResult::fail(SendFailure::PeerKeyMissing);
         }
         if (built.failure == ProtocolFailure::CryptoFailed)
