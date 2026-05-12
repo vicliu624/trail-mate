@@ -42,6 +42,7 @@ SendResult DirectMessageService::sendDirect(const DirectMessageCommand& command)
     }
 
     ProtocolBuildContext context{};
+    context.local_node = command.from;
     context.local_identity = local;
     context.peer_key = peer;
     context.now_ms = clock_.nowMs();

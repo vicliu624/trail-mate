@@ -10,16 +10,20 @@ namespace mesh
 
 struct DirectMessageCommand
 {
+    NodeId from;
     NodeId to;
     ByteView payload;
     bool request_ack = true;
+    uint32_t application_port = 0;
 
     DirectMessageCommand() = default;
 
     DirectMessageCommand(NodeId command_to, ByteView command_payload, bool command_request_ack)
-        : to(command_to),
+        : from(),
+          to(command_to),
           payload(command_payload),
-          request_ack(command_request_ack)
+          request_ack(command_request_ack),
+          application_port(0)
     {
     }
 };

@@ -14,9 +14,14 @@ namespace mesh
 
 struct ProtocolBuildContext
 {
+    NodeId local_node{};
     LocalIdentity local_identity{};
     PeerPublicKey peer_key{};
+    ByteView channel_key{};
     uint32_t now_ms = 0;
+    uint32_t packet_id = 0;
+    uint8_t channel_hash = 0;
+    uint8_t hop_limit = 2;
 };
 
 class MeshProtocolStrategy

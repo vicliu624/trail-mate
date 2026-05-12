@@ -151,8 +151,6 @@ if(BUILD_TESTING)
              COMMAND trailmate_core_gps_time_smoke)
 
     set(TRAIL_MATE_CORE_MESH_TEST_SOURCES
-        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshcore/meshcore_protocol_strategy.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshtastic/meshtastic_protocol_strategy.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/direct_message_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/mesh_dedup_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/mesh_session.cpp"
@@ -177,4 +175,37 @@ if(BUILD_TESTING)
         add_test(NAME trailmate_core_mesh_${core_mesh_test}_smoke
                  COMMAND trailmate_core_mesh_${core_mesh_test}_smoke)
     endforeach()
+
+    set(TRAIL_MATE_MESHTASTIC_PROTOCOL_TEST_SOURCES
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshtastic/meshtastic_protocol_strategy.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_packet_wire.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_protocol_helpers.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_radio_config.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_region.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb/pb_common.c"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb/pb_decode.c"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb/pb_encode.c"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/channel.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/config.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/device_ui.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/mesh.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/module_config.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/portnums.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/telemetry.pb.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/xmodem.pb.cpp"
+    )
+
+    add_executable(trailmate_core_mesh_meshtastic_protocol_strategy_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests/test_meshtastic_protocol_strategy.cpp"
+        ${TRAIL_MATE_MESHTASTIC_PROTOCOL_TEST_SOURCES}
+    )
+    target_include_directories(trailmate_core_mesh_meshtastic_protocol_strategy_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb")
+    add_test(NAME trailmate_core_mesh_meshtastic_protocol_strategy_smoke
+             COMMAND trailmate_core_mesh_meshtastic_protocol_strategy_smoke)
 endif()
