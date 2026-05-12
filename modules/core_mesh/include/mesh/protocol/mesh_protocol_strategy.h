@@ -22,6 +22,11 @@ struct ProtocolBuildContext
     uint32_t packet_id = 0;
     uint8_t channel_hash = 0;
     uint8_t hop_limit = 2;
+    uint8_t route_type = 0;
+    ByteView route_path{};
+    bool has_air_want_ack = false;
+    bool air_want_ack = false;
+    bool include_payload_dest = true;
 };
 
 class MeshProtocolStrategy

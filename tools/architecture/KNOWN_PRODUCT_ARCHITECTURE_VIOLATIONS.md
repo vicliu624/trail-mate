@@ -58,6 +58,15 @@ adapters, but their protocol PKI flow, direct encryption/decryption, and runtime
 packet behavior are still historical adapter responsibilities until the
 protocol strategy and use-case migration slices take over.
 
+Phase 4 PR 4.8 starts thinning the ESP compatibility adapters by routing ESP
+Meshtastic non-PKI app-data packet construction through
+`MeshtasticProtocolStrategy` and ESP MeshCore direct/group app-data frame
+construction through `MeshCoreProtocolStrategy`. Radio TX, route selection,
+legacy ACK tracking, PKI compatibility paths, receive parsing, and platform
+event bridging remain in the adapters as known follow-up violations until the
+full `DirectMessageService`/`ReceivePacketService` bridge can take ownership
+without changing on-air behavior.
+
 Current known LoRa/Mesh exceptions include:
 
 - `platform/esp/arduino_common/src/chat/infra/meshtastic/mt_adapter.cpp`

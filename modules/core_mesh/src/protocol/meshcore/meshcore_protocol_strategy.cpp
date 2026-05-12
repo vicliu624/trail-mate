@@ -37,6 +37,11 @@ bool isDirectSharedSecret(ByteView secret)
     return secret.data != nullptr && secret.size == 32;
 }
 
+bool isSupportedDirectSecret(ByteView secret)
+{
+    return secret.data != nullptr && (secret.size == 16 || secret.size == 32);
+}
+
 bool copyPayload(const DirectMessageCommand& command,
                  uint8_t* out_plain,
                  size_t plain_capacity,
@@ -161,10 +166,10 @@ ProtocolResult MeshCoreProtocolStrategy::buildDirectMessage(
 
     if (!group_packet)
     {
-        ByteView secret = isDirectSharedSecret(context.channel_key)
+        ByteView secret = isSupportedDirectSecret(context.channel_key)
                               ? context.channel_key
                               : ByteView{direct_key32_, sizeof(direct_key32_)};
-        if (!has_direct_secret_ && !isDirectSharedSecret(context.channel_key))
+        if (!has_direct_secret_ && !isSupportedDirectSecret(context.channel_key))
         {
             return ProtocolResult::fail(ProtocolFailure::MissingPeerKey);
         }
@@ -204,10 +209,13 @@ ProtocolResult MeshCoreProtocolStrategy::buildDirectMessage(
             return ProtocolResult::fail(ProtocolFailure::EncodeFailed);
         }
 
-        if (!chat::meshcore::buildFrameNoTransport(kRouteTypeFlood,
+        const uint8_t route_type = context.route_type != 0 ? context.route_type : kRouteTypeFlood;
+        const uint8_t* route_path = context.route_path.empty() ? nullptr : context.route_path.data;
+        const size_t route_path_len = context.route_path.empty() ? 0 : context.route_path.size;
+        if (!chat::meshcore::buildFrameNoTransport(route_type,
                                                    kPayloadTypeDirectData,
-                                                   nullptr,
-                                                   0,
+                                                   route_path,
+                                                   route_path_len,
                                                    payload,
                                                    payload_len,
                                                    out.bytes,

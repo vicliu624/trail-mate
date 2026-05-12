@@ -50,7 +50,10 @@ uint32_t portFromCommand(const DirectMessageCommand& command)
                : static_cast<uint32_t>(meshtastic_PortNum_TEXT_MESSAGE_APP);
 }
 
-bool encodeAppData(const DirectMessageCommand& command, uint8_t* out, size_t* out_size)
+bool encodeAppData(const ProtocolBuildContext& context,
+                   const DirectMessageCommand& command,
+                   uint8_t* out,
+                   size_t* out_size)
 {
     if (!out || !out_size || command.payload.size > sizeof(meshtastic_Data::payload.bytes))
     {
@@ -61,7 +64,10 @@ bool encodeAppData(const DirectMessageCommand& command, uint8_t* out, size_t* ou
     data.want_response = command.request_ack;
     data.has_bitfield = true;
     data.bitfield = 0;
-    data.dest = command.to.value;
+    if (context.include_payload_dest)
+    {
+        data.dest = command.to.value;
+    }
     data.payload.size = static_cast<pb_size_t>(command.payload.size);
     std::memcpy(data.payload.bytes, command.payload.data, command.payload.size);
 
@@ -97,7 +103,8 @@ ProtocolResult MeshtasticProtocolStrategy::buildDirectMessage(
     const DirectMessageCommand& command,
     EncodedPacket& out)
 {
-    if (!context.local_node.isValidUnicast() || !command.to.isValidUnicast() ||
+    if (!context.local_node.isValidUnicast() ||
+        (!command.to.isValidUnicast() && !command.to.isBroadcast()) ||
         command.payload.empty())
     {
         return ProtocolResult::fail(ProtocolFailure::InvalidInput);
@@ -105,14 +112,16 @@ ProtocolResult MeshtasticProtocolStrategy::buildDirectMessage(
 
     uint8_t data[256]{};
     size_t data_size = sizeof(data);
-    if (!encodeAppData(command, data, &data_size))
+    if (!encodeAppData(context, command, data, &data_size))
     {
         return ProtocolResult::fail(ProtocolFailure::EncodeFailed);
     }
 
     out.size = sizeof(out.bytes);
-    const bool want_ack =
-        ::chat::meshtastic::shouldSetAirWantAck(command.to.value, command.request_ack);
+    const bool want_ack = context.has_air_want_ack
+                              ? context.air_want_ack
+                              : ::chat::meshtastic::shouldSetAirWantAck(command.to.value,
+                                                                        command.request_ack);
     const uint8_t* psk = context.channel_key.data;
     const size_t psk_len = context.channel_key.size;
     if (!::chat::meshtastic::buildWirePacket(data,

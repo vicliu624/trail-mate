@@ -9,6 +9,7 @@
 #include "chat/infra/meshcore/meshcore_payload_helpers.h"
 #include "chat/infra/meshcore/meshcore_protocol_helpers.h"
 #include "chat/time_utils.h"
+#include "mesh/protocol/meshcore/meshcore_protocol_strategy.h"
 #include "sys/event_bus.h"
 #include <AES.h>
 #include <Arduino.h>
@@ -2973,79 +2974,54 @@ bool MeshCoreAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                 return false;
             }
         }
+        (void)peer_key16;
 
-        constexpr size_t kDirectCipherBudget =
-            ((kMeshcoreMaxPayloadSize - 2 - kCipherMacSize) / kCipherBlockSize) * kCipherBlockSize;
-        constexpr size_t kDirectPlainPrefix = 2 + 1 + sizeof(portnum);
-        if (kDirectCipherBudget <= kDirectPlainPrefix)
+        ::mesh::meshcore::MeshCoreProtocolStrategy core_strategy;
+        ::mesh::ProtocolBuildContext core_context{};
+        core_context.local_node = ::mesh::NodeId{node_id_};
+        core_context.channel_key = ::mesh::ByteView{peer_key32, sizeof(peer_key32)};
+        core_context.route_type = route_type;
+        core_context.route_path = ::mesh::ByteView{out_path, out_path_len};
+
+        ::mesh::DirectMessageCommand core_command{
+            ::mesh::NodeId{dest},
+            ::mesh::ByteView{payload, len},
+            want_ack};
+        core_command.application_port = portnum;
+
+        ::mesh::EncodedPacket frame{};
+        auto built = core_strategy.buildDirectMessage(core_context, core_command, frame);
+        if (!built.ok)
         {
-            MESHCORE_LOG("[MESHCORE] TX direct app-data dropped (cipher budget too small) peer=%08lX port=%u\n",
-                         static_cast<unsigned long>(dest),
-                         static_cast<unsigned>(portnum));
-            return false;
-        }
-
-        size_t body_len = len;
-        if (body_len + kDirectPlainPrefix > kDirectCipherBudget)
-        {
-            body_len = kDirectCipherBudget - kDirectPlainPrefix;
-        }
-
-        uint8_t plain[kDirectCipherBudget];
-        size_t plain_len = 0;
-        plain[plain_len++] = kDirectAppMagic0;
-        plain[plain_len++] = kDirectAppMagic1;
-        plain[plain_len++] = want_ack ? kDirectAppFlagWantAck : 0x00;
-        memcpy(&plain[plain_len], &portnum, sizeof(portnum));
-        plain_len += sizeof(portnum);
-        memcpy(&plain[plain_len], payload, body_len);
-        plain_len += body_len;
-
-        uint8_t peer_payload[kMeshcoreMaxPayloadSize];
-        size_t peer_payload_len = 0;
-        if (!buildPeerDatagramPayload(peer_hash, self_hash_,
-                                      peer_key16, peer_key32,
-                                      plain, plain_len,
-                                      peer_payload, sizeof(peer_payload), &peer_payload_len))
-        {
-            MESHCORE_LOG("[MESHCORE] TX direct app-data dropped (build payload fail) peer=%08lX port=%u plain_len=%u\n",
-                         static_cast<unsigned long>(dest),
-                         static_cast<unsigned>(portnum),
-                         static_cast<unsigned>(plain_len));
-            return false;
-        }
-
-        uint8_t frame[kMeshcoreMaxFrameSize];
-        size_t frame_len = 0;
-
-        if (!buildFrameNoTransport(route_type, kPayloadTypeDirectData,
-                                   out_path, out_path_len,
-                                   peer_payload, peer_payload_len,
-                                   frame, sizeof(frame), &frame_len))
-        {
-            MESHCORE_LOG("[MESHCORE] TX direct app-data dropped (build frame fail) peer=%08lX route=%s path_len=%u port=%u payload_len=%u\n",
+            MESHCORE_LOG("[MESHCORE] TX direct app-data dropped (core build fail) peer=%08lX route=%s path_len=%u port=%u code=%u\n",
                          static_cast<unsigned long>(dest),
                          (route_type == kRouteTypeDirect) ? "direct" : "flood",
                          static_cast<unsigned>(out_path_len),
                          static_cast<unsigned>(portnum),
-                         static_cast<unsigned>(peer_payload_len));
+                         static_cast<unsigned>(built.failure));
             return false;
         }
 
-        bool ok = transmitFrameNow(frame, frame_len, now_ms);
+        bool ok = transmitFrameNow(frame.bytes, frame.size, now_ms);
         MESHCORE_LOG("[MESHCORE] TX direct app-data peer=%08lX hash=%02X route=%s path_len=%u port=%u len=%u ok=%u\n",
                      static_cast<unsigned long>(dest),
                      static_cast<unsigned>(peer_hash),
                      (route_type == kRouteTypeDirect) ? "direct" : "flood",
                      static_cast<unsigned>(out_path_len),
                      static_cast<unsigned>(portnum),
-                     static_cast<unsigned>(frame_len),
+                     static_cast<unsigned>(frame.size),
                      ok ? 1U : 0U);
         if (ok && want_ack)
         {
-            const uint32_t ack_sig = packetSignature(kPayloadTypeDirectData, out_path_len,
-                                                     peer_payload, peer_payload_len);
-            trackPendingAppAck(ack_sig, dest, portnum, now_ms);
+            ParsedPacket built_packet{};
+            if (parsePacket(frame.bytes, frame.size, &built_packet))
+            {
+                const uint32_t ack_sig = packetSignature(built_packet.payload_type,
+                                                         built_packet.path_len,
+                                                         built_packet.payload,
+                                                         built_packet.payload_len);
+                trackPendingAppAck(ack_sig, dest, portnum, now_ms);
+            }
         }
         return ok;
     }
@@ -3060,55 +3036,32 @@ bool MeshCoreAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                      static_cast<unsigned>(portnum));
         return false;
     }
+    (void)channel_key16;
 
-    constexpr size_t kGroupCipherBudget =
-        ((kMeshcoreMaxPayloadSize - 1 - kCipherMacSize) / kCipherBlockSize) * kCipherBlockSize;
-    constexpr size_t kGroupPlainPrefix = 2 + sizeof(uint32_t) + sizeof(portnum);
-    if (kGroupCipherBudget <= kGroupPlainPrefix)
-    {
-        MESHCORE_LOG("[MESHCORE] TX group app-data dropped (cipher budget too small) ch=%u port=%u\n",
-                     static_cast<unsigned>(channel),
-                     static_cast<unsigned>(portnum));
-        return false;
-    }
-    size_t body_len = len;
-    if (body_len + kGroupPlainPrefix > kGroupCipherBudget)
-    {
-        body_len = kGroupCipherBudget - kGroupPlainPrefix;
-    }
-    uint8_t plain[kGroupCipherBudget];
-    size_t plain_len = 0;
-    plain[plain_len++] = kGroupDataMagic0;
-    plain[plain_len++] = kGroupDataMagic1;
-    memcpy(&plain[plain_len], &node_id_, sizeof(node_id_));
-    plain_len += sizeof(node_id_);
-    memcpy(&plain[plain_len], &portnum, sizeof(portnum));
-    plain_len += sizeof(portnum);
-    memcpy(&plain[plain_len], payload, body_len);
-    plain_len += body_len;
+    ::mesh::meshcore::MeshCoreProtocolStrategy core_strategy;
+    ::mesh::ProtocolBuildContext core_context{};
+    core_context.local_node = ::mesh::NodeId{node_id_};
+    core_context.channel_key = ::mesh::ByteView{channel_key32, sizeof(channel_key32)};
+    core_context.channel_hash = channel_hash;
 
-    uint8_t encrypted[kMeshcoreMaxPayloadSize];
-    size_t encrypted_len = encryptThenMac(channel_key16, channel_key32,
-                                          encrypted, sizeof(encrypted),
-                                          plain, plain_len);
-    if (encrypted_len == 0 || encrypted_len > (kMeshcoreMaxPayloadSize - 1))
+    ::mesh::DirectMessageCommand core_command{
+        ::mesh::NodeId{},
+        ::mesh::ByteView{payload, len},
+        false};
+    core_command.application_port = portnum;
+
+    ::mesh::EncodedPacket frame{};
+    auto built = core_strategy.buildDirectMessage(core_context, core_command, frame);
+    if (!built.ok)
     {
-        MESHCORE_LOG("[MESHCORE] TX group app-data dropped (encrypt fail) ch=%u port=%u plain_len=%u\n",
+        MESHCORE_LOG("[MESHCORE] TX group app-data dropped (core build fail) ch=%u port=%u code=%u\n",
                      static_cast<unsigned>(channel),
                      static_cast<unsigned>(portnum),
-                     static_cast<unsigned>(plain_len));
+                     static_cast<unsigned>(built.failure));
         return false;
     }
 
-    uint8_t buffer[256];
-    size_t index = 0;
-    buffer[index++] = buildHeader(kRouteTypeFlood, kPayloadTypeGrpData, kPayloadVer1);
-    buffer[index++] = 0; // path_len = 0
-    buffer[index++] = channel_hash;
-    memcpy(&buffer[index], encrypted, encrypted_len);
-    index += encrypted_len;
-
-    return transmitFrameNow(buffer, index, now_ms);
+    return transmitFrameNow(frame.bytes, frame.size, now_ms);
 }
 
 bool MeshCoreAdapter::pollIncomingData(MeshIncomingData* out)

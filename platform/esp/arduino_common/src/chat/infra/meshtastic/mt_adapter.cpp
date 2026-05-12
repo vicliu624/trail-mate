@@ -29,6 +29,7 @@
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "mesh/protocol/meshtastic/meshtastic_protocol_strategy.h"
 #include "meshtastic/config.pb.h"
 #include "meshtastic/mqtt.pb.h"
 #include <Curve25519.h>
@@ -518,11 +519,47 @@ bool MtAdapter::sendAppData(ChannelId channel, uint32_t portnum,
                 static_cast<unsigned>(channel_hash),
                 use_pki ? "PKI" : "CHANNEL",
                 static_cast<unsigned>(out_len));
-    if (!buildWirePacket(out_payload, out_len, node_id_, msg_id,
-                         dest_node, channel_hash, hop_limit, air_want_ack,
-                         psk, psk_len, wire_buffer, &wire_size))
+    if (use_pki)
     {
-        return false;
+        if (!buildWirePacket(out_payload, out_len, node_id_, msg_id,
+                             dest_node, channel_hash, hop_limit, air_want_ack,
+                             psk, psk_len, wire_buffer, &wire_size))
+        {
+            return false;
+        }
+    }
+    else
+    {
+        ::mesh::meshtastic::MeshtasticProtocolStrategy core_strategy;
+        ::mesh::ProtocolBuildContext core_context{};
+        core_context.local_node = ::mesh::NodeId{node_id_};
+        core_context.packet_id = msg_id;
+        core_context.channel_hash = channel_hash;
+        core_context.hop_limit = hop_limit;
+        core_context.channel_key = ::mesh::ByteView{psk, psk_len};
+        core_context.has_air_want_ack = true;
+        core_context.air_want_ack = air_want_ack;
+        core_context.include_payload_dest = false;
+
+        ::mesh::DirectMessageCommand core_command{
+            ::mesh::NodeId{dest_node},
+            ::mesh::ByteView{payload, len},
+            effective_want_response};
+        core_command.application_port = portnum;
+
+        ::mesh::EncodedPacket frame{};
+        auto built = core_strategy.buildDirectMessage(core_context, core_command, frame);
+        if (!built.ok || frame.size > wire_size)
+        {
+            mt_diag_log("[MT][TX_BLOCK] id=%08lX dest=%08lX port=%u reason=core_build_fail code=%u\n",
+                        static_cast<unsigned long>(msg_id),
+                        static_cast<unsigned long>(dest_node),
+                        static_cast<unsigned>(portnum),
+                        static_cast<unsigned>(built.failure));
+            return false;
+        }
+        memcpy(wire_buffer, frame.bytes, frame.size);
+        wire_size = frame.size;
     }
 
     if (!board_.isRadioOnline())
