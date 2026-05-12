@@ -49,6 +49,25 @@ Existing GPS runtime APIs are consumed directly by parts of the current UI and
 Linux uConsole presentation code. Later phases should route GPS facts through a
 LocationService, TimeAuthority, and presentation snapshots.
 
+Phase 3 introduces the shared `core_gps` ports and use cases for this split:
+`IGnssByteStream`, `ILocationSource`, `ITimeAuthority`, `NmeaParser`,
+`LocationService`, and `TimeAuthority`. ESP BLE and Team track sampling now have
+adapter paths that consume `ILocationSource` rather than reading GPS state as
+their own domain fact. The older platform/UI GPS runtime remains in place as a
+compatibility surface for existing pages and Linux simulator behavior until the
+presentation-model phase can replace those direct reads.
+
+Current known GPS/time exceptions include:
+
+- `platform/ui/gps_runtime.h` is still the UI compatibility facade for existing
+  LVGL, mono, GTK, and Linux simulator surfaces.
+- ESP `GpsService` still owns the current Arduino task shell, receiver config
+  application, TinyGPS-backed parsing, and track-recorder append path.
+- Some board packages still perform direct `settimeofday` or RTC synchronization
+  as historical hardware runtime behavior.
+- Host/UI runtime code may still read system time directly for display or legacy
+  status until those surfaces consume `ITimeAuthority`/device snapshots.
+
 ### LVGL/shared UI code still contains product and platform coupling
 
 Some current LVGL/shared UI files still call app facades and platform UI

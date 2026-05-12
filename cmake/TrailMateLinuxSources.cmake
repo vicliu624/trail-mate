@@ -164,7 +164,16 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/usecase/team_service.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/usecase/team_track_sampler.cpp"
     # modules/core_gps
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_sentence.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/gnss_skyplot_presenter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/gps_jitter_filter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/gps_runtime_config.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/gps_runtime_policy.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/gps_runtime_state.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/location_service.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/time_authority.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/motion_policy.cpp"
     # modules/core_hostlink
     "${TRAIL_MATE_REPO_ROOT}/modules/core_hostlink/src/hostlink_session.cpp"
     # modules/core_sys

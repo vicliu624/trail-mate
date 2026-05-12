@@ -324,7 +324,7 @@ void AppPhoneFacade::setTimezoneOffsetMinutes(int offset_min)
 
 bool AppPhoneFacade::getGpsFix(phone::meshtastic::MeshtasticGpsFix* out) const
 {
-    return platform::shared::ble_bridge::fillMeshtasticGpsFixFromUiRuntime(out);
+    return platform::shared::ble_bridge::fillMeshtasticGpsFixFromLocationSource(gps::gps_location_source(), out);
 }
 
 phone::meshcore::MeshCorePhoneBatteryInfo AppPhoneFacade::getBatteryInfo() const

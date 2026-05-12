@@ -1,13 +1,91 @@
 #include "platform/esp/arduino_common/gps/gps_service_api.h"
 #include "platform/esp/arduino_common/gps/gps_service.h"
+#include "sys/clock.h"
 #include <cmath>
+#include <ctime>
 
 namespace gps
 {
+namespace
+{
+constexpr uint32_t kMinValidEpochSeconds = 1577836800UL; // 2020-01-01 UTC
+
+class GpsServiceLocationSource final : public ILocationSource
+{
+  public:
+    bool latestFix(LocationFix& out) const override
+    {
+        const GpsState state = gps_get_data();
+        if (!state.valid)
+        {
+            out = {};
+            return false;
+        }
+        uint64_t epoch = 0;
+        const uint32_t now_epoch = sys::epoch_seconds_now();
+        if (now_epoch >= kMinValidEpochSeconds)
+        {
+            epoch = now_epoch;
+        }
+        out = locationFixFromGpsState(state, sys::millis_now(), epoch);
+        return true;
+    }
+};
+
+class SystemEpochTimeAuthority final : public ITimeAuthority
+{
+  public:
+    uint32_t nowMonotonicMs() const override
+    {
+        return sys::millis_now();
+    }
+
+    bool nowEpoch(uint64_t& out_epoch_seconds) const override
+    {
+        const uint32_t epoch = sys::epoch_seconds_now();
+        if (epoch < kMinValidEpochSeconds)
+        {
+            out_epoch_seconds = 0;
+            return false;
+        }
+        out_epoch_seconds = epoch;
+        return true;
+    }
+
+    TimeSyncStatus syncStatus() const override
+    {
+        TimeSyncStatus status{};
+        uint64_t epoch = 0;
+        status.epoch_valid = nowEpoch(epoch);
+        status.synced = status.epoch_valid;
+        status.source = status.epoch_valid ? TimeSourceKind::System : TimeSourceKind::None;
+        status.epoch_seconds = epoch;
+        status.observed_at_ms = sys::millis_now();
+        return status;
+    }
+};
+} // namespace
 
 GpsState gps_get_data()
 {
     return GpsService::getInstance().getData();
+}
+
+bool gps_latest_fix(gps::LocationFix& out)
+{
+    return gps_location_source().latestFix(out);
+}
+
+const gps::ILocationSource& gps_location_source()
+{
+    static GpsServiceLocationSource source;
+    return source;
+}
+
+const gps::ITimeAuthority& gps_time_authority()
+{
+    static SystemEpochTimeAuthority authority;
+    return authority;
 }
 
 bool gps_get_gnss_snapshot(gps::GnssSatInfo* out, size_t max, size_t* out_count, gps::GnssStatus* status)

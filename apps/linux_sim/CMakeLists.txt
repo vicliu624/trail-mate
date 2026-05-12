@@ -115,4 +115,38 @@ if(BUILD_TESTING)
         PRIVATE trailmate_cardputer_zero_linux_common)
     add_test(NAME trailmate_core_phone_smoke
              COMMAND trailmate_core_phone_smoke)
+
+    add_executable(trailmate_core_gps_nmea_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_sentence.cpp"
+    )
+    target_include_directories(trailmate_core_gps_nmea_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include")
+    add_test(NAME trailmate_core_gps_nmea_smoke
+             COMMAND trailmate_core_gps_nmea_smoke)
+
+    add_executable(trailmate_core_gps_location_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_location_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_sentence.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/gps_jitter_filter.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/location_service.cpp"
+    )
+    target_include_directories(trailmate_core_gps_location_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include")
+    add_test(NAME trailmate_core_gps_location_smoke
+             COMMAND trailmate_core_gps_location_smoke)
+
+    add_executable(trailmate_core_gps_time_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_time_authority.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/time_authority.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
+    )
+    target_include_directories(trailmate_core_gps_time_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
+    add_test(NAME trailmate_core_gps_time_smoke
+             COMMAND trailmate_core_gps_time_smoke)
 endif()

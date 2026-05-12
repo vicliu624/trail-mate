@@ -5,13 +5,19 @@
 #include "gps/domain/gnss_satellite.h"
 #include "gps/domain/gps_diagnostics.h"
 #include "gps/domain/gps_state.h"
+#include "gps/domain/location_fix.h"
 #include "gps/domain/motion_config.h"
+#include "gps/ports/i_location_source.h"
+#include "gps/ports/i_time_authority.h"
 #include "gps/usecase/gps_runtime_config.h"
 
 namespace gps
 {
 
 GpsState gps_get_data();
+bool gps_latest_fix(gps::LocationFix& out);
+const gps::ILocationSource& gps_location_source();
+const gps::ITimeAuthority& gps_time_authority();
 bool gps_get_gnss_snapshot(gps::GnssSatInfo* out, size_t max, size_t* out_count, gps::GnssStatus* status);
 GpsDiagnosticsSnapshot gps_get_diagnostics();
 uint32_t gps_get_last_motion_ms();

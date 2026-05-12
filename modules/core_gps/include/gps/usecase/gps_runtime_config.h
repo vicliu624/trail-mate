@@ -46,8 +46,12 @@ struct GpsReceiverInitConfig
 
 struct GnssRuntimeConfig
 {
+    uint32_t baud = 9600;
+    uint32_t update_interval_ms = 1000;
     uint8_t mode = 0;
     uint8_t sat_mask = kDefaultGnssSatelliteMask;
+    bool nmea_enabled = true;
+    bool ubx_enabled = false;
 };
 
 struct ExternalNmeaRuntimeConfig

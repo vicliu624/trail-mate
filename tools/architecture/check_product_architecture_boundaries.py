@@ -165,6 +165,74 @@ RULES = (
         ),
     ),
     Rule(
+        name="platform-ble-must-not-read-gps-driver-directly",
+        roots=("platform",),
+        path_contains=("/ble/", "\\ble\\"),
+        patterns=compile_patterns(
+            (
+                r"\bboard\.gps\b",
+                r"\bGpsService\b",
+                r"\bNmeaParser\b",
+                r"\bsettimeofday\b",
+                r"\bgps_uart\b",
+                r"\bgps_get_data\b",
+                r"#include\s*[<\"]platform/ui/gps_runtime\.h[>\"]",
+                r"#include\s*[<\"]platform/[^>\"]+/gps/",
+            )
+        ),
+        excludes=(
+            "platform/esp/arduino_common/include/ble/app_phone_facade.h",
+            "platform/esp/arduino_common/src/ble/app_phone_facade.cpp",
+            "platform/nrf52/arduino_common/include/ble/app_phone_facade.h",
+            "platform/nrf52/arduino_common/src/ble/app_phone_facade.cpp",
+        ),
+    ),
+    Rule(
+        name="ui-must-not-read-gps-driver-directly",
+        roots=("modules/ui_shared", "apps/linux_uconsole", "platform/esp/arduino_common", "platform/linux"),
+        path_contains=("/ui/", "\\ui\\", "/gtk/", "\\gtk\\"),
+        patterns=compile_patterns(
+            (
+                r"\bGpsService\b",
+                r"\bIGnssByteStream\b",
+                r"\bNmeaParser\b",
+                r"\bgps_driver\b",
+                r"\bgps_uart\b",
+                r"#include\s*[<\"]platform/[^>\"]+/gps/",
+            )
+        ),
+    ),
+    Rule(
+        name="mesh-team-must-use-location-source-not-gps-driver",
+        roots=("modules/core_team", "modules/core_chat"),
+        patterns=compile_patterns(
+            (
+                r"\bGpsService\b",
+                r"\bIGnssByteStream\b",
+                r"\bNmeaParser\b",
+                r"\bboard\.gps\b",
+                r"#include\s*[<\"]platform/ui/gps_runtime\.h[>\"]",
+                r"#include\s*[<\"]platform/[^>\"]+/gps/",
+            )
+        ),
+    ),
+    Rule(
+        name="platform-gps-shell-must-not-own-ui-or-business",
+        roots=("platform",),
+        path_contains=("/gps/", "\\gps\\"),
+        patterns=compile_patterns(
+            (
+                r"\blv_obj_t\b",
+                r"\bGtkWidget\b",
+                r"\bChatService\b",
+                r"\bContactService\b",
+                r"\bDirectMessage\b",
+                r"\bMeshtasticPhoneCore\b",
+                r"\bMeshCorePhoneCore\b",
+            )
+        ),
+    ),
+    Rule(
         name="lvgl-ui-must-not-access-storage-radio-gps-board-directly",
         roots=("modules/ui_shared", "platform/esp/arduino_common", "apps/esp_pio"),
         path_contains=("/ui/", "\\ui\\"),

@@ -4,8 +4,8 @@
 #include "phone/meshtastic/meshtastic_defaults.h"
 #include "phone/meshtastic/meshtastic_phone_core.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "gps/ports/i_location_source.h"
 #include "meshtastic/localonly.pb.h"
-#include "platform/ui/gps_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 
@@ -85,24 +85,31 @@ inline bool setMeshtasticGpsFixUnavailable(::phone::meshtastic::MeshtasticGpsFix
     return false;
 }
 
-inline bool fillMeshtasticGpsFixFromUiRuntime(::phone::meshtastic::MeshtasticGpsFix* out)
+inline bool fillMeshtasticGpsFixFromLocationSource(const ::gps::ILocationSource& source,
+                                                   ::phone::meshtastic::MeshtasticGpsFix* out)
 {
     if (!out)
     {
         return false;
     }
 
-    const platform::ui::gps::GpsState gps_state = platform::ui::gps::get_data();
-    out->valid = gps_state.valid;
-    out->lat = gps_state.lat;
-    out->lng = gps_state.lng;
-    out->has_alt = gps_state.has_alt;
-    out->alt_m = gps_state.alt_m;
-    out->has_speed = gps_state.has_speed;
-    out->speed_mps = gps_state.speed_mps;
-    out->has_course = gps_state.has_course;
-    out->course_deg = gps_state.course_deg;
-    out->satellites = gps_state.satellites;
+    ::gps::LocationFix fix{};
+    if (!source.latestFix(fix))
+    {
+        *out = {};
+        return false;
+    }
+
+    out->valid = fix.valid;
+    out->lat = fix.latitude;
+    out->lng = fix.longitude;
+    out->has_alt = fix.has_altitude;
+    out->alt_m = static_cast<double>(fix.altitude_m);
+    out->has_speed = fix.has_speed;
+    out->speed_mps = static_cast<double>(fix.speed_mps);
+    out->has_course = fix.has_course;
+    out->course_deg = static_cast<double>(fix.course_deg);
+    out->satellites = fix.satellites;
     return out->valid;
 }
 

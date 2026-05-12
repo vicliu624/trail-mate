@@ -47,6 +47,17 @@ phone-core policy?
 
 Does this PR let a GPS driver directly serve UI, BLE, Mesh, or storage policy?
 
+If this PR touches GPS or time, did it identify whether the change is Board
+Facts, Platform GNSS Driver, GNSS Parser, LocationService, TimeAuthority, or a
+consumer?
+
+Does this PR make BLE, UI, Mesh, Team, or HostLink read `GpsService`, GPS UART,
+board GPS, or NMEA parser directly instead of `ILocationSource`,
+`ITimeAuthority`, or a device/status snapshot?
+
+Does this PR let a platform GPS runtime shell own UI, chat, BLE phone protocol,
+direct message, or contact-service behavior?
+
 Does this PR let a UI renderer own business logic?
 
 Does this PR let an app service know LVGL, GTK, ASCII, CLI, board pins, or
