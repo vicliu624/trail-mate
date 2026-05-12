@@ -161,6 +161,7 @@ if(BUILD_TESTING)
     )
 
     foreach(core_mesh_test
+            store_contracts
             peer_identity_service
             direct_message_service
             receive_packet_service

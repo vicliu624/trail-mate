@@ -57,6 +57,10 @@ Does this PR make `platform/*/mesh` or `platform/*/radio` depend on AES,
 Curve25519, Ed25519, protobuf business decisions, peer trust policy,
 `DirectMessageService` internals, or protocol-specific direct-message flow?
 
+If this PR adds or changes a store adapter, does the adapter only load, save,
+remove, clear, and expose stored facts without deciding peer trust, key
+exchange, direct-message eligibility, PKI fallback, or identity verification?
+
 Does this PR keep `modules/core_mesh` free of Arduino, RadioLib, Preferences,
 SQLite, FreeRTOS, Zephyr, ESP/nRF SDK, BLE, board, and UI headers?
 

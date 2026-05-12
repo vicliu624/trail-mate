@@ -48,22 +48,38 @@ Phase 4 introduces the shared `modules/core_mesh` boundary for this split:
 `DirectMessageService`, `ReceivePacketService`, `MeshSession`, and initial
 Meshtastic/MeshCore protocol strategy shells. The legacy adapters remain known
 violations until their behavior is migrated behind those ports/use cases.
+Phase 4 PR 4.2/4.3 also adds platform store adapters for Meshtastic-compatible
+32-byte local identities and peer public keys:
+`EspPreferencesLocalIdentityStore`, `EspPreferencesPeerKeyStore`,
+`Nrf52SettingsLocalIdentityStore`, `Nrf52SettingsPeerKeyStore`,
+`LinuxSqliteLocalIdentityStore`, and `LinuxSqlitePeerKeyStore`. ESP, nRF52, and
+Linux Meshtastic adapters now route PKI identity/key persistence through those
+adapters, but their protocol PKI flow, direct encryption/decryption, and runtime
+packet behavior are still historical adapter responsibilities until the
+protocol strategy and use-case migration slices take over.
 
 Current known LoRa/Mesh exceptions include:
 
 - `platform/esp/arduino_common/src/chat/infra/meshtastic/mt_adapter.cpp`
-  still owns Meshtastic PKI key load/save, direct encryption/decryption,
-  packet build/parse, retransmit policy, and radio transmit bridging.
+  still owns Meshtastic PKI flow, direct encryption/decryption, packet
+  build/parse, retransmit policy, and radio transmit bridging. PKI persistence
+  has been wrapped by platform store adapters, but protocol behavior has not
+  moved yet.
 - `platform/esp/arduino_common/src/chat/infra/meshcore/meshcore_adapter.cpp`
   still owns MeshCore peer public-key persistence, identity routing, direct
   payload encryption/decryption, frame build/parse, ACK/retry behavior, and
   radio transmit bridging.
 - `platform/nrf52/arduino_common/src/chat/infra/meshtastic/meshtastic_radio_adapter.cpp`
   still owns Meshtastic direct-message/PKI behavior, peer key memory, and
-  retransmit behavior next to radio I/O.
+  retransmit behavior next to radio I/O. PKI persistence has been wrapped by
+  platform store adapters, but protocol behavior has not moved yet.
 - `platform/nrf52/arduino_common/src/chat/infra/meshcore/meshcore_radio_adapter.cpp`
   still owns MeshCore direct/group payload framing and identity behavior next
   to radio I/O.
+- `platform/linux/common/src/chat/linux_raw_lora_mesh_adapter.cpp` still owns
+  Meshtastic direct-message/PKI behavior and packet build/parse next to Linux
+  radio I/O. PKI persistence has been wrapped by the Linux store adapter, but
+  protocol behavior has not moved yet.
 
 During Phase 4, new direct-send and receive paths should be added to
 `modules/core_mesh` first, then the legacy adapters should be thinned into

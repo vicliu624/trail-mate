@@ -21,8 +21,8 @@
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/time_utils.h"
+#include "platform/linux/mesh/linux_sqlite_mesh_identity_store.h"
 #include "platform/linux/runtime_packet_log.h"
-#include "platform/ui/settings_store.h"
 #include "sys/event_bus.h"
 
 #if defined(TRAIL_MATE_HAS_OPENSSL)
@@ -51,14 +51,7 @@ constexpr std::uint8_t kBitfieldWantResponseMask = 0x02;
 constexpr std::uint32_t kNodeInfoReplySuppressMs = 60000;
 constexpr std::uint32_t kKeyVerificationTimeoutMs = 60000;
 constexpr std::size_t kMaxPkiNodes = 16;
-constexpr char kPkiLocalNamespace[] = "chat";
-constexpr char kPkiPublicKey[] = "pki_pub";
-constexpr char kPkiPrivateKey[] = "pki_priv";
-constexpr char kPkiNodeNamespace[] = "chat_pki";
-constexpr char kPkiNodeKeys[] = "pki_nodes";
 constexpr std::size_t kPkiKeySize = 32;
-constexpr std::size_t kPkiNodeEntryV2Size = 40;
-constexpr std::size_t kPkiNodeEntryV1Size = 36;
 
 struct MeshtasticAirPlan
 {
@@ -1934,24 +1927,18 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
 
 bool LinuxRawLoraMeshAdapter::initPkiKeys()
 {
-    std::vector<std::uint8_t> public_blob;
-    std::vector<std::uint8_t> private_blob;
-    const bool have_public = ::platform::ui::settings_store::get_blob(
-        kPkiLocalNamespace, kPkiPublicKey, public_blob);
-    const bool have_private = ::platform::ui::settings_store::get_blob(
-        kPkiLocalNamespace, kPkiPrivateKey, private_blob);
-
-    if (have_public && have_private &&
-        public_blob.size() == pki_public_key_.size() &&
-        private_blob.size() == pki_private_key_.size() &&
-        !::chat::meshtastic::isZeroKey(private_blob.data(),
-                                       private_blob.size()))
+    ::platform::linux_runtime::mesh::LinuxSqliteLocalIdentityStore store;
+    ::mesh::LocalIdentity stored_identity{};
+    auto loaded = store.load(stored_identity);
+    if (loaded.ok &&
+        !::chat::meshtastic::isZeroKey(stored_identity.private_key,
+                                       sizeof(stored_identity.private_key)))
     {
         std::memcpy(pki_public_key_.data(),
-                    public_blob.data(),
+                    stored_identity.public_key,
                     pki_public_key_.size());
         std::memcpy(pki_private_key_.data(),
-                    private_blob.data(),
+                    stored_identity.private_key,
                     pki_private_key_.size());
         pki_ready_ = true;
         append_lora_system_log("Meshtastic PKI ready",
@@ -1973,17 +1960,16 @@ bool LinuxRawLoraMeshAdapter::initPkiKeys()
         return false;
     }
 
-    const bool public_ok = ::platform::ui::settings_store::put_blob(
-        kPkiLocalNamespace,
-        kPkiPublicKey,
-        pki_public_key_.data(),
-        pki_public_key_.size());
-    const bool private_ok = ::platform::ui::settings_store::put_blob(
-        kPkiLocalNamespace,
-        kPkiPrivateKey,
-        pki_private_key_.data(),
-        pki_private_key_.size());
-    pki_ready_ = public_ok && private_ok;
+    ::mesh::LocalIdentity generated{};
+    std::memcpy(generated.public_key,
+                pki_public_key_.data(),
+                sizeof(generated.public_key));
+    std::memcpy(generated.private_key,
+                pki_private_key_.data(),
+                sizeof(generated.private_key));
+    generated.valid = true;
+    auto saved = store.save(generated);
+    pki_ready_ = saved.ok;
     append_lora_system_log(
         pki_ready_ ? "Meshtastic PKI ready" : "Meshtastic PKI save failed",
         pki_ready_ ? "Generated and saved local X25519 identity key."
@@ -1993,45 +1979,22 @@ bool LinuxRawLoraMeshAdapter::initPkiKeys()
 
 void LinuxRawLoraMeshAdapter::loadPkiNodeKeys()
 {
-    std::vector<std::uint8_t> blob;
-    if (!::platform::ui::settings_store::get_blob(kPkiNodeNamespace,
-                                                  kPkiNodeKeys,
-                                                  blob) ||
-        blob.empty())
+    ::platform::linux_runtime::mesh::LinuxSqlitePeerKeyStore store;
+    std::vector<::mesh::PeerPublicKey> keys;
+    auto loaded = store.loadAll(keys);
+    if (!loaded.ok)
     {
         return;
     }
 
-    const bool is_v2 = (blob.size() % kPkiNodeEntryV2Size) == 0;
-    const bool is_v1 = !is_v2 && (blob.size() % kPkiNodeEntryV1Size) == 0;
-    if (!is_v2 && !is_v1)
+    node_public_keys_.clear();
+    node_key_last_seen_.clear();
+    for (const auto& peer_key : keys)
     {
-        return;
-    }
-
-    const std::size_t entry_size = is_v2 ? kPkiNodeEntryV2Size
-                                         : kPkiNodeEntryV1Size;
-    std::size_t count = std::min(kMaxPkiNodes, blob.size() / entry_size);
-    for (std::size_t index = 0; index < count; ++index)
-    {
-        const std::uint8_t* entry = blob.data() + (index * entry_size);
-        const ::chat::NodeId node_id = read_u32(entry);
-        const std::uint8_t* key = is_v2 ? entry + 8 : entry + 4;
-        if (node_id == 0 || node_id == kBroadcastNodeId ||
-            ::chat::meshtastic::isZeroKey(key, kPkiKeySize))
-        {
-            continue;
-        }
-
         std::array<std::uint8_t, 32> key_copy{};
-        std::memcpy(key_copy.data(), key, key_copy.size());
-        node_public_keys_[node_id] = key_copy;
-        node_key_last_seen_[node_id] = is_v2 ? read_u32(entry + 4) : 0;
-    }
-
-    if (is_v1 && !node_public_keys_.empty())
-    {
-        savePkiKeysToStore();
+        std::memcpy(key_copy.data(), peer_key.public_key, key_copy.size());
+        node_public_keys_[peer_key.node_id.value] = key_copy;
+        node_key_last_seen_[peer_key.node_id.value] = peer_key.updated_at_ms;
     }
 }
 
@@ -2055,23 +2018,17 @@ void LinuxRawLoraMeshAdapter::savePkiNodeKey(::chat::NodeId node_id,
 
 void LinuxRawLoraMeshAdapter::savePkiKeysToStore()
 {
-    struct NodeKeyEntry
-    {
-        ::chat::NodeId node_id = 0;
-        std::uint32_t last_seen = 0;
-        std::array<std::uint8_t, 32> key{};
-    };
-
-    std::vector<NodeKeyEntry> entries;
+    std::vector<::mesh::PeerPublicKey> entries;
     entries.reserve(node_public_keys_.size());
     for (const auto& item : node_public_keys_)
     {
-        NodeKeyEntry entry{};
-        entry.node_id = item.first;
-        entry.key = item.second;
+        ::mesh::PeerPublicKey entry{};
+        entry.node_id = ::mesh::NodeId{item.first};
         const auto seen_it = node_key_last_seen_.find(item.first);
-        entry.last_seen =
+        entry.updated_at_ms =
             seen_it == node_key_last_seen_.end() ? 0 : seen_it->second;
+        entry.verified = false;
+        std::memcpy(entry.public_key, item.second.data(), sizeof(entry.public_key));
         entries.push_back(entry);
     }
 
@@ -2079,35 +2036,24 @@ void LinuxRawLoraMeshAdapter::savePkiKeysToStore()
     {
         std::sort(entries.begin(),
                   entries.end(),
-                  [](const NodeKeyEntry& left, const NodeKeyEntry& right)
+                  [](const ::mesh::PeerPublicKey& left,
+                     const ::mesh::PeerPublicKey& right)
                   {
-                      return left.last_seen < right.last_seen;
+                      return left.updated_at_ms < right.updated_at_ms;
                   });
         const std::size_t drop_count = entries.size() - kMaxPkiNodes;
         for (std::size_t index = 0; index < drop_count; ++index)
         {
-            node_public_keys_.erase(entries[index].node_id);
-            node_key_last_seen_.erase(entries[index].node_id);
+            node_public_keys_.erase(entries[index].node_id.value);
+            node_key_last_seen_.erase(entries[index].node_id.value);
         }
         entries.erase(entries.begin(),
                       entries.begin() +
                           static_cast<std::ptrdiff_t>(drop_count));
     }
 
-    std::vector<std::uint8_t> blob(entries.size() * kPkiNodeEntryV2Size);
-    for (std::size_t index = 0; index < entries.size(); ++index)
-    {
-        std::uint8_t* out = blob.data() + (index * kPkiNodeEntryV2Size);
-        write_u32(out, entries[index].node_id);
-        write_u32(out + 4, entries[index].last_seen);
-        std::memcpy(out + 8, entries[index].key.data(), kPkiKeySize);
-    }
-
-    (void)::platform::ui::settings_store::put_blob(
-        kPkiNodeNamespace,
-        kPkiNodeKeys,
-        blob.empty() ? nullptr : blob.data(),
-        blob.size());
+    ::platform::linux_runtime::mesh::LinuxSqlitePeerKeyStore store;
+    (void)store.replaceAll(entries.empty() ? nullptr : entries.data(), entries.size());
 }
 
 void LinuxRawLoraMeshAdapter::forgetPkiNodeKey(::chat::NodeId node_id)

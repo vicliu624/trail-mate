@@ -12,6 +12,7 @@
 #include "meshtastic/mqtt.pb.h"
 #include "platform/nrf52/arduino_common/chat/infra/radio_packet_io.h"
 #include "platform/nrf52/arduino_common/device_identity.h"
+#include "platform/nrf52/arduino_common/mesh/nrf52_settings_mesh_identity_store.h"
 #include "platform/nrf52/arduino_common/sys/event_bus.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/settings_store.h"
@@ -49,11 +50,6 @@ constexpr ::chat::NodeId kBroadcastNode = 0xFFFFFFFFUL;
 constexpr uint8_t kDefaultPskIndex = 1;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02U;
 constexpr size_t kMaxPkiNodes = 16;
-constexpr const char* kPkiNodeNs = "chat_pki";
-constexpr const char* kPkiNodeKey = "pki_nodes";
-constexpr const char* kPkiPublicNs = "chat";
-constexpr const char* kPkiPublicKey = "pki_pub";
-constexpr const char* kPkiPrivateKey = "pki_priv";
 
 using ::chat::meshtastic::allowPkiForPortnum;
 using ::chat::meshtastic::computeKeyVerificationHashes;
@@ -2351,18 +2347,16 @@ uint64_t MeshtasticRadioAdapter::pendingKey(::chat::NodeId from, ::chat::Message
 
 bool MeshtasticRadioAdapter::initPkiKeys()
 {
-    std::vector<uint8_t> pub_blob;
-    std::vector<uint8_t> priv_blob;
-    const bool have_pub = platform::ui::settings_store::get_blob(kPkiPublicNs, kPkiPublicKey, pub_blob);
-    const bool have_priv = platform::ui::settings_store::get_blob(kPkiPublicNs, kPkiPrivateKey, priv_blob);
-    bool have_keys = have_pub && have_priv &&
-                     pub_blob.size() == pki_public_key_.size() &&
-                     priv_blob.size() == pki_private_key_.size();
+    ::platform::nrf52::arduino_common::mesh::Nrf52SettingsLocalIdentityStore store;
+    ::mesh::LocalIdentity stored_identity{};
+    auto loaded = store.load(stored_identity);
+    bool have_keys = loaded.ok &&
+                     !isZeroKey(stored_identity.private_key,
+                                sizeof(stored_identity.private_key));
     if (have_keys)
     {
-        std::memcpy(pki_public_key_.data(), pub_blob.data(), pki_public_key_.size());
-        std::memcpy(pki_private_key_.data(), priv_blob.data(), pki_private_key_.size());
-        have_keys = !isZeroKey(pki_private_key_.data(), pki_private_key_.size());
+        std::memcpy(pki_public_key_.data(), stored_identity.public_key, pki_public_key_.size());
+        std::memcpy(pki_private_key_.data(), stored_identity.private_key, pki_private_key_.size());
     }
 
     if (!have_keys)
@@ -2376,10 +2370,11 @@ bool MeshtasticRadioAdapter::initPkiKeys()
         have_keys = !isZeroKey(pki_private_key_.data(), pki_private_key_.size());
         if (have_keys)
         {
-            (void)platform::ui::settings_store::put_blob(kPkiPublicNs, kPkiPublicKey,
-                                                         pki_public_key_.data(), pki_public_key_.size());
-            (void)platform::ui::settings_store::put_blob(kPkiPublicNs, kPkiPrivateKey,
-                                                         pki_private_key_.data(), pki_private_key_.size());
+            ::mesh::LocalIdentity generated{};
+            std::memcpy(generated.public_key, pki_public_key_.data(), sizeof(generated.public_key));
+            std::memcpy(generated.private_key, pki_private_key_.data(), sizeof(generated.private_key));
+            generated.valid = true;
+            (void)store.save(generated);
         }
     }
 
@@ -2388,34 +2383,27 @@ bool MeshtasticRadioAdapter::initPkiKeys()
 
 void MeshtasticRadioAdapter::loadPkiNodeKeys()
 {
-    struct PkiKeyEntry
+    ::platform::nrf52::arduino_common::mesh::Nrf52SettingsPeerKeyStore store;
+    std::vector<::mesh::PeerPublicKey> keys;
+    auto loaded = store.loadAll(keys);
+    if (!loaded.ok)
     {
-        uint32_t node_id;
-        uint32_t last_seen;
-        uint8_t key[32];
-    } __attribute__((packed));
-
-    std::vector<uint8_t> blob;
-    if (!platform::ui::settings_store::get_blob(kPkiNodeNs, kPkiNodeKey, blob) ||
-        blob.size() < sizeof(PkiKeyEntry))
-    {
+        if (loaded.failure != ::mesh::StoreFailure::NotFound)
+        {
+            logMeshtasticRx("[gat562][mt] pki key load failed status=%u\n",
+                            static_cast<unsigned>(loaded.failure));
+        }
         return;
     }
 
-    const size_t count = std::min(blob.size() / sizeof(PkiKeyEntry), kMaxPkiNodes);
-    const auto* entries = reinterpret_cast<const PkiKeyEntry*>(blob.data());
     node_public_keys_.clear();
     node_key_last_seen_.clear();
-    for (size_t i = 0; i < count; ++i)
+    for (const auto& peer_key : keys)
     {
-        if (entries[i].node_id == 0)
-        {
-            continue;
-        }
         std::array<uint8_t, 32> key{};
-        std::memcpy(key.data(), entries[i].key, sizeof(entries[i].key));
-        node_public_keys_[entries[i].node_id] = key;
-        node_key_last_seen_[entries[i].node_id] = entries[i].last_seen;
+        std::memcpy(key.data(), peer_key.public_key, key.size());
+        node_public_keys_[peer_key.node_id.value] = key;
+        node_key_last_seen_[peer_key.node_id.value] = peer_key.updated_at_ms;
     }
 }
 
@@ -2463,49 +2451,42 @@ void MeshtasticRadioAdapter::markPkiKeysDirty()
 
 bool MeshtasticRadioAdapter::savePkiKeysToPrefs()
 {
-    struct PkiKeyEntry
-    {
-        uint32_t node_id;
-        uint32_t last_seen;
-        uint8_t key[32];
-    } __attribute__((packed));
-
-    std::vector<PkiKeyEntry> entries;
+    std::vector<::mesh::PeerPublicKey> entries;
     entries.reserve(node_public_keys_.size());
     for (const auto& item : node_public_keys_)
     {
-        PkiKeyEntry entry{};
-        entry.node_id = item.first;
+        ::mesh::PeerPublicKey entry{};
+        entry.node_id = ::mesh::NodeId{item.first};
         auto seen_it = node_key_last_seen_.find(item.first);
-        entry.last_seen = (seen_it != node_key_last_seen_.end()) ? seen_it->second : 0;
-        std::memcpy(entry.key, item.second.data(), sizeof(entry.key));
+        entry.updated_at_ms = (seen_it != node_key_last_seen_.end()) ? seen_it->second : 0;
+        entry.verified = false;
+        std::memcpy(entry.public_key, item.second.data(), sizeof(entry.public_key));
         entries.push_back(entry);
     }
 
     if (entries.size() > kMaxPkiNodes)
     {
         std::sort(entries.begin(), entries.end(),
-                  [](const PkiKeyEntry& a, const PkiKeyEntry& b)
+                  [](const ::mesh::PeerPublicKey& a, const ::mesh::PeerPublicKey& b)
                   {
-                      return a.last_seen < b.last_seen;
+                      return a.updated_at_ms < b.updated_at_ms;
                   });
         const size_t drop = entries.size() - kMaxPkiNodes;
         for (size_t i = 0; i < drop; ++i)
         {
-            node_public_keys_.erase(entries[i].node_id);
-            node_key_last_seen_.erase(entries[i].node_id);
+            node_public_keys_.erase(entries[i].node_id.value);
+            node_key_last_seen_.erase(entries[i].node_id.value);
         }
         entries.erase(entries.begin(), entries.begin() + static_cast<long>(drop));
     }
 
-    const bool persisted = platform::ui::settings_store::put_blob(kPkiNodeNs, kPkiNodeKey,
-                                                                  entries.empty() ? nullptr : entries.data(),
-                                                                  entries.size() * sizeof(PkiKeyEntry));
-    if (persisted)
+    ::platform::nrf52::arduino_common::mesh::Nrf52SettingsPeerKeyStore store;
+    auto saved = store.replaceAll(entries.empty() ? nullptr : entries.data(), entries.size());
+    if (saved.ok)
     {
         pki_node_keys_dirty_ = false;
     }
-    return persisted;
+    return saved.ok;
 }
 
 void MeshtasticRadioAdapter::touchPkiNodeKey(::chat::NodeId node_id)

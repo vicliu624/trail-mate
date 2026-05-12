@@ -70,13 +70,19 @@ StoreResult PeerIdentityService::rememberPeerKey(const PeerPublicKey& key)
 
     PeerPublicKey current{};
     auto existing = peer_store_.get(key.node_id, current);
-    if (existing.ok && current.verified && !key.verified &&
-        !sameKey(current.public_key, key.public_key))
+    const bool should_preserve_verification = existing.ok &&
+                                              current.verified &&
+                                              !key.verified;
+    if (should_preserve_verification && !sameKey(current.public_key, key.public_key))
     {
         return StoreResult::fail(StoreFailure::PermissionDenied);
     }
 
     PeerPublicKey stored = key;
+    if (should_preserve_verification)
+    {
+        stored.verified = true;
+    }
     if (stored.updated_at_ms == 0)
     {
         stored.updated_at_ms = clock_.nowMs();
