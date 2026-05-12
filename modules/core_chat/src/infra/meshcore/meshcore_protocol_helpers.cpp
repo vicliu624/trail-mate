@@ -9,9 +9,16 @@
 #include "mbedtls/aes.h"
 #include "mbedtls/md.h"
 #include "mbedtls/sha256.h"
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
 #else
+#if defined(ARDUINO)
 #include <AES.h>
 #include <SHA256.h>
+#else
+#define CHAT_MESHCORE_NO_CRYPTO_BACKEND 1
+#endif
 #endif
 
 #include <algorithm>
@@ -150,6 +157,130 @@ bool hmacSha256(const uint8_t* key,
     return info &&
            mbedtls_md_hmac(info, key, key_len, input, data_len, out_hash) == 0;
 }
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+class Sha256Accumulator
+{
+  public:
+    Sha256Accumulator()
+        : ctx_(EVP_MD_CTX_new())
+    {
+        valid_ = ctx_ && EVP_DigestInit_ex(ctx_, EVP_sha256(), nullptr) == 1;
+    }
+
+    ~Sha256Accumulator()
+    {
+        if (ctx_)
+        {
+            EVP_MD_CTX_free(ctx_);
+        }
+    }
+
+    void update(const void* data, size_t len)
+    {
+        if (!valid_ || !data || len == 0)
+        {
+            return;
+        }
+        valid_ = EVP_DigestUpdate(ctx_, data, len) == 1;
+    }
+
+    bool finalize(uint8_t out_hash[32])
+    {
+        if (!valid_ || !out_hash)
+        {
+            return false;
+        }
+        unsigned int out_len = 0;
+        return EVP_DigestFinal_ex(ctx_, out_hash, &out_len) == 1 && out_len == 32;
+    }
+
+  private:
+    EVP_MD_CTX* ctx_ = nullptr;
+    bool valid_ = false;
+};
+
+class Aes128EcbCipher
+{
+  public:
+    Aes128EcbCipher()
+        : encrypt_(EVP_CIPHER_CTX_new()),
+          decrypt_(EVP_CIPHER_CTX_new())
+    {
+    }
+
+    ~Aes128EcbCipher()
+    {
+        if (encrypt_)
+        {
+            EVP_CIPHER_CTX_free(encrypt_);
+        }
+        if (decrypt_)
+        {
+            EVP_CIPHER_CTX_free(decrypt_);
+        }
+    }
+
+    bool setKey(const uint8_t* key, size_t len)
+    {
+        if (!key || len != kCipherKeySize || !encrypt_ || !decrypt_)
+        {
+            return false;
+        }
+        if (EVP_EncryptInit_ex(encrypt_, EVP_aes_128_ecb(), nullptr, key, nullptr) != 1 ||
+            EVP_CIPHER_CTX_set_padding(encrypt_, 0) != 1 ||
+            EVP_DecryptInit_ex(decrypt_, EVP_aes_128_ecb(), nullptr, key, nullptr) != 1 ||
+            EVP_CIPHER_CTX_set_padding(decrypt_, 0) != 1)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    bool encryptBlock(uint8_t* out, const uint8_t* in)
+    {
+        if (!out || !in)
+        {
+            return false;
+        }
+        int out_len = 0;
+        return EVP_EncryptUpdate(encrypt_, out, &out_len, in, kCipherBlockSize) == 1 &&
+               out_len == static_cast<int>(kCipherBlockSize);
+    }
+
+    bool decryptBlock(uint8_t* out, const uint8_t* in)
+    {
+        if (!out || !in)
+        {
+            return false;
+        }
+        int out_len = 0;
+        return EVP_DecryptUpdate(decrypt_, out, &out_len, in, kCipherBlockSize) == 1 &&
+               out_len == static_cast<int>(kCipherBlockSize);
+    }
+
+  private:
+    EVP_CIPHER_CTX* encrypt_ = nullptr;
+    EVP_CIPHER_CTX* decrypt_ = nullptr;
+};
+
+bool hmacSha256(const uint8_t* key,
+                size_t key_len,
+                const uint8_t* data,
+                size_t data_len,
+                uint8_t out_hash[32])
+{
+    if (!key || key_len == 0 || !out_hash)
+    {
+        return false;
+    }
+
+    static constexpr uint8_t kEmpty = 0;
+    const uint8_t* input = (data && data_len != 0) ? data : &kEmpty;
+    unsigned int out_len = 0;
+    return HMAC(EVP_sha256(), key, static_cast<int>(key_len),
+                input, data_len, out_hash, &out_len) != nullptr &&
+           out_len == 32;
+}
 #endif
 
 } // namespace
@@ -247,7 +378,7 @@ uint32_t packetSignature(uint8_t payload_type, size_t path_len,
                          const uint8_t* payload, size_t payload_len)
 {
     uint8_t sig_bytes[sizeof(uint32_t)] = {};
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
     uint8_t hash_bytes[32] = {};
     Sha256Accumulator sha;
     sha.update(&payload_type, sizeof(payload_type));
@@ -265,7 +396,7 @@ uint32_t packetSignature(uint8_t payload_type, size_t path_len,
         return 0;
     }
     memcpy(sig_bytes, hash_bytes, sizeof(sig_bytes));
-#else
+#elif defined(ARDUINO)
     SHA256 sha;
     sha.update(&payload_type, sizeof(payload_type));
     if (payload_type == kPayloadTypeTrace)
@@ -278,6 +409,21 @@ uint32_t packetSignature(uint8_t payload_type, size_t path_len,
         sha.update(payload, payload_len);
     }
     sha.finalize(sig_bytes, sizeof(sig_bytes));
+#else
+    uint32_t fallback = 2166136261u;
+    fallback ^= static_cast<uint32_t>(payload_type);
+    fallback *= 16777619u;
+    fallback ^= static_cast<uint32_t>(path_len & 0xFFU);
+    fallback *= 16777619u;
+    if (payload && payload_len > 0)
+    {
+        for (size_t index = 0; index < payload_len; ++index)
+        {
+            fallback ^= static_cast<uint32_t>(payload[index]);
+            fallback *= 16777619u;
+        }
+    }
+    memcpy(sig_bytes, &fallback, sizeof(sig_bytes));
 #endif
 
     uint32_t sig = 0;
@@ -414,7 +560,7 @@ void sha256Trunc(uint8_t* out_hash, size_t out_len, const uint8_t* msg, size_t m
     {
         return;
     }
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
     uint8_t full_hash[32] = {};
     Sha256Accumulator sha;
     if (msg && msg_len != 0)
@@ -427,10 +573,22 @@ void sha256Trunc(uint8_t* out_hash, size_t out_len, const uint8_t* msg, size_t m
         return;
     }
     memcpy(out_hash, full_hash, std::min(out_len, sizeof(full_hash)));
-#else
+#elif defined(ARDUINO)
     SHA256 sha;
     sha.update(msg, static_cast<size_t>(msg_len));
     sha.finalize(out_hash, out_len);
+#else
+    uint32_t fallback = 2166136261u;
+    if (msg && msg_len != 0)
+    {
+        for (size_t index = 0; index < msg_len; ++index)
+        {
+            fallback ^= static_cast<uint32_t>(msg[index]);
+            fallback *= 16777619u;
+        }
+    }
+    memset(out_hash, 0, out_len);
+    memcpy(out_hash, &fallback, std::min(out_len, sizeof(fallback)));
 #endif
 }
 
@@ -451,15 +609,17 @@ size_t aesEncrypt(const uint8_t* key16, uint8_t* dest, const uint8_t* src, size_
     {
         return 0;
     }
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
     Aes128EcbCipher aes;
     if (!aes.setKey(key16, kCipherKeySize))
     {
         return 0;
     }
-#else
+#elif defined(ARDUINO)
     AES128 aes;
     aes.setKey(key16, kCipherKeySize);
+#else
+    return 0;
 #endif
 
     uint8_t* dest_ptr = dest;
@@ -467,12 +627,12 @@ size_t aesEncrypt(const uint8_t* key16, uint8_t* dest, const uint8_t* src, size_
     size_t remaining = src_len;
     while (remaining >= kCipherBlockSize)
     {
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
         if (!aes.encryptBlock(dest_ptr, src_ptr))
         {
             return 0;
         }
-#else
+#elif defined(ARDUINO)
         aes.encryptBlock(dest_ptr, src_ptr);
 #endif
         dest_ptr += kCipherBlockSize;
@@ -484,12 +644,12 @@ size_t aesEncrypt(const uint8_t* key16, uint8_t* dest, const uint8_t* src, size_
         uint8_t tail[kCipherBlockSize];
         memset(tail, 0, sizeof(tail));
         memcpy(tail, src_ptr, remaining);
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
         if (!aes.encryptBlock(dest_ptr, tail))
         {
             return 0;
         }
-#else
+#elif defined(ARDUINO)
         aes.encryptBlock(dest_ptr, tail);
 #endif
         dest_ptr += kCipherBlockSize;
@@ -503,15 +663,17 @@ size_t aesDecrypt(const uint8_t* key16, uint8_t* dest, const uint8_t* src, size_
     {
         return 0;
     }
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
     Aes128EcbCipher aes;
     if (!aes.setKey(key16, kCipherKeySize))
     {
         return 0;
     }
-#else
+#elif defined(ARDUINO)
     AES128 aes;
     aes.setKey(key16, kCipherKeySize);
+#else
+    return 0;
 #endif
 
     uint8_t* dest_ptr = dest;
@@ -519,12 +681,12 @@ size_t aesDecrypt(const uint8_t* key16, uint8_t* dest, const uint8_t* src, size_
     size_t remaining = src_len;
     while (remaining >= kCipherBlockSize)
     {
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
         if (!aes.decryptBlock(dest_ptr, src_ptr))
         {
             return 0;
         }
-#else
+#elif defined(ARDUINO)
         aes.decryptBlock(dest_ptr, src_ptr);
 #endif
         dest_ptr += kCipherBlockSize;
@@ -556,18 +718,20 @@ size_t encryptThenMac(const uint8_t* key16, const uint8_t* key32,
         return 0;
     }
 
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
     uint8_t full_hash[32] = {};
     if (!hmacSha256(key32, kCipherHmacKeySize, out + kCipherMacSize, enc_len, full_hash))
     {
         return 0;
     }
     memcpy(out, full_hash, kCipherMacSize);
-#else
+#elif defined(ARDUINO)
     SHA256 sha;
     sha.resetHMAC(key32, kCipherHmacKeySize);
     sha.update(out + kCipherMacSize, enc_len);
     sha.finalizeHMAC(key32, kCipherHmacKeySize, out, kCipherMacSize);
+#else
+    return 0;
 #endif
     return kCipherMacSize + enc_len;
 }
@@ -586,18 +750,20 @@ bool macThenDecrypt(const uint8_t* key16, const uint8_t* key32,
     }
 
     uint8_t expected[kCipherMacSize];
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(TRAIL_MATE_HAS_OPENSSL)
     uint8_t full_hash[32] = {};
     if (!hmacSha256(key32, kCipherHmacKeySize, src + kCipherMacSize, cipher_len, full_hash))
     {
         return false;
     }
     memcpy(expected, full_hash, sizeof(expected));
-#else
+#elif defined(ARDUINO)
     SHA256 sha;
     sha.resetHMAC(key32, kCipherHmacKeySize);
     sha.update(src + kCipherMacSize, cipher_len);
     sha.finalizeHMAC(key32, kCipherHmacKeySize, expected, kCipherMacSize);
+#else
+    return false;
 #endif
     if (memcmp(expected, src, kCipherMacSize) != 0)
     {

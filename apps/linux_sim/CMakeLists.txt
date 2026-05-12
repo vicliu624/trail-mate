@@ -208,4 +208,23 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb")
     add_test(NAME trailmate_core_mesh_meshtastic_protocol_strategy_smoke
              COMMAND trailmate_core_mesh_meshtastic_protocol_strategy_smoke)
+
+    set(TRAIL_MATE_MESHCORE_PROTOCOL_TEST_SOURCES
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshcore/meshcore_protocol_strategy.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/mc_region_presets.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/meshcore_payload_helpers.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/meshcore_protocol_helpers.cpp"
+    )
+
+    add_executable(trailmate_core_mesh_meshcore_protocol_strategy_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests/test_meshcore_protocol_strategy.cpp"
+        ${TRAIL_MATE_MESHCORE_PROTOCOL_TEST_SOURCES}
+    )
+    target_include_directories(trailmate_core_mesh_meshcore_protocol_strategy_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    add_test(NAME trailmate_core_mesh_meshcore_protocol_strategy_smoke
+             COMMAND trailmate_core_mesh_meshcore_protocol_strategy_smoke)
 endif()
