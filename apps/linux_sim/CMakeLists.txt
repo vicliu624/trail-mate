@@ -149,4 +149,31 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
     add_test(NAME trailmate_core_gps_time_smoke
              COMMAND trailmate_core_gps_time_smoke)
+
+    set(TRAIL_MATE_CORE_MESH_TEST_SOURCES
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshcore/meshcore_protocol_strategy.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshtastic/meshtastic_protocol_strategy.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/direct_message_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/mesh_dedup_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/mesh_session.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/peer_identity_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/receive_packet_service.cpp"
+    )
+
+    foreach(core_mesh_test
+            peer_identity_service
+            direct_message_service
+            receive_packet_service
+            mesh_session)
+        add_executable(trailmate_core_mesh_${core_mesh_test}_smoke
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests/test_${core_mesh_test}.cpp"
+            ${TRAIL_MATE_CORE_MESH_TEST_SOURCES}
+        )
+        target_include_directories(trailmate_core_mesh_${core_mesh_test}_smoke
+            PRIVATE
+                "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/include"
+                "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests")
+        add_test(NAME trailmate_core_mesh_${core_mesh_test}_smoke
+                 COMMAND trailmate_core_mesh_${core_mesh_test}_smoke)
+    endforeach()
 endif()

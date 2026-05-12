@@ -61,6 +61,9 @@ function(_trailmate_set_linux_paths)
     set(TRAIL_MATE_CORE_DEVICE_INCLUDE_ROOT
         "${TRAIL_MATE_REPO_ROOT}/modules/core_device/include"
         PARENT_SCOPE)
+    set(TRAIL_MATE_CORE_MESH_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/include"
+        PARENT_SCOPE)
     set(TRAIL_MATE_CORE_PHONE_INCLUDE_ROOT
         "${TRAIL_MATE_REPO_ROOT}/modules/core_phone/include"
         PARENT_SCOPE)
@@ -181,6 +184,14 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
     # modules/core_device
     "${TRAIL_MATE_REPO_ROOT}/modules/core_device/src/device/capability_types.cpp"
+    # modules/core_mesh
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshcore/meshcore_protocol_strategy.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/protocol/meshtastic/meshtastic_protocol_strategy.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/direct_message_service.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/mesh_dedup_service.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/mesh_session.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/peer_identity_service.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/src/usecase/receive_packet_service.cpp"
     # modules/core_phone
     "${TRAIL_MATE_REPO_ROOT}/modules/core_phone/src/meshcore/meshcore_phone_core.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_phone/src/meshtastic/meshtastic_phone_core.cpp"
@@ -332,6 +343,7 @@ set(TRAIL_MATE_LINUX_COMMON_INCLUDES
     "${TRAIL_MATE_CORE_HOSTLINK_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_SYS_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_DEVICE_INCLUDE_ROOT}"
+    "${TRAIL_MATE_CORE_MESH_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_PHONE_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_TEAM_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_SHARED_INCLUDE_ROOT}"

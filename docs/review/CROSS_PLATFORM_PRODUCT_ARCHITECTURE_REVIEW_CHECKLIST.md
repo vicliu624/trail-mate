@@ -45,6 +45,25 @@ back into `platform/*/ble`?
 Does this PR let a radio adapter own direct message, PKI, peer key, contact, or
 phone-core policy?
 
+If this PR touches LoRa/Mesh, did it identify whether the change is Board Radio
+Facts, Platform Radio Driver, Packet Radio Port, Mesh Protocol Core, Mesh
+UseCase, Mesh Runtime Shell, or App Service/Chat integration?
+
+Does this PR put direct-send, receive/decrypt/route, peer-key trust,
+local-identity generation, ACK/retry/dedup, or PKI/identity flow into
+`platform/*/chat/infra/*adapter*` instead of `modules/core_mesh`?
+
+Does this PR make `platform/*/mesh` or `platform/*/radio` depend on AES,
+Curve25519, Ed25519, protobuf business decisions, peer trust policy,
+`DirectMessageService` internals, or protocol-specific direct-message flow?
+
+Does this PR keep `modules/core_mesh` free of Arduino, RadioLib, Preferences,
+SQLite, FreeRTOS, Zephyr, ESP/nRF SDK, BLE, board, and UI headers?
+
+Does this PR report direct-send failures as structured `SendResult`-style
+causes (`PeerKeyMissing`, `LocalIdentityMissing`, `PacketBuildFailed`,
+`RadioSendFailed`) instead of collapsing everything to `bool` in new core code?
+
 Does this PR let a GPS driver directly serve UI, BLE, Mesh, or storage policy?
 
 If this PR touches GPS or time, did it identify whether the change is Board

@@ -112,6 +112,30 @@ RULES = (
         ),
     ),
     Rule(
+        name="core-mesh-must-not-include-platform-sdk-or-ui",
+        roots=("modules/core_mesh",),
+        patterns=compile_patterns(
+            (
+                r"#include\s*[<\"]Arduino\.h[>\"]",
+                r"#include\s*[<\"]Preferences[>\"]",
+                r"#include\s*[<\"]sqlite3\.h[>\"]",
+                r"#include\s*[<\"]freertos/",
+                r"#include\s*[<\"]zephyr/",
+                r"#include\s*[<\"]nrf_",
+                r"#include\s*[<\"]esp_",
+                r"#include\s*[<\"]RadioLib",
+                r"#include\s*[<\"]lvgl\.h[>\"]",
+                r"#include\s*[<\"]gtk/",
+                r"#include\s*[<\"]bluefruit",
+                r"#include\s*[<\"]Bluefruit",
+                r"#include\s*[<\"]NimBLE",
+                r"#include\s*[<\"]platform/",
+                r"#include\s*[<\"]board/",
+                r"#include\s*[<\"]boards/",
+            )
+        ),
+    ),
+    Rule(
         name="platform-ble-must-not-own-phone-protocol",
         roots=("platform",),
         path_contains=("/ble/", "\\ble\\"),
@@ -158,9 +182,51 @@ RULES = (
                 r"\bDirectMessage\b",
                 r"\bPeerKey\b",
                 r"\bLocalIdentity\b",
+                r"\bPkiFlow\b",
+                r"\bAdminMessage\b",
+                r"\bContactService\b",
+                r"\bChatService\b",
                 r"\bPhoneCore\b",
                 r"\bToRadio\b",
                 r"\bFromRadio\b",
+            )
+        ),
+    ),
+    Rule(
+        name="platform-mesh-runtime-shell-must-not-own-crypto-or-peer-policy",
+        roots=("platform",),
+        path_contains=("/mesh/", "\\mesh\\"),
+        patterns=compile_patterns(
+            (
+                r"\bAES\b",
+                r"\bCurve25519\b",
+                r"\bEd25519\b",
+                r"\bpeer trust\b",
+                r"\btrust peer\b",
+                r"\bsavePeer(Key|PubKey)",
+                r"\bloadPeer(Key|PubKey)",
+                r"\bgenerateIdentity\b",
+                r"\bdecrypt direct packet\b",
+                r"\bencrypt direct packet\b",
+            )
+        ),
+    ),
+    Rule(
+        name="legacy-mesh-adapter-thickness-must-shrink",
+        roots=("platform",),
+        path_regex=re.compile(r"(^|[/\\])(mt_adapter|meshcore_adapter)\.(c|cc|cpp|cxx|h|hh|hpp)$", re.IGNORECASE),
+        patterns=compile_patterns(
+            (
+                r"\bsavePeer(Key|PubKey)",
+                r"\bloadPeer(Key|PubKey)",
+                r"\bgenerateIdentity\b",
+                r"\binitPkiKeys\b",
+                r"\bloadPkiNodeKeys\b",
+                r"\bsavePkiNodeKey\b",
+                r"\bdecryptPkiPayload\b",
+                r"\bencryptPkiPayload\b",
+                r"\bderiveIdentitySecret\b",
+                r"\btryDecryptPeerPayload\b",
             )
         ),
     ),

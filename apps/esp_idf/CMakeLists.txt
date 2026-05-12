@@ -14,6 +14,15 @@ file(GLOB_RECURSE trail_mate_idf_external_sources
     ${CMAKE_SOURCE_DIR}/modules/core_device/src/*.c
     ${CMAKE_SOURCE_DIR}/modules/core_device/src/*.cc
     ${CMAKE_SOURCE_DIR}/modules/core_device/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*.c
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*/*.c
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*/*.cpp
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*/*/*.c
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*/*/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/core_mesh/src/*/*/*.cpp
     ${CMAKE_SOURCE_DIR}/modules/core_phone/src/*.c
     ${CMAKE_SOURCE_DIR}/modules/core_phone/src/*.cc
     ${CMAKE_SOURCE_DIR}/modules/core_phone/src/*.cpp
@@ -222,6 +231,7 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/boards/t_display_p4/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_shared/include"
     "${CMAKE_SOURCE_DIR}/modules/core_device/include"
+    "${CMAKE_SOURCE_DIR}/modules/core_mesh/include"
     "${CMAKE_SOURCE_DIR}/modules/core_phone/include"
     "${CMAKE_SOURCE_DIR}/modules/core_sys/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/include"

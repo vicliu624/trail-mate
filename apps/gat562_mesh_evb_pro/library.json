@@ -14,6 +14,7 @@
       "-Iinclude",
       "-I../../boards/gat562_mesh_evb_pro/include",
       "-I../../platform/shared/include",
+      "-I../../modules/core_mesh/include",
       "-I../../modules/core_phone/include",
       "-I../../modules/core_sys/include",
       "-I../../modules/core_chat/include",
@@ -28,6 +29,9 @@
   "dependencies": [
     {
       "name": "core_phone"
+    },
+    {
+      "name": "core_mesh"
     },
     {
       "name": "platform_nrf52_arduino_common"

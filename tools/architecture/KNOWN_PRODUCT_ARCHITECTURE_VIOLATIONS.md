@@ -43,6 +43,32 @@ MeshCore adapter logic. Later phases should move direct-message, peer-key, PKI,
 and protocol mapping decisions out of platform/radio files and into shared
 protocol/use-case cores.
 
+Phase 4 introduces the shared `modules/core_mesh` boundary for this split:
+`IPacketRadio`, identity/key store ports, `PeerIdentityService`,
+`DirectMessageService`, `ReceivePacketService`, `MeshSession`, and initial
+Meshtastic/MeshCore protocol strategy shells. The legacy adapters remain known
+violations until their behavior is migrated behind those ports/use cases.
+
+Current known LoRa/Mesh exceptions include:
+
+- `platform/esp/arduino_common/src/chat/infra/meshtastic/mt_adapter.cpp`
+  still owns Meshtastic PKI key load/save, direct encryption/decryption,
+  packet build/parse, retransmit policy, and radio transmit bridging.
+- `platform/esp/arduino_common/src/chat/infra/meshcore/meshcore_adapter.cpp`
+  still owns MeshCore peer public-key persistence, identity routing, direct
+  payload encryption/decryption, frame build/parse, ACK/retry behavior, and
+  radio transmit bridging.
+- `platform/nrf52/arduino_common/src/chat/infra/meshtastic/meshtastic_radio_adapter.cpp`
+  still owns Meshtastic direct-message/PKI behavior, peer key memory, and
+  retransmit behavior next to radio I/O.
+- `platform/nrf52/arduino_common/src/chat/infra/meshcore/meshcore_radio_adapter.cpp`
+  still owns MeshCore direct/group payload framing and identity behavior next
+  to radio I/O.
+
+During Phase 4, new direct-send and receive paths should be added to
+`modules/core_mesh` first, then the legacy adapters should be thinned into
+compatibility shells instead of receiving new protocol-specific policy.
+
 ### GPS runtime still exposes platform UI service surfaces
 
 Existing GPS runtime APIs are consumed directly by parts of the current UI and
