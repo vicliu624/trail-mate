@@ -2,7 +2,6 @@
 
 #include "app/app_config.h"
 #include "ble/ble_uuids.h"
-#include "board/BoardBase.h"
 #include "chat/domain/contact_types.h"
 #include "display/DisplayConfig.h"
 #include "platform/esp/arduino_common/chat/infra/meshcore/meshcore_adapter.h"
@@ -421,8 +420,9 @@ class MeshCoreServerCallbacks : public NimBLEServerCallbacks
 
 MeshCoreBleService::MeshCoreBleService(app::IAppBleFacade& ctx, const std::string& device_name)
     : ctx_(ctx),
+      phone_facade_(ctx, phone_ble_config_, phone_module_config_),
       device_name_(device_name),
-      shared_core_(new MeshCorePhoneCore(*this, device_name, this))
+      shared_core_(new phone::meshcore::MeshCorePhoneCore(phone_facade_, device_name, this))
 {
     loadBlePin();
     loadManualContacts();
@@ -610,8 +610,8 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
         return false;
     }
 
-    auto mesh_cfg = getMeshCorePhoneConfig();
-    auto mt_cfg = getMeshtasticPhoneConfig();
+    auto mesh_cfg = phone_facade_.getMeshCorePhoneConfig();
+    auto mt_cfg = phone_facade_.getMeshtasticPhoneConfig();
     bool save_cfg = false;
     bool apply_mesh = false;
     bool apply_user = false;
@@ -738,27 +738,27 @@ bool MeshCoreBleService::handleCustomVarSet(const char* key, const char* value)
     }
     if (save_mesh_cfg)
     {
-        setMeshCorePhoneConfig(mesh_cfg);
+        phone_facade_.setMeshCorePhoneConfig(mesh_cfg);
     }
     if (save_mt_cfg)
     {
-        setMeshtasticPhoneConfig(mt_cfg);
+        phone_facade_.setMeshtasticPhoneConfig(mt_cfg);
     }
     if (save_cfg)
     {
-        ctx_.saveConfig();
+        phone_facade_.saveConfig();
     }
     if (apply_user)
     {
-        ctx_.applyUserInfo();
+        phone_facade_.applyUserInfo();
     }
     if (apply_mesh)
     {
-        ctx_.applyMeshConfig();
+        phone_facade_.applyMeshConfig();
     }
     if (apply_position)
     {
-        ctx_.applyPositionConfig();
+        phone_facade_.applyPositionConfig();
     }
     return true;
 }
@@ -783,7 +783,7 @@ void MeshCoreBleService::enqueueRawDataPush(const uint8_t* payload, size_t len, 
 chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter()
 {
     auto* adapter = ctx_.getMeshAdapter();
-    if (!adapter || getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
+    if (!adapter || phone_facade_.getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
     {
         return nullptr;
     }
@@ -795,7 +795,7 @@ chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter()
 const chat::meshcore::MeshCoreAdapter* MeshCoreBleService::meshCoreAdapter() const
 {
     const auto* adapter = ctx_.getMeshAdapter();
-    if (!adapter || getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
+    if (!adapter || phone_facade_.getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
     {
         return nullptr;
     }
@@ -833,7 +833,7 @@ bool MeshCoreBleService::start()
     }
     startAdvertising();
 
-    multi_acks_ = getMeshCorePhoneConfig().mesh.meshcore_multi_acks ? 1 : 0;
+    multi_acks_ = phone_facade_.getMeshCorePhoneConfig().mesh.meshcore_multi_acks ? 1 : 0;
 
     ctx_.getChatService().addIncomingTextObserver(this);
     if (auto* team = ctx_.getTeamService())

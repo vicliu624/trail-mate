@@ -1,6 +1,6 @@
-#include "chat/ble/meshtastic_phone_session.h"
+#include "phone/meshtastic/meshtastic_phone_session.h"
 
-namespace ble
+namespace phone::meshtastic
 {
 
 MeshtasticPhoneSession::MeshtasticPhoneSession(IPhoneRuntimeContext& ctx, MeshtasticPhoneTransport& transport,
@@ -61,4 +61,4 @@ void MeshtasticPhoneSession::onIncomingData(const chat::MeshIncomingData& msg)
     core_.onIncomingData(msg);
 }
 
-} // namespace ble
+} // namespace phone::meshtastic

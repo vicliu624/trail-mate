@@ -1,8 +1,5 @@
 #include "ble/meshcore_ble.h"
 
-#include "board/BoardBase.h"
-#include "platform/esp/arduino_common/gps/gps_service_api.h"
-#include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
 #include "sys/clock.h"
 
 #include <Arduino.h>
@@ -16,19 +13,6 @@ namespace
 {
 constexpr size_t kPubKeySize = chat::meshcore::MeshCoreIdentity::kPubKeySize;
 constexpr bool kMeshCoreBleSecurityEnabled = true;
-
-int estimateBatteryMv(int percent)
-{
-    if (percent < 0)
-    {
-        return 0;
-    }
-    if (percent > 100)
-    {
-        percent = 100;
-    }
-    return 3300 + (percent * 9);
-}
 
 bool isConfiguredBlePin(uint32_t pin)
 {
@@ -94,30 +78,14 @@ uint32_t nowSeconds()
 
 namespace ble
 {
-MeshCorePhoneBatteryInfo MeshCoreBleService::getBatteryInfo() const
+phone::meshcore::MeshCorePhoneBatteryInfo MeshCoreBleService::getBatteryInfo() const
 {
-    MeshCorePhoneBatteryInfo info{};
-    int level = -1;
-    if (BoardBase* board = ctx_.getBoard())
-    {
-        level = board->getBatteryLevel();
-    }
-    if (level < 0)
-    {
-        level = 0;
-    }
-    if (level > 100)
-    {
-        level = 100;
-    }
-    info.level = static_cast<uint8_t>(level);
-    info.millivolts = static_cast<uint16_t>(estimateBatteryMv(level));
-    return info;
+    return phone_facade_.getBatteryInfo();
 }
 
-MeshCorePhoneLocation MeshCoreBleService::getAdvertLocation() const
+phone::meshcore::MeshCorePhoneLocation MeshCoreBleService::getAdvertLocation() const
 {
-    MeshCorePhoneLocation location{};
+    phone::meshcore::MeshCorePhoneLocation location{};
     location.lat_i6 = advert_lat_;
     location.lon_i6 = advert_lon_;
     return location;
@@ -268,7 +236,7 @@ void MeshCoreBleService::logoutActiveConnection(const uint8_t* prefix, size_t le
     }
 }
 
-bool MeshCoreBleService::getRadioStats(MeshCorePhoneRadioStats* out) const
+bool MeshCoreBleService::getRadioStats(phone::meshcore::MeshCorePhoneRadioStats* out) const
 {
     if (!out)
     {
@@ -289,7 +257,7 @@ bool MeshCoreBleService::getRadioStats(MeshCorePhoneRadioStats* out) const
     return true;
 }
 
-bool MeshCoreBleService::getPacketStats(MeshCorePhonePacketStats* out) const
+bool MeshCoreBleService::getPacketStats(phone::meshcore::MeshCorePhonePacketStats* out) const
 {
     if (!out)
     {
@@ -409,27 +377,18 @@ bool MeshCoreBleService::popOfflineMessage(uint8_t* out, size_t* out_len)
     return true;
 }
 
-bool MeshCoreBleService::setTuningParams(const MeshCorePhoneTuningParams& params)
+bool MeshCoreBleService::setTuningParams(const phone::meshcore::MeshCorePhoneTuningParams& params)
 {
-    auto cfg = getMeshCorePhoneConfig();
-    cfg.mesh.meshcore_rx_delay_base = static_cast<float>(params.rx_delay_base_ms) / 1000.0f;
-    cfg.mesh.meshcore_airtime_factor = static_cast<float>(params.airtime_factor_milli) / 1000.0f;
-    setMeshCorePhoneConfig(cfg);
-    ctx_.saveConfig();
-    ctx_.applyMeshConfig();
-    return true;
+    return phone_facade_.setTuningParams(params);
 }
 
-bool MeshCoreBleService::getTuningParams(MeshCorePhoneTuningParams* out) const
+bool MeshCoreBleService::getTuningParams(phone::meshcore::MeshCorePhoneTuningParams* out) const
 {
     if (!out)
     {
         return false;
     }
-    const auto cfg = getMeshCorePhoneConfig();
-    out->rx_delay_base_ms = static_cast<uint32_t>(cfg.mesh.meshcore_rx_delay_base * 1000.0f);
-    out->airtime_factor_milli = static_cast<uint32_t>(cfg.mesh.meshcore_airtime_factor * 1000.0f);
-    return true;
+    return phone_facade_.getTuningParams(out);
 }
 
 bool MeshCoreBleService::setOtherParams(uint8_t manual_add_contacts, uint8_t telemetry_bits,
@@ -442,12 +401,12 @@ bool MeshCoreBleService::setOtherParams(uint8_t manual_add_contacts, uint8_t tel
     advert_loc_policy_ = advert_loc_policy;
     if (has_multi_acks)
     {
-        auto cfg = getMeshCorePhoneConfig();
+        auto cfg = phone_facade_.getMeshCorePhoneConfig();
         cfg.mesh.meshcore_multi_acks = (multi_acks != 0);
-        setMeshCorePhoneConfig(cfg);
+        phone_facade_.setMeshCorePhoneConfig(cfg);
         multi_acks_ = (multi_acks != 0) ? 1U : 0U;
-        ctx_.saveConfig();
-        ctx_.applyMeshConfig();
+        phone_facade_.saveConfig();
+        phone_facade_.applyMeshConfig();
     }
     saveBlePin();
     return true;
@@ -476,13 +435,7 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
     }
     out->clear();
     char buf[40];
-    if (gps::gps_is_enabled())
-    {
-        appendCustomVar(*out, "gps", gps::gps_is_powered() ? "1" : "0");
-    }
-    const auto cfg = getMeshCorePhoneConfig();
-    appendCustomVar(*out, "node_name", cfg.node_name);
-    appendCustomVar(*out, "channel_name", cfg.mesh.meshcore_channel_name);
+    phone_facade_.getCustomVars(out);
     std::snprintf(buf, sizeof(buf), "%lu", static_cast<unsigned long>(ble_pin_));
     appendCustomVar(*out, "ble_pin", buf);
     appendCustomVar(*out, "manual_add_contacts", manual_add_contacts_ ? "1" : "0");
@@ -494,33 +447,12 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
     appendCustomVar(*out, "telemetry_env", buf);
     std::snprintf(buf, sizeof(buf), "%u", static_cast<unsigned>(advert_loc_policy_));
     appendCustomVar(*out, "advert_loc_policy", buf);
-    appendCustomVar(*out, "multi_acks", cfg.mesh.meshcore_multi_acks ? "1" : "0");
     return true;
 }
 
 bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
 {
-    return handleCustomVarSet(key, value);
-}
-
-MeshtasticPhoneConfigSnapshot MeshCoreBleService::getMeshtasticPhoneConfig() const
-{
-    return platform::shared::ble_bridge::makeMeshtasticPhoneConfigSnapshot(ctx_.getConfig());
-}
-
-void MeshCoreBleService::setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config)
-{
-    platform::shared::ble_bridge::applyMeshtasticPhoneConfigSnapshot(ctx_.getConfig(), config);
-}
-
-MeshCorePhoneConfigSnapshot MeshCoreBleService::getMeshCorePhoneConfig() const
-{
-    return platform::shared::ble_bridge::makeMeshCorePhoneConfigSnapshot(ctx_.getConfig());
-}
-
-void MeshCoreBleService::setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config)
-{
-    platform::shared::ble_bridge::applyMeshCorePhoneConfigSnapshot(ctx_.getConfig(), config);
+    return handleCustomVarSet(key, value) || phone_facade_.setCustomVar(key, value);
 }
 
 void MeshCoreBleService::onFactoryReset()

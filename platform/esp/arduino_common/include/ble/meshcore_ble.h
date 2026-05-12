@@ -1,10 +1,12 @@
 #pragma once
 
 #include "app/app_facades.h"
+#include "ble/app_phone_facade.h"
 #include "ble/ble_manager.h"
-#include "chat/ble/meshcore_phone_core.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
+#include "phone/meshcore/meshcore_phone_core.h"
+#include "phone/meshtastic/meshtastic_phone_core.h"
 #include "platform/esp/arduino_common/chat/infra/meshcore/meshcore_adapter.h"
 #include "team/usecase/team_service.h"
 #include <NimBLEDevice.h>
@@ -19,10 +21,9 @@ namespace ble
 {
 
 class MeshCoreBleService : public BleService,
-                           public MeshCorePhoneHooks,
+                           public phone::meshcore::MeshCorePhoneHooks,
                            public chat::ChatService::IncomingTextObserver,
-                           public team::TeamService::IncomingDataObserver,
-                           public IPhoneRuntimeContext
+                           public team::TeamService::IncomingDataObserver
 {
   public:
     MeshCoreBleService(app::IAppBleFacade& ctx, const std::string& device_name);
@@ -61,6 +62,9 @@ class MeshCoreBleService : public BleService,
     } __attribute__((packed));
 
     app::IAppBleFacade& ctx_;
+    meshtastic_Config_BluetoothConfig phone_ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
+    meshtastic_LocalModuleConfig phone_module_config_ = meshtastic_LocalModuleConfig_init_zero;
+    AppPhoneFacade phone_facade_;
     std::string device_name_;
     NimBLEServer* server_ = nullptr;
     NimBLEService* service_ = nullptr;
@@ -125,7 +129,7 @@ class MeshCoreBleService : public BleService,
         uint16_t keep_alive_secs = 0;
     };
     std::vector<ConnectionEntry> connections_;
-    std::unique_ptr<MeshCorePhoneCore> shared_core_;
+    std::unique_ptr<phone::meshcore::MeshCorePhoneCore> shared_core_;
 
     void setupService();
     void startAdvertising();
@@ -173,8 +177,8 @@ class MeshCoreBleService : public BleService,
     uint32_t deriveNodeIdFromPubkey(const uint8_t* pubkey, size_t len) const;
     bool shouldUseSharedCore(uint8_t cmd) const;
     bool handleViaSharedCore(size_t len);
-    MeshCorePhoneBatteryInfo getBatteryInfo() const override;
-    MeshCorePhoneLocation getAdvertLocation() const override;
+    phone::meshcore::MeshCorePhoneBatteryInfo getBatteryInfo() const override;
+    phone::meshcore::MeshCorePhoneLocation getAdvertLocation() const override;
     uint32_t getReportedBlePin() const override;
     uint8_t getAdvertLocationPolicy() const override;
     uint8_t getTelemetryModeBits() const override;
@@ -189,8 +193,8 @@ class MeshCoreBleService : public BleService,
                           uint32_t* out_ts, uint8_t* out_path, size_t* inout_len) const override;
     bool hasActiveConnection(const uint8_t* prefix, size_t len) const override;
     void logoutActiveConnection(const uint8_t* prefix, size_t len) override;
-    bool getRadioStats(MeshCorePhoneRadioStats* out) const override;
-    bool getPacketStats(MeshCorePhonePacketStats* out) const override;
+    bool getRadioStats(phone::meshcore::MeshCorePhoneRadioStats* out) const override;
+    bool getPacketStats(phone::meshcore::MeshCorePhonePacketStats* out) const override;
     bool setAdvertLocation(int32_t lat, int32_t lon) override;
     bool upsertContactFromFrame(const uint8_t* frame, size_t len) override;
     bool removeContact(const uint8_t* pubkey, size_t len) override;
@@ -198,47 +202,14 @@ class MeshCoreBleService : public BleService,
     bool importContact(const uint8_t* frame, size_t len) override;
     bool shareContact(const uint8_t* pubkey, size_t len) override;
     bool popOfflineMessage(uint8_t* out, size_t* out_len) override;
-    bool setTuningParams(const MeshCorePhoneTuningParams& params) override;
-    bool getTuningParams(MeshCorePhoneTuningParams* out) const override;
+    bool setTuningParams(const phone::meshcore::MeshCorePhoneTuningParams& params) override;
+    bool getTuningParams(phone::meshcore::MeshCorePhoneTuningParams* out) const override;
     bool setOtherParams(uint8_t manual_add_contacts, uint8_t telemetry_bits,
                         bool has_multi_acks, uint8_t advert_loc_policy, uint8_t multi_acks) override;
     bool setDevicePin(uint32_t pin) override;
     bool getCustomVars(std::string* out) const override;
     bool setCustomVar(const char* key, const char* value) override;
     void onFactoryReset() override;
-    MeshtasticPhoneConfigSnapshot getMeshtasticPhoneConfig() const override;
-    void setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config) override;
-    MeshCorePhoneConfigSnapshot getMeshCorePhoneConfig() const override;
-    void setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config) override;
-    void saveConfig() override { ctx_.saveConfig(); }
-    void applyMeshConfig() override { ctx_.applyMeshConfig(); }
-    void applyUserInfo() override { ctx_.applyUserInfo(); }
-    void applyPositionConfig() override { ctx_.applyPositionConfig(); }
-    void getEffectiveUserInfo(char* out_long,
-                              std::size_t long_len,
-                              char* out_short,
-                              std::size_t short_len) const override
-    {
-        ctx_.getEffectiveUserInfo(out_long, long_len, out_short, short_len);
-    }
-    chat::ChatService& getChatService() override { return ctx_.getChatService(); }
-    chat::contacts::ContactService& getContactService() override { return ctx_.getContactService(); }
-    chat::IMeshAdapter* getMeshAdapter() override { return ctx_.getMeshAdapter(); }
-    const chat::IMeshAdapter* getMeshAdapter() const override { return ctx_.getMeshAdapter(); }
-    chat::contacts::INodeStore* getNodeStore() override { return ctx_.getNodeStore(); }
-    const chat::contacts::INodeStore* getNodeStore() const override { return ctx_.getNodeStore(); }
-    chat::NodeId getSelfNodeId() const override { return ctx_.getSelfNodeId(); }
-    bool isBleEnabled() const override { return ctx_.isBleEnabled(); }
-    void setBleEnabled(bool enabled) override { ctx_.setBleEnabled(enabled); }
-    bool getDeviceMacAddress(uint8_t out_mac[6]) const override { return ctx_.getDeviceMacAddress(out_mac); }
-    bool syncCurrentEpochSeconds(uint32_t epoch_seconds) override
-    {
-        return ctx_.syncCurrentEpochSeconds(epoch_seconds);
-    }
-    void resetMeshConfig() override { ctx_.resetMeshConfig(); }
-    void clearNodeDb() override { ctx_.clearNodeDb(); }
-    void clearMessageDb() override { ctx_.clearMessageDb(); }
-    void restartDevice() override { ctx_.restartDevice(); }
 };
 
 } // namespace ble

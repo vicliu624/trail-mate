@@ -34,6 +34,14 @@ Does this PR let a platform driver interpret protocol semantics?
 
 Does this PR let a BLE host interpret Meshtastic or MeshCore phone protocol?
 
+Does this PR add direct GPS, board, time, config, chat, contact, or mesh-adapter
+reads to a BLE host instead of routing them through `modules/core_phone` and a
+phone facade?
+
+Does this PR put Meshtastic `ToRadio`/`FromRadio`, admin/config response,
+queue/status encoding, or MeshCore command/contact/status/device-info semantics
+back into `platform/*/ble`?
+
 Does this PR let a radio adapter own direct message, PKI, peer key, contact, or
 phone-core policy?
 
@@ -80,4 +88,3 @@ Board manifest updated: yes/no/not applicable
 Runtime/concurrency impact:
 Known boundary exceptions:
 ```
-

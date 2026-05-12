@@ -52,18 +52,6 @@ void bleLogBoth(const char* fmt, ...)
     Serial2.println(buffer);
 }
 
-platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter* getMeshtasticBackend(app::IAppBleFacade& ctx)
-{
-    auto* adapter = ctx.getMeshAdapter();
-    if (!adapter || adapter->backendProtocol() != chat::MeshProtocol::Meshtastic)
-    {
-        return nullptr;
-    }
-
-    auto* backend = adapter->backendForProtocol(chat::MeshProtocol::Meshtastic);
-    return static_cast<platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter*>(backend);
-}
-
 #if !defined(GAT562_MESH_EVB_PRO)
 template <typename T>
 bool loadBlobConfigFromUiStore(const char* key, T* out)
@@ -325,6 +313,7 @@ void onFromRadioAuthorize(uint16_t conn_handle, BLECharacteristic* chr, ble_gatt
 
 MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::string& device_name)
     : ctx_(ctx),
+      phone_facade_(ctx, ble_config_, module_config_, this),
       device_name_(device_name),
       service_(::BLEUuid(MESH_SERVICE_UUID)),
       to_radio_(::BLEUuid(TORADIO_UUID)),
@@ -333,7 +322,7 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
       log_radio_(::BLEUuid(LOGRADIO_UUID))
 {
     ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
-    ble_config_.enabled = ctx_.isBleEnabled();
+    ble_config_.enabled = phone_facade_.isBleEnabled();
     ble_config_.mode = meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN;
     ble_config_.fixed_pin = 0;
 
@@ -354,7 +343,7 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
 #endif
 
     meshtastic_config_bridge::initializeConfigState(
-        persisted, ctx_.isBleEnabled(), ctx_.getSelfNodeId(), &ble_config_, &module_config_);
+        persisted, phone_facade_.isBleEnabled(), phone_facade_.getSelfNodeId(), &ble_config_, &module_config_);
 
     if (persisted.has_bluetooth)
     {
@@ -370,7 +359,14 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
                    module_config_.mqtt.root);
     }
 
-    phone_session_.reset(new MeshtasticPhoneSession(*this, *this, this, this, this, this, this, this));
+    phone_session_.reset(new phone::meshtastic::MeshtasticPhoneSession(phone_facade_,
+                                                                       *this,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_));
 }
 
 MeshtasticBleService::~MeshtasticBleService()
@@ -649,7 +645,7 @@ void MeshtasticBleService::handleToPhone()
             return;
         }
 
-        MeshtasticBleFrame session_frame{};
+        phone::meshtastic::MeshtasticBleFrame session_frame{};
         if (!phone_session_->popToPhone(&session_frame))
         {
             if (waiting_for_read && in_send_packets)
@@ -1045,7 +1041,7 @@ bool MeshtasticBleService::getPairingStatus(BlePairingStatus* out) const
     }
 
     *out = BlePairingStatus{};
-    out->available = ctx_.isBleEnabled();
+    out->available = phone_facade_.isBleEnabled();
     out->requires_passkey = ble_config_.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN;
     out->is_fixed_pin = ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN;
     out->is_connected = isBleConnected();
@@ -1057,6 +1053,40 @@ bool MeshtasticBleService::getPairingStatus(BlePairingStatus* out) const
 bool MeshtasticBleService::isBleConnected() const
 {
     return connected_ && Bluefruit.connected();
+}
+
+bool MeshtasticBleService::isPhoneBleConnected() const
+{
+    return isBleConnected();
+}
+
+uint32_t MeshtasticBleService::pendingPhoneBlePasskey() const
+{
+    return effectivePasskey();
+}
+
+void MeshtasticBleService::requestPhoneHighThroughputConnection()
+{
+}
+
+void MeshtasticBleService::requestPhoneLowerPowerConnection()
+{
+}
+
+void MeshtasticBleService::onPhoneBluetoothConfigChanged()
+{
+    markConfigSavePending(true, false);
+    bleLogBoth("[BLE][nrf52][mt] saveBluetoothConfig queued mode=%u pin=%06lu enabled=%u",
+               static_cast<unsigned>(ble_config_.mode),
+               static_cast<unsigned long>(ble_config_.fixed_pin),
+               ble_config_.enabled ? 1U : 0U);
+}
+
+void MeshtasticBleService::onPhoneModuleConfigChanged()
+{
+    markConfigSavePending(false, true);
+    syncMqttProxySettings();
+    bleLogBoth("[BLE][nrf52][mt] saveModuleConfig queued");
 }
 
 void MeshtasticBleService::notifyFromNum(uint32_t from_num)
@@ -1108,114 +1138,6 @@ void MeshtasticBleService::flushPendingFromNumNotify()
     }
 }
 
-bool MeshtasticBleService::loadBluetoothConfig(meshtastic_Config_BluetoothConfig* out) const
-{
-    return meshtastic_config_bridge::loadBluetoothConfigView(ble_config_, ctx_.isBleEnabled(), out);
-}
-
-void MeshtasticBleService::saveBluetoothConfig(const meshtastic_Config_BluetoothConfig& config)
-{
-    ble_config_ = config;
-    meshtastic_config_bridge::normalizeBluetoothConfig(&ble_config_);
-    ble_config_.enabled = config.enabled;
-    markConfigSavePending(true, false);
-    bleLogBoth("[BLE][nrf52][mt] saveBluetoothConfig queued mode=%u pin=%06lu enabled=%u",
-               static_cast<unsigned>(ble_config_.mode),
-               static_cast<unsigned long>(ble_config_.fixed_pin),
-               ble_config_.enabled ? 1U : 0U);
-}
-
-bool MeshtasticBleService::loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const
-{
-    return meshtastic_config_bridge::fillDeviceConnectionStatus(effectivePasskey(), isBleConnected(), out);
-}
-
-bool MeshtasticBleService::loadModuleConfig(meshtastic_LocalModuleConfig* out) const
-{
-    if (!out)
-    {
-        return false;
-    }
-
-    *out = module_config_;
-    meshtastic_config_bridge::normalizeModuleConfig(out);
-    return true;
-}
-
-void MeshtasticBleService::saveModuleConfig(const meshtastic_LocalModuleConfig& config)
-{
-    bleLogBoth("[BLE][nrf52][mt] saveModuleConfig mqtt enabled=%u proxy=%u enc=%u root=%s",
-               config.has_mqtt && config.mqtt.enabled ? 1U : 0U,
-               config.has_mqtt && config.mqtt.proxy_to_client_enabled ? 1U : 0U,
-               config.has_mqtt ? (config.mqtt.encryption_enabled ? 1U : 0U) : 1U,
-               config.has_mqtt ? config.mqtt.root : "");
-    module_config_ = config;
-    meshtastic_config_bridge::normalizeModuleConfig(&module_config_);
-    markConfigSavePending(false, true);
-    syncMqttProxySettings();
-    bleLogBoth("[BLE][nrf52][mt] saveModuleConfig queued");
-}
-
-bool MeshtasticBleService::loadTimezoneTzdef(char* out, size_t out_len) const
-{
-    if (!out || out_len == 0)
-    {
-        return false;
-    }
-
-    out[0] = '\0';
-
-#if defined(GAT562_MESH_EVB_PRO)
-    return false;
-#else
-    return platform::shared::ble_bridge::loadTimezoneTzdefFromSettings(out, out_len);
-#endif
-}
-
-void MeshtasticBleService::saveTimezoneTzdef(const char* tzdef)
-{
-#if defined(GAT562_MESH_EVB_PRO)
-    (void)tzdef;
-#else
-    platform::shared::ble_bridge::saveTimezoneTzdefToSettings(tzdef);
-#endif
-}
-
-int MeshtasticBleService::getTimezoneOffsetMinutes() const
-{
-    return platform::shared::ble_bridge::getTimezoneOffsetMinutes();
-}
-
-void MeshtasticBleService::setTimezoneOffsetMinutes(int offset_min)
-{
-    platform::shared::ble_bridge::setTimezoneOffsetMinutes(offset_min);
-}
-
-bool MeshtasticBleService::getGpsFix(MeshtasticGpsFix* out) const
-{
-    return platform::shared::ble_bridge::setMeshtasticGpsFixUnavailable(out);
-}
-
-MeshtasticPhoneConfigSnapshot MeshtasticBleService::getMeshtasticPhoneConfig() const
-{
-    return platform::shared::ble_bridge::makeMeshtasticPhoneConfigSnapshot(ctx_.getConfig());
-}
-
-void MeshtasticBleService::setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config)
-{
-    platform::shared::ble_bridge::applyMeshtasticPhoneConfigSnapshot(ctx_.getConfig(), config);
-}
-
-MeshCorePhoneConfigSnapshot MeshtasticBleService::getMeshCorePhoneConfig() const
-{
-    return platform::shared::ble_bridge::makeMeshCorePhoneConfigSnapshot(ctx_.getConfig());
-}
-
-void MeshtasticBleService::setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config)
-{
-    platform::shared::ble_bridge::applyMeshCorePhoneConfigSnapshot(ctx_.getConfig(), config);
-}
-
 void MeshtasticBleService::markConfigSavePending(bool bluetooth_changed, bool module_changed)
 {
     if (bluetooth_changed)
@@ -1255,7 +1177,7 @@ void MeshtasticBleService::flushPendingConfigSaves(bool force)
 
     meshtastic_Config_BluetoothConfig persisted_bluetooth = ble_config_;
     meshtastic_config_bridge::normalizeBluetoothConfig(&persisted_bluetooth);
-    persisted_bluetooth.enabled = ctx_.isBleEnabled();
+    persisted_bluetooth.enabled = phone_facade_.isBleEnabled();
     meshtastic_LocalModuleConfig persisted_module = module_config_;
     meshtastic_config_bridge::normalizeModuleConfig(&persisted_module);
     const bool needs_save = bluetooth_config_save_pending_ || module_config_save_pending_;
@@ -1300,27 +1222,20 @@ void MeshtasticBleService::flushPendingConfigSaves(bool force)
     }
 }
 
-bool MeshtasticBleService::handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg)
-{
-    auto* mt = getMeshtasticBackend(ctx_);
-    return mt ? mt->handleMqttProxyMessage(msg) : false;
-}
-
-bool MeshtasticBleService::pollMqttProxyToPhone(meshtastic_MqttClientProxyMessage* out)
-{
-    auto* mt = getMeshtasticBackend(ctx_);
-    return (mt && out) ? mt->pollMqttProxyMessage(out) : false;
-}
-
 void MeshtasticBleService::syncMqttProxySettings()
 {
-    auto* mt = getMeshtasticBackend(ctx_);
+    auto* adapter = phone_facade_.getMeshAdapter();
+    auto* mt =
+        (adapter && adapter->backendProtocol() == chat::MeshProtocol::Meshtastic)
+            ? static_cast<platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter*>(
+                  adapter->backendForProtocol(chat::MeshProtocol::Meshtastic))
+            : nullptr;
     if (!mt)
     {
         return;
     }
 
-    const auto cfg = getMeshtasticPhoneConfig();
+    const auto cfg = phone_facade_.getMeshtasticPhoneConfig();
     platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter::MqttProxySettings settings;
     platform::shared::ble_bridge::applyMeshtasticMqttProxySettings(settings, module_config_, cfg);
     mt->setMqttProxySettings(settings);

@@ -2,7 +2,6 @@
 
 #include "app/app_config.h"
 #include "ble/ble_uuids.h"
-#include "board/BoardBase.h"
 #include "chat/ble/meshtastic_defaults.h"
 #include "chat/ble/meshtastic_phone_core.h"
 #include "chat/domain/contact_types.h"
@@ -13,7 +12,6 @@
 #include "meshtastic/portnums.pb.h"
 #include "meshtastic/telemetry.pb.h"
 #include "platform/esp/arduino_common/chat/infra/meshtastic/mt_adapter.h"
-#include "platform/esp/arduino_common/gps/gps_service_api.h"
 #include "screen_sleep.h"
 #include "ui/widgets/ble_pairing_popup.h"
 #include <Arduino.h>
@@ -408,6 +406,7 @@ class MeshtasticNotifyStateCallbacks : public NimBLECharacteristicCallbacks
 
 MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::string& device_name)
     : ctx_(ctx),
+      phone_facade_(ctx, ble_config_, module_config_, this),
       device_name_(device_name)
 {
 }
@@ -469,7 +468,14 @@ bool MeshtasticBleService::start()
         team->addIncomingDataObserver(this);
     }
 
-    phone_session_.reset(new MeshtasticPhoneSession(*this, *this, this, this, this, this, this, this));
+    phone_session_.reset(new phone::meshtastic::MeshtasticPhoneSession(phone_facade_,
+                                                                       *this,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_,
+                                                                       &phone_facade_));
     if (!phone_session_)
     {
         ble_log("start failed reason=phone_session_alloc");
@@ -762,7 +768,7 @@ void MeshtasticBleService::handleToPhone()
         {
             return;
         }
-        MeshtasticBleFrame session_frame{};
+        phone::meshtastic::MeshtasticBleFrame session_frame{};
         if (!phone_session_->popToPhone(&session_frame))
         {
             if (waiting_for_read && in_send_packets)

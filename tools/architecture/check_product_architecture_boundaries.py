@@ -117,14 +117,36 @@ RULES = (
         path_contains=("/ble/", "\\ble\\"),
         patterns=compile_patterns(
             (
+                r"\bhandleToRadio(Packet)?\b",
                 r"\bToRadio\b",
                 r"\bFromRadio\b",
+                r"\bFromRadio\s+encode\b",
+                r"\bToRadio\s+decode\b",
                 r"\bAdminMessage\b",
                 r"\bContactService\b",
                 r"\bChatService\b",
                 r"\bDirectMessage\b",
                 r"\bboard\.gps\b",
+                r"\bgat562_board\b",
+                r"#include\s*[<\"]board/",
+                r"#include\s*[<\"]boards/",
+                r"\bgetBoard\s*\(",
+                r"\bgps::gps_is_",
+                r"\bfillMeshtasticGpsFix",
+                r"\bloadTimezone",
+                r"\bgetTimezone",
+                r"\bsetTimezone",
+                r"\bctx_\s*\.\s*getConfig\s*\(",
+                r"\bctx_\s*\.\s*saveConfig\s*\(",
+                r"\bctx_\s*\.\s*applyMeshConfig\s*\(",
+                r"\bctx_\s*\.\s*applyPositionConfig\s*\(",
             )
+        ),
+        excludes=(
+            "platform/esp/arduino_common/include/ble/app_phone_facade.h",
+            "platform/esp/arduino_common/src/ble/app_phone_facade.cpp",
+            "platform/nrf52/arduino_common/include/ble/app_phone_facade.h",
+            "platform/nrf52/arduino_common/src/ble/app_phone_facade.cpp",
         ),
     ),
     Rule(
@@ -318,4 +340,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
-

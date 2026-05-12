@@ -1,4 +1,4 @@
-#include "chat/ble/meshcore_phone_core.h"
+#include "phone/meshcore/meshcore_phone_core.h"
 
 #include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/ports/i_mesh_adapter.h"
@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace ble
+namespace phone::meshcore
 {
 namespace
 {
@@ -1797,4 +1797,4 @@ bool MeshCorePhoneCore::buildContactFromNode(const chat::contacts::NodeEntry& en
     return true;
 }
 
-} // namespace ble
+} // namespace phone::meshcore

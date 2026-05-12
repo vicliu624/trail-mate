@@ -2,7 +2,6 @@
 
 #include "ble/ble_uuids.h"
 #include "ble/bluefruit_runtime.h"
-#include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
 
 #include <Arduino.h>
 #include <cstdlib>
@@ -143,11 +142,12 @@ void onTxAuthorize(uint16_t conn_handle, BLECharacteristic* chr, ble_gatts_evt_r
 
 MeshCoreBleService::MeshCoreBleService(app::IAppBleFacade& ctx, const std::string& device_name)
     : ctx_(ctx),
+      phone_facade_(ctx, phone_ble_config_, phone_module_config_),
       device_name_(device_name),
       service_(::BLEUuid(NUS_SERVICE_UUID)),
       rx_char_(::BLEUuid(NUS_CHAR_RX_UUID)),
       tx_char_(::BLEUuid(NUS_CHAR_TX_UUID)),
-      core_(new MeshCorePhoneCore(*this, device_name, this))
+      core_(new phone::meshcore::MeshCorePhoneCore(phone_facade_, device_name, this))
 {
 }
 
@@ -297,12 +297,7 @@ bool MeshCoreBleService::getCustomVars(std::string* out) const
 
     out->clear();
 
-    const auto mesh_cfg = getMeshCorePhoneConfig();
-    const auto mt_cfg = getMeshtasticPhoneConfig();
-    appendCustomVar(*out, "node_name", mesh_cfg.node_name);
-    appendCustomVar(*out, "channel_name", mesh_cfg.mesh.meshcore_channel_name);
-    appendCustomVar(*out, "multi_acks", mesh_cfg.mesh.meshcore_multi_acks ? "1" : "0");
-    appendCustomVar(*out, "gps", mt_cfg.gps_enabled ? "1" : "0");
+    phone_facade_.getCustomVars(out);
 
     // Keep the variable surface compatible with the MeshCore app even if
     // nRF52 doesn't implement every extended option yet.
@@ -323,8 +318,8 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
         return false;
     }
 
-    auto mesh_cfg = getMeshCorePhoneConfig();
-    auto mt_cfg = getMeshtasticPhoneConfig();
+    auto mesh_cfg = phone_facade_.getMeshCorePhoneConfig();
+    auto mt_cfg = phone_facade_.getMeshtasticPhoneConfig();
     bool changed = false;
     bool mesh_changed = false;
     bool mt_changed = false;
@@ -404,39 +399,19 @@ bool MeshCoreBleService::setCustomVar(const char* key, const char* value)
     {
         if (mesh_changed)
         {
-            setMeshCorePhoneConfig(mesh_cfg);
+            phone_facade_.setMeshCorePhoneConfig(mesh_cfg);
         }
         if (mt_changed)
         {
-            setMeshtasticPhoneConfig(mt_cfg);
+            phone_facade_.setMeshtasticPhoneConfig(mt_cfg);
         }
-        ctx_.saveConfig();
+        phone_facade_.saveConfig();
     }
     if (position_changed)
     {
-        ctx_.applyPositionConfig();
+        phone_facade_.applyPositionConfig();
     }
     return true;
-}
-
-MeshtasticPhoneConfigSnapshot MeshCoreBleService::getMeshtasticPhoneConfig() const
-{
-    return platform::shared::ble_bridge::makeMeshtasticPhoneConfigSnapshot(ctx_.getConfig());
-}
-
-void MeshCoreBleService::setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config)
-{
-    platform::shared::ble_bridge::applyMeshtasticPhoneConfigSnapshot(ctx_.getConfig(), config);
-}
-
-MeshCorePhoneConfigSnapshot MeshCoreBleService::getMeshCorePhoneConfig() const
-{
-    return platform::shared::ble_bridge::makeMeshCorePhoneConfigSnapshot(ctx_.getConfig());
-}
-
-void MeshCoreBleService::setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config)
-{
-    platform::shared::ble_bridge::applyMeshCorePhoneConfigSnapshot(ctx_.getConfig(), config);
 }
 
 } // namespace ble

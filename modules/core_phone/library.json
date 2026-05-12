@@ -1,0 +1,23 @@
+{
+  "name": "core_phone",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-I../core_sys/include",
+      "-I../core_chat/include",
+      "-I../core_chat/generated",
+      "-I../core_chat/third_party/nanopb"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "core_chat"
+    },
+    {
+      "name": "core_sys"
+    }
+  ]
+}
+

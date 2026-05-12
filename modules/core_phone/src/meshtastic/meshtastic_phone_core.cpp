@@ -1,7 +1,7 @@
-#include "chat/ble/meshtastic_phone_core.h"
+#include "phone/meshtastic/meshtastic_phone_core.h"
 
-#include "chat/ble/meshtastic_defaults.h"
-#include "chat/ble/meshtastic_phone_config_bridge.h"
+#include "phone/meshtastic/meshtastic_defaults.h"
+#include "phone/meshtastic/meshtastic_phone_config_bridge.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/runtime/self_identity_policy.h"
 #include "chat/usecase/chat_service.h"
@@ -18,7 +18,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace ble
+namespace phone::meshtastic
 {
 namespace
 {
@@ -327,9 +327,9 @@ const char* configStageName(uint32_t nonce)
 {
     switch (nonce)
     {
-    case meshtastic_defaults::kConfigNonceOnlyConfig:
+    case defaults::kConfigNonceOnlyConfig:
         return "stage1_config";
-    case meshtastic_defaults::kConfigNonceOnlyNodes:
+    case defaults::kConfigNonceOnlyNodes:
         return "stage2_nodes";
     default:
         return "stage_unknown";
@@ -373,7 +373,7 @@ meshtastic_Config_DeviceConfig_Role roleFromEntry(uint8_t role)
 
 void initDefaultModuleConfig(meshtastic_LocalModuleConfig* out, uint32_t self_node)
 {
-    meshtastic_config_bridge::initDefaultModuleConfig(out, self_node);
+    config_bridge::initDefaultModuleConfig(out, self_node);
     if (out)
     {
         out->ambient_lighting.current = 8;
@@ -382,7 +382,7 @@ void initDefaultModuleConfig(meshtastic_LocalModuleConfig* out, uint32_t self_no
 
 void applyLegacyMqttDefaults(meshtastic_LocalModuleConfig* out)
 {
-    meshtastic_config_bridge::normalizeModuleConfig(out);
+    config_bridge::normalizeModuleConfig(out);
 }
 
 bool moduleConfigTypeFromVariant(pb_size_t variant_tag, meshtastic_AdminMessage_ModuleConfigType* out)
@@ -1331,7 +1331,7 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
     }
 
     const uint8_t channel_slot = static_cast<uint8_t>(config_channel_index_ - 1);
-    if (channel_slot < meshtastic_defaults::kMaxMeshtasticChannels)
+    if (channel_slot < defaults::kMaxMeshtasticChannels)
     {
         from.which_payload_variant = meshtastic_FromRadio_channel_tag;
         fillChannel(channel_slot, &from.channel);
@@ -1475,7 +1475,7 @@ void MeshtasticPhoneCore::fillMyInfo(meshtastic_MyNodeInfo* out) const
     std::memset(&info, 0, sizeof(info));
     info.my_node_num = ctx_.getSelfNodeId();
     info.reboot_count = 0;
-    info.min_app_version = meshtastic_defaults::kOfficialMinAppVersion;
+    info.min_app_version = defaults::kOfficialMinAppVersion;
 
     size_t nodedb_count = 1;
     if (const auto* store = ctx_.getNodeStore())
@@ -1624,8 +1624,8 @@ void MeshtasticPhoneCore::fillMetadata(meshtastic_DeviceMetadata* out) const
     }
     meshtastic_DeviceMetadata& metadata = *out;
     std::memset(&metadata, 0, sizeof(metadata));
-    copyBounded(metadata.firmware_version, sizeof(metadata.firmware_version), meshtastic_defaults::kCompatFirmwareVersion);
-    metadata.device_state_version = meshtastic_defaults::kOfficialDeviceStateVersion;
+    copyBounded(metadata.firmware_version, sizeof(metadata.firmware_version), defaults::kCompatFirmwareVersion);
+    metadata.device_state_version = defaults::kOfficialDeviceStateVersion;
     metadata.canShutdown = true;
     metadata.hasBluetooth = true;
     metadata.hasWifi = false;
@@ -2065,4 +2065,4 @@ meshtastic_MeshPacket MeshtasticPhoneCore::buildPacketFromData(const chat::MeshI
     return packet;
 }
 
-} // namespace ble
+} // namespace phone::meshtastic

@@ -13,11 +13,28 @@ runtime contracts from inside a `core_*` module. This violates the new wording
 that shared core must not include platform/UI headers. It is historical layout
 from the ongoing migration and should be addressed by a later boundary split.
 
-### ESP BLE runtime still carries phone-protocol semantics
+### BLE runtime still carries historical phone-protocol transport glue
 
-The ESP Arduino BLE layer currently includes Meshtastic and MeshCore BLE runtime
-logic. Later phases should split BLE host/transport ownership from
-MeshtasticPhoneCore and MeshCorePhoneCore protocol semantics.
+The ESP and nRF52 BLE hosts now construct `modules/core_phone` cores through an
+`AppPhoneFacade`, so GPS/time/config/board reads are no longer owned directly by
+the BLE service classes. Historical transport files still contain compatibility
+glue around Meshtastic reads/notifies and ESP MeshCore NUS command/event
+queues. Later Phase 2 slices should keep reducing these protocol-shaped helpers
+or explicitly move them behind phone-core session APIs.
+
+Current known BLE-host exceptions include:
+
+- `platform/esp/arduino_common/src/ble/meshtastic_ble.cpp` still has
+  Meshtastic characteristic names, queue names, and read/notify compatibility
+  state such as `ToRadio`/`FromRadio` buffers.
+- `platform/nrf52/arduino_common/src/ble/meshtastic_ble.cpp` still has the
+  same Meshtastic transport compatibility surface for Bluefruit.
+- `platform/esp/arduino_common/src/ble/meshcore_ble.cpp` still carries legacy
+  MeshCore NUS fallback parsing, offline queues, manual contacts, and push
+  framing while the shared core coverage is being expanded.
+- `platform/esp/arduino_common/include/ble/meshcore_ble.h` still implements
+  `MeshCorePhoneHooks` for BLE-local state such as connection, PIN, telemetry
+  mode, and manual contacts.
 
 ### Radio runtime and chat protocol adapters are still partially coupled
 
@@ -55,4 +72,3 @@ composition roots and target manifests.
 Do not fix these categories opportunistically inside unrelated feature PRs.
 When a later phase removes one category, update this file and consider enabling
 the relevant checker rule in `--strict` mode for that area.
-

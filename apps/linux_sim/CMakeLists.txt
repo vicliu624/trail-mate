@@ -105,4 +105,14 @@ if(BUILD_TESTING)
         PRIVATE trailmate_cardputer_zero_linux_common)
     add_test(NAME trailmate_cardputer_zero_path_safety_smoke
              COMMAND trailmate_cardputer_zero_path_safety_smoke)
+
+    add_executable(trailmate_core_phone_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_phone/tests/test_phone_core_smoke.cpp"
+    )
+    target_include_directories(trailmate_core_phone_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/core_phone/tests")
+    target_link_libraries(trailmate_core_phone_smoke
+        PRIVATE trailmate_cardputer_zero_linux_common)
+    add_test(NAME trailmate_core_phone_smoke
+             COMMAND trailmate_core_phone_smoke)
 endif()

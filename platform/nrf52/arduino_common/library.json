@@ -13,6 +13,7 @@
       "-I../../..",
       "-I../../../boards/gat562_mesh_evb_pro/include",
       "-I../../../platform/shared/include",
+      "-I../../../modules/core_phone/include",
       "-I../../../modules/core_sys/include",
       "-I../../../modules/core_chat/include",
       "-I../../../modules/core_chat/generated",
@@ -31,5 +32,10 @@
       "-IC:/Users/VicLi/.platformio/packages/framework-arduinoadafruitnrf52/libraries/Adafruit_LittleFS/src",
       "-IC:/Users/VicLi/.platformio/packages/framework-arduinoadafruitnrf52/libraries/InternalFileSytem/src"
     ]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "core_phone"
+    }
+  ]
 }

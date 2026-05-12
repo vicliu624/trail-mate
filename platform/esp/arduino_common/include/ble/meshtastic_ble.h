@@ -1,8 +1,8 @@
 #pragma once
 
 #include "app/app_facades.h"
+#include "ble/app_phone_facade.h"
 #include "ble/ble_manager.h"
-#include "chat/ble/meshtastic_phone_session.h"
 #include "chat/infra/meshtastic/mt_codec_pb.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"
@@ -13,6 +13,8 @@
 #include "meshtastic/localonly.pb.h"
 #include "meshtastic/mesh.pb.h"
 #include "meshtastic/module_config.pb.h"
+#include "phone/meshtastic/meshtastic_phone_session.h"
+#include "platform/shared/ble/phone_ble_runtime.h"
 #include "team/usecase/team_service.h"
 #include <NimBLEDevice.h>
 #include <array>
@@ -28,14 +30,8 @@ class MeshtasticBleService : public BleService,
                              public chat::ChatService::IncomingTextObserver,
                              public chat::ChatService::OutgoingTextObserver,
                              public team::TeamService::IncomingDataObserver,
-                             public MeshtasticPhoneTransport,
-                             public MeshtasticPhoneBluetoothConfigHooks,
-                             public MeshtasticPhoneModuleConfigHooks,
-                             public MeshtasticPhoneConfigLifecycleHooks,
-                             public MeshtasticPhoneStatusHooks,
-                             public MeshtasticPhoneMqttHooks,
-                             public MeshtasticPhoneDeviceRuntimeHooks,
-                             public IPhoneRuntimeContext
+                             public phone::meshtastic::MeshtasticPhoneTransport,
+                             public platform::shared::ble_bridge::IPhoneBleRuntime
 {
   public:
     MeshtasticBleService(app::IAppBleFacade& ctx, const std::string& device_name);
@@ -50,56 +46,18 @@ class MeshtasticBleService : public BleService,
     void onIncomingData(const chat::MeshIncomingData& msg) override;
     bool isBleConnected() const override;
     void notifyFromNum(uint32_t value) override;
-    bool loadBluetoothConfig(meshtastic_Config_BluetoothConfig* out) const override;
-    void saveBluetoothConfig(const meshtastic_Config_BluetoothConfig& config) override;
-    bool loadDeviceConnectionStatus(meshtastic_DeviceConnectionStatus* out) const override;
-    bool loadModuleConfig(meshtastic_LocalModuleConfig* out) const override;
-    void saveModuleConfig(const meshtastic_LocalModuleConfig& config) override;
-    bool loadTimezoneTzdef(char* out, size_t out_len) const override;
-    void saveTimezoneTzdef(const char* tzdef) override;
-    int getTimezoneOffsetMinutes() const override;
-    void setTimezoneOffsetMinutes(int offset_min) override;
-    bool getGpsFix(MeshtasticGpsFix* out) const override;
-    MeshtasticPhoneConfigSnapshot getMeshtasticPhoneConfig() const override;
-    void setMeshtasticPhoneConfig(const MeshtasticPhoneConfigSnapshot& config) override;
-    MeshCorePhoneConfigSnapshot getMeshCorePhoneConfig() const override;
-    void setMeshCorePhoneConfig(const MeshCorePhoneConfigSnapshot& config) override;
-    void saveConfig() override { ctx_.saveConfig(); }
-    void applyMeshConfig() override { ctx_.applyMeshConfig(); }
-    void applyUserInfo() override { ctx_.applyUserInfo(); }
-    void applyPositionConfig() override { ctx_.applyPositionConfig(); }
-    void getEffectiveUserInfo(char* out_long,
-                              std::size_t long_len,
-                              char* out_short,
-                              std::size_t short_len) const override
-    {
-        ctx_.getEffectiveUserInfo(out_long, long_len, out_short, short_len);
-    }
-    chat::ChatService& getChatService() override { return ctx_.getChatService(); }
-    chat::contacts::ContactService& getContactService() override { return ctx_.getContactService(); }
-    chat::IMeshAdapter* getMeshAdapter() override { return ctx_.getMeshAdapter(); }
-    const chat::IMeshAdapter* getMeshAdapter() const override { return ctx_.getMeshAdapter(); }
-    chat::contacts::INodeStore* getNodeStore() override { return ctx_.getNodeStore(); }
-    const chat::contacts::INodeStore* getNodeStore() const override { return ctx_.getNodeStore(); }
-    chat::NodeId getSelfNodeId() const override { return ctx_.getSelfNodeId(); }
-    bool isBleEnabled() const override { return ctx_.isBleEnabled(); }
-    void setBleEnabled(bool enabled) override { ctx_.setBleEnabled(enabled); }
-    bool getDeviceMacAddress(uint8_t out_mac[6]) const override { return ctx_.getDeviceMacAddress(out_mac); }
-    bool syncCurrentEpochSeconds(uint32_t epoch_seconds) override
-    {
-        return ctx_.syncCurrentEpochSeconds(epoch_seconds);
-    }
-    void resetMeshConfig() override { ctx_.resetMeshConfig(); }
-    void clearNodeDb() override { ctx_.clearNodeDb(); }
-    void clearMessageDb() override { ctx_.clearMessageDb(); }
-    void restartDevice() override { ctx_.restartDevice(); }
-    bool handleMqttProxyToRadio(const meshtastic_MqttClientProxyMessage& msg) override;
-    bool pollMqttProxyToPhone(meshtastic_MqttClientProxyMessage* out) override;
-    void onConfigStart() override;
-    void onConfigComplete() override;
+    bool isPhoneBleConnected() const override;
+    uint32_t pendingPhoneBlePasskey() const override;
+    void requestPhoneHighThroughputConnection() override;
+    void requestPhoneLowerPowerConnection() override;
+    void onPhoneBluetoothConfigChanged() override;
+    void onPhoneModuleConfigChanged() override;
 
   private:
     app::IAppBleFacade& ctx_;
+    meshtastic_Config_BluetoothConfig ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
+    meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
+    AppPhoneFacade phone_facade_;
     std::string device_name_;
     NimBLEServer* server_ = nullptr;
     NimBLEService* service_ = nullptr;
@@ -119,10 +77,7 @@ class MeshtasticBleService : public BleService,
     std::atomic<uint32_t> pending_passkey_{0};
     int last_battery_level_ = -2;
 
-    meshtastic_Config_BluetoothConfig ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
-    meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
-
-    std::unique_ptr<MeshtasticPhoneSession> phone_session_;
+    std::unique_ptr<phone::meshtastic::MeshtasticPhoneSession> phone_session_;
 
     struct Frame
     {

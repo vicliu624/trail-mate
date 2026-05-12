@@ -93,7 +93,8 @@
       "targets": [
         "trailmate_cardputer_zero_smoke",
         "trailmate_cardputer_zero_runtime_smoke",
-        "trailmate_cardputer_zero_path_safety_smoke"
+        "trailmate_cardputer_zero_path_safety_smoke",
+        "trailmate_core_phone_smoke"
       ]
     },
     {
@@ -111,7 +112,8 @@
       "targets": [
         "trailmate_cardputer_zero_smoke",
         "trailmate_cardputer_zero_runtime_smoke",
-        "trailmate_cardputer_zero_path_safety_smoke"
+        "trailmate_cardputer_zero_path_safety_smoke",
+        "trailmate_core_phone_smoke"
       ]
     }
   ],

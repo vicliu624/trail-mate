@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app/app_config.h"
-#include "chat/ble/phone_runtime_context.h"
+#include "phone/common/phone_runtime_context.h"
 
 #include <cstddef>
 #include <cstring>
@@ -29,9 +29,9 @@ inline void copyBounded(char* dst, std::size_t dst_len, const char* src)
     dst[dst_len - 1] = '\0';
 }
 
-inline ::ble::MeshtasticPhoneConfigSnapshot makeMeshtasticPhoneConfigSnapshot(const app::AppConfig& cfg)
+inline ::phone::MeshtasticPhoneConfigSnapshot makeMeshtasticPhoneConfigSnapshot(const app::AppConfig& cfg)
 {
-    ::ble::MeshtasticPhoneConfigSnapshot snapshot{};
+    ::phone::MeshtasticPhoneConfigSnapshot snapshot{};
     snapshot.mesh = cfg.meshtastic_config;
     snapshot.relay_enabled = cfg.chat_policy.enable_relay;
     copyBounded(snapshot.node_name, sizeof(snapshot.node_name), cfg.node_name);
@@ -50,7 +50,7 @@ inline ::ble::MeshtasticPhoneConfigSnapshot makeMeshtasticPhoneConfigSnapshot(co
 }
 
 inline void applyMeshtasticPhoneConfigSnapshot(app::AppConfig& cfg,
-                                               const ::ble::MeshtasticPhoneConfigSnapshot& snapshot)
+                                               const ::phone::MeshtasticPhoneConfigSnapshot& snapshot)
 {
     cfg.meshtastic_config = snapshot.mesh;
     cfg.chat_policy.enable_relay = snapshot.relay_enabled;
@@ -68,9 +68,9 @@ inline void applyMeshtasticPhoneConfigSnapshot(app::AppConfig& cfg,
     cfg.gps_strategy = snapshot.gps_strategy;
 }
 
-inline ::ble::MeshCorePhoneConfigSnapshot makeMeshCorePhoneConfigSnapshot(const app::AppConfig& cfg)
+inline ::phone::MeshCorePhoneConfigSnapshot makeMeshCorePhoneConfigSnapshot(const app::AppConfig& cfg)
 {
-    ::ble::MeshCorePhoneConfigSnapshot snapshot{};
+    ::phone::MeshCorePhoneConfigSnapshot snapshot{};
     snapshot.active_protocol = cfg.mesh_protocol;
     snapshot.mesh = cfg.meshcore_config;
     copyBounded(snapshot.node_name, sizeof(snapshot.node_name), cfg.node_name);
@@ -81,7 +81,7 @@ inline ::ble::MeshCorePhoneConfigSnapshot makeMeshCorePhoneConfigSnapshot(const 
 }
 
 inline void applyMeshCorePhoneConfigSnapshot(app::AppConfig& cfg,
-                                             const ::ble::MeshCorePhoneConfigSnapshot& snapshot)
+                                             const ::phone::MeshCorePhoneConfigSnapshot& snapshot)
 {
     cfg.mesh_protocol = snapshot.active_protocol;
     cfg.meshcore_config = snapshot.mesh;
