@@ -722,7 +722,7 @@ bool MeshtasticRadioAdapter::publishNodePayload(const meshtastic_Data& data,
             node.via_mqtt,
             node.is_ignored,
             node.has_public_key,
-            node.key_manually_verified,
+            false,
             node.has_device_metrics,
             node.has_device_metrics ? &node.device_metrics : nullptr),
         0);

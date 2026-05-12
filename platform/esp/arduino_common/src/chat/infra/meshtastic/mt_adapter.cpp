@@ -1863,7 +1863,7 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
                     node.via_mqtt,
                     node.is_ignored,
                     node.has_public_key,
-                    node.key_manually_verified,
+                    false,
                     node.has_device_metrics,
                     node.has_device_metrics ? &node.device_metrics : nullptr);
                 bool published = sys::EventBus::publish(event, 0);

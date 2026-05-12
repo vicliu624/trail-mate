@@ -5,11 +5,20 @@
 
 #include "chat/infra/meshtastic/mt_pki_crypto.h"
 
+#include <cstring>
+
+#if __has_include(<AES.h>) && __has_include(<Crypto.h>) && __has_include(<SHA256.h>)
 #include <AES.h>
 #include <Crypto.h>
 #include <SHA256.h>
+#define TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO 1
+#else
+#define TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO 0
+#endif
 
-#include <cstring>
+#if defined(TRAIL_MATE_HAS_OPENSSL)
+#include <openssl/evp.h>
+#endif
 
 namespace chat
 {
@@ -19,6 +28,32 @@ namespace
 {
 constexpr size_t kAesBlockSize = 16;
 constexpr size_t kMaxAadLen = 30;
+#if TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO || defined(TRAIL_MATE_HAS_OPENSSL)
+constexpr size_t kCcmLengthSize = 2;
+#endif
+
+#if TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO
+int constantTimeCompare(const void* a_, const void* b_, size_t len)
+{
+    const volatile uint8_t* volatile a =
+        reinterpret_cast<const volatile uint8_t*>(a_);
+    const volatile uint8_t* volatile b =
+        reinterpret_cast<const volatile uint8_t*>(b_);
+    if (len == 0)
+    {
+        return 0;
+    }
+    if (!a || !b)
+    {
+        return -1;
+    }
+    volatile uint8_t diff = 0U;
+    for (size_t index = 0; index < len; ++index)
+    {
+        diff |= static_cast<uint8_t>(a[index] ^ b[index]);
+    }
+    return diff;
+}
 
 class AesCcmCipher
 {
@@ -56,26 +91,6 @@ class AesCcmCipher
   private:
     AESSmall256* aes_ = nullptr;
 };
-
-int constantTimeCompare(const void* a_, const void* b_, size_t len)
-{
-    const volatile uint8_t* volatile a = (const volatile uint8_t* volatile)a_;
-    const volatile uint8_t* volatile b = (const volatile uint8_t* volatile)b_;
-    if (len == 0)
-    {
-        return 0;
-    }
-    if (!a || !b)
-    {
-        return -1;
-    }
-    volatile uint8_t diff = 0U;
-    for (size_t index = 0; index < len; ++index)
-    {
-        diff |= static_cast<uint8_t>(a[index] ^ b[index]);
-    }
-    return diff;
-}
 
 void putBe16(uint8_t* out, uint16_t value)
 {
@@ -213,6 +228,196 @@ void aesCcmDecryptAuth(AesCcmCipher& cipher,
         out_tag[index] = auth[index] ^ tmp[index];
     }
 }
+#endif
+
+#if defined(TRAIL_MATE_HAS_OPENSSL)
+constexpr size_t kOpenSslCcmNonceLen = 15 - kCcmLengthSize;
+
+const EVP_CIPHER* opensslAesCcmCipher(size_t key_len)
+{
+    if (key_len == 16)
+    {
+        return EVP_aes_128_ccm();
+    }
+    if (key_len == 32)
+    {
+        return EVP_aes_256_ccm();
+    }
+    return nullptr;
+}
+
+bool opensslSha256Update(EVP_MD_CTX* ctx, const void* data, size_t len)
+{
+    if (!ctx || !data || len == 0)
+    {
+        return true;
+    }
+    return EVP_DigestUpdate(ctx, data, len) == 1;
+}
+
+bool opensslSha256(const void* first,
+                   size_t first_len,
+                   const void* second,
+                   size_t second_len,
+                   const void* third,
+                   size_t third_len,
+                   const void* fourth,
+                   size_t fourth_len,
+                   const void* fifth,
+                   size_t fifth_len,
+                   const void* sixth,
+                   size_t sixth_len,
+                   uint8_t out[32])
+{
+    if (!out)
+    {
+        return false;
+    }
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx)
+    {
+        return false;
+    }
+    bool ok = EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) == 1;
+    ok = ok && opensslSha256Update(ctx, first, first_len);
+    ok = ok && opensslSha256Update(ctx, second, second_len);
+    ok = ok && opensslSha256Update(ctx, third, third_len);
+    ok = ok && opensslSha256Update(ctx, fourth, fourth_len);
+    ok = ok && opensslSha256Update(ctx, fifth, fifth_len);
+    ok = ok && opensslSha256Update(ctx, sixth, sixth_len);
+    unsigned int out_len = 0;
+    ok = ok && EVP_DigestFinal_ex(ctx, out, &out_len) == 1 && out_len == 32;
+    EVP_MD_CTX_free(ctx);
+    return ok;
+}
+
+bool opensslAesCcmDecrypt(const uint8_t* key,
+                          size_t key_len,
+                          const uint8_t nonce[kPkiNonceSize],
+                          size_t auth_len,
+                          const uint8_t* crypt,
+                          size_t crypt_len,
+                          const uint8_t* aad,
+                          size_t aad_len,
+                          const uint8_t* auth,
+                          uint8_t* out_plain)
+{
+    const EVP_CIPHER* cipher = opensslAesCcmCipher(key_len);
+    if (!cipher || !nonce || !crypt || !auth || !out_plain ||
+        auth_len == 0 || auth_len > kAesBlockSize || aad_len > kMaxAadLen)
+    {
+        return false;
+    }
+
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx)
+    {
+        return false;
+    }
+
+    int out_len = 0;
+    bool ok =
+        EVP_DecryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) == 1 &&
+        EVP_CIPHER_CTX_ctrl(ctx,
+                            EVP_CTRL_CCM_SET_IVLEN,
+                            static_cast<int>(kOpenSslCcmNonceLen),
+                            nullptr) == 1 &&
+        EVP_CIPHER_CTX_ctrl(ctx,
+                            EVP_CTRL_CCM_SET_TAG,
+                            static_cast<int>(auth_len),
+                            const_cast<uint8_t*>(auth)) == 1 &&
+        EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, nonce) == 1 &&
+        EVP_DecryptUpdate(ctx,
+                          nullptr,
+                          &out_len,
+                          nullptr,
+                          static_cast<int>(crypt_len)) == 1;
+    if (ok && aad && aad_len > 0)
+    {
+        ok = EVP_DecryptUpdate(ctx,
+                               nullptr,
+                               &out_len,
+                               aad,
+                               static_cast<int>(aad_len)) == 1;
+    }
+    if (ok)
+    {
+        ok = EVP_DecryptUpdate(ctx,
+                               out_plain,
+                               &out_len,
+                               crypt,
+                               static_cast<int>(crypt_len)) == 1 &&
+             static_cast<size_t>(out_len) == crypt_len;
+    }
+
+    EVP_CIPHER_CTX_free(ctx);
+    return ok;
+}
+
+bool opensslAesCcmEncrypt(const uint8_t* key,
+                          size_t key_len,
+                          const uint8_t nonce[kPkiNonceSize],
+                          size_t auth_len,
+                          const uint8_t* aad,
+                          size_t aad_len,
+                          const uint8_t* plain,
+                          size_t plain_len,
+                          uint8_t* out_cipher,
+                          uint8_t* out_auth)
+{
+    const EVP_CIPHER* cipher = opensslAesCcmCipher(key_len);
+    if (!cipher || !nonce || !plain || !out_cipher || !out_auth ||
+        auth_len == 0 || auth_len > kAesBlockSize || aad_len > kMaxAadLen)
+    {
+        return false;
+    }
+
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx)
+    {
+        return false;
+    }
+
+    int out_len = 0;
+    bool ok =
+        EVP_EncryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) == 1 &&
+        EVP_CIPHER_CTX_ctrl(ctx,
+                            EVP_CTRL_CCM_SET_IVLEN,
+                            static_cast<int>(kOpenSslCcmNonceLen),
+                            nullptr) == 1 &&
+        EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, nonce) == 1 &&
+        EVP_EncryptUpdate(ctx,
+                          nullptr,
+                          &out_len,
+                          nullptr,
+                          static_cast<int>(plain_len)) == 1;
+    if (ok && aad && aad_len > 0)
+    {
+        ok = EVP_EncryptUpdate(ctx,
+                               nullptr,
+                               &out_len,
+                               aad,
+                               static_cast<int>(aad_len)) == 1;
+    }
+    if (ok)
+    {
+        ok = EVP_EncryptUpdate(ctx,
+                               out_cipher,
+                               &out_len,
+                               plain,
+                               static_cast<int>(plain_len)) == 1 &&
+             static_cast<size_t>(out_len) == plain_len &&
+             EVP_EncryptFinal_ex(ctx, out_cipher + out_len, &out_len) == 1 &&
+             EVP_CIPHER_CTX_ctrl(ctx,
+                                 EVP_CTRL_CCM_GET_TAG,
+                                 static_cast<int>(auth_len),
+                                 out_auth) == 1;
+    }
+
+    EVP_CIPHER_CTX_free(ctx);
+    return ok;
+}
+#endif
 
 } // namespace
 
@@ -223,6 +428,7 @@ void hashSharedKey(uint8_t* bytes, size_t num_bytes)
         return;
     }
 
+#if TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO
     SHA256 hash;
     uint8_t size = static_cast<uint8_t>(num_bytes);
     constexpr uint8_t kChunkSize = 16;
@@ -237,6 +443,22 @@ void hashSharedKey(uint8_t* bytes, size_t num_bytes)
         hash.update(bytes + pos, len);
     }
     hash.finalize(bytes, 32);
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+    uint8_t digest[32] = {};
+    if (opensslSha256(bytes, num_bytes,
+                      nullptr, 0,
+                      nullptr, 0,
+                      nullptr, 0,
+                      nullptr, 0,
+                      nullptr, 0,
+                      digest))
+    {
+        memcpy(bytes, digest, sizeof(digest));
+    }
+#else
+    (void)bytes;
+    (void)num_bytes;
+#endif
 }
 
 void initPkiNonce(uint32_t from,
@@ -275,18 +497,34 @@ bool decryptPkiAesCcm(const uint8_t* key,
         return false;
     }
 
-    const size_t length_size = 2;
+#if TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO
     uint8_t x[kAesBlockSize];
     uint8_t block[kAesBlockSize];
     uint8_t tag[kAesBlockSize];
     AesCcmCipher cipher;
     cipher.setKey(key, key_len);
-    aesCcmEncrStart(length_size, nonce, block);
+    aesCcmEncrStart(kCcmLengthSize, nonce, block);
     aesCcmDecryptAuth(cipher, auth_len, block, auth, tag);
-    aesCcmEncr(cipher, length_size, crypt, crypt_len, out_plain, block);
-    aesCcmAuthStart(cipher, auth_len, length_size, nonce, aad, aad_len, crypt_len, x);
+    aesCcmEncr(cipher, kCcmLengthSize, crypt, crypt_len, out_plain, block);
+    aesCcmAuthStart(cipher, auth_len, kCcmLengthSize, nonce, aad, aad_len, crypt_len, x);
     aesCcmAuth(cipher, out_plain, crypt_len, x);
     return constantTimeCompare(x, tag, auth_len) == 0;
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+    return opensslAesCcmDecrypt(key, key_len, nonce, auth_len,
+                                crypt, crypt_len, aad, aad_len, auth, out_plain);
+#else
+    (void)key;
+    (void)key_len;
+    (void)nonce;
+    (void)auth_len;
+    (void)crypt;
+    (void)crypt_len;
+    (void)aad;
+    (void)aad_len;
+    (void)auth;
+    (void)out_plain;
+    return false;
+#endif
 }
 
 bool encryptPkiAesCcm(const uint8_t* key,
@@ -306,17 +544,34 @@ bool encryptPkiAesCcm(const uint8_t* key,
         return false;
     }
 
-    const size_t length_size = 2;
+#if TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO
     uint8_t x[kAesBlockSize];
     uint8_t block[kAesBlockSize];
     AesCcmCipher cipher;
     cipher.setKey(key, key_len);
-    aesCcmAuthStart(cipher, auth_len, length_size, nonce, aad, aad_len, plain_len, x);
+    aesCcmAuthStart(cipher, auth_len, kCcmLengthSize, nonce, aad, aad_len, plain_len, x);
     aesCcmAuth(cipher, plain, plain_len, x);
-    aesCcmEncrStart(length_size, nonce, block);
-    aesCcmEncr(cipher, length_size, plain, plain_len, out_cipher, block);
+    aesCcmEncrStart(kCcmLengthSize, nonce, block);
+    aesCcmEncr(cipher, kCcmLengthSize, plain, plain_len, out_cipher, block);
     aesCcmEncryptAuth(cipher, auth_len, x, block, out_auth);
     return true;
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+    return opensslAesCcmEncrypt(key, key_len, nonce, auth_len,
+                                aad, aad_len, plain, plain_len,
+                                out_cipher, out_auth);
+#else
+    (void)key;
+    (void)key_len;
+    (void)nonce;
+    (void)auth_len;
+    (void)aad;
+    (void)aad_len;
+    (void)plain;
+    (void)plain_len;
+    (void)out_cipher;
+    (void)out_auth;
+    return false;
+#endif
 }
 
 bool computeKeyVerificationHashes(uint32_t security_number,
@@ -337,6 +592,7 @@ bool computeKeyVerificationHashes(uint32_t security_number,
         return false;
     }
 
+#if TRAILMATE_MESHTASTIC_PKI_HAS_ARDUINO_CRYPTO
     SHA256 hash;
     hash.reset();
     hash.update(&security_number, sizeof(security_number));
@@ -352,6 +608,34 @@ bool computeKeyVerificationHashes(uint32_t security_number,
     hash.update(out_hash1, 32);
     hash.finalize(out_hash2, 32);
     return true;
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+    return opensslSha256(&security_number, sizeof(security_number),
+                         &nonce, sizeof(nonce),
+                         &first_node_id, sizeof(first_node_id),
+                         &second_node_id, sizeof(second_node_id),
+                         first_pubkey, first_pubkey_len,
+                         second_pubkey, second_pubkey_len,
+                         out_hash1) &&
+           opensslSha256(&nonce, sizeof(nonce),
+                         out_hash1, 32,
+                         nullptr, 0,
+                         nullptr, 0,
+                         nullptr, 0,
+                         nullptr, 0,
+                         out_hash2);
+#else
+    (void)security_number;
+    (void)nonce;
+    (void)first_node_id;
+    (void)second_node_id;
+    (void)first_pubkey;
+    (void)first_pubkey_len;
+    (void)second_pubkey;
+    (void)second_pubkey_len;
+    (void)out_hash1;
+    (void)out_hash2;
+    return false;
+#endif
 }
 
 } // namespace meshtastic

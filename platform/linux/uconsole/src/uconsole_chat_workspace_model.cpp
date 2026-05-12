@@ -1558,24 +1558,14 @@ bool UConsoleChatWorkspaceModel::verifyNodeKey(::chat::NodeId node_id)
         return true;
     }
 
-    const auto* node = services_.contacts().getNodeInfo(node_id);
-    if (node == nullptr || !node->has_public_key)
+    if (adapter != nullptr && capabilities.supports_pki)
     {
-        action_status_ = "No public key is stored for this node.";
+        action_status_ = "Key verification could not start.";
         return false;
     }
-    if (node->key_manually_verified)
-    {
-        action_status_ = "Key is already trusted.";
-        return true;
-    }
-    if (!services_.contacts().setNodeKeyManuallyVerified(node_id, true))
-    {
-        action_status_ = "Key trust state could not be saved.";
-        return false;
-    }
-    action_status_ = "Key marked trusted.";
-    return true;
+
+    action_status_ = "Key verification is unsupported by this mesh adapter.";
+    return false;
 }
 
 void UConsoleChatWorkspaceModel::ensureActiveConversation()

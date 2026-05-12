@@ -1651,6 +1651,8 @@ bool LinuxAppServices::initialize()
     syncLocalIdentity();
     applyMeshConfig();
     applyPositionConfig();
+    applyNetworkLimits();
+    applyPrivacyConfig();
     applyChatDefaults();
     initialized_ = true;
     return true;
@@ -1754,10 +1756,15 @@ void LinuxAppServices::applyPositionConfig()
 
 void LinuxAppServices::applyNetworkLimits()
 {
+    ensureServicesReady();
+    impl().mesh_adapter.setNetworkLimits(config_.net_duty_cycle,
+                                         config_.net_channel_util);
 }
 
 void LinuxAppServices::applyPrivacyConfig()
 {
+    ensureServicesReady();
+    impl().mesh_adapter.setPrivacyConfig(config_.privacy_encrypt_mode);
 }
 
 void LinuxAppServices::applyChatDefaults()

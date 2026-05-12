@@ -224,8 +224,9 @@ contacts::NodeUpdate DecodedNodePayload::toNodeUpdate() const
     update.is_ignored = is_ignored;
     update.has_public_key = has_user;
     update.public_key_present = has_public_key;
-    update.has_key_manually_verified = true;
-    update.key_manually_verified = key_manually_verified;
+    // Trust is a local decision. Do not overwrite local trust state with
+    // remote NODEINFO flags.
+    update.has_key_manually_verified = false;
     update.has_device_metrics = has_device_metrics;
     if (has_device_metrics)
     {

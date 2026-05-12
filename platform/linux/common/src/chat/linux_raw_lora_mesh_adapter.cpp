@@ -1,10 +1,14 @@
 #include "chat/linux_raw_lora_mesh_adapter.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <limits>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,14 +17,17 @@
 #include "chat/infra/meshtastic/mt_codec_pb.h"
 #include "chat/infra/meshtastic/mt_node_payload.h"
 #include "chat/infra/meshtastic/mt_packet_wire.h"
+#include "chat/infra/meshtastic/mt_pki_crypto.h"
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/time_utils.h"
 #include "platform/linux/runtime_packet_log.h"
+#include "platform/ui/settings_store.h"
 #include "sys/event_bus.h"
 
 #if defined(TRAIL_MATE_HAS_OPENSSL)
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 #endif
 
 namespace trailmate::linux_app
@@ -40,6 +47,18 @@ constexpr std::uint32_t kBroadcastNodeId = 0xFFFFFFFFUL;
 constexpr std::uint8_t kDefaultPskIndex = 1;
 constexpr char kSecondaryChannelName[] = "Squad";
 constexpr std::uint32_t kRxMonitorHeartbeatSeconds = 15;
+constexpr std::uint8_t kBitfieldWantResponseMask = 0x02;
+constexpr std::uint32_t kNodeInfoReplySuppressMs = 60000;
+constexpr std::uint32_t kKeyVerificationTimeoutMs = 60000;
+constexpr std::size_t kMaxPkiNodes = 16;
+constexpr char kPkiLocalNamespace[] = "chat";
+constexpr char kPkiPublicKey[] = "pki_pub";
+constexpr char kPkiPrivateKey[] = "pki_priv";
+constexpr char kPkiNodeNamespace[] = "chat_pki";
+constexpr char kPkiNodeKeys[] = "pki_nodes";
+constexpr std::size_t kPkiKeySize = 32;
+constexpr std::size_t kPkiNodeEntryV2Size = 40;
+constexpr std::size_t kPkiNodeEntryV1Size = 36;
 
 struct MeshtasticAirPlan
 {
@@ -59,6 +78,162 @@ std::uint32_t now_seconds()
         std::chrono::duration_cast<std::chrono::seconds>(
             clock::now().time_since_epoch())
             .count());
+}
+
+bool should_require_direct_pki(std::uint8_t encrypt_mode,
+                               std::uint32_t dest_node,
+                               std::uint32_t portnum)
+{
+    return encrypt_mode != 0 && dest_node != kBroadcastNodeId &&
+           ::chat::meshtastic::allowPkiForPortnum(portnum);
+}
+
+bool secure_random_bytes(std::uint8_t* out, std::size_t len)
+{
+    if (out == nullptr || len == 0)
+    {
+        return false;
+    }
+#if defined(TRAIL_MATE_HAS_OPENSSL)
+    if (len <= static_cast<std::size_t>(std::numeric_limits<int>::max()) &&
+        RAND_bytes(out, static_cast<int>(len)) == 1)
+    {
+        return true;
+    }
+#endif
+    std::random_device rd;
+    for (std::size_t pos = 0; pos < len;)
+    {
+        std::uint32_t word = rd();
+        const std::size_t chunk = std::min<std::size_t>(sizeof(word), len - pos);
+        std::memcpy(out + pos, &word, chunk);
+        pos += chunk;
+    }
+    return true;
+}
+
+std::uint32_t random_u32()
+{
+    std::uint32_t value = 0;
+    (void)secure_random_bytes(reinterpret_cast<std::uint8_t*>(&value),
+                              sizeof(value));
+    if (value == 0)
+    {
+        value = static_cast<std::uint32_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+    }
+    return value;
+}
+
+std::uint64_t random_u64()
+{
+    std::uint64_t value = 0;
+    (void)secure_random_bytes(reinterpret_cast<std::uint8_t*>(&value),
+                              sizeof(value));
+    if (value == 0)
+    {
+        value = random_u32();
+    }
+    return value;
+}
+
+std::uint32_t random_packet_id_seed()
+{
+    std::uint32_t seed = random_u32() & 0x7FFFFFFFUL;
+    if (seed == 0)
+    {
+        seed = 1;
+    }
+    return seed;
+}
+
+std::uint32_t random_security_number()
+{
+    return (random_u32() % 999999U) + 1U;
+}
+
+bool generate_x25519_keypair(std::uint8_t public_key[kPkiKeySize],
+                             std::uint8_t private_key[kPkiKeySize])
+{
+    if (public_key == nullptr || private_key == nullptr)
+    {
+        return false;
+    }
+#if defined(TRAIL_MATE_HAS_OPENSSL)
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_X25519, nullptr);
+    if (ctx == nullptr)
+    {
+        return false;
+    }
+    EVP_PKEY* pkey = nullptr;
+    bool ok = EVP_PKEY_keygen_init(ctx) == 1 &&
+              EVP_PKEY_keygen(ctx, &pkey) == 1 && pkey != nullptr;
+    EVP_PKEY_CTX_free(ctx);
+    if (!ok)
+    {
+        if (pkey != nullptr)
+        {
+            EVP_PKEY_free(pkey);
+        }
+        return false;
+    }
+
+    std::size_t public_len = kPkiKeySize;
+    std::size_t private_len = kPkiKeySize;
+    ok = EVP_PKEY_get_raw_public_key(pkey, public_key, &public_len) == 1 &&
+         EVP_PKEY_get_raw_private_key(pkey, private_key, &private_len) == 1 &&
+         public_len == kPkiKeySize && private_len == kPkiKeySize;
+    EVP_PKEY_free(pkey);
+    return ok;
+#else
+    (void)public_key;
+    (void)private_key;
+    return false;
+#endif
+}
+
+bool derive_x25519_shared_key(const std::uint8_t peer_public_key[kPkiKeySize],
+                              const std::uint8_t local_private_key[kPkiKeySize],
+                              std::uint8_t out_shared[kPkiKeySize])
+{
+    if (peer_public_key == nullptr || local_private_key == nullptr ||
+        out_shared == nullptr)
+    {
+        return false;
+    }
+#if defined(TRAIL_MATE_HAS_OPENSSL)
+    EVP_PKEY* local = EVP_PKEY_new_raw_private_key(
+        EVP_PKEY_X25519, nullptr, local_private_key, kPkiKeySize);
+    EVP_PKEY* peer = EVP_PKEY_new_raw_public_key(
+        EVP_PKEY_X25519, nullptr, peer_public_key, kPkiKeySize);
+    EVP_PKEY_CTX* ctx = local != nullptr ? EVP_PKEY_CTX_new(local, nullptr)
+                                         : nullptr;
+    std::size_t shared_len = kPkiKeySize;
+    const bool ok =
+        local != nullptr && peer != nullptr && ctx != nullptr &&
+        EVP_PKEY_derive_init(ctx) == 1 &&
+        EVP_PKEY_derive_set_peer(ctx, peer) == 1 &&
+        EVP_PKEY_derive(ctx, out_shared, &shared_len) == 1 &&
+        shared_len == kPkiKeySize;
+    if (ctx != nullptr)
+    {
+        EVP_PKEY_CTX_free(ctx);
+    }
+    if (peer != nullptr)
+    {
+        EVP_PKEY_free(peer);
+    }
+    if (local != nullptr)
+    {
+        EVP_PKEY_free(local);
+    }
+    return ok;
+#else
+    (void)peer_public_key;
+    (void)local_private_key;
+    (void)out_shared;
+    return false;
+#endif
 }
 
 void write_u16(std::uint8_t* out, std::uint16_t value)
@@ -845,6 +1020,9 @@ LinuxRawLoraMeshAdapter::LinuxRawLoraMeshAdapter(::chat::NodeId self_node_id)
     : radio_(::platform::linux_runtime::Sx126xRadio::instance()),
       self_node_id_(self_node_id)
 {
+    next_msg_id_ = random_packet_id_seed();
+    (void)initPkiKeys();
+    loadPkiNodeKeys();
 }
 
 bool LinuxRawLoraMeshAdapter::hardwareCandidatePresent()
@@ -921,7 +1099,7 @@ bool LinuxRawLoraMeshAdapter::takePendingSendResult(::chat::MessageId& out_msg_i
         .supports_appdata_ack = false,
         .provides_appdata_sender = true,
         .supports_node_info = true,
-        .supports_pki = false,
+        .supports_pki = pki_ready_,
         .supports_discovery_actions = false,
     };
 }
@@ -949,6 +1127,14 @@ bool LinuxRawLoraMeshAdapter::sendTextWithId(::chat::ChannelId channel,
     if (out_msg_id != nullptr)
     {
         *out_msg_id = msg_id;
+    }
+    if (forced_msg_id != 0 && forced_msg_id >= next_msg_id_)
+    {
+        next_msg_id_ = forced_msg_id + 1U;
+        if (next_msg_id_ == 0)
+        {
+            next_msg_id_ = 1;
+        }
     }
 
     const auto* bytes = reinterpret_cast<const std::uint8_t*>(text.data());
@@ -1001,8 +1187,6 @@ bool LinuxRawLoraMeshAdapter::sendAppData(::chat::ChannelId channel,
                                           ::chat::MessageId packet_id,
                                           bool want_response)
 {
-    (void)want_ack;
-    (void)want_response;
     if (payload == nullptr || len == 0)
     {
         return false;
@@ -1010,6 +1194,14 @@ bool LinuxRawLoraMeshAdapter::sendAppData(::chat::ChannelId channel,
     const ::chat::NodeId effective_dest = dest == 0 ? kBroadcastNodeId : dest;
     const ::chat::MessageId effective_id =
         packet_id != 0 ? packet_id : nextMessageId();
+    if (packet_id != 0 && packet_id >= next_msg_id_)
+    {
+        next_msg_id_ = packet_id + 1U;
+        if (next_msg_id_ == 0)
+        {
+            next_msg_id_ = 1;
+        }
+    }
     if (active_protocol_ == ::chat::MeshProtocol::Meshtastic)
     {
         return sendMeshtasticPayload(channel,
@@ -1060,6 +1252,52 @@ bool LinuxRawLoraMeshAdapter::requestNodeInfo(::chat::NodeId dest,
     return sendMeshtasticNodeInfoTo(target,
                                     want_response,
                                     ::chat::ChannelId::PRIMARY);
+}
+
+bool LinuxRawLoraMeshAdapter::startKeyVerification(::chat::NodeId node_id)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::Idle ||
+        node_id == 0 || node_id == kBroadcastNodeId)
+    {
+        return false;
+    }
+    if (!pki_ready_ || node_public_keys_.find(node_id) == node_public_keys_.end())
+    {
+        append_lora_system_log(
+            "Key verification unavailable",
+            "PKI is not ready or the remote public key has not been exchanged yet.");
+        return false;
+    }
+
+    kv_remote_node_ = node_id;
+    kv_nonce_ = random_u64();
+    kv_nonce_ms_ = ::sys::millis_now();
+    kv_security_number_ = 0;
+    kv_hash1_.fill(0);
+    kv_hash2_.fill(0);
+
+    meshtastic_KeyVerification init = meshtastic_KeyVerification_init_zero;
+    init.nonce = kv_nonce_;
+    init.hash1.size = 0;
+    init.hash2.size = 0;
+
+    if (!sendKeyVerificationPacket(kv_remote_node_, init, true))
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::SenderInitiated;
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::submitKeyVerificationNumber(
+    ::chat::NodeId node_id,
+    std::uint64_t nonce,
+    std::uint32_t number)
+{
+    return processKeyVerificationNumber(node_id, nonce, number);
 }
 
 void LinuxRawLoraMeshAdapter::applyConfig(const ::chat::MeshConfig& config)
@@ -1114,6 +1352,28 @@ void LinuxRawLoraMeshAdapter::setUserInfo(const char* long_name,
 {
     long_name_ = long_name == nullptr ? "" : long_name;
     short_name_ = short_name == nullptr ? "" : short_name;
+}
+
+bool LinuxRawLoraMeshAdapter::isPkiReady() const
+{
+    return pki_ready_;
+}
+
+bool LinuxRawLoraMeshAdapter::hasPkiKey(::chat::NodeId dest) const
+{
+    return dest != 0 && node_public_keys_.find(dest) != node_public_keys_.end();
+}
+
+void LinuxRawLoraMeshAdapter::setNetworkLimits(bool duty_cycle_enabled,
+                                               std::uint8_t util_percent)
+{
+    duty_cycle_enabled_ = duty_cycle_enabled;
+    channel_util_percent_ = util_percent;
+}
+
+void LinuxRawLoraMeshAdapter::setPrivacyConfig(std::uint8_t encrypt_mode)
+{
+    encrypt_mode_ = std::min<std::uint8_t>(encrypt_mode, 2);
 }
 
 ::chat::NodeId LinuxRawLoraMeshAdapter::getNodeId() const
@@ -1334,12 +1594,16 @@ bool LinuxRawLoraMeshAdapter::ensureRadioReady()
 
 ::chat::MessageId LinuxRawLoraMeshAdapter::nextMessageId()
 {
-    ++next_msg_id_;
+    if (next_msg_id_ == 0)
+    {
+        next_msg_id_ = random_packet_id_seed();
+    }
+    const std::uint32_t msg_id = next_msg_id_++;
     if (next_msg_id_ == 0)
     {
         next_msg_id_ = 1;
     }
-    return next_msg_id_;
+    return msg_id == 0 ? nextMessageId() : msg_id;
 }
 
 bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
@@ -1360,6 +1624,7 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     std::uint8_t data_payload[256] = {};
     std::size_t data_size = sizeof(data_payload);
     bool encoded = false;
+    const bool data_want_response = want_response || want_ack;
     if (portnum == meshtastic_PortNum_TEXT_MESSAGE_APP)
     {
         const std::string text(reinterpret_cast<const char*>(payload), len);
@@ -1376,7 +1641,7 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
         encoded = ::chat::meshtastic::encodeAppData(portnum,
                                                     payload,
                                                     len,
-                                                    want_response,
+                                                    data_want_response,
                                                     data_payload,
                                                     &data_size);
     }
@@ -1397,8 +1662,70 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     const MeshtasticAirPlan plan = build_meshtastic_air_plan(config_);
     std::size_t psk_len = 0;
     const std::uint8_t* psk = psk_for_channel(plan, channel, &psk_len);
-    const std::uint8_t channel_hash = channel_hash_for(plan, channel);
-    if (psk != nullptr && psk_len > 0 && !meshtastic_crypto_available())
+    std::uint8_t channel_hash = channel_hash_for(plan, channel);
+    const std::uint8_t* wire_payload = data_payload;
+    std::size_t wire_payload_size = data_size;
+    std::uint8_t pki_payload[256] = {};
+    bool use_pki = false;
+    bool air_want_ack =
+        ::chat::meshtastic::shouldSetAirWantAck(dest, want_ack);
+
+    if (should_require_direct_pki(encrypt_mode_, dest, portnum))
+    {
+        const bool have_dest_key =
+            node_public_keys_.find(dest) != node_public_keys_.end();
+        if (!pki_ready_ || !have_dest_key)
+        {
+            append_lora_system_log(
+                "Meshtastic direct TX blocked",
+                std::string("PKI is required for direct ") +
+                    meshtastic_port_label(portnum) + " to " +
+                    node_hex(dest) +
+                    (!pki_ready_ ? " but local PKI is not ready."
+                                 : " but the remote public key is unknown."),
+                {{
+                    .kind =
+                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                    .label = "pki",
+                    .text = !pki_ready_ ? "pki_not_ready" : "key_missing",
+                }});
+            if (pki_ready_ && !have_dest_key)
+            {
+                (void)sendMeshtasticNodeInfoTo(dest, true, channel);
+            }
+            return false;
+        }
+
+        std::size_t pki_len = sizeof(pki_payload);
+        if (!encryptPkiPayload(dest,
+                               msg_id,
+                               data_payload,
+                               data_size,
+                               pki_payload,
+                               &pki_len))
+        {
+            append_lora_system_log(
+                "Meshtastic direct TX blocked",
+                "PKI payload encryption failed.",
+                {{
+                    .kind =
+                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                    .label = "pki",
+                    .text = "encrypt_failed",
+                }});
+            return false;
+        }
+        wire_payload = pki_payload;
+        wire_payload_size = pki_len;
+        channel_hash = 0;
+        psk = nullptr;
+        psk_len = 0;
+        air_want_ack = true;
+        use_pki = true;
+    }
+
+    if (!use_pki && psk != nullptr && psk_len > 0 &&
+        !meshtastic_crypto_available())
     {
         append_lora_system_log(
             "Meshtastic TX crypto unavailable",
@@ -1412,10 +1739,8 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     }
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
-    const bool air_want_ack =
-        ::chat::meshtastic::shouldSetAirWantAck(dest, want_ack);
-    if (!build_meshtastic_wire_packet(data_payload,
-                                      data_size,
+    if (!build_meshtastic_wire_packet(wire_payload,
+                                      wire_payload_size,
                                       self_node_id_,
                                       msg_id,
                                       dest,
@@ -1441,7 +1766,8 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     const std::string summary =
         std::string("Meshtastic ") + meshtastic_port_label(portnum) +
         " TX to " + node_hex(dest) + " id " + node_hex(msg_id) +
-        " channel " + hex_u8(channel_hash) + ".";
+        " channel " + hex_u8(channel_hash) +
+        (use_pki ? " via PKI." : ".");
     auto entry = make_meshtastic_wire_log(
         ::platform::linux_runtime::PacketLogDirection::Tx,
         wire,
@@ -1453,6 +1779,11 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
         .kind = ::platform::linux_runtime::PacketLogSegmentKind::Meta,
         .label = "air",
         .text = describe_meshtastic_air_plan(plan),
+    });
+    entry.segments.push_back({
+        .kind = ::platform::linux_runtime::PacketLogSegmentKind::Meta,
+        .label = "path",
+        .text = use_pki ? "PKI direct" : "channel",
     });
     ::platform::linux_runtime::append_packet_log(std::move(entry));
 
@@ -1517,8 +1848,8 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
             short_name,
             meshtastic_HardwareModel_PRIVATE_HW,
             mac_addr,
-            nullptr,
-            0,
+            pki_ready_ ? pki_public_key_.data() : nullptr,
+            pki_ready_ ? pki_public_key_.size() : 0,
             want_response,
             data_payload,
             &data_size))
@@ -1597,6 +1928,722 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
                 .label = "driver",
                 .text = radio_.lastError(),
             }});
+    }
+    return ok;
+}
+
+bool LinuxRawLoraMeshAdapter::initPkiKeys()
+{
+    std::vector<std::uint8_t> public_blob;
+    std::vector<std::uint8_t> private_blob;
+    const bool have_public = ::platform::ui::settings_store::get_blob(
+        kPkiLocalNamespace, kPkiPublicKey, public_blob);
+    const bool have_private = ::platform::ui::settings_store::get_blob(
+        kPkiLocalNamespace, kPkiPrivateKey, private_blob);
+
+    if (have_public && have_private &&
+        public_blob.size() == pki_public_key_.size() &&
+        private_blob.size() == pki_private_key_.size() &&
+        !::chat::meshtastic::isZeroKey(private_blob.data(),
+                                       private_blob.size()))
+    {
+        std::memcpy(pki_public_key_.data(),
+                    public_blob.data(),
+                    pki_public_key_.size());
+        std::memcpy(pki_private_key_.data(),
+                    private_blob.data(),
+                    pki_private_key_.size());
+        pki_ready_ = true;
+        append_lora_system_log("Meshtastic PKI ready",
+                               "Loaded local X25519 identity key.");
+        return true;
+    }
+
+    pki_public_key_.fill(0);
+    pki_private_key_.fill(0);
+    if (!generate_x25519_keypair(pki_public_key_.data(),
+                                 pki_private_key_.data()) ||
+        ::chat::meshtastic::isZeroKey(pki_private_key_.data(),
+                                      pki_private_key_.size()))
+    {
+        pki_ready_ = false;
+        append_lora_system_log(
+            "Meshtastic PKI unavailable",
+            "OpenSSL X25519 key generation failed or libcrypto is not linked.");
+        return false;
+    }
+
+    const bool public_ok = ::platform::ui::settings_store::put_blob(
+        kPkiLocalNamespace,
+        kPkiPublicKey,
+        pki_public_key_.data(),
+        pki_public_key_.size());
+    const bool private_ok = ::platform::ui::settings_store::put_blob(
+        kPkiLocalNamespace,
+        kPkiPrivateKey,
+        pki_private_key_.data(),
+        pki_private_key_.size());
+    pki_ready_ = public_ok && private_ok;
+    append_lora_system_log(
+        pki_ready_ ? "Meshtastic PKI ready" : "Meshtastic PKI save failed",
+        pki_ready_ ? "Generated and saved local X25519 identity key."
+                   : "Generated a local PKI key but could not persist it.");
+    return pki_ready_;
+}
+
+void LinuxRawLoraMeshAdapter::loadPkiNodeKeys()
+{
+    std::vector<std::uint8_t> blob;
+    if (!::platform::ui::settings_store::get_blob(kPkiNodeNamespace,
+                                                  kPkiNodeKeys,
+                                                  blob) ||
+        blob.empty())
+    {
+        return;
+    }
+
+    const bool is_v2 = (blob.size() % kPkiNodeEntryV2Size) == 0;
+    const bool is_v1 = !is_v2 && (blob.size() % kPkiNodeEntryV1Size) == 0;
+    if (!is_v2 && !is_v1)
+    {
+        return;
+    }
+
+    const std::size_t entry_size = is_v2 ? kPkiNodeEntryV2Size
+                                         : kPkiNodeEntryV1Size;
+    std::size_t count = std::min(kMaxPkiNodes, blob.size() / entry_size);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        const std::uint8_t* entry = blob.data() + (index * entry_size);
+        const ::chat::NodeId node_id = read_u32(entry);
+        const std::uint8_t* key = is_v2 ? entry + 8 : entry + 4;
+        if (node_id == 0 || node_id == kBroadcastNodeId ||
+            ::chat::meshtastic::isZeroKey(key, kPkiKeySize))
+        {
+            continue;
+        }
+
+        std::array<std::uint8_t, 32> key_copy{};
+        std::memcpy(key_copy.data(), key, key_copy.size());
+        node_public_keys_[node_id] = key_copy;
+        node_key_last_seen_[node_id] = is_v2 ? read_u32(entry + 4) : 0;
+    }
+
+    if (is_v1 && !node_public_keys_.empty())
+    {
+        savePkiKeysToStore();
+    }
+}
+
+void LinuxRawLoraMeshAdapter::savePkiNodeKey(::chat::NodeId node_id,
+                                             const std::uint8_t* key,
+                                             std::size_t key_len)
+{
+    if (node_id == 0 || node_id == kBroadcastNodeId || key == nullptr ||
+        key_len != kPkiKeySize ||
+        ::chat::meshtastic::isZeroKey(key, key_len))
+    {
+        return;
+    }
+
+    std::array<std::uint8_t, 32> key_copy{};
+    std::memcpy(key_copy.data(), key, key_copy.size());
+    node_public_keys_[node_id] = key_copy;
+    touchPkiNodeKey(node_id);
+    savePkiKeysToStore();
+}
+
+void LinuxRawLoraMeshAdapter::savePkiKeysToStore()
+{
+    struct NodeKeyEntry
+    {
+        ::chat::NodeId node_id = 0;
+        std::uint32_t last_seen = 0;
+        std::array<std::uint8_t, 32> key{};
+    };
+
+    std::vector<NodeKeyEntry> entries;
+    entries.reserve(node_public_keys_.size());
+    for (const auto& item : node_public_keys_)
+    {
+        NodeKeyEntry entry{};
+        entry.node_id = item.first;
+        entry.key = item.second;
+        const auto seen_it = node_key_last_seen_.find(item.first);
+        entry.last_seen =
+            seen_it == node_key_last_seen_.end() ? 0 : seen_it->second;
+        entries.push_back(entry);
+    }
+
+    if (entries.size() > kMaxPkiNodes)
+    {
+        std::sort(entries.begin(),
+                  entries.end(),
+                  [](const NodeKeyEntry& left, const NodeKeyEntry& right)
+                  {
+                      return left.last_seen < right.last_seen;
+                  });
+        const std::size_t drop_count = entries.size() - kMaxPkiNodes;
+        for (std::size_t index = 0; index < drop_count; ++index)
+        {
+            node_public_keys_.erase(entries[index].node_id);
+            node_key_last_seen_.erase(entries[index].node_id);
+        }
+        entries.erase(entries.begin(),
+                      entries.begin() +
+                          static_cast<std::ptrdiff_t>(drop_count));
+    }
+
+    std::vector<std::uint8_t> blob(entries.size() * kPkiNodeEntryV2Size);
+    for (std::size_t index = 0; index < entries.size(); ++index)
+    {
+        std::uint8_t* out = blob.data() + (index * kPkiNodeEntryV2Size);
+        write_u32(out, entries[index].node_id);
+        write_u32(out + 4, entries[index].last_seen);
+        std::memcpy(out + 8, entries[index].key.data(), kPkiKeySize);
+    }
+
+    (void)::platform::ui::settings_store::put_blob(
+        kPkiNodeNamespace,
+        kPkiNodeKeys,
+        blob.empty() ? nullptr : blob.data(),
+        blob.size());
+}
+
+void LinuxRawLoraMeshAdapter::forgetPkiNodeKey(::chat::NodeId node_id)
+{
+    if (node_public_keys_.erase(node_id) > 0)
+    {
+        node_key_last_seen_.erase(node_id);
+        savePkiKeysToStore();
+    }
+}
+
+void LinuxRawLoraMeshAdapter::touchPkiNodeKey(::chat::NodeId node_id)
+{
+    node_key_last_seen_[node_id] = now_seconds();
+}
+
+bool LinuxRawLoraMeshAdapter::encryptPkiPayload(
+    ::chat::NodeId dest,
+    ::chat::MessageId packet_id,
+    const std::uint8_t* plain,
+    std::size_t plain_len,
+    std::uint8_t* out_cipher,
+    std::size_t* out_cipher_len)
+{
+    if (!pki_ready_ || plain == nullptr || plain_len == 0 ||
+        out_cipher == nullptr || out_cipher_len == nullptr)
+    {
+        return false;
+    }
+    const auto key_it = node_public_keys_.find(dest);
+    if (key_it == node_public_keys_.end())
+    {
+        return false;
+    }
+
+    const std::size_t auth_len = 8;
+    const std::size_t needed = plain_len + auth_len + sizeof(std::uint32_t);
+    if (*out_cipher_len < needed)
+    {
+        *out_cipher_len = needed;
+        return false;
+    }
+
+    std::array<std::uint8_t, 32> shared{};
+    if (!derive_x25519_shared_key(key_it->second.data(),
+                                  pki_private_key_.data(),
+                                  shared.data()))
+    {
+        return false;
+    }
+    ::chat::meshtastic::hashSharedKey(shared.data(), shared.size());
+    const std::uint32_t extra_nonce = random_u32();
+    std::uint8_t nonce[::chat::meshtastic::kPkiNonceSize] = {};
+    ::chat::meshtastic::initPkiNonce(self_node_id_,
+                                     packet_id,
+                                     extra_nonce,
+                                     nonce);
+
+    std::uint8_t auth[16] = {};
+    if (!::chat::meshtastic::encryptPkiAesCcm(shared.data(),
+                                              shared.size(),
+                                              nonce,
+                                              auth_len,
+                                              nullptr,
+                                              0,
+                                              plain,
+                                              plain_len,
+                                              out_cipher,
+                                              auth))
+    {
+        return false;
+    }
+
+    std::memcpy(out_cipher + plain_len, auth, auth_len);
+    std::memcpy(out_cipher + plain_len + auth_len,
+                &extra_nonce,
+                sizeof(extra_nonce));
+    *out_cipher_len = needed;
+    touchPkiNodeKey(dest);
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::decryptPkiPayload(
+    ::chat::NodeId from,
+    ::chat::MessageId packet_id,
+    const std::uint8_t* cipher,
+    std::size_t cipher_len,
+    std::uint8_t* out_plain,
+    std::size_t* out_plain_len)
+{
+    if (!pki_ready_ || cipher == nullptr || cipher_len <= 12 ||
+        out_plain == nullptr || out_plain_len == nullptr)
+    {
+        return false;
+    }
+    const auto key_it = node_public_keys_.find(from);
+    if (key_it == node_public_keys_.end())
+    {
+        (void)sendMeshtasticNodeInfoTo(from, true, ::chat::ChannelId::PRIMARY);
+        return false;
+    }
+
+    const std::size_t auth_len = 8;
+    const std::size_t plain_len = cipher_len - auth_len - sizeof(std::uint32_t);
+    if (*out_plain_len < plain_len)
+    {
+        *out_plain_len = plain_len;
+        return false;
+    }
+
+    std::array<std::uint8_t, 32> shared{};
+    if (!derive_x25519_shared_key(key_it->second.data(),
+                                  pki_private_key_.data(),
+                                  shared.data()))
+    {
+        return false;
+    }
+    ::chat::meshtastic::hashSharedKey(shared.data(), shared.size());
+
+    const std::uint8_t* auth = cipher + plain_len;
+    std::uint32_t extra_nonce = 0;
+    std::memcpy(&extra_nonce, auth + auth_len, sizeof(extra_nonce));
+    std::uint8_t nonce[::chat::meshtastic::kPkiNonceSize] = {};
+    ::chat::meshtastic::initPkiNonce(from, packet_id, extra_nonce, nonce);
+
+    if (!::chat::meshtastic::decryptPkiAesCcm(shared.data(),
+                                              shared.size(),
+                                              nonce,
+                                              auth_len,
+                                              cipher,
+                                              plain_len,
+                                              nullptr,
+                                              0,
+                                              auth,
+                                              out_plain))
+    {
+        return false;
+    }
+
+    *out_plain_len = plain_len;
+    touchPkiNodeKey(from);
+    return true;
+}
+
+void LinuxRawLoraMeshAdapter::updateKeyVerificationState()
+{
+    if (kv_state_ == KeyVerificationState::Idle)
+    {
+        return;
+    }
+
+    const std::uint32_t now_ms = ::sys::millis_now();
+    if (kv_nonce_ms_ != 0 &&
+        static_cast<std::uint32_t>(now_ms - kv_nonce_ms_) >
+            kKeyVerificationTimeoutMs)
+    {
+        resetKeyVerificationState();
+        return;
+    }
+    kv_nonce_ms_ = now_ms;
+}
+
+void LinuxRawLoraMeshAdapter::resetKeyVerificationState()
+{
+    kv_state_ = KeyVerificationState::Idle;
+    kv_nonce_ = 0;
+    kv_nonce_ms_ = 0;
+    kv_security_number_ = 0;
+    kv_remote_node_ = 0;
+    kv_hash1_.fill(0);
+    kv_hash2_.fill(0);
+}
+
+void LinuxRawLoraMeshAdapter::buildVerificationCode(char* out,
+                                                    std::size_t out_len) const
+{
+    if (out == nullptr || out_len == 0)
+    {
+        return;
+    }
+    if (out_len < 10)
+    {
+        out[0] = '\0';
+        return;
+    }
+    for (int index = 0; index < 4; ++index)
+    {
+        out[index] = static_cast<char>((kv_hash1_[index] >> 2) + 48);
+    }
+    out[4] = ' ';
+    for (int index = 0; index < 4; ++index)
+    {
+        out[index + 5] =
+            static_cast<char>((kv_hash1_[index + 4] >> 2) + 48);
+    }
+    out[9] = '\0';
+}
+
+bool LinuxRawLoraMeshAdapter::handleKeyVerificationInit(
+    const ::chat::meshtastic::PacketHeaderWire& header,
+    const meshtastic_KeyVerification& kv)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::Idle ||
+        header.to != self_node_id_ || header.to == kBroadcastNodeId ||
+        !pki_ready_)
+    {
+        return false;
+    }
+    const auto key_it = node_public_keys_.find(header.from);
+    if (key_it == node_public_keys_.end())
+    {
+        return false;
+    }
+
+    kv_nonce_ = kv.nonce;
+    kv_nonce_ms_ = ::sys::millis_now();
+    kv_remote_node_ = header.from;
+    kv_security_number_ = random_security_number();
+    if (!::chat::meshtastic::computeKeyVerificationHashes(
+            kv_security_number_,
+            kv_nonce_,
+            kv_remote_node_,
+            self_node_id_,
+            key_it->second.data(),
+            key_it->second.size(),
+            pki_public_key_.data(),
+            pki_public_key_.size(),
+            kv_hash1_.data(),
+            kv_hash2_.data()))
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    meshtastic_KeyVerification reply = meshtastic_KeyVerification_init_zero;
+    reply.nonce = kv_nonce_;
+    reply.hash1.size = 0;
+    reply.hash2.size = static_cast<pb_size_t>(kv_hash2_.size());
+    std::memcpy(reply.hash2.bytes, kv_hash2_.data(), kv_hash2_.size());
+
+    if (!sendKeyVerificationPacket(kv_remote_node_, reply, false))
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::ReceiverAwaitingHash1;
+    ::sys::EventBus::publish(
+        new ::sys::KeyVerificationNumberInformEvent(kv_remote_node_,
+                                                    kv_nonce_,
+                                                    kv_security_number_),
+        0);
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::handleKeyVerificationReply(
+    const ::chat::meshtastic::PacketHeaderWire& header,
+    const meshtastic_KeyVerification& kv)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::SenderInitiated ||
+        header.to != self_node_id_ || header.to == kBroadcastNodeId ||
+        kv.nonce != kv_nonce_ || header.from != kv_remote_node_ ||
+        kv.hash1.size != 0 || kv.hash2.size != kv_hash2_.size())
+    {
+        return false;
+    }
+
+    std::memcpy(kv_hash2_.data(), kv.hash2.bytes, kv_hash2_.size());
+    kv_state_ = KeyVerificationState::SenderAwaitingNumber;
+    kv_nonce_ms_ = ::sys::millis_now();
+    ::sys::EventBus::publish(
+        new ::sys::KeyVerificationNumberRequestEvent(kv_remote_node_,
+                                                     kv_nonce_),
+        0);
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::processKeyVerificationNumber(
+    ::chat::NodeId remote_node,
+    std::uint64_t nonce,
+    std::uint32_t number)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::SenderAwaitingNumber ||
+        kv_remote_node_ != remote_node || kv_nonce_ != nonce)
+    {
+        return false;
+    }
+    const auto key_it = node_public_keys_.find(remote_node);
+    if (key_it == node_public_keys_.end())
+    {
+        resetKeyVerificationState();
+        return false;
+    }
+
+    std::array<std::uint8_t, 32> scratch_hash{};
+    kv_security_number_ = number;
+    if (!::chat::meshtastic::computeKeyVerificationHashes(
+            kv_security_number_,
+            kv_nonce_,
+            self_node_id_,
+            kv_remote_node_,
+            pki_public_key_.data(),
+            pki_public_key_.size(),
+            key_it->second.data(),
+            key_it->second.size(),
+            kv_hash1_.data(),
+            scratch_hash.data()))
+    {
+        return false;
+    }
+    if (std::memcmp(scratch_hash.data(), kv_hash2_.data(), kv_hash2_.size()) !=
+        0)
+    {
+        return false;
+    }
+
+    meshtastic_KeyVerification response = meshtastic_KeyVerification_init_zero;
+    response.nonce = kv_nonce_;
+    response.hash1.size = static_cast<pb_size_t>(kv_hash1_.size());
+    std::memcpy(response.hash1.bytes, kv_hash1_.data(), kv_hash1_.size());
+    response.hash2.size = 0;
+    if (!sendKeyVerificationPacket(kv_remote_node_, response, true))
+    {
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::SenderAwaitingUser;
+    kv_nonce_ms_ = ::sys::millis_now();
+
+    char code[12] = {};
+    buildVerificationCode(code, sizeof(code));
+    ::sys::EventBus::publish(
+        new ::sys::KeyVerificationFinalEvent(kv_remote_node_,
+                                             kv_nonce_,
+                                             true,
+                                             code),
+        0);
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::handleKeyVerificationFinal(
+    const ::chat::meshtastic::PacketHeaderWire& header,
+    const meshtastic_KeyVerification& kv)
+{
+    updateKeyVerificationState();
+    if (kv_state_ != KeyVerificationState::ReceiverAwaitingHash1 ||
+        header.to != self_node_id_ || header.to == kBroadcastNodeId ||
+        kv.nonce != kv_nonce_ || header.from != kv_remote_node_ ||
+        kv.hash1.size != kv_hash1_.size() || kv.hash2.size != 0)
+    {
+        return false;
+    }
+    if (std::memcmp(kv.hash1.bytes, kv_hash1_.data(), kv_hash1_.size()) != 0)
+    {
+        return false;
+    }
+
+    kv_state_ = KeyVerificationState::ReceiverAwaitingUser;
+    kv_nonce_ms_ = ::sys::millis_now();
+
+    char code[12] = {};
+    buildVerificationCode(code, sizeof(code));
+    ::sys::EventBus::publish(
+        new ::sys::KeyVerificationFinalEvent(kv_remote_node_,
+                                             kv_nonce_,
+                                             false,
+                                             code),
+        0);
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::sendKeyVerificationPacket(
+    ::chat::NodeId dest,
+    const meshtastic_KeyVerification& kv,
+    bool want_response)
+{
+    if (!tx_enabled_ || !ensureRadioReady() || !pki_ready_ ||
+        node_public_keys_.find(dest) == node_public_keys_.end())
+    {
+        return false;
+    }
+
+    std::uint8_t kv_buf[96] = {};
+    pb_ostream_t kv_stream = pb_ostream_from_buffer(kv_buf, sizeof(kv_buf));
+    if (!pb_encode(&kv_stream, meshtastic_KeyVerification_fields, &kv))
+    {
+        return false;
+    }
+
+    std::uint8_t data_buf[160] = {};
+    std::size_t data_size = sizeof(data_buf);
+    if (!::chat::meshtastic::encodeAppData(
+            meshtastic_PortNum_KEY_VERIFICATION_APP,
+            kv_buf,
+            kv_stream.bytes_written,
+            want_response,
+            data_buf,
+            &data_size))
+    {
+        return false;
+    }
+
+    const ::chat::MessageId msg_id = nextMessageId();
+    std::uint8_t pki_buf[256] = {};
+    std::size_t pki_len = sizeof(pki_buf);
+    if (!encryptPkiPayload(dest, msg_id, data_buf, data_size, pki_buf, &pki_len))
+    {
+        return false;
+    }
+
+    std::uint8_t wire[255] = {};
+    std::size_t wire_size = sizeof(wire);
+    if (!build_meshtastic_wire_packet(pki_buf,
+                                      pki_len,
+                                      self_node_id_,
+                                      msg_id,
+                                      dest,
+                                      0,
+                                      config_.hop_limit,
+                                      false,
+                                      nullptr,
+                                      0,
+                                      wire,
+                                      &wire_size))
+    {
+        return false;
+    }
+
+    const bool ok = radio_.transmit(wire, wire_size);
+    if (ok)
+    {
+        append_lora_system_log(
+            "Meshtastic key verification TX",
+            "Sent key verification stage to " + node_hex(dest) +
+                " id " + node_hex(msg_id) + ".");
+    }
+    return ok;
+}
+
+bool LinuxRawLoraMeshAdapter::sendRoutingAck(::chat::NodeId dest,
+                                             ::chat::MessageId request_id,
+                                             std::uint8_t channel_hash,
+                                             const std::uint8_t* psk,
+                                             std::size_t psk_len)
+{
+    if (!tx_enabled_ || !ensureRadioReady() || dest == 0 ||
+        dest == kBroadcastNodeId || request_id == 0)
+    {
+        return false;
+    }
+
+    meshtastic_Routing routing = meshtastic_Routing_init_default;
+    routing.which_variant = meshtastic_Routing_error_reason_tag;
+    routing.error_reason = meshtastic_Routing_Error_NONE;
+
+    std::uint8_t routing_buf[64] = {};
+    pb_ostream_t routing_stream =
+        pb_ostream_from_buffer(routing_buf, sizeof(routing_buf));
+    if (!pb_encode(&routing_stream, meshtastic_Routing_fields, &routing))
+    {
+        return false;
+    }
+
+    meshtastic_Data data = meshtastic_Data_init_default;
+    data.portnum = meshtastic_PortNum_ROUTING_APP;
+    data.dest = dest;
+    data.source = self_node_id_;
+    data.request_id = request_id;
+    data.want_response = false;
+    data.has_bitfield = true;
+    data.bitfield = 0;
+    data.payload.size = routing_stream.bytes_written;
+    if (data.payload.size > sizeof(data.payload.bytes))
+    {
+        return false;
+    }
+    std::memcpy(data.payload.bytes, routing_buf, data.payload.size);
+
+    std::uint8_t data_buf[128] = {};
+    pb_ostream_t data_stream =
+        pb_ostream_from_buffer(data_buf, sizeof(data_buf));
+    if (!pb_encode(&data_stream, meshtastic_Data_fields, &data))
+    {
+        return false;
+    }
+
+    const ::chat::MessageId msg_id = nextMessageId();
+    const std::uint8_t* payload = data_buf;
+    std::size_t payload_len = data_stream.bytes_written;
+    std::uint8_t pki_buf[256] = {};
+    if (channel_hash == 0)
+    {
+        std::size_t pki_len = sizeof(pki_buf);
+        if (!encryptPkiPayload(dest,
+                               msg_id,
+                               data_buf,
+                               data_stream.bytes_written,
+                               pki_buf,
+                               &pki_len))
+        {
+            return false;
+        }
+        payload = pki_buf;
+        payload_len = pki_len;
+        psk = nullptr;
+        psk_len = 0;
+    }
+
+    std::uint8_t wire[255] = {};
+    std::size_t wire_size = sizeof(wire);
+    if (!build_meshtastic_wire_packet(payload,
+                                      payload_len,
+                                      self_node_id_,
+                                      msg_id,
+                                      dest,
+                                      channel_hash,
+                                      config_.hop_limit,
+                                      false,
+                                      psk,
+                                      psk_len,
+                                      wire,
+                                      &wire_size))
+    {
+        return false;
+    }
+
+    const bool ok = radio_.transmit(wire, wire_size);
+    if (ok)
+    {
+        append_lora_system_log(
+            "Meshtastic routing ACK TX",
+            "ACK to " + node_hex(dest) + " for " + node_hex(request_id) +
+                " via channel " + hex_u8(channel_hash) + ".");
     }
     return ok;
 }
@@ -1747,7 +2794,11 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
 
     const MeshtasticAirPlan plan = build_meshtastic_air_plan(config_);
     ::chat::ChannelId channel = ::chat::ChannelId::PRIMARY;
-    if (!channel_from_hash(plan, header.channel, &channel))
+    const bool matches_channel = channel_from_hash(plan, header.channel, &channel);
+    const bool can_try_pki =
+        header.to == self_node_id_ && header.to != kBroadcastNodeId &&
+        payload_size > 12 && (header.channel == 0 || !matches_channel);
+    if (!matches_channel && !can_try_pki)
     {
         append_lora_system_log(
             "Meshtastic RX unknown channel",
@@ -1811,10 +2862,42 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
     }
 
     std::size_t psk_len = 0;
-    const std::uint8_t* psk = psk_for_channel(plan, channel, &psk_len);
+    const std::uint8_t* psk =
+        matches_channel ? psk_for_channel(plan, channel, &psk_len) : nullptr;
     std::uint8_t plaintext[256] = {};
     std::size_t plaintext_len = sizeof(plaintext);
-    if (psk != nullptr && psk_len > 0)
+    bool used_pki_transport = false;
+    if (can_try_pki)
+    {
+        if (!decryptPkiPayload(header.from,
+                               header.id,
+                               payload,
+                               payload_size,
+                               plaintext,
+                               &plaintext_len))
+        {
+            append_lora_system_log(
+                "Meshtastic PKI RX decrypt failed",
+                "Direct PKI payload could not be decoded; requesting fresh NodeInfo from " +
+                    node_hex(header.from) + ".",
+                {{
+                    .kind =
+                        ::platform::linux_runtime::PacketLogSegmentKind::Error,
+                    .label = "pki",
+                    .text = "decrypt_failed",
+                }});
+            forgetPkiNodeKey(header.from);
+            (void)sendMeshtasticNodeInfoTo(header.from,
+                                           true,
+                                           ::chat::ChannelId::PRIMARY);
+            return true;
+        }
+        used_pki_transport = true;
+        channel = ::chat::ChannelId::PRIMARY;
+        psk = nullptr;
+        psk_len = 0;
+    }
+    else if (psk != nullptr && psk_len > 0)
     {
         if (!meshtastic_crypto_available())
         {
@@ -1884,10 +2967,26 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
     }
 
     const ::chat::RxMeta rx_meta = make_meshtastic_rx_meta(header, packet);
-    const bool encrypted = psk != nullptr && psk_len > 0;
+    const bool encrypted =
+        used_pki_transport || (psk != nullptr && psk_len > 0);
     const auto channel_index = static_cast<std::uint8_t>(channel);
     const bool via_mqtt_packet =
         (header.flags & ::chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
+    const bool decoded_want_response =
+        decoded.want_response ||
+        (decoded.has_bitfield &&
+         ((decoded.bitfield & kBitfieldWantResponseMask) != 0));
+    const bool want_ack_flag =
+        (header.flags &
+         ::chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK) != 0;
+    if (want_ack_flag && header.to == self_node_id_)
+    {
+        (void)sendRoutingAck(header.from,
+                             header.id,
+                             header.channel,
+                             psk,
+                             psk_len);
+    }
 
     if (decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
         decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)
@@ -1977,6 +3076,12 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
         ::chat::meshtastic::DecodedNodePayload node{};
         if (::chat::meshtastic::decodeNodeInfoPayload(decoded, context, &node))
         {
+            if (node.has_public_key)
+            {
+                savePkiNodeKey(node.node_id,
+                               node.public_key.data(),
+                               node.public_key.size());
+            }
             ::sys::EventBus::publish(
                 new ::sys::NodeInfoUpdateEvent(
                     node.node_id,
@@ -1995,7 +3100,7 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
                     node.via_mqtt,
                     node.is_ignored,
                     node.has_public_key,
-                    node.key_manually_verified,
+                    false,
                     node.has_device_metrics,
                     node.has_device_metrics ? &node.device_metrics : nullptr),
                 0);
@@ -2063,6 +3168,24 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
                          .text = std::string(node.has_position ? "position " : "") +
                                  (node.has_device_metrics ? "metrics" : ""),
                      }});
+            }
+            if (decoded_want_response &&
+                (header.to == self_node_id_ || header.to == kBroadcastNodeId))
+            {
+                const std::uint32_t now_ms = ::sys::millis_now();
+                bool allow_reply = true;
+                const auto last_it = nodeinfo_last_reply_ms_.find(header.from);
+                if (last_it != nodeinfo_last_reply_ms_.end() &&
+                    static_cast<std::uint32_t>(now_ms - last_it->second) <
+                        kNodeInfoReplySuppressMs)
+                {
+                    allow_reply = false;
+                }
+                nodeinfo_last_reply_ms_[header.from] = now_ms;
+                if (allow_reply)
+                {
+                    (void)sendMeshtasticNodeInfoTo(header.from, false, channel);
+                }
             }
         }
         else
@@ -2173,16 +3296,60 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
         return true;
     }
 
+    if (decoded.portnum == meshtastic_PortNum_KEY_VERIFICATION_APP &&
+        decoded.payload.size > 0)
+    {
+        meshtastic_KeyVerification kv = meshtastic_KeyVerification_init_default;
+        bool handled = false;
+        if (::chat::meshtastic::decodeKeyVerificationMessage(plaintext,
+                                                              plaintext_len,
+                                                              &kv) &&
+            header.channel == 0)
+        {
+            if (kv.hash1.size == 0 && kv.hash2.size == 0)
+            {
+                handled = handleKeyVerificationInit(header, kv);
+            }
+            else if (kv.hash1.size == 0 && kv.hash2.size == 32)
+            {
+                handled = handleKeyVerificationReply(header, kv);
+            }
+            else if (kv.hash1.size == 32 && kv.hash2.size == 0)
+            {
+                handled = handleKeyVerificationFinal(header, kv);
+            }
+        }
+
+        append_lora_system_log(
+            handled ? "Meshtastic key verification RX"
+                    : "Meshtastic key verification ignored",
+            "From " + node_hex(header.from) + " id " + node_hex(header.id) +
+                " nonce " + std::to_string(kv.nonce) + ".",
+            {{
+                 .kind = ::platform::linux_runtime::PacketLogSegmentKind::Meta,
+                 .label = "stage",
+                 .text = ::chat::meshtastic::keyVerificationStage(kv),
+             },
+             {
+                 .kind = ::platform::linux_runtime::PacketLogSegmentKind::Meta,
+                 .label = "signal",
+                 .text = packet_signal_text(packet),
+             }});
+        return true;
+    }
+
     ::chat::MeshIncomingData app{};
     if (::chat::meshtastic::decodeAppPayload(decoded, &app))
     {
         app.from = header.from;
         app.to = header.to;
         app.packet_id = header.id;
+        app.request_id = decoded.request_id;
         app.channel = channel;
         app.channel_hash = header.channel;
         app.hop_limit =
             header.flags & ::chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
+        app.want_response = decoded_want_response;
         app.rx_meta = rx_meta;
         incoming_data_.push_back(std::move(app));
     }
