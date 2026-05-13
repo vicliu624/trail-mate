@@ -130,7 +130,7 @@ void EspMeshEventBridge::emit(const ::mesh::MeshEvent& event)
 EspMeshtasticAdapterBridge::EspMeshtasticAdapterBridge(LoraBoard& board)
     : radio_(board),
       identity_(local_store_, peer_store_, crypto_, clock_),
-      receive_(protocol_, identity_, events_, clock_),
+      receive_(protocol_, identity_, events_, clock_, &receive_dedup_),
       direct_(protocol_, identity_, radio_, clock_, events_),
       session_(radio_, protocol_, direct_, receive_, clock_)
 {
@@ -164,6 +164,25 @@ bool EspMeshtasticAdapterBridge::copyLastSentPacket(uint8_t* out, size_t capacit
     std::memcpy(out, radio_.last_sent_, radio_.last_sent_size_);
     out_size = radio_.last_sent_size_;
     return true;
+}
+
+void EspMeshtasticAdapterBridge::onRadioPacket(const uint8_t* data,
+                                               size_t size,
+                                               int16_t rssi,
+                                               int8_t snr)
+{
+    if (!data || size == 0 || size > sizeof(::mesh::RadioRxPacket::bytes))
+    {
+        return;
+    }
+
+    ::mesh::RadioRxPacket packet{};
+    std::memcpy(packet.bytes, data, size);
+    packet.size = size;
+    packet.rssi = rssi;
+    packet.snr = snr;
+    packet.received_at_ms = clock_.nowMs();
+    receive_.onRadioPacket(packet);
 }
 
 void EspMeshtasticAdapterBridge::tick()

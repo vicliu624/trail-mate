@@ -7,6 +7,7 @@
 #include "mesh/ports/i_packet_radio.h"
 #include "mesh/protocol/meshtastic/meshtastic_protocol_strategy.h"
 #include "mesh/usecase/direct_message_service.h"
+#include "mesh/usecase/mesh_dedup_service.h"
 #include "mesh/usecase/mesh_session.h"
 #include "mesh/usecase/peer_identity_service.h"
 #include "mesh/usecase/receive_packet_service.h"
@@ -75,6 +76,7 @@ class EspMeshtasticAdapterBridge final
 
     ::mesh::SendResult sendDirect(const ::mesh::DirectMessageCommand& command);
     bool copyLastSentPacket(uint8_t* out, size_t capacity, size_t& out_size) const;
+    void onRadioPacket(const uint8_t* data, size_t size, int16_t rssi, int8_t snr);
     void tick();
 
   private:
@@ -86,6 +88,7 @@ class EspMeshtasticAdapterBridge final
     EspArduinoMeshClock clock_;
     EspMeshEventBridge events_;
     ::mesh::PeerIdentityService identity_;
+    ::mesh::MeshDedupService receive_dedup_;
     ::mesh::ReceivePacketService receive_;
     ::mesh::DirectMessageService direct_;
     ::mesh::MeshSession session_;

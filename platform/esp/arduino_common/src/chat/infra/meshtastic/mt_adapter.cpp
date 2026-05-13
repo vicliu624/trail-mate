@@ -119,6 +119,26 @@ bool shouldRequireDirectPki(uint8_t encrypt_mode, uint32_t dest_node, uint32_t p
            allowPkiForPortnum(portnum);
 }
 
+int16_t coreRadioRssi(float rssi)
+{
+    if (!std::isfinite(rssi))
+    {
+        return 0;
+    }
+    return static_cast<int16_t>(std::lround(
+        std::max(-32768.0f, std::min(32767.0f, rssi))));
+}
+
+int8_t coreRadioSnr(float snr)
+{
+    if (!std::isfinite(snr))
+    {
+        return 0;
+    }
+    return static_cast<int8_t>(std::lround(
+        std::max(-128.0f, std::min(127.0f, snr))));
+}
+
 void mt_diag_log(const char* fmt, ...)
 {
     char buf[192] = {};
@@ -1407,6 +1427,14 @@ void MtAdapter::processReceivedPacket(const uint8_t* data, size_t size)
         memcpy(last_raw_packet_, data, size);
         last_raw_packet_len_ = size;
         has_pending_raw_packet_ = true;
+    }
+
+    if (core_bridge_)
+    {
+        core_bridge_->onRadioPacket(data,
+                                    size,
+                                    coreRadioRssi(last_rx_rssi_),
+                                    coreRadioSnr(last_rx_snr_));
     }
 
     // Parse wire packet header

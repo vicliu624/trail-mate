@@ -86,6 +86,10 @@ exception. The already-established boundaries are:
   Meshtastic channel-key app-data send path through
   `MeshSession::sendDirect` -> `DirectMessageService` -> `MeshtasticProtocolStrategy`
   -> `IPacketRadio` via `EspMeshtasticAdapterBridge`.
+- Phase 4.5.5 routes the actual ESP Meshtastic raw receive entry through
+  `EspMeshtasticAdapterBridge::onRadioPacket` -> `ReceivePacketService` ->
+  `MeshtasticProtocolStrategy::parseRadioPacket` for shared parse/event
+  observation before the legacy compatibility receive logic continues.
 - ESP MeshCore direct/group app-data frame construction has a
   `MeshCoreProtocolStrategy` path.
 
@@ -94,11 +98,13 @@ Remaining Phase 4.5 mesh ownership items:
 - ESP Meshtastic channel-key app-data direct send now routes through
   `MeshSession::sendDirect` -> `DirectMessageService` -> `MeshtasticProtocolStrategy`
   -> `IPacketRadio`. PKI direct send remains legacy-owned.
-- At least one actual receive path must route through `ReceivePacketService`
-  for protocol parse and event emission.
+- ESP Meshtastic raw receive now also routes through `ReceivePacketService`
+  for the shared parse/event path. Legacy receive remains authoritative for
+  channel/PKI decrypt, self/drop handling, app queues, ACK/retry, MQTT proxy,
+  node info, position, and compatibility event publishing.
 - Meshtastic PKI flow, direct encryption/decryption, route selection,
-  retransmit/ACK behavior, and receive parsing remain legacy-owned until moved
-  behind `core_mesh`.
+  retransmit/ACK behavior, and decrypted receive routing remain legacy-owned
+  until moved behind `core_mesh`.
 - MeshCore identity routing, peer-key behavior, direct/group payload
   encryption/decryption, ACK/retry behavior, and receive parsing remain
   legacy-owned until moved behind `core_mesh`.
