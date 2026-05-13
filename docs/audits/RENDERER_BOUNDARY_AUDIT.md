@@ -93,6 +93,11 @@ ASCII/headless migrated path:
   implementations only
 - ASCII probes must not directly include toolkit, runtime, store, or service
   headers
+- `trailmate_map_workspace_ascii_probe` must render map workspace state from
+  `MapWorkspaceModel`
+- `trailmate_presentation_workspace_ascii_probe` must render Device/GPS/Mesh,
+  Settings/Chat/TeamChat capability flags, and Map summary from
+  `PresentationWorkspaceProbe`
 
 LVGL dashboard migrated path:
 

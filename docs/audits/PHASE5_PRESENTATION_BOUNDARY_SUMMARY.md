@@ -66,6 +66,8 @@ Phase 5.9 starts locking renderer behavior:
 - LVGL dashboard GPS status labels now consume `GpsStatusModel`
 - uConsole map status/center summary must continue exposing
   `presentation_workspace`
+- ASCII/headless probes remain strict renderers that consume only
+  `ui_presentation` models and fake source/sink implementations
 
 uConsole tile/cache/contour enumeration, GTK overview GPS compatibility logic,
 and dashboard/chat app model runtime reads remain bounded legacy ownership.

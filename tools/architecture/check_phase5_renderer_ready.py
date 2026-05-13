@@ -113,6 +113,35 @@ def check_ascii_probes_are_strict() -> int:
             failures += fail(
                 f"{path.relative_to(ROOT)} does not consume ui_presentation"
             )
+
+    required_probe_tokens = {
+        "apps/linux_sim/tests/map_workspace_ascii_probe.cpp": [
+            "MapWorkspaceModel",
+            "MAP CENTER:",
+            "SELF:",
+            "LAYERS:",
+            "TEAM:",
+        ],
+        "apps/linux_sim/tests/presentation_workspace_ascii_probe.cpp": [
+            "PresentationWorkspaceProbe::snapshot",
+            "PRESENTATION WORKSPACE",
+            "DEVICE:",
+            "GPS:",
+            "MESH:",
+            "SETTINGS:",
+            "CHAT:",
+            "TEAM_CHAT:",
+            "MAP:",
+        ],
+    }
+    for probe, tokens in required_probe_tokens.items():
+        if not exists(probe):
+            failures += fail(f"missing ASCII/headless probe: {probe}")
+            continue
+        text = read_text(probe)
+        for token in tokens:
+            if token not in text:
+                failures += fail(f"{probe} missing probe output token: {token}")
     return failures
 
 
