@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chat/delivery/chat_delivery_read_model.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "ui_presentation/chat/chat_presentation_source.h"
@@ -25,7 +26,9 @@ class LegacyChatPresentationSource final : public ui::chat::IChatPresentationSou
 {
   public:
     LegacyChatPresentationSource(::chat::ChatService& chat_service,
-                                 ::chat::contacts::ContactService* contact_service = nullptr);
+                                 ::chat::contacts::ContactService* contact_service = nullptr,
+                                 const ::chat::delivery::ChatDeliveryReadModel*
+                                     delivery_read_model = nullptr);
 
     bool buildChatWorkspaceSnapshot(
         const ui::chat::ChatWorkspaceRequest& request,
@@ -34,6 +37,7 @@ class LegacyChatPresentationSource final : public ui::chat::IChatPresentationSou
   private:
     ::chat::ChatService& chat_service_;
     ::chat::contacts::ContactService* contact_service_ = nullptr;
+    const ::chat::delivery::ChatDeliveryReadModel* delivery_read_model_ = nullptr;
 };
 
 } // namespace ui::presentation_sources

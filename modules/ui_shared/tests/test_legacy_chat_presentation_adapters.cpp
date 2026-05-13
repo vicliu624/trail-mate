@@ -1,4 +1,6 @@
 #include "chat/domain/chat_model.h"
+#include "chat/delivery/chat_delivery_read_model.h"
+#include "chat/delivery/legacy_chat_delivery_bridge.h"
 #include "chat/infra/store/ram_store.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/chat_service.h"
@@ -101,9 +103,11 @@ int main()
     FakeMeshAdapter mesh;
     ::chat::RamStore store;
     ::chat::ChatService service(model, mesh, store);
+    ::chat::delivery::ChatDeliveryReadModel delivery_read_model;
 
     ui::presentation_sources::LegacyChatActionSink sink(service);
-    ui::presentation_sources::LegacyChatPresentationSource source(service);
+    ui::presentation_sources::LegacyChatPresentationSource source(
+        service, nullptr, &delivery_read_model);
 
     const ui::chat::ConversationId ada = directPeer(1234);
     ui::chat::SendMessageView send;
@@ -117,6 +121,12 @@ int main()
     assert(mesh.last_peer == 1234);
     assert(mesh.last_text == "hello");
 
+    ::chat::delivery::ChatDeliveryRecord delivered{};
+    delivered.ref.protocol_id = 100;
+    delivered.state = ::chat::delivery::DeliveryState::Delivered;
+    delivered.failure = ::chat::delivery::DeliveryFailureKind::None;
+    assert(delivery_read_model.upsert(delivered));
+
     ui::chat::ChatWorkspaceRequest request;
     request.selected = ada;
     ui::chat::ChatWorkspaceSnapshot snapshot;
@@ -129,7 +139,8 @@ int main()
     assert(snapshot.message_count == 1);
     assert(snapshot.messages[0].conversation == ada);
     assert(snapshot.messages[0].outgoing);
-    assert(snapshot.messages[0].delivery == ui::chat::MessageDeliveryState::Queued);
+    assert(snapshot.messages[0].delivery ==
+           ui::chat::MessageDeliveryState::Delivered);
     assert(snapshot.messages[0].failure == ui::chat::MessageFailureKind::None);
     assert(std::strcmp(snapshot.messages[0].text.c_str(), "hello") == 0);
     assert(snapshot.can_send);
@@ -140,10 +151,14 @@ int main()
     const auto rejected_send = sink.sendMessage(failed_send);
     assert(!rejected_send.ok);
     assert(rejected_send.failure == ui::UiActionFailure::Rejected);
+    assert(delivery_read_model.upsert(::chat::delivery::toFailedDeliveryRecord(
+        ::chat::delivery::ChatDeliveryRef{0, 101, 0},
+        ::chat::delivery::SendFailureKind::PeerKeyMissing)));
     assert(source.buildChatWorkspaceSnapshot(request, snapshot));
     assert(snapshot.message_count == 2);
     assert(snapshot.messages[1].delivery == ui::chat::MessageDeliveryState::Failed);
-    assert(snapshot.messages[1].failure == ui::chat::MessageFailureKind::Unknown);
+    assert(snapshot.messages[1].failure ==
+           ui::chat::MessageFailureKind::PeerKeyMissing);
 
     assert(sink.markRead(ada).ok);
 

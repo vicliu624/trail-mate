@@ -25,4 +25,15 @@ const product_composition::PresentationBundle& LinuxSimCompositionRoot::presenta
     return presentation_;
 }
 
+chat::delivery::ChatDeliveryReadModel& LinuxSimCompositionRoot::deliveryReadModel()
+{
+    return delivery_read_model_;
+}
+
+chat::delivery::ChatDeliveryEventProjector&
+LinuxSimCompositionRoot::deliveryProjector()
+{
+    return delivery_projector_;
+}
+
 } // namespace trailmate::linux_sim

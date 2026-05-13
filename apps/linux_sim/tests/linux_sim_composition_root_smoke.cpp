@@ -9,6 +9,7 @@ int main()
 {
     trailmate::linux_sim::LinuxSimCompositionRoot root;
     assert(root.initialize());
+    assert(root.deliveryReadModel().size() == 0);
 
     auto& presentation = root.presentation();
     assert(product_composition::hasInteractivePresentation(presentation));

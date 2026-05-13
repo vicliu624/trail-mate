@@ -281,11 +281,14 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/workspace/presentation_workspace_probe.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
     )
     target_include_directories(trailmate_linux_sim_composition_root_smoke
         PRIVATE
             "${PROJECT_SOURCE_DIR}/src"
             "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
     add_test(NAME trailmate_linux_sim_composition_root_smoke
@@ -351,6 +354,9 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_message_mapper.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/legacy_chat_delivery_bridge.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/chat_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/contact_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/domain/chat_model.cpp"

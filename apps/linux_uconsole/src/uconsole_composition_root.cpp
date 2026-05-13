@@ -30,7 +30,7 @@ bool UConsoleCompositionRoot::initialize()
 
     chat_source_ =
         std::make_unique<::ui::presentation_sources::LegacyChatPresentationSource>(
-            services_.chat(), &services_.contacts());
+            services_.chat(), &services_.contacts(), &delivery_read_model_);
     chat_sink_ =
         std::make_unique<::ui::presentation_sources::LegacyChatActionSink>(
             services_.chat());
@@ -81,6 +81,18 @@ UConsoleChatWorkspaceModel& UConsoleCompositionRoot::chatModel() noexcept
 UConsoleMapWorkspaceModel& UConsoleCompositionRoot::mapModel() noexcept
 {
     return map_model_;
+}
+
+::chat::delivery::ChatDeliveryReadModel&
+UConsoleCompositionRoot::deliveryReadModel() noexcept
+{
+    return delivery_read_model_;
+}
+
+::chat::delivery::ChatDeliveryEventProjector&
+UConsoleCompositionRoot::deliveryProjector() noexcept
+{
+    return delivery_projector_;
 }
 
 } // namespace trailmate::uconsole

@@ -39,6 +39,7 @@ int main()
 
     trailmate::uconsole::UConsoleCompositionRoot root;
     assert(root.initialize());
+    assert(root.deliveryReadModel().size() == 0);
 
     assert(product_composition::hasChatServices(root.appServices()));
     assert(product_composition::hasInteractivePresentation(root.presentation()));

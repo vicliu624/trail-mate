@@ -1,5 +1,6 @@
 #include "ui/presentation_sources/legacy_chat_presentation_source.h"
 
+#include "chat/delivery/legacy_chat_delivery_bridge.h"
 #include "chat_presentation_adapters/chat_conversation_mapper.h"
 #include "chat_presentation_adapters/chat_message_mapper.h"
 #include "ui_presentation/common/fixed_text.h"
@@ -49,13 +50,63 @@ void copyTimeLabel(ui::FixedText<24>& out, uint32_t timestamp)
     ui::copyText(out, buffer);
 }
 
+ui::chat::MessageDeliveryState mapDeliveryState(
+    ::chat::delivery::DeliveryState state)
+{
+    switch (state)
+    {
+    case ::chat::delivery::DeliveryState::Queued:
+        return ui::chat::MessageDeliveryState::Queued;
+    case ::chat::delivery::DeliveryState::Sending:
+        return ui::chat::MessageDeliveryState::Sending;
+    case ::chat::delivery::DeliveryState::Sent:
+        return ui::chat::MessageDeliveryState::Sent;
+    case ::chat::delivery::DeliveryState::Delivered:
+        return ui::chat::MessageDeliveryState::Delivered;
+    case ::chat::delivery::DeliveryState::Failed:
+        return ui::chat::MessageDeliveryState::Failed;
+    case ::chat::delivery::DeliveryState::Received:
+        return ui::chat::MessageDeliveryState::Received;
+    case ::chat::delivery::DeliveryState::Unknown:
+        return ui::chat::MessageDeliveryState::Unknown;
+    }
+    return ui::chat::MessageDeliveryState::Unknown;
+}
+
+ui::chat::MessageFailureKind mapDeliveryFailure(
+    ::chat::delivery::DeliveryFailureKind failure)
+{
+    switch (failure)
+    {
+    case ::chat::delivery::DeliveryFailureKind::None:
+        return ui::chat::MessageFailureKind::None;
+    case ::chat::delivery::DeliveryFailureKind::PeerKeyMissing:
+        return ui::chat::MessageFailureKind::PeerKeyMissing;
+    case ::chat::delivery::DeliveryFailureKind::LocalIdentityMissing:
+        return ui::chat::MessageFailureKind::LocalIdentityMissing;
+    case ::chat::delivery::DeliveryFailureKind::RadioSendFailed:
+        return ui::chat::MessageFailureKind::RadioSendFailed;
+    case ::chat::delivery::DeliveryFailureKind::AckTimeout:
+        return ui::chat::MessageFailureKind::AckTimeout;
+    case ::chat::delivery::DeliveryFailureKind::UnsupportedProtocol:
+        return ui::chat::MessageFailureKind::UnsupportedProtocol;
+    case ::chat::delivery::DeliveryFailureKind::Rejected:
+        return ui::chat::MessageFailureKind::Rejected;
+    case ::chat::delivery::DeliveryFailureKind::Unknown:
+        return ui::chat::MessageFailureKind::Unknown;
+    }
+    return ui::chat::MessageFailureKind::Unknown;
+}
+
 } // namespace
 
 LegacyChatPresentationSource::LegacyChatPresentationSource(
     ::chat::ChatService& chat_service,
-    ::chat::contacts::ContactService* contact_service)
+    ::chat::contacts::ContactService* contact_service,
+    const ::chat::delivery::ChatDeliveryReadModel* delivery_read_model)
     : chat_service_(chat_service),
-      contact_service_(contact_service)
+      contact_service_(contact_service),
+      delivery_read_model_(delivery_read_model)
 {
 }
 
@@ -122,6 +173,17 @@ bool LegacyChatPresentationSource::buildChatWorkspaceSnapshot(
                 chat_presentation_adapters::mapMessageStatus(message.status);
             row.failure =
                 chat_presentation_adapters::mapMessageFailure(message.status);
+            if (delivery_read_model_ != nullptr)
+            {
+                ::chat::delivery::ChatDeliveryRecord delivery{};
+                if (delivery_read_model_->find(
+                        ::chat::delivery::toDeliveryRef(message),
+                        delivery))
+                {
+                    row.delivery = mapDeliveryState(delivery.state);
+                    row.failure = mapDeliveryFailure(delivery.failure);
+                }
+            }
             row.outgoing = message.status != ::chat::MessageStatus::Incoming;
             copyString(row.text, message.text);
             copyTimeLabel(row.time_label, message.timestamp);

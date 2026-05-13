@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/linux_app_services.h"
+#include "chat/delivery/chat_delivery_event_projector.h"
 #include "product_composition/app_services_bundle.h"
 #include "product_composition/presentation_bundle.h"
 #include "uconsole/uconsole_chat_workspace_model.h"
@@ -32,8 +33,16 @@ class UConsoleCompositionRoot final
         noexcept;
     [[nodiscard]] UConsoleChatWorkspaceModel& chatModel() noexcept;
     [[nodiscard]] UConsoleMapWorkspaceModel& mapModel() noexcept;
+    [[nodiscard]] ::chat::delivery::ChatDeliveryReadModel& deliveryReadModel()
+        noexcept;
+    [[nodiscard]] ::chat::delivery::ChatDeliveryEventProjector&
+    deliveryProjector() noexcept;
 
   private:
+    ::chat::delivery::ChatDeliveryReadModel delivery_read_model_{};
+    ::chat::delivery::ChatDeliveryEventProjector delivery_projector_{
+        delivery_read_model_};
+
     linux_app::LinuxAppServices services_{};
     UConsoleChatWorkspaceModel chat_model_{services_};
     UConsoleMapWorkspaceModel map_model_{services_};
