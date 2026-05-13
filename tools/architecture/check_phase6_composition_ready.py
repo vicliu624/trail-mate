@@ -45,6 +45,8 @@ def check_required_files() -> int:
         "docs/audits/PRODUCT_COMPOSITION_BOUNDARY_AUDIT.md",
         "docs/audits/APPCONTEXT_LEGACY_BRIDGE_AUDIT.md",
         "docs/audits/ESP_LVGL_COMPOSITION_BRIDGE_AUDIT.md",
+        "docs/audits/PHASE6_COMPOSITION_CONFORMANCE_MATRIX.md",
+        "docs/audits/PHASE6_COMPOSITION_READINESS_REPORT.md",
         "modules/product_composition/include/product_composition/app_services_bundle.h",
         "modules/product_composition/include/product_composition/presentation_bundle.h",
         "modules/product_composition/include/product_composition/target_app_shell.h",
@@ -100,6 +102,18 @@ def check_specification_language() -> int:
             "LegacyAppContextBridge",
             "New ESP code must not",
             "Phase 6 Acceptance",
+        ],
+        "docs/audits/PHASE6_COMPOSITION_CONFORMANCE_MATRIX.md": [
+            "Phase 6-ready does not mean all global state",
+            "ready-with-legacy",
+            "No area may remain blocked",
+        ],
+        "docs/audits/PHASE6_COMPOSITION_READINESS_REPORT.md": [
+            "Phase 6 is ready to close",
+            "This decision does not mean every target startup path is fully clean",
+            "CompositionRoot wires",
+            "Phase 6 composition checker exists and passes",
+            "`AppContext` is compatibility-only",
         ],
     }
 

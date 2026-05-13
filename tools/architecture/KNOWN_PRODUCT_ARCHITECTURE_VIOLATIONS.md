@@ -321,6 +321,45 @@ Future phases must not:
 - put tile/cache into `MapWorkspaceSnapshot`
 - let renderers infer pending/failure state
 
+### Phase 6 Product Composition Boundary Status
+
+Status: ready-with-legacy.
+
+Phase 6 established product composition and app shell boundaries for:
+
+- product composition contracts
+- Linux simulator composition root
+- uConsole composition root pilot
+- ESP LVGL composition bridge audit
+- AppContext legacy bridge audit
+- Phase 6 composition legacy baseline
+- Phase 6 composition readiness checker
+
+Remaining composition legacy surfaces are recorded in:
+
+- `docs/audits/APPCONTEXT_LEGACY_BRIDGE_AUDIT.md`
+- `docs/audits/ESP_LVGL_COMPOSITION_BRIDGE_AUDIT.md`
+- `docs/audits/PHASE6_COMPOSITION_CONFORMANCE_MATRIX.md`
+- `docs/audits/PHASE6_COMPOSITION_READINESS_REPORT.md`
+- `tools/architecture/phase6_composition_legacy_baseline.json`
+
+These are no longer uncontrolled object graph construction violations. They are
+bounded legacy composition surfaces.
+
+Future phases must either:
+
+- preserve the composition root boundary, or
+- explicitly migrate a legacy composition surface behind a target/app shell
+  root.
+
+Future phases must not:
+
+- add dynamic service lookup to `AppServicesBundle`
+- construct source/sink/model objects inside `ui_presentation`
+- create app services from renderer/page code
+- expand `AppContext` for new unrelated dependencies
+- put board or target product selection into renderers
+
 ## Operating Rule
 
 Do not fix these categories opportunistically inside unrelated feature PRs.
