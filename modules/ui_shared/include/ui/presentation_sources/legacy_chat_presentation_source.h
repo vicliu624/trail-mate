@@ -7,6 +7,20 @@
 namespace ui::presentation_sources
 {
 
+// LegacyChatPresentationSource is a Phase 5.6 compatibility read adapter.
+//
+// Pattern:
+//   CQRS read model / projection / anti-corruption adapter.
+//
+// It may read ChatService and ContactService, and may use
+// chat_presentation_adapters to map core chat types into ui_presentation rows.
+//
+// It must not:
+//   - send messages
+//   - mark conversations read
+//   - mutate ChatService
+//   - access LVGL widgets
+//   - access radio, mesh adapter, PKI, or packet builders
 class LegacyChatPresentationSource final : public ui::chat::IChatPresentationSource
 {
   public:

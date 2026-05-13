@@ -6,6 +6,19 @@
 namespace ui::presentation_sources
 {
 
+// LegacyChatActionSink is a Phase 5.6 compatibility command adapter.
+//
+// Pattern:
+//   Command Sink / anti-corruption adapter.
+//
+// It may translate UI actions into ChatService commands.
+//
+// It must not:
+//   - build ChatWorkspaceSnapshot
+//   - format UI labels
+//   - access LVGL widgets
+//   - inspect renderer state
+//   - build radio packets or perform PKI logic
 class LegacyChatActionSink final : public ui::chat::IChatActionSink
 {
   public:

@@ -63,6 +63,11 @@ bool LegacyChatPresentationSource::buildChatWorkspaceSnapshot(
     const ui::chat::ChatWorkspaceRequest& request,
     ui::chat::ChatWorkspaceSnapshot& out) const
 {
+    // Phase 5.6 compatibility source returns the most recent messages.
+    // Message paging is deferred until ChatService exposes a stable
+    // presentation-safe paging API.
+    (void)request.message_offset;
+
     out = ui::chat::ChatWorkspaceSnapshot{};
     out.header.valid = true;
     out.header.version = 1;

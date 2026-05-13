@@ -83,6 +83,35 @@ returns the recent message window.
 This is intentional. The closeout phase must not change `ChatService` storage
 or paging behavior.
 
+Renderers must not assume `message_offset` is already honored by the legacy
+compatibility source.
+
+## Legacy Source/Sink Adapter Contract
+
+`LegacyChatPresentationSource` is the Phase 5.6 compatibility read adapter.
+It may read `ChatService` and `ContactService`, and may use
+`chat_presentation_adapters` to map core chat types into `ui_presentation`
+rows.
+
+It must not:
+
+- send messages
+- mark conversations read
+- mutate `ChatService`
+- access LVGL widgets
+- access radio, mesh adapters, PKI, or packet builders
+
+`LegacyChatActionSink` is the Phase 5.6 compatibility command adapter. It may
+translate UI actions into `ChatService` commands.
+
+It must not:
+
+- build `ChatWorkspaceSnapshot`
+- format UI labels
+- access LVGL widgets
+- inspect renderer state
+- build radio packets or perform PKI logic
+
 ## Pending / Failure
 
 `ChatWorkspaceModel` must not own pending messages, ACK tracking, retry state,
