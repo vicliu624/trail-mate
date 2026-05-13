@@ -153,6 +153,23 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_uconsole_map_workspace_smoke
              COMMAND trailmate_uconsole_map_workspace_smoke)
 
+    add_executable(trailmate_uconsole_presentation_workspace_smoke
+        tests/uconsole_presentation_workspace_smoke.cpp
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/workspace/presentation_workspace_probe.cpp"
+    )
+    target_include_directories(trailmate_uconsole_presentation_workspace_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    add_test(NAME trailmate_uconsole_presentation_workspace_smoke
+             COMMAND trailmate_uconsole_presentation_workspace_smoke)
+
     add_executable(trailmate_uconsole_chat_dedup_smoke
         tests/uconsole_chat_dedup_smoke.cpp
     )
