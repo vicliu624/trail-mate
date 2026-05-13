@@ -187,6 +187,35 @@ The current repo still uses board and target macros in build adapters and
 runtime selection files. Later phases should keep product choice in explicit
 composition roots and target manifests.
 
+### Phase 5.6 Chat Presentation Remaining Legacy Ownership
+
+Status: known, bounded.
+
+Phase 5.6 introduced:
+
+- `ui_presentation` chat identity/snapshot/model
+- `chat_presentation_adapters` mapper
+- `LegacyChatPresentationSource`
+- `LegacyChatActionSink`
+- partial `ChatUiController` integration
+
+Remaining legacy ownership:
+
+- `ChatUiController` still owns LVGL state machine.
+- `ChatUiController` still depends on `ChatService` for event processing and
+  compatibility flows.
+- Team chat remains legacy-owned.
+- Key verification remains legacy-owned.
+- Team position picker remains legacy-owned.
+- Conversation list cache remains legacy-owned.
+- Structured send failure is not yet preserved in `ChatMessage`.
+
+Rules:
+
+- New non-team chat presentation should use `ChatWorkspaceModel`.
+- Team chat must be migrated through a dedicated TeamChatPresentation phase.
+- Renderer must not infer pending/failure state.
+
 ## Operating Rule
 
 Do not fix these categories opportunistically inside unrelated feature PRs.
