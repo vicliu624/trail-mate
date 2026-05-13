@@ -63,6 +63,7 @@ def check_required_files() -> int:
         "modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp",
         "modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp",
         "modules/ui_shared/tests/test_legacy_map_presentation_adapters.cpp",
+        "apps/linux_sim/tests/map_workspace_ascii_probe.cpp",
     ]
 
     failures = 0
@@ -264,6 +265,37 @@ def check_uconsole_map_surface_uses_workspace_model() -> int:
         if "#include \"platform/ui/gps_runtime.h\"" in text:
             failures += fail("uConsole map model still includes gps_runtime directly")
 
+    return failures
+
+
+def check_map_ascii_probe_exists() -> int:
+    path = "apps/linux_sim/tests/map_workspace_ascii_probe.cpp"
+    if not exists(path):
+        return fail("Map ASCII/headless probe is missing")
+
+    text = read_text(path)
+    failures = 0
+    for token in [
+        "MapWorkspaceModel",
+        "MAP CENTER:",
+        "SELF:",
+        "LAYERS:",
+        "TEAM:",
+    ]:
+        if token not in text:
+            failures += fail(f"Map ASCII/headless probe missing token: {token}")
+
+    forbidden_tokens = [
+        "lvgl.h",
+        "gtk/",
+        "gps_runtime",
+        "MapTileCache",
+        "map_tiles",
+        "TeamUiStore",
+    ]
+    for token in forbidden_tokens:
+        if token in text:
+            failures += fail(f"Map ASCII/headless probe contains forbidden token {token}")
     return failures
 
 
@@ -488,6 +520,7 @@ def main() -> int:
     failures += check_map_presentation_sources_are_bounded()
     failures += check_lvgl_map_surface_uses_workspace_model()
     failures += check_uconsole_map_surface_uses_workspace_model()
+    failures += check_map_ascii_probe_exists()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
     failures += check_team_chat_presentation_context()

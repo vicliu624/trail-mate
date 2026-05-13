@@ -198,6 +198,17 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_ui_presentation_map_workspace_smoke
              COMMAND trailmate_ui_presentation_map_workspace_smoke)
 
+    add_executable(trailmate_map_workspace_ascii_probe
+        tests/map_workspace_ascii_probe.cpp
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
+    )
+    target_include_directories(trailmate_map_workspace_ascii_probe
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    add_test(NAME trailmate_map_workspace_ascii_probe
+             COMMAND trailmate_map_workspace_ascii_probe)
+
     add_executable(trailmate_chat_presentation_mapper_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/tests/test_chat_conversation_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
