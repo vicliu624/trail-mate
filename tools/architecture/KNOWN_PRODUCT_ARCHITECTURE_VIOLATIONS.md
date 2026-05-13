@@ -360,6 +360,32 @@ Future phases must not:
 - expand `AppContext` for new unrelated dependencies
 - put board or target product selection into renderers
 
+### Phase 7.1 Chat Delivery Runtime Ownership Status
+
+Status: in progress / bounded.
+
+Phase 7.1 establishes runtime ownership for chat delivery, pending, and
+failure state:
+
+- `ChatDeliveryReadModel`
+- `ChatDeliveryEventProjector`
+- `LegacyChatDeliveryBridge`
+- optional delivery enrichment in `LegacyChatPresentationSource`
+- composition-root ownership in Linux simulator and uConsole pilots
+
+Remaining delivery/runtime legacy work is recorded in:
+
+- `docs/audits/CHAT_DELIVERY_OWNERSHIP_AUDIT.md`
+- `docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md`
+- `docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md`
+
+Future phases must not:
+
+- put pending queues into `ChatWorkspaceModel`
+- let renderers infer failure from labels, colors, or button state
+- move chat delivery runtime into `ui_presentation`
+- make `LegacyChatPresentationSource` receive send events or own retry policy
+
 ## Operating Rule
 
 Do not fix these categories opportunistically inside unrelated feature PRs.
