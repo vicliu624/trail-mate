@@ -297,6 +297,26 @@ def check_migrated_map_path_is_locked() -> int:
     return failures
 
 
+def check_migrated_dashboard_status_is_locked() -> int:
+    path = "modules/ui_shared/src/ui/menu/dashboard/dashboard_gps_widget.cpp"
+    if not exists(path):
+        return fail("LVGL dashboard GPS widget is missing")
+
+    text = read_text(path)
+    failures = 0
+    for token in [
+        "ui_presentation/gps/gps_status_model.h",
+        "legacy_gps_status_source",
+        "dashboard_gps_status_model().snapshot()",
+        "status_snapshot.fix_valid",
+        "status_snapshot.fix_label",
+        "status_snapshot.satellites",
+    ]:
+        if token not in text:
+            failures += fail(f"dashboard GPS migrated status path missing token: {token}")
+    return failures
+
+
 def load_baseline() -> dict:
     if not BASELINE_PATH.exists():
         return {}
@@ -396,6 +416,7 @@ def main() -> int:
     failures += check_team_chat_adapters_are_bounded()
     failures += check_migrated_chat_path_is_locked()
     failures += check_migrated_map_path_is_locked()
+    failures += check_migrated_dashboard_status_is_locked()
     failures += check_legacy_baseline(strict_baseline=args.strict)
     failures += check_docs()
 

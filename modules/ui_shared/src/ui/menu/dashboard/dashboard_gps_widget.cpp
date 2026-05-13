@@ -8,15 +8,24 @@
 
 #include "platform/ui/gps_runtime.h"
 #include "sys/clock.h"
+#include "ui/presentation_sources/legacy_gps_status_source.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
+#include "ui_presentation/gps/gps_status_model.h"
 
 namespace ui::menu::dashboard
 {
 namespace
 {
 
-void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::GnssStatus& gnss, bool fix)
+::ui::gps::GpsStatusModel& dashboard_gps_status_model()
+{
+    static ::ui::gps::GpsStatusModel model(
+        ::ui::presentation_sources::legacy_gps_status_source());
+    return model;
+}
+
+void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const ::gps::GnssStatus& gnss, bool fix)
 {
     static bool s_last_has_snapshot = false;
     static bool s_last_fix = false;
@@ -29,7 +38,7 @@ void logDashboardGpsFlow(bool has_snapshot, std::size_t sat_count, const gps::Gn
     const bool changed = (has_snapshot != s_last_has_snapshot) || (fix != s_last_fix) || (sat_count != s_last_sat_count) ||
                          (gnss.sats_in_view != s_last_sats_in_view) || (gnss.sats_in_use != s_last_sats_in_use);
     const bool suspicious_full_scale =
-        has_snapshot && sat_count == gps::kMaxGnssSats && gnss.sats_in_view != static_cast<uint8_t>(sat_count);
+        has_snapshot && sat_count == ::gps::kMaxGnssSats && gnss.sats_in_view != static_cast<uint8_t>(sat_count);
     if (!changed && !suspicious_full_scale && (now_ms - s_last_log_ms) < 2000U)
     {
         return;
@@ -78,37 +87,37 @@ void set_label_text_if_changed(lv_obj_t* label, const char* english)
     }
 }
 
-lv_color_t satellite_color(gps::GnssSystem sys)
+lv_color_t satellite_color(::gps::GnssSystem sys)
 {
     switch (sys)
     {
-    case gps::GnssSystem::GPS:
+    case ::gps::GnssSystem::GPS:
         return color_amber_dark();
-    case gps::GnssSystem::GLN:
+    case ::gps::GnssSystem::GLN:
         return color_info();
-    case gps::GnssSystem::GAL:
+    case ::gps::GnssSystem::GAL:
         return color_ok();
-    case gps::GnssSystem::BD:
+    case ::gps::GnssSystem::BD:
         return color_warn();
     default:
         return color_text_dim();
     }
 }
 
-int sat_rank(const gps::GnssSatInfo& sat)
+int sat_rank(const ::gps::GnssSatInfo& sat)
 {
     const int used_bonus = sat.used ? 1000 : 0;
     const int snr_score = std::max(0, static_cast<int>(sat.snr)) * 10;
     return used_bonus + snr_score + sat.elevation;
 }
 
-const char* fix_text(gps::GnssFix fix)
+const char* fix_text(::gps::GnssFix fix)
 {
     switch (fix)
     {
-    case gps::GnssFix::FIX3D:
+    case ::gps::GnssFix::FIX3D:
         return "3D FIX";
-    case gps::GnssFix::FIX2D:
+    case ::gps::GnssFix::FIX2D:
         return "2D FIX";
     default:
         return "NO FIX";
@@ -229,39 +238,49 @@ void refresh_gps_widget()
         return;
     }
 
-    gps::GnssSatInfo sats[gps::kMaxGnssSats];
+    ::gps::GnssSatInfo sats[::gps::kMaxGnssSats];
     std::size_t sat_count = 0;
-    gps::GnssStatus gnss{};
-    const bool has_snapshot = platform::ui::gps::get_gnss_snapshot(sats, gps::kMaxGnssSats, &sat_count, &gnss);
-    const auto state = platform::ui::gps::get_data();
-    const bool fix = state.valid || (has_snapshot && gnss.fix != gps::GnssFix::NOFIX);
+    ::gps::GnssStatus gnss{};
+    const bool has_snapshot =
+        platform::ui::gps::get_gnss_snapshot(sats, ::gps::kMaxGnssSats, &sat_count, &gnss);
+    const auto status_snapshot = dashboard_gps_status_model().snapshot();
+    const bool fix = status_snapshot.header.valid
+                         ? status_snapshot.fix_valid
+                         : (has_snapshot && gnss.fix != ::gps::GnssFix::NOFIX);
+    const unsigned visible_sats = status_snapshot.header.valid
+                                      ? static_cast<unsigned>(status_snapshot.satellites)
+                                      : static_cast<unsigned>(has_snapshot ? sat_count : 0);
     logDashboardGpsFlow(has_snapshot, sat_count, gnss, fix);
 
+    const char* status_label = status_snapshot.header.valid
+                                   ? status_snapshot.fix_label.c_str()
+                                   : fix_text(gnss.fix);
+
     set_status_chip(gps_ui.chrome,
-                    fix_text(gnss.fix),
+                    status_label,
                     fix ? color_soft_green() : color_soft_warn(),
                     fix ? color_ok() : color_warn());
 
-    set_label_text_if_changed(gps_ui.stat_values[0], fix_text(gnss.fix));
+    set_label_text_if_changed_raw(gps_ui.stat_values[0], status_label);
 
     char used_buf[16];
     std::snprintf(used_buf, sizeof(used_buf), "%u/%u",
                   static_cast<unsigned>(has_snapshot ? gnss.sats_in_use : 0),
-                  static_cast<unsigned>(has_snapshot ? sat_count : 0));
+                  visible_sats);
     set_label_text_if_changed_raw(gps_ui.stat_values[1], used_buf);
 
     char hdop_buf[16];
     std::snprintf(hdop_buf, sizeof(hdop_buf), "%.1f", has_snapshot ? gnss.hdop : 0.0f);
     set_label_text_if_changed_raw(gps_ui.stat_values[2], hdop_buf);
 
-    std::array<gps::GnssSatInfo, gps::kMaxGnssSats> ranked{};
+    std::array<::gps::GnssSatInfo, ::gps::kMaxGnssSats> ranked{};
     for (size_t i = 0; i < sat_count && i < ranked.size(); ++i)
     {
         ranked[i] = sats[i];
     }
     std::sort(ranked.begin(),
               ranked.begin() + static_cast<std::ptrdiff_t>(std::min(sat_count, ranked.size())),
-              [](const gps::GnssSatInfo& lhs, const gps::GnssSatInfo& rhs)
+              [](const ::gps::GnssSatInfo& lhs, const ::gps::GnssSatInfo& rhs)
               {
                   const int lhs_rank = sat_rank(lhs);
                   const int rhs_rank = sat_rank(rhs);
@@ -325,7 +344,7 @@ void refresh_gps_widget()
                   "%s",
                   ::ui::i18n::format(
                       fix ? "position stream active  |  %u in view" : "waiting for better sky view  |  %u in view",
-                      static_cast<unsigned>(has_snapshot ? sat_count : 0))
+                      visible_sats)
                       .c_str());
     set_label_text_if_changed_raw(gps_ui.footer_label, footer);
 }

@@ -62,6 +62,7 @@ These should not regress:
 - `ChatWorkspaceModel`-backed non-team message rendering
 - `TeamChatPresentationSource`-backed Team text rendering
 - `MapWorkspaceModel`-backed map workspace status/action path
+- LVGL dashboard GPS status labels backed by `GpsStatusModel`
 - uConsole `presentation_workspace` bridge
 
 ## Migrated Path Locks
@@ -89,6 +90,13 @@ ASCII/headless migrated path:
   implementations only
 - ASCII probes must not directly include toolkit, runtime, store, or service
   headers
+
+LVGL dashboard migrated path:
+
+- GPS status label, fix chip, and satellite count summary should continue using
+  `dashboard_gps_status_model().snapshot()`
+- the satellite radar remains a baseline legacy section until a richer GNSS
+  skyplot presentation source exists
 
 ## Deferred
 
