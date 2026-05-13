@@ -14,6 +14,7 @@ int main()
     assert(product_composition::hasInteractivePresentation(presentation));
 
     auto& workspace = presentation.workspace;
+    assert(ui::workspace::hasCoreStatusModels(workspace));
     assert(workspace.hasDevice());
     assert(workspace.hasGps());
     assert(workspace.hasMesh());

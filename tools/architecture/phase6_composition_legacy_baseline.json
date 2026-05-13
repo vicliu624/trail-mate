@@ -1,0 +1,106 @@
+{
+  "phase": "6",
+  "purpose": "product composition legacy boundary baseline",
+  "known_legacy_composition_surfaces": [
+    {
+      "id": "esp-pio-app-context",
+      "path": "apps/esp_pio/src/app_context.cpp",
+      "allowed_tokens": [
+        "AppContext",
+        "ChatService",
+        "ContactService",
+        "TeamService",
+        "IMeshAdapter"
+      ],
+      "reason": "ESP Arduino app services still live behind the documented AppContext legacy bridge.",
+      "future_phase": "esp-composition-root-migration"
+    },
+    {
+      "id": "esp-pio-runtime-access",
+      "path": "apps/esp_pio/src/app_runtime_access.cpp",
+      "allowed_tokens": [
+        "AppContext::getInstance",
+        "bootstrapAppContext",
+        "resolveAppContextInitHandles"
+      ],
+      "reason": "ESP Arduino startup currently resolves board/runtime handles before AppContext bootstrapping.",
+      "future_phase": "esp-startup-composition-root"
+    },
+    {
+      "id": "esp-idf-app-facade-runtime",
+      "path": "apps/esp_idf/src/app_facade_runtime.cpp",
+      "allowed_tokens": [
+        "MinimalAppFacade",
+        "bindAppFacade",
+        "AppContextInitHandles"
+      ],
+      "reason": "ESP-IDF still uses an app facade runtime bridge while target startup is preserved.",
+      "future_phase": "esp-idf-composition-root"
+    },
+    {
+      "id": "global-app-facade-access",
+      "path": "modules/core_sys/src/app/app_facade_access.cpp",
+      "allowed_tokens": [
+        "g_app_facade",
+        "bindAppFacade",
+        "appFacade"
+      ],
+      "reason": "Global facade access remains a bounded compatibility bridge for legacy UI islands.",
+      "future_phase": "appcontext-removal"
+    },
+    {
+      "id": "chat-page-runtime-presentation-bridge",
+      "path": "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp",
+      "allowed_tokens": [
+        "LegacyChatPresentationSource",
+        "LegacyChatActionSink",
+        "TeamChatPresentationSource",
+        "TeamChatActionSink",
+        "ChatWorkspaceModel"
+      ],
+      "reason": "Chat page runtime still constructs presentation adapters until the LVGL shell has a full composition binding.",
+      "future_phase": "lvgl-chat-composition-root"
+    },
+    {
+      "id": "gps-page-runtime-presentation-bridge",
+      "path": "modules/ui_shared/src/ui/screens/gps/gps_page_runtime.cpp",
+      "allowed_tokens": [
+        "LegacyMapPresentationSource",
+        "LegacyMapActionSink",
+        "MapWorkspaceModel"
+      ],
+      "reason": "GPS page runtime still constructs the map presentation bridge as a legacy renderer island.",
+      "future_phase": "lvgl-map-composition-root"
+    },
+    {
+      "id": "dashboard-status-widget-bridge",
+      "path": "modules/ui_shared/src/ui/menu/dashboard/dashboard_gps_widget.cpp",
+      "allowed_tokens": [
+        "LegacyGpsStatusSource",
+        "GpsStatusModel"
+      ],
+      "reason": "Dashboard GPS widget is hardened through snapshots but still owns local bridge construction.",
+      "future_phase": "dashboard-composition-binding"
+    },
+    {
+      "id": "gtk-uconsole-app-state-legacy",
+      "path": "apps/linux_uconsole/src/platform/gtk/gtk_uconsole_app_state.h",
+      "allowed_tokens": [
+        "LinuxAppServices",
+        "UConsoleChatWorkspaceModel",
+        "UConsoleMapWorkspaceModel"
+      ],
+      "reason": "Existing GTK app state still owns uConsole app models until the GTK shell consumes UConsoleCompositionRoot.",
+      "future_phase": "uconsole-gtk-shell-composition-root"
+    },
+    {
+      "id": "uconsole-desktop-shell-legacy",
+      "path": "platform/linux/uconsole/src/uconsole_desktop_shell.cpp",
+      "allowed_tokens": [
+        "LinuxAppServices"
+      ],
+      "reason": "Legacy framebuffer shell still owns LinuxAppServices as a bounded pre-root surface.",
+      "future_phase": "uconsole-shell-composition-root"
+    }
+  ]
+}
