@@ -128,6 +128,6 @@ build:
   app: "apps/linux_sim"
   board_package: "none"
   cmake_presets: ["linux-sim-debug"]
-  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "core_sys", "core_team"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team"]
   disabled_modules: ["ui_shared_renderer"]
 

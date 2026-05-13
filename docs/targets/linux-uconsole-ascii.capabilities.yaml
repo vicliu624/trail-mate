@@ -128,6 +128,6 @@ build:
   app: "apps/linux_uconsole"
   board_package: "platform/linux/uconsole"
   cmake_presets: ["linux-uconsole-debug", "linux-uconsole-release"]
-  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "core_sys", "core_team", "ui_shared"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team", "ui_shared"]
   disabled_modules: []
 

@@ -116,6 +116,14 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_core_phone_smoke
              COMMAND trailmate_core_phone_smoke)
 
+    add_executable(trailmate_ui_presentation_common_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_fixed_text.cpp"
+    )
+    target_include_directories(trailmate_ui_presentation_common_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_ui_presentation_common_smoke
+             COMMAND trailmate_ui_presentation_common_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"

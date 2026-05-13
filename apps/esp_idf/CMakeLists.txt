@@ -26,6 +26,12 @@ file(GLOB_RECURSE trail_mate_idf_external_sources
     ${CMAKE_SOURCE_DIR}/modules/core_phone/src/*.c
     ${CMAKE_SOURCE_DIR}/modules/core_phone/src/*.cc
     ${CMAKE_SOURCE_DIR}/modules/core_phone/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*.c
+    ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*/*.c
+    ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*/*.cpp
     ${CMAKE_SOURCE_DIR}/modules/core_chat/src/*.c
     ${CMAKE_SOURCE_DIR}/modules/core_chat/src/*.cc
     ${CMAKE_SOURCE_DIR}/modules/core_chat/src/*.cpp
@@ -233,6 +239,7 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/modules/core_device/include"
     "${CMAKE_SOURCE_DIR}/modules/core_mesh/include"
     "${CMAKE_SOURCE_DIR}/modules/core_phone/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_presentation/include"
     "${CMAKE_SOURCE_DIR}/modules/core_sys/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/generated"

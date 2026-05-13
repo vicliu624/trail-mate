@@ -133,6 +133,6 @@ build:
   app: "apps/esp_pio"
   board_package: "boards/tdeck"
   platformio_envs: ["tdeck", "tdeck_debug"]
-  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "core_sys", "core_team", "ui_shared"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team", "ui_shared"]
   disabled_modules: []
 

@@ -136,6 +136,25 @@ RULES = (
         ),
     ),
     Rule(
+        name="ui-presentation-must-not-include-toolkit-platform-or-storage",
+        roots=("modules/ui_presentation",),
+        patterns=compile_patterns(
+            (
+                r"#include\s*[<\"]lvgl\.h[>\"]",
+                r"#include\s*[<\"]gtk/",
+                r"#include\s*[<\"]ncurses",
+                r"#include\s*[<\"]Arduino\.h[>\"]",
+                r"#include\s*[<\"]Preferences[>\"]",
+                r"#include\s*[<\"]sqlite3\.h[>\"]",
+                r"#include\s*[<\"]RadioLib",
+                r"#include\s*[<\"]platform/",
+                r"#include\s*[<\"]apps/",
+                r"#include\s*[<\"]board/",
+                r"#include\s*[<\"]boards/",
+            )
+        ),
+    ),
+    Rule(
         name="platform-ble-must-not-own-phone-protocol",
         roots=("platform",),
         path_contains=("/ble/", "\\ble\\"),

@@ -139,6 +139,7 @@ build:
     - "core_hostlink"
     - "core_phone"
     - "core_mesh"
+    - "ui_presentation"
     - "core_sys"
     - "core_team"
     - "ui_shared"
