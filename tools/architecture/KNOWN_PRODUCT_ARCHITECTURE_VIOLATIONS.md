@@ -206,8 +206,11 @@ Remaining legacy ownership:
   compatibility flows.
 - Team text projection migrated to `TeamChatPresentationSource`.
 - Team text send migrated to `TeamChatActionSink`.
+- Team location/command entries are currently projected as textual
+  `MessageRow` summaries.
 - Team location/command picker remains legacy-owned.
 - Team richer payload UI remains future work.
+- Team structured pending/failure remains future work.
 - Key verification remains legacy-owned.
 - Team position picker remains legacy-owned.
 - Conversation list cache remains legacy-owned.

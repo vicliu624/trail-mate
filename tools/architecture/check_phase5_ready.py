@@ -235,8 +235,14 @@ def check_team_chat_presentation_context() -> int:
     if exists(audit):
         text = read_text(audit)
         for token in [
+            "Migrated in Phase 5.6-f",
             "Team text projection migrated to `TeamChatPresentationSource`",
             "Team text send migrated to `TeamChatActionSink`",
+            "Team location entries are projected as textual `MessageRow` summaries",
+            "Team command entries are projected as textual `MessageRow` summaries",
+            "Team read/unread clear can be handled by `TeamChatActionSink::markRead`",
+            "Remaining Legacy Ownership",
+            "Team pending/failure structured delivery",
         ]:
             if token not in text:
                 failures += fail(f"Team audit missing token: {token}")
@@ -259,6 +265,17 @@ def check_chat_ui_controller_closeout() -> int:
             failures += fail("ChatUiController does not mark Team path for Phase 5.6-f")
         if "team_chat_model_" not in text:
             failures += fail("ChatUiController does not retain a dedicated team_chat_model_")
+
+    audit = "docs/audits/CHAT_UI_CONTROLLER_LEGACY_OWNERSHIP_AUDIT.md"
+    if exists(audit):
+        text = read_text(audit)
+        for token in [
+            "Team text projection/send has started migrating to",
+            "TeamChatPresentationSource` / `TeamChatActionSink",
+            "Team structured pending/failure delivery",
+        ]:
+            if token not in text:
+                failures += fail(f"Chat UI controller audit missing token: {token}")
     return failures
 
 
@@ -273,8 +290,10 @@ def check_known_violations_recorded() -> int:
         "still owns LVGL state machine",
         "Team text projection migrated to `TeamChatPresentationSource`",
         "Team text send migrated to `TeamChatActionSink`",
+        "Team location/command entries are currently projected as textual",
         "Team location/command picker remains legacy-owned",
         "Team richer payload UI remains future work",
+        "Team structured pending/failure remains future work",
         "Structured send failure is not yet preserved",
     ]
     failures = 0

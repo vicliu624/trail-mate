@@ -18,6 +18,8 @@ It owns more than rendering:
 ## Migrated in Phase 5.6
 
 The non-team direct/channel path has started moving to `ChatWorkspaceModel`.
+Team text projection/send has started migrating to
+`TeamChatPresentationSource` / `TeamChatActionSink`.
 
 Migrated surfaces:
 
@@ -35,6 +37,7 @@ The following remain legacy-owned:
 
 - Team location/command send
 - richer Team location/command payload UI
+- Team structured pending/failure delivery
 - key verification modal
 - direct event bus handling
 - conversation list cache

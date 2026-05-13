@@ -28,18 +28,28 @@ Current owner:
 Team bounded presentation context, with remaining ChatUiController legacy flows
 ```
 
-Phase 5.6-f migrated:
+## Migrated in Phase 5.6-f
+
+The following Team chat presentation surfaces have been migrated:
 
 - Team text projection migrated to `TeamChatPresentationSource`
 - Team text send migrated to `TeamChatActionSink`
+- Team location entries are projected as textual `MessageRow` summaries by
+  `TeamChatPresentationSource`
+- Team command entries are projected as textual `MessageRow` summaries by
+  `TeamChatPresentationSource`
+- Team read/unread clear can be handled by `TeamChatActionSink::markRead`
 
-Remaining legacy functions include:
+## Remaining Legacy Ownership
 
-- team location rendering
-- team command rendering
-- team position picker
-- send team location marker
-- richer Team message payload UI
+The following remain legacy-owned:
+
+- Team location picker UI
+- Team location marker send flow
+- Team command send flow
+- Rich Team payload rendering beyond textual `MessageRow` summaries
+- Team pending/failure structured delivery
+- Team position picker LVGL overlay
 
 ## Target Presentation Identity
 
