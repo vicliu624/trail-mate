@@ -2,9 +2,12 @@
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
 #include "ui/presentation_sources/legacy_chat_presentation_source.h"
+#include "ui/presentation_sources/team_chat_action_sink.h"
+#include "ui/presentation_sources/team_chat_presentation_source.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/ui_common.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
@@ -19,6 +22,9 @@ lv_obj_t* s_chat_container = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource> s_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink> s_chat_sink = nullptr;
 std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_chat_model = nullptr;
+std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource> s_team_chat_source = nullptr;
+std::unique_ptr<::ui::presentation_sources::TeamChatActionSink> s_team_chat_sink = nullptr;
+std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_team_chat_model = nullptr;
 std::unique_ptr<chat::ui::UiController> s_ui_controller = nullptr;
 
 void request_shell_exit(void*)
@@ -61,6 +67,9 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     }
     s_chat_container = nullptr;
     s_ui_controller.reset();
+    s_team_chat_model.reset();
+    s_team_chat_sink.reset();
+    s_team_chat_source.reset();
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
@@ -97,11 +106,23 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         new ::ui::presentation_sources::LegacyChatActionSink(chat_service));
     s_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
         new ::ui::chat::ChatWorkspaceModel(*s_chat_source, *s_chat_sink));
+    s_team_chat_source =
+        std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource>(
+            new ::ui::presentation_sources::TeamChatPresentationSource(
+                team::ui::team_ui_get_store()));
+    s_team_chat_sink =
+        std::unique_ptr<::ui::presentation_sources::TeamChatActionSink>(
+            new ::ui::presentation_sources::TeamChatActionSink(
+                team::ui::team_ui_get_store(),
+                app::teamFacade().getTeamController()));
+    s_team_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
+        new ::ui::chat::ChatWorkspaceModel(*s_team_chat_source, *s_team_chat_sink));
 
     s_ui_controller = std::unique_ptr<chat::ui::UiController>(
         new chat::ui::UiController(s_chat_container,
                                    chat_service,
                                    *s_chat_model,
+                                   *s_team_chat_model,
                                    default_channel,
                                    request_shell_exit,
                                    nullptr));
@@ -122,6 +143,9 @@ void exit(lv_obj_t* parent)
 
     app::runtimeFacade().setChatUiRuntime(nullptr);
     s_ui_controller.reset();
+    s_team_chat_model.reset();
+    s_team_chat_sink.reset();
+    s_team_chat_source.reset();
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();

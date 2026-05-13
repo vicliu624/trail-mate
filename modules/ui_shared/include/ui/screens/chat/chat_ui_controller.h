@@ -28,9 +28,10 @@ namespace ui
 // Phase 5.6 note:
 //
 // UiController is still a legacy application controller. It has started
-// consuming ChatWorkspaceModel for the non-team direct/channel chat path, but
-// it still owns legacy responsibilities such as event handling, Team chat, key
-// verification, conversation cache, and ChatService lifecycle calls.
+// consuming ChatWorkspaceModel for the non-team direct/channel chat path and a
+// dedicated Team ChatWorkspaceModel for team text projection/send, but it still
+// owns legacy responsibilities such as event handling, Team location/command
+// flows, key verification, conversation cache, and ChatService lifecycle calls.
 //
 // Do not add new direct ChatService rendering logic here unless it is
 // documented as legacy ownership. New non-team chat presentation should flow
@@ -44,6 +45,7 @@ class UiController : public IChatUiRuntime
     UiController(lv_obj_t* parent,
                  chat::ChatService& service,
                  ::ui::chat::ChatWorkspaceModel& chat_model,
+                 ::ui::chat::ChatWorkspaceModel& team_chat_model,
                  chat::ChannelId initial_channel = chat::ChannelId::PRIMARY,
                  ExitRequestCallback exit_request = nullptr,
                  void* exit_request_user_data = nullptr);
@@ -71,6 +73,7 @@ class UiController : public IChatUiRuntime
     // presentation should migrate toward ChatWorkspaceModel.
     chat::ChatService& service_;
     ::ui::chat::ChatWorkspaceModel& chat_model_;
+    ::ui::chat::ChatWorkspaceModel& team_chat_model_;
     State state_;
 
     std::unique_ptr<ChatMessageListScreen> channel_list_;
@@ -104,14 +107,15 @@ class UiController : public IChatUiRuntime
     void updateConversationMetaForMessage(const chat::ChatMessage& msg, bool increment_unread);
     bool updateConversationViewForIncoming(const chat::ChatMessage& msg);
     void reloadConversationView();
-    // Legacy team path. Team chat is intentionally not modeled through
-    // ChatWorkspaceModel until Phase 5.6-f defines TeamChatPresentationSource
-    // and TeamChatActionSink.
+    // Phase 5.6-f: Team text projection now flows through team_chat_model_.
+    // Team location and command rendering remain a bounded legacy path until
+    // their richer presentation shape is defined.
     void refreshTeamConversation();
     void startTeamConversationTimer();
     void stopTeamConversationTimer();
-    // Legacy team path. Team location send remains outside the generic
-    // DirectPeer/Channel ChatWorkspaceModel action path until Phase 5.6-f.
+    // Legacy team path. Team location send remains outside both generic chat
+    // and TeamChatActionSink until a dedicated location/command action contract
+    // is defined.
     bool sendTeamLocationWithIcon(uint8_t icon_id);
     void openTeamPositionPicker();
     void closeTeamPositionPicker(bool restore_group);

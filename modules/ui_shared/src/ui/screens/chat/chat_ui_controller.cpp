@@ -400,6 +400,35 @@ void appendSnapshotConversationsToLegacy(const ::ui::chat::ChatWorkspaceSnapshot
     }
 }
 
+bool legacyTeamConversationMetaFromSnapshot(
+    const ::ui::chat::ChatWorkspaceSnapshot& snapshot,
+    chat::ConversationMeta& out)
+{
+    if (!snapshot.header.valid)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < snapshot.conversation_count; ++i)
+    {
+        const auto& row = snapshot.conversations[i];
+        if (row.id.kind != ::ui::chat::ConversationKind::Team)
+        {
+            continue;
+        }
+
+        out = chat::ConversationMeta{};
+        out.id = teamConversationId();
+        out.name = row.title.c_str();
+        out.preview = row.subtitle.c_str();
+        out.unread = static_cast<int>(row.unread_count);
+        out.last_timestamp = 0;
+        return true;
+    }
+
+    return false;
+}
+
 void applySnapshotMessagesToConversation(
     const ::ui::chat::ChatWorkspaceSnapshot& snapshot,
     ChatConversationScreen& conversation)
@@ -410,6 +439,39 @@ void applySnapshotMessagesToConversation(
         conversation.addMessage(legacyMessageFromRow(snapshot.messages[i]));
     }
     conversation.scrollToBottom();
+}
+
+bool buildSelectedTeamSnapshot(::ui::chat::ChatWorkspaceModel& model,
+                               ::ui::chat::ChatWorkspaceSnapshot& out)
+{
+    const auto overview = model.snapshot();
+    if (!overview.header.valid || overview.conversation_count == 0)
+    {
+        out = overview;
+        return false;
+    }
+
+    (void)model.selectConversation(overview.conversations[0].id);
+    out = model.snapshot();
+    return out.header.valid && out.conversation_count > 0;
+}
+
+void showTeamSendFailure(::ui::UiActionResult result)
+{
+    const char* message = "Team chat send failed";
+    if (result.failure == ::ui::UiActionFailure::NotReady)
+    {
+        message = "Team keys not ready";
+    }
+    else if (result.failure == ::ui::UiActionFailure::Unsupported)
+    {
+        message = "Team chat unsupported";
+    }
+    else if (result.failure == ::ui::UiActionFailure::InvalidInput)
+    {
+        message = "Message unavailable";
+    }
+    ::ui::SystemNotification::show(message, 2000);
 }
 
 void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
@@ -472,10 +534,12 @@ void handle_conversation_back(void* user_data)
 UiController::UiController(lv_obj_t* parent,
                            chat::ChatService& service,
                            ::ui::chat::ChatWorkspaceModel& chat_model,
+                           ::ui::chat::ChatWorkspaceModel& team_chat_model,
                            chat::ChannelId initial_channel,
                            ExitRequestCallback exit_request,
                            void* exit_request_user_data)
     : parent_(parent), service_(service), chat_model_(chat_model),
+      team_chat_model_(team_chat_model),
       state_(State::ChannelList),
       current_channel_(initial_channel),
       current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
@@ -754,22 +818,27 @@ void UiController::switchToConversation(chat::ConversationId conv)
 
     if (team_conv_active_)
     {
-        team::ui::TeamUiSnapshot snap;
-        std::string title = "Team";
-        bool loaded = team::ui::team_ui_get_store().load(snap);
-        if (loaded)
-        {
-            title = team_title_from_snapshot(snap);
-        }
+        ::ui::chat::ChatWorkspaceSnapshot team_snapshot;
+        const bool loaded =
+            buildSelectedTeamSnapshot(team_chat_model_, team_snapshot);
+        std::string title = loaded && team_snapshot.conversation_count > 0
+                                ? team_snapshot.conversations[0].title.c_str()
+                                : "Team";
+        const uint16_t unread = loaded && team_snapshot.conversation_count > 0
+                                    ? team_snapshot.conversations[0].unread_count
+                                    : 0;
         conversation_->setHeaderText(title.c_str(), nullptr);
         conversation_->updateBatteryFromBoard();
-        refreshTeamConversation();
-        startTeamConversationTimer();
-        if (loaded && snap.team_chat_unread != 0)
+        if (loaded)
         {
-            snap.team_chat_unread = 0;
-            team::ui::team_ui_get_store().save(snap);
-            sys::EventBus::publish(new sys::ChatUnreadChangedEvent(kTeamChatChannelRaw, 0), 0);
+            applySnapshotMessagesToConversation(team_snapshot, *conversation_);
+        }
+        startTeamConversationTimer();
+        if (loaded && unread != 0)
+        {
+            (void)team_chat_model_.markRead(team_snapshot.conversations[0].id);
+            sys::EventBus::publish(
+                new sys::ChatUnreadChangedEvent(kTeamChatChannelRaw, 0), 0);
         }
         return;
     }
@@ -898,10 +967,11 @@ void UiController::switchToCompose(chat::ConversationId conv)
     std::string title = resolveConversationDisplayName(conv);
     if (team_conv_active_)
     {
-        team::ui::TeamUiSnapshot snap;
-        if (team::ui::team_ui_get_store().load(snap))
+        ::ui::chat::ChatWorkspaceSnapshot team_snapshot;
+        if (buildSelectedTeamSnapshot(team_chat_model_, team_snapshot) &&
+            team_snapshot.conversation_count > 0)
         {
-            title = team_title_from_snapshot(snap);
+            title = team_snapshot.conversations[0].title.c_str();
         }
         else
         {
@@ -952,6 +1022,13 @@ void UiController::handleSendMessage(const std::string& text)
     }
     if (team_conv_active_)
     {
+        const ::ui::UiActionResult result =
+            team_chat_model_.sendMessage(text.c_str());
+        if (!result.ok)
+        {
+            showTeamSendFailure(result);
+        }
+        handleComposeSendDone(result.ok, false);
         return;
     }
     if (!chat_support::supports_local_text_chat())
@@ -1024,27 +1101,9 @@ void UiController::syncConversationListFromStore()
     }
     normalizeConversationNames(cached_conversations_);
 
-    team::ui::TeamUiSnapshot team_snap;
-    if (team::ui::team_ui_get_store().load(team_snap) && team_snap.has_team_id)
+    chat::ConversationMeta team_conv;
+    if (legacyTeamConversationMetaFromSnapshot(team_chat_model_.snapshot(), team_conv))
     {
-        chat::ConversationMeta team_conv;
-        team_conv.id = teamConversationId();
-        team_conv.name = team_title_from_snapshot(team_snap);
-        team_conv.preview.clear();
-        team_conv.last_timestamp = 0;
-        team_conv.unread = static_cast<int>(team_snap.team_chat_unread);
-
-        std::vector<team::ui::TeamChatLogEntry> entries;
-        if (team::ui::team_ui_chatlog_load_recent(team_snap.team_id, 1, entries))
-        {
-            const auto& entry = entries.back();
-            team_conv.preview = format_team_chat_entry(entry);
-            team_conv.last_timestamp = entry.ts;
-        }
-        if (team_conv.preview.empty())
-        {
-            team_conv.preview = "No messages";
-        }
         cached_conversations_.insert(cached_conversations_.begin(), team_conv);
     }
 
@@ -1201,52 +1260,16 @@ bool UiController::isTeamConversation(const chat::ConversationId& conv) const
 
 void UiController::refreshTeamConversation()
 {
-    // Legacy team path. Phase 5.6-closeout records this as a bounded island;
-    // Phase 5.6-f must move Team projection behind a Team presentation source.
     if (!conversation_ || !team_conv_active_)
     {
         return;
     }
-    team::ui::TeamUiSnapshot snap;
-    if (!team::ui::team_ui_get_store().load(snap) || !snap.has_team_id)
-    {
-        return;
-    }
-    conversation_->clearMessages();
 
-    std::vector<team::ui::TeamChatLogEntry> entries;
-    if (team::ui::team_ui_chatlog_load_recent(snap.team_id, 50, entries))
+    const auto snapshot = team_chat_model_.snapshot();
+    if (snapshot.header.valid)
     {
-        for (const auto& entry : entries)
-        {
-            chat::ChatMessage msg;
-            msg.protocol = chat_support::active_mesh_protocol();
-            msg.channel = chat::ChannelId::PRIMARY;
-            msg.peer = 0;
-            msg.from = entry.incoming ? entry.peer_id : 0;
-            msg.timestamp = entry.ts;
-            msg.text = format_team_chat_entry(entry);
-            if (entry.type == team::proto::TeamChatType::Location)
-            {
-                team::proto::TeamChatLocation loc;
-                if (team::proto::decodeTeamChatLocation(entry.payload.data(),
-                                                        entry.payload.size(),
-                                                        &loc))
-                {
-                    if (team::proto::team_location_marker_icon_is_valid(loc.source))
-                    {
-                        msg.team_location_icon = loc.source;
-                    }
-                    msg.has_geo = true;
-                    msg.geo_lat_e7 = loc.lat_e7;
-                    msg.geo_lon_e7 = loc.lon_e7;
-                }
-            }
-            msg.status = entry.incoming ? chat::MessageStatus::Incoming : chat::MessageStatus::Sent;
-            conversation_->addMessage(msg);
-        }
+        applySnapshotMessagesToConversation(snapshot, *conversation_);
     }
-    conversation_->scrollToBottom();
 }
 
 void UiController::startTeamConversationTimer()
@@ -2120,46 +2143,10 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
 
     if (team_conv_active_)
     {
-        team::ui::TeamUiSnapshot snap;
-        if (!team::ui::team_ui_get_store().load(snap) || !snap.has_team_id)
-        {
-            ::ui::SystemNotification::show("Team chat send failed", 2000);
-            switchToConversation(current_conv_);
-            return;
-        }
-        team::TeamController* controller = app::teamFacade().getTeamController();
-        if (!controller)
-        {
-            ::ui::SystemNotification::show("Team chat send failed", 2000);
-            switchToConversation(current_conv_);
-            return;
-        }
-        if (!snap.has_team_psk)
-        {
-            ::ui::SystemNotification::show("Team keys not ready", 2000);
-            switchToConversation(current_conv_);
-            return;
-        }
-        if (!controller->setKeysFromPsk(snap.team_id,
-                                        snap.security_round,
-                                        snap.team_psk.data(),
-                                        snap.team_psk.size()))
-        {
-            ::ui::SystemNotification::show("Team keys not ready", 2000);
-            switchToConversation(current_conv_);
-            return;
-        }
-
         if (intent == ChatComposeScreen::ActionIntent::Position)
         {
             openTeamPositionPicker();
             return;
-        }
-
-        uint32_t ts = sys::epoch_seconds_now();
-        if (ts < kMinValidEpochSeconds)
-        {
-            ts = static_cast<uint32_t>(sys::millis_now() / 1000U);
         }
 
         std::string text = compose_->getText();
@@ -2168,29 +2155,11 @@ void UiController::handleComposeAction(ChatComposeScreen::ActionIntent intent)
             switchToConversation(current_conv_);
             return;
         }
-        team::proto::TeamChatMessage msg;
-        msg.header.type = team::proto::TeamChatType::Text;
-        msg.header.ts = ts;
-        msg.header.msg_id = s_team_msg_id++;
-        if (s_team_msg_id == 0)
+        const ::ui::UiActionResult result =
+            team_chat_model_.sendMessage(text.c_str());
+        if (!result.ok)
         {
-            s_team_msg_id = kTeamComposeMsgIdStart;
-        }
-        msg.payload.assign(text.begin(), text.end());
-
-        bool ok = controller->onChat(msg, chat::ChannelId::PRIMARY);
-        if (ok)
-        {
-            team::ui::team_ui_chatlog_append_structured(snap.team_id,
-                                                        0,
-                                                        false,
-                                                        ts,
-                                                        team::proto::TeamChatType::Text,
-                                                        msg.payload);
-        }
-        else
-        {
-            ::ui::SystemNotification::show("Team chat send failed", 2000);
+            showTeamSendFailure(result);
         }
         switchToConversation(current_conv_);
         return;
