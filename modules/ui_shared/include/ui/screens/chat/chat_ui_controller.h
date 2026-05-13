@@ -14,6 +14,7 @@
 #include "ui/screens/chat/chat_conversation_components.h"
 #include "ui/screens/chat/chat_message_list_components.h"
 #include "ui/widgets/ime/ime_widget.h"
+#include "ui_presentation/chat/chat_workspace_model.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -32,6 +33,7 @@ class UiController : public IChatUiRuntime
 
     UiController(lv_obj_t* parent,
                  chat::ChatService& service,
+                 ::ui::chat::ChatWorkspaceModel& chat_model,
                  chat::ChannelId initial_channel = chat::ChannelId::PRIMARY,
                  ExitRequestCallback exit_request = nullptr,
                  void* exit_request_user_data = nullptr);
@@ -54,6 +56,7 @@ class UiController : public IChatUiRuntime
   private:
     lv_obj_t* parent_;
     chat::ChatService& service_;
+    ::ui::chat::ChatWorkspaceModel& chat_model_;
     State state_;
 
     std::unique_ptr<ChatMessageListScreen> channel_list_;

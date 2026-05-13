@@ -3,8 +3,11 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "ui/app_runtime.h"
+#include "ui/presentation_sources/legacy_chat_action_sink.h"
+#include "ui/presentation_sources/legacy_chat_presentation_source.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/ui_common.h"
+#include "ui_presentation/chat/chat_workspace_model.h"
 
 #include <memory>
 
@@ -13,6 +16,9 @@ namespace
 
 const chat::ui::shell::Host* s_host = nullptr;
 lv_obj_t* s_chat_container = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource> s_chat_source = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink> s_chat_sink = nullptr;
+std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_chat_model = nullptr;
 std::unique_ptr<chat::ui::UiController> s_ui_controller = nullptr;
 
 void request_shell_exit(void*)
@@ -55,6 +61,9 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     }
     s_chat_container = nullptr;
     s_ui_controller.reset();
+    s_chat_model.reset();
+    s_chat_sink.reset();
+    s_chat_source.reset();
 
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
@@ -79,9 +88,20 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     chat::ChannelId default_channel = (app::configFacade().getConfig().chat_channel == 1)
                                           ? chat::ChannelId::SECONDARY
                                           : chat::ChannelId::PRIMARY;
+    auto& chat_service = app::messagingFacade().getChatService();
+    s_chat_source = std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource>(
+        new ::ui::presentation_sources::LegacyChatPresentationSource(
+            chat_service,
+            &app::messagingFacade().getContactService()));
+    s_chat_sink = std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink>(
+        new ::ui::presentation_sources::LegacyChatActionSink(chat_service));
+    s_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
+        new ::ui::chat::ChatWorkspaceModel(*s_chat_source, *s_chat_sink));
+
     s_ui_controller = std::unique_ptr<chat::ui::UiController>(
         new chat::ui::UiController(s_chat_container,
-                                   app::messagingFacade().getChatService(),
+                                   chat_service,
+                                   *s_chat_model,
                                    default_channel,
                                    request_shell_exit,
                                    nullptr));
@@ -102,6 +122,9 @@ void exit(lv_obj_t* parent)
 
     app::runtimeFacade().setChatUiRuntime(nullptr);
     s_ui_controller.reset();
+    s_chat_model.reset();
+    s_chat_sink.reset();
+    s_chat_source.reset();
 
     if (s_chat_container && !lv_obj_is_valid(s_chat_container))
     {

@@ -6,6 +6,7 @@
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
+#include "chat_presentation_adapters/chat_conversation_mapper.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/contact_service.h"
@@ -22,7 +23,6 @@
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/chat/chat_protocol_support.h"
-#include "ui/screens/chat/chat_send_flow.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
@@ -311,6 +311,107 @@ std::string team_title_from_snapshot(const team::ui::TeamUiSnapshot& snap)
     return ::ui::i18n::tr("Team");
 }
 
+chat::MessageStatus legacyStatusFromDelivery(::ui::chat::MessageDeliveryState delivery)
+{
+    switch (delivery)
+    {
+    case ::ui::chat::MessageDeliveryState::Received:
+        return chat::MessageStatus::Incoming;
+    case ::ui::chat::MessageDeliveryState::Queued:
+    case ::ui::chat::MessageDeliveryState::Sending:
+    case ::ui::chat::MessageDeliveryState::Draft:
+        return chat::MessageStatus::Queued;
+    case ::ui::chat::MessageDeliveryState::Sent:
+    case ::ui::chat::MessageDeliveryState::Delivered:
+        return chat::MessageStatus::Sent;
+    case ::ui::chat::MessageDeliveryState::Failed:
+        return chat::MessageStatus::Failed;
+    case ::ui::chat::MessageDeliveryState::Unknown:
+        break;
+    }
+    return chat::MessageStatus::Incoming;
+}
+
+chat::ConversationMeta legacyConversationMetaFromRow(
+    const ::ui::chat::ConversationRow& row)
+{
+    chat::ConversationMeta meta;
+    if (!chat_presentation_adapters::toCoreConversationId(row.id, meta.id))
+    {
+        return meta;
+    }
+    meta.name = row.title.c_str();
+    meta.preview = row.subtitle.c_str();
+    meta.unread = static_cast<int>(row.unread_count);
+    meta.last_timestamp = 0;
+    return meta;
+}
+
+uint32_t timestampFromTimeLabel(const ::ui::FixedText<24>& label)
+{
+    const char* text = label.c_str();
+    if (!text || text[0] == '\0')
+    {
+        return 0;
+    }
+
+    char* end = nullptr;
+    const unsigned long value = std::strtoul(text, &end, 10);
+    if (end == text || (end && *end != '\0'))
+    {
+        return 0;
+    }
+    return static_cast<uint32_t>(value);
+}
+
+chat::ChatMessage legacyMessageFromRow(const ::ui::chat::MessageRow& row)
+{
+    chat::ChatMessage msg;
+    chat::ConversationId core_id;
+    if (chat_presentation_adapters::toCoreConversationId(row.conversation, core_id))
+    {
+        msg.protocol = core_id.protocol;
+        msg.channel = core_id.channel;
+        msg.peer = core_id.peer;
+    }
+    msg.msg_id = row.ref.protocol_id != 0
+                     ? row.ref.protocol_id
+                     : static_cast<chat::MessageId>(row.ref.local_id);
+    msg.from = row.outgoing ? 0 : row.conversation.primary;
+    msg.text = row.text.c_str();
+    msg.timestamp = timestampFromTimeLabel(row.time_label);
+    msg.status = legacyStatusFromDelivery(row.delivery);
+    return msg;
+}
+
+void appendSnapshotConversationsToLegacy(const ::ui::chat::ChatWorkspaceSnapshot& snapshot,
+                                         std::vector<chat::ConversationMeta>& out)
+{
+    for (size_t i = 0; i < snapshot.conversation_count; ++i)
+    {
+        chat::ConversationId core_id;
+        if (!chat_presentation_adapters::toCoreConversationId(snapshot.conversations[i].id, core_id))
+        {
+            continue;
+        }
+        chat::ConversationMeta meta = legacyConversationMetaFromRow(snapshot.conversations[i]);
+        meta.id = core_id;
+        out.push_back(meta);
+    }
+}
+
+void applySnapshotMessagesToConversation(
+    const ::ui::chat::ChatWorkspaceSnapshot& snapshot,
+    ChatConversationScreen& conversation)
+{
+    conversation.clearMessages();
+    for (size_t i = 0; i < snapshot.message_count; ++i)
+    {
+        conversation.addMessage(legacyMessageFromRow(snapshot.messages[i]));
+    }
+    conversation.scrollToBottom();
+}
+
 void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
                                 const chat::ConversationId& conv,
                                 void* user_data)
@@ -368,8 +469,14 @@ void handle_conversation_back(void* user_data)
 }
 } // namespace
 
-UiController::UiController(lv_obj_t* parent, chat::ChatService& service, chat::ChannelId initial_channel, ExitRequestCallback exit_request, void* exit_request_user_data)
-    : parent_(parent), service_(service), state_(State::ChannelList),
+UiController::UiController(lv_obj_t* parent,
+                           chat::ChatService& service,
+                           ::ui::chat::ChatWorkspaceModel& chat_model,
+                           chat::ChannelId initial_channel,
+                           ExitRequestCallback exit_request,
+                           void* exit_request_user_data)
+    : parent_(parent), service_(service), chat_model_(chat_model),
+      state_(State::ChannelList),
       current_channel_(initial_channel),
       current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
       exit_request_(exit_request), exit_request_user_data_(exit_request_user_data)
@@ -503,7 +610,8 @@ void UiController::onChatEvent(sys::Event* event)
             {
                 (void)updateConversationViewForIncoming(*latest);
                 reloadConversationView();
-                service_.markConversationRead(current_conv_);
+                (void)chat_model_.markRead(
+                    chat_presentation_adapters::toUiConversationId(current_conv_));
             }
             else
             {
@@ -666,6 +774,10 @@ void UiController::switchToConversation(chat::ConversationId conv)
         return;
     }
 
+    const ::ui::chat::ConversationId ui_conv =
+        chat_presentation_adapters::toUiConversationId(conv);
+    (void)chat_model_.selectConversation(ui_conv);
+
     // Update header (prefer contact name, else short_name)
     std::string title = resolveConversationDisplayName(conv);
     if (conv.peer != 0)
@@ -693,14 +805,12 @@ void UiController::switchToConversation(chat::ConversationId conv)
     std::string header = "[" + std::string(protocol_short_label(conv.protocol)) + "] " + title;
     conversation_->setHeaderText(header.c_str(), nullptr);
 
-    auto messages = service_.getRecentMessages(conv, 50);
-    conversation_->clearMessages();
-    for (const auto& msg : messages)
+    const auto snapshot = chat_model_.snapshot();
+    if (snapshot.header.valid)
     {
-        conversation_->addMessage(msg);
+        applySnapshotMessagesToConversation(snapshot, *conversation_);
     }
-    conversation_->scrollToBottom();
-    service_.markConversationRead(conv);
+    (void)chat_model_.markRead(ui_conv);
 }
 
 void UiController::switchToCompose(chat::ConversationId conv)
@@ -727,6 +837,12 @@ void UiController::switchToCompose(chat::ConversationId conv)
     current_channel_ = conv.channel;
     current_conv_ = conv;
     team_conv_active_ = is_team_conv;
+
+    if (!is_team_conv)
+    {
+        (void)chat_model_.selectConversation(
+            chat_presentation_adapters::toUiConversationId(conv));
+    }
 
     stopTeamConversationTimer();
     CHAT_UI_LOG("[UiController] switchToCompose: parent=%p active=%p sleeping=%d conv_peer=%08lX\n",
@@ -826,10 +942,6 @@ void UiController::switchToCompose(chat::ConversationId conv)
 void UiController::handleChannelSelected(const chat::ConversationId& conv)
 {
     switchToConversation(conv);
-    if (!isTeamConversation(conv))
-    {
-        service_.switchChannel(conv.channel);
-    }
 }
 
 void UiController::handleSendMessage(const std::string& text)
@@ -847,12 +959,21 @@ void UiController::handleSendMessage(const std::string& text)
         ::ui::SystemNotification::show(chat_support::local_text_chat_unavailable_message(), 2200);
         return;
     }
-    chat::ui::send_flow::begin_local_text_send(compose_.get(),
-                                               &service_,
-                                               current_conv_,
-                                               text,
-                                               UiController::handleComposeSendDoneCallback,
-                                               this);
+    const ::ui::UiActionResult result = chat_model_.sendMessage(text.c_str());
+    if (!result.ok)
+    {
+        const char* message = "Send failed";
+        if (result.failure == ::ui::UiActionFailure::Unsupported)
+        {
+            message = "Conversation unsupported";
+        }
+        else if (result.failure == ::ui::UiActionFailure::InvalidInput)
+        {
+            message = "Message unavailable";
+        }
+        ::ui::SystemNotification::show(message, 2000);
+    }
+    handleComposeSendDone(result.ok, false);
 }
 
 void UiController::handleComposeSendDone(bool ok, bool timeout)
@@ -895,8 +1016,12 @@ void UiController::refreshUnreadCounts(const bool force_reload)
 
 void UiController::syncConversationListFromStore()
 {
-    size_t total = 0;
-    cached_conversations_ = service_.getConversations(0, 0, &total);
+    cached_conversations_.clear();
+    const auto snapshot = chat_model_.snapshot();
+    if (snapshot.header.valid)
+    {
+        appendSnapshotConversationsToLegacy(snapshot, cached_conversations_);
+    }
     normalizeConversationNames(cached_conversations_);
 
     team::ui::TeamUiSnapshot team_snap;
@@ -1050,7 +1175,7 @@ bool UiController::updateConversationViewForIncoming(const chat::ChatMessage& ms
         return false;
     }
 
-    conversation_->addMessage(msg);
+    reloadConversationView();
     return true;
 }
 
@@ -1061,13 +1186,12 @@ void UiController::reloadConversationView()
         return;
     }
 
-    auto messages = service_.getRecentMessages(current_conv_, 50);
-    conversation_->clearMessages();
-    for (const auto& msg : messages)
+    const auto snapshot = chat_model_.snapshot();
+    if (!snapshot.header.valid)
     {
-        conversation_->addMessage(msg);
+        return;
     }
-    conversation_->scrollToBottom();
+    applySnapshotMessagesToConversation(snapshot, *conversation_);
 }
 
 bool UiController::isTeamConversation(const chat::ConversationId& conv) const
