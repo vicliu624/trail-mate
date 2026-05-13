@@ -122,3 +122,26 @@ Board manifest updated: yes/no/not applicable
 Runtime/concurrency impact:
 Known boundary exceptions:
 ```
+
+## Phase 4.5 Exit Gate
+
+Before starting Phase 5 PresentationModel/UI shell work, run:
+
+```text
+python tools/architecture/check_phase45_ready.py
+```
+
+This gate is narrower than the non-blocking global boundary report. It must
+pass before Phase 5 because it checks that:
+
+- target manifests name `core_phone` and `core_mesh`;
+- `core_phone` no longer exposes `ChatService`, `ContactService`,
+  `IMeshAdapter`, or `INodeStore` as phone-core dependencies;
+- `core_mesh` has no platform SDK, board, BLE, or UI includes;
+- Phase 4.5 core mesh/phone/GPS test files exist;
+- at least one actual ESP Meshtastic send path enters `MeshSession` and
+  `DirectMessageService`;
+- at least one actual ESP Meshtastic receive path enters
+  `ReceivePacketService`;
+- remaining Mesh/GPS/BLE exceptions are explicit burn-down items in
+  `tools/architecture/KNOWN_PRODUCT_ARCHITECTURE_VIOLATIONS.md`.
