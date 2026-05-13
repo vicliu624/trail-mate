@@ -259,6 +259,18 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_presentation_workspace_ascii_probe
              COMMAND trailmate_presentation_workspace_ascii_probe)
 
+    add_executable(trailmate_product_composition_bundle_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/tests/test_presentation_bundle_shape.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+    )
+    target_include_directories(trailmate_product_composition_bundle_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    add_test(NAME trailmate_product_composition_bundle_smoke
+             COMMAND trailmate_product_composition_bundle_smoke)
+
     add_executable(trailmate_chat_presentation_mapper_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/tests/test_chat_conversation_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
