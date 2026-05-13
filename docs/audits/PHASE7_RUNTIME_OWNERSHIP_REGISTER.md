@@ -18,7 +18,7 @@ has direct user-visible consequences and a bounded migration path.
 | radio send failure projection | in progress | 7.1 | structured failure kind exists |
 | Chat retry/cancel actions | future | 7.x | not implemented in 7.1 |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
-| Team location/command delivery | future | later phase | rich payload semantics remain separate |
+| Team location/command action ownership | in progress | 7.2 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; rich rendering remains future |
 | key verification UI | future | later phase | not delivery read model ownership |
 | GPS page timers/tasks | future | later phase | runtime scheduling owner still legacy |
 
@@ -53,3 +53,26 @@ Phase 7.1 does not fully clean:
 - retry/cancel commands
 
 These are not blockers because the delivery ownership boundary is now explicit.
+
+## Phase 7.2 Decision
+
+Team location and command sends are action/runtime ownership.
+
+They are not owned by:
+
+- `ChatWorkspaceModel`
+- renderer widgets
+- `ChatUiController` payload encoding
+- `ui_presentation`
+
+Phase 7.2 introduces:
+
+- `TeamActionRequest`
+- `ITeamActionSink`
+- `ITeamLocationSource`
+- `LegacyTeamActionBridge`
+- Chat UI submission of location marker intent through the Team action sink
+
+Team text remains on the existing `TeamChatActionSink` /
+`team_chat_model_.sendMessage(...)` path. Rich Team payload rendering remains
+future work.

@@ -37,6 +37,8 @@ def check_required_files() -> int:
     required = [
         "docs/audits/CHAT_DELIVERY_OWNERSHIP_AUDIT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
+        "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
+        "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
         "modules/core_chat/include/chat/delivery/chat_delivery_types.h",
         "modules/core_chat/include/chat/delivery/chat_delivery_read_model.h",
@@ -48,6 +50,12 @@ def check_required_files() -> int:
         "modules/core_chat/tests/test_chat_delivery_read_model.cpp",
         "modules/core_chat/tests/test_chat_delivery_event_projector.cpp",
         "modules/core_chat/tests/test_legacy_chat_delivery_bridge.cpp",
+        "modules/ui_shared/include/ui/team_actions/team_action_types.h",
+        "modules/ui_shared/include/ui/team_actions/team_action_sink.h",
+        "modules/ui_shared/include/ui/team_actions/legacy_team_action_bridge.h",
+        "modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp",
+        "modules/ui_shared/tests/test_team_action_types.cpp",
+        "modules/ui_shared/tests/test_legacy_team_action_bridge.cpp",
         "tools/architecture/check_phase7_runtime_ownership_ready.py",
     ]
 
@@ -78,6 +86,23 @@ def check_docs() -> int:
             "runtime state",
             "not owned by",
             "composition-root ownership",
+            "Team location/command action ownership",
+            "LegacyTeamActionBridge",
+        ],
+        "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md": [
+            "Team actions are command ownership",
+            "Renderer/controller code may collect user input",
+            "must not",
+            "encode Team payloads",
+            "LegacyTeamActionBridge",
+        ],
+        "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md": [
+            "Team action payload encoding belongs to Team action/runtime adapters",
+            "TeamActionRequest",
+            "ITeamActionSink",
+            "ITeamLocationSource",
+            "LegacyTeamActionBridge",
+            "Phase 7.2 does not turn Team into DirectPeer or Channel chat",
         ],
     }
 
@@ -270,6 +295,191 @@ def check_ui_presentation_and_renderers_do_not_own_delivery() -> int:
     return failures
 
 
+def check_team_action_type_shape() -> int:
+    failures = 0
+
+    types = "modules/ui_shared/include/ui/team_actions/team_action_types.h"
+    if exists(types):
+        text = read_text(types)
+        for token in [
+            "enum class TeamActionKind",
+            "LocationMarker",
+            "Command",
+            "enum class TeamCommandKind",
+            "TeamLocationMarkerRequest",
+            "use_current_location",
+            "TeamLocationSnapshot",
+            "TeamCommandRequest",
+            "TeamActionRequest",
+        ]:
+            if token not in text:
+                failures += fail(f"Team action types missing token: {token}")
+        for token in ["lv_obj_t", "lvgl.h", "TeamChatMessage", "DirectPeer"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"TeamActionRequest contains forbidden token: {token}")
+
+    sink = "modules/ui_shared/include/ui/team_actions/team_action_sink.h"
+    if exists(sink):
+        text = read_text(sink)
+        for token in ["ITeamActionSink", "sendTeamAction", "ITeamLocationSource", "currentTeamLocation"]:
+            if token not in text:
+                failures += fail(f"Team action sink missing token: {token}")
+        for token in ["ChatWorkspaceModel", "lvgl.h", "LegacyChatActionSink"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"Team action sink contains forbidden token: {token}")
+
+    return failures
+
+
+def check_team_action_bridge_boundary() -> int:
+    failures = 0
+    bridge_files = [
+        "modules/ui_shared/include/ui/team_actions/legacy_team_action_bridge.h",
+        "modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp",
+    ]
+
+    for path in bridge_files:
+        if not exists(path):
+            failures += fail(f"missing Team action bridge file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "lvgl.h",
+            "lv_obj_t",
+            "LegacyChatActionSink",
+            "DirectPeer",
+            "ConversationKind::Direct",
+            "ConversationKind::Channel",
+            "ChatWorkspaceModel",
+            "MapWorkspaceModel",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden Team action token: {token}")
+
+    source = "modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp"
+    if exists(source):
+        text = read_text(source)
+        for token in [
+            "ITeamLocationSource",
+            "currentTeamLocation",
+            "encodeTeamChatLocation",
+            "encodeTeamChatCommand",
+            "team_ui_chatlog_append_structured",
+            "sendTeamChat",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyTeamActionBridge source missing token: {token}")
+
+    return failures
+
+
+def _function_body(text: str, start_marker: str, end_marker: str) -> str:
+    start = text.find(start_marker)
+    if start < 0:
+        return ""
+    end = text.find(end_marker, start)
+    if end < 0:
+        return text[start:]
+    return text[start:end]
+
+
+def check_chat_ui_team_action_migration() -> int:
+    failures = 0
+    header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
+    source = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+
+    if exists(header):
+        text = read_text(header)
+        for token in ["ITeamActionSink", "team_action_sink_"]:
+            if token not in text:
+                failures += fail(f"ChatUiController header missing Team action token: {token}")
+    else:
+        failures += fail("ChatUiController header is missing")
+
+    if exists(source):
+        text = read_text(source)
+        for token in [
+            "TeamActionRequest",
+            "TeamActionKind::LocationMarker",
+            "sendTeamAction",
+            "team_chat_model_.sendMessage",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatUiController source missing Team action token: {token}")
+        for token in [
+            '#include "platform/ui/gps_runtime.h"',
+            '#include "team/usecase/team_controller.h"',
+        ]:
+            if token in text:
+                failures += fail(f"ChatUiController source reintroduced runtime include: {token}")
+
+        body = strip_cpp_comments(
+            _function_body(
+                text,
+                "bool UiController::sendTeamLocationWithIcon",
+                "void UiController::onTeamPositionIconSelected",
+            )
+        )
+        if not body:
+            failures += fail("ChatUiController sendTeamLocationWithIcon body missing")
+        else:
+            for token in [
+                "encodeTeamChatLocation",
+                "TeamChatMessage",
+                "TeamChatLocation",
+                "team_ui_chatlog_append_structured",
+                "controller->onChat",
+                "setKeysFromPsk",
+                "platform::ui::gps::get_data",
+                "app::teamFacade",
+                "team_ui_get_store",
+                "TeamController",
+            ]:
+                if token in body:
+                    failures += fail(
+                        f"ChatUiController location send still owns Team runtime token: {token}"
+                    )
+    else:
+        failures += fail("ChatUiController source is missing")
+
+    return failures
+
+
+def check_chat_runtime_wires_team_action_sink() -> int:
+    failures = 0
+    path = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
+    if not exists(path):
+        failures += fail("chat_page_runtime.cpp is missing")
+        return failures
+
+    text = read_text(path)
+    for token in [
+        "LegacyTeamActionBridge",
+        "GpsTeamLocationSource",
+        "s_team_action_sink",
+        "s_team_location_source",
+        "s_team_action_sink.get()",
+        "platform/ui/gps_runtime.h",
+    ]:
+        if token not in text:
+            failures += fail(f"chat_page_runtime.cpp missing Team action wiring token: {token}")
+    return failures
+
+
+def check_ui_presentation_does_not_own_team_actions() -> int:
+    failures = 0
+    for path in iter_code_files(
+        ROOT / "modules/ui_presentation/include",
+        ROOT / "modules/ui_presentation/src",
+    ):
+        text = strip_cpp_comments(path.read_text(encoding="utf-8", errors="ignore"))
+        if "team_actions" in text or "TeamActionRequest" in text:
+            failures += fail(
+                f"{path.relative_to(ROOT)} imports Team action runtime"
+            )
+    return failures
+
+
 def main() -> int:
     failures = 0
     failures += check_required_files()
@@ -279,6 +489,11 @@ def main() -> int:
     failures += check_presentation_source_enrichment()
     failures += check_composition_roots_own_delivery()
     failures += check_ui_presentation_and_renderers_do_not_own_delivery()
+    failures += check_team_action_type_shape()
+    failures += check_team_action_bridge_boundary()
+    failures += check_chat_ui_team_action_migration()
+    failures += check_chat_runtime_wires_team_action_sink()
+    failures += check_ui_presentation_does_not_own_team_actions()
 
     if failures == 0:
         print("[phase7-runtime-ready] OK")
