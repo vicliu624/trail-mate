@@ -120,6 +120,34 @@ ChatWorkspaceModel::markRead(...)
 token back to `core_chat` identity, `MeshSession`, or legacy send behavior
 belongs to the Source/Sink adapter layer, not to `ui_presentation`.
 
+## Source/Sink Adapter Contract
+
+Chat presentation adapters are the first layer allowed to touch real chat
+services. A Source may read `ChatService`, `ContactService`, `TeamService`, and
+mapper adapters to build `ChatWorkspaceSnapshot`. An ActionSink may translate
+`SendMessageView`, `selectConversation`, and `markRead` into app service
+commands.
+
+The read and write sides stay separate:
+
+```text
+ChatService / ContactService / TeamService
+    -> IChatPresentationSource
+        -> ChatWorkspaceSnapshot
+
+SendMessageView / ConversationId action
+    -> IChatActionSink
+        -> ChatService / MeshSession / TeamService
+```
+
+Source adapters must not send messages or mutate renderer state. ActionSink
+adapters must not build snapshots or format row labels. Renderer code must not
+call these services directly.
+
+The initial legacy sink supports `DirectPeer` and `Channel` conversations.
+`Team`, `Broadcast`, and `System` return `Unsupported` until their semantics are
+explicitly mapped in later phases.
+
 ## Non-Goals
 
 Phase 5.6 does not connect LVGL chat pages, does not change team chat behavior,

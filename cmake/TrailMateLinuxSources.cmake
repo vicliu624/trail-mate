@@ -79,6 +79,12 @@ function(_trailmate_set_linux_paths)
     set(TRAIL_MATE_UI_PRESENTATION_SRC_ROOT
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src"
         PARENT_SCOPE)
+    set(TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/include"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_SRC_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src"
+        PARENT_SCOPE)
     set(TRAIL_MATE_PLATFORM_SHARED_INCLUDE_ROOT
         "${TRAIL_MATE_REPO_ROOT}/platform/shared/include"
         PARENT_SCOPE)
@@ -222,6 +228,10 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+    # modules/chat_presentation_adapters
+    "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_SRC_ROOT}/chat_conversation_mapper.cpp"
+    "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_SRC_ROOT}/chat_message_mapper.cpp"
 )
 
 set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
@@ -262,6 +272,8 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_mesh_status_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_settings_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_settings_action_sink.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_presentation_source.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/fonts/font_utils.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/info_card.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/two_pane_layout.cpp"
@@ -377,6 +389,7 @@ set(TRAIL_MATE_LINUX_COMMON_INCLUDES
     "${TRAIL_MATE_CORE_MESH_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_PHONE_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_TEAM_INCLUDE_ROOT}"
+    "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_PRESENTATION_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_SHARED_INCLUDE_ROOT}"
 )
@@ -392,6 +405,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_INCLUDES
     "${TRAIL_MATE_CORE_SYS_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_DEVICE_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_PHONE_INCLUDE_ROOT}"
+    "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_PRESENTATION_INCLUDE_ROOT}"
     "${TRAIL_MATE_PLATFORM_SHARED_INCLUDE_ROOT}"
 )

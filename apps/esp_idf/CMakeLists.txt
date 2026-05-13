@@ -32,6 +32,9 @@ file(GLOB_RECURSE trail_mate_idf_external_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*/*.c
     ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*/*.cc
     ${CMAKE_SOURCE_DIR}/modules/ui_presentation/src/*/*.cpp
+    ${CMAKE_SOURCE_DIR}/modules/chat_presentation_adapters/src/*.c
+    ${CMAKE_SOURCE_DIR}/modules/chat_presentation_adapters/src/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/chat_presentation_adapters/src/*.cpp
     ${CMAKE_SOURCE_DIR}/modules/core_chat/src/*.c
     ${CMAKE_SOURCE_DIR}/modules/core_chat/src/*.cc
     ${CMAKE_SOURCE_DIR}/modules/core_chat/src/*.cpp
@@ -124,6 +127,8 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_mesh_status_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_settings_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_settings_action_sink.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/info_card.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
@@ -245,6 +250,7 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/modules/core_mesh/include"
     "${CMAKE_SOURCE_DIR}/modules/core_phone/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_presentation/include"
+    "${CMAKE_SOURCE_DIR}/modules/chat_presentation_adapters/include"
     "${CMAKE_SOURCE_DIR}/modules/core_sys/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/include"
     "${CMAKE_SOURCE_DIR}/modules/core_chat/generated"

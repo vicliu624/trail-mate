@@ -17,6 +17,8 @@
                                 "-I../../modules/core_gps/include",
                                 "-I../../modules/core_hostlink/include",
                                 "-I../../modules/core_team/include",
+                                "-I../../modules/ui_presentation/include",
+                                "-I../../modules/chat_presentation_adapters/include",
                                 "-I../../platform/esp/common/include"
                             ]
               },
@@ -29,6 +31,9 @@
                          },
                          {
                              "name":  "core_phone"
+                         },
+                         {
+                             "name":  "chat_presentation_adapters"
                          },
                          {
                              "name":  "esp_arduino_common"

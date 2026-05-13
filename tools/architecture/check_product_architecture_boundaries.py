@@ -179,6 +179,29 @@ RULES = (
         ),
     ),
     Rule(
+        name="chat-presentation-source-sink-adapters-must-not-touch-renderer-or-radio",
+        roots=("modules/ui_shared", "platform"),
+        path_contains=("/presentation_sources/", "\\presentation_sources\\"),
+        path_regex=re.compile(r".*chat.*\.(c|cc|cpp|cxx|h|hh|hpp)$", re.IGNORECASE),
+        patterns=compile_patterns(
+            (
+                r"#include\s*[<\"]lvgl\.h[>\"]",
+                r"#include\s*[<\"]gtk/",
+                r"#include\s*[<\"]sqlite3\.h[>\"]",
+                r"#include\s*[<\"]Preferences[>\"]",
+                r"#include\s*[<\"]RadioLib",
+                r"#include\s*[<\"]Arduino\.h[>\"]",
+                r"#include\s*[<\"]board/",
+                r"#include\s*[<\"]boards/",
+                r"\blv_obj_t\b",
+                r"\bGtkWidget\b",
+                r"\bIPacketRadio\b",
+                r"\bDirectMessageService\b",
+                r"\bPeerIdentityService\b",
+            )
+        ),
+    ),
+    Rule(
         name="platform-ble-must-not-own-phone-protocol",
         roots=("platform",),
         path_contains=("/ble/", "\\ble\\"),

@@ -1,0 +1,17 @@
+{
+  "name": "chat_presentation_adapters",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-I../core_chat/include",
+      "-I../ui_presentation/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "core_chat"
+    }
+  ]
+}

@@ -22,6 +22,8 @@
       "-I../../modules/core_gps/include",
       "-I../../modules/ui_mono_128x64/include",
       "-I../../modules/ui_shared/include",
+      "-I../../modules/ui_presentation/include",
+      "-I../../modules/chat_presentation_adapters/include",
       "-I../../platform/nrf52/arduino_common/include",
       "-I../.."
     ]
@@ -32,6 +34,9 @@
     },
     {
       "name": "core_mesh"
+    },
+    {
+      "name": "chat_presentation_adapters"
     },
     {
       "name": "platform_nrf52_arduino_common"
