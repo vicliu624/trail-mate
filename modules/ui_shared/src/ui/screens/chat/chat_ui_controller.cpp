@@ -1997,7 +1997,8 @@ void UiController::onTeamPositionCancel()
 bool UiController::sendTeamLocationWithIcon(uint8_t icon_id)
 {
     // Legacy team path. Team send semantics are intentionally not routed
-    // through LegacyChatActionSink until TeamChatActionSink is defined.
+    // through LegacyChatActionSink. TeamChatActionSink currently owns text
+    // only; location/command actions need a dedicated Team action contract.
     if (!team::proto::team_location_marker_icon_is_valid(icon_id))
     {
         ::ui::SystemNotification::show("Invalid marker", 1500);

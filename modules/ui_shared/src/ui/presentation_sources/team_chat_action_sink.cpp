@@ -3,7 +3,6 @@
 #include "platform/ui/team_ui_store_runtime.h"
 #include "sys/clock.h"
 #include "team/protocol/team_chat.h"
-#include "team/usecase/team_controller.h"
 
 #include <string>
 
@@ -33,10 +32,10 @@ uint32_t currentTimestamp()
 } // namespace
 
 TeamChatActionSink::TeamChatActionSink(::team::ui::ITeamUiStore& team_store,
-                                       ::team::TeamController* team_controller,
+                                       ITeamChatCommandPort* command_port,
                                        uint8_t team_channel_raw)
     : team_store_(team_store),
-      team_controller_(team_controller),
+      command_port_(command_port),
       team_channel_raw_(team_channel_raw)
 {
 }
@@ -74,14 +73,14 @@ ui::UiActionResult TeamChatActionSink::sendMessage(
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::NotReady);
     }
-    if (team_controller_ == nullptr || !snap.has_team_psk)
+    if (command_port_ == nullptr || !snap.has_team_psk)
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::NotReady);
     }
-    if (!team_controller_->setKeysFromPsk(snap.team_id,
-                                          snap.security_round,
-                                          snap.team_psk.data(),
-                                          snap.team_psk.size()))
+    if (!command_port_->setKeysFromPsk(snap.team_id,
+                                       snap.security_round,
+                                       snap.team_psk.data(),
+                                       snap.team_psk.size()))
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::NotReady);
     }
@@ -99,9 +98,8 @@ ui::UiActionResult TeamChatActionSink::sendMessage(
     }
     team_message.payload.assign(text.begin(), text.end());
 
-    const bool sent = team_controller_->onChat(
-        team_message,
-        static_cast<::chat::ChannelId>(team_channel_raw_));
+    const bool sent = command_port_->sendTeamChat(team_message,
+                                                  team_channel_raw_);
     if (!sent)
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::Rejected);

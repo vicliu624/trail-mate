@@ -25,20 +25,21 @@ Current Team chat UI reads from:
 Current owner:
 
 ```text
-ChatUiController legacy team path
+Team bounded presentation context, with remaining ChatUiController legacy flows
 ```
 
-Current functions include:
+Phase 5.6-f migrated:
 
-- team title resolution
-- team conversation refresh
-- team unread clearing
-- team text rendering
+- Team text projection migrated to `TeamChatPresentationSource`
+- Team text send migrated to `TeamChatActionSink`
+
+Remaining legacy functions include:
+
 - team location rendering
 - team command rendering
 - team position picker
 - send team location marker
-- team compose path
+- richer Team message payload UI
 
 ## Target Presentation Identity
 
@@ -53,19 +54,13 @@ Team conversation must not be converted through `toCoreConversationId`.
 
 ## Target Read Side
 
-Introduce later:
+Phase 5.6-f introduced:
 
 ```text
 TeamChatPresentationSource
 ```
 
-or:
-
-```text
-LegacyTeamChatPresentationSource
-```
-
-It will project:
+It projects:
 
 - team text entries
 - team location entries
@@ -77,17 +72,23 @@ It will project:
 
 ## Target Write Side
 
-Introduce later:
+Phase 5.6-f introduced:
 
 ```text
 TeamChatActionSink
 ```
 
-It will handle:
+It handles:
 
 - send team text
+
+It does not yet handle:
+
 - send team location marker
 - send team command
+
+Those remain bounded legacy/future work until their action contract and richer
+payload UI are defined.
 
 ## Non-Goals Before 5.6-f
 
@@ -116,3 +117,12 @@ This is a bounded presentation context.
 Team chat and Direct/Channel chat can share UI appearance,
 but they do not share business identity or send semantics.
 ```
+
+## Phase 5.6-f Status
+
+The generic chat path remains DirectPeer/Channel focused. Team text now has its
+own read adapter, command sink, and `ChatWorkspaceModel` instance.
+
+Location and command entries are read-side textual projections only. Their
+picker/send actions remain legacy-owned and must not be routed through
+`LegacyChatActionSink`, `toCoreConversationId`, or direct/channel send paths.

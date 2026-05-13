@@ -204,7 +204,10 @@ Remaining legacy ownership:
 - `ChatUiController` still owns LVGL state machine.
 - `ChatUiController` still depends on `ChatService` for event processing and
   compatibility flows.
-- Team chat remains legacy-owned.
+- Team text projection migrated to `TeamChatPresentationSource`.
+- Team text send migrated to `TeamChatActionSink`.
+- Team location/command picker remains legacy-owned.
+- Team richer payload UI remains future work.
 - Key verification remains legacy-owned.
 - Team position picker remains legacy-owned.
 - Conversation list cache remains legacy-owned.
@@ -213,7 +216,8 @@ Remaining legacy ownership:
 Rules:
 
 - New non-team chat presentation should use `ChatWorkspaceModel`.
-- Team chat must be migrated through a dedicated TeamChatPresentation phase.
+- New Team text presentation should use the dedicated Team ChatWorkspaceModel
+  backed by `TeamChatPresentationSource` and `TeamChatActionSink`.
 - Renderer must not infer pending/failure state.
 
 ## Operating Rule

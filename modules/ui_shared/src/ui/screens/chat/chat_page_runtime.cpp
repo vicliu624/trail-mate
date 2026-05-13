@@ -11,6 +11,7 @@
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/ui_common.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
+#include "team/usecase/team_controller.h"
 
 #include <memory>
 
@@ -23,9 +24,39 @@ std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource> s_chat
 std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink> s_chat_sink = nullptr;
 std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_chat_model = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource> s_team_chat_source = nullptr;
+std::unique_ptr<::ui::presentation_sources::ITeamChatCommandPort> s_team_chat_command_port = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatActionSink> s_team_chat_sink = nullptr;
 std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_team_chat_model = nullptr;
 std::unique_ptr<chat::ui::UiController> s_ui_controller = nullptr;
+
+class TeamControllerChatCommandPort final
+    : public ::ui::presentation_sources::ITeamChatCommandPort
+{
+  public:
+    explicit TeamControllerChatCommandPort(::team::TeamController& controller)
+        : controller_(controller)
+    {
+    }
+
+    bool setKeysFromPsk(const ::team::TeamId& team_id,
+                        uint32_t key_id,
+                        const uint8_t* psk,
+                        size_t psk_len) override
+    {
+        return controller_.setKeysFromPsk(team_id, key_id, psk, psk_len);
+    }
+
+    bool sendTeamChat(const ::team::proto::TeamChatMessage& message,
+                      uint8_t team_channel_raw) override
+    {
+        return controller_.onChat(
+            message,
+            static_cast<::chat::ChannelId>(team_channel_raw));
+    }
+
+  private:
+    ::team::TeamController& controller_;
+};
 
 void request_shell_exit(void*)
 {
@@ -69,6 +100,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_ui_controller.reset();
     s_team_chat_model.reset();
     s_team_chat_sink.reset();
+    s_team_chat_command_port.reset();
     s_team_chat_source.reset();
     s_chat_model.reset();
     s_chat_sink.reset();
@@ -110,11 +142,17 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource>(
             new ::ui::presentation_sources::TeamChatPresentationSource(
                 team::ui::team_ui_get_store()));
+    if (auto* team_controller = app::teamFacade().getTeamController())
+    {
+        s_team_chat_command_port =
+            std::unique_ptr<::ui::presentation_sources::ITeamChatCommandPort>(
+                new TeamControllerChatCommandPort(*team_controller));
+    }
     s_team_chat_sink =
         std::unique_ptr<::ui::presentation_sources::TeamChatActionSink>(
             new ::ui::presentation_sources::TeamChatActionSink(
                 team::ui::team_ui_get_store(),
-                app::teamFacade().getTeamController()));
+                s_team_chat_command_port.get()));
     s_team_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
         new ::ui::chat::ChatWorkspaceModel(*s_team_chat_source, *s_team_chat_sink));
 
@@ -145,6 +183,7 @@ void exit(lv_obj_t* parent)
     s_ui_controller.reset();
     s_team_chat_model.reset();
     s_team_chat_sink.reset();
+    s_team_chat_command_port.reset();
     s_team_chat_source.reset();
     s_chat_model.reset();
     s_chat_sink.reset();

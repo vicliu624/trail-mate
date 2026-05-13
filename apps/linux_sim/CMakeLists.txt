@@ -218,6 +218,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_message_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/chat_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/contact_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/domain/chat_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/store/ram_store.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
@@ -231,6 +232,42 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
     add_test(NAME trailmate_legacy_chat_presentation_adapters_smoke
              COMMAND trailmate_legacy_chat_presentation_adapters_smoke)
+
+    add_executable(trailmate_team_chat_presentation_source_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_team_chat_presentation_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/team_ui_store_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/protocol/team_chat.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/protocol/team_location_marker.cpp"
+    )
+    target_include_directories(trailmate_team_chat_presentation_source_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include"
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include")
+    add_test(NAME trailmate_team_chat_presentation_source_smoke
+             COMMAND trailmate_team_chat_presentation_source_smoke)
+
+    add_executable(trailmate_team_chat_action_sink_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_team_chat_action_sink.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/team_ui_store_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/protocol/team_chat.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
+    )
+    target_include_directories(trailmate_team_chat_action_sink_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include"
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include")
+    add_test(NAME trailmate_team_chat_action_sink_smoke
+             COMMAND trailmate_team_chat_action_sink_smoke)
 
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"

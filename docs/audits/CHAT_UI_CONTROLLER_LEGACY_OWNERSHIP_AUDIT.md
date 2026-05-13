@@ -9,7 +9,7 @@ It owns more than rendering:
 - LVGL screen state machine
 - chat event handling
 - `ChatService` processIncoming / flushStore calls
-- Team chat path
+- Team location/command legacy path
 - key verification modal
 - team position picker
 - conversation cache
@@ -25,13 +25,16 @@ Migrated surfaces:
 - non-team conversation message view can be populated from `ChatWorkspaceSnapshot`
 - non-team send action calls `ChatWorkspaceModel::sendMessage`
 - mark read can call `ChatWorkspaceModel::markRead`
+- Team text projection calls the dedicated Team `ChatWorkspaceModel`
+- Team text send calls `TeamChatActionSink` through the dedicated Team
+  `ChatWorkspaceModel`
 
 ## Remaining Legacy Ownership
 
 The following remain legacy-owned:
 
-- Team conversation projection
-- Team text/location/command send
+- Team location/command send
+- richer Team location/command payload UI
 - key verification modal
 - direct event bus handling
 - conversation list cache

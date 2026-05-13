@@ -274,6 +274,8 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_settings_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_presentation_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_action_sink.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_presentation_source.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/fonts/font_utils.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/info_card.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/two_pane_layout.cpp"

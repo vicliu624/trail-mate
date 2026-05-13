@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +28,11 @@ def iter_code_files(*roots: Path):
                 yield path
 
 
+def strip_cpp_comments(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    return re.sub(r"//.*", "", text)
+
+
 def check_required_files() -> int:
     required = [
         "docs/specification/CHAT_PRESENTATION_IDENTITY_SPEC.md",
@@ -37,6 +43,12 @@ def check_required_files() -> int:
         "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_model.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_presentation_source.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_action_sink.h",
+        "modules/ui_shared/include/ui/presentation_sources/team_chat_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/team_chat_action_sink.h",
+        "modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp",
+        "modules/ui_shared/tests/test_team_chat_presentation_source.cpp",
+        "modules/ui_shared/tests/test_team_chat_action_sink.cpp",
         "modules/chat_presentation_adapters/include/chat_presentation_adapters/chat_conversation_mapper.h",
     ]
 
@@ -161,6 +173,77 @@ def check_chat_presentation_sources_are_bounded() -> int:
     return failures
 
 
+def check_team_chat_presentation_context() -> int:
+    failures = 0
+
+    team_paths = [
+        "modules/ui_shared/include/ui/presentation_sources/team_chat_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/team_chat_action_sink.h",
+        "modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp",
+    ]
+
+    forbidden_tokens = [
+        "toCoreConversationId",
+        "LegacyChatActionSink",
+        "#include \"chat/domain/chat_types.h\"",
+        "#include <chat/domain/chat_types.h>",
+        "sendDirect",
+        "IMeshAdapter",
+        "MeshSession",
+        "lvgl.h",
+        "gtk/",
+    ]
+    forbidden_patterns = [
+        r"(?<!ui::)chat::ConversationId",
+    ]
+
+    for path in team_paths:
+        if not exists(path):
+            continue
+        text = read_text(path)
+        code_text = strip_cpp_comments(text)
+        if "ConversationKind::Team" not in text:
+            failures += fail(f"{path} does not explicitly use ConversationKind::Team")
+        for token in forbidden_tokens:
+            if token in code_text:
+                failures += fail(
+                    f"{path} contains forbidden Team presentation token {token}"
+                )
+        for pattern in forbidden_patterns:
+            if re.search(pattern, code_text):
+                failures += fail(
+                    f"{path} contains forbidden Team presentation pattern {pattern}"
+                )
+
+    source = "modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp"
+    if exists(source):
+        text = read_text(source)
+        for token in ["TeamChatType::Text", "TeamChatType::Location", "TeamChatType::Command"]:
+            if token not in text:
+                failures += fail(f"TeamChatPresentationSource missing projection token {token}")
+
+    sink = "modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp"
+    if exists(sink):
+        text = read_text(sink)
+        if "ITeamChatCommandPort" not in text:
+            failures += fail("TeamChatActionSink does not use ITeamChatCommandPort")
+        if "team_ui_chatlog_append_structured" not in text:
+            failures += fail("TeamChatActionSink does not append outgoing Team text projection")
+
+    audit = "docs/audits/TEAM_CHAT_PRESENTATION_AUDIT.md"
+    if exists(audit):
+        text = read_text(audit)
+        for token in [
+            "Team text projection migrated to `TeamChatPresentationSource`",
+            "Team text send migrated to `TeamChatActionSink`",
+        ]:
+            if token not in text:
+                failures += fail(f"Team audit missing token: {token}")
+
+    return failures
+
+
 def check_chat_ui_controller_closeout() -> int:
     failures = 0
     controller = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
@@ -174,6 +257,8 @@ def check_chat_ui_controller_closeout() -> int:
             failures += fail("ChatUiController is not marked as a legacy controller")
         if "Phase 5.6-f" not in text:
             failures += fail("ChatUiController does not mark Team path for Phase 5.6-f")
+        if "team_chat_model_" not in text:
+            failures += fail("ChatUiController does not retain a dedicated team_chat_model_")
     return failures
 
 
@@ -186,7 +271,10 @@ def check_known_violations_recorded() -> int:
     required_tokens = [
         "Phase 5.6 Chat Presentation Remaining Legacy Ownership",
         "still owns LVGL state machine",
-        "Team chat remains legacy-owned",
+        "Team text projection migrated to `TeamChatPresentationSource`",
+        "Team text send migrated to `TeamChatActionSink`",
+        "Team location/command picker remains legacy-owned",
+        "Team richer payload UI remains future work",
         "Structured send failure is not yet preserved",
     ]
     failures = 0
@@ -202,6 +290,7 @@ def main() -> int:
     failures += check_ui_presentation_chat_is_portable()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
+    failures += check_team_chat_presentation_context()
     failures += check_chat_ui_controller_closeout()
     failures += check_known_violations_recorded()
 
