@@ -275,6 +275,52 @@ Rules:
 - Tile/cache/route/rich overlay cleanup must be handled in later bounded
   phases, not by expanding `MapWorkspaceModel`.
 
+### Phase 5 Final Presentation Boundary Status
+
+Status: ready-with-legacy.
+
+Phase 5 established presentation boundaries for:
+
+- Device
+- GPS
+- Mesh
+- Settings
+- Chat
+- Team Chat
+- Map
+- PresentationWorkspace
+- Renderer hardening
+
+Remaining UI legacy islands are recorded in:
+
+- `docs/audits/PHASE5_LEGACY_ISLAND_REGISTER.md`
+- `docs/audits/PHASE5_FINAL_READINESS_REPORT.md`
+- `docs/audits/PHASE5_RENDERER_HARDENING_SUMMARY.md`
+- `tools/architecture/phase5_renderer_legacy_baseline.json`
+
+These are no longer uncontrolled architecture violations. They are bounded
+legacy islands.
+
+Phase 5 final readiness is guarded by:
+
+- `tools/architecture/check_phase5_ready.py`
+- `tools/architecture/check_phase5_workspace_ready.py`
+- `tools/architecture/check_phase5_renderer_ready.py`
+- `tools/architecture/check_phase5_final_ready.py`
+
+Future phases must either:
+
+- preserve the presentation boundary, or
+- explicitly migrate a legacy island behind a stricter adapter/model.
+
+Future phases must not:
+
+- bypass `ChatWorkspaceModel` for new chat UI paths
+- bypass `MapWorkspaceModel` for new map workspace state
+- map Team chat to DirectPeer or Channel
+- put tile/cache into `MapWorkspaceSnapshot`
+- let renderers infer pending/failure state
+
 ## Operating Rule
 
 Do not fix these categories opportunistically inside unrelated feature PRs.
