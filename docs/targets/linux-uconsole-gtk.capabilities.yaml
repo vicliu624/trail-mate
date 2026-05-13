@@ -87,22 +87,22 @@ capability_bindings:
     board_provider: "uconsole_aio2.spi_radio"
     platform_driver: "linux_sx1262_packet_radio"
     runtime_owner: "linux_event_loop"
-    protocol_consumers: ["meshtastic", "meshcore"]
+    protocol_consumers: ["core_mesh.meshtastic", "core_mesh.meshcore"]
   gps:
     board_provider: "uconsole_aio2.serial_gps"
     platform_driver: "linux_serial_gnss"
     runtime_owner: "linux_event_loop"
-    protocol_consumers: ["nmea"]
+    protocol_consumers: ["core_gps.nmea", "core_gps.location_service", "core_gps.time_authority"]
 
 protocols:
   meshtastic:
     enabled: true
-    radio_profile_source: "shared_core"
-    ble_phone_core: "shared_core"
+    radio_profile_source: "core_mesh"
+    ble_phone_core: "disabled_no_ble_stack"
   meshcore:
     enabled: true
-    radio_profile_source: "shared_core"
-    ble_phone_core: "shared_core"
+    radio_profile_source: "core_mesh"
+    ble_phone_core: "disabled_no_ble_stack"
   hostlink:
     enabled: true
     frame_core: "shared_core"
@@ -128,7 +128,7 @@ build:
   app: "apps/linux_uconsole"
   board_package: "platform/linux/uconsole"
   cmake_presets: ["linux-uconsole-debug", "linux-uconsole-release"]
-  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_sys", "core_team", "ui_shared"]
+  enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "core_sys", "core_team", "ui_shared"]
   disabled_modules: []
 
 draft_notes:

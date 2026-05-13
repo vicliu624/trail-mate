@@ -87,27 +87,27 @@ capability_bindings:
     board_provider: "t_lora_pager.radio"
     platform_driver: "esp_sx1262_packet_radio"
     runtime_owner: "radio_task"
-    protocol_consumers: ["meshtastic", "meshcore"]
+    protocol_consumers: ["core_mesh.meshtastic", "core_mesh.meshcore"]
   gps:
     board_provider: "t_lora_pager.gps"
     platform_driver: "esp_uart_gnss"
     runtime_owner: "gps_task"
-    protocol_consumers: ["nmea"]
+    protocol_consumers: ["core_gps.nmea", "core_gps.location_service", "core_gps.time_authority"]
   ble:
     board_provider: "esp32.integrated_ble"
     platform_driver: "nimble_gatt_host"
     runtime_owner: "stack_callback"
-    protocol_consumers: ["meshtastic_phone", "meshcore_phone"]
+    protocol_consumers: ["core_phone.meshtastic", "core_phone.meshcore"]
 
 protocols:
   meshtastic:
     enabled: true
-    radio_profile_source: "shared_core"
-    ble_phone_core: "shared_core"
+    radio_profile_source: "core_mesh"
+    ble_phone_core: "core_phone"
   meshcore:
     enabled: true
-    radio_profile_source: "shared_core"
-    ble_phone_core: "shared_core"
+    radio_profile_source: "core_mesh"
+    ble_phone_core: "core_phone"
   hostlink:
     enabled: true
     frame_core: "shared_core"
@@ -137,8 +137,9 @@ build:
     - "core_device"
     - "core_gps"
     - "core_hostlink"
+    - "core_phone"
+    - "core_mesh"
     - "core_sys"
     - "core_team"
     - "ui_shared"
   disabled_modules: []
-

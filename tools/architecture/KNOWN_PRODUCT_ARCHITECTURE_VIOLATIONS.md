@@ -67,6 +67,35 @@ event bridging remain in the adapters as known follow-up violations until the
 full `DirectMessageService`/`ReceivePacketService` bridge can take ownership
 without changing on-air behavior.
 
+Phase 4.5 turns this category into a burn-down list rather than a generic
+exception. The already-established boundaries are:
+
+- Target manifests now name `core_mesh` as the Meshtastic/MeshCore radio
+  profile source and `core_phone` as the BLE phone protocol owner where BLE is
+  present.
+- Store persistence is wrapped by platform store adapters; stores should not
+  decide peer trust, fallback, or key overwrite policy.
+- ESP Meshtastic non-PKI app-data packet construction has a
+  `MeshtasticProtocolStrategy` path.
+- ESP MeshCore direct/group app-data frame construction has a
+  `MeshCoreProtocolStrategy` path.
+
+Remaining Phase 4.5 mesh ownership items:
+
+- At least one actual direct-send entry must route through
+  `MeshSession::sendDirect` -> `DirectMessageService` -> `PeerIdentityService`
+  -> `MeshProtocolStrategy` -> `IPacketRadio`.
+- At least one actual receive path must route through `ReceivePacketService`
+  for protocol parse and event emission.
+- Meshtastic PKI flow, direct encryption/decryption, route selection,
+  retransmit/ACK behavior, and receive parsing remain legacy-owned until moved
+  behind `core_mesh`.
+- MeshCore identity routing, peer-key behavior, direct/group payload
+  encryption/decryption, ACK/retry behavior, and receive parsing remain
+  legacy-owned until moved behind `core_mesh`.
+- nRF52 and Linux active radio paths still need the same MeshSession bridge
+  treatment; platform-specific fixes must not add new protocol policy.
+
 Current known LoRa/Mesh exceptions include:
 
 - `platform/esp/arduino_common/src/chat/infra/meshtastic/mt_adapter.cpp`
@@ -107,6 +136,12 @@ adapter paths that consume `ILocationSource` rather than reading GPS state as
 their own domain fact. The older platform/UI GPS runtime remains in place as a
 compatibility surface for existing pages and Linux simulator behavior until the
 presentation-model phase can replace those direct reads.
+
+Phase 4.5 records the current GPS consumer inventory in
+`docs/audits/GPS_CONSUMER_BOUNDARY_AUDIT.md`. New non-UI consumers should use
+`ILocationSource`, `ITimeAuthority`, or a device/status snapshot. Existing UI
+consumers may stay on `platform/ui/gps_runtime.h` only as Phase 5 replacement
+inputs.
 
 Current known GPS/time exceptions include:
 
