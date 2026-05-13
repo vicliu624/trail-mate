@@ -33,6 +33,11 @@ and UI presentation identity types.
 
 - `chat::ConversationId` remains the source of truth for core chat sessions.
 - `ui::chat::ConversationId` is only a UI selection token.
+- `ChatWorkspaceModel` may own only UI selection state and cursor offsets. It
+  must delegate snapshot construction to `IChatPresentationSource` and user
+  actions to `IChatActionSink`.
+- `ChatWorkspaceModel` must not own or expose `ChatService`, `ContactService`,
+  `IMeshAdapter`, stores, protocol adapters, or `chat::ConversationId`.
 - `ChatWorkspaceSnapshot` must not expose `ChatService`, `ContactService`,
   `IMeshAdapter`, store cursors, or `chat::ConversationId`.
 - `SendMessageView` uses `ui::chat::ConversationId`, not a bare peer node id.
@@ -66,8 +71,31 @@ chat::ConversationId(protocol, channel, peer = 0)
 Team presentation rows are represented as `ConversationKind::Team`. They are not
 forced into `chat::ConversationId`.
 
+## Workspace Model Contract
+
+`ChatWorkspaceModel` is a thin presentation model. It keeps the currently
+selected `ui::chat::ConversationId`, conversation list offset, and message list
+offset. Its read path is:
+
+```text
+ChatWorkspaceModel::snapshot()
+    -> IChatPresentationSource::buildChatWorkspaceSnapshot(...)
+```
+
+Its action path is:
+
+```text
+ChatWorkspaceModel::selectConversation(...)
+ChatWorkspaceModel::sendMessage(...)
+ChatWorkspaceModel::markRead(...)
+    -> IChatActionSink
+```
+
+`sendMessage` sends against the selected UI conversation token. Mapping that UI
+token back to `core_chat` identity, `MeshSession`, or legacy send behavior
+belongs to the Source/Sink adapter layer, not to `ui_presentation`.
+
 ## Non-Goals
 
-Phase 5.6-pre does not add `ChatWorkspaceModel`, does not connect LVGL chat
-pages, does not change team chat behavior, does not change message storage, and
-does not change send/receive paths.
+Phase 5.6 does not connect LVGL chat pages, does not change team chat behavior,
+does not change message storage, and does not change send/receive paths.
