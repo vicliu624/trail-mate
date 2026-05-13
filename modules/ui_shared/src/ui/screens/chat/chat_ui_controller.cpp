@@ -1201,6 +1201,8 @@ bool UiController::isTeamConversation(const chat::ConversationId& conv) const
 
 void UiController::refreshTeamConversation()
 {
+    // Legacy team path. Phase 5.6-closeout records this as a bounded island;
+    // Phase 5.6-f must move Team projection behind a Team presentation source.
     if (!conversation_ || !team_conv_active_)
     {
         return;
@@ -1971,6 +1973,8 @@ void UiController::onTeamPositionCancel()
 
 bool UiController::sendTeamLocationWithIcon(uint8_t icon_id)
 {
+    // Legacy team path. Team send semantics are intentionally not routed
+    // through LegacyChatActionSink until TeamChatActionSink is defined.
     if (!team::proto::team_location_marker_icon_is_valid(icon_id))
     {
         ::ui::SystemNotification::show("Invalid marker", 1500);

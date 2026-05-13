@@ -25,6 +25,16 @@ namespace chat
 namespace ui
 {
 
+// Phase 5.6 note:
+//
+// UiController is still a legacy application controller. It has started
+// consuming ChatWorkspaceModel for the non-team direct/channel chat path, but
+// it still owns legacy responsibilities such as event handling, Team chat, key
+// verification, conversation cache, and ChatService lifecycle calls.
+//
+// Do not add new direct ChatService rendering logic here unless it is
+// documented as legacy ownership. New non-team chat presentation should flow
+// through ChatWorkspaceModel.
 class UiController : public IChatUiRuntime
 {
   public:
@@ -55,6 +65,10 @@ class UiController : public IChatUiRuntime
 
   private:
     lv_obj_t* parent_;
+    // Legacy ownership:
+    // ChatService is still required here for event processing, team legacy
+    // path, key verification, and compatibility refresh flows. Non-team
+    // presentation should migrate toward ChatWorkspaceModel.
     chat::ChatService& service_;
     ::ui::chat::ChatWorkspaceModel& chat_model_;
     State state_;
@@ -90,9 +104,14 @@ class UiController : public IChatUiRuntime
     void updateConversationMetaForMessage(const chat::ChatMessage& msg, bool increment_unread);
     bool updateConversationViewForIncoming(const chat::ChatMessage& msg);
     void reloadConversationView();
+    // Legacy team path. Team chat is intentionally not modeled through
+    // ChatWorkspaceModel until Phase 5.6-f defines TeamChatPresentationSource
+    // and TeamChatActionSink.
     void refreshTeamConversation();
     void startTeamConversationTimer();
     void stopTeamConversationTimer();
+    // Legacy team path. Team location send remains outside the generic
+    // DirectPeer/Channel ChatWorkspaceModel action path until Phase 5.6-f.
     bool sendTeamLocationWithIcon(uint8_t icon_id);
     void openTeamPositionPicker();
     void closeTeamPositionPicker(bool restore_group);
