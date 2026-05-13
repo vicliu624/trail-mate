@@ -211,6 +211,25 @@ def check_map_presentation_sources_are_bounded() -> int:
     return failures
 
 
+def check_lvgl_map_surface_uses_workspace_model() -> int:
+    path = "modules/ui_shared/src/ui/screens/gps/gps_page_runtime.cpp"
+    if not exists(path):
+        return fail("GPS page runtime is missing")
+
+    text = read_text(path)
+    failures = 0
+    for token in [
+        "ui_presentation/map/map_workspace_model.h",
+        "LegacyMapPresentationSource",
+        "LegacyMapActionSink",
+        "map_workspace_model().snapshot()",
+        "map_workspace_model().centerOnSelf()",
+    ]:
+        if token not in text:
+            failures += fail(f"LVGL map runtime missing MapWorkspaceModel token: {token}")
+    return failures
+
+
 def check_chat_presentation_adapters_are_pure_mappers() -> int:
     forbidden_tokens = [
         "ChatService",
@@ -430,6 +449,7 @@ def main() -> int:
     failures += check_ui_presentation_chat_is_portable()
     failures += check_ui_presentation_map_is_portable()
     failures += check_map_presentation_sources_are_bounded()
+    failures += check_lvgl_map_surface_uses_workspace_model()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
     failures += check_team_chat_presentation_context()

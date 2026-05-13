@@ -606,13 +606,17 @@ using Host = gps::ui::shell::Host;
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
-#include "platform/ui/gps_runtime.h"
+#include "platform/ui/team_ui_store_runtime.h"
+#include "ui/presentation_sources/legacy_gps_status_source.h"
+#include "ui/presentation_sources/legacy_map_action_sink.h"
+#include "ui/presentation_sources/legacy_map_presentation_source.h"
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_viewport.h"
 #include "ui/widgets/top_bar.h"
+#include "ui_presentation/map/map_workspace_model.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -649,19 +653,60 @@ void request_exit()
     ui_request_exit_to_menu();
 }
 
-::ui::widgets::map::Model build_map_model(const platform::ui::gps::GpsState& gps_data)
+::ui::map::MapWorkspaceModel& map_workspace_model()
+{
+    static ::ui::presentation_sources::LegacyMapPresentationSource source(
+        ::ui::presentation_sources::legacy_gps_status_source(),
+        ::ui::presentation_sources::legacy_map_presentation_state(),
+        &::team::ui::team_ui_get_store());
+    static ::ui::presentation_sources::LegacyMapActionSink sink(
+        ::ui::presentation_sources::legacy_gps_status_source(),
+        ::ui::presentation_sources::legacy_map_presentation_state());
+    static ::ui::map::MapWorkspaceModel model(source, sink);
+    return model;
+}
+
+uint8_t current_map_zoom()
+{
+    return static_cast<uint8_t>(
+        std::clamp(s_map_zoom,
+                   ::ui::widgets::map::kMinZoom,
+                   ::ui::widgets::map::kMaxZoom));
+}
+
+void sync_workspace_layers_from_legacy_renderer()
+{
+    auto& state = ::ui::presentation_sources::legacy_map_presentation_state();
+    const auto layers = ::ui::widgets::map::current_layer_state();
+    state.layers.osm = layers.map_source == 0;
+    state.layers.terrain = layers.map_source == 1;
+    state.layers.satellite = layers.map_source == 2;
+    state.layers.contour = layers.contour_enabled;
+}
+
+void sync_workspace_viewport_from_legacy_renderer()
+{
+    auto& model = map_workspace_model();
+    auto viewport = model.viewport();
+    viewport.zoom = current_map_zoom();
+    (void)model.setViewport(viewport);
+    (void)model.setActiveTool(::ui::map::MapToolKind::Pan);
+}
+
+::ui::widgets::map::Model build_map_model(
+    const ::ui::map::MapWorkspaceSnapshot& snapshot)
 {
     const auto& config = app::configFacade().getConfig();
 
     ::ui::widgets::map::Model model{};
-    model.focus_point.valid = gps_data.valid;
-    model.focus_point.lat = gps_data.lat;
-    model.focus_point.lon = gps_data.lng;
-    model.zoom = s_map_zoom;
+    model.focus_point.valid = snapshot.self.valid;
+    model.focus_point.lat = snapshot.self.lat;
+    model.focus_point.lon = snapshot.self.lon;
+    model.zoom = snapshot.viewport.zoom == 0 ? s_map_zoom : snapshot.viewport.zoom;
     model.pan_x = s_map_pan_x;
     model.pan_y = s_map_pan_y;
     model.map_source = config.map_source;
-    model.contour_enabled = config.map_contour_enabled;
+    model.contour_enabled = snapshot.layers.contour;
     model.coord_system = config.map_coord_system;
     return model;
 }
@@ -713,11 +758,12 @@ void refresh_view()
     ui_update_top_bar_battery(s_top_bar);
     apply_compact_top_bar_style(s_top_bar);
 
-    const platform::ui::gps::GpsState gps_data = platform::ui::gps::get_data();
+    sync_workspace_layers_from_legacy_renderer();
+    const auto snapshot = map_workspace_model().snapshot();
 
-    if (gps_data.valid)
+    if (snapshot.header.valid && snapshot.self.valid)
     {
-        ::ui::widgets::map::apply_model(s_map_runtime, build_map_model(gps_data));
+        ::ui::widgets::map::apply_model(s_map_runtime, build_map_model(snapshot));
     }
     else
     {
@@ -770,10 +816,19 @@ bool handle_map_key(uint32_t key, lv_event_t* e)
     case '_':
         s_map_zoom = std::max(s_map_zoom - 1, ::ui::widgets::map::kMinZoom);
         break;
+    case 'c':
+    case 'C':
+        if (map_workspace_model().centerOnSelf().ok)
+        {
+            s_map_pan_x = 0;
+            s_map_pan_y = 0;
+        }
+        break;
     default:
         return false;
     }
 
+    sync_workspace_viewport_from_legacy_renderer();
     refresh_view();
     consume_key_event(e);
     return true;
@@ -814,6 +869,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_map_zoom = kCardputerZeroMapDefaultZoom;
     s_map_pan_x = 0;
     s_map_pan_y = 0;
+    sync_workspace_viewport_from_legacy_renderer();
 
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
