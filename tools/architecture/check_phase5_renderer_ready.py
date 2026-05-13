@@ -44,6 +44,7 @@ def check_required_files() -> int:
     required = [
         "docs/audits/RENDERER_BOUNDARY_AUDIT.md",
         "docs/audits/RENDERER_HARDENING_BASELINE.md",
+        "docs/audits/PHASE5_RENDERER_HARDENING_SUMMARY.md",
         "tools/architecture/check_phase5_renderer_ready.py",
         "tools/architecture/phase5_renderer_legacy_baseline.json",
     ]
@@ -449,6 +450,20 @@ def check_docs() -> int:
         ]:
             if token not in text:
                 failures += fail(f"renderer hardening baseline doc missing token: {token}")
+
+    summary = "docs/audits/PHASE5_RENDERER_HARDENING_SUMMARY.md"
+    if exists(summary):
+        text = read_text(summary)
+        for token in [
+            "Strict Surfaces",
+            "Legacy Islands",
+            "Thin Slices Migrated or Locked",
+            "LVGL dashboard GPS fix chip",
+            "phase5_renderer_legacy_baseline.json",
+            "New renderer code must prefer presentation models",
+        ]:
+            if token not in text:
+                failures += fail(f"renderer hardening summary missing token: {token}")
 
     chat_audit = "docs/audits/CHAT_UI_CONTROLLER_LEGACY_OWNERSHIP_AUDIT.md"
     if exists(chat_audit):
