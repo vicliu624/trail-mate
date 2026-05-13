@@ -26,12 +26,18 @@ Current known BLE-host exceptions include:
 
 - `platform/esp/arduino_common/src/ble/meshtastic_ble.cpp` still has
   Meshtastic characteristic names, queue names, and read/notify compatibility
-  state such as `ToRadio`/`FromRadio` buffers.
+  state such as `ToRadio`/`FromRadio` buffers. Phase 4.5.3 moved its
+  Chat/Team observer registration into `MeshtasticBleObserverBridge`.
 - `platform/nrf52/arduino_common/src/ble/meshtastic_ble.cpp` still has the
-  same Meshtastic transport compatibility surface for Bluefruit.
+  same Meshtastic transport compatibility surface for Bluefruit. Phase 4.5.3
+  moved its Chat observer registration into `MeshtasticBleObserverBridge` and
+  board/settings persistence into `MeshtasticBlePersistenceBridge`.
 - `platform/esp/arduino_common/src/ble/meshcore_ble.cpp` still carries legacy
   MeshCore NUS fallback parsing, offline queues, manual contacts, and push
   framing while the shared core coverage is being expanded.
+- ESP/nRF52 MeshCore BLE hosts still register Chat/Team observers directly;
+  those remain BLE-host thinning follow-ups and should move to bridge objects
+  before Phase 5 starts depending on MeshCore BLE status projection.
 - `platform/esp/arduino_common/include/ble/meshcore_ble.h` still implements
   `MeshCorePhoneHooks` for BLE-local state such as connection, PIN, telemetry
   mode, and manual contacts.

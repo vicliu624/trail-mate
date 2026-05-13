@@ -3,9 +3,8 @@
 #include "app/app_facades.h"
 #include "ble/app_phone_facade.h"
 #include "ble/ble_manager.h"
+#include "chat/domain/chat_types.h"
 #include "chat/infra/meshtastic/mt_codec_pb.h"
-#include "chat/ports/i_node_store.h"
-#include "chat/usecase/chat_service.h"
 #include "meshtastic/admin.pb.h"
 #include "meshtastic/channel.pb.h"
 #include "meshtastic/config.pb.h"
@@ -15,21 +14,20 @@
 #include "meshtastic/module_config.pb.h"
 #include "phone/meshtastic/meshtastic_phone_session.h"
 #include "platform/shared/ble/phone_ble_runtime.h"
-#include "team/usecase/team_service.h"
 #include <NimBLEDevice.h>
 #include <array>
 #include <atomic>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace ble
 {
 
+class MeshtasticBleObserverBridge;
+
 class MeshtasticBleService : public BleService,
-                             public chat::ChatService::IncomingTextObserver,
-                             public chat::ChatService::OutgoingTextObserver,
-                             public team::TeamService::IncomingDataObserver,
                              public phone::meshtastic::MeshtasticPhoneTransport,
                              public platform::shared::ble_bridge::IPhoneBleRuntime
 {
@@ -41,9 +39,9 @@ class MeshtasticBleService : public BleService,
     void stop() override;
     void update() override;
 
-    void onIncomingText(const chat::MeshIncomingText& msg) override;
-    void onOutgoingText(const chat::MeshIncomingText& msg) override;
-    void onIncomingData(const chat::MeshIncomingData& msg) override;
+    void handleIncomingTextFromApp(const chat::MeshIncomingText& msg);
+    void handleOutgoingTextFromApp(const chat::MeshIncomingText& msg);
+    void handleIncomingDataFromApp(const chat::MeshIncomingData& msg);
     bool isBleConnected() const override;
     void notifyFromNum(uint32_t value) override;
     bool isPhoneBleConnected() const override;
@@ -54,10 +52,10 @@ class MeshtasticBleService : public BleService,
     void onPhoneModuleConfigChanged() override;
 
   private:
-    app::IAppBleFacade& ctx_;
     meshtastic_Config_BluetoothConfig ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
     meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
     AppPhoneFacade phone_facade_;
+    std::unique_ptr<MeshtasticBleObserverBridge> observer_bridge_;
     std::string device_name_;
     NimBLEServer* server_ = nullptr;
     NimBLEService* service_ = nullptr;

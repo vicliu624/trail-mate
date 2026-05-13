@@ -1,25 +1,18 @@
 ﻿#include "../../include/ble/meshtastic_ble.h"
 
 #include "ble/ble_uuids.h"
-#if defined(GAT562_MESH_EVB_PRO)
-#include "boards/gat562_mesh_evb_pro/settings_store.h"
-#endif
+#include "ble/meshtastic_ble_observer_bridge.h"
+#include "ble/meshtastic_ble_persistence_bridge.h"
 #include "chat/ble/meshtastic_defaults.h"
 #include "chat/ble/meshtastic_phone_config_bridge.h"
 #include "platform/nrf52/arduino_common/chat/infra/meshtastic/meshtastic_radio_adapter.h"
 #include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
 #include "platform/shared/ble/meshtastic_phone_runtime_bridge.h"
-#if !defined(GAT562_MESH_EVB_PRO)
-#include "platform/ui/settings_store.h"
-#endif
 
 #include <Arduino.h>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
-#if !defined(GAT562_MESH_EVB_PRO)
-#include <vector>
-#endif
 
 namespace ble
 {
@@ -27,11 +20,6 @@ namespace
 {
 constexpr uint32_t kDefaultBleFixedPin = 654321;
 constexpr uint32_t kConfigSaveDebounceMs = 1500UL;
-#if !defined(GAT562_MESH_EVB_PRO)
-constexpr const char* kBleSettingsNamespace = "ble_meshtastic";
-constexpr const char* kBluetoothConfigKey = "bt_cfg";
-constexpr const char* kModuleConfigKey = "mod_cfg";
-#endif
 
 bool usbSerialWritable(std::size_t len)
 {
@@ -50,89 +38,6 @@ void bleLogBoth(const char* fmt, ...)
         Serial.println(buffer);
     }
     Serial2.println(buffer);
-}
-
-#if !defined(GAT562_MESH_EVB_PRO)
-template <typename T>
-bool loadBlobConfigFromUiStore(const char* key, T* out)
-{
-    if (!out)
-    {
-        return false;
-    }
-
-    std::vector<uint8_t> blob;
-    if (!platform::ui::settings_store::get_blob(kBleSettingsNamespace, key, blob))
-    {
-        return false;
-    }
-    if (blob.size() != sizeof(T))
-    {
-        bleLogBoth("[BLE][nrf52][mt] load cfg size mismatch key=%s got=%u expected=%u",
-                   key ? key : "?",
-                   static_cast<unsigned>(blob.size()),
-                   static_cast<unsigned>(sizeof(T)));
-        return false;
-    }
-
-    std::memcpy(out, blob.data(), sizeof(T));
-    return true;
-}
-
-template <typename T>
-bool saveBlobConfigToUiStore(const char* key, const T& value)
-{
-    const bool ok = platform::ui::settings_store::put_blob(kBleSettingsNamespace, key, &value, sizeof(T));
-    if (!ok)
-    {
-        bleLogBoth("[BLE][nrf52][mt] save cfg failed key=%s size=%u",
-                   key ? key : "?",
-                   static_cast<unsigned>(sizeof(T)));
-    }
-    return ok;
-}
-#endif
-
-bool loadPersistedBleState(meshtastic_config_bridge::PersistedState* out)
-{
-    if (!out)
-    {
-        return false;
-    }
-
-    *out = meshtastic_config_bridge::PersistedState{};
-
-#if defined(GAT562_MESH_EVB_PRO)
-    if (::boards::gat562_mesh_evb_pro::settings_store::loadMeshtasticBleState(&out->bluetooth, &out->module))
-    {
-        out->has_bluetooth = true;
-        out->has_module = true;
-        return true;
-    }
-    return false;
-#else
-    out->has_bluetooth = loadBlobConfigFromUiStore(kBluetoothConfigKey, &out->bluetooth);
-    out->has_module = loadBlobConfigFromUiStore(kModuleConfigKey, &out->module);
-    if (out->has_bluetooth || out->has_module)
-    {
-        bleLogBoth("[BLE][nrf52][mt] legacy cfg store fallback bt=%u mod=%u",
-                   out->has_bluetooth ? 1U : 0U,
-                   out->has_module ? 1U : 0U);
-    }
-    return out->has_bluetooth || out->has_module;
-#endif
-}
-
-bool savePersistedBleState(const meshtastic_Config_BluetoothConfig& bluetooth,
-                           const meshtastic_LocalModuleConfig& module)
-{
-#if defined(GAT562_MESH_EVB_PRO)
-    return ::boards::gat562_mesh_evb_pro::settings_store::saveMeshtasticBleState(bluetooth, module);
-#else
-    const bool bluetooth_ok = saveBlobConfigToUiStore(kBluetoothConfigKey, bluetooth);
-    const bool module_ok = saveBlobConfigToUiStore(kModuleConfigKey, module);
-    return bluetooth_ok && module_ok;
-#endif
 }
 
 uint32_t parsePasskeyDigits(const uint8_t passkey[6])
@@ -312,8 +217,8 @@ void onFromRadioAuthorize(uint16_t conn_handle, BLECharacteristic* chr, ble_gatt
 } // namespace
 
 MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::string& device_name)
-    : ctx_(ctx),
-      phone_facade_(ctx, ble_config_, module_config_, this),
+    : phone_facade_(ctx, ble_config_, module_config_, this),
+      observer_bridge_(new MeshtasticBleObserverBridge(ctx, *this)),
       device_name_(device_name),
       service_(::BLEUuid(MESH_SERVICE_UUID)),
       to_radio_(::BLEUuid(TORADIO_UUID)),
@@ -327,20 +232,14 @@ MeshtasticBleService::MeshtasticBleService(app::IAppBleFacade& ctx, const std::s
     ble_config_.fixed_pin = 0;
 
     meshtastic_config_bridge::PersistedState persisted{};
-    const bool persisted_ok = loadPersistedBleState(&persisted);
+    const bool persisted_ok = loadMeshtasticBlePersistedState(&persisted);
 
     bleLogBoth("[BLE][nrf52][mt] persisted load ok=%u has_bt=%u has_mod=%u",
                persisted_ok ? 1U : 0U,
                persisted.has_bluetooth ? 1U : 0U,
                persisted.has_module ? 1U : 0U);
 
-#if defined(GAT562_MESH_EVB_PRO)
-    bleLogBoth("[BLE][nrf52][mt] settings_store load=%s save=%s",
-               ::boards::gat562_mesh_evb_pro::settings_store::statusLabel(
-                   ::boards::gat562_mesh_evb_pro::settings_store::lastLoadStatus()),
-               ::boards::gat562_mesh_evb_pro::settings_store::statusLabel(
-                   ::boards::gat562_mesh_evb_pro::settings_store::lastSaveStatus()));
-#endif
+    logMeshtasticBlePersistenceStatus();
 
     meshtastic_config_bridge::initializeConfigState(
         persisted, phone_facade_.isBleEnabled(), phone_facade_.getSelfNodeId(), &ble_config_, &module_config_);
@@ -450,9 +349,10 @@ void MeshtasticBleService::start()
     log_radio_.begin();
     bleLogBoth("[BLE][nrf52][mt] chars ready");
 
-    ctx_.getChatService().addIncomingTextObserver(this);
-    ctx_.getChatService().addOutgoingTextObserver(this);
-    ctx_.getChatService().addIncomingDataObserver(this);
+    if (observer_bridge_)
+    {
+        observer_bridge_->registerObservers();
+    }
 
     startAdvertising(service_);
     active_ = true;
@@ -464,9 +364,10 @@ void MeshtasticBleService::start()
 
 void MeshtasticBleService::stop()
 {
-    ctx_.getChatService().removeIncomingTextObserver(this);
-    ctx_.getChatService().removeOutgoingTextObserver(this);
-    ctx_.getChatService().removeIncomingDataObserver(this);
+    if (observer_bridge_)
+    {
+        observer_bridge_->unregisterObservers();
+    }
 
     disconnectAll();
     Bluefruit.Advertising.stop();
@@ -538,7 +439,7 @@ void MeshtasticBleService::update()
     }
 }
 
-void MeshtasticBleService::onIncomingText(const chat::MeshIncomingText& msg)
+void MeshtasticBleService::handleIncomingTextFromApp(const chat::MeshIncomingText& msg)
 {
     if (phone_session_)
     {
@@ -550,7 +451,7 @@ void MeshtasticBleService::onIncomingText(const chat::MeshIncomingText& msg)
     }
 }
 
-void MeshtasticBleService::onOutgoingText(const chat::MeshIncomingText& msg)
+void MeshtasticBleService::handleOutgoingTextFromApp(const chat::MeshIncomingText& msg)
 {
     if (phone_session_)
     {
@@ -567,7 +468,7 @@ void MeshtasticBleService::onOutgoingText(const chat::MeshIncomingText& msg)
     }
 }
 
-void MeshtasticBleService::onIncomingData(const chat::MeshIncomingData& msg)
+void MeshtasticBleService::handleIncomingDataFromApp(const chat::MeshIncomingData& msg)
 {
     if (phone_session_)
     {
@@ -1181,7 +1082,7 @@ void MeshtasticBleService::flushPendingConfigSaves(bool force)
     meshtastic_LocalModuleConfig persisted_module = module_config_;
     meshtastic_config_bridge::normalizeModuleConfig(&persisted_module);
     const bool needs_save = bluetooth_config_save_pending_ || module_config_save_pending_;
-    const bool persisted = needs_save ? savePersistedBleState(persisted_bluetooth, persisted_module) : true;
+    const bool persisted = needs_save ? saveMeshtasticBlePersistedState(persisted_bluetooth, persisted_module) : true;
     ble_config_.enabled = persisted_bluetooth.enabled;
 
     bleLogBoth("[BLE][nrf52][mt] current mem persisted=%u bluetooth_config_save_pending_=%u module_config_save_pending_=%u needs_save=%u",

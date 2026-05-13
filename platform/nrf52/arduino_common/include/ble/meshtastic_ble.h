@@ -4,8 +4,6 @@
 #include "ble/app_phone_facade.h"
 #include "ble/ble_manager.h"
 #include "chat/domain/chat_types.h"
-#include "chat/ports/i_node_store.h"
-#include "chat/usecase/chat_service.h"
 #include "meshtastic/admin.pb.h"
 #include "meshtastic/channel.pb.h"
 #include "meshtastic/config.pb.h"
@@ -25,10 +23,9 @@
 namespace ble
 {
 
+class MeshtasticBleObserverBridge;
+
 class MeshtasticBleService final : public BleService,
-                                   public chat::ChatService::IncomingTextObserver,
-                                   public chat::ChatService::OutgoingTextObserver,
-                                   public chat::ChatService::IncomingDataObserver,
                                    public phone::meshtastic::MeshtasticPhoneTransport,
                                    public platform::shared::ble_bridge::IPhoneBleRuntime
 {
@@ -49,9 +46,9 @@ class MeshtasticBleService final : public BleService,
     bool isRunning() const override;
     void setDeviceName(const std::string& name) override;
 
-    void onIncomingText(const chat::MeshIncomingText& msg) override;
-    void onOutgoingText(const chat::MeshIncomingText& msg) override;
-    void onIncomingData(const chat::MeshIncomingData& msg) override;
+    void handleIncomingTextFromApp(const chat::MeshIncomingText& msg);
+    void handleOutgoingTextFromApp(const chat::MeshIncomingText& msg);
+    void handleIncomingDataFromApp(const chat::MeshIncomingData& msg);
 
     bool handleToRadio(const uint8_t* data, size_t len);
     bool enqueueToRadio(const uint8_t* data, size_t len);
@@ -103,10 +100,10 @@ class MeshtasticBleService final : public BleService,
     uint32_t effectivePasskey() const;
     void logDeferredBleEvents();
 
-    app::IAppBleFacade& ctx_;
     meshtastic_Config_BluetoothConfig ble_config_ = meshtastic_Config_BluetoothConfig_init_zero;
     meshtastic_LocalModuleConfig module_config_ = meshtastic_LocalModuleConfig_init_zero;
     AppPhoneFacade phone_facade_;
+    std::unique_ptr<MeshtasticBleObserverBridge> observer_bridge_;
     std::string device_name_;
     ::BLEService service_;
     ::BLECharacteristic to_radio_;
