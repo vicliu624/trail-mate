@@ -4,13 +4,11 @@
 #include <cstdio>
 #include <cstring>
 
-#include "app/app_facade_access.h"
-#include "ble/ble_manager.h"
 #include "platform/ui/device_runtime.h"
-#include "platform/ui/team_ui_store_runtime.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
-#include "ui/ui_status.h"
+#include "ui/presentation_sources/legacy_mesh_status_source.h"
+#include "ui_presentation/mesh/mesh_status_model.h"
 
 namespace ui::menu::dashboard
 {
@@ -68,6 +66,13 @@ void create_stat_column(MeshWidgetUi& mesh, lv_obj_t* parent, lv_coord_t x, lv_c
         lv_obj_align(mesh.stat_captions[i], LV_ALIGN_BOTTOM_LEFT, 0, 0);
         ::ui::i18n::set_label_text(mesh.stat_captions[i], kCaptions[i]);
     }
+}
+
+::ui::mesh::MeshStatusModel& meshStatusModel()
+{
+    static ::ui::mesh::MeshStatusModel model(
+        ::ui::presentation_sources::legacy_mesh_status_source());
+    return model;
 }
 
 } // namespace
@@ -142,9 +147,9 @@ void refresh_mesh_widget()
         return;
     }
 
-    team::ui::TeamUiSnapshot team_snap;
-    const bool has_team = team::ui::team_ui_get_store().load(team_snap) && team_snap.in_team;
-    const int unread = ui::status::get_total_unread();
+    const auto status = meshStatusModel().snapshot();
+    const bool has_team = status.header.valid && status.team_linked;
+    const int unread = status.header.valid ? static_cast<int>(status.unread_messages) : 0;
     const auto battery = platform::ui::device::battery_info();
 
     char power_buf[16];
@@ -170,7 +175,10 @@ void refresh_mesh_widget()
     set_label_text_if_changed(mesh.hero_caption, unread > 0 ? "traffic active" : "standing by");
 
     char team_buf[16];
-    std::snprintf(team_buf, sizeof(team_buf), "%u", has_team ? static_cast<unsigned>(team_snap.members.size()) : 0U);
+    std::snprintf(team_buf,
+                  sizeof(team_buf),
+                  "%u",
+                  status.header.valid ? static_cast<unsigned>(status.known_nodes) : 0U);
     set_label_text_if_changed_raw(mesh.stat_values[0], team_buf);
 
     char unread_buf[16];
@@ -181,27 +189,8 @@ void refresh_mesh_widget()
     set_label_text_if_changed_raw(mesh.stat_values[2], power_buf);
     lv_obj_set_style_text_color(mesh.stat_values[2], battery.charging ? color_info() : color_text(), 0);
 
-    char footer[64];
-    bool ble_active = false;
-    bool ble_linked = false;
-    if (auto* ble = app::runtimeFacade().getBleManager())
-    {
-        ble_active = ble->isEnabled();
-        ble::BlePairingStatus ble_status{};
-        if (ble->getPairingStatus(&ble_status))
-        {
-            ble_linked = ble_status.is_connected;
-        }
-    }
-    std::snprintf(footer,
-                  sizeof(footer),
-                  "%s",
-                  ::ui::i18n::format(
-                      ble_linked ? "BLE linked  |  %s"
-                                 : (ble_active ? "BLE bridge ready  |  %s" : "LoRa direct path  |  %s"),
-                      unread > 0 ? ::ui::i18n::tr("new activity") : ::ui::i18n::tr("quiet net"))
-                      .c_str());
-    set_label_text_if_changed_raw(mesh.footer_label, footer);
+    set_label_text_if_changed_raw(mesh.footer_label,
+                                  status.header.valid ? status.status_line.c_str() : "-");
 
     lv_obj_set_style_border_opa(mesh.orbit_outer, LV_OPA_60, 0);
     lv_obj_set_style_border_opa(mesh.orbit_mid, LV_OPA_COVER, 0);
