@@ -49,6 +49,11 @@ int main()
 
     assert(snapshot.has_center);
     assert(!snapshot.has_fix);
+    assert(snapshot.presentation_workspace.header.valid);
+    assert(snapshot.presentation_workspace.viewport.zoom == 2);
+    assert(!snapshot.presentation_workspace.self.valid);
+    assert(snapshot.presentation_workspace.active_tool ==
+           ::ui::map::MapToolKind::Pan);
     assert(snapshot.using_default_center);
     assert(!snapshot.has_configured_center);
     assert(snapshot.zoom == 2);
@@ -104,6 +109,7 @@ int main()
     assert(model.earthdataTokenConfigured());
     const auto contours_missing = model.snapshot();
     assert(contours_missing.contour_enabled);
+    assert(contours_missing.presentation_workspace.layers.contour);
     assert(!contours_missing.contour_ultra_fine_enabled);
     assert(contours_missing.earthdata_token_configured);
     assert(contours_missing.contour_profiles.size() == 2U);

@@ -12,8 +12,8 @@
 #include "app/linux_app_services.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/linux/env_config.h"
-#include "platform/ui/gps_runtime.h"
 #include "platform/ui/settings_store.h"
+#include "platform/ui/team_ui_store_runtime.h"
 #include "uconsole/uconsole_hardware_probe.h"
 
 namespace trailmate::uconsole
@@ -251,6 +251,11 @@ void append_projected_node(MapWorkspaceSnapshot& out,
 UConsoleMapWorkspaceModel::UConsoleMapWorkspaceModel(
     linux_app::LinuxAppServices& services)
     : services_(services),
+      legacy_map_source_(legacy_gps_source_,
+                         legacy_map_state_,
+                         &::team::ui::team_ui_get_store()),
+      legacy_map_sink_(legacy_gps_source_, legacy_map_state_),
+      presentation_model_(legacy_map_source_, legacy_map_sink_),
       zoom_(std::clamp(
           platform::ui::settings_store::get_int(kMapNamespace, kZoomKey, 14),
           kMinZoom,
@@ -301,15 +306,17 @@ MapWorkspaceSnapshot UConsoleMapWorkspaceModel::snapshot() const
     else
     {
         const bool has_external_source = external_gps_source_configured();
-        const auto gps = ::platform::ui::gps::get_data();
-        out.has_fix = has_external_source && gps.valid;
+        ::ui::gps::GpsStatusSnapshot gps;
+        const bool has_gps_snapshot =
+            legacy_gps_source_.buildGpsStatusSnapshot(gps) && gps.header.valid;
+        out.has_fix = has_external_source && has_gps_snapshot && gps.fix_valid;
         out.has_center = out.has_fix;
-        out.lat = gps.lat;
-        out.lon = gps.lng;
-        out.altitude_m = gps.alt_m;
-        out.has_altitude = gps.has_alt;
-        out.speed_mps = gps.speed_mps;
-        out.has_speed = gps.has_speed;
+        out.lat = gps.latitude;
+        out.lon = gps.longitude;
+        out.altitude_m = static_cast<double>(gps.altitude_m);
+        out.has_altitude = out.has_fix;
+        out.speed_mps = static_cast<double>(gps.speed_mps);
+        out.has_speed = out.has_fix;
         out.satellites = gps.satellites;
         out.fix_label = out.has_fix ? "GPS fix" : "Default map center";
         if (!out.has_center)
@@ -333,6 +340,9 @@ MapWorkspaceSnapshot UConsoleMapWorkspaceModel::snapshot() const
     {
         return out;
     }
+
+    syncPresentationWorkspace(out.lat, out.lon, out.zoom);
+    out.presentation_workspace = presentation_model_.snapshot();
 
     out.columns = static_cast<std::size_t>(kLandscapeTileRadiusX * 2 + 1);
     out.rows = static_cast<std::size_t>(kLandscapeTileRadiusY * 2 + 1);
@@ -691,6 +701,28 @@ bool UConsoleMapWorkspaceModel::showMqttNodes() const
 bool UConsoleMapWorkspaceModel::contourEnabled() const
 {
     return services_.config().map_contour_enabled;
+}
+
+void UConsoleMapWorkspaceModel::syncPresentationWorkspace(double lat,
+                                                          double lon,
+                                                          int zoom) const
+{
+    const auto map_source = source();
+    legacy_map_state_.layers.osm =
+        map_source == ::platform::linux_runtime::MapBaseSource::Osm;
+    legacy_map_state_.layers.terrain =
+        map_source == ::platform::linux_runtime::MapBaseSource::Terrain;
+    legacy_map_state_.layers.satellite =
+        map_source == ::platform::linux_runtime::MapBaseSource::Satellite;
+    legacy_map_state_.layers.contour = contourEnabled();
+
+    ::ui::map::MapViewport viewport;
+    viewport.center_lat = lat;
+    viewport.center_lon = lon;
+    viewport.zoom = static_cast<std::uint8_t>(
+        std::clamp(zoom, kMinZoom, kMaxZoom));
+    (void)presentation_model_.setViewport(viewport);
+    (void)presentation_model_.setActiveTool(::ui::map::MapToolKind::Pan);
 }
 
 void UConsoleMapWorkspaceModel::persistZoom() const

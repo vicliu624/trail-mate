@@ -230,6 +230,43 @@ def check_lvgl_map_surface_uses_workspace_model() -> int:
     return failures
 
 
+def check_uconsole_map_surface_uses_workspace_model() -> int:
+    header = "platform/linux/uconsole/include/uconsole/uconsole_map_workspace_model.h"
+    source = "platform/linux/uconsole/src/uconsole_map_workspace_model.cpp"
+    failures = 0
+
+    if not exists(header):
+        failures += fail("uConsole map model header is missing")
+    else:
+        text = read_text(header)
+        for token in [
+            "ui_presentation/map/map_workspace_model.h",
+            "presentation_workspace",
+            "MapWorkspaceModel presentation_model_",
+            "LegacyMapPresentationSource",
+            "LegacyMapActionSink",
+            "LegacyGpsStatusSource",
+        ]:
+            if token not in text:
+                failures += fail(f"uConsole map header missing token: {token}")
+
+    if not exists(source):
+        failures += fail("uConsole map model source is missing")
+    else:
+        text = read_text(source)
+        for token in [
+            "presentation_model_.snapshot()",
+            "legacy_gps_source_.buildGpsStatusSnapshot",
+            "syncPresentationWorkspace",
+        ]:
+            if token not in text:
+                failures += fail(f"uConsole map source missing token: {token}")
+        if "#include \"platform/ui/gps_runtime.h\"" in text:
+            failures += fail("uConsole map model still includes gps_runtime directly")
+
+    return failures
+
+
 def check_chat_presentation_adapters_are_pure_mappers() -> int:
     forbidden_tokens = [
         "ChatService",
@@ -450,6 +487,7 @@ def main() -> int:
     failures += check_ui_presentation_map_is_portable()
     failures += check_map_presentation_sources_are_bounded()
     failures += check_lvgl_map_surface_uses_workspace_model()
+    failures += check_uconsole_map_surface_uses_workspace_model()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
     failures += check_team_chat_presentation_context()

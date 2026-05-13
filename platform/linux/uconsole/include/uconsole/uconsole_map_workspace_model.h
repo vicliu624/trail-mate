@@ -8,6 +8,11 @@
 
 #include "platform/linux/map_contour_tile_generator.h"
 #include "platform/linux/map_tile_cache.h"
+#include "ui/presentation_sources/legacy_gps_status_source.h"
+#include "ui/presentation_sources/legacy_map_action_sink.h"
+#include "ui/presentation_sources/legacy_map_presentation_source.h"
+#include "ui_presentation/map/map_workspace_model.h"
+#include "ui_presentation/map/map_workspace_snapshot.h"
 
 namespace trailmate::linux_app
 {
@@ -60,6 +65,8 @@ struct MapCoordinate
 
 struct MapWorkspaceSnapshot
 {
+    ::ui::map::MapWorkspaceSnapshot presentation_workspace{};
+
     bool has_center = false;
     bool has_fix = false;
     bool has_configured_center = false;
@@ -146,11 +153,19 @@ class UConsoleMapWorkspaceModel final
     [[nodiscard]] ::platform::linux_runtime::MapBaseSource source() const;
     [[nodiscard]] bool showMqttNodes() const;
     [[nodiscard]] bool contourEnabled() const;
+    void syncPresentationWorkspace(double lat, double lon, int zoom) const;
     void persistZoom() const;
     void persistManualCenter() const;
     void clearPersistedManualCenter() const;
 
     linux_app::LinuxAppServices& services_;
+    mutable ::ui::presentation_sources::LegacyGpsStatusSource legacy_gps_source_{};
+    mutable ::ui::presentation_sources::LegacyMapPresentationState
+        legacy_map_state_{};
+    mutable ::ui::presentation_sources::LegacyMapPresentationSource
+        legacy_map_source_;
+    mutable ::ui::presentation_sources::LegacyMapActionSink legacy_map_sink_;
+    mutable ::ui::map::MapWorkspaceModel presentation_model_;
     ::platform::linux_runtime::MapTileCache tile_cache_{};
     ::platform::linux_runtime::MapContourTileStore contour_store_{};
     ::platform::linux_runtime::MapContourTileGenerator contour_generator_{};

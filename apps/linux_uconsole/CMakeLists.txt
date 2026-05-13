@@ -103,6 +103,9 @@ endif()
 # ---------------------------------------------------------------------------
 
 add_library(trailmate_uconsole_shell
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_gps_status_source.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp"
     "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_chat_workspace_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_dashboard_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_hardware_probe.cpp"
