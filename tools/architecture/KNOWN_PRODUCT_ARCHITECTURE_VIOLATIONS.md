@@ -82,15 +82,18 @@ exception. The already-established boundaries are:
 - Store persistence is wrapped by platform store adapters; stores should not
   decide peer trust, fallback, or key overwrite policy.
 - ESP Meshtastic non-PKI app-data packet construction has a
-  `MeshtasticProtocolStrategy` path.
+  `MeshtasticProtocolStrategy` path. Phase 4.5.4 routes the actual ESP
+  Meshtastic channel-key app-data send path through
+  `MeshSession::sendDirect` -> `DirectMessageService` -> `MeshtasticProtocolStrategy`
+  -> `IPacketRadio` via `EspMeshtasticAdapterBridge`.
 - ESP MeshCore direct/group app-data frame construction has a
   `MeshCoreProtocolStrategy` path.
 
 Remaining Phase 4.5 mesh ownership items:
 
-- At least one actual direct-send entry must route through
-  `MeshSession::sendDirect` -> `DirectMessageService` -> `PeerIdentityService`
-  -> `MeshProtocolStrategy` -> `IPacketRadio`.
+- ESP Meshtastic channel-key app-data direct send now routes through
+  `MeshSession::sendDirect` -> `DirectMessageService` -> `MeshtasticProtocolStrategy`
+  -> `IPacketRadio`. PKI direct send remains legacy-owned.
 - At least one actual receive path must route through `ReceivePacketService`
   for protocol parse and event emission.
 - Meshtastic PKI flow, direct encryption/decryption, route selection,

@@ -24,21 +24,27 @@ SendResult DirectMessageService::sendDirect(const DirectMessageCommand& command)
     }
 
     LocalIdentity local{};
-    auto local_result = identity_.ensureLocalIdentity(local);
-    if (!local_result.ok || !local.valid)
+    if (command.require_local_identity)
     {
-        events_.emit(MeshEvent{MeshEventKind::SendFailed,
-                               command.to,
-                               static_cast<int>(SendFailure::LocalIdentityMissing)});
-        return SendResult::fail(SendFailure::LocalIdentityMissing);
+        auto local_result = identity_.ensureLocalIdentity(local);
+        if (!local_result.ok || !local.valid)
+        {
+            events_.emit(MeshEvent{MeshEventKind::SendFailed,
+                                   command.to,
+                                   static_cast<int>(SendFailure::LocalIdentityMissing)});
+            return SendResult::fail(SendFailure::LocalIdentityMissing);
+        }
     }
 
     PeerPublicKey peer{};
-    auto peer_result = identity_.findPeerKey(command.to, peer);
-    if (!peer_result.ok)
+    if (command.require_peer_key)
     {
-        events_.emit(MeshEvent{MeshEventKind::PeerKeyMissing, command.to, 0});
-        return SendResult::fail(SendFailure::PeerKeyMissing);
+        auto peer_result = identity_.findPeerKey(command.to, peer);
+        if (!peer_result.ok)
+        {
+            events_.emit(MeshEvent{MeshEventKind::PeerKeyMissing, command.to, 0});
+            return SendResult::fail(SendFailure::PeerKeyMissing);
+        }
     }
 
     ProtocolBuildContext context{};
@@ -46,6 +52,13 @@ SendResult DirectMessageService::sendDirect(const DirectMessageCommand& command)
     context.local_identity = local;
     context.peer_key = peer;
     context.now_ms = clock_.nowMs();
+    context.packet_id = command.packet_id;
+    context.channel_key = command.channel_key;
+    context.channel_hash = command.channel_hash;
+    context.hop_limit = command.hop_limit;
+    context.has_air_want_ack = command.has_air_want_ack;
+    context.air_want_ack = command.air_want_ack;
+    context.include_payload_dest = command.include_payload_dest;
 
     EncodedPacket packet{};
     auto built = protocol_.buildDirectMessage(context, command, packet);

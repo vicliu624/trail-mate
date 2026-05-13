@@ -13,8 +13,10 @@
 #include "chat/ports/i_mesh_adapter.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "platform/esp/arduino_common/mesh/esp_meshtastic_adapter_bridge.h"
 #include <array>
 #include <map>
+#include <memory>
 #include <queue>
 #include <string>
 
@@ -191,6 +193,7 @@ class MtAdapter : public chat::IMeshAdapter
     std::queue<meshtastic_MqttClientProxyMessage> mqtt_proxy_queue_;
     MqttProxySettings mqtt_proxy_settings_;
     std::map<uint32_t, PendingAckState> pending_ack_states_;
+    std::unique_ptr<::platform::esp::arduino_common::mesh::EspMeshtasticAdapterBridge> core_bridge_;
 
     static constexpr size_t MAX_PACKET_SIZE = 255;
     static constexpr uint32_t RETRY_DELAY_MS = 1000;
@@ -239,6 +242,19 @@ class MtAdapter : public chat::IMeshAdapter
     void initNodeIdentity();
     void updateChannelKeys();
     bool transmitWirePacket(const uint8_t* wire_data, size_t wire_size);
+    bool sendChannelAppDataViaCore(uint32_t portnum,
+                                   const uint8_t* payload,
+                                   size_t len,
+                                   uint32_t dest_node,
+                                   bool effective_want_response,
+                                   MessageId msg_id,
+                                   uint8_t channel_hash,
+                                   const uint8_t* psk,
+                                   size_t psk_len,
+                                   uint8_t hop_limit,
+                                   bool air_want_ack,
+                                   uint8_t* out_wire_data,
+                                   size_t* inout_wire_size);
     void startRadioReceive();
     void trackPendingAck(uint32_t msg_id, uint32_t dest, ChannelId channel, uint8_t channel_hash,
                          const uint8_t* wire_data, size_t wire_size);

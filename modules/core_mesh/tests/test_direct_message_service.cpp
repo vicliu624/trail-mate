@@ -41,6 +41,37 @@ int main()
     assert(ok.radio.send_count == 1);
     assert(ok.events.count(mesh::MeshEventKind::MessageSent) == 1);
 
+    Harness channel_key_path;
+    mesh::DirectMessageCommand channel_command{mesh::NodeId{0xAA02},
+                                               mesh::ByteView{payload, sizeof(payload)},
+                                               false};
+    const uint8_t psk[] = {0x10, 0x11, 0x12, 0x13};
+    channel_command.from = mesh::NodeId{0x1001};
+    channel_command.application_port = 77;
+    channel_command.packet_id = 0x12345678;
+    channel_command.channel_hash = 0x2A;
+    channel_command.channel_key = mesh::ByteView{psk, sizeof(psk)};
+    channel_command.hop_limit = 5;
+    channel_command.has_air_want_ack = true;
+    channel_command.air_want_ack = false;
+    channel_command.include_payload_dest = false;
+    channel_command.require_local_identity = false;
+    channel_command.require_peer_key = false;
+    auto channel_sent = channel_key_path.direct.sendDirect(channel_command);
+    assert(channel_sent.ok);
+    assert(channel_key_path.crypto.random_count == 0);
+    assert(channel_key_path.peer_store.keys.empty());
+    assert(channel_key_path.protocol.last_context.local_node == mesh::NodeId{0x1001});
+    assert(channel_key_path.protocol.last_context.packet_id == 0x12345678);
+    assert(channel_key_path.protocol.last_context.channel_hash == 0x2A);
+    assert(channel_key_path.protocol.last_context.channel_key.data == psk);
+    assert(channel_key_path.protocol.last_context.channel_key.size == sizeof(psk));
+    assert(channel_key_path.protocol.last_context.hop_limit == 5);
+    assert(channel_key_path.protocol.last_context.has_air_want_ack);
+    assert(!channel_key_path.protocol.last_context.air_want_ack);
+    assert(!channel_key_path.protocol.last_context.include_payload_dest);
+    assert(channel_key_path.radio.send_count == 1);
+
     Harness invalid;
     mesh::DirectMessageCommand invalid_command{mesh::NodeId{},
                                                mesh::ByteView{payload, sizeof(payload)},
