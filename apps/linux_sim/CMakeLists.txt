@@ -271,6 +271,26 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_product_composition_bundle_smoke
              COMMAND trailmate_product_composition_bundle_smoke)
 
+    add_executable(trailmate_linux_sim_composition_root_smoke
+        tests/linux_sim_composition_root_smoke.cpp
+        src/linux_sim_composition_root.cpp
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/workspace/presentation_workspace_probe.cpp"
+    )
+    target_include_directories(trailmate_linux_sim_composition_root_smoke
+        PRIVATE
+            "${PROJECT_SOURCE_DIR}/src"
+            "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    add_test(NAME trailmate_linux_sim_composition_root_smoke
+             COMMAND trailmate_linux_sim_composition_root_smoke)
+
     add_executable(trailmate_chat_presentation_mapper_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/tests/test_chat_conversation_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
