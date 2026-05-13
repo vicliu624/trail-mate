@@ -1,0 +1,119 @@
+{
+  "phase": "5.9",
+  "purpose": "renderer legacy boundary baseline",
+  "known_legacy_islands": [
+    {
+      "id": "chat-ui-controller-legacy",
+      "path": "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp",
+      "allowed_tokens": [
+        "ChatService",
+        "ContactService",
+        "TeamUiStore",
+        "gps_runtime",
+        "service_.getRecentMessages",
+        "service_.getConversations"
+      ],
+      "reason": "legacy application controller documented in CHAT_UI_CONTROLLER_LEGACY_OWNERSHIP_AUDIT.md",
+      "future_phase": "chat-renderer-cleanup"
+    },
+    {
+      "id": "chat-ui-controller-header-legacy",
+      "path": "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h",
+      "allowed_tokens": [
+        "ChatService"
+      ],
+      "reason": "ChatUiController still owns event handling, compatibility refresh, and legacy island lifecycle",
+      "future_phase": "chat-renderer-cleanup"
+    },
+    {
+      "id": "gps-page-state-legacy",
+      "path": "modules/ui_shared/src/ui/screens/gps",
+      "allowed_tokens": [
+        "platform/ui/gps_runtime.h",
+        "GPSPageState",
+        "map_viewport",
+        "map_tiles"
+      ],
+      "reason": "legacy LVGL GPS/map page state documented in MAP_UI_LEGACY_OWNERSHIP_AUDIT.md",
+      "future_phase": "map-renderer-cleanup"
+    },
+    {
+      "id": "lvgl-map-viewport-legacy",
+      "path": "modules/ui_shared/src/ui/widgets/map",
+      "allowed_tokens": [
+        "map_tiles",
+        "lv_obj_t",
+        "lvgl"
+      ],
+      "reason": "map viewport remains the legacy tile renderer/runtime surface",
+      "future_phase": "map-renderer-cleanup"
+    },
+    {
+      "id": "lvgl-dashboard-widgets-legacy",
+      "path": "modules/ui_shared/src/ui/menu/dashboard",
+      "allowed_tokens": [
+        "platform/ui/gps_runtime.h",
+        "ContactService",
+        "ChatService",
+        "messagingFacade"
+      ],
+      "reason": "dashboard widgets are being hardened incrementally through presentation snapshots",
+      "future_phase": "dashboard-renderer-cleanup"
+    },
+    {
+      "id": "uconsole-map-model-legacy",
+      "path": "platform/linux/uconsole/src/uconsole_map_workspace_model.cpp",
+      "allowed_tokens": [
+        "map_tiles_around",
+        "ensureTile",
+        "ensureContourTiles",
+        "MapTileCache"
+      ],
+      "reason": "uConsole tile/cache/contour enumeration remains outside MapWorkspaceSnapshot",
+      "future_phase": "uconsole-map-renderer-cleanup"
+    },
+    {
+      "id": "uconsole-map-model-header-legacy",
+      "path": "platform/linux/uconsole/include/uconsole/uconsole_map_workspace_model.h",
+      "allowed_tokens": [
+        "MapTileCache",
+        "MapTileCacheStats"
+      ],
+      "reason": "uConsole map model still owns platform tile/cache state as a bounded legacy app model",
+      "future_phase": "uconsole-map-renderer-cleanup"
+    },
+    {
+      "id": "uconsole-chat-model-legacy",
+      "path": "platform/linux/uconsole/src/uconsole_chat_workspace_model.cpp",
+      "allowed_tokens": [
+        "platform/ui/gps_runtime.h",
+        "ChatService",
+        "ContactService"
+      ],
+      "reason": "uConsole chat app model still contains legacy compatibility reads and command paths",
+      "future_phase": "uconsole-chat-renderer-cleanup"
+    },
+    {
+      "id": "uconsole-dashboard-model-legacy",
+      "path": "platform/linux/uconsole/src/uconsole_dashboard_model.cpp",
+      "allowed_tokens": [
+        "platform/ui/gps_runtime.h",
+        "ChatService",
+        "ContactService",
+        "MapTileCache"
+      ],
+      "reason": "uConsole dashboard app model remains a platform application model, not a pure renderer",
+      "future_phase": "uconsole-dashboard-renderer-cleanup"
+    },
+    {
+      "id": "tracker-route-overlay-legacy",
+      "path": "modules/ui_shared/src/ui/screens/tracker",
+      "allowed_tokens": [
+        "platform/ui/route_storage.h",
+        "route_storage"
+      ],
+      "reason": "route/tracker overlays are outside Phase 5.9 renderer hardening",
+      "future_phase": "route-renderer-cleanup"
+    }
+  ]
+}
