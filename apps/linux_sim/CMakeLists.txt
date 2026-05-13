@@ -198,6 +198,22 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_ui_presentation_map_workspace_smoke
              COMMAND trailmate_ui_presentation_map_workspace_smoke)
 
+    add_executable(trailmate_ui_presentation_workspace_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_presentation_workspace.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
+    )
+    target_include_directories(trailmate_ui_presentation_workspace_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    add_test(NAME trailmate_ui_presentation_workspace_smoke
+             COMMAND trailmate_ui_presentation_workspace_smoke)
+
     add_executable(trailmate_map_workspace_ascii_probe
         tests/map_workspace_ascii_probe.cpp
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
