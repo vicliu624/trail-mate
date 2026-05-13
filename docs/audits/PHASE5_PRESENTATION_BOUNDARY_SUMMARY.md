@@ -55,3 +55,17 @@ can be represented as one typed presentation graph.
 
 The workspace layer is intentionally not a factory, service locator, app service
 registry, renderer, telemetry model, or snapshot cache.
+
+## Phase 5.9 Renderer Hardening
+
+Phase 5.9 starts locking renderer behavior:
+
+- strict surfaces cannot include platform/toolkit/business runtime dependencies
+- migrated Chat and Team text paths must continue using `ChatWorkspaceModel`
+- migrated Map status/action paths must continue using `MapWorkspaceModel`
+- LVGL dashboard GPS status labels now consume `GpsStatusModel`
+- uConsole map status/center summary must continue exposing
+  `presentation_workspace`
+
+uConsole tile/cache/contour enumeration, GTK overview GPS compatibility logic,
+and dashboard/chat app model runtime reads remain bounded legacy ownership.

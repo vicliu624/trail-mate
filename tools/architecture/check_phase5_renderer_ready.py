@@ -317,6 +317,39 @@ def check_migrated_dashboard_status_is_locked() -> int:
     return failures
 
 
+def check_uconsole_renderer_bridge_is_locked() -> int:
+    failures = 0
+
+    smoke = "apps/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp"
+    if exists(smoke):
+        text = read_text(smoke)
+        for token in [
+            "PresentationWorkspace",
+            "PresentationWorkspaceProbe::snapshot",
+            "workspace.map",
+            "workspace.chat",
+            "workspace.team_chat",
+        ]:
+            if token not in text:
+                failures += fail(f"uConsole presentation workspace smoke missing token: {token}")
+    else:
+        failures += fail("uConsole presentation workspace smoke is missing")
+
+    app_state = "apps/linux_uconsole/src/platform/gtk/gtk_uconsole_app_state.h"
+    if exists(app_state):
+        text = read_text(app_state)
+        for token in [
+            "UConsoleChatWorkspaceModel chat_model",
+            "UConsoleMapWorkspaceModel map_model",
+        ]:
+            if token not in text:
+                failures += fail(f"uConsole GTK app state missing model token: {token}")
+    else:
+        failures += fail("uConsole GTK app state is missing")
+
+    return failures
+
+
 def load_baseline() -> dict:
     if not BASELINE_PATH.exists():
         return {}
@@ -445,6 +478,7 @@ def main() -> int:
     failures += check_migrated_chat_path_is_locked()
     failures += check_migrated_map_path_is_locked()
     failures += check_migrated_dashboard_status_is_locked()
+    failures += check_uconsole_renderer_bridge_is_locked()
     failures += check_legacy_baseline(strict_baseline=args.strict)
     failures += check_docs()
 

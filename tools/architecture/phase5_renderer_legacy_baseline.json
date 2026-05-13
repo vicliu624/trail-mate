@@ -106,6 +106,15 @@
       "future_phase": "uconsole-dashboard-renderer-cleanup"
     },
     {
+      "id": "uconsole-gtk-overview-legacy",
+      "path": "apps/linux_uconsole/src/platform/gtk/gtk_uconsole_overview_logic.cpp",
+      "allowed_tokens": [
+        "platform/ui/gps_runtime.h"
+      ],
+      "reason": "GTK overview logic still contains legacy GPS compatibility reads and is not part of the Phase 5.9 map presentation bridge",
+      "future_phase": "uconsole-gtk-renderer-cleanup"
+    },
+    {
       "id": "tracker-route-overlay-legacy",
       "path": "modules/ui_shared/src/ui/screens/tracker",
       "allowed_tokens": [

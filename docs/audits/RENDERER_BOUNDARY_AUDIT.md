@@ -35,6 +35,7 @@ Renderers must not directly read:
 | Migrated renderer surface | Chat non-team path, Team text path, Map workspace status | strict for migrated path |
 | Legacy island | `ChatUiController`, `GPSPageState`, map viewport tile runtime | baseline |
 | Platform application model | `UConsoleMapWorkspaceModel` | bounded legacy, not pure renderer |
+| GTK/uConsole renderer | GTK app logic and widgets | strict only where a presentation bridge exists |
 
 ## Known Legacy Islands
 
@@ -45,6 +46,7 @@ Renderers must not directly read:
 - LVGL dashboard GPS/compass/recent widgets
 - uConsole tile/cache/contour model
 - uConsole chat/dashboard app models
+- uConsole GTK overview GPS compatibility logic
 - key verification modal
 - Team location/command picker
 - route/tracker overlays
@@ -64,6 +66,7 @@ These should not regress:
 - `MapWorkspaceModel`-backed map workspace status/action path
 - LVGL dashboard GPS status labels backed by `GpsStatusModel`
 - uConsole `presentation_workspace` bridge
+- uConsole presentation workspace smoke
 
 ## Migrated Path Locks
 
@@ -97,6 +100,15 @@ LVGL dashboard migrated path:
   `dashboard_gps_status_model().snapshot()`
 - the satellite radar remains a baseline legacy section until a richer GNSS
   skyplot presentation source exists
+
+GTK/uConsole migrated path:
+
+- `UConsoleMapWorkspaceModel` must keep exposing `presentation_workspace`
+- `UConsoleMapWorkspaceModel` must keep map status/center projection behind
+  `LegacyMapPresentationSource`, `LegacyMapActionSink`, and
+  `MapWorkspaceModel`
+- GTK overview GPS compatibility logic remains a baseline legacy island until a
+  dedicated overview presentation model exists
 
 ## Deferred
 

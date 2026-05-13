@@ -54,6 +54,7 @@ It records:
 | LVGL dashboard widgets | incremental snapshot migration target |
 | uConsole map model | bounded platform application model |
 | uConsole chat/dashboard models | bounded platform application models |
+| uConsole GTK overview logic | legacy GPS compatibility renderer |
 | tracker route overlays | deferred renderer cleanup |
 
 ## Interpretation
