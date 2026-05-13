@@ -1,19 +1,12 @@
 #include "ui/components/air_status_footer.h"
 
-#include "app/app_config.h"
-#include "app/app_facade_access.h"
-#include "chat/infra/mesh_protocol_utils.h"
-#include "chat/infra/meshcore/mc_region_presets.h"
-#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/components/two_pane_layout.h"
 #include "ui/components/two_pane_styles.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
-
-#include <cmath>
-#include <cstdio>
-#include <string>
+#include "ui/presentation_sources/legacy_air_device_status_source.h"
+#include "ui_presentation/device/device_status_model.h"
 
 namespace ui::components::air_status_footer
 {
@@ -23,111 +16,11 @@ namespace
 constexpr lv_coord_t kFooterHeightCompact = 36;
 constexpr lv_coord_t kFooterHeightLarge = 44;
 
-void format_bw_text(float bw_khz, char* out, size_t out_len)
+::ui::device::DeviceStatusModel& deviceStatusModel()
 {
-    if (!out || out_len == 0)
-    {
-        return;
-    }
-
-    if (!std::isfinite(bw_khz) || bw_khz <= 0.0f)
-    {
-        std::snprintf(out, out_len, "BW-");
-        return;
-    }
-
-    const float rounded = std::round(bw_khz);
-    if (std::fabs(bw_khz - rounded) < 0.05f)
-    {
-        std::snprintf(out, out_len, "BW%.0fk", static_cast<double>(bw_khz));
-    }
-    else
-    {
-        std::snprintf(out, out_len, "BW%.1fk", static_cast<double>(bw_khz));
-    }
-}
-
-void format_summary_and_detail(char* summary,
-                               size_t summary_len,
-                               char* detail,
-                               size_t detail_len)
-{
-    if (!summary || summary_len == 0 || !detail || detail_len == 0)
-    {
-        return;
-    }
-
-    summary[0] = '\0';
-    detail[0] = '\0';
-
-    const app::AppConfig& cfg = app::configFacade().getConfig();
-    const chat::MeshProtocol protocol = cfg.mesh_protocol;
-    const char* protocol_name = chat::infra::meshProtocolName(protocol);
-
-    float freq_mhz = 0.0f;
-    float bw_khz = 0.0f;
-    uint8_t sf = 0;
-    uint8_t cr = 0;
-
-    if (protocol == chat::MeshProtocol::Meshtastic)
-    {
-        const chat::meshtastic::RadioConfig radio =
-            chat::meshtastic::deriveRadioConfig(cfg.meshtastic_config);
-        freq_mhz = radio.freq_mhz;
-        bw_khz = radio.bw_khz;
-        sf = radio.sf;
-        cr = radio.cr_denom;
-    }
-    else if (protocol == chat::MeshProtocol::MeshCore)
-    {
-        const chat::MeshConfig& mesh = cfg.meshcore_config;
-        freq_mhz = mesh.meshcore_freq_mhz;
-        bw_khz = mesh.meshcore_bw_khz;
-        sf = mesh.meshcore_sf;
-        cr = mesh.meshcore_cr;
-
-        if (mesh.meshcore_region_preset > 0)
-        {
-            if (const chat::meshcore::RegionPreset* preset =
-                    chat::meshcore::findRegionPresetById(mesh.meshcore_region_preset))
-            {
-                freq_mhz = preset->freq_mhz;
-                bw_khz = preset->bw_khz;
-                sf = preset->sf;
-                cr = preset->cr;
-            }
-        }
-    }
-    else
-    {
-        const chat::MeshConfig& mesh = cfg.rnode_config;
-        freq_mhz = mesh.override_frequency_mhz;
-        bw_khz = mesh.bandwidth_khz;
-        sf = mesh.spread_factor;
-        cr = mesh.coding_rate;
-    }
-
-    if (freq_mhz > 0.0f)
-    {
-        std::snprintf(summary,
-                      summary_len,
-                      "%s  %.3fMHz",
-                      protocol_name ? protocol_name : "-",
-                      static_cast<double>(freq_mhz));
-    }
-    else
-    {
-        std::snprintf(summary, summary_len, "%s", protocol_name ? protocol_name : "-");
-    }
-
-    char bw_text[24];
-    format_bw_text(bw_khz, bw_text, sizeof(bw_text));
-    std::snprintf(detail,
-                  detail_len,
-                  "%s  SF%u  CR%u",
-                  bw_text,
-                  static_cast<unsigned>(sf),
-                  static_cast<unsigned>(cr));
+    static ::ui::device::DeviceStatusModel model(
+        ::ui::presentation_sources::legacy_air_device_status_source());
+    return model;
 }
 
 } // namespace
@@ -188,9 +81,9 @@ void refresh(Footer& footer)
         return;
     }
 
-    char summary[64];
-    char detail[48];
-    format_summary_and_detail(summary, sizeof(summary), detail, sizeof(detail));
+    const auto snapshot = deviceStatusModel().snapshot();
+    const char* summary = snapshot.header.valid ? snapshot.status_line.c_str() : "-";
+    const char* detail = snapshot.header.valid ? snapshot.modem_preset.c_str() : "-";
 
     ::ui::i18n::set_label_text_raw(footer.summary_label, summary);
     ::ui::i18n::set_label_text_raw(footer.detail_label, detail);
