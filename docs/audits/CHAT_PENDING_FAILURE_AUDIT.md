@@ -79,3 +79,34 @@ Failed -> MessageFailureKind::Unknown
 
 That fallback is acceptable only while structured failure ownership is missing.
 It must not be interpreted as completion of detailed pending/failure UI.
+
+## Phase 5.6 Closeout Decision
+
+Phase 5.6-closeout does not introduce a new pending queue.
+
+Structured failure remains deferred until one of the following is chosen:
+
+1. `ChatService` stores structured failure on `ChatMessage`.
+2. A ChatPendingReadModel aggregates `MeshSession` / ACK tracker / send result
+   events.
+3. A Mesh-to-chat event projector normalizes `SendResult` into chat delivery
+   updates.
+
+Until then:
+
+```text
+Failed -> MessageDeliveryState::Failed
+Failed -> MessageFailureKind::Unknown
+```
+
+is the only supported compatibility projection.
+
+## Prohibited Workaround
+
+Do not:
+
+- keep last send failure in `ChatWorkspaceModel`
+- let LVGL widgets remember failure state
+- infer failure from text color
+- infer pending from a button state
+- create a renderer-side pending message list
