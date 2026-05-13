@@ -315,6 +315,36 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_chat_message_mapper_smoke
              COMMAND trailmate_chat_message_mapper_smoke)
 
+    add_executable(trailmate_chat_delivery_read_model_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_chat_delivery_read_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
+    )
+    target_include_directories(trailmate_chat_delivery_read_model_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    add_test(NAME trailmate_chat_delivery_read_model_smoke
+             COMMAND trailmate_chat_delivery_read_model_smoke)
+
+    add_executable(trailmate_chat_delivery_event_projector_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_chat_delivery_event_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
+    )
+    target_include_directories(trailmate_chat_delivery_event_projector_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    add_test(NAME trailmate_chat_delivery_event_projector_smoke
+             COMMAND trailmate_chat_delivery_event_projector_smoke)
+
+    add_executable(trailmate_legacy_chat_delivery_bridge_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_legacy_chat_delivery_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/legacy_chat_delivery_bridge.cpp"
+    )
+    target_include_directories(trailmate_legacy_chat_delivery_bridge_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    add_test(NAME trailmate_legacy_chat_delivery_bridge_smoke
+             COMMAND trailmate_legacy_chat_delivery_bridge_smoke)
+
     add_executable(trailmate_legacy_chat_presentation_adapters_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_chat_presentation_adapters.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp"
