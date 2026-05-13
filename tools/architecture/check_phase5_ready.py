@@ -51,6 +51,8 @@ def check_required_files() -> int:
         "modules/ui_shared/tests/test_team_chat_action_sink.cpp",
         "modules/chat_presentation_adapters/include/chat_presentation_adapters/chat_conversation_mapper.h",
         "docs/audits/MAP_PRESENTATION_BOUNDARY_AUDIT.md",
+        "docs/specification/MAP_WORKSPACE_MODEL_SPEC.md",
+        "docs/audits/MAP_UI_LEGACY_OWNERSHIP_AUDIT.md",
         "modules/ui_presentation/include/ui_presentation/map/map_workspace_snapshot.h",
         "modules/ui_presentation/include/ui_presentation/map/map_presentation_source.h",
         "modules/ui_presentation/include/ui_presentation/map/map_action_sink.h",
@@ -299,6 +301,56 @@ def check_map_ascii_probe_exists() -> int:
     return failures
 
 
+def check_map_closeout_docs() -> int:
+    failures = 0
+
+    spec = "docs/specification/MAP_WORKSPACE_MODEL_SPEC.md"
+    if not exists(spec):
+        failures += fail("Map workspace model specification is missing")
+    else:
+        text = read_text(spec)
+        for token in [
+            "confirmed update semantics",
+            "Tile availability remains owned by the legacy tile/cache runtime",
+            "Full GPS receiver status belongs to `GpsStatusModel`",
+            "TeamOverlaySummary is a projection summary only",
+            "Phase 5.7 establishes the presentation boundary",
+        ]:
+            if token not in text:
+                failures += fail(f"Map workspace model spec missing token: {token}")
+
+    audit = "docs/audits/MAP_UI_LEGACY_OWNERSHIP_AUDIT.md"
+    if not exists(audit):
+        failures += fail("Map UI legacy ownership audit is missing")
+    else:
+        text = read_text(audit)
+        for token in [
+            "Migrated in Phase 5.7",
+            "compact LVGL map runtime consumes `MapWorkspaceModel::snapshot()`",
+            "`UConsoleMapWorkspaceModel` exposes a portable",
+            "Remaining Legacy Ownership",
+            "Route/tracker overlays remain legacy-owned",
+            "Phase 5.7 does not remove",
+        ]:
+            if token not in text:
+                failures += fail(f"Map UI legacy audit missing token: {token}")
+
+    known = "tools/architecture/KNOWN_PRODUCT_ARCHITECTURE_VIOLATIONS.md"
+    if exists(known):
+        text = read_text(known)
+        for token in [
+            "Phase 5.7 Map Presentation Remaining Legacy Ownership",
+            "`ui_presentation/map` snapshot/source/sink/model",
+            "uConsole `presentation_workspace` bridge",
+            "Rich Team map markers remain legacy-owned",
+            "Tile/cache/route/rich overlay cleanup must be handled in later bounded",
+        ]:
+            if token not in text:
+                failures += fail(f"known violations missing map token: {token}")
+
+    return failures
+
+
 def check_chat_presentation_adapters_are_pure_mappers() -> int:
     forbidden_tokens = [
         "ChatService",
@@ -521,6 +573,7 @@ def main() -> int:
     failures += check_lvgl_map_surface_uses_workspace_model()
     failures += check_uconsole_map_surface_uses_workspace_model()
     failures += check_map_ascii_probe_exists()
+    failures += check_map_closeout_docs()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
     failures += check_team_chat_presentation_context()

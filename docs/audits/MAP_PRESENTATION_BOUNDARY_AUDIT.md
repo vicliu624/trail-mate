@@ -42,6 +42,20 @@ Renderer should consume:
 Legacy GPS/map/runtime reads are allowed only inside compatibility
 presentation-source adapters.
 
+## Migrated in Phase 5.7
+
+- `ui_presentation/map` now contains the portable map workspace snapshot,
+  source port, action sink port, and ViewModel.
+- `LegacyMapPresentationSource` and `LegacyMapActionSink` now bound legacy
+  GPS/map/team compatibility state behind read/write adapters.
+- The compact LVGL map runtime consumes `MapWorkspaceModel` for self-location
+  rendering and center-on-self action flow.
+- `UConsoleMapWorkspaceModel` now exposes a portable
+  `presentation_workspace` and consumes `LegacyGpsStatusSource` instead of
+  including `platform/ui/gps_runtime.h` directly in its map center path.
+- The ASCII/headless probe renders `MapWorkspaceSnapshot` without LVGL, GTK,
+  GPS runtime, tile cache, or raw Team store dependencies.
+
 ## Current Consumers
 
 | Consumer | Current source | Target source | Phase owner |

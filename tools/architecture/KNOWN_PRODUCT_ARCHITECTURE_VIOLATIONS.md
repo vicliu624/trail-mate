@@ -223,6 +223,58 @@ Rules:
   backed by `TeamChatPresentationSource` and `TeamChatActionSink`.
 - Renderer must not infer pending/failure state.
 
+### Phase 5.7 Map Presentation Remaining Legacy Ownership
+
+Status: known, bounded.
+
+Phase 5.7 introduced:
+
+- `ui_presentation/map` snapshot/source/sink/model.
+- `LegacyMapPresentationSource`.
+- `LegacyMapActionSink`.
+- compact LVGL map runtime consumption of `MapWorkspaceModel`.
+- uConsole `presentation_workspace` bridge.
+- ASCII/headless `MapWorkspaceSnapshot` probe.
+
+Migrated surfaces:
+
+- Map self-location projection now flows through `MapWorkspaceModel` on the
+  compact LVGL map runtime.
+- Center-on-self action now flows through `MapWorkspaceModel` on the compact
+  LVGL map runtime.
+- uConsole map center fix projection now consumes `LegacyGpsStatusSource`
+  rather than including `platform/ui/gps_runtime.h` directly in the map model.
+- uConsole exposes portable `presentation_workspace` inside its legacy
+  tile/cache map snapshot.
+- Headless map presentation is covered by `trailmate_map_workspace_ascii_probe`.
+
+Remaining legacy ownership:
+
+- ESP/LVGL `GPSPageState` still owns LVGL widgets, tile context, map anchors,
+  pan/zoom/follow state, route/tracker overlays, Team marker widgets, timers,
+  and input/edit mode.
+- Shared LVGL `ui/widgets/map/map_viewport.*` still owns tile rendering, tile
+  loader timers, gesture runtime, map source config reads, and tile availability
+  checks.
+- ESP/Linux map tile loaders still own tile image loading, SD/cache paths,
+  contour tile rendering, and missing tile notices.
+- GTK/uConsole still owns tile path enumeration, cache stats, contour store and
+  generator access, MQTT/contact node projection, click-to-coordinate math, and
+  pan/zoom persistence.
+- Rich Team map markers remain legacy-owned.
+- Route/tracker overlays remain legacy-owned.
+- Advanced measurement tools remain legacy-owned or unimplemented.
+- Offline map package scanning and repair remain legacy-owned.
+- Tile download retry state remains legacy-owned.
+
+Rules:
+
+- New map workspace status/actions should use `MapWorkspaceModel`.
+- Renderer must not infer GPS fix, layer state, or Team summary from tile/cache
+  side effects.
+- Tile/cache/route/rich overlay cleanup must be handled in later bounded
+  phases, not by expanding `MapWorkspaceModel`.
+
 ## Operating Rule
 
 Do not fix these categories opportunistically inside unrelated feature PRs.
