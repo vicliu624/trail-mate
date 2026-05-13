@@ -112,6 +112,15 @@ class UConsoleMapWorkspaceModel final
                                                       int zoom,
                                                       int radius_x,
                                                       int radius_y) const;
+    [[nodiscard]] ::ui::map::MapWorkspaceModel& presentationModel() noexcept
+    {
+        return presentation_model_;
+    }
+    [[nodiscard]] const ::ui::map::MapWorkspaceModel& presentationModel() const
+        noexcept
+    {
+        return presentation_model_;
+    }
     [[nodiscard]] ::platform::linux_runtime::MapTileResult ensureTile(
         const ::platform::linux_runtime::MapTileId& tile) const;
     [[nodiscard]] ::platform::linux_runtime::MapContourGenerationResult

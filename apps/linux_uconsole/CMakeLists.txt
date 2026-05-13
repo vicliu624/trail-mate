@@ -103,6 +103,9 @@ endif()
 # ---------------------------------------------------------------------------
 
 add_library(trailmate_uconsole_shell
+    "src/uconsole_composition_root.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_gps_status_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp"
@@ -119,6 +122,8 @@ if(TRAIL_MATE_UCONSOLE_ENABLE_LEGACY_SURFACE)
 endif()
 target_include_directories(trailmate_uconsole_shell
     PUBLIC
+        "${PROJECT_SOURCE_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/include"
         "${TRAIL_MATE_LINUX_COMMON_INCLUDE_ROOT}"
         "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}"
@@ -187,6 +192,15 @@ if(BUILD_TESTING)
     )
     add_test(NAME trailmate_uconsole_chat_workspace_smoke
              COMMAND trailmate_uconsole_chat_workspace_smoke)
+
+    add_executable(trailmate_uconsole_composition_root_smoke
+        tests/uconsole_composition_root_smoke.cpp
+    )
+    target_link_libraries(trailmate_uconsole_composition_root_smoke
+        PRIVATE trailmate_uconsole_shell
+    )
+    add_test(NAME trailmate_uconsole_composition_root_smoke
+             COMMAND trailmate_uconsole_composition_root_smoke)
 
     add_executable(trailmate_uconsole_meshtastic_node_payload_smoke
         tests/uconsole_meshtastic_node_payload_smoke.cpp
