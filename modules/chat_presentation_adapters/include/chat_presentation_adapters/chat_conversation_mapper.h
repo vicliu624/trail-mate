@@ -7,7 +7,8 @@ namespace chat_presentation_adapters
 {
 
 ui::chat::ChatProtocolKind mapProtocol(chat::MeshProtocol protocol);
-chat::MeshProtocol mapProtocol(ui::chat::ChatProtocolKind protocol);
+bool tryMapProtocol(ui::chat::ChatProtocolKind protocol,
+                    chat::MeshProtocol& out);
 ui::chat::ConversationId toUiConversationId(const chat::ConversationId& id);
 bool toCoreConversationId(const ui::chat::ConversationId& id,
                           chat::ConversationId& out);

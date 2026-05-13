@@ -39,6 +39,12 @@ and UI presentation identity types.
 - `ChatWorkspaceModel` may own only UI selection state and cursor offsets. It
   must delegate snapshot construction to `IChatPresentationSource` and user
   actions to `IChatActionSink`.
+- `ChatWorkspaceModel::selectConversation` uses optimistic UI selection:
+  it validates the presentation id, updates local selected state immediately,
+  resets the message offset, and then notifies `IChatActionSink`. A sink
+  failure does not roll back the UI selection because selection is presentation
+  state, while the sink is a synchronization hook for app-side side effects
+  such as read cursors and mark-read behavior.
 - `ChatWorkspaceModel` must not own or expose `ChatService`, `ContactService`,
   `IMeshAdapter`, stores, protocol adapters, or `chat::ConversationId`.
 - `ChatWorkspaceSnapshot` must not expose `ChatService`, `ContactService`,
@@ -95,6 +101,13 @@ chat::MessageStatus::Failed   -> MessageDeliveryState::Failed
 Send failure mapping from Mesh/Core send results is deferred until the
 pending/failure ownership is explicit.
 
+The current compatibility mapper copies `chat::ChatMessage::msg_id` into
+`MessageRef::protocol_id`. That is a compatibility projection only. It is not
+a stable local UI id, database row id, retry nonce, or pending token. When a
+message repository exposes a stable local row id or message handle, the source
+adapter should populate `MessageRef::local_id` and keep protocol packet ids in
+`MessageRef::protocol_id`.
+
 ## Workspace Model Contract
 
 `ChatWorkspaceModel` is a thin presentation model. It keeps the currently
@@ -148,7 +161,32 @@ The initial legacy sink supports `DirectPeer` and `Channel` conversations.
 `Team`, `Broadcast`, and `System` return `Unsupported` until their semantics are
 explicitly mapped in later phases.
 
+The current Phase 5.6-c compatibility adapter lives in
+`modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp`
+and
+`modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp`.
+It is a Source/Sink boundary around the existing `ChatService`, not a new chat
+domain model.
+
+## Minimal Renderer Connection
+
+Phase 5.6-d may connect an existing renderer surface to `ChatWorkspaceModel`
+for the primary conversation list, selected conversation, message list, send,
+and mark-read paths. During transition, legacy LVGL widgets can still require
+local compatibility conversion back to `chat::ConversationMeta` or
+`chat::ChatMessage`. That compatibility conversion is not a public identity
+adapter and must not be treated as part of the portable presentation contract.
+
+Any remaining renderer access to `ChatService`, `ContactService`, team runtime,
+or event-specific message lookup is migration debt for later hardening. New
+renderer paths must use:
+
+```text
+Renderer -> ChatWorkspaceModel -> Source/Sink
+```
+
 ## Non-Goals
 
-Phase 5.6 does not connect LVGL chat pages, does not change team chat behavior,
-does not change message storage, and does not change send/receive paths.
+Phase 5.6 does not complete team chat behavior, does not change message
+storage, does not redefine `chat::ConversationId`, and does not change the
+underlying send/receive protocol paths.

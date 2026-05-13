@@ -47,14 +47,38 @@ void protocolsMapOneToOne()
            ui::chat::ChatProtocolKind::RNode);
     assert(chat_presentation_adapters::mapProtocol(chat::MeshProtocol::LXMF) ==
            ui::chat::ChatProtocolKind::LXMF);
-    assert(chat_presentation_adapters::mapProtocol(ui::chat::ChatProtocolKind::Meshtastic) ==
-           chat::MeshProtocol::Meshtastic);
-    assert(chat_presentation_adapters::mapProtocol(ui::chat::ChatProtocolKind::MeshCore) ==
-           chat::MeshProtocol::MeshCore);
-    assert(chat_presentation_adapters::mapProtocol(ui::chat::ChatProtocolKind::RNode) ==
-           chat::MeshProtocol::RNode);
-    assert(chat_presentation_adapters::mapProtocol(ui::chat::ChatProtocolKind::LXMF) ==
-           chat::MeshProtocol::LXMF);
+
+    chat::MeshProtocol core_protocol = chat::MeshProtocol::LXMF;
+    assert(chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::Meshtastic,
+        core_protocol));
+    assert(core_protocol == chat::MeshProtocol::Meshtastic);
+    assert(chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::MeshCore,
+        core_protocol));
+    assert(core_protocol == chat::MeshProtocol::MeshCore);
+    assert(chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::RNode,
+        core_protocol));
+    assert(core_protocol == chat::MeshProtocol::RNode);
+    assert(chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::LXMF,
+        core_protocol));
+    assert(core_protocol == chat::MeshProtocol::LXMF);
+}
+
+void unsupportedPresentationProtocolsDoNotMapToCore()
+{
+    chat::MeshProtocol core_protocol = chat::MeshProtocol::Meshtastic;
+    assert(!chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::None,
+        core_protocol));
+    assert(!chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::TrailMate,
+        core_protocol));
+    assert(!chat_presentation_adapters::tryMapProtocol(
+        ui::chat::ChatProtocolKind::Mixed,
+        core_protocol));
 }
 
 void directPeerMapsBackToCoreConversation()
@@ -83,6 +107,18 @@ void teamDoesNotMapBackToCoreConversation()
     assert(!chat_presentation_adapters::toCoreConversationId(ui, core));
 }
 
+void trailMateDirectPeerDoesNotMapBackToCoreConversation()
+{
+    ui::chat::ConversationId ui;
+    ui.kind = ui::chat::ConversationKind::DirectPeer;
+    ui.protocol = ui::chat::ChatProtocolKind::TrailMate;
+    ui.primary = 1234;
+    ui.secondary = static_cast<uint32_t>(chat::ChannelId::PRIMARY);
+
+    chat::ConversationId core;
+    assert(!chat_presentation_adapters::toCoreConversationId(ui, core));
+}
+
 } // namespace
 
 int main()
@@ -90,7 +126,9 @@ int main()
     peerConversationMapsToDirectPeer();
     channelConversationMapsToChannel();
     protocolsMapOneToOne();
+    unsupportedPresentationProtocolsDoNotMapToCore();
     directPeerMapsBackToCoreConversation();
     teamDoesNotMapBackToCoreConversation();
+    trailMateDirectPeerDoesNotMapBackToCoreConversation();
     return 0;
 }

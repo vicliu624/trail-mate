@@ -19,24 +19,29 @@ ui::chat::ChatProtocolKind mapProtocol(chat::MeshProtocol protocol)
     return ui::chat::ChatProtocolKind::None;
 }
 
-chat::MeshProtocol mapProtocol(ui::chat::ChatProtocolKind protocol)
+bool tryMapProtocol(ui::chat::ChatProtocolKind protocol,
+                    chat::MeshProtocol& out)
 {
     switch (protocol)
     {
     case ui::chat::ChatProtocolKind::Meshtastic:
-        return chat::MeshProtocol::Meshtastic;
+        out = chat::MeshProtocol::Meshtastic;
+        return true;
     case ui::chat::ChatProtocolKind::MeshCore:
-        return chat::MeshProtocol::MeshCore;
+        out = chat::MeshProtocol::MeshCore;
+        return true;
     case ui::chat::ChatProtocolKind::RNode:
-        return chat::MeshProtocol::RNode;
+        out = chat::MeshProtocol::RNode;
+        return true;
     case ui::chat::ChatProtocolKind::LXMF:
-        return chat::MeshProtocol::LXMF;
+        out = chat::MeshProtocol::LXMF;
+        return true;
     case ui::chat::ChatProtocolKind::None:
     case ui::chat::ChatProtocolKind::TrailMate:
     case ui::chat::ChatProtocolKind::Mixed:
         break;
     }
-    return chat::MeshProtocol::Meshtastic;
+    return false;
 }
 
 ui::chat::ConversationId toUiConversationId(const chat::ConversationId& id)
@@ -67,14 +72,12 @@ bool toCoreConversationId(const ui::chat::ConversationId& id,
         return false;
     }
 
-    if (id.protocol == ui::chat::ChatProtocolKind::None ||
-        id.protocol == ui::chat::ChatProtocolKind::TrailMate ||
-        id.protocol == ui::chat::ChatProtocolKind::Mixed)
+    chat::MeshProtocol protocol;
+    if (!tryMapProtocol(id.protocol, protocol))
     {
         return false;
     }
 
-    const chat::MeshProtocol protocol = mapProtocol(id.protocol);
     if (id.kind == ui::chat::ConversationKind::DirectPeer)
     {
         out = chat::ConversationId(static_cast<chat::ChannelId>(id.secondary),

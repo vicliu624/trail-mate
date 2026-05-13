@@ -75,6 +75,24 @@ ui::chat::ConversationId teamConversation()
     return id;
 }
 
+ui::chat::ConversationId broadcastConversation()
+{
+    ui::chat::ConversationId id;
+    id.kind = ui::chat::ConversationKind::Broadcast;
+    id.protocol = ui::chat::ChatProtocolKind::Meshtastic;
+    id.primary = static_cast<uint32_t>(::chat::ChannelId::PRIMARY);
+    return id;
+}
+
+ui::chat::ConversationId systemConversation()
+{
+    ui::chat::ConversationId id;
+    id.kind = ui::chat::ConversationKind::System;
+    id.protocol = ui::chat::ChatProtocolKind::TrailMate;
+    id.primary = 1;
+    return id;
+}
+
 } // namespace
 
 int main()
@@ -136,6 +154,23 @@ int main()
     const auto team_send = sink.sendMessage(send);
     assert(!team_send.ok);
     assert(team_send.failure == ui::UiActionFailure::Unsupported);
+
+    request.selected = team;
+    assert(source.buildChatWorkspaceSnapshot(request, snapshot));
+    assert(!snapshot.can_send);
+    assert(!snapshot.composer_enabled);
+
+    const ui::chat::ConversationId broadcast = broadcastConversation();
+    send.conversation = broadcast;
+    const auto broadcast_send = sink.sendMessage(send);
+    assert(!broadcast_send.ok);
+    assert(broadcast_send.failure == ui::UiActionFailure::Unsupported);
+
+    const ui::chat::ConversationId system = systemConversation();
+    send.conversation = system;
+    const auto system_send = sink.sendMessage(send);
+    assert(!system_send.ok);
+    assert(system_send.failure == ui::UiActionFailure::Unsupported);
 
     return 0;
 }
