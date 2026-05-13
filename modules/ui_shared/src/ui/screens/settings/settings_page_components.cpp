@@ -32,12 +32,15 @@
 #include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation_sources/legacy_settings_action_sink.h"
+#include "ui/presentation_sources/legacy_settings_source.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
 #include "ui/screens/settings/settings_page_layout.h"
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
 #include "ui/ui_common.h"
+#include "ui_presentation/settings/settings_model.h"
 #include "ui/widgets/busy_overlay.h"
 #include "ui/widgets/system_notification.h"
 #include "ui/widgets/top_bar.h"
@@ -134,6 +137,22 @@ static bool s_firmware_overlay_owned = false;
 static firmware_update_runtime::Phase s_last_firmware_phase = firmware_update_runtime::Phase::Unsupported;
 static bool s_last_firmware_busy = false;
 static lv_obj_t* s_gps_diagnostics_label = nullptr;
+
+static ::ui::settings::SettingsModel& settings_model()
+{
+    static ::ui::settings::SettingsModel model(
+        ::ui::presentation_sources::legacy_settings_source(),
+        ::ui::presentation_sources::legacy_settings_action_sink());
+    return model;
+}
+
+static bool apply_settings_bool_patch(const char* key, bool value)
+{
+    ::ui::settings::SettingsPatchView patch;
+    ::ui::copyText(patch.key, key);
+    ::ui::copyText(patch.value, value ? "1" : "0");
+    return settings_model().apply(patch).ok;
+}
 
 static void update_item_value(settings::ui::ItemWidget& widget);
 static void open_factory_reset_modal();
@@ -3307,10 +3326,10 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
             }
             if (item.pref_key && strcmp(item.pref_key, "gps_enabled") == 0)
             {
-                app::IAppFacade& app_ctx = app::appFacade();
-                app_ctx.getConfig().gps_enabled = *item.bool_value;
-                app_ctx.saveConfig();
-                gps_runtime::set_enabled(*item.bool_value);
+                if (!apply_settings_bool_patch("gps_enabled", *item.bool_value))
+                {
+                    ::ui::SystemNotification::show(::ui::i18n::tr("Unable to apply GPS setting"), 3000);
+                }
             }
             if (item.pref_key && strcmp(item.pref_key, "net_duty_cycle") == 0)
             {

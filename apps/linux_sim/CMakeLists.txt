@@ -157,6 +157,17 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_ui_presentation_mesh_status_smoke
              COMMAND trailmate_ui_presentation_mesh_status_smoke)
 
+    add_executable(trailmate_ui_presentation_settings_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_settings_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
+    )
+    target_include_directories(trailmate_ui_presentation_settings_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    add_test(NAME trailmate_ui_presentation_settings_smoke
+             COMMAND trailmate_ui_presentation_settings_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"

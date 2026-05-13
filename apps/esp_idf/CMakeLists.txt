@@ -122,6 +122,8 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_air_device_status_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_gps_status_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_mesh_status_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_settings_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_settings_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/info_card.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
