@@ -1,7 +1,12 @@
 #include "ble/app_phone_facade.h"
 
 #include "board/BoardBase.h"
+#include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/ble/meshtastic_phone_config_bridge.h"
+#include "chat/ports/i_mesh_adapter.h"
+#include "chat/ports/i_node_store.h"
+#include "chat/usecase/chat_service.h"
+#include "chat/usecase/contact_service.h"
 #include "platform/esp/arduino_common/chat/infra/meshtastic/mt_adapter.h"
 #include "platform/esp/arduino_common/gps/gps_service_api.h"
 #include "platform/shared/ble/app_config_phone_snapshot_bridge.h"
@@ -89,6 +94,42 @@ chat::meshtastic::MtAdapter* getMeshtasticBackend(app::IAppBleFacade& app)
     auto* backend = adapter->backendForProtocol(adapter->backendProtocol());
     return static_cast<chat::meshtastic::MtAdapter*>(backend);
 }
+
+void copyNodeView(const chat::contacts::NodeEntry& entry, phone::PhoneNodeView& out)
+{
+    out = {};
+    out.node_id = entry.node_id;
+    copyBounded(out.short_name, sizeof(out.short_name), entry.short_name);
+    copyBounded(out.long_name, sizeof(out.long_name), entry.long_name);
+    out.last_seen = entry.last_seen;
+    out.snr = entry.snr;
+    out.rssi = entry.rssi;
+    out.hops_away = entry.hops_away;
+    out.channel = entry.channel;
+    out.next_hop = entry.next_hop;
+    out.protocol = entry.protocol;
+    out.role = entry.role;
+    out.hw_model = entry.hw_model;
+    out.has_macaddr = entry.has_macaddr;
+    std::memcpy(out.macaddr, entry.macaddr, sizeof(out.macaddr));
+    out.via_mqtt = entry.via_mqtt;
+    out.is_ignored = entry.is_ignored;
+    out.has_public_key = entry.has_public_key;
+    out.key_manually_verified = entry.key_manually_verified;
+    out.has_device_metrics = entry.has_device_metrics;
+    out.device_metrics = entry.device_metrics;
+    out.position.valid = entry.position_valid;
+    out.position.latitude_i = entry.position_latitude_i;
+    out.position.longitude_i = entry.position_longitude_i;
+    out.position.has_altitude = entry.position_has_altitude;
+    out.position.altitude = entry.position_altitude;
+    out.position.timestamp = entry.position_timestamp;
+    out.position.precision_bits = entry.position_precision_bits;
+    out.position.pdop = entry.position_pdop;
+    out.position.hdop = entry.position_hdop;
+    out.position.vdop = entry.position_vdop;
+    out.position.gps_accuracy_mm = entry.position_gps_accuracy_mm;
+}
 } // namespace
 
 AppPhoneFacade::AppPhoneFacade(app::IAppBleFacade& app,
@@ -105,6 +146,20 @@ AppPhoneFacade::AppPhoneFacade(app::IAppBleFacade& app,
 void AppPhoneFacade::setBleRuntime(platform::shared::ble_bridge::IPhoneBleRuntime* runtime)
 {
     ble_runtime_ = runtime;
+}
+
+void AppPhoneFacade::syncMeshtasticMqttProxySettings(const meshtastic_LocalModuleConfig& module_config)
+{
+    auto* mt = getMeshtasticBackend(app_);
+    if (!mt)
+    {
+        return;
+    }
+
+    const auto cfg = getMeshtasticPhoneConfig();
+    chat::meshtastic::MtAdapter::MqttProxySettings settings;
+    platform::shared::ble_bridge::applyMeshtasticMqttProxySettings(settings, module_config, cfg);
+    mt->setMqttProxySettings(settings);
 }
 
 phone::MeshtasticPhoneConfigSnapshot AppPhoneFacade::getMeshtasticPhoneConfig() const
@@ -155,39 +210,92 @@ void AppPhoneFacade::getEffectiveUserInfo(char* out_long,
     app_.getEffectiveUserInfo(out_long, long_len, out_short, short_len);
 }
 
-chat::ChatService& AppPhoneFacade::getChatService()
-{
-    return app_.getChatService();
-}
-
-chat::contacts::ContactService& AppPhoneFacade::getContactService()
-{
-    return app_.getContactService();
-}
-
-chat::IMeshAdapter* AppPhoneFacade::getMeshAdapter()
-{
-    return app_.getMeshAdapter();
-}
-
-const chat::IMeshAdapter* AppPhoneFacade::getMeshAdapter() const
-{
-    return app_.getMeshAdapter();
-}
-
-chat::contacts::INodeStore* AppPhoneFacade::getNodeStore()
-{
-    return app_.getNodeStore();
-}
-
-const chat::contacts::INodeStore* AppPhoneFacade::getNodeStore() const
-{
-    return app_.getNodeStore();
-}
-
 chat::NodeId AppPhoneFacade::getSelfNodeId() const
 {
     return app_.getSelfNodeId();
+}
+
+bool AppPhoneFacade::sendPhoneText(chat::ChannelId channel,
+                                   const std::string& text,
+                                   chat::MessageId forced_msg_id,
+                                   chat::NodeId peer,
+                                   chat::MessageId& out_msg_id)
+{
+    out_msg_id = app_.getChatService().sendTextWithId(channel, text, forced_msg_id, peer);
+    return out_msg_id != 0;
+}
+
+bool AppPhoneFacade::sendPhoneAppData(chat::ChannelId channel,
+                                      uint32_t portnum,
+                                      const uint8_t* payload,
+                                      std::size_t len,
+                                      chat::NodeId dest,
+                                      bool want_ack,
+                                      chat::MessageId packet_id,
+                                      bool want_response)
+{
+    auto* adapter = app_.getMeshAdapter();
+    return adapter && adapter->sendAppData(channel, portnum, payload, len, dest, want_ack, packet_id, want_response);
+}
+
+bool AppPhoneFacade::pollIncomingPhoneData(chat::MeshIncomingData& out)
+{
+    auto* adapter = app_.getMeshAdapter();
+    return adapter && adapter->pollIncomingData(&out);
+}
+
+std::size_t AppPhoneFacade::phoneNodeCount() const
+{
+    const auto* store = app_.getNodeStore();
+    return store ? store->getEntries().size() : 0;
+}
+
+bool AppPhoneFacade::getPhoneNodeByIndex(std::size_t index, phone::PhoneNodeView& out) const
+{
+    const auto* store = app_.getNodeStore();
+    if (!store)
+    {
+        return false;
+    }
+    const auto& entries = store->getEntries();
+    if (index >= entries.size())
+    {
+        return false;
+    }
+    copyNodeView(entries[index], out);
+    if (const auto* node = app_.getContactService().getNodeInfo(out.node_id))
+    {
+        out.position = node->position;
+    }
+    return true;
+}
+
+bool AppPhoneFacade::findPhoneNode(chat::NodeId node_id, phone::PhoneNodeView& out) const
+{
+    const auto* store = app_.getNodeStore();
+    if (!store)
+    {
+        return false;
+    }
+    for (const auto& entry : store->getEntries())
+    {
+        if (entry.node_id == node_id)
+        {
+            copyNodeView(entry, out);
+            if (const auto* node = app_.getContactService().getNodeInfo(out.node_id))
+            {
+                out.position = node->position;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AppPhoneFacade::isMeshPkiReady() const
+{
+    const auto* adapter = app_.getMeshAdapter();
+    return adapter ? adapter->isPkiReady() : false;
 }
 
 bool AppPhoneFacade::isBleEnabled() const
@@ -478,6 +586,145 @@ bool AppPhoneFacade::getTuningParams(phone::meshcore::MeshCorePhoneTuningParams*
     out->rx_delay_base_ms = static_cast<uint32_t>(cfg.mesh.meshcore_rx_delay_base * 1000.0f);
     out->airtime_factor_milli = static_cast<uint32_t>(cfg.mesh.meshcore_airtime_factor * 1000.0f);
     return true;
+}
+
+chat::meshcore::IMeshCoreBleBackend* AppPhoneFacade::meshCoreBackend()
+{
+    auto* adapter = app_.getMeshAdapter();
+    if (!adapter || app_.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    {
+        return nullptr;
+    }
+    if (auto* backend = adapter->backendForProtocol(chat::MeshProtocol::MeshCore))
+    {
+        return backend->asMeshCoreBleBackend();
+    }
+    return adapter->asMeshCoreBleBackend();
+}
+
+const chat::meshcore::IMeshCoreBleBackend* AppPhoneFacade::meshCoreBackend() const
+{
+    auto* adapter = app_.getMeshAdapter();
+    if (!adapter || app_.getConfig().mesh_protocol != chat::MeshProtocol::MeshCore)
+    {
+        return nullptr;
+    }
+    if (auto* backend = adapter->backendForProtocol(chat::MeshProtocol::MeshCore))
+    {
+        return backend->asMeshCoreBleBackend();
+    }
+    return adapter->asMeshCoreBleBackend();
+}
+
+bool AppPhoneFacade::meshCoreExportIdentityPublicKey(uint8_t* out_pubkey, std::size_t len)
+{
+    auto* backend = meshCoreBackend();
+    return backend && out_pubkey && len >= chat::meshcore::kMeshCorePubKeySize &&
+           backend->exportIdentityPublicKey(out_pubkey);
+}
+
+bool AppPhoneFacade::meshCoreExportIdentityPrivateKey(uint8_t* out_priv, std::size_t len)
+{
+    auto* backend = meshCoreBackend();
+    return backend && out_priv && len >= chat::meshcore::kMeshCorePrivKeySize &&
+           backend->exportIdentityPrivateKey(out_priv);
+}
+
+bool AppPhoneFacade::meshCoreImportIdentityPrivateKey(const uint8_t* in_priv, std::size_t len)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->importIdentityPrivateKey(in_priv, len);
+}
+
+bool AppPhoneFacade::meshCoreSignPayload(const uint8_t* data, std::size_t len, uint8_t* out_sig, std::size_t out_len)
+{
+    auto* backend = meshCoreBackend();
+    return backend && out_sig && out_len >= chat::meshcore::kMeshCoreSignatureSize &&
+           backend->signPayload(data, len, out_sig);
+}
+
+bool AppPhoneFacade::meshCoreSendSelfAdvert(bool broadcast)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->sendSelfAdvert(broadcast);
+}
+
+bool AppPhoneFacade::meshCoreSendPeerRequestType(const uint8_t* pubkey,
+                                                 std::size_t len,
+                                                 uint8_t req_type,
+                                                 uint32_t* out_tag,
+                                                 uint32_t* out_est_timeout,
+                                                 bool* out_sent_flood)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->sendPeerRequestType(pubkey, len, req_type, out_tag, out_est_timeout, out_sent_flood);
+}
+
+bool AppPhoneFacade::meshCoreSendPeerRequestPayload(const uint8_t* pubkey,
+                                                    std::size_t len,
+                                                    const uint8_t* payload,
+                                                    std::size_t payload_len,
+                                                    bool force_flood,
+                                                    uint32_t* out_tag,
+                                                    uint32_t* out_est_timeout,
+                                                    bool* out_sent_flood)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->sendPeerRequestPayload(pubkey,
+                                                      len,
+                                                      payload,
+                                                      payload_len,
+                                                      force_flood,
+                                                      out_tag,
+                                                      out_est_timeout,
+                                                      out_sent_flood);
+}
+
+bool AppPhoneFacade::meshCoreSendAnonRequestPayload(const uint8_t* pubkey,
+                                                    std::size_t len,
+                                                    const uint8_t* payload,
+                                                    std::size_t payload_len,
+                                                    uint32_t* out_est_timeout,
+                                                    bool* out_sent_flood)
+{
+    auto* backend = meshCoreBackend();
+    return backend &&
+           backend->sendAnonRequestPayload(pubkey, len, payload, payload_len, out_est_timeout, out_sent_flood);
+}
+
+bool AppPhoneFacade::meshCoreSendTracePath(const uint8_t* path,
+                                           std::size_t path_len,
+                                           uint32_t tag,
+                                           uint32_t auth,
+                                           uint8_t flags,
+                                           uint32_t* out_est_timeout)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->sendTracePath(path, path_len, tag, auth, flags, out_est_timeout);
+}
+
+bool AppPhoneFacade::meshCoreSendControlData(const uint8_t* payload, std::size_t payload_len)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->sendControlData(payload, payload_len);
+}
+
+bool AppPhoneFacade::meshCoreSendRawData(const uint8_t* path,
+                                         std::size_t path_len,
+                                         const uint8_t* payload,
+                                         std::size_t payload_len,
+                                         uint32_t* out_est_timeout)
+{
+    auto* backend = meshCoreBackend();
+    return backend && backend->sendRawData(path, path_len, payload, payload_len, out_est_timeout);
+}
+
+void AppPhoneFacade::meshCoreSetFloodScopeKey(const uint8_t* key, std::size_t len)
+{
+    if (auto* backend = meshCoreBackend())
+    {
+        backend->setFloodScopeKey(key, len);
+    }
 }
 
 } // namespace ble

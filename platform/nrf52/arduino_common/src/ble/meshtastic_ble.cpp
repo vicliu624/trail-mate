@@ -1224,21 +1224,7 @@ void MeshtasticBleService::flushPendingConfigSaves(bool force)
 
 void MeshtasticBleService::syncMqttProxySettings()
 {
-    auto* adapter = phone_facade_.getMeshAdapter();
-    auto* mt =
-        (adapter && adapter->backendProtocol() == chat::MeshProtocol::Meshtastic)
-            ? static_cast<platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter*>(
-                  adapter->backendForProtocol(chat::MeshProtocol::Meshtastic))
-            : nullptr;
-    if (!mt)
-    {
-        return;
-    }
-
-    const auto cfg = phone_facade_.getMeshtasticPhoneConfig();
-    platform::nrf52::arduino_common::chat::meshtastic::MeshtasticRadioAdapter::MqttProxySettings settings;
-    platform::shared::ble_bridge::applyMeshtasticMqttProxySettings(settings, module_config_, cfg);
-    mt->setMqttProxySettings(settings);
+    phone_facade_.syncMeshtasticMqttProxySettings(module_config_);
 }
 
 void MeshtasticBleService::applyBleSecurity()

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app/app_config.h"
-#include "phone/common/phone_runtime_context.h"
+#include "phone/common/phone_app_facade.h"
 
 #include <cstddef>
 #include <cstring>

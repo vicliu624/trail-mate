@@ -1,9 +1,6 @@
 #include "phone/meshcore/meshcore_phone_core.h"
 
-#include "chat/infra/meshcore/meshcore_ble_backend.h"
-#include "chat/ports/i_mesh_adapter.h"
-#include "chat/ports/i_node_store.h"
-#include "chat/usecase/chat_service.h"
+#include "chat/infra/meshcore/meshcore_identity_crypto.h"
 #include "sys/clock.h"
 
 #include <algorithm>
@@ -132,26 +129,10 @@ uint32_t nowSeconds()
     return sys::epoch_seconds_now();
 }
 
-chat::meshcore::IMeshCoreBleBackend* resolveMeshCoreAdapter(IPhoneRuntimeContext& ctx)
-{
-    auto* adapter = ctx.getMeshAdapter();
-    if (!adapter || ctx.getMeshCorePhoneConfig().active_protocol != chat::MeshProtocol::MeshCore)
-    {
-        return nullptr;
-    }
-
-    if (auto* backend = adapter->backendForProtocol(chat::MeshProtocol::MeshCore))
-    {
-        return backend->asMeshCoreBleBackend();
-    }
-
-    return adapter->asMeshCoreBleBackend();
-}
-
 } // namespace
 
-MeshCorePhoneCore::MeshCorePhoneCore(IPhoneRuntimeContext& ctx, const std::string& device_name, MeshCorePhoneHooks* hooks)
-    : ctx_(ctx), device_name_(device_name), hooks_(hooks) {}
+MeshCorePhoneCore::MeshCorePhoneCore(IPhoneAppFacade& app, const std::string& device_name, MeshCorePhoneHooks* hooks)
+    : app_(app), device_name_(device_name), hooks_(hooks) {}
 
 void MeshCorePhoneCore::reset()
 {
@@ -292,16 +273,10 @@ bool MeshCorePhoneCore::canHandleCommand(uint8_t cmd) const
 
 void MeshCorePhoneCore::pumpIncomingAppData()
 {
-    chat::IMeshAdapter* adapter = ctx_.getMeshAdapter();
-    if (!adapter)
-    {
-        return;
-    }
-
     for (uint8_t count = 0; count < 4; ++count)
     {
         chat::MeshIncomingData msg{};
-        if (!adapter->pollIncomingData(&msg))
+        if (!app_.pollIncomingPhoneData(msg))
         {
             break;
         }
@@ -312,9 +287,7 @@ void MeshCorePhoneCore::pumpIncomingAppData()
 void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 {
     const uint8_t cmd = data[0];
-    chat::IMeshAdapter* adapter = ctx_.getMeshAdapter();
-    auto cfg = ctx_.getMeshCorePhoneConfig();
-    auto* backend = resolveMeshCoreAdapter(ctx_);
+    auto cfg = app_.getMeshCorePhoneConfig();
 
     if (cmd == CMD_DEVICE_QEURY && len >= 2)
     {
@@ -348,10 +321,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         out[index++] = static_cast<uint8_t>(cfg.tx_power_max_dbm);
 
         uint8_t pubkey[chat::meshcore::kMeshCorePubKeySize] = {};
-        if (backend)
-        {
-            backend->exportIdentityPublicKey(pubkey);
-        }
+        app_.meshCoreExportIdentityPublicKey(pubkey, sizeof(pubkey));
         std::memcpy(&out[index], pubkey, sizeof(pubkey));
         index += sizeof(pubkey);
 
@@ -379,7 +349,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
         char long_name[32] = {};
         char short_name[16] = {};
-        ctx_.getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
+        app_.getEffectiveUserInfo(long_name, sizeof(long_name), short_name, sizeof(short_name));
 
         const char* display_name = long_name[0] != '\0' ? long_name : short_name;
         const size_t name_len = strnlen(display_name, long_name[0] != '\0' ? sizeof(long_name)
@@ -403,20 +373,22 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         }
 
         uint32_t total = 0;
-        if (const auto* store = ctx_.getNodeStore())
+        PhoneNodeView entry{};
+        for (size_t node_index = 0; node_index < app_.phoneNodeCount(); ++node_index)
         {
-            for (const auto& entry : store->getEntries())
+            if (!app_.getPhoneNodeByIndex(node_index, entry))
             {
-                if (entry.node_id == 0)
-                {
-                    continue;
-                }
-                if (filter_since != 0 && entry.last_seen <= filter_since)
-                {
-                    continue;
-                }
-                ++total;
+                continue;
             }
+            if (entry.node_id == 0)
+            {
+                continue;
+            }
+            if (filter_since != 0 && entry.last_seen <= filter_since)
+            {
+                continue;
+            }
+            ++total;
         }
 
         uint8_t start_buf[5] = {RESP_CODE_CONTACTS_START, 0, 0, 0, 0};
@@ -424,24 +396,25 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         enqueueFrame(start_buf, sizeof(start_buf));
 
         uint32_t most_recent = 0;
-        if (const auto* store = ctx_.getNodeStore())
+        for (size_t node_index = 0; node_index < app_.phoneNodeCount(); ++node_index)
         {
-            for (const auto& entry : store->getEntries())
+            if (!app_.getPhoneNodeByIndex(node_index, entry))
             {
-                if (entry.node_id == 0)
-                {
-                    continue;
-                }
-                if (filter_since != 0 && entry.last_seen <= filter_since)
-                {
-                    continue;
-                }
-                MeshCoreBleFrame frame{};
-                if (buildContactFromNode(entry, RESP_CODE_CONTACT, frame))
-                {
-                    enqueueFrame(frame.buf.data(), frame.len);
-                    most_recent = std::max(most_recent, entry.last_seen);
-                }
+                continue;
+            }
+            if (entry.node_id == 0)
+            {
+                continue;
+            }
+            if (filter_since != 0 && entry.last_seen <= filter_since)
+            {
+                continue;
+            }
+            MeshCoreBleFrame frame{};
+            if (buildContactFromNode(entry, RESP_CODE_CONTACT, frame))
+            {
+                enqueueFrame(frame.buf.data(), frame.len);
+                most_recent = std::max(most_recent, entry.last_seen);
             }
         }
 
@@ -453,11 +426,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_TXT_MSG && len >= 14)
     {
-        if (!adapter)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         size_t index = 1;
         const uint8_t txt_type = data[index++];
         index++;
@@ -479,7 +447,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
         const std::string text(reinterpret_cast<const char*>(&data[index]), len - index);
         chat::MessageId msg_id = 0;
-        if (!adapter->sendText(chat::ChannelId::PRIMARY, text, &msg_id, dest))
+        if (!app_.sendPhoneText(chat::ChannelId::PRIMARY, text, 0, dest, msg_id))
         {
             enqueueErr(ERR_CODE_BAD_STATE);
             return;
@@ -500,11 +468,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_CHANNEL_TXT_MSG && len >= 7)
     {
-        if (!adapter)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         size_t index = 1;
         const uint8_t txt_type = data[index++];
         const uint8_t channel_idx = data[index++];
@@ -517,7 +480,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         const std::string text(reinterpret_cast<const char*>(&data[index]), len - index);
         chat::MessageId msg_id = 0;
         const chat::ChannelId channel = (channel_idx == 1U) ? chat::ChannelId::SECONDARY : chat::ChannelId::PRIMARY;
-        if (!adapter->sendText(channel, text, &msg_id, 0))
+        if (!app_.sendPhoneText(channel, text, 0, 0, msg_id))
         {
             enqueueErr(ERR_CODE_BAD_STATE);
             return;
@@ -530,11 +493,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_LOGIN && len >= 1 + kPubKeySize)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         const uint8_t* pubkey = &data[1];
         const size_t pass_len = (len > (1 + kPubKeySize)) ? (len - (1 + kPubKeySize)) : 0;
         uint8_t payload[24] = {};
@@ -551,12 +509,12 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
         uint32_t est_timeout = 0;
         bool sent_flood = false;
-        if (!backend->sendAnonRequestPayload(pubkey,
-                                             kPubKeySize,
-                                             payload,
-                                             payload_len,
-                                             &est_timeout,
-                                             &sent_flood))
+        if (!app_.meshCoreSendAnonRequestPayload(pubkey,
+                                                 kPubKeySize,
+                                                 payload,
+                                                 payload_len,
+                                                 &est_timeout,
+                                                 &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -575,21 +533,16 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_STATUS_REQ && len >= 1 + kPubKeySize)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         const uint8_t* pubkey = &data[1];
         uint32_t tag = 0;
         uint32_t est_timeout = 0;
         bool sent_flood = false;
-        if (!backend->sendPeerRequestType(pubkey,
-                                          kPubKeySize,
-                                          0x01,
-                                          &tag,
-                                          &est_timeout,
-                                          &sent_flood))
+        if (!app_.meshCoreSendPeerRequestType(pubkey,
+                                              kPubKeySize,
+                                              0x01,
+                                              &tag,
+                                              &est_timeout,
+                                              &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -611,9 +564,9 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         const size_t nlen = std::min(len - 1, sizeof(cfg.node_name) - 1);
         std::memcpy(cfg.node_name, &data[1], nlen);
         cfg.node_name[nlen] = '\0';
-        ctx_.setMeshCorePhoneConfig(cfg);
-        ctx_.saveConfig();
-        ctx_.applyUserInfo();
+        app_.setMeshCorePhoneConfig(cfg);
+        app_.saveConfig();
+        app_.applyUserInfo();
         enqueueSentOk();
         return;
     }
@@ -752,7 +705,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
     if (cmd == CMD_SEND_SELF_ADVERT)
     {
         const bool broadcast = (len >= 2 && data[1] == 1);
-        if (backend && backend->sendSelfAdvert(broadcast))
+        if (app_.meshCoreSendSelfAdvert(broadcast))
         {
             ++stats_tx_packets_;
             if (broadcast)
@@ -786,7 +739,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
     {
         uint32_t epoch = 0;
         std::memcpy(&epoch, &data[1], sizeof(epoch));
-        if (ctx_.syncCurrentEpochSeconds(epoch))
+        if (app_.syncCurrentEpochSeconds(epoch))
         {
             enqueueSentOk();
         }
@@ -830,9 +783,9 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         cfg.mesh.meshcore_bw_khz = static_cast<float>(bw) / 1000.0f;
         cfg.mesh.meshcore_sf = sf;
         cfg.mesh.meshcore_cr = cr;
-        ctx_.setMeshCorePhoneConfig(cfg);
-        ctx_.saveConfig();
-        ctx_.applyMeshConfig();
+        app_.setMeshCorePhoneConfig(cfg);
+        app_.saveConfig();
+        app_.applyMeshConfig();
         enqueueSentOk();
         return;
     }
@@ -846,9 +799,9 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             return;
         }
         cfg.mesh.tx_power = tx;
-        ctx_.setMeshCorePhoneConfig(cfg);
-        ctx_.saveConfig();
-        ctx_.applyMeshConfig();
+        app_.setMeshCorePhoneConfig(cfg);
+        app_.saveConfig();
+        app_.applyMeshConfig();
         enqueueSentOk();
         return;
     }
@@ -946,13 +899,8 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_EXPORT_PRIVATE_KEY)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         uint8_t priv[chat::meshcore::kMeshCorePrivKeySize] = {};
-        if (!backend->exportIdentityPrivateKey(priv))
+        if (!app_.meshCoreExportIdentityPrivateKey(priv, sizeof(priv)))
         {
             enqueueErr(ERR_CODE_BAD_STATE);
             return;
@@ -966,12 +914,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_IMPORT_PRIVATE_KEY && len >= 1 + chat::meshcore::kMeshCorePrivKeySize)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
-        if (!backend->importIdentityPrivateKey(&data[1], chat::meshcore::kMeshCorePrivKeySize))
+        if (!app_.meshCoreImportIdentityPrivateKey(&data[1], chat::meshcore::kMeshCorePrivKeySize))
         {
             enqueueErr(ERR_CODE_ILLEGAL_ARG);
             return;
@@ -982,11 +925,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_PATH_DISCOVERY_REQ)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         if (len < 2 + kPubKeySize || data[1] != 0)
         {
             enqueueErr(ERR_CODE_ILLEGAL_ARG);
@@ -1002,14 +940,14 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint32_t tag = 0;
         uint32_t est_timeout = 0;
         bool sent_flood = false;
-        if (!backend->sendPeerRequestPayload(pubkey,
-                                             kPubKeySize,
-                                             req_data,
-                                             sizeof(req_data),
-                                             true,
-                                             &tag,
-                                             &est_timeout,
-                                             &sent_flood))
+        if (!app_.meshCoreSendPeerRequestPayload(pubkey,
+                                                 kPubKeySize,
+                                                 req_data,
+                                                 sizeof(req_data),
+                                                 true,
+                                                 &tag,
+                                                 &est_timeout,
+                                                 &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1033,11 +971,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_RAW_DATA && len >= 6)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         size_t index = 1;
         const int8_t path_len = static_cast<int8_t>(data[index++]);
         if (path_len < 0 || (index + static_cast<size_t>(path_len) + 4U) > len)
@@ -1050,7 +983,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         const uint8_t* payload = &data[index];
         const size_t payload_len = len - index;
         uint32_t est_timeout = 0;
-        if (!backend->sendRawData(path, static_cast<size_t>(path_len), payload, payload_len, &est_timeout))
+        if (!app_.meshCoreSendRawData(path, static_cast<size_t>(path_len), payload, payload_len, &est_timeout))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1063,11 +996,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_BINARY_REQ && len >= 1 + kPubKeySize + 1)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         uint8_t resolved_pubkey[kPubKeySize] = {};
         const uint8_t* pubkey = &data[1];
         if (hooks_ && !hooks_->resolvePeerPublicKey(&data[1], kPubKeySize, resolved_pubkey, sizeof(resolved_pubkey)))
@@ -1089,14 +1017,14 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         uint32_t tag = 0;
         uint32_t est_timeout = 0;
         bool sent_flood = false;
-        if (!backend->sendPeerRequestPayload(pubkey,
-                                             kPubKeySize,
-                                             payload,
-                                             payload_len,
-                                             false,
-                                             &tag,
-                                             &est_timeout,
-                                             &sent_flood))
+        if (!app_.meshCoreSendPeerRequestPayload(pubkey,
+                                                 kPubKeySize,
+                                                 payload,
+                                                 payload_len,
+                                                 false,
+                                                 &tag,
+                                                 &est_timeout,
+                                                 &sent_flood))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1127,17 +1055,14 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             out[index++] = PUSH_CODE_TELEMETRY_RESPONSE;
             out[index++] = 0;
             uint8_t prefix[kPrefixSize] = {};
-            if (backend)
+            uint8_t pubkey[kPubKeySize] = {};
+            if (app_.meshCoreExportIdentityPublicKey(pubkey, sizeof(pubkey)))
             {
-                uint8_t pubkey[kPubKeySize] = {};
-                if (backend->exportIdentityPublicKey(pubkey))
-                {
-                    std::memcpy(prefix, pubkey, kPrefixSize);
-                }
+                std::memcpy(prefix, pubkey, kPrefixSize);
             }
             if (prefix[0] == 0)
             {
-                const uint32_t self_id = ctx_.getSelfNodeId();
+                const uint32_t self_id = app_.getSelfNodeId();
                 std::memcpy(prefix, &self_id, std::min(sizeof(self_id), sizeof(prefix)));
             }
             std::memcpy(&out[index], prefix, sizeof(prefix));
@@ -1154,11 +1079,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         }
         if (len >= 4 + kPubKeySize)
         {
-            if (!backend)
-            {
-                enqueueErr(ERR_CODE_BAD_STATE);
-                return;
-            }
             uint8_t resolved_pubkey[kPubKeySize] = {};
             const uint8_t* pubkey = &data[4];
             if (hooks_ && !hooks_->resolvePeerPublicKey(&data[4], kPubKeySize, resolved_pubkey, sizeof(resolved_pubkey)))
@@ -1173,7 +1093,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             uint32_t tag = 0;
             uint32_t est_timeout = 0;
             bool sent_flood = false;
-            if (!backend->sendPeerRequestType(pubkey, kPubKeySize, 0x03, &tag, &est_timeout, &sent_flood))
+            if (!app_.meshCoreSendPeerRequestType(pubkey, kPubKeySize, 0x03, &tag, &est_timeout, &sent_flood))
             {
                 enqueueErr(ERR_CODE_TABLE_FULL);
                 return;
@@ -1199,11 +1119,6 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SEND_TRACE_PATH && len > 10)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
         uint32_t tag = 0;
         uint32_t auth = 0;
         std::memcpy(&tag, &data[1], sizeof(tag));
@@ -1218,7 +1133,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             return;
         }
         uint32_t est_timeout = 0;
-        if (!backend->sendTracePath(&data[10], path_len, tag, auth, flags, &est_timeout))
+        if (!app_.meshCoreSendTracePath(&data[10], path_len, tag, auth, flags, &est_timeout))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1250,26 +1165,28 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
                 path_len = static_cast<uint8_t>(std::min(lookup_len, static_cast<size_t>(kMaxPathSize)));
             }
         }
-        if (const auto* store = ctx_.getNodeStore())
+        PhoneNodeView entry{};
+        for (size_t node_index = 0; node_index < app_.phoneNodeCount(); ++node_index)
         {
-            for (const auto& entry : store->getEntries())
+            if (!app_.getPhoneNodeByIndex(node_index, entry))
             {
-                if (found)
-                {
-                    break;
-                }
-                if (entry.node_id == 0)
-                {
-                    continue;
-                }
-                uint32_t entry_id = 0;
-                std::memcpy(&entry_id, pubkey, std::min(sizeof(entry_id), kPubKeySize));
-                if (entry.node_id == entry_id)
-                {
-                    ts = entry.last_seen;
-                    found = true;
-                    break;
-                }
+                continue;
+            }
+            if (found)
+            {
+                break;
+            }
+            if (entry.node_id == 0)
+            {
+                continue;
+            }
+            uint32_t entry_id = 0;
+            std::memcpy(&entry_id, pubkey, std::min(sizeof(entry_id), kPubKeySize));
+            if (entry.node_id == entry_id)
+            {
+                ts = entry.last_seen;
+                found = true;
+                break;
             }
         }
         if (!found)
@@ -1301,7 +1218,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         }
         enqueueSentOk();
         sys::sleep_ms(100);
-        ctx_.restartDevice();
+        app_.restartDevice();
         return;
     }
 
@@ -1309,22 +1226,24 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
     {
         const uint8_t* key = &data[1];
         const size_t key_len = len - 1;
-        if (const auto* store = ctx_.getNodeStore())
+        PhoneNodeView entry{};
+        for (size_t node_index = 0; node_index < app_.phoneNodeCount(); ++node_index)
         {
-            for (const auto& entry : store->getEntries())
+            if (!app_.getPhoneNodeByIndex(node_index, entry))
             {
-                if (entry.node_id == 0)
+                continue;
+            }
+            if (entry.node_id == 0)
+            {
+                continue;
+            }
+            if (std::memcmp(&entry.node_id, key, std::min(key_len, sizeof(entry.node_id))) == 0)
+            {
+                MeshCoreBleFrame frame{};
+                if (buildContactFromNode(entry, RESP_CODE_CONTACT, frame))
                 {
-                    continue;
-                }
-                if (std::memcmp(&entry.node_id, key, std::min(key_len, sizeof(entry.node_id))) == 0)
-                {
-                    MeshCoreBleFrame frame{};
-                    if (buildContactFromNode(entry, RESP_CODE_CONTACT, frame))
-                    {
-                        enqueueFrame(frame.buf.data(), frame.len);
-                        return;
-                    }
+                    enqueueFrame(frame.buf.data(), frame.len);
+                    return;
                 }
             }
         }
@@ -1334,10 +1253,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_RESET_PATH && len >= 1 + kPubKeySize)
     {
-        if (backend)
-        {
-            backend->setFloodScopeKey(nullptr, 0);
-        }
+        app_.meshCoreSetFloodScopeKey(nullptr, 0);
         enqueueSentOk();
         return;
     }
@@ -1375,14 +1291,14 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SIGN_FINISH)
     {
-        if (!sign_active_ || !backend)
+        if (!sign_active_)
         {
             enqueueErr(ERR_CODE_BAD_STATE);
             return;
         }
         sign_active_ = false;
         uint8_t sig[chat::meshcore::kMeshCoreSignatureSize] = {};
-        if (!backend->signPayload(sign_data_.data(), sign_data_.size(), sig))
+        if (!app_.meshCoreSignPayload(sign_data_.data(), sign_data_.size(), sig, sizeof(sig)))
         {
             enqueueErr(ERR_CODE_BAD_STATE);
             sign_data_.clear();
@@ -1421,21 +1337,16 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         {
             std::memcpy(cfg.mesh.secondary_key, &data[34], 16);
         }
-        ctx_.setMeshCorePhoneConfig(cfg);
-        ctx_.saveConfig();
-        ctx_.applyMeshConfig();
+        app_.setMeshCorePhoneConfig(cfg);
+        app_.saveConfig();
+        app_.applyMeshConfig();
         enqueueSentOk();
         return;
     }
 
     if (cmd == CMD_SEND_CONTROL_DATA && len >= 2 && (data[1] & 0x80U) != 0)
     {
-        if (!backend)
-        {
-            enqueueErr(ERR_CODE_BAD_STATE);
-            return;
-        }
-        if (!backend->sendControlData(&data[1], len - 1))
+        if (!app_.meshCoreSendControlData(&data[1], len - 1))
         {
             enqueueErr(ERR_CODE_TABLE_FULL);
             return;
@@ -1516,16 +1427,13 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
 
     if (cmd == CMD_SET_FLOOD_SCOPE && len >= 2 && data[1] == 0)
     {
-        if (backend)
+        if (len >= 18)
         {
-            if (len >= 18)
-            {
-                backend->setFloodScopeKey(&data[2], 16);
-            }
-            else
-            {
-                backend->setFloodScopeKey(nullptr, 0);
-            }
+            app_.meshCoreSetFloodScopeKey(&data[2], 16);
+        }
+        else
+        {
+            app_.meshCoreSetFloodScopeKey(nullptr, 0);
         }
         enqueueSentOk();
         return;
@@ -1651,10 +1559,10 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
             enqueueErr(ERR_CODE_ILLEGAL_ARG);
             return;
         }
-        ctx_.resetMeshConfig();
-        ctx_.clearNodeDb();
-        ctx_.clearMessageDb();
-        ctx_.setBleEnabled(true);
+        app_.resetMeshConfig();
+        app_.clearNodeDb();
+        app_.clearMessageDb();
+        app_.setBleEnabled(true);
         if (hooks_)
         {
             hooks_->onFactoryReset();
@@ -1664,7 +1572,7 @@ void MeshCorePhoneCore::handleCmdFrame(const uint8_t* data, size_t len)
         sign_active_ = false;
         enqueueSentOk();
         sys::sleep_ms(100);
-        ctx_.restartDevice();
+        app_.restartDevice();
         return;
     }
 
@@ -1737,14 +1645,13 @@ uint32_t MeshCorePhoneCore::resolveNodeIdFromPrefix(const uint8_t* prefix, size_
         }
     }
 
-    const auto* store = ctx_.getNodeStore();
-    if (!store)
+    PhoneNodeView entry{};
+    for (size_t node_index = 0; node_index < app_.phoneNodeCount(); ++node_index)
     {
-        return 0;
-    }
-
-    for (const auto& entry : store->getEntries())
-    {
+        if (!app_.getPhoneNodeByIndex(node_index, entry))
+        {
+            continue;
+        }
         if (entry.node_id == 0)
         {
             continue;
@@ -1757,7 +1664,7 @@ uint32_t MeshCorePhoneCore::resolveNodeIdFromPrefix(const uint8_t* prefix, size_
     return 0;
 }
 
-bool MeshCorePhoneCore::buildContactFromNode(const chat::contacts::NodeEntry& entry, uint8_t code, MeshCoreBleFrame& out) const
+bool MeshCorePhoneCore::buildContactFromNode(const PhoneNodeView& entry, uint8_t code, MeshCoreBleFrame& out) const
 {
     size_t index = 0;
     out.buf[index++] = code;

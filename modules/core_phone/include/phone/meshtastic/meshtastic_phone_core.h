@@ -1,8 +1,7 @@
 ﻿#pragma once
 
-#include "phone/common/phone_runtime_context.h"
+#include "phone/common/phone_app_facade.h"
 #include "chat/domain/chat_types.h"
-#include "chat/ports/i_node_store.h"
 #include "meshtastic/admin.pb.h"
 #include "meshtastic/channel.pb.h"
 #include "meshtastic/config.pb.h"
@@ -147,7 +146,7 @@ class MeshtasticPhoneDeviceRuntimeHooks
 class MeshtasticPhoneCore
 {
   public:
-    MeshtasticPhoneCore(IPhoneRuntimeContext& ctx, MeshtasticPhoneTransport& transport,
+    MeshtasticPhoneCore(IPhoneAppFacade& app, MeshtasticPhoneTransport& transport,
                         MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks = nullptr,
                         MeshtasticPhoneModuleConfigHooks* module_config_hooks = nullptr,
                         MeshtasticPhoneConfigLifecycleHooks* config_lifecycle_hooks = nullptr,
@@ -176,7 +175,7 @@ class MeshtasticPhoneCore
     void notifyFromNum(uint32_t from_num);
     void fillMyInfo(meshtastic_MyNodeInfo* out) const;
     void fillSelfNodeInfo(meshtastic_NodeInfo* out) const;
-    void fillNodeInfoFromEntry(const chat::contacts::NodeEntry& entry, meshtastic_NodeInfo* out) const;
+    void fillNodeInfoFromEntry(const PhoneNodeView& entry, meshtastic_NodeInfo* out) const;
     void fillMetadata(meshtastic_DeviceMetadata* out) const;
     void fillDeviceUi(meshtastic_DeviceUIConfig* out) const;
     void fillChannel(uint8_t idx, meshtastic_Channel* out) const;
@@ -184,7 +183,7 @@ class MeshtasticPhoneCore
     void fillModuleConfig(meshtastic_AdminMessage_ModuleConfigType type, meshtastic_ModuleConfig* out) const;
     meshtastic_MyNodeInfo buildMyInfo() const;
     meshtastic_NodeInfo buildSelfNodeInfo() const;
-    meshtastic_NodeInfo buildNodeInfoFromEntry(const chat::contacts::NodeEntry& entry) const;
+    meshtastic_NodeInfo buildNodeInfoFromEntry(const PhoneNodeView& entry) const;
     meshtastic_DeviceMetadata buildMetadata() const;
     meshtastic_DeviceMetrics buildDeviceMetrics() const;
     meshtastic_LocalStats buildLocalStats() const;
@@ -195,7 +194,7 @@ class MeshtasticPhoneCore
     meshtastic_MeshPacket buildPacketFromText(const chat::MeshIncomingText& msg) const;
     meshtastic_MeshPacket buildPacketFromData(const chat::MeshIncomingData& msg) const;
 
-    IPhoneRuntimeContext& ctx_;
+    IPhoneAppFacade& app_;
     MeshtasticPhoneTransport& transport_;
     MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks_ = nullptr;
     MeshtasticPhoneModuleConfigHooks* module_config_hooks_ = nullptr;

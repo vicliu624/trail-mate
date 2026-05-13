@@ -205,21 +205,7 @@ void MeshtasticBleService::refreshBatteryLevel(bool notify)
 
 void MeshtasticBleService::syncMqttProxySettings()
 {
-    auto* mt = static_cast<chat::meshtastic::MtAdapter*>(nullptr);
-    auto* adapter = phone_facade_.getMeshAdapter();
-    if (adapter && adapter->backendProtocol() == chat::MeshProtocol::Meshtastic)
-    {
-        mt = static_cast<chat::meshtastic::MtAdapter*>(adapter->backendForProtocol(adapter->backendProtocol()));
-    }
-    if (!mt)
-    {
-        return;
-    }
-
-    const auto cfg = phone_facade_.getMeshtasticPhoneConfig();
-    chat::meshtastic::MtAdapter::MqttProxySettings settings;
-    platform::shared::ble_bridge::applyMeshtasticMqttProxySettings(settings, module_config_, cfg);
-    mt->setMqttProxySettings(settings);
+    phone_facade_.syncMeshtasticMqttProxySettings(module_config_);
 }
 
 } // namespace ble

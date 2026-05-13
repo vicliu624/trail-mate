@@ -3,14 +3,14 @@
 namespace phone::meshtastic
 {
 
-MeshtasticPhoneSession::MeshtasticPhoneSession(IPhoneRuntimeContext& ctx, MeshtasticPhoneTransport& transport,
+MeshtasticPhoneSession::MeshtasticPhoneSession(IPhoneAppFacade& app, MeshtasticPhoneTransport& transport,
                                                MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks,
                                                MeshtasticPhoneModuleConfigHooks* module_config_hooks,
                                                MeshtasticPhoneConfigLifecycleHooks* config_lifecycle_hooks,
                                                MeshtasticPhoneStatusHooks* status_hooks,
                                                MeshtasticPhoneMqttHooks* mqtt_hooks,
                                                MeshtasticPhoneDeviceRuntimeHooks* device_runtime_hooks)
-    : core_(ctx,
+    : core_(app,
             transport,
             bluetooth_config_hooks,
             module_config_hooks,

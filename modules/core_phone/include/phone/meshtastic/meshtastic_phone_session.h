@@ -8,7 +8,7 @@ namespace phone::meshtastic
 class MeshtasticPhoneSession
 {
   public:
-    MeshtasticPhoneSession(IPhoneRuntimeContext& ctx,
+    MeshtasticPhoneSession(IPhoneAppFacade& app,
                            MeshtasticPhoneTransport& transport,
                            MeshtasticPhoneBluetoothConfigHooks* bluetooth_config_hooks,
                            MeshtasticPhoneModuleConfigHooks* module_config_hooks,
