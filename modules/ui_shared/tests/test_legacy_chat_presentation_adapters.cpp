@@ -112,9 +112,20 @@ int main()
     assert(snapshot.messages[0].conversation == ada);
     assert(snapshot.messages[0].outgoing);
     assert(snapshot.messages[0].delivery == ui::chat::MessageDeliveryState::Queued);
+    assert(snapshot.messages[0].failure == ui::chat::MessageFailureKind::None);
     assert(std::strcmp(snapshot.messages[0].text.c_str(), "hello") == 0);
     assert(snapshot.can_send);
     assert(snapshot.composer_enabled);
+
+    mesh.send_ok = false;
+    const ui::chat::SendMessageView failed_send{ada, "fail", 4};
+    const auto rejected_send = sink.sendMessage(failed_send);
+    assert(!rejected_send.ok);
+    assert(rejected_send.failure == ui::UiActionFailure::Rejected);
+    assert(source.buildChatWorkspaceSnapshot(request, snapshot));
+    assert(snapshot.message_count == 2);
+    assert(snapshot.messages[1].delivery == ui::chat::MessageDeliveryState::Failed);
+    assert(snapshot.messages[1].failure == ui::chat::MessageFailureKind::Unknown);
 
     assert(sink.markRead(ada).ok);
 

@@ -19,6 +19,13 @@ ui::chat::MessageDeliveryState mapMessageStatus(chat::MessageStatus status)
     return ui::chat::MessageDeliveryState::Unknown;
 }
 
+ui::chat::MessageFailureKind mapMessageFailure(chat::MessageStatus status)
+{
+    return status == chat::MessageStatus::Failed
+               ? ui::chat::MessageFailureKind::Unknown
+               : ui::chat::MessageFailureKind::None;
+}
+
 ui::chat::MessageRef toUiMessageRef(const chat::ChatMessage& message)
 {
     ui::chat::MessageRef out;

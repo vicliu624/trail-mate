@@ -115,6 +115,8 @@ bool LegacyChatPresentationSource::buildChatWorkspaceSnapshot(
             row.ref = chat_presentation_adapters::toUiMessageRef(message);
             row.delivery =
                 chat_presentation_adapters::mapMessageStatus(message.status);
+            row.failure =
+                chat_presentation_adapters::mapMessageFailure(message.status);
             row.outgoing = message.status != ::chat::MessageStatus::Incoming;
             copyString(row.text, message.text);
             copyTimeLabel(row.time_label, message.timestamp);

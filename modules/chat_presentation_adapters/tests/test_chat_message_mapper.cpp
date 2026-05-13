@@ -17,6 +17,18 @@ void messageStatusesMapToDeliveryStates()
            ui::chat::MessageDeliveryState::Failed);
 }
 
+void messageStatusesMapToFailureKinds()
+{
+    assert(chat_presentation_adapters::mapMessageFailure(chat::MessageStatus::Incoming) ==
+           ui::chat::MessageFailureKind::None);
+    assert(chat_presentation_adapters::mapMessageFailure(chat::MessageStatus::Queued) ==
+           ui::chat::MessageFailureKind::None);
+    assert(chat_presentation_adapters::mapMessageFailure(chat::MessageStatus::Sent) ==
+           ui::chat::MessageFailureKind::None);
+    assert(chat_presentation_adapters::mapMessageFailure(chat::MessageStatus::Failed) ==
+           ui::chat::MessageFailureKind::Unknown);
+}
+
 void incomingMessageMapsToRemoteStoredRef()
 {
     chat::ChatMessage message;
@@ -69,6 +81,7 @@ void storedLocalMessageMapsToLocalStoredRef()
 int main()
 {
     messageStatusesMapToDeliveryStates();
+    messageStatusesMapToFailureKinds();
     incomingMessageMapsToRemoteStoredRef();
     queuedMessageMapsToLocalPendingRef();
     storedLocalMessageMapsToLocalStoredRef();

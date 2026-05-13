@@ -43,8 +43,17 @@ ui::UiActionResult LegacyChatActionSink::sendMessage(
     const std::string text(message.text, message.text_len);
     const ::chat::MessageId msg_id =
         chat_service_.sendText(core_id.channel, text, core_id.peer);
-    return msg_id != 0 ? ui::UiActionResult::success()
-                       : ui::UiActionResult::fail(ui::UiActionFailure::Rejected);
+    if (msg_id == 0)
+    {
+        return ui::UiActionResult::fail(ui::UiActionFailure::Rejected);
+    }
+
+    const ::chat::ChatMessage* sent = chat_service_.getMessage(msg_id);
+    if (sent != nullptr && sent->status == ::chat::MessageStatus::Failed)
+    {
+        return ui::UiActionResult::fail(ui::UiActionFailure::Rejected);
+    }
+    return ui::UiActionResult::success();
 }
 
 ui::UiActionResult LegacyChatActionSink::markRead(ui::chat::ConversationId id)
