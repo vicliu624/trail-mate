@@ -4,6 +4,8 @@
 
 Phase 5.7 establishes a UI presentation boundary for map workspace state.
 
+Phase 5.7 is `MapWorkspaceModel minimal`, not a map engine rewrite.
+
 It does not rewrite tile loading, tile cache, route planning, POI, contour
 generation, Team marker rendering, or rich map rendering.
 
@@ -35,6 +37,7 @@ Renderer should consume:
 
 - `MapWorkspaceModel::snapshot()`
 - `MapWorkspaceModel` actions
+- MapWorkspaceModel actions
 
 Legacy GPS/map/runtime reads are allowed only inside compatibility
 presentation-source adapters.

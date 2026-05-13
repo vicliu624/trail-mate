@@ -50,6 +50,13 @@ def check_required_files() -> int:
         "modules/ui_shared/tests/test_team_chat_presentation_source.cpp",
         "modules/ui_shared/tests/test_team_chat_action_sink.cpp",
         "modules/chat_presentation_adapters/include/chat_presentation_adapters/chat_conversation_mapper.h",
+        "docs/audits/MAP_PRESENTATION_BOUNDARY_AUDIT.md",
+        "modules/ui_presentation/include/ui_presentation/map/map_workspace_snapshot.h",
+        "modules/ui_presentation/include/ui_presentation/map/map_presentation_source.h",
+        "modules/ui_presentation/include/ui_presentation/map/map_action_sink.h",
+        "modules/ui_presentation/include/ui_presentation/map/map_workspace_model.h",
+        "modules/ui_presentation/src/map/map_workspace_model.cpp",
+        "modules/ui_presentation/tests/test_map_workspace_model.cpp",
     ]
 
     failures = 0
@@ -87,6 +94,61 @@ def check_ui_presentation_chat_is_portable() -> int:
                 failures += fail(
                     f"{path.relative_to(ROOT)} contains forbidden token {token}"
                 )
+    return failures
+
+
+def check_ui_presentation_map_is_portable() -> int:
+    forbidden_tokens = [
+        "platform/",
+        "platform\\",
+        "gps_runtime",
+        "lvgl.h",
+        "gtk",
+        "app_context",
+        "app_facade",
+        "TeamUiStore",
+        "team_ui_get_store",
+        "MapTileCache",
+        "map_tiles",
+        "route_storage",
+        "Store",
+    ]
+
+    failures = 0
+    roots = [
+        ROOT / "modules/ui_presentation/include/ui_presentation/map",
+        ROOT / "modules/ui_presentation/src/map",
+    ]
+    for path in iter_code_files(*roots):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for token in forbidden_tokens:
+            if token in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} contains forbidden map token {token}"
+                )
+
+    model_header = "modules/ui_presentation/include/ui_presentation/map/map_workspace_model.h"
+    if exists(model_header):
+        text = read_text(model_header)
+        if "map_action_sink.h" not in text:
+            failures += fail("MapWorkspaceModel does not include MapActionSink")
+        if "map_presentation_source.h" not in text:
+            failures += fail("MapWorkspaceModel does not include MapPresentationSource")
+
+    audit = "docs/audits/MAP_PRESENTATION_BOUNDARY_AUDIT.md"
+    if exists(audit):
+        text = read_text(audit)
+        for token in [
+            "MapWorkspaceModel minimal",
+            "does not rewrite tile loading",
+            "Renderer must not directly read",
+            "MapWorkspaceModel::snapshot()",
+            "MapWorkspaceModel actions",
+            "must not derive from LVGL",
+        ]:
+            if token not in text:
+                failures += fail(f"map boundary audit missing token: {token}")
+
     return failures
 
 
@@ -307,6 +369,7 @@ def main() -> int:
     failures = 0
     failures += check_required_files()
     failures += check_ui_presentation_chat_is_portable()
+    failures += check_ui_presentation_map_is_portable()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
     failures += check_team_chat_presentation_context()
