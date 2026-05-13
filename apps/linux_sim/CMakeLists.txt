@@ -409,6 +409,35 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_team_chat_action_sink_smoke
              COMMAND trailmate_team_chat_action_sink_smoke)
 
+    add_executable(trailmate_team_action_types_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_team_action_types.cpp"
+    )
+    target_include_directories(trailmate_team_action_types_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+    add_test(NAME trailmate_team_action_types_smoke
+             COMMAND trailmate_team_action_types_smoke)
+
+    add_executable(trailmate_legacy_team_action_bridge_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_team_action_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/team_ui_store_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/protocol/team_chat.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_team/src/protocol/team_location_marker.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
+    )
+    target_include_directories(trailmate_legacy_team_action_bridge_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include"
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include")
+    add_test(NAME trailmate_legacy_team_action_bridge_smoke
+             COMMAND trailmate_legacy_team_action_bridge_smoke)
+
     add_executable(trailmate_legacy_map_presentation_adapters_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_map_presentation_adapters.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp"
