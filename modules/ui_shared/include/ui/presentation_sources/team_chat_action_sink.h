@@ -39,6 +39,7 @@ class TeamChatActionSink final : public ui::chat::IChatActionSink
     ::team::ui::ITeamUiStore& team_store_;
     ::team::TeamController* team_controller_ = nullptr;
     uint8_t team_channel_raw_ = 2;
+    uint32_t next_message_id_ = 1;
 };
 
 } // namespace ui::presentation_sources
