@@ -148,6 +148,7 @@ RULES = (
                 r"#include\s*[<\"]sqlite3\.h[>\"]",
                 r"#include\s*[<\"]RadioLib",
                 r"#include\s*[<\"]platform/",
+                r"#include\s*[<\"]chat/domain/chat_types\.h[>\"]",
                 r"#include\s*[<\"]apps/",
                 r"#include\s*[<\"]board/",
                 r"#include\s*[<\"]boards/",

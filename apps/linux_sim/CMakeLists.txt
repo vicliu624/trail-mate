@@ -168,6 +168,26 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_ui_presentation_settings_smoke
              COMMAND trailmate_ui_presentation_settings_smoke)
 
+    add_executable(trailmate_ui_presentation_chat_identity_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_chat_presentation_identity.cpp"
+    )
+    target_include_directories(trailmate_ui_presentation_chat_identity_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_ui_presentation_chat_identity_smoke
+             COMMAND trailmate_ui_presentation_chat_identity_smoke)
+
+    add_executable(trailmate_chat_presentation_mapper_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/tests/test_chat_conversation_mapper.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
+    )
+    target_include_directories(trailmate_chat_presentation_mapper_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_chat_presentation_mapper_smoke
+             COMMAND trailmate_chat_presentation_mapper_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"
