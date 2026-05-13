@@ -199,6 +199,18 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_chat_presentation_mapper_smoke
              COMMAND trailmate_chat_presentation_mapper_smoke)
 
+    add_executable(trailmate_chat_message_mapper_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/tests/test_chat_message_mapper.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_message_mapper.cpp"
+    )
+    target_include_directories(trailmate_chat_message_mapper_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_chat_message_mapper_smoke
+             COMMAND trailmate_chat_message_mapper_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"

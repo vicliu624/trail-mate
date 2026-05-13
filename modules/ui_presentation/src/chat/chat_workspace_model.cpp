@@ -1,29 +1,9 @@
 #include "ui_presentation/chat/chat_workspace_model.h"
 
-#include <stddef.h>
+#include <cstring>
 
 namespace ui::chat
 {
-
-namespace
-{
-
-size_t textLength(const char* text)
-{
-    if (!text)
-    {
-        return 0;
-    }
-
-    size_t length = 0;
-    while (text[length] != '\0')
-    {
-        ++length;
-    }
-    return length;
-}
-
-} // namespace
 
 ChatWorkspaceModel::ChatWorkspaceModel(IChatPresentationSource& source,
                                        IChatActionSink& sink)
@@ -34,11 +14,13 @@ ChatWorkspaceModel::ChatWorkspaceModel(IChatPresentationSource& source,
 
 ChatWorkspaceSnapshot ChatWorkspaceModel::snapshot() const
 {
+    ChatWorkspaceRequest request;
+    request.selected = selected_;
+    request.conversation_offset = conversation_offset_;
+    request.message_offset = message_offset_;
+
     ChatWorkspaceSnapshot out{};
-    if (!source_.buildChatWorkspaceSnapshot(out,
-                                            selected_,
-                                            conversation_offset_,
-                                            message_offset_))
+    if (!source_.buildChatWorkspaceSnapshot(request, out))
     {
         out.header.valid = false;
     }
@@ -52,19 +34,14 @@ ui::UiActionResult ChatWorkspaceModel::selectConversation(ConversationId id)
         return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
     }
 
-    const auto result = sink_.selectConversation(id);
-    if (result.ok)
-    {
-        selected_ = id;
-        message_offset_ = 0;
-    }
-    return result;
+    selected_ = id;
+    message_offset_ = 0;
+    return sink_.selectConversation(id);
 }
 
 ui::UiActionResult ChatWorkspaceModel::sendMessage(const char* text)
 {
-    const size_t length = textLength(text);
-    if (!selected_.isValid() || length == 0)
+    if (!selected_.isValid() || text == nullptr || text[0] == '\0')
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
     }
@@ -72,7 +49,7 @@ ui::UiActionResult ChatWorkspaceModel::sendMessage(const char* text)
     SendMessageView message;
     message.conversation = selected_;
     message.text = text;
-    message.text_len = length;
+    message.text_len = std::strlen(text);
     return sink_.sendMessage(message);
 }
 

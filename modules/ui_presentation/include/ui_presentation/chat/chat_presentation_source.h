@@ -8,16 +8,21 @@
 namespace ui::chat
 {
 
+struct ChatWorkspaceRequest
+{
+    ConversationId selected;
+    uint16_t conversation_offset = 0;
+    uint16_t message_offset = 0;
+};
+
 class IChatPresentationSource
 {
   public:
     virtual ~IChatPresentationSource() = default;
 
     virtual bool buildChatWorkspaceSnapshot(
-        ChatWorkspaceSnapshot& out,
-        ConversationId selected,
-        uint16_t conversation_offset,
-        uint16_t message_offset) const = 0;
+        const ChatWorkspaceRequest& request,
+        ChatWorkspaceSnapshot& out) const = 0;
 };
 
 } // namespace ui::chat

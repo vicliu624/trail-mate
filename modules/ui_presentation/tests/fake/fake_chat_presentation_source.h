@@ -8,15 +8,12 @@ namespace ui::tests
 class FakeChatPresentationSource final : public ui::chat::IChatPresentationSource
 {
   public:
-    bool buildChatWorkspaceSnapshot(ui::chat::ChatWorkspaceSnapshot& out,
-                                    ui::chat::ConversationId selected,
-                                    uint16_t conversation_offset,
-                                    uint16_t message_offset) const override
+    bool buildChatWorkspaceSnapshot(
+        const ui::chat::ChatWorkspaceRequest& request,
+        ui::chat::ChatWorkspaceSnapshot& out) const override
     {
         ++build_count;
-        last_selected = selected;
-        last_conversation_offset = conversation_offset;
-        last_message_offset = message_offset;
+        last_request = request;
 
         if (!available)
         {
@@ -24,7 +21,7 @@ class FakeChatPresentationSource final : public ui::chat::IChatPresentationSourc
         }
 
         out = snapshot_value;
-        out.selected_conversation = selected;
+        out.selected_conversation = request.selected;
         return true;
     }
 
@@ -32,9 +29,7 @@ class FakeChatPresentationSource final : public ui::chat::IChatPresentationSourc
     ui::chat::ChatWorkspaceSnapshot snapshot_value{};
 
     mutable int build_count = 0;
-    mutable ui::chat::ConversationId last_selected{};
-    mutable uint16_t last_conversation_offset = 0;
-    mutable uint16_t last_message_offset = 0;
+    mutable ui::chat::ChatWorkspaceRequest last_request{};
 };
 
 } // namespace ui::tests

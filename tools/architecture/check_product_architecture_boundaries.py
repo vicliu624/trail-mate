@@ -156,6 +156,29 @@ RULES = (
         ),
     ),
     Rule(
+        name="chat-presentation-adapters-must-stay-pure-mappers",
+        roots=("modules/chat_presentation_adapters",),
+        patterns=compile_patterns(
+            (
+                r"\bChatService\b",
+                r"\bContactService\b",
+                r"\bTeamService\b",
+                r"\bMeshSession\b",
+                r"\bIMeshAdapter\b",
+                r"\bAppContext\b",
+                r"#include\s*[<\"]platform/",
+                r"#include\s*[<\"]lvgl\.h[>\"]",
+                r"#include\s*[<\"]gtk/",
+                r"#include\s*[<\"]sqlite3\.h[>\"]",
+                r"#include\s*[<\"]Preferences[>\"]",
+                r"#include\s*[<\"]RadioLib",
+                r"#include\s*[<\"]Arduino\.h[>\"]",
+                r"#include\s*[<\"]board/",
+                r"#include\s*[<\"]boards/",
+            )
+        ),
+    ),
+    Rule(
         name="platform-ble-must-not-own-phone-protocol",
         roots=("platform",),
         path_contains=("/ble/", "\\ble\\"),

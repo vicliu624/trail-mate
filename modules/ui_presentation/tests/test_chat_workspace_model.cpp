@@ -69,8 +69,8 @@ int main()
     assert(std::strcmp(initial.conversations[0].title.c_str(), "Ada") == 0);
     assert(std::strcmp(initial.messages[0].text.c_str(), "hello") == 0);
     assert(source.build_count == 1);
-    assert(source.last_conversation_offset == 3);
-    assert(source.last_message_offset == 5);
+    assert(source.last_request.conversation_offset == 3);
+    assert(source.last_request.message_offset == 5);
 
     const auto ada = directPeer(1234, 0);
     const auto selected = model.selectConversation(ada);
@@ -83,7 +83,7 @@ int main()
     const auto selected_snapshot = model.snapshot();
     assert(selected_snapshot.header.valid);
     assert(selected_snapshot.selected_conversation == ada);
-    assert(source.last_selected == ada);
+    assert(source.last_request.selected == ada);
 
     const auto sent = model.sendMessage("on my way");
     assert(sent.ok);
@@ -126,7 +126,8 @@ int main()
     const auto rejected = model.selectConversation(ada);
     assert(!rejected.ok);
     assert(rejected.failure == ui::UiActionFailure::Rejected);
-    assert(model.selectedConversation() == before_rejected);
+    assert(model.selectedConversation() == ada);
+    assert(model.selectedConversation() != before_rejected);
 
     source.available = false;
     const auto invalid_snapshot = model.snapshot();

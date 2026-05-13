@@ -33,6 +33,9 @@ and UI presentation identity types.
 
 - `chat::ConversationId` remains the source of truth for core chat sessions.
 - `ui::chat::ConversationId` is only a UI selection token.
+- `ChatWorkspaceRequest` carries UI selection and list offsets into the
+  presentation source. Its offsets are UI window offsets, not database cursors
+  or `ChatService` cursors.
 - `ChatWorkspaceModel` may own only UI selection state and cursor offsets. It
   must delegate snapshot construction to `IChatPresentationSource` and user
   actions to `IChatActionSink`.
@@ -71,6 +74,27 @@ chat::ConversationId(protocol, channel, peer = 0)
 Team presentation rows are represented as `ConversationKind::Team`. They are not
 forced into `chat::ConversationId`.
 
+## Message Mapping
+
+Message references and delivery labels are presentation projections. The
+`chat_presentation_adapters` layer may map `chat::MessageStatus` to
+`ui::chat::MessageDeliveryState` and `chat::ChatMessage` to
+`ui::chat::MessageRef`, but it must not treat that reference as a database row
+id, retry token, pending nonce, or packet id unless that source field is
+explicitly available.
+
+Current adapter mapping is intentionally narrow:
+
+```text
+chat::MessageStatus::Incoming -> MessageDeliveryState::Received
+chat::MessageStatus::Queued   -> MessageDeliveryState::Queued
+chat::MessageStatus::Sent     -> MessageDeliveryState::Sent
+chat::MessageStatus::Failed   -> MessageDeliveryState::Failed
+```
+
+Send failure mapping from Mesh/Core send results is deferred until the
+pending/failure ownership is explicit.
+
 ## Workspace Model Contract
 
 `ChatWorkspaceModel` is a thin presentation model. It keeps the currently
@@ -79,6 +103,7 @@ offset. Its read path is:
 
 ```text
 ChatWorkspaceModel::snapshot()
+    -> ChatWorkspaceRequest
     -> IChatPresentationSource::buildChatWorkspaceSnapshot(...)
 ```
 
