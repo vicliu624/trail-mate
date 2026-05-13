@@ -57,6 +57,12 @@ def check_required_files() -> int:
         "modules/ui_presentation/include/ui_presentation/map/map_workspace_model.h",
         "modules/ui_presentation/src/map/map_workspace_model.cpp",
         "modules/ui_presentation/tests/test_map_workspace_model.cpp",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_presentation_state.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_action_sink.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp",
+        "modules/ui_shared/tests/test_legacy_map_presentation_adapters.cpp",
     ]
 
     failures = 0
@@ -148,6 +154,59 @@ def check_ui_presentation_map_is_portable() -> int:
         ]:
             if token not in text:
                 failures += fail(f"map boundary audit missing token: {token}")
+
+    return failures
+
+
+def check_map_presentation_sources_are_bounded() -> int:
+    forbidden_tokens = [
+        "lvgl.h",
+        "gtk/",
+        "MapTileCache",
+        "map_tiles",
+        "route_storage",
+        "map_contour",
+        "RadioLib",
+        "Arduino.h",
+        "sendDirect",
+        "sqlite3",
+    ]
+
+    failures = 0
+    paths = [
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_action_sink.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp",
+    ]
+    for path in paths:
+        if not exists(path):
+            continue
+        text = read_text(path)
+        code_text = strip_cpp_comments(text)
+        for token in forbidden_tokens:
+            if token in code_text:
+                failures += fail(
+                    f"{path} contains forbidden legacy map adapter token {token}"
+                )
+
+    source = "modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp"
+    if exists(source):
+        text = read_text(source)
+        if "buildMapWorkspaceSnapshot" not in text:
+            failures += fail("LegacyMapPresentationSource does not build map snapshots")
+        for token in ["setLayer(", "setViewport(", "setActiveTool(", "clearMeasurement("]:
+            if token in text:
+                failures += fail(f"LegacyMapPresentationSource contains action token {token}")
+
+    sink = "modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp"
+    if exists(sink):
+        text = read_text(sink)
+        if "MapWorkspaceSnapshot" in text:
+            failures += fail("LegacyMapActionSink builds or references MapWorkspaceSnapshot")
+        for token in ["buildMapWorkspaceSnapshot", "status_line", "TeamOverlaySummary"]:
+            if token in text:
+                failures += fail(f"LegacyMapActionSink contains projection token {token}")
 
     return failures
 
@@ -370,6 +429,7 @@ def main() -> int:
     failures += check_required_files()
     failures += check_ui_presentation_chat_is_portable()
     failures += check_ui_presentation_map_is_portable()
+    failures += check_map_presentation_sources_are_bounded()
     failures += check_chat_presentation_adapters_are_pure_mappers()
     failures += check_chat_presentation_sources_are_bounded()
     failures += check_team_chat_presentation_context()

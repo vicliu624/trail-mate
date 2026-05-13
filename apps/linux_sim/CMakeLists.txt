@@ -280,6 +280,21 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_team_chat_action_sink_smoke
              COMMAND trailmate_team_chat_action_sink_smoke)
 
+    add_executable(trailmate_legacy_map_presentation_adapters_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_map_presentation_adapters.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp"
+    )
+    target_include_directories(trailmate_legacy_map_presentation_adapters_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include")
+    add_test(NAME trailmate_legacy_map_presentation_adapters_smoke
+             COMMAND trailmate_legacy_map_presentation_adapters_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"
