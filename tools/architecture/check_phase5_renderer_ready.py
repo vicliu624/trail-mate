@@ -388,6 +388,34 @@ def check_docs() -> int:
             if token not in text:
                 failures += fail(f"renderer hardening baseline doc missing token: {token}")
 
+    chat_audit = "docs/audits/CHAT_UI_CONTROLLER_LEGACY_OWNERSHIP_AUDIT.md"
+    if exists(chat_audit):
+        text = read_text(chat_audit)
+        for token in [
+            "Renderer Hardening in Phase 5.9",
+            "chat_model_.selectConversation",
+            "chat_model_.snapshot()",
+            "chat_model_.sendMessage",
+            "team_chat_model_",
+            "Do not add new renderer send/read logic",
+        ]:
+            if token not in text:
+                failures += fail(f"Chat UI legacy audit missing renderer lock token: {token}")
+
+    map_audit = "docs/audits/MAP_UI_LEGACY_OWNERSHIP_AUDIT.md"
+    if exists(map_audit):
+        text = read_text(map_audit)
+        for token in [
+            "Renderer Hardening in Phase 5.9",
+            "map_workspace_model().snapshot()",
+            "map_workspace_model().centerOnSelf()",
+            "presentation_workspace",
+            "platform/ui/gps_runtime.h",
+            "tile/cache/contour loading and rendering",
+        ]:
+            if token not in text:
+                failures += fail(f"Map UI legacy audit missing renderer lock token: {token}")
+
     return failures
 
 

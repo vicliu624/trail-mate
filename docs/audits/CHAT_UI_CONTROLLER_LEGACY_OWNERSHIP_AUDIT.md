@@ -54,6 +54,30 @@ New non-team chat rendering must prefer `ChatWorkspaceModel`.
 New direct calls from renderer/controller to `ChatService` must be justified as
 legacy ownership or moved behind source/sink.
 
+## Renderer Hardening in Phase 5.9
+
+Phase 5.9 locks the migrated Chat paths without claiming
+`ChatUiController` is clean.
+
+Regression guard:
+
+- non-team selection must continue using `chat_model_.selectConversation`
+- non-team message rendering must continue using `chat_model_.snapshot()`
+- non-team send must continue using `chat_model_.sendMessage`
+- non-team read clearing must continue using `chat_model_.markRead`
+- Team text projection/send must continue using `team_chat_model_`
+
+Allowed legacy ownership remains:
+
+- `ChatService` lifecycle and compatibility refresh calls
+- key verification modal
+- event bus handling
+- conversation cache
+- Team location/command picker and send path
+- platform GPS/team helper usage
+
+Do not add new renderer send/read logic that bypasses `ChatWorkspaceModel`.
+
 ## Non-Goal
 
 Phase 5.6-closeout does not remove `ChatService&` from `ChatUiController`.

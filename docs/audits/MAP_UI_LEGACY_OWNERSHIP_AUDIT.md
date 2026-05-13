@@ -59,6 +59,30 @@ New direct renderer reads of GPS runtime, tile cache, SD map store, raw Team
 store, or platform map probes must either be moved behind a presentation source
 or explicitly documented as legacy ownership.
 
+## Renderer Hardening in Phase 5.9
+
+Phase 5.9 locks the migrated Map paths without rewriting the tile renderer.
+
+Regression guard:
+
+- compact LVGL map status must continue using
+  `map_workspace_model().snapshot()`
+- compact LVGL center-on-self must continue using
+  `map_workspace_model().centerOnSelf()`
+- uConsole map status/center summary must continue exposing
+  `presentation_workspace`
+- uConsole map center fix path must not reintroduce a direct
+  `platform/ui/gps_runtime.h` include
+
+Allowed legacy ownership remains:
+
+- LVGL `GPSPageState`
+- `ui/widgets/map/map_viewport`
+- tile/cache/contour loading and rendering
+- route/tracker overlays
+- rich Team map markers
+- uConsole tile/cache/contour platform model
+
 ## Non-goal
 
 Phase 5.7 does not remove:
