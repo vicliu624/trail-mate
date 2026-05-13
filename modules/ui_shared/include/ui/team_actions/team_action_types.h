@@ -23,6 +23,7 @@ enum class TeamCommandKind : uint8_t
 
 struct TeamLocationMarkerRequest
 {
+    bool use_current_location = false;
     double lat = 0.0;
     double lon = 0.0;
     bool has_altitude = false;
@@ -31,6 +32,17 @@ struct TeamLocationMarkerRequest
     uint32_t timestamp = 0;
     uint8_t marker_icon = 0;
     const char* label = nullptr;
+};
+
+struct TeamLocationSnapshot
+{
+    bool valid = false;
+    double lat = 0.0;
+    double lon = 0.0;
+    bool has_altitude = false;
+    double altitude_m = 0.0;
+    float accuracy_m = 0.0f;
+    uint32_t timestamp = 0;
 };
 
 struct TeamCommandRequest

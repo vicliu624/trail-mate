@@ -10,23 +10,20 @@
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/contact_service.h"
-#include "platform/ui/gps_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/team_ui_store_runtime.h"
-#include "sys/clock.h"
 #include "sys/event_bus.h"
 #include "team/protocol/team_location_marker.h"
-#include "team/usecase/team_controller.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/formatters.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/chat/chat_protocol_support.h"
+#include "ui/team_actions/team_action_sink.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -63,9 +60,6 @@ namespace chat_support = chat::ui::support;
 constexpr uint8_t kTeamChatChannelRaw = 2;
 constexpr chat::ChannelId kTeamChatChannel =
     static_cast<chat::ChannelId>(kTeamChatChannelRaw);
-constexpr uint32_t kTeamComposeMsgIdStart = 1;
-uint32_t s_team_msg_id = kTeamComposeMsgIdStart;
-constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
 
 struct TeamPositionIconOption
 {
@@ -474,6 +468,24 @@ void showTeamSendFailure(::ui::UiActionResult result)
     ::ui::SystemNotification::show(message, 2000);
 }
 
+void showTeamLocationSendFailure(::ui::UiActionResult result)
+{
+    const char* message = "Team location send failed";
+    if (result.failure == ::ui::UiActionFailure::NotReady)
+    {
+        message = "Team location not ready";
+    }
+    else if (result.failure == ::ui::UiActionFailure::Unsupported)
+    {
+        message = "Team location unsupported";
+    }
+    else if (result.failure == ::ui::UiActionFailure::InvalidInput)
+    {
+        message = "Invalid marker";
+    }
+    ::ui::SystemNotification::show(message, 2000);
+}
+
 void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
                                 const chat::ConversationId& conv,
                                 void* user_data)
@@ -535,11 +547,13 @@ UiController::UiController(lv_obj_t* parent,
                            chat::ChatService& service,
                            ::ui::chat::ChatWorkspaceModel& chat_model,
                            ::ui::chat::ChatWorkspaceModel& team_chat_model,
+                           ::ui::team_actions::ITeamActionSink* team_action_sink,
                            chat::ChannelId initial_channel,
                            ExitRequestCallback exit_request,
                            void* exit_request_user_data)
     : parent_(parent), service_(service), chat_model_(chat_model),
       team_chat_model_(team_chat_model),
+      team_action_sink_(team_action_sink),
       state_(State::ChannelList),
       current_channel_(initial_channel),
       current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
@@ -1996,100 +2010,30 @@ void UiController::onTeamPositionCancel()
 
 bool UiController::sendTeamLocationWithIcon(uint8_t icon_id)
 {
-    // Legacy team path. Team send semantics are intentionally not routed
-    // through LegacyChatActionSink. TeamChatActionSink currently owns text
-    // only; location/command actions need a dedicated Team action contract.
     if (!team::proto::team_location_marker_icon_is_valid(icon_id))
     {
         ::ui::SystemNotification::show("Invalid marker", 1500);
         return false;
     }
 
-    team::ui::TeamUiSnapshot snap;
-    if (!team::ui::team_ui_get_store().load(snap) || !snap.has_team_id)
+    if (team_action_sink_ == nullptr)
     {
         ::ui::SystemNotification::show("Team chat send failed", 2000);
         return false;
     }
-    team::TeamController* controller = app::teamFacade().getTeamController();
-    if (!controller)
-    {
-        ::ui::SystemNotification::show("Team chat send failed", 2000);
-        return false;
-    }
-    if (!snap.has_team_psk)
-    {
-        ::ui::SystemNotification::show("Team keys not ready", 2000);
-        return false;
-    }
-    if (!controller->setKeysFromPsk(snap.team_id,
-                                    snap.security_round,
-                                    snap.team_psk.data(),
-                                    snap.team_psk.size()))
-    {
-        ::ui::SystemNotification::show("Team keys not ready", 2000);
-        return false;
-    }
 
-    ::gps::GpsState gps_state = platform::ui::gps::get_data();
-    if (!gps_state.valid)
-    {
-        ::ui::SystemNotification::show("No GPS fix", 2000);
-        return false;
-    }
+    ::ui::team_actions::TeamActionRequest request;
+    request.kind = ::ui::team_actions::TeamActionKind::LocationMarker;
+    request.location.use_current_location = true;
+    request.location.marker_icon = icon_id;
+    request.location.label = team::proto::team_location_marker_icon_name(icon_id);
 
-    uint32_t ts = sys::epoch_seconds_now();
-    if (ts < kMinValidEpochSeconds)
+    const auto result = team_action_sink_->sendTeamAction(request);
+    if (!result.ok)
     {
-        ts = static_cast<uint32_t>(sys::millis_now() / 1000U);
+        showTeamLocationSendFailure(result);
     }
-
-    team::proto::TeamChatLocation loc;
-    loc.lat_e7 = static_cast<int32_t>(gps_state.lat * 1e7);
-    loc.lon_e7 = static_cast<int32_t>(gps_state.lng * 1e7);
-    if (gps_state.has_alt)
-    {
-        double alt = gps_state.alt_m;
-        if (alt > 32767.0) alt = 32767.0;
-        if (alt < -32768.0) alt = -32768.0;
-        loc.alt_m = static_cast<int16_t>(lround(alt));
-    }
-    loc.ts = ts;
-    loc.source = icon_id;
-    loc.label = team::proto::team_location_marker_icon_name(icon_id);
-
-    std::vector<uint8_t> payload;
-    if (!team::proto::encodeTeamChatLocation(loc, payload))
-    {
-        ::ui::SystemNotification::show("Team location encode failed", 2000);
-        return false;
-    }
-
-    team::proto::TeamChatMessage msg;
-    msg.header.type = team::proto::TeamChatType::Location;
-    msg.header.ts = ts;
-    msg.header.msg_id = s_team_msg_id++;
-    if (s_team_msg_id == 0)
-    {
-        s_team_msg_id = kTeamComposeMsgIdStart;
-    }
-    msg.payload = payload;
-
-    bool ok = controller->onChat(msg, chat::ChannelId::PRIMARY);
-    if (ok)
-    {
-        team::ui::team_ui_chatlog_append_structured(snap.team_id,
-                                                    0,
-                                                    false,
-                                                    ts,
-                                                    team::proto::TeamChatType::Location,
-                                                    payload);
-    }
-    else
-    {
-        ::ui::SystemNotification::show("Team chat send failed", 2000);
-    }
-    return ok;
+    return result.ok;
 }
 
 void UiController::onTeamPositionIconSelected(uint8_t icon_id)

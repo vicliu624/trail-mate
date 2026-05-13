@@ -90,6 +90,10 @@ TeamChatPresentationSource
 Phase 7.2 migrates Team location send behind an explicit Team action sink and
 bridge.
 
+The chat UI submits `TeamActionRequest` with marker intent. Current location
+resolution, Team key setup, payload encoding, Team runtime send, and outgoing
+Team log append move behind `LegacyTeamActionBridge` and its runtime ports.
+
 Phase 7.2 defines Team command action types and bridge behavior, but the
 current Chat UI command send path remains unsupported until a real command UI
 surface exists.

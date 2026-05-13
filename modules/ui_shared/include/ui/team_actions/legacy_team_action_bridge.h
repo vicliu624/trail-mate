@@ -29,6 +29,7 @@ class LegacyTeamActionBridge final : public ITeamActionSink
     LegacyTeamActionBridge(
         ::team::ui::ITeamUiStore& team_store,
         ::ui::presentation_sources::ITeamChatCommandPort* command_port,
+        ITeamLocationSource* location_source = nullptr,
         uint8_t team_channel_raw = 2);
 
     ui::UiActionResult sendTeamAction(
@@ -41,6 +42,7 @@ class LegacyTeamActionBridge final : public ITeamActionSink
 
     ::team::ui::ITeamUiStore& team_store_;
     ::ui::presentation_sources::ITeamChatCommandPort* command_port_ = nullptr;
+    ITeamLocationSource* location_source_ = nullptr;
     uint8_t team_channel_raw_ = 2;
     uint32_t next_message_id_ = 1;
 };

@@ -45,6 +45,21 @@ class FakeTeamCommandPort final
     ::team::proto::TeamChatMessage last_message{};
 };
 
+class FakeTeamLocationSource final : public ui::team_actions::ITeamLocationSource
+{
+  public:
+    bool currentTeamLocation(ui::team_actions::TeamLocationSnapshot& out) override
+    {
+        ++read_count;
+        out = snapshot;
+        return read_ok;
+    }
+
+    int read_count = 0;
+    bool read_ok = true;
+    ui::team_actions::TeamLocationSnapshot snapshot{};
+};
+
 team::ui::TeamUiSnapshot readySnapshot()
 {
     team::ui::TeamUiSnapshot snapshot;
@@ -69,7 +84,18 @@ int main()
     store.clear();
 
     FakeTeamCommandPort port;
-    ui::team_actions::LegacyTeamActionBridge bridge(store, &port);
+    FakeTeamLocationSource location_source;
+    location_source.snapshot.valid = true;
+    location_source.snapshot.lat = 30.2672;
+    location_source.snapshot.lon = -97.7431;
+    location_source.snapshot.has_altitude = true;
+    location_source.snapshot.altitude_m = 153.2;
+    location_source.snapshot.accuracy_m = 6.0f;
+    location_source.snapshot.timestamp = 12345;
+
+    ui::team_actions::LegacyTeamActionBridge bridge(store,
+                                                    &port,
+                                                    &location_source);
 
     ui::team_actions::TeamActionRequest location;
     location.kind = ui::team_actions::TeamActionKind::LocationMarker;
@@ -107,6 +133,36 @@ int main()
     assert(decoded_location.lon_e7 == 1214737000);
     assert(decoded_location.alt_m == 123);
     assert(decoded_location.acc_m == 7);
+
+    ui::team_actions::TeamActionRequest current_location;
+    current_location.kind = ui::team_actions::TeamActionKind::LocationMarker;
+    current_location.location.use_current_location = true;
+    current_location.location.marker_icon =
+        static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::GoodFind);
+    const auto current_location_result = bridge.sendTeamAction(current_location);
+    assert(current_location_result.ok);
+    assert(location_source.read_count == 1);
+    assert(port.last_message.header.type == team::proto::TeamChatType::Location);
+    assert(team::proto::decodeTeamChatLocation(
+        port.last_message.payload.data(),
+        port.last_message.payload.size(),
+        &decoded_location));
+    assert(decoded_location.lat_e7 == 302672000);
+    assert(decoded_location.lon_e7 == -977431000);
+    assert(decoded_location.alt_m == 153);
+    assert(decoded_location.acc_m == 6);
+    assert(decoded_location.ts == 12345);
+
+    location_source.snapshot.valid = false;
+    assert(bridge.sendTeamAction(current_location).failure ==
+           ui::UiActionFailure::NotReady);
+    location_source.snapshot.valid = true;
+
+    ui::team_actions::LegacyTeamActionBridge bridge_without_location_source(
+        store,
+        &port);
+    assert(bridge_without_location_source.sendTeamAction(current_location).failure ==
+           ui::UiActionFailure::NotReady);
 
     std::vector<team::ui::TeamChatLogEntry> log;
     assert(team::ui::team_ui_chatlog_load_recent(readySnapshot().team_id, 4, log));

@@ -13,6 +13,7 @@
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
 #include "ui/screens/chat/chat_message_list_components.h"
+#include "ui/team_actions/team_action_sink.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
 #include <cstdint>
@@ -46,6 +47,7 @@ class UiController : public IChatUiRuntime
                  chat::ChatService& service,
                  ::ui::chat::ChatWorkspaceModel& chat_model,
                  ::ui::chat::ChatWorkspaceModel& team_chat_model,
+                 ::ui::team_actions::ITeamActionSink* team_action_sink = nullptr,
                  chat::ChannelId initial_channel = chat::ChannelId::PRIMARY,
                  ExitRequestCallback exit_request = nullptr,
                  void* exit_request_user_data = nullptr);
@@ -74,6 +76,7 @@ class UiController : public IChatUiRuntime
     chat::ChatService& service_;
     ::ui::chat::ChatWorkspaceModel& chat_model_;
     ::ui::chat::ChatWorkspaceModel& team_chat_model_;
+    ::ui::team_actions::ITeamActionSink* team_action_sink_ = nullptr;
     State state_;
 
     std::unique_ptr<ChatMessageListScreen> channel_list_;
@@ -113,9 +116,8 @@ class UiController : public IChatUiRuntime
     void refreshTeamConversation();
     void startTeamConversationTimer();
     void stopTeamConversationTimer();
-    // Legacy team path. Team location send remains outside both generic chat
-    // and TeamChatActionSink until a dedicated location/command action contract
-    // is defined.
+    // Phase 7.2: Team location/command sends flow through Team action sinks.
+    // Rich Team payload rendering remains bounded legacy.
     bool sendTeamLocationWithIcon(uint8_t icon_id);
     void openTeamPositionPicker();
     void closeTeamPositionPicker(bool restore_group);

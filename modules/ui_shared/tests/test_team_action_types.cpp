@@ -17,6 +17,14 @@ int main()
     assert(action.location.lat > 31.0);
     assert(action.location.marker_icon == 4);
 
+    action.location.use_current_location = true;
+    ui::team_actions::TeamLocationSnapshot location_snapshot;
+    location_snapshot.valid = true;
+    location_snapshot.lat = 31.2304;
+    location_snapshot.lon = 121.4737;
+    assert(action.location.use_current_location);
+    assert(location_snapshot.valid);
+
     action.kind = ui::team_actions::TeamActionKind::Command;
     action.command.kind = ui::team_actions::TeamCommandKind::RallyPoint;
     action.command.payload = "rally";

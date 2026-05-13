@@ -86,9 +86,11 @@ team::proto::TeamCommandType toProtoCommand(TeamCommandKind kind)
 LegacyTeamActionBridge::LegacyTeamActionBridge(
     ::team::ui::ITeamUiStore& team_store,
     ::ui::presentation_sources::ITeamChatCommandPort* command_port,
+    ITeamLocationSource* location_source,
     uint8_t team_channel_raw)
     : team_store_(team_store),
       command_port_(command_port),
+      location_source_(location_source),
       team_channel_raw_(team_channel_raw)
 {
 }
@@ -161,9 +163,40 @@ ui::UiActionResult LegacyTeamActionBridge::sendText(
 ui::UiActionResult LegacyTeamActionBridge::sendLocationMarker(
     const TeamActionRequest& request)
 {
-    const auto& location = request.location;
-    if (!team::proto::team_location_marker_icon_is_valid(location.marker_icon) ||
-        !validCoordinate(location.lat, location.lon))
+    TeamLocationMarkerRequest location = request.location;
+    if (!team::proto::team_location_marker_icon_is_valid(location.marker_icon))
+    {
+        return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
+    }
+
+    if (location.use_current_location)
+    {
+        if (location_source_ == nullptr)
+        {
+            return ui::UiActionResult::fail(ui::UiActionFailure::NotReady);
+        }
+
+        TeamLocationSnapshot snapshot;
+        if (!location_source_->currentTeamLocation(snapshot) || !snapshot.valid)
+        {
+            return ui::UiActionResult::fail(ui::UiActionFailure::NotReady);
+        }
+
+        location.lat = snapshot.lat;
+        location.lon = snapshot.lon;
+        location.has_altitude = snapshot.has_altitude;
+        location.altitude_m = snapshot.altitude_m;
+        if (location.accuracy_m <= 0.0f)
+        {
+            location.accuracy_m = snapshot.accuracy_m;
+        }
+        if (location.timestamp == 0)
+        {
+            location.timestamp = snapshot.timestamp;
+        }
+    }
+
+    if (!validCoordinate(location.lat, location.lon))
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
     }

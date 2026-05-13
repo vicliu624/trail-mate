@@ -27,9 +27,11 @@ Phase 7.2 defines:
 - `TeamActionKind`
 - `TeamCommandKind`
 - `TeamLocationMarkerRequest`
+- `TeamLocationSnapshot`
 - `TeamCommandRequest`
 - `TeamActionRequest`
 - `ITeamActionSink`
+- `ITeamLocationSource`
 - `LegacyTeamActionBridge`
 
 ## Ownership
@@ -41,6 +43,10 @@ contain renderer widgets, LVGL objects, raw packets, or app service references.
 
 `LegacyTeamActionBridge` translates Team action requests into the current Team
 runtime command port and Team UI store compatibility helpers.
+
+`ITeamLocationSource` provides current location facts to Team action adapters
+when a renderer submits `use_current_location`. It is a runtime source, not a UI
+widget dependency.
 
 `TeamChatPresentationSource` remains a read projection and must not send Team
 actions.
@@ -68,6 +74,11 @@ TeamLocationMarkerRequest
 The request contains location facts and marker identity. Encoding
 `TeamChatLocation` and appending the outgoing structured Team log belong to the
 Team action bridge.
+
+When the UI wants to send the current location, it submits
+`use_current_location` and marker identity. The bridge resolves the current
+location through `ITeamLocationSource`; the renderer/controller must not read
+GPS runtime directly for this action.
 
 ## Command
 

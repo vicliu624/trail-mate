@@ -15,4 +15,12 @@ class ITeamActionSink
         const TeamActionRequest& request) = 0;
 };
 
+class ITeamLocationSource
+{
+  public:
+    virtual ~ITeamLocationSource() = default;
+
+    virtual bool currentTeamLocation(TeamLocationSnapshot& out) = 0;
+};
+
 } // namespace ui::team_actions
