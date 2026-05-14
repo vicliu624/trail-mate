@@ -17,6 +17,7 @@ has direct user-visible consequences and a bounded migration path.
 | ACK timeout projection | in progress | 7.3 | adapter hook projects `AckTimeout`; unified ACK source remains future |
 | key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
+| Chat runtime event pump / store flush ownership | contained | 7.7 | owned by `ChatPageRuntimeEventPump` / `ChatPageRuntimeFacade`; controller is UI refresh sink |
 | Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
 | Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
@@ -172,3 +173,33 @@ Remaining legacy surfaces now require removal conditions:
 - `LegacyKeyVerificationActionSink`
 - Team rich payload formatting in `ChatUiController`
 - controller-owned `ChatService::processIncoming` / `flushStore`
+
+## Phase 7.7 Decision
+
+Chat runtime event projection and ChatService scheduling are runtime pump
+responsibilities.
+
+They are not owned by:
+
+- `ChatUiController`
+- renderer widgets
+- `ChatWorkspaceModel`
+- `ui_presentation`
+
+Phase 7.7 introduces:
+
+- `IChatUiRefreshSink`
+- `ChatPageRuntimeEventPump`
+- `ChatPageRuntimeFacade`
+
+`ChatPageRuntimeFacade` remains compatible with the existing
+`IChatUiRuntime` app facade hook. It calls the event pump first and then lets
+`ChatUiController` refresh UI state.
+
+`ChatUiController` no longer:
+
+- calls `ChatService::processIncoming()`
+- calls `ChatService::flushStore()`
+- receives EventBus events directly
+- calls `LegacyChatDeliveryEventBridge`
+- updates `LegacyKeyVerificationSource`

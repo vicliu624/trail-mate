@@ -37,7 +37,7 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 | Conversation cache | `cached_conversations_` and list refresh helpers | Presentation workspace provides all conversation list projection needed by controller | remaining legacy |
 | `ChatService::processIncoming` | `UiController::update()` | Runtime/app shell event pump owns incoming processing cadence | remaining legacy |
 | `ChatService::flushStore` | `UiController::update()` | Runtime/app shell storage flush owner is explicit | remaining legacy |
-| EventBus forwarding | `UiController::onChatEvent(...)` | Chat page runtime handles event projection before UI refresh | contained legacy |
+| EventBus forwarding | `ChatPageRuntimeFacade` / `ChatPageRuntimeEventPump` | App-wide runtime scheduler owns EventBus routing outside page runtime | burned down from controller |
 | Team rich payload rendering | `format_team_chat_entry(...)` | Team rich payload presentation adapter renders location/command rows | remaining legacy |
 | Team position picker renderer | `openTeamPositionPicker(...)` | Team position picker view helper owns widget rendering | remaining legacy |
 | Legacy Team log formatting | Team log refresh path | Team presentation source projects rich payload display fields | remaining legacy |
