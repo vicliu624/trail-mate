@@ -267,6 +267,7 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_gps_runtime/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_lvgl_core/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/include"
     "${CMAKE_SOURCE_DIR}/modules/core_device/include"
     "${CMAKE_SOURCE_DIR}/modules/core_mesh/include"

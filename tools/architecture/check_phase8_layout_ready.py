@@ -32,6 +32,7 @@ def check_required_files() -> int:
         "docs/specification/DEVICE_UX_PACK_ARCHITECTURE_SPEC.md",
         "docs/audits/REPOSITORY_LAYOUT_CURRENT_STATE_AUDIT.md",
         "docs/audits/UI_SHARED_SPLIT_AUDIT.md",
+        "docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
         "docs/decisions/ADR_BUILD_ENTRYPOINTS.md",
         "docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md",
         "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md",
@@ -257,8 +258,40 @@ def check_audit_language() -> int:
             "ui_map_runtime",
             "ui_chat_runtime",
             "ui_gps_runtime",
+            "UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
+            "transitional umbrella",
+            "Forwarding headers",
+            "authoritative new module paths",
         ],
         "ui_shared split audit",
+    )
+
+    failures += check_tokens(
+        "docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
+        [
+            "transitional umbrella",
+            "compatibility shims only",
+            "Authoritative include paths live in the owning module",
+            "Forwarding Header Pattern",
+            "ui_chat_runtime",
+            "ui_map_runtime",
+            "ui_gps_runtime",
+            "ui_legacy_adapters",
+            "ui_lvgl_core",
+            "ui_lvgl_ux_packs",
+            "ui_shared Must Not Receive",
+            "new runtime helpers",
+            "new legacy adapters",
+            "new map tile helpers",
+            "new GPS runtime helpers",
+            "new chat runtime helpers",
+            "new LVGL UX pack renderers",
+            "LegacyFilesystemMapTileSource",
+            "deprecated compatibility alias",
+            "FilesystemMapTileSource",
+            "check_phase8_layout_ready.py",
+        ],
+        "ui_shared compatibility shim policy",
     )
 
     return failures
@@ -709,6 +742,171 @@ def check_forwarding_headers() -> int:
     return failures
 
 
+def check_authoritative_include_paths() -> int:
+    old_include_replacements = {
+        "ui/screens/chat/chat_page_runtime_event_pump.h":
+            "ui_chat_runtime/chat_page_runtime_event_pump.h",
+        "ui/screens/chat/chat_ui_refresh_sink.h":
+            "ui_chat_runtime/chat_ui_refresh_sink.h",
+        "ui/screens/gps/gps_page_runtime_pump.h":
+            "ui_gps_runtime/gps_page_runtime_pump.h",
+        "ui/screens/gps/gps_ui_refresh_sink.h":
+            "ui_gps_runtime/gps_ui_refresh_sink.h",
+        "ui/map_tiles/map_tile_types.h":
+            "ui_map_runtime/map_tiles/map_tile_types.h",
+        "ui/map_tiles/map_tile_resolver.h":
+            "ui_map_runtime/map_tiles/map_tile_resolver.h",
+        "ui/map_tiles/map_tile_source.h":
+            "ui_map_runtime/map_tiles/map_tile_source.h",
+        "ui/map_tiles/map_tile_cache.h":
+            "ui_map_runtime/map_tiles/map_tile_cache.h",
+        "ui/map_tiles/map_tile_decoder_cache.h":
+            "ui_map_runtime/map_tiles/map_tile_decoder_cache.h",
+        "ui/map_tiles/map_tile_render_queue.h":
+            "ui_map_runtime/map_tiles/map_tile_render_queue.h",
+        "ui/map_tiles/legacy_filesystem_map_tile_source.h":
+            "ui_map_runtime/map_tiles/filesystem_map_tile_source.h",
+        "ui/map_overlay/map_overlay_projector.h":
+            "ui_map_runtime/map_overlay/map_overlay_projector.h",
+        "ui/presentation_sources/legacy_chat_delivery_event_bridge.h":
+            "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
+        "ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
+            "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
+        "ui/presentation_sources/legacy_key_verification_session.h":
+            "ui_legacy_adapters/legacy_key_verification_session.h",
+        "ui/presentation_sources/legacy_key_verification_source.h":
+            "ui_legacy_adapters/legacy_key_verification_source.h",
+        "ui/presentation_sources/legacy_key_verification_action_sink.h":
+            "ui_legacy_adapters/legacy_key_verification_action_sink.h",
+        "ui/presentation_sources/legacy_map_overlay_source.h":
+            "ui_legacy_adapters/legacy_map_overlay_source.h",
+        "ui/screens/chat/team_position_picker_renderer.h":
+            "ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
+        "ui/screens/chat/key_verification_modal_renderer.h":
+            "ui_lvgl_ux_packs/common/key_verification_modal_renderer.h",
+    }
+
+    forwarding_headers = {
+        "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h",
+        "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h",
+        "modules/ui_shared/include/ui/screens/gps/gps_page_runtime_pump.h",
+        "modules/ui_shared/include/ui/screens/gps/gps_ui_refresh_sink.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_types.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_resolver.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_source.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_decoder_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_render_queue.h",
+        "modules/ui_shared/include/ui/map_tiles/legacy_filesystem_map_tile_source.h",
+        "modules/ui_shared/include/ui/map_overlay/map_overlay_projector.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h",
+        "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h",
+        "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h",
+    }
+
+    failures = 0
+    for root_name in ["apps", "modules", "platform", "boards"]:
+        for path in iter_code_files(ROOT / root_name):
+            rel = path.relative_to(ROOT).as_posix()
+            if rel in forwarding_headers:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if "PHASE8_COMPATIBILITY_INCLUDE_TEST" in text:
+                continue
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("#include"):
+                    continue
+                for old_include, replacement in old_include_replacements.items():
+                    if f'"{old_include}"' in stripped or f"<{old_include}>" in stripped:
+                        failures += fail(
+                            f"{rel} includes compatibility path {old_include}; use {replacement}"
+                        )
+
+    return failures
+
+
+def check_build_manifest_authority() -> int:
+    failures = 0
+    common_include_tokens = [
+        "modules/ui_chat_runtime/include",
+        "modules/ui_map_runtime/include",
+        "modules/ui_gps_runtime/include",
+        "modules/ui_legacy_adapters/include",
+        "modules/ui_lvgl_core/include",
+        "modules/ui_lvgl_ux_packs/include",
+    ]
+
+    for manifest in [
+        "platformio.ini",
+        "modules/ui_shared/library.json",
+        "apps/esp_pio/library.json",
+        "apps/gat562_mesh_evb_pro/library.json",
+    ]:
+        failures += check_tokens(manifest, common_include_tokens, "new module include authority")
+
+    failures += check_tokens(
+        "apps/esp_pio/library.json",
+        [
+            '"name":  "ui_chat_runtime"',
+            '"name":  "ui_map_runtime"',
+            '"name":  "ui_gps_runtime"',
+            '"name":  "ui_legacy_adapters"',
+            '"name":  "ui_lvgl_core"',
+            '"name":  "ui_lvgl_ux_packs"',
+        ],
+        "ESP PIO new module dependency",
+    )
+
+    failures += check_tokens(
+        "apps/esp_idf/CMakeLists.txt",
+        [
+            "modules/ui_chat_runtime/src/chat_page_runtime_event_pump.cpp",
+            "modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp",
+            "modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp",
+            "modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp",
+            "modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp",
+            "modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp",
+            "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
+            "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
+            "modules/ui_lvgl_core/include",
+            "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
+            "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
+        ],
+        "ESP-IDF new module authority",
+    )
+
+    failures += check_tokens(
+        "cmake/TrailMateLinuxSources.cmake",
+        [
+            "TRAIL_MATE_UI_CHAT_RUNTIME_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_CHAT_RUNTIME_SRC_ROOT",
+            "TRAIL_MATE_UI_MAP_RUNTIME_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT",
+            "TRAIL_MATE_UI_GPS_RUNTIME_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_GPS_RUNTIME_SRC_ROOT",
+            "TRAIL_MATE_UI_LEGACY_ADAPTERS_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT",
+            "TRAIL_MATE_UI_LVGL_CORE_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_LVGL_UX_PACKS_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT",
+            "chat_page_runtime_event_pump.cpp",
+            "filesystem_map_tile_source.cpp",
+            "gps_page_runtime_pump.cpp",
+            "team_position_picker_renderer.cpp",
+            "key_verification_modal_renderer.cpp",
+        ],
+        "Linux CMake new module authority",
+    )
+
+    return failures
+
+
 def check_runtime_module_boundaries() -> int:
     failures = 0
     forbidden_by_root = {
@@ -768,8 +966,12 @@ def check_runtime_module_boundaries() -> int:
         text = read_text(filesystem_header)
         if "class FilesystemMapTileSource" not in text:
             failures += fail("FilesystemMapTileSource class is missing")
-        if "using LegacyFilesystemMapTileSource = FilesystemMapTileSource;" not in text:
-            failures += fail("LegacyFilesystemMapTileSource must be compatibility alias only")
+        if "using LegacyFilesystemMapTileSource" not in text:
+            failures += fail("LegacyFilesystemMapTileSource compatibility alias is missing")
+        if "[[deprecated" not in text:
+            failures += fail("LegacyFilesystemMapTileSource alias must be deprecated")
+        if "FilesystemMapTileSource;" not in text:
+            failures += fail("LegacyFilesystemMapTileSource must alias FilesystemMapTileSource")
 
     for path in iter_code_files(ROOT / "modules/ui_map_runtime"):
         text = path.read_text(encoding="utf-8", errors="ignore")
@@ -790,6 +992,29 @@ def check_runtime_module_boundaries() -> int:
                 failures += fail(
                     f"{path.relative_to(ROOT)} contains forbidden portable presentation token {token}"
                 )
+
+    return failures
+
+
+def check_deprecated_alias_usage() -> int:
+    allowed = {
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/filesystem_map_tile_source.h",
+    }
+
+    failures = 0
+    for root_name in ["apps", "modules", "platform", "boards"]:
+        for path in iter_code_files(ROOT / root_name):
+            rel = path.relative_to(ROOT).as_posix()
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if "LegacyFilesystemMapTileSource" not in text:
+                continue
+            if rel in allowed:
+                continue
+            if "PHASE8_LEGACY_ALIAS_COMPATIBILITY_TEST" in text:
+                continue
+            failures += fail(
+                f"{rel} uses deprecated LegacyFilesystemMapTileSource alias; use FilesystemMapTileSource"
+            )
 
     return failures
 
@@ -832,7 +1057,10 @@ def main() -> int:
     failures += check_ux_profile_language()
     failures += check_build_entrypoint_language()
     failures += check_forwarding_headers()
+    failures += check_authoritative_include_paths()
+    failures += check_build_manifest_authority()
     failures += check_runtime_module_boundaries()
+    failures += check_deprecated_alias_usage()
     failures += check_transitional_app_markers()
 
     if failures:

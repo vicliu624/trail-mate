@@ -19,6 +19,12 @@
                                 "-I../../modules/core_team/include",
                                 "-I../../modules/ui_presentation/include",
                                 "-I../../modules/chat_presentation_adapters/include",
+                                "-I../../modules/ui_chat_runtime/include",
+                                "-I../../modules/ui_map_runtime/include",
+                                "-I../../modules/ui_gps_runtime/include",
+                                "-I../../modules/ui_legacy_adapters/include",
+                                "-I../../modules/ui_lvgl_core/include",
+                                "-I../../modules/ui_lvgl_ux_packs/include",
                                 "-I../../platform/esp/common/include"
                             ]
               },
@@ -34,6 +40,24 @@
                          },
                          {
                              "name":  "chat_presentation_adapters"
+                         },
+                         {
+                             "name":  "ui_chat_runtime"
+                         },
+                         {
+                             "name":  "ui_map_runtime"
+                         },
+                         {
+                             "name":  "ui_gps_runtime"
+                         },
+                         {
+                             "name":  "ui_legacy_adapters"
+                         },
+                         {
+                             "name":  "ui_lvgl_core"
+                         },
+                         {
+                             "name":  "ui_lvgl_ux_packs"
                          },
                          {
                              "name":  "esp_arduino_common"

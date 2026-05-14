@@ -230,3 +230,23 @@ Moved to `ui_lvgl_ux_packs`:
 `LegacyFilesystemMapTileSource` is now a compatibility alias for
 `FilesystemMapTileSource`. New code should include
 `ui_map_runtime/map_tiles/filesystem_map_tile_source.h`.
+
+## Phase 8 Structural Consolidation Policy
+
+`ui_shared` is a transitional umbrella after the structural migration batch. The
+compatibility rules are defined in
+`docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md`.
+
+Forwarding headers under `modules/ui_shared/include` are allowed only as
+compatibility shims. Main code must include the authoritative new module paths:
+
+- `ui_chat_runtime/...`
+- `ui_map_runtime/...`
+- `ui_gps_runtime/...`
+- `ui_legacy_adapters/...`
+- `ui_lvgl_core/...`
+- `ui_lvgl_ux_packs/...`
+
+New runtime helpers, legacy adapters, map tile helpers, GPS runtime helpers,
+chat runtime helpers, and LVGL UX pack renderers must not be added to
+`modules/ui_shared`.
