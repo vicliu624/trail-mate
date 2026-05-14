@@ -47,6 +47,12 @@ int main()
             ::chat::delivery::SendFailureKind::Rejected,
             44});
     assert(root.deliveryReadModel().size() == 1);
+    const auto clear_result = root.deliveryActionSink().handleDeliveryAction(
+        ::chat::delivery::ChatDeliveryActionRequest{
+            ::chat::delivery::ChatDeliveryActionKind::ClearFailure,
+            ::chat::delivery::ChatDeliveryRef{0, 77, 0}});
+    assert(clear_result.ok);
+    assert(root.deliveryReadModel().size() == 0);
 
     assert(product_composition::hasChatServices(root.appServices()));
     assert(product_composition::hasInteractivePresentation(root.presentation()));

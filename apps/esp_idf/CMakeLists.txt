@@ -129,9 +129,11 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_settings_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/info_card.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp

@@ -10,6 +10,7 @@
 #include "fake/fake_settings_action_sink.h"
 #include "fake/fake_settings_source.h"
 
+#include "chat/delivery/chat_delivery_action_service.h"
 #include "chat/delivery/chat_delivery_event_port.h"
 #include "product_composition/presentation_bundle.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
@@ -32,6 +33,7 @@ class LinuxSimCompositionRoot
     chat::delivery::ChatDeliveryReadModel& deliveryReadModel();
     chat::delivery::ChatDeliveryEventProjector& deliveryProjector();
     chat::delivery::IChatDeliveryEventPort& deliveryEventPort();
+    chat::delivery::IChatDeliveryActionSink& deliveryActionSink();
 
   private:
     chat::delivery::ChatDeliveryReadModel delivery_read_model_{};
@@ -39,6 +41,8 @@ class LinuxSimCompositionRoot
         delivery_read_model_};
     chat::delivery::ProjectingChatDeliveryEventPort delivery_event_port_{
         delivery_projector_};
+    chat::delivery::ChatDeliveryActionService delivery_action_service_{
+        delivery_read_model_};
 
     ui::tests::FakeDeviceStatusSource device_source_{};
     ui::device::DeviceStatusModel device_model_{device_source_};

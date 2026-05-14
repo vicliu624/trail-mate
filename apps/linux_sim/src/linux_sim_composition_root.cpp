@@ -42,4 +42,10 @@ LinuxSimCompositionRoot::deliveryEventPort()
     return delivery_event_port_;
 }
 
+chat::delivery::IChatDeliveryActionSink&
+LinuxSimCompositionRoot::deliveryActionSink()
+{
+    return delivery_action_service_;
+}
+
 } // namespace trailmate::linux_sim

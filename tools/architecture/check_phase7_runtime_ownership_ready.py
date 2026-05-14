@@ -37,7 +37,9 @@ def check_required_files() -> int:
     required = [
         "docs/audits/CHAT_DELIVERY_OWNERSHIP_AUDIT.md",
         "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md",
+        "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
+        "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -45,18 +47,26 @@ def check_required_files() -> int:
         "modules/core_chat/include/chat/delivery/chat_delivery_read_model.h",
         "modules/core_chat/include/chat/delivery/chat_delivery_event_projector.h",
         "modules/core_chat/include/chat/delivery/chat_delivery_event_port.h",
+        "modules/core_chat/include/chat/delivery/chat_delivery_action_types.h",
+        "modules/core_chat/include/chat/delivery/chat_delivery_action_sink.h",
+        "modules/core_chat/include/chat/delivery/chat_delivery_action_service.h",
         "modules/core_chat/include/chat/delivery/legacy_chat_delivery_bridge.h",
         "modules/core_chat/include/chat/delivery/legacy_chat_send_result_mapper.h",
         "modules/core_chat/src/delivery/chat_delivery_read_model.cpp",
         "modules/core_chat/src/delivery/chat_delivery_event_projector.cpp",
         "modules/core_chat/src/delivery/chat_delivery_event_port.cpp",
+        "modules/core_chat/src/delivery/chat_delivery_action_service.cpp",
         "modules/core_chat/src/delivery/legacy_chat_delivery_bridge.cpp",
         "modules/core_chat/src/delivery/legacy_chat_send_result_mapper.cpp",
         "modules/core_chat/tests/test_chat_delivery_read_model.cpp",
         "modules/core_chat/tests/test_chat_delivery_event_projector.cpp",
         "modules/core_chat/tests/test_chat_delivery_event_port.cpp",
+        "modules/core_chat/tests/test_chat_delivery_action_service.cpp",
         "modules/core_chat/tests/test_legacy_chat_delivery_bridge.cpp",
         "modules/core_chat/tests/test_legacy_chat_send_result_mapper.cpp",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_shared/tests/test_legacy_chat_delivery_action_bridge.cpp",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
         "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp",
         "modules/ui_shared/tests/test_legacy_chat_delivery_event_bridge.cpp",
@@ -94,6 +104,23 @@ def check_docs() -> int:
             "LegacyChatPresentationSource",
             "Phase 7.1 does not make `ChatWorkspaceModel` own delivery state",
         ],
+        "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md": [
+            "retry",
+            "cancel pending",
+            "clear failure",
+            "ChatDeliveryActionRequest",
+            "ChatDeliveryActionService",
+            "Renderers and controllers must not directly clear delivery records",
+        ],
+        "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md": [
+            "Delivery actions belong to runtime/action sinks",
+            "ChatDeliveryActionRequest",
+            "IChatDeliveryActionSink",
+            "IRetryChatMessagePort",
+            "ChatDeliveryActionService",
+            "LegacyChatDeliveryActionBridge",
+            "`ChatWorkspaceModel` must not own retry, cancel, or clear-failure state",
+        ],
         "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md": [
             "ChatSendResultEvent",
             "`msg_id`",
@@ -109,6 +136,8 @@ def check_docs() -> int:
             "composition-root ownership",
             "Team location/command action ownership",
             "LegacyTeamActionBridge",
+            "Chat retry/cancel/clear failure actions",
+            "ChatDeliveryActionService",
         ],
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md": [
             "Team actions are command ownership",
@@ -233,6 +262,74 @@ def check_delivery_type_shape() -> int:
             if token in strip_cpp_comments(text):
                 failures += fail(f"ChatDeliveryEventPort owns forbidden token: {token}")
 
+    action_types = "modules/core_chat/include/chat/delivery/chat_delivery_action_types.h"
+    if exists(action_types):
+        text = read_text(action_types)
+        for token in [
+            "enum class ChatDeliveryActionKind",
+            "Retry",
+            "CancelPending",
+            "ClearFailure",
+            "ChatDeliveryActionRequest",
+            "ChatDeliveryActionFailure",
+            "InvalidRef",
+            "Unsupported",
+            "NotRetryable",
+            "ChatDeliveryActionResult",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatDeliveryActionTypes missing token: {token}")
+        for token in ["UiActionResult", "lvgl.h", "ChatWorkspaceModel", "MessageRow"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"ChatDeliveryActionTypes owns forbidden token: {token}")
+
+    action_sink = "modules/core_chat/include/chat/delivery/chat_delivery_action_sink.h"
+    if exists(action_sink):
+        text = read_text(action_sink)
+        for token in ["IChatDeliveryActionSink", "handleDeliveryAction"]:
+            if token not in text:
+                failures += fail(f"ChatDeliveryActionSink missing token: {token}")
+
+    action_service_header = (
+        "modules/core_chat/include/chat/delivery/chat_delivery_action_service.h"
+    )
+    action_service_source = (
+        "modules/core_chat/src/delivery/chat_delivery_action_service.cpp"
+    )
+    for path in [action_service_header, action_service_source]:
+        if exists(path):
+            text = strip_cpp_comments(read_text(path))
+            for token in ["lvgl.h", "gtk", "ChatWorkspaceModel", "MessageRow", "ui_presentation", "UiActionResult"]:
+                if token in text:
+                    failures += fail(
+                        f"{path} contains forbidden delivery action token: {token}"
+                    )
+    if exists(action_service_header):
+        text = read_text(action_service_header)
+        for token in [
+            "IRetryChatMessagePort",
+            "retryMessage",
+            "ChatDeliveryActionService",
+            "IChatDeliveryActionSink",
+            "ChatDeliveryReadModel& read_model_",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatDeliveryActionService header missing token: {token}")
+    if exists(action_service_source):
+        text = read_text(action_service_source)
+        for token in [
+            "ChatDeliveryActionKind::Retry",
+            "ChatDeliveryActionKind::CancelPending",
+            "ChatDeliveryActionKind::ClearFailure",
+            "read_model_.clear",
+            "retry_port_->retryMessage",
+            "DeliveryState::Queued",
+            "DeliveryState::Sending",
+            "DeliveryState::Failed",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatDeliveryActionService source missing token: {token}")
+
     mapper = "modules/core_chat/include/chat/delivery/legacy_chat_send_result_mapper.h"
     if exists(mapper):
         text = read_text(mapper)
@@ -295,17 +392,21 @@ def check_composition_roots_own_delivery() -> int:
             "ChatDeliveryReadModel delivery_read_model_",
             "ChatDeliveryEventProjector delivery_projector_",
             "ProjectingChatDeliveryEventPort delivery_event_port_",
+            "ChatDeliveryActionService delivery_action_service_",
             "deliveryReadModel()",
             "deliveryProjector()",
             "deliveryEventPort()",
+            "deliveryActionSink()",
         ],
         "apps/linux_uconsole/src/uconsole_composition_root.h": [
             "ChatDeliveryReadModel delivery_read_model_",
             "ChatDeliveryEventProjector delivery_projector_",
             "ProjectingChatDeliveryEventPort delivery_event_port_",
+            "ChatDeliveryActionService delivery_action_service_",
             "deliveryReadModel()",
             "deliveryProjector()",
             "deliveryEventPort()",
+            "deliveryActionSink()",
         ],
         "apps/linux_uconsole/src/uconsole_composition_root.cpp": [
             "&delivery_read_model_",
@@ -432,6 +533,106 @@ def check_delivery_event_bridge_boundary() -> int:
         ]:
             if token not in text:
                 failures += fail(f"chat_page_runtime.cpp missing delivery runtime wiring token: {token}")
+
+    return failures
+
+
+def check_delivery_action_bridge_boundary() -> int:
+    failures = 0
+    bridge_files = [
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp",
+    ]
+    for path in bridge_files:
+        if not exists(path):
+            failures += fail(f"missing delivery action bridge file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "lvgl.h",
+            "gtk",
+            "ChatWorkspaceModel",
+            "MessageRow",
+            "ChatDeliveryReadModel",
+            "read_model",
+            "sendText(",
+            "sendMessage(",
+            "Renderer",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden delivery action bridge token {token}")
+
+    header = "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h"
+    if exists(header):
+        text = read_text(header)
+        for token in [
+            "LegacyChatDeliveryActionBridge",
+            "IChatDeliveryActionSink",
+            "handleMessageAction",
+            "retryMessage",
+            "cancelPending",
+            "clearFailure",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyChatDeliveryActionBridge header missing token: {token}")
+
+    source = "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp"
+    if exists(source):
+        text = read_text(source)
+        for token in [
+            "toDeliveryRef",
+            "MessageRef",
+            "ChatDeliveryActionRequest",
+            "handleDeliveryAction",
+            "ChatDeliveryActionKind::Retry",
+            "ChatDeliveryActionKind::CancelPending",
+            "ChatDeliveryActionKind::ClearFailure",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyChatDeliveryActionBridge source missing token: {token}")
+
+    runtime = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
+    if exists(runtime):
+        text = read_text(runtime)
+        for token in [
+            "ChatDeliveryActionService",
+            "LegacyChatDeliveryActionBridge",
+            "s_delivery_action_service",
+            "s_delivery_action_bridge",
+        ]:
+            if token not in text:
+                failures += fail(f"chat_page_runtime.cpp missing delivery action wiring token: {token}")
+
+    controller = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+    if exists(controller):
+        text = strip_cpp_comments(read_text(controller))
+        for token in [
+            "ChatDeliveryActionService",
+            "ChatDeliveryActionRequest",
+            "IChatDeliveryActionSink",
+            "LegacyChatDeliveryActionBridge",
+            "s_delivery_action",
+        ]:
+            if token in text:
+                failures += fail(f"ChatUiController owns delivery action token: {token}")
+
+    for path in [
+        "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_model.h",
+        "modules/ui_presentation/src/chat/chat_workspace_model.cpp",
+        "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_snapshot.h",
+    ]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "ChatDeliveryAction",
+            "IChatDeliveryActionSink",
+            "Retry",
+            "CancelPending",
+            "ClearFailure",
+        ]:
+            if token in text:
+                failures += fail(f"{path} owns delivery action token: {token}")
 
     return failures
 
@@ -631,6 +832,7 @@ def main() -> int:
     failures += check_composition_roots_own_delivery()
     failures += check_ui_presentation_and_renderers_do_not_own_delivery()
     failures += check_delivery_event_bridge_boundary()
+    failures += check_delivery_action_bridge_boundary()
     failures += check_team_action_type_shape()
     failures += check_team_action_bridge_boundary()
     failures += check_chat_ui_team_action_migration()

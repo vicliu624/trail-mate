@@ -2,10 +2,13 @@
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
+#include "chat/delivery/chat_delivery_action_service.h"
+#include "chat/delivery/chat_delivery_event_port.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/team_ui_store_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
+#include "ui/presentation_sources/legacy_chat_delivery_action_bridge.h"
 #include "ui/presentation_sources/legacy_chat_delivery_event_bridge.h"
 #include "ui/presentation_sources/legacy_chat_presentation_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
@@ -14,7 +17,6 @@
 #include "ui/team_actions/legacy_team_action_bridge.h"
 #include "ui/ui_common.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
-#include "chat/delivery/chat_delivery_event_port.h"
 #include "team/usecase/team_controller.h"
 
 #include <memory>
@@ -31,6 +33,8 @@ std::unique_ptr<::chat::delivery::ChatDeliveryReadModel> s_delivery_read_model =
 std::unique_ptr<::chat::delivery::ChatDeliveryEventProjector> s_delivery_projector = nullptr;
 std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort> s_delivery_event_port = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryEventBridge> s_delivery_event_bridge = nullptr;
+std::unique_ptr<::chat::delivery::ChatDeliveryActionService> s_delivery_action_service = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryActionBridge> s_delivery_action_bridge = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource> s_team_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::ITeamChatCommandPort> s_team_chat_command_port = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatActionSink> s_team_chat_sink = nullptr;
@@ -141,6 +145,8 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
+    s_delivery_action_bridge.reset();
+    s_delivery_action_service.reset();
     s_delivery_event_bridge.reset();
     s_delivery_event_port.reset();
     s_delivery_projector.reset();
@@ -182,6 +188,12 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         std::make_unique<::ui::presentation_sources::LegacyChatDeliveryEventBridge>(
             chat_service,
             *s_delivery_event_port);
+    s_delivery_action_service =
+        std::make_unique<::chat::delivery::ChatDeliveryActionService>(
+            *s_delivery_read_model);
+    s_delivery_action_bridge =
+        std::make_unique<::ui::presentation_sources::LegacyChatDeliveryActionBridge>(
+            *s_delivery_action_service);
     s_chat_source = std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource>(
         new ::ui::presentation_sources::LegacyChatPresentationSource(
             chat_service,
@@ -254,6 +266,8 @@ void exit(lv_obj_t* parent)
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
+    s_delivery_action_bridge.reset();
+    s_delivery_action_service.reset();
     s_delivery_event_bridge.reset();
     s_delivery_event_port.reset();
     s_delivery_projector.reset();

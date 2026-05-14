@@ -17,6 +17,19 @@ int main()
             ::chat::delivery::SendFailureKind::None,
             12});
     assert(root.deliveryReadModel().size() == 1);
+    root.deliveryEventPort().publishDeliveryEvent(
+        ::chat::delivery::ChatDeliveryEvent{
+            ::chat::delivery::ChatDeliveryRef{0, 43, 0},
+            ::chat::delivery::DeliveryState::Failed,
+            ::chat::delivery::SendFailureKind::AckTimeout,
+            13});
+    assert(root.deliveryReadModel().size() == 2);
+    const auto clear_result = root.deliveryActionSink().handleDeliveryAction(
+        ::chat::delivery::ChatDeliveryActionRequest{
+            ::chat::delivery::ChatDeliveryActionKind::ClearFailure,
+            ::chat::delivery::ChatDeliveryRef{0, 43, 0}});
+    assert(clear_result.ok);
+    assert(root.deliveryReadModel().size() == 1);
 
     auto& presentation = root.presentation();
     assert(product_composition::hasInteractivePresentation(presentation));

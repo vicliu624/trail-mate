@@ -101,4 +101,10 @@ UConsoleCompositionRoot::deliveryEventPort() noexcept
     return delivery_event_port_;
 }
 
+::chat::delivery::IChatDeliveryActionSink&
+UConsoleCompositionRoot::deliveryActionSink() noexcept
+{
+    return delivery_action_service_;
+}
+
 } // namespace trailmate::uconsole
