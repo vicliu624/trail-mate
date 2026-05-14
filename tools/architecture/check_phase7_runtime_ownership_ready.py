@@ -48,12 +48,15 @@ def check_required_files() -> int:
         "docs/audits/PHASE7_7_EVENT_PUMP_BURNDOWN_REPORT.md",
         "docs/audits/PHASE7_8_TEAM_RICH_PAYLOAD_BURNDOWN_REPORT.md",
         "docs/audits/PHASE7_9_TEAM_POSITION_PICKER_BURNDOWN_REPORT.md",
+        "docs/audits/MAP_TILE_SOURCE_CACHE_OWNERSHIP_AUDIT.md",
+        "docs/audits/PHASE7_10_MAP_TILE_SOURCE_CACHE_BURNDOWN_REPORT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
         "docs/specification/CHAT_RUNTIME_EVENT_PUMP_SPEC.md",
         "docs/specification/TEAM_RICH_PAYLOAD_PRESENTATION_SPEC.md",
         "docs/specification/TEAM_POSITION_PICKER_RENDERER_SPEC.md",
+        "docs/specification/MAP_TILE_SOURCE_CACHE_RUNTIME_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -110,6 +113,15 @@ def check_required_files() -> int:
         "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp",
         "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h",
         "modules/ui_shared/src/ui/screens/chat/team_position_picker_renderer.cpp",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_types.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_resolver.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_source.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/legacy_filesystem_map_tile_source.h",
+        "modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp",
+        "modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp",
+        "modules/ui_shared/tests/test_map_tile_resolver.cpp",
+        "modules/ui_shared/tests/test_legacy_filesystem_map_tile_source.cpp",
         "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h",
         "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h",
         "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp",
@@ -179,6 +191,9 @@ def check_docs() -> int:
             "ChatDeliveryActionService",
             "key verification workflow",
             "KeyVerificationModel",
+            "Map tile/cache ownership",
+            "MapTileResolver",
+            "LegacyFilesystemMapTileSource",
         ],
         "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md": [
             "Key verification is a standalone runtime/presentation workflow",
@@ -296,6 +311,7 @@ def check_docs() -> int:
             "ChatUiController` Team rich payload formatting",
             "ChatUiController` Team position picker renderer",
             "MessageRow` Team rich display limitations",
+            "Map tile path/cache legacy runtime",
         ],
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md": [
             "Temporary UI Responsibilities",
@@ -351,6 +367,41 @@ def check_docs() -> int:
             "Burned Down",
             "Still Contained",
         ],
+        "docs/audits/MAP_TILE_SOURCE_CACHE_OWNERSHIP_AUDIT.md": [
+            "Phase 7.10 establishes ownership for map tile source, path resolution, and tile availability lookup",
+            "MapTileRef",
+            "MapTileResolver",
+            "LegacyFilesystemMapTileSource",
+            "IMapTileSource::lookup(...)",
+            "MapWorkspaceSnapshot",
+            "/maps/base/osm/{z}/{x}/{y}.png",
+            "/maps/contour/major-500/{z}/{x}/{y}.png",
+            "ESP decoded LVGL tile cache",
+            "Linux `MapTileCache` downloader",
+        ],
+        "docs/specification/MAP_TILE_SOURCE_CACHE_RUNTIME_SPEC.md": [
+            "Tile lookup and cache ownership belong to map runtime/source adapters",
+            "MapTileRef",
+            "MapTileLayer",
+            "MapTileFormat",
+            "MapTilePayload",
+            "IMapTileSource",
+            "IMapTileCache",
+            "MapTileResolver",
+            "LegacyFilesystemMapTileSource",
+            "Phase 7.10 does not",
+        ],
+        "docs/audits/PHASE7_10_MAP_TILE_SOURCE_CACHE_BURNDOWN_REPORT.md": [
+            "Phase 7.10 moved Trail Mate map tile path mapping and filesystem-backed availability lookup",
+            "MapTileResolver",
+            "LegacyFilesystemMapTileSource",
+            "MapTileRef",
+            "Burned Down",
+            "Still Contained",
+            "ESP decoded LVGL tile cache",
+            "Linux `platform::linux_runtime::MapTileCache` downloader",
+            "uConsole workspace path fields",
+        ],
     }
 
     failures = 0
@@ -391,6 +442,7 @@ def check_legacy_burndown_register() -> int:
         "ChatUiController` Team rich payload formatting",
         "ChatUiController` Team position picker renderer",
         "MessageRow` Team rich display limitations",
+        "Map tile path/cache legacy runtime",
     ]
     for surface in required_surfaces:
         if surface not in text:
@@ -1382,6 +1434,228 @@ def check_team_position_picker_renderer_boundary() -> int:
     return failures
 
 
+def check_map_tile_source_cache_boundary() -> int:
+    failures = 0
+
+    types_header = "modules/ui_shared/include/ui/map_tiles/map_tile_types.h"
+    source_header = "modules/ui_shared/include/ui/map_tiles/map_tile_source.h"
+    cache_header = "modules/ui_shared/include/ui/map_tiles/map_tile_cache.h"
+    resolver_header = "modules/ui_shared/include/ui/map_tiles/map_tile_resolver.h"
+    resolver_source = "modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp"
+    legacy_header = "modules/ui_shared/include/ui/map_tiles/legacy_filesystem_map_tile_source.h"
+    legacy_source = "modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp"
+    viewport_source = "modules/ui_shared/src/ui/widgets/map/map_viewport.cpp"
+    snapshot_header = "modules/ui_presentation/include/ui_presentation/map/map_workspace_snapshot.h"
+    esp_tiles = "platform/esp/arduino_common/src/ui/widgets/map/map_tiles.cpp"
+    linux_tiles = "platform/linux/common/src/ui/widgets/map/map_tiles.cpp"
+    runtime_register = "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md"
+    burndown_register = "docs/audits/LEGACY_BURNDOWN_REGISTER.md"
+
+    if exists(types_header):
+        text = read_text(types_header)
+        for token in [
+            "enum class MapTileLayer",
+            "Osm",
+            "Terrain",
+            "Satellite",
+            "ContourMajor500",
+            "ContourMajor25",
+            "enum class MapTileFormat",
+            "enum class MapTileStatus",
+            "struct MapTileRef",
+            "struct MapTilePayload",
+            "struct MapTileLookupResult",
+            "mapTileLayerFromBaseSource",
+            "mapTileContourLayerForZoom",
+            "mapTileFormatForLayer",
+            "mapTileLayerIsContour",
+        ]:
+            if token not in text:
+                failures += fail(f"Map tile types missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "std::string", "std::vector", "filesystem"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"Map tile types contain forbidden dependency token: {token}")
+
+    if exists(source_header):
+        text = read_text(source_header)
+        for token in [
+            "class IMapTileSource",
+            "lookup",
+            "read",
+            "class IMapTileFileSystem",
+            "exists",
+            "isDirectory",
+            "readFile",
+        ]:
+            if token not in text:
+                failures += fail(f"Map tile source header missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "std::filesystem", "FILE*", "SD.open", "LittleFS", "SPIFFS"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"Map tile source header contains forbidden token: {token}")
+
+    if exists(cache_header):
+        text = read_text(cache_header)
+        for token in ["class IMapTileCache", "clear", "has"]:
+            if token not in text:
+                failures += fail(f"Map tile cache header missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "MapWorkspaceSnapshot", "std::vector", "filesystem"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"Map tile cache header contains forbidden token: {token}")
+
+    if exists(resolver_header):
+        text = read_text(resolver_header)
+        for token in ["class MapTileResolver", "setRootPrefix", "resolvePath", "resolveDirectory"]:
+            if token not in text:
+                failures += fail(f"MapTileResolver header missing token: {token}")
+
+    if exists(resolver_source):
+        text = strip_cpp_comments(read_text(resolver_source))
+        for token in [
+            "maps/base",
+            "maps/contour",
+            "major-500",
+            "major-200",
+            "major-100",
+            "major-50",
+            "major-25",
+            "MapTileResolver::resolvePath",
+            "MapTileResolver::resolveDirectory",
+            "std::snprintf",
+        ]:
+            if token not in text:
+                failures += fail(f"MapTileResolver source missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "std::filesystem", "FILE*", "fopen", "SD.open", "LittleFS", "SPIFFS"]:
+            if token in text:
+                failures += fail(f"MapTileResolver owns forbidden storage/render token: {token}")
+
+    if exists(legacy_header):
+        text = read_text(legacy_header)
+        for token in [
+            "LegacyFilesystemMapTileSource",
+            "IMapTileSource",
+            "MapTileResolver",
+            "lookup",
+            "read",
+            "resolvePath",
+            "resolveDirectory",
+            "layerDirectoryAvailable",
+            "anyContourDirectoryAvailable",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyFilesystemMapTileSource header missing token: {token}")
+
+    if exists(legacy_source):
+        text = strip_cpp_comments(read_text(legacy_source))
+        for token in [
+            "LegacyFilesystemMapTileSource::lookup",
+            "MapTileStatus::Available",
+            "MapTileStatus::Missing",
+            "LegacyFilesystemMapTileSource::read",
+            "file_system_.readFile",
+            "file_system_.isDirectory",
+            "MapTileLayer::ContourMajor500",
+            "MapTileLayer::ContourMajor25",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyFilesystemMapTileSource source missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "std::filesystem", "FILE*", "fopen", "SD.open", "LittleFS", "SPIFFS"]:
+            if token in text:
+                failures += fail(f"LegacyFilesystemMapTileSource owns forbidden platform token: {token}")
+
+    if exists(snapshot_header):
+        text = strip_cpp_comments(read_text(snapshot_header))
+        for token in [
+            "MapTilePayload",
+            "IMapTileSource",
+            "IMapTileCache",
+            "lv_image_dsc_t",
+            "bitmap",
+            "uint8_t*",
+            "std::vector<MapTile",
+            "filesystem",
+            "path",
+        ]:
+            if token in text:
+                failures += fail(f"MapWorkspaceSnapshot owns forbidden tile cache/payload token: {token}")
+
+    if exists(viewport_source):
+        text = strip_cpp_comments(read_text(viewport_source))
+        for token in [
+            "/maps/",
+            "maps/base",
+            "maps/contour",
+            "major-500",
+            "major-200",
+            "major-100",
+            "major-50",
+            "major-25",
+            "fopen",
+            "FILE*",
+            "SD.open",
+            "LittleFS",
+            "SPIFFS",
+        ]:
+            if token in text:
+                failures += fail(f"Map viewport owns forbidden tile path/storage token: {token}")
+
+    for path in [esp_tiles, linux_tiles]:
+        if not exists(path):
+            failures += fail(f"missing platform map tile runtime: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "LegacyFilesystemMapTileSource",
+            "IMapTileFileSystem",
+            "MapTileRef",
+            "tile_source().resolvePath",
+            "tile_source().lookup",
+            "layerDirectoryAvailable",
+            "anyContourDirectoryAvailable",
+        ]:
+            if token not in text:
+                failures += fail(f"{path} missing map tile source ownership token: {token}")
+        for token in [
+            "base_source_dir",
+            "base_source_ext",
+            "major_contour_profile_for_zoom",
+            "maps/base/",
+            "maps/contour/",
+            "/maps/base",
+            "/maps/contour",
+        ]:
+            if token in text:
+                failures += fail(f"{path} still owns direct tile path policy token: {token}")
+
+    if exists(runtime_register):
+        text = read_text(runtime_register)
+        for token in [
+            "Map tile/cache ownership",
+            "contained",
+            "7.10",
+            "MapTileResolver",
+            "LegacyFilesystemMapTileSource",
+            "decoded image cache remains contained legacy",
+        ]:
+            if token not in text:
+                failures += fail(f"PHASE7_RUNTIME_OWNERSHIP_REGISTER missing map tile token: {token}")
+
+    if exists(burndown_register):
+        text = read_text(burndown_register)
+        for token in [
+            "Map tile path/cache legacy runtime",
+            "MapTileResolver",
+            "LegacyFilesystemMapTileSource",
+            "ESP decoded cache",
+            "Linux downloader cache",
+            "uConsole path fields",
+            "Renderer consumes tile refs/source without direct path/cache ownership",
+        ]:
+            if token not in text:
+                failures += fail(f"LEGACY_BURNDOWN_REGISTER missing map tile token: {token}")
+
+    return failures
+
+
 def check_chat_runtime_event_pump_boundary() -> int:
     failures = 0
     header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
@@ -1826,6 +2100,7 @@ def main() -> int:
     failures += check_chat_ui_legacy_burndown()
     failures += check_team_rich_payload_presentation_boundary()
     failures += check_team_position_picker_renderer_boundary()
+    failures += check_map_tile_source_cache_boundary()
     failures += check_chat_runtime_event_pump_boundary()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()

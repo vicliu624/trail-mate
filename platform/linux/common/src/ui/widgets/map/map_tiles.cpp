@@ -7,6 +7,8 @@
 
 #include "lvgl.h"
 
+#include "ui/map_tiles/legacy_filesystem_map_tile_source.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -30,9 +32,42 @@ bool g_missing_tile_notice_pending = false;
 bool g_missing_tile_notice_emitted = false;
 uint8_t g_missing_tile_notice_source = 0;
 
-const char* base_source_dir(uint8_t map_source);
-const char* base_source_ext(uint8_t map_source);
-const char* major_contour_profile_for_zoom(int z);
+class StdMapTileFileSystem final : public ui::map_tiles::IMapTileFileSystem
+{
+  public:
+    bool exists(const char* path) const override
+    {
+        return path && std::filesystem::exists(std::filesystem::path(path));
+    }
+
+    bool isDirectory(const char* path) const override
+    {
+        return path && std::filesystem::is_directory(std::filesystem::path(path));
+    }
+
+    bool readFile(const char* path,
+                  uint8_t* buffer,
+                  std::size_t capacity,
+                  std::size_t& out_size) const override
+    {
+        out_size = 0;
+        if (!path || !buffer || capacity == 0)
+        {
+            return false;
+        }
+
+        FILE* file = std::fopen(path, "rb");
+        if (!file)
+        {
+            return false;
+        }
+
+        out_size = std::fread(buffer, 1, capacity, file);
+        const bool ok = std::ferror(file) == 0;
+        std::fclose(file);
+        return ok;
+    }
+};
 
 uint32_t now_ms()
 {
@@ -46,22 +81,86 @@ std::filesystem::path default_storage_root()
     return ::platform::linux_runtime::resolve_paths().sd_root;
 }
 
+StdMapTileFileSystem& tile_file_system()
+{
+    static StdMapTileFileSystem fs;
+    return fs;
+}
+
+ui::map_tiles::LegacyFilesystemMapTileSource& tile_source()
+{
+    static const std::string root = default_storage_root().string();
+    static ui::map_tiles::LegacyFilesystemMapTileSource source(
+        tile_file_system(),
+        root.c_str());
+    return source;
+}
+
+uint8_t clamp_tile_zoom(int z)
+{
+    if (z < 0)
+    {
+        return 0;
+    }
+    if (z > 255)
+    {
+        return 255;
+    }
+    return static_cast<uint8_t>(z);
+}
+
+ui::map_tiles::MapTileRef base_tile_ref(int z, int x, int y, uint8_t map_source)
+{
+    ui::map_tiles::MapTileRef ref{};
+    ref.layer = ui::map_tiles::mapTileLayerFromBaseSource(sanitize_map_source(map_source));
+    ref.z = clamp_tile_zoom(z);
+    ref.x = static_cast<uint32_t>(x < 0 ? 0 : x);
+    ref.y = static_cast<uint32_t>(y < 0 ? 0 : y);
+    return ref;
+}
+
+bool contour_tile_ref(int z, int x, int y, ui::map_tiles::MapTileRef& out)
+{
+    bool supported = false;
+    const auto layer = ui::map_tiles::mapTileContourLayerForZoom(z, &supported);
+    if (!supported)
+    {
+        return false;
+    }
+
+    out.layer = layer;
+    out.z = clamp_tile_zoom(z);
+    out.x = static_cast<uint32_t>(x < 0 ? 0 : x);
+    out.y = static_cast<uint32_t>(y < 0 ? 0 : y);
+    return true;
+}
+
 std::filesystem::path build_base_tile_actual_path(int z, int x, int y, uint8_t map_source)
 {
-    return default_storage_root() / "maps" / "base" / base_source_dir(map_source) / std::to_string(z) / std::to_string(x) /
-           (std::to_string(y) + "." + base_source_ext(map_source));
+    char path[160]{};
+    if (!tile_source().resolvePath(base_tile_ref(z, x, y, map_source),
+                                   path,
+                                   sizeof(path)))
+    {
+        return {};
+    }
+    return std::filesystem::path(path);
 }
 
 std::filesystem::path build_contour_tile_actual_path(int z, int x, int y)
 {
-    const char* profile = major_contour_profile_for_zoom(z);
-    if (!profile)
+    ui::map_tiles::MapTileRef ref{};
+    if (!contour_tile_ref(z, x, y, ref))
     {
         return {};
     }
 
-    return default_storage_root() / "maps" / "contour" / profile / std::to_string(z) / std::to_string(x) /
-           (std::to_string(y) + ".png");
+    char path[160]{};
+    if (!tile_source().resolvePath(ref, path, sizeof(path)))
+    {
+        return {};
+    }
+    return std::filesystem::path(path);
 }
 
 bool build_lvgl_path_from_actual(const std::filesystem::path& actual_path, char* out_path, size_t out_size)
@@ -75,58 +174,6 @@ bool build_lvgl_path_from_actual(const std::filesystem::path& actual_path, char*
     std::snprintf(out_path, out_size, "A:%s", actual.c_str());
     out_path[out_size - 1] = '\0';
     return true;
-}
-
-const char* base_source_dir(uint8_t map_source)
-{
-    switch (sanitize_map_source(map_source))
-    {
-    case 1:
-        return "terrain";
-    case 2:
-        return "satellite";
-    case 0:
-    default:
-        return "osm";
-    }
-}
-
-const char* base_source_ext(uint8_t map_source)
-{
-    return sanitize_map_source(map_source) == 2 ? "jpg" : "png";
-}
-
-const char* major_contour_profile_for_zoom(int z)
-{
-    if (z <= 7)
-    {
-        return nullptr;
-    }
-    if (z == 8)
-    {
-        return "major-500";
-    }
-    if (z == 9)
-    {
-        return "major-200";
-    }
-    if (z == 10)
-    {
-        return "major-500";
-    }
-    if (z == 11)
-    {
-        return "major-200";
-    }
-    if (z <= 14)
-    {
-        return "major-100";
-    }
-    if (z <= 16)
-    {
-        return "major-50";
-    }
-    return "major-25";
 }
 
 double clamp_lat(double lat)
@@ -308,12 +355,18 @@ void create_or_refresh_tile_card(TileContext& ctx, MapTile& tile)
 
     const auto base_actual_path =
         build_base_tile_actual_path(tile.z, static_cast<int>(tile.x), static_cast<int>(tile.y), tile.map_source);
-    const bool has_base = std::filesystem::exists(base_actual_path);
+    const auto base_result = tile_source().lookup(
+        base_tile_ref(tile.z, static_cast<int>(tile.x), static_cast<int>(tile.y), tile.map_source));
+    const bool has_base = base_result.status == ui::map_tiles::MapTileStatus::Available;
 
     const auto contour_actual_path =
         g_requested_contour_enabled ? build_contour_tile_actual_path(tile.z, static_cast<int>(tile.x), static_cast<int>(tile.y))
                                     : std::filesystem::path{};
-    const bool has_contour = !contour_actual_path.empty() && std::filesystem::exists(contour_actual_path);
+    ui::map_tiles::MapTileRef contour_ref{};
+    const bool has_contour =
+        g_requested_contour_enabled &&
+        contour_tile_ref(tile.z, static_cast<int>(tile.x), static_cast<int>(tile.y), contour_ref) &&
+        tile_source().lookup(contour_ref).status == ui::map_tiles::MapTileStatus::Available;
 
     if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj))
     {
@@ -430,32 +483,19 @@ bool build_contour_tile_path(int z, int x, int y, char* out_path, size_t out_siz
 
 bool base_tile_available(int z, int x, int y, uint8_t map_source)
 {
-    return std::filesystem::exists(build_base_tile_actual_path(z, x, y, map_source));
+    const auto result = tile_source().lookup(base_tile_ref(z, x, y, map_source));
+    return result.status == ui::map_tiles::MapTileStatus::Available;
 }
 
 bool map_source_directory_available(uint8_t map_source)
 {
-    return std::filesystem::exists(default_storage_root() / "maps" / "base" / base_source_dir(map_source));
+    return tile_source().layerDirectoryAvailable(
+        ui::map_tiles::mapTileLayerFromBaseSource(sanitize_map_source(map_source)));
 }
 
 bool contour_directory_available()
 {
-    static const char* kMajorProfiles[] = {
-        "major-500",
-        "major-200",
-        "major-100",
-        "major-50",
-        "major-25",
-    };
-
-    for (const char* profile : kMajorProfiles)
-    {
-        if (std::filesystem::exists(default_storage_root() / "maps" / "contour" / profile))
-        {
-            return true;
-        }
-    }
-    return std::filesystem::exists(default_storage_root() / "maps" / "contour");
+    return tile_source().anyContourDirectoryAvailable();
 }
 
 bool take_missing_tile_notice(uint8_t* out_map_source)

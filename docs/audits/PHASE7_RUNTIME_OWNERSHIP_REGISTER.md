@@ -19,7 +19,7 @@ has direct user-visible consequences and a bounded migration path.
 | radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | Chat runtime event pump / store flush ownership | contained | 7.7 | owned by `ChatPageRuntimeEventPump` / `ChatPageRuntimeFacade`; controller is UI refresh sink |
 | Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
-| Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
+| Map tile/cache ownership | contained | 7.10 | tile path mapping and filesystem availability are owned by `MapTileResolver` / `LegacyFilesystemMapTileSource`; decoded image cache remains contained legacy |
 | Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
 | Team rich payload display ownership | contained | 7.8 | owned by `TeamRichPayloadProjector` / `TeamChatPresentationSource`; controller display decode/format is forbidden |
 | Team position picker widget lifecycle | burned-down UI surface | 7.9 | owned by `TeamPositionPickerRenderer`; controller only handles selected/cancel workflow |
