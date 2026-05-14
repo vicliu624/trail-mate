@@ -1158,6 +1158,16 @@ def check_team_rich_payload_presentation_boundary() -> int:
             "encodeTeamChatCommand",
             "team_ui_chatlog_append_structured",
             "buildChatWorkspaceSnapshot",
+            "#include <string>",
+            "#include <vector>",
+            "#include <iostream>",
+            "#include <sstream>",
+            "#include <format>",
+            "std::string",
+            "std::vector",
+            "std::format",
+            "std::stringstream",
+            "std::ostringstream",
         ]:
             if token in text:
                 failures += fail(

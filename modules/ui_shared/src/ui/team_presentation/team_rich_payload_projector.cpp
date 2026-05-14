@@ -5,7 +5,7 @@
 
 #include <cstddef>
 #include <cstdio>
-#include <string>
+#include <cstring>
 
 namespace ui::team_presentation
 {
@@ -13,17 +13,36 @@ namespace ui::team_presentation
 namespace
 {
 
-std::string truncateText(const std::string& text, std::size_t max_len)
+void copyTextPayloadSummary(TeamRichPayloadDisplay& out,
+                            const uint8_t* data,
+                            std::size_t size)
 {
-    if (text.size() <= max_len)
+    char buffer[96]{};
+    if (data == nullptr || size == 0)
     {
-        return text;
+        ui::copyText(out.summary, "");
+        return;
     }
-    if (max_len <= 3)
+
+    const std::size_t max_copy = sizeof(buffer) - 1U;
+    const bool truncated = size > max_copy;
+    std::size_t copy_len = truncated ? sizeof(buffer) - 4U : size;
+    if (copy_len > 0)
     {
-        return text.substr(0, max_len);
+        std::memcpy(buffer, data, copy_len);
     }
-    return text.substr(0, max_len - 3) + "...";
+    if (truncated)
+    {
+        buffer[copy_len] = '.';
+        buffer[copy_len + 1U] = '.';
+        buffer[copy_len + 2U] = '.';
+        buffer[copy_len + 3U] = '\0';
+    }
+    else
+    {
+        buffer[copy_len] = '\0';
+    }
+    ui::copyText(out.summary, buffer);
 }
 
 const char* teamCommandName(team::proto::TeamCommandType type)
@@ -54,16 +73,18 @@ TeamCommandDisplayKind toDisplayKind(team::proto::TeamCommandType type)
     return TeamCommandDisplayKind::Unknown;
 }
 
-std::string formatCoordinate(double lat, double lon)
+void formatCoordinate(char* out, std::size_t out_len, double lat, double lon)
 {
-    char buffer[64]{};
-    std::snprintf(buffer, sizeof(buffer), "%.5f, %.5f", lat, lon);
-    return std::string(buffer);
+    if (out == nullptr || out_len == 0)
+    {
+        return;
+    }
+    std::snprintf(out, out_len, "%.5f, %.5f", lat, lon);
 }
 
-void copySummary(TeamRichPayloadDisplay& out, const std::string& value)
+void copySummary(TeamRichPayloadDisplay& out, const char* value)
 {
-    ui::copyText(out.summary, value.c_str());
+    ui::copyText(out.summary, value);
 }
 
 } // namespace
@@ -79,10 +100,10 @@ bool TeamRichPayloadProjector::project(
         out.kind = TeamRichPayloadKind::Text;
         ui::copyText(out.title, "Message");
         ui::copyText(out.badge, "Text");
-        copySummary(out,
-                    truncateText(
-                        std::string(entry.payload.begin(), entry.payload.end()),
-                        160));
+        copyTextPayloadSummary(out,
+                               entry.payload.empty() ? nullptr
+                                                     : entry.payload.data(),
+                               entry.payload.size());
         return true;
     }
 
@@ -107,8 +128,11 @@ bool TeamRichPayloadProjector::project(
         out.location.altitude_m = static_cast<float>(loc.alt_m);
         out.location.marker_icon = loc.source;
 
-        const std::string coord =
-            formatCoordinate(out.location.lat, out.location.lon);
+        char coord[64]{};
+        formatCoordinate(coord,
+                         sizeof(coord),
+                         out.location.lat,
+                         out.location.lon);
         const bool marker =
             team::proto::team_location_marker_icon_is_valid(loc.source);
         const char* marker_name =
@@ -123,7 +147,7 @@ bool TeamRichPayloadProjector::project(
                           sizeof(buffer),
                           "%s: %s",
                           marker_name,
-                          coord.c_str());
+                          coord);
         }
         else if (!loc.label.empty())
         {
@@ -131,14 +155,14 @@ bool TeamRichPayloadProjector::project(
                           sizeof(buffer),
                           "Location: %s %s",
                           loc.label.c_str(),
-                          coord.c_str());
+                          coord);
         }
         else
         {
             std::snprintf(buffer,
                           sizeof(buffer),
                           "Location: %s",
-                          coord.c_str());
+                          coord);
         }
         copySummary(out, buffer);
         return true;
@@ -169,15 +193,18 @@ bool TeamRichPayloadProjector::project(
         char buffer[160]{};
         if (command.lat_e7 != 0 || command.lon_e7 != 0)
         {
-            const std::string coord =
-                formatCoordinate(out.command.lat, out.command.lon);
+            char coord[64]{};
+            formatCoordinate(coord,
+                             sizeof(coord),
+                             out.command.lat,
+                             out.command.lon);
             if (!command.note.empty())
             {
                 std::snprintf(buffer,
                               sizeof(buffer),
                               "Command: %s %s %s",
                               name,
-                              coord.c_str(),
+                              coord,
                               command.note.c_str());
             }
             else
@@ -186,7 +213,7 @@ bool TeamRichPayloadProjector::project(
                               sizeof(buffer),
                               "Command: %s %s",
                               name,
-                              coord.c_str());
+                              coord);
             }
         }
         else if (!command.note.empty())

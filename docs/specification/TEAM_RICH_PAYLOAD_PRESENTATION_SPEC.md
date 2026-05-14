@@ -52,6 +52,8 @@ TeamChatLogEntry -> TeamRichPayloadDisplay
 
 It may call legacy Team payload decode helpers because Phase 7.8 is an anti-corruption display projection.
 
+It must remain portable shared code. Shared portable code must remain C++11-compatible unless explicitly marked target-local. Target-local code may use a higher standard provided by its target toolchain.
+
 It must not:
 
 - render LVGL widgets
@@ -61,6 +63,14 @@ It must not:
 - mutate `TeamUiStore`
 - build `ChatWorkspaceSnapshot`
 - map Team chat to DirectPeer or Channel chat
+- allocate display summaries through `std::string`
+- use `std::vector`, `iostream`, `sstream`, or `<format>` for projection formatting
+
+## Embedded Hardening
+
+`TeamRichPayloadProjector` must build summary text with fixed buffers, `std::snprintf`, bounded copies, and `ui::copyText`.
+
+The projector may read legacy payload strings after decode, but it must not allocate temporary strings while projecting display rows.
 
 ## Team Row Projection
 
@@ -99,3 +109,16 @@ Phase 7.8 does not:
 - implement full Team rich cards
 - redesign `MessageRow`
 - rewrite `ChatWorkspaceModel`
+- replace the legacy `TeamUiStore` recent-log API
+
+## Legacy Store Boundary
+
+`TeamChatPresentationSource` still consumes `std::vector<TeamChatLogEntry>` because the legacy `TeamUiStore` recent-log API returns a vector.
+
+Exit condition:
+
+```text
+TeamUiStore exposes a fixed-capacity recent-log visitor or equivalent bounded iterator.
+```
+
+C++11 has no `std::span`, so a future portable API should prefer an explicit visitor/callback over introducing a higher-standard dependency into shared embedded UI code.
