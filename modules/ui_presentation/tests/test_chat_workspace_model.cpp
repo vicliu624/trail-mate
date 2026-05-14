@@ -32,6 +32,27 @@ ui::chat::ConversationId team(uint32_t team_id)
 
 int main()
 {
+    ui::chat::ChatWorkspaceSnapshot reset_probe;
+    reset_probe.header.valid = true;
+    reset_probe.conversation_count = 1;
+    reset_probe.conversations[0].last_delivery =
+        ui::chat::MessageDeliveryState::Delivered;
+    reset_probe.message_count = 1;
+    reset_probe.messages[0].ref.origin = ui::chat::MessageOrigin::RemoteStored;
+    reset_probe.messages[0].delivery = ui::chat::MessageDeliveryState::Delivered;
+    ui::copyText(reset_probe.messages[0].text, "stale");
+    ui::chat::resetChatWorkspaceSnapshot(reset_probe);
+    assert(!reset_probe.header.valid);
+    assert(reset_probe.conversation_count == 0);
+    assert(reset_probe.conversations[0].last_delivery ==
+           ui::chat::MessageDeliveryState::Unknown);
+    assert(reset_probe.message_count == 0);
+    assert(reset_probe.messages[0].ref.origin ==
+           ui::chat::MessageOrigin::SystemGenerated);
+    assert(reset_probe.messages[0].delivery ==
+           ui::chat::MessageDeliveryState::Unknown);
+    assert(reset_probe.messages[0].text.empty());
+
     ui::tests::FakeChatPresentationSource source;
     source.snapshot_value.header.valid = true;
     source.snapshot_value.header.version = 6;

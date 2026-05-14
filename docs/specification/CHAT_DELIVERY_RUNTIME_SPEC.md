@@ -16,7 +16,7 @@ Delivery state is runtime state, not UI state.
 send result / ACK / failure event
   -> ChatDeliveryEventProjector
     -> ChatDeliveryReadModel
-      -> LegacyChatPresentationSource
+      -> ChatPresentationSource
         -> MessageRow delivery/failure
           -> Renderer
 ```
@@ -57,7 +57,7 @@ timeout hooks into the delivery event port.
 `LegacyChatDeliveryBridge` maps existing coarse `ChatMessage::status` and
 legacy send/failure concepts into delivery records.
 
-`LegacyChatPresentationSource` reads the delivery read model and projects state
+`ChatPresentationSource` reads the delivery read model and projects state
 into `MessageRow`.
 
 ## Boundaries
@@ -105,13 +105,13 @@ into `MessageRow`.
 - include LVGL/GTK
 - mutate renderer state
 
-`LegacyChatPresentationSource` may:
+`ChatPresentationSource` may:
 
 - read delivery records
 - enrich `MessageRow.delivery`
 - enrich `MessageRow.failure`
 
-`LegacyChatPresentationSource` must not:
+`ChatPresentationSource` must not:
 
 - maintain pending queues
 - receive send result events

@@ -7,10 +7,10 @@
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/team_ui_store_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/presentation_sources/chat_presentation_source.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
 #include "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h"
 #include "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h"
-#include "ui/presentation_sources/legacy_chat_presentation_source.h"
 #include "ui_legacy_adapters/legacy_key_verification_action_sink.h"
 #include "ui_legacy_adapters/legacy_key_verification_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
@@ -30,7 +30,7 @@ namespace
 
 const chat::ui::shell::Host* s_host = nullptr;
 lv_obj_t* s_chat_container = nullptr;
-std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource> s_chat_source = nullptr;
+std::unique_ptr<::ui::presentation_sources::ChatPresentationSource> s_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink> s_chat_sink = nullptr;
 std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_chat_model = nullptr;
 std::unique_ptr<::chat::delivery::ChatDeliveryReadModel> s_delivery_read_model = nullptr;
@@ -251,8 +251,8 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryActionBridge>(
             new ::ui::presentation_sources::LegacyChatDeliveryActionBridge(
                 *s_delivery_action_service));
-    s_chat_source = std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource>(
-        new ::ui::presentation_sources::LegacyChatPresentationSource(
+    s_chat_source = std::unique_ptr<::ui::presentation_sources::ChatPresentationSource>(
+        new ::ui::presentation_sources::ChatPresentationSource(
             chat_service,
             &app::messagingFacade().getContactService(),
             s_delivery_read_model.get()));

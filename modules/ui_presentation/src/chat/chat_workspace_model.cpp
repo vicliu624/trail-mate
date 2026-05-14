@@ -19,9 +19,9 @@ bool ChatWorkspaceModel::buildSnapshot(ChatWorkspaceSnapshot& out) const
     request.conversation_offset = conversation_offset_;
     request.message_offset = message_offset_;
 
-    out = ChatWorkspaceSnapshot{};
     if (!source_.buildChatWorkspaceSnapshot(request, out))
     {
+        resetChatWorkspaceSnapshot(out);
         out.header.valid = false;
         return false;
     }

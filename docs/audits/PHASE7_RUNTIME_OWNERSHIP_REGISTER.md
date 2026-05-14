@@ -44,7 +44,7 @@ Phase 7.1 introduces:
 - `ChatDeliveryReadModel`
 - `ChatDeliveryEventProjector`
 - `LegacyChatDeliveryBridge`
-- optional delivery enrichment in `LegacyChatPresentationSource`
+- optional delivery enrichment in `ChatPresentationSource`
 - composition-root ownership in Linux simulator and uConsole pilots
 
 ## Remaining Legacy

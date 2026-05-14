@@ -68,4 +68,52 @@ struct SendMessageView
     size_t text_len = 0;
 };
 
+inline void resetConversationRow(ConversationRow& row)
+{
+    row.id = ConversationId{};
+    row.title.clear();
+    row.subtitle.clear();
+    row.unread_count = 0;
+    row.selected = false;
+    row.muted = false;
+    row.kind = ConversationKind::None;
+    row.protocol = ChatProtocolKind::None;
+    row.last_delivery = MessageDeliveryState::Unknown;
+}
+
+inline void resetMessageRow(MessageRow& row)
+{
+    row.ref = MessageRef{};
+    row.conversation = ConversationId{};
+    row.outgoing = false;
+    row.delivery = MessageDeliveryState::Unknown;
+    row.failure = MessageFailureKind::None;
+    row.text.clear();
+    row.time_label.clear();
+    row.sender_label.clear();
+}
+
+inline void resetChatWorkspaceSnapshot(ChatWorkspaceSnapshot& out)
+{
+    out.header = ui::SnapshotHeader{};
+
+    for (size_t i = 0; i < 16; ++i)
+    {
+        resetConversationRow(out.conversations[i]);
+    }
+    out.conversation_count = 0;
+
+    for (size_t i = 0; i < 24; ++i)
+    {
+        resetMessageRow(out.messages[i]);
+    }
+    out.message_count = 0;
+
+    out.selected_conversation = ConversationId{};
+    out.can_send = false;
+    out.composer_enabled = false;
+    out.composer_placeholder.clear();
+    out.workspace_title.clear();
+}
+
 } // namespace ui::chat

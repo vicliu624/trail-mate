@@ -58,7 +58,7 @@ These should not regress:
 
 - `ui_presentation/*`
 - `apps/linux_sim/tests/*ascii_probe*.cpp`
-- `LegacyChatPresentationSource` / `LegacyChatActionSink`
+- `ChatPresentationSource` / `LegacyChatActionSink`
 - `TeamChatPresentationSource` / `TeamChatActionSink`
 - `LegacyMapPresentationSource` / `LegacyMapActionSink`
 - `ChatWorkspaceModel`-backed non-team message rendering

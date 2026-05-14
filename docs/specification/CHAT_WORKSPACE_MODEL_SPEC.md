@@ -77,19 +77,19 @@ Rationale:
 
 `ChatWorkspaceRequest::message_offset` is reserved for future message paging.
 
-The Phase 5.6 `LegacyChatPresentationSource` ignores `message_offset` and
-returns the recent message window.
+`ChatPresentationSource` currently ignores `message_offset` and returns the
+recent message window.
 
 This is intentional. The closeout phase must not change `ChatService` storage
 or paging behavior.
 
-Renderers must not assume `message_offset` is already honored by the legacy
-compatibility source.
+Renderers must not assume `message_offset` is already honored by the chat read
+projection.
 
-## Legacy Source/Sink Adapter Contract
+## Source/Sink Adapter Contract
 
-`LegacyChatPresentationSource` is the Phase 5.6 compatibility read adapter.
-It may read `ChatService` and `ContactService`, and may use
+`ChatPresentationSource` is the product chat read projection adapter. It may
+read `ChatService` and `ContactService`, and may use
 `chat_presentation_adapters` to map core chat types into `ui_presentation`
 rows.
 

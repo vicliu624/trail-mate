@@ -7,8 +7,8 @@
 #include "product_composition/presentation_bundle.h"
 #include "uconsole/uconsole_chat_workspace_model.h"
 #include "uconsole/uconsole_map_workspace_model.h"
+#include "ui/presentation_sources/chat_presentation_source.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
-#include "ui/presentation_sources/legacy_chat_presentation_source.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
 
 #include <memory>
@@ -59,8 +59,7 @@ class UConsoleCompositionRoot final
     product_composition::AppServicesBundle app_services_{};
     product_composition::PresentationBundle presentation_{};
 
-    std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource>
-        chat_source_{};
+    std::unique_ptr<::ui::presentation_sources::ChatPresentationSource> chat_source_{};
     std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink>
         chat_sink_{};
     std::unique_ptr<::ui::chat::ChatWorkspaceModel> chat_presentation_model_{};

@@ -447,9 +447,9 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_legacy_key_verification_adapters_smoke
              COMMAND trailmate_legacy_key_verification_adapters_smoke)
 
-    add_executable(trailmate_legacy_chat_presentation_adapters_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_chat_presentation_adapters.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp"
+    add_executable(trailmate_chat_presentation_source_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_chat_presentation_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_conversation_mapper.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src/chat_message_mapper.cpp"
@@ -464,15 +464,15 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/store/ram_store.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
     )
-    target_include_directories(trailmate_legacy_chat_presentation_adapters_smoke
+    target_include_directories(trailmate_chat_presentation_source_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
-    add_test(NAME trailmate_legacy_chat_presentation_adapters_smoke
-             COMMAND trailmate_legacy_chat_presentation_adapters_smoke)
+    add_test(NAME trailmate_chat_presentation_source_smoke
+             COMMAND trailmate_chat_presentation_source_smoke)
 
     add_executable(trailmate_team_chat_presentation_source_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_team_chat_presentation_source.cpp"

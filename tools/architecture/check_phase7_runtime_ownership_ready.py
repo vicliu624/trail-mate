@@ -259,6 +259,62 @@ def check_required_files() -> int:
     return failures
 
 
+def check_removed_chat_read_projection_not_reintroduced() -> int:
+    legacy_type = "Legacy" + "ChatPresentationSource"
+    legacy_file_stem = "legacy_chat" + "_presentation_source"
+    removed_paths = [
+        "modules/ui_shared/include/ui/presentation_sources/" + legacy_file_stem + ".h",
+        "modules/ui_shared/src/ui/presentation_sources/" + legacy_file_stem + ".cpp",
+        "modules/ui_shared/tests/test_" + legacy_file_stem + ".cpp",
+    ]
+
+    failures = 0
+    for path in removed_paths:
+        if exists(path):
+            failures += fail(f"removed chat presentation source path still exists: {path}")
+
+    search_roots = [
+        ROOT / "apps",
+        ROOT / "cmake",
+        ROOT / "docs",
+        ROOT / "modules",
+        ROOT / "tools" / "architecture",
+    ]
+    text_suffixes = {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".h",
+        ".hpp",
+        ".cmake",
+        ".ini",
+        ".json",
+        ".md",
+        ".py",
+        ".txt",
+    }
+    this_file = Path(__file__).resolve()
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.resolve() == this_file:
+                continue
+            if path.suffix not in text_suffixes and path.name != "CMakeLists.txt":
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if legacy_type in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} references removed {legacy_type}"
+                )
+            if legacy_file_stem in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} references removed {legacy_file_stem}"
+                )
+    return failures
+
+
 def check_docs() -> int:
     docs = {
         "docs/audits/CHAT_DELIVERY_OWNERSHIP_AUDIT.md": [
@@ -274,7 +330,7 @@ def check_docs() -> int:
             "IChatDeliveryEventPort",
             "ProjectingChatDeliveryEventPort",
             "LegacyChatDeliveryEventBridge",
-            "LegacyChatPresentationSource",
+            "ChatPresentationSource",
             "Phase 7.1 does not make `ChatWorkspaceModel` own delivery state",
         ],
         "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md": [
@@ -816,8 +872,8 @@ def check_delivery_type_shape() -> int:
 
 def check_presentation_source_enrichment() -> int:
     failures = 0
-    header = "modules/ui_shared/include/ui/presentation_sources/legacy_chat_presentation_source.h"
-    source = "modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp"
+    header = "modules/ui_shared/include/ui/presentation_sources/chat_presentation_source.h"
+    source = "modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp"
 
     if exists(header):
         text = read_text(header)
@@ -827,7 +883,7 @@ def check_presentation_source_enrichment() -> int:
             "delivery_read_model_",
         ]:
             if token not in text:
-                failures += fail(f"LegacyChatPresentationSource header missing token: {token}")
+                failures += fail(f"ChatPresentationSource header missing token: {token}")
 
     if exists(source):
         text = read_text(source)
@@ -840,11 +896,19 @@ def check_presentation_source_enrichment() -> int:
             "row.failure",
         ]:
             if token not in text:
-                failures += fail(f"LegacyChatPresentationSource source missing token: {token}")
+                failures += fail(f"ChatPresentationSource source missing token: {token}")
+        for token in [
+            "out = ui::chat::ChatWorkspaceSnapshot{}",
+            "out = ChatWorkspaceSnapshot{}",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"ChatPresentationSource uses stack-heavy snapshot reset: {token}"
+                )
         for token in ["onQueued", "onFailed", "ChatDeliveryEventProjector"]:
             if token in strip_cpp_comments(text):
                 failures += fail(
-                    f"LegacyChatPresentationSource must not project events: {token}"
+                    f"ChatPresentationSource must not project events: {token}"
                 )
     return failures
 
@@ -874,7 +938,7 @@ def check_composition_roots_own_delivery() -> int:
         ],
         "apps/linux_uconsole/src/uconsole_composition_root.cpp": [
             "&delivery_read_model_",
-            "LegacyChatPresentationSource",
+            "ChatPresentationSource",
             "deliveryEventPort()",
         ],
     }
@@ -2814,6 +2878,7 @@ def check_chat_ui_key_verification_migration() -> int:
 def main() -> int:
     failures = 0
     failures += check_required_files()
+    failures += check_removed_chat_read_projection_not_reintroduced()
     failures += check_docs()
     failures += check_legacy_burndown_register()
     failures += check_core_delivery_is_runtime_only()

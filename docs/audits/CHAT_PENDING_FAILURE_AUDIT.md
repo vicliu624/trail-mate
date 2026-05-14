@@ -70,7 +70,7 @@ MessageRef.local_id or MessageRef.nonce_or_seq
 
 ## Current Constraint
 
-The compatibility source may continue projecting:
+The chat read projection may continue projecting:
 
 ```text
 Failed -> MessageDeliveryState::Failed

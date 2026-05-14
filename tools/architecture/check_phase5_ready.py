@@ -41,7 +41,9 @@ def check_required_files() -> int:
         "docs/audits/CHAT_UI_CONTROLLER_LEGACY_OWNERSHIP_AUDIT.md",
         "docs/audits/TEAM_CHAT_PRESENTATION_AUDIT.md",
         "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_model.h",
-        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/chat_presentation_source.h",
+        "modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp",
+        "modules/ui_shared/tests/test_chat_presentation_source.cpp",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_action_sink.h",
         "modules/ui_shared/include/ui/presentation_sources/team_chat_presentation_source.h",
         "modules/ui_shared/include/ui/presentation_sources/team_chat_action_sink.h",
@@ -72,6 +74,62 @@ def check_required_files() -> int:
     for path in required:
         if not exists(path):
             failures += fail(f"missing required file: {path}")
+    return failures
+
+
+def check_removed_chat_read_projection_not_reintroduced() -> int:
+    legacy_type = "Legacy" + "ChatPresentationSource"
+    legacy_file_stem = "legacy_chat" + "_presentation_source"
+    removed_paths = [
+        "modules/ui_shared/include/ui/presentation_sources/" + legacy_file_stem + ".h",
+        "modules/ui_shared/src/ui/presentation_sources/" + legacy_file_stem + ".cpp",
+        "modules/ui_shared/tests/test_" + legacy_file_stem + ".cpp",
+    ]
+
+    failures = 0
+    for path in removed_paths:
+        if exists(path):
+            failures += fail(f"removed chat presentation source path still exists: {path}")
+
+    search_roots = [
+        ROOT / "apps",
+        ROOT / "cmake",
+        ROOT / "docs",
+        ROOT / "modules",
+        ROOT / "tools" / "architecture",
+    ]
+    text_suffixes = {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".h",
+        ".hpp",
+        ".cmake",
+        ".ini",
+        ".json",
+        ".md",
+        ".py",
+        ".txt",
+    }
+    this_file = Path(__file__).resolve()
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.resolve() == this_file:
+                continue
+            if path.suffix not in text_suffixes and path.name != "CMakeLists.txt":
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if legacy_type in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} references removed {legacy_type}"
+                )
+            if legacy_file_stem in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} references removed {legacy_file_stem}"
+                )
     return failures
 
 
@@ -423,14 +481,20 @@ def check_chat_presentation_sources_are_bounded() -> int:
                     f"{path.relative_to(ROOT)} contains forbidden source/sink token {token}"
                 )
 
-    source = "modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp"
+    source = "modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp"
     if exists(source):
         text = read_text(source)
         for token in ["sendText(", "markConversationRead(", "switchChannel("]:
             if token in text:
-                failures += fail(f"LegacyChatPresentationSource contains action token {token}")
+                failures += fail(f"ChatPresentationSource contains action token {token}")
+        for token in [
+            "out = ui::chat::ChatWorkspaceSnapshot{}",
+            "out = ChatWorkspaceSnapshot{}",
+        ]:
+            if token in text:
+                failures += fail(f"ChatPresentationSource uses stack-heavy snapshot reset: {token}")
         if "(void)request.message_offset;" not in text:
-            failures += fail("LegacyChatPresentationSource does not explicitly ignore message_offset")
+            failures += fail("ChatPresentationSource does not explicitly ignore message_offset")
     return failures
 
 
@@ -574,6 +638,7 @@ def check_known_violations_recorded() -> int:
 def main() -> int:
     failures = 0
     failures += check_required_files()
+    failures += check_removed_chat_read_projection_not_reintroduced()
     failures += check_ui_presentation_chat_is_portable()
     failures += check_ui_presentation_map_is_portable()
     failures += check_map_presentation_sources_are_bounded()

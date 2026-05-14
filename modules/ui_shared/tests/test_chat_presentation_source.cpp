@@ -5,7 +5,7 @@
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/chat_service.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
-#include "ui/presentation_sources/legacy_chat_presentation_source.h"
+#include "ui/presentation_sources/chat_presentation_source.h"
 
 #include <cassert>
 #include <cstring>
@@ -106,7 +106,7 @@ int main()
     ::chat::delivery::ChatDeliveryReadModel delivery_read_model;
 
     ui::presentation_sources::LegacyChatActionSink sink(service);
-    ui::presentation_sources::LegacyChatPresentationSource source(
+    ui::presentation_sources::ChatPresentationSource source(
         service, nullptr, &delivery_read_model);
 
     const ui::chat::ConversationId ada = directPeer(1234);

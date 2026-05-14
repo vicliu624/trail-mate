@@ -104,7 +104,7 @@ endif()
 
 add_library(trailmate_uconsole_shell
     "src/uconsole_composition_root.cpp"
-    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp"

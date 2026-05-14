@@ -158,9 +158,9 @@ def check_chat_presentation_adapters_are_renderer_free() -> int:
     ]
 
     paths = [
-        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/chat_presentation_source.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_action_sink.h",
-        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp",
         "modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp",
     ]
 

@@ -49,7 +49,7 @@ policy.
 - `LegacyMeshStatusSource`
 - `LegacySettingsSource`
 - `LegacySettingsActionSink`
-- `LegacyChatPresentationSource`
+- `ChatPresentationSource`
 - `LegacyChatActionSink`
 - `TeamChatPresentationSource`
 - `TeamChatActionSink`

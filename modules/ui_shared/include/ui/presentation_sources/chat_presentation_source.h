@@ -8,7 +8,7 @@
 namespace ui::presentation_sources
 {
 
-// LegacyChatPresentationSource is a Phase 5.6 compatibility read adapter.
+// ChatPresentationSource is the product chat read projection adapter.
 //
 // Pattern:
 //   CQRS read model / projection / anti-corruption adapter.
@@ -22,13 +22,13 @@ namespace ui::presentation_sources
 //   - mutate ChatService
 //   - access LVGL widgets
 //   - access radio, mesh adapter, PKI, or packet builders
-class LegacyChatPresentationSource final : public ui::chat::IChatPresentationSource
+class ChatPresentationSource final : public ui::chat::IChatPresentationSource
 {
   public:
-    LegacyChatPresentationSource(::chat::ChatService& chat_service,
-                                 ::chat::contacts::ContactService* contact_service = nullptr,
-                                 const ::chat::delivery::ChatDeliveryReadModel*
-                                     delivery_read_model = nullptr);
+    ChatPresentationSource(::chat::ChatService& chat_service,
+                           ::chat::contacts::ContactService* contact_service = nullptr,
+                           const ::chat::delivery::ChatDeliveryReadModel*
+                               delivery_read_model = nullptr);
 
     bool buildChatWorkspaceSnapshot(
         const ui::chat::ChatWorkspaceRequest& request,

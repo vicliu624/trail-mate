@@ -52,7 +52,7 @@
       "id": "chat-page-runtime-presentation-bridge",
       "path": "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp",
       "allowed_tokens": [
-        "LegacyChatPresentationSource",
+        "ChatPresentationSource",
         "LegacyChatActionSink",
         "TeamChatPresentationSource",
         "TeamChatActionSink",

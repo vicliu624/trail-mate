@@ -75,7 +75,7 @@ Phase 7.3 introduces:
 - `LegacyChatSendResultMapper`
 - `LegacyChatDeliveryEventBridge`
 
-`LegacyChatPresentationSource` continues to read `ChatDeliveryReadModel` and
+`ChatPresentationSource` continues to read `ChatDeliveryReadModel` and
 enrich `MessageRow.delivery` / `MessageRow.failure`.
 
 ## Deferred

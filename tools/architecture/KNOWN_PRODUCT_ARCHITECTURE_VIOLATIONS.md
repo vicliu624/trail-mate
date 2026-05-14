@@ -195,7 +195,7 @@ Phase 5.6 introduced:
 
 - `ui_presentation` chat identity/snapshot/model
 - `chat_presentation_adapters` mapper
-- `LegacyChatPresentationSource`
+- `ChatPresentationSource`
 - `LegacyChatActionSink`
 - partial `ChatUiController` integration
 
@@ -370,7 +370,7 @@ failure state:
 - `ChatDeliveryReadModel`
 - `ChatDeliveryEventProjector`
 - `LegacyChatDeliveryBridge`
-- optional delivery enrichment in `LegacyChatPresentationSource`
+- optional delivery enrichment in `ChatPresentationSource`
 - composition-root ownership in Linux simulator and uConsole pilots
 
 Remaining delivery/runtime legacy work is recorded in:
@@ -384,7 +384,7 @@ Future phases must not:
 - put pending queues into `ChatWorkspaceModel`
 - let renderers infer failure from labels, colors, or button state
 - move chat delivery runtime into `ui_presentation`
-- make `LegacyChatPresentationSource` receive send events or own retry policy
+- make `ChatPresentationSource` receive send events or own retry policy
 
 ## Operating Rule
 

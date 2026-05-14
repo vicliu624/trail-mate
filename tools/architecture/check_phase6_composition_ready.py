@@ -296,7 +296,7 @@ def check_uconsole_root_shape() -> int:
             "services_.initialize()",
             "app_services_.chat",
             "app_services_.contacts",
-            "LegacyChatPresentationSource",
+            "ChatPresentationSource",
             "LegacyChatActionSink",
             "ChatWorkspaceModel",
             "presentation_.workspace.chat",

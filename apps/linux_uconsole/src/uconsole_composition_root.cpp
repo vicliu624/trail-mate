@@ -29,7 +29,7 @@ bool UConsoleCompositionRoot::initialize()
     app_services_.contacts = &services_.contacts();
 
     chat_source_ =
-        std::make_unique<::ui::presentation_sources::LegacyChatPresentationSource>(
+        std::make_unique<::ui::presentation_sources::ChatPresentationSource>(
             services_.chat(), &services_.contacts(), &delivery_read_model_);
     chat_sink_ =
         std::make_unique<::ui::presentation_sources::LegacyChatActionSink>(

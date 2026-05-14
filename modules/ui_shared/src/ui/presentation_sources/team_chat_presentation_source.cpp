@@ -111,7 +111,7 @@ bool TeamChatPresentationSource::buildChatWorkspaceSnapshot(
     (void)request.conversation_offset;
     (void)request.message_offset;
 
-    out = ui::chat::ChatWorkspaceSnapshot{};
+    ui::chat::resetChatWorkspaceSnapshot(out);
     out.header.valid = true;
     out.header.version = 1;
     ui::copyText(out.workspace_title, "Team");

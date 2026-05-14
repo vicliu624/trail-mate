@@ -17,7 +17,7 @@ remaining legacy ownership is documented.
 | GPS | `GpsStatusModel` | `LegacyGpsStatusSource` | `gps_runtime` compatibility surface |
 | Mesh | `MeshStatusModel` | `LegacyMeshStatusSource` | adapter-specific counters and runtime details |
 | Settings | `SettingsModel` | `LegacySettingsSource` / `LegacySettingsActionSink` | full configuration migration |
-| Chat | `ChatWorkspaceModel` | `LegacyChatPresentationSource` / `LegacyChatActionSink` | `ChatUiController`, key verification, structured pending/failure |
+| Chat | `ChatWorkspaceModel` | `ChatPresentationSource` / `LegacyChatActionSink` | `ChatUiController`, key verification, structured pending/failure |
 | Team Chat | `ChatWorkspaceModel` with Team source/sink | `TeamChatPresentationSource` / `TeamChatActionSink` | location/command picker, rich payload UI, structured pending/failure |
 | Map | `MapWorkspaceModel` | `LegacyMapPresentationSource` / `LegacyMapActionSink` | tile/cache/renderer/rich overlay cleanup |
 | Workspace | `PresentationWorkspace` | target-owned composition | target construction order and legacy UI islands |

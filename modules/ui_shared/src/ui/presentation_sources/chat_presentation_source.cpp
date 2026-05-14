@@ -1,4 +1,4 @@
-#include "ui/presentation_sources/legacy_chat_presentation_source.h"
+#include "ui/presentation_sources/chat_presentation_source.h"
 
 #include "chat/delivery/legacy_chat_delivery_bridge.h"
 #include "chat_presentation_adapters/chat_conversation_mapper.h"
@@ -100,7 +100,7 @@ ui::chat::MessageFailureKind mapDeliveryFailure(
 
 } // namespace
 
-LegacyChatPresentationSource::LegacyChatPresentationSource(
+ChatPresentationSource::ChatPresentationSource(
     ::chat::ChatService& chat_service,
     ::chat::contacts::ContactService* contact_service,
     const ::chat::delivery::ChatDeliveryReadModel* delivery_read_model)
@@ -110,16 +110,15 @@ LegacyChatPresentationSource::LegacyChatPresentationSource(
 {
 }
 
-bool LegacyChatPresentationSource::buildChatWorkspaceSnapshot(
+bool ChatPresentationSource::buildChatWorkspaceSnapshot(
     const ui::chat::ChatWorkspaceRequest& request,
     ui::chat::ChatWorkspaceSnapshot& out) const
 {
-    // Phase 5.6 compatibility source returns the most recent messages.
     // Message paging is deferred until ChatService exposes a stable
     // presentation-safe paging API.
     (void)request.message_offset;
 
-    out = ui::chat::ChatWorkspaceSnapshot{};
+    ui::chat::resetChatWorkspaceSnapshot(out);
     out.header.valid = true;
     out.header.version = 1;
     ui::copyText(out.workspace_title, "Chat");

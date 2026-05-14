@@ -67,7 +67,7 @@ def check_known_domain_files() -> int:
         "modules/ui_presentation/include/ui_presentation/mesh/mesh_status_model.h",
         "modules/ui_presentation/include/ui_presentation/settings/settings_model.h",
         "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_model.h",
-        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_presentation_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/chat_presentation_source.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_action_sink.h",
         "modules/ui_shared/include/ui/presentation_sources/team_chat_presentation_source.h",
         "modules/ui_shared/include/ui/presentation_sources/team_chat_action_sink.h",

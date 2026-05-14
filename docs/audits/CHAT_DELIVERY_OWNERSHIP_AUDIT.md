@@ -13,10 +13,10 @@ which runtime/read-model boundary should own UI-readable delivery state.
 
 | State | Current source | Current reader | Problem |
 | --- | --- | --- | --- |
-| Queued | `ChatMessage::status` | `LegacyChatPresentationSource` / chat mapper | coarse only |
-| Sent | `ChatMessage::status` | `LegacyChatPresentationSource` / chat mapper | send success is not delivery acknowledgement |
-| Failed | `ChatMessage::status` | `LegacyChatPresentationSource` / chat mapper | failure reason is lost |
-| Received | `ChatMessage::status` | `LegacyChatPresentationSource` / chat mapper | incoming state is readable but not part of a delivery model |
+| Queued | `ChatMessage::status` | `ChatPresentationSource` / chat mapper | coarse only |
+| Sent | `ChatMessage::status` | `ChatPresentationSource` / chat mapper | send success is not delivery acknowledgement |
+| Failed | `ChatMessage::status` | `ChatPresentationSource` / chat mapper | failure reason is lost |
+| Received | `ChatMessage::status` | `ChatPresentationSource` / chat mapper | incoming state is readable but not part of a delivery model |
 | PeerKeyMissing | send result / mesh protocol path | not projected consistently | UI sees `Unknown` failure |
 | LocalIdentityMissing | send result / mesh protocol path | not projected consistently | UI sees `Unknown` failure |
 | RadioSendFailed | radio/send path | not projected consistently | UI sees `Unknown` failure |
@@ -101,7 +101,7 @@ It does require a stable owner for the UI-readable projection.
 
 Renderer must not infer delivery/failure from labels, colors, or button state.
 
-`LegacyChatPresentationSource` may read a delivery read model and enrich
+`ChatPresentationSource` may read a delivery read model and enrich
 `MessageRow`, but it must not maintain pending queues or receive send events.
 
 ## Target Ownership
