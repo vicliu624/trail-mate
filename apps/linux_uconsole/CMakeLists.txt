@@ -37,8 +37,10 @@ endif()
 # ---------------------------------------------------------------------------
 
 include("${PROJECT_SOURCE_DIR}/../../cmake/TrailMateLinuxSources.cmake")
+include("${PROJECT_SOURCE_DIR}/../../cmake/TrailMateUxPacks.cmake")
 
 trailmate_add_linux_common(trailmate_uconsole_linux_common)
+trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
 if(TRAIL_MATE_UCONSOLE_ENABLE_LEGACY_SURFACE)
     include(FetchContent)
@@ -144,6 +146,7 @@ target_compile_definitions(trailmate_uconsole_shell
 target_link_libraries(trailmate_uconsole_shell
     PUBLIC
         trailmate_uconsole_linux_common
+        trailmate_ui_lvgl_ux_packs
 )
 if(TRAIL_MATE_UCONSOLE_ENABLE_LEGACY_SURFACE)
     target_link_libraries(trailmate_uconsole_shell PUBLIC lvgl)

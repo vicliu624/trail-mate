@@ -9,12 +9,18 @@
 #include "uconsole/uconsole_map_workspace_model.h"
 #include "ui/presentation_sources/chat_presentation_source.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
+#include "ui_lvgl_ux_packs/ux/ux_menu_model.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
 
 #include <memory>
 
 namespace trailmate::uconsole
 {
+
+struct UConsoleCompositionRootConfig
+{
+    const char* ux_pack_id = "uconsole_desktop";
+};
 
 class UConsoleCompositionRoot final
 {
@@ -26,12 +32,14 @@ class UConsoleCompositionRoot final
     UConsoleCompositionRoot& operator=(const UConsoleCompositionRoot&) = delete;
 
     bool initialize();
+    bool initialize(const UConsoleCompositionRootConfig& config);
     void shutdown();
 
     [[nodiscard]] linux_app::LinuxAppServices& services() noexcept;
     [[nodiscard]] product_composition::AppServicesBundle& appServices() noexcept;
     [[nodiscard]] product_composition::PresentationBundle& presentation()
         noexcept;
+    [[nodiscard]] const ui_lvgl_ux::UxMenuModel& uxMenu() const noexcept;
     [[nodiscard]] UConsoleChatWorkspaceModel& chatModel() noexcept;
     [[nodiscard]] UConsoleMapWorkspaceModel& mapModel() noexcept;
     [[nodiscard]] ::chat::delivery::ChatDeliveryReadModel& deliveryReadModel()
@@ -58,6 +66,7 @@ class UConsoleCompositionRoot final
 
     product_composition::AppServicesBundle app_services_{};
     product_composition::PresentationBundle presentation_{};
+    ui_lvgl_ux::UxMenuModel ux_menu_{};
 
     std::unique_ptr<::ui::presentation_sources::ChatPresentationSource> chat_source_{};
     std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink>

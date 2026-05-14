@@ -14,12 +14,39 @@ find_package(Threads REQUIRED)
 # ---------------------------------------------------------------------------
 
 include("${PROJECT_SOURCE_DIR}/../../cmake/TrailMateLinuxSources.cmake")
+include("${PROJECT_SOURCE_DIR}/../../cmake/TrailMateUxPacks.cmake")
 
 # ---------------------------------------------------------------------------
 # Common library
 # ---------------------------------------------------------------------------
 
 trailmate_add_linux_common(trailmate_cardputer_zero_linux_common)
+trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
+
+add_library(trailmate_linux_sim_composition_root
+    src/linux_sim_composition_root.cpp
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/workspace/presentation_workspace_probe.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_port.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_action_service.cpp"
+)
+target_include_directories(trailmate_linux_sim_composition_root
+    PUBLIC
+        "${PROJECT_SOURCE_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+target_link_libraries(trailmate_linux_sim_composition_root
+    PUBLIC trailmate_ui_lvgl_ux_packs)
+target_compile_features(trailmate_linux_sim_composition_root PUBLIC cxx_std_20)
 
 # ---------------------------------------------------------------------------
 # SDL3 – simulator-only dependency
@@ -278,31 +305,16 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    target_link_libraries(trailmate_product_composition_bundle_smoke
+        PRIVATE trailmate_ui_lvgl_ux_packs)
     add_test(NAME trailmate_product_composition_bundle_smoke
              COMMAND trailmate_product_composition_bundle_smoke)
 
     add_executable(trailmate_linux_sim_composition_root_smoke
         tests/linux_sim_composition_root_smoke.cpp
-        src/linux_sim_composition_root.cpp
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/settings/settings_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/chat/chat_workspace_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/workspace/presentation_workspace_probe.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_port.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_action_service.cpp"
     )
-    target_include_directories(trailmate_linux_sim_composition_root_smoke
-        PRIVATE
-            "${PROJECT_SOURCE_DIR}/src"
-            "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
-            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
-            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
-            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
+    target_link_libraries(trailmate_linux_sim_composition_root_smoke
+        PRIVATE trailmate_linux_sim_composition_root)
     add_test(NAME trailmate_linux_sim_composition_root_smoke
              COMMAND trailmate_linux_sim_composition_root_smoke)
 

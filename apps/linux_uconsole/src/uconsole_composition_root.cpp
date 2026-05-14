@@ -2,6 +2,7 @@
 
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
+#include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
 
 namespace trailmate::uconsole
 {
@@ -15,13 +16,25 @@ UConsoleCompositionRoot::~UConsoleCompositionRoot()
 
 bool UConsoleCompositionRoot::initialize()
 {
+    return initialize(UConsoleCompositionRootConfig{});
+}
+
+bool UConsoleCompositionRoot::initialize(const UConsoleCompositionRootConfig& config)
+{
     if (initialized_)
     {
         return true;
     }
 
+    if (config.ux_pack_id == nullptr ||
+        !ui_lvgl_ux::buildMenuForUxPack(config.ux_pack_id, ux_menu_))
+    {
+        return false;
+    }
+
     if (!services_.initialize())
     {
+        ux_menu_.clear();
         return false;
     }
 
@@ -40,6 +53,7 @@ bool UConsoleCompositionRoot::initialize()
 
     presentation_.workspace.chat = chat_presentation_model_.get();
     presentation_.workspace.map = &map_model_.presentationModel();
+    presentation_.ux_menu = &ux_menu_;
 
     initialized_ = true;
     return true;
@@ -49,6 +63,8 @@ void UConsoleCompositionRoot::shutdown()
 {
     initialized_ = false;
     presentation_.workspace = {};
+    presentation_.ux_menu = nullptr;
+    ux_menu_.clear();
     chat_presentation_model_.reset();
     chat_sink_.reset();
     chat_source_.reset();
@@ -71,6 +87,11 @@ product_composition::PresentationBundle& UConsoleCompositionRoot::presentation()
     noexcept
 {
     return presentation_;
+}
+
+const ui_lvgl_ux::UxMenuModel& UConsoleCompositionRoot::uxMenu() const noexcept
+{
+    return ux_menu_;
 }
 
 UConsoleChatWorkspaceModel& UConsoleCompositionRoot::chatModel() noexcept

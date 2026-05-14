@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ui_lvgl_ux_packs/ux/ux_menu_model.h"
 #include "ui_presentation/workspace/presentation_workspace.h"
 
 namespace product_composition
@@ -8,6 +9,7 @@ namespace product_composition
 struct PresentationBundle
 {
     ui::workspace::PresentationWorkspace workspace;
+    const ui_lvgl_ux::UxMenuModel* ux_menu = nullptr;
 
     // Source/sink/model lifetime is owned by the target composition root.
     // This bundle only exposes the presentation graph to app shells.

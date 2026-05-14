@@ -1,5 +1,6 @@
 #include "nrf52_node_app_shell.h"
 
+#include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
 #include "ui_lvgl_ux_packs/ux/ux_pack_registry.h"
 
 #include <cassert>
@@ -20,5 +21,9 @@ int main()
     assert(std::strcmp(config.legacy_adapter_target,
                        "trailmate_nrf52_pio_legacy_adapter") == 0);
     assert(ui_lvgl_ux::findUxPackById(shell.activeUxPackId()) != nullptr);
+
+    ui_lvgl_ux::UxMenuModel menu;
+    assert(ui_lvgl_ux::buildMenuForUxPack(shell.activeUxPackId(), menu));
+    assert(menu.size() > 0);
     return 0;
 }

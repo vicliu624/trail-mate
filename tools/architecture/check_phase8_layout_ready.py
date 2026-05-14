@@ -74,10 +74,16 @@ def check_required_files() -> int:
         "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
         "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp",
         "apps/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
+        "apps/linux_uconsole/src/uconsole_composition_root.h",
+        "apps/linux_uconsole/src/uconsole_composition_root.cpp",
+        "apps/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
         "apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
         "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp",
         "apps/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
+        "apps/linux_sim/src/linux_sim_composition_root.h",
+        "apps/linux_sim/src/linux_sim_composition_root.cpp",
+        "apps/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
         "apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
         "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp",
@@ -1333,6 +1339,124 @@ def check_ux_pack_runtime_binding() -> int:
     return failures
 
 
+def check_composition_root_binding() -> int:
+    failures = 0
+
+    failures += check_tokens(
+        "modules/product_composition/include/product_composition/presentation_bundle.h",
+        [
+            "UxMenuModel",
+            "ux_menu",
+        ],
+        "presentation bundle UX menu slot",
+    )
+
+    for path, config_token, pack_id in [
+        (
+            "apps/linux_uconsole/src/uconsole_composition_root.h",
+            "UConsoleCompositionRootConfig",
+            "uconsole_desktop",
+        ),
+        (
+            "apps/linux_sim/src/linux_sim_composition_root.h",
+            "LinuxSimCompositionRootConfig",
+            "simulator_full",
+        ),
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "UxMenuModel",
+                "ux_pack_id",
+                pack_id,
+                config_token,
+                "initialize(const",
+                "uxMenu",
+            ],
+            "composition root UX menu contract",
+        )
+
+    for path in [
+        "apps/linux_uconsole/src/uconsole_composition_root.cpp",
+        "apps/linux_sim/src/linux_sim_composition_root.cpp",
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "buildMenuForUxPack",
+                "config.ux_pack_id",
+                "ux_menu_",
+                "presentation_.ux_menu",
+            ],
+            "composition root UX menu wiring",
+        )
+
+        text = read_text(path)
+        for token in [
+            "builds/",
+            "builds\\",
+            "boards/",
+            "boards\\",
+            "platformio",
+            "idf_component_register",
+            "TRAIL_MATE_IDF_TARGET",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden composition root token: {token}")
+
+    for path in [
+        "apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp",
+        "apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_app_shell_smoke.cpp",
+        "apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp",
+        "apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp",
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "activeUxPackId",
+                "buildMenuForUxPack",
+                "menu.size()",
+            ],
+            "app shell UX menu smoke test",
+        )
+
+    for path in [
+        "apps/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
+        "apps/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "uxMenu().size()",
+                "presentation().ux_menu",
+            ],
+            "composition root UX menu smoke test",
+        )
+
+    failures += check_tokens(
+        "apps/linux_uconsole/CMakeLists.txt",
+        [
+            "TrailMateUxPacks.cmake",
+            "trailmate_ui_lvgl_ux_packs",
+            "trailmate_uconsole_shell",
+        ],
+        "uConsole composition root UX pack linkage",
+    )
+
+    failures += check_tokens(
+        "apps/linux_sim/CMakeLists.txt",
+        [
+            "TrailMateUxPacks.cmake",
+            "trailmate_ui_lvgl_ux_packs",
+            "trailmate_linux_sim_composition_root",
+            "target_link_libraries(trailmate_linux_sim_composition_root",
+        ],
+        "Linux sim composition root UX pack target",
+    )
+
+    return failures
+
+
 def check_forwarding_headers() -> int:
     expected = {
         "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h":
@@ -1757,6 +1881,7 @@ def main() -> int:
     failures += check_build_entrypoint_language()
     failures += check_executable_layout_convergence()
     failures += check_ux_pack_runtime_binding()
+    failures += check_composition_root_binding()
     failures += check_forwarding_headers()
     failures += check_authoritative_include_paths()
     failures += check_build_manifest_authority()

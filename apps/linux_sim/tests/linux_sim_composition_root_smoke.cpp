@@ -4,6 +4,24 @@
 #include "ui_presentation/workspace/presentation_workspace_probe.h"
 
 #include <cassert>
+#include <cstddef>
+
+namespace
+{
+
+bool contains(const ui_lvgl_ux::UxMenuModel& menu, ui_lvgl_ux::ScreenId id)
+{
+    for (std::size_t index = 0; index < menu.size(); ++index)
+    {
+        if (menu.items()[index].screen_id == id)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
 
 int main()
 {
@@ -33,6 +51,13 @@ int main()
 
     auto& presentation = root.presentation();
     assert(product_composition::hasInteractivePresentation(presentation));
+    assert(root.uxMenu().size() > 0);
+    assert(root.presentation().ux_menu == &root.uxMenu());
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Dashboard));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Chat));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Map));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Gps));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Settings));
 
     auto& workspace = presentation.workspace;
     assert(ui::workspace::hasCoreStatusModels(workspace));

@@ -4,12 +4,25 @@
 #include "product_composition/presentation_bundle.h"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
 
 namespace
 {
+
+bool contains(const ui_lvgl_ux::UxMenuModel& menu, ui_lvgl_ux::ScreenId id)
+{
+    for (std::size_t index = 0; index < menu.size(); ++index)
+    {
+        if (menu.items()[index].screen_id == id)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 void set_env_var(const char* name, const std::string& value)
 {
@@ -56,6 +69,12 @@ int main()
 
     assert(product_composition::hasChatServices(root.appServices()));
     assert(product_composition::hasInteractivePresentation(root.presentation()));
+    assert(root.uxMenu().size() > 0);
+    assert(root.presentation().ux_menu == &root.uxMenu());
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Chat));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Map));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Gps));
+    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Settings));
 
     auto& workspace = root.presentation().workspace;
     assert(workspace.hasChat());
