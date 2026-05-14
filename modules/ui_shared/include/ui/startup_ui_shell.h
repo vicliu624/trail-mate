@@ -10,6 +10,7 @@ namespace ui::startup_ui_shell
 struct Hooks
 {
     AppCatalog apps{};
+    const char* ux_pack_id = nullptr;
     bool (*lock_ui)(uint32_t timeout_ms) = nullptr;
     void (*unlock_ui)() = nullptr;
     uint32_t lock_timeout_ms = 1000;

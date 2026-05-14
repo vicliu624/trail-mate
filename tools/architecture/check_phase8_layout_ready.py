@@ -160,6 +160,12 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/input_binding_set.h",
         "modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_menu_model.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_screen_menu_adapter.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_provider.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack_registry.h",
         "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
@@ -173,6 +179,9 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/src/packs/simulator_full_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_screen_registry.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_input_binding_set.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_ux_screen_menu_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_ux_menu_provider.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_compatibility_menu_binding.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_uconsole_desktop_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_tiny_node_status_ux_pack.cpp",
@@ -1144,6 +1153,36 @@ def check_ux_pack_runtime_binding() -> int:
             "void clear()",
             "bool add",
         ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h": [
+            "UxMenuModel",
+            "UxMenuItem",
+            "ScreenId",
+            "kMaxItems",
+            "void clear()",
+            "bool add",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_screen_menu_adapter.h": [
+            "UxScreenMenuAdapter",
+            "ScreenRegistry",
+            "UxMenuModel",
+            "buildMenu",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_provider.h": [
+            "buildMenuForUxPack",
+            "UxMenuModel",
+        ],
+        "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp": [
+            "UxScreenMenuAdapter",
+            "ScreenRegistry",
+            "UxMenuModel",
+            "screen.enabled",
+        ],
+        "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp": [
+            "buildMenuForUxPack",
+            "findUxPackById",
+            "ScreenRegistry",
+            "UxScreenMenuAdapter",
+        ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h": [
             "IUxPack",
             "virtual const char* id() const = 0",
@@ -1204,6 +1243,9 @@ def check_ux_pack_runtime_binding() -> int:
             "trailmate_add_ui_lvgl_ux_packs",
             "screen_registry.cpp",
             "input_binding_set.cpp",
+            "ux_menu_model.cpp",
+            "ux_screen_menu_adapter.cpp",
+            "ux_menu_provider.cpp",
             "ux_pack_registry.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
@@ -1226,6 +1268,7 @@ def check_ux_pack_runtime_binding() -> int:
             [
                 "ui_lvgl_ux_packs/ux/ux_pack_registry.h",
                 "findUxPackById",
+                "activeUxPackId",
                 expected_pack,
             ],
             "app shell UX Pack lookup",
@@ -1241,10 +1284,51 @@ def check_ux_pack_runtime_binding() -> int:
             path,
             [
                 "findUxPackById",
+                "activeUxPackId",
                 expected_pack_id,
             ],
             "app shell UX Pack smoke test",
         )
+
+    failures += check_tokens(
+        "modules/ui_shared/include/ui/menu/menu_layout.h",
+        [
+            "UxMenuModel",
+            "ux_menu",
+        ],
+        "existing menu UX model entry point",
+    )
+
+    failures += check_tokens(
+        "modules/ui_shared/src/ui/menu/menu_layout.cpp",
+        [
+            "UxMenuModel",
+            "stableIdForScreenId",
+            "createAppButtonsFromUxMenu",
+            "createAppButtonsFromCatalog",
+        ],
+        "existing menu UX model consumer",
+    )
+
+    failures += check_tokens(
+        "modules/ui_shared/src/ui/startup_shell.cpp",
+        [
+            "buildMenuForUxPack",
+            "hooks.ux_pack_id",
+            "menu_options.ux_menu",
+        ],
+        "startup shell UX menu provider",
+    )
+
+    failures += check_tokens(
+        "modules/ui_shared/src/ui/startup_ui_shell.cpp",
+        [
+            "buildMenuForUxPack",
+            "hooks.ux_pack_id",
+            "options.ux_menu",
+        ],
+        "startup UI shell UX menu provider",
+    )
 
     return failures
 
@@ -1463,6 +1547,9 @@ def check_build_manifest_authority() -> int:
             "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp",
+            "modules/ui_lvgl_ux_packs/src/ux/ux_menu_model.cpp",
+            "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
+            "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp",
@@ -1489,6 +1576,9 @@ def check_build_manifest_authority() -> int:
             "chat_page_runtime_event_pump.cpp",
             "filesystem_map_tile_source.cpp",
             "gps_page_runtime_pump.cpp",
+            "ux_menu_model.cpp",
+            "ux_screen_menu_adapter.cpp",
+            "ux_menu_provider.cpp",
             "ux_pack_registry.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
@@ -1556,6 +1646,19 @@ def check_runtime_module_boundaries() -> int:
                     failures += fail(
                         f"{path.relative_to(ROOT)} contains forbidden boundary token {token}"
                     )
+
+    for path in [
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_menu_model.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_screen_menu_adapter.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_provider.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
+    ]:
+        text = read_text(path)
+        for token in ["lvgl.h", "apps/", "apps\\", "boards/", "boards\\", "platform/", "platform\\"]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden UX menu binding token {token}")
 
     filesystem_header = "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
     if exists(filesystem_header):

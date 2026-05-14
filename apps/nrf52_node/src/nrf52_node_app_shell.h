@@ -20,6 +20,7 @@ class Nrf52NodeAppShell
 {
   public:
     const Nrf52NodeAppShellConfig& config() const;
+    const char* activeUxPackId() const;
     bool validate() const;
 
   private:

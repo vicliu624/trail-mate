@@ -14,11 +14,16 @@ const LinuxSimAppShellConfig& LinuxSimAppShell::config() const
     return config_;
 }
 
+const char* LinuxSimAppShell::activeUxPackId() const
+{
+    return config_.ux_pack_id;
+}
+
 bool LinuxSimAppShell::validate() const
 {
     return config_.target_id != nullptr &&
            config_.ux_pack_id != nullptr &&
-           ui_lvgl_ux::findUxPackById(config_.ux_pack_id) != nullptr &&
+           ui_lvgl_ux::findUxPackById(activeUxPackId()) != nullptr &&
            config_.transitional_source != nullptr &&
            config_.legacy_adapter_target != nullptr;
 }

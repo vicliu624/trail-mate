@@ -19,6 +19,7 @@ class LinuxUConsoleGtkAppShell
 {
   public:
     const LinuxUConsoleGtkAppShellConfig& config() const;
+    const char* activeUxPackId() const;
     bool validate() const;
 
   private:

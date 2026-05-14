@@ -14,11 +14,14 @@
 #include "ui/ui_status.h"
 #include "ui/watch_face.h"
 #include "ui/widgets/system_notification.h"
+#include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
 
 namespace ui::startup_shell
 {
 namespace
 {
+
+ui_lvgl_ux::UxMenuModel s_ux_menu_model;
 
 bool resolve_display_time(struct tm* out_tm)
 {
@@ -152,6 +155,11 @@ void initializeShell(const Hooks& hooks)
     ui::menu_layout::InitOptions menu_options{};
     menu_options.messaging = hooks.messaging;
     menu_options.apps = hooks.apps;
+    if (hooks.ux_pack_id != nullptr &&
+        ui_lvgl_ux::buildMenuForUxPack(hooks.ux_pack_id, s_ux_menu_model))
+    {
+        menu_options.ux_menu = &s_ux_menu_model;
+    }
     ui::menu_layout::init(menu_options);
 
     ui::menu_runtime::init(

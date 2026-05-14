@@ -14,6 +14,7 @@ struct Hooks
 {
     app::IAppMessagingFacade* messaging = nullptr;
     AppCatalog apps{};
+    const char* ux_pack_id = nullptr;
     menu_runtime::Hooks::WatchFaceHooks watch_face{};
     void (*set_max_brightness)() = nullptr;
     void (*show_main_menu)() = nullptr;

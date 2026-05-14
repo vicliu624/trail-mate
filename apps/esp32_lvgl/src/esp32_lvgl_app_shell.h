@@ -19,6 +19,7 @@ class Esp32LvglAppShell
 {
   public:
     const Esp32LvglAppShellConfig& config() const;
+    const char* activeUxPackId() const;
     bool validate() const;
 
   private:

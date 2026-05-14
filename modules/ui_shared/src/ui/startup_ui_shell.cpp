@@ -10,6 +10,7 @@
 #include "ui/menu/menu_runtime.h"
 #include "ui/ui_boot.h"
 #include "ui/widgets/system_notification.h"
+#include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
 
 namespace ui::startup_ui_shell
 {
@@ -17,6 +18,7 @@ namespace
 {
 
 bool s_shell_initialized = false;
+ui_lvgl_ux::UxMenuModel s_ux_menu_model;
 
 void present_boot_overlay_now()
 {
@@ -131,6 +133,11 @@ bool initializeMenuSkeleton(const Hooks& hooks)
 
     ui::menu_layout::InitOptions options{};
     options.apps = hooks.apps;
+    if (hooks.ux_pack_id != nullptr &&
+        ui_lvgl_ux::buildMenuForUxPack(hooks.ux_pack_id, s_ux_menu_model))
+    {
+        options.ux_menu = &s_ux_menu_model;
+    }
     ui::menu_layout::init(options);
     ui::menu_runtime::init(
         lv_screen_active(), main_screen, ui::menu_layout::menuPanel(), build_menu_runtime_hooks());

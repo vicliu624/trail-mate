@@ -19,6 +19,7 @@ class LinuxSimAppShell
 {
   public:
     const LinuxSimAppShellConfig& config() const;
+    const char* activeUxPackId() const;
     bool validate() const;
 
   private:

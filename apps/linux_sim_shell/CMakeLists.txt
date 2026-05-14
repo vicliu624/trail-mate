@@ -51,6 +51,9 @@ if(BUILD_TESTING)
     foreach(ux_pack_test IN ITEMS
         screen_registry
         input_binding_set
+        ux_screen_menu_adapter
+        ux_menu_provider
+        compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack
         tiny_node_status_ux_pack
