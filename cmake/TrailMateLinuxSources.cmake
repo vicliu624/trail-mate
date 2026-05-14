@@ -326,6 +326,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_send_flow.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_ui_controller.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/key_verification_modal_renderer.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/team_position_picker_renderer.cpp"
     # contacts
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/contacts/contacts_page_components.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/contacts/contacts_page_input.cpp"

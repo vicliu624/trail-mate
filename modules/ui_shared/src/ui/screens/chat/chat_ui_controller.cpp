@@ -14,9 +14,9 @@
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
-#include "ui/page/page_profile.h"
 #include "ui/screens/chat/chat_protocol_support.h"
 #include "ui/screens/chat/key_verification_modal_renderer.h"
+#include "ui/screens/chat/team_position_picker_renderer.h"
 #include "ui/team_actions/team_action_sink.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
@@ -37,15 +37,6 @@
 #define CHAT_UI_LOG(...)
 #endif
 
-extern "C"
-{
-    extern const lv_image_dsc_t AreaCleared;
-    extern const lv_image_dsc_t BaseCamp;
-    extern const lv_image_dsc_t GoodFind;
-    extern const lv_image_dsc_t rally;
-    extern const lv_image_dsc_t sos;
-}
-
 namespace chat
 {
 namespace ui
@@ -58,37 +49,6 @@ namespace chat_support = chat::ui::support;
 constexpr uint8_t kTeamChatChannelRaw = 2;
 constexpr chat::ChannelId kTeamChatChannel =
     static_cast<chat::ChannelId>(kTeamChatChannelRaw);
-
-struct TeamPositionIconOption
-{
-    uint8_t icon_id;
-    const char* meaning;
-    const lv_image_dsc_t* image;
-};
-
-const TeamPositionIconOption kTeamPositionIconOptions[] = {
-    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::AreaCleared),
-     "Area Cleared", &AreaCleared},
-    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::BaseCamp),
-     "Base Camp", &BaseCamp},
-    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::GoodFind),
-     "Good Find", &GoodFind},
-    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::Rally),
-     "Rally Point", &rally},
-    {static_cast<uint8_t>(team::proto::TeamLocationMarkerIcon::Sos),
-     "Emergency SOS", &sos}};
-
-const TeamPositionIconOption* find_team_position_icon_option(uint8_t icon_id)
-{
-    for (const auto& item : kTeamPositionIconOptions)
-    {
-        if (item.icon_id == icon_id)
-        {
-            return &item;
-        }
-    }
-    return nullptr;
-}
 
 const char* protocol_short_label(chat::MeshProtocol protocol)
 {
@@ -414,6 +374,7 @@ UiController::UiController(lv_obj_t* parent,
 UiController::~UiController()
 {
     closeTeamPositionPicker(false);
+    team_position_picker_.reset();
     closeKeyVerificationModal(false);
     stopTeamConversationTimer();
     service_.setModelEnabled(false);
@@ -434,6 +395,26 @@ void UiController::cleanupComposeIme()
 
 void UiController::init()
 {
+    TeamPositionPickerRenderer::Callbacks callbacks;
+    callbacks.on_icon_selected = [](void* user_data, uint8_t icon_id)
+    {
+        auto* controller = static_cast<UiController*>(user_data);
+        if (controller)
+        {
+            controller->onTeamPositionIconSelected(icon_id);
+        }
+    };
+    callbacks.on_cancel = [](void* user_data)
+    {
+        auto* controller = static_cast<UiController*>(user_data);
+        if (controller)
+        {
+            controller->onTeamPositionCancel();
+        }
+    };
+    callbacks.user_data = this;
+    team_position_picker_.reset(
+        new TeamPositionPickerRenderer(parent_, callbacks));
     switchToChannelList();
 }
 
@@ -1141,262 +1122,36 @@ void UiController::stopTeamConversationTimer()
 
 bool UiController::isTeamPositionPickerOpen() const
 {
-    return team_position_picker_overlay_ != nullptr;
+    return team_position_picker_ && team_position_picker_->isOpen();
 }
 
 void UiController::updateTeamPositionPickerHint(uint8_t icon_id)
 {
-    if (!team_position_picker_desc_)
+    if (team_position_picker_)
     {
-        return;
-    }
-    if (icon_id == 0)
-    {
-        ::ui::i18n::set_label_text(team_position_picker_desc_, "Cancel");
-        return;
-    }
-    const TeamPositionIconOption* option = find_team_position_icon_option(icon_id);
-    if (option)
-    {
-        ::ui::i18n::set_label_text(team_position_picker_desc_, option->meaning);
-    }
-    else
-    {
-        ::ui::i18n::set_label_text(team_position_picker_desc_, "Select marker");
-    }
-}
-
-void UiController::team_position_icon_event_cb(lv_event_t* e)
-{
-    auto* ctx = static_cast<TeamPositionIconEventCtx*>(lv_event_get_user_data(e));
-    if (!ctx || !ctx->controller)
-    {
-        return;
-    }
-    UiController* controller = ctx->controller;
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_FOCUSED)
-    {
-        controller->updateTeamPositionPickerHint(ctx->icon_id);
-        lv_obj_scroll_to_view(lv_event_get_target_obj(e), LV_ANIM_ON);
-        return;
-    }
-    if (code == LV_EVENT_KEY)
-    {
-        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
-        if (key != LV_KEY_ENTER)
-        {
-            return;
-        }
-    }
-    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
-    {
-        controller->onTeamPositionIconSelected(ctx->icon_id);
-    }
-}
-
-void UiController::team_position_cancel_event_cb(lv_event_t* e)
-{
-    auto* controller = static_cast<UiController*>(lv_event_get_user_data(e));
-    if (!controller)
-    {
-        return;
-    }
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_FOCUSED)
-    {
-        controller->updateTeamPositionPickerHint(0);
-        return;
-    }
-    if (code == LV_EVENT_KEY)
-    {
-        lv_key_t key = static_cast<lv_key_t>(lv_event_get_key(e));
-        if (key != LV_KEY_ENTER)
-        {
-            return;
-        }
-    }
-    if (code == LV_EVENT_CLICKED || code == LV_EVENT_KEY)
-    {
-        controller->onTeamPositionCancel();
+        team_position_picker_->updateHint(icon_id);
     }
 }
 
 void UiController::openTeamPositionPicker()
 {
-    if (!team_conv_active_ || !compose_ || isTeamPositionPickerOpen() || !parent_)
+    if (!team_conv_active_ || !compose_ || !parent_)
     {
         return;
     }
-
-    team_position_prev_group_ = lv_group_get_default();
-    team_position_picker_group_ = lv_group_create();
-    set_default_group(team_position_picker_group_);
-
-    team_position_picker_overlay_ = lv_obj_create(parent_);
-    lv_obj_set_size(team_position_picker_overlay_, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(team_position_picker_overlay_, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(team_position_picker_overlay_, LV_OPA_50, 0);
-    lv_obj_set_style_border_width(team_position_picker_overlay_, 0, 0);
-    lv_obj_set_style_pad_all(team_position_picker_overlay_, 0, 0);
-    lv_obj_set_style_radius(team_position_picker_overlay_, 0, 0);
-    lv_obj_clear_flag(team_position_picker_overlay_, LV_OBJ_FLAG_SCROLLABLE);
-
-    const auto& profile = ::ui::page_profile::current();
-    const auto modal_size = ::ui::page_profile::resolve_modal_size(
-        profile.large_touch_hitbox ? 560 : 320,
-        profile.large_touch_hitbox ? 320 : 186,
-        team_position_picker_overlay_);
-    const lv_coord_t icon_button_size = ::ui::page_profile::resolve_icon_picker_button_size();
-    const lv_coord_t title_bar_height = ::ui::page_profile::resolve_popup_title_height();
-
-    team_position_picker_panel_ = lv_obj_create(team_position_picker_overlay_);
-    lv_obj_set_size(team_position_picker_panel_, modal_size.width, modal_size.height);
-    lv_obj_center(team_position_picker_panel_);
-    lv_obj_set_style_bg_color(team_position_picker_panel_, lv_color_hex(0xFAF0D8), 0);
-    lv_obj_set_style_bg_opa(team_position_picker_panel_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(team_position_picker_panel_, 1, 0);
-    lv_obj_set_style_border_color(team_position_picker_panel_, lv_color_hex(0xE7C98F), 0);
-    lv_obj_set_style_radius(team_position_picker_panel_, 10, 0);
-    lv_obj_set_style_pad_all(team_position_picker_panel_, ::ui::page_profile::resolve_modal_pad(), 0);
-    lv_obj_clear_flag(team_position_picker_panel_, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t* title_bar = lv_obj_create(team_position_picker_panel_);
-    lv_obj_set_size(title_bar, LV_PCT(100), title_bar_height);
-    lv_obj_set_style_bg_color(title_bar, lv_color_hex(0xEBA341), 0);
-    lv_obj_set_style_bg_opa(title_bar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(title_bar, 0, 0);
-    lv_obj_set_style_radius(title_bar, 6, 0);
-    lv_obj_align(title_bar, LV_ALIGN_TOP_MID, 0, -4);
-    lv_obj_clear_flag(title_bar, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t* title = lv_label_create(title_bar);
-    ::ui::i18n::set_label_text(title, "Share Position Marker");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
-    lv_obj_center(title);
-
-    lv_obj_t* icon_row = lv_obj_create(team_position_picker_panel_);
-    lv_obj_set_size(icon_row, LV_PCT(100), profile.large_touch_hitbox ? (icon_button_size + 20) : 72);
-    lv_obj_set_style_bg_opa(icon_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(icon_row, 0, 0);
-    lv_obj_set_style_pad_all(icon_row, 0, 0);
-    lv_obj_set_style_pad_column(icon_row, profile.large_touch_hitbox ? 12 : 6, 0);
-    lv_obj_set_flex_flow(icon_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(icon_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_align(icon_row, LV_ALIGN_TOP_MID, 0, profile.large_touch_hitbox ? (title_bar_height + 8) : 24);
-    lv_obj_set_scroll_dir(icon_row, LV_DIR_HOR);
-    lv_obj_set_scrollbar_mode(icon_row, LV_SCROLLBAR_MODE_OFF);
-
-    for (const auto& option : kTeamPositionIconOptions)
+    if (!team_position_picker_)
     {
-        lv_obj_t* btn = lv_btn_create(icon_row);
-        lv_obj_set_size(btn, icon_button_size, icon_button_size);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(0xF6E6C6), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_border_width(btn, 1, LV_PART_MAIN);
-        lv_obj_set_style_border_color(btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
-        lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
-        lv_obj_set_style_outline_width(btn, 2, LV_PART_MAIN | LV_STATE_FOCUSED);
-        lv_obj_set_style_outline_color(btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_FOCUSED);
-        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
-
-        lv_obj_t* img = lv_image_create(btn);
-        lv_image_set_src(img, option.image);
-        lv_obj_center(img);
-
-        auto* ctx = new TeamPositionIconEventCtx();
-        ctx->controller = this;
-        ctx->icon_id = option.icon_id;
-        team_position_icon_ctxs_.push_back(ctx);
-
-        lv_obj_add_event_cb(btn, team_position_icon_event_cb, LV_EVENT_CLICKED, ctx);
-        lv_obj_add_event_cb(btn, team_position_icon_event_cb, LV_EVENT_KEY, ctx);
-        lv_obj_add_event_cb(btn, team_position_icon_event_cb, LV_EVENT_FOCUSED, ctx);
-
-        lv_group_add_obj(team_position_picker_group_, btn);
+        return;
     }
-
-    team_position_picker_desc_ = lv_label_create(team_position_picker_panel_);
-    ::ui::i18n::set_label_text(team_position_picker_desc_, "Select marker");
-    lv_obj_set_width(team_position_picker_desc_, LV_PCT(100));
-    lv_obj_set_style_text_align(team_position_picker_desc_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(team_position_picker_desc_, lv_color_hex(0x8A6A3A), 0);
-    lv_obj_align(team_position_picker_desc_, LV_ALIGN_TOP_MID, 0, profile.large_touch_hitbox ? (title_bar_height + icon_button_size + 28) : 104);
-
-    lv_obj_t* cancel_btn = lv_btn_create(team_position_picker_panel_);
-    lv_obj_set_size(cancel_btn, ::ui::page_profile::resolve_control_button_min_width(), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_set_style_bg_color(cancel_btn, lv_color_hex(0xF6E6C6), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(cancel_btn, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(cancel_btn, lv_color_hex(0xE7C98F), LV_PART_MAIN);
-    lv_obj_set_style_radius(cancel_btn, 6, LV_PART_MAIN);
-    lv_obj_set_style_outline_width(cancel_btn, 2, LV_PART_MAIN | LV_STATE_FOCUSED);
-    lv_obj_set_style_outline_color(cancel_btn, lv_color_hex(0xC98118), LV_PART_MAIN | LV_STATE_FOCUSED);
-    lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_MID, 0, profile.large_touch_hitbox ? -12 : -6);
-    lv_obj_clear_flag(cancel_btn, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    ::ui::i18n::set_label_text(cancel_label, "Cancel");
-    lv_obj_set_style_text_color(cancel_label, lv_color_hex(0x6B4A1E), 0);
-    lv_obj_center(cancel_label);
-
-    lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_KEY, this);
-    lv_obj_add_event_cb(cancel_btn, team_position_cancel_event_cb, LV_EVENT_FOCUSED, this);
-    lv_group_add_obj(team_position_picker_group_, cancel_btn);
-
-    if (!team_position_icon_ctxs_.empty() && team_position_picker_group_)
-    {
-        lv_obj_t* first_btn = lv_group_get_focused(team_position_picker_group_);
-        if (!first_btn)
-        {
-            first_btn = lv_obj_get_child(icon_row, 0);
-        }
-        if (first_btn)
-        {
-            lv_group_focus_obj(first_btn);
-        }
-        updateTeamPositionPickerHint(team_position_icon_ctxs_.front()->icon_id);
-    }
-    lv_obj_move_foreground(team_position_picker_overlay_);
+    (void)team_position_picker_->open();
 }
 
 void UiController::closeTeamPositionPicker(bool restore_group)
 {
-    for (auto* ctx : team_position_icon_ctxs_)
+    if (team_position_picker_)
     {
-        delete ctx;
+        team_position_picker_->close(restore_group);
     }
-    team_position_icon_ctxs_.clear();
-
-    if (team_position_picker_group_ && lv_group_get_default() == team_position_picker_group_)
-    {
-        if (restore_group)
-        {
-            lv_group_t* restore_target = team_position_prev_group_ ? team_position_prev_group_ : app_g;
-            set_default_group(restore_target);
-        }
-        else
-        {
-            set_default_group(nullptr);
-        }
-    }
-
-    if (team_position_picker_overlay_ && lv_obj_is_valid(team_position_picker_overlay_))
-    {
-        lv_obj_del(team_position_picker_overlay_);
-    }
-
-    if (team_position_picker_group_)
-    {
-        lv_group_del(team_position_picker_group_);
-    }
-
-    team_position_picker_overlay_ = nullptr;
-    team_position_picker_panel_ = nullptr;
-    team_position_picker_desc_ = nullptr;
-    team_position_picker_group_ = nullptr;
-    team_position_prev_group_ = nullptr;
 }
 
 bool UiController::isKeyVerificationModalOpen() const

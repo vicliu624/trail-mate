@@ -15,6 +15,7 @@
 #include "ui/screens/chat/chat_message_list_components.h"
 #include "ui/screens/chat/chat_ui_refresh_sink.h"
 #include "ui/screens/chat/key_verification_modal_renderer.h"
+#include "ui/screens/chat/team_position_picker_renderer.h"
 #include "ui/team_actions/team_action_sink.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
@@ -99,6 +100,7 @@ class UiController : public IChatUiRefreshSink
     std::unique_ptr<ChatConversationScreen> conversation_;
     std::unique_ptr<ChatComposeScreen> compose_;
     std::unique_ptr<::ui::widgets::ImeWidget> compose_ime_;
+    std::unique_ptr<TeamPositionPickerRenderer> team_position_picker_;
 
     chat::ChannelId current_channel_;
     chat::ConversationId current_conv_;
@@ -150,26 +152,11 @@ class UiController : public IChatUiRefreshSink
     void trustKeyFromVerificationModal();
     void clearKeyVerificationError();
 
-    struct TeamPositionIconEventCtx
-    {
-        UiController* controller = nullptr;
-        uint8_t icon_id = 0;
-    };
-
-    std::vector<TeamPositionIconEventCtx*> team_position_icon_ctxs_;
-    lv_obj_t* team_position_picker_overlay_ = nullptr;
-    lv_obj_t* team_position_picker_panel_ = nullptr;
-    lv_obj_t* team_position_picker_desc_ = nullptr;
-    lv_group_t* team_position_picker_group_ = nullptr;
-    lv_group_t* team_position_prev_group_ = nullptr;
-
     KeyVerificationModalRefs key_verify_modal_;
     std::unique_ptr<::ui::widgets::ImeWidget> key_verify_ime_;
     std::vector<chat::ConversationMeta> cached_conversations_;
     bool conversation_list_dirty_ = true;
 
-    static void team_position_icon_event_cb(lv_event_t* e);
-    static void team_position_cancel_event_cb(lv_event_t* e);
     static void key_verify_submit_event_cb(lv_event_t* e);
     static void key_verify_close_event_cb(lv_event_t* e);
     static void key_verify_trust_event_cb(lv_event_t* e);

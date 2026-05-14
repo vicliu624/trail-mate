@@ -15,7 +15,7 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 | Textarea input parsing | Compose and verification number inputs are widget concerns | Must not encode runtime payloads or access protocol APIs |
 | Button callback dispatch | LVGL callbacks still enter the controller | Callback must submit to model/action sink, not own runtime state |
 | Conversation screen navigation | Existing chat UI state machine remains controller-local | Must not define delivery/key/team ownership |
-| Team position picker widget lifecycle | Picker still belongs to chat LVGL UI | Sends `TeamActionRequest`; does not encode Team payload |
+| Team position picker workflow coordination | Controller starts picker workflow and handles selected/cancel results | Widget lifecycle belongs to `TeamPositionPickerRenderer`; send path submits `TeamActionRequest` |
 | IME attach / detach | Existing LVGL input integration remains widget lifecycle | Does not affect Chat/Team runtime state |
 
 ## B. Migrated Runtime Responsibilities
@@ -30,6 +30,7 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 | Key verification state/session | `KeyVerificationModel` plus `LegacyKeyVerificationSource` | Controller selects peer and renders snapshot only |
 | Key verification submit/trust runtime calls | `LegacyKeyVerificationActionSink` | Controller calls `KeyVerificationModel` actions only |
 | Key verification modal rendering | `KeyVerificationModalRenderer` helper | Controller owns open/close and callback forwarding only |
+| Team position picker widget lifecycle | `TeamPositionPickerRenderer` | Controller owns selected/cancel workflow only |
 
 ## C. Remaining Legacy Responsibilities
 
@@ -39,7 +40,7 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 | `ChatService::processIncoming` | `ChatPageRuntimeEventPump::update()` | App-wide runtime scheduler owns cadence outside page runtime | burned down from controller |
 | `ChatService::flushStore` | `ChatPageRuntimeEventPump::update()` | App-wide runtime scheduler owns cadence outside page runtime | burned down from controller |
 | EventBus forwarding | `ChatPageRuntimeFacade` / `ChatPageRuntimeEventPump` | App-wide runtime scheduler owns EventBus routing outside page runtime | burned down from controller |
-| Team position picker renderer | `openTeamPositionPicker(...)` | Team position picker view helper owns widget rendering | remaining legacy |
+| Team position picker selection workflow | `onTeamPositionIconSelected(...)` / `onTeamPositionCancel(...)` | Future workflow coordinator or UX pack-specific picker flow owns selection routing | contained |
 | Legacy Team log formatting outside Chat UI | Contacts/GPS/team-page legacy paths | Shared Team presentation projection is reused by those screens | remaining legacy |
 | Protocol mismatch UX | Reply guard notifications | Protocol support model exposes UI-ready disabled reason | remaining legacy |
 
@@ -53,3 +54,4 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 - adds key verification fields to `ChatWorkspaceModel` or `MessageRow`
 - maps Team to DirectPeer or Channel conversation semantics
 - decodes or formats Team location/command payloads for chat display
+- creates or stores Team position picker overlay, panel, hint label, group, or icon event contexts

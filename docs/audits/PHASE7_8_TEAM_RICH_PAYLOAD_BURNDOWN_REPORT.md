@@ -27,7 +27,7 @@ TeamChatLogEntry -> TeamRichPayloadProjector -> TeamChatPresentationSource -> Me
 | Surface | Reason | Exit condition |
 | --- | --- | --- |
 | `LegacyTeamActionBridge` | Send-side Team action runtime bridge remains legacy | Introduce or rename a stable Team action service/adapter |
-| Team position picker renderer | Picker widget lifecycle is separate from display projection | Extract picker renderer/helper from `ChatUiController` |
+| Team position picker renderer | Picker widget lifecycle is separate from display projection | Resolved by Phase 7.9 with `TeamPositionPickerRenderer` |
 | `MessageRow` rich display limitations | Existing renderer only consumes text rows | Future Team row model or renderer supports rich payload display fields |
 | Other Team rich decode surfaces | Contacts/GPS/team screens have separate legacy display paths | Later phases migrate those screens to shared Team projection |
 | `TeamChatPresentationSource` vector boundary | Legacy Team store API returns recent logs through `std::vector` | Add a fixed-capacity visitor / bounded iterator API to `TeamUiStore` |
@@ -47,7 +47,7 @@ TeamChatLogEntry -> TeamRichPayloadProjector -> TeamChatPresentationSource -> Me
 | Work | Direction |
 | --- | --- |
 | Rich Team card UI | Add renderer support for structured `TeamRichPayloadDisplay` fields |
-| Team position picker renderer | Extract LVGL picker helper without changing Team send ownership |
+| Team position picker renderer | Resolved by Phase 7.9 without changing Team send ownership |
 | Contacts/GPS Team payload formatting | Move those legacy display paths to shared Team presentation projection |
 | Team action bridge burn-down | Replace or rename `LegacyTeamActionBridge` when runtime service boundary is stable |
 | Team store recent-log API | Replace vector-return API with fixed-capacity visitor / bounded iterator for embedded targets |

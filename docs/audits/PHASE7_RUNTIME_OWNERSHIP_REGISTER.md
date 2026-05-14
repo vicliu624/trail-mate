@@ -13,7 +13,7 @@ has direct user-visible consequences and a bounded migration path.
 | Runtime item | Owner status | Phase | Notes |
 | --- | --- | --- | --- |
 | Chat delivery / pending / failure | contained | 7.1 / 7.6 | owned by `ChatDeliveryReadModel` and projector path; controller direct ownership is forbidden |
-| Chat send-result projection | contained | 7.3 / 7.6 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge`; event pump extraction remains future |
+| Chat send-result projection | contained | 7.3 / 7.7 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge`; `ChatPageRuntimeEventPump` owns forwarding |
 | ACK timeout projection | in progress | 7.3 | adapter hook projects `AckTimeout`; unified ACK source remains future |
 | key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
@@ -22,6 +22,7 @@ has direct user-visible consequences and a bounded migration path.
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
 | Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
 | Team rich payload display ownership | contained | 7.8 | owned by `TeamRichPayloadProjector` / `TeamChatPresentationSource`; controller display decode/format is forbidden |
+| Team position picker widget lifecycle | burned-down UI surface | 7.9 | owned by `TeamPositionPickerRenderer`; controller only handles selected/cancel workflow |
 | key verification workflow | contained | 7.5 / 7.6 | owned by `KeyVerificationModel` plus legacy source/sink adapters; modal rendering is helper-bounded |
 | GPS page timers/tasks | future | later phase | runtime scheduling owner still legacy |
 
@@ -165,14 +166,15 @@ Phase 7.6 burned down:
 - direct delivery read/action ownership in `ChatUiController`
 - key verification modal rendering inside the controller body
 
-Remaining legacy surfaces now require removal conditions:
+Remaining legacy surfaces now require removal conditions. Later burn-down phases
+may move those surfaces from contained to burned-down:
 
 - `LegacyChatDeliveryEventBridge`
 - `LegacyChatDeliveryActionBridge`
 - `LegacyTeamActionBridge`
 - `LegacyKeyVerificationSource`
 - `LegacyKeyVerificationActionSink`
-- controller-owned `ChatService::processIncoming` / `flushStore`
+- controller-owned `ChatService::processIncoming` / `flushStore` was removed in Phase 7.7
 
 ## Phase 7.7 Decision
 
@@ -230,3 +232,28 @@ Phase 7.8 introduces:
 
 The current renderer still consumes summary text through `MessageRow`. Rich Team
 cards and Map overlays remain future work.
+
+## Phase 7.9 Decision
+
+Team position picker lifecycle is a widget renderer concern.
+
+It is not owned by:
+
+- Team action send sinks
+- Team protocol payload encoders
+- GPS runtime
+- `ChatWorkspaceModel`
+- `ChatUiController` LVGL member refs
+
+Phase 7.9 introduces:
+
+- `TeamPositionPickerRenderer`
+- `TeamPositionPickerRenderer::Callbacks`
+
+`ChatUiController` no longer stores picker overlay, panel, description label,
+LVGL group, previous group, or icon event contexts. It no longer defines picker
+LVGL event callbacks or directly creates the picker widget tree.
+
+The controller keeps the selection workflow. `sendTeamLocationWithIcon(...)`
+remains only because it submits `TeamActionRequest` through `ITeamActionSink`;
+it must not encode Team payloads directly.

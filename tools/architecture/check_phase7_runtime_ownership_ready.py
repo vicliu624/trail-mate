@@ -41,16 +41,19 @@ def check_required_files() -> int:
         "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md",
         "docs/audits/CHAT_RUNTIME_EVENT_PUMP_AUDIT.md",
         "docs/audits/TEAM_RICH_PAYLOAD_PRESENTATION_AUDIT.md",
+        "docs/audits/TEAM_POSITION_PICKER_RENDERER_AUDIT.md",
         "docs/audits/LEGACY_BURNDOWN_REGISTER.md",
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md",
         "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md",
         "docs/audits/PHASE7_7_EVENT_PUMP_BURNDOWN_REPORT.md",
         "docs/audits/PHASE7_8_TEAM_RICH_PAYLOAD_BURNDOWN_REPORT.md",
+        "docs/audits/PHASE7_9_TEAM_POSITION_PICKER_BURNDOWN_REPORT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
         "docs/specification/CHAT_RUNTIME_EVENT_PUMP_SPEC.md",
         "docs/specification/TEAM_RICH_PAYLOAD_PRESENTATION_SPEC.md",
+        "docs/specification/TEAM_POSITION_PICKER_RENDERER_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -105,6 +108,8 @@ def check_required_files() -> int:
         "modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp",
         "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h",
         "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp",
+        "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h",
+        "modules/ui_shared/src/ui/screens/chat/team_position_picker_renderer.cpp",
         "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h",
         "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h",
         "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp",
@@ -240,6 +245,19 @@ def check_docs() -> int:
             "decodeTeamChatCommand",
             "The chat controller no longer formats or decodes Team location/command display payloads",
         ],
+        "docs/audits/TEAM_POSITION_PICKER_RENDERER_AUDIT.md": [
+            "Phase 7.9 burns down Team position picker widget lifecycle from `ChatUiController`",
+            "renderer / widget lifecycle boundary",
+            "TeamPositionPickerRenderer",
+            "overlay",
+            "panel",
+            "description label",
+            "focus group",
+            "icon event contexts",
+            "`ChatUiController` owns only",
+            "`TeamPositionPickerRenderer` must not",
+            "send Team actions",
+        ],
         "docs/specification/TEAM_RICH_PAYLOAD_PRESENTATION_SPEC.md": [
             "Team rich payload display is presentation projection, not controller formatting",
             "TeamRichPayloadKind",
@@ -249,6 +267,17 @@ def check_docs() -> int:
             "TeamChatLogEntry -> TeamRichPayloadDisplay",
             "TeamChatPresentationSource",
             "Phase 7.8 does not",
+        ],
+        "docs/specification/TEAM_POSITION_PICKER_RENDERER_SPEC.md": [
+            "Picker rendering belongs to `TeamPositionPickerRenderer`",
+            "Team action sending belongs to `ITeamActionSink`",
+            "TeamPositionPickerRenderer::Callbacks",
+            "bool open()",
+            "void close(bool restore_group)",
+            "bool isOpen() const",
+            "void updateHint(uint8_t icon_id)",
+            "must not interpret the result as a Team send operation",
+            "Phase 7.9 does not",
         ],
         "docs/audits/LEGACY_BURNDOWN_REGISTER.md": [
             "Remaining callers",
@@ -265,6 +294,7 @@ def check_docs() -> int:
             "ChatUiController` delivery mutation",
             "ChatUiController` runtime event pump",
             "ChatUiController` Team rich payload formatting",
+            "ChatUiController` Team position picker renderer",
             "MessageRow` Team rich display limitations",
         ],
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md": [
@@ -278,6 +308,7 @@ def check_docs() -> int:
             "ChatDeliveryEventProjector",
             "ChatDeliveryActionService",
             "TeamRichPayloadProjector",
+            "TeamPositionPickerRenderer",
         ],
         "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md": [
             "Phase 7.6 reduced Chat / Team / key-verification legacy ownership surfaces",
@@ -302,6 +333,21 @@ def check_docs() -> int:
             "format_team_chat_entry",
             "decodeTeamChatLocation",
             "decodeTeamChatCommand",
+            "Burned Down",
+            "Still Contained",
+        ],
+        "docs/audits/PHASE7_9_TEAM_POSITION_PICKER_BURNDOWN_REPORT.md": [
+            "Phase 7.9 moved Team position picker LVGL widget lifecycle out of `ChatUiController`",
+            "TeamPositionPickerRenderer",
+            "team_position_picker_overlay_",
+            "team_position_picker_panel_",
+            "team_position_picker_desc_",
+            "team_position_picker_group_",
+            "team_position_prev_group_",
+            "team_position_icon_ctxs_",
+            "TeamPositionIconEventCtx",
+            "team_position_icon_event_cb",
+            "team_position_cancel_event_cb",
             "Burned Down",
             "Still Contained",
         ],
@@ -343,6 +389,7 @@ def check_legacy_burndown_register() -> int:
         "ChatUiController` delivery mutation",
         "ChatUiController` runtime event pump",
         "ChatUiController` Team rich payload formatting",
+        "ChatUiController` Team position picker renderer",
         "MessageRow` Team rich display limitations",
     ]
     for surface in required_surfaces:
@@ -1216,6 +1263,125 @@ def check_team_rich_payload_presentation_boundary() -> int:
     return failures
 
 
+def check_team_position_picker_renderer_boundary() -> int:
+    failures = 0
+    header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
+    source = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+    renderer_header = "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h"
+    renderer_source = "modules/ui_shared/src/ui/screens/chat/team_position_picker_renderer.cpp"
+
+    controller_forbidden = [
+        "team_position_picker_overlay_",
+        "team_position_picker_panel_",
+        "team_position_picker_desc_",
+        "team_position_picker_group_",
+        "team_position_prev_group_",
+        "team_position_icon_ctxs_",
+        "TeamPositionIconEventCtx",
+        "team_position_icon_event_cb",
+        "team_position_cancel_event_cb",
+        "lv_obj_create(parent_)",
+    ]
+
+    for path in [header, source]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in controller_forbidden:
+            if token in text:
+                failures += fail(
+                    f"{path} still owns Team position picker widget token: {token}"
+                )
+
+    if exists(header):
+        text = strip_cpp_comments(read_text(header))
+        for token in [
+            "TeamPositionPickerRenderer",
+            "team_position_picker_",
+            "openTeamPositionPicker",
+            "closeTeamPositionPicker",
+            "updateTeamPositionPickerHint",
+            "onTeamPositionIconSelected",
+            "onTeamPositionCancel",
+            "isTeamPositionPickerOpen",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatUiController missing Team picker workflow token: {token}")
+
+    if exists(source):
+        text = strip_cpp_comments(read_text(source))
+        for token in [
+            "TeamPositionPickerRenderer::Callbacks",
+            "team_position_picker_->open()",
+            "team_position_picker_->close(restore_group)",
+            "team_position_picker_->updateHint(icon_id)",
+            "team_position_picker_->isOpen()",
+            "sendTeamLocationWithIcon",
+            "team_action_sink_->sendTeamAction",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatUiController missing Team picker delegation token: {token}")
+
+    for path in [renderer_header, renderer_source]:
+        if not exists(path):
+            failures += fail(f"missing Team position picker renderer file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "ChatService",
+            "TeamUiStore",
+            "ITeamActionSink",
+            "TeamActionRequest",
+            "sendTeamAction",
+            "encodeTeamChatLocation",
+            "decodeTeamChatLocation",
+            "platform::ui::gps::get_data",
+            "ChatWorkspaceModel",
+            "team_ui_chatlog_append_structured",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"{path} contains forbidden Team picker renderer token: {token}"
+                )
+
+    if exists(renderer_header):
+        text = read_text(renderer_header)
+        for token in [
+            "TeamPositionPickerRenderer",
+            "struct Callbacks",
+            "on_icon_selected",
+            "on_cancel",
+            "bool open()",
+            "void close(bool restore_group)",
+            "bool isOpen() const",
+            "void updateHint(uint8_t icon_id)",
+            "IconEventCtx",
+            "iconEventCb",
+            "cancelEventCb",
+        ]:
+            if token not in text:
+                failures += fail(f"TeamPositionPickerRenderer header missing token: {token}")
+
+    if exists(renderer_source):
+        text = strip_cpp_comments(read_text(renderer_source))
+        for token in [
+            "TeamPositionPickerRenderer::open",
+            "TeamPositionPickerRenderer::close",
+            "TeamPositionPickerRenderer::updateHint",
+            "TeamPositionPickerRenderer::iconEventCb",
+            "TeamPositionPickerRenderer::cancelEventCb",
+            "lv_obj_create",
+            "lv_group_create",
+            "set_default_group",
+            "callbacks_.on_icon_selected",
+            "callbacks_.on_cancel",
+        ]:
+            if token not in text:
+                failures += fail(f"TeamPositionPickerRenderer source missing token: {token}")
+
+    return failures
+
+
 def check_chat_runtime_event_pump_boundary() -> int:
     failures = 0
     header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
@@ -1659,6 +1825,7 @@ def main() -> int:
     failures += check_chat_ui_team_action_migration()
     failures += check_chat_ui_legacy_burndown()
     failures += check_team_rich_payload_presentation_boundary()
+    failures += check_team_position_picker_renderer_boundary()
     failures += check_chat_runtime_event_pump_boundary()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()
