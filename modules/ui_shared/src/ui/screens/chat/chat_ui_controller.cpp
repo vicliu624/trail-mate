@@ -8,7 +8,6 @@
 #include "app/app_facade_access.h"
 #include "chat_presentation_adapters/chat_conversation_mapper.h"
 #include "chat/infra/mesh_protocol_utils.h"
-#include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/team_ui_store_runtime.h"
@@ -20,11 +19,13 @@
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/presentation_sources/legacy_chat_delivery_event_bridge.h"
+#include "ui/presentation_sources/legacy_key_verification_source.h"
 #include "ui/screens/chat/chat_protocol_support.h"
 #include "ui/team_actions/team_action_sink.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui/widgets/system_notification.h"
+#include "ui_presentation/key_verification/key_verification_model.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -202,18 +203,6 @@ std::string truncate_text(const std::string& text, size_t max_len)
     }
 
     return text.substr(0, safe_len) + "...";
-}
-
-std::string resolve_contact_name(chat::NodeId node_id)
-{
-    std::string name = app::messagingFacade().getContactService().getContactName(node_id);
-    if (!name.empty())
-    {
-        return name;
-    }
-    char fallback[16] = {};
-    std::snprintf(fallback, sizeof(fallback), "%08lX", static_cast<unsigned long>(node_id));
-    return fallback;
 }
 
 std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
@@ -487,6 +476,38 @@ void showTeamLocationSendFailure(::ui::UiActionResult result)
     ::ui::SystemNotification::show(message, 2000);
 }
 
+const char* key_verification_action_failure_message(::ui::UiActionResult result)
+{
+    if (result.failure == ::ui::UiActionFailure::NotReady)
+    {
+        return "Key verification unavailable";
+    }
+    if (result.failure == ::ui::UiActionFailure::Unsupported)
+    {
+        return "Key verification unsupported";
+    }
+    if (result.failure == ::ui::UiActionFailure::InvalidInput)
+    {
+        return "Key verification unavailable";
+    }
+    return "Key verification failed";
+}
+
+::ui::key_verification::VerificationProtocol active_key_verification_protocol()
+{
+    switch (chat_support::active_mesh_protocol())
+    {
+    case chat::MeshProtocol::MeshCore:
+        return ::ui::key_verification::VerificationProtocol::MeshCore;
+    case chat::MeshProtocol::Meshtastic:
+        return ::ui::key_verification::VerificationProtocol::Meshtastic;
+    case chat::MeshProtocol::RNode:
+    case chat::MeshProtocol::LXMF:
+    default:
+        return ::ui::key_verification::VerificationProtocol::Unknown;
+    }
+}
+
 void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
                                 const chat::ConversationId& conv,
                                 void* user_data)
@@ -551,6 +572,10 @@ UiController::UiController(lv_obj_t* parent,
                            ::ui::team_actions::ITeamActionSink* team_action_sink,
                            ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
                                delivery_event_bridge,
+                           ::ui::key_verification::KeyVerificationModel*
+                               key_verification_model,
+                           ::ui::presentation_sources::LegacyKeyVerificationSource*
+                               key_verification_source,
                            chat::ChannelId initial_channel,
                            ExitRequestCallback exit_request,
                            void* exit_request_user_data)
@@ -558,6 +583,8 @@ UiController::UiController(lv_obj_t* parent,
       team_chat_model_(team_chat_model),
       team_action_sink_(team_action_sink),
       delivery_event_bridge_(delivery_event_bridge),
+      key_verification_model_(key_verification_model),
+      key_verification_source_(key_verification_source),
       state_(State::ChannelList),
       current_channel_(initial_channel),
       current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
@@ -730,11 +757,63 @@ void UiController::onChatEvent(sys::Event* event)
         break;
     }
     case sys::EventType::KeyVerificationNumberRequest:
+    {
+        auto* key_event =
+            static_cast<sys::KeyVerificationNumberRequestEvent*>(event);
+        if (key_verification_source_ != nullptr)
+        {
+            key_verification_source_->onNumberRequest(key_event->node_id,
+                                                      key_event->nonce);
+        }
+        if (key_verification_model_ != nullptr)
+        {
+            key_verification_model_->selectPeer(
+                active_key_verification_protocol(),
+                key_event->node_id);
+            renderKeyVerificationModal(key_verification_model_->snapshot());
+        }
         break;
+    }
     case sys::EventType::KeyVerificationNumberInform:
+    {
+        auto* key_event =
+            static_cast<sys::KeyVerificationNumberInformEvent*>(event);
+        if (key_verification_source_ != nullptr)
+        {
+            key_verification_source_->onNumberInform(
+                key_event->node_id,
+                key_event->nonce,
+                key_event->security_number);
+        }
+        if (key_verification_model_ != nullptr)
+        {
+            key_verification_model_->selectPeer(
+                active_key_verification_protocol(),
+                key_event->node_id);
+            renderKeyVerificationModal(key_verification_model_->snapshot());
+        }
         break;
+    }
     case sys::EventType::KeyVerificationFinal:
+    {
+        auto* key_event =
+            static_cast<sys::KeyVerificationFinalEvent*>(event);
+        if (key_verification_source_ != nullptr)
+        {
+            key_verification_source_->onFinal(key_event->node_id,
+                                             key_event->nonce,
+                                             key_event->is_sender,
+                                             key_event->verification_code);
+        }
+        if (key_verification_model_ != nullptr)
+        {
+            key_verification_model_->selectPeer(
+                active_key_verification_protocol(),
+                key_event->node_id);
+            renderKeyVerificationModal(key_verification_model_->snapshot());
+        }
         break;
+    }
 
     default:
         break;
@@ -1664,7 +1743,7 @@ void UiController::key_verify_trust_event_cb(lv_event_t* e)
     }
 }
 
-void UiController::closeKeyVerificationModal(bool restore_group)
+void UiController::destroyKeyVerificationModal(bool restore_group)
 {
     if (key_verify_ime_)
     {
@@ -1701,24 +1780,16 @@ void UiController::closeKeyVerificationModal(bool restore_group)
     key_verify_error_label_ = nullptr;
     key_verify_group_ = nullptr;
     key_verify_prev_group_ = nullptr;
-    key_verify_node_id_ = 0;
-    key_verify_nonce_ = 0;
-    key_verify_expects_number_ = false;
-    key_verify_can_trust_ = false;
 }
 
-void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t nonce)
+void UiController::renderKeyVerificationModal(
+    const ::ui::key_verification::KeyVerificationSnapshot& snapshot)
 {
-    closeKeyVerificationModal(false);
-    if (!parent_)
+    destroyKeyVerificationModal(false);
+    if (!parent_ || !snapshot.header.valid || snapshot.peer_id == 0)
     {
         return;
     }
-
-    key_verify_node_id_ = node_id;
-    key_verify_nonce_ = nonce;
-    key_verify_expects_number_ = true;
-    key_verify_can_trust_ = false;
 
     key_verify_prev_group_ = lv_group_get_default();
     key_verify_group_ = lv_group_create();
@@ -1734,9 +1805,10 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     lv_obj_clear_flag(key_verify_overlay_, LV_OBJ_FLAG_SCROLLABLE);
 
     const auto& profile = ::ui::page_profile::current();
+    const bool needs_number = snapshot.requires_number;
     const auto modal_size = ::ui::page_profile::resolve_modal_size(
-        profile.large_touch_hitbox ? 560 : 320,
-        profile.large_touch_hitbox ? 380 : 220,
+        needs_number ? (profile.large_touch_hitbox ? 560 : 320) : 420,
+        needs_number ? (profile.large_touch_hitbox ? 380 : 220) : 260,
         key_verify_overlay_);
 
     key_verify_panel_ = lv_obj_create(key_verify_overlay_);
@@ -1750,203 +1822,140 @@ void UiController::openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t
     lv_obj_set_style_pad_all(key_verify_panel_, ::ui::page_profile::resolve_modal_pad(), 0);
     lv_obj_clear_flag(key_verify_panel_, LV_OBJ_FLAG_SCROLLABLE);
 
+    const char* title_text = "Key Verification";
+    if (snapshot.prompt == ::ui::key_verification::VerificationPromptKind::ShowNumber)
+    {
+        title_text = "Verification Number";
+    }
+    else if (snapshot.prompt == ::ui::key_verification::VerificationPromptKind::CompareCode)
+    {
+        title_text = "Compare Verification Code";
+    }
+
     lv_obj_t* title = lv_label_create(key_verify_panel_);
-    ::ui::i18n::set_label_text(title, "Key Verification");
+    ::ui::i18n::set_label_text(title, title_text);
     lv_obj_set_style_text_color(title, lv_color_hex(0x6B4A1E), 0);
     lv_obj_set_style_text_font(title, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
-    std::string desc = ::ui::i18n::format("Enter number for %s", resolve_contact_name(node_id).c_str());
+    std::string desc = snapshot.peer_label.c_str();
+    if (!desc.empty())
+    {
+        desc += "\n";
+    }
+    desc += snapshot.status_line.c_str();
+    if (!snapshot.verification_code.empty())
+    {
+        desc += "\n";
+        desc += snapshot.verification_code.c_str();
+    }
+    if (snapshot.can_accept)
+    {
+        desc += "\n\n";
+        desc += ::ui::i18n::tr("If it matches, trust the key.");
+    }
+
     key_verify_desc_ = lv_label_create(key_verify_panel_);
     ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
     lv_obj_set_width(key_verify_desc_, LV_PCT(100));
     lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(key_verify_desc_, lv_color_hex(0x8A6A3A), 0);
-    lv_obj_align(key_verify_desc_, LV_ALIGN_TOP_MID, 0, 34);
+    lv_obj_align(key_verify_desc_,
+                 needs_number ? LV_ALIGN_TOP_MID : LV_ALIGN_CENTER,
+                 0,
+                 needs_number ? 34 : -8);
 
-    key_verify_textarea_ = lv_textarea_create(key_verify_panel_);
-    lv_obj_set_width(key_verify_textarea_, LV_PCT(100));
-    lv_textarea_set_one_line(key_verify_textarea_, true);
-    lv_textarea_set_placeholder_text(key_verify_textarea_, ::ui::i18n::tr("6 digits"));
-    lv_textarea_set_accepted_chars(key_verify_textarea_, "0123456789");
-    lv_textarea_set_max_length(key_verify_textarea_, 6);
-    lv_obj_align(key_verify_textarea_, LV_ALIGN_TOP_MID, 0, 72);
-
-    key_verify_error_label_ = lv_label_create(key_verify_panel_);
-    ::ui::i18n::set_label_text_raw(key_verify_error_label_, "");
-    lv_obj_set_width(key_verify_error_label_, LV_PCT(100));
-    lv_obj_set_style_text_align(key_verify_error_label_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(key_verify_error_label_, lv_color_hex(0xB94A2C), 0);
-    lv_obj_align(key_verify_error_label_, LV_ALIGN_TOP_MID, 0, 110);
-
-    lv_obj_t* submit_btn = lv_btn_create(key_verify_panel_);
-    lv_obj_set_size(submit_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_align(submit_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_t* submit_label = lv_label_create(submit_btn);
-    ::ui::i18n::set_label_text(submit_label, "Submit");
-    lv_obj_center(submit_label);
-
-    lv_obj_t* cancel_btn = lv_btn_create(key_verify_panel_);
-    lv_obj_set_size(cancel_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
-    ::ui::i18n::set_label_text(cancel_label, "Cancel");
-    lv_obj_center(cancel_label);
-
-    lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_KEY, this);
-    lv_obj_add_event_cb(cancel_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(cancel_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
-
-    lv_group_add_obj(key_verify_group_, key_verify_textarea_);
-    lv_group_add_obj(key_verify_group_, submit_btn);
-    lv_group_add_obj(key_verify_group_, cancel_btn);
-    lv_group_focus_obj(key_verify_textarea_);
-
-    if (::ui::page_profile::current().large_touch_hitbox)
+    if (needs_number)
     {
-        key_verify_ime_.reset(new ::ui::widgets::ImeWidget());
-        key_verify_ime_->init(key_verify_panel_, key_verify_textarea_);
-        key_verify_ime_->setMode(::ui::widgets::ImeWidget::Mode::NUM);
+        key_verify_textarea_ = lv_textarea_create(key_verify_panel_);
+        lv_obj_set_width(key_verify_textarea_, LV_PCT(100));
+        lv_textarea_set_one_line(key_verify_textarea_, true);
+        lv_textarea_set_placeholder_text(key_verify_textarea_, ::ui::i18n::tr("6 digits"));
+        lv_textarea_set_accepted_chars(key_verify_textarea_, "0123456789");
+        lv_textarea_set_max_length(key_verify_textarea_, 6);
+        lv_obj_align(key_verify_textarea_, LV_ALIGN_TOP_MID, 0, 72);
+
+        key_verify_error_label_ = lv_label_create(key_verify_panel_);
+        ::ui::i18n::set_label_text_raw(key_verify_error_label_, "");
+        lv_obj_set_width(key_verify_error_label_, LV_PCT(100));
+        lv_obj_set_style_text_align(key_verify_error_label_, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(key_verify_error_label_, lv_color_hex(0xB94A2C), 0);
+        lv_obj_align(key_verify_error_label_, LV_ALIGN_TOP_MID, 0, 110);
+
+        lv_obj_t* submit_btn = lv_btn_create(key_verify_panel_);
+        lv_obj_set_size(submit_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+        lv_obj_align(submit_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+        lv_obj_t* submit_label = lv_label_create(submit_btn);
+        ::ui::i18n::set_label_text(submit_label, "Submit");
+        lv_obj_center(submit_label);
+
+        lv_obj_t* cancel_btn = lv_btn_create(key_verify_panel_);
+        lv_obj_set_size(cancel_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+        lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+        lv_obj_t* cancel_label = lv_label_create(cancel_btn);
+        ::ui::i18n::set_label_text(cancel_label, "Cancel");
+        lv_obj_center(cancel_label);
+
+        lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_CLICKED, this);
+        lv_obj_add_event_cb(submit_btn, key_verify_submit_event_cb, LV_EVENT_KEY, this);
+        lv_obj_add_event_cb(cancel_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
+        lv_obj_add_event_cb(cancel_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
+
+        lv_group_add_obj(key_verify_group_, key_verify_textarea_);
+        lv_group_add_obj(key_verify_group_, submit_btn);
+        lv_group_add_obj(key_verify_group_, cancel_btn);
+        lv_group_focus_obj(key_verify_textarea_);
+
+        if (::ui::page_profile::current().large_touch_hitbox)
+        {
+            key_verify_ime_.reset(new ::ui::widgets::ImeWidget());
+            key_verify_ime_->init(key_verify_panel_, key_verify_textarea_);
+            key_verify_ime_->setMode(::ui::widgets::ImeWidget::Mode::NUM);
+        }
+    }
+    else
+    {
+        lv_obj_t* primary_btn = nullptr;
+        if (snapshot.can_accept)
+        {
+            primary_btn = lv_btn_create(key_verify_panel_);
+            lv_obj_set_size(primary_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
+            lv_obj_align(primary_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+            lv_obj_t* primary_label = lv_label_create(primary_btn);
+            ::ui::i18n::set_label_text(primary_label, "Trust Key");
+            lv_obj_center(primary_label);
+            lv_obj_add_event_cb(primary_btn, key_verify_trust_event_cb, LV_EVENT_CLICKED, this);
+            lv_obj_add_event_cb(primary_btn, key_verify_trust_event_cb, LV_EVENT_KEY, this);
+            lv_group_add_obj(key_verify_group_, primary_btn);
+        }
+
+        lv_obj_t* close_btn = lv_btn_create(key_verify_panel_);
+        lv_obj_set_size(close_btn, snapshot.can_accept ? LV_PCT(48) : LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
+        lv_obj_align(close_btn, snapshot.can_accept ? LV_ALIGN_BOTTOM_RIGHT : LV_ALIGN_BOTTOM_MID, 0, 0);
+        lv_obj_t* close_label = lv_label_create(close_btn);
+        ::ui::i18n::set_label_text(close_label, snapshot.can_accept ? "Later" : "OK");
+        lv_obj_center(close_label);
+        lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
+        lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
+        lv_group_add_obj(key_verify_group_, close_btn);
+        lv_group_focus_obj(primary_btn ? primary_btn : close_btn);
     }
 
     lv_obj_move_foreground(key_verify_overlay_);
 }
 
-void UiController::openKeyVerificationInfoModal(chat::NodeId node_id, uint32_t number)
+void UiController::closeKeyVerificationModal(bool restore_group)
 {
-    closeKeyVerificationModal(false);
-    if (!parent_)
+    destroyKeyVerificationModal(restore_group);
+    if (key_verification_model_ != nullptr)
     {
-        return;
+        key_verification_model_->clearSelection();
     }
-
-    key_verify_node_id_ = node_id;
-    key_verify_expects_number_ = false;
-    key_verify_can_trust_ = false;
-
-    key_verify_prev_group_ = lv_group_get_default();
-    key_verify_group_ = lv_group_create();
-    set_default_group(key_verify_group_);
-
-    key_verify_overlay_ = lv_obj_create(parent_);
-    lv_obj_set_size(key_verify_overlay_, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(key_verify_overlay_, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(key_verify_overlay_, LV_OPA_50, 0);
-    lv_obj_set_style_border_width(key_verify_overlay_, 0, 0);
-    lv_obj_set_style_pad_all(key_verify_overlay_, 0, 0);
-    lv_obj_set_style_radius(key_verify_overlay_, 0, 0);
-    lv_obj_clear_flag(key_verify_overlay_, LV_OBJ_FLAG_SCROLLABLE);
-
-    const auto modal_size = ::ui::page_profile::resolve_modal_size(360, 220, key_verify_overlay_);
-    key_verify_panel_ = lv_obj_create(key_verify_overlay_);
-    lv_obj_set_size(key_verify_panel_, modal_size.width, modal_size.height);
-    lv_obj_center(key_verify_panel_);
-
-    lv_obj_t* title = lv_label_create(key_verify_panel_);
-    ::ui::i18n::set_label_text(title, "Verification Number");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
-
-    char num_buf[24] = {};
-    std::snprintf(num_buf,
-                  sizeof(num_buf),
-                  "%03u %03u",
-                  static_cast<unsigned>(number / 1000U),
-                  static_cast<unsigned>(number % 1000U));
-    key_verify_desc_ = lv_label_create(key_verify_panel_);
-    std::string desc = resolve_contact_name(node_id) + "\n" + ::ui::i18n::tr("Share this number:\n");
-    desc += num_buf;
-    ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
-    lv_obj_set_width(key_verify_desc_, LV_PCT(100));
-    lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(key_verify_desc_, LV_ALIGN_CENTER, 0, -12);
-
-    lv_obj_t* close_btn = lv_btn_create(key_verify_panel_);
-    lv_obj_set_size(close_btn, LV_PCT(100), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_align(close_btn, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_t* close_label = lv_label_create(close_btn);
-    ::ui::i18n::set_label_text(close_label, "OK");
-    lv_obj_center(close_label);
-    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
-    lv_group_add_obj(key_verify_group_, close_btn);
-    lv_group_focus_obj(close_btn);
-    lv_obj_move_foreground(key_verify_overlay_);
-}
-
-void UiController::openKeyVerificationFinalModal(chat::NodeId node_id, const char* code, bool is_sender)
-{
-    closeKeyVerificationModal(false);
-    if (!parent_)
-    {
-        return;
-    }
-
-    key_verify_node_id_ = node_id;
-    key_verify_expects_number_ = false;
-    key_verify_can_trust_ = true;
-
-    key_verify_prev_group_ = lv_group_get_default();
-    key_verify_group_ = lv_group_create();
-    set_default_group(key_verify_group_);
-
-    key_verify_overlay_ = lv_obj_create(parent_);
-    lv_obj_set_size(key_verify_overlay_, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(key_verify_overlay_, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(key_verify_overlay_, LV_OPA_50, 0);
-    lv_obj_set_style_border_width(key_verify_overlay_, 0, 0);
-    lv_obj_set_style_pad_all(key_verify_overlay_, 0, 0);
-    lv_obj_set_style_radius(key_verify_overlay_, 0, 0);
-    lv_obj_clear_flag(key_verify_overlay_, LV_OBJ_FLAG_SCROLLABLE);
-
-    const auto modal_size = ::ui::page_profile::resolve_modal_size(420, 260, key_verify_overlay_);
-    key_verify_panel_ = lv_obj_create(key_verify_overlay_);
-    lv_obj_set_size(key_verify_panel_, modal_size.width, modal_size.height);
-    lv_obj_center(key_verify_panel_);
-
-    lv_obj_t* title = lv_label_create(key_verify_panel_);
-    ::ui::i18n::set_label_text(title, "Compare Verification Code");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
-
-    std::string desc = resolve_contact_name(node_id);
-    desc += "\n";
-    desc += is_sender ? ::ui::i18n::tr("Send this code and compare:\n") : ::ui::i18n::tr("Confirm received code:\n");
-    desc += (code && code[0] != '\0') ? code : "--------";
-    desc += "\n\n";
-    desc += ::ui::i18n::tr("If it matches, trust the key.");
-    key_verify_desc_ = lv_label_create(key_verify_panel_);
-    ::ui::i18n::set_label_text_raw(key_verify_desc_, desc.c_str());
-    lv_obj_set_width(key_verify_desc_, LV_PCT(100));
-    lv_obj_set_style_text_align(key_verify_desc_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(key_verify_desc_, LV_ALIGN_CENTER, 0, -8);
-
-    lv_obj_t* trust_btn = lv_btn_create(key_verify_panel_);
-    lv_obj_set_size(trust_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_align(trust_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_t* trust_label = lv_label_create(trust_btn);
-    ::ui::i18n::set_label_text(trust_label, "Trust Key");
-    lv_obj_center(trust_label);
-
-    lv_obj_t* close_btn = lv_btn_create(key_verify_panel_);
-    lv_obj_set_size(close_btn, LV_PCT(48), ::ui::page_profile::resolve_control_button_height());
-    lv_obj_align(close_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-    lv_obj_t* close_label = lv_label_create(close_btn);
-    ::ui::i18n::set_label_text(close_label, "Later");
-    lv_obj_center(close_label);
-
-    lv_obj_add_event_cb(trust_btn, key_verify_trust_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(trust_btn, key_verify_trust_event_cb, LV_EVENT_KEY, this);
-    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_CLICKED, this);
-    lv_obj_add_event_cb(close_btn, key_verify_close_event_cb, LV_EVENT_KEY, this);
-    lv_group_add_obj(key_verify_group_, trust_btn);
-    lv_group_add_obj(key_verify_group_, close_btn);
-    lv_group_focus_obj(trust_btn);
-    lv_obj_move_foreground(key_verify_overlay_);
 }
 
 void UiController::submitKeyVerificationNumber()
 {
-    if (!key_verify_expects_number_ || !key_verify_textarea_)
+    if (!key_verify_textarea_ || key_verification_model_ == nullptr)
     {
         return;
     }
@@ -1973,23 +1982,15 @@ void UiController::submitKeyVerificationNumber()
         return;
     }
 
-    chat::IMeshAdapter* mesh = app::messagingFacade().getMeshAdapter();
-    if (!mesh)
+    const auto result = key_verification_model_->submitNumber(
+        static_cast<uint32_t>(parsed));
+    if (!result.ok)
     {
         if (key_verify_error_label_)
         {
-            ::ui::i18n::set_label_text(key_verify_error_label_, "Mesh unavailable");
-        }
-        return;
-    }
-
-    const bool ok = mesh->submitKeyVerificationNumber(key_verify_node_id_, key_verify_nonce_,
-                                                      static_cast<uint32_t>(parsed));
-    if (!ok)
-    {
-        if (key_verify_error_label_)
-        {
-            ::ui::i18n::set_label_text(key_verify_error_label_, "Submit failed");
+            ::ui::i18n::set_label_text_raw(
+                key_verify_error_label_,
+                key_verification_action_failure_message(result));
         }
         return;
     }
@@ -2000,14 +2001,17 @@ void UiController::submitKeyVerificationNumber()
 
 void UiController::trustKeyFromVerificationModal()
 {
-    if (!key_verify_can_trust_ || key_verify_node_id_ == 0)
+    if (key_verification_model_ == nullptr)
     {
         closeKeyVerificationModal(true);
         return;
     }
 
-    bool ok = app::messagingFacade().getContactService().setNodeKeyManuallyVerified(key_verify_node_id_, true);
-    ::ui::SystemNotification::show(ok ? "Key marked trusted" : "Key trust failed", 2000);
+    const auto result = key_verification_model_->accept();
+    ::ui::SystemNotification::show(
+        result.ok ? "Key marked trusted"
+                  : key_verification_action_failure_message(result),
+        2000);
     closeKeyVerificationModal(true);
 }
 

@@ -38,8 +38,10 @@ def check_required_files() -> int:
         "docs/audits/CHAT_DELIVERY_OWNERSHIP_AUDIT.md",
         "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md",
         "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md",
+        "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
+        "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -76,6 +78,18 @@ def check_required_files() -> int:
         "modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp",
         "modules/ui_shared/tests/test_team_action_types.cpp",
         "modules/ui_shared/tests/test_legacy_team_action_bridge.cpp",
+        "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_snapshot.h",
+        "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_source.h",
+        "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_action_sink.h",
+        "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_model.h",
+        "modules/ui_presentation/src/key_verification/key_verification_model.cpp",
+        "modules/ui_presentation/tests/test_key_verification_model.cpp",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp",
+        "modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp",
         "tools/architecture/check_phase7_runtime_ownership_ready.py",
     ]
 
@@ -138,6 +152,28 @@ def check_docs() -> int:
             "LegacyTeamActionBridge",
             "Chat retry/cancel/clear failure actions",
             "ChatDeliveryActionService",
+            "key verification workflow",
+            "KeyVerificationModel",
+        ],
+        "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md": [
+            "Key verification is a standalone runtime/presentation workflow",
+            "`ChatWorkspaceModel`",
+            "`MessageRow`",
+            "renderer-local modal state",
+            "`IMeshAdapter::submitKeyVerificationNumber(...)`",
+            "`ContactService::setNodeKeyManuallyVerified(...)`",
+            "LegacyKeyVerificationSource",
+            "LegacyKeyVerificationActionSink",
+        ],
+        "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md": [
+            "Key verification is an independent runtime/presentation workflow",
+            "KeyVerificationSnapshot",
+            "IKeyVerificationPresentationSource",
+            "IKeyVerificationActionSink",
+            "KeyVerificationModel",
+            "LegacyKeyVerificationSource",
+            "LegacyKeyVerificationActionSink",
+            "Phase 7.5 does not add key verification to `ChatWorkspaceModel` or",
         ],
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md": [
             "Team actions are command ownership",
@@ -822,6 +858,282 @@ def check_ui_presentation_does_not_own_team_actions() -> int:
     return failures
 
 
+def check_key_verification_type_shape() -> int:
+    failures = 0
+
+    snapshot = "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_snapshot.h"
+    if exists(snapshot):
+        text = read_text(snapshot)
+        for token in [
+            "enum class VerificationProtocol",
+            "Meshtastic",
+            "MeshCore",
+            "enum class VerificationState",
+            "Pending",
+            "Verified",
+            "enum class VerificationFailureKind",
+            "MissingPeerKey",
+            "MissingLocalIdentity",
+            "enum class VerificationPromptKind",
+            "EnterNumber",
+            "ShowNumber",
+            "CompareCode",
+            "KeyVerificationSnapshot",
+            "can_accept",
+            "can_reject",
+            "can_refresh",
+            "can_copy_code",
+            "requires_number",
+        ]:
+            if token not in text:
+                failures += fail(f"KeyVerificationSnapshot missing token: {token}")
+        for token in ["private", "public_key", "PSK", "packet", "ChatWorkspaceModel", "MessageRow"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"KeyVerificationSnapshot owns forbidden token: {token}")
+
+    model_header = "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_model.h"
+    model_source = "modules/ui_presentation/src/key_verification/key_verification_model.cpp"
+    for path in [model_header, model_source]:
+        if exists(path):
+            text = strip_cpp_comments(read_text(path))
+            for token in [
+                "ChatService",
+                "IMeshAdapter",
+                "ContactService",
+                "lvgl.h",
+                "gtk",
+                "sys/event_bus",
+                "ChatWorkspaceModel",
+                "MessageRow",
+                "platform/",
+                "setNodeKeyManuallyVerified",
+                "submitKeyVerificationNumber",
+            ]:
+                if token in text:
+                    failures += fail(f"{path} contains forbidden key verification model token: {token}")
+
+    if exists(model_header):
+        text = read_text(model_header)
+        for token in [
+            "KeyVerificationModel",
+            "selectPeer",
+            "clearSelection",
+            "snapshot",
+            "accept",
+            "reject",
+            "refresh",
+            "copyCode",
+            "submitNumber",
+            "IKeyVerificationPresentationSource& source_",
+            "IKeyVerificationActionSink& sink_",
+        ]:
+            if token not in text:
+                failures += fail(f"KeyVerificationModel missing token: {token}")
+
+    source = "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_source.h"
+    if exists(source):
+        text = read_text(source)
+        for token in ["KeyVerificationRequest", "IKeyVerificationPresentationSource", "buildKeyVerificationSnapshot"]:
+            if token not in text:
+                failures += fail(f"KeyVerificationSource missing token: {token}")
+
+    sink = "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_action_sink.h"
+    if exists(sink):
+        text = read_text(sink)
+        for token in ["IKeyVerificationActionSink", "accept", "reject", "refresh", "copyCode", "submitNumber"]:
+            if token not in text:
+                failures += fail(f"KeyVerificationActionSink missing token: {token}")
+
+    return failures
+
+
+def check_key_verification_bridge_boundary() -> int:
+    failures = 0
+    bridge_files = [
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp",
+    ]
+    for path in bridge_files:
+        if not exists(path):
+            failures += fail(f"missing key verification bridge file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "lvgl.h",
+            "gtk",
+            "ChatWorkspaceModel",
+            "MessageRow",
+            "ChatDeliveryReadModel",
+            "LegacyChatActionSink",
+            "sendMessage(",
+            "sendText(",
+            "Renderer",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden key verification bridge token {token}")
+
+    source_header = "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h"
+    source_impl = "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp"
+    if exists(source_header):
+        text = read_text(source_header)
+        for token in [
+            "LegacyKeyVerificationSource",
+            "IKeyVerificationPresentationSource",
+            "onNumberRequest",
+            "onNumberInform",
+            "onFinal",
+            "onPeerKeyMissing",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyKeyVerificationSource header missing token: {token}")
+    if exists(source_impl):
+        text = read_text(source_impl)
+        for token in [
+            "buildKeyVerificationSnapshot",
+            "VerificationPromptKind::EnterNumber",
+            "VerificationPromptKind::ShowNumber",
+            "VerificationPromptKind::CompareCode",
+            "getContactName",
+            "backendProtocol",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyKeyVerificationSource source missing token: {token}")
+        for token in ["submitKeyVerificationNumber", "setNodeKeyManuallyVerified"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"LegacyKeyVerificationSource mutates key verification runtime: {token}")
+
+    sink_header = "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h"
+    sink_impl = "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp"
+    if exists(sink_header):
+        text = read_text(sink_header)
+        for token in [
+            "LegacyKeyVerificationActionSink",
+            "IKeyVerificationActionSink",
+            "accept",
+            "reject",
+            "refresh",
+            "copyCode",
+            "submitNumber",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyKeyVerificationActionSink header missing token: {token}")
+    if exists(sink_impl):
+        text = read_text(sink_impl)
+        for token in [
+            "startKeyVerification",
+            "submitKeyVerificationNumber",
+            "setNodeKeyManuallyVerified",
+            "VerificationState::Verified",
+            "VerificationState::Rejected",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyKeyVerificationActionSink source missing token: {token}")
+
+    return failures
+
+
+def check_chat_ui_key_verification_migration() -> int:
+    failures = 0
+
+    header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
+    source = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+
+    if exists(header):
+        text = strip_cpp_comments(read_text(header))
+        for token in ["KeyVerificationModel", "LegacyKeyVerificationSource", "key_verification_model_", "key_verification_source_"]:
+            if token not in text:
+                failures += fail(f"ChatUiController header missing key verification token: {token}")
+        for token in [
+            "key_verify_node_id_",
+            "key_verify_nonce_",
+            "key_verify_expects_number_",
+            "key_verify_can_trust_",
+            "openKeyVerificationNumberModal",
+            "openKeyVerificationInfoModal",
+            "openKeyVerificationFinalModal",
+        ]:
+            if token in text:
+                failures += fail(f"ChatUiController header still owns key verification token: {token}")
+    else:
+        failures += fail("ChatUiController header is missing")
+
+    if exists(source):
+        text = strip_cpp_comments(read_text(source))
+        for token in [
+            "renderKeyVerificationModal",
+            "KeyVerificationNumberRequestEvent",
+            "KeyVerificationNumberInformEvent",
+            "KeyVerificationFinalEvent",
+            "key_verification_source_->onNumberRequest",
+            "key_verification_source_->onNumberInform",
+            "key_verification_source_->onFinal",
+            "key_verification_model_->selectPeer",
+            "key_verification_model_->snapshot",
+            "key_verification_model_->submitNumber",
+            "key_verification_model_->accept",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatUiController source missing key verification token: {token}")
+        for token in [
+            "key_verify_node_id_",
+            "key_verify_nonce_",
+            "key_verify_expects_number_",
+            "key_verify_can_trust_",
+            "submitKeyVerificationNumber(",
+            "setNodeKeyManuallyVerified",
+        ]:
+            if token in text:
+                # The method name submitKeyVerificationNumber is allowed as the
+                # legacy UI callback name, but direct mesh API calls are not.
+                if token == "submitKeyVerificationNumber(" and "mesh->submitKeyVerificationNumber" not in text:
+                    continue
+                failures += fail(f"ChatUiController source still owns key verification token: {token}")
+        if "getMeshAdapter()" in text and "submitKeyVerificationNumber" in text:
+            failures += fail("ChatUiController key verification path still reads mesh adapter directly")
+    else:
+        failures += fail("ChatUiController source is missing")
+
+    runtime = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
+    if exists(runtime):
+        text = read_text(runtime)
+        for token in [
+            "LegacyKeyVerificationSession",
+            "LegacyKeyVerificationSource",
+            "LegacyKeyVerificationActionSink",
+            "KeyVerificationModel",
+            "s_key_verification_session",
+            "s_key_verification_source",
+            "s_key_verification_sink",
+            "s_key_verification_model",
+        ]:
+            if token not in text:
+                failures += fail(f"chat_page_runtime.cpp missing key verification wiring token: {token}")
+    else:
+        failures += fail("chat_page_runtime.cpp is missing")
+
+    for path in [
+        "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_model.h",
+        "modules/ui_presentation/src/chat/chat_workspace_model.cpp",
+        "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_snapshot.h",
+    ]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "KeyVerification",
+            "VerificationPrompt",
+            "verification_code",
+            "can_accept_key",
+            "MessageKeyVerification",
+        ]:
+            if token in text:
+                failures += fail(f"{path} owns key verification token: {token}")
+
+    return failures
+
+
 def main() -> int:
     failures = 0
     failures += check_required_files()
@@ -838,6 +1150,9 @@ def main() -> int:
     failures += check_chat_ui_team_action_migration()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()
+    failures += check_key_verification_type_shape()
+    failures += check_key_verification_bridge_boundary()
+    failures += check_chat_ui_key_verification_migration()
 
     if failures == 0:
         print("[phase7-runtime-ready] OK")

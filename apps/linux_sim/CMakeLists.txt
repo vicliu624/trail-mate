@@ -187,6 +187,16 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_ui_presentation_chat_workspace_smoke
              COMMAND trailmate_ui_presentation_chat_workspace_smoke)
 
+    add_executable(trailmate_key_verification_model_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_key_verification_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/key_verification/key_verification_model.cpp"
+    )
+    target_include_directories(trailmate_key_verification_model_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_key_verification_model_smoke
+             COMMAND trailmate_key_verification_model_smoke)
+
     add_executable(trailmate_ui_presentation_map_workspace_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_map_workspace_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
@@ -417,6 +427,22 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
     add_test(NAME trailmate_legacy_chat_delivery_action_bridge_smoke
              COMMAND trailmate_legacy_chat_delivery_action_bridge_smoke)
+
+    add_executable(trailmate_legacy_key_verification_adapters_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/contact_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
+    )
+    target_include_directories(trailmate_legacy_key_verification_adapters_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
+    add_test(NAME trailmate_legacy_key_verification_adapters_smoke
+             COMMAND trailmate_legacy_key_verification_adapters_smoke)
 
     add_executable(trailmate_legacy_chat_presentation_adapters_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_chat_presentation_adapters.cpp"

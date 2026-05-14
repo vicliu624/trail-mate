@@ -11,12 +11,15 @@
 #include "ui/presentation_sources/legacy_chat_delivery_action_bridge.h"
 #include "ui/presentation_sources/legacy_chat_delivery_event_bridge.h"
 #include "ui/presentation_sources/legacy_chat_presentation_source.h"
+#include "ui/presentation_sources/legacy_key_verification_action_sink.h"
+#include "ui/presentation_sources/legacy_key_verification_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
 #include "ui/presentation_sources/team_chat_presentation_source.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/team_actions/legacy_team_action_bridge.h"
 #include "ui/ui_common.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
+#include "ui_presentation/key_verification/key_verification_model.h"
 #include "team/usecase/team_controller.h"
 
 #include <memory>
@@ -35,6 +38,10 @@ std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort> s_delivery_ev
 std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryEventBridge> s_delivery_event_bridge = nullptr;
 std::unique_ptr<::chat::delivery::ChatDeliveryActionService> s_delivery_action_service = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryActionBridge> s_delivery_action_bridge = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSession> s_key_verification_session = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSource> s_key_verification_source = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationActionSink> s_key_verification_sink = nullptr;
+std::unique_ptr<::ui::key_verification::KeyVerificationModel> s_key_verification_model = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource> s_team_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::ITeamChatCommandPort> s_team_chat_command_port = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatActionSink> s_team_chat_sink = nullptr;
@@ -145,6 +152,10 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
+    s_key_verification_model.reset();
+    s_key_verification_sink.reset();
+    s_key_verification_source.reset();
+    s_key_verification_session.reset();
     s_delivery_action_bridge.reset();
     s_delivery_action_service.reset();
     s_delivery_event_bridge.reset();
@@ -203,6 +214,22 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         new ::ui::presentation_sources::LegacyChatActionSink(chat_service));
     s_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
         new ::ui::chat::ChatWorkspaceModel(*s_chat_source, *s_chat_sink));
+    s_key_verification_session =
+        std::make_unique<::ui::presentation_sources::LegacyKeyVerificationSession>();
+    s_key_verification_source =
+        std::make_unique<::ui::presentation_sources::LegacyKeyVerificationSource>(
+            *s_key_verification_session,
+            &app::messagingFacade().getContactService(),
+            app::messagingFacade().getMeshAdapter());
+    s_key_verification_sink =
+        std::make_unique<::ui::presentation_sources::LegacyKeyVerificationActionSink>(
+            *s_key_verification_session,
+            app::messagingFacade().getMeshAdapter(),
+            &app::messagingFacade().getContactService());
+    s_key_verification_model =
+        std::make_unique<::ui::key_verification::KeyVerificationModel>(
+            *s_key_verification_source,
+            *s_key_verification_sink);
     s_team_chat_source =
         std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource>(
             new ::ui::presentation_sources::TeamChatPresentationSource(
@@ -237,6 +264,8 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                    *s_team_chat_model,
                                    s_team_action_sink.get(),
                                    s_delivery_event_bridge.get(),
+                                   s_key_verification_model.get(),
+                                   s_key_verification_source.get(),
                                    default_channel,
                                    request_shell_exit,
                                    nullptr));
@@ -266,6 +295,10 @@ void exit(lv_obj_t* parent)
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
+    s_key_verification_model.reset();
+    s_key_verification_sink.reset();
+    s_key_verification_source.reset();
+    s_key_verification_session.reset();
     s_delivery_action_bridge.reset();
     s_delivery_action_service.reset();
     s_delivery_event_bridge.reset();

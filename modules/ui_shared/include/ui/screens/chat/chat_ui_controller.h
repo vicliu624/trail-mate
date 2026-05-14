@@ -24,6 +24,13 @@
 namespace ui::presentation_sources
 {
 class LegacyChatDeliveryEventBridge;
+class LegacyKeyVerificationSource;
+}
+
+namespace ui::key_verification
+{
+class KeyVerificationModel;
+struct KeyVerificationSnapshot;
 }
 
 namespace chat
@@ -55,6 +62,10 @@ class UiController : public IChatUiRuntime
                  ::ui::team_actions::ITeamActionSink* team_action_sink = nullptr,
                  ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
                      delivery_event_bridge = nullptr,
+                 ::ui::key_verification::KeyVerificationModel*
+                     key_verification_model = nullptr,
+                 ::ui::presentation_sources::LegacyKeyVerificationSource*
+                     key_verification_source = nullptr,
                  chat::ChannelId initial_channel = chat::ChannelId::PRIMARY,
                  ExitRequestCallback exit_request = nullptr,
                  void* exit_request_user_data = nullptr);
@@ -86,6 +97,10 @@ class UiController : public IChatUiRuntime
     ::ui::team_actions::ITeamActionSink* team_action_sink_ = nullptr;
     ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
         delivery_event_bridge_ = nullptr;
+    ::ui::key_verification::KeyVerificationModel* key_verification_model_ =
+        nullptr;
+    ::ui::presentation_sources::LegacyKeyVerificationSource*
+        key_verification_source_ = nullptr;
     State state_;
 
     std::unique_ptr<ChatMessageListScreen> channel_list_;
@@ -135,9 +150,9 @@ class UiController : public IChatUiRuntime
     void onTeamPositionCancel();
     bool isTeamPositionPickerOpen() const;
     bool isKeyVerificationModalOpen() const;
-    void openKeyVerificationNumberModal(chat::NodeId node_id, uint64_t nonce);
-    void openKeyVerificationInfoModal(chat::NodeId node_id, uint32_t number);
-    void openKeyVerificationFinalModal(chat::NodeId node_id, const char* code, bool is_sender);
+    void destroyKeyVerificationModal(bool restore_group);
+    void renderKeyVerificationModal(
+        const ::ui::key_verification::KeyVerificationSnapshot& snapshot);
     void closeKeyVerificationModal(bool restore_group);
     void submitKeyVerificationNumber();
     void trustKeyFromVerificationModal();
@@ -164,10 +179,6 @@ class UiController : public IChatUiRuntime
     lv_group_t* key_verify_group_ = nullptr;
     lv_group_t* key_verify_prev_group_ = nullptr;
     std::unique_ptr<::ui::widgets::ImeWidget> key_verify_ime_;
-    chat::NodeId key_verify_node_id_ = 0;
-    uint64_t key_verify_nonce_ = 0;
-    bool key_verify_expects_number_ = false;
-    bool key_verify_can_trust_ = false;
     std::vector<chat::ConversationMeta> cached_conversations_;
     bool conversation_list_dirty_ = true;
 
