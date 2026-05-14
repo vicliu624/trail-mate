@@ -21,6 +21,7 @@ has direct user-visible consequences and a bounded migration path.
 | Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
 | Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
+| Team rich payload display ownership | contained | 7.8 | owned by `TeamRichPayloadProjector` / `TeamChatPresentationSource`; controller display decode/format is forbidden |
 | key verification workflow | contained | 7.5 / 7.6 | owned by `KeyVerificationModel` plus legacy source/sink adapters; modal rendering is helper-bounded |
 | GPS page timers/tasks | future | later phase | runtime scheduling owner still legacy |
 
@@ -171,7 +172,6 @@ Remaining legacy surfaces now require removal conditions:
 - `LegacyTeamActionBridge`
 - `LegacyKeyVerificationSource`
 - `LegacyKeyVerificationActionSink`
-- Team rich payload formatting in `ChatUiController`
 - controller-owned `ChatService::processIncoming` / `flushStore`
 
 ## Phase 7.7 Decision
@@ -203,3 +203,30 @@ Phase 7.7 introduces:
 - receives EventBus events directly
 - calls `LegacyChatDeliveryEventBridge`
 - updates `LegacyKeyVerificationSource`
+
+## Phase 7.8 Decision
+
+Team location and command display are presentation projection concerns.
+
+They are not owned by:
+
+- `ChatUiController`
+- renderer local state
+- `ChatWorkspaceModel`
+- Team action send sinks
+
+Phase 7.8 introduces:
+
+- `TeamRichPayloadDisplay`
+- `TeamRichPayloadProjector`
+- `TeamChatPresentationSource` consumption of projected rich payload summaries
+
+`ChatUiController` no longer:
+
+- defines `format_team_chat_entry(...)`
+- calls `decodeTeamChatLocation(...)`
+- calls `decodeTeamChatCommand(...)`
+- constructs `TeamChatLocation` / `TeamChatCommand` for display formatting
+
+The current renderer still consumes summary text through `MessageRow`. Rich Team
+cards and Map overlays remain future work.

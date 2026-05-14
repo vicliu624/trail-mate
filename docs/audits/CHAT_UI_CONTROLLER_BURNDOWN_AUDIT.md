@@ -26,6 +26,7 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 | Delivery event projection | `ChatDeliveryEventProjector` behind `IChatDeliveryEventPort` | Controller may only forward legacy events while event pump is legacy |
 | Delivery actions | `ChatDeliveryActionService` / `IChatDeliveryActionSink` | Controller must not directly retry/cancel/clear delivery records |
 | Team location/command payload encoding | `LegacyTeamActionBridge` / Team action runtime adapter | Controller submits `TeamActionRequest` only |
+| Team rich payload display projection | `TeamRichPayloadProjector` / `TeamChatPresentationSource` | Controller consumes `team_chat_model_.snapshot()` rows only |
 | Key verification state/session | `KeyVerificationModel` plus `LegacyKeyVerificationSource` | Controller selects peer and renders snapshot only |
 | Key verification submit/trust runtime calls | `LegacyKeyVerificationActionSink` | Controller calls `KeyVerificationModel` actions only |
 | Key verification modal rendering | `KeyVerificationModalRenderer` helper | Controller owns open/close and callback forwarding only |
@@ -35,12 +36,11 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 | Remaining responsibility | Current caller | Exit condition | Status |
 | --- | --- | --- | --- |
 | Conversation cache | `cached_conversations_` and list refresh helpers | Presentation workspace provides all conversation list projection needed by controller | remaining legacy |
-| `ChatService::processIncoming` | `UiController::update()` | Runtime/app shell event pump owns incoming processing cadence | remaining legacy |
-| `ChatService::flushStore` | `UiController::update()` | Runtime/app shell storage flush owner is explicit | remaining legacy |
+| `ChatService::processIncoming` | `ChatPageRuntimeEventPump::update()` | App-wide runtime scheduler owns cadence outside page runtime | burned down from controller |
+| `ChatService::flushStore` | `ChatPageRuntimeEventPump::update()` | App-wide runtime scheduler owns cadence outside page runtime | burned down from controller |
 | EventBus forwarding | `ChatPageRuntimeFacade` / `ChatPageRuntimeEventPump` | App-wide runtime scheduler owns EventBus routing outside page runtime | burned down from controller |
-| Team rich payload rendering | `format_team_chat_entry(...)` | Team rich payload presentation adapter renders location/command rows | remaining legacy |
 | Team position picker renderer | `openTeamPositionPicker(...)` | Team position picker view helper owns widget rendering | remaining legacy |
-| Legacy Team log formatting | Team log refresh path | Team presentation source projects rich payload display fields | remaining legacy |
+| Legacy Team log formatting outside Chat UI | Contacts/GPS/team-page legacy paths | Shared Team presentation projection is reused by those screens | remaining legacy |
 | Protocol mismatch UX | Reply guard notifications | Protocol support model exposes UI-ready disabled reason | remaining legacy |
 
 ## Forbidden Additions
@@ -52,3 +52,4 @@ This audit prevents new Chat / Team / key verification ownership from being adde
 - owns `ChatDeliveryReadModel`, `ChatDeliveryEventProjector`, or `ChatDeliveryActionService`
 - adds key verification fields to `ChatWorkspaceModel` or `MessageRow`
 - maps Team to DirectPeer or Channel conversation semantics
+- decodes or formats Team location/command payloads for chat display

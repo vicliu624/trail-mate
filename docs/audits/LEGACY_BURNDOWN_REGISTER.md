@@ -25,8 +25,8 @@ A legacy surface may remain temporarily only if it has:
 | `ChatUiController` Team payload encoding | `LegacyTeamActionBridge` | None expected for send path; controller submits `TeamActionRequest` only | Checker forbids `encodeTeamChatLocation` / `encodeTeamChatCommand` / raw `TeamChatMessage` send encoding in controller | 7.6 | burned-down |
 | `ChatUiController` delivery mutation | `ChatDeliveryReadModel` / `ChatDeliveryActionService` | None expected; event pump forwards send-result events to delivery bridge | Checker forbids direct `ChatDeliveryReadModel`, `ChatDeliveryEventProjector`, `ChatDeliveryActionService`, and `LegacyChatDeliveryEventBridge` ownership in controller | 7.6 / 7.7 | burned-down |
 | `ChatUiController` runtime event pump | `ChatPageRuntimeEventPump` / `ChatPageRuntimeFacade` | None expected; app facade registers runtime facade instead of controller | Checker forbids `ChatUiController::onChatEvent(...)`, `processIncoming()`, `flushStore()`, and key verification source projection calls in controller | 7.7 | burned-down |
-| `ChatUiController` Team rich payload formatting | Future Team rich payload presentation adapter | `format_team_chat_entry(...)` decodes legacy Team location/command log entries for text display | Team rich payload projection has a dedicated read adapter and controller stops decoding `TeamChatLocation` / `TeamChatCommand` | later phase | remaining legacy |
-| `ChatUiController` `ChatService::processIncoming` / `flushStore` calls | Future runtime event pump / app shell scheduling owner | `UiController::update()` | Chat page runtime or app shell owns store flush and incoming processing cadence | later phase | remaining legacy |
+| `ChatUiController` Team rich payload formatting | `TeamRichPayloadProjector` / `TeamChatPresentationSource` | None in `ChatUiController`; Team chat rows consume projected summaries from `team_chat_model_.snapshot()` | Checker forbids `format_team_chat_entry(...)`, `decodeTeamChatLocation(...)`, `decodeTeamChatCommand(...)`, `TeamChatLocation`, and `TeamChatCommand` in controller | 7.8 | burned-down |
+| `MessageRow` Team rich display limitations | `TeamRichPayloadDisplay` / future Team row renderer | `TeamChatPresentationSource` projects rich payloads to summary text for current renderer compatibility | Rich Team row/card renderer consumes structured display fields directly | 7.x | contained |
 
 ## Checker Status
 
@@ -37,4 +37,5 @@ A legacy surface may remain temporarily only if it has:
 | Direct delivery read/action ownership in controller | forbidden |
 | Key verification modal helper | required |
 | Runtime event pump in controller | forbidden |
+| Team rich payload formatting in controller | forbidden |
 | Legacy bridges without removal condition | forbidden by register token check |
