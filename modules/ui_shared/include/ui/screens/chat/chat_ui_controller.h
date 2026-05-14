@@ -121,6 +121,8 @@ class UiController : public IChatUiRefreshSink
     void refreshUnreadCounts(bool force_reload);
     void cleanupComposeIme();
     bool isTeamConversation(const chat::ConversationId& conv) const;
+    bool loadChatSnapshot();
+    bool loadTeamChatSnapshot();
     void syncConversationListFromStore();
     void normalizeConversationNames(std::vector<chat::ConversationMeta>& convs) const;
     std::string resolveConversationDisplayName(const chat::ConversationId& conv) const;
@@ -155,6 +157,10 @@ class UiController : public IChatUiRefreshSink
     KeyVerificationModalRefs key_verify_modal_;
     std::unique_ptr<::ui::widgets::ImeWidget> key_verify_ime_;
     std::vector<chat::ConversationMeta> cached_conversations_;
+    // Chat snapshots are large enough to overflow ESP loopTask when copied on
+    // the stack during page entry. Reuse controller-owned buffers instead.
+    ::ui::chat::ChatWorkspaceSnapshot chat_snapshot_buffer_{};
+    ::ui::chat::ChatWorkspaceSnapshot team_chat_snapshot_buffer_{};
     bool conversation_list_dirty_ = true;
 
     static void key_verify_submit_event_cb(lv_event_t* e);

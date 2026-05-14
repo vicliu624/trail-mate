@@ -13,6 +13,7 @@ class ChatWorkspaceModel
   public:
     ChatWorkspaceModel(IChatPresentationSource& source, IChatActionSink& sink);
 
+    bool buildSnapshot(ChatWorkspaceSnapshot& out) const;
     ChatWorkspaceSnapshot snapshot() const;
 
     ui::UiActionResult selectConversation(ConversationId id);

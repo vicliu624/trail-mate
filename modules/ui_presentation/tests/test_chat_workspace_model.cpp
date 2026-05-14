@@ -72,6 +72,13 @@ int main()
     assert(source.last_request.conversation_offset == 3);
     assert(source.last_request.message_offset == 5);
 
+    ui::chat::ChatWorkspaceSnapshot reusable_snapshot;
+    assert(model.buildSnapshot(reusable_snapshot));
+    assert(reusable_snapshot.header.valid);
+    assert(reusable_snapshot.header.version == 6);
+    assert(reusable_snapshot.conversation_count == 2);
+    assert(source.build_count == 2);
+
     const auto ada = directPeer(1234, 0);
     const auto selected = model.selectConversation(ada);
     assert(selected.ok);
@@ -132,6 +139,10 @@ int main()
     source.available = false;
     const auto invalid_snapshot = model.snapshot();
     assert(!invalid_snapshot.header.valid);
+
+    reusable_snapshot.header.valid = true;
+    assert(!model.buildSnapshot(reusable_snapshot));
+    assert(!reusable_snapshot.header.valid);
 
     return 0;
 }

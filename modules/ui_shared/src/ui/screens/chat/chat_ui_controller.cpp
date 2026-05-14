@@ -228,15 +228,13 @@ void applySnapshotMessagesToConversation(
 bool buildSelectedTeamSnapshot(::ui::chat::ChatWorkspaceModel& model,
                                ::ui::chat::ChatWorkspaceSnapshot& out)
 {
-    const auto overview = model.snapshot();
-    if (!overview.header.valid || overview.conversation_count == 0)
+    if (!model.buildSnapshot(out) || out.conversation_count == 0)
     {
-        out = overview;
         return false;
     }
 
-    (void)model.selectConversation(overview.conversations[0].id);
-    out = model.snapshot();
+    (void)model.selectConversation(out.conversations[0].id);
+    (void)model.buildSnapshot(out);
     return out.header.valid && out.conversation_count > 0;
 }
 
@@ -635,25 +633,25 @@ void UiController::switchToConversation(chat::ConversationId conv)
 
     if (team_conv_active_)
     {
-        ::ui::chat::ChatWorkspaceSnapshot team_snapshot;
         const bool loaded =
-            buildSelectedTeamSnapshot(team_chat_model_, team_snapshot);
-        std::string title = loaded && team_snapshot.conversation_count > 0
-                                ? team_snapshot.conversations[0].title.c_str()
+            buildSelectedTeamSnapshot(team_chat_model_, team_chat_snapshot_buffer_);
+        std::string title = loaded && team_chat_snapshot_buffer_.conversation_count > 0
+                                ? team_chat_snapshot_buffer_.conversations[0].title.c_str()
                                 : "Team";
-        const uint16_t unread = loaded && team_snapshot.conversation_count > 0
-                                    ? team_snapshot.conversations[0].unread_count
+        const uint16_t unread = loaded && team_chat_snapshot_buffer_.conversation_count > 0
+                                    ? team_chat_snapshot_buffer_.conversations[0].unread_count
                                     : 0;
         conversation_->setHeaderText(title.c_str(), nullptr);
         conversation_->updateBatteryFromBoard();
         if (loaded)
         {
-            applySnapshotMessagesToConversation(team_snapshot, *conversation_);
+            applySnapshotMessagesToConversation(team_chat_snapshot_buffer_, *conversation_);
         }
         startTeamConversationTimer();
         if (loaded && unread != 0)
         {
-            (void)team_chat_model_.markRead(team_snapshot.conversations[0].id);
+            (void)team_chat_model_.markRead(
+                team_chat_snapshot_buffer_.conversations[0].id);
             sys::EventBus::publish(
                 new sys::ChatUnreadChangedEvent(kTeamChatChannelRaw, 0), 0);
         }
@@ -691,10 +689,9 @@ void UiController::switchToConversation(chat::ConversationId conv)
     std::string header = "[" + std::string(protocol_short_label(conv.protocol)) + "] " + title;
     conversation_->setHeaderText(header.c_str(), nullptr);
 
-    const auto snapshot = chat_model_.snapshot();
-    if (snapshot.header.valid)
+    if (loadChatSnapshot())
     {
-        applySnapshotMessagesToConversation(snapshot, *conversation_);
+        applySnapshotMessagesToConversation(chat_snapshot_buffer_, *conversation_);
     }
     (void)chat_model_.markRead(ui_conv);
 }
@@ -784,11 +781,10 @@ void UiController::switchToCompose(chat::ConversationId conv)
     std::string title = resolveConversationDisplayName(conv);
     if (team_conv_active_)
     {
-        ::ui::chat::ChatWorkspaceSnapshot team_snapshot;
-        if (buildSelectedTeamSnapshot(team_chat_model_, team_snapshot) &&
-            team_snapshot.conversation_count > 0)
+        if (buildSelectedTeamSnapshot(team_chat_model_, team_chat_snapshot_buffer_) &&
+            team_chat_snapshot_buffer_.conversation_count > 0)
         {
-            title = team_snapshot.conversations[0].title.c_str();
+            title = team_chat_snapshot_buffer_.conversations[0].title.c_str();
         }
         else
         {
@@ -911,15 +907,16 @@ void UiController::refreshUnreadCounts(const bool force_reload)
 void UiController::syncConversationListFromStore()
 {
     cached_conversations_.clear();
-    const auto snapshot = chat_model_.snapshot();
-    if (snapshot.header.valid)
+    if (loadChatSnapshot())
     {
-        appendSnapshotConversationsToLegacy(snapshot, cached_conversations_);
+        appendSnapshotConversationsToLegacy(chat_snapshot_buffer_,
+                                            cached_conversations_);
     }
     normalizeConversationNames(cached_conversations_);
 
     chat::ConversationMeta team_conv;
-    if (legacyTeamConversationMetaFromSnapshot(team_chat_model_.snapshot(), team_conv))
+    if (loadTeamChatSnapshot() &&
+        legacyTeamConversationMetaFromSnapshot(team_chat_snapshot_buffer_, team_conv))
     {
         cached_conversations_.insert(cached_conversations_.begin(), team_conv);
     }
@@ -1062,17 +1059,26 @@ void UiController::reloadConversationView()
         return;
     }
 
-    const auto snapshot = chat_model_.snapshot();
-    if (!snapshot.header.valid)
+    if (!loadChatSnapshot())
     {
         return;
     }
-    applySnapshotMessagesToConversation(snapshot, *conversation_);
+    applySnapshotMessagesToConversation(chat_snapshot_buffer_, *conversation_);
 }
 
 bool UiController::isTeamConversation(const chat::ConversationId& conv) const
 {
     return isTeamConversationId(conv);
+}
+
+bool UiController::loadChatSnapshot()
+{
+    return chat_model_.buildSnapshot(chat_snapshot_buffer_);
+}
+
+bool UiController::loadTeamChatSnapshot()
+{
+    return team_chat_model_.buildSnapshot(team_chat_snapshot_buffer_);
 }
 
 void UiController::refreshTeamConversation()
@@ -1082,10 +1088,9 @@ void UiController::refreshTeamConversation()
         return;
     }
 
-    const auto snapshot = team_chat_model_.snapshot();
-    if (snapshot.header.valid)
+    if (loadTeamChatSnapshot())
     {
-        applySnapshotMessagesToConversation(snapshot, *conversation_);
+        applySnapshotMessagesToConversation(team_chat_snapshot_buffer_, *conversation_);
     }
 }
 

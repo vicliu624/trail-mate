@@ -12,18 +12,26 @@ ChatWorkspaceModel::ChatWorkspaceModel(IChatPresentationSource& source,
 {
 }
 
-ChatWorkspaceSnapshot ChatWorkspaceModel::snapshot() const
+bool ChatWorkspaceModel::buildSnapshot(ChatWorkspaceSnapshot& out) const
 {
     ChatWorkspaceRequest request;
     request.selected = selected_;
     request.conversation_offset = conversation_offset_;
     request.message_offset = message_offset_;
 
-    ChatWorkspaceSnapshot out{};
+    out = ChatWorkspaceSnapshot{};
     if (!source_.buildChatWorkspaceSnapshot(request, out))
     {
         out.header.valid = false;
+        return false;
     }
+    return out.header.valid;
+}
+
+ChatWorkspaceSnapshot ChatWorkspaceModel::snapshot() const
+{
+    ChatWorkspaceSnapshot out{};
+    (void)buildSnapshot(out);
     return out;
 }
 

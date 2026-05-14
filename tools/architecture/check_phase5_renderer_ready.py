@@ -251,6 +251,8 @@ def check_migrated_chat_path_is_locked() -> int:
             "ChatWorkspaceModel& team_chat_model",
             "chat_model_",
             "team_chat_model_",
+            "chat_snapshot_buffer_",
+            "team_chat_snapshot_buffer_",
         ]:
             if token not in text:
                 failures += fail(f"ChatUiController header missing migrated token: {token}")
@@ -261,15 +263,20 @@ def check_migrated_chat_path_is_locked() -> int:
         text = read_text(source)
         for token in [
             "chat_model_.selectConversation",
-            "chat_model_.snapshot()",
+            "chat_model_.buildSnapshot",
             "chat_model_.markRead",
             "chat_model_.sendMessage",
-            "team_chat_model_.snapshot()",
+            "team_chat_model_.buildSnapshot",
             "team_chat_model_.markRead",
             "team_chat_model_.sendMessage",
         ]:
             if token not in text:
                 failures += fail(f"ChatUiController source missing migrated token: {token}")
+        for token in ["chat_model_.snapshot()", "team_chat_model_.snapshot()"]:
+            if token in text:
+                failures += fail(
+                    f"ChatUiController uses stack-heavy snapshot API: {token}"
+                )
         for token in ["service_.sendText", "service_.sendMessage", "service_.markConversationRead"]:
             if token in text:
                 failures += fail(
@@ -471,7 +478,7 @@ def check_docs() -> int:
         for token in [
             "Renderer Hardening in Phase 5.9",
             "chat_model_.selectConversation",
-            "chat_model_.snapshot()",
+            "chat_model_.buildSnapshot",
             "chat_model_.sendMessage",
             "team_chat_model_",
             "Do not add new renderer send/read logic",

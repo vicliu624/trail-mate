@@ -62,7 +62,8 @@ Phase 5.9 locks the migrated Chat paths without claiming
 Regression guard:
 
 - non-team selection must continue using `chat_model_.selectConversation`
-- non-team message rendering must continue using `chat_model_.snapshot()`
+- non-team message rendering must continue using `chat_model_.buildSnapshot`
+  into controller-owned snapshot buffers
 - non-team send must continue using `chat_model_.sendMessage`
 - non-team read clearing must continue using `chat_model_.markRead`
 - Team text projection/send must continue using `team_chat_model_`
@@ -77,6 +78,10 @@ Allowed legacy ownership remains:
 - platform GPS/team helper usage
 
 Do not add new renderer send/read logic that bypasses `ChatWorkspaceModel`.
+
+Do not reintroduce `chat_model_.snapshot()` or `team_chat_model_.snapshot()`
+inside `ChatUiController`; `ChatWorkspaceSnapshot` is large enough to overflow
+ESP `loopTask` when copied on the stack during page entry.
 
 ## Non-Goal
 
