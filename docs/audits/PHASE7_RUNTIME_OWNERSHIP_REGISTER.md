@@ -12,15 +12,15 @@ has direct user-visible consequences and a bounded migration path.
 
 | Runtime item | Owner status | Phase | Notes |
 | --- | --- | --- | --- |
-| Chat delivery / pending / failure | in progress | 7.1 | owned by `ChatDeliveryReadModel` and projector path |
-| Chat send-result projection | in progress | 7.3 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge` |
+| Chat delivery / pending / failure | contained | 7.1 / 7.6 | owned by `ChatDeliveryReadModel` and projector path; controller direct ownership is forbidden |
+| Chat send-result projection | contained | 7.3 / 7.6 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge`; event pump extraction remains future |
 | ACK timeout projection | in progress | 7.3 | adapter hook projects `AckTimeout`; unified ACK source remains future |
 | key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
-| Chat retry/cancel/clear failure actions | in progress | 7.4 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService` |
+| Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
-| Team location/command action ownership | in progress | 7.2 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; rich rendering remains future |
-| key verification workflow | in progress | 7.5 | owned by `KeyVerificationModel` plus legacy source/sink adapters; not `ChatWorkspaceModel` or `MessageRow` |
+| Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
+| key verification workflow | contained | 7.5 / 7.6 | owned by `KeyVerificationModel` plus legacy source/sink adapters; modal rendering is helper-bounded |
 | GPS page timers/tasks | future | later phase | runtime scheduling owner still legacy |
 
 ## Phase 7.1 Decision
@@ -147,3 +147,28 @@ Phase 7.5 introduces:
 The LVGL modal may remain in `ChatUiController`, but it must render snapshots
 and submit actions through the model. MeshCore/Meshtastic differences remain
 behind legacy key verification adapters.
+
+## Phase 7.6 Decision
+
+Phase 7.6 is a burn-down pass, not a new model phase.
+
+Legacy surfaces covered by Phase 7 owners are tracked in
+`LEGACY_BURNDOWN_REGISTER.md`. `ChatUiController` responsibilities are
+classified in `CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md`.
+
+Phase 7.6 burned down:
+
+- direct Team location/command send payload ownership in `ChatUiController`
+- direct key verification runtime API ownership in `ChatUiController`
+- direct delivery read/action ownership in `ChatUiController`
+- key verification modal rendering inside the controller body
+
+Remaining legacy surfaces now require removal conditions:
+
+- `LegacyChatDeliveryEventBridge`
+- `LegacyChatDeliveryActionBridge`
+- `LegacyTeamActionBridge`
+- `LegacyKeyVerificationSource`
+- `LegacyKeyVerificationActionSink`
+- Team rich payload formatting in `ChatUiController`
+- controller-owned `ChatService::processIncoming` / `flushStore`
