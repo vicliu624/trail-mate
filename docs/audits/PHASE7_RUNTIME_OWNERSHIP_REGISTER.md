@@ -13,9 +13,10 @@ has direct user-visible consequences and a bounded migration path.
 | Runtime item | Owner status | Phase | Notes |
 | --- | --- | --- | --- |
 | Chat delivery / pending / failure | in progress | 7.1 | owned by `ChatDeliveryReadModel` and projector path |
-| ACK timeout projection | future | 7.x | events can project into delivery read model |
-| key missing projection | in progress | 7.1 | structured failure kind exists |
-| radio send failure projection | in progress | 7.1 | structured failure kind exists |
+| Chat send-result projection | in progress | 7.3 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge` |
+| ACK timeout projection | in progress | 7.3 | adapter hook projects `AckTimeout`; unified ACK source remains future |
+| key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
+| radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | Chat retry/cancel actions | future | 7.x | not implemented in 7.1 |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
 | Team location/command action ownership | in progress | 7.2 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; rich rendering remains future |
@@ -53,6 +54,28 @@ Phase 7.1 does not fully clean:
 - retry/cancel commands
 
 These are not blockers because the delivery ownership boundary is now explicit.
+
+## Phase 7.3 Decision
+
+Chat delivery events are runtime projection events.
+
+They are not owned by:
+
+- `ChatUiController`
+- renderer widgets
+- `ChatWorkspaceModel`
+- `ui_presentation`
+
+Phase 7.3 introduces:
+
+- `IChatDeliveryEventPort`
+- `ProjectingChatDeliveryEventPort`
+- `LegacyChatSendResultMapper`
+- `LegacyChatDeliveryEventBridge`
+
+Existing `ChatSendResultEvent` projects coarse success/failure into
+`ChatDeliveryReadModel`. Structured failure kinds are supported by mapper and
+hook APIs, but the current EventBus schema does not yet carry those details.
 
 ## Phase 7.2 Decision
 

@@ -32,11 +32,27 @@ Phase 7.1 introduces:
 - `ChatDeliveryReadModel`
 - `ChatDeliveryEventProjector`
 
+Phase 7.3 adds:
+
+- `ChatDeliveryEvent`
+- `IChatDeliveryEventPort`
+- `ProjectingChatDeliveryEventPort`
+- `LegacyChatSendResultMapper`
+- `LegacyChatDeliveryEventBridge`
+
 ## Ownership
 
 `ChatDeliveryReadModel` owns UI-readable delivery records.
 
 `ChatDeliveryEventProjector` updates the read model from send/delivery events.
+
+`IChatDeliveryEventPort` is the runtime event sink port for delivery events.
+
+`ProjectingChatDeliveryEventPort` adapts that port to
+`ChatDeliveryEventProjector`.
+
+`LegacyChatDeliveryEventBridge` maps existing `ChatSendResultEvent` and ACK
+timeout hooks into the delivery event port.
 
 `LegacyChatDeliveryBridge` maps existing coarse `ChatMessage::status` and
 legacy send/failure concepts into delivery records.
@@ -73,6 +89,21 @@ into `MessageRow`.
 - build UI snapshots
 - mutate ChatService storage directly
 - render UI
+
+`LegacyChatDeliveryEventBridge` may:
+
+- consume legacy send result events
+- look up the message needed to build `ChatDeliveryRef`
+- publish delivery events through `IChatDeliveryEventPort`
+- expose an ACK timeout projection hook
+
+`LegacyChatDeliveryEventBridge` must not:
+
+- send packets
+- retry messages
+- build UI snapshots
+- include LVGL/GTK
+- mutate renderer state
 
 `LegacyChatPresentationSource` may:
 
