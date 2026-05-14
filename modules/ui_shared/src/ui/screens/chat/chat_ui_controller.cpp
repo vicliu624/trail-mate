@@ -4,18 +4,15 @@
  */
 
 #include "ui/screens/chat/chat_ui_controller.h"
-#include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat_presentation_adapters/chat_conversation_mapper.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/screen_runtime.h"
-#include "platform/ui/team_ui_store_runtime.h"
 #include "sys/event_bus.h"
 #include "team/protocol/team_location_marker.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
-#include "ui/formatters.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/chat/chat_protocol_support.h"
@@ -136,162 +133,6 @@ chat::ConversationId teamConversationId()
 bool isTeamConversationId(const chat::ConversationId& conv)
 {
     return conv.channel == kTeamChatChannel && conv.peer == 0;
-}
-
-const char* team_command_name(team::proto::TeamCommandType type)
-{
-    switch (type)
-    {
-    case team::proto::TeamCommandType::RallyTo:
-        return "RallyTo";
-    case team::proto::TeamCommandType::MoveTo:
-        return "MoveTo";
-    case team::proto::TeamCommandType::Hold:
-        return "Hold";
-    default:
-        return "Command";
-    }
-}
-
-std::string truncate_text(const std::string& text, size_t max_len)
-{
-    if (text.size() <= max_len)
-    {
-        return text;
-    }
-    if (max_len <= 3)
-    {
-        return text.substr(0, max_len);
-    }
-
-    auto utf8_char_bytes = [](unsigned char lead) -> size_t
-    {
-        if ((lead & 0x80U) == 0)
-        {
-            return 1;
-        }
-        if ((lead & 0xE0U) == 0xC0U)
-        {
-            return 2;
-        }
-        if ((lead & 0xF0U) == 0xE0U)
-        {
-            return 3;
-        }
-        if ((lead & 0xF8U) == 0xF0U)
-        {
-            return 4;
-        }
-        return 1;
-    };
-
-    const size_t target_len = max_len - 3;
-    size_t safe_len = 0;
-    while (safe_len < text.size())
-    {
-        const size_t next = utf8_char_bytes(static_cast<unsigned char>(text[safe_len]));
-        if (safe_len + next > target_len)
-        {
-            break;
-        }
-        safe_len += next;
-    }
-    if (safe_len == 0)
-    {
-        safe_len = target_len;
-    }
-
-    return text.substr(0, safe_len) + "...";
-}
-
-std::string format_team_chat_entry(const team::ui::TeamChatLogEntry& entry)
-{
-    if (entry.type == team::proto::TeamChatType::Text)
-    {
-        std::string text(entry.payload.begin(), entry.payload.end());
-        return truncate_text(text, 160);
-    }
-    if (entry.type == team::proto::TeamChatType::Location)
-    {
-        team::proto::TeamChatLocation loc;
-        if (team::proto::decodeTeamChatLocation(entry.payload.data(),
-                                                entry.payload.size(),
-                                                &loc))
-        {
-            double lat = static_cast<double>(loc.lat_e7) / 1e7;
-            double lon = static_cast<double>(loc.lon_e7) / 1e7;
-            char buf[128];
-            char coord_buf[64];
-            uint8_t coord_fmt = app::configFacade().getConfig().gps_coord_format;
-            ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
-            const bool has_marker_icon = team::proto::team_location_marker_icon_is_valid(loc.source);
-            const char* marker_name = team::proto::team_location_marker_icon_name(loc.source);
-            if (has_marker_icon)
-            {
-                snprintf(buf, sizeof(buf), "%s: %s", marker_name, coord_buf);
-            }
-            else if (!loc.label.empty())
-            {
-                snprintf(buf, sizeof(buf), "Location: %s %s",
-                         loc.label.c_str(), coord_buf);
-            }
-            else
-            {
-                snprintf(buf, sizeof(buf), "Location: %s", coord_buf);
-            }
-            return std::string(buf);
-        }
-        return "Location";
-    }
-    if (entry.type == team::proto::TeamChatType::Command)
-    {
-        team::proto::TeamChatCommand cmd;
-        if (team::proto::decodeTeamChatCommand(entry.payload.data(),
-                                               entry.payload.size(),
-                                               &cmd))
-        {
-            const char* name = team_command_name(cmd.cmd_type);
-            double lat = static_cast<double>(cmd.lat_e7) / 1e7;
-            double lon = static_cast<double>(cmd.lon_e7) / 1e7;
-            char buf[160];
-            char coord_buf[64];
-            uint8_t coord_fmt = app::configFacade().getConfig().gps_coord_format;
-            ui_format_coords(lat, lon, coord_fmt, coord_buf, sizeof(coord_buf));
-            if (cmd.lat_e7 != 0 || cmd.lon_e7 != 0)
-            {
-                if (!cmd.note.empty())
-                {
-                    snprintf(buf, sizeof(buf), "Command: %s %s %s",
-                             name, coord_buf, cmd.note.c_str());
-                }
-                else
-                {
-                    snprintf(buf, sizeof(buf), "Command: %s %s",
-                             name, coord_buf);
-                }
-            }
-            else if (!cmd.note.empty())
-            {
-                snprintf(buf, sizeof(buf), "Command: %s %s", name, cmd.note.c_str());
-            }
-            else
-            {
-                snprintf(buf, sizeof(buf), "Command: %s", name);
-            }
-            return std::string(buf);
-        }
-        return "Command";
-    }
-    return "Message";
-}
-
-std::string team_title_from_snapshot(const team::ui::TeamUiSnapshot& snap)
-{
-    if (!snap.team_name.empty())
-    {
-        return snap.team_name;
-    }
-    return ::ui::i18n::tr("Team");
 }
 
 chat::MessageStatus legacyStatusFromDelivery(::ui::chat::MessageDeliveryState delivery)

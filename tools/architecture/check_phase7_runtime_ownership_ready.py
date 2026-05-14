@@ -40,14 +40,17 @@ def check_required_files() -> int:
         "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md",
         "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md",
         "docs/audits/CHAT_RUNTIME_EVENT_PUMP_AUDIT.md",
+        "docs/audits/TEAM_RICH_PAYLOAD_PRESENTATION_AUDIT.md",
         "docs/audits/LEGACY_BURNDOWN_REGISTER.md",
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md",
         "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md",
         "docs/audits/PHASE7_7_EVENT_PUMP_BURNDOWN_REPORT.md",
+        "docs/audits/PHASE7_8_TEAM_RICH_PAYLOAD_BURNDOWN_REPORT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
         "docs/specification/CHAT_RUNTIME_EVENT_PUMP_SPEC.md",
+        "docs/specification/TEAM_RICH_PAYLOAD_PRESENTATION_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -84,6 +87,10 @@ def check_required_files() -> int:
         "modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp",
         "modules/ui_shared/tests/test_team_action_types.cpp",
         "modules/ui_shared/tests/test_legacy_team_action_bridge.cpp",
+        "modules/ui_shared/include/ui/team_presentation/team_rich_payload_display.h",
+        "modules/ui_shared/include/ui/team_presentation/team_rich_payload_projector.h",
+        "modules/ui_shared/src/ui/team_presentation/team_rich_payload_projector.cpp",
+        "modules/ui_shared/tests/test_team_rich_payload_projector.cpp",
         "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_snapshot.h",
         "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_source.h",
         "modules/ui_presentation/include/ui_presentation/key_verification/key_verification_action_sink.h",
@@ -161,6 +168,8 @@ def check_docs() -> int:
             "composition-root ownership",
             "Team location/command action ownership",
             "LegacyTeamActionBridge",
+            "Team rich payload display ownership",
+            "TeamRichPayloadProjector",
             "Chat retry/cancel/clear failure actions",
             "ChatDeliveryActionService",
             "key verification workflow",
@@ -221,6 +230,26 @@ def check_docs() -> int:
             "ChatService::processIncoming()",
             "ChatService::flushStore()",
         ],
+        "docs/audits/TEAM_RICH_PAYLOAD_PRESENTATION_AUDIT.md": [
+            "Team rich payload display is presentation projection",
+            "TeamRichPayloadProjector",
+            "TeamRichPayloadDisplay",
+            "TeamChatPresentationSource",
+            "ChatUiController",
+            "decodeTeamChatLocation",
+            "decodeTeamChatCommand",
+            "The chat controller no longer formats or decodes Team location/command display payloads",
+        ],
+        "docs/specification/TEAM_RICH_PAYLOAD_PRESENTATION_SPEC.md": [
+            "Team rich payload display is presentation projection, not controller formatting",
+            "TeamRichPayloadKind",
+            "TeamCommandDisplayKind",
+            "TeamRichPayloadDisplay",
+            "TeamRichPayloadProjector",
+            "TeamChatLogEntry -> TeamRichPayloadDisplay",
+            "TeamChatPresentationSource",
+            "Phase 7.8 does not",
+        ],
         "docs/audits/LEGACY_BURNDOWN_REGISTER.md": [
             "Remaining callers",
             "Removal condition",
@@ -235,16 +264,20 @@ def check_docs() -> int:
             "ChatUiController` Team payload encoding",
             "ChatUiController` delivery mutation",
             "ChatUiController` runtime event pump",
+            "ChatUiController` Team rich payload formatting",
+            "MessageRow` Team rich display limitations",
         ],
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md": [
             "Temporary UI Responsibilities",
             "Migrated Runtime Responsibilities",
             "Remaining Legacy Responsibilities",
             "Team location/command payload encoding",
+            "Team rich payload display projection",
             "Key verification modal rendering",
             "ChatDeliveryReadModel",
             "ChatDeliveryEventProjector",
             "ChatDeliveryActionService",
+            "TeamRichPayloadProjector",
         ],
         "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md": [
             "Phase 7.6 reduced Chat / Team / key-verification legacy ownership surfaces",
@@ -259,6 +292,16 @@ def check_docs() -> int:
             "ChatPageRuntimeFacade",
             "ChatService::processIncoming()",
             "ChatService::flushStore()",
+            "Burned Down",
+            "Still Contained",
+        ],
+        "docs/audits/PHASE7_8_TEAM_RICH_PAYLOAD_BURNDOWN_REPORT.md": [
+            "Phase 7.8 moved Team location/command display decoding out of `ChatUiController`",
+            "TeamRichPayloadProjector",
+            "TeamChatPresentationSource",
+            "format_team_chat_entry",
+            "decodeTeamChatLocation",
+            "decodeTeamChatCommand",
             "Burned Down",
             "Still Contained",
         ],
@@ -299,6 +342,8 @@ def check_legacy_burndown_register() -> int:
         "ChatUiController` Team payload encoding",
         "ChatUiController` delivery mutation",
         "ChatUiController` runtime event pump",
+        "ChatUiController` Team rich payload formatting",
+        "MessageRow` Team rich display limitations",
     ]
     for surface in required_surfaces:
         if surface not in text:
@@ -1040,6 +1085,127 @@ def check_chat_ui_legacy_burndown() -> int:
     return failures
 
 
+def check_team_rich_payload_presentation_boundary() -> int:
+    failures = 0
+    controller = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+    presentation = "modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp"
+    display_header = "modules/ui_shared/include/ui/team_presentation/team_rich_payload_display.h"
+    projector_header = "modules/ui_shared/include/ui/team_presentation/team_rich_payload_projector.h"
+    projector_source = "modules/ui_shared/src/ui/team_presentation/team_rich_payload_projector.cpp"
+
+    if exists(display_header):
+        text = read_text(display_header)
+        for token in [
+            "enum class TeamRichPayloadKind",
+            "Text",
+            "Location",
+            "Command",
+            "Unsupported",
+            "enum class TeamCommandDisplayKind",
+            "MoveTo",
+            "RallyPoint",
+            "Hold",
+            "TeamLocationDisplay",
+            "TeamCommandDisplay",
+            "TeamRichPayloadDisplay",
+            "summary",
+            "badge",
+        ]:
+            if token not in text:
+                failures += fail(f"TeamRichPayloadDisplay missing token: {token}")
+        for token in [
+            "lvgl.h",
+            "lv_obj_t",
+            "ChatWorkspaceModel",
+            "ChatUiController",
+            "TeamChatMessage",
+            "sendTeamAction",
+        ]:
+            if token in strip_cpp_comments(text):
+                failures += fail(
+                    f"TeamRichPayloadDisplay contains forbidden ownership token: {token}"
+                )
+
+    if exists(projector_header):
+        text = read_text(projector_header)
+        for token in ["TeamRichPayloadProjector", "project", "TeamRichPayloadDisplay"]:
+            if token not in text:
+                failures += fail(f"TeamRichPayloadProjector header missing token: {token}")
+
+    if exists(projector_source):
+        text = strip_cpp_comments(read_text(projector_source))
+        for token in [
+            "TeamRichPayloadProjector::project",
+            "decodeTeamChatLocation",
+            "decodeTeamChatCommand",
+            "TeamRichPayloadKind::Location",
+            "TeamRichPayloadKind::Command",
+            "TeamRichPayloadKind::Unsupported",
+            "TeamCommandDisplayKind::MoveTo",
+            "TeamCommandDisplayKind::Hold",
+            "team_location_marker_icon_name",
+        ]:
+            if token not in text:
+                failures += fail(f"TeamRichPayloadProjector source missing token: {token}")
+        for token in [
+            "lvgl.h",
+            "lv_obj_t",
+            "ChatUiController",
+            "ChatWorkspaceModel",
+            "LegacyTeamActionBridge",
+            "sendTeamAction",
+            "encodeTeamChatLocation",
+            "encodeTeamChatCommand",
+            "team_ui_chatlog_append_structured",
+            "buildChatWorkspaceSnapshot",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"TeamRichPayloadProjector owns forbidden token: {token}"
+                )
+
+    if exists(presentation):
+        text = strip_cpp_comments(read_text(presentation))
+        for token in [
+            "TeamRichPayloadProjector",
+            "TeamRichPayloadDisplay",
+            "display.summary",
+        ]:
+            if token not in text:
+                failures += fail(
+                    f"TeamChatPresentationSource missing Team rich projection token: {token}"
+                )
+        for token in [
+            "formatTeamChatEntry",
+            "teamCommandName",
+            "decodeTeamChatLocation",
+            "decodeTeamChatCommand",
+            "TeamChatLocation",
+            "TeamChatCommand",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"TeamChatPresentationSource still owns inline rich payload formatter token: {token}"
+                )
+
+    if exists(controller):
+        text = strip_cpp_comments(read_text(controller))
+        for token in [
+            "format_team_chat_entry",
+            "team_command_name",
+            "decodeTeamChatLocation",
+            "decodeTeamChatCommand",
+            "TeamChatLocation",
+            "TeamChatCommand",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"ChatUiController still owns Team rich payload display token: {token}"
+                )
+
+    return failures
+
+
 def check_chat_runtime_event_pump_boundary() -> int:
     failures = 0
     header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
@@ -1482,6 +1648,7 @@ def main() -> int:
     failures += check_team_action_bridge_boundary()
     failures += check_chat_ui_team_action_migration()
     failures += check_chat_ui_legacy_burndown()
+    failures += check_team_rich_payload_presentation_boundary()
     failures += check_chat_runtime_event_pump_boundary()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()

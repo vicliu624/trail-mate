@@ -480,9 +480,16 @@ def check_team_chat_presentation_context() -> int:
     source = "modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp"
     if exists(source):
         text = read_text(source)
-        for token in ["TeamChatType::Text", "TeamChatType::Location", "TeamChatType::Command"]:
+        for token in ["TeamRichPayloadProjector", "TeamRichPayloadDisplay", "display.summary"]:
             if token not in text:
                 failures += fail(f"TeamChatPresentationSource missing projection token {token}")
+
+    rich_projector = "modules/ui_shared/src/ui/team_presentation/team_rich_payload_projector.cpp"
+    if exists(rich_projector):
+        text = read_text(rich_projector)
+        for token in ["TeamChatType::Text", "TeamChatType::Location", "TeamChatType::Command"]:
+            if token not in text:
+                failures += fail(f"TeamRichPayloadProjector missing projection token {token}")
 
     sink = "modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp"
     if exists(sink):
