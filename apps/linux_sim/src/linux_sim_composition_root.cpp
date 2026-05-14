@@ -36,4 +36,10 @@ LinuxSimCompositionRoot::deliveryProjector()
     return delivery_projector_;
 }
 
+chat::delivery::IChatDeliveryEventPort&
+LinuxSimCompositionRoot::deliveryEventPort()
+{
+    return delivery_event_port_;
+}
+
 } // namespace trailmate::linux_sim

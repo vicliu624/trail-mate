@@ -10,6 +10,13 @@ int main()
     trailmate::linux_sim::LinuxSimCompositionRoot root;
     assert(root.initialize());
     assert(root.deliveryReadModel().size() == 0);
+    root.deliveryEventPort().publishDeliveryEvent(
+        ::chat::delivery::ChatDeliveryEvent{
+            ::chat::delivery::ChatDeliveryRef{0, 42, 0},
+            ::chat::delivery::DeliveryState::Sent,
+            ::chat::delivery::SendFailureKind::None,
+            12});
+    assert(root.deliveryReadModel().size() == 1);
 
     auto& presentation = root.presentation();
     assert(product_composition::hasInteractivePresentation(presentation));

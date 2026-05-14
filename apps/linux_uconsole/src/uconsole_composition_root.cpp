@@ -95,4 +95,10 @@ UConsoleCompositionRoot::deliveryProjector() noexcept
     return delivery_projector_;
 }
 
+::chat::delivery::IChatDeliveryEventPort&
+UConsoleCompositionRoot::deliveryEventPort() noexcept
+{
+    return delivery_event_port_;
+}
+
 } // namespace trailmate::uconsole

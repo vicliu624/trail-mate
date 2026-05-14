@@ -36,6 +36,7 @@ def iter_code_files(*roots: Path):
 def check_required_files() -> int:
     required = [
         "docs/audits/CHAT_DELIVERY_OWNERSHIP_AUDIT.md",
+        "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
@@ -43,13 +44,22 @@ def check_required_files() -> int:
         "modules/core_chat/include/chat/delivery/chat_delivery_types.h",
         "modules/core_chat/include/chat/delivery/chat_delivery_read_model.h",
         "modules/core_chat/include/chat/delivery/chat_delivery_event_projector.h",
+        "modules/core_chat/include/chat/delivery/chat_delivery_event_port.h",
         "modules/core_chat/include/chat/delivery/legacy_chat_delivery_bridge.h",
+        "modules/core_chat/include/chat/delivery/legacy_chat_send_result_mapper.h",
         "modules/core_chat/src/delivery/chat_delivery_read_model.cpp",
         "modules/core_chat/src/delivery/chat_delivery_event_projector.cpp",
+        "modules/core_chat/src/delivery/chat_delivery_event_port.cpp",
         "modules/core_chat/src/delivery/legacy_chat_delivery_bridge.cpp",
+        "modules/core_chat/src/delivery/legacy_chat_send_result_mapper.cpp",
         "modules/core_chat/tests/test_chat_delivery_read_model.cpp",
         "modules/core_chat/tests/test_chat_delivery_event_projector.cpp",
+        "modules/core_chat/tests/test_chat_delivery_event_port.cpp",
         "modules/core_chat/tests/test_legacy_chat_delivery_bridge.cpp",
+        "modules/core_chat/tests/test_legacy_chat_send_result_mapper.cpp",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_shared/tests/test_legacy_chat_delivery_event_bridge.cpp",
         "modules/ui_shared/include/ui/team_actions/team_action_types.h",
         "modules/ui_shared/include/ui/team_actions/team_action_sink.h",
         "modules/ui_shared/include/ui/team_actions/legacy_team_action_bridge.h",
@@ -78,8 +88,19 @@ def check_docs() -> int:
             "Delivery state is runtime state, not UI state",
             "ChatDeliveryEventProjector",
             "ChatDeliveryReadModel",
+            "IChatDeliveryEventPort",
+            "ProjectingChatDeliveryEventPort",
+            "LegacyChatDeliveryEventBridge",
             "LegacyChatPresentationSource",
             "Phase 7.1 does not make `ChatWorkspaceModel` own delivery state",
+        ],
+        "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md": [
+            "ChatSendResultEvent",
+            "`msg_id`",
+            "`success`",
+            "success=false",
+            "AckTimeout",
+            "LegacyChatDeliveryEventBridge",
         ],
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md": [
             "Chat delivery / pending / failure",
@@ -197,6 +218,38 @@ def check_delivery_type_shape() -> int:
             if token not in text:
                 failures += fail(f"ChatDeliveryEventProjector missing token: {token}")
 
+    event_port = "modules/core_chat/include/chat/delivery/chat_delivery_event_port.h"
+    if exists(event_port):
+        text = read_text(event_port)
+        for token in [
+            "ChatDeliveryEvent",
+            "IChatDeliveryEventPort",
+            "publishDeliveryEvent",
+            "ProjectingChatDeliveryEventPort",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatDeliveryEventPort missing token: {token}")
+        for token in ["ChatWorkspaceModel", "MessageRow", "lvgl.h", "sendText"]:
+            if token in strip_cpp_comments(text):
+                failures += fail(f"ChatDeliveryEventPort owns forbidden token: {token}")
+
+    mapper = "modules/core_chat/include/chat/delivery/legacy_chat_send_result_mapper.h"
+    if exists(mapper):
+        text = read_text(mapper)
+        for token in [
+            "LegacyChatSendFailure",
+            "PeerKeyMissing",
+            "LocalIdentityMissing",
+            "RadioSendFailed",
+            "AckTimeout",
+            "UnsupportedProtocol",
+            "Rejected",
+            "mapLegacyChatSendResult",
+            "makeAckTimeoutDeliveryEvent",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyChatSendResultMapper missing token: {token}")
+
     return failures
 
 
@@ -241,18 +294,23 @@ def check_composition_roots_own_delivery() -> int:
         "apps/linux_sim/src/linux_sim_composition_root.h": [
             "ChatDeliveryReadModel delivery_read_model_",
             "ChatDeliveryEventProjector delivery_projector_",
+            "ProjectingChatDeliveryEventPort delivery_event_port_",
             "deliveryReadModel()",
             "deliveryProjector()",
+            "deliveryEventPort()",
         ],
         "apps/linux_uconsole/src/uconsole_composition_root.h": [
             "ChatDeliveryReadModel delivery_read_model_",
             "ChatDeliveryEventProjector delivery_projector_",
+            "ProjectingChatDeliveryEventPort delivery_event_port_",
             "deliveryReadModel()",
             "deliveryProjector()",
+            "deliveryEventPort()",
         ],
         "apps/linux_uconsole/src/uconsole_composition_root.cpp": [
             "&delivery_read_model_",
             "LegacyChatPresentationSource",
+            "deliveryEventPort()",
         ],
     }
 
@@ -287,11 +345,94 @@ def check_ui_presentation_and_renderers_do_not_own_delivery() -> int:
         ROOT / "apps/linux_uconsole/src/platform/gtk",
     ]
     for path in iter_code_files(*renderer_roots):
+        if path.name == "chat_page_runtime.cpp":
+            continue
         text = strip_cpp_comments(path.read_text(encoding="utf-8", errors="ignore"))
-        if "chat/delivery" in text or "ChatDelivery" in text:
+        forbidden_delivery_tokens = [
+            '#include "chat/delivery',
+            "ChatDeliveryReadModel",
+            "ChatDeliveryEventProjector",
+            "ProjectingChatDeliveryEventPort",
+        ]
+        for token in forbidden_delivery_tokens:
+            if token in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} must not own chat delivery runtime token {token}"
+                )
+        if "LegacyChatDeliveryEventBridge" in text and path.name != "chat_ui_controller.cpp":
             failures += fail(
-                f"{path.relative_to(ROOT)} must not own chat delivery runtime"
+                f"{path.relative_to(ROOT)} contains delivery event bridge outside approved forwarding controller"
             )
+    return failures
+
+
+def check_delivery_event_bridge_boundary() -> int:
+    failures = 0
+    bridge_files = [
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp",
+    ]
+    for path in bridge_files:
+        if not exists(path):
+            failures += fail(f"missing delivery event bridge file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "lvgl.h",
+            "gtk",
+            "ChatWorkspaceModel",
+            "MessageRow",
+            "sendText(",
+            "sendMessage(",
+            "retry",
+            "Renderer",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden delivery bridge token {token}")
+
+    source = "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp"
+    if exists(source):
+        text = read_text(source)
+        for token in [
+            "onChatSendResult",
+            "onAckTimeout",
+            "mapLegacyChatSendResult",
+            "publishDeliveryEvent",
+            "toDeliveryRef",
+            "getMessage",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyChatDeliveryEventBridge missing token: {token}")
+
+    controller = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+    if exists(controller):
+        text = strip_cpp_comments(read_text(controller))
+        if "LegacyChatDeliveryEventBridge" not in text:
+            failures += fail("ChatUiController missing legacy delivery event forwarding bridge")
+        for token in [
+            "ChatDeliveryReadModel",
+            "ChatDeliveryEventProjector",
+            "ProjectingChatDeliveryEventPort",
+            "delivery_read_model",
+            "delivery_projector",
+        ]:
+            if token in text:
+                failures += fail(f"ChatUiController owns delivery runtime token: {token}")
+
+    runtime = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
+    if exists(runtime):
+        text = read_text(runtime)
+        for token in [
+            "ChatDeliveryReadModel",
+            "ChatDeliveryEventProjector",
+            "ProjectingChatDeliveryEventPort",
+            "LegacyChatDeliveryEventBridge",
+            "s_delivery_event_bridge",
+            "s_delivery_read_model",
+        ]:
+            if token not in text:
+                failures += fail(f"chat_page_runtime.cpp missing delivery runtime wiring token: {token}")
+
     return failures
 
 
@@ -489,6 +630,7 @@ def main() -> int:
     failures += check_presentation_source_enrichment()
     failures += check_composition_roots_own_delivery()
     failures += check_ui_presentation_and_renderers_do_not_own_delivery()
+    failures += check_delivery_event_bridge_boundary()
     failures += check_team_action_type_shape()
     failures += check_team_action_bridge_boundary()
     failures += check_chat_ui_team_action_migration()

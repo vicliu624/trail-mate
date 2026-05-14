@@ -6,6 +6,7 @@
 #include "platform/ui/team_ui_store_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
+#include "ui/presentation_sources/legacy_chat_delivery_event_bridge.h"
 #include "ui/presentation_sources/legacy_chat_presentation_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
 #include "ui/presentation_sources/team_chat_presentation_source.h"
@@ -13,6 +14,7 @@
 #include "ui/team_actions/legacy_team_action_bridge.h"
 #include "ui/ui_common.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
+#include "chat/delivery/chat_delivery_event_port.h"
 #include "team/usecase/team_controller.h"
 
 #include <memory>
@@ -25,6 +27,10 @@ lv_obj_t* s_chat_container = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource> s_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink> s_chat_sink = nullptr;
 std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_chat_model = nullptr;
+std::unique_ptr<::chat::delivery::ChatDeliveryReadModel> s_delivery_read_model = nullptr;
+std::unique_ptr<::chat::delivery::ChatDeliveryEventProjector> s_delivery_projector = nullptr;
+std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort> s_delivery_event_port = nullptr;
+std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryEventBridge> s_delivery_event_bridge = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource> s_team_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::ITeamChatCommandPort> s_team_chat_command_port = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatActionSink> s_team_chat_sink = nullptr;
@@ -135,6 +141,10 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
+    s_delivery_event_bridge.reset();
+    s_delivery_event_port.reset();
+    s_delivery_projector.reset();
+    s_delivery_read_model.reset();
 
     lv_group_t* prev_group = lv_group_get_default();
     set_default_group(nullptr);
@@ -160,10 +170,23 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                           ? chat::ChannelId::SECONDARY
                                           : chat::ChannelId::PRIMARY;
     auto& chat_service = app::messagingFacade().getChatService();
+    s_delivery_read_model =
+        std::make_unique<::chat::delivery::ChatDeliveryReadModel>();
+    s_delivery_projector =
+        std::make_unique<::chat::delivery::ChatDeliveryEventProjector>(
+            *s_delivery_read_model);
+    s_delivery_event_port =
+        std::make_unique<::chat::delivery::ProjectingChatDeliveryEventPort>(
+            *s_delivery_projector);
+    s_delivery_event_bridge =
+        std::make_unique<::ui::presentation_sources::LegacyChatDeliveryEventBridge>(
+            chat_service,
+            *s_delivery_event_port);
     s_chat_source = std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource>(
         new ::ui::presentation_sources::LegacyChatPresentationSource(
             chat_service,
-            &app::messagingFacade().getContactService()));
+            &app::messagingFacade().getContactService(),
+            s_delivery_read_model.get()));
     s_chat_sink = std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink>(
         new ::ui::presentation_sources::LegacyChatActionSink(chat_service));
     s_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
@@ -201,6 +224,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                    *s_chat_model,
                                    *s_team_chat_model,
                                    s_team_action_sink.get(),
+                                   s_delivery_event_bridge.get(),
                                    default_channel,
                                    request_shell_exit,
                                    nullptr));
@@ -230,6 +254,10 @@ void exit(lv_obj_t* parent)
     s_chat_model.reset();
     s_chat_sink.reset();
     s_chat_source.reset();
+    s_delivery_event_bridge.reset();
+    s_delivery_event_port.reset();
+    s_delivery_projector.reset();
+    s_delivery_read_model.reset();
 
     if (s_chat_container && !lv_obj_is_valid(s_chat_container))
     {

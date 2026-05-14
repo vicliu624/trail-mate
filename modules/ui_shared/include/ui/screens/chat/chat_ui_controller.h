@@ -21,6 +21,11 @@
 #include <string>
 #include <vector>
 
+namespace ui::presentation_sources
+{
+class LegacyChatDeliveryEventBridge;
+}
+
 namespace chat
 {
 namespace ui
@@ -48,6 +53,8 @@ class UiController : public IChatUiRuntime
                  ::ui::chat::ChatWorkspaceModel& chat_model,
                  ::ui::chat::ChatWorkspaceModel& team_chat_model,
                  ::ui::team_actions::ITeamActionSink* team_action_sink = nullptr,
+                 ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
+                     delivery_event_bridge = nullptr,
                  chat::ChannelId initial_channel = chat::ChannelId::PRIMARY,
                  ExitRequestCallback exit_request = nullptr,
                  void* exit_request_user_data = nullptr);
@@ -77,6 +84,8 @@ class UiController : public IChatUiRuntime
     ::ui::chat::ChatWorkspaceModel& chat_model_;
     ::ui::chat::ChatWorkspaceModel& team_chat_model_;
     ::ui::team_actions::ITeamActionSink* team_action_sink_ = nullptr;
+    ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
+        delivery_event_bridge_ = nullptr;
     State state_;
 
     std::unique_ptr<ChatMessageListScreen> channel_list_;

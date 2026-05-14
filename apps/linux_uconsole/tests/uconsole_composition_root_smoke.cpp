@@ -40,6 +40,13 @@ int main()
     trailmate::uconsole::UConsoleCompositionRoot root;
     assert(root.initialize());
     assert(root.deliveryReadModel().size() == 0);
+    root.deliveryEventPort().publishDeliveryEvent(
+        ::chat::delivery::ChatDeliveryEvent{
+            ::chat::delivery::ChatDeliveryRef{0, 77, 0},
+            ::chat::delivery::DeliveryState::Failed,
+            ::chat::delivery::SendFailureKind::Rejected,
+            44});
+    assert(root.deliveryReadModel().size() == 1);
 
     assert(product_composition::hasChatServices(root.appServices()));
     assert(product_composition::hasInteractivePresentation(root.presentation()));

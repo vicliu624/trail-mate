@@ -19,6 +19,7 @@
 #include "ui/formatters.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui/presentation_sources/legacy_chat_delivery_event_bridge.h"
 #include "ui/screens/chat/chat_protocol_support.h"
 #include "ui/team_actions/team_action_sink.h"
 #include "ui/ui_common.h"
@@ -548,12 +549,15 @@ UiController::UiController(lv_obj_t* parent,
                            ::ui::chat::ChatWorkspaceModel& chat_model,
                            ::ui::chat::ChatWorkspaceModel& team_chat_model,
                            ::ui::team_actions::ITeamActionSink* team_action_sink,
+                           ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
+                               delivery_event_bridge,
                            chat::ChannelId initial_channel,
                            ExitRequestCallback exit_request,
                            void* exit_request_user_data)
     : parent_(parent), service_(service), chat_model_(chat_model),
       team_chat_model_(team_chat_model),
       team_action_sink_(team_action_sink),
+      delivery_event_bridge_(delivery_event_bridge),
       state_(State::ChannelList),
       current_channel_(initial_channel),
       current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
@@ -703,6 +707,10 @@ void UiController::onChatEvent(sys::Event* event)
     case sys::EventType::ChatSendResult:
     {
         sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
+        if (delivery_event_bridge_ != nullptr)
+        {
+            delivery_event_bridge_->onChatSendResult(*result_event);
+        }
         if (state_ == State::Conversation && conversation_)
         {
             const ChatMessage* msg = service_.getMessage(result_event->msg_id);
