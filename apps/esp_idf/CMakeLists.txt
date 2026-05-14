@@ -136,10 +136,12 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_presentation/team_rich_payload_projector.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/info_card.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
@@ -171,6 +173,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_shell.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/screens/gps/gps_modal.cpp
     ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/screens/gps/gps_page_components.cpp

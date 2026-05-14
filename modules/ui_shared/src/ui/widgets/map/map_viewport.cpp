@@ -24,6 +24,7 @@ struct RuntimeImpl
 {
     Widgets widgets{};
     Model model{};
+    ui::map::MapOverlaySnapshot overlay{};
     MapAnchor anchor{};
     std::vector<MapTile> tiles{};
     ui::map_tiles::MapTileRenderQueue render_queue{};
@@ -397,6 +398,113 @@ void refresh_tiles(RuntimeImpl& impl, const char* reason)
                      impl.has_visible_map_data ? 1 : 0);
 }
 
+lv_color_t overlay_color(::ui::map::MapOverlayStyle style)
+{
+    switch (style)
+    {
+    case ::ui::map::MapOverlayStyle::OwnPosition:
+        return lv_color_hex(0x2563EB);
+    case ::ui::map::MapOverlayStyle::Team:
+        return lv_color_hex(0x16A34A);
+    case ::ui::map::MapOverlayStyle::Route:
+        return lv_color_hex(0xF59E0B);
+    case ::ui::map::MapOverlayStyle::Track:
+        return lv_color_hex(0x7C3AED);
+    case ::ui::map::MapOverlayStyle::Warning:
+        return lv_color_hex(0xDC2626);
+    case ::ui::map::MapOverlayStyle::Default:
+    default:
+        return lv_color_hex(0x111827);
+    }
+}
+
+void clear_overlay_layer(RuntimeImpl& impl)
+{
+    if (impl.widgets.overlay_layer && lv_obj_is_valid(impl.widgets.overlay_layer))
+    {
+        lv_obj_clean(impl.widgets.overlay_layer);
+    }
+}
+
+bool project_geo_point(const RuntimeImpl& impl, const GeoPoint& point, lv_point_t& out_screen_point)
+{
+    if (!is_runtime_alive(impl) || !impl.anchor.valid || !point.valid)
+    {
+        return false;
+    }
+
+    GeoPoint transformed{};
+    if (!transform_geo_point(point, impl.model.coord_system, transformed) || !transformed.valid)
+    {
+        return false;
+    }
+
+    int screen_x = 0;
+    int screen_y = 0;
+    if (!gps_screen_pos(impl.tile_ctx, transformed.lat, transformed.lon, screen_x, screen_y))
+    {
+        return false;
+    }
+
+    out_screen_point.x = static_cast<lv_coord_t>(screen_x);
+    out_screen_point.y = static_cast<lv_coord_t>(screen_y);
+    return true;
+}
+
+void render_overlay(RuntimeImpl& impl)
+{
+    if (!is_runtime_alive(impl) ||
+        !impl.widgets.overlay_layer ||
+        !lv_obj_is_valid(impl.widgets.overlay_layer))
+    {
+        return;
+    }
+
+    clear_overlay_layer(impl);
+    if (!impl.overlay.header.valid)
+    {
+        return;
+    }
+
+    for (std::size_t i = 0; i < impl.overlay.item_count; ++i)
+    {
+        const auto& item = impl.overlay.items[i];
+        if (!item.visible || !item.point.valid)
+        {
+            continue;
+        }
+
+        lv_point_t point{};
+        GeoPoint geo{item.point.valid, item.point.lat, item.point.lon};
+        if (!project_geo_point(impl, geo, point))
+        {
+            continue;
+        }
+
+        lv_obj_t* marker = lv_obj_create(impl.widgets.overlay_layer);
+        make_plain(marker);
+        lv_obj_set_size(marker, 8, 8);
+        lv_obj_set_style_radius(marker, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(marker, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(marker, overlay_color(item.style), 0);
+        lv_obj_set_style_border_width(marker, 1, 0);
+        lv_obj_set_style_border_color(marker, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_set_pos(marker,
+                       static_cast<lv_coord_t>(point.x - 4),
+                       static_cast<lv_coord_t>(point.y - 4));
+
+        if (!item.label.empty())
+        {
+            lv_obj_t* label = lv_label_create(impl.widgets.overlay_layer);
+            lv_label_set_text(label, item.label.c_str());
+            lv_obj_set_style_text_color(label, overlay_color(item.style), 0);
+            lv_obj_set_pos(label,
+                           static_cast<lv_coord_t>(point.x + 6),
+                           static_cast<lv_coord_t>(point.y - 8));
+        }
+    }
+}
+
 void loader_timer_cb(lv_timer_t* timer)
 {
     auto* impl = static_cast<RuntimeImpl*>(lv_timer_get_user_data(timer));
@@ -611,6 +719,19 @@ void apply_model(Runtime& runtime, const Model& model)
                      impl->model.contour_enabled ? 1 : 0,
                      static_cast<unsigned>(impl->model.coord_system));
     refresh_tiles(*impl, "apply_model");
+    render_overlay(*impl);
+}
+
+void apply_overlay(Runtime& runtime, const ui::map::MapOverlaySnapshot& overlay)
+{
+    if (!runtime.impl_)
+    {
+        runtime.impl_ = new RuntimeImpl();
+        runtime.impl_->tiles.reserve(TILE_RECORD_LIMIT);
+    }
+    RuntimeImpl* impl = runtime.impl_;
+    impl->overlay = overlay;
+    render_overlay(*impl);
 }
 
 void clear(Runtime& runtime)
@@ -622,6 +743,8 @@ void clear(Runtime& runtime)
     }
 
     impl->model.focus_point = GeoPoint{};
+    impl->overlay = ui::map::MapOverlaySnapshot{};
+    clear_overlay_layer(*impl);
     cleanup_tiles(impl->tile_ctx);
     impl->anchor.valid = false;
     reset_gesture_state(*impl);
@@ -631,27 +754,7 @@ void clear(Runtime& runtime)
 bool project_point(const Runtime& runtime, const GeoPoint& point, lv_point_t& out_screen_point)
 {
     const RuntimeImpl* impl = runtime.impl_;
-    if (!impl || !is_runtime_alive(*impl) || !impl->anchor.valid || !point.valid)
-    {
-        return false;
-    }
-
-    GeoPoint transformed{};
-    if (!transform_geo_point(point, impl->model.coord_system, transformed) || !transformed.valid)
-    {
-        return false;
-    }
-
-    int screen_x = 0;
-    int screen_y = 0;
-    if (!gps_screen_pos(impl->tile_ctx, transformed.lat, transformed.lon, screen_x, screen_y))
-    {
-        return false;
-    }
-
-    out_screen_point.x = static_cast<lv_coord_t>(screen_x);
-    out_screen_point.y = static_cast<lv_coord_t>(screen_y);
-    return true;
+    return impl != nullptr && project_geo_point(*impl, point, out_screen_point);
 }
 
 bool preview_project_point(lv_obj_t* viewport_root, const Model& model, const GeoPoint& point, lv_point_t& out_screen_point)

@@ -14,18 +14,19 @@ has direct user-visible consequences and a bounded migration path.
 | --- | --- | --- | --- |
 | Chat delivery / pending / failure | contained | 7.1 / 7.6 | owned by `ChatDeliveryReadModel` and projector path; controller direct ownership is forbidden |
 | Chat send-result projection | contained | 7.3 / 7.7 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge`; `ChatPageRuntimeEventPump` owns forwarding |
-| ACK timeout projection | in progress | 7.3 | adapter hook projects `AckTimeout`; unified ACK source remains future |
+| ACK timeout projection | explicitly deferred | 7.3 / final matrix | adapter hook projects `AckTimeout`; unified ACK source has exit condition in `PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md` |
 | key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | Chat runtime event pump / store flush ownership | contained | 7.7 | owned by `ChatPageRuntimeEventPump` / `ChatPageRuntimeFacade`; controller is UI refresh sink |
 | Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
 | Map tile/cache ownership | contained | 7.10 | tile path mapping and filesystem availability are owned by `MapTileResolver` / `LegacyFilesystemMapTileSource`; decoded image cache remains contained legacy |
 | Map tile render queue / decoded cache ownership | contained | 7.11 | visible tile plan is projected into `MapTileRenderQueue`; ESP decoded image cache is wrapped by `LvglDecodedTileCache`; LVGL widget records remain contained legacy |
+| Map overlay/route/tracker ownership | contained / explicitly deferred | 7.12 | current GPS and Team overlays project through `MapOverlaySnapshot` / `LegacyMapOverlaySource`; route/tracker overlay sources have exit conditions in final matrix |
+| GPS page timers/tasks | contained | 7.13 | refresh cadence is owned by `GpsPageRuntimePump`; LVGL timers are tick hooks only |
 | Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
 | Team rich payload display ownership | contained | 7.8 | owned by `TeamRichPayloadProjector` / `TeamChatPresentationSource`; controller display decode/format is forbidden |
 | Team position picker widget lifecycle | burned-down UI surface | 7.9 | owned by `TeamPositionPickerRenderer`; controller only handles selected/cancel workflow |
 | key verification workflow | contained | 7.5 / 7.6 | owned by `KeyVerificationModel` plus legacy source/sink adapters; modal rendering is helper-bounded |
-| GPS page timers/tasks | future | later phase | runtime scheduling owner still legacy |
 
 ## Phase 7.1 Decision
 
@@ -102,7 +103,7 @@ Phase 7.2 introduces:
 
 Team text remains on the existing `TeamChatActionSink` /
 `team_chat_model_.sendMessage(...)` path. Rich Team payload rendering remains
-future work.
+deferred with an exit condition in the burn-down register.
 
 ## Phase 7.4 Decision
 
@@ -167,7 +168,7 @@ Phase 7.6 burned down:
 - direct delivery read/action ownership in `ChatUiController`
 - key verification modal rendering inside the controller body
 
-Remaining legacy surfaces now require removal conditions. Later burn-down phases
+Remaining legacy surfaces now require removal conditions. Subsequent burn-down phases
 may move those surfaces from contained to burned-down:
 
 - `LegacyChatDeliveryEventBridge`
@@ -232,7 +233,7 @@ Phase 7.8 introduces:
 - constructs `TeamChatLocation` / `TeamChatCommand` for display formatting
 
 The current renderer still consumes summary text through `MessageRow`. Rich Team
-cards and Map overlays remain future work.
+cards and additional Map overlay visuals are deferred with exit conditions.
 
 ## Phase 7.9 Decision
 
@@ -258,3 +259,46 @@ LVGL event callbacks or directly creates the picker widget tree.
 The controller keeps the selection workflow. `sendTeamLocationWithIcon(...)`
 remains only because it submits `TeamActionRequest` through `ITeamActionSink`;
 it must not encode Team payloads directly.
+
+## Phase 7.12 Decision
+
+Map overlay semantic state is presentation projection state.
+
+It is not owned by:
+
+- tile source/cache
+- renderer widgets
+- GPS runtime source
+- Team store
+- route/tracker stores
+
+Phase 7.12 introduces:
+
+- `MapOverlaySnapshot`
+- `IMapOverlayPresentationSource`
+- `MapOverlayProjector`
+- `LegacyMapOverlaySource`
+
+Current GPS and Team latest location overlays are projected through the overlay
+source boundary. Route/tracker and measurement overlays are explicitly deferred
+with removal conditions in `PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md`.
+
+## Phase 7.13 Decision
+
+GPS page refresh cadence is runtime scheduling state.
+
+It is not owned by:
+
+- GPS renderers
+- map widgets
+- page widget local state
+- GPS status snapshots
+
+Phase 7.13 introduces:
+
+- `IGpsUiRefreshSink`
+- `IGpsStatusRefreshModel`
+- `GpsPageRuntimePump`
+
+LVGL timers may remain as platform tick hooks during migration, but the refresh
+interval and active/inactive lifecycle belong to `GpsPageRuntimePump`.

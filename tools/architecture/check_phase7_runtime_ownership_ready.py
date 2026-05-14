@@ -52,6 +52,12 @@ def check_required_files() -> int:
         "docs/audits/PHASE7_10_MAP_TILE_SOURCE_CACHE_BURNDOWN_REPORT.md",
         "docs/audits/MAP_TILE_RENDER_QUEUE_CACHE_AUDIT.md",
         "docs/audits/PHASE7_11_MAP_TILE_RENDER_QUEUE_CACHE_REPORT.md",
+        "docs/audits/MAP_OVERLAY_ROUTE_TRACKER_OWNERSHIP_AUDIT.md",
+        "docs/audits/PHASE7_12_MAP_OVERLAY_ROUTE_TRACKER_REPORT.md",
+        "docs/audits/GPS_RUNTIME_SCHEDULING_OWNERSHIP_AUDIT.md",
+        "docs/audits/PHASE7_13_GPS_RUNTIME_SCHEDULING_REPORT.md",
+        "docs/audits/PHASE7_FINAL_RUNTIME_OWNERSHIP_READINESS_REPORT.md",
+        "docs/audits/PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
@@ -60,6 +66,8 @@ def check_required_files() -> int:
         "docs/specification/TEAM_POSITION_PICKER_RENDERER_SPEC.md",
         "docs/specification/MAP_TILE_SOURCE_CACHE_RUNTIME_SPEC.md",
         "docs/specification/MAP_TILE_RENDER_QUEUE_CACHE_SPEC.md",
+        "docs/specification/MAP_OVERLAY_ROUTE_TRACKER_RUNTIME_SPEC.md",
+        "docs/specification/GPS_RUNTIME_SCHEDULING_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -129,6 +137,18 @@ def check_required_files() -> int:
         "modules/ui_shared/tests/test_map_tile_render_queue.cpp",
         "modules/ui_shared/tests/test_map_tile_resolver.cpp",
         "modules/ui_shared/tests/test_legacy_filesystem_map_tile_source.cpp",
+        "modules/ui_presentation/include/ui_presentation/map/map_overlay_snapshot.h",
+        "modules/ui_presentation/include/ui_presentation/map/map_overlay_source.h",
+        "modules/ui_shared/include/ui/map_overlay/map_overlay_projector.h",
+        "modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp",
+        "modules/ui_shared/tests/test_map_overlay_projector.cpp",
+        "modules/ui_shared/tests/test_legacy_map_overlay_source.cpp",
+        "modules/ui_shared/include/ui/screens/gps/gps_ui_refresh_sink.h",
+        "modules/ui_shared/include/ui/screens/gps/gps_page_runtime_pump.h",
+        "modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp",
+        "modules/ui_shared/tests/test_gps_page_runtime_pump.cpp",
         "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h",
         "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h",
         "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp",
@@ -486,6 +506,9 @@ def check_legacy_burndown_register() -> int:
         "Map tile path/cache legacy runtime",
         "Map tile visible plan in platform renderer",
         "ESP decoded LVGL tile cache",
+        "Map overlay current/team marker projection",
+        "Map route/tracker overlay projection",
+        "GPS page refresh cadence",
     ]
     for surface in required_surfaces:
         if surface not in text:
@@ -1853,6 +1876,390 @@ def check_map_tile_render_queue_cache_boundary() -> int:
     return failures
 
 
+def check_map_overlay_route_tracker_boundary() -> int:
+    failures = 0
+
+    snapshot_header = "modules/ui_presentation/include/ui_presentation/map/map_overlay_snapshot.h"
+    source_header = "modules/ui_presentation/include/ui_presentation/map/map_overlay_source.h"
+    projector_header = "modules/ui_shared/include/ui/map_overlay/map_overlay_projector.h"
+    projector_source = "modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp"
+    legacy_header = "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h"
+    legacy_source = "modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp"
+    projector_test = "modules/ui_shared/tests/test_map_overlay_projector.cpp"
+    legacy_test = "modules/ui_shared/tests/test_legacy_map_overlay_source.cpp"
+    viewport_source = "modules/ui_shared/src/ui/widgets/map/map_viewport.cpp"
+    runtime_source = "modules/ui_shared/src/ui/screens/gps/gps_page_runtime.cpp"
+    runtime_register = "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md"
+    burndown_register = "docs/audits/LEGACY_BURNDOWN_REGISTER.md"
+
+    if exists(snapshot_header):
+        text = strip_cpp_comments(read_text(snapshot_header))
+        for token in [
+            "enum class MapOverlayKind",
+            "CurrentPosition",
+            "TeamMember",
+            "RoutePoint",
+            "TrackPoint",
+            "MeasurementPoint",
+            "SelectedTarget",
+            "Warning",
+            "enum class MapOverlayStyle",
+            "struct MapGeoPoint",
+            "struct MapOverlayItem",
+            "FixedText<32> label",
+            "FixedText<64> detail",
+            "uint32_t stable_id",
+            "struct MapOverlaySnapshot",
+            "kMaxItems",
+            "MapOverlayItem items[kMaxItems]",
+            "bool truncated",
+        ]:
+            if token not in text:
+                failures += fail(f"MapOverlaySnapshot missing token: {token}")
+        for token in [
+            "lvgl.h",
+            "lv_obj_t",
+            "MapTilePayload",
+            "IMapTileSource",
+            "IMapTileCache",
+            "bitmap",
+            "filesystem",
+            "path",
+            "GpsStatusSource",
+            "ITeamUiStore",
+            "TeamUiStore",
+            "route store",
+        ]:
+            if token in text:
+                failures += fail(f"MapOverlaySnapshot owns forbidden runtime/render token: {token}")
+
+    if exists(source_header):
+        text = strip_cpp_comments(read_text(source_header))
+        for token in ["IMapOverlayPresentationSource", "buildMapOverlaySnapshot"]:
+            if token not in text:
+                failures += fail(f"Map overlay source header missing token: {token}")
+        for token in ["lvgl.h", "platform::ui::gps", "team_ui_chatlog_load_recent", "ITeamUiStore", "filesystem"]:
+            if token in text:
+                failures += fail(f"Map overlay source port exposes forbidden token: {token}")
+
+    for path in [projector_header, projector_source]:
+        if exists(path):
+            text = strip_cpp_comments(read_text(path))
+            for token in [
+                "platform::ui::gps::get_data",
+                "team_ui_chatlog_load_recent",
+                "team_ui_posring_load_latest",
+                "decodeTeamChatLocation",
+                "lvgl.h",
+                "lv_obj_t",
+                "IMapTileSource",
+                "filesystem",
+                "fopen",
+            ]:
+                if token in text:
+                    failures += fail(f"{path} contains forbidden overlay projector token: {token}")
+
+    if exists(projector_header):
+        text = read_text(projector_header)
+        for token in ["MapOverlayProjector", "projectCurrentPosition", "projectTeamMember"]:
+            if token not in text:
+                failures += fail(f"MapOverlayProjector header missing token: {token}")
+
+    if exists(projector_source):
+        text = read_text(projector_source)
+        for token in [
+            "MapOverlayProjector::projectCurrentPosition",
+            "MapOverlayKind::CurrentPosition",
+            "MapOverlayStyle::OwnPosition",
+            "MapOverlayProjector::projectTeamMember",
+            "MapOverlayKind::TeamMember",
+            "MapOverlayStyle::Team",
+        ]:
+            if token not in text:
+                failures += fail(f"MapOverlayProjector source missing token: {token}")
+
+    if exists(legacy_header):
+        text = strip_cpp_comments(read_text(legacy_header))
+        for token in [
+            "IMapOverlayGpsSource",
+            "currentFix",
+            "IMapOverlayTeamSource",
+            "TeamPoint",
+            "latestTeamPoints",
+            "LegacyMapOverlaySource",
+            "IMapOverlayPresentationSource",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyMapOverlaySource header missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "platform::ui::gps::get_data", "team_ui_chatlog_load_recent", "decodeTeamChatLocation"]:
+            if token in text:
+                failures += fail(f"LegacyMapOverlaySource header exposes forbidden token: {token}")
+
+    if exists(legacy_source):
+        text = strip_cpp_comments(read_text(legacy_source))
+        for token in [
+            "LegacyMapOverlaySource::buildMapOverlaySnapshot",
+            "projector_.projectCurrentPosition",
+            "projector_.projectTeamMember",
+            "kMaxLegacyTeamPoints",
+        ]:
+            if token not in text:
+                failures += fail(f"LegacyMapOverlaySource source missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "platform::ui::gps::get_data", "team_ui_chatlog_load_recent", "decodeTeamChatLocation", "IMapTileSource"]:
+            if token in text:
+                failures += fail(f"LegacyMapOverlaySource source owns forbidden render/source token: {token}")
+
+    for path in [projector_test, legacy_test]:
+        if exists(path):
+            text = read_text(path)
+            if "MapOverlay" not in text:
+                failures += fail(f"{path} does not exercise map overlay boundary")
+
+    if exists(viewport_source):
+        text = strip_cpp_comments(read_text(viewport_source))
+        for token in [
+            "platform::ui::gps::get_data",
+            "team_ui_chatlog_load_recent",
+            "team_ui_posring_load_latest",
+            "decodeTeamChatLocation",
+            "ITeamUiStore",
+            "TeamUiStore",
+        ]:
+            if token in text:
+                failures += fail(f"Map viewport owns forbidden overlay source token: {token}")
+
+    if exists(runtime_source):
+        text = read_text(runtime_source)
+        for token in [
+            "LegacyMapOverlaySource",
+            "IMapOverlayGpsSource",
+            "IMapOverlayTeamSource",
+            "buildMapOverlaySnapshot",
+        ]:
+            if token not in text:
+                failures += fail(f"gps_page_runtime.cpp missing overlay runtime wiring token: {token}")
+
+    if exists(runtime_register):
+        text = read_text(runtime_register)
+        for token in [
+            "Map overlay/route/tracker ownership",
+            "7.12",
+            "MapOverlaySnapshot",
+            "LegacyMapOverlaySource",
+            "route/tracker overlay sources have exit conditions",
+        ]:
+            if token not in text:
+                failures += fail(f"PHASE7_RUNTIME_OWNERSHIP_REGISTER missing map overlay token: {token}")
+
+    if exists(burndown_register):
+        text = read_text(burndown_register)
+        for token in [
+            "Map overlay current/team marker projection",
+            "Map route/tracker overlay projection",
+            "MapOverlayProjector",
+            "Dedicated map overlay renderer consumes `MapOverlaySnapshot`",
+        ]:
+            if token not in text:
+                failures += fail(f"LEGACY_BURNDOWN_REGISTER missing map overlay token: {token}")
+
+    return failures
+
+
+def check_gps_runtime_scheduling_boundary() -> int:
+    failures = 0
+
+    sink_header = "modules/ui_shared/include/ui/screens/gps/gps_ui_refresh_sink.h"
+    pump_header = "modules/ui_shared/include/ui/screens/gps/gps_page_runtime_pump.h"
+    pump_source = "modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp"
+    pump_test = "modules/ui_shared/tests/test_gps_page_runtime_pump.cpp"
+    runtime_source = "modules/ui_shared/src/ui/screens/gps/gps_page_runtime.cpp"
+    runtime_register = "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md"
+    burndown_register = "docs/audits/LEGACY_BURNDOWN_REGISTER.md"
+
+    if exists(sink_header):
+        text = strip_cpp_comments(read_text(sink_header))
+        for token in ["class IGpsUiRefreshSink", "onGpsRuntimeUpdated"]:
+            if token not in text:
+                failures += fail(f"IGpsUiRefreshSink missing token: {token}")
+        for token in ["platform::ui::gps", "GpsState", "GpsStatusSnapshot", "lvgl.h", "lv_obj_t"]:
+            if token in text:
+                failures += fail(f"IGpsUiRefreshSink exposes forbidden runtime/render token: {token}")
+
+    if exists(pump_header):
+        text = strip_cpp_comments(read_text(pump_header))
+        for token in [
+            "class IGpsStatusRefreshModel",
+            "virtual void refresh()",
+            "class GpsPageRuntimePump",
+            "setActive",
+            "active() const",
+            "update(uint32_t now_ms)",
+            "interval_ms_",
+            "last_update_ms_",
+            "has_last_update_",
+        ]:
+            if token not in text:
+                failures += fail(f"GpsPageRuntimePump header missing token: {token}")
+        for token in ["platform::ui::gps", "lvgl.h", "lv_obj_t", "GpsStatusSnapshot", "MapWorkspaceModel"]:
+            if token in text:
+                failures += fail(f"GpsPageRuntimePump header owns forbidden token: {token}")
+
+    if exists(pump_source):
+        text = strip_cpp_comments(read_text(pump_source))
+        for token in [
+            "GpsPageRuntimePump::setActive",
+            "GpsPageRuntimePump::active",
+            "GpsPageRuntimePump::update",
+            "model_.refresh()",
+            "ui_->onGpsRuntimeUpdated()",
+            "has_last_update_",
+        ]:
+            if token not in text:
+                failures += fail(f"GpsPageRuntimePump source missing token: {token}")
+        for token in ["platform::ui::gps", "lvgl.h", "lv_obj_t", "millis()", "MapWorkspaceModel"]:
+            if token in text:
+                failures += fail(f"GpsPageRuntimePump source owns forbidden token: {token}")
+
+    if exists(pump_test):
+        text = read_text(pump_test)
+        for token in ["GpsPageRuntimePump", "setActive(true)", "setActive(false)", "update"]:
+            if token not in text:
+                failures += fail(f"GPS pump test missing token: {token}")
+
+    if exists(runtime_source):
+        text = read_text(runtime_source)
+        for token in [
+            "GpsPageRuntimePump",
+            "IGpsStatusRefreshModel",
+            "IGpsUiRefreshSink",
+            "gps_runtime_pump().update(sys::millis_now())",
+            "gps_runtime_pump().setActive(true)",
+            "gps_runtime_pump().setActive(false)",
+        ]:
+            if token not in text:
+                failures += fail(f"gps_page_runtime.cpp missing GPS pump wiring token: {token}")
+
+    if exists(runtime_register):
+        text = read_text(runtime_register)
+        for token in [
+            "GPS page timers/tasks",
+            "contained",
+            "7.13",
+            "GpsPageRuntimePump",
+            "LVGL timers are tick hooks only",
+        ]:
+            if token not in text:
+                failures += fail(f"PHASE7_RUNTIME_OWNERSHIP_REGISTER missing GPS scheduling token: {token}")
+
+    if exists(burndown_register):
+        text = read_text(burndown_register)
+        for token in [
+            "GPS page refresh cadence",
+            "GpsPageRuntimePump",
+            "Page-local adapters are replaced by GPS presentation refresh models",
+        ]:
+            if token not in text:
+                failures += fail(f"LEGACY_BURNDOWN_REGISTER missing GPS scheduling token: {token}")
+
+    return failures
+
+
+def check_phase7_final_readiness() -> int:
+    failures = 0
+
+    runtime_register = "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md"
+    burndown_register = "docs/audits/LEGACY_BURNDOWN_REGISTER.md"
+    final_report = "docs/audits/PHASE7_FINAL_RUNTIME_OWNERSHIP_READINESS_REPORT.md"
+    final_matrix = "docs/audits/PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md"
+    map_snapshot = "modules/ui_presentation/include/ui_presentation/map/map_workspace_snapshot.h"
+    chat_model_header = "modules/ui_presentation/include/ui_presentation/chat/chat_workspace_model.h"
+    chat_model_source = "modules/ui_presentation/src/chat/chat_workspace_model.cpp"
+
+    if exists(runtime_register):
+        text = read_text(runtime_register)
+        for token in ["future", "later", "TBD"]:
+            if re.search(rf"\b{re.escape(token)}\b", text, flags=re.IGNORECASE):
+                failures += fail(f"PHASE7_RUNTIME_OWNERSHIP_REGISTER contains naked deferred token: {token}")
+
+    if exists(burndown_register):
+        text = read_text(burndown_register)
+        for token in ["future", "later", "TBD"]:
+            if re.search(rf"\b{re.escape(token)}\b", text, flags=re.IGNORECASE):
+                failures += fail(f"LEGACY_BURNDOWN_REGISTER contains naked deferred token: {token}")
+
+    if exists(final_report):
+        text = read_text(final_report)
+        for token in [
+            "Chat delivery",
+            "Chat event pump",
+            "Team action sends",
+            "Team rich payload display",
+            "Team position picker",
+            "Key verification",
+            "Map tile source/cache",
+            "Map render queue/cache",
+            "Map overlay/route/tracker",
+            "GPS runtime scheduling",
+            "PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md",
+        ]:
+            if token not in text:
+                failures += fail(f"final readiness report missing token: {token}")
+
+    if exists(final_matrix):
+        text = read_text(final_matrix)
+        header = "| Surface | Current owner | New owner | Status | Removal condition | Blocking reason | Future phase |"
+        if header not in text:
+            failures += fail("final legacy surface matrix missing required header")
+        for token in [
+            "Chat delivery send-result bridge",
+            "Map overlay current position",
+            "Map route/tracker overlay",
+            "GPS page refresh cadence",
+            "ACK timeout projection",
+        ]:
+            if token not in text:
+                failures += fail(f"final legacy surface matrix missing token: {token}")
+        for line in text.splitlines():
+            if not line.startswith("| ") or line.startswith("| ---") or line.startswith("| Surface"):
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) < 7:
+                failures += fail(f"final legacy matrix row has too few cells: {line}")
+                continue
+            if not cells[4]:
+                failures += fail(f"final legacy matrix row missing removal condition: {line}")
+            if not cells[5]:
+                failures += fail(f"final legacy matrix row missing blocking reason: {line}")
+
+    if exists(map_snapshot):
+        text = strip_cpp_comments(read_text(map_snapshot))
+        for token in [
+            "MapTilePayload",
+            "IMapTileSource",
+            "IMapTileCache",
+            "IMapTileDecoderCache",
+            "lv_image_dsc_t",
+            "bitmap",
+            "cache object",
+            "filesystem path",
+        ]:
+            if token in text:
+                failures += fail(f"MapWorkspaceSnapshot owns forbidden final map token: {token}")
+
+    for path in [chat_model_header, chat_model_source]:
+        if exists(path):
+            text = strip_cpp_comments(read_text(path))
+            for token in [
+                "ChatDeliveryReadModel",
+                "KeyVerificationModel",
+                "ChatDeliveryActionService",
+            ]:
+                if token in text:
+                    failures += fail(f"{path} owns forbidden final chat runtime token: {token}")
+
+    return failures
+
+
 def check_chat_runtime_event_pump_boundary() -> int:
     failures = 0
     header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
@@ -2299,6 +2706,9 @@ def main() -> int:
     failures += check_team_position_picker_renderer_boundary()
     failures += check_map_tile_source_cache_boundary()
     failures += check_map_tile_render_queue_cache_boundary()
+    failures += check_map_overlay_route_tracker_boundary()
+    failures += check_gps_runtime_scheduling_boundary()
+    failures += check_phase7_final_readiness()
     failures += check_chat_runtime_event_pump_boundary()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()

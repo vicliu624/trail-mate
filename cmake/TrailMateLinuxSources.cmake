@@ -289,10 +289,12 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_presentation_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_actions/legacy_team_action_bridge.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_overlay/map_overlay_projector.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_tiles/legacy_filesystem_map_tile_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_tiles/map_tile_render_queue.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_tiles/map_tile_resolver.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_presentation/team_rich_payload_projector.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_map_overlay_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_map_presentation_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_map_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/fonts/font_utils.cpp"
@@ -348,6 +350,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gnss/gnss_skyplot_page_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gnss/gnss_skyplot_page_shell.cpp"
     # gps
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_runtime_pump.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_shell.cpp"
     # node info

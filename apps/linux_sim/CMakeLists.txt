@@ -598,6 +598,38 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_map_tile_render_queue_smoke
              COMMAND trailmate_map_tile_render_queue_smoke)
 
+    add_executable(trailmate_map_overlay_projector_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_map_overlay_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp"
+    )
+    target_include_directories(trailmate_map_overlay_projector_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_map_overlay_projector_smoke
+             COMMAND trailmate_map_overlay_projector_smoke)
+
+    add_executable(trailmate_legacy_map_overlay_source_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_map_overlay_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp"
+    )
+    target_include_directories(trailmate_legacy_map_overlay_source_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    add_test(NAME trailmate_legacy_map_overlay_source_smoke
+             COMMAND trailmate_legacy_map_overlay_source_smoke)
+
+    add_executable(trailmate_gps_page_runtime_pump_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_gps_page_runtime_pump.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp"
+    )
+    target_include_directories(trailmate_gps_page_runtime_pump_smoke
+        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+    add_test(NAME trailmate_gps_page_runtime_pump_smoke
+             COMMAND trailmate_gps_page_runtime_pump_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"

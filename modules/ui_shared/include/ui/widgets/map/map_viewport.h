@@ -6,6 +6,7 @@
 #pragma once
 
 #include "lvgl.h"
+#include "ui_presentation/map/map_overlay_snapshot.h"
 
 #include <cstdint>
 #include <string>
@@ -116,6 +117,7 @@ class Runtime
     friend const Widgets& widgets(const Runtime& runtime);
     friend void set_size(Runtime& runtime, lv_coord_t width, lv_coord_t height);
     friend void apply_model(Runtime& runtime, const Model& model);
+    friend void apply_overlay(Runtime& runtime, const ui::map::MapOverlaySnapshot& overlay);
     friend void clear(Runtime& runtime);
     friend bool project_point(const Runtime& runtime, const GeoPoint& point, lv_point_t& out_screen_point);
     friend Status status(const Runtime& runtime);
@@ -129,6 +131,7 @@ void destroy(Runtime& runtime);
 const Widgets& widgets(const Runtime& runtime);
 void set_size(Runtime& runtime, lv_coord_t width, lv_coord_t height);
 void apply_model(Runtime& runtime, const Model& model);
+void apply_overlay(Runtime& runtime, const ui::map::MapOverlaySnapshot& overlay);
 void clear(Runtime& runtime);
 bool project_point(const Runtime& runtime, const GeoPoint& point, lv_point_t& out_screen_point);
 bool preview_project_point(lv_obj_t* viewport_root, const Model& model, const GeoPoint& point, lv_point_t& out_screen_point);

@@ -111,6 +111,8 @@ add_library(trailmate_uconsole_shell
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_gps_status_source.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp"
     "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_chat_workspace_model.cpp"
