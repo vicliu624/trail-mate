@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "ui/map_tiles/map_tile_render_queue.h"
+#include "ui_map_runtime/map_tiles/map_tile_render_queue.h"
 
 #include "lvgl.h"
 

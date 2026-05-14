@@ -1,0 +1,16 @@
+{
+  "name": "ui_lvgl_core",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-I../../modules/ui_lvgl_core/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "lvgl"
+    }
+  ]
+}

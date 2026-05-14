@@ -1,0 +1,33 @@
+{
+  "name": "ui_chat_runtime",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-I../../modules/ui_chat_runtime/include",
+      "-I../../modules/ui_shared/include",
+      "-I../../modules/ui_legacy_adapters/include",
+      "-I../../modules/ui_presentation/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_team/include",
+      "-I../../platform/shared/include",
+      "-I../../platform/esp/arduino_common/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "core_chat"
+    },
+    {
+      "name": "core_sys"
+    },
+    {
+      "name": "core_team"
+    },
+    {
+      "name": "ui_legacy_adapters"
+    }
+  ]
+}

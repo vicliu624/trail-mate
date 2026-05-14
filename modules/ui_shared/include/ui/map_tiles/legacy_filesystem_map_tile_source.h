@@ -1,38 +1,3 @@
 #pragma once
 
-#include "ui/map_tiles/map_tile_resolver.h"
-#include "ui/map_tiles/map_tile_source.h"
-
-#include <cstddef>
-
-namespace ui
-{
-namespace map_tiles
-{
-
-class LegacyFilesystemMapTileSource final : public IMapTileSource
-{
-  public:
-    LegacyFilesystemMapTileSource(IMapTileFileSystem& file_system,
-                                  const char* root_prefix = "");
-
-    MapTileLookupResult lookup(const MapTileRef& ref) const override;
-
-    bool read(const MapTileRef& ref,
-              uint8_t* buffer,
-              std::size_t capacity,
-              std::size_t& out_size,
-              MapTileFormat& out_format) const override;
-
-    bool resolvePath(const MapTileRef& ref, char* out_path, std::size_t out_size) const;
-    bool resolveDirectory(MapTileLayer layer, char* out_path, std::size_t out_size) const;
-    bool layerDirectoryAvailable(MapTileLayer layer) const;
-    bool anyContourDirectoryAvailable() const;
-
-  private:
-    IMapTileFileSystem& file_system_;
-    MapTileResolver resolver_;
-};
-
-} // namespace map_tiles
-} // namespace ui
+#include "ui_map_runtime/map_tiles/filesystem_map_tile_source.h"

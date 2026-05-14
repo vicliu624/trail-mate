@@ -1,0 +1,26 @@
+{
+  "name": "ui_lvgl_ux_packs",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-I../../modules/ui_lvgl_ux_packs/include",
+      "-I../../modules/ui_lvgl_core/include",
+      "-I../../modules/ui_shared/include",
+      "-I../../modules/ui_presentation/include",
+      "-I../../modules/core_team/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "lvgl"
+    },
+    {
+      "name": "ui_lvgl_core"
+    },
+    {
+      "name": "core_team"
+    }
+  ]
+}

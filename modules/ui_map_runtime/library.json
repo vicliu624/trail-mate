@@ -1,0 +1,12 @@
+{
+  "name": "ui_map_runtime",
+  "version": "0.1.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-I../../modules/ui_map_runtime/include",
+      "-I../../modules/ui_presentation/include"
+    ]
+  }
+}

@@ -189,3 +189,44 @@ This audit is satisfied when later Phase 8 work can point each `ui_shared`
 change to one of the target buckets above and explain whether it is moving a
 technical primitive, UX pack decision, runtime helper, map runtime helper, chat
 runtime helper, GPS runtime helper, or legacy adapter.
+
+## Phase 8 Structural Migration Batch
+
+The first structural migration batch moves the Phase 7 extracted, lowest-risk
+helpers out of `ui_shared` while keeping forwarding headers at the old include
+paths.
+
+Moved to `ui_chat_runtime`:
+
+- `ChatPageRuntimeEventPump`
+- `IChatUiRefreshSink`
+
+Moved to `ui_gps_runtime`:
+
+- `GpsPageRuntimePump`
+- `IGpsUiRefreshSink`
+
+Moved to `ui_map_runtime`:
+
+- map tile types/source/cache/decoder-cache ports
+- `MapTileResolver`
+- `MapTileRenderQueue`
+- `FilesystemMapTileSource`
+- `MapOverlayProjector`
+
+Moved to `ui_legacy_adapters`:
+
+- `LegacyChatDeliveryEventBridge`
+- `LegacyChatDeliveryActionBridge`
+- `LegacyKeyVerificationSource`
+- `LegacyKeyVerificationActionSink`
+- `LegacyMapOverlaySource`
+
+Moved to `ui_lvgl_ux_packs`:
+
+- `TeamPositionPickerRenderer`
+- key verification modal renderer
+
+`LegacyFilesystemMapTileSource` is now a compatibility alias for
+`FilesystemMapTileSource`. New code should include
+`ui_map_runtime/map_tiles/filesystem_map_tile_source.h`.

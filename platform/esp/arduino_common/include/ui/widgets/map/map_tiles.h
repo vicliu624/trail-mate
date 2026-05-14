@@ -6,7 +6,7 @@
 #ifndef MAP_TILES_H
 #define MAP_TILES_H
 
-#include "ui/map_tiles/map_tile_render_queue.h"
+#include "ui_map_runtime/map_tiles/map_tile_render_queue.h"
 
 #include "lvgl.h"
 #include <cstddef>

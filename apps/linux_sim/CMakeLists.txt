@@ -392,8 +392,8 @@ if(BUILD_TESTING)
              COMMAND trailmate_legacy_chat_delivery_bridge_smoke)
 
     add_executable(trailmate_legacy_chat_delivery_event_bridge_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_chat_delivery_event_bridge.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_port.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
@@ -407,6 +407,7 @@ if(BUILD_TESTING)
     target_include_directories(trailmate_legacy_chat_delivery_event_bridge_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include"
@@ -415,29 +416,31 @@ if(BUILD_TESTING)
              COMMAND trailmate_legacy_chat_delivery_event_bridge_smoke)
 
     add_executable(trailmate_legacy_chat_delivery_action_bridge_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_chat_delivery_action_bridge.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_action_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
     )
     target_include_directories(trailmate_legacy_chat_delivery_action_bridge_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
     add_test(NAME trailmate_legacy_chat_delivery_action_bridge_smoke
              COMMAND trailmate_legacy_chat_delivery_action_bridge_smoke)
 
     add_executable(trailmate_legacy_key_verification_adapters_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/contact_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
     )
     target_include_directories(trailmate_legacy_key_verification_adapters_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
@@ -568,65 +571,73 @@ if(BUILD_TESTING)
              COMMAND trailmate_legacy_map_presentation_adapters_smoke)
 
     add_executable(trailmate_map_tile_resolver_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_map_tile_resolver.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/tests/test_map_tile_resolver.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp"
     )
     target_include_directories(trailmate_map_tile_resolver_smoke
         PRIVATE
-            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include")
     add_test(NAME trailmate_map_tile_resolver_smoke
              COMMAND trailmate_map_tile_resolver_smoke)
 
     add_executable(trailmate_legacy_filesystem_map_tile_source_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_filesystem_map_tile_source.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/tests/test_filesystem_map_tile_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp"
     )
     target_include_directories(trailmate_legacy_filesystem_map_tile_source_smoke
         PRIVATE
-            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include")
     add_test(NAME trailmate_legacy_filesystem_map_tile_source_smoke
              COMMAND trailmate_legacy_filesystem_map_tile_source_smoke)
 
     add_executable(trailmate_map_tile_render_queue_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_map_tile_render_queue.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/tests/test_map_tile_render_queue.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp"
     )
     target_include_directories(trailmate_map_tile_render_queue_smoke
         PRIVATE
-            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include")
     add_test(NAME trailmate_map_tile_render_queue_smoke
              COMMAND trailmate_map_tile_render_queue_smoke)
 
     add_executable(trailmate_map_overlay_projector_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_map_overlay_projector.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/tests/test_map_overlay_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp"
     )
     target_include_directories(trailmate_map_overlay_projector_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
     add_test(NAME trailmate_map_overlay_projector_smoke
              COMMAND trailmate_map_overlay_projector_smoke)
 
     add_executable(trailmate_legacy_map_overlay_source_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_legacy_map_overlay_source.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp"
     )
     target_include_directories(trailmate_legacy_map_overlay_source_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
     add_test(NAME trailmate_legacy_map_overlay_source_smoke
              COMMAND trailmate_legacy_map_overlay_source_smoke)
 
     add_executable(trailmate_gps_page_runtime_pump_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_gps_page_runtime_pump.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_gps_runtime/tests/test_gps_page_runtime_pump.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp"
     )
     target_include_directories(trailmate_gps_page_runtime_pump_smoke
-        PRIVATE "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_gps_runtime/include")
     add_test(NAME trailmate_gps_page_runtime_pump_smoke
              COMMAND trailmate_gps_page_runtime_pump_smoke)
 

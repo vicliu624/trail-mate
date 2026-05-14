@@ -1,20 +1,3 @@
 #pragma once
 
-namespace ui
-{
-namespace screens
-{
-namespace gps
-{
-
-class IGpsUiRefreshSink
-{
-  public:
-    virtual ~IGpsUiRefreshSink() = default;
-
-    virtual void onGpsRuntimeUpdated() = 0;
-};
-
-} // namespace gps
-} // namespace screens
-} // namespace ui
+#include "ui_gps_runtime/gps_ui_refresh_sink.h"

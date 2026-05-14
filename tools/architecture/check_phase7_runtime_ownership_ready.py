@@ -5,13 +5,110 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 
+PATH_ALIASES = {
+    "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
+    "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp":
+        "modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp",
+    "modules/ui_shared/tests/test_legacy_chat_delivery_action_bridge.cpp":
+        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge.cpp",
+    "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h":
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
+    "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp":
+        "modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp",
+    "modules/ui_shared/tests/test_legacy_chat_delivery_event_bridge.cpp":
+        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge.cpp",
+    "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h":
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_session.h",
+    "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h":
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_source.h",
+    "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h":
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_action_sink.h",
+    "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp":
+        "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
+    "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp":
+        "modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp",
+    "modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp":
+        "modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp",
+    "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h":
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_map_overlay_source.h",
+    "modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp":
+        "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
+    "modules/ui_shared/tests/test_legacy_map_overlay_source.cpp":
+        "modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source.cpp",
+    "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h":
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/key_verification_modal_renderer.h",
+    "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp":
+        "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
+    "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h":
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
+    "modules/ui_shared/src/ui/screens/chat/team_position_picker_renderer.cpp":
+        "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
+    "modules/ui_shared/include/ui/map_tiles/map_tile_types.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_types.h",
+    "modules/ui_shared/include/ui/map_tiles/map_tile_resolver.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_resolver.h",
+    "modules/ui_shared/include/ui/map_tiles/map_tile_source.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_source.h",
+    "modules/ui_shared/include/ui/map_tiles/map_tile_cache.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_cache.h",
+    "modules/ui_shared/include/ui/map_tiles/map_tile_decoder_cache.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_decoder_cache.h",
+    "modules/ui_shared/include/ui/map_tiles/map_tile_render_queue.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_render_queue.h",
+    "modules/ui_shared/include/ui/map_tiles/legacy_filesystem_map_tile_source.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/filesystem_map_tile_source.h",
+    "modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp":
+        "modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp",
+    "modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp":
+        "modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp",
+    "modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp":
+        "modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp",
+    "modules/ui_shared/tests/test_map_tile_render_queue.cpp":
+        "modules/ui_map_runtime/tests/test_map_tile_render_queue.cpp",
+    "modules/ui_shared/tests/test_map_tile_resolver.cpp":
+        "modules/ui_map_runtime/tests/test_map_tile_resolver.cpp",
+    "modules/ui_shared/tests/test_legacy_filesystem_map_tile_source.cpp":
+        "modules/ui_map_runtime/tests/test_filesystem_map_tile_source.cpp",
+    "modules/ui_shared/include/ui/map_overlay/map_overlay_projector.h":
+        "modules/ui_map_runtime/include/ui_map_runtime/map_overlay/map_overlay_projector.h",
+    "modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp":
+        "modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp",
+    "modules/ui_shared/tests/test_map_overlay_projector.cpp":
+        "modules/ui_map_runtime/tests/test_map_overlay_projector.cpp",
+    "modules/ui_shared/include/ui/screens/gps/gps_ui_refresh_sink.h":
+        "modules/ui_gps_runtime/include/ui_gps_runtime/gps_ui_refresh_sink.h",
+    "modules/ui_shared/include/ui/screens/gps/gps_page_runtime_pump.h":
+        "modules/ui_gps_runtime/include/ui_gps_runtime/gps_page_runtime_pump.h",
+    "modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp":
+        "modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp",
+    "modules/ui_shared/tests/test_gps_page_runtime_pump.cpp":
+        "modules/ui_gps_runtime/tests/test_gps_page_runtime_pump.cpp",
+    "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h":
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_ui_refresh_sink.h",
+    "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h":
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_page_runtime_event_pump.h",
+    "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp":
+        "modules/ui_chat_runtime/src/chat_page_runtime_event_pump.cpp",
+}
+
+
+def resolve_path(path: str) -> Path:
+    direct = ROOT / path
+    if direct.exists() and path not in PATH_ALIASES:
+        return direct
+    alias = PATH_ALIASES.get(path)
+    if alias:
+        return ROOT / alias
+    return direct
+
 
 def exists(path: str) -> bool:
-    return (ROOT / path).exists()
+    return resolve_path(path).exists()
 
 
 def read_text(path: str) -> str:
-    return (ROOT / path).read_text(encoding="utf-8", errors="ignore")
+    return resolve_path(path).read_text(encoding="utf-8", errors="ignore")
 
 
 def strip_cpp_comments(text: str) -> str:
@@ -1613,10 +1710,8 @@ def check_map_tile_source_cache_boundary() -> int:
     if exists(legacy_source):
         text = strip_cpp_comments(read_text(legacy_source))
         for token in [
-            "LegacyFilesystemMapTileSource::lookup",
             "MapTileStatus::Available",
             "MapTileStatus::Missing",
-            "LegacyFilesystemMapTileSource::read",
             "file_system_.readFile",
             "file_system_.isDirectory",
             "MapTileLayer::ContourMajor500",
@@ -1624,6 +1719,16 @@ def check_map_tile_source_cache_boundary() -> int:
         ]:
             if token not in text:
                 failures += fail(f"LegacyFilesystemMapTileSource source missing token: {token}")
+        if (
+            "LegacyFilesystemMapTileSource::lookup" not in text
+            and "FilesystemMapTileSource::lookup" not in text
+        ):
+            failures += fail("LegacyFilesystemMapTileSource source missing lookup implementation token")
+        if (
+            "LegacyFilesystemMapTileSource::read" not in text
+            and "FilesystemMapTileSource::read" not in text
+        ):
+            failures += fail("LegacyFilesystemMapTileSource source missing read implementation token")
         for token in ["lvgl.h", "lv_obj_t", "std::filesystem", "FILE*", "fopen", "SD.open", "LittleFS", "SPIFFS"]:
             if token in text:
                 failures += fail(f"LegacyFilesystemMapTileSource owns forbidden platform token: {token}")
@@ -1670,7 +1775,6 @@ def check_map_tile_source_cache_boundary() -> int:
             continue
         text = strip_cpp_comments(read_text(path))
         for token in [
-            "LegacyFilesystemMapTileSource",
             "IMapTileFileSystem",
             "MapTileRef",
             "tile_source().resolvePath",
@@ -1680,6 +1784,8 @@ def check_map_tile_source_cache_boundary() -> int:
         ]:
             if token not in text:
                 failures += fail(f"{path} missing map tile source ownership token: {token}")
+        if "LegacyFilesystemMapTileSource" not in text and "FilesystemMapTileSource" not in text:
+            failures += fail(f"{path} missing map tile source ownership token: FilesystemMapTileSource")
         for token in [
             "base_source_dir",
             "base_source_ext",

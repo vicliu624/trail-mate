@@ -129,19 +129,19 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_settings_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_presentation/team_rich_payload_projector.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/info_card.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
@@ -162,18 +162,18 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_message_list_input.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_message_list_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_message_list_styles.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_chat_runtime/src/chat_page_runtime_event_pump.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_protocol_support.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_send_flow.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/team_position_picker_renderer.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_shell.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/screens/gps/gps_modal.cpp
     ${CMAKE_SOURCE_DIR}/platform/esp/arduino_common/src/ui/screens/gps/gps_page_components.cpp
@@ -263,6 +263,11 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/boards/tab5/include"
     "${CMAKE_SOURCE_DIR}/boards/t_display_p4/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_shared/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_chat_runtime/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_gps_runtime/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/include"
     "${CMAKE_SOURCE_DIR}/modules/core_device/include"
     "${CMAKE_SOURCE_DIR}/modules/core_mesh/include"
     "${CMAKE_SOURCE_DIR}/modules/core_phone/include"

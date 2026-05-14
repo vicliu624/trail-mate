@@ -282,6 +282,43 @@ define board facts, or become product app shells.
 Phase 8.2 does not change ESP-IDF CMake, PlatformIO, Linux CMake, app runtime
 behavior, or existing target startup paths.
 
+## Phase 8.3 Progress
+
+Phase 8.3 establishes app shell skeletons but does not move runtime
+implementations or build host files.
+
+Skeleton app shells:
+
+```text
+apps/esp32_lvgl
+apps/nrf52_node
+apps/linux_uconsole_gtk
+apps/linux_sim_shell
+```
+
+These names describe product/runtime shape rather than build systems. They are
+architecture anchors for future migration. They do not build or alter runtime
+behavior in Phase 8.3.
+
+Target profile documentation under `docs/targets/` maps product target names to
+board, platform family, build entrypoint, app shell, UX profile placeholder, and
+status.
+
+The first structural migration batch also creates the target UI modules:
+
+```text
+modules/ui_chat_runtime
+modules/ui_map_runtime
+modules/ui_gps_runtime
+modules/ui_legacy_adapters
+modules/ui_lvgl_core
+modules/ui_lvgl_ux_packs
+```
+
+`modules/ui_shared` remains a transitional umbrella, but the moved Phase 7
+runtime/helper/adapter files must not gain new implementation at their old
+paths. Old headers may remain as forwarding headers only.
+
 ## Non-Goals
 
 Phase 8.1 does not:

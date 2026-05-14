@@ -7,7 +7,7 @@
 
 #include "lvgl.h"
 
-#include "ui/map_tiles/legacy_filesystem_map_tile_source.h"
+#include "ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
 
 #include <algorithm>
 #include <chrono>
@@ -87,10 +87,10 @@ StdMapTileFileSystem& tile_file_system()
     return fs;
 }
 
-ui::map_tiles::LegacyFilesystemMapTileSource& tile_source()
+ui::map_tiles::FilesystemMapTileSource& tile_source()
 {
     static const std::string root = default_storage_root().string();
-    static ui::map_tiles::LegacyFilesystemMapTileSource source(
+    static ui::map_tiles::FilesystemMapTileSource source(
         tile_file_system(),
         root.c_str());
     return source;

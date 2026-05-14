@@ -10,8 +10,8 @@
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "sys/clock.h"
-#include "ui/map_tiles/map_tile_decoder_cache.h"
-#include "ui/map_tiles/legacy_filesystem_map_tile_source.h"
+#include "ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
+#include "ui_map_runtime/map_tiles/map_tile_decoder_cache.h"
 #include "ui/page/page_profile.h"
 #include "ui/runtime/memory_profile.h"
 #include "ui/screens/gps/gps_constants.h"
@@ -322,9 +322,9 @@ LvglDecodedTileCache& decoded_tile_cache()
     return cache;
 }
 
-ui::map_tiles::LegacyFilesystemMapTileSource& tile_source()
+ui::map_tiles::FilesystemMapTileSource& tile_source()
 {
-    static ui::map_tiles::LegacyFilesystemMapTileSource source(tile_file_system(), "A:");
+    static ui::map_tiles::FilesystemMapTileSource source(tile_file_system(), "A:");
     return source;
 }
 

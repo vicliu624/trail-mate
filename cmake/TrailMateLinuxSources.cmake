@@ -73,6 +73,36 @@ function(_trailmate_set_linux_paths)
     set(TRAIL_MATE_UI_SHARED_SRC_ROOT
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src"
         PARENT_SCOPE)
+    set(TRAIL_MATE_UI_CHAT_RUNTIME_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/include"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_CHAT_RUNTIME_SRC_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/src"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_MAP_RUNTIME_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_GPS_RUNTIME_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_gps_runtime/include"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_GPS_RUNTIME_SRC_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_gps_runtime/src"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_LEGACY_ADAPTERS_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_LVGL_UX_PACKS_INCLUDE_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/include"
+        PARENT_SCOPE)
+    set(TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src"
+        PARENT_SCOPE)
     set(TRAIL_MATE_UI_PRESENTATION_INCLUDE_ROOT
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
         PARENT_SCOPE)
@@ -282,19 +312,19 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_settings_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_presentation_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_action_sink.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_key_verification_action_sink.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_key_verification_source.cpp"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT}/legacy_chat_delivery_action_bridge.cpp"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT}/legacy_chat_delivery_event_bridge.cpp"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT}/legacy_key_verification_action_sink.cpp"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT}/legacy_key_verification_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_presentation_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_actions/legacy_team_action_bridge.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_overlay/map_overlay_projector.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_tiles/legacy_filesystem_map_tile_source.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_tiles/map_tile_render_queue.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/map_tiles/map_tile_resolver.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_overlay/map_overlay_projector.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/filesystem_map_tile_source.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/map_tile_render_queue.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/map_tile_resolver.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_presentation/team_rich_payload_projector.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_map_overlay_source.cpp"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT}/legacy_map_overlay_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_map_presentation_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_map_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/fonts/font_utils.cpp"
@@ -324,14 +354,14 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_message_list_input.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_message_list_layout.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_message_list_styles.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_page_runtime_event_pump.cpp"
+    "${TRAIL_MATE_UI_CHAT_RUNTIME_SRC_ROOT}/chat_page_runtime_event_pump.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_page_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_page_shell.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_protocol_support.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_send_flow.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_ui_controller.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/key_verification_modal_renderer.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/team_position_picker_renderer.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/common/key_verification_modal_renderer.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/common/team_position_picker_renderer.cpp"
     # contacts
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/contacts/contacts_page_components.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/contacts/contacts_page_input.cpp"
@@ -350,7 +380,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gnss/gnss_skyplot_page_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gnss/gnss_skyplot_page_shell.cpp"
     # gps
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_runtime_pump.cpp"
+    "${TRAIL_MATE_UI_GPS_RUNTIME_SRC_ROOT}/gps_page_runtime_pump.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_shell.cpp"
     # node info
@@ -419,6 +449,11 @@ set(TRAIL_MATE_LINUX_COMMON_INCLUDES
     "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_PRESENTATION_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_SHARED_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_CHAT_RUNTIME_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_GPS_RUNTIME_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_INCLUDE_ROOT}"
 )
 
 set(TRAIL_MATE_LINUX_UI_SHELL_INCLUDES
@@ -429,6 +464,11 @@ set(TRAIL_MATE_LINUX_UI_SHELL_INCLUDES
     "${TRAIL_MATE_CORE_CHAT_NANOPB_ROOT}"
     "${TRAIL_MATE_CORE_TEAM_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_SHARED_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_CHAT_RUNTIME_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_GPS_RUNTIME_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_LEGACY_ADAPTERS_INCLUDE_ROOT}"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_SYS_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_DEVICE_INCLUDE_ROOT}"
     "${TRAIL_MATE_CORE_PHONE_INCLUDE_ROOT}"

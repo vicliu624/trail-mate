@@ -18,6 +18,14 @@ def fail(message: str) -> int:
     return 1
 
 
+def iter_code_files(root: Path):
+    if not root.exists():
+        return
+    for path in root.rglob("*"):
+        if path.is_file() and path.suffix in {".h", ".hpp", ".cpp", ".cc", ".cxx"}:
+            yield path
+
+
 def check_required_files() -> int:
     required = [
         "docs/specification/REPOSITORY_LAYOUT_ARCHITECTURE_SPEC.md",
@@ -27,10 +35,89 @@ def check_required_files() -> int:
         "docs/decisions/ADR_BUILD_ENTRYPOINTS.md",
         "docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md",
         "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md",
+        "docs/specification/APP_SHELL_ARCHITECTURE_SPEC.md",
+        "docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md",
         "builds/README.md",
         "builds/esp_idf/README.md",
         "builds/pio_nrf52/README.md",
         "builds/linux_cmake/README.md",
+        "apps/esp32_lvgl/README.md",
+        "apps/esp32_lvgl/APP_SHELL_MANIFEST.md",
+        "apps/nrf52_node/README.md",
+        "apps/nrf52_node/APP_SHELL_MANIFEST.md",
+        "apps/linux_uconsole_gtk/README.md",
+        "apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md",
+        "apps/linux_sim_shell/README.md",
+        "apps/linux_sim_shell/APP_SHELL_MANIFEST.md",
+        "docs/targets/README.md",
+        "docs/targets/esp32_lvgl_targets.md",
+        "docs/targets/nrf52_node_targets.md",
+        "docs/targets/linux_targets.md",
+        "docs/ux_profiles/README.md",
+        "docs/ux_profiles/deck_full.md",
+        "docs/ux_profiles/pager_compact.md",
+        "docs/ux_profiles/watch_quick.md",
+        "docs/ux_profiles/cardputer_wide.md",
+        "docs/ux_profiles/tab5_touch.md",
+        "docs/ux_profiles/tiny_node_status.md",
+        "docs/ux_profiles/uconsole_desktop.md",
+        "modules/ui_chat_runtime/README.md",
+        "modules/ui_chat_runtime/library.json",
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_page_runtime_event_pump.h",
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_ui_refresh_sink.h",
+        "modules/ui_chat_runtime/src/chat_page_runtime_event_pump.cpp",
+        "modules/ui_map_runtime/README.md",
+        "modules/ui_map_runtime/library.json",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_types.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_resolver.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_source.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_cache.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_render_queue.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_decoder_cache.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/filesystem_map_tile_source.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_overlay/map_overlay_projector.h",
+        "modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp",
+        "modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp",
+        "modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp",
+        "modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp",
+        "modules/ui_map_runtime/tests/test_map_tile_resolver.cpp",
+        "modules/ui_map_runtime/tests/test_map_tile_render_queue.cpp",
+        "modules/ui_map_runtime/tests/test_filesystem_map_tile_source.cpp",
+        "modules/ui_map_runtime/tests/test_map_overlay_projector.cpp",
+        "modules/ui_gps_runtime/README.md",
+        "modules/ui_gps_runtime/library.json",
+        "modules/ui_gps_runtime/include/ui_gps_runtime/gps_page_runtime_pump.h",
+        "modules/ui_gps_runtime/include/ui_gps_runtime/gps_ui_refresh_sink.h",
+        "modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp",
+        "modules/ui_gps_runtime/tests/test_gps_page_runtime_pump.cpp",
+        "modules/ui_legacy_adapters/README.md",
+        "modules/ui_legacy_adapters/library.json",
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_session.h",
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_source.h",
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_action_sink.h",
+        "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_map_overlay_source.h",
+        "modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
+        "modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp",
+        "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source.cpp",
+        "modules/ui_lvgl_core/README.md",
+        "modules/ui_lvgl_core/library.json",
+        "modules/ui_lvgl_core/include/ui_lvgl_core/lvgl_focus_group.h",
+        "modules/ui_lvgl_core/include/ui_lvgl_core/.gitkeep",
+        "modules/ui_lvgl_core/src/.gitkeep",
+        "modules/ui_lvgl_ux_packs/README.md",
+        "modules/ui_lvgl_ux_packs/library.json",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
+        "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/key_verification_modal_renderer.h",
+        "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
         "tools/architecture/check_phase8_layout_ready.py",
     ]
 
@@ -88,6 +175,17 @@ def check_specification_language() -> int:
             "builds/pio_nrf52",
             "builds/linux_cmake",
             "`apps/esp_idf` and `apps/esp_pio` remain transitional",
+            "Phase 8.3 establishes app shell skeletons",
+            "apps/esp32_lvgl",
+            "apps/nrf52_node",
+            "apps/linux_uconsole_gtk",
+            "apps/linux_sim_shell",
+            "modules/ui_chat_runtime",
+            "modules/ui_map_runtime",
+            "modules/ui_gps_runtime",
+            "modules/ui_legacy_adapters",
+            "modules/ui_lvgl_core",
+            "modules/ui_lvgl_ux_packs",
         ],
         "repository layout",
     )
@@ -163,6 +261,250 @@ def check_audit_language() -> int:
         "ui_shared split audit",
     )
 
+    return failures
+
+
+def check_app_shell_language() -> int:
+    failures = 0
+
+    app_shell_tokens = [
+        "AppShell",
+        "AppShellManifest",
+        "TargetProfile",
+        "AppShellLifecycle",
+        "AppShellCompatibilityAdapter",
+        "Build Entrypoint invokes",
+        "App Shell composes",
+        "Target chooses",
+        "Board describes",
+        "UX Pack presents",
+        "select target profile",
+        "select board package",
+        "select platform family",
+        "select UX profile / UX pack",
+        "hand off to product composition",
+        "start runtime facade",
+        "own build host files",
+        "define board facts",
+        "contain SDK/HAL implementation",
+        "implement screen internals",
+        "assemble Chat/Map/GPS details behind hidden globals",
+    ]
+
+    failures += check_tokens(
+        "docs/specification/APP_SHELL_ARCHITECTURE_SPEC.md",
+        app_shell_tokens
+        + [
+            "apps/esp32_lvgl",
+            "apps/nrf52_node",
+            "apps/linux_uconsole_gtk",
+            "apps/linux_sim_shell",
+            "trail_mate_esp32_lvgl_start",
+            "trail_mate_nrf52_node_start",
+            "trail_mate_linux_uconsole_gtk_start",
+            "trail_mate_linux_sim_shell_start",
+            "No behavior change",
+        ],
+        "app shell specification",
+    )
+
+    failures += check_tokens(
+        "docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md",
+        [
+            "apps/esp_idf",
+            "apps/esp_pio",
+            "apps/linux_sim",
+            "apps/linux_uconsole",
+            "apps/linux_rpi",
+            "apps/linux_unoq",
+            "apps/gat562_mesh_evb_pro",
+            "Current role",
+            "App shell part",
+            "Build entrypoint part",
+            "Platform part",
+            "Board-specific part",
+            "Future app shell direction",
+            "Migration risk",
+            "apps/esp32_lvgl",
+            "apps/nrf52_node",
+            "apps/linux_uconsole_gtk",
+            "apps/linux_sim_shell",
+            "skeleton only",
+        ],
+        "app shell audit",
+    )
+
+    shell_docs = {
+        "apps/esp32_lvgl/README.md": [
+            "Role = product app shell / target app shell",
+            "Build entrypoint = `builds/esp_idf`",
+            "Current transitional path = `apps/esp_idf`",
+            "must not",
+            "own build host files",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/esp32_lvgl/APP_SHELL_MANIFEST.md": [
+            "Product app shell / target app shell",
+            "ESP / ESP32-P4",
+            "LVGL",
+            "`builds/esp_idf`",
+            "`apps/esp_idf`",
+            "own build host files",
+            "Skeleton only",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/nrf52_node/README.md": [
+            "Role = product app shell / target app shell",
+            "Build entrypoint = `builds/pio_nrf52`",
+            "Current transitional path = `apps/esp_pio`",
+            "apps/gat562_mesh_evb_pro",
+            "own build host files",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/nrf52_node/APP_SHELL_MANIFEST.md": [
+            "Product app shell / target app shell",
+            "nRF52",
+            "`builds/pio_nrf52`",
+            "`apps/esp_pio`",
+            "`apps/gat562_mesh_evb_pro`",
+            "own build host files",
+            "Skeleton only",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/linux_uconsole_gtk/README.md": [
+            "Role = product app shell / target app shell",
+            "Build entrypoint = `builds/linux_cmake`",
+            "Current transitional path = `apps/linux_uconsole`",
+            "own build host files",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md": [
+            "Product app shell / target app shell",
+            "Linux uConsole",
+            "GTK",
+            "`builds/linux_cmake`",
+            "`apps/linux_uconsole`",
+            "own build host files",
+            "Skeleton only",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/linux_sim_shell/README.md": [
+            "Role = product app shell / target app shell",
+            "Build entrypoint = `builds/linux_cmake`",
+            "Current transitional path = `apps/linux_sim`",
+            "own build host files",
+            "No behavior change in Phase 8.3",
+        ],
+        "apps/linux_sim_shell/APP_SHELL_MANIFEST.md": [
+            "Product app shell / target app shell",
+            "Linux simulator",
+            "`builds/linux_cmake`",
+            "`apps/linux_sim`",
+            "own build host files",
+            "Skeleton only",
+            "No behavior change in Phase 8.3",
+        ],
+    }
+
+    for path, tokens in shell_docs.items():
+        failures += check_tokens(path, tokens, "app shell skeleton")
+
+    target_docs = {
+        "docs/targets/README.md": [
+            "Target profiles",
+            "Build Entrypoint invokes",
+            "App Shell composes",
+            "Target chooses",
+            "Board describes",
+            "UX Pack presents",
+            "esp32_lvgl_targets.md",
+            "nrf52_node_targets.md",
+            "linux_targets.md",
+        ],
+        "docs/targets/esp32_lvgl_targets.md": [
+            "tab5",
+            "tdeck",
+            "builds/esp_idf",
+            "apps/esp32_lvgl",
+            "tab5_touch",
+            "deck_full",
+            "transitional",
+            "No behavior change in Phase 8.3",
+        ],
+        "docs/targets/nrf52_node_targets.md": [
+            "gat562",
+            "gat562_mesh_evb_pro",
+            "builds/pio_nrf52",
+            "apps/nrf52_node",
+            "tiny_node_status",
+            "transitional",
+            "apps/esp_pio",
+            "No behavior change in Phase 8.3",
+        ],
+        "docs/targets/linux_targets.md": [
+            "uconsole",
+            "linux_sim",
+            "builds/linux_cmake",
+            "apps/linux_uconsole_gtk",
+            "apps/linux_sim_shell",
+            "uconsole_desktop",
+            "simulator_full",
+            "transitional",
+            "No behavior change in Phase 8.3",
+        ],
+    }
+
+    for path, tokens in target_docs.items():
+        failures += check_tokens(path, tokens, "target profile")
+
+    return failures
+
+
+def check_ux_profile_language() -> int:
+    failures = 0
+    common = [
+        "Screen Class",
+        "Input Model",
+        "Feature Set",
+        "Screen Set",
+        "Map Mode",
+        "Chat Mode",
+        "Team Action Mode",
+        "GPS Mode",
+        "Modal/Picker Strategy",
+        "Renderer Family",
+        "Deferred Decisions",
+        "Board describes. Target chooses. UX Pack presents. Renderer draws.",
+    ]
+    profiles = [
+        "docs/ux_profiles/deck_full.md",
+        "docs/ux_profiles/pager_compact.md",
+        "docs/ux_profiles/watch_quick.md",
+        "docs/ux_profiles/cardputer_wide.md",
+        "docs/ux_profiles/tab5_touch.md",
+        "docs/ux_profiles/tiny_node_status.md",
+        "docs/ux_profiles/uconsole_desktop.md",
+    ]
+    for path in profiles:
+        failures += check_tokens(path, common, "UX profile")
+
+    failures += check_tokens(
+        "docs/ux_profiles/README.md",
+        [
+            "Board describes",
+            "Target chooses",
+            "UX Pack presents",
+            "Renderer draws",
+            "deck_full.md",
+            "pager_compact.md",
+            "watch_quick.md",
+            "cardputer_wide.md",
+            "tab5_touch.md",
+            "tiny_node_status.md",
+            "uconsole_desktop.md",
+        ],
+        "UX profile index",
+    )
     return failures
 
 
@@ -290,6 +632,168 @@ def check_build_entrypoint_language() -> int:
     return failures
 
 
+def check_forwarding_headers() -> int:
+    expected = {
+        "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h":
+            "ui_chat_runtime/chat_page_runtime_event_pump.h",
+        "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h":
+            "ui_chat_runtime/chat_ui_refresh_sink.h",
+        "modules/ui_shared/include/ui/screens/gps/gps_page_runtime_pump.h":
+            "ui_gps_runtime/gps_page_runtime_pump.h",
+        "modules/ui_shared/include/ui/screens/gps/gps_ui_refresh_sink.h":
+            "ui_gps_runtime/gps_ui_refresh_sink.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_types.h":
+            "ui_map_runtime/map_tiles/map_tile_types.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_resolver.h":
+            "ui_map_runtime/map_tiles/map_tile_resolver.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_source.h":
+            "ui_map_runtime/map_tiles/map_tile_source.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_cache.h":
+            "ui_map_runtime/map_tiles/map_tile_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_decoder_cache.h":
+            "ui_map_runtime/map_tiles/map_tile_decoder_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_render_queue.h":
+            "ui_map_runtime/map_tiles/map_tile_render_queue.h",
+        "modules/ui_shared/include/ui/map_tiles/legacy_filesystem_map_tile_source.h":
+            "ui_map_runtime/map_tiles/filesystem_map_tile_source.h",
+        "modules/ui_shared/include/ui/map_overlay/map_overlay_projector.h":
+            "ui_map_runtime/map_overlay/map_overlay_projector.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h":
+            "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
+            "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h":
+            "ui_legacy_adapters/legacy_key_verification_session.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h":
+            "ui_legacy_adapters/legacy_key_verification_source.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h":
+            "ui_legacy_adapters/legacy_key_verification_action_sink.h",
+        "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h":
+            "ui_legacy_adapters/legacy_map_overlay_source.h",
+        "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h":
+            "ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
+        "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h":
+            "ui_lvgl_ux_packs/common/key_verification_modal_renderer.h",
+    }
+
+    failures = 0
+    for path, include_token in expected.items():
+        if not exists(path):
+            failures += fail(f"missing forwarding header: {path}")
+            continue
+        text = read_text(path)
+        if include_token not in text:
+            failures += fail(f"{path} does not forward to {include_token}")
+        if "class " in text or "struct " in text or "namespace " in text:
+            failures += fail(f"{path} must be a forwarding header only")
+
+    forbidden_sources = [
+        "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp",
+        "modules/ui_shared/src/ui/screens/gps/gps_page_runtime_pump.cpp",
+        "modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp",
+        "modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp",
+        "modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp",
+        "modules/ui_shared/src/ui/map_overlay/map_overlay_projector.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp",
+        "modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp",
+        "modules/ui_shared/src/ui/screens/chat/team_position_picker_renderer.cpp",
+        "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp",
+    ]
+    for path in forbidden_sources:
+        if exists(path):
+            failures += fail(f"old implementation path still exists: {path}")
+
+    return failures
+
+
+def check_runtime_module_boundaries() -> int:
+    failures = 0
+    forbidden_by_root = {
+        "modules/ui_chat_runtime": [
+            "lvgl.h",
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+        ],
+        "modules/ui_gps_runtime": [
+            "lvgl.h",
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+        ],
+        "modules/ui_map_runtime": [
+            "lvgl.h",
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+        ],
+        "modules/ui_legacy_adapters": [
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+        ],
+        "modules/ui_lvgl_ux_packs": [
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+            "platform/",
+            "platform\\",
+        ],
+    }
+
+    for root_name, forbidden_tokens in forbidden_by_root.items():
+        for path in iter_code_files(ROOT / root_name):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for token in forbidden_tokens:
+                if token in text:
+                    failures += fail(
+                        f"{path.relative_to(ROOT)} contains forbidden boundary token {token}"
+                    )
+
+    filesystem_header = "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
+    if exists(filesystem_header):
+        text = read_text(filesystem_header)
+        if "class FilesystemMapTileSource" not in text:
+            failures += fail("FilesystemMapTileSource class is missing")
+        if "using LegacyFilesystemMapTileSource = FilesystemMapTileSource;" not in text:
+            failures += fail("LegacyFilesystemMapTileSource must be compatibility alias only")
+
+    for path in iter_code_files(ROOT / "modules/ui_map_runtime"):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if "LegacyFilesystemMapTileSource" in text and path.as_posix().endswith(
+            "filesystem_map_tile_source.h"
+        ):
+            continue
+        if "LegacyFilesystemMapTileSource" in text:
+            failures += fail(
+                f"{path.relative_to(ROOT)} uses deprecated LegacyFilesystemMapTileSource"
+            )
+
+    ui_presentation_root = ROOT / "modules/ui_presentation"
+    for path in iter_code_files(ui_presentation_root):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for token in ["lvgl.h", "platform/", "platform\\", "filesystem", "FILE*"]:
+            if token in text:
+                failures += fail(
+                    f"{path.relative_to(ROOT)} contains forbidden portable presentation token {token}"
+                )
+
+    return failures
+
+
 def check_transitional_app_markers() -> int:
     failures = 0
     marker_path = "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md"
@@ -324,7 +828,11 @@ def main() -> int:
     failures += check_required_files()
     failures += check_specification_language()
     failures += check_audit_language()
+    failures += check_app_shell_language()
+    failures += check_ux_profile_language()
     failures += check_build_entrypoint_language()
+    failures += check_forwarding_headers()
+    failures += check_runtime_module_boundaries()
     failures += check_transitional_app_markers()
 
     if failures:
