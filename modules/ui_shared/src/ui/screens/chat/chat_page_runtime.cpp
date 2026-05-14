@@ -15,6 +15,7 @@
 #include "ui/presentation_sources/legacy_key_verification_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
 #include "ui/presentation_sources/team_chat_presentation_source.h"
+#include "ui/screens/chat/chat_page_runtime_event_pump.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/team_actions/legacy_team_action_bridge.h"
 #include "ui/ui_common.h"
@@ -49,6 +50,43 @@ std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_team_chat_model = nullptr;
 std::unique_ptr<::ui::team_actions::ITeamLocationSource> s_team_location_source = nullptr;
 std::unique_ptr<::ui::team_actions::LegacyTeamActionBridge> s_team_action_sink = nullptr;
 std::unique_ptr<chat::ui::UiController> s_ui_controller = nullptr;
+std::unique_ptr<chat::ui::ChatPageRuntimeEventPump> s_event_pump = nullptr;
+std::unique_ptr<chat::ui::IChatUiRuntime> s_runtime_facade = nullptr;
+
+class ChatPageRuntimeFacade final : public chat::ui::IChatUiRuntime
+{
+  public:
+    ChatPageRuntimeFacade(chat::ui::ChatPageRuntimeEventPump& event_pump,
+                          chat::ui::UiController& controller)
+        : event_pump_(event_pump), controller_(controller)
+    {
+    }
+
+    void update() override
+    {
+        event_pump_.update();
+        controller_.update();
+    }
+
+    void onChatEvent(sys::Event* event) override
+    {
+        event_pump_.handleEvent(event);
+    }
+
+    chat::ui::ChatUiState getState() const override
+    {
+        return controller_.getState();
+    }
+
+    bool isTeamConversationActive() const override
+    {
+        return controller_.isTeamConversationActive();
+    }
+
+  private:
+    chat::ui::ChatPageRuntimeEventPump& event_pump_;
+    chat::ui::UiController& controller_;
+};
 
 class TeamControllerChatCommandPort final
     : public ::ui::presentation_sources::ITeamChatCommandPort
@@ -142,6 +180,8 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         lv_obj_del(s_chat_container);
     }
     s_chat_container = nullptr;
+    s_runtime_facade.reset();
+    s_event_pump.reset();
     s_ui_controller.reset();
     s_team_action_sink.reset();
     s_team_location_source.reset();
@@ -263,15 +303,23 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                    *s_chat_model,
                                    *s_team_chat_model,
                                    s_team_action_sink.get(),
-                                   s_delivery_event_bridge.get(),
                                    s_key_verification_model.get(),
-                                   s_key_verification_source.get(),
                                    default_channel,
                                    request_shell_exit,
                                    nullptr));
     s_ui_controller->init();
+    s_event_pump =
+        std::make_unique<chat::ui::ChatPageRuntimeEventPump>(
+            chat_service,
+            s_delivery_event_bridge.get(),
+            s_key_verification_source.get(),
+            s_key_verification_model.get(),
+            s_ui_controller.get());
+    s_runtime_facade =
+        std::unique_ptr<chat::ui::IChatUiRuntime>(
+            new ChatPageRuntimeFacade(*s_event_pump, *s_ui_controller));
 
-    app::runtimeFacade().setChatUiRuntime(s_ui_controller.get());
+    app::runtimeFacade().setChatUiRuntime(s_runtime_facade.get());
 }
 
 void exit(lv_obj_t* parent)
@@ -285,6 +333,8 @@ void exit(lv_obj_t* parent)
     }
 
     app::runtimeFacade().setChatUiRuntime(nullptr);
+    s_runtime_facade.reset();
+    s_event_pump.reset();
     s_ui_controller.reset();
     s_team_action_sink.reset();
     s_team_location_source.reset();

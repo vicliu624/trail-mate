@@ -12,8 +12,9 @@
 #include "ui/chat_ui_runtime.h"
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
-#include "ui/screens/chat/key_verification_modal_renderer.h"
 #include "ui/screens/chat/chat_message_list_components.h"
+#include "ui/screens/chat/chat_ui_refresh_sink.h"
+#include "ui/screens/chat/key_verification_modal_renderer.h"
 #include "ui/team_actions/team_action_sink.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
@@ -21,12 +22,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-namespace ui::presentation_sources
-{
-class LegacyChatDeliveryEventBridge;
-class LegacyKeyVerificationSource;
-}
 
 namespace ui::key_verification
 {
@@ -50,7 +45,7 @@ namespace ui
 // Do not add new direct ChatService rendering logic here unless it is
 // documented as legacy ownership. New non-team chat presentation should flow
 // through ChatWorkspaceModel.
-class UiController : public IChatUiRuntime
+class UiController : public IChatUiRefreshSink
 {
   public:
     using State = ChatUiState;
@@ -61,30 +56,30 @@ class UiController : public IChatUiRuntime
                  ::ui::chat::ChatWorkspaceModel& chat_model,
                  ::ui::chat::ChatWorkspaceModel& team_chat_model,
                  ::ui::team_actions::ITeamActionSink* team_action_sink = nullptr,
-                 ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
-                     delivery_event_bridge = nullptr,
                  ::ui::key_verification::KeyVerificationModel*
                      key_verification_model = nullptr,
-                 ::ui::presentation_sources::LegacyKeyVerificationSource*
-                     key_verification_source = nullptr,
                  chat::ChannelId initial_channel = chat::ChannelId::PRIMARY,
                  ExitRequestCallback exit_request = nullptr,
                  void* exit_request_user_data = nullptr);
     ~UiController();
 
     void init();
-    void update() override;
+    void update();
     void onInput(const sys::InputEvent& event);
-    void onChatEvent(sys::Event* event) override;
     void backToList();
     void handleConversationAction(ChatConversationScreen::ActionIntent intent);
     void handleComposeAction(ChatComposeScreen::ActionIntent intent);
     void exitToMenu();
 
-    State getState() const override { return state_; }
-    bool isTeamConversationActive() const override { return team_conv_active_; }
+    State getState() const { return state_; }
+    bool isTeamConversationActive() const { return team_conv_active_; }
     lv_obj_t* getParent() const { return parent_; }
     void onChannelClicked(chat::ConversationId conv);
+    void onRuntimeMessageArrived(chat::MessageId msg_id) override;
+    void onRuntimeSendResult(chat::MessageId msg_id) override;
+    void onRuntimeUnreadChanged() override;
+    void showKeyVerification(
+        const ::ui::key_verification::KeyVerificationSnapshot& snapshot) override;
 
   private:
     lv_obj_t* parent_;
@@ -96,12 +91,8 @@ class UiController : public IChatUiRuntime
     ::ui::chat::ChatWorkspaceModel& chat_model_;
     ::ui::chat::ChatWorkspaceModel& team_chat_model_;
     ::ui::team_actions::ITeamActionSink* team_action_sink_ = nullptr;
-    ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
-        delivery_event_bridge_ = nullptr;
     ::ui::key_verification::KeyVerificationModel* key_verification_model_ =
         nullptr;
-    ::ui::presentation_sources::LegacyKeyVerificationSource*
-        key_verification_source_ = nullptr;
     State state_;
 
     std::unique_ptr<ChatMessageListScreen> channel_list_;

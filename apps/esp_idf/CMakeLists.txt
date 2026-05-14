@@ -156,6 +156,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_message_list_input.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_message_list_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_message_list_styles.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_protocol_support.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp

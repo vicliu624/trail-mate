@@ -18,8 +18,6 @@
 #include "ui/formatters.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
-#include "ui/presentation_sources/legacy_chat_delivery_event_bridge.h"
-#include "ui/presentation_sources/legacy_key_verification_source.h"
 #include "ui/screens/chat/chat_protocol_support.h"
 #include "ui/screens/chat/key_verification_modal_renderer.h"
 #include "ui/team_actions/team_action_sink.h"
@@ -494,21 +492,6 @@ const char* key_verification_action_failure_message(::ui::UiActionResult result)
     return "Key verification failed";
 }
 
-::ui::key_verification::VerificationProtocol active_key_verification_protocol()
-{
-    switch (chat_support::active_mesh_protocol())
-    {
-    case chat::MeshProtocol::MeshCore:
-        return ::ui::key_verification::VerificationProtocol::MeshCore;
-    case chat::MeshProtocol::Meshtastic:
-        return ::ui::key_verification::VerificationProtocol::Meshtastic;
-    case chat::MeshProtocol::RNode:
-    case chat::MeshProtocol::LXMF:
-    default:
-        return ::ui::key_verification::VerificationProtocol::Unknown;
-    }
-}
-
 void handle_message_list_action(chat::ui::ChatMessageListScreen::ActionIntent intent,
                                 const chat::ConversationId& conv,
                                 void* user_data)
@@ -571,21 +554,15 @@ UiController::UiController(lv_obj_t* parent,
                            ::ui::chat::ChatWorkspaceModel& chat_model,
                            ::ui::chat::ChatWorkspaceModel& team_chat_model,
                            ::ui::team_actions::ITeamActionSink* team_action_sink,
-                           ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
-                               delivery_event_bridge,
                            ::ui::key_verification::KeyVerificationModel*
                                key_verification_model,
-                           ::ui::presentation_sources::LegacyKeyVerificationSource*
-                               key_verification_source,
                            chat::ChannelId initial_channel,
                            ExitRequestCallback exit_request,
                            void* exit_request_user_data)
     : parent_(parent), service_(service), chat_model_(chat_model),
       team_chat_model_(team_chat_model),
       team_action_sink_(team_action_sink),
-      delivery_event_bridge_(delivery_event_bridge),
       key_verification_model_(key_verification_model),
-      key_verification_source_(key_verification_source),
       state_(State::ChannelList),
       current_channel_(initial_channel),
       current_conv_(chat::ConversationId(initial_channel, 0, chat_support::active_mesh_protocol())),
@@ -621,10 +598,6 @@ void UiController::init()
 
 void UiController::update()
 {
-    // Process incoming messages
-    service_.processIncoming();
-    service_.flushStore();
-
     // Refresh UI only when an event marks the conversation list dirty.
     refreshUnreadCounts(false);
 }
@@ -690,137 +663,57 @@ void UiController::onInput(const sys::InputEvent& event)
     }
 }
 
-void UiController::onChatEvent(sys::Event* event)
+void UiController::onRuntimeMessageArrived(chat::MessageId msg_id)
 {
-    if (!event)
-    {
-        return;
-    }
+    CHAT_UI_LOG("[UiController::onRuntimeMessageArrived] msg_id=%lu, state=%d, current_channel=%d\n",
+                static_cast<unsigned long>(msg_id), (int)state_, (int)current_channel_);
 
-    switch (event->type)
+    const ChatMessage* latest = service_.getMessage(msg_id);
+    if (latest)
     {
-    case sys::EventType::ChatNewMessage:
-    {
-        sys::ChatNewMessageEvent* msg_event = (sys::ChatNewMessageEvent*)event;
-        CHAT_UI_LOG("[UiController::onChatEvent] ChatNewMessage received: channel=%d, state=%d, current_channel=%d\n",
-                    msg_event->channel, (int)state_, (int)current_channel_);
+        const bool is_current_conversation =
+            (state_ == State::Conversation) &&
+            (current_conv_ == chat::ConversationId(latest->channel,
+                                                   latest->peer,
+                                                   latest->protocol));
+        updateConversationMetaForMessage(*latest, !is_current_conversation);
+        if (is_current_conversation)
+        {
+            (void)updateConversationViewForIncoming(*latest);
+            reloadConversationView();
+            (void)chat_model_.markRead(
+                chat_presentation_adapters::toUiConversationId(current_conv_));
+        }
+        else
+        {
+            conversation_list_dirty_ = true;
+        }
+    }
+    refreshUnreadCounts(false);
+}
 
-        // Note: Haptic feedback is now handled by the app runtime event pump
-        // No need to call vibrator() here
-
-        const ChatMessage* latest = service_.getMessage(msg_event->msg_id);
-        if (latest)
-        {
-            const bool is_current_conversation =
-                (state_ == State::Conversation) && (current_conv_ == chat::ConversationId(latest->channel,
-                                                                                          latest->peer,
-                                                                                          latest->protocol));
-            updateConversationMetaForMessage(*latest, !is_current_conversation);
-            if (is_current_conversation)
-            {
-                (void)updateConversationViewForIncoming(*latest);
-                reloadConversationView();
-                (void)chat_model_.markRead(
-                    chat_presentation_adapters::toUiConversationId(current_conv_));
-            }
-            else
-            {
-                conversation_list_dirty_ = true;
-            }
-        }
-        refreshUnreadCounts(false);
-        break;
-    }
-
-    case sys::EventType::ChatSendResult:
+void UiController::onRuntimeSendResult(chat::MessageId msg_id)
+{
+    if (state_ == State::Conversation && conversation_)
     {
-        sys::ChatSendResultEvent* result_event = (sys::ChatSendResultEvent*)event;
-        if (delivery_event_bridge_ != nullptr)
+        const ChatMessage* msg = service_.getMessage(msg_id);
+        if (!msg || !conversation_->updateMessageStatus(msg_id, msg->status))
         {
-            delivery_event_bridge_->onChatSendResult(*result_event);
+            reloadConversationView();
         }
-        if (state_ == State::Conversation && conversation_)
-        {
-            const ChatMessage* msg = service_.getMessage(result_event->msg_id);
-            if (!msg || !conversation_->updateMessageStatus(result_event->msg_id, msg->status))
-            {
-                reloadConversationView();
-            }
-        }
-        (void)result_event;
-        break;
     }
+}
 
-    case sys::EventType::ChatUnreadChanged:
-    {
-        conversation_list_dirty_ = true;
-        refreshUnreadCounts(false);
-        break;
-    }
-    case sys::EventType::KeyVerificationNumberRequest:
-    {
-        auto* key_event =
-            static_cast<sys::KeyVerificationNumberRequestEvent*>(event);
-        if (key_verification_source_ != nullptr)
-        {
-            key_verification_source_->onNumberRequest(key_event->node_id,
-                                                      key_event->nonce);
-        }
-        if (key_verification_model_ != nullptr)
-        {
-            key_verification_model_->selectPeer(
-                active_key_verification_protocol(),
-                key_event->node_id);
-            renderKeyVerificationModal(key_verification_model_->snapshot());
-        }
-        break;
-    }
-    case sys::EventType::KeyVerificationNumberInform:
-    {
-        auto* key_event =
-            static_cast<sys::KeyVerificationNumberInformEvent*>(event);
-        if (key_verification_source_ != nullptr)
-        {
-            key_verification_source_->onNumberInform(
-                key_event->node_id,
-                key_event->nonce,
-                key_event->security_number);
-        }
-        if (key_verification_model_ != nullptr)
-        {
-            key_verification_model_->selectPeer(
-                active_key_verification_protocol(),
-                key_event->node_id);
-            renderKeyVerificationModal(key_verification_model_->snapshot());
-        }
-        break;
-    }
-    case sys::EventType::KeyVerificationFinal:
-    {
-        auto* key_event =
-            static_cast<sys::KeyVerificationFinalEvent*>(event);
-        if (key_verification_source_ != nullptr)
-        {
-            key_verification_source_->onFinal(key_event->node_id,
-                                             key_event->nonce,
-                                             key_event->is_sender,
-                                             key_event->verification_code);
-        }
-        if (key_verification_model_ != nullptr)
-        {
-            key_verification_model_->selectPeer(
-                active_key_verification_protocol(),
-                key_event->node_id);
-            renderKeyVerificationModal(key_verification_model_->snapshot());
-        }
-        break;
-    }
+void UiController::onRuntimeUnreadChanged()
+{
+    conversation_list_dirty_ = true;
+    refreshUnreadCounts(false);
+}
 
-    default:
-        break;
-    }
-
-    delete event;
+void UiController::showKeyVerification(
+    const ::ui::key_verification::KeyVerificationSnapshot& snapshot)
+{
+    renderKeyVerificationModal(snapshot);
 }
 
 void UiController::switchToChannelList()

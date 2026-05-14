@@ -39,12 +39,15 @@ def check_required_files() -> int:
         "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md",
         "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md",
         "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md",
+        "docs/audits/CHAT_RUNTIME_EVENT_PUMP_AUDIT.md",
         "docs/audits/LEGACY_BURNDOWN_REGISTER.md",
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md",
         "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md",
+        "docs/audits/PHASE7_7_EVENT_PUMP_BURNDOWN_REPORT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
+        "docs/specification/CHAT_RUNTIME_EVENT_PUMP_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -95,6 +98,9 @@ def check_required_files() -> int:
         "modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp",
         "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h",
         "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp",
+        "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h",
+        "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h",
+        "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp",
         "tools/architecture/check_phase7_runtime_ownership_ready.py",
     ]
 
@@ -195,6 +201,26 @@ def check_docs() -> int:
             "LegacyTeamActionBridge",
             "Phase 7.2 does not turn Team into DirectPeer or Channel chat",
         ],
+        "docs/audits/CHAT_RUNTIME_EVENT_PUMP_AUDIT.md": [
+            "Phase 7.7 moves Chat runtime scheduling and event projection out of `ChatUiController`",
+            "ChatSendResultEvent",
+            "LegacyChatDeliveryEventBridge",
+            "LegacyKeyVerificationSource",
+            "ChatService::processIncoming()",
+            "ChatService::flushStore()",
+            "IChatUiRefreshSink",
+            "ChatPageRuntimeEventPump",
+        ],
+        "docs/specification/CHAT_RUNTIME_EVENT_PUMP_SPEC.md": [
+            "Runtime event projection belongs to the event pump",
+            "UI refresh belongs to the controller",
+            "IChatUiRefreshSink",
+            "ChatPageRuntimeEventPump",
+            "ChatPageRuntimeFacade",
+            "ChatSendResultEvent",
+            "ChatService::processIncoming()",
+            "ChatService::flushStore()",
+        ],
         "docs/audits/LEGACY_BURNDOWN_REGISTER.md": [
             "Remaining callers",
             "Removal condition",
@@ -208,6 +234,7 @@ def check_docs() -> int:
             "ChatUiController` key verification modal rendering",
             "ChatUiController` Team payload encoding",
             "ChatUiController` delivery mutation",
+            "ChatUiController` runtime event pump",
         ],
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md": [
             "Temporary UI Responsibilities",
@@ -225,6 +252,15 @@ def check_docs() -> int:
             "Still Contained",
             "Checker Changes",
             "Remaining Work",
+        ],
+        "docs/audits/PHASE7_7_EVENT_PUMP_BURNDOWN_REPORT.md": [
+            "Phase 7.7 moved Chat runtime event projection and ChatService scheduling out of `ChatUiController`",
+            "ChatPageRuntimeEventPump",
+            "ChatPageRuntimeFacade",
+            "ChatService::processIncoming()",
+            "ChatService::flushStore()",
+            "Burned Down",
+            "Still Contained",
         ],
     }
 
@@ -262,6 +298,7 @@ def check_legacy_burndown_register() -> int:
         "ChatUiController` key verification modal rendering",
         "ChatUiController` Team payload encoding",
         "ChatUiController` delivery mutation",
+        "ChatUiController` runtime event pump",
     ]
     for surface in required_surfaces:
         if surface not in text:
@@ -580,9 +617,12 @@ def check_ui_presentation_and_renderers_do_not_own_delivery() -> int:
                 failures += fail(
                     f"{path.relative_to(ROOT)} must not own chat delivery runtime token {token}"
                 )
-        if "LegacyChatDeliveryEventBridge" in text and path.name != "chat_ui_controller.cpp":
+        if (
+            "LegacyChatDeliveryEventBridge" in text
+            and path.name != "chat_page_runtime_event_pump.cpp"
+        ):
             failures += fail(
-                f"{path.relative_to(ROOT)} contains delivery event bridge outside approved forwarding controller"
+                f"{path.relative_to(ROOT)} contains delivery event bridge outside approved event pump"
             )
     return failures
 
@@ -628,17 +668,27 @@ def check_delivery_event_bridge_boundary() -> int:
     controller = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
     if exists(controller):
         text = strip_cpp_comments(read_text(controller))
-        if "LegacyChatDeliveryEventBridge" not in text:
-            failures += fail("ChatUiController missing legacy delivery event forwarding bridge")
         for token in [
+            "LegacyChatDeliveryEventBridge",
             "ChatDeliveryReadModel",
             "ChatDeliveryEventProjector",
             "ProjectingChatDeliveryEventPort",
+            "delivery_event_bridge",
             "delivery_read_model",
             "delivery_projector",
         ]:
             if token in text:
                 failures += fail(f"ChatUiController owns delivery runtime token: {token}")
+
+    event_pump = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp"
+    if exists(event_pump):
+        text = read_text(event_pump)
+        for token in [
+            "LegacyChatDeliveryEventBridge",
+            "delivery_bridge_->onChatSendResult",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatPageRuntimeEventPump missing delivery projection token: {token}")
 
     runtime = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
     if exists(runtime):
@@ -990,6 +1040,120 @@ def check_chat_ui_legacy_burndown() -> int:
     return failures
 
 
+def check_chat_runtime_event_pump_boundary() -> int:
+    failures = 0
+    header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
+    source = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+    runtime = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
+    pump_header = "modules/ui_shared/include/ui/screens/chat/chat_page_runtime_event_pump.h"
+    pump_source = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime_event_pump.cpp"
+    refresh_sink = "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h"
+
+    for path in [header, source]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "public IChatUiRuntime",
+            "onChatEvent",
+            "processIncoming(",
+            "flushStore(",
+            "delivery_event_bridge_",
+            "LegacyChatDeliveryEventBridge",
+            "key_verification_source_",
+            "LegacyKeyVerificationSource",
+            "onNumberRequest",
+            "onNumberInform",
+            "onFinal",
+            "KeyVerificationNumberRequestEvent",
+            "KeyVerificationNumberInformEvent",
+            "KeyVerificationFinalEvent",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"{path} still owns runtime event pump token: {token}"
+                )
+
+    if exists(header):
+        text = read_text(header)
+        for token in [
+            "public IChatUiRefreshSink",
+            "onRuntimeMessageArrived",
+            "onRuntimeSendResult",
+            "onRuntimeUnreadChanged",
+            "showKeyVerification",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatUiController header missing refresh sink token: {token}")
+
+    if exists(refresh_sink):
+        text = strip_cpp_comments(read_text(refresh_sink))
+        for token in [
+            "IChatUiRefreshSink",
+            "onRuntimeMessageArrived",
+            "onRuntimeSendResult",
+            "onRuntimeUnreadChanged",
+            "showKeyVerification",
+        ]:
+            if token not in text:
+                failures += fail(f"IChatUiRefreshSink missing token: {token}")
+        for token in [
+            "ChatService",
+            "ChatDeliveryReadModel",
+            "ChatDeliveryEventProjector",
+            "LegacyKeyVerificationSource",
+            "sys::Event",
+        ]:
+            if token in text:
+                failures += fail(f"IChatUiRefreshSink exposes runtime token: {token}")
+
+    for path in [pump_header, pump_source]:
+        if not exists(path):
+            failures += fail(f"missing ChatPageRuntimeEventPump file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in ["lvgl.h", "lv_obj_t", "ChatWorkspaceModel", "MessageRow", "encodeTeamChat"]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden event pump UI token: {token}")
+
+    if exists(pump_source):
+        text = read_text(pump_source)
+        for token in [
+            "service_.processIncoming()",
+            "service_.flushStore()",
+            "delivery_bridge_->onChatSendResult",
+            "key_verification_source_->onNumberRequest",
+            "key_verification_source_->onNumberInform",
+            "key_verification_source_->onFinal",
+            "ui_->onRuntimeMessageArrived",
+            "ui_->onRuntimeSendResult",
+            "ui_->onRuntimeUnreadChanged",
+            "ui_->showKeyVerification",
+            "delete event",
+        ]:
+            if token not in text:
+                failures += fail(f"ChatPageRuntimeEventPump source missing token: {token}")
+
+    if exists(runtime):
+        text = read_text(runtime)
+        for token in [
+            "ChatPageRuntimeFacade",
+            "s_event_pump",
+            "s_runtime_facade",
+            "ChatPageRuntimeEventPump",
+            "event_pump_.update();",
+            "controller_.update();",
+            "event_pump_.handleEvent(event);",
+            "setChatUiRuntime(s_runtime_facade.get())",
+        ]:
+            if token not in text:
+                failures += fail(f"chat_page_runtime.cpp missing event pump wiring token: {token}")
+        if "setChatUiRuntime(s_ui_controller.get())" in text:
+            failures += fail("chat_page_runtime.cpp still registers controller directly")
+
+    return failures
+
+
 def check_chat_runtime_wires_team_action_sink() -> int:
     failures = 0
     path = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
@@ -1209,9 +1373,12 @@ def check_chat_ui_key_verification_migration() -> int:
 
     if exists(header):
         text = strip_cpp_comments(read_text(header))
-        for token in ["KeyVerificationModel", "LegacyKeyVerificationSource", "key_verification_model_", "key_verification_source_"]:
+        for token in ["KeyVerificationModel", "key_verification_model_"]:
             if token not in text:
                 failures += fail(f"ChatUiController header missing key verification token: {token}")
+        for token in ["LegacyKeyVerificationSource", "key_verification_source_"]:
+            if token in text:
+                failures += fail(f"ChatUiController header still owns key verification source token: {token}")
         for token in [
             "key_verify_node_id_",
             "key_verify_nonce_",
@@ -1231,17 +1398,10 @@ def check_chat_ui_key_verification_migration() -> int:
         for token in [
             "renderKeyVerificationModal",
             "KeyVerificationModalCallbacks",
-            "KeyVerificationNumberRequestEvent",
-            "KeyVerificationNumberInformEvent",
-            "KeyVerificationFinalEvent",
-            "key_verification_source_->onNumberRequest",
-            "key_verification_source_->onNumberInform",
-            "key_verification_source_->onFinal",
-            "key_verification_model_->selectPeer",
-            "key_verification_model_->snapshot",
             "key_verification_model_->submitNumber",
             "key_verification_model_->accept",
             "submitKeyVerificationInput",
+            "showKeyVerification",
         ]:
             if token not in text:
                 failures += fail(f"ChatUiController source missing key verification token: {token}")
@@ -1252,6 +1412,13 @@ def check_chat_ui_key_verification_migration() -> int:
             "key_verify_can_trust_",
             "submitKeyVerificationNumber",
             "setNodeKeyManuallyVerified",
+            "KeyVerificationNumberRequestEvent",
+            "KeyVerificationNumberInformEvent",
+            "KeyVerificationFinalEvent",
+            "key_verification_source_->onNumberRequest",
+            "key_verification_source_->onNumberInform",
+            "key_verification_source_->onFinal",
+            "key_verification_model_->selectPeer",
         ]:
             if token in text:
                 failures += fail(f"ChatUiController source still owns key verification token: {token}")
@@ -1315,6 +1482,7 @@ def main() -> int:
     failures += check_team_action_bridge_boundary()
     failures += check_chat_ui_team_action_migration()
     failures += check_chat_ui_legacy_burndown()
+    failures += check_chat_runtime_event_pump_boundary()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()
     failures += check_key_verification_type_shape()

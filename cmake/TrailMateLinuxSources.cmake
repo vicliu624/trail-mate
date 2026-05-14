@@ -318,6 +318,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_message_list_input.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_message_list_layout.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_message_list_styles.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_page_runtime_event_pump.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_page_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_page_shell.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_protocol_support.cpp"
