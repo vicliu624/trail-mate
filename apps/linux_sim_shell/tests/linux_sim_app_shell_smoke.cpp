@@ -12,5 +12,7 @@ int main()
     assert(std::strcmp(config.target_id, "linux_sim") == 0);
     assert(std::strcmp(config.ux_pack_id, "simulator_full") == 0);
     assert(std::strcmp(config.transitional_source, "apps/linux_sim") == 0);
+    assert(std::strcmp(config.legacy_adapter_target,
+                       "trailmate_linux_sim_legacy_adapter") == 0);
     return 0;
 }

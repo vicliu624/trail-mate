@@ -144,3 +144,60 @@ the first proof of the direction:
 Build Entrypoint invokes.
 App Shell composes.
 ```
+
+## Phase 8 Build/AppShell Executable Convergence
+
+Phase 8 Build/AppShell Executable Convergence extends the executable baseline
+to all three platform families without moving physical build files.
+
+Executable proof chains:
+
+```text
+builds/linux_cmake
+  -> apps/linux_uconsole_gtk
+  -> trailmate_linux_uconsole_legacy_adapter
+  -> apps/linux_uconsole
+
+builds/linux_cmake
+  -> apps/linux_sim_shell
+  -> trailmate_linux_sim_legacy_adapter
+  -> apps/linux_sim
+
+builds/esp_idf
+  -> apps/esp32_lvgl
+  -> trailmate_esp32_lvgl_app_shell
+  -> trailmate_esp_idf_legacy_adapter
+  -> apps/esp_idf
+
+builds/pio_nrf52
+  -> apps/nrf52_node
+  -> trailmate-nrf52-node-app-shell
+  -> trailmate_nrf52_pio_legacy_adapter
+  -> apps/esp_pio / apps/gat562_mesh_evb_pro
+```
+
+The wrapper files are intentionally thin:
+
+- `builds/linux_cmake/CMakeLists.txt` invokes Linux app shells.
+- `builds/esp_idf/CMakeLists.txt` invokes the ESP32 LVGL app shell baseline.
+- `builds/pio_nrf52/platformio.ini` declares the nRF52 PlatformIO wrapper
+  authority and transitional roots.
+
+The following historical roots are explicitly transitional implementation
+roots:
+
+- `apps/linux_uconsole`
+- `apps/linux_sim`
+- `apps/esp_idf`
+- `apps/esp_pio`
+- `apps/gat562_mesh_evb_pro`
+
+Physical migration remains deferred for ESP-IDF sdkconfig/component registration
+and current PlatformIO environments. This batch proves the authority direction:
+
+```text
+Build Entrypoint invokes.
+App Shell selects.
+Transitional Adapter delegates.
+Legacy implementation still runs.
+```

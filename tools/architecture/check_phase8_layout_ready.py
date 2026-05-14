@@ -40,13 +40,24 @@ def check_required_files() -> int:
         "docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md",
         "builds/README.md",
         "builds/esp_idf/README.md",
+        "builds/esp_idf/CMakeLists.txt",
         "builds/pio_nrf52/README.md",
+        "builds/pio_nrf52/platformio.ini",
+        "builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp",
         "builds/linux_cmake/README.md",
         "builds/linux_cmake/CMakeLists.txt",
         "apps/esp32_lvgl/README.md",
         "apps/esp32_lvgl/APP_SHELL_MANIFEST.md",
+        "apps/esp32_lvgl/CMakeLists.txt",
+        "apps/esp32_lvgl/src/esp32_lvgl_app_shell.h",
+        "apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp",
+        "apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp",
         "apps/nrf52_node/README.md",
         "apps/nrf52_node/APP_SHELL_MANIFEST.md",
+        "apps/nrf52_node/library.json",
+        "apps/nrf52_node/src/nrf52_node_app_shell.h",
+        "apps/nrf52_node/src/nrf52_node_app_shell.cpp",
+        "apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp",
         "apps/linux_uconsole_gtk/README.md",
         "apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md",
         "apps/linux_uconsole_gtk/CMakeLists.txt",
@@ -59,8 +70,20 @@ def check_required_files() -> int:
         "apps/linux_sim_shell/src/linux_sim_app_shell.h",
         "apps/linux_sim_shell/src/linux_sim_app_shell.cpp",
         "apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp",
+        "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
+        "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp",
+        "apps/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
         "apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
+        "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp",
+        "apps/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
         "apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
+        "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp",
+        "apps/esp_idf/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "apps/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h",
+        "apps/esp_pio/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "apps/gat562_mesh_evb_pro/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         "docs/targets/README.md",
         "docs/targets/esp32_lvgl_targets.md",
         "docs/targets/nrf52_node_targets.md",
@@ -373,10 +396,14 @@ def check_app_shell_language() -> int:
             "apps/nrf52_node",
             "apps/linux_uconsole_gtk",
             "apps/linux_sim_shell",
-            "skeleton only",
             "executable app shell baseline",
+            "Phase 8 Build/AppShell Executable Convergence",
+            "trailmate_esp32_lvgl_app_shell",
+            "trailmate-nrf52-node-app-shell",
             "trailmate_linux_uconsole_gtk_shell",
             "trailmate_linux_sim_shell",
+            "trailmate_esp_idf_legacy_adapter",
+            "trailmate_nrf52_pio_legacy_adapter",
             "TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         ],
         "app shell audit",
@@ -389,7 +416,12 @@ def check_app_shell_language() -> int:
             "Current transitional path = `apps/esp_idf`",
             "must not",
             "own build host files",
-            "No behavior change in Phase 8.3",
+            "src/esp32_lvgl_app_shell.h",
+            "target_family = esp32_lvgl",
+            "default_ux_pack_id = compatibility",
+            "transitional_source = apps/esp_idf",
+            "legacy_adapter_target = trailmate_esp_idf_legacy_adapter",
+            "No behavior change in Phase 8 Build/AppShell Executable Convergence",
         ],
         "apps/esp32_lvgl/APP_SHELL_MANIFEST.md": [
             "Product app shell / target app shell",
@@ -398,8 +430,12 @@ def check_app_shell_language() -> int:
             "`builds/esp_idf`",
             "`apps/esp_idf`",
             "own build host files",
-            "Skeleton only",
-            "No behavior change in Phase 8.3",
+            "Executable app shell baseline",
+            "esp32_lvgl_app_shell.cpp",
+            "Default UX Pack",
+            "`compatibility`",
+            "trailmate_esp_idf_legacy_adapter",
+            "No behavior change in Phase 8 Build/AppShell Executable Convergence",
         ],
         "apps/nrf52_node/README.md": [
             "Role = product app shell / target app shell",
@@ -407,7 +443,13 @@ def check_app_shell_language() -> int:
             "Current transitional path = `apps/esp_pio`",
             "apps/gat562_mesh_evb_pro",
             "own build host files",
-            "No behavior change in Phase 8.3",
+            "src/nrf52_node_app_shell.h",
+            "target_family = nrf52_node",
+            "default_ux_pack_id = tiny_node_status",
+            "transitional_source = apps/esp_pio",
+            "board_specific_transitional_source = apps/gat562_mesh_evb_pro",
+            "legacy_adapter_target = trailmate_nrf52_pio_legacy_adapter",
+            "No behavior change in Phase 8 Build/AppShell Executable Convergence",
         ],
         "apps/nrf52_node/APP_SHELL_MANIFEST.md": [
             "Product app shell / target app shell",
@@ -416,8 +458,12 @@ def check_app_shell_language() -> int:
             "`apps/esp_pio`",
             "`apps/gat562_mesh_evb_pro`",
             "own build host files",
-            "Skeleton only",
-            "No behavior change in Phase 8.3",
+            "Executable app shell baseline",
+            "nrf52_node_app_shell.cpp",
+            "Default UX Pack",
+            "`tiny_node_status`",
+            "trailmate_nrf52_pio_legacy_adapter",
+            "No behavior change in Phase 8 Build/AppShell Executable Convergence",
         ],
         "apps/linux_uconsole_gtk/README.md": [
             "Role = product app shell / target app shell",
@@ -617,6 +663,17 @@ def check_build_entrypoint_language() -> int:
             "executable wrapper baseline",
             "trailmate_linux_uconsole_gtk_shell",
             "trailmate_linux_sim_shell",
+            "Phase 8 Build/AppShell Executable Convergence",
+            "builds/esp_idf",
+            "builds/pio_nrf52",
+            "trailmate_esp32_lvgl_app_shell",
+            "trailmate-nrf52-node-app-shell",
+            "trailmate_linux_uconsole_legacy_adapter",
+            "trailmate_linux_sim_legacy_adapter",
+            "trailmate_esp_idf_legacy_adapter",
+            "trailmate_nrf52_pio_legacy_adapter",
+            "Transitional Adapter delegates",
+            "Legacy implementation still runs",
             "TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         ],
         "build entrypoint audit",
@@ -730,9 +787,12 @@ def check_executable_layout_convergence() -> int:
     failures += check_tokens(
         "apps/linux_uconsole_gtk/CMakeLists.txt",
         [
+            "trailmate_linux_uconsole_legacy_adapter",
             "trailmate_linux_uconsole_gtk_shell",
             "linux_uconsole_gtk_app_shell.cpp",
             "linux_uconsole_gtk_app_shell_smoke.cpp",
+            "uconsole_legacy_implementation_adapter.cpp",
+            "uconsole_legacy_implementation_adapter_smoke.cpp",
             "add_test",
         ],
         "uConsole GTK app shell CMake",
@@ -745,6 +805,7 @@ def check_executable_layout_convergence() -> int:
             "target_id = \"uconsole\"",
             "ux_pack_id = \"uconsole_desktop\"",
             "transitional_source = \"apps/linux_uconsole\"",
+            "legacy_adapter_target = \"trailmate_linux_uconsole_legacy_adapter\"",
             "LinuxUConsoleGtkAppShell",
         ],
         "uConsole GTK app shell header",
@@ -758,16 +819,32 @@ def check_executable_layout_convergence() -> int:
             "config_.target_id",
             "config_.ux_pack_id",
             "config_.transitional_source",
+            "config_.legacy_adapter_target",
         ],
         "uConsole GTK app shell source",
     )
 
     failures += check_tokens(
+        "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
+        [
+            "UConsoleLegacyImplementationDescriptor",
+            "implementation_root = \"apps/linux_uconsole\"",
+            "app_shell = \"apps/linux_uconsole_gtk\"",
+            "target_id = \"uconsole\"",
+            "UConsoleLegacyImplementationAdapter",
+        ],
+        "uConsole legacy adapter header",
+    )
+
+    failures += check_tokens(
         "apps/linux_sim_shell/CMakeLists.txt",
         [
+            "trailmate_linux_sim_legacy_adapter",
             "trailmate_linux_sim_shell",
             "linux_sim_app_shell.cpp",
             "linux_sim_app_shell_smoke.cpp",
+            "linux_sim_legacy_implementation_adapter.cpp",
+            "linux_sim_legacy_implementation_adapter_smoke.cpp",
             "add_test",
         ],
         "Linux sim app shell CMake",
@@ -780,6 +857,7 @@ def check_executable_layout_convergence() -> int:
             "target_id = \"linux_sim\"",
             "ux_pack_id = \"simulator_full\"",
             "transitional_source = \"apps/linux_sim\"",
+            "legacy_adapter_target = \"trailmate_linux_sim_legacy_adapter\"",
             "LinuxSimAppShell",
         ],
         "Linux sim app shell header",
@@ -793,21 +871,190 @@ def check_executable_layout_convergence() -> int:
             "config_.target_id",
             "config_.ux_pack_id",
             "config_.transitional_source",
+            "config_.legacy_adapter_target",
         ],
         "Linux sim app shell source",
     )
 
-    for path, app_shell in [
-        ("apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_uconsole_gtk"),
-        ("apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_sim_shell"),
+    failures += check_tokens(
+        "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
+        [
+            "LinuxSimLegacyImplementationDescriptor",
+            "implementation_root = \"apps/linux_sim\"",
+            "app_shell = \"apps/linux_sim_shell\"",
+            "target_id = \"linux_sim\"",
+            "LinuxSimLegacyImplementationAdapter",
+        ],
+        "Linux sim legacy adapter header",
+    )
+
+    failures += check_tokens(
+        "builds/esp_idf/CMakeLists.txt",
+        [
+            "Build Entrypoint invokes; App Shell composes.",
+            "TRAIL_MATE_ESP_APP_SHELL",
+            "apps/esp32_lvgl",
+            "add_subdirectory",
+        ],
+        "ESP-IDF executable build wrapper",
+    )
+
+    esp_wrapper_text = read_text("builds/esp_idf/CMakeLists.txt")
+    for token in [
+        "idf_component_register",
+        "trail_mate_idf_ui_shared_sources",
+        "ChatService",
+        "MapWorkspaceModel",
+        "GpsStatusModel",
+    ]:
+        if token in esp_wrapper_text:
+            failures += fail(f"builds/esp_idf/CMakeLists.txt owns forbidden token: {token}")
+
+    failures += check_tokens(
+        "apps/esp32_lvgl/CMakeLists.txt",
+        [
+            "trailmate_esp_idf_legacy_adapter",
+            "trailmate_esp32_lvgl_app_shell",
+            "esp32_lvgl_app_shell.cpp",
+            "esp32_lvgl_app_shell_smoke.cpp",
+            "esp_idf_legacy_implementation_adapter.cpp",
+            "add_test",
+        ],
+        "ESP32 LVGL app shell CMake",
+    )
+
+    failures += check_tokens(
+        "apps/esp32_lvgl/src/esp32_lvgl_app_shell.h",
+        [
+            "Esp32LvglAppShellConfig",
+            "target_family = \"esp32_lvgl\"",
+            "default_ux_pack_id = \"compatibility\"",
+            "transitional_source = \"apps/esp_idf\"",
+            "legacy_adapter_target = \"trailmate_esp_idf_legacy_adapter\"",
+            "Esp32LvglAppShell",
+        ],
+        "ESP32 LVGL app shell header",
+    )
+
+    failures += check_tokens(
+        "apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp",
+        [
+            "Esp32LvglAppShell::config",
+            "Esp32LvglAppShell::validate",
+            "config_.target_family",
+            "config_.default_ux_pack_id",
+            "config_.transitional_source",
+            "config_.legacy_adapter_target",
+        ],
+        "ESP32 LVGL app shell source",
+    )
+
+    failures += check_tokens(
+        "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
+        [
+            "EspIdfLegacyImplementationDescriptor",
+            "implementation_root = \"apps/esp_idf\"",
+            "app_shell = \"apps/esp32_lvgl\"",
+            "build_wrapper = \"builds/esp_idf\"",
+            "EspIdfLegacyImplementationAdapter",
+        ],
+        "ESP-IDF legacy adapter header",
+    )
+
+    failures += check_tokens(
+        "builds/pio_nrf52/platformio.ini",
+        [
+            "Build Entrypoint invokes",
+            "App Shell composes",
+            "apps/nrf52_node",
+            "apps/esp_pio",
+            "apps/gat562_mesh_evb_pro",
+            "env:nrf52_node_wrapper_baseline",
+            "symlink://../../apps/nrf52_node",
+            "TRAIL_MATE_BUILD_WRAPPER_BASELINE",
+            "nrf52_node_wrapper_baseline.cpp",
+        ],
+        "PIO nRF52 executable build wrapper",
+    )
+
+    failures += check_tokens(
+        "builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp",
+        [
+            "nrf52_node_app_shell.h",
+            "nrf52_pio_legacy_implementation_adapter.h",
+            "Nrf52NodeAppShell",
+            "Nrf52PioLegacyImplementationDescriptor",
+            "shell.validate()",
+        ],
+        "PIO nRF52 wrapper source",
+    )
+
+    failures += check_tokens(
+        "apps/nrf52_node/library.json",
+        [
+            "trailmate-nrf52-node-app-shell",
+            "\"includeDir\": \"src\"",
+            "\"srcDir\": \"src\"",
+        ],
+        "nRF52 node PIO library manifest",
+    )
+
+    failures += check_tokens(
+        "apps/nrf52_node/src/nrf52_node_app_shell.h",
+        [
+            "Nrf52NodeAppShellConfig",
+            "target_family = \"nrf52_node\"",
+            "default_ux_pack_id = \"tiny_node_status\"",
+            "transitional_source = \"apps/esp_pio\"",
+            "board_specific_transitional_source = \"apps/gat562_mesh_evb_pro\"",
+            "legacy_adapter_target = \"trailmate_nrf52_pio_legacy_adapter\"",
+            "Nrf52NodeAppShell",
+        ],
+        "nRF52 node app shell header",
+    )
+
+    failures += check_tokens(
+        "apps/nrf52_node/src/nrf52_node_app_shell.cpp",
+        [
+            "Nrf52NodeAppShell::config",
+            "Nrf52NodeAppShell::validate",
+            "config_.target_family",
+            "config_.default_ux_pack_id",
+            "config_.transitional_source",
+            "config_.board_specific_transitional_source",
+            "config_.legacy_adapter_target",
+        ],
+        "nRF52 node app shell source",
+    )
+
+    failures += check_tokens(
+        "apps/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h",
+        [
+            "Nrf52PioLegacyImplementationDescriptor",
+            "implementation_root = \"apps/esp_pio\"",
+            "board_specific_root = \"apps/gat562_mesh_evb_pro\"",
+            "app_shell = \"apps/nrf52_node\"",
+            "build_wrapper = \"builds/pio_nrf52\"",
+        ],
+        "nRF52 PIO legacy adapter header",
+    )
+
+    for path, app_shell, wrapper in [
+        ("apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_uconsole_gtk", "builds/linux_cmake"),
+        ("apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_sim_shell", "builds/linux_cmake"),
+        ("apps/esp_idf/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/esp32_lvgl", "builds/esp_idf"),
+        ("apps/esp_pio/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/nrf52_node", "builds/pio_nrf52"),
+        ("apps/gat562_mesh_evb_pro/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/nrf52_node", "builds/pio_nrf52"),
     ]:
         failures += check_tokens(
             path,
             [
                 "transitional implementation root",
                 "not the final app shell semantic root",
+                "Final app shell",
                 app_shell,
-                "builds/linux_cmake",
+                "Authoritative build wrapper",
+                wrapper,
                 "Exit condition",
             ],
             "transitional implementation root marker",

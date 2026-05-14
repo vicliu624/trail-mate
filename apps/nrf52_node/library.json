@@ -1,0 +1,8 @@
+{
+  "name": "trailmate-nrf52-node-app-shell",
+  "version": "0.0.0",
+  "build": {
+    "includeDir": "src",
+    "srcDir": "src"
+  }
+}

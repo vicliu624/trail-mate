@@ -2,10 +2,10 @@
 
 Role = product app shell / target app shell.
 
-`apps/esp32_lvgl` is the future ESP + LVGL product app shell skeleton.
+`apps/esp32_lvgl` is the ESP + LVGL product app shell executable baseline.
 
 It is not an ESP-IDF project directory and does not contain build host files in
-Phase 8.3.
+Phase 8 Build/AppShell Executable Convergence.
 
 ```text
 Build Entrypoint invokes.
@@ -42,10 +42,21 @@ must not own:
 
 ## Thin App Shell Entrypoint Declaration
 
-Future declaration:
+Current source-level shell descriptor:
 
 ```text
-trail_mate_esp32_lvgl_start(target_profile)
+src/esp32_lvgl_app_shell.h
+src/esp32_lvgl_app_shell.cpp
+trailmate_esp32_lvgl_app_shell
 ```
 
-This is a declaration of intent only. No behavior change in Phase 8.3.
+Current config:
+
+```text
+target_family = esp32_lvgl
+default_ux_pack_id = compatibility
+transitional_source = apps/esp_idf
+legacy_adapter_target = trailmate_esp_idf_legacy_adapter
+```
+
+No behavior change in Phase 8 Build/AppShell Executable Convergence.

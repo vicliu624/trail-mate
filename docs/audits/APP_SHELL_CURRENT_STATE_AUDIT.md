@@ -49,8 +49,8 @@ Phase 8.3 adds semantic skeletons:
 
 | Future app shell | Current compatibility source | Build entrypoint | Renderer family | Status |
 | --- | --- | --- | --- | --- |
-| `apps/esp32_lvgl` | `apps/esp_idf` | `builds/esp_idf` | LVGL | skeleton only |
-| `apps/nrf52_node` | `apps/esp_pio`, `apps/gat562_mesh_evb_pro` | `builds/pio_nrf52` | mono/status or future embedded UI | skeleton only |
+| `apps/esp32_lvgl` | `apps/esp_idf` | `builds/esp_idf` | LVGL | executable app shell baseline |
+| `apps/nrf52_node` | `apps/esp_pio`, `apps/gat562_mesh_evb_pro` | `builds/pio_nrf52` | mono/status or future embedded UI | executable app shell baseline |
 | `apps/linux_uconsole_gtk` | `apps/linux_uconsole` | `builds/linux_cmake` | GTK | executable app shell baseline |
 | `apps/linux_sim_shell` | `apps/linux_sim` | `builds/linux_cmake` | simulator/ASCII/host UI | executable app shell baseline |
 
@@ -66,6 +66,31 @@ targets without migrating GTK or simulator runtime behavior.
 
 `apps/linux_uconsole` and `apps/linux_sim` are now explicitly marked with
 `TRANSITIONAL_IMPLEMENTATION_ROOT.md`.
+
+## Phase 8 Build/AppShell Executable Convergence
+
+Phase 8 Build/AppShell Executable Convergence turns ESP-IDF and PIO/nRF app
+shell placeholders into source-level executable shell descriptors while keeping
+physical build behavior in the transitional roots.
+
+| App shell | Build wrapper | Shell target or library | Config source | Transitional implementation root |
+| --- | --- | --- | --- | --- |
+| `apps/esp32_lvgl` | `builds/esp_idf` | `trailmate_esp32_lvgl_app_shell` | `esp32_lvgl_app_shell.cpp` | `apps/esp_idf` |
+| `apps/nrf52_node` | `builds/pio_nrf52` | `trailmate-nrf52-node-app-shell` | `nrf52_node_app_shell.cpp` | `apps/esp_pio`, `apps/gat562_mesh_evb_pro` |
+| `apps/linux_uconsole_gtk` | `builds/linux_cmake` | `trailmate_linux_uconsole_gtk_shell` | `linux_uconsole_gtk_app_shell.cpp` | `apps/linux_uconsole` |
+| `apps/linux_sim_shell` | `builds/linux_cmake` | `trailmate_linux_sim_shell` | `linux_sim_app_shell.cpp` | `apps/linux_sim` |
+
+Compatibility adapter targets and descriptors:
+
+- `trailmate_linux_uconsole_legacy_adapter`
+- `trailmate_linux_sim_legacy_adapter`
+- `trailmate_esp_idf_legacy_adapter`
+- `trailmate_nrf52_pio_legacy_adapter`
+
+This changes the status of `apps/esp32_lvgl` and `apps/nrf52_node` from
+skeleton only to executable app shell baseline. It still does not move ESP-IDF
+CMake, PlatformIO environments, Linux GTK runtime behavior, or simulator
+runtime behavior.
 
 ## App Shell Boundary
 

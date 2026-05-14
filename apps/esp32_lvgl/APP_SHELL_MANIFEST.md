@@ -43,14 +43,24 @@ Must not:
 
 ## Thin App Shell Entrypoint Declaration
 
-Future declaration:
+Current source-level shell descriptor:
 
 ```text
-trail_mate_esp32_lvgl_start(target_profile)
+src/esp32_lvgl_app_shell.h
+src/esp32_lvgl_app_shell.cpp
+trailmate_esp32_lvgl_app_shell
 ```
 
 ## Current Status
 
-Skeleton only.
+Executable app shell baseline.
 
-No behavior change in Phase 8.3.
+Default UX Pack:
+
+- `compatibility`
+
+Transitional implementation adapter target:
+
+- `trailmate_esp_idf_legacy_adapter`
+
+No behavior change in Phase 8 Build/AppShell Executable Convergence.

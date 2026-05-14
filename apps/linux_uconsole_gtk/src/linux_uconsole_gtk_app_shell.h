@@ -12,6 +12,7 @@ struct LinuxUConsoleGtkAppShellConfig
     const char* target_id = "uconsole";
     const char* ux_pack_id = "uconsole_desktop";
     const char* transitional_source = "apps/linux_uconsole";
+    const char* legacy_adapter_target = "trailmate_linux_uconsole_legacy_adapter";
 };
 
 class LinuxUConsoleGtkAppShell

@@ -5,11 +5,11 @@ CMake integration.
 
 It is not the final app shell semantic root.
 
-Final app shell semantic root:
+Final app shell:
 
 - `apps/linux_uconsole_gtk`
 
-Authoritative Linux build wrapper:
+Authoritative build wrapper:
 
 - `builds/linux_cmake`
 
@@ -23,4 +23,6 @@ Exit condition:
 
 - `apps/linux_uconsole_gtk` owns the app shell startup contract;
 - `builds/linux_cmake` invokes the app shell;
+- `trailmate_linux_uconsole_legacy_adapter` exposes the transitional adapter
+  descriptor;
 - GTK implementation can be moved or wrapped without changing target behavior.

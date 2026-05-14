@@ -12,6 +12,7 @@ struct LinuxSimAppShellConfig
     const char* target_id = "linux_sim";
     const char* ux_pack_id = "simulator_full";
     const char* transitional_source = "apps/linux_sim";
+    const char* legacy_adapter_target = "trailmate_linux_sim_legacy_adapter";
 };
 
 class LinuxSimAppShell

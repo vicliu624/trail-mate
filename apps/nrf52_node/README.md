@@ -2,10 +2,10 @@
 
 Role = product app shell / target app shell.
 
-`apps/nrf52_node` is the future nRF52 node product app shell skeleton.
+`apps/nrf52_node` is the nRF52 node product app shell executable baseline.
 
 It is not a PlatformIO project directory and does not contain build host files
-in Phase 8.3.
+in Phase 8 Build/AppShell Executable Convergence.
 
 ```text
 Build Entrypoint invokes.
@@ -42,10 +42,22 @@ Must not:
 
 ## Thin App Shell Entrypoint Declaration
 
-Future declaration:
+Current source-level shell descriptor:
 
 ```text
-trail_mate_nrf52_node_start(target_profile)
+src/nrf52_node_app_shell.h
+src/nrf52_node_app_shell.cpp
+trailmate-nrf52-node-app-shell
 ```
 
-This is a declaration of intent only. No behavior change in Phase 8.3.
+Current config:
+
+```text
+target_family = nrf52_node
+default_ux_pack_id = tiny_node_status
+transitional_source = apps/esp_pio
+board_specific_transitional_source = apps/gat562_mesh_evb_pro
+legacy_adapter_target = trailmate_nrf52_pio_legacy_adapter
+```
+
+No behavior change in Phase 8 Build/AppShell Executable Convergence.

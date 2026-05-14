@@ -44,14 +44,24 @@ Must not:
 
 ## Thin App Shell Entrypoint Declaration
 
-Future declaration:
+Current source-level shell descriptor:
 
 ```text
-trail_mate_nrf52_node_start(target_profile)
+src/nrf52_node_app_shell.h
+src/nrf52_node_app_shell.cpp
+trailmate-nrf52-node-app-shell
 ```
 
 ## Current Status
 
-Skeleton only.
+Executable app shell baseline.
 
-No behavior change in Phase 8.3.
+Default UX Pack:
+
+- `tiny_node_status`
+
+Transitional implementation adapter target:
+
+- `trailmate_nrf52_pio_legacy_adapter`
+
+No behavior change in Phase 8 Build/AppShell Executable Convergence.
