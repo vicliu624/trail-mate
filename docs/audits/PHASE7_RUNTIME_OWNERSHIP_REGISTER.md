@@ -20,7 +20,7 @@ has direct user-visible consequences and a bounded migration path.
 | Chat retry/cancel/clear failure actions | in progress | 7.4 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService` |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
 | Team location/command action ownership | in progress | 7.2 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; rich rendering remains future |
-| key verification UI | future | later phase | not delivery read model ownership |
+| key verification workflow | in progress | 7.5 | owned by `KeyVerificationModel` plus legacy source/sink adapters; not `ChatWorkspaceModel` or `MessageRow` |
 | GPS page timers/tasks | future | later phase | runtime scheduling owner still legacy |
 
 ## Phase 7.1 Decision
@@ -122,3 +122,28 @@ Phase 7.4 introduces:
 `ClearFailure` removes failed records from `ChatDeliveryReadModel`.
 `CancelPending` removes queued or sending projections only. `Retry` is a port
 owned action and returns `Unsupported` until a retry port is wired.
+
+## Phase 7.5 Decision
+
+Key verification is an independent runtime/presentation workflow.
+
+It is not owned by:
+
+- `ChatWorkspaceModel`
+- `MessageRow`
+- renderer modal local state
+- chat delivery read model
+- `ChatUiController` workflow fields
+
+Phase 7.5 introduces:
+
+- `KeyVerificationSnapshot`
+- `IKeyVerificationPresentationSource`
+- `IKeyVerificationActionSink`
+- `KeyVerificationModel`
+- `LegacyKeyVerificationSource`
+- `LegacyKeyVerificationActionSink`
+
+The LVGL modal may remain in `ChatUiController`, but it must render snapshots
+and submit actions through the model. MeshCore/Meshtastic differences remain
+behind legacy key verification adapters.
