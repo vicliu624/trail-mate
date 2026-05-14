@@ -261,6 +261,27 @@ place while the split is planned, but new Phase 8 work must classify additions
 as LVGL core, UX pack, runtime helper, map runtime, chat runtime, GPS runtime,
 or legacy adapter.
 
+## Phase 8.2 Progress
+
+Phase 8.2 establishes builds/ skeleton but does not move build host files.
+
+The intended authoritative build entrypoint families are:
+
+```text
+ESP / ESP32-P4 -> builds/esp_idf
+nRF52 -> builds/pio_nrf52
+Linux -> builds/linux_cmake
+```
+
+`apps/esp_idf` and `apps/esp_pio` remain transitional until wrapper migration.
+
+`builds/esp_idf`, `builds/pio_nrf52`, and `builds/linux_cmake` are thin wrapper
+slots. They must not assemble Chat, Map, Team, or GPS runtime, choose UX packs,
+define board facts, or become product app shells.
+
+Phase 8.2 does not change ESP-IDF CMake, PlatformIO, Linux CMake, app runtime
+behavior, or existing target startup paths.
+
 ## Non-Goals
 
 Phase 8.1 does not:
