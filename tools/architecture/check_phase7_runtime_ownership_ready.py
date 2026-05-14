@@ -2180,6 +2180,25 @@ def check_phase7_final_readiness() -> int:
         for token in ["future", "later", "TBD"]:
             if re.search(rf"\b{re.escape(token)}\b", text, flags=re.IGNORECASE):
                 failures += fail(f"PHASE7_RUNTIME_OWNERSHIP_REGISTER contains naked deferred token: {token}")
+        in_runtime_items = False
+        for line in text.splitlines():
+            if line.strip() == "## Runtime Ownership Items":
+                in_runtime_items = True
+                continue
+            if in_runtime_items and line.startswith("## "):
+                break
+            if not in_runtime_items or not line.startswith("| ") or line.startswith("| ---") or line.startswith("| Runtime item"):
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) < 4:
+                failures += fail(f"runtime ownership row has too few cells: {line}")
+                continue
+            status = cells[1].lower()
+            for token in ["in progress", "future", "later", "tbd"]:
+                if token in status:
+                    failures += fail(
+                        f"Runtime Ownership Items row has non-final status '{cells[1]}': {cells[0]}"
+                    )
 
     if exists(burndown_register):
         text = read_text(burndown_register)

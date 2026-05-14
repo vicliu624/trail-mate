@@ -15,8 +15,8 @@ has direct user-visible consequences and a bounded migration path.
 | Chat delivery / pending / failure | contained | 7.1 / 7.6 | owned by `ChatDeliveryReadModel` and projector path; controller direct ownership is forbidden |
 | Chat send-result projection | contained | 7.3 / 7.7 | `ChatSendResultEvent` projects through `LegacyChatDeliveryEventBridge`; `ChatPageRuntimeEventPump` owns forwarding |
 | ACK timeout projection | explicitly deferred | 7.3 / final matrix | adapter hook projects `AckTimeout`; unified ACK source has exit condition in `PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md` |
-| key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
-| radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
+| key missing projection | explicitly deferred | 7.3 / final matrix | mapper supports structured failure; EventBus schema exit condition in `PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md` |
+| radio send failure projection | explicitly deferred | 7.3 / final matrix | mapper supports structured failure; EventBus schema exit condition in `PHASE7_FINAL_LEGACY_SURFACE_MATRIX.md` |
 | Chat runtime event pump / store flush ownership | contained | 7.7 | owned by `ChatPageRuntimeEventPump` / `ChatPageRuntimeFacade`; controller is UI refresh sink |
 | Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
 | Map tile/cache ownership | contained | 7.10 | tile path mapping and filesystem availability are owned by `MapTileResolver` / `LegacyFilesystemMapTileSource`; decoded image cache remains contained legacy |
