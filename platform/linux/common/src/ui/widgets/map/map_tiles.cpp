@@ -176,6 +176,85 @@ bool build_lvgl_path_from_actual(const std::filesystem::path& actual_path, char*
     return true;
 }
 
+int16_t clamp_screen_coord(int value)
+{
+    if (value < -32768)
+    {
+        return -32768;
+    }
+    if (value > 32767)
+    {
+        return 32767;
+    }
+    return static_cast<int16_t>(value);
+}
+
+ui::map_tiles::MapTileRef tile_render_ref(const MapTile& tile)
+{
+    ui::map_tiles::MapTileRef ref{};
+    ref.layer = ui::map_tiles::mapTileLayerFromBaseSource(sanitize_map_source(tile.map_source));
+    ref.z = clamp_tile_zoom(tile.z);
+    ref.x = static_cast<uint32_t>(tile.x < 0 ? 0 : tile.x);
+    ref.y = static_cast<uint32_t>(tile.y < 0 ? 0 : tile.y);
+    return ref;
+}
+
+ui::map_tiles::MapTileRenderState tile_render_state(const MapTile& tile)
+{
+    if (tile.has_png_file)
+    {
+        return ui::map_tiles::MapTileRenderState::Ready;
+    }
+    if (tile.base_missing)
+    {
+        return ui::map_tiles::MapTileRenderState::Missing;
+    }
+    return ui::map_tiles::MapTileRenderState::Loading;
+}
+
+void rebuild_render_queue(TileContext& ctx)
+{
+    if (!ctx.render_queue)
+    {
+        return;
+    }
+
+    ctx.render_queue->clear();
+    if (!ctx.tiles || !ctx.anchor || !ctx.anchor->valid)
+    {
+        return;
+    }
+
+    for (const auto& tile : *ctx.tiles)
+    {
+        if (!tile.visible)
+        {
+            continue;
+        }
+
+        int screen_x = 0;
+        int screen_y = 0;
+        if (!tile_screen_pos_xyz(ctx,
+                                 static_cast<int>(tile.x),
+                                 static_cast<int>(tile.y),
+                                 tile.z,
+                                 screen_x,
+                                 screen_y))
+        {
+            continue;
+        }
+
+        ui::map_tiles::MapTileRenderRef item{};
+        item.tile = tile_render_ref(tile);
+        item.rect.x = clamp_screen_coord(screen_x);
+        item.rect.y = clamp_screen_coord(screen_y);
+        item.rect.width = TILE_SIZE;
+        item.rect.height = TILE_SIZE;
+        item.state = tile_render_state(tile);
+        ctx.render_queue->push(item);
+    }
+}
+
 double clamp_lat(double lat)
 {
     return std::clamp(lat, -kMaxMercatorLat, kMaxMercatorLat);
@@ -767,6 +846,7 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
     }
 
     refresh_status_flags(ctx);
+    rebuild_render_queue(ctx);
 }
 
 void tile_loader_step(TileContext& ctx)
@@ -806,20 +886,27 @@ void tile_loader_step(TileContext& ctx)
     }
 
     refresh_status_flags(ctx);
+    rebuild_render_queue(ctx);
 }
 
 void init_tile_context(TileContext& ctx,
                        lv_obj_t* map_container,
                        MapAnchor* anchor,
                        std::vector<MapTile>* tiles,
+                       ui::map_tiles::MapTileRenderQueue* render_queue,
                        bool* has_map_data,
                        bool* has_visible_map_data)
 {
     ctx.map_container = map_container;
     ctx.anchor = anchor;
     ctx.tiles = tiles;
+    ctx.render_queue = render_queue;
     ctx.has_map_data = has_map_data;
     ctx.has_visible_map_data = has_visible_map_data;
+    if (ctx.render_queue)
+    {
+        ctx.render_queue->clear();
+    }
     if (ctx.has_map_data)
     {
         *ctx.has_map_data = false;
@@ -855,5 +942,9 @@ void cleanup_tiles(TileContext& ctx)
     if (ctx.anchor)
     {
         ctx.anchor->valid = false;
+    }
+    if (ctx.render_queue)
+    {
+        ctx.render_queue->clear();
     }
 }

@@ -20,6 +20,7 @@ has direct user-visible consequences and a bounded migration path.
 | Chat runtime event pump / store flush ownership | contained | 7.7 | owned by `ChatPageRuntimeEventPump` / `ChatPageRuntimeFacade`; controller is UI refresh sink |
 | Chat retry/cancel/clear failure actions | contained | 7.4 / 7.6 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService`; controller direct action ownership is forbidden |
 | Map tile/cache ownership | contained | 7.10 | tile path mapping and filesystem availability are owned by `MapTileResolver` / `LegacyFilesystemMapTileSource`; decoded image cache remains contained legacy |
+| Map tile render queue / decoded cache ownership | contained | 7.11 | visible tile plan is projected into `MapTileRenderQueue`; ESP decoded image cache is wrapped by `LvglDecodedTileCache`; LVGL widget records remain contained legacy |
 | Team location/command action ownership | contained | 7.2 / 7.6 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; controller send payload encoding is forbidden |
 | Team rich payload display ownership | contained | 7.8 | owned by `TeamRichPayloadProjector` / `TeamChatPresentationSource`; controller display decode/format is forbidden |
 | Team position picker widget lifecycle | burned-down UI surface | 7.9 | owned by `TeamPositionPickerRenderer`; controller only handles selected/cancel workflow |

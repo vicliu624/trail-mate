@@ -26,6 +26,7 @@ struct RuntimeImpl
     Model model{};
     MapAnchor anchor{};
     std::vector<MapTile> tiles{};
+    ui::map_tiles::MapTileRenderQueue render_queue{};
     TileContext tile_ctx{};
     lv_timer_t* loader_timer = nullptr;
     uint32_t loader_interval_ms = 200;
@@ -512,6 +513,7 @@ Widgets create(Runtime& runtime, lv_obj_t* parent, uint32_t loader_interval_ms)
                       impl->widgets.tile_layer,
                       &impl->anchor,
                       &impl->tiles,
+                      &impl->render_queue,
                       &impl->has_map_data,
                       &impl->has_visible_map_data);
 

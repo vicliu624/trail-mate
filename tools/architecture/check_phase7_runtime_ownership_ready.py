@@ -50,6 +50,8 @@ def check_required_files() -> int:
         "docs/audits/PHASE7_9_TEAM_POSITION_PICKER_BURNDOWN_REPORT.md",
         "docs/audits/MAP_TILE_SOURCE_CACHE_OWNERSHIP_AUDIT.md",
         "docs/audits/PHASE7_10_MAP_TILE_SOURCE_CACHE_BURNDOWN_REPORT.md",
+        "docs/audits/MAP_TILE_RENDER_QUEUE_CACHE_AUDIT.md",
+        "docs/audits/PHASE7_11_MAP_TILE_RENDER_QUEUE_CACHE_REPORT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
@@ -57,6 +59,7 @@ def check_required_files() -> int:
         "docs/specification/TEAM_RICH_PAYLOAD_PRESENTATION_SPEC.md",
         "docs/specification/TEAM_POSITION_PICKER_RENDERER_SPEC.md",
         "docs/specification/MAP_TILE_SOURCE_CACHE_RUNTIME_SPEC.md",
+        "docs/specification/MAP_TILE_RENDER_QUEUE_CACHE_SPEC.md",
         "docs/audits/TEAM_ACTION_OWNERSHIP_AUDIT.md",
         "docs/specification/TEAM_ACTION_RUNTIME_SPEC.md",
         "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md",
@@ -117,9 +120,13 @@ def check_required_files() -> int:
         "modules/ui_shared/include/ui/map_tiles/map_tile_resolver.h",
         "modules/ui_shared/include/ui/map_tiles/map_tile_source.h",
         "modules/ui_shared/include/ui/map_tiles/map_tile_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_decoder_cache.h",
+        "modules/ui_shared/include/ui/map_tiles/map_tile_render_queue.h",
         "modules/ui_shared/include/ui/map_tiles/legacy_filesystem_map_tile_source.h",
+        "modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp",
         "modules/ui_shared/src/ui/map_tiles/map_tile_resolver.cpp",
         "modules/ui_shared/src/ui/map_tiles/legacy_filesystem_map_tile_source.cpp",
+        "modules/ui_shared/tests/test_map_tile_render_queue.cpp",
         "modules/ui_shared/tests/test_map_tile_resolver.cpp",
         "modules/ui_shared/tests/test_legacy_filesystem_map_tile_source.cpp",
         "modules/ui_shared/include/ui/screens/chat/chat_ui_refresh_sink.h",
@@ -312,6 +319,8 @@ def check_docs() -> int:
             "ChatUiController` Team position picker renderer",
             "MessageRow` Team rich display limitations",
             "Map tile path/cache legacy runtime",
+            "Map tile visible plan in platform renderer",
+            "ESP decoded LVGL tile cache",
         ],
         "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md": [
             "Temporary UI Responsibilities",
@@ -402,6 +411,38 @@ def check_docs() -> int:
             "Linux `platform::linux_runtime::MapTileCache` downloader",
             "uConsole workspace path fields",
         ],
+        "docs/audits/MAP_TILE_RENDER_QUEUE_CACHE_AUDIT.md": [
+            "Phase 7.11 establishes explicit ownership boundaries for map tile visible render planning and decoded tile cache lifetime",
+            "MapTileRenderQueue",
+            "MapTileRenderRef",
+            "MapTileRenderState",
+            "IMapTileDecoderCache",
+            "LvglDecodedTileCache",
+            "LVGL tile widget records",
+            "Platform tile loader cadence",
+        ],
+        "docs/specification/MAP_TILE_RENDER_QUEUE_CACHE_SPEC.md": [
+            "Source owns tile bytes",
+            "Decoder cache owns decoded image lifetime",
+            "Render queue owns the current visible tile plan",
+            "MapTileScreenRect",
+            "MapTileRenderState",
+            "MapTileRenderRef",
+            "MapTileRenderQueue",
+            "IMapTileDecoderCache",
+            "LvglDecodedTileCache",
+            "Phase 7.11 does not",
+        ],
+        "docs/audits/PHASE7_11_MAP_TILE_RENDER_QUEUE_CACHE_REPORT.md": [
+            "Phase 7.11 made the current map tile render plan and ESP decoded tile cache ownership explicit",
+            "MapTileRenderQueue",
+            "MapTileRenderState",
+            "LvglDecodedTileCache",
+            "IMapTileDecoderCache",
+            "Burned Down",
+            "Still Contained",
+            "Platform tile loading cadence",
+        ],
     }
 
     failures = 0
@@ -443,6 +484,8 @@ def check_legacy_burndown_register() -> int:
         "ChatUiController` Team position picker renderer",
         "MessageRow` Team rich display limitations",
         "Map tile path/cache legacy runtime",
+        "Map tile visible plan in platform renderer",
+        "ESP decoded LVGL tile cache",
     ]
     for surface in required_surfaces:
         if surface not in text:
@@ -1656,6 +1699,160 @@ def check_map_tile_source_cache_boundary() -> int:
     return failures
 
 
+def check_map_tile_render_queue_cache_boundary() -> int:
+    failures = 0
+
+    queue_header = "modules/ui_shared/include/ui/map_tiles/map_tile_render_queue.h"
+    queue_source = "modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp"
+    decoder_header = "modules/ui_shared/include/ui/map_tiles/map_tile_decoder_cache.h"
+    viewport_source = "modules/ui_shared/src/ui/widgets/map/map_viewport.cpp"
+    snapshot_header = "modules/ui_presentation/include/ui_presentation/map/map_workspace_snapshot.h"
+    esp_tiles = "platform/esp/arduino_common/src/ui/widgets/map/map_tiles.cpp"
+    esp_header = "platform/esp/arduino_common/include/ui/widgets/map/map_tiles.h"
+    linux_tiles = "platform/linux/common/src/ui/widgets/map/map_tiles.cpp"
+    linux_header = "platform/linux/common/include/ui/widgets/map/map_tiles.h"
+    runtime_register = "docs/audits/PHASE7_RUNTIME_OWNERSHIP_REGISTER.md"
+    burndown_register = "docs/audits/LEGACY_BURNDOWN_REGISTER.md"
+
+    if exists(queue_header):
+        text = strip_cpp_comments(read_text(queue_header))
+        for token in [
+            "struct MapTileScreenRect",
+            "enum class MapTileRenderState",
+            "Missing",
+            "Loading",
+            "Ready",
+            "struct MapTileRenderRef",
+            "class MapTileRenderQueue",
+            "kMaxTiles",
+            "void clear()",
+            "bool push",
+            "std::size_t size() const",
+            "const MapTileRenderRef* items() const",
+            "MapTileRenderRef items_[kMaxTiles]",
+        ]:
+            if token not in text:
+                failures += fail(f"MapTileRenderQueue header missing token: {token}")
+        for token in ["std::vector", "std::string", "lvgl.h", "lv_obj_t", "filesystem", "FILE*"]:
+            if token in text:
+                failures += fail(f"MapTileRenderQueue owns forbidden dependency token: {token}")
+
+    if exists(queue_source):
+        text = strip_cpp_comments(read_text(queue_source))
+        for token in [
+            "MapTileRenderQueue::clear",
+            "MapTileRenderQueue::push",
+            "MapTileRenderQueue::size",
+            "MapTileRenderQueue::items",
+        ]:
+            if token not in text:
+                failures += fail(f"MapTileRenderQueue source missing token: {token}")
+        for token in ["std::vector", "std::string", "lvgl.h", "lv_obj_t", "filesystem", "FILE*"]:
+            if token in text:
+                failures += fail(f"MapTileRenderQueue source owns forbidden dependency token: {token}")
+
+    if exists(decoder_header):
+        text = strip_cpp_comments(read_text(decoder_header))
+        for token in ["class IMapTileDecoderCache", "clear", "hasDecoded"]:
+            if token not in text:
+                failures += fail(f"IMapTileDecoderCache missing token: {token}")
+        for token in ["lvgl.h", "lv_obj_t", "lv_image_dsc_t", "filesystem", "FILE*", "MapWorkspaceSnapshot"]:
+            if token in text:
+                failures += fail(f"IMapTileDecoderCache exposes forbidden token: {token}")
+
+    for path in [esp_header, linux_header]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in ["map_tile_render_queue.h", "MapTileRenderQueue* render_queue"]:
+            if token not in text:
+                failures += fail(f"{path} missing render queue context token: {token}")
+
+    for path in [esp_tiles, linux_tiles]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "rebuild_render_queue",
+            "MapTileRenderRef",
+            "MapTileRenderState::Ready",
+            "MapTileRenderState::Missing",
+            "MapTileRenderState::Loading",
+            "ctx.render_queue->clear()",
+            "ctx.render_queue->push(item)",
+        ]:
+            if token not in text:
+                failures += fail(f"{path} missing render queue projection token: {token}")
+
+    if exists(esp_tiles):
+        text = strip_cpp_comments(read_text(esp_tiles))
+        for token in [
+            "class LvglDecodedTileCache",
+            "IMapTileDecoderCache",
+            "hasDecoded",
+            "acquireSlot",
+            "releaseUsage",
+            "decoded_tile_cache()",
+            "decoded_tile_cache().clear()",
+            "decoded_tile_cache().find",
+            "decoded_tile_cache().acquireSlot",
+        ]:
+            if token not in text:
+                failures += fail(f"ESP map tiles missing decoded cache owner token: {token}")
+        for token in ["g_tile_decode_cache", "g_tile_cache_initialized", "TILE_DECODE_CACHE_SIZE"]:
+            if token in text:
+                failures += fail(f"ESP map tiles still owns loose decoded cache global token: {token}")
+
+    if exists(viewport_source):
+        text = strip_cpp_comments(read_text(viewport_source))
+        for token in ["MapTileRenderQueue render_queue", "&impl->render_queue"]:
+            if token not in text:
+                failures += fail(f"Map viewport missing render queue runtime token: {token}")
+        for token in ["lv_image_dsc_t", "DecodedTileCache", "IMapTileDecoderCache", "LvglDecodedTileCache"]:
+            if token in text:
+                failures += fail(f"Map viewport owns decoded cache token: {token}")
+
+    if exists(snapshot_header):
+        text = strip_cpp_comments(read_text(snapshot_header))
+        for token in [
+            "MapTileRenderQueue",
+            "MapTileRenderRef",
+            "IMapTileDecoderCache",
+            "LvglDecodedTileCache",
+            "DecodedTileCache",
+            "lv_image_dsc_t",
+        ]:
+            if token in text:
+                failures += fail(f"MapWorkspaceSnapshot owns render queue/cache token: {token}")
+
+    if exists(runtime_register):
+        text = read_text(runtime_register)
+        for token in [
+            "Map tile render queue / decoded cache ownership",
+            "7.11",
+            "MapTileRenderQueue",
+            "LvglDecodedTileCache",
+            "LVGL widget records remain contained legacy",
+        ]:
+            if token not in text:
+                failures += fail(f"PHASE7_RUNTIME_OWNERSHIP_REGISTER missing 7.11 map token: {token}")
+
+    if exists(burndown_register):
+        text = read_text(burndown_register)
+        for token in [
+            "Map tile visible plan in platform renderer",
+            "ESP decoded LVGL tile cache",
+            "MapTileRenderQueue",
+            "LvglDecodedTileCache",
+            "IMapTileDecoderCache",
+            "Runtime-owned decoder cache is injected",
+        ]:
+            if token not in text:
+                failures += fail(f"LEGACY_BURNDOWN_REGISTER missing 7.11 map token: {token}")
+
+    return failures
+
+
 def check_chat_runtime_event_pump_boundary() -> int:
     failures = 0
     header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
@@ -2101,6 +2298,7 @@ def main() -> int:
     failures += check_team_rich_payload_presentation_boundary()
     failures += check_team_position_picker_renderer_boundary()
     failures += check_map_tile_source_cache_boundary()
+    failures += check_map_tile_render_queue_cache_boundary()
     failures += check_chat_runtime_event_pump_boundary()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()

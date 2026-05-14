@@ -588,6 +588,16 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_legacy_filesystem_map_tile_source_smoke
              COMMAND trailmate_legacy_filesystem_map_tile_source_smoke)
 
+    add_executable(trailmate_map_tile_render_queue_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_map_tile_render_queue.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/map_tiles/map_tile_render_queue.cpp"
+    )
+    target_include_directories(trailmate_map_tile_render_queue_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include")
+    add_test(NAME trailmate_map_tile_render_queue_smoke
+             COMMAND trailmate_map_tile_render_queue_smoke)
+
     add_executable(trailmate_core_gps_nmea_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/tests/test_nmea_parser.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/protocol/nmea/nmea_parser.cpp"

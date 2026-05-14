@@ -10,6 +10,7 @@
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "sys/clock.h"
+#include "ui/map_tiles/map_tile_decoder_cache.h"
 #include "ui/map_tiles/legacy_filesystem_map_tile_source.h"
 #include "ui/page/page_profile.h"
 #include "ui/runtime/memory_profile.h"
@@ -40,12 +41,6 @@
         std::fflush(stdout);      \
     } while (0)
 
-// Decoded tile image cache upper bound.
-// Active slots are selected at runtime from the current viewport size so
-// large displays like Tab5 can keep one full screen of decoded tiles hot.
-#define TILE_DECODE_CACHE_SIZE 32
-static DecodedTileCache g_tile_decode_cache[TILE_DECODE_CACHE_SIZE];
-static bool g_tile_cache_initialized = false;
 static uint32_t g_cache_full_until_ms = 0;
 static uint32_t g_cache_full_log_ms = 0;
 static uint8_t g_requested_map_source = 0;
@@ -144,10 +139,187 @@ class LvglMapTileFileSystem final : public ui::map_tiles::IMapTileFileSystem
     }
 };
 
+class LvglDecodedTileCache final : public ui::map_tiles::IMapTileDecoderCache
+{
+  public:
+    static constexpr std::size_t kCapacity = 32;
+
+    void clear() override
+    {
+        if (!initialized_)
+        {
+            return;
+        }
+
+        for (std::size_t i = 0; i < kCapacity; ++i)
+        {
+            freeSlot(slots_[i]);
+            resetSlot(slots_[i]);
+        }
+        g_cache_full_until_ms = 0;
+    }
+
+    bool hasDecoded(const ui::map_tiles::MapTileRef& ref) const override
+    {
+        return find(ref) != nullptr;
+    }
+
+    void initialize()
+    {
+        if (initialized_)
+        {
+            return;
+        }
+
+        for (std::size_t i = 0; i < kCapacity; ++i)
+        {
+            resetSlot(slots_[i]);
+        }
+        initialized_ = true;
+        GPS_LOG("[GPS] Tile decode cache initialized (size=%d)\n", static_cast<int>(kCapacity));
+    }
+
+    DecodedTileCache* find(const ui::map_tiles::MapTileRef& ref) const
+    {
+        if (!initialized_)
+        {
+            return nullptr;
+        }
+
+        const uint8_t map_source = mapSourceFor(ref.layer);
+        for (std::size_t i = 0; i < kCapacity; ++i)
+        {
+            if (slots_[i].x == static_cast<int32_t>(ref.x) &&
+                slots_[i].y == static_cast<int32_t>(ref.y) &&
+                slots_[i].z == static_cast<int32_t>(ref.z) &&
+                slots_[i].map_source == map_source &&
+                slots_[i].img_dsc != NULL)
+            {
+                slots_[i].last_used_ms = sys::millis_now();
+                return &slots_[i];
+            }
+        }
+        return nullptr;
+    }
+
+    DecodedTileCache* acquireSlot(std::size_t active_limit)
+    {
+        initialize();
+
+        const int slot_count = std::max(1, std::min(static_cast<int>(active_limit), static_cast<int>(kCapacity)));
+        uint32_t oldest_ms = UINT32_MAX;
+        int lru_idx = -1;
+        bool found_unused = false;
+
+        for (int i = 0; i < slot_count; ++i)
+        {
+            if (slots_[i].img_dsc == NULL)
+            {
+                return &slots_[i];
+            }
+            if (!slots_[i].in_use)
+            {
+                found_unused = true;
+                if (slots_[i].last_used_ms < oldest_ms)
+                {
+                    oldest_ms = slots_[i].last_used_ms;
+                    lru_idx = i;
+                }
+            }
+        }
+
+        if (!found_unused || lru_idx == -1)
+        {
+            const uint32_t now_ms = sys::millis_now();
+            g_cache_full_until_ms = now_ms + 500;
+            if (now_ms - g_cache_full_log_ms >= 1000)
+            {
+                GPS_LOG("[GPS] All cache slots are in use, cannot evict safely\n");
+                g_cache_full_log_ms = now_ms;
+            }
+            return nullptr;
+        }
+
+        GPS_LOG("[GPS] Evicting cached tile %d/%d/%d from decode cache\n",
+                fmt_tile_coord(slots_[lru_idx].z),
+                fmt_tile_coord(slots_[lru_idx].x),
+                fmt_tile_coord(slots_[lru_idx].y));
+        freeSlot(slots_[lru_idx]);
+        resetSlot(slots_[lru_idx]);
+        return &slots_[lru_idx];
+    }
+
+    void releaseUsage()
+    {
+        if (!initialized_)
+        {
+            return;
+        }
+
+        const uint32_t now_ms = sys::millis_now();
+        for (std::size_t i = 0; i < kCapacity; ++i)
+        {
+            slots_[i].in_use = false;
+            if (slots_[i].img_dsc != NULL)
+            {
+                slots_[i].last_used_ms = now_ms;
+            }
+        }
+    }
+
+  private:
+    static uint8_t mapSourceFor(ui::map_tiles::MapTileLayer layer)
+    {
+        switch (layer)
+        {
+        case ui::map_tiles::MapTileLayer::Terrain:
+            return 1;
+        case ui::map_tiles::MapTileLayer::Satellite:
+            return 2;
+        case ui::map_tiles::MapTileLayer::Osm:
+        default:
+            return 0;
+        }
+    }
+
+    static void freeSlot(DecodedTileCache& slot)
+    {
+        if (slot.img_dsc != NULL)
+        {
+            if (slot.img_dsc->data != NULL)
+            {
+                lv_free((void*)slot.img_dsc->data);
+            }
+            lv_free(slot.img_dsc);
+            slot.img_dsc = NULL;
+        }
+    }
+
+    static void resetSlot(DecodedTileCache& slot)
+    {
+        slot.x = -1;
+        slot.y = -1;
+        slot.z = -1;
+        slot.map_source = 0;
+        slot.img_dsc = NULL;
+        slot.last_used_ms = 0;
+        slot.in_use = false;
+    }
+
+    mutable DecodedTileCache slots_[kCapacity]{};
+    bool initialized_ = false;
+};
+
 LvglMapTileFileSystem& tile_file_system()
 {
     static LvglMapTileFileSystem fs;
     return fs;
+}
+
+LvglDecodedTileCache& decoded_tile_cache()
+{
+    static LvglDecodedTileCache cache;
+    return cache;
 }
 
 ui::map_tiles::LegacyFilesystemMapTileSource& tile_source()
@@ -193,6 +365,78 @@ bool contour_tile_ref(int z, int x, int y, ui::map_tiles::MapTileRef& out)
     out.x = static_cast<uint32_t>(x < 0 ? 0 : x);
     out.y = static_cast<uint32_t>(y < 0 ? 0 : y);
     return true;
+}
+
+ui::map_tiles::MapTileRef base_tile_ref_for_tile(const MapTile& tile)
+{
+    return base_tile_ref(tile.z,
+                         static_cast<int>(tile.x),
+                         static_cast<int>(tile.y),
+                         g_active_map_source);
+}
+
+int16_t clamp_screen_coord(int value)
+{
+    if (value < -32768)
+    {
+        return -32768;
+    }
+    if (value > 32767)
+    {
+        return 32767;
+    }
+    return static_cast<int16_t>(value);
+}
+
+ui::map_tiles::MapTileRenderState tile_render_state(const MapTile& tile)
+{
+    if (tile.has_png_file)
+    {
+        return ui::map_tiles::MapTileRenderState::Ready;
+    }
+    if (tile.base_missing)
+    {
+        return ui::map_tiles::MapTileRenderState::Missing;
+    }
+    return ui::map_tiles::MapTileRenderState::Loading;
+}
+
+void rebuild_render_queue(TileContext& ctx)
+{
+    if (!ctx.render_queue)
+    {
+        return;
+    }
+
+    ctx.render_queue->clear();
+    if (!ctx.tiles || !ctx.anchor || !ctx.anchor->valid)
+    {
+        return;
+    }
+
+    for (const auto& tile : *ctx.tiles)
+    {
+        if (!tile.visible)
+        {
+            continue;
+        }
+
+        int screen_x = 0;
+        int screen_y = 0;
+        if (!tile_screen_pos_xyz(ctx, tile.x, tile.y, tile.z, screen_x, screen_y))
+        {
+            continue;
+        }
+
+        ui::map_tiles::MapTileRenderRef item{};
+        item.tile = base_tile_ref_for_tile(tile);
+        item.rect.x = clamp_screen_coord(screen_x);
+        item.rect.y = clamp_screen_coord(screen_y);
+        item.rect.width = TILE_SIZE;
+        item.rect.height = TILE_SIZE;
+        item.state = tile_render_state(tile);
+        ctx.render_queue->push(item);
+    }
 }
 
 void summarize_visible_tiles(const TileContext& ctx,
@@ -277,7 +521,7 @@ size_t tile_decode_cache_limit(const TileContext& ctx)
     const size_t profile_limit =
         std::max<std::size_t>(1U, ::ui::runtime::current_memory_profile().max_map_decode_tiles);
     return std::min<size_t>(std::min<size_t>(desired, profile_limit),
-                            static_cast<size_t>(TILE_DECODE_CACHE_SIZE));
+                            static_cast<size_t>(LvglDecodedTileCache::kCapacity));
 }
 
 } // namespace
@@ -355,69 +599,14 @@ void set_map_render_options(uint8_t map_source, bool contour_enabled)
     g_requested_contour_enabled = contour_enabled;
 }
 
-/**
- * Initialize tile decode cache
- */
-static void init_tile_decode_cache()
-{
-    if (g_tile_cache_initialized) return;
-    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
-    {
-        g_tile_decode_cache[i].x = -1;
-        g_tile_decode_cache[i].y = -1;
-        g_tile_decode_cache[i].z = -1;
-        g_tile_decode_cache[i].map_source = 0;
-        g_tile_decode_cache[i].img_dsc = NULL;
-        g_tile_decode_cache[i].last_used_ms = 0;
-        g_tile_decode_cache[i].in_use = false;
-    }
-    g_tile_cache_initialized = true;
-    GPS_LOG("[GPS] Tile decode cache initialized (size=%d)\n", TILE_DECODE_CACHE_SIZE);
-}
-
 static void clear_tile_decode_cache()
 {
-    if (!g_tile_cache_initialized)
-    {
-        return;
-    }
-    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
-    {
-        if (g_tile_decode_cache[i].img_dsc != NULL)
-        {
-            if (g_tile_decode_cache[i].img_dsc->data != NULL)
-            {
-                lv_free((void*)g_tile_decode_cache[i].img_dsc->data);
-            }
-            lv_free(g_tile_decode_cache[i].img_dsc);
-            g_tile_decode_cache[i].img_dsc = NULL;
-        }
-        g_tile_decode_cache[i].x = -1;
-        g_tile_decode_cache[i].y = -1;
-        g_tile_decode_cache[i].z = -1;
-        g_tile_decode_cache[i].map_source = 0;
-        g_tile_decode_cache[i].last_used_ms = 0;
-        g_tile_decode_cache[i].in_use = false;
-    }
-    g_cache_full_until_ms = 0;
+    decoded_tile_cache().clear();
 }
 
 static void release_tile_decode_cache_usage()
 {
-    if (!g_tile_cache_initialized)
-    {
-        return;
-    }
-
-    const uint32_t now_ms = sys::millis_now();
-    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
-    {
-        g_tile_decode_cache[i].in_use = false;
-        if (g_tile_decode_cache[i].img_dsc != NULL)
-        {
-            g_tile_decode_cache[i].last_used_ms = now_ms;
-        }
-    }
+    decoded_tile_cache().releaseUsage();
 }
 
 /**
@@ -425,22 +614,7 @@ static void release_tile_decode_cache_usage()
  */
 static DecodedTileCache* find_cached_tile(int x, int y, int z, uint8_t map_source)
 {
-    if (!g_tile_cache_initialized) init_tile_decode_cache();
-    map_source = sanitize_map_source(map_source);
-
-    for (int i = 0; i < TILE_DECODE_CACHE_SIZE; i++)
-    {
-        if (g_tile_decode_cache[i].x == x &&
-            g_tile_decode_cache[i].y == y &&
-            g_tile_decode_cache[i].z == z &&
-            g_tile_decode_cache[i].map_source == map_source &&
-            g_tile_decode_cache[i].img_dsc != NULL)
-        {
-            g_tile_decode_cache[i].last_used_ms = sys::millis_now();
-            return &g_tile_decode_cache[i];
-        }
-    }
-    return NULL;
+    return decoded_tile_cache().find(base_tile_ref(z, x, y, map_source));
 }
 
 /**
@@ -449,67 +623,7 @@ static DecodedTileCache* find_cached_tile(int x, int y, int z, uint8_t map_sourc
  */
 static DecodedTileCache* get_lru_cache_slot(size_t active_limit)
 {
-    if (!g_tile_cache_initialized) init_tile_decode_cache();
-
-    const int slot_count = std::max(1, std::min(static_cast<int>(active_limit), TILE_DECODE_CACHE_SIZE));
-    uint32_t oldest_ms = UINT32_MAX;
-    int lru_idx = -1;
-    bool found_unused = false;
-
-    for (int i = 0; i < slot_count; i++)
-    {
-        if (g_tile_decode_cache[i].img_dsc == NULL)
-        {
-            return &g_tile_decode_cache[i]; // Empty slot
-        }
-        if (!g_tile_decode_cache[i].in_use)
-        {
-            found_unused = true;
-            if (g_tile_decode_cache[i].last_used_ms < oldest_ms)
-            {
-                oldest_ms = g_tile_decode_cache[i].last_used_ms;
-                lru_idx = i;
-            }
-        }
-    }
-
-    // If all slots are in use, return NULL to avoid use-after-free
-    if (!found_unused || lru_idx == -1)
-    {
-        uint32_t now_ms = sys::millis_now();
-        g_cache_full_until_ms = now_ms + 500;
-        if (now_ms - g_cache_full_log_ms >= 1000)
-        {
-            GPS_LOG("[GPS] All cache slots are in use, cannot evict safely\n");
-            g_cache_full_log_ms = now_ms;
-        }
-        return NULL;
-    }
-
-    // Evict LRU entry (only if it's not in use)
-    if (g_tile_decode_cache[lru_idx].img_dsc != NULL)
-    {
-        GPS_LOG("[GPS] Evicting cached tile %d/%d/%d from decode cache\n",
-                fmt_tile_coord(g_tile_decode_cache[lru_idx].z),
-                fmt_tile_coord(g_tile_decode_cache[lru_idx].x),
-                fmt_tile_coord(g_tile_decode_cache[lru_idx].y));
-        // Free the image descriptor (data was allocated by us)
-        if (g_tile_decode_cache[lru_idx].img_dsc->data != NULL)
-        {
-            lv_free((void*)g_tile_decode_cache[lru_idx].img_dsc->data);
-        }
-        lv_free(g_tile_decode_cache[lru_idx].img_dsc);
-        g_tile_decode_cache[lru_idx].img_dsc = NULL;
-    }
-
-    g_tile_decode_cache[lru_idx].x = -1;
-    g_tile_decode_cache[lru_idx].y = -1;
-    g_tile_decode_cache[lru_idx].z = -1;
-    g_tile_decode_cache[lru_idx].map_source = 0;
-    g_tile_decode_cache[lru_idx].last_used_ms = 0;
-    g_tile_decode_cache[lru_idx].in_use = false;
-
-    return &g_tile_decode_cache[lru_idx];
+    return decoded_tile_cache().acquireSlot(active_limit);
 }
 
 /**
@@ -1198,6 +1312,7 @@ static void load_tile_image(TileContext& ctx, MapTile& tile)
     tile.last_used_ms = sys::millis_now();
     tile.obj_evicted_ms = 0;
     tile.record_evicted = false;
+    rebuild_render_queue(ctx);
     GPS_LOG("[GPS] Tile %d/%d/%d loaded, visible=%d\n",
             tile.z,
             fmt_tile_coord(tile.x),
@@ -1771,6 +1886,7 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
     layout_loaded_tile_objects(ctx);
 
     evict_cache(ctx);
+    rebuild_render_queue(ctx);
 
     // Update GPS marker position after tiles are laid out (rendered after map)
     // This ensures marker is on top and moves with the map
@@ -1993,19 +2109,27 @@ void tile_loader_step(TileContext& ctx)
             }
         }
     }
+    rebuild_render_queue(ctx);
 }
 
 /**
  * Initialize tile context
  */
 void init_tile_context(TileContext& ctx, lv_obj_t* map_container, MapAnchor* anchor,
-                       std::vector<MapTile>* tiles, bool* has_map_data, bool* has_visible_map_data)
+                       std::vector<MapTile>* tiles,
+                       ui::map_tiles::MapTileRenderQueue* render_queue,
+                       bool* has_map_data, bool* has_visible_map_data)
 {
     ctx.map_container = map_container;
     ctx.anchor = anchor;
     ctx.tiles = tiles;
+    ctx.render_queue = render_queue;
     ctx.has_map_data = has_map_data;
     ctx.has_visible_map_data = has_visible_map_data;
+    if (ctx.render_queue)
+    {
+        ctx.render_queue->clear();
+    }
 }
 
 /**
@@ -2041,5 +2165,9 @@ void cleanup_tiles(TileContext& ctx)
     if (ctx.has_visible_map_data)
     {
         *ctx.has_visible_map_data = false;
+    }
+    if (ctx.render_queue)
+    {
+        ctx.render_queue->clear();
     }
 }

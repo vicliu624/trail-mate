@@ -382,6 +382,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                         nullptr,
                         &g_gps_state.anchor,
                         &g_gps_state.tiles,
+                        &g_gps_state.tile_render_queue,
                         &g_gps_state.has_map_data,
                         &g_gps_state.has_visible_map_data);
     g_gps_state.tile_ctx.map_container = g_gps_state.map;

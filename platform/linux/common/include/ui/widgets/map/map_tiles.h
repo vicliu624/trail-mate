@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "ui/map_tiles/map_tile_render_queue.h"
+
 #include "lvgl.h"
 
 #include <cstddef>
@@ -73,6 +75,7 @@ struct TileContext
     lv_obj_t* map_container = nullptr;
     MapAnchor* anchor = nullptr;
     std::vector<MapTile>* tiles = nullptr;
+    ui::map_tiles::MapTileRenderQueue* render_queue = nullptr;
     bool* has_map_data = nullptr;
     bool* has_visible_map_data = nullptr;
 };
@@ -101,6 +104,7 @@ void init_tile_context(TileContext& ctx,
                        lv_obj_t* map_container,
                        MapAnchor* anchor,
                        std::vector<MapTile>* tiles,
+                       ui::map_tiles::MapTileRenderQueue* render_queue,
                        bool* has_map_data,
                        bool* has_visible_map_data);
 void cleanup_tiles(TileContext& ctx);

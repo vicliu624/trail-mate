@@ -6,6 +6,8 @@
 #ifndef MAP_TILES_H
 #define MAP_TILES_H
 
+#include "ui/map_tiles/map_tile_render_queue.h"
+
 #include "lvgl.h"
 #include <cstddef>
 #include <cstdint> // For int32_t
@@ -76,6 +78,7 @@ struct TileContext
     lv_obj_t* map_container; // Only UI dependency - for creating objects and getting size
     MapAnchor* anchor;
     std::vector<MapTile>* tiles;
+    ui::map_tiles::MapTileRenderQueue* render_queue;
     bool* has_map_data;         // Global: any tile ever loaded
     bool* has_visible_map_data; // Viewport: current visible tiles have PNG
 };
@@ -193,7 +196,9 @@ void set_map_render_options(uint8_t map_source, bool contour_enabled);
  * Initialize tile context
  */
 void init_tile_context(TileContext& ctx, lv_obj_t* map_container, MapAnchor* anchor,
-                       std::vector<MapTile>* tiles, bool* has_map_data, bool* has_visible_map_data);
+                       std::vector<MapTile>* tiles,
+                       ui::map_tiles::MapTileRenderQueue* render_queue,
+                       bool* has_map_data, bool* has_visible_map_data);
 
 /**
  * Cleanup tiles

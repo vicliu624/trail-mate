@@ -29,6 +29,8 @@ A legacy surface may remain temporarily only if it has:
 | `ChatUiController` Team position picker renderer | `TeamPositionPickerRenderer` | `ChatUiController` calls open/close/updateHint and handles selected/cancel workflow only | Future UX pack-specific picker replaces shared LVGL renderer or renderer is renamed as official chat picker view | 7.9 | burned-down |
 | `MessageRow` Team rich display limitations | `TeamRichPayloadDisplay` / future Team row renderer | `TeamChatPresentationSource` projects rich payloads to summary text for current renderer compatibility | Rich Team row/card renderer consumes structured display fields directly | 7.x | contained |
 | `Map tile path/cache legacy runtime` | `MapTileResolver` / `LegacyFilesystemMapTileSource` / future map tile cache owner | Platform LVGL map tile runtimes call source/resolver; ESP decoded cache, Linux downloader cache, and uConsole path fields remain contained | Renderer consumes tile refs/source without direct path/cache ownership, and decoded/downloader caches are moved behind stable runtime adapters | 7.10 / 7.x | contained |
+| `Map tile visible plan in platform renderer` | `MapTileRenderQueue` | Platform map tile runtimes still populate queue from legacy `MapTile` records | Dedicated map runtime computes visible queue and renderer consumes queue rows without mutating plan state | 7.11 / 7.x | contained |
+| `ESP decoded LVGL tile cache` | `LvglDecodedTileCache` / `IMapTileDecoderCache` | ESP map tile runtime still asks the LVGL cache adapter for decoded handles | Runtime-owned decoder cache is injected into a dedicated map tile renderer | 7.11 / 7.x | contained |
 
 ## Checker Status
 
@@ -42,4 +44,6 @@ A legacy surface may remain temporarily only if it has:
 | Team rich payload formatting in controller | forbidden |
 | Team position picker widget refs in controller | forbidden |
 | Map tile path policy in viewport/renderer | forbidden |
+| Map tile render queue boundary | required |
+| ESP decoded tile cache owner | required |
 | Legacy bridges without removal condition | forbidden by register token check |

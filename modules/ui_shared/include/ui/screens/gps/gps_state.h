@@ -69,6 +69,7 @@ struct GPSPageState
 
     MapAnchor anchor = {0};
     std::vector<MapTile> tiles;
+    ui::map_tiles::MapTileRenderQueue tile_render_queue;
     TileContext tile_ctx;
 
     uint32_t initial_load_ms = 0;
