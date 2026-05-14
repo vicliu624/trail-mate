@@ -51,8 +51,21 @@ Phase 8.3 adds semantic skeletons:
 | --- | --- | --- | --- | --- |
 | `apps/esp32_lvgl` | `apps/esp_idf` | `builds/esp_idf` | LVGL | skeleton only |
 | `apps/nrf52_node` | `apps/esp_pio`, `apps/gat562_mesh_evb_pro` | `builds/pio_nrf52` | mono/status or future embedded UI | skeleton only |
-| `apps/linux_uconsole_gtk` | `apps/linux_uconsole` | `builds/linux_cmake` | GTK | skeleton only |
-| `apps/linux_sim_shell` | `apps/linux_sim` | `builds/linux_cmake` | simulator/ASCII/host UI | skeleton only |
+| `apps/linux_uconsole_gtk` | `apps/linux_uconsole` | `builds/linux_cmake` | GTK | executable app shell baseline |
+| `apps/linux_sim_shell` | `apps/linux_sim` | `builds/linux_cmake` | simulator/ASCII/host UI | executable app shell baseline |
+
+## Phase 8 Correction Executable Layout Baseline
+
+Phase 8 Correction turns the Linux app shell skeletons into executable CMake
+targets without migrating GTK or simulator runtime behavior.
+
+| App shell | CMake target | Config source | Smoke test | Transitional implementation root |
+| --- | --- | --- | --- | --- |
+| `apps/linux_uconsole_gtk` | `trailmate_linux_uconsole_gtk_shell` | `linux_uconsole_gtk_app_shell.cpp` | `linux_uconsole_gtk_app_shell_smoke.cpp` | `apps/linux_uconsole` |
+| `apps/linux_sim_shell` | `trailmate_linux_sim_shell` | `linux_sim_app_shell.cpp` | `linux_sim_app_shell_smoke.cpp` | `apps/linux_sim` |
+
+`apps/linux_uconsole` and `apps/linux_sim` are now explicitly marked with
+`TRANSITIONAL_IMPLEMENTATION_ROOT.md`.
 
 ## App Shell Boundary
 

@@ -51,6 +51,21 @@ trail_mate_linux_uconsole_gtk_start(target_profile)
 
 ## Current Status
 
-Skeleton only.
+Executable app shell baseline.
 
-No behavior change in Phase 8.3.
+Phase 8 Correction adds:
+
+- `CMakeLists.txt`
+- `src/linux_uconsole_gtk_app_shell.h`
+- `src/linux_uconsole_gtk_app_shell.cpp`
+- `tests/linux_uconsole_gtk_app_shell_smoke.cpp`
+
+Selected UX Pack:
+
+- `uconsole_desktop`
+
+Transitional implementation root:
+
+- `apps/linux_uconsole`
+
+No GTK runtime behavior change in Phase 8 Correction.

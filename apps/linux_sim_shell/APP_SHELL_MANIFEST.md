@@ -51,6 +51,21 @@ trail_mate_linux_sim_shell_start(target_profile)
 
 ## Current Status
 
-Skeleton only.
+Executable app shell baseline.
 
-No behavior change in Phase 8.3.
+Phase 8 Correction adds:
+
+- `CMakeLists.txt`
+- `src/linux_sim_app_shell.h`
+- `src/linux_sim_app_shell.cpp`
+- `tests/linux_sim_app_shell_smoke.cpp`
+
+Selected UX Pack:
+
+- `simulator_full`
+
+Transitional implementation root:
+
+- `apps/linux_sim`
+
+No simulator runtime behavior change in Phase 8 Correction.

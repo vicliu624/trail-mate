@@ -42,14 +42,25 @@ def check_required_files() -> int:
         "builds/esp_idf/README.md",
         "builds/pio_nrf52/README.md",
         "builds/linux_cmake/README.md",
+        "builds/linux_cmake/CMakeLists.txt",
         "apps/esp32_lvgl/README.md",
         "apps/esp32_lvgl/APP_SHELL_MANIFEST.md",
         "apps/nrf52_node/README.md",
         "apps/nrf52_node/APP_SHELL_MANIFEST.md",
         "apps/linux_uconsole_gtk/README.md",
         "apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md",
+        "apps/linux_uconsole_gtk/CMakeLists.txt",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.h",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.cpp",
+        "apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_app_shell_smoke.cpp",
         "apps/linux_sim_shell/README.md",
         "apps/linux_sim_shell/APP_SHELL_MANIFEST.md",
+        "apps/linux_sim_shell/CMakeLists.txt",
+        "apps/linux_sim_shell/src/linux_sim_app_shell.h",
+        "apps/linux_sim_shell/src/linux_sim_app_shell.cpp",
+        "apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp",
+        "apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         "docs/targets/README.md",
         "docs/targets/esp32_lvgl_targets.md",
         "docs/targets/nrf52_node_targets.md",
@@ -363,6 +374,10 @@ def check_app_shell_language() -> int:
             "apps/linux_uconsole_gtk",
             "apps/linux_sim_shell",
             "skeleton only",
+            "executable app shell baseline",
+            "trailmate_linux_uconsole_gtk_shell",
+            "trailmate_linux_sim_shell",
+            "TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         ],
         "app shell audit",
     )
@@ -409,7 +424,11 @@ def check_app_shell_language() -> int:
             "Build entrypoint = `builds/linux_cmake`",
             "Current transitional path = `apps/linux_uconsole`",
             "own build host files",
-            "No behavior change in Phase 8.3",
+            "src/linux_uconsole_gtk_app_shell.h",
+            "target_id = uconsole",
+            "ux_pack_id = uconsole_desktop",
+            "transitional_source = apps/linux_uconsole",
+            "No GTK runtime behavior changes in Phase 8 Correction",
         ],
         "apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md": [
             "Product app shell / target app shell",
@@ -418,15 +437,22 @@ def check_app_shell_language() -> int:
             "`builds/linux_cmake`",
             "`apps/linux_uconsole`",
             "own build host files",
-            "Skeleton only",
-            "No behavior change in Phase 8.3",
+            "Executable app shell baseline",
+            "linux_uconsole_gtk_app_shell.cpp",
+            "Selected UX Pack",
+            "`uconsole_desktop`",
+            "No GTK runtime behavior change in Phase 8 Correction",
         ],
         "apps/linux_sim_shell/README.md": [
             "Role = product app shell / target app shell",
             "Build entrypoint = `builds/linux_cmake`",
             "Current transitional path = `apps/linux_sim`",
             "own build host files",
-            "No behavior change in Phase 8.3",
+            "src/linux_sim_app_shell.h",
+            "target_id = linux_sim",
+            "ux_pack_id = simulator_full",
+            "transitional_source = apps/linux_sim",
+            "No simulator runtime behavior changes in Phase 8 Correction",
         ],
         "apps/linux_sim_shell/APP_SHELL_MANIFEST.md": [
             "Product app shell / target app shell",
@@ -434,8 +460,11 @@ def check_app_shell_language() -> int:
             "`builds/linux_cmake`",
             "`apps/linux_sim`",
             "own build host files",
-            "Skeleton only",
-            "No behavior change in Phase 8.3",
+            "Executable app shell baseline",
+            "linux_sim_app_shell.cpp",
+            "Selected UX Pack",
+            "`simulator_full`",
+            "No simulator runtime behavior change in Phase 8 Correction",
         ],
     }
 
@@ -583,6 +612,12 @@ def check_build_entrypoint_language() -> int:
             "build.tab5",
             "BuildEntrypoint Constraints",
             "No build behavior changes in this phase",
+            "Phase 8 Correction",
+            "Linux Executable Wrapper Baseline",
+            "executable wrapper baseline",
+            "trailmate_linux_uconsole_gtk_shell",
+            "trailmate_linux_sim_shell",
+            "TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         ],
         "build entrypoint audit",
     )
@@ -661,6 +696,122 @@ def check_build_entrypoint_language() -> int:
         ],
         "Linux CMake build README",
     )
+
+    return failures
+
+
+def check_executable_layout_convergence() -> int:
+    failures = 0
+
+    failures += check_tokens(
+        "builds/linux_cmake/CMakeLists.txt",
+        [
+            "Build Entrypoint invokes; App Shell composes.",
+            "TRAIL_MATE_BUILD_LINUX_UCONSOLE_GTK",
+            "TRAIL_MATE_BUILD_LINUX_SIM_SHELL",
+            "add_subdirectory",
+            "apps/linux_uconsole_gtk",
+            "apps/linux_sim_shell",
+        ],
+        "Linux executable build wrapper",
+    )
+
+    wrapper_text = read_text("builds/linux_cmake/CMakeLists.txt")
+    for token in [
+        "ChatService",
+        "MapWorkspaceModel",
+        "GpsStatusModel",
+        "trailmate_add_linux_common",
+        "TrailMateLinuxSources.cmake",
+    ]:
+        if token in wrapper_text:
+            failures += fail(f"builds/linux_cmake/CMakeLists.txt owns forbidden token: {token}")
+
+    failures += check_tokens(
+        "apps/linux_uconsole_gtk/CMakeLists.txt",
+        [
+            "trailmate_linux_uconsole_gtk_shell",
+            "linux_uconsole_gtk_app_shell.cpp",
+            "linux_uconsole_gtk_app_shell_smoke.cpp",
+            "add_test",
+        ],
+        "uConsole GTK app shell CMake",
+    )
+
+    failures += check_tokens(
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.h",
+        [
+            "LinuxUConsoleGtkAppShellConfig",
+            "target_id = \"uconsole\"",
+            "ux_pack_id = \"uconsole_desktop\"",
+            "transitional_source = \"apps/linux_uconsole\"",
+            "LinuxUConsoleGtkAppShell",
+        ],
+        "uConsole GTK app shell header",
+    )
+
+    failures += check_tokens(
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.cpp",
+        [
+            "LinuxUConsoleGtkAppShell::config",
+            "LinuxUConsoleGtkAppShell::validate",
+            "config_.target_id",
+            "config_.ux_pack_id",
+            "config_.transitional_source",
+        ],
+        "uConsole GTK app shell source",
+    )
+
+    failures += check_tokens(
+        "apps/linux_sim_shell/CMakeLists.txt",
+        [
+            "trailmate_linux_sim_shell",
+            "linux_sim_app_shell.cpp",
+            "linux_sim_app_shell_smoke.cpp",
+            "add_test",
+        ],
+        "Linux sim app shell CMake",
+    )
+
+    failures += check_tokens(
+        "apps/linux_sim_shell/src/linux_sim_app_shell.h",
+        [
+            "LinuxSimAppShellConfig",
+            "target_id = \"linux_sim\"",
+            "ux_pack_id = \"simulator_full\"",
+            "transitional_source = \"apps/linux_sim\"",
+            "LinuxSimAppShell",
+        ],
+        "Linux sim app shell header",
+    )
+
+    failures += check_tokens(
+        "apps/linux_sim_shell/src/linux_sim_app_shell.cpp",
+        [
+            "LinuxSimAppShell::config",
+            "LinuxSimAppShell::validate",
+            "config_.target_id",
+            "config_.ux_pack_id",
+            "config_.transitional_source",
+        ],
+        "Linux sim app shell source",
+    )
+
+    for path, app_shell in [
+        ("apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_uconsole_gtk"),
+        ("apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_sim_shell"),
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "transitional implementation root",
+                "not the final app shell semantic root",
+                app_shell,
+                "builds/linux_cmake",
+                "Exit condition",
+            ],
+            "transitional implementation root marker",
+        )
 
     return failures
 
@@ -1056,6 +1207,7 @@ def main() -> int:
     failures += check_app_shell_language()
     failures += check_ux_profile_language()
     failures += check_build_entrypoint_language()
+    failures += check_executable_layout_convergence()
     failures += check_forwarding_headers()
     failures += check_authoritative_include_paths()
     failures += check_build_manifest_authority()

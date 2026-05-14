@@ -8,7 +8,14 @@ Build authority:
 Linux -> CMake
 ```
 
-Current transitional app shells:
+Current executable app shell wrappers:
+
+```text
+apps/linux_uconsole_gtk
+apps/linux_sim_shell
+```
+
+Current transitional implementation roots:
 
 ```text
 apps/linux_sim
@@ -28,8 +35,9 @@ The selected shell may be simulator, uConsole, Raspberry Pi, UNO Q, or a future
 headless Linux target. The wrapper must not absorb product behavior from those
 app shells.
 
-This directory is a Phase 8.2 migration stub. It does not yet contain top-level
-CMake project files, presets, source-list rewrites, or generated build state.
+Phase 8 Correction adds a real `CMakeLists.txt` here. It only invokes app shell
+directories with `add_subdirectory`; it does not include
+`TrailMateLinuxSources.cmake` or own Linux runtime composition.
 
 Rules:
 

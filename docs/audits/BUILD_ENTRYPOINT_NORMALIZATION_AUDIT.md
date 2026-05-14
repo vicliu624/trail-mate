@@ -106,3 +106,41 @@ Phase 8.2 creates only:
 - `builds/linux_cmake/README.md`
 
 No build behavior changes in this phase.
+
+## Phase 8 Correction: Linux Executable Wrapper Baseline
+
+Phase 8 Correction changes the Linux line from declared-only authority to an
+executable wrapper baseline.
+
+`builds/linux_cmake` now contains a real `CMakeLists.txt`. It is still a thin
+build wrapper: it does not include `TrailMateLinuxSources.cmake`, does not call
+`trailmate_add_linux_common`, and does not assemble Chat/Map/GPS services. Its
+job is to invoke app shells through `add_subdirectory`.
+
+Executable proof chain:
+
+```text
+builds/linux_cmake
+  -> apps/linux_uconsole_gtk
+  -> apps/linux_sim_shell
+```
+
+Linux app shell status:
+
+| App shell | Executable target | Transitional source | Status |
+| --- | --- | --- | --- |
+| `apps/linux_uconsole_gtk` | `trailmate_linux_uconsole_gtk_shell` | `apps/linux_uconsole` | executable app shell baseline |
+| `apps/linux_sim_shell` | `trailmate_linux_sim_shell` | `apps/linux_sim` | executable app shell baseline |
+
+The old implementation roots are explicitly marked:
+
+- `apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
+- `apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
+
+ESP-IDF and PlatformIO physical migration remains deferred. The Linux line is
+the first proof of the direction:
+
+```text
+Build Entrypoint invokes.
+App Shell composes.
+```

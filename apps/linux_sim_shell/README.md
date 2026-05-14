@@ -2,10 +2,11 @@
 
 Role = product app shell / target app shell.
 
-`apps/linux_sim_shell` is the future Linux simulator app shell skeleton.
+`apps/linux_sim_shell` is the Linux simulator app shell baseline.
 
-It is not a CMake build entrypoint directory and does not contain build host
-files in Phase 8.3.
+It is not a CMake build entrypoint directory. Phase 8 Correction adds a minimal
+CMake target and smoke test so the app shell is executable without pulling in
+the transitional simulator implementation root.
 
 ```text
 Build Entrypoint invokes.
@@ -40,12 +41,18 @@ Must not:
 - implement screen internals
 - assemble Chat/Map/GPS runtime directly in build wrapper
 
-## Thin App Shell Entrypoint Declaration
+## Thin App Shell Entrypoint
 
-Future declaration:
+Current source:
+
+- `src/linux_sim_app_shell.h`
+- `src/linux_sim_app_shell.cpp`
+- `tests/linux_sim_app_shell_smoke.cpp`
 
 ```text
-trail_mate_linux_sim_shell_start(target_profile)
+target_id = linux_sim
+ux_pack_id = simulator_full
+transitional_source = apps/linux_sim
 ```
 
-This is a declaration of intent only. No behavior change in Phase 8.3.
+No simulator runtime behavior changes in Phase 8 Correction.
