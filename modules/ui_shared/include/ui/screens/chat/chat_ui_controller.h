@@ -12,6 +12,7 @@
 #include "ui/chat_ui_runtime.h"
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
+#include "ui/screens/chat/key_verification_modal_renderer.h"
 #include "ui/screens/chat/chat_message_list_components.h"
 #include "ui/team_actions/team_action_sink.h"
 #include "ui/widgets/ime/ime_widget.h"
@@ -154,7 +155,7 @@ class UiController : public IChatUiRuntime
     void renderKeyVerificationModal(
         const ::ui::key_verification::KeyVerificationSnapshot& snapshot);
     void closeKeyVerificationModal(bool restore_group);
-    void submitKeyVerificationNumber();
+    void submitKeyVerificationInput();
     void trustKeyFromVerificationModal();
     void clearKeyVerificationError();
 
@@ -171,13 +172,7 @@ class UiController : public IChatUiRuntime
     lv_group_t* team_position_picker_group_ = nullptr;
     lv_group_t* team_position_prev_group_ = nullptr;
 
-    lv_obj_t* key_verify_overlay_ = nullptr;
-    lv_obj_t* key_verify_panel_ = nullptr;
-    lv_obj_t* key_verify_desc_ = nullptr;
-    lv_obj_t* key_verify_textarea_ = nullptr;
-    lv_obj_t* key_verify_error_label_ = nullptr;
-    lv_group_t* key_verify_group_ = nullptr;
-    lv_group_t* key_verify_prev_group_ = nullptr;
+    KeyVerificationModalRefs key_verify_modal_;
     std::unique_ptr<::ui::widgets::ImeWidget> key_verify_ime_;
     std::vector<chat::ConversationMeta> cached_conversations_;
     bool conversation_list_dirty_ = true;

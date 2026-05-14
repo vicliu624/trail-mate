@@ -161,6 +161,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_send_flow.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_shell.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gps/gps_page_shell.cpp

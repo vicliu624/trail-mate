@@ -39,6 +39,9 @@ def check_required_files() -> int:
         "docs/audits/CHAT_DELIVERY_EVENT_PROJECTION_AUDIT.md",
         "docs/audits/CHAT_DELIVERY_ACTION_OWNERSHIP_AUDIT.md",
         "docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md",
+        "docs/audits/LEGACY_BURNDOWN_REGISTER.md",
+        "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md",
+        "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md",
         "docs/specification/CHAT_DELIVERY_RUNTIME_SPEC.md",
         "docs/specification/CHAT_DELIVERY_ACTION_RUNTIME_SPEC.md",
         "docs/specification/KEY_VERIFICATION_RUNTIME_SPEC.md",
@@ -90,6 +93,8 @@ def check_required_files() -> int:
         "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp",
         "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp",
         "modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp",
+        "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h",
+        "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp",
         "tools/architecture/check_phase7_runtime_ownership_ready.py",
     ]
 
@@ -190,6 +195,37 @@ def check_docs() -> int:
             "LegacyTeamActionBridge",
             "Phase 7.2 does not turn Team into DirectPeer or Channel chat",
         ],
+        "docs/audits/LEGACY_BURNDOWN_REGISTER.md": [
+            "Remaining callers",
+            "Removal condition",
+            "Target phase",
+            "Status",
+            "LegacyChatDeliveryEventBridge",
+            "LegacyChatDeliveryActionBridge",
+            "LegacyTeamActionBridge",
+            "LegacyKeyVerificationSource",
+            "LegacyKeyVerificationActionSink",
+            "ChatUiController` key verification modal rendering",
+            "ChatUiController` Team payload encoding",
+            "ChatUiController` delivery mutation",
+        ],
+        "docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md": [
+            "Temporary UI Responsibilities",
+            "Migrated Runtime Responsibilities",
+            "Remaining Legacy Responsibilities",
+            "Team location/command payload encoding",
+            "Key verification modal rendering",
+            "ChatDeliveryReadModel",
+            "ChatDeliveryEventProjector",
+            "ChatDeliveryActionService",
+        ],
+        "docs/audits/PHASE7_6_LEGACY_BURNDOWN_REPORT.md": [
+            "Phase 7.6 reduced Chat / Team / key-verification legacy ownership surfaces",
+            "Burned Down",
+            "Still Contained",
+            "Checker Changes",
+            "Remaining Work",
+        ],
     }
 
     failures = 0
@@ -200,6 +236,54 @@ def check_docs() -> int:
         for token in tokens:
             if token not in text:
                 failures += fail(f"{path} missing runtime ownership token: {token}")
+    return failures
+
+
+def check_legacy_burndown_register() -> int:
+    failures = 0
+    path = "docs/audits/LEGACY_BURNDOWN_REGISTER.md"
+    if not exists(path):
+        return failures
+
+    text = read_text(path)
+    header = (
+        "| Legacy surface | New owner | Remaining callers | Removal condition | "
+        "Target phase | Status |"
+    )
+    if header not in text:
+        failures += fail("LEGACY_BURNDOWN_REGISTER.md missing required table header")
+
+    required_surfaces = [
+        "LegacyChatDeliveryEventBridge",
+        "LegacyChatDeliveryActionBridge",
+        "LegacyTeamActionBridge",
+        "LegacyKeyVerificationSource",
+        "LegacyKeyVerificationActionSink",
+        "ChatUiController` key verification modal rendering",
+        "ChatUiController` Team payload encoding",
+        "ChatUiController` delivery mutation",
+    ]
+    for surface in required_surfaces:
+        if surface not in text:
+            failures += fail(f"LEGACY_BURNDOWN_REGISTER.md missing surface: {surface}")
+
+    for line in text.splitlines():
+        if not line.startswith("| `") or line.startswith("| ---"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 6:
+            failures += fail(f"legacy burn-down row has too few cells: {line}")
+            continue
+        surface, _owner, callers, removal_condition, target_phase, status = cells[:6]
+        if not callers or callers.lower() in {"none", "n/a"}:
+            failures += fail(f"{surface} missing remaining caller/none rationale")
+        if not removal_condition or removal_condition.lower() in {"none", "n/a"}:
+            failures += fail(f"{surface} missing removal condition")
+        if not target_phase or target_phase.lower() in {"none", "n/a"}:
+            failures += fail(f"{surface} missing target phase")
+        if status not in {"contained", "burned-down", "remaining legacy"}:
+            failures += fail(f"{surface} has unsupported burn-down status: {status}")
+
     return failures
 
 
@@ -823,6 +907,89 @@ def check_chat_ui_team_action_migration() -> int:
     return failures
 
 
+def check_chat_ui_legacy_burndown() -> int:
+    failures = 0
+    header = "modules/ui_shared/include/ui/screens/chat/chat_ui_controller.h"
+    source = "modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp"
+
+    controller_forbidden = [
+        "encodeTeamChatLocation",
+        "encodeTeamChatCommand",
+        "TeamChatMessage",
+        "setKeysFromPsk",
+        "team_ui_chatlog_append_structured",
+        "platform::ui::gps::get_data",
+        "app::messagingFacade().getMeshAdapter()",
+        "submitKeyVerificationNumber",
+        "setNodeKeyManuallyVerified",
+        "ChatDeliveryReadModel",
+        "ChatDeliveryEventProjector",
+        "ChatDeliveryActionService",
+    ]
+
+    for path in [header, source]:
+        if not exists(path):
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in controller_forbidden:
+            if token in text:
+                failures += fail(
+                    f"{path} contains forbidden Phase 7.6 legacy ownership token: {token}"
+                )
+
+    if exists(source):
+        text = strip_cpp_comments(read_text(source))
+        required = [
+            "KeyVerificationModalCallbacks",
+            "key_verify_modal_",
+            "submitKeyVerificationInput",
+            "key_verification_model_->submitNumber",
+            "key_verification_model_->accept",
+        ]
+        for token in required:
+            if token not in text:
+                failures += fail(f"ChatUiController missing burn-down token: {token}")
+
+    renderer_header = "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h"
+    renderer_source = "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp"
+    for path in [renderer_header, renderer_source]:
+        if not exists(path):
+            failures += fail(f"missing key verification modal renderer file: {path}")
+            continue
+        text = strip_cpp_comments(read_text(path))
+        for token in [
+            "ContactService",
+            "IMeshAdapter",
+            "LegacyKeyVerificationSession",
+            "ChatService",
+            "ChatWorkspaceModel",
+            "MessageRow",
+            "submitKeyVerificationNumber",
+            "setNodeKeyManuallyVerified",
+            "accept(",
+            "reject(",
+            "refresh(",
+            "submitNumber",
+        ]:
+            if token in text:
+                failures += fail(
+                    f"{path} contains forbidden modal renderer ownership token: {token}"
+                )
+    if exists(renderer_header):
+        text = read_text(renderer_header)
+        for token in [
+            "KeyVerificationModalRefs",
+            "KeyVerificationModalCallbacks",
+            "renderKeyVerificationModal",
+            "destroyKeyVerificationModal",
+            "clearKeyVerificationError",
+        ]:
+            if token not in text:
+                failures += fail(f"key verification modal renderer missing token: {token}")
+
+    return failures
+
+
 def check_chat_runtime_wires_team_action_sink() -> int:
     failures = 0
     path = "modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp"
@@ -1063,6 +1230,7 @@ def check_chat_ui_key_verification_migration() -> int:
         text = strip_cpp_comments(read_text(source))
         for token in [
             "renderKeyVerificationModal",
+            "KeyVerificationModalCallbacks",
             "KeyVerificationNumberRequestEvent",
             "KeyVerificationNumberInformEvent",
             "KeyVerificationFinalEvent",
@@ -1073,6 +1241,7 @@ def check_chat_ui_key_verification_migration() -> int:
             "key_verification_model_->snapshot",
             "key_verification_model_->submitNumber",
             "key_verification_model_->accept",
+            "submitKeyVerificationInput",
         ]:
             if token not in text:
                 failures += fail(f"ChatUiController source missing key verification token: {token}")
@@ -1081,16 +1250,12 @@ def check_chat_ui_key_verification_migration() -> int:
             "key_verify_nonce_",
             "key_verify_expects_number_",
             "key_verify_can_trust_",
-            "submitKeyVerificationNumber(",
+            "submitKeyVerificationNumber",
             "setNodeKeyManuallyVerified",
         ]:
             if token in text:
-                # The method name submitKeyVerificationNumber is allowed as the
-                # legacy UI callback name, but direct mesh API calls are not.
-                if token == "submitKeyVerificationNumber(" and "mesh->submitKeyVerificationNumber" not in text:
-                    continue
                 failures += fail(f"ChatUiController source still owns key verification token: {token}")
-        if "getMeshAdapter()" in text and "submitKeyVerificationNumber" in text:
+        if "getMeshAdapter()" in text:
             failures += fail("ChatUiController key verification path still reads mesh adapter directly")
     else:
         failures += fail("ChatUiController source is missing")
@@ -1138,6 +1303,7 @@ def main() -> int:
     failures = 0
     failures += check_required_files()
     failures += check_docs()
+    failures += check_legacy_burndown_register()
     failures += check_core_delivery_is_runtime_only()
     failures += check_delivery_type_shape()
     failures += check_presentation_source_enrichment()
@@ -1148,6 +1314,7 @@ def main() -> int:
     failures += check_team_action_type_shape()
     failures += check_team_action_bridge_boundary()
     failures += check_chat_ui_team_action_migration()
+    failures += check_chat_ui_legacy_burndown()
     failures += check_chat_runtime_wires_team_action_sink()
     failures += check_ui_presentation_does_not_own_team_actions()
     failures += check_key_verification_type_shape()
