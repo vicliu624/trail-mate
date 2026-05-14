@@ -6,6 +6,9 @@ set(TRAIL_MATE_REPO_ROOT
     "${CMAKE_CURRENT_LIST_DIR}/../.."
     CACHE PATH "Trail Mate repository root")
 
+include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
+trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
+
 # Transitional Adapter delegates; legacy implementation still runs.
 add_library(trailmate_linux_sim_legacy_adapter
     "${TRAIL_MATE_REPO_ROOT}/apps/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp")
@@ -24,7 +27,9 @@ target_include_directories(trailmate_linux_sim_shell
         "${CMAKE_CURRENT_LIST_DIR}/src")
 
 target_link_libraries(trailmate_linux_sim_shell
-    PUBLIC trailmate_linux_sim_legacy_adapter)
+    PUBLIC
+        trailmate_linux_sim_legacy_adapter
+        trailmate_ui_lvgl_ux_packs)
 
 target_compile_features(trailmate_linux_sim_shell PUBLIC cxx_std_17)
 
@@ -42,4 +47,20 @@ if(BUILD_TESTING)
         PRIVATE trailmate_linux_sim_legacy_adapter)
     add_test(NAME trailmate_linux_sim_legacy_adapter_smoke
              COMMAND trailmate_linux_sim_legacy_adapter_smoke)
+
+    foreach(ux_pack_test IN ITEMS
+        screen_registry
+        input_binding_set
+        compatibility_ux_pack
+        uconsole_desktop_ux_pack
+        tiny_node_status_ux_pack
+        simulator_full_ux_pack
+        ux_pack_registry)
+        add_executable(trailmate_ui_lvgl_ux_packs_${ux_pack_test}_smoke
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/tests/test_${ux_pack_test}.cpp")
+        target_link_libraries(trailmate_ui_lvgl_ux_packs_${ux_pack_test}_smoke
+            PRIVATE trailmate_ui_lvgl_ux_packs)
+        add_test(NAME trailmate_ui_lvgl_ux_packs_${ux_pack_test}_smoke
+                 COMMAND trailmate_ui_lvgl_ux_packs_${ux_pack_test}_smoke)
+    endforeach()
 endif()

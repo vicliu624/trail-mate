@@ -64,6 +64,11 @@ Selected UX Pack:
 
 - `simulator_full`
 
+UX Pack Runtime Binding:
+
+- `LinuxSimAppShell::validate()` resolves `ux_pack_id` through
+  `findUxPackById`.
+
 Transitional implementation root:
 
 - `apps/linux_sim`

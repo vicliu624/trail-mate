@@ -38,6 +38,7 @@ def check_required_files() -> int:
         "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md",
         "docs/specification/APP_SHELL_ARCHITECTURE_SPEC.md",
         "docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md",
+        "cmake/TrailMateUxPacks.cmake",
         "builds/README.md",
         "builds/esp_idf/README.md",
         "builds/esp_idf/CMakeLists.txt",
@@ -153,6 +154,30 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/key_verification_modal_renderer.h",
         "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/device_ux_profile.h",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_feature_set.h",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/screen_registry.h",
+        "modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/input_binding_set.h",
+        "modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack_registry.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/packs/compatibility_ux_pack.h",
+        "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/packs/uconsole_desktop_ux_pack.h",
+        "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/packs/tiny_node_status_ux_pack.h",
+        "modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/packs/simulator_full_ux_pack.h",
+        "modules/ui_lvgl_ux_packs/src/packs/simulator_full_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_screen_registry.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_input_binding_set.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_compatibility_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_uconsole_desktop_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_tiny_node_status_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_simulator_full_ux_pack.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_ux_pack_registry.cpp",
         "tools/architecture/check_phase8_layout_ready.py",
     ]
 
@@ -787,6 +812,8 @@ def check_executable_layout_convergence() -> int:
     failures += check_tokens(
         "apps/linux_uconsole_gtk/CMakeLists.txt",
         [
+            "TrailMateUxPacks.cmake",
+            "trailmate_ui_lvgl_ux_packs",
             "trailmate_linux_uconsole_legacy_adapter",
             "trailmate_linux_uconsole_gtk_shell",
             "linux_uconsole_gtk_app_shell.cpp",
@@ -816,6 +843,8 @@ def check_executable_layout_convergence() -> int:
         [
             "LinuxUConsoleGtkAppShell::config",
             "LinuxUConsoleGtkAppShell::validate",
+            "ui_lvgl_ux_packs/ux/ux_pack_registry.h",
+            "findUxPackById",
             "config_.target_id",
             "config_.ux_pack_id",
             "config_.transitional_source",
@@ -839,12 +868,15 @@ def check_executable_layout_convergence() -> int:
     failures += check_tokens(
         "apps/linux_sim_shell/CMakeLists.txt",
         [
+            "TrailMateUxPacks.cmake",
+            "trailmate_ui_lvgl_ux_packs",
             "trailmate_linux_sim_legacy_adapter",
             "trailmate_linux_sim_shell",
             "linux_sim_app_shell.cpp",
             "linux_sim_app_shell_smoke.cpp",
             "linux_sim_legacy_implementation_adapter.cpp",
             "linux_sim_legacy_implementation_adapter_smoke.cpp",
+            "ux_pack_registry",
             "add_test",
         ],
         "Linux sim app shell CMake",
@@ -868,6 +900,8 @@ def check_executable_layout_convergence() -> int:
         [
             "LinuxSimAppShell::config",
             "LinuxSimAppShell::validate",
+            "ui_lvgl_ux_packs/ux/ux_pack_registry.h",
+            "findUxPackById",
             "config_.target_id",
             "config_.ux_pack_id",
             "config_.transitional_source",
@@ -913,6 +947,8 @@ def check_executable_layout_convergence() -> int:
     failures += check_tokens(
         "apps/esp32_lvgl/CMakeLists.txt",
         [
+            "TrailMateUxPacks.cmake",
+            "trailmate_ui_lvgl_ux_packs",
             "trailmate_esp_idf_legacy_adapter",
             "trailmate_esp32_lvgl_app_shell",
             "esp32_lvgl_app_shell.cpp",
@@ -941,6 +977,8 @@ def check_executable_layout_convergence() -> int:
         [
             "Esp32LvglAppShell::config",
             "Esp32LvglAppShell::validate",
+            "ui_lvgl_ux_packs/ux/ux_pack_registry.h",
+            "findUxPackById",
             "config_.target_family",
             "config_.default_ux_pack_id",
             "config_.transitional_source",
@@ -971,7 +1009,9 @@ def check_executable_layout_convergence() -> int:
             "apps/gat562_mesh_evb_pro",
             "env:nrf52_node_wrapper_baseline",
             "symlink://../../apps/nrf52_node",
+            "symlink://../../modules/ui_lvgl_ux_packs",
             "TRAIL_MATE_BUILD_WRAPPER_BASELINE",
+            "modules/ui_lvgl_ux_packs/include",
             "nrf52_node_wrapper_baseline.cpp",
         ],
         "PIO nRF52 executable build wrapper",
@@ -995,6 +1035,7 @@ def check_executable_layout_convergence() -> int:
             "trailmate-nrf52-node-app-shell",
             "\"includeDir\": \"src\"",
             "\"srcDir\": \"src\"",
+            "ui_lvgl_ux_packs",
         ],
         "nRF52 node PIO library manifest",
     )
@@ -1018,6 +1059,8 @@ def check_executable_layout_convergence() -> int:
         [
             "Nrf52NodeAppShell::config",
             "Nrf52NodeAppShell::validate",
+            "ui_lvgl_ux_packs/ux/ux_pack_registry.h",
+            "findUxPackById",
             "config_.target_family",
             "config_.default_ux_pack_id",
             "config_.transitional_source",
@@ -1058,6 +1101,149 @@ def check_executable_layout_convergence() -> int:
                 "Exit condition",
             ],
             "transitional implementation root marker",
+        )
+
+    return failures
+
+
+def check_ux_pack_runtime_binding() -> int:
+    failures = 0
+
+    ux_tokens = {
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/device_ux_profile.h": [
+            "DeviceUxProfile",
+            "ScreenClass",
+            "InputModel",
+            "MapMode",
+            "ChatMode",
+            "supports_team_actions",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_feature_set.h": [
+            "UxFeatureSet",
+            "chat",
+            "contacts",
+            "map",
+            "gps",
+            "team",
+            "tracker",
+            "settings",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/screen_registry.h": [
+            "ScreenRegistry",
+            "ScreenDescriptor",
+            "ScreenId",
+            "kMaxScreens",
+            "void clear()",
+            "bool add",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/input_binding_set.h": [
+            "InputBindingSet",
+            "InputBinding",
+            "InputAction",
+            "kMaxBindings",
+            "void clear()",
+            "bool add",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h": [
+            "IUxPack",
+            "virtual const char* id() const = 0",
+            "DeviceUxProfile",
+            "UxFeatureSet",
+            "buildScreens",
+            "buildInputBindings",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack_registry.h": [
+            "findUxPackById",
+            "IUxPack",
+        ],
+        "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp": [
+            "findUxPackById",
+            "CompatibilityUxPack",
+            "UConsoleDesktopUxPack",
+            "TinyNodeStatusUxPack",
+            "SimulatorFullUxPack",
+            "compatibility",
+            "uconsole_desktop",
+            "tiny_node_status",
+            "simulator_full",
+            "nullptr",
+        ],
+        "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp": [
+            "CompatibilityUxPack",
+            "compatibility",
+            "ScreenId::Dashboard",
+            "ScreenId::Chat",
+            "ScreenId::Extensions",
+            "InputAction::Compose",
+        ],
+        "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp": [
+            "UConsoleDesktopUxPack",
+            "uconsole_desktop",
+            "ScreenClass::Desktop",
+            "InputModel::DesktopKeyboardMouse",
+            "MapMode::Desktop",
+            "ChatMode::Full",
+        ],
+        "modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp": [
+            "TinyNodeStatusUxPack",
+            "tiny_node_status",
+            "ScreenClass::TinyStatus",
+            "MapMode::None",
+            "ChatMode::StatusOnly",
+            "ScreenId::Team",
+        ],
+        "modules/ui_lvgl_ux_packs/src/packs/simulator_full_ux_pack.cpp": [
+            "SimulatorFullUxPack",
+            "simulator_full",
+            "ScreenClass::Desktop",
+            "MapMode::Full",
+            "ChatMode::Full",
+            "ScreenId::Extensions",
+        ],
+        "cmake/TrailMateUxPacks.cmake": [
+            "trailmate_add_ui_lvgl_ux_packs",
+            "screen_registry.cpp",
+            "input_binding_set.cpp",
+            "ux_pack_registry.cpp",
+            "compatibility_ux_pack.cpp",
+            "uconsole_desktop_ux_pack.cpp",
+            "tiny_node_status_ux_pack.cpp",
+            "simulator_full_ux_pack.cpp",
+        ],
+    }
+
+    for path, tokens in ux_tokens.items():
+        failures += check_tokens(path, tokens, "UX Pack runtime binding")
+
+    for path, expected_pack in [
+        ("apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp", "default_ux_pack_id"),
+        ("apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.cpp", "ux_pack_id"),
+        ("apps/linux_sim_shell/src/linux_sim_app_shell.cpp", "ux_pack_id"),
+        ("apps/nrf52_node/src/nrf52_node_app_shell.cpp", "default_ux_pack_id"),
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "ui_lvgl_ux_packs/ux/ux_pack_registry.h",
+                "findUxPackById",
+                expected_pack,
+            ],
+            "app shell UX Pack lookup",
+        )
+
+    for path, expected_pack_id in [
+        ("apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp", "default_ux_pack_id"),
+        ("apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_app_shell_smoke.cpp", "ux_pack_id"),
+        ("apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp", "ux_pack_id"),
+        ("apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp", "default_ux_pack_id"),
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "findUxPackById",
+                expected_pack_id,
+            ],
+            "app shell UX Pack smoke test",
         )
 
     return failures
@@ -1275,6 +1461,13 @@ def check_build_manifest_authority() -> int:
             "modules/ui_lvgl_core/include",
             "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
             "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
+            "modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp",
+            "modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp",
+            "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
+            "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp",
+            "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp",
+            "modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp",
+            "modules/ui_lvgl_ux_packs/src/packs/simulator_full_ux_pack.cpp",
         ],
         "ESP-IDF new module authority",
     )
@@ -1296,6 +1489,11 @@ def check_build_manifest_authority() -> int:
             "chat_page_runtime_event_pump.cpp",
             "filesystem_map_tile_source.cpp",
             "gps_page_runtime_pump.cpp",
+            "ux_pack_registry.cpp",
+            "compatibility_ux_pack.cpp",
+            "uconsole_desktop_ux_pack.cpp",
+            "tiny_node_status_ux_pack.cpp",
+            "simulator_full_ux_pack.cpp",
             "team_position_picker_renderer.cpp",
             "key_verification_modal_renderer.cpp",
         ],
@@ -1455,6 +1653,7 @@ def main() -> int:
     failures += check_ux_profile_language()
     failures += check_build_entrypoint_language()
     failures += check_executable_layout_convergence()
+    failures += check_ux_pack_runtime_binding()
     failures += check_forwarding_headers()
     failures += check_authoritative_include_paths()
     failures += check_build_manifest_authority()

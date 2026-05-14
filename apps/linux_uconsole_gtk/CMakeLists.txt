@@ -6,6 +6,9 @@ set(TRAIL_MATE_REPO_ROOT
     "${CMAKE_CURRENT_LIST_DIR}/../.."
     CACHE PATH "Trail Mate repository root")
 
+include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
+trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
+
 # Transitional Adapter delegates; legacy implementation still runs.
 add_library(trailmate_linux_uconsole_legacy_adapter
     "${TRAIL_MATE_REPO_ROOT}/apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp")
@@ -24,7 +27,9 @@ target_include_directories(trailmate_linux_uconsole_gtk_shell
         "${CMAKE_CURRENT_LIST_DIR}/src")
 
 target_link_libraries(trailmate_linux_uconsole_gtk_shell
-    PUBLIC trailmate_linux_uconsole_legacy_adapter)
+    PUBLIC
+        trailmate_linux_uconsole_legacy_adapter
+        trailmate_ui_lvgl_ux_packs)
 
 target_compile_features(trailmate_linux_uconsole_gtk_shell PUBLIC cxx_std_17)
 

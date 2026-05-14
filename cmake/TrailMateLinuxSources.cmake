@@ -363,6 +363,13 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_protocol_support.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_send_flow.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/chat/chat_ui_controller.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/ux/screen_registry.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/ux/input_binding_set.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/ux/ux_pack_registry.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/compatibility_ux_pack.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/uconsole_desktop_ux_pack.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/tiny_node_status_ux_pack.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/simulator_full_ux_pack.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/common/key_verification_modal_renderer.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/common/team_position_picker_renderer.cpp"
     # contacts

@@ -168,6 +168,13 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_page_runtime.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_send_flow.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/chat/chat_ui_controller.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/simulator_full_ux_pack.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/screens/gnss/gnss_skyplot_page_shell.cpp

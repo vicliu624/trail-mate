@@ -13,6 +13,22 @@ team actions, and status-only experiences.
 Phase 8.1 defines the vocabulary and boundaries only. It does not split
 `ui_shared`, create UX pack modules, or move existing LVGL screens.
 
+Phase 8 UX Pack Runtime Binding establishes the first executable selection
+chain:
+
+```text
+Target/AppShell
+  -> ux_pack_id
+    -> UxPackRegistry
+      -> IUxPack
+        -> ScreenRegistry / UxFeatureSet / InputBindingSet
+```
+
+This binding names the current default UI as `CompatibilityUxPack`, adds
+`UConsoleDesktopUxPack`, `TinyNodeStatusUxPack`, and `SimulatorFullUxPack`, and
+requires app shell validation to resolve the configured UX pack through
+`findUxPackById`.
+
 ## Core Rule
 
 ```text
@@ -76,6 +92,15 @@ watch_quick
 cardputer_wide
 tab5_touch
 tiny_node_status
+```
+
+Current executable baseline packs:
+
+```text
+compatibility
+uconsole_desktop
+tiny_node_status
+simulator_full
 ```
 
 ### UxFeatureSet

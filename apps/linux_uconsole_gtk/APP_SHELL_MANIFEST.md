@@ -64,6 +64,11 @@ Selected UX Pack:
 
 - `uconsole_desktop`
 
+UX Pack Runtime Binding:
+
+- `LinuxUConsoleGtkAppShell::validate()` resolves `ux_pack_id` through
+  `findUxPackById`.
+
 Transitional implementation root:
 
 - `apps/linux_uconsole`

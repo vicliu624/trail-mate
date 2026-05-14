@@ -59,6 +59,11 @@ Default UX Pack:
 
 - `compatibility`
 
+UX Pack Runtime Binding:
+
+- `Esp32LvglAppShell::validate()` resolves `default_ux_pack_id` through
+  `findUxPackById`.
+
 Transitional implementation adapter target:
 
 - `trailmate_esp_idf_legacy_adapter`

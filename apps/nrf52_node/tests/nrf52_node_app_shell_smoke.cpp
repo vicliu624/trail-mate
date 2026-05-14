@@ -1,5 +1,7 @@
 #include "nrf52_node_app_shell.h"
 
+#include "ui_lvgl_ux_packs/ux/ux_pack_registry.h"
+
 #include <cassert>
 #include <cstring>
 
@@ -16,5 +18,6 @@ int main()
                        "apps/gat562_mesh_evb_pro") == 0);
     assert(std::strcmp(config.legacy_adapter_target,
                        "trailmate_nrf52_pio_legacy_adapter") == 0);
+    assert(ui_lvgl_ux::findUxPackById(config.default_ux_pack_id) != nullptr);
     return 0;
 }

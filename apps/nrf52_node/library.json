@@ -3,6 +3,14 @@
   "version": "0.0.0",
   "build": {
     "includeDir": "src",
-    "srcDir": "src"
-  }
+    "srcDir": "src",
+    "flags": [
+      "-I../../modules/ui_lvgl_ux_packs/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "ui_lvgl_ux_packs"
+    }
+  ]
 }

@@ -60,6 +60,11 @@ Default UX Pack:
 
 - `tiny_node_status`
 
+UX Pack Runtime Binding:
+
+- `Nrf52NodeAppShell::validate()` resolves `default_ux_pack_id` through
+  `findUxPackById`.
+
 Transitional implementation adapter target:
 
 - `trailmate_nrf52_pio_legacy_adapter`
