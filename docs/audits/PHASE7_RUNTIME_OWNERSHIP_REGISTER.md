@@ -17,7 +17,7 @@ has direct user-visible consequences and a bounded migration path.
 | ACK timeout projection | in progress | 7.3 | adapter hook projects `AckTimeout`; unified ACK source remains future |
 | key missing projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
 | radio send failure projection | in progress | 7.3 | mapper supports structured failure; EventBus schema still coarse |
-| Chat retry/cancel actions | future | 7.x | not implemented in 7.1 |
+| Chat retry/cancel/clear failure actions | in progress | 7.4 | owned by `ChatDeliveryActionRequest` / `ChatDeliveryActionService` |
 | Map tile/cache ownership | future | later phase | must not move into `MapWorkspaceSnapshot` |
 | Team location/command action ownership | in progress | 7.2 | owned by `TeamActionRequest` / `LegacyTeamActionBridge`; rich rendering remains future |
 | key verification UI | future | later phase | not delivery read model ownership |
@@ -99,3 +99,26 @@ Phase 7.2 introduces:
 Team text remains on the existing `TeamChatActionSink` /
 `team_chat_model_.sendMessage(...)` path. Rich Team payload rendering remains
 future work.
+
+## Phase 7.4 Decision
+
+Chat delivery retry, cancel pending, and clear failure are runtime actions.
+
+They are not owned by:
+
+- `ChatWorkspaceModel`
+- renderer widgets
+- `ChatUiController` local state
+- `ui_presentation`
+
+Phase 7.4 introduces:
+
+- `ChatDeliveryActionRequest`
+- `IChatDeliveryActionSink`
+- `IRetryChatMessagePort`
+- `ChatDeliveryActionService`
+- `LegacyChatDeliveryActionBridge`
+
+`ClearFailure` removes failed records from `ChatDeliveryReadModel`.
+`CancelPending` removes queued or sending projections only. `Retry` is a port
+owned action and returns `Unsupported` until a retry port is wired.
