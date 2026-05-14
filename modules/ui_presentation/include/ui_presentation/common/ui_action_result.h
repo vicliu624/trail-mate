@@ -23,12 +23,18 @@ struct UiActionResult
 
     static UiActionResult success()
     {
-        return UiActionResult{true, UiActionFailure::None};
+        UiActionResult result;
+        result.ok = true;
+        result.failure = UiActionFailure::None;
+        return result;
     }
 
     static UiActionResult fail(UiActionFailure failure)
     {
-        return UiActionResult{false, failure};
+        UiActionResult result;
+        result.ok = false;
+        result.failure = failure;
+        return result;
     }
 };
 

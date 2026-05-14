@@ -228,23 +228,29 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                           : chat::ChannelId::PRIMARY;
     auto& chat_service = app::messagingFacade().getChatService();
     s_delivery_read_model =
-        std::make_unique<::chat::delivery::ChatDeliveryReadModel>();
+        std::unique_ptr<::chat::delivery::ChatDeliveryReadModel>(
+            new ::chat::delivery::ChatDeliveryReadModel());
     s_delivery_projector =
-        std::make_unique<::chat::delivery::ChatDeliveryEventProjector>(
-            *s_delivery_read_model);
+        std::unique_ptr<::chat::delivery::ChatDeliveryEventProjector>(
+            new ::chat::delivery::ChatDeliveryEventProjector(
+                *s_delivery_read_model));
     s_delivery_event_port =
-        std::make_unique<::chat::delivery::ProjectingChatDeliveryEventPort>(
-            *s_delivery_projector);
+        std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort>(
+            new ::chat::delivery::ProjectingChatDeliveryEventPort(
+                *s_delivery_projector));
     s_delivery_event_bridge =
-        std::make_unique<::ui::presentation_sources::LegacyChatDeliveryEventBridge>(
-            chat_service,
-            *s_delivery_event_port);
+        std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryEventBridge>(
+            new ::ui::presentation_sources::LegacyChatDeliveryEventBridge(
+                chat_service,
+                *s_delivery_event_port));
     s_delivery_action_service =
-        std::make_unique<::chat::delivery::ChatDeliveryActionService>(
-            *s_delivery_read_model);
+        std::unique_ptr<::chat::delivery::ChatDeliveryActionService>(
+            new ::chat::delivery::ChatDeliveryActionService(
+                *s_delivery_read_model));
     s_delivery_action_bridge =
-        std::make_unique<::ui::presentation_sources::LegacyChatDeliveryActionBridge>(
-            *s_delivery_action_service);
+        std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryActionBridge>(
+            new ::ui::presentation_sources::LegacyChatDeliveryActionBridge(
+                *s_delivery_action_service));
     s_chat_source = std::unique_ptr<::ui::presentation_sources::LegacyChatPresentationSource>(
         new ::ui::presentation_sources::LegacyChatPresentationSource(
             chat_service,
@@ -255,21 +261,25 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
         new ::ui::chat::ChatWorkspaceModel(*s_chat_source, *s_chat_sink));
     s_key_verification_session =
-        std::make_unique<::ui::presentation_sources::LegacyKeyVerificationSession>();
+        std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSession>(
+            new ::ui::presentation_sources::LegacyKeyVerificationSession());
     s_key_verification_source =
-        std::make_unique<::ui::presentation_sources::LegacyKeyVerificationSource>(
-            *s_key_verification_session,
-            &app::messagingFacade().getContactService(),
-            app::messagingFacade().getMeshAdapter());
+        std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSource>(
+            new ::ui::presentation_sources::LegacyKeyVerificationSource(
+                *s_key_verification_session,
+                &app::messagingFacade().getContactService(),
+                app::messagingFacade().getMeshAdapter()));
     s_key_verification_sink =
-        std::make_unique<::ui::presentation_sources::LegacyKeyVerificationActionSink>(
-            *s_key_verification_session,
-            app::messagingFacade().getMeshAdapter(),
-            &app::messagingFacade().getContactService());
+        std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationActionSink>(
+            new ::ui::presentation_sources::LegacyKeyVerificationActionSink(
+                *s_key_verification_session,
+                app::messagingFacade().getMeshAdapter(),
+                &app::messagingFacade().getContactService()));
     s_key_verification_model =
-        std::make_unique<::ui::key_verification::KeyVerificationModel>(
-            *s_key_verification_source,
-            *s_key_verification_sink);
+        std::unique_ptr<::ui::key_verification::KeyVerificationModel>(
+            new ::ui::key_verification::KeyVerificationModel(
+                *s_key_verification_source,
+                *s_key_verification_sink));
     s_team_chat_source =
         std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource>(
             new ::ui::presentation_sources::TeamChatPresentationSource(
@@ -309,12 +319,13 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                    nullptr));
     s_ui_controller->init();
     s_event_pump =
-        std::make_unique<chat::ui::ChatPageRuntimeEventPump>(
-            chat_service,
-            s_delivery_event_bridge.get(),
-            s_key_verification_source.get(),
-            s_key_verification_model.get(),
-            s_ui_controller.get());
+        std::unique_ptr<chat::ui::ChatPageRuntimeEventPump>(
+            new chat::ui::ChatPageRuntimeEventPump(
+                chat_service,
+                s_delivery_event_bridge.get(),
+                s_key_verification_source.get(),
+                s_key_verification_model.get(),
+                s_ui_controller.get()));
     s_runtime_facade =
         std::unique_ptr<chat::ui::IChatUiRuntime>(
             new ChatPageRuntimeFacade(*s_event_pump, *s_ui_controller));

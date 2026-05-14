@@ -35,12 +35,18 @@ struct ChatDeliveryActionResult
 
     static ChatDeliveryActionResult success()
     {
-        return {true, ChatDeliveryActionFailure::None};
+        ChatDeliveryActionResult result;
+        result.ok = true;
+        result.failure = ChatDeliveryActionFailure::None;
+        return result;
     }
 
     static ChatDeliveryActionResult fail(ChatDeliveryActionFailure failure)
     {
-        return {false, failure};
+        ChatDeliveryActionResult result;
+        result.ok = false;
+        result.failure = failure;
+        return result;
     }
 };
 
