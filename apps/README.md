@@ -14,7 +14,10 @@ The directories here define the target structure we are converging toward.
 
 For Linux bring-up:
 
-- `legacy/app_implementations/linux_sim` is the simulator and developer-tooling shell
-- `legacy/app_implementations/linux_rpi` is the real Pi OS device shell for Cardputer Zero
-- `legacy/app_implementations/linux_uconsole` is the desktop-class Linux handheld shell for
-  uConsole/AIO2-class targets
+- `apps/linux_sim_shell` is the final simulator and developer-tooling app shell.
+- `apps/linux_uconsole_gtk` is the final GTK/uConsole app shell.
+- `legacy/app_implementations/linux_sim` and
+  `legacy/app_implementations/linux_uconsole` are transitional historical roots
+  that may be reached only through declared compatibility adapters.
+- `legacy/app_implementations/linux_rpi` remains a historical bring-up root
+  until a final Linux device app shell owns the product path.
