@@ -26,6 +26,8 @@ function(trailmate_add_ui_lvgl_ux_packs target_name)
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_runtime_entry_adoption.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_runtime_adoption_probe.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_primary_screen_graph_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_descriptor_menu_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_descriptor_renderer_probe.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp"

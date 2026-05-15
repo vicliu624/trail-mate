@@ -25,11 +25,13 @@ add_library(trailmate_linux_sim_shell
     src/linux_sim_app_shell.cpp
     src/linux_sim_runtime_entry.cpp
     src/linux_sim_runtime_entry_adoption_probe.cpp
+    src/linux_sim_runtime_renderer.cpp
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_runtime_screen_graph_presenter.cpp"
-    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_runtime_entry_adoption.cpp")
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_runtime_entry_adoption.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_descriptor_renderer.cpp")
 
 target_include_directories(trailmate_linux_sim_shell
     PUBLIC
@@ -72,12 +74,26 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_linux_sim_runtime_entry_fallback_smoke
              COMMAND trailmate_linux_sim_runtime_entry_fallback_smoke)
 
+    add_executable(trailmate_linux_sim_runtime_renderer_smoke
+        tests/linux_sim_runtime_renderer_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_runtime_renderer_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_linux_sim_runtime_renderer_smoke
+             COMMAND trailmate_linux_sim_runtime_renderer_smoke)
+
     add_executable(trailmate_ascii_runtime_entry_adoption_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_runtime_entry_adoption_smoke.cpp")
     target_link_libraries(trailmate_ascii_runtime_entry_adoption_smoke
         PRIVATE trailmate_linux_sim_shell)
     add_test(NAME trailmate_ascii_runtime_entry_adoption_smoke
              COMMAND trailmate_ascii_runtime_entry_adoption_smoke)
+
+    add_executable(trailmate_ascii_descriptor_renderer_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/test_ascii_descriptor_renderer.cpp")
+    target_link_libraries(trailmate_ascii_descriptor_renderer_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_ascii_descriptor_renderer_smoke
+             COMMAND trailmate_ascii_descriptor_renderer_smoke)
 
     add_executable(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge_legacy_alias.cpp")
@@ -187,6 +203,8 @@ if(BUILD_TESTING)
         lvgl_runtime_entry_adoption
         lvgl_runtime_adoption_probe
         lvgl_primary_screen_graph_runtime
+        lvgl_descriptor_menu_model
+        lvgl_descriptor_renderer_probe
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack
