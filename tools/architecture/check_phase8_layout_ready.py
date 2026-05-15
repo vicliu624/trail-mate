@@ -215,24 +215,24 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/tests/test_tiny_node_status_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_simulator_full_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_ux_pack_registry.cpp",
-        "legacy/app_implementations/linux_sim/src/ascii_menu_runtime_adapter.h",
-        "legacy/app_implementations/linux_sim/src/ascii_menu_runtime_adapter.cpp",
-        "legacy/app_implementations/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.h",
-        "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.cpp",
-        "legacy/app_implementations/linux_sim/tests/ascii_screen_host_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.h",
-        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.cpp",
-        "legacy/app_implementations/linux_sim/tests/ascii_screen_graph_bridge_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.h",
-        "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.h",
-        "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/gtk_screen_host_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.h",
-        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/gtk_uconsole_screen_graph_bridge_smoke.cpp",
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_menu_runtime_adapter.h",
+        "modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp",
+        "modules/ui_ascii_runtime/tests/ascii_menu_runtime_adapter_smoke.cpp",
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_screen_host_adapter.h",
+        "modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp",
+        "modules/ui_ascii_runtime/tests/ascii_screen_host_adapter_smoke.cpp",
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_screen_graph_bridge.h",
+        "modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp",
+        "modules/ui_ascii_runtime/tests/ascii_screen_graph_bridge_smoke.cpp",
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_menu_runtime_adapter.h",
+        "modules/ui_gtk_runtime/src/gtk_menu_runtime_adapter.cpp",
+        "modules/ui_gtk_runtime/tests/gtk_menu_runtime_adapter_smoke.cpp",
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_screen_host_adapter.h",
+        "modules/ui_gtk_runtime/src/gtk_screen_host_adapter.cpp",
+        "modules/ui_gtk_runtime/tests/gtk_screen_host_adapter_smoke.cpp",
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_uconsole_screen_graph_bridge.h",
+        "modules/ui_gtk_runtime/src/gtk_uconsole_screen_graph_bridge.cpp",
+        "modules/ui_gtk_runtime/tests/gtk_uconsole_screen_graph_bridge_smoke.cpp",
         "tools/architecture/check_phase8_layout_ready.py",
     ]
 
@@ -1719,12 +1719,12 @@ def check_ui_runtime_consumption_boundary() -> int:
             "buildMenuForUxPack",
             "MenuModel",
         ],
-        "legacy/app_implementations/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp": [
+        "modules/ui_ascii_runtime/tests/ascii_menu_runtime_adapter_smoke.cpp": [
             "AsciiMenuRuntimeAdapter",
             "presentation().ux_menu",
             "hasUxMenu",
         ],
-        "legacy/app_implementations/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp": [
+        "modules/ui_gtk_runtime/tests/gtk_menu_runtime_adapter_smoke.cpp": [
             "GtkMenuRuntimeAdapter",
             "presentation().ux_menu",
             "hasUxMenu",
@@ -1838,24 +1838,24 @@ def check_screen_factory_host_binding() -> int:
             "hasUxMenu",
             "hasScreenBindings",
         ],
-        "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.h": [
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_screen_host_adapter.h": [
             "AsciiScreenHostAdapter",
             "ScreenRoute",
             "resolve",
         ],
-        "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.h": [
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_screen_host_adapter.h": [
             "GtkScreenHostAdapter",
             "ScreenRoute",
             "resolve",
         ],
-        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.h": [
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_screen_graph_bridge.h": [
             "AsciiScreenGraphBridge",
             "PresentationBundle",
             "AsciiMenuRuntimeAdapter",
             "AsciiScreenHostAdapter",
             "AsciiScreenGraph",
         ],
-        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.h": [
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_uconsole_screen_graph_bridge.h": [
             "GtkUConsoleScreenGraphBridge",
             "PresentationBundle",
             "GtkMenuRuntimeAdapter",
@@ -1874,14 +1874,14 @@ def check_screen_factory_host_binding() -> int:
             "LvglMenuRuntimeAdapter",
             "LvglScreenHostAdapter",
         ],
-        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.cpp": [
+        "modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp": [
             "PresentationBundle",
             "hasUxMenu",
             "hasScreenBindings",
             "AsciiMenuRuntimeAdapter",
             "AsciiScreenHostAdapter",
         ],
-        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp": [
+        "modules/ui_gtk_runtime/src/gtk_uconsole_screen_graph_bridge.cpp": [
             "PresentationBundle",
             "hasUxMenu",
             "hasScreenBindings",
@@ -1893,10 +1893,10 @@ def check_screen_factory_host_binding() -> int:
         failures += check_tokens(path, tokens, "screen graph bridge runtime adoption")
 
     for path in [
-        "legacy/app_implementations/linux_sim/tests/ascii_screen_host_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/gtk_screen_host_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_sim/tests/ascii_screen_graph_bridge_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/gtk_uconsole_screen_graph_bridge_smoke.cpp",
+        "modules/ui_ascii_runtime/tests/ascii_screen_host_adapter_smoke.cpp",
+        "modules/ui_gtk_runtime/tests/gtk_screen_host_adapter_smoke.cpp",
+        "modules/ui_ascii_runtime/tests/ascii_screen_graph_bridge_smoke.cpp",
+        "modules/ui_gtk_runtime/tests/gtk_uconsole_screen_graph_bridge_smoke.cpp",
     ]:
         failures += check_tokens(
             path,
@@ -1910,8 +1910,8 @@ def check_screen_factory_host_binding() -> int:
         )
 
     for path in [
-        "legacy/app_implementations/linux_sim/src/ascii_menu_runtime_adapter.h",
-        "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.h",
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_menu_runtime_adapter.h",
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_menu_runtime_adapter.h",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h",
     ]:
         failures += check_tokens(
@@ -1991,10 +1991,10 @@ def check_screen_factory_host_binding() -> int:
                 failures += fail(f"{path} contains forbidden screen factory token {token}")
 
     for path in [
-        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.h",
-        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.cpp",
-        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.h",
-        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp",
+        "modules/ui_ascii_runtime/include/ui_ascii_runtime/ascii_screen_graph_bridge.h",
+        "modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp",
+        "modules/ui_gtk_runtime/include/ui_gtk_runtime/gtk_uconsole_screen_graph_bridge.h",
+        "modules/ui_gtk_runtime/src/gtk_uconsole_screen_graph_bridge.cpp",
     ]:
         text = read_text(path)
         for token in [

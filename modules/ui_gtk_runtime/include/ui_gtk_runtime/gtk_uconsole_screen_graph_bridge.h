@@ -1,8 +1,8 @@
 #pragma once
 
-#include "gtk_menu_runtime_adapter.h"
-#include "gtk_screen_host_adapter.h"
 #include "product_composition/presentation_bundle.h"
+#include "ui_gtk_runtime/gtk_menu_runtime_adapter.h"
+#include "ui_gtk_runtime/gtk_screen_host_adapter.h"
 
 #include <cstddef>
 

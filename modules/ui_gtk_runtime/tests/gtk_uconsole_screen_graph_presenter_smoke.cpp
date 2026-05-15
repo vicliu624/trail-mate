@@ -1,12 +1,12 @@
-#include "platform/gtk/gtk_uconsole_screen_graph_bridge.h"
 #include "uconsole_composition_root.h"
 
 #include "product_composition/presentation_bundle.h"
+#include "ui_gtk_runtime/gtk_uconsole_screen_graph_presenter.h"
 
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <string>
 
@@ -19,14 +19,14 @@ void set_env_var(const char* name, const std::string& value)
 }
 
 bool containsScreen(
-    const trailmate::uconsole::gtk::GtkUConsoleScreenGraphBridge& bridge,
+    const trailmate::uconsole::gtk::GtkUConsoleScreenGraphPresenter& presenter,
     ui::menu::MenuScreenId screen_id,
     const char* binding_id)
 {
-    for (std::size_t index = 0; index < bridge.screenBindingCount(); ++index)
+    for (std::size_t index = 0; index < presenter.screenCount(); ++index)
     {
         const trailmate::uconsole::GtkScreenDescriptor& screen =
-            bridge.screenItems()[index];
+            presenter.screenDescriptors()[index];
         if (screen.screen_id == screen_id && screen.available &&
             screen.binding_id != nullptr &&
             std::strcmp(screen.binding_id, binding_id) == 0)
@@ -43,7 +43,7 @@ int main()
 {
     const auto root_dir =
         std::filesystem::temp_directory_path() /
-        "trailmate_gtk_uconsole_screen_graph_bridge_smoke";
+        "trailmate_gtk_uconsole_screen_graph_presenter_smoke";
 
     std::error_code ec;
     std::filesystem::remove_all(root_dir, ec);
@@ -60,20 +60,18 @@ int main()
 
     trailmate::uconsole::UConsoleCompositionRoot root;
     assert(root.initialize());
-    assert(root.presentation().ux_menu != nullptr);
     assert(product_composition::hasUxMenu(root.presentation()));
     assert(product_composition::hasScreenBindings(root.presentation()));
 
-    trailmate::uconsole::gtk::GtkUConsoleScreenGraphBridge bridge;
-    assert(bridge.load(root.presentation()));
-    assert(bridge.menuCount() > 0);
-    assert(bridge.screenBindingCount() > 0);
-    const ui::screen::ScreenRoute route = bridge.menuItems()[0].route;
-    assert(route.valid);
+    trailmate::uconsole::gtk::GtkUConsoleScreenGraphPresenter presenter;
+    assert(presenter.load(root.presentation()));
+    assert(presenter.menuCount() > 0);
+    assert(presenter.screenCount() > 0);
+    assert(presenter.menuDescriptors()[0].route.valid);
 
-    assert(containsScreen(bridge, ui::menu::MenuScreenId::Chat, "chat"));
-    assert(containsScreen(bridge, ui::menu::MenuScreenId::Map, "map"));
-    assert(containsScreen(bridge, ui::menu::MenuScreenId::Settings, "settings"));
+    assert(containsScreen(presenter, ui::menu::MenuScreenId::Chat, "chat"));
+    assert(containsScreen(presenter, ui::menu::MenuScreenId::Map, "map"));
+    assert(containsScreen(presenter, ui::menu::MenuScreenId::Settings, "settings"));
 
     root.shutdown();
     std::filesystem::remove_all(root_dir, ec);

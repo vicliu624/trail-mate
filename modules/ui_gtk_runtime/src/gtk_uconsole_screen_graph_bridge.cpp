@@ -1,4 +1,4 @@
-#include "platform/gtk/gtk_uconsole_screen_graph_bridge.h"
+#include "ui_gtk_runtime/gtk_uconsole_screen_graph_bridge.h"
 
 namespace trailmate::uconsole::gtk
 {

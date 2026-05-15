@@ -1,7 +1,7 @@
-#include "ascii_screen_graph_bridge.h"
 #include "linux_sim_composition_root.h"
 
 #include "product_composition/presentation_bundle.h"
+#include "ui_ascii_runtime/ascii_screen_graph_bridge.h"
 
 #include <cassert>
 #include <cstddef>

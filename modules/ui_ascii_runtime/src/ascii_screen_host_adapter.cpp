@@ -1,13 +1,13 @@
-#include "gtk_screen_host_adapter.h"
+#include "ui_ascii_runtime/ascii_screen_host_adapter.h"
 
 #include "ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h"
 
-namespace trailmate::uconsole
+namespace trailmate::linux_sim
 {
 namespace
 {
 
-void clearDescriptor(GtkScreenDescriptor& out)
+void clearDescriptor(AsciiScreenDescriptor& out)
 {
     out.screen_id = ui::menu::MenuScreenId::Dashboard;
     out.binding_id = nullptr;
@@ -16,8 +16,8 @@ void clearDescriptor(GtkScreenDescriptor& out)
 
 } // namespace
 
-bool GtkScreenHostAdapter::resolve(const ui::screen::ScreenRoute& route,
-                                   GtkScreenDescriptor& out) const
+bool AsciiScreenHostAdapter::resolve(const ui::screen::ScreenRoute& route,
+                                     AsciiScreenDescriptor& out) const
 {
     if (!route.valid)
     {
@@ -39,4 +39,4 @@ bool GtkScreenHostAdapter::resolve(const ui::screen::ScreenRoute& route,
     return true;
 }
 
-} // namespace trailmate::uconsole
+} // namespace trailmate::linux_sim

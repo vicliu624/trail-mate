@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(TrailMateLinuxSimShell LANGUAGES CXX)
 
+include(CTest)
+
 set(TRAIL_MATE_REPO_ROOT
     "${CMAKE_CURRENT_LIST_DIR}/../.."
     CACHE PATH "Trail Mate repository root")
@@ -64,6 +66,7 @@ if(BUILD_TESTING)
         compatibility_screen_factory
         lvgl_screen_host_adapter
         lvgl_screen_graph_bridge
+        lvgl_runtime_screen_graph_presenter
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack

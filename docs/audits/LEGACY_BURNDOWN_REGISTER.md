@@ -35,6 +35,13 @@ A legacy surface may remain temporarily only if it has:
 | `Map route/tracker overlay projection` | deferred route/tracker presentation source | ESP route/tracker draw callbacks still own route/tracker widget drawing | Route/tracker stores expose presentation sources and renderer consumes overlay snapshot rows | 7.12 / 7.x | contained |
 | `GPS page refresh cadence` | `GpsPageRuntimePump` / `IGpsUiRefreshSink` | ESP and Linux GPS page timers tick `GpsPageRuntimePump`; page-local adapters preserve legacy refresh behavior | Page-local adapters are replaced by GPS presentation refresh models and renderers consume snapshots only | 7.13 / 7.x | contained |
 
+## Phase 9 Runtime Adoption Burn-down
+
+| Legacy surface | New owner | Remaining callers | Removal condition | Target phase | Status |
+| --- | --- | --- | --- | --- | --- |
+| `legacy/app_implementations/linux_sim` ASCII descriptor adapters | `modules/ui_ascii_runtime` | moved out of legacy; legacy LinuxSim CMake links module-owned sources for compatibility smoke coverage | real simulator entry consumes `AsciiRuntimeScreenGraphPresenter` and old hardcoded routing is fallback-only | 9.2 | burned-down |
+| `legacy/app_implementations/linux_uconsole` GTK descriptor adapters | `modules/ui_gtk_runtime` | moved out of legacy; legacy uConsole CMake links module-owned sources for compatibility smoke coverage | real GTK page switch path consumes `GtkUConsoleScreenGraphPresenter` and old hardcoded routing is fallback-only | 9.2 | burned-down |
+
 ## Checker Status
 
 | Surface | Checker rule |

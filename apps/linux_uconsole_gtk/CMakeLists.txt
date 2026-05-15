@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(TrailMateLinuxUConsoleGtkShell LANGUAGES CXX)
 
+include(CTest)
+
 set(TRAIL_MATE_REPO_ROOT
     "${CMAKE_CURRENT_LIST_DIR}/../.."
     CACHE PATH "Trail Mate repository root")

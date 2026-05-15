@@ -23,9 +23,10 @@ trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
 add_library(trailmate_linux_sim_composition_root
     src/linux_sim_composition_root.cpp
-    src/ascii_menu_runtime_adapter.cpp
-    src/ascii_screen_host_adapter.cpp
-    src/ascii_screen_graph_bridge.cpp
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_runtime_screen_graph_presenter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
@@ -41,6 +42,7 @@ add_library(trailmate_linux_sim_composition_root
 target_include_directories(trailmate_linux_sim_composition_root
     PUBLIC
         "${PROJECT_SOURCE_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
@@ -778,7 +780,7 @@ if(BUILD_TESTING)
              COMMAND trailmate_linux_sim_composition_root_smoke)
 
     add_executable(trailmate_ascii_menu_runtime_adapter_smoke
-        tests/ascii_menu_runtime_adapter_smoke.cpp
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_menu_runtime_adapter_smoke.cpp"
     )
     target_link_libraries(trailmate_ascii_menu_runtime_adapter_smoke
         PRIVATE trailmate_linux_sim_composition_root)
@@ -786,7 +788,7 @@ if(BUILD_TESTING)
              COMMAND trailmate_ascii_menu_runtime_adapter_smoke)
 
     add_executable(trailmate_ascii_screen_host_adapter_smoke
-        tests/ascii_screen_host_adapter_smoke.cpp
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_screen_host_adapter_smoke.cpp"
     )
     target_link_libraries(trailmate_ascii_screen_host_adapter_smoke
         PRIVATE trailmate_linux_sim_composition_root)
@@ -794,10 +796,18 @@ if(BUILD_TESTING)
              COMMAND trailmate_ascii_screen_host_adapter_smoke)
 
     add_executable(trailmate_ascii_screen_graph_bridge_smoke
-        tests/ascii_screen_graph_bridge_smoke.cpp
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_screen_graph_bridge_smoke.cpp"
     )
     target_link_libraries(trailmate_ascii_screen_graph_bridge_smoke
         PRIVATE trailmate_linux_sim_composition_root)
     add_test(NAME trailmate_ascii_screen_graph_bridge_smoke
              COMMAND trailmate_ascii_screen_graph_bridge_smoke)
+
+    add_executable(trailmate_ascii_runtime_screen_graph_presenter_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_runtime_screen_graph_presenter_smoke.cpp"
+    )
+    target_link_libraries(trailmate_ascii_runtime_screen_graph_presenter_smoke
+        PRIVATE trailmate_linux_sim_composition_root)
+    add_test(NAME trailmate_ascii_runtime_screen_graph_presenter_smoke
+             COMMAND trailmate_ascii_runtime_screen_graph_presenter_smoke)
 endif()

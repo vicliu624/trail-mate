@@ -1,12 +1,12 @@
-#include "ascii_menu_runtime_adapter.h"
+#include "ui_gtk_runtime/gtk_menu_runtime_adapter.h"
 
-namespace trailmate::linux_sim
+namespace trailmate::uconsole
 {
 
-bool AsciiMenuRuntimeAdapter::buildLines(const ui::menu::MenuModel& menu,
-                                         AsciiMenuLine* out,
-                                         std::size_t capacity,
-                                         std::size_t& out_count) const
+bool GtkMenuRuntimeAdapter::buildDescriptors(const ui::menu::MenuModel& menu,
+                                             GtkMenuDescriptor* out,
+                                             std::size_t capacity,
+                                             std::size_t& out_count) const
 {
     out_count = 0;
 
@@ -43,4 +43,4 @@ bool AsciiMenuRuntimeAdapter::buildLines(const ui::menu::MenuModel& menu,
     return true;
 }
 
-} // namespace trailmate::linux_sim
+} // namespace trailmate::uconsole

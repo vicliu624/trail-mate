@@ -1,4 +1,4 @@
-#include "ascii_screen_graph_bridge.h"
+#include "ui_ascii_runtime/ascii_screen_graph_bridge.h"
 
 namespace trailmate::linux_sim
 {

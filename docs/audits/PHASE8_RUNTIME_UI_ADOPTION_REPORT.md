@@ -6,9 +6,9 @@ Phase 8 now has descriptor-level runtime adoption bridges for the presentation
 graph:
 
 - GTK descriptor bridge:
-  `legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.*`
+  `modules/ui_gtk_runtime/*/gtk_uconsole_screen_graph_bridge.*`
 - ASCII descriptor bridge:
-  `legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.*`
+  `modules/ui_ascii_runtime/*/ascii_screen_graph_bridge.*`
 - LVGL descriptor bridge:
   `modules/ui_lvgl_ux_packs/runtime/lvgl_screen_graph_bridge.*`
 
