@@ -45,7 +45,17 @@ bool LinuxSimRuntimeRenderer::usingPrimaryScreenGraph() const noexcept
     return primary_;
 }
 
+bool LinuxSimRuntimeRenderer::usedPrimaryScreenGraph() const noexcept
+{
+    return primary_;
+}
+
 bool LinuxSimRuntimeRenderer::fallbackUsed() const noexcept
+{
+    return fallback_;
+}
+
+bool LinuxSimRuntimeRenderer::usedFallback() const noexcept
 {
     return fallback_;
 }
@@ -53,6 +63,12 @@ bool LinuxSimRuntimeRenderer::fallbackUsed() const noexcept
 std::size_t LinuxSimRuntimeRenderer::lineCount() const noexcept
 {
     return ready_ ? descriptor_renderer_.lineCount() : 0;
+}
+
+const trailmate::linux_sim::AsciiRenderLine*
+LinuxSimRuntimeRenderer::lines() const noexcept
+{
+    return ready_ ? descriptor_renderer_.lines() : nullptr;
 }
 
 const char* LinuxSimRuntimeRenderer::line(std::size_t index) const noexcept

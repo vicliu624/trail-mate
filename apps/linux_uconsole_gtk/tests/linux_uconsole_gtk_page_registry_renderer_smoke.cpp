@@ -17,7 +17,9 @@ int main()
     assert(renderer.render(adoption));
     assert(renderer.ready());
     assert(renderer.usingPrimaryScreenGraph());
+    assert(renderer.usedPrimaryScreenGraph());
     assert(!renderer.fallbackUsed());
+    assert(!renderer.usedFallback());
     assert(renderer.pageCount() > 0);
     assert(renderer.pages() != nullptr);
     assert(renderer.pages()[0].binding_id != nullptr);
@@ -33,5 +35,6 @@ int main()
     assert(fallback_adoption.fallbackUsed());
     assert(!renderer.render(fallback_adoption));
     assert(renderer.fallbackUsed());
+    assert(renderer.usedFallback());
     return 0;
 }

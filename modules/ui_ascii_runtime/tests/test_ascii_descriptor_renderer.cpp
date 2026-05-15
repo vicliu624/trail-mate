@@ -24,6 +24,8 @@ int main()
     trailmate::linux_sim::AsciiDescriptorRenderer renderer;
     assert(renderer.render(adoption));
     assert(renderer.lineCount() > 0);
+    assert(renderer.lines() != nullptr);
+    assert(renderer.lines()[0].text != nullptr);
     assert(renderer.line(0) != nullptr);
 
     trailmate::linux_sim::AsciiRuntimeEntryAdoption empty;

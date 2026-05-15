@@ -10,11 +10,14 @@ namespace ui_lvgl_ux
 class LvglDescriptorRendererProbe
 {
   public:
+    bool render(const LvglPrimaryScreenGraphRuntime& runtime);
     bool load(const LvglPrimaryScreenGraphRuntime& runtime);
 
     bool ready() const noexcept;
     bool usingPrimaryScreenGraph() const noexcept;
+    bool usedPrimaryScreenGraph() const noexcept;
     bool fallbackUsed() const noexcept;
+    bool usedFallback() const noexcept;
     std::size_t itemCount() const noexcept;
     const LvglDescriptorMenuItem* items() const noexcept;
 

@@ -48,7 +48,18 @@ bool LinuxUConsoleGtkPageRegistryRenderer::usingPrimaryScreenGraph()
     return primary_;
 }
 
+bool LinuxUConsoleGtkPageRegistryRenderer::usedPrimaryScreenGraph()
+    const noexcept
+{
+    return primary_;
+}
+
 bool LinuxUConsoleGtkPageRegistryRenderer::fallbackUsed() const noexcept
+{
+    return fallback_;
+}
+
+bool LinuxUConsoleGtkPageRegistryRenderer::usedFallback() const noexcept
 {
     return fallback_;
 }

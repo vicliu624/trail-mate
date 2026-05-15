@@ -15,8 +15,11 @@ int main()
     assert(renderer.render(entry));
     assert(renderer.ready());
     assert(renderer.usingPrimaryScreenGraph());
+    assert(renderer.usedPrimaryScreenGraph());
     assert(!renderer.fallbackUsed());
+    assert(!renderer.usedFallback());
     assert(renderer.lineCount() > 0);
+    assert(renderer.lines() != nullptr);
     assert(renderer.line(0) != nullptr);
 
     trailmate::apps::linux_sim_shell::LinuxSimAppShellConfig invalid_config;
@@ -28,5 +31,6 @@ int main()
     assert(fallback_entry.fallbackUsed());
     assert(!renderer.render(fallback_entry));
     assert(renderer.fallbackUsed());
+    assert(renderer.usedFallback());
     return 0;
 }

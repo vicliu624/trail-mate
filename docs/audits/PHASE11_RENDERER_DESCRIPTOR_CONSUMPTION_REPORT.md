@@ -18,6 +18,10 @@ renderer descriptor path:
 
 `LinuxSimRuntimeEntry -> LinuxSimRuntimeRenderer -> AsciiDescriptorRenderer -> AsciiRuntimeEntryAdoption`
 
+descriptor source:
+
+`AsciiRuntimeEntryAdoption -> AsciiRuntimeScreenGraphPresenter -> AsciiMenuLine / AsciiScreenDescriptor`
+
 Status:
 
 - `AsciiDescriptorRenderer` consumes `AsciiRuntimeEntryAdoption` descriptors.
@@ -31,6 +35,10 @@ Fallback path:
   `entry.fallbackUsed()` is true.
 - fallback remains available but is not the default renderer data source.
 
+fallback status:
+
+fallback-only
+
 Not done:
 
 - hardcoded ASCII renderer deletion
@@ -41,6 +49,10 @@ Not done:
 Page registry descriptor path:
 
 `LinuxUConsoleGtkPageRegistryAdoption -> LinuxUConsoleGtkPageRegistryRenderer -> GtkDescriptorPageRegistry -> GtkRuntimeEntryAdoption`
+
+descriptor source:
+
+`GtkRuntimeEntryAdoption -> GtkUConsoleScreenGraphPresenter -> GtkMenuDescriptor / GtkScreenDescriptor`
 
 Status:
 
@@ -57,6 +69,10 @@ Fallback path:
   when `adoption.fallbackUsed()` is true.
 - hardcoded GTK page registry remains fallback-only.
 
+fallback status:
+
+fallback-only
+
 Not done:
 
 - GTK widget tree rewrite
@@ -67,6 +83,10 @@ Not done:
 Descriptor renderer path:
 
 `LvglPrimaryScreenGraphRuntime -> LvglDescriptorRendererProbe -> LvglDescriptorMenuModel -> LvglRuntimeEntryAdoption`
+
+descriptor source:
+
+`LvglPrimaryScreenGraphRuntime -> LvglRuntimeEntryAdoption -> LvglRuntimeScreenGraphPresenter -> LvglMenuEntry / LvglScreenHostEntry`
 
 Status:
 
@@ -81,6 +101,10 @@ Fallback path:
 - `LvglDescriptorRendererProbe::loadFallback(...)` is reached only when
   `runtime.fallbackUsed()` is true.
 - hardcoded LVGL menu/page creation remains fallback-only.
+
+fallback status:
+
+fallback-only
 
 Not done:
 
@@ -103,3 +127,18 @@ Renderer consumption paths must not create:
 
 Renderer consumption paths must not construct `MenuModel` or select UX packs.
 UX selection and `PresentationBundle` construction remain upstream.
+
+## Explicit Non-goals
+
+Phase 11 does not rewrite real GTK widgets.
+Phase 11 does not create LVGL widgets.
+Phase 11 does not delete fallback.
+
+## Phase 12 Recommendation
+
+Phase 12 should focus on fallback deletion readiness and architecture freeze:
+
+- list which fallback branches are now provably unused by default
+- decide which alias/fallback surfaces can be deleted safely
+- freeze the directory and checker rules that prevent app shell, renderer, and
+  legacy implementation concerns from drifting back together

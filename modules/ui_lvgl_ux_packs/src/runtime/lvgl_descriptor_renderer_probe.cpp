@@ -3,6 +3,12 @@
 namespace ui_lvgl_ux
 {
 
+bool LvglDescriptorRendererProbe::render(
+    const LvglPrimaryScreenGraphRuntime& runtime)
+{
+    return load(runtime);
+}
+
 bool LvglDescriptorRendererProbe::load(
     const LvglPrimaryScreenGraphRuntime& runtime)
 {
@@ -47,7 +53,17 @@ bool LvglDescriptorRendererProbe::usingPrimaryScreenGraph() const noexcept
     return primary_;
 }
 
+bool LvglDescriptorRendererProbe::usedPrimaryScreenGraph() const noexcept
+{
+    return primary_;
+}
+
 bool LvglDescriptorRendererProbe::fallbackUsed() const noexcept
+{
+    return fallback_;
+}
+
+bool LvglDescriptorRendererProbe::usedFallback() const noexcept
 {
     return fallback_;
 }

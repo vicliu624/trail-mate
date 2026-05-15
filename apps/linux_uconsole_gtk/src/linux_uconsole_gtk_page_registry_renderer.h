@@ -15,7 +15,9 @@ class LinuxUConsoleGtkPageRegistryRenderer
 
     bool ready() const noexcept;
     bool usingPrimaryScreenGraph() const noexcept;
+    bool usedPrimaryScreenGraph() const noexcept;
     bool fallbackUsed() const noexcept;
+    bool usedFallback() const noexcept;
     std::size_t pageCount() const noexcept;
     const trailmate::uconsole::GtkDescriptorPage* pages() const noexcept;
 

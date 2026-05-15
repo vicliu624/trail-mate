@@ -15,8 +15,11 @@ class LinuxSimRuntimeRenderer
 
     bool ready() const noexcept;
     bool usingPrimaryScreenGraph() const noexcept;
+    bool usedPrimaryScreenGraph() const noexcept;
     bool fallbackUsed() const noexcept;
+    bool usedFallback() const noexcept;
     std::size_t lineCount() const noexcept;
+    const trailmate::linux_sim::AsciiRenderLine* lines() const noexcept;
     const char* line(std::size_t index) const noexcept;
 
   private:
