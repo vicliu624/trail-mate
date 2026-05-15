@@ -38,3 +38,16 @@ aliases once no main runtime code includes them directly.
 Phase 9 does not add new runtime ownership under `legacy/`. Compilation
 failures in a legacy root should be treated as a signal to move the runtime
 surface into a stable module or to replace the legacy adapter.
+
+## Phase 9.2 Correction
+
+Runtime entry adoption helpers are not maintained under
+`legacy/app_implementations`. The Phase 9.2 entry adoption surfaces live in
+`modules/ui_ascii_runtime`, `modules/ui_gtk_runtime`, and
+`modules/ui_lvgl_ux_packs`; final app-shell probes live under
+`apps/linux_sim_shell` and `apps/linux_uconsole_gtk`.
+
+If a future Phase 9 task needs behavior that currently sits in
+`legacy/app_implementations`, the task should burn down that behavior into a
+stable owner instead of adding another compatibility helper inside the legacy
+tree.

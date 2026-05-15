@@ -60,6 +60,31 @@ The following paths still need Phase 9.2 real entry adoption:
 Fallback remains contained until each real runtime entry consumes its presenter
 and treats hardcoded routing as a compatibility fallback only.
 
+## Phase 9.2 Entry Adoption
+
+Phase 9.2 adds thin entry adoption helpers on top of the presenters:
+
+- `AsciiRuntimeEntryAdoption`
+- `GtkRuntimeEntryAdoption`
+- `LvglRuntimeEntryAdoption`
+
+The LinuxSim and GTK helpers live in stable runtime modules:
+
+- `modules/ui_ascii_runtime`
+- `modules/ui_gtk_runtime`
+
+The final app-shell probes live under:
+
+- `apps/linux_sim_shell`
+- `apps/linux_uconsole_gtk`
+
+They are probe glue for shell-selected UX packs. They must not become new
+composition roots, and they must not be added to `legacy/`. The LVGL helper
+remains under `modules/ui_lvgl_ux_packs/runtime`.
+
+The detailed fallback map is tracked in
+`docs/audits/PHASE9_RUNTIME_ENTRY_ADOPTION_REPORT.md`.
+
 ## Phase 9 Rule
 
 New runtime/presentation work must not be added to `legacy/`. If a legacy root

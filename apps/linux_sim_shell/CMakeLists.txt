@@ -22,11 +22,18 @@ target_include_directories(trailmate_linux_sim_legacy_adapter
 target_compile_features(trailmate_linux_sim_legacy_adapter PUBLIC cxx_std_17)
 
 add_library(trailmate_linux_sim_shell
-    src/linux_sim_app_shell.cpp)
+    src/linux_sim_app_shell.cpp
+    src/linux_sim_runtime_entry_adoption_probe.cpp
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_runtime_screen_graph_presenter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_runtime_entry_adoption.cpp")
 
 target_include_directories(trailmate_linux_sim_shell
     PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}/src")
+        "${CMAKE_CURRENT_LIST_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/include")
 
 target_link_libraries(trailmate_linux_sim_shell
     PUBLIC
@@ -42,6 +49,20 @@ if(BUILD_TESTING)
         PRIVATE trailmate_linux_sim_shell)
     add_test(NAME trailmate_linux_sim_app_shell_smoke
              COMMAND trailmate_linux_sim_app_shell_smoke)
+
+    add_executable(trailmate_linux_sim_runtime_entry_adoption_probe_smoke
+        tests/linux_sim_runtime_entry_adoption_probe_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_runtime_entry_adoption_probe_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_linux_sim_runtime_entry_adoption_probe_smoke
+             COMMAND trailmate_linux_sim_runtime_entry_adoption_probe_smoke)
+
+    add_executable(trailmate_ascii_runtime_entry_adoption_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_runtime_entry_adoption_smoke.cpp")
+    target_link_libraries(trailmate_ascii_runtime_entry_adoption_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_ascii_runtime_entry_adoption_smoke
+             COMMAND trailmate_ascii_runtime_entry_adoption_smoke)
 
     add_executable(trailmate_linux_sim_legacy_adapter_smoke
         "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp")
@@ -67,6 +88,7 @@ if(BUILD_TESTING)
         lvgl_screen_host_adapter
         lvgl_screen_graph_bridge
         lvgl_runtime_screen_graph_presenter
+        lvgl_runtime_entry_adoption
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack
