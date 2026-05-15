@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap"
       rel="stylesheet"
     >
     <link rel="icon" type="image/png" href="./assets/showcase/brand-logo.png">
@@ -35,346 +35,500 @@
           >
           <span class="brand-text">Trail Mate</span>
         </a>
-        <nav class="nav">
-          <a href="#overview">Overview</a>
-          <a href="#languages">Languages</a>
-          <a href="#webflasher">Web Flasher</a>
-          <a href="https://github.com/vicliu624/trail-mate">GitHub</a>
-          <a href="https://github.com/vicliu624/trail-mate/blob/main/README.md">Docs</a>
-          <a href="https://github.com/vicliu624/trail-mate/blob/main/README_CN.md">Chinese</a>
-        </nav>
+
+        <div class="top-actions" aria-label="Global actions">
+          <a class="top-link" href="https://github.com/vicliu624/trail-mate" data-i18n="top.github">
+            GitHub
+          </a>
+          <a class="top-link" href="https://github.com/vicliu624/trail-mate/wiki" data-i18n="top.wiki">
+            Wiki
+          </a>
+          <a class="top-link top-link-strong" href="#webflasher" data-i18n="top.flash">
+            Flash
+          </a>
+          <div class="language-toggle" role="group" aria-label="Language">
+            <button class="lang-button is-active" type="button" data-lang-choice="en" aria-pressed="true">
+              EN
+            </button>
+            <button class="lang-button" type="button" data-lang-choice="zh" aria-pressed="false">
+              中文
+            </button>
+          </div>
+        </div>
       </header>
 
-      <main>
-        <section class="hero">
-          <div class="hero-copy">
-            <p class="eyebrow">Offline Navigation + LoRa Communication</p>
-            <h1>Trail Mate turns ESP32 handhelds into field-ready offline tools.</h1>
-            <p class="lede">
-              A low-power firmware stack for outdoor navigation, GNSS diagnostics,
-              LoRa chat, installable multilingual UI support, team coordination,
-              and protocol interoperability on compact devices you can actually
-              carry into the field.
-            </p>
-            <div class="hero-actions">
-              <a class="button button-primary" href="#webflasher">Open Web Flasher</a>
-              <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate">
-                View Repository
-              </a>
-            </div>
-          </div>
+      <div class="content-shell">
+        <aside class="sidebar" aria-label="Site navigation">
+          <p class="sidebar-label" data-i18n="side.label">Product Map</p>
+          <nav class="side-nav">
+            <a href="#overview" data-i18n="side.overview">Overview</a>
+            <a href="#capabilities" data-i18n="side.capabilities">Capabilities</a>
+            <details class="nav-group" open>
+              <summary data-i18n="side.devices">Devices</summary>
+              <button class="side-device is-active" type="button" data-device-nav="tlora-pager-sx1262">
+                <span>T-LoRa Pager</span>
+              </button>
+              <button class="side-device" type="button" data-device-nav="tdeck">
+                <span>T-Deck</span>
+              </button>
+              <button class="side-device" type="button" data-device-nav="lilygo-twatch-s3">
+                <span>T-Watch-S3</span>
+              </button>
+              <button class="side-device" type="button" data-device-nav="gat562-mesh-evb-pro">
+                <span>GAT562 EVB Pro</span>
+              </button>
+            </details>
+            <a href="#features" data-i18n="side.features">Feature Walkthrough</a>
+            <a href="#languages" data-i18n="side.languages">Language Packs</a>
+            <a href="#webflasher" data-i18n="side.flasher">Web Flasher</a>
+            <a href="#docs" data-i18n="side.docs">Docs</a>
+          </nav>
+        </aside>
 
-          <div class="hero-visual">
-            <div class="hero-screen">
-              <img
-                src="./assets/showcase/home-main.png"
-                alt="Trail Mate main menu screenshot"
-                loading="eager"
-              >
-            </div>
-            <div class="hero-note hero-note-release">
-              <p class="feature-kicker">Latest Release</p>
-              <p class="hero-note-value" data-release-version>Waiting for first tagged release</p>
-            </div>
-            <div class="hero-note hero-note-proof">
-              <p class="feature-kicker">Captured From Real UI</p>
-              <p class="hero-note-value">Every feature block below uses screens from the actual firmware.</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="overview-ribbon" id="overview" aria-label="Project overview">
-          <p class="overview-copy">
-            Trail Mate is not a single-page radio demo. It is a compact offline field stack:
-            navigation, direct LoRa messaging, team coordination, RF diagnostics, and utility
-            tooling shaped for embedded hardware with tight power and UI constraints, now
-            with installable language packs that keep broader localization practical on
-            small devices.
-          </p>
-          <div class="overview-tags">
-            <span>Offline Maps</span>
-            <span>GNSS Diagnostics</span>
-            <span>Mesh Chat</span>
-            <span>Team Mode</span>
-            <span>Language Packs</span>
-            <span>Sub-GHz Scan</span>
-            <span>PC Link</span>
-          </div>
-        </section>
-
-        <section class="language-section" id="languages">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Localization</p>
-              <h2>0.1.25-alpha adds GPS receiver controls, diagnostics, and T-Deck UART noise guidance.</h2>
-            </div>
-            <p class="section-note">
-              The release keeps the installable language-pack catalog from 0.1.24-alpha and
-              adds clearer GPS setup paths for receiver baud, receiver profile, initialization
-              policy, diagnostics, and ordinary T-Deck hardware checks.
-            </p>
-          </div>
-
-          <div class="language-highlights">
-            <article class="language-highlight">
-              <p class="feature-kicker">Built-In Default</p>
-              <h3>English is always available.</h3>
-              <p>
-                The device can boot, recover, and stay usable even when no external language
-                packs are installed on the SD card.
+        <main class="main-content">
+          <section class="hero" id="overview">
+            <div class="hero-copy">
+              <p class="eyebrow" data-i18n="hero.eyebrow">Offline Navigation + LoRa Communication</p>
+              <h1>Trail Mate</h1>
+              <p class="hero-tagline" data-i18n="hero.tagline">
+                Field firmware for offline maps, LoRa messaging, and team coordination.
               </p>
-            </article>
-
-            <article class="language-highlight">
-              <p class="feature-kicker">Pack Catalog</p>
-              <h3><span data-pack-count>0</span> bundles covering <span data-locale-count>0</span> cataloged locales.</h3>
-              <p>
-                Locale, font, and real IME resources are shipped as packages so firmware builds
-                stay lean while the language surface can mature through review and release states.
+              <p class="lede" data-i18n="hero.lede">
+                A low-power firmware stack for outdoor navigation, GNSS diagnostics, LoRa chat,
+                installable multilingual UI support, team coordination, and protocol interoperability
+                on compact devices you can actually carry into the field.
               </p>
-            </article>
-
-            <article class="language-highlight">
-              <p class="feature-kicker">Release Gate</p>
-              <h3>Review packs are visible in the catalog but kept out of the runtime language picker.</h3>
-              <p>
-                The catalog carries translation status, archive hashes, and package versions so
-                updates are visible without pretending unfinished locales are ready.
-              </p>
-            </article>
-
-            <article class="language-highlight">
-              <p class="feature-kicker">Mixed-Script UI</p>
-              <h3>Localized chrome and multilingual content can coexist.</h3>
-              <p>
-                External font coverage lets menus, contact names, and chat content stay
-                readable across scripts without recompiling the whole firmware.
-              </p>
-            </article>
-          </div>
-
-          <div class="language-pack-grid" data-pack-grid>
-            <article class="language-pack-card language-pack-empty">
-              <p class="feature-kicker">Catalog</p>
-              <h3>Loading package catalog...</h3>
-              <p class="language-pack-summary">
-                Published locale bundles from the current Pages build will appear here.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section class="overview-ribbon" aria-label="GPS release update">
-          <p class="overview-copy">
-            0.1.25-alpha separates GPS transport readiness from receiver health, exposes UART
-            traffic diagnostics in Settings, and documents the ordinary T-Deck case where LoRa TX
-            can induce non-NMEA bytes on a floating or weakly driven GPS UART RX line.
-          </p>
-          <div class="overview-tags">
-            <span>GPS Settings</span>
-            <span>Receiver Profiles</span>
-            <span>UART Diagnostics</span>
-            <span>T-Deck Hardware Notes</span>
-            <span>LoRa TX Noise Checks</span>
-          </div>
-        </section>
-
-        <section class="story-stack" aria-label="Feature walkthrough">
-          <article class="story-section">
-            <div class="story-copy">
-              <p class="eyebrow">Navigation</p>
-              <h2>Offline mapping is a first-class workflow, not an afterthought.</h2>
-              <p class="story-lede">
-                The navigation side is built around field use on constrained hardware:
-                north-up rendering, SD card map tiles, simple visual hierarchy, and fast
-                satellite diagnostics without overloading the screen.
-              </p>
-              <ul class="story-points">
-                <li>North-up map orientation keeps movement reading predictable while walking.</li>
-                <li>OSM, terrain, and satellite layers cover different outdoor planning needs.</li>
-                <li>Sky plot and fix diagnostics make GNSS quality visible instead of opaque.</li>
-                <li>Tracker history and breadcrumb awareness stay available on-device.</li>
-              </ul>
-            </div>
-            <div class="story-media story-media-navigation">
-              <figure class="shot shot-wide">
-                <img src="./assets/showcase/nav-map-osm.png" alt="Offline OSM map view" loading="lazy">
-              </figure>
-              <figure class="shot">
-                <img src="./assets/showcase/nav-map-terrain.png" alt="Terrain map layer" loading="lazy">
-              </figure>
-              <figure class="shot">
-                <img src="./assets/showcase/nav-map-satellite.png" alt="Satellite map layer" loading="lazy">
-              </figure>
-              <figure class="shot shot-panel">
-                <img src="./assets/showcase/nav-skyplot.png" alt="GNSS sky plot screen" loading="lazy">
-              </figure>
-            </div>
-          </article>
-
-          <article class="story-section story-section-alt">
-            <div class="story-copy">
-              <p class="eyebrow">Communication</p>
-              <h2>Messaging and team coordination stay practical under low bandwidth.</h2>
-              <p class="story-lede">
-                Trail Mate focuses on short-form communication that still works when latency,
-                packet loss, and limited input make smartphone assumptions unrealistic.
-              </p>
-              <ul class="story-points">
-                <li>Compose and review LoRa messages directly on-device without a phone dependency.</li>
-                <li>Meshtastic and MeshCore compatibility keep it interoperable with existing networks.</li>
-                <li>Contact discovery, recent activity, and quick actions reduce menu friction.</li>
-                <li>ESP-NOW pairing plus LoRa runtime gives small teams shared identity and map context.</li>
-              </ul>
-            </div>
-            <div class="story-media story-media-communication">
-              <figure class="shot shot-tall">
-                <img src="./assets/showcase/chat-compose.png" alt="Message compose interface" loading="lazy">
-              </figure>
-              <figure class="shot shot-panel">
-                <img src="./assets/showcase/chat-messages.png" alt="Message history screen" loading="lazy">
-              </figure>
-              <figure class="shot shot-panel">
-                <img src="./assets/showcase/chat-contacts.png" alt="Contacts screen" loading="lazy">
-              </figure>
-              <figure class="shot">
-                <img src="./assets/showcase/team-join.png" alt="Team join screen" loading="lazy">
-              </figure>
-              <figure class="shot shot-wide">
-                <img src="./assets/showcase/team-map.png" alt="Team map interface" loading="lazy">
-              </figure>
-            </div>
-          </article>
-
-          <article class="story-section">
-            <div class="story-copy">
-              <p class="eyebrow">Field Utilities</p>
-              <h2>The firmware expands into a toolkit: scan, decode, sync, and inspect.</h2>
-              <p class="story-lede">
-                The project is broader than chat and maps. It already includes utility surfaces
-                for RF awareness, host integration, SSTV experimentation, and route or track review.
-              </p>
-              <ul class="story-points">
-                <li>Energy Sweep exposes Sub-GHz occupancy for quick in-field channel planning.</li>
-                <li>SSTV receive and on-device decoding add a real experimental radio workflow.</li>
-                <li>PC Link exports structured device data over USB for downstream integration.</li>
-                <li>Tracker views keep recorded movement accessible on the device itself.</li>
-              </ul>
-            </div>
-            <div class="story-media story-media-utilities">
-              <figure class="shot shot-panel">
-                <img src="./assets/showcase/utility-spectrum.png" alt="Sub-GHz energy sweep view" loading="lazy">
-              </figure>
-              <figure class="shot">
-                <img src="./assets/showcase/utility-sstv-page.jpg" alt="SSTV receiver screen" loading="lazy">
-              </figure>
-              <figure class="shot">
-                <img src="./assets/showcase/utility-sstv-result.jpg" alt="SSTV decode result" loading="lazy">
-              </figure>
-              <figure class="shot shot-panel">
-                <img src="./assets/showcase/utility-data-exchange.png" alt="USB data exchange screen" loading="lazy">
-              </figure>
-              <figure class="shot shot-wide">
-                <img src="./assets/showcase/utility-tracker.png" alt="Tracker overview screen" loading="lazy">
-              </figure>
-            </div>
-          </article>
-        </section>
-
-        <section class="install-section" id="webflasher">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Install</p>
-              <h2>Web Flasher</h2>
-            </div>
-            <p class="section-note">
-              Use Google Chrome or Microsoft Edge over HTTPS with a USB data cable.
-              The browser installer currently targets the ESP32-S3 builds.
-            </p>
-          </div>
-
-          <div class="install-grid">
-            <article class="board-card" data-board-id="tlora-pager-sx1262">
-              <p class="board-chip">ESP32-S3</p>
-              <h3>LilyGo T-LoRa Pager</h3>
-              <p class="board-copy">SX1262 build for the keyboard pager hardware.</p>
-              <div class="board-install" data-install-slot>
-                <p class="board-hint">Checking release assets...</p>
+              <div class="hero-actions">
+                <a class="button button-primary" href="#webflasher" data-i18n="hero.primaryAction">
+                  Open Web Flasher
+                </a>
+                <a
+                  class="button button-secondary"
+                  href="https://github.com/vicliu624/trail-mate"
+                  data-i18n="hero.secondaryAction"
+                >
+                  View Repository
+                </a>
               </div>
-              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
-                Open latest release
-              </a>
-            </article>
+            </div>
 
-            <article class="board-card" data-board-id="tdeck">
-              <p class="board-chip">ESP32-S3</p>
-              <h3>LilyGo T-Deck</h3>
-              <p class="board-copy">Keyboard + touch build tuned for the T-Deck layout.</p>
-              <div class="board-install" data-install-slot>
-                <p class="board-hint">Checking release assets...</p>
+            <div class="hero-visual">
+              <div class="hero-screen">
+                <img
+                  src="./assets/showcase/home-main.png"
+                  alt="Trail Mate main menu screenshot"
+                  loading="eager"
+                >
               </div>
-              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
-                Open latest release
-              </a>
-            </article>
-
-            <article class="board-card" data-board-id="lilygo-twatch-s3">
-              <p class="board-chip">ESP32-S3</p>
-              <h3>LilyGo T-Watch-S3</h3>
-              <p class="board-copy">Touch-first watch build for compact field experiments.</p>
-              <div class="board-install" data-install-slot>
-                <p class="board-hint">Checking release assets...</p>
+              <div class="hero-note hero-note-release">
+                <p class="feature-kicker" data-i18n="hero.releaseKicker">Latest Release</p>
+                <p class="hero-note-value" data-release-version>Waiting for first tagged release</p>
               </div>
-              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
-                Open latest release
-              </a>
-            </article>
-
-            <article class="board-card board-card-muted">
-              <p class="board-chip">nRF52</p>
-              <h3>GAT562 Mesh EVB Pro</h3>
-              <p class="board-copy">
-                Browser flashing is not wired up for the nRF52 target yet. Use the
-                release package for manual flashing instead.
-              </p>
-              <div class="board-install">
-                <p class="board-hint">
-                  Download the packaged firmware from the latest GitHub release.
+              <div class="hero-note hero-note-proof">
+                <p class="feature-kicker" data-i18n="hero.proofKicker">Screenshot Policy</p>
+                <p class="hero-note-value" data-i18n="hero.proofText">
+                  Device pages only claim screenshots that belong to that device. Pager is complete today; other devices get their own lanes as captures arrive.
                 </p>
               </div>
-              <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases">
-                Open latest release
-              </a>
-            </article>
-          </div>
-
-          <div class="workflow-note">
-            <p>1. Connect the device with a USB data cable.</p>
-            <p>2. Put the board into download mode if your hardware requires it.</p>
-            <p>3. Choose the correct target above and let the browser flash the merged image.</p>
-          </div>
-        </section>
-
-        <section class="links-section" id="docs">
-          <article>
-            <p class="feature-kicker">Read More</p>
-            <h2>Deeper guides now live in the project's wiki.</h2>
-            <p>
-              The homepage shows the product surface directly, while the project's wiki
-              carries the long-form material: architecture, supported hardware, flashing,
-              configuration, protocol boundaries, troubleshooting, and development notes.
-            </p>
-            <div class="hero-actions">
-              <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate/wiki">
-                Wiki Home
-              </a>
-              <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate/wiki/2.-Supported-Hardware">
-                Supported Hardware
-              </a>
             </div>
-          </article>
-        </section>
-      </main>
+          </section>
+
+          <section class="overview-ribbon" aria-label="Project overview">
+            <p class="overview-copy" data-i18n="overview.copy">
+              Trail Mate is a compact offline field stack: navigation, direct LoRa messaging,
+              team coordination, RF diagnostics, utility tooling, and installable language packs
+              shaped for embedded hardware with tight power and UI constraints.
+            </p>
+            <div class="overview-tags" aria-label="Core capabilities">
+              <span data-i18n="tag.maps">Offline Maps</span>
+              <span data-i18n="tag.gnss">GNSS Diagnostics</span>
+              <span data-i18n="tag.chat">Mesh Chat</span>
+              <span data-i18n="tag.team">Team Mode</span>
+              <span data-i18n="tag.languages">Language Packs</span>
+              <span data-i18n="tag.scan">Sub-GHz Scan</span>
+              <span data-i18n="tag.usb">PC Link</span>
+            </div>
+          </section>
+
+          <div class="animal-divider animal-divider-teal" aria-hidden="true"></div>
+
+          <section class="capability-section" id="capabilities">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow" data-i18n="capabilities.eyebrow">Capability Map</p>
+                <h2 data-i18n="capabilities.title">The homepage now has room for the whole product, not just a few screenshots.</h2>
+              </div>
+              <p class="section-note" data-i18n="capabilities.note">
+                These lanes make future growth explicit: each area can gain pages, captures, docs, release notes, and board-specific detail without overloading the top navigation.
+              </p>
+            </div>
+
+            <div class="capability-grid">
+              <article class="capability-card capability-device">
+                <p class="feature-kicker" data-i18n="capabilities.deviceKicker">Devices</p>
+                <h3 data-i18n="capabilities.deviceTitle">Board-owned product lanes</h3>
+                <p data-i18n="capabilities.deviceText">
+                  Every board can carry its own screenshots, interaction notes, install state, and hardware caveats.
+                </p>
+              </article>
+              <article class="capability-card capability-navigation">
+                <p class="feature-kicker" data-i18n="capabilities.navigationKicker">Navigation</p>
+                <h3 data-i18n="capabilities.navigationTitle">Offline map workflows</h3>
+                <p data-i18n="capabilities.navigationText">
+                  Map layers, GNSS diagnostics, route review, and tracker views stay grouped as field navigation.
+                </p>
+              </article>
+              <article class="capability-card capability-protocol">
+                <p class="feature-kicker" data-i18n="capabilities.protocolKicker">Protocols</p>
+                <h3 data-i18n="capabilities.protocolTitle">Mesh and radio compatibility</h3>
+                <p data-i18n="capabilities.protocolText">
+                  Meshtastic, MeshCore, LoRa runtime work, RF diagnostics, and future protocol notes have a dedicated lane.
+                </p>
+              </article>
+              <article class="capability-card capability-install">
+                <p class="feature-kicker" data-i18n="capabilities.installKicker">Install</p>
+                <h3 data-i18n="capabilities.installTitle">Release-first flashing</h3>
+                <p data-i18n="capabilities.installText">
+                  Web flashing, manual downloads, OTA assets, and per-board availability can evolve together.
+                </p>
+              </article>
+              <article class="capability-card capability-locale">
+                <p class="feature-kicker" data-i18n="capabilities.localeKicker">Localization</p>
+                <h3 data-i18n="capabilities.localeTitle">Installable language packs</h3>
+                <p data-i18n="capabilities.localeText">
+                  The site distinguishes homepage language switching from firmware language-pack releases.
+                </p>
+              </article>
+              <article class="capability-card capability-field">
+                <p class="feature-kicker" data-i18n="capabilities.fieldKicker">Field Tools</p>
+                <h3 data-i18n="capabilities.fieldTitle">Utilities beyond chat and maps</h3>
+                <p data-i18n="capabilities.fieldText">
+                  SSTV, Energy Sweep, USB data exchange, and diagnostics can become their own focused pages later.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <div class="animal-divider animal-divider-teal" aria-hidden="true"></div>
+
+          <section class="device-section" id="devices">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow" data-i18n="devices.eyebrow">Device Library</p>
+                <h2 data-i18n="devices.title">Each supported board gets its own product lane.</h2>
+              </div>
+              <p class="section-note" data-i18n="devices.note">
+                The left navigation is ready for a growing hardware catalog. Select a device to see its
+                release status, interaction notes, and only the screenshot set that belongs to that device.
+              </p>
+            </div>
+
+            <div class="device-browser">
+              <div class="device-switcher" role="tablist" aria-label="Supported devices">
+                <button class="device-tab is-active" type="button" data-device-target="tlora-pager-sx1262">
+                  <span>T-LoRa Pager</span>
+                  <small>ESP32-S3</small>
+                </button>
+                <button class="device-tab" type="button" data-device-target="tdeck">
+                  <span>T-Deck</span>
+                  <small>ESP32-S3</small>
+                </button>
+                <button class="device-tab" type="button" data-device-target="lilygo-twatch-s3">
+                  <span>T-Watch-S3</span>
+                  <small>ESP32-S3</small>
+                </button>
+                <button class="device-tab" type="button" data-device-target="gat562-mesh-evb-pro">
+                  <span>GAT562 EVB Pro</span>
+                  <small>nRF52</small>
+                </button>
+              </div>
+
+              <article class="device-stage" aria-live="polite">
+                <div class="device-stage-header">
+                  <div>
+                    <p class="feature-kicker" data-device-kicker>ESP32-S3</p>
+                    <h3 data-device-title>LilyGo T-LoRa Pager</h3>
+                    <p class="device-summary" data-device-summary>
+                      Keyboard pager target with the most complete captured UI surface today.
+                    </p>
+                  </div>
+                  <div class="device-status-card">
+                    <span data-device-status>Complete screenshot set</span>
+                  </div>
+                </div>
+
+                <div class="device-showcase">
+                  <figure class="device-main-shot">
+                    <img
+                      src="./assets/showcase/home-main.png"
+                      alt="T-LoRa Pager home launcher"
+                      data-device-main-image
+                    >
+                    <figcaption data-device-main-caption>Home launcher</figcaption>
+                  </figure>
+
+                  <div class="device-detail-panel">
+                    <p class="feature-kicker" data-i18n="devices.interactionKicker">Interaction Notes</p>
+                    <ul class="device-interactions" data-device-interactions></ul>
+                  </div>
+                </div>
+
+                <div class="device-thumb-grid" data-device-thumbs></div>
+              </article>
+            </div>
+          </section>
+
+          <div class="animal-divider animal-divider-teal" aria-hidden="true"></div>
+
+          <section class="story-stack" id="features" aria-label="Feature walkthrough">
+            <article class="story-section">
+              <div class="story-copy">
+                <p class="eyebrow" data-i18n="features.navEyebrow">Navigation</p>
+                <h2 data-i18n="features.navTitle">Offline mapping is a first-class workflow.</h2>
+                <p class="story-lede" data-i18n="features.navLead">
+                  North-up rendering, SD card map tiles, terrain and satellite layers, sky plot, and fix diagnostics
+                  keep field navigation readable on constrained hardware.
+                </p>
+              </div>
+              <div class="story-media">
+                <figure class="shot">
+                  <img src="./assets/showcase/nav-map-osm.png" alt="Offline OSM map view" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/nav-map-terrain.png" alt="Terrain map layer" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/nav-map-satellite.png" alt="Satellite map layer" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/nav-skyplot.png" alt="GNSS sky plot screen" loading="lazy">
+                </figure>
+              </div>
+            </article>
+
+            <article class="story-section">
+              <div class="story-copy">
+                <p class="eyebrow" data-i18n="features.commEyebrow">Communication</p>
+                <h2 data-i18n="features.commTitle">Messaging and team coordination stay practical under low bandwidth.</h2>
+                <p class="story-lede" data-i18n="features.commLead">
+                  Compose LoRa messages on-device, review contacts and activity, and keep small teams aligned without
+                  assuming a phone or cloud connection.
+                </p>
+              </div>
+              <div class="story-media">
+                <figure class="shot">
+                  <img src="./assets/showcase/chat-compose.png" alt="Message compose interface" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/chat-messages.png" alt="Message history screen" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/chat-contacts.png" alt="Contacts screen" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/team-map.png" alt="Team map interface" loading="lazy">
+                </figure>
+              </div>
+            </article>
+
+            <article class="story-section">
+              <div class="story-copy">
+                <p class="eyebrow" data-i18n="features.toolsEyebrow">Field Utilities</p>
+                <h2 data-i18n="features.toolsTitle">The firmware expands into a toolkit.</h2>
+                <p class="story-lede" data-i18n="features.toolsLead">
+                  Energy Sweep, SSTV receive, USB data exchange, and tracker views make the device useful beyond a
+                  single chat or map screen.
+                </p>
+              </div>
+              <div class="story-media">
+                <figure class="shot">
+                  <img src="./assets/showcase/utility-spectrum.png" alt="Sub-GHz energy sweep view" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/utility-sstv-page.jpg" alt="SSTV receiver screen" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/utility-data-exchange.png" alt="USB data exchange screen" loading="lazy">
+                </figure>
+                <figure class="shot">
+                  <img src="./assets/showcase/utility-tracker.png" alt="Tracker overview screen" loading="lazy">
+                </figure>
+              </div>
+            </article>
+          </section>
+
+          <div class="animal-divider animal-divider-teal" aria-hidden="true"></div>
+
+          <section class="language-section" id="languages">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow" data-i18n="languages.eyebrow">Localization</p>
+                <h2 data-i18n="languages.title">English stays built in; installable packs extend the interface.</h2>
+              </div>
+              <p class="section-note" data-i18n="languages.note">
+                The homepage itself now switches between English and Chinese. On-device language packs remain release
+                artifacts, with review status visible instead of hidden.
+              </p>
+            </div>
+
+            <div class="language-highlights">
+              <article class="language-highlight">
+                <p class="feature-kicker" data-i18n="languages.defaultKicker">Built-In Default</p>
+                <h3 data-i18n="languages.defaultTitle">English is always available.</h3>
+                <p data-i18n="languages.defaultText">
+                  The device can boot, recover, and stay usable even when no external language packs are installed.
+                </p>
+              </article>
+
+              <article class="language-highlight">
+                <p class="feature-kicker" data-i18n="languages.catalogKicker">Pack Catalog</p>
+                <h3>
+                  <span data-pack-count>0</span>
+                  <span data-i18n="languages.bundleSuffix">bundles covering</span>
+                  <span data-locale-count>0</span>
+                  <span data-i18n="languages.localeSuffix">cataloged locales.</span>
+                </h3>
+                <p data-i18n="languages.catalogText">
+                  Locale, font, and IME resources are shipped as packages so firmware builds stay lean.
+                </p>
+              </article>
+
+              <article class="language-highlight">
+                <p class="feature-kicker" data-i18n="languages.gateKicker">Release Gate</p>
+                <h3 data-i18n="languages.gateTitle">Review packs are visible but not treated as finished UI choices.</h3>
+                <p data-i18n="languages.gateText">
+                  Package metadata carries translation status, archive hashes, and package versions for every release.
+                </p>
+              </article>
+            </div>
+
+            <div class="language-pack-grid" data-pack-grid>
+              <article class="language-pack-card language-pack-empty">
+                <p class="feature-kicker" data-i18n="languages.loadingKicker">Catalog</p>
+                <h3 data-i18n="languages.loadingTitle">Loading package catalog...</h3>
+                <p class="language-pack-summary" data-i18n="languages.loadingText">
+                  Published locale bundles from the current Pages build will appear here.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section class="install-section" id="webflasher">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow" data-i18n="install.eyebrow">Install</p>
+                <h2 data-i18n="install.title">Web Flasher</h2>
+              </div>
+              <p class="section-note" data-i18n="install.note">
+                Use Google Chrome or Microsoft Edge over HTTPS with a USB data cable.
+                The browser installer currently targets the ESP32-S3 builds.
+              </p>
+            </div>
+
+            <div class="install-grid">
+              <article class="board-card" data-board-id="tlora-pager-sx1262">
+                <p class="board-chip">ESP32-S3</p>
+                <h3>LilyGo T-LoRa Pager</h3>
+                <p class="board-copy" data-i18n="install.pagerCopy">SX1262 build for the keyboard pager hardware.</p>
+                <div class="board-install" data-install-slot>
+                  <p class="board-hint" data-i18n="install.checking">Checking release assets...</p>
+                </div>
+                <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases" data-i18n="install.openRelease">
+                  Open latest release
+                </a>
+              </article>
+
+              <article class="board-card" data-board-id="tdeck">
+                <p class="board-chip">ESP32-S3</p>
+                <h3>LilyGo T-Deck</h3>
+                <p class="board-copy" data-i18n="install.tdeckCopy">Keyboard + touch build tuned for the T-Deck layout.</p>
+                <div class="board-install" data-install-slot>
+                  <p class="board-hint" data-i18n="install.checking">Checking release assets...</p>
+                </div>
+                <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases" data-i18n="install.openRelease">
+                  Open latest release
+                </a>
+              </article>
+
+              <article class="board-card" data-board-id="lilygo-twatch-s3">
+                <p class="board-chip">ESP32-S3</p>
+                <h3>LilyGo T-Watch-S3</h3>
+                <p class="board-copy" data-i18n="install.twatchCopy">Touch-first watch build for compact field experiments.</p>
+                <div class="board-install" data-install-slot>
+                  <p class="board-hint" data-i18n="install.checking">Checking release assets...</p>
+                </div>
+                <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases" data-i18n="install.openRelease">
+                  Open latest release
+                </a>
+              </article>
+
+              <article class="board-card board-card-muted">
+                <p class="board-chip">nRF52</p>
+                <h3>GAT562 Mesh EVB Pro</h3>
+                <p class="board-copy" data-i18n="install.gatCopy">
+                  Browser flashing is not wired up for the nRF52 target yet. Use the release package for manual flashing.
+                </p>
+                <div class="board-install">
+                  <p class="board-hint" data-i18n="install.gatHint">
+                    Download the packaged firmware from the latest GitHub release.
+                  </p>
+                </div>
+                <a class="release-link" data-release-link href="https://github.com/vicliu624/trail-mate/releases" data-i18n="install.openRelease">
+                  Open latest release
+                </a>
+              </article>
+            </div>
+
+            <div class="workflow-note">
+              <p data-i18n="install.step1">1. Connect the device with a USB data cable.</p>
+              <p data-i18n="install.step2">2. Put the board into download mode if your hardware requires it.</p>
+              <p data-i18n="install.step3">3. Choose the correct target and let the browser flash the merged image.</p>
+            </div>
+          </section>
+
+          <section class="links-section" id="docs">
+            <article>
+              <p class="feature-kicker" data-i18n="docs.eyebrow">Read More</p>
+              <h2 data-i18n="docs.title">Long-form project material belongs in the wiki.</h2>
+              <p data-i18n="docs.copy">
+                The homepage is now a product surface and device library. The wiki carries architecture,
+                supported hardware, flashing, configuration, protocol boundaries, troubleshooting, and development notes.
+              </p>
+              <div class="hero-actions">
+                <a class="button button-secondary" href="https://github.com/vicliu624/trail-mate/wiki" data-i18n="docs.wiki">
+                  Wiki Home
+                </a>
+                <a
+                  class="button button-secondary"
+                  href="https://github.com/vicliu624/trail-mate/wiki/2.-Supported-Hardware"
+                  data-i18n="docs.hardware"
+                >
+                  Supported Hardware
+                </a>
+              </div>
+            </article>
+          </section>
+        </main>
+      </div>
+
+      <footer class="site-footer">
+        <div class="site-footer-card">
+          <div>
+            <p class="feature-kicker" data-i18n="footer.eyebrow">Trail Mate Field Notes</p>
+            <h2 data-i18n="footer.title">Built for the quiet work between signal and terrain.</h2>
+            <p data-i18n="footer.copy">
+              Follow the repository for releases, device captures, hardware notes, and language-pack updates as the
+              project grows beyond a single board.
+            </p>
+          </div>
+          <div class="site-footer-links">
+            <a href="https://github.com/vicliu624/trail-mate" data-i18n="footer.repo">Repository</a>
+            <a href="https://github.com/vicliu624/trail-mate/releases" data-i18n="footer.releases">Releases</a>
+            <a href="https://github.com/vicliu624/trail-mate/wiki" data-i18n="footer.wiki">Wiki</a>
+          </div>
+        </div>
+        <div class="animal-footer-art" aria-hidden="true"></div>
+      </footer>
     </div>
   </body>
 </html>

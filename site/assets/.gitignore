@@ -1,2 +1,10 @@
 *
 !.gitignore
+!animal-island/
+!animal-island/dividers/
+!animal-island/dividers/divider-line-teal.svg
+!animal-island/footer/
+!animal-island/footer/footer-tree.webp
+!animal-island/icons/
+!animal-island/icons/*.svg
+!animal-island/icons/icon-leaf.png
