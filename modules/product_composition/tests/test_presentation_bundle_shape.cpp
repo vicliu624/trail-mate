@@ -6,6 +6,7 @@
 #include "product_composition/presentation_bundle.h"
 #include "product_composition/target_app_shell.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
+#include "ui_presentation/menu/menu_model.h"
 
 #include <cassert>
 
@@ -71,6 +72,7 @@ void test_presentation_bundle_exports_workspace_graph()
     product_composition::PresentationBundle bundle;
     assert(!product_composition::hasInteractivePresentation(bundle));
     assert(bundle.ux_menu == nullptr);
+    assert(!product_composition::hasUxMenu(bundle));
 
     ui::tests::FakeChatPresentationSource chat_source;
     ui::tests::FakeChatActionSink chat_sink;
@@ -80,11 +82,12 @@ void test_presentation_bundle_exports_workspace_graph()
     assert(product_composition::hasInteractivePresentation(bundle));
     assert(bundle.workspace.hasChat());
 
-    ui_lvgl_ux::UxMenuModel ux_menu;
-    assert(ux_menu.add({ui_lvgl_ux::ScreenId::Chat, "Chat", true}));
+    ui::menu::MenuModel ux_menu;
+    assert(ux_menu.add({ui::menu::MenuScreenId::Chat, "Chat", true}));
     bundle.ux_menu = &ux_menu;
     assert(bundle.ux_menu != nullptr);
     assert(bundle.ux_menu->size() == 1);
+    assert(product_composition::hasUxMenu(bundle));
 }
 
 void test_target_app_shell_lifecycle_contract()

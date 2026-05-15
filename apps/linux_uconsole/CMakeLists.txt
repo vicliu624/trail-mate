@@ -213,6 +213,16 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_uconsole_composition_root_smoke
              COMMAND trailmate_uconsole_composition_root_smoke)
 
+    add_executable(trailmate_gtk_menu_runtime_adapter_smoke
+        tests/gtk_menu_runtime_adapter_smoke.cpp
+        src/gtk_menu_runtime_adapter.cpp
+    )
+    target_link_libraries(trailmate_gtk_menu_runtime_adapter_smoke
+        PRIVATE trailmate_uconsole_shell
+    )
+    add_test(NAME trailmate_gtk_menu_runtime_adapter_smoke
+             COMMAND trailmate_gtk_menu_runtime_adapter_smoke)
+
     add_executable(trailmate_uconsole_meshtastic_node_payload_smoke
         tests/uconsole_meshtastic_node_payload_smoke.cpp
     )

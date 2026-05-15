@@ -21,7 +21,7 @@ namespace ui::startup_shell
 namespace
 {
 
-ui_lvgl_ux::UxMenuModel s_ux_menu_model;
+ui::menu::MenuModel s_ux_menu_model;
 
 bool resolve_display_time(struct tm* out_tm)
 {

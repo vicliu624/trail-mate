@@ -18,7 +18,7 @@ namespace
 {
 
 bool s_shell_initialized = false;
-ui_lvgl_ux::UxMenuModel s_ux_menu_model;
+ui::menu::MenuModel s_ux_menu_model;
 
 void present_boot_overlay_now()
 {

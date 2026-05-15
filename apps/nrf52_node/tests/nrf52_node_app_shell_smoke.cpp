@@ -2,6 +2,7 @@
 
 #include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
 #include "ui_lvgl_ux_packs/ux/ux_pack_registry.h"
+#include "ui_presentation/menu/menu_model.h"
 
 #include <cassert>
 #include <cstring>
@@ -22,7 +23,7 @@ int main()
                        "trailmate_nrf52_pio_legacy_adapter") == 0);
     assert(ui_lvgl_ux::findUxPackById(shell.activeUxPackId()) != nullptr);
 
-    ui_lvgl_ux::UxMenuModel menu;
+    ui::menu::MenuModel menu;
     assert(ui_lvgl_ux::buildMenuForUxPack(shell.activeUxPackId(), menu));
     assert(menu.size() > 0);
     return 0;

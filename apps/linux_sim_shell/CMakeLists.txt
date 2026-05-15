@@ -53,6 +53,7 @@ if(BUILD_TESTING)
         input_binding_set
         ux_screen_menu_adapter
         ux_menu_provider
+        lvgl_menu_runtime_adapter
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack

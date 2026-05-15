@@ -1,4 +1,5 @@
 #include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
+#include "ui_presentation/menu/menu_model.h"
 
 #include <cassert>
 #include <cstring>
@@ -6,7 +7,7 @@
 namespace
 {
 
-bool contains(const ui_lvgl_ux::UxMenuModel& menu, ui_lvgl_ux::ScreenId id)
+bool contains(const ui::menu::MenuModel& menu, ui::menu::MenuScreenId id)
 {
     for (std::size_t index = 0; index < menu.size(); ++index)
     {
@@ -22,20 +23,20 @@ bool contains(const ui_lvgl_ux::UxMenuModel& menu, ui_lvgl_ux::ScreenId id)
 
 int main()
 {
-    ui_lvgl_ux::UxMenuModel menu;
+    ui::menu::MenuModel menu;
 
     assert(ui_lvgl_ux::buildMenuForUxPack("compatibility", menu));
     assert(menu.size() >= 8);
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Chat));
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Map));
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Gps));
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Settings));
+    assert(contains(menu, ui::menu::MenuScreenId::Chat));
+    assert(contains(menu, ui::menu::MenuScreenId::Map));
+    assert(contains(menu, ui::menu::MenuScreenId::Gps));
+    assert(contains(menu, ui::menu::MenuScreenId::Settings));
 
     assert(ui_lvgl_ux::buildMenuForUxPack("uconsole_desktop", menu));
     assert(menu.size() == 7);
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Dashboard));
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Chat));
-    assert(contains(menu, ui_lvgl_ux::ScreenId::Settings));
+    assert(contains(menu, ui::menu::MenuScreenId::Dashboard));
+    assert(contains(menu, ui::menu::MenuScreenId::Chat));
+    assert(contains(menu, ui::menu::MenuScreenId::Settings));
 
     assert(!ui_lvgl_ux::buildMenuForUxPack("missing", menu));
     assert(menu.size() == 0);

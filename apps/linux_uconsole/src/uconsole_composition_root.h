@@ -9,8 +9,8 @@
 #include "uconsole/uconsole_map_workspace_model.h"
 #include "ui/presentation_sources/chat_presentation_source.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
-#include "ui_lvgl_ux_packs/ux/ux_menu_model.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
+#include "ui_presentation/menu/menu_model.h"
 
 #include <memory>
 
@@ -39,7 +39,7 @@ class UConsoleCompositionRoot final
     [[nodiscard]] product_composition::AppServicesBundle& appServices() noexcept;
     [[nodiscard]] product_composition::PresentationBundle& presentation()
         noexcept;
-    [[nodiscard]] const ui_lvgl_ux::UxMenuModel& uxMenu() const noexcept;
+    [[nodiscard]] const ui::menu::MenuModel& uxMenu() const noexcept;
     [[nodiscard]] UConsoleChatWorkspaceModel& chatModel() noexcept;
     [[nodiscard]] UConsoleMapWorkspaceModel& mapModel() noexcept;
     [[nodiscard]] ::chat::delivery::ChatDeliveryReadModel& deliveryReadModel()
@@ -66,7 +66,7 @@ class UConsoleCompositionRoot final
 
     product_composition::AppServicesBundle app_services_{};
     product_composition::PresentationBundle presentation_{};
-    ui_lvgl_ux::UxMenuModel ux_menu_{};
+    ui::menu::MenuModel ux_menu_{};
 
     std::unique_ptr<::ui::presentation_sources::ChatPresentationSource> chat_source_{};
     std::unique_ptr<::ui::presentation_sources::LegacyChatActionSink>

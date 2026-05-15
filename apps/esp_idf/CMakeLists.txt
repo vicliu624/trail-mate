@@ -174,6 +174,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp

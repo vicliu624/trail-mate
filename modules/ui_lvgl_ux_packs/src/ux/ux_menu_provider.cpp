@@ -7,7 +7,7 @@
 namespace ui_lvgl_ux
 {
 
-bool buildMenuForUxPack(const char* ux_pack_id, UxMenuModel& out)
+bool buildMenuForUxPack(const char* ux_pack_id, ui::menu::MenuModel& out)
 {
     out.clear();
 

@@ -89,7 +89,7 @@ product_composition::PresentationBundle& UConsoleCompositionRoot::presentation()
     return presentation_;
 }
 
-const ui_lvgl_ux::UxMenuModel& UConsoleCompositionRoot::uxMenu() const noexcept
+const ui::menu::MenuModel& UConsoleCompositionRoot::uxMenu() const noexcept
 {
     return ux_menu_;
 }

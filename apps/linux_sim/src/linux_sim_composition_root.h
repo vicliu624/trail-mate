@@ -13,10 +13,10 @@
 #include "chat/delivery/chat_delivery_action_service.h"
 #include "chat/delivery/chat_delivery_event_port.h"
 #include "product_composition/presentation_bundle.h"
-#include "ui_lvgl_ux_packs/ux/ux_menu_model.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
 #include "ui_presentation/device/device_status_model.h"
 #include "ui_presentation/gps/gps_status_model.h"
+#include "ui_presentation/menu/menu_model.h"
 #include "ui_presentation/map/map_workspace_model.h"
 #include "ui_presentation/mesh/mesh_status_model.h"
 #include "ui_presentation/settings/settings_model.h"
@@ -37,7 +37,7 @@ class LinuxSimCompositionRoot
 
     product_composition::PresentationBundle& presentation();
     const product_composition::PresentationBundle& presentation() const;
-    const ui_lvgl_ux::UxMenuModel& uxMenu() const;
+    const ui::menu::MenuModel& uxMenu() const;
     chat::delivery::ChatDeliveryReadModel& deliveryReadModel();
     chat::delivery::ChatDeliveryEventProjector& deliveryProjector();
     chat::delivery::IChatDeliveryEventPort& deliveryEventPort();
@@ -78,7 +78,7 @@ class LinuxSimCompositionRoot
     ui::map::MapWorkspaceModel map_model_{map_source_, map_sink_};
 
     product_composition::PresentationBundle presentation_{};
-    ui_lvgl_ux::UxMenuModel ux_menu_{};
+    ui::menu::MenuModel ux_menu_{};
 };
 
 } // namespace trailmate::linux_sim

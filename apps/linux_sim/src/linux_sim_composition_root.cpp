@@ -39,7 +39,7 @@ const product_composition::PresentationBundle& LinuxSimCompositionRoot::presenta
     return presentation_;
 }
 
-const ui_lvgl_ux::UxMenuModel& LinuxSimCompositionRoot::uxMenu() const
+const ui::menu::MenuModel& LinuxSimCompositionRoot::uxMenu() const
 {
     return ux_menu_;
 }

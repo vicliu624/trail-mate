@@ -154,6 +154,9 @@ def check_required_files() -> int:
         "modules/ui_lvgl_core/include/ui_lvgl_core/lvgl_focus_group.h",
         "modules/ui_lvgl_core/include/ui_lvgl_core/.gitkeep",
         "modules/ui_lvgl_core/src/.gitkeep",
+        "modules/ui_presentation/library.json",
+        "modules/ui_presentation/include/ui_presentation/menu/menu_model.h",
+        "modules/ui_presentation/src/menu/menu_model.cpp",
         "modules/ui_lvgl_ux_packs/README.md",
         "modules/ui_lvgl_ux_packs/library.json",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
@@ -172,6 +175,8 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_provider.h",
         "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack_registry.h",
         "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
@@ -187,12 +192,19 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/tests/test_input_binding_set.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_ux_screen_menu_adapter.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_ux_menu_provider.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_lvgl_menu_runtime_adapter.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_menu_binding.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_uconsole_desktop_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_tiny_node_status_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_simulator_full_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_ux_pack_registry.cpp",
+        "apps/linux_sim/src/ascii_menu_runtime_adapter.h",
+        "apps/linux_sim/src/ascii_menu_runtime_adapter.cpp",
+        "apps/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp",
+        "apps/linux_uconsole/src/gtk_menu_runtime_adapter.h",
+        "apps/linux_uconsole/src/gtk_menu_runtime_adapter.cpp",
+        "apps/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp",
         "tools/architecture/check_phase8_layout_ready.py",
     ]
 
@@ -1159,35 +1171,55 @@ def check_ux_pack_runtime_binding() -> int:
             "void clear()",
             "bool add",
         ],
-        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h": [
-            "UxMenuModel",
-            "UxMenuItem",
-            "ScreenId",
+        "modules/ui_presentation/include/ui_presentation/menu/menu_model.h": [
+            "MenuModel",
+            "MenuItem",
+            "MenuScreenId",
             "kMaxItems",
             "void clear()",
             "bool add",
         ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h": [
+            "ui_presentation/menu/menu_model.h",
+            "UxMenuModel",
+            "UxMenuItem",
+            "using UxMenuModel",
+        ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_screen_menu_adapter.h": [
             "UxScreenMenuAdapter",
             "ScreenRegistry",
-            "UxMenuModel",
+            "ui::menu::MenuModel",
             "buildMenu",
         ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_provider.h": [
             "buildMenuForUxPack",
-            "UxMenuModel",
+            "ui::menu::MenuModel",
         ],
         "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp": [
             "UxScreenMenuAdapter",
             "ScreenRegistry",
-            "UxMenuModel",
+            "MenuScreenId",
+            "toMenuScreenId",
             "screen.enabled",
         ],
         "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp": [
             "buildMenuForUxPack",
             "findUxPackById",
             "ScreenRegistry",
+            "ui::menu::MenuModel",
             "UxScreenMenuAdapter",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h": [
+            "LvglMenuRuntimeAdapter",
+            "LvglMenuEntry",
+            "ui::menu::MenuModel",
+            "buildEntries",
+        ],
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp": [
+            "LvglMenuRuntimeAdapter",
+            "buildEntries",
+            "MenuItem",
+            "out_count",
         ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h": [
             "IUxPack",
@@ -1247,12 +1279,14 @@ def check_ux_pack_runtime_binding() -> int:
         ],
         "cmake/TrailMateUxPacks.cmake": [
             "trailmate_add_ui_lvgl_ux_packs",
+            "menu_model.cpp",
             "screen_registry.cpp",
             "input_binding_set.cpp",
             "ux_menu_model.cpp",
             "ux_screen_menu_adapter.cpp",
             "ux_menu_provider.cpp",
             "ux_pack_registry.cpp",
+            "lvgl_menu_runtime_adapter.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
             "tiny_node_status_ux_pack.cpp",
@@ -1299,7 +1333,8 @@ def check_ux_pack_runtime_binding() -> int:
     failures += check_tokens(
         "modules/ui_shared/include/ui/menu/menu_layout.h",
         [
-            "UxMenuModel",
+            "ui_presentation/menu/menu_model.h",
+            "MenuModel",
             "ux_menu",
         ],
         "existing menu UX model entry point",
@@ -1308,7 +1343,7 @@ def check_ux_pack_runtime_binding() -> int:
     failures += check_tokens(
         "modules/ui_shared/src/ui/menu/menu_layout.cpp",
         [
-            "UxMenuModel",
+            "MenuScreenId",
             "stableIdForScreenId",
             "createAppButtonsFromUxMenu",
             "createAppButtonsFromCatalog",
@@ -1345,11 +1380,19 @@ def check_composition_root_binding() -> int:
     failures += check_tokens(
         "modules/product_composition/include/product_composition/presentation_bundle.h",
         [
-            "UxMenuModel",
+            "ui_presentation/menu/menu_model.h",
+            "MenuModel",
             "ux_menu",
+            "hasUxMenu",
         ],
         "presentation bundle UX menu slot",
     )
+    if "ui_lvgl_ux_packs/ux/ux_menu_model.h" in read_text(
+        "modules/product_composition/include/product_composition/presentation_bundle.h"
+    ):
+        failures += fail(
+            "PresentationBundle must not depend on ui_lvgl_ux_packs/ux/ux_menu_model.h"
+        )
 
     for path, config_token, pack_id in [
         (
@@ -1366,7 +1409,8 @@ def check_composition_root_binding() -> int:
         failures += check_tokens(
             path,
             [
-                "UxMenuModel",
+                "ui_presentation/menu/menu_model.h",
+                "MenuModel",
                 "ux_pack_id",
                 pack_id,
                 config_token,
@@ -1375,6 +1419,10 @@ def check_composition_root_binding() -> int:
             ],
             "composition root UX menu contract",
         )
+        if "ui_lvgl_ux_packs/ux/ux_menu_model.h" in read_text(path):
+            failures += fail(
+                f"{path} must use ui_presentation/menu/menu_model.h, not the UX-pack menu alias"
+            )
 
     for path in [
         "apps/linux_uconsole/src/uconsole_composition_root.cpp",
@@ -1429,6 +1477,7 @@ def check_composition_root_binding() -> int:
             [
                 "uxMenu().size()",
                 "presentation().ux_menu",
+                "hasUxMenu",
             ],
             "composition root UX menu smoke test",
         )
@@ -1452,6 +1501,123 @@ def check_composition_root_binding() -> int:
             "target_link_libraries(trailmate_linux_sim_composition_root",
         ],
         "Linux sim composition root UX pack target",
+    )
+
+    return failures
+
+
+def check_ui_runtime_consumption_boundary() -> int:
+    failures = 0
+
+    failures += check_tokens(
+        "modules/product_composition/include/product_composition/presentation_bundle.h",
+        [
+            "ui_presentation/menu/menu_model.h",
+            "ux_menu",
+            "hasUxMenu",
+        ],
+        "portable presentation menu boundary",
+    )
+
+    product_composition_root = ROOT / "modules/product_composition"
+    for path in iter_code_files(product_composition_root):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if "ui_lvgl_ux_packs" in text:
+            failures += fail(
+                f"{path.relative_to(ROOT)} depends on ui_lvgl_ux_packs; use ui_presentation/menu/menu_model.h"
+            )
+
+    failures += check_tokens(
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h",
+        [
+            "ui_presentation/menu/menu_model.h",
+            "using UxMenuItem",
+            "using UxMenuModel",
+        ],
+        "UX menu compatibility alias",
+    )
+
+    for path in [
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_screen_menu_adapter.h",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_provider.h",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
+    ]:
+        failures += check_tokens(
+            path,
+            ["ui::menu::MenuModel"],
+            "portable MenuModel provider output",
+        )
+
+    for path in [
+        "apps/linux_uconsole/src/uconsole_composition_root.h",
+        "apps/linux_sim/src/linux_sim_composition_root.h",
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "ui_presentation/menu/menu_model.h",
+                "ui::menu::MenuModel",
+            ],
+            "composition root portable menu model",
+        )
+        if "ui_lvgl_ux_packs/ux/ux_menu_model.h" in read_text(path):
+            failures += fail(
+                f"{path} must not include the UX-pack menu compatibility alias"
+            )
+
+    runtime_contracts = {
+        "modules/ui_lvgl_ux_packs/tests/test_lvgl_menu_runtime_adapter.cpp": [
+            "LvglMenuRuntimeAdapter",
+            "buildMenuForUxPack",
+            "MenuModel",
+        ],
+        "apps/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp": [
+            "AsciiMenuRuntimeAdapter",
+            "presentation().ux_menu",
+            "hasUxMenu",
+        ],
+        "apps/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp": [
+            "GtkMenuRuntimeAdapter",
+            "presentation().ux_menu",
+            "hasUxMenu",
+        ],
+    }
+    for path, tokens in runtime_contracts.items():
+        failures += check_tokens(path, tokens, "runtime menu consumption smoke")
+
+    for path in [
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
+    ]:
+        text = read_text(path)
+        for token in [
+            "lvgl.h",
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+            "platform/",
+            "platform\\",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden runtime menu adapter token {token}")
+
+    failures += check_tokens(
+        "apps/linux_sim/CMakeLists.txt",
+        ["ascii_menu_runtime_adapter_smoke"],
+        "ASCII menu runtime adapter test target",
+    )
+    failures += check_tokens(
+        "apps/linux_uconsole/CMakeLists.txt",
+        ["gtk_menu_runtime_adapter_smoke"],
+        "GTK menu runtime adapter test target",
+    )
+    failures += check_tokens(
+        "apps/linux_sim_shell/CMakeLists.txt",
+        ["lvgl_menu_runtime_adapter"],
+        "LVGL menu runtime adapter test target",
     )
 
     return failures
@@ -1667,6 +1833,7 @@ def check_build_manifest_authority() -> int:
             "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
             "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
             "modules/ui_lvgl_core/include",
+            "modules/ui_presentation/src/*/*.cpp",
             "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
             "modules/ui_lvgl_ux_packs/src/common/key_verification_modal_renderer.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp",
@@ -1675,6 +1842,7 @@ def check_build_manifest_authority() -> int:
             "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
+            "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp",
@@ -1700,10 +1868,12 @@ def check_build_manifest_authority() -> int:
             "chat_page_runtime_event_pump.cpp",
             "filesystem_map_tile_source.cpp",
             "gps_page_runtime_pump.cpp",
+            "menu_model.cpp",
             "ux_menu_model.cpp",
             "ux_screen_menu_adapter.cpp",
             "ux_menu_provider.cpp",
             "ux_pack_registry.cpp",
+            "lvgl_menu_runtime_adapter.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
             "tiny_node_status_ux_pack.cpp",
@@ -1882,6 +2052,7 @@ def main() -> int:
     failures += check_executable_layout_convergence()
     failures += check_ux_pack_runtime_binding()
     failures += check_composition_root_binding()
+    failures += check_ui_runtime_consumption_boundary()
     failures += check_forwarding_headers()
     failures += check_authoritative_include_paths()
     failures += check_build_manifest_authority()

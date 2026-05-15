@@ -2,6 +2,7 @@
 
 #include "product_composition/app_services_bundle.h"
 #include "product_composition/presentation_bundle.h"
+#include "ui_presentation/menu/menu_model.h"
 
 #include <cassert>
 #include <cstddef>
@@ -12,7 +13,7 @@
 namespace
 {
 
-bool contains(const ui_lvgl_ux::UxMenuModel& menu, ui_lvgl_ux::ScreenId id)
+bool contains(const ui::menu::MenuModel& menu, ui::menu::MenuScreenId id)
 {
     for (std::size_t index = 0; index < menu.size(); ++index)
     {
@@ -69,12 +70,13 @@ int main()
 
     assert(product_composition::hasChatServices(root.appServices()));
     assert(product_composition::hasInteractivePresentation(root.presentation()));
+    assert(product_composition::hasUxMenu(root.presentation()));
     assert(root.uxMenu().size() > 0);
     assert(root.presentation().ux_menu == &root.uxMenu());
-    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Chat));
-    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Map));
-    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Gps));
-    assert(contains(root.uxMenu(), ui_lvgl_ux::ScreenId::Settings));
+    assert(contains(root.uxMenu(), ui::menu::MenuScreenId::Chat));
+    assert(contains(root.uxMenu(), ui::menu::MenuScreenId::Map));
+    assert(contains(root.uxMenu(), ui::menu::MenuScreenId::Gps));
+    assert(contains(root.uxMenu(), ui::menu::MenuScreenId::Settings));
 
     auto& workspace = root.presentation().workspace;
     assert(workspace.hasChat());

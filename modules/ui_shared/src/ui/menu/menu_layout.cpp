@@ -18,7 +18,6 @@
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
 #include "ui/ui_theme.h"
-#include "ui_lvgl_ux_packs/ux/ux_menu_model.h"
 
 namespace ui
 {
@@ -694,30 +693,30 @@ void createAppButton(lv_obj_t* parent, AppScreen* app, size_t idx)
     lv_obj_add_event_cb(btn, menuButtonClickCallback, LV_EVENT_CLICKED, app);
 }
 
-const char* stableIdForScreenId(ui_lvgl_ux::ScreenId screen_id)
+const char* stableIdForScreenId(ui::menu::MenuScreenId screen_id)
 {
     switch (screen_id)
     {
-    case ui_lvgl_ux::ScreenId::Chat:
+    case ui::menu::MenuScreenId::Chat:
         return "chat";
-    case ui_lvgl_ux::ScreenId::Contacts:
+    case ui::menu::MenuScreenId::Contacts:
         return "contacts";
-    case ui_lvgl_ux::ScreenId::Map:
-    case ui_lvgl_ux::ScreenId::Gps:
+    case ui::menu::MenuScreenId::Map:
+    case ui::menu::MenuScreenId::Gps:
         return "map";
-    case ui_lvgl_ux::ScreenId::Team:
+    case ui::menu::MenuScreenId::Team:
         return "team";
-    case ui_lvgl_ux::ScreenId::Tracker:
+    case ui::menu::MenuScreenId::Tracker:
         return "tracker";
-    case ui_lvgl_ux::ScreenId::Settings:
+    case ui::menu::MenuScreenId::Settings:
         return "settings";
-    case ui_lvgl_ux::ScreenId::WalkieTalkie:
+    case ui::menu::MenuScreenId::WalkieTalkie:
         return "walkie_talkie";
-    case ui_lvgl_ux::ScreenId::Sstv:
+    case ui::menu::MenuScreenId::Sstv:
         return "sstv";
-    case ui_lvgl_ux::ScreenId::Extensions:
+    case ui::menu::MenuScreenId::Extensions:
         return "extensions";
-    case ui_lvgl_ux::ScreenId::Dashboard:
+    case ui::menu::MenuScreenId::Dashboard:
     default:
         return nullptr;
     }
@@ -765,7 +764,7 @@ AppScreen* findCatalogAppByStableId(const char* stable_id)
 
 bool createAppButtonsFromUxMenu(lv_obj_t* panel)
 {
-    const ui_lvgl_ux::UxMenuModel* ux_menu = s_init_options.ux_menu;
+    const ui::menu::MenuModel* ux_menu = s_init_options.ux_menu;
     if (ux_menu == nullptr || ux_menu->size() == 0)
     {
         return false;
@@ -774,7 +773,7 @@ bool createAppButtonsFromUxMenu(lv_obj_t* panel)
     size_t created_count = 0;
     for (size_t index = 0; index < ux_menu->size() && created_count < kMaxMenuApps; ++index)
     {
-        const ui_lvgl_ux::UxMenuItem& item = ux_menu->items()[index];
+        const ui::menu::MenuItem& item = ux_menu->items()[index];
         if (!item.enabled)
         {
             continue;
