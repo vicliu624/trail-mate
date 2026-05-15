@@ -4,7 +4,7 @@
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/chat_service.h"
 #include "sys/event_bus.h"
-#include "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h"
+#include "ui_chat_runtime/chat_delivery_event_projection_adapter.h"
 
 #include <cassert>
 #include <string>
@@ -60,7 +60,7 @@ int main()
     ::chat::delivery::ChatDeliveryReadModel read_model;
     ::chat::delivery::ChatDeliveryEventProjector projector(read_model);
     ::chat::delivery::ProjectingChatDeliveryEventPort event_port(projector);
-    ::ui::presentation_sources::LegacyChatDeliveryEventBridge bridge(
+    ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter projection_adapter(
         service,
         event_port);
 
@@ -71,7 +71,7 @@ int main()
     service.handleSendResult(sent_id, true);
     ::sys::ChatSendResultEvent sent_event(sent_id, true);
     sent_event.timestamp = 1234;
-    bridge.onChatSendResult(sent_event);
+    projection_adapter.onChatSendResult(sent_event);
 
     ::chat::delivery::ChatDeliveryRecord record{};
     assert(read_model.find(::chat::delivery::ChatDeliveryRef{0, sent_id, 0},
@@ -87,7 +87,7 @@ int main()
     service.handleSendResult(failed_id, false);
     ::sys::ChatSendResultEvent failed_event(failed_id, false);
     failed_event.timestamp = 2345;
-    bridge.onChatSendResult(failed_event);
+    projection_adapter.onChatSendResult(failed_event);
 
     assert(read_model.find(::chat::delivery::ChatDeliveryRef{0, failed_id, 0},
                            record));
@@ -98,18 +98,18 @@ int main()
     const auto timeout_id =
         service.sendText(::chat::ChannelId::PRIMARY, "timeout", 0);
     assert(timeout_id == 702);
-    bridge.onAckTimeout(timeout_id, 3456);
+    projection_adapter.onAckTimeout(timeout_id, 3456);
     assert(read_model.find(::chat::delivery::ChatDeliveryRef{0, timeout_id, 0},
                            record));
     assert(record.state == ::chat::delivery::DeliveryState::Failed);
     assert(record.failure == ::chat::delivery::DeliveryFailureKind::AckTimeout);
     assert(record.updated_at_ms == 3456);
 
-    bridge.onAckTimeout(0, 4567);
+    projection_adapter.onAckTimeout(0, 4567);
     assert(read_model.size() == 3);
 
     ::sys::ChatSendResultEvent unknown_event(9999, false);
-    bridge.onChatSendResult(unknown_event);
+    projection_adapter.onChatSendResult(unknown_event);
     assert(read_model.size() == 3);
 
     return 0;

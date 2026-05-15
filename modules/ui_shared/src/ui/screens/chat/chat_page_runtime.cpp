@@ -9,12 +9,12 @@
 #include "ui/app_runtime.h"
 #include "ui/presentation_sources/chat_presentation_source.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
-#include "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h"
-#include "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h"
 #include "ui_legacy_adapters/legacy_key_verification_action_sink.h"
 #include "ui_legacy_adapters/legacy_key_verification_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
 #include "ui/presentation_sources/team_chat_presentation_source.h"
+#include "ui_chat_runtime/chat_delivery_action_port_adapter.h"
+#include "ui_chat_runtime/chat_delivery_event_projection_adapter.h"
 #include "ui_chat_runtime/chat_page_runtime_event_pump.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/team_actions/legacy_team_action_bridge.h"
@@ -36,9 +36,9 @@ std::unique_ptr<::ui::chat::ChatWorkspaceModel> s_chat_model = nullptr;
 std::unique_ptr<::chat::delivery::ChatDeliveryReadModel> s_delivery_read_model = nullptr;
 std::unique_ptr<::chat::delivery::ChatDeliveryEventProjector> s_delivery_projector = nullptr;
 std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort> s_delivery_event_port = nullptr;
-std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryEventBridge> s_delivery_event_bridge = nullptr;
+std::unique_ptr<::ui_chat_runtime::ChatDeliveryEventProjectionAdapter> s_delivery_event_adapter = nullptr;
 std::unique_ptr<::chat::delivery::ChatDeliveryActionService> s_delivery_action_service = nullptr;
-std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryActionBridge> s_delivery_action_bridge = nullptr;
+std::unique_ptr<::ui_chat_runtime::ChatDeliveryActionPortAdapter> s_delivery_action_adapter = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSession> s_key_verification_session = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSource> s_key_verification_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationActionSink> s_key_verification_sink = nullptr;
@@ -196,9 +196,9 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_key_verification_sink.reset();
     s_key_verification_source.reset();
     s_key_verification_session.reset();
-    s_delivery_action_bridge.reset();
+    s_delivery_action_adapter.reset();
     s_delivery_action_service.reset();
-    s_delivery_event_bridge.reset();
+    s_delivery_event_adapter.reset();
     s_delivery_event_port.reset();
     s_delivery_projector.reset();
     s_delivery_read_model.reset();
@@ -238,18 +238,18 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort>(
             new ::chat::delivery::ProjectingChatDeliveryEventPort(
                 *s_delivery_projector));
-    s_delivery_event_bridge =
-        std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryEventBridge>(
-            new ::ui::presentation_sources::LegacyChatDeliveryEventBridge(
+    s_delivery_event_adapter =
+        std::unique_ptr<::ui_chat_runtime::ChatDeliveryEventProjectionAdapter>(
+            new ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter(
                 chat_service,
                 *s_delivery_event_port));
     s_delivery_action_service =
         std::unique_ptr<::chat::delivery::ChatDeliveryActionService>(
             new ::chat::delivery::ChatDeliveryActionService(
                 *s_delivery_read_model));
-    s_delivery_action_bridge =
-        std::unique_ptr<::ui::presentation_sources::LegacyChatDeliveryActionBridge>(
-            new ::ui::presentation_sources::LegacyChatDeliveryActionBridge(
+    s_delivery_action_adapter =
+        std::unique_ptr<::ui_chat_runtime::ChatDeliveryActionPortAdapter>(
+            new ::ui_chat_runtime::ChatDeliveryActionPortAdapter(
                 *s_delivery_action_service));
     s_chat_source = std::unique_ptr<::ui::presentation_sources::ChatPresentationSource>(
         new ::ui::presentation_sources::ChatPresentationSource(
@@ -322,7 +322,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         std::unique_ptr<chat::ui::ChatPageRuntimeEventPump>(
             new chat::ui::ChatPageRuntimeEventPump(
                 chat_service,
-                s_delivery_event_bridge.get(),
+                s_delivery_event_adapter.get(),
                 s_key_verification_source.get(),
                 s_key_verification_model.get(),
                 s_ui_controller.get()));
@@ -360,9 +360,9 @@ void exit(lv_obj_t* parent)
     s_key_verification_sink.reset();
     s_key_verification_source.reset();
     s_key_verification_session.reset();
-    s_delivery_action_bridge.reset();
+    s_delivery_action_adapter.reset();
     s_delivery_action_service.reset();
-    s_delivery_event_bridge.reset();
+    s_delivery_event_adapter.reset();
     s_delivery_event_port.reset();
     s_delivery_projector.reset();
     s_delivery_read_model.reset();

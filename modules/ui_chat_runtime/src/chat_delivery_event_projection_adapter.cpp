@@ -1,21 +1,21 @@
-#include "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h"
+#include "ui_chat_runtime/chat_delivery_event_projection_adapter.h"
 
 #include "chat/delivery/legacy_chat_delivery_bridge.h"
 #include "chat/usecase/chat_service.h"
 #include "sys/event_bus.h"
 
-namespace ui::presentation_sources
+namespace ui_chat_runtime
 {
 
-LegacyChatDeliveryEventBridge::LegacyChatDeliveryEventBridge(
+ChatDeliveryEventProjectionAdapter::ChatDeliveryEventProjectionAdapter(
     ::chat::ChatService& chat_service,
-    ::chat::delivery::IChatDeliveryEventPort& delivery_events)
+    IChatDeliveryEventPort& delivery_events)
     : chat_service_(chat_service),
       delivery_events_(delivery_events)
 {
 }
 
-void LegacyChatDeliveryEventBridge::onChatSendResult(
+void ChatDeliveryEventProjectionAdapter::onChatSendResult(
     const ::sys::ChatSendResultEvent& event)
 {
     const auto failure = event.success
@@ -27,8 +27,9 @@ void LegacyChatDeliveryEventBridge::onChatSendResult(
                             event.timestamp);
 }
 
-void LegacyChatDeliveryEventBridge::onAckTimeout(::chat::MessageId msg_id,
-                                                 uint32_t timestamp_ms)
+void ChatDeliveryEventProjectionAdapter::onAckTimeout(
+    ::chat::MessageId msg_id,
+    uint32_t timestamp_ms)
 {
     (void)publishSendResult(
         msg_id,
@@ -37,7 +38,7 @@ void LegacyChatDeliveryEventBridge::onAckTimeout(::chat::MessageId msg_id,
         timestamp_ms);
 }
 
-bool LegacyChatDeliveryEventBridge::publishSendResult(
+bool ChatDeliveryEventProjectionAdapter::publishSendResult(
     ::chat::MessageId msg_id,
     bool success,
     ::chat::delivery::LegacyChatSendFailure failure,
@@ -64,4 +65,4 @@ bool LegacyChatDeliveryEventBridge::publishSendResult(
     return true;
 }
 
-} // namespace ui::presentation_sources
+} // namespace ui_chat_runtime

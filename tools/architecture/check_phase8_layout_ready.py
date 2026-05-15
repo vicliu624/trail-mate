@@ -108,8 +108,14 @@ def check_required_files() -> int:
         "docs/ux_profiles/uconsole_desktop.md",
         "modules/ui_chat_runtime/README.md",
         "modules/ui_chat_runtime/library.json",
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_delivery_action_port.h",
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_delivery_event_port.h",
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_delivery_action_port_adapter.h",
+        "modules/ui_chat_runtime/include/ui_chat_runtime/chat_delivery_event_projection_adapter.h",
         "modules/ui_chat_runtime/include/ui_chat_runtime/chat_page_runtime_event_pump.h",
         "modules/ui_chat_runtime/include/ui_chat_runtime/chat_ui_refresh_sink.h",
+        "modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp",
+        "modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp",
         "modules/ui_chat_runtime/src/chat_page_runtime_event_pump.cpp",
         "modules/ui_map_runtime/README.md",
         "modules/ui_map_runtime/library.json",
@@ -143,13 +149,13 @@ def check_required_files() -> int:
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_source.h",
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_action_sink.h",
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_map_overlay_source.h",
-        "modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp",
-        "modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp",
         "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
         "modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp",
         "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
-        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge.cpp",
-        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_chat_runtime/tests/test_chat_delivery_event_projection_adapter.cpp",
+        "modules/ui_chat_runtime/tests/test_chat_delivery_action_port_adapter.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge_legacy_alias.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge_legacy_alias.cpp",
         "modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp",
         "modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source.cpp",
         "modules/ui_lvgl_core/README.md",
@@ -2041,9 +2047,9 @@ def check_forwarding_headers() -> int:
         "modules/ui_shared/include/ui/map_overlay/map_overlay_projector.h":
             "ui_map_runtime/map_overlay/map_overlay_projector.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h":
-            "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
+            "ui_chat_runtime/chat_delivery_event_projection_adapter.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
-            "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
+            "ui_chat_runtime/chat_delivery_action_port_adapter.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h":
             "ui_legacy_adapters/legacy_key_verification_session.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h":
@@ -2066,6 +2072,15 @@ def check_forwarding_headers() -> int:
         text = read_text(path)
         if include_token not in text:
             failures += fail(f"{path} does not forward to {include_token}")
+        if path in {
+            "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
+            "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h",
+        }:
+            if "using LegacyChatDelivery" not in text or "[[deprecated" not in text:
+                failures += fail(f"{path} must be a deprecated alias forwarding header")
+            if "class " in text or "struct " in text:
+                failures += fail(f"{path} must not contain a class or struct implementation")
+            continue
         if "class " in text or "struct " in text or "namespace " in text:
             failures += fail(f"{path} must be a forwarding header only")
 
@@ -2118,9 +2133,9 @@ def check_authoritative_include_paths() -> int:
         "ui/map_overlay/map_overlay_projector.h":
             "ui_map_runtime/map_overlay/map_overlay_projector.h",
         "ui/presentation_sources/legacy_chat_delivery_event_bridge.h":
-            "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
+            "ui_chat_runtime/chat_delivery_event_projection_adapter.h",
         "ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
-            "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
+            "ui_chat_runtime/chat_delivery_action_port_adapter.h",
         "ui/presentation_sources/legacy_key_verification_session.h":
             "ui_legacy_adapters/legacy_key_verification_session.h",
         "ui/presentation_sources/legacy_key_verification_source.h":
@@ -2220,7 +2235,8 @@ def check_build_manifest_authority() -> int:
             "modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp",
             "modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp",
             "modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp",
-            "modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp",
+            "modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp",
+            "modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp",
             "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
             "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
             "modules/ui_lvgl_core/include",
@@ -2260,6 +2276,8 @@ def check_build_manifest_authority() -> int:
             "TRAIL_MATE_UI_LVGL_UX_PACKS_INCLUDE_ROOT",
             "TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT",
             "chat_page_runtime_event_pump.cpp",
+            "chat_delivery_action_port_adapter.cpp",
+            "chat_delivery_event_projection_adapter.cpp",
             "filesystem_map_tile_source.cpp",
             "gps_page_runtime_pump.cpp",
             "menu_model.cpp",

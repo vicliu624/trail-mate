@@ -72,6 +72,31 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_ascii_runtime_entry_adoption_smoke
              COMMAND trailmate_ascii_runtime_entry_adoption_smoke)
 
+    add_executable(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge_legacy_alias.cpp")
+    target_include_directories(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    target_compile_features(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
+        PRIVATE cxx_std_17)
+    add_test(NAME trailmate_legacy_chat_delivery_action_bridge_alias_smoke
+             COMMAND trailmate_legacy_chat_delivery_action_bridge_alias_smoke)
+
+    add_executable(trailmate_legacy_chat_delivery_event_bridge_alias_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge_legacy_alias.cpp")
+    target_include_directories(trailmate_legacy_chat_delivery_event_bridge_alias_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    target_compile_features(trailmate_legacy_chat_delivery_event_bridge_alias_smoke
+        PRIVATE cxx_std_17)
+    add_test(NAME trailmate_legacy_chat_delivery_event_bridge_alias_smoke
+             COMMAND trailmate_legacy_chat_delivery_event_bridge_alias_smoke)
+
     add_executable(trailmate_linux_sim_legacy_adapter_smoke
         "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp")
     target_link_libraries(trailmate_linux_sim_legacy_adapter_smoke

@@ -1,6 +1,6 @@
 #include "ui_chat_runtime/chat_page_runtime_event_pump.h"
 
-#include "ui_legacy_adapters/legacy_chat_delivery_event_bridge.h"
+#include "ui_chat_runtime/chat_delivery_event_projection_adapter.h"
 #include "ui_legacy_adapters/legacy_key_verification_source.h"
 
 namespace chat::ui
@@ -29,13 +29,13 @@ namespace
 
 ChatPageRuntimeEventPump::ChatPageRuntimeEventPump(
     chat::ChatService& service,
-    ::ui::presentation_sources::LegacyChatDeliveryEventBridge* delivery_bridge,
+    ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter* delivery_adapter,
     ::ui::presentation_sources::LegacyKeyVerificationSource*
         key_verification_source,
     ::ui::key_verification::KeyVerificationModel* key_verification_model,
     IChatUiRefreshSink* ui)
     : service_(service),
-      delivery_bridge_(delivery_bridge),
+      delivery_adapter_(delivery_adapter),
       key_verification_source_(key_verification_source),
       key_verification_model_(key_verification_model),
       ui_(ui)
@@ -97,9 +97,9 @@ void ChatPageRuntimeEventPump::handleChatNewMessage(
 void ChatPageRuntimeEventPump::handleChatSendResult(
     const sys::ChatSendResultEvent& event)
 {
-    if (delivery_bridge_ != nullptr)
+    if (delivery_adapter_ != nullptr)
     {
-        delivery_bridge_->onChatSendResult(event);
+        delivery_adapter_->onChatSendResult(event);
     }
     if (ui_ != nullptr)
     {

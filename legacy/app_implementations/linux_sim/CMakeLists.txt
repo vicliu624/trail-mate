@@ -60,7 +60,7 @@ if(TRAIL_MATE_LINUX_SIM_ENABLE_FULL_APP)
     trailmate_add_linux_common(trailmate_cardputer_zero_linux_common)
 
     # -----------------------------------------------------------------------
-    # SDL3 – simulator-only dependency
+    # SDL3 simulator-only dependency
     # -----------------------------------------------------------------------
 
     include(FetchContent)
@@ -408,9 +408,9 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_legacy_chat_delivery_bridge_smoke
              COMMAND trailmate_legacy_chat_delivery_bridge_smoke)
 
-    add_executable(trailmate_legacy_chat_delivery_event_bridge_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp"
+    add_executable(trailmate_chat_delivery_event_projection_adapter_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/tests/test_chat_delivery_event_projection_adapter.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_projector.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_event_port.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
@@ -421,7 +421,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/store/ram_store.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
     )
-    target_include_directories(trailmate_legacy_chat_delivery_event_bridge_smoke
+    target_include_directories(trailmate_chat_delivery_event_projection_adapter_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
@@ -429,23 +429,23 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include")
-    add_test(NAME trailmate_legacy_chat_delivery_event_bridge_smoke
-             COMMAND trailmate_legacy_chat_delivery_event_bridge_smoke)
+    add_test(NAME trailmate_chat_delivery_event_projection_adapter_smoke
+             COMMAND trailmate_chat_delivery_event_projection_adapter_smoke)
 
-    add_executable(trailmate_legacy_chat_delivery_action_bridge_smoke
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp"
+    add_executable(trailmate_chat_delivery_action_port_adapter_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/tests/test_chat_delivery_action_port_adapter.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_action_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_read_model.cpp"
     )
-    target_include_directories(trailmate_legacy_chat_delivery_action_bridge_smoke
+    target_include_directories(trailmate_chat_delivery_action_port_adapter_smoke
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
-    add_test(NAME trailmate_legacy_chat_delivery_action_bridge_smoke
-             COMMAND trailmate_legacy_chat_delivery_action_bridge_smoke)
+    add_test(NAME trailmate_chat_delivery_action_port_adapter_smoke
+             COMMAND trailmate_chat_delivery_action_port_adapter_smoke)
 
     add_executable(trailmate_legacy_key_verification_adapters_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp"

@@ -1,27 +1,26 @@
-#include "ui_legacy_adapters/legacy_chat_delivery_action_bridge.h"
+#include "ui_chat_runtime/chat_delivery_action_port_adapter.h"
 
-namespace ui::presentation_sources
+namespace ui_chat_runtime
 {
 
-LegacyChatDeliveryActionBridge::LegacyChatDeliveryActionBridge(
-    ::chat::delivery::IChatDeliveryActionSink& action_sink)
-    : action_sink_(action_sink)
+ChatDeliveryActionPortAdapter::ChatDeliveryActionPortAdapter(
+    IChatDeliveryActionPort& action_port)
+    : action_port_(action_port)
 {
 }
 
-::chat::delivery::ChatDeliveryActionResult
-LegacyChatDeliveryActionBridge::handleMessageAction(
+ChatDeliveryActionResult
+ChatDeliveryActionPortAdapter::handleMessageAction(
     ::chat::delivery::ChatDeliveryActionKind kind,
     const ::ui::chat::MessageRef& ref)
 {
     ::chat::delivery::ChatDeliveryActionRequest request{};
     request.kind = kind;
     request.ref = toDeliveryRef(ref);
-    return action_sink_.handleDeliveryAction(request);
+    return action_port_.handleDeliveryAction(request);
 }
 
-::chat::delivery::ChatDeliveryActionResult
-LegacyChatDeliveryActionBridge::retryMessage(
+ChatDeliveryActionResult ChatDeliveryActionPortAdapter::retryMessage(
     const ::ui::chat::MessageRef& ref)
 {
     return handleMessageAction(
@@ -29,8 +28,7 @@ LegacyChatDeliveryActionBridge::retryMessage(
         ref);
 }
 
-::chat::delivery::ChatDeliveryActionResult
-LegacyChatDeliveryActionBridge::cancelPending(
+ChatDeliveryActionResult ChatDeliveryActionPortAdapter::cancelPending(
     const ::ui::chat::MessageRef& ref)
 {
     return handleMessageAction(
@@ -38,8 +36,7 @@ LegacyChatDeliveryActionBridge::cancelPending(
         ref);
 }
 
-::chat::delivery::ChatDeliveryActionResult
-LegacyChatDeliveryActionBridge::clearFailure(
+ChatDeliveryActionResult ChatDeliveryActionPortAdapter::clearFailure(
     const ::ui::chat::MessageRef& ref)
 {
     return handleMessageAction(
@@ -57,4 +54,4 @@ LegacyChatDeliveryActionBridge::clearFailure(
     return out;
 }
 
-} // namespace ui::presentation_sources
+} // namespace ui_chat_runtime

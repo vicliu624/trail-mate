@@ -9,8 +9,12 @@
 
 namespace ui::presentation_sources
 {
-class LegacyChatDeliveryEventBridge;
 class LegacyKeyVerificationSource;
+}
+
+namespace ui_chat_runtime
+{
+class ChatDeliveryEventProjectionAdapter;
 }
 
 namespace chat::ui
@@ -21,8 +25,8 @@ class ChatPageRuntimeEventPump
   public:
     ChatPageRuntimeEventPump(
         chat::ChatService& service,
-        ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
-            delivery_bridge,
+        ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter*
+            delivery_adapter,
         ::ui::presentation_sources::LegacyKeyVerificationSource*
             key_verification_source,
         ::ui::key_verification::KeyVerificationModel* key_verification_model,
@@ -45,8 +49,8 @@ class ChatPageRuntimeEventPump
                                     uint32_t peer_id);
 
     chat::ChatService& service_;
-    ::ui::presentation_sources::LegacyChatDeliveryEventBridge*
-        delivery_bridge_ = nullptr;
+    ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter*
+        delivery_adapter_ = nullptr;
     ::ui::presentation_sources::LegacyKeyVerificationSource*
         key_verification_source_ = nullptr;
     ::ui::key_verification::KeyVerificationModel* key_verification_model_ =

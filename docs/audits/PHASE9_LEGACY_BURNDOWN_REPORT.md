@@ -15,23 +15,35 @@ surfaces:
 | GTK screen host adapter | `legacy/app_implementations/linux_uconsole` | `modules/ui_gtk_runtime` | moved out of legacy |
 | GTK screen graph bridge | `legacy/app_implementations/linux_uconsole` | `modules/ui_gtk_runtime` | moved out of legacy |
 
+## Burned Down In Phase 9.4
+
+Phase 9.4 burns down the Chat delivery bridge pair from real implementation
+ownership into stable `ui_chat_runtime` ports and adapters.
+
+| Surface | Previous owner | New owner | Status |
+| --- | --- | --- | --- |
+| `LegacyChatDeliveryActionBridge` | `modules/ui_legacy_adapters` real bridge implementation | `ChatDeliveryActionPortAdapter` and `IChatDeliveryActionPort` in `modules/ui_chat_runtime` | main runtime callers removed; old headers are deprecated aliases |
+| `LegacyChatDeliveryEventBridge` | `modules/ui_legacy_adapters` real bridge implementation | `ChatDeliveryEventProjectionAdapter` and `IChatDeliveryEventPort` in `modules/ui_chat_runtime` | main runtime callers removed; old headers are deprecated aliases |
+
+The former `modules/ui_legacy_adapters/src/legacy_chat_delivery_*_bridge.cpp`
+implementation files are removed from the build. Compatibility headers remain
+only as forwarding aliases for downstream includes.
+
 ## Still Contained
 
 These code-level legacy adapters remain governed by
 `docs/audits/LEGACY_BURNDOWN_REGISTER.md`:
 
-- `LegacyChatDeliveryActionBridge`
-- `LegacyChatDeliveryEventBridge`
 - `LegacyKeyVerificationSource`
 - `LegacyKeyVerificationActionSink`
 - `LegacyMapOverlaySource`
 
 ## Next Burn-down Target
 
-The next Phase 9 legacy burn-down target is the chat delivery bridge pair. The
-exit direction is to replace the `LegacyChatDelivery*Bridge` names with stable
-chat runtime port adapters, or to make the old headers deprecated forwarding
-aliases once no main runtime code includes them directly.
+The next Phase 9 legacy burn-down target should be selected from
+`LegacyKeyVerificationSource`, `LegacyKeyVerificationActionSink`, and
+`LegacyMapOverlaySource`. The Chat delivery bridge pair is no longer a main
+runtime fallback; its remaining work is compatibility alias deletion.
 
 ## Rule
 

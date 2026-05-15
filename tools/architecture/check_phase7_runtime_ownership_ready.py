@@ -9,15 +9,15 @@ PATH_ALIASES = {
     "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_action_bridge.h",
     "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp":
-        "modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp",
     "modules/ui_shared/tests/test_legacy_chat_delivery_action_bridge.cpp":
-        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_chat_runtime/tests/test_chat_delivery_action_port_adapter.cpp",
     "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h":
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
     "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp":
-        "modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp",
     "modules/ui_shared/tests/test_legacy_chat_delivery_event_bridge.cpp":
-        "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_chat_runtime/tests/test_chat_delivery_event_projection_adapter.cpp",
     "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h":
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_session.h",
     "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h":
@@ -681,7 +681,12 @@ def check_legacy_burndown_register() -> int:
             failures += fail(f"{surface} missing removal condition")
         if not target_phase or target_phase.lower() in {"none", "n/a"}:
             failures += fail(f"{surface} missing target phase")
-        if status not in {"contained", "burned-down", "remaining legacy"}:
+        if status not in {
+            "contained",
+            "burned-down",
+            "burned-down to deprecated alias",
+            "remaining legacy",
+        }:
             failures += fail(f"{surface} has unsupported burn-down status: {status}")
 
     return failures
@@ -1002,7 +1007,7 @@ def check_delivery_event_bridge_boundary() -> int:
     failures = 0
     bridge_files = [
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
-        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp",
+        "modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp",
     ]
     for path in bridge_files:
         if not exists(path):
@@ -1022,7 +1027,7 @@ def check_delivery_event_bridge_boundary() -> int:
             if token in text:
                 failures += fail(f"{path} contains forbidden delivery bridge token {token}")
 
-    source = "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_event_bridge.cpp"
+    source = "modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp"
     if exists(source):
         text = read_text(source)
         for token in [
@@ -1055,8 +1060,8 @@ def check_delivery_event_bridge_boundary() -> int:
     if exists(event_pump):
         text = read_text(event_pump)
         for token in [
-            "LegacyChatDeliveryEventBridge",
-            "delivery_bridge_->onChatSendResult",
+            "ChatDeliveryEventProjectionAdapter",
+            "delivery_adapter_->onChatSendResult",
         ]:
             if token not in text:
                 failures += fail(f"ChatPageRuntimeEventPump missing delivery projection token: {token}")
@@ -1068,8 +1073,8 @@ def check_delivery_event_bridge_boundary() -> int:
             "ChatDeliveryReadModel",
             "ChatDeliveryEventProjector",
             "ProjectingChatDeliveryEventPort",
-            "LegacyChatDeliveryEventBridge",
-            "s_delivery_event_bridge",
+            "ChatDeliveryEventProjectionAdapter",
+            "s_delivery_event_adapter",
             "s_delivery_read_model",
         ]:
             if token not in text:
@@ -1082,7 +1087,7 @@ def check_delivery_action_bridge_boundary() -> int:
     failures = 0
     bridge_files = [
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h",
-        "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp",
+        "modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp",
     ]
     for path in bridge_files:
         if not exists(path):
@@ -1108,16 +1113,13 @@ def check_delivery_action_bridge_boundary() -> int:
         text = read_text(header)
         for token in [
             "LegacyChatDeliveryActionBridge",
-            "IChatDeliveryActionSink",
-            "handleMessageAction",
-            "retryMessage",
-            "cancelPending",
-            "clearFailure",
+            "ChatDeliveryActionPortAdapter",
+            "[[deprecated",
         ]:
             if token not in text:
                 failures += fail(f"LegacyChatDeliveryActionBridge header missing token: {token}")
 
-    source = "modules/ui_shared/src/ui/presentation_sources/legacy_chat_delivery_action_bridge.cpp"
+    source = "modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp"
     if exists(source):
         text = read_text(source)
         for token in [
@@ -1137,9 +1139,9 @@ def check_delivery_action_bridge_boundary() -> int:
         text = read_text(runtime)
         for token in [
             "ChatDeliveryActionService",
-            "LegacyChatDeliveryActionBridge",
+            "ChatDeliveryActionPortAdapter",
             "s_delivery_action_service",
-            "s_delivery_action_bridge",
+            "s_delivery_action_adapter",
         ]:
             if token not in text:
                 failures += fail(f"chat_page_runtime.cpp missing delivery action wiring token: {token}")
@@ -2530,7 +2532,7 @@ def check_chat_runtime_event_pump_boundary() -> int:
         for token in [
             "service_.processIncoming()",
             "service_.flushStore()",
-            "delivery_bridge_->onChatSendResult",
+            "delivery_adapter_->onChatSendResult",
             "key_verification_source_->onNumberRequest",
             "key_verification_source_->onNumberInform",
             "key_verification_source_->onFinal",

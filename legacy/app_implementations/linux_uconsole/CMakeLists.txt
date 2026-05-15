@@ -113,8 +113,8 @@ add_library(trailmate_uconsole_shell
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/screen/screen_binding_registry.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp"
-    "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_action_bridge.cpp"
-    "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_chat_delivery_event_bridge.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_gps_status_source.cpp"
@@ -137,6 +137,7 @@ target_include_directories(trailmate_uconsole_shell
     PUBLIC
         "${PROJECT_SOURCE_DIR}/src"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/include"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_chat_runtime/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
