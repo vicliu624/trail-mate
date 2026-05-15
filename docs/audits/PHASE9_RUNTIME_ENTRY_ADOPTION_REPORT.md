@@ -89,3 +89,23 @@ migration. Entry adoption helpers do not select UX packs, construct
 app-shell probes may adapt the selected UX pack into a temporary
 `PresentationBundle`, but that is transitional probe glue, not new product
 composition ownership.
+
+## Phase 9.3 Real Entry Adoption
+
+Phase 9.3 adds entry-facing consumers above the Phase 9.2 probes:
+
+- `LinuxSimRuntimeEntry` consumes `AsciiRuntimeEntryAdoption` through
+  `LinuxSimRuntimeEntryAdoptionProbe`.
+- `LinuxUConsoleGtkPageRegistryAdoption` consumes `GtkRuntimeEntryAdoption`
+  and exposes GTK menu/screen descriptors for page-registry adoption.
+- `LvglRuntimeAdoptionProbe` consumes `LvglRuntimeEntryAdoption` as the LVGL
+  compatibility runtime path.
+
+These are real/probe runtime entry paths rather than plain app-shell smoke
+tests. The hardcoded simulator routing, GTK page registry, and LVGL menu/page
+creation remain fallback only and are tracked in
+`docs/audits/PHASE9_FALLBACK_CONTAINMENT_LEDGER.md`.
+
+`legacy/app_implementations remains burn-down`: Phase 9.3 does not add
+`LinuxSimRuntimeAdoptionBridge`, `GtkRuntimeEntryAdoption`, or screen graph
+bridge files under legacy implementation roots.

@@ -85,6 +85,25 @@ remains under `modules/ui_lvgl_ux_packs/runtime`.
 The detailed fallback map is tracked in
 `docs/audits/PHASE9_RUNTIME_ENTRY_ADOPTION_REPORT.md`.
 
+## Phase 9.3 Real Entry Adoption
+
+Phase 9.3 moves beyond app-shell probe smoke coverage by adding real
+entry-facing consumers that still avoid `legacy/app_implementations`:
+
+- `LinuxSimRuntimeEntry` consumes `AsciiRuntimeEntryAdoption` through the
+  final LinuxSim app-shell adoption probe.
+- `LinuxUConsoleGtkPageRegistryAdoption` consumes `GtkRuntimeEntryAdoption`
+  and exposes descriptor data that a GTK page registry can adopt.
+- `LvglRuntimeAdoptionProbe` consumes `LvglRuntimeEntryAdoption` as the LVGL
+  compatibility runtime landing point.
+
+These paths do not create widgets, do not choose UX packs, and do not replace
+the existing hardcoded UI behavior. They mark the hardcoded paths as contained
+fallback until descriptors become the primary route/page/menu source.
+
+The fallback inventory is tracked in
+`docs/audits/PHASE9_FALLBACK_CONTAINMENT_LEDGER.md`.
+
 ## Phase 9 Rule
 
 New runtime/presentation work must not be added to `legacy/`. If a legacy root

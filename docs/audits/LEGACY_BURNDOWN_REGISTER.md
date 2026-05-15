@@ -42,6 +42,7 @@ A legacy surface may remain temporarily only if it has:
 | `legacy/app_implementations/linux_sim` ASCII descriptor adapters | `modules/ui_ascii_runtime` | moved out of legacy; legacy LinuxSim CMake links module-owned sources for compatibility smoke coverage | real simulator entry consumes `AsciiRuntimeScreenGraphPresenter` and old hardcoded routing is fallback-only | 9.2 | burned-down |
 | `legacy/app_implementations/linux_uconsole` GTK descriptor adapters | `modules/ui_gtk_runtime` | moved out of legacy; legacy uConsole CMake links module-owned sources for compatibility smoke coverage | real GTK page switch path consumes `GtkUConsoleScreenGraphPresenter` and old hardcoded routing is fallback-only | 9.2 | burned-down |
 | Runtime entry adoption helpers under `legacy/app_implementations` | `modules/ui_ascii_runtime`, `modules/ui_gtk_runtime`, `modules/ui_lvgl_ux_packs`, final app-shell probes | none; Phase 9.2 keeps entry adoption helpers out of legacy | checker forbids `*RuntimeEntryAdoption` files and tokens under `legacy/app_implementations` | 9.2 | burned-down |
+| Runtime entry bridges under `legacy/app_implementations` | final app-shell runtime entry/page-registry adoption and `modules/ui_lvgl_ux_packs` | none; Phase 9.3 keeps real entry adoption out of legacy | checker forbids Phase 9 runtime adoption bridge files under `legacy/app_implementations` | 9.3 | burned-down |
 
 ## Checker Status
 

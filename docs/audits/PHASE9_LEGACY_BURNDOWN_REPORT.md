@@ -51,3 +51,14 @@ If a future Phase 9 task needs behavior that currently sits in
 `legacy/app_implementations`, the task should burn down that behavior into a
 stable owner instead of adding another compatibility helper inside the legacy
 tree.
+
+## Phase 9.3 Correction
+
+Real runtime entry adoption also stays out of `legacy/app_implementations`.
+The LinuxSim runtime entry and GTK page-registry adoption live under final
+app-shell directories, while the LVGL compatibility runtime adoption probe
+lives under `modules/ui_lvgl_ux_packs`.
+
+Legacy implementation roots may continue to exist as historical fallback, but
+new Phase 9 adoption code must either live in a stable module or in the final
+app-shell surface that owns product startup semantics.

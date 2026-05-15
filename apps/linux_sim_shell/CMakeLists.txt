@@ -23,6 +23,7 @@ target_compile_features(trailmate_linux_sim_legacy_adapter PUBLIC cxx_std_17)
 
 add_library(trailmate_linux_sim_shell
     src/linux_sim_app_shell.cpp
+    src/linux_sim_runtime_entry.cpp
     src/linux_sim_runtime_entry_adoption_probe.cpp
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp"
@@ -57,6 +58,13 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_linux_sim_runtime_entry_adoption_probe_smoke
              COMMAND trailmate_linux_sim_runtime_entry_adoption_probe_smoke)
 
+    add_executable(trailmate_linux_sim_runtime_entry_smoke
+        tests/linux_sim_runtime_entry_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_runtime_entry_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_linux_sim_runtime_entry_smoke
+             COMMAND trailmate_linux_sim_runtime_entry_smoke)
+
     add_executable(trailmate_ascii_runtime_entry_adoption_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_runtime_entry_adoption_smoke.cpp")
     target_link_libraries(trailmate_ascii_runtime_entry_adoption_smoke
@@ -89,6 +97,7 @@ if(BUILD_TESTING)
         lvgl_screen_graph_bridge
         lvgl_runtime_screen_graph_presenter
         lvgl_runtime_entry_adoption
+        lvgl_runtime_adoption_probe
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack
