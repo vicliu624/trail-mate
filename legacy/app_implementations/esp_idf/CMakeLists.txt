@@ -131,17 +131,18 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_key_verification_runtime/src/key_verification_action_sink.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_key_verification_runtime/src/key_verification_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_presentation_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/presentation_sources/team_chat_action_sink.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_actions/legacy_team_action_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_overlay_projection_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_overlay_snapshot_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/team_presentation/team_rich_payload_projector.cpp
-    ${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/info_card.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_layout.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_shared/src/ui/components/two_pane_styles.cpp
@@ -278,6 +279,7 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/boards/t_display_p4/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_shared/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_chat_runtime/include"
+    "${CMAKE_SOURCE_DIR}/modules/ui_key_verification_runtime/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_map_runtime/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_gps_runtime/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/include"

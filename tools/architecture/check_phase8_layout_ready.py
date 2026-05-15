@@ -127,20 +127,33 @@ def check_required_files() -> int:
         "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/map_tile_decoder_cache.h",
         "modules/ui_map_runtime/include/ui_map_runtime/map_tiles/filesystem_map_tile_source.h",
         "modules/ui_map_runtime/include/ui_map_runtime/map_overlay/map_overlay_projector.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_overlay_projection_adapter.h",
+        "modules/ui_map_runtime/include/ui_map_runtime/map_overlay_snapshot_source.h",
         "modules/ui_map_runtime/src/map_tiles/map_tile_resolver.cpp",
         "modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp",
         "modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp",
         "modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp",
+        "modules/ui_map_runtime/src/map_overlay_projection_adapter.cpp",
+        "modules/ui_map_runtime/src/map_overlay_snapshot_source.cpp",
         "modules/ui_map_runtime/tests/test_map_tile_resolver.cpp",
         "modules/ui_map_runtime/tests/test_map_tile_render_queue.cpp",
         "modules/ui_map_runtime/tests/test_filesystem_map_tile_source.cpp",
         "modules/ui_map_runtime/tests/test_map_overlay_projector.cpp",
+        "modules/ui_map_runtime/tests/test_map_overlay_snapshot_source.cpp",
         "modules/ui_gps_runtime/README.md",
         "modules/ui_gps_runtime/library.json",
         "modules/ui_gps_runtime/include/ui_gps_runtime/gps_page_runtime_pump.h",
         "modules/ui_gps_runtime/include/ui_gps_runtime/gps_ui_refresh_sink.h",
         "modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp",
         "modules/ui_gps_runtime/tests/test_gps_page_runtime_pump.cpp",
+        "modules/ui_key_verification_runtime/README.md",
+        "modules/ui_key_verification_runtime/library.json",
+        "modules/ui_key_verification_runtime/include/ui_key_verification_runtime/key_verification_session_adapter.h",
+        "modules/ui_key_verification_runtime/include/ui_key_verification_runtime/key_verification_presentation_source.h",
+        "modules/ui_key_verification_runtime/include/ui_key_verification_runtime/key_verification_action_sink.h",
+        "modules/ui_key_verification_runtime/src/key_verification_presentation_source.cpp",
+        "modules/ui_key_verification_runtime/src/key_verification_action_sink.cpp",
+        "modules/ui_key_verification_runtime/tests/test_key_verification_runtime_adapters.cpp",
         "modules/ui_legacy_adapters/README.md",
         "modules/ui_legacy_adapters/library.json",
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_chat_delivery_event_bridge.h",
@@ -149,15 +162,12 @@ def check_required_files() -> int:
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_source.h",
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_action_sink.h",
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_map_overlay_source.h",
-        "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
-        "modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp",
-        "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
         "modules/ui_chat_runtime/tests/test_chat_delivery_event_projection_adapter.cpp",
         "modules/ui_chat_runtime/tests/test_chat_delivery_action_port_adapter.cpp",
         "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_event_bridge_legacy_alias.cpp",
         "modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge_legacy_alias.cpp",
-        "modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp",
-        "modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters_legacy_alias.cpp",
+        "modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source_legacy_alias.cpp",
         "modules/ui_lvgl_core/README.md",
         "modules/ui_lvgl_core/library.json",
         "modules/ui_lvgl_core/include/ui_lvgl_core/lvgl_focus_group.h",
@@ -2051,13 +2061,13 @@ def check_forwarding_headers() -> int:
         "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
             "ui_chat_runtime/chat_delivery_action_port_adapter.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h":
-            "ui_legacy_adapters/legacy_key_verification_session.h",
+            "ui_key_verification_runtime/key_verification_session_adapter.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h":
-            "ui_legacy_adapters/legacy_key_verification_source.h",
+            "ui_key_verification_runtime/key_verification_presentation_source.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h":
-            "ui_legacy_adapters/legacy_key_verification_action_sink.h",
+            "ui_key_verification_runtime/key_verification_action_sink.h",
         "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h":
-            "ui_legacy_adapters/legacy_map_overlay_source.h",
+            "ui_map_runtime/map_overlay_snapshot_source.h",
         "modules/ui_shared/include/ui/screens/chat/team_position_picker_renderer.h":
             "ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
         "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h":
@@ -2075,8 +2085,12 @@ def check_forwarding_headers() -> int:
         if path in {
             "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_event_bridge.h",
             "modules/ui_shared/include/ui/presentation_sources/legacy_chat_delivery_action_bridge.h",
+            "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_session.h",
+            "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_source.h",
+            "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h",
+            "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h",
         }:
-            if "using LegacyChatDelivery" not in text or "[[deprecated" not in text:
+            if "using Legacy" not in text or "[[deprecated" not in text:
                 failures += fail(f"{path} must be a deprecated alias forwarding header")
             if "class " in text or "struct " in text:
                 failures += fail(f"{path} must not contain a class or struct implementation")
@@ -2137,13 +2151,13 @@ def check_authoritative_include_paths() -> int:
         "ui/presentation_sources/legacy_chat_delivery_action_bridge.h":
             "ui_chat_runtime/chat_delivery_action_port_adapter.h",
         "ui/presentation_sources/legacy_key_verification_session.h":
-            "ui_legacy_adapters/legacy_key_verification_session.h",
+            "ui_key_verification_runtime/key_verification_session_adapter.h",
         "ui/presentation_sources/legacy_key_verification_source.h":
-            "ui_legacy_adapters/legacy_key_verification_source.h",
+            "ui_key_verification_runtime/key_verification_presentation_source.h",
         "ui/presentation_sources/legacy_key_verification_action_sink.h":
-            "ui_legacy_adapters/legacy_key_verification_action_sink.h",
+            "ui_key_verification_runtime/key_verification_action_sink.h",
         "ui/presentation_sources/legacy_map_overlay_source.h":
-            "ui_legacy_adapters/legacy_map_overlay_source.h",
+            "ui_map_runtime/map_overlay_snapshot_source.h",
         "ui/screens/chat/team_position_picker_renderer.h":
             "ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
         "ui/screens/chat/key_verification_modal_renderer.h":
@@ -2237,8 +2251,10 @@ def check_build_manifest_authority() -> int:
             "modules/ui_gps_runtime/src/gps_page_runtime_pump.cpp",
             "modules/ui_chat_runtime/src/chat_delivery_action_port_adapter.cpp",
             "modules/ui_chat_runtime/src/chat_delivery_event_projection_adapter.cpp",
-            "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
-            "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
+            "modules/ui_key_verification_runtime/src/key_verification_presentation_source.cpp",
+            "modules/ui_key_verification_runtime/src/key_verification_action_sink.cpp",
+            "modules/ui_map_runtime/src/map_overlay_projection_adapter.cpp",
+            "modules/ui_map_runtime/src/map_overlay_snapshot_source.cpp",
             "modules/ui_lvgl_core/include",
             "modules/ui_presentation/src/*/*.cpp",
             "modules/ui_lvgl_ux_packs/src/common/team_position_picker_renderer.cpp",
@@ -2270,6 +2286,8 @@ def check_build_manifest_authority() -> int:
             "TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT",
             "TRAIL_MATE_UI_GPS_RUNTIME_INCLUDE_ROOT",
             "TRAIL_MATE_UI_GPS_RUNTIME_SRC_ROOT",
+            "TRAIL_MATE_UI_KEY_VERIFICATION_RUNTIME_INCLUDE_ROOT",
+            "TRAIL_MATE_UI_KEY_VERIFICATION_RUNTIME_SRC_ROOT",
             "TRAIL_MATE_UI_LEGACY_ADAPTERS_INCLUDE_ROOT",
             "TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT",
             "TRAIL_MATE_UI_LVGL_CORE_INCLUDE_ROOT",
@@ -2278,7 +2296,11 @@ def check_build_manifest_authority() -> int:
             "chat_page_runtime_event_pump.cpp",
             "chat_delivery_action_port_adapter.cpp",
             "chat_delivery_event_projection_adapter.cpp",
+            "key_verification_presentation_source.cpp",
+            "key_verification_action_sink.cpp",
             "filesystem_map_tile_source.cpp",
+            "map_overlay_projection_adapter.cpp",
+            "map_overlay_snapshot_source.cpp",
             "gps_page_runtime_pump.cpp",
             "menu_model.cpp",
             "screen_binding_registry.cpp",
@@ -2324,6 +2346,16 @@ def check_runtime_module_boundaries() -> int:
         ],
         "modules/ui_map_runtime": [
             "lvgl.h",
+            "apps/",
+            "apps\\",
+            "builds/",
+            "boards/",
+            "boards\\",
+        ],
+        "modules/ui_key_verification_runtime": [
+            "lvgl.h",
+            "GtkWidget",
+            "lv_obj_t",
             "apps/",
             "apps\\",
             "builds/",

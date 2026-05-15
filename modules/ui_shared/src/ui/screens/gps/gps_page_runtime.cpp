@@ -655,12 +655,12 @@ using Host = gps::ui::shell::Host;
 #include "platform/ui/team_ui_store_runtime.h"
 #include "ui/presentation_sources/legacy_gps_status_source.h"
 #include "ui/presentation_sources/legacy_map_action_sink.h"
-#include "ui_legacy_adapters/legacy_map_overlay_source.h"
 #include "ui/presentation_sources/legacy_map_presentation_source.h"
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui_gps_runtime/gps_page_runtime_pump.h"
+#include "ui_map_runtime/map_overlay_snapshot_source.h"
 #include "ui/ui_common.h"
 #include "ui/widgets/map/map_viewport.h"
 #include "ui/widgets/top_bar.h"
@@ -718,7 +718,7 @@ void request_exit()
     return model;
 }
 
-class LinuxMapOverlayGpsSource final : public ::ui::presentation_sources::IMapOverlayGpsSource
+class LinuxMapOverlayGpsSource final : public ::ui::map_overlay::IMapOverlayGpsSource
 {
   public:
     bool currentFix(double& lat, double& lon, bool& valid) const override
@@ -736,7 +736,7 @@ class LinuxMapOverlayGpsSource final : public ::ui::presentation_sources::IMapOv
     }
 };
 
-class LinuxMapOverlayTeamSource final : public ::ui::presentation_sources::IMapOverlayTeamSource
+class LinuxMapOverlayTeamSource final : public ::ui::map_overlay::IMapOverlayTeamSource
 {
   public:
     std::size_t latestTeamPoints(TeamPoint* out, std::size_t capacity) const override
@@ -805,7 +805,7 @@ class LinuxMapOverlayTeamSource final : public ::ui::presentation_sources::IMapO
 {
     static LinuxMapOverlayGpsSource gps;
     static LinuxMapOverlayTeamSource team;
-    static ::ui::presentation_sources::LegacyMapOverlaySource source(&gps, &team);
+    static ::ui::map_overlay::MapOverlaySnapshotSource source(&gps, &team);
     return source;
 }
 

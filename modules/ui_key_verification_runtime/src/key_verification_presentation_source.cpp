@@ -1,4 +1,4 @@
-#include "ui_legacy_adapters/legacy_key_verification_source.h"
+#include "ui_key_verification_runtime/key_verification_presentation_source.h"
 
 #include "chat/domain/chat_types.h"
 #include "chat/ports/i_mesh_adapter.h"
@@ -9,7 +9,7 @@
 #include <cstring>
 #include <string>
 
-namespace ui::presentation_sources
+namespace ui_key_verification_runtime
 {
 
 namespace
@@ -69,8 +69,8 @@ const char* failureStatus(
 
 } // namespace
 
-LegacyKeyVerificationSource::LegacyKeyVerificationSource(
-    LegacyKeyVerificationSession& session,
+KeyVerificationPresentationSource::KeyVerificationPresentationSource(
+    KeyVerificationSessionAdapter& session,
     const ::chat::contacts::ContactService* contacts,
     const ::chat::IMeshAdapter* mesh)
     : session_(session),
@@ -79,7 +79,7 @@ LegacyKeyVerificationSource::LegacyKeyVerificationSource(
 {
 }
 
-bool LegacyKeyVerificationSource::buildKeyVerificationSnapshot(
+bool KeyVerificationPresentationSource::buildKeyVerificationSnapshot(
     const ::ui::key_verification::KeyVerificationRequest& request,
     ::ui::key_verification::KeyVerificationSnapshot& out) const
 {
@@ -153,8 +153,8 @@ bool LegacyKeyVerificationSource::buildKeyVerificationSnapshot(
     return true;
 }
 
-void LegacyKeyVerificationSource::onNumberRequest(uint32_t peer_id,
-                                                  uint64_t nonce)
+void KeyVerificationPresentationSource::onNumberRequest(uint32_t peer_id,
+                                                        uint64_t nonce)
 {
     session_ = {};
     session_.peer_id = peer_id;
@@ -165,9 +165,10 @@ void LegacyKeyVerificationSource::onNumberRequest(uint32_t peer_id,
         ::ui::key_verification::VerificationPromptKind::EnterNumber;
 }
 
-void LegacyKeyVerificationSource::onNumberInform(uint32_t peer_id,
-                                                 uint64_t nonce,
-                                                 uint32_t security_number)
+void KeyVerificationPresentationSource::onNumberInform(
+    uint32_t peer_id,
+    uint64_t nonce,
+    uint32_t security_number)
 {
     session_ = {};
     session_.peer_id = peer_id;
@@ -179,10 +180,11 @@ void LegacyKeyVerificationSource::onNumberInform(uint32_t peer_id,
         ::ui::key_verification::VerificationPromptKind::ShowNumber;
 }
 
-void LegacyKeyVerificationSource::onFinal(uint32_t peer_id,
-                                          uint64_t nonce,
-                                          bool is_sender,
-                                          const char* verification_code)
+void KeyVerificationPresentationSource::onFinal(
+    uint32_t peer_id,
+    uint64_t nonce,
+    bool is_sender,
+    const char* verification_code)
 {
     session_ = {};
     session_.peer_id = peer_id;
@@ -202,7 +204,7 @@ void LegacyKeyVerificationSource::onFinal(uint32_t peer_id,
     }
 }
 
-void LegacyKeyVerificationSource::onPeerKeyMissing(uint32_t peer_id)
+void KeyVerificationPresentationSource::onPeerKeyMissing(uint32_t peer_id)
 {
     session_ = {};
     session_.peer_id = peer_id;
@@ -212,13 +214,13 @@ void LegacyKeyVerificationSource::onPeerKeyMissing(uint32_t peer_id)
         ::ui::key_verification::VerificationFailureKind::MissingPeerKey;
 }
 
-void LegacyKeyVerificationSource::clear()
+void KeyVerificationPresentationSource::clear()
 {
     session_ = {};
 }
 
 ::ui::key_verification::VerificationProtocol
-LegacyKeyVerificationSource::currentProtocol() const
+KeyVerificationPresentationSource::currentProtocol() const
 {
     if (mesh_ == nullptr)
     {
@@ -227,7 +229,7 @@ LegacyKeyVerificationSource::currentProtocol() const
     return mapProtocol(mesh_->backendProtocol());
 }
 
-void LegacyKeyVerificationSource::copyPeerLabel(
+void KeyVerificationPresentationSource::copyPeerLabel(
     uint32_t peer_id,
     ::ui::key_verification::KeyVerificationSnapshot& out) const
 {
@@ -249,7 +251,7 @@ void LegacyKeyVerificationSource::copyPeerLabel(
     ::ui::copyText(out.peer_label, fallback);
 }
 
-void LegacyKeyVerificationSource::copyStatusLine(
+void KeyVerificationPresentationSource::copyStatusLine(
     ::ui::key_verification::KeyVerificationSnapshot& out) const
 {
     if (out.state == ::ui::key_verification::VerificationState::Verified)
@@ -286,4 +288,4 @@ void LegacyKeyVerificationSource::copyStatusLine(
     }
 }
 
-} // namespace ui::presentation_sources
+} // namespace ui_key_verification_runtime

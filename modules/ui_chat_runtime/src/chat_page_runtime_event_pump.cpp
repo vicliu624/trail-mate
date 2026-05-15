@@ -1,7 +1,7 @@
 #include "ui_chat_runtime/chat_page_runtime_event_pump.h"
 
 #include "ui_chat_runtime/chat_delivery_event_projection_adapter.h"
-#include "ui_legacy_adapters/legacy_key_verification_source.h"
+#include "ui_key_verification_runtime/key_verification_presentation_source.h"
 
 namespace chat::ui
 {
@@ -30,7 +30,7 @@ namespace
 ChatPageRuntimeEventPump::ChatPageRuntimeEventPump(
     chat::ChatService& service,
     ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter* delivery_adapter,
-    ::ui::presentation_sources::LegacyKeyVerificationSource*
+    ::ui_key_verification_runtime::KeyVerificationPresentationSource*
         key_verification_source,
     ::ui::key_verification::KeyVerificationModel* key_verification_model,
     IChatUiRefreshSink* ui)

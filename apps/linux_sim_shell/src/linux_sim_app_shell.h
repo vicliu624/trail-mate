@@ -18,6 +18,9 @@ struct LinuxSimAppShellConfig
 class LinuxSimAppShell
 {
   public:
+    LinuxSimAppShell() = default;
+    explicit LinuxSimAppShell(LinuxSimAppShellConfig config);
+
     const LinuxSimAppShellConfig& config() const;
     const char* activeUxPackId() const;
     bool validate() const;

@@ -7,10 +7,25 @@ bool LinuxUConsoleGtkPageRegistryAdoption::load(
     const LinuxUConsoleGtkAppShell& shell)
 {
     ready_ = adoption_probe_.load(shell);
-    // Phase 9 fallback: hardcoded GTK page registry remains until adoption
-    // descriptors become the primary page registry source.
-    fallback_ = !ready_;
-    return ready_;
+    if (ready_)
+    {
+        registry_source_ =
+            LinuxUConsoleGtkPageRegistrySource::ScreenGraphAdoption;
+        fallback_ = false;
+        return true;
+    }
+
+    registry_source_ = LinuxUConsoleGtkPageRegistrySource::HardcodedFallback;
+    fallback_ = true;
+    return loadFallback(shell);
+}
+
+bool LinuxUConsoleGtkPageRegistryAdoption::loadFallback(
+    const LinuxUConsoleGtkAppShell&)
+{
+    // Phase 10 fallback containment: the legacy hardcoded GTK page registry
+    // remains available until descriptors become the primary page source.
+    return false;
 }
 
 bool LinuxUConsoleGtkPageRegistryAdoption::ready() const
@@ -18,9 +33,23 @@ bool LinuxUConsoleGtkPageRegistryAdoption::ready() const
     return ready_;
 }
 
+bool LinuxUConsoleGtkPageRegistryAdoption::usingPrimaryScreenGraph()
+    const noexcept
+{
+    return registry_source_ ==
+               LinuxUConsoleGtkPageRegistrySource::ScreenGraphAdoption &&
+           ready_ && !fallback_;
+}
+
 bool LinuxUConsoleGtkPageRegistryAdoption::fallbackUsed() const
 {
     return fallback_;
+}
+
+LinuxUConsoleGtkPageRegistrySource
+LinuxUConsoleGtkPageRegistryAdoption::registrySource() const noexcept
+{
+    return registry_source_;
 }
 
 std::size_t LinuxUConsoleGtkPageRegistryAdoption::menuCount() const

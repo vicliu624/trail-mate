@@ -65,6 +65,13 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_linux_sim_runtime_entry_smoke
              COMMAND trailmate_linux_sim_runtime_entry_smoke)
 
+    add_executable(trailmate_linux_sim_runtime_entry_fallback_smoke
+        tests/linux_sim_runtime_entry_fallback_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_runtime_entry_fallback_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_linux_sim_runtime_entry_fallback_smoke
+             COMMAND trailmate_linux_sim_runtime_entry_fallback_smoke)
+
     add_executable(trailmate_ascii_runtime_entry_adoption_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/tests/ascii_runtime_entry_adoption_smoke.cpp")
     target_link_libraries(trailmate_ascii_runtime_entry_adoption_smoke
@@ -97,6 +104,62 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_legacy_chat_delivery_event_bridge_alias_smoke
              COMMAND trailmate_legacy_chat_delivery_event_bridge_alias_smoke)
 
+    add_executable(trailmate_key_verification_runtime_adapters_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_key_verification_runtime/tests/test_key_verification_runtime_adapters.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_key_verification_runtime/src/key_verification_action_sink.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_key_verification_runtime/src/key_verification_presentation_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/usecase/contact_service.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp")
+    target_include_directories(trailmate_key_verification_runtime_adapters_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_key_verification_runtime/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
+    target_compile_features(trailmate_key_verification_runtime_adapters_smoke
+        PRIVATE cxx_std_17)
+    add_test(NAME trailmate_key_verification_runtime_adapters_smoke
+             COMMAND trailmate_key_verification_runtime_adapters_smoke)
+
+    add_executable(trailmate_legacy_key_verification_adapters_alias_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters_legacy_alias.cpp")
+    target_include_directories(trailmate_legacy_key_verification_adapters_alias_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_key_verification_runtime/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
+    target_compile_features(trailmate_legacy_key_verification_adapters_alias_smoke
+        PRIVATE cxx_std_17)
+    add_test(NAME trailmate_legacy_key_verification_adapters_alias_smoke
+             COMMAND trailmate_legacy_key_verification_adapters_alias_smoke)
+
+    add_executable(trailmate_map_overlay_snapshot_source_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/tests/test_map_overlay_snapshot_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_overlay_snapshot_source.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_overlay_projection_adapter.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/src/map_overlay/map_overlay_projector.cpp")
+    target_include_directories(trailmate_map_overlay_snapshot_source_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    target_compile_features(trailmate_map_overlay_snapshot_source_smoke
+        PRIVATE cxx_std_17)
+    add_test(NAME trailmate_map_overlay_snapshot_source_smoke
+             COMMAND trailmate_map_overlay_snapshot_source_smoke)
+
+    add_executable(trailmate_legacy_map_overlay_source_alias_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source_legacy_alias.cpp")
+    target_include_directories(trailmate_legacy_map_overlay_source_alias_smoke
+        PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include")
+    target_compile_features(trailmate_legacy_map_overlay_source_alias_smoke
+        PRIVATE cxx_std_17)
+    add_test(NAME trailmate_legacy_map_overlay_source_alias_smoke
+             COMMAND trailmate_legacy_map_overlay_source_alias_smoke)
+
     add_executable(trailmate_linux_sim_legacy_adapter_smoke
         "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp")
     target_link_libraries(trailmate_linux_sim_legacy_adapter_smoke
@@ -123,6 +186,7 @@ if(BUILD_TESTING)
         lvgl_runtime_screen_graph_presenter
         lvgl_runtime_entry_adoption
         lvgl_runtime_adoption_probe
+        lvgl_primary_screen_graph_runtime
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack

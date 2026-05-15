@@ -1,4 +1,4 @@
-#include "ui_legacy_adapters/legacy_map_overlay_source.h"
+#include "ui_map_runtime/map_overlay_snapshot_source.h"
 
 #include <cassert>
 #include <cstring>
@@ -6,7 +6,7 @@
 namespace
 {
 
-class FakeGpsSource final : public ui::presentation_sources::IMapOverlayGpsSource
+class FakeGpsSource final : public ui::map_overlay::IMapOverlayGpsSource
 {
   public:
     bool currentFix(double& out_lat, double& out_lon, bool& out_valid) const override
@@ -29,7 +29,7 @@ class FakeGpsSource final : public ui::presentation_sources::IMapOverlayGpsSourc
     bool valid = true;
 };
 
-class FakeTeamSource final : public ui::presentation_sources::IMapOverlayTeamSource
+class FakeTeamSource final : public ui::map_overlay::IMapOverlayTeamSource
 {
   public:
     std::size_t latestTeamPoints(TeamPoint* out, std::size_t capacity) const override
@@ -71,7 +71,7 @@ int main()
 {
     FakeGpsSource gps;
     FakeTeamSource team;
-    ui::presentation_sources::LegacyMapOverlaySource source(&gps, &team);
+    ui::map_overlay::MapOverlaySnapshotSource source(&gps, &team);
 
     ui::map::MapOverlaySnapshot snapshot;
     assert(source.buildMapOverlaySnapshot(snapshot));

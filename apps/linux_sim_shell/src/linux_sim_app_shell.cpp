@@ -9,6 +9,11 @@ namespace apps
 namespace linux_sim_shell
 {
 
+LinuxSimAppShell::LinuxSimAppShell(LinuxSimAppShellConfig config)
+    : config_(config)
+{
+}
+
 const LinuxSimAppShellConfig& LinuxSimAppShell::config() const
 {
     return config_;

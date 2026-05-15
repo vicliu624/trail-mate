@@ -1,57 +1,17 @@
 #pragma once
 
-#include "ui_map_runtime/map_overlay/map_overlay_projector.h"
-#include "ui_presentation/map/map_overlay_source.h"
-
-#include <cstddef>
-#include <cstdint>
+#include "ui_map_runtime/map_overlay_snapshot_source.h"
 
 namespace ui
 {
 namespace presentation_sources
 {
 
-class IMapOverlayGpsSource
-{
-  public:
-    virtual ~IMapOverlayGpsSource() = default;
-
-    virtual bool currentFix(double& lat,
-                            double& lon,
-                            bool& valid) const = 0;
-};
-
-class IMapOverlayTeamSource
-{
-  public:
-    struct TeamPoint
-    {
-        uint32_t node_id = 0;
-        const char* label = nullptr;
-        double lat = 0.0;
-        double lon = 0.0;
-        bool valid = false;
-    };
-
-    virtual ~IMapOverlayTeamSource() = default;
-
-    virtual std::size_t latestTeamPoints(TeamPoint* out,
-                                         std::size_t capacity) const = 0;
-};
-
-class LegacyMapOverlaySource final : public ::ui::map::IMapOverlayPresentationSource
-{
-  public:
-    LegacyMapOverlaySource(IMapOverlayGpsSource* gps,
-                           IMapOverlayTeamSource* team);
-
-    bool buildMapOverlaySnapshot(::ui::map::MapOverlaySnapshot& out) const override;
-
-  private:
-    IMapOverlayGpsSource* gps_ = nullptr;
-    IMapOverlayTeamSource* team_ = nullptr;
-    ::ui::map_overlay::MapOverlayProjector projector_;
-};
+using IMapOverlayGpsSource = ::ui::map_overlay::IMapOverlayGpsSource;
+using IMapOverlayTeamSource = ::ui::map_overlay::IMapOverlayTeamSource;
+using LegacyMapOverlaySource
+    [[deprecated("Use ui::map_overlay::MapOverlaySnapshotSource")]] =
+        ::ui::map_overlay::MapOverlaySnapshotSource;
 
 } // namespace presentation_sources
 } // namespace ui

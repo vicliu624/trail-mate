@@ -1,46 +1,41 @@
-#include "ui_legacy_adapters/legacy_map_overlay_source.h"
+#include "ui_map_runtime/map_overlay_projection_adapter.h"
 
 namespace ui
 {
-namespace presentation_sources
+namespace map_overlay
 {
 namespace
 {
 
-constexpr std::size_t kMaxLegacyTeamPoints = 16;
+constexpr std::size_t kMaxTeamPoints = 16;
 
 } // namespace
 
-LegacyMapOverlaySource::LegacyMapOverlaySource(IMapOverlayGpsSource* gps,
-                                               IMapOverlayTeamSource* team)
-    : gps_(gps),
-      team_(team)
-{
-}
-
-bool LegacyMapOverlaySource::buildMapOverlaySnapshot(
+bool MapOverlayProjectionAdapter::project(
+    const IMapOverlayGpsSource* gps,
+    const IMapOverlayTeamSource* team,
     ::ui::map::MapOverlaySnapshot& out) const
 {
     out = ::ui::map::MapOverlaySnapshot{};
     out.header.valid = true;
     out.header.version = 1;
 
-    if (gps_ != nullptr)
+    if (gps != nullptr)
     {
         double lat = 0.0;
         double lon = 0.0;
         bool valid = false;
-        if (gps_->currentFix(lat, lon, valid))
+        if (gps->currentFix(lat, lon, valid))
         {
             (void)projector_.projectCurrentPosition(lat, lon, valid, out);
         }
     }
 
-    if (team_ != nullptr)
+    if (team != nullptr)
     {
-        IMapOverlayTeamSource::TeamPoint points[kMaxLegacyTeamPoints]{};
-        const std::size_t count = team_->latestTeamPoints(points, kMaxLegacyTeamPoints);
-        for (std::size_t i = 0; i < count && i < kMaxLegacyTeamPoints; ++i)
+        IMapOverlayTeamSource::TeamPoint points[kMaxTeamPoints]{};
+        const std::size_t count = team->latestTeamPoints(points, kMaxTeamPoints);
+        for (std::size_t i = 0; i < count && i < kMaxTeamPoints; ++i)
         {
             (void)projector_.projectTeamMember(points[i].node_id,
                                                points[i].label,
@@ -49,7 +44,7 @@ bool LegacyMapOverlaySource::buildMapOverlaySnapshot(
                                                points[i].valid,
                                                out);
         }
-        if (count > kMaxLegacyTeamPoints)
+        if (count > kMaxTeamPoints)
         {
             out.truncated = true;
         }
@@ -58,5 +53,5 @@ bool LegacyMapOverlaySource::buildMapOverlaySnapshot(
     return true;
 }
 
-} // namespace presentation_sources
+} // namespace map_overlay
 } // namespace ui

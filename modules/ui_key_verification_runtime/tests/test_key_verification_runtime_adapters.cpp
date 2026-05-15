@@ -2,8 +2,8 @@
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/contact_service.h"
-#include "ui_legacy_adapters/legacy_key_verification_action_sink.h"
-#include "ui_legacy_adapters/legacy_key_verification_source.h"
+#include "ui_key_verification_runtime/key_verification_action_sink.h"
+#include "ui_key_verification_runtime/key_verification_presentation_source.h"
 
 #include <cassert>
 #include <cstring>
@@ -184,7 +184,6 @@ class FakeContactStore final : public ::chat::contacts::IContactStore
 int main()
 {
     using namespace ui::key_verification;
-    using namespace ui::presentation_sources;
 
     FakeNodeStore node_store;
     node_store.upsert(0x1234, "ADA", "Ada Lovelace", 1);
@@ -193,9 +192,14 @@ int main()
     ::chat::contacts::ContactService contacts(node_store, contact_store);
 
     FakeMeshAdapter mesh;
-    LegacyKeyVerificationSession session{};
-    LegacyKeyVerificationSource source(session, &contacts, &mesh);
-    LegacyKeyVerificationActionSink sink(session, &mesh, &contacts);
+    ui_key_verification_runtime::KeyVerificationSessionAdapter session{};
+    ui_key_verification_runtime::KeyVerificationPresentationSource source(
+        session,
+        &contacts,
+        &mesh);
+    ui_key_verification_runtime::KeyVerificationActionSink sink(session,
+                                                                &mesh,
+                                                                &contacts);
 
     source.onNumberRequest(0x1234, 99);
     KeyVerificationSnapshot snapshot{};
@@ -266,7 +270,10 @@ int main()
     assert(snapshot.failure == VerificationFailureKind::MissingPeerKey);
     assert(snapshot.can_refresh);
 
-    LegacyKeyVerificationActionSink no_runtime_sink(session, nullptr, nullptr);
+    ui_key_verification_runtime::KeyVerificationActionSink no_runtime_sink(
+        session,
+        nullptr,
+        nullptr);
     result = no_runtime_sink.refresh(0xBEEF);
     assert(!result.ok);
     assert(result.failure == ui::UiActionFailure::NotReady);

@@ -7,6 +7,7 @@
     "flags": [
       "-I../../modules/ui_legacy_adapters/include",
       "-I../../modules/ui_chat_runtime/include",
+      "-I../../modules/ui_key_verification_runtime/include",
       "-I../../modules/ui_map_runtime/include",
       "-I../../modules/ui_presentation/include",
       "-I../../modules/core_chat/include",
@@ -26,6 +27,9 @@
     },
     {
       "name": "ui_map_runtime"
+    },
+    {
+      "name": "ui_key_verification_runtime"
     }
   ]
 }

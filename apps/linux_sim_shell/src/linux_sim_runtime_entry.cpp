@@ -6,10 +6,23 @@ namespace trailmate::apps::linux_sim_shell
 bool LinuxSimRuntimeEntry::start(const LinuxSimAppShell& shell)
 {
     ready_ = adoption_probe_.load(shell);
-    // Phase 9 fallback: hardcoded simulator routing remains until this runtime
-    // entry is the only simulator route source.
-    fallback_ = !ready_;
-    return ready_;
+    if (ready_)
+    {
+        runtime_source_ = LinuxSimRuntimeSource::ScreenGraphAdoption;
+        fallback_ = false;
+        return true;
+    }
+
+    runtime_source_ = LinuxSimRuntimeSource::HardcodedFallback;
+    fallback_ = true;
+    return startFallback(shell);
+}
+
+bool LinuxSimRuntimeEntry::startFallback(const LinuxSimAppShell&)
+{
+    // Phase 10 fallback containment: old simulator routing remains available
+    // until the renderer fully consumes AsciiRuntimeEntryAdoption descriptors.
+    return false;
 }
 
 bool LinuxSimRuntimeEntry::ready() const
@@ -17,9 +30,20 @@ bool LinuxSimRuntimeEntry::ready() const
     return ready_;
 }
 
+bool LinuxSimRuntimeEntry::usingPrimaryScreenGraph() const noexcept
+{
+    return runtime_source_ == LinuxSimRuntimeSource::ScreenGraphAdoption &&
+           ready_ && !fallback_;
+}
+
 bool LinuxSimRuntimeEntry::fallbackUsed() const
 {
     return fallback_;
+}
+
+LinuxSimRuntimeSource LinuxSimRuntimeEntry::runtimeSource() const noexcept
+{
+    return runtime_source_;
 }
 
 std::size_t LinuxSimRuntimeEntry::menuCount() const

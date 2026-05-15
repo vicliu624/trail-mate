@@ -18,6 +18,9 @@ struct LinuxUConsoleGtkAppShellConfig
 class LinuxUConsoleGtkAppShell
 {
   public:
+    LinuxUConsoleGtkAppShell() = default;
+    explicit LinuxUConsoleGtkAppShell(LinuxUConsoleGtkAppShellConfig config);
+
     const LinuxUConsoleGtkAppShellConfig& config() const;
     const char* activeUxPackId() const;
     bool validate() const;

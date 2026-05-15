@@ -1,28 +1,12 @@
 #pragma once
 
-#include "ui_presentation/key_verification/key_verification_snapshot.h"
-
-#include <stdint.h>
+#include "ui_key_verification_runtime/key_verification_session_adapter.h"
 
 namespace ui::presentation_sources
 {
 
-struct LegacyKeyVerificationSession
-{
-    ::ui::key_verification::VerificationProtocol protocol =
-        ::ui::key_verification::VerificationProtocol::Unknown;
-    ::ui::key_verification::VerificationState state =
-        ::ui::key_verification::VerificationState::Idle;
-    ::ui::key_verification::VerificationFailureKind failure =
-        ::ui::key_verification::VerificationFailureKind::None;
-    ::ui::key_verification::VerificationPromptKind prompt =
-        ::ui::key_verification::VerificationPromptKind::None;
-
-    uint32_t peer_id = 0;
-    uint64_t nonce = 0;
-    uint32_t security_number = 0;
-    bool is_sender = false;
-    char verification_code[32]{};
-};
+using LegacyKeyVerificationSession
+    [[deprecated("Use ui_key_verification_runtime::KeyVerificationSessionAdapter")]] =
+        ::ui_key_verification_runtime::KeyVerificationSessionAdapter;
 
 } // namespace ui::presentation_sources

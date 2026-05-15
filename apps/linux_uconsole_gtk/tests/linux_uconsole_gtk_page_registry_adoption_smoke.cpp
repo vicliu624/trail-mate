@@ -11,6 +11,10 @@ int main()
 
     assert(page_registry.load(shell));
     assert(page_registry.ready());
+    assert(page_registry.usingPrimaryScreenGraph());
+    assert(page_registry.registrySource() ==
+           trailmate::apps::linux_uconsole_gtk::
+               LinuxUConsoleGtkPageRegistrySource::ScreenGraphAdoption);
     assert(!page_registry.fallbackUsed());
     assert(page_registry.menuCount() > 0);
     assert(page_registry.screenCount() > 0);

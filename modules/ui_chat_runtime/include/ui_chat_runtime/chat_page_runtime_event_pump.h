@@ -7,14 +7,14 @@
 #include "ui_chat_runtime/chat_ui_refresh_sink.h"
 #include "ui_presentation/key_verification/key_verification_model.h"
 
-namespace ui::presentation_sources
-{
-class LegacyKeyVerificationSource;
-}
-
 namespace ui_chat_runtime
 {
 class ChatDeliveryEventProjectionAdapter;
+}
+
+namespace ui_key_verification_runtime
+{
+class KeyVerificationPresentationSource;
 }
 
 namespace chat::ui
@@ -27,7 +27,7 @@ class ChatPageRuntimeEventPump
         chat::ChatService& service,
         ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter*
             delivery_adapter,
-        ::ui::presentation_sources::LegacyKeyVerificationSource*
+        ::ui_key_verification_runtime::KeyVerificationPresentationSource*
             key_verification_source,
         ::ui::key_verification::KeyVerificationModel* key_verification_model,
         IChatUiRefreshSink* ui);
@@ -51,7 +51,7 @@ class ChatPageRuntimeEventPump
     chat::ChatService& service_;
     ::ui_chat_runtime::ChatDeliveryEventProjectionAdapter*
         delivery_adapter_ = nullptr;
-    ::ui::presentation_sources::LegacyKeyVerificationSource*
+    ::ui_key_verification_runtime::KeyVerificationPresentationSource*
         key_verification_source_ = nullptr;
     ::ui::key_verification::KeyVerificationModel* key_verification_model_ =
         nullptr;

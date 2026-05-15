@@ -9,13 +9,14 @@
 #include "ui/app_runtime.h"
 #include "ui/presentation_sources/chat_presentation_source.h"
 #include "ui/presentation_sources/legacy_chat_action_sink.h"
-#include "ui_legacy_adapters/legacy_key_verification_action_sink.h"
-#include "ui_legacy_adapters/legacy_key_verification_source.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
 #include "ui/presentation_sources/team_chat_presentation_source.h"
 #include "ui_chat_runtime/chat_delivery_action_port_adapter.h"
 #include "ui_chat_runtime/chat_delivery_event_projection_adapter.h"
 #include "ui_chat_runtime/chat_page_runtime_event_pump.h"
+#include "ui_key_verification_runtime/key_verification_action_sink.h"
+#include "ui_key_verification_runtime/key_verification_presentation_source.h"
+#include "ui_key_verification_runtime/key_verification_session_adapter.h"
 #include "ui/screens/chat/chat_ui_controller.h"
 #include "ui/team_actions/legacy_team_action_bridge.h"
 #include "ui/ui_common.h"
@@ -39,9 +40,9 @@ std::unique_ptr<::chat::delivery::ProjectingChatDeliveryEventPort> s_delivery_ev
 std::unique_ptr<::ui_chat_runtime::ChatDeliveryEventProjectionAdapter> s_delivery_event_adapter = nullptr;
 std::unique_ptr<::chat::delivery::ChatDeliveryActionService> s_delivery_action_service = nullptr;
 std::unique_ptr<::ui_chat_runtime::ChatDeliveryActionPortAdapter> s_delivery_action_adapter = nullptr;
-std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSession> s_key_verification_session = nullptr;
-std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSource> s_key_verification_source = nullptr;
-std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationActionSink> s_key_verification_sink = nullptr;
+std::unique_ptr<::ui_key_verification_runtime::KeyVerificationSessionAdapter> s_key_verification_session = nullptr;
+std::unique_ptr<::ui_key_verification_runtime::KeyVerificationPresentationSource> s_key_verification_source = nullptr;
+std::unique_ptr<::ui_key_verification_runtime::KeyVerificationActionSink> s_key_verification_sink = nullptr;
 std::unique_ptr<::ui::key_verification::KeyVerificationModel> s_key_verification_model = nullptr;
 std::unique_ptr<::ui::presentation_sources::TeamChatPresentationSource> s_team_chat_source = nullptr;
 std::unique_ptr<::ui::presentation_sources::ITeamChatCommandPort> s_team_chat_command_port = nullptr;
@@ -261,17 +262,17 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_chat_model = std::unique_ptr<::ui::chat::ChatWorkspaceModel>(
         new ::ui::chat::ChatWorkspaceModel(*s_chat_source, *s_chat_sink));
     s_key_verification_session =
-        std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSession>(
-            new ::ui::presentation_sources::LegacyKeyVerificationSession());
+        std::unique_ptr<::ui_key_verification_runtime::KeyVerificationSessionAdapter>(
+            new ::ui_key_verification_runtime::KeyVerificationSessionAdapter());
     s_key_verification_source =
-        std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationSource>(
-            new ::ui::presentation_sources::LegacyKeyVerificationSource(
+        std::unique_ptr<::ui_key_verification_runtime::KeyVerificationPresentationSource>(
+            new ::ui_key_verification_runtime::KeyVerificationPresentationSource(
                 *s_key_verification_session,
                 &app::messagingFacade().getContactService(),
                 app::messagingFacade().getMeshAdapter()));
     s_key_verification_sink =
-        std::unique_ptr<::ui::presentation_sources::LegacyKeyVerificationActionSink>(
-            new ::ui::presentation_sources::LegacyKeyVerificationActionSink(
+        std::unique_ptr<::ui_key_verification_runtime::KeyVerificationActionSink>(
+            new ::ui_key_verification_runtime::KeyVerificationActionSink(
                 *s_key_verification_session,
                 app::messagingFacade().getMeshAdapter(),
                 &app::messagingFacade().getContactService()));

@@ -25,17 +25,17 @@ PATH_ALIASES = {
     "modules/ui_shared/include/ui/presentation_sources/legacy_key_verification_action_sink.h":
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_key_verification_action_sink.h",
     "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_source.cpp":
-        "modules/ui_legacy_adapters/src/legacy_key_verification_source.cpp",
+        "modules/ui_key_verification_runtime/src/key_verification_presentation_source.cpp",
     "modules/ui_shared/src/ui/presentation_sources/legacy_key_verification_action_sink.cpp":
-        "modules/ui_legacy_adapters/src/legacy_key_verification_action_sink.cpp",
+        "modules/ui_key_verification_runtime/src/key_verification_action_sink.cpp",
     "modules/ui_shared/tests/test_legacy_key_verification_adapters.cpp":
-        "modules/ui_legacy_adapters/tests/test_legacy_key_verification_adapters.cpp",
+        "modules/ui_key_verification_runtime/tests/test_key_verification_runtime_adapters.cpp",
     "modules/ui_shared/include/ui/presentation_sources/legacy_map_overlay_source.h":
         "modules/ui_legacy_adapters/include/ui_legacy_adapters/legacy_map_overlay_source.h",
     "modules/ui_shared/src/ui/presentation_sources/legacy_map_overlay_source.cpp":
-        "modules/ui_legacy_adapters/src/legacy_map_overlay_source.cpp",
+        "modules/ui_map_runtime/src/map_overlay_snapshot_source.cpp",
     "modules/ui_shared/tests/test_legacy_map_overlay_source.cpp":
-        "modules/ui_legacy_adapters/tests/test_legacy_map_overlay_source.cpp",
+        "modules/ui_map_runtime/tests/test_map_overlay_snapshot_source.cpp",
     "modules/ui_shared/include/ui/screens/chat/key_verification_modal_renderer.h":
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/key_verification_modal_renderer.h",
     "modules/ui_shared/src/ui/screens/chat/key_verification_modal_renderer.cpp":
@@ -2154,12 +2154,10 @@ def check_map_overlay_route_tracker_boundary() -> int:
         text = strip_cpp_comments(read_text(legacy_header))
         for token in [
             "IMapOverlayGpsSource",
-            "currentFix",
             "IMapOverlayTeamSource",
-            "TeamPoint",
-            "latestTeamPoints",
             "LegacyMapOverlaySource",
-            "IMapOverlayPresentationSource",
+            "MapOverlaySnapshotSource",
+            "[[deprecated",
         ]:
             if token not in text:
                 failures += fail(f"LegacyMapOverlaySource header missing token: {token}")
@@ -2170,16 +2168,14 @@ def check_map_overlay_route_tracker_boundary() -> int:
     if exists(legacy_source):
         text = strip_cpp_comments(read_text(legacy_source))
         for token in [
-            "LegacyMapOverlaySource::buildMapOverlaySnapshot",
-            "projector_.projectCurrentPosition",
-            "projector_.projectTeamMember",
-            "kMaxLegacyTeamPoints",
+            "MapOverlaySnapshotSource::buildMapOverlaySnapshot",
+            "adapter_.project",
         ]:
             if token not in text:
-                failures += fail(f"LegacyMapOverlaySource source missing token: {token}")
+                failures += fail(f"MapOverlaySnapshotSource source missing token: {token}")
         for token in ["lvgl.h", "lv_obj_t", "platform::ui::gps::get_data", "team_ui_chatlog_load_recent", "decodeTeamChatLocation", "IMapTileSource"]:
             if token in text:
-                failures += fail(f"LegacyMapOverlaySource source owns forbidden render/source token: {token}")
+                failures += fail(f"MapOverlaySnapshotSource source owns forbidden render/source token: {token}")
 
     for path in [projector_test, legacy_test]:
         if exists(path):
@@ -2203,7 +2199,7 @@ def check_map_overlay_route_tracker_boundary() -> int:
     if exists(runtime_source):
         text = read_text(runtime_source)
         for token in [
-            "LegacyMapOverlaySource",
+            "MapOverlaySnapshotSource",
             "IMapOverlayGpsSource",
             "IMapOverlayTeamSource",
             "buildMapOverlaySnapshot",
@@ -2229,7 +2225,7 @@ def check_map_overlay_route_tracker_boundary() -> int:
             "Map overlay current/team marker projection",
             "Map route/tracker overlay projection",
             "MapOverlayProjector",
-            "Dedicated map overlay renderer consumes `MapOverlaySnapshot`",
+            "map renderers consume `MapOverlaySnapshotSource` only",
         ]:
             if token not in text:
                 failures += fail(f"LEGACY_BURNDOWN_REGISTER missing map overlay token: {token}")
@@ -2722,11 +2718,8 @@ def check_key_verification_bridge_boundary() -> int:
         text = read_text(source_header)
         for token in [
             "LegacyKeyVerificationSource",
-            "IKeyVerificationPresentationSource",
-            "onNumberRequest",
-            "onNumberInform",
-            "onFinal",
-            "onPeerKeyMissing",
+            "KeyVerificationPresentationSource",
+            "[[deprecated",
         ]:
             if token not in text:
                 failures += fail(f"LegacyKeyVerificationSource header missing token: {token}")
@@ -2752,12 +2745,8 @@ def check_key_verification_bridge_boundary() -> int:
         text = read_text(sink_header)
         for token in [
             "LegacyKeyVerificationActionSink",
-            "IKeyVerificationActionSink",
-            "accept",
-            "reject",
-            "refresh",
-            "copyCode",
-            "submitNumber",
+            "KeyVerificationActionSink",
+            "[[deprecated",
         ]:
             if token not in text:
                 failures += fail(f"LegacyKeyVerificationActionSink header missing token: {token}")
@@ -2842,9 +2831,9 @@ def check_chat_ui_key_verification_migration() -> int:
     if exists(runtime):
         text = read_text(runtime)
         for token in [
-            "LegacyKeyVerificationSession",
-            "LegacyKeyVerificationSource",
-            "LegacyKeyVerificationActionSink",
+            "KeyVerificationSessionAdapter",
+            "KeyVerificationPresentationSource",
+            "KeyVerificationActionSink",
             "KeyVerificationModel",
             "s_key_verification_session",
             "s_key_verification_source",

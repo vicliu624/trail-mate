@@ -7,7 +7,7 @@
     "flags": [
       "-I../../modules/ui_chat_runtime/include",
       "-I../../modules/ui_shared/include",
-      "-I../../modules/ui_legacy_adapters/include",
+      "-I../../modules/ui_key_verification_runtime/include",
       "-I../../modules/ui_presentation/include",
       "-I../../modules/core_chat/include",
       "-I../../modules/core_sys/include",
@@ -25,9 +25,6 @@
     },
     {
       "name": "core_team"
-    },
-    {
-      "name": "ui_legacy_adapters"
     }
   ]
 }

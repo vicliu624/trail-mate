@@ -1,10 +1,10 @@
-#include "ui_legacy_adapters/legacy_key_verification_action_sink.h"
+#include "ui_key_verification_runtime/key_verification_action_sink.h"
 
 #include "chat/domain/chat_types.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/contact_service.h"
 
-namespace ui::presentation_sources
+namespace ui_key_verification_runtime
 {
 
 namespace
@@ -28,8 +28,8 @@ namespace
 
 } // namespace
 
-LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
-    LegacyKeyVerificationSession& session,
+KeyVerificationActionSink::KeyVerificationActionSink(
+    KeyVerificationSessionAdapter& session,
     ::chat::IMeshAdapter* mesh,
     ::chat::contacts::ContactService* contacts)
     : session_(session),
@@ -38,7 +38,7 @@ LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
 {
 }
 
-::ui::UiActionResult LegacyKeyVerificationActionSink::accept(uint32_t peer_id)
+::ui::UiActionResult KeyVerificationActionSink::accept(uint32_t peer_id)
 {
     if (peer_id == 0 || !sessionMatches(peer_id))
     {
@@ -68,7 +68,7 @@ LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
     return ::ui::UiActionResult::success();
 }
 
-::ui::UiActionResult LegacyKeyVerificationActionSink::reject(uint32_t peer_id)
+::ui::UiActionResult KeyVerificationActionSink::reject(uint32_t peer_id)
 {
     if (peer_id == 0)
     {
@@ -87,7 +87,7 @@ LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
     return ::ui::UiActionResult::fail(::ui::UiActionFailure::InvalidInput);
 }
 
-::ui::UiActionResult LegacyKeyVerificationActionSink::refresh(uint32_t peer_id)
+::ui::UiActionResult KeyVerificationActionSink::refresh(uint32_t peer_id)
 {
     if (peer_id == 0)
     {
@@ -116,7 +116,7 @@ LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
     return ::ui::UiActionResult::success();
 }
 
-::ui::UiActionResult LegacyKeyVerificationActionSink::copyCode(uint32_t peer_id)
+::ui::UiActionResult KeyVerificationActionSink::copyCode(uint32_t peer_id)
 {
     if (peer_id == 0 || !sessionMatches(peer_id))
     {
@@ -125,7 +125,7 @@ LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
     return ::ui::UiActionResult::fail(::ui::UiActionFailure::Unsupported);
 }
 
-::ui::UiActionResult LegacyKeyVerificationActionSink::submitNumber(
+::ui::UiActionResult KeyVerificationActionSink::submitNumber(
     uint32_t peer_id,
     uint32_t number)
 {
@@ -154,9 +154,9 @@ LegacyKeyVerificationActionSink::LegacyKeyVerificationActionSink(
     return ::ui::UiActionResult::success();
 }
 
-bool LegacyKeyVerificationActionSink::sessionMatches(uint32_t peer_id) const
+bool KeyVerificationActionSink::sessionMatches(uint32_t peer_id) const
 {
     return session_.peer_id == peer_id && peer_id != 0;
 }
 
-} // namespace ui::presentation_sources
+} // namespace ui_key_verification_runtime

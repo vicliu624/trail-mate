@@ -9,6 +9,12 @@ namespace apps
 namespace linux_uconsole_gtk
 {
 
+LinuxUConsoleGtkAppShell::LinuxUConsoleGtkAppShell(
+    LinuxUConsoleGtkAppShellConfig config)
+    : config_(config)
+{
+}
+
 const LinuxUConsoleGtkAppShellConfig& LinuxUConsoleGtkAppShell::config() const
 {
     return config_;
