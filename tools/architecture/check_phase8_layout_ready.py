@@ -36,8 +36,11 @@ def check_required_files() -> int:
         "docs/decisions/ADR_BUILD_ENTRYPOINTS.md",
         "docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md",
         "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md",
+        "docs/audits/PHASE8_RUNTIME_UI_ADOPTION_REPORT.md",
         "docs/specification/APP_SHELL_ARCHITECTURE_SPEC.md",
         "docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md",
+        "legacy/LEGACY_GOVERNANCE.md",
+        "legacy/app_implementations/LEGACY_IMPLEMENTATION_INDEX.md",
         "cmake/TrailMateUxPacks.cmake",
         "builds/README.md",
         "builds/esp_idf/README.md",
@@ -185,6 +188,8 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_host_adapter.h",
         "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_graph_bridge.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack_registry.h",
         "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
@@ -203,6 +208,7 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/tests/test_lvgl_menu_runtime_adapter.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_screen_factory.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_lvgl_screen_host_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_lvgl_screen_graph_bridge.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_menu_binding.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_uconsole_desktop_ux_pack.cpp",
@@ -215,12 +221,18 @@ def check_required_files() -> int:
         "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.h",
         "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.cpp",
         "legacy/app_implementations/linux_sim/tests/ascii_screen_host_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.h",
+        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.cpp",
+        "legacy/app_implementations/linux_sim/tests/ascii_screen_graph_bridge_smoke.cpp",
         "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.h",
         "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.cpp",
         "legacy/app_implementations/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp",
         "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.h",
         "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.cpp",
         "legacy/app_implementations/linux_uconsole/tests/gtk_screen_host_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.h",
+        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/gtk_uconsole_screen_graph_bridge_smoke.cpp",
         "tools/architecture/check_phase8_layout_ready.py",
     ]
 
@@ -1289,6 +1301,22 @@ def check_ux_pack_runtime_binding() -> int:
             "resolve",
             "binding_id",
         ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_graph_bridge.h": [
+            "LvglScreenGraphBridge",
+            "PresentationBundle",
+            "LvglMenuRuntimeAdapter",
+            "LvglScreenHostAdapter",
+            "menuCount",
+            "screenCount",
+        ],
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp": [
+            "LvglScreenGraphBridge",
+            "PresentationBundle",
+            "hasUxMenu",
+            "hasScreenBindings",
+            "LvglMenuRuntimeAdapter",
+            "LvglScreenHostAdapter",
+        ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h": [
             "IUxPack",
             "virtual const char* id() const = 0",
@@ -1358,6 +1386,7 @@ def check_ux_pack_runtime_binding() -> int:
             "compatibility_screen_factory.cpp",
             "lvgl_menu_runtime_adapter.cpp",
             "lvgl_screen_host_adapter.cpp",
+            "lvgl_screen_graph_bridge.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
             "tiny_node_status_ux_pack.cpp",
@@ -1588,6 +1617,46 @@ def check_ui_runtime_consumption_boundary() -> int:
     failures = 0
 
     failures += check_tokens(
+        "legacy/LEGACY_GOVERNANCE.md",
+        [
+            "not a feature area",
+            "historical implementation roots only",
+            "LEGACY_BURNDOWN_REGISTER",
+            "stable adapters must be renamed",
+            "compatibility containment",
+        ],
+        "legacy governance",
+    )
+
+    failures += check_tokens(
+        "legacy/app_implementations/LEGACY_IMPLEMENTATION_INDEX.md",
+        [
+            "Historical path",
+            "Current path",
+            "Final app shell",
+            "Authoritative build wrapper",
+            "Exit condition",
+            "legacy/app_implementations/gat562_mesh_evb_pro",
+        ],
+        "legacy implementation index",
+    )
+
+    failures += check_tokens(
+        "docs/audits/PHASE8_RUNTIME_UI_ADOPTION_REPORT.md",
+        [
+            "GTK descriptor bridge",
+            "ASCII descriptor bridge",
+            "LVGL descriptor bridge",
+            "real LVGL menu renderer",
+            "real GTK page switch logic",
+            "real simulator main UI selection",
+            "hardcoded screen creation",
+            "fallbacks remain compatibility fallbacks",
+        ],
+        "Phase 8 runtime UI adoption report",
+    )
+
+    failures += check_tokens(
         "modules/product_composition/include/product_composition/presentation_bundle.h",
         [
             "ui_presentation/menu/menu_model.h",
@@ -1667,6 +1736,8 @@ def check_ui_runtime_consumption_boundary() -> int:
     for path in [
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h",
         "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_graph_bridge.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp",
     ]:
         text = read_text(path)
         for token in [
@@ -1684,17 +1755,26 @@ def check_ui_runtime_consumption_boundary() -> int:
 
     failures += check_tokens(
         "legacy/app_implementations/linux_sim/CMakeLists.txt",
-        ["ascii_menu_runtime_adapter_smoke"],
+        [
+            "ascii_menu_runtime_adapter_smoke",
+            "ascii_screen_graph_bridge_smoke",
+        ],
         "ASCII menu runtime adapter test target",
     )
     failures += check_tokens(
         "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
-        ["gtk_menu_runtime_adapter_smoke"],
+        [
+            "gtk_menu_runtime_adapter_smoke",
+            "gtk_uconsole_screen_graph_bridge_smoke",
+        ],
         "GTK menu runtime adapter test target",
     )
     failures += check_tokens(
         "apps/linux_sim_shell/CMakeLists.txt",
-        ["lvgl_menu_runtime_adapter"],
+        [
+            "lvgl_menu_runtime_adapter",
+            "lvgl_screen_graph_bridge",
+        ],
         "LVGL menu runtime adapter test target",
     )
 
@@ -1747,6 +1827,17 @@ def check_screen_factory_host_binding() -> int:
             "resolve",
             "binding_id",
         ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_graph_bridge.h": [
+            "LvglScreenGraphBridge",
+            "PresentationBundle",
+            "screenCount",
+        ],
+        "modules/ui_lvgl_ux_packs/tests/test_lvgl_screen_graph_bridge.cpp": [
+            "LvglScreenGraphBridge",
+            "PresentationBundle",
+            "hasUxMenu",
+            "hasScreenBindings",
+        ],
         "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.h": [
             "AsciiScreenHostAdapter",
             "ScreenRoute",
@@ -1757,20 +1848,61 @@ def check_screen_factory_host_binding() -> int:
             "ScreenRoute",
             "resolve",
         ],
+        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.h": [
+            "AsciiScreenGraphBridge",
+            "PresentationBundle",
+            "AsciiMenuRuntimeAdapter",
+            "AsciiScreenHostAdapter",
+            "AsciiScreenGraph",
+        ],
+        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.h": [
+            "GtkUConsoleScreenGraphBridge",
+            "PresentationBundle",
+            "GtkMenuRuntimeAdapter",
+            "GtkScreenHostAdapter",
+            "screenBindingCount",
+        ],
     }
     for path, tokens in screen_runtime_contracts.items():
         failures += check_tokens(path, tokens, "screen factory host binding")
 
+    bridge_source_contracts = {
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp": [
+            "PresentationBundle",
+            "hasUxMenu",
+            "hasScreenBindings",
+            "LvglMenuRuntimeAdapter",
+            "LvglScreenHostAdapter",
+        ],
+        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.cpp": [
+            "PresentationBundle",
+            "hasUxMenu",
+            "hasScreenBindings",
+            "AsciiMenuRuntimeAdapter",
+            "AsciiScreenHostAdapter",
+        ],
+        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp": [
+            "PresentationBundle",
+            "hasUxMenu",
+            "hasScreenBindings",
+            "GtkMenuRuntimeAdapter",
+            "GtkScreenHostAdapter",
+        ],
+    }
+    for path, tokens in bridge_source_contracts.items():
+        failures += check_tokens(path, tokens, "screen graph bridge runtime adoption")
+
     for path in [
         "legacy/app_implementations/linux_sim/tests/ascii_screen_host_adapter_smoke.cpp",
         "legacy/app_implementations/linux_uconsole/tests/gtk_screen_host_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_sim/tests/ascii_screen_graph_bridge_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/gtk_uconsole_screen_graph_bridge_smoke.cpp",
     ]:
         failures += check_tokens(
             path,
             [
                 "presentation().ux_menu",
                 "route",
-                "resolve",
                 "ScreenRoute",
                 "hasScreenBindings",
             ],
@@ -1797,6 +1929,7 @@ def check_screen_factory_host_binding() -> int:
             [
                 "screen_host_adapter_smoke",
                 "screen_host_adapter.cpp",
+                "screen_graph_bridge_smoke",
             ],
             "screen host adapter smoke target",
         )
@@ -1835,6 +1968,8 @@ def check_screen_factory_host_binding() -> int:
         "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_host_adapter.h",
         "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_graph_bridge.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp",
     ]:
         text = read_text(path)
         for token in [
@@ -1849,9 +1984,32 @@ def check_screen_factory_host_binding() -> int:
             "ChatService",
             "MapRuntime",
             "GpsRuntime",
+            "lv_obj",
+            "GtkWidget",
         ]:
             if token in text:
                 failures += fail(f"{path} contains forbidden screen factory token {token}")
+
+    for path in [
+        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.h",
+        "legacy/app_implementations/linux_sim/src/ascii_screen_graph_bridge.cpp",
+        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.h",
+        "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp",
+    ]:
+        text = read_text(path)
+        for token in [
+            "lvgl.h",
+            "GtkWidget",
+            "gtk_widget",
+            "activeUxPackId",
+            "findUxPackById",
+            "buildMenuForUxPack",
+            "apps/",
+            "boards/",
+            "platformio",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden screen graph bridge token {token}")
 
     return failures
 
@@ -2078,6 +2236,7 @@ def check_build_manifest_authority() -> int:
             "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp",
             "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
             "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp",
+            "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp",
@@ -2112,6 +2271,7 @@ def check_build_manifest_authority() -> int:
             "compatibility_screen_factory.cpp",
             "lvgl_menu_runtime_adapter.cpp",
             "lvgl_screen_host_adapter.cpp",
+            "lvgl_screen_graph_bridge.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
             "tiny_node_status_ux_pack.cpp",

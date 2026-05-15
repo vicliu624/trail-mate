@@ -18,6 +18,7 @@
                                 "-I../../../modules/core_hostlink/include",
                                 "-I../../../modules/core_team/include",
                                 "-I../../../modules/ui_presentation/include",
+                                "-I../../../modules/product_composition/include",
                                 "-I../../../modules/chat_presentation_adapters/include",
                                 "-I../../../modules/ui_chat_runtime/include",
                                 "-I../../../modules/ui_map_runtime/include",

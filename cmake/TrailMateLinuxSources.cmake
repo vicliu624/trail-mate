@@ -376,6 +376,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/runtime/compatibility_screen_factory.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/runtime/lvgl_menu_runtime_adapter.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/runtime/lvgl_screen_host_adapter.cpp"
+    "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/runtime/lvgl_screen_graph_bridge.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/compatibility_ux_pack.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/uconsole_desktop_ux_pack.cpp"
     "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/tiny_node_status_ux_pack.cpp"
@@ -468,6 +469,7 @@ set(TRAIL_MATE_LINUX_COMMON_INCLUDES
     "${TRAIL_MATE_CORE_TEAM_INCLUDE_ROOT}"
     "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_PRESENTATION_INCLUDE_ROOT}"
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
     "${TRAIL_MATE_UI_SHARED_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_CHAT_RUNTIME_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_MAP_RUNTIME_INCLUDE_ROOT}"
@@ -496,6 +498,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_INCLUDES
     "${TRAIL_MATE_CORE_PHONE_INCLUDE_ROOT}"
     "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT}"
     "${TRAIL_MATE_UI_PRESENTATION_INCLUDE_ROOT}"
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
     "${TRAIL_MATE_PLATFORM_SHARED_INCLUDE_ROOT}"
 )
 

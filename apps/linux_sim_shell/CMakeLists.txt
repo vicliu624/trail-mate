@@ -63,6 +63,7 @@ if(BUILD_TESTING)
         lvgl_menu_runtime_adapter
         compatibility_screen_factory
         lvgl_screen_host_adapter
+        lvgl_screen_graph_bridge
         compatibility_menu_binding
         compatibility_ux_pack
         uconsole_desktop_ux_pack

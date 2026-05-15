@@ -177,6 +177,7 @@ set(trail_mate_idf_ui_shared_sources
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_graph_bridge.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp
     ${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp
@@ -282,6 +283,7 @@ set(trail_mate_idf_include_dirs
     "${CMAKE_SOURCE_DIR}/modules/ui_legacy_adapters/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_lvgl_core/include"
     "${CMAKE_SOURCE_DIR}/modules/ui_lvgl_ux_packs/include"
+    "${CMAKE_SOURCE_DIR}/modules/product_composition/include"
     "${CMAKE_SOURCE_DIR}/modules/core_device/include"
     "${CMAKE_SOURCE_DIR}/modules/core_mesh/include"
     "${CMAKE_SOURCE_DIR}/modules/core_phone/include"

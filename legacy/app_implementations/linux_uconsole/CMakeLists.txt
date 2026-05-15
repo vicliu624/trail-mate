@@ -106,6 +106,9 @@ endif()
 
 add_library(trailmate_uconsole_shell
     "src/uconsole_composition_root.cpp"
+    "src/gtk_menu_runtime_adapter.cpp"
+    "src/gtk_screen_host_adapter.cpp"
+    "src/platform/gtk/gtk_uconsole_screen_graph_bridge.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/screen/screen_binding_registry.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/chat_presentation_source.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/legacy_chat_action_sink.cpp"
@@ -216,7 +219,6 @@ if(BUILD_TESTING)
 
     add_executable(trailmate_gtk_menu_runtime_adapter_smoke
         tests/gtk_menu_runtime_adapter_smoke.cpp
-        src/gtk_menu_runtime_adapter.cpp
     )
     target_link_libraries(trailmate_gtk_menu_runtime_adapter_smoke
         PRIVATE trailmate_uconsole_shell
@@ -226,14 +228,21 @@ if(BUILD_TESTING)
 
     add_executable(trailmate_gtk_screen_host_adapter_smoke
         tests/gtk_screen_host_adapter_smoke.cpp
-        src/gtk_menu_runtime_adapter.cpp
-        src/gtk_screen_host_adapter.cpp
     )
     target_link_libraries(trailmate_gtk_screen_host_adapter_smoke
         PRIVATE trailmate_uconsole_shell
     )
     add_test(NAME trailmate_gtk_screen_host_adapter_smoke
              COMMAND trailmate_gtk_screen_host_adapter_smoke)
+
+    add_executable(trailmate_gtk_uconsole_screen_graph_bridge_smoke
+        tests/gtk_uconsole_screen_graph_bridge_smoke.cpp
+    )
+    target_link_libraries(trailmate_gtk_uconsole_screen_graph_bridge_smoke
+        PRIVATE trailmate_uconsole_shell
+    )
+    add_test(NAME trailmate_gtk_uconsole_screen_graph_bridge_smoke
+             COMMAND trailmate_gtk_uconsole_screen_graph_bridge_smoke)
 
     add_executable(trailmate_uconsole_meshtastic_node_payload_smoke
         tests/uconsole_meshtastic_node_payload_smoke.cpp

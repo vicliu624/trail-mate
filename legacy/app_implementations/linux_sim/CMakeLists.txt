@@ -8,6 +8,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(CTest)
 find_package(Threads REQUIRED)
+option(TRAIL_MATE_LINUX_SIM_ENABLE_FULL_APP
+       "Build the simulator executable and Linux common runtime layer." ON)
 
 # ---------------------------------------------------------------------------
 # Shared Linux sources, paths, and helper functions
@@ -17,14 +19,13 @@ include("${PROJECT_SOURCE_DIR}/../../../cmake/TrailMateLinuxSources.cmake")
 include("${PROJECT_SOURCE_DIR}/../../../cmake/TrailMateUxPacks.cmake")
 
 # ---------------------------------------------------------------------------
-# Common library
-# ---------------------------------------------------------------------------
-
-trailmate_add_linux_common(trailmate_cardputer_zero_linux_common)
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
 add_library(trailmate_linux_sim_composition_root
     src/linux_sim_composition_root.cpp
+    src/ascii_menu_runtime_adapter.cpp
+    src/ascii_screen_host_adapter.cpp
+    src/ascii_screen_graph_bridge.cpp
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/device/device_status_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/gps/gps_status_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/mesh/mesh_status_model.cpp"
@@ -49,70 +50,80 @@ target_link_libraries(trailmate_linux_sim_composition_root
 target_compile_features(trailmate_linux_sim_composition_root PUBLIC cxx_std_20)
 
 # ---------------------------------------------------------------------------
-# SDL3 – simulator-only dependency
-# ---------------------------------------------------------------------------
+if(TRAIL_MATE_LINUX_SIM_ENABLE_FULL_APP)
+    # -----------------------------------------------------------------------
+    # Common library
+    # -----------------------------------------------------------------------
 
-include(FetchContent)
+    trailmate_add_linux_common(trailmate_cardputer_zero_linux_common)
 
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
-set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
-set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+    # -----------------------------------------------------------------------
+    # SDL3 – simulator-only dependency
+    # -----------------------------------------------------------------------
 
-FetchContent_Declare(
-    SDL3
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG release-3.4.4
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(SDL3)
+    include(FetchContent)
 
-add_executable(trailmate_cardputer_zero_simulator
-    src/platform/simulator/sdl_simulator.cpp
-    src/targets/simulator_main.cpp
-)
-target_include_directories(trailmate_cardputer_zero_simulator PRIVATE "${PROJECT_SOURCE_DIR}/src")
-target_link_libraries(trailmate_cardputer_zero_simulator
-    PRIVATE trailmate_cardputer_zero_linux_common SDL3::SDL3
-)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
 
-# ---------------------------------------------------------------------------
-# LVGL and UI shell
-# ---------------------------------------------------------------------------
+    FetchContent_Declare(
+        SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-3.4.4
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(SDL3)
 
-set(LV_BUILD_CONF_PATH
-    "${PROJECT_SOURCE_DIR}/../../../platform/linux/common/include/lv_conf.h"
-    CACHE PATH "" FORCE)
-set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
-set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    add_executable(trailmate_cardputer_zero_simulator
+        src/platform/simulator/sdl_simulator.cpp
+        src/targets/simulator_main.cpp
+    )
+    target_include_directories(trailmate_cardputer_zero_simulator PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(trailmate_cardputer_zero_simulator
+        PRIVATE trailmate_cardputer_zero_linux_common SDL3::SDL3
+    )
 
-FetchContent_Declare(
-    lvgl
-    GIT_REPOSITORY https://github.com/lvgl/lvgl.git
-    GIT_TAG v9.4.0
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(lvgl)
+    # -----------------------------------------------------------------------
+    # LVGL and UI shell
+    # -----------------------------------------------------------------------
 
-trailmate_add_linux_ui_shell(
-    trailmate_cardputer_zero_ui_shell
-    trailmate_cardputer_zero_linux_common
-)
-# Simulator-specific include path for shell_ui_runner internals
-target_include_directories(trailmate_cardputer_zero_ui_shell
-    PRIVATE "${PROJECT_SOURCE_DIR}/src"
-)
+    set(LV_BUILD_CONF_PATH
+        "${PROJECT_SOURCE_DIR}/../../../platform/linux/common/include/lv_conf.h"
+        CACHE PATH "" FORCE)
+    set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+    set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-target_link_libraries(trailmate_cardputer_zero_simulator
-    PRIVATE trailmate_cardputer_zero_ui_shell
-)
+    FetchContent_Declare(
+        lvgl
+        GIT_REPOSITORY https://github.com/lvgl/lvgl.git
+        GIT_TAG v9.4.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(lvgl)
+
+    trailmate_add_linux_ui_shell(
+        trailmate_cardputer_zero_ui_shell
+        trailmate_cardputer_zero_linux_common
+    )
+    # Simulator-specific include path for shell_ui_runner internals
+    target_include_directories(trailmate_cardputer_zero_ui_shell
+        PRIVATE "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(trailmate_cardputer_zero_simulator
+        PRIVATE trailmate_cardputer_zero_ui_shell
+    )
+endif()
 
 # ---------------------------------------------------------------------------
 # Smoke tests (simulator-only)
 # ---------------------------------------------------------------------------
 
 if(BUILD_TESTING)
+    if(TRAIL_MATE_LINUX_SIM_ENABLE_FULL_APP)
     add_executable(trailmate_cardputer_zero_smoke tests/demo_app_smoke.cpp)
     target_link_libraries(trailmate_cardputer_zero_smoke
         PRIVATE trailmate_cardputer_zero_linux_common)
@@ -309,33 +320,6 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests")
     add_test(NAME trailmate_product_composition_bundle_smoke
              COMMAND trailmate_product_composition_bundle_smoke)
-
-    add_executable(trailmate_linux_sim_composition_root_smoke
-        tests/linux_sim_composition_root_smoke.cpp
-    )
-    target_link_libraries(trailmate_linux_sim_composition_root_smoke
-        PRIVATE trailmate_linux_sim_composition_root)
-    add_test(NAME trailmate_linux_sim_composition_root_smoke
-             COMMAND trailmate_linux_sim_composition_root_smoke)
-
-    add_executable(trailmate_ascii_menu_runtime_adapter_smoke
-        tests/ascii_menu_runtime_adapter_smoke.cpp
-        src/ascii_menu_runtime_adapter.cpp
-    )
-    target_link_libraries(trailmate_ascii_menu_runtime_adapter_smoke
-        PRIVATE trailmate_linux_sim_composition_root)
-    add_test(NAME trailmate_ascii_menu_runtime_adapter_smoke
-             COMMAND trailmate_ascii_menu_runtime_adapter_smoke)
-
-    add_executable(trailmate_ascii_screen_host_adapter_smoke
-        tests/ascii_screen_host_adapter_smoke.cpp
-        src/ascii_menu_runtime_adapter.cpp
-        src/ascii_screen_host_adapter.cpp
-    )
-    target_link_libraries(trailmate_ascii_screen_host_adapter_smoke
-        PRIVATE trailmate_linux_sim_composition_root)
-    add_test(NAME trailmate_ascii_screen_host_adapter_smoke
-             COMMAND trailmate_ascii_screen_host_adapter_smoke)
 
     add_executable(trailmate_chat_presentation_mapper_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/tests/test_chat_conversation_mapper.cpp"
@@ -783,4 +767,37 @@ if(BUILD_TESTING)
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
     add_test(NAME trailmate_core_mesh_meshcore_protocol_strategy_smoke
              COMMAND trailmate_core_mesh_meshcore_protocol_strategy_smoke)
+    endif()
+
+    add_executable(trailmate_linux_sim_composition_root_smoke
+        tests/linux_sim_composition_root_smoke.cpp
+    )
+    target_link_libraries(trailmate_linux_sim_composition_root_smoke
+        PRIVATE trailmate_linux_sim_composition_root)
+    add_test(NAME trailmate_linux_sim_composition_root_smoke
+             COMMAND trailmate_linux_sim_composition_root_smoke)
+
+    add_executable(trailmate_ascii_menu_runtime_adapter_smoke
+        tests/ascii_menu_runtime_adapter_smoke.cpp
+    )
+    target_link_libraries(trailmate_ascii_menu_runtime_adapter_smoke
+        PRIVATE trailmate_linux_sim_composition_root)
+    add_test(NAME trailmate_ascii_menu_runtime_adapter_smoke
+             COMMAND trailmate_ascii_menu_runtime_adapter_smoke)
+
+    add_executable(trailmate_ascii_screen_host_adapter_smoke
+        tests/ascii_screen_host_adapter_smoke.cpp
+    )
+    target_link_libraries(trailmate_ascii_screen_host_adapter_smoke
+        PRIVATE trailmate_linux_sim_composition_root)
+    add_test(NAME trailmate_ascii_screen_host_adapter_smoke
+             COMMAND trailmate_ascii_screen_host_adapter_smoke)
+
+    add_executable(trailmate_ascii_screen_graph_bridge_smoke
+        tests/ascii_screen_graph_bridge_smoke.cpp
+    )
+    target_link_libraries(trailmate_ascii_screen_graph_bridge_smoke
+        PRIVATE trailmate_linux_sim_composition_root)
+    add_test(NAME trailmate_ascii_screen_graph_bridge_smoke
+             COMMAND trailmate_ascii_screen_graph_bridge_smoke)
 endif()

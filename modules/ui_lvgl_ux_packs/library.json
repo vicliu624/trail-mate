@@ -9,6 +9,7 @@
       "-I../../modules/ui_lvgl_core/include",
       "-I../../modules/ui_shared/include",
       "-I../../modules/ui_presentation/include",
+      "-I../../modules/product_composition/include",
       "-I../../modules/core_team/include"
     ]
   },
