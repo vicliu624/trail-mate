@@ -32,16 +32,16 @@ App Shell composes.
 
 | Current path | Current role | Final role | Migration risk | Blocking reason | Next action |
 | --- | --- | --- | --- | --- | --- |
-| `apps/esp_idf` | ESP-IDF build entrypoint plus transitional ESP app/runtime shell | `builds/esp_idf` thin wrapper invoking a future ESP LVGL app shell | ESP-IDF CMake include paths, target sdkconfig defaults, generated build dirs, component registration | Existing ESP-IDF targets build through this directory | Create wrapper skeleton first; move build-host files only after equivalent invocation is proven |
-| `apps/esp_pio` | PlatformIO/Arduino compatibility entrypoint and legacy ESP app glue | split into `builds/pio_nrf52` for nRF52 authority and possible legacy ESP PIO compatibility wrapper | PlatformIO environments and root `platformio.ini` still reference current layout | nRF and legacy ESP build flows are coupled through PIO conventions | Keep transitional; introduce family-specific wrapper docs before moving files |
-| `apps/linux_sim` | Linux simulator and developer-tooling shell with CMake project files | Linux app shell invoked by `builds/linux_cmake` | CMake source helper and simulator scripts live in current app directory | Simulator remains a fast validation target and should not be disrupted | Document as transitional CMake app shell; wrapper should invoke existing CMake path first |
-| `apps/linux_uconsole` | uConsole/AIO2-class Linux handheld shell | Linux app shell invoked by `builds/linux_cmake` | GTK/uConsole app model and platform code are adjacent | Device shell is still evolving and tied to app-local structure | Keep app shell; route future canonical build through Linux CMake wrapper |
-| `apps/linux_rpi` | Pi OS / Cardputer Zero device shell and CMake/SCons bring-up paths | Linux app shell invoked by `builds/linux_cmake` | CMake framebuffer path and M5 SDK/SCons path coexist | Device path still needs build and hardware validation | Keep as transitional Linux app shell; wrapper should not absorb device behavior |
-| `apps/linux_unoq` | Future UNO Q Linux shell placeholder | Linux app shell invoked by `builds/linux_cmake` | Early target, low source volume | Final product identity and build path not fully proven | Keep as app shell candidate; delay migration until target profile exists |
-| `apps/gat562_mesh_evb_pro` | nRF/mono device app shell with board-specific runtime access | future nRF52 app shell invoked by `builds/pio_nrf52` | Board app shell and board facts are currently close together | PIO/nRF split is not yet represented by final app shell names | Keep stable; later separate app shell from board facts and PIO wrapper |
+| `legacy/app_implementations/esp_idf` | ESP-IDF build entrypoint plus transitional ESP app/runtime shell | `builds/esp_idf` thin wrapper invoking a future ESP LVGL app shell | ESP-IDF CMake include paths, target sdkconfig defaults, generated build dirs, component registration | Existing ESP-IDF targets build through this directory | Create wrapper skeleton first; move build-host files only after equivalent invocation is proven |
+| `legacy/app_implementations/esp_pio` | PlatformIO/Arduino compatibility entrypoint and legacy ESP app glue | split into `builds/pio_nrf52` for nRF52 authority and possible legacy ESP PIO compatibility wrapper | PlatformIO environments and root `platformio.ini` still reference current layout | nRF and legacy ESP build flows are coupled through PIO conventions | Keep transitional; introduce family-specific wrapper docs before moving files |
+| `legacy/app_implementations/linux_sim` | Linux simulator and developer-tooling shell with CMake project files | Linux app shell invoked by `builds/linux_cmake` | CMake source helper and simulator scripts live in current app directory | Simulator remains a fast validation target and should not be disrupted | Document as transitional CMake app shell; wrapper should invoke existing CMake path first |
+| `legacy/app_implementations/linux_uconsole` | uConsole/AIO2-class Linux handheld shell | Linux app shell invoked by `builds/linux_cmake` | GTK/uConsole app model and platform code are adjacent | Device shell is still evolving and tied to app-local structure | Keep app shell; route future canonical build through Linux CMake wrapper |
+| `legacy/app_implementations/linux_rpi` | Pi OS / Cardputer Zero device shell and CMake/SCons bring-up paths | Linux app shell invoked by `builds/linux_cmake` | CMake framebuffer path and M5 SDK/SCons path coexist | Device path still needs build and hardware validation | Keep as transitional Linux app shell; wrapper should not absorb device behavior |
+| `legacy/app_implementations/linux_unoq` | Future UNO Q Linux shell placeholder | Linux app shell invoked by `builds/linux_cmake` | Early target, low source volume | Final product identity and build path not fully proven | Keep as app shell candidate; delay migration until target profile exists |
+| `legacy/app_implementations/gat562_mesh_evb_pro` | nRF/mono device app shell with board-specific runtime access | future nRF52 app shell invoked by `builds/pio_nrf52` | Board app shell and board facts are currently close together | PIO/nRF split is not yet represented by final app shell names | Keep stable; later separate app shell from board facts and PIO wrapper |
 | root `platformio.ini` | current PlatformIO build authority for Arduino/PIO targets | invoked or wrapped by `builds/pio_nrf52` and any legacy PIO compatibility entrypoint | Environment names, library paths, and board configs are sensitive | Current PIO build must remain unbroken | Do not edit in Phase 8.2; document as existing authority |
 | root `CMakeLists.txt` | root CMake/ESP-IDF historical entrypoint surface | clarified by `builds/esp_idf` and `builds/linux_cmake` wrappers | Root CMake has ESP-IDF history and Linux CMake must not hijack it | Multiple CMake host meanings coexist | Do not edit in Phase 8.2; document target authority before moving |
-| `apps/esp_idf/build.tab5` | generated or local ESP-IDF build output under app tree | build artifact outside final source semantics | Generated files may be large or host-specific | Existing developer workflow produced it there | Do not normalize in Phase 8.2; clean artifact policy separately |
+| `legacy/app_implementations/esp_idf/build.tab5` | generated or local ESP-IDF build output under app tree | build artifact outside final source semantics | Generated files may be large or host-specific | Existing developer workflow produced it there | Do not normalize in Phase 8.2; clean artifact policy separately |
 | root `build/` | generated build output | build artifact | May contain local host output | Unknown local use | Leave untouched |
 | root `build.cardputer` | generated target build output | build artifact | May be referenced by local tooling | Unknown local use | Leave untouched |
 | root `build.tab5` | generated target build output | build artifact | May be referenced by local tooling | Unknown local use | Leave untouched |
@@ -51,10 +51,10 @@ App Shell composes.
 
 ## Findings
 
-`apps/esp_idf` is not a final product app shell. It is a transitional ESP-IDF
+`legacy/app_implementations/esp_idf` is not a final product app shell. It is a transitional ESP-IDF
 build entrypoint and compatibility shell.
 
-`apps/esp_pio` is not a final product app shell. It is a transitional
+`legacy/app_implementations/esp_pio` is not a final product app shell. It is a transitional
 PlatformIO/Arduino build entrypoint and compatibility shell.
 
 Linux app directories are closer to app shells, but they still carry local
@@ -87,7 +87,7 @@ A build entrypoint must not:
 
 ## Transitional Compatibility Rule
 
-`apps/esp_idf` and `apps/esp_pio` are allowed to remain because they are
+`legacy/app_implementations/esp_idf` and `legacy/app_implementations/esp_pio` are allowed to remain because they are
 recorded transitional historical build entrypoints.
 
 New build-system-named directories under `apps/` should not be added. Future
@@ -129,13 +129,13 @@ Linux app shell status:
 
 | App shell | Executable target | Transitional source | Status |
 | --- | --- | --- | --- |
-| `apps/linux_uconsole_gtk` | `trailmate_linux_uconsole_gtk_shell` | `apps/linux_uconsole` | executable app shell baseline |
-| `apps/linux_sim_shell` | `trailmate_linux_sim_shell` | `apps/linux_sim` | executable app shell baseline |
+| `apps/linux_uconsole_gtk` | `trailmate_linux_uconsole_gtk_shell` | `legacy/app_implementations/linux_uconsole` | executable app shell baseline |
+| `apps/linux_sim_shell` | `trailmate_linux_sim_shell` | `legacy/app_implementations/linux_sim` | executable app shell baseline |
 
 The old implementation roots are explicitly marked:
 
-- `apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
-- `apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
+- `legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
+- `legacy/app_implementations/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
 
 ESP-IDF and PlatformIO physical migration remains deferred. The Linux line is
 the first proof of the direction:
@@ -156,24 +156,24 @@ Executable proof chains:
 builds/linux_cmake
   -> apps/linux_uconsole_gtk
   -> trailmate_linux_uconsole_legacy_adapter
-  -> apps/linux_uconsole
+  -> legacy/app_implementations/linux_uconsole
 
 builds/linux_cmake
   -> apps/linux_sim_shell
   -> trailmate_linux_sim_legacy_adapter
-  -> apps/linux_sim
+  -> legacy/app_implementations/linux_sim
 
 builds/esp_idf
   -> apps/esp32_lvgl
   -> trailmate_esp32_lvgl_app_shell
   -> trailmate_esp_idf_legacy_adapter
-  -> apps/esp_idf
+  -> legacy/app_implementations/esp_idf
 
 builds/pio_nrf52
   -> apps/nrf52_node
   -> trailmate-nrf52-node-app-shell
   -> trailmate_nrf52_pio_legacy_adapter
-  -> apps/esp_pio / apps/gat562_mesh_evb_pro
+  -> legacy/app_implementations/esp_pio / legacy/app_implementations/gat562_mesh_evb_pro
 ```
 
 The wrapper files are intentionally thin:
@@ -186,11 +186,11 @@ The wrapper files are intentionally thin:
 The following historical roots are explicitly transitional implementation
 roots:
 
-- `apps/linux_uconsole`
-- `apps/linux_sim`
-- `apps/esp_idf`
-- `apps/esp_pio`
-- `apps/gat562_mesh_evb_pro`
+- `legacy/app_implementations/linux_uconsole`
+- `legacy/app_implementations/linux_sim`
+- `legacy/app_implementations/esp_idf`
+- `legacy/app_implementations/esp_pio`
+- `legacy/app_implementations/gat562_mesh_evb_pro`
 
 Physical migration remains deferred for ESP-IDF sdkconfig/component registration
 and current PlatformIO environments. This batch proves the authority direction:

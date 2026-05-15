@@ -19,7 +19,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/pio_nrf52`
 
-Current transitional path = `apps/esp_pio` and `apps/gat562_mesh_evb_pro`
+Current transitional path = `legacy/app_implementations/esp_pio` and `legacy/app_implementations/gat562_mesh_evb_pro`
 
 ## Future Responsibilities
 
@@ -55,8 +55,8 @@ Current config:
 ```text
 target_family = nrf52_node
 default_ux_pack_id = tiny_node_status
-transitional_source = apps/esp_pio
-board_specific_transitional_source = apps/gat562_mesh_evb_pro
+transitional_source = legacy/app_implementations/esp_pio
+board_specific_transitional_source = legacy/app_implementations/gat562_mesh_evb_pro
 legacy_adapter_target = trailmate_nrf52_pio_legacy_adapter
 ```
 

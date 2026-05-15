@@ -321,7 +321,7 @@ RULES = (
     ),
     Rule(
         name="ui-must-not-read-gps-driver-directly",
-        roots=("modules/ui_shared", "apps/linux_uconsole", "platform/esp/arduino_common", "platform/linux"),
+        roots=("modules/ui_shared", "legacy/app_implementations/linux_uconsole", "platform/esp/arduino_common", "platform/linux"),
         path_contains=("/ui/", "\\ui\\", "/gtk/", "\\gtk\\"),
         patterns=compile_patterns(
             (
@@ -366,7 +366,7 @@ RULES = (
     ),
     Rule(
         name="lvgl-ui-must-not-access-storage-radio-gps-board-directly",
-        roots=("modules/ui_shared", "platform/esp/arduino_common", "apps/esp_pio"),
+        roots=("modules/ui_shared", "platform/esp/arduino_common", "legacy/app_implementations/esp_pio"),
         path_contains=("/ui/", "\\ui\\"),
         patterns=compile_patterns(
             (
@@ -382,7 +382,7 @@ RULES = (
     ),
     Rule(
         name="gtk-ui-must-not-own-protocol-store-radio",
-        roots=("apps/linux_uconsole", "platform/linux"),
+        roots=("legacy/app_implementations/linux_uconsole", "platform/linux"),
         path_contains=("/gtk/", "\\gtk\\"),
         patterns=compile_patterns(
             (
@@ -396,7 +396,7 @@ RULES = (
     ),
     Rule(
         name="ascii-ui-must-not-access-radio-gps-store-directly",
-        roots=("apps", "platform/linux"),
+        roots=("apps", "legacy/app_implementations", "platform/linux"),
         path_regex=re.compile(r"(^|[/\\]).*(ascii|terminal|tui).*\.(c|cc|cpp|cxx|h|hh|hpp)$", re.IGNORECASE),
         patterns=compile_patterns(
             (
@@ -421,7 +421,7 @@ RULES = (
         excludes=(
             "boards/",
             "platform/esp/boards/",
-            "apps/esp_idf/CMakeLists.txt",
+            "legacy/app_implementations/esp_idf/CMakeLists.txt",
         ),
     ),
 )

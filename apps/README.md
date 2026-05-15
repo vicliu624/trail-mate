@@ -14,7 +14,7 @@ The directories here define the target structure we are converging toward.
 
 For Linux bring-up:
 
-- `apps/linux_sim` is the simulator and developer-tooling shell
-- `apps/linux_rpi` is the real Pi OS device shell for Cardputer Zero
-- `apps/linux_uconsole` is the desktop-class Linux handheld shell for
+- `legacy/app_implementations/linux_sim` is the simulator and developer-tooling shell
+- `legacy/app_implementations/linux_rpi` is the real Pi OS device shell for Cardputer Zero
+- `legacy/app_implementations/linux_uconsole` is the desktop-class Linux handheld shell for
   uConsole/AIO2-class targets

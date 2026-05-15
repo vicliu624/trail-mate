@@ -11,7 +11,7 @@ ESP / ESP32-P4 -> ESP-IDF
 Current transitional path:
 
 ```text
-apps/esp_idf
+legacy/app_implementations/esp_idf
 ```
 
 Final wrapper direction:

@@ -67,7 +67,7 @@ def check_required_files() -> int:
         "modules/ui_shared/src/ui/presentation_sources/legacy_map_presentation_source.cpp",
         "modules/ui_shared/src/ui/presentation_sources/legacy_map_action_sink.cpp",
         "modules/ui_shared/tests/test_legacy_map_presentation_adapters.cpp",
-        "apps/linux_sim/tests/map_workspace_ascii_probe.cpp",
+        "legacy/app_implementations/linux_sim/tests/map_workspace_ascii_probe.cpp",
     ]
 
     failures = 0
@@ -329,7 +329,7 @@ def check_uconsole_map_surface_uses_workspace_model() -> int:
 
 
 def check_map_ascii_probe_exists() -> int:
-    path = "apps/linux_sim/tests/map_workspace_ascii_probe.cpp"
+    path = "legacy/app_implementations/linux_sim/tests/map_workspace_ascii_probe.cpp"
     if not exists(path):
         return fail("Map ASCII/headless probe is missing")
 

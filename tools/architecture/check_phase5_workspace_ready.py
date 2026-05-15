@@ -37,8 +37,8 @@ def check_required_files() -> int:
         "modules/ui_presentation/src/workspace/presentation_workspace_probe.cpp",
         "modules/ui_presentation/tests/test_presentation_workspace.cpp",
         "modules/ui_presentation/tests/test_presentation_workspace_probe.cpp",
-        "apps/linux_sim/tests/presentation_workspace_ascii_probe.cpp",
-        "apps/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp",
+        "legacy/app_implementations/linux_sim/tests/presentation_workspace_ascii_probe.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp",
     ]
 
     failures = 0
@@ -202,7 +202,7 @@ def check_workspace_probe_is_read_only_summary() -> int:
 
 
 def check_ascii_probe() -> int:
-    path = "apps/linux_sim/tests/presentation_workspace_ascii_probe.cpp"
+    path = "legacy/app_implementations/linux_sim/tests/presentation_workspace_ascii_probe.cpp"
     if not exists(path):
         return 0
 
@@ -241,7 +241,7 @@ def check_ascii_probe() -> int:
 
 
 def check_uconsole_smoke() -> int:
-    path = "apps/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp"
+    path = "legacy/app_implementations/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp"
     if not exists(path):
         return 0
 

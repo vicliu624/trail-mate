@@ -59,16 +59,17 @@ apps/
 
 Audit finding:
 
-`apps/esp_idf` and `apps/esp_pio` are build entrypoints, not final app shells.
+`legacy/app_implementations/esp_idf` and
+`legacy/app_implementations/esp_pio` are build entrypoints, not final app shells.
 
 They are named after build systems and currently carry build-host concerns.
 Phase 8 should classify them as transitional build entrypoints until a
 `builds/esp_idf` and nRF/PIO entrypoint plan exists.
 
-`apps/linux_sim` and `apps/linux_uconsole` are closer to product app shells, but
-their names still mix shell, target, platform, and device identity. They are
-acceptable transitional app shells until target profile documents and UX pack
-selection are introduced.
+`legacy/app_implementations/linux_sim` and
+`legacy/app_implementations/linux_uconsole` are historical implementation
+roots. Their old names mixed shell, target, platform, and device identity; they
+are no longer current `apps/` entries.
 
 ## Current `modules/`
 

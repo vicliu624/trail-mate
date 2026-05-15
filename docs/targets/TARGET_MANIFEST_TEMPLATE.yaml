@@ -130,7 +130,7 @@ race_policy:
   ui_update: "ui_thread_only"
 
 build:
-  app: "apps/esp_pio"
+  app: "legacy/app_implementations/esp_pio"
   board_package: "boards/tlora_pager"
   enabled_modules:
     - "core_chat"

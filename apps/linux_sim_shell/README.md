@@ -20,7 +20,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/linux_cmake`
 
-Current transitional path = `apps/linux_sim`
+Current transitional path = `legacy/app_implementations/linux_sim`
 
 ## Future Responsibilities
 
@@ -52,7 +52,7 @@ Current source:
 ```text
 target_id = linux_sim
 ux_pack_id = simulator_full
-transitional_source = apps/linux_sim
+transitional_source = legacy/app_implementations/linux_sim
 ```
 
 No simulator runtime behavior changes in Phase 8 Correction.

@@ -21,7 +21,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/linux_cmake`
 
-Current transitional path = `apps/linux_uconsole`
+Current transitional path = `legacy/app_implementations/linux_uconsole`
 
 ## Future Responsibilities
 
@@ -53,7 +53,7 @@ Current source:
 ```text
 target_id = uconsole
 ux_pack_id = uconsole_desktop
-transitional_source = apps/linux_uconsole
+transitional_source = legacy/app_implementations/linux_uconsole
 ```
 
 No GTK runtime behavior changes in Phase 8 Correction.

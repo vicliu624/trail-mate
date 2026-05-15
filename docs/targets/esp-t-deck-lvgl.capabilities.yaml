@@ -130,7 +130,7 @@ race_policy:
   ui_update: "ui_thread_only"
 
 build:
-  app: "apps/esp_pio"
+  app: "legacy/app_implementations/esp_pio"
   board_package: "boards/tdeck"
   platformio_envs: ["tdeck", "tdeck_debug"]
   enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team", "ui_shared"]

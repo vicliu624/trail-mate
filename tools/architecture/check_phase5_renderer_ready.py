@@ -102,7 +102,7 @@ def check_ascii_probes_are_strict() -> int:
     ]
 
     failures = 0
-    root = ROOT / "apps/linux_sim/tests"
+    root = ROOT / "legacy/app_implementations/linux_sim/tests"
     for path in root.glob("*ascii_probe*.cpp"):
         text = strip_cpp_comments(path.read_text(encoding="utf-8", errors="ignore"))
         for token in forbidden_tokens:
@@ -116,14 +116,14 @@ def check_ascii_probes_are_strict() -> int:
             )
 
     required_probe_tokens = {
-        "apps/linux_sim/tests/map_workspace_ascii_probe.cpp": [
+        "legacy/app_implementations/linux_sim/tests/map_workspace_ascii_probe.cpp": [
             "MapWorkspaceModel",
             "MAP CENTER:",
             "SELF:",
             "LAYERS:",
             "TEAM:",
         ],
-        "apps/linux_sim/tests/presentation_workspace_ascii_probe.cpp": [
+        "legacy/app_implementations/linux_sim/tests/presentation_workspace_ascii_probe.cpp": [
             "PresentationWorkspaceProbe::snapshot",
             "PRESENTATION WORKSPACE",
             "DEVICE:",
@@ -357,7 +357,7 @@ def check_migrated_dashboard_status_is_locked() -> int:
 def check_uconsole_renderer_bridge_is_locked() -> int:
     failures = 0
 
-    smoke = "apps/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp"
+    smoke = "legacy/app_implementations/linux_uconsole/tests/uconsole_presentation_workspace_smoke.cpp"
     if exists(smoke):
         text = read_text(smoke)
         for token in [
@@ -372,7 +372,7 @@ def check_uconsole_renderer_bridge_is_locked() -> int:
     else:
         failures += fail("uConsole presentation workspace smoke is missing")
 
-    app_state = "apps/linux_uconsole/src/platform/gtk/gtk_uconsole_app_state.h"
+    app_state = "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_app_state.h"
     if exists(app_state):
         text = read_text(app_state)
         for token in [

@@ -11,11 +11,11 @@ trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
 # Transitional Adapter delegates; legacy implementation still runs.
 add_library(trailmate_linux_uconsole_legacy_adapter
-    "${TRAIL_MATE_REPO_ROOT}/apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp")
+    "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp")
 
 target_include_directories(trailmate_linux_uconsole_legacy_adapter
     PUBLIC
-        "${TRAIL_MATE_REPO_ROOT}/apps/linux_uconsole/src")
+        "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_uconsole/src")
 
 target_compile_features(trailmate_linux_uconsole_legacy_adapter PUBLIC cxx_std_17)
 
@@ -42,7 +42,7 @@ if(BUILD_TESTING)
              COMMAND trailmate_linux_uconsole_gtk_app_shell_smoke)
 
     add_executable(trailmate_linux_uconsole_legacy_adapter_smoke
-        "${TRAIL_MATE_REPO_ROOT}/apps/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp")
+        "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp")
     target_link_libraries(trailmate_linux_uconsole_legacy_adapter_smoke
         PRIVATE trailmate_linux_uconsole_legacy_adapter)
     add_test(NAME trailmate_linux_uconsole_legacy_adapter_smoke

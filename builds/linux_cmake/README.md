@@ -18,10 +18,10 @@ apps/linux_sim_shell
 Current transitional implementation roots:
 
 ```text
-apps/linux_sim
-apps/linux_uconsole
-apps/linux_rpi
-apps/linux_unoq
+legacy/app_implementations/linux_sim
+legacy/app_implementations/linux_uconsole
+legacy/app_implementations/linux_rpi
+legacy/app_implementations/linux_unoq
 ```
 
 Final wrapper direction:

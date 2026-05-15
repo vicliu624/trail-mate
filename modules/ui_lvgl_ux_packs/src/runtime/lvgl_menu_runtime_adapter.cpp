@@ -34,6 +34,7 @@ bool LvglMenuRuntimeAdapter::buildEntries(const ui::menu::MenuModel& menu,
         }
 
         out[out_count].screen_id = item.screen_id;
+        out[out_count].route = ui::screen::routeForMenuScreen(item.screen_id);
         out[out_count].label = item.label;
         out[out_count].enabled = item.enabled;
         ++out_count;

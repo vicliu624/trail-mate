@@ -17,6 +17,8 @@ int main()
     assert(adapter.buildEntries(menu, entries, ui::menu::MenuModel::kMaxItems, count));
     assert(count > 0);
     assert(entries[0].enabled);
+    assert(entries[0].route.valid);
+    assert(entries[0].route.screen_id == entries[0].screen_id);
     assert(entries[0].label != nullptr);
 
     std::size_t small_count = 0;

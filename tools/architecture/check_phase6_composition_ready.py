@@ -52,12 +52,12 @@ def check_required_files() -> int:
         "modules/product_composition/include/product_composition/target_app_shell.h",
         "modules/product_composition/include/product_composition/composition_status.h",
         "modules/product_composition/tests/test_presentation_bundle_shape.cpp",
-        "apps/linux_sim/src/linux_sim_composition_root.h",
-        "apps/linux_sim/src/linux_sim_composition_root.cpp",
-        "apps/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
-        "apps/linux_uconsole/src/uconsole_composition_root.h",
-        "apps/linux_uconsole/src/uconsole_composition_root.cpp",
-        "apps/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
         "tools/architecture/check_phase6_composition_ready.py",
         "tools/architecture/phase6_composition_legacy_baseline.json",
     ]
@@ -225,9 +225,9 @@ def check_ui_presentation_does_not_import_composition() -> int:
 
 def check_linux_sim_root_shape() -> int:
     failures = 0
-    header = "apps/linux_sim/src/linux_sim_composition_root.h"
-    source = "apps/linux_sim/src/linux_sim_composition_root.cpp"
-    smoke = "apps/linux_sim/tests/linux_sim_composition_root_smoke.cpp"
+    header = "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h"
+    source = "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp"
+    smoke = "legacy/app_implementations/linux_sim/tests/linux_sim_composition_root_smoke.cpp"
 
     if exists(header):
         text = read_text(header)
@@ -274,9 +274,9 @@ def check_linux_sim_root_shape() -> int:
 
 def check_uconsole_root_shape() -> int:
     failures = 0
-    header = "apps/linux_uconsole/src/uconsole_composition_root.h"
-    source = "apps/linux_uconsole/src/uconsole_composition_root.cpp"
-    smoke = "apps/linux_uconsole/tests/uconsole_composition_root_smoke.cpp"
+    header = "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h"
+    source = "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp"
+    smoke = "legacy/app_implementations/linux_uconsole/tests/uconsole_composition_root_smoke.cpp"
 
     if exists(header):
         text = read_text(header)

@@ -7,6 +7,7 @@
 #include "product_composition/target_app_shell.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
 #include "ui_presentation/menu/menu_model.h"
+#include "ui_presentation/screen/screen_binding_registry.h"
 
 #include <cassert>
 
@@ -73,6 +74,8 @@ void test_presentation_bundle_exports_workspace_graph()
     assert(!product_composition::hasInteractivePresentation(bundle));
     assert(bundle.ux_menu == nullptr);
     assert(!product_composition::hasUxMenu(bundle));
+    assert(bundle.screen_bindings == nullptr);
+    assert(!product_composition::hasScreenBindings(bundle));
 
     ui::tests::FakeChatPresentationSource chat_source;
     ui::tests::FakeChatActionSink chat_sink;
@@ -88,6 +91,12 @@ void test_presentation_bundle_exports_workspace_graph()
     assert(bundle.ux_menu != nullptr);
     assert(bundle.ux_menu->size() == 1);
     assert(product_composition::hasUxMenu(bundle));
+
+    ui::screen::ScreenBindingRegistry screen_bindings;
+    assert(screen_bindings.add({ui::menu::MenuScreenId::Chat, "chat", true}));
+    bundle.screen_bindings = &screen_bindings;
+    assert(bundle.screen_bindings != nullptr);
+    assert(product_composition::hasScreenBindings(bundle));
 }
 
 void test_target_app_shell_lifecycle_contract()

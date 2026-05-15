@@ -4,7 +4,7 @@
   "known_legacy_composition_surfaces": [
     {
       "id": "esp-pio-app-context",
-      "path": "apps/esp_pio/src/app_context.cpp",
+      "path": "legacy/app_implementations/esp_pio/src/app_context.cpp",
       "allowed_tokens": [
         "AppContext",
         "ChatService",
@@ -17,7 +17,7 @@
     },
     {
       "id": "esp-pio-runtime-access",
-      "path": "apps/esp_pio/src/app_runtime_access.cpp",
+      "path": "legacy/app_implementations/esp_pio/src/app_runtime_access.cpp",
       "allowed_tokens": [
         "AppContext::getInstance",
         "bootstrapAppContext",
@@ -28,7 +28,7 @@
     },
     {
       "id": "esp-idf-app-facade-runtime",
-      "path": "apps/esp_idf/src/app_facade_runtime.cpp",
+      "path": "legacy/app_implementations/esp_idf/src/app_facade_runtime.cpp",
       "allowed_tokens": [
         "MinimalAppFacade",
         "bindAppFacade",
@@ -84,7 +84,7 @@
     },
     {
       "id": "gtk-uconsole-app-state-legacy",
-      "path": "apps/linux_uconsole/src/platform/gtk/gtk_uconsole_app_state.h",
+      "path": "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_app_state.h",
       "allowed_tokens": [
         "LinuxAppServices",
         "UConsoleChatWorkspaceModel",

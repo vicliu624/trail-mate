@@ -21,8 +21,8 @@ UX Pack presents.
 
 Current transitional paths:
 
-- `apps/esp_pio`
-- `apps/gat562_mesh_evb_pro`
+- `legacy/app_implementations/esp_pio`
+- `legacy/app_implementations/gat562_mesh_evb_pro`
 - root `platformio.ini`
 
 The final `apps/nrf52_node` shell should select target profile and hand off to

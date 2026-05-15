@@ -10,11 +10,11 @@ include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
 add_library(trailmate_esp_idf_legacy_adapter
-    "${CMAKE_CURRENT_LIST_DIR}/../esp_idf/src/esp_idf_legacy_implementation_adapter.cpp")
+    "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp")
 
 target_include_directories(trailmate_esp_idf_legacy_adapter
     PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}/../esp_idf/src")
+        "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/esp_idf/src")
 
 target_compile_features(trailmate_esp_idf_legacy_adapter PUBLIC cxx_std_17)
 

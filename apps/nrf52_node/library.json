@@ -5,6 +5,7 @@
     "includeDir": "src",
     "srcDir": "src",
     "flags": [
+      "-I../../modules/ui_presentation/include",
       "-I../../modules/ui_lvgl_ux_packs/include"
     ]
   },

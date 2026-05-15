@@ -24,10 +24,10 @@ UX Pack presents.
 
 Current transitional paths:
 
-- `apps/linux_uconsole`
-- `apps/linux_sim`
-- `apps/linux_rpi`
-- `apps/linux_unoq`
+- `legacy/app_implementations/linux_uconsole`
+- `legacy/app_implementations/linux_sim`
+- `legacy/app_implementations/linux_rpi`
+- `legacy/app_implementations/linux_unoq`
 
 Linux CMake wrappers should invoke selected Linux app shells. They must not
 absorb GTK, simulator, framebuffer, device-shell, or runtime behavior into

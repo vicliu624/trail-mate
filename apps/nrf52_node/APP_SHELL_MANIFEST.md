@@ -20,8 +20,8 @@ Future authoritative build entrypoint:
 
 Current transitional path:
 
-- `apps/esp_pio`
-- `apps/gat562_mesh_evb_pro`
+- `legacy/app_implementations/esp_pio`
+- `legacy/app_implementations/gat562_mesh_evb_pro`
 
 ## Future Responsibilities
 

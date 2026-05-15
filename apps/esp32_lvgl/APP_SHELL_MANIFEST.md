@@ -20,7 +20,7 @@ Future authoritative build entrypoint:
 
 Current transitional path:
 
-- `apps/esp_idf`
+- `legacy/app_implementations/esp_idf`
 
 ## Future Responsibilities
 

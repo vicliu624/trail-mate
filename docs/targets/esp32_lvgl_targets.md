@@ -25,9 +25,9 @@ UX Pack presents.
 
 Current transitional path:
 
-- `apps/esp_idf`
+- `legacy/app_implementations/esp_idf`
 
-Current target descriptors under `apps/esp_idf/targets/*` remain in place until
+Current target descriptors under `legacy/app_implementations/esp_idf/targets/*` remain in place until
 wrapper and app shell migration are proven.
 
 ## Non-Goals

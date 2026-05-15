@@ -130,7 +130,7 @@ race_policy:
   ui_update: "none"
 
 build:
-  app: "apps/gat562_mesh_evb_pro"
+  app: "legacy/app_implementations/gat562_mesh_evb_pro"
   board_package: "boards/gat562_mesh_evb_pro"
   platformio_envs: ["gat562_mesh_evb_pro"]
   enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team", "ui_shared"]

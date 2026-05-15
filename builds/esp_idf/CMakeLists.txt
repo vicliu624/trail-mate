@@ -14,7 +14,7 @@ set(TRAIL_MATE_ESP_APP_SHELL
 include(CTest)
 
 # Phase 8 convergence baseline:
-# ESP-IDF physical component registration remains in apps/esp_idf.
+# ESP-IDF physical component registration remains in legacy/app_implementations/esp_idf.
 # This wrapper establishes the authority direction without duplicating IDF
 # component registration or runtime object assembly.
 add_subdirectory(

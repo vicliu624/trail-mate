@@ -916,7 +916,7 @@ def check_presentation_source_enrichment() -> int:
 def check_composition_roots_own_delivery() -> int:
     failures = 0
     roots = {
-        "apps/linux_sim/src/linux_sim_composition_root.h": [
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h": [
             "ChatDeliveryReadModel delivery_read_model_",
             "ChatDeliveryEventProjector delivery_projector_",
             "ProjectingChatDeliveryEventPort delivery_event_port_",
@@ -926,7 +926,7 @@ def check_composition_roots_own_delivery() -> int:
             "deliveryEventPort()",
             "deliveryActionSink()",
         ],
-        "apps/linux_uconsole/src/uconsole_composition_root.h": [
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h": [
             "ChatDeliveryReadModel delivery_read_model_",
             "ChatDeliveryEventProjector delivery_projector_",
             "ProjectingChatDeliveryEventPort delivery_event_port_",
@@ -936,7 +936,7 @@ def check_composition_roots_own_delivery() -> int:
             "deliveryEventPort()",
             "deliveryActionSink()",
         ],
-        "apps/linux_uconsole/src/uconsole_composition_root.cpp": [
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp": [
             "&delivery_read_model_",
             "ChatPresentationSource",
             "deliveryEventPort()",
@@ -971,7 +971,7 @@ def check_ui_presentation_and_renderers_do_not_own_delivery() -> int:
         ROOT / "modules/ui_shared/src/ui/screens",
         ROOT / "modules/ui_shared/src/ui/widgets",
         ROOT / "modules/ui_shared/src/ui/menu",
-        ROOT / "apps/linux_uconsole/src/platform/gtk",
+        ROOT / "legacy/app_implementations/linux_uconsole/src/platform/gtk",
     ]
     for path in iter_code_files(*renderer_roots):
         if path.name == "chat_page_runtime.cpp":

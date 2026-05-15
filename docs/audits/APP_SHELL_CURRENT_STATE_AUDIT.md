@@ -22,25 +22,25 @@ UX Pack presents.
 
 | Current path | Current role | App shell part | Build entrypoint part | Platform part | Board-specific part | Future app shell direction | Migration risk |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `apps/esp_idf` | ESP-IDF build entrypoint plus ESP runtime compatibility shell | startup runtime, loop runtime, app facade access, target runtime config | ESP-IDF CMake, component manifest, sdkconfig target descriptors, local build output | ESP-IDF adapter calls and radio/GPS/team runtime glue | target descriptors for Tab5 and T-Display-P4 variants | `apps/esp32_lvgl` invoked by `builds/esp_idf` | ESP-IDF include paths, component registration, generated build dirs, target sdkconfig defaults |
-| `apps/esp_pio` | PlatformIO/Arduino compatibility entrypoint | Arduino startup, loop runtime, app runtime access | root `platformio.ini`, library layout, PIO environment assumptions | Arduino/PIO startup and compatibility access | legacy target coupling through current PIO environments | `apps/nrf52_node` plus possible legacy ESP PIO compatibility path | PIO environments couple ESP/nRF assumptions; root build must stay stable |
-| `apps/linux_sim` | Linux simulator and developer-tooling shell | simulator target startup, simulator composition root, smoke/probe tests | app-local CMake, presets, simulator scripts | SDL/desktop platform integration and host tooling | simulator geometry/input assumptions | `apps/linux_sim_shell` invoked by `builds/linux_cmake` | CMake helper and scripts are app-local; simulator remains fast validation path |
-| `apps/linux_uconsole` | Linux uConsole/AIO2-class handheld shell | uConsole composition root and app model | local GTK/CMake assumptions | GTK/Linux handheld integration | uConsole/AIO2 product assumptions | `apps/linux_uconsole_gtk` invoked by `builds/linux_cmake` | GTK shell and app model are still adjacent; do not destabilize runtime |
-| `apps/linux_rpi` | Pi OS / Cardputer Zero device shell and bring-up path | Raspberry Pi/Cardputer Zero product startup | CMake framebuffer path and M5 SDK/SCons path | Linux framebuffer, evdev, SDK host integration | Cardputer Zero hardware/device assumptions | future Linux device app shell under `builds/linux_cmake` | hardware validation and dual build path must stay intact |
-| `apps/linux_unoq` | future UNO Q Linux shell placeholder | target placeholder | not yet authoritative | future Linux device integration | UNO Q product assumptions | future Linux UNO Q app shell under `builds/linux_cmake` | target profile and build path are early |
-| `apps/gat562_mesh_evb_pro` | nRF/mono device app shell with board-adjacent runtime | device startup, loop runtime, protocol factory, UI runtime | PIO/root build assumptions outside this directory | embedded runtime glue | direct `boards/gat562_mesh_evb_pro` access | `apps/nrf52_node` invoked by `builds/pio_nrf52` | board facts and app runtime are close; separate only after nRF wrapper parity |
+| `legacy/app_implementations/esp_idf` | ESP-IDF build entrypoint plus ESP runtime compatibility shell | startup runtime, loop runtime, app facade access, target runtime config | ESP-IDF CMake, component manifest, sdkconfig target descriptors, local build output | ESP-IDF adapter calls and radio/GPS/team runtime glue | target descriptors for Tab5 and T-Display-P4 variants | `apps/esp32_lvgl` invoked by `builds/esp_idf` | ESP-IDF include paths, component registration, generated build dirs, target sdkconfig defaults |
+| `legacy/app_implementations/esp_pio` | PlatformIO/Arduino compatibility entrypoint | Arduino startup, loop runtime, app runtime access | root `platformio.ini`, library layout, PIO environment assumptions | Arduino/PIO startup and compatibility access | legacy target coupling through current PIO environments | `apps/nrf52_node` plus possible legacy ESP PIO compatibility path | PIO environments couple ESP/nRF assumptions; root build must stay stable |
+| `legacy/app_implementations/linux_sim` | Linux simulator and developer-tooling shell | simulator target startup, simulator composition root, smoke/probe tests | app-local CMake, presets, simulator scripts | SDL/desktop platform integration and host tooling | simulator geometry/input assumptions | `apps/linux_sim_shell` invoked by `builds/linux_cmake` | CMake helper and scripts are app-local; simulator remains fast validation path |
+| `legacy/app_implementations/linux_uconsole` | Linux uConsole/AIO2-class handheld shell | uConsole composition root and app model | local GTK/CMake assumptions | GTK/Linux handheld integration | uConsole/AIO2 product assumptions | `apps/linux_uconsole_gtk` invoked by `builds/linux_cmake` | GTK shell and app model are still adjacent; do not destabilize runtime |
+| `legacy/app_implementations/linux_rpi` | Pi OS / Cardputer Zero device shell and bring-up path | Raspberry Pi/Cardputer Zero product startup | CMake framebuffer path and M5 SDK/SCons path | Linux framebuffer, evdev, SDK host integration | Cardputer Zero hardware/device assumptions | future Linux device app shell under `builds/linux_cmake` | hardware validation and dual build path must stay intact |
+| `legacy/app_implementations/linux_unoq` | future UNO Q Linux shell placeholder | target placeholder | not yet authoritative | future Linux device integration | UNO Q product assumptions | future Linux UNO Q app shell under `builds/linux_cmake` | target profile and build path are early |
+| `legacy/app_implementations/gat562_mesh_evb_pro` | nRF/mono device app shell with board-adjacent runtime | device startup, loop runtime, protocol factory, UI runtime | PIO/root build assumptions outside this directory | embedded runtime glue | direct `boards/gat562_mesh_evb_pro` access | `apps/nrf52_node` invoked by `builds/pio_nrf52` | board facts and app runtime are close; separate only after nRF wrapper parity |
 
 ## Findings
 
-`apps/esp_idf` and `apps/esp_pio` are still historical app-shell illusions
+`legacy/app_implementations/esp_idf` and `legacy/app_implementations/esp_pio` are still historical app-shell illusions
 because their names are build-system names and their responsibilities mix build
 entrypoint, compatibility app shell, and runtime glue.
 
-`apps/linux_sim`, `apps/linux_uconsole`, `apps/linux_rpi`, and
-`apps/linux_unoq` are closer to app shells, but their build scripts and app
+`legacy/app_implementations/linux_sim`, `legacy/app_implementations/linux_uconsole`, `legacy/app_implementations/linux_rpi`, and
+`legacy/app_implementations/linux_unoq` are closer to app shells, but their build scripts and app
 shell code are not yet normalized behind `builds/linux_cmake`.
 
-`apps/gat562_mesh_evb_pro` has real product startup meaning, but it is too
+`legacy/app_implementations/gat562_mesh_evb_pro` has real product startup meaning, but it is too
 board-specific to be the final generic nRF52 app shell name.
 
 ## Phase 8.3 Skeleton Direction
@@ -49,10 +49,10 @@ Phase 8.3 adds semantic skeletons:
 
 | Future app shell | Current compatibility source | Build entrypoint | Renderer family | Status |
 | --- | --- | --- | --- | --- |
-| `apps/esp32_lvgl` | `apps/esp_idf` | `builds/esp_idf` | LVGL | executable app shell baseline |
-| `apps/nrf52_node` | `apps/esp_pio`, `apps/gat562_mesh_evb_pro` | `builds/pio_nrf52` | mono/status or future embedded UI | executable app shell baseline |
-| `apps/linux_uconsole_gtk` | `apps/linux_uconsole` | `builds/linux_cmake` | GTK | executable app shell baseline |
-| `apps/linux_sim_shell` | `apps/linux_sim` | `builds/linux_cmake` | simulator/ASCII/host UI | executable app shell baseline |
+| `apps/esp32_lvgl` | `legacy/app_implementations/esp_idf` | `builds/esp_idf` | LVGL | executable app shell baseline |
+| `apps/nrf52_node` | `legacy/app_implementations/esp_pio`, `legacy/app_implementations/gat562_mesh_evb_pro` | `builds/pio_nrf52` | mono/status or future embedded UI | executable app shell baseline |
+| `apps/linux_uconsole_gtk` | `legacy/app_implementations/linux_uconsole` | `builds/linux_cmake` | GTK | executable app shell baseline |
+| `apps/linux_sim_shell` | `legacy/app_implementations/linux_sim` | `builds/linux_cmake` | simulator/ASCII/host UI | executable app shell baseline |
 
 ## Phase 8 Correction Executable Layout Baseline
 
@@ -61,10 +61,10 @@ targets without migrating GTK or simulator runtime behavior.
 
 | App shell | CMake target | Config source | Smoke test | Transitional implementation root |
 | --- | --- | --- | --- | --- |
-| `apps/linux_uconsole_gtk` | `trailmate_linux_uconsole_gtk_shell` | `linux_uconsole_gtk_app_shell.cpp` | `linux_uconsole_gtk_app_shell_smoke.cpp` | `apps/linux_uconsole` |
-| `apps/linux_sim_shell` | `trailmate_linux_sim_shell` | `linux_sim_app_shell.cpp` | `linux_sim_app_shell_smoke.cpp` | `apps/linux_sim` |
+| `apps/linux_uconsole_gtk` | `trailmate_linux_uconsole_gtk_shell` | `linux_uconsole_gtk_app_shell.cpp` | `linux_uconsole_gtk_app_shell_smoke.cpp` | `legacy/app_implementations/linux_uconsole` |
+| `apps/linux_sim_shell` | `trailmate_linux_sim_shell` | `linux_sim_app_shell.cpp` | `linux_sim_app_shell_smoke.cpp` | `legacy/app_implementations/linux_sim` |
 
-`apps/linux_uconsole` and `apps/linux_sim` are now explicitly marked with
+`legacy/app_implementations/linux_uconsole` and `legacy/app_implementations/linux_sim` are now explicitly marked with
 `TRANSITIONAL_IMPLEMENTATION_ROOT.md`.
 
 ## Phase 8 Build/AppShell Executable Convergence
@@ -75,10 +75,10 @@ physical build behavior in the transitional roots.
 
 | App shell | Build wrapper | Shell target or library | Config source | Transitional implementation root |
 | --- | --- | --- | --- | --- |
-| `apps/esp32_lvgl` | `builds/esp_idf` | `trailmate_esp32_lvgl_app_shell` | `esp32_lvgl_app_shell.cpp` | `apps/esp_idf` |
-| `apps/nrf52_node` | `builds/pio_nrf52` | `trailmate-nrf52-node-app-shell` | `nrf52_node_app_shell.cpp` | `apps/esp_pio`, `apps/gat562_mesh_evb_pro` |
-| `apps/linux_uconsole_gtk` | `builds/linux_cmake` | `trailmate_linux_uconsole_gtk_shell` | `linux_uconsole_gtk_app_shell.cpp` | `apps/linux_uconsole` |
-| `apps/linux_sim_shell` | `builds/linux_cmake` | `trailmate_linux_sim_shell` | `linux_sim_app_shell.cpp` | `apps/linux_sim` |
+| `apps/esp32_lvgl` | `builds/esp_idf` | `trailmate_esp32_lvgl_app_shell` | `esp32_lvgl_app_shell.cpp` | `legacy/app_implementations/esp_idf` |
+| `apps/nrf52_node` | `builds/pio_nrf52` | `trailmate-nrf52-node-app-shell` | `nrf52_node_app_shell.cpp` | `legacy/app_implementations/esp_pio`, `legacy/app_implementations/gat562_mesh_evb_pro` |
+| `apps/linux_uconsole_gtk` | `builds/linux_cmake` | `trailmate_linux_uconsole_gtk_shell` | `linux_uconsole_gtk_app_shell.cpp` | `legacy/app_implementations/linux_uconsole` |
+| `apps/linux_sim_shell` | `builds/linux_cmake` | `trailmate_linux_sim_shell` | `linux_sim_app_shell.cpp` | `legacy/app_implementations/linux_sim` |
 
 Compatibility adapter targets and descriptors:
 
@@ -113,8 +113,8 @@ An app shell must not:
 
 ## Migration Notes
 
-The skeleton directories weaken the old assumption that `apps/esp_idf` and
-`apps/esp_pio` are final app shell names. They do not change builds.
+The skeleton directories weaken the old assumption that `legacy/app_implementations/esp_idf` and
+`legacy/app_implementations/esp_pio` are final app shell names. They do not change builds.
 
 Future phases should migrate one shell at a time only after:
 

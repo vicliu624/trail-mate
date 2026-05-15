@@ -125,7 +125,7 @@ race_policy:
   ui_update: "none"
 
 build:
-  app: "apps/linux_sim"
+  app: "legacy/app_implementations/linux_sim"
   board_package: "none"
   cmake_presets: ["linux-sim-debug"]
   enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team"]

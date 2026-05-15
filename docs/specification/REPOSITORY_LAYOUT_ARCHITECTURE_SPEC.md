@@ -251,10 +251,11 @@ It must not restate board pin facts or build-system mechanics.
 
 ## Transitional Historical Layout
 
-Current `apps/esp_idf` and `apps/esp_pio` are transitional build entrypoint
-shapes. They may remain while the build entrypoint migration is planned, but
-Phase 8 must treat them as legacy build entrypoint directories, not final app
-shell names.
+Current `legacy/app_implementations/esp_idf` and
+`legacy/app_implementations/esp_pio` are transitional build entrypoint shapes.
+They may remain while the build entrypoint migration is planned, but Phase 8
+must treat them as legacy build entrypoint directories, not final app shell
+names.
 
 Current `modules/ui_shared` is a transitional mixed UI module. It may remain in
 place while the split is planned, but new Phase 8 work must classify additions
@@ -273,7 +274,8 @@ nRF52 -> builds/pio_nrf52
 Linux -> builds/linux_cmake
 ```
 
-`apps/esp_idf` and `apps/esp_pio` remain transitional until wrapper migration.
+`legacy/app_implementations/esp_idf` and `legacy/app_implementations/esp_pio` remain transitional
+until wrapper migration.
 
 `builds/esp_idf`, `builds/pio_nrf52`, and `builds/linux_cmake` are thin wrapper
 slots. They must not assemble Chat, Map, Team, or GPS runtime, choose UX packs,

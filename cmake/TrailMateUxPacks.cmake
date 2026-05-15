@@ -11,13 +11,16 @@ function(trailmate_add_ui_lvgl_ux_packs target_name)
 
     add_library(${target_name}
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/menu/menu_model.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/screen/screen_binding_registry.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/ux_menu_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp"

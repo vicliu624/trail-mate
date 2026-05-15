@@ -15,7 +15,9 @@ Their build hosts are not interchangeable:
 
 Historically, some build-host identity leaked into `apps/` names. That made
 `apps/esp_idf` and `apps/esp_pio` look like product app shells even though they
-are currently build entrypoint and compatibility directories.
+were build entrypoint and compatibility directories. Their current containment
+paths are `legacy/app_implementations/esp_idf` and
+`legacy/app_implementations/esp_pio`.
 
 Phase 8 separates these concepts:
 
@@ -34,7 +36,7 @@ The authoritative build entrypoint families are:
 | nRF52 | `builds/pio_nrf52` | PlatformIO |
 | Linux | `builds/linux_cmake` | CMake |
 
-`apps/esp_idf and apps/esp_pio are transitional historical build entrypoints.`
+`legacy/app_implementations/esp_idf and legacy/app_implementations/esp_pio are transitional historical build entrypoints.`
 They are not final product app shells.
 
 The final shape should move build-host wrappers toward `builds/` while product

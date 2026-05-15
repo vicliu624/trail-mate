@@ -107,7 +107,7 @@
     },
     {
       "id": "uconsole-gtk-overview-legacy",
-      "path": "apps/linux_uconsole/src/platform/gtk/gtk_uconsole_overview_logic.cpp",
+      "path": "legacy/app_implementations/linux_uconsole/src/platform/gtk/gtk_uconsole_overview_logic.cpp",
       "allowed_tokens": [
         "platform/ui/gps_runtime.h"
       ],

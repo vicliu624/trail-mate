@@ -71,26 +71,26 @@ def check_required_files() -> int:
         "apps/linux_sim_shell/src/linux_sim_app_shell.h",
         "apps/linux_sim_shell/src/linux_sim_app_shell.cpp",
         "apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp",
-        "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
-        "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp",
-        "apps/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
-        "apps/linux_uconsole/src/uconsole_composition_root.h",
-        "apps/linux_uconsole/src/uconsole_composition_root.cpp",
-        "apps/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
-        "apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
-        "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
-        "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp",
-        "apps/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
-        "apps/linux_sim/src/linux_sim_composition_root.h",
-        "apps/linux_sim/src/linux_sim_composition_root.cpp",
-        "apps/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
-        "apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
-        "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
-        "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp",
-        "apps/esp_idf/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
-        "apps/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h",
-        "apps/esp_pio/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
-        "apps/gat562_mesh_evb_pro/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
+        "legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/esp_idf/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "legacy/app_implementations/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h",
+        "legacy/app_implementations/esp_pio/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
+        "legacy/app_implementations/gat562_mesh_evb_pro/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         "docs/targets/README.md",
         "docs/targets/esp32_lvgl_targets.md",
         "docs/targets/nrf52_node_targets.md",
@@ -157,6 +157,10 @@ def check_required_files() -> int:
         "modules/ui_presentation/library.json",
         "modules/ui_presentation/include/ui_presentation/menu/menu_model.h",
         "modules/ui_presentation/src/menu/menu_model.cpp",
+        "modules/ui_presentation/include/ui_presentation/screen/screen_route.h",
+        "modules/ui_presentation/include/ui_presentation/screen/screen_binding_registry.h",
+        "modules/ui_presentation/src/screen/screen_binding_registry.cpp",
+        "modules/ui_presentation/tests/test_screen_binding_registry.cpp",
         "modules/ui_lvgl_ux_packs/README.md",
         "modules/ui_lvgl_ux_packs/library.json",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/common/team_position_picker_renderer.h",
@@ -177,6 +181,10 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h",
         "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_host_adapter.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h",
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack_registry.h",
         "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
@@ -193,18 +201,26 @@ def check_required_files() -> int:
         "modules/ui_lvgl_ux_packs/tests/test_ux_screen_menu_adapter.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_ux_menu_provider.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_lvgl_menu_runtime_adapter.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_compatibility_screen_factory.cpp",
+        "modules/ui_lvgl_ux_packs/tests/test_lvgl_screen_host_adapter.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_menu_binding.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_compatibility_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_uconsole_desktop_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_tiny_node_status_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_simulator_full_ux_pack.cpp",
         "modules/ui_lvgl_ux_packs/tests/test_ux_pack_registry.cpp",
-        "apps/linux_sim/src/ascii_menu_runtime_adapter.h",
-        "apps/linux_sim/src/ascii_menu_runtime_adapter.cpp",
-        "apps/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp",
-        "apps/linux_uconsole/src/gtk_menu_runtime_adapter.h",
-        "apps/linux_uconsole/src/gtk_menu_runtime_adapter.cpp",
-        "apps/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_sim/src/ascii_menu_runtime_adapter.h",
+        "legacy/app_implementations/linux_sim/src/ascii_menu_runtime_adapter.cpp",
+        "legacy/app_implementations/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.h",
+        "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.cpp",
+        "legacy/app_implementations/linux_sim/tests/ascii_screen_host_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.h",
+        "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.h",
+        "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/gtk_screen_host_adapter_smoke.cpp",
         "tools/architecture/check_phase8_layout_ready.py",
     ]
 
@@ -261,7 +277,7 @@ def check_specification_language() -> int:
             "builds/esp_idf",
             "builds/pio_nrf52",
             "builds/linux_cmake",
-            "`apps/esp_idf` and `apps/esp_pio` remain transitional",
+            "`legacy/app_implementations/esp_idf` and `legacy/app_implementations/esp_pio` remain transitional",
             "Phase 8.3 establishes app shell skeletons",
             "apps/esp32_lvgl",
             "apps/nrf52_node",
@@ -313,8 +329,8 @@ def check_audit_language() -> int:
     failures += check_tokens(
         "docs/audits/REPOSITORY_LAYOUT_CURRENT_STATE_AUDIT.md",
         [
-            "apps/esp_idf",
-            "apps/esp_pio",
+            "legacy/app_implementations/esp_idf",
+            "legacy/app_implementations/esp_pio",
             "build entrypoints, not final app shells",
             "ui_shared",
             "LVGL core/widgets/screens/runtime bridges/adapters",
@@ -430,13 +446,13 @@ def check_app_shell_language() -> int:
     failures += check_tokens(
         "docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md",
         [
-            "apps/esp_idf",
-            "apps/esp_pio",
-            "apps/linux_sim",
-            "apps/linux_uconsole",
-            "apps/linux_rpi",
-            "apps/linux_unoq",
-            "apps/gat562_mesh_evb_pro",
+            "legacy/app_implementations/esp_idf",
+            "legacy/app_implementations/esp_pio",
+            "legacy/app_implementations/linux_sim",
+            "legacy/app_implementations/linux_uconsole",
+            "legacy/app_implementations/linux_rpi",
+            "legacy/app_implementations/linux_unoq",
+            "legacy/app_implementations/gat562_mesh_evb_pro",
             "Current role",
             "App shell part",
             "Build entrypoint part",
@@ -465,13 +481,13 @@ def check_app_shell_language() -> int:
         "apps/esp32_lvgl/README.md": [
             "Role = product app shell / target app shell",
             "Build entrypoint = `builds/esp_idf`",
-            "Current transitional path = `apps/esp_idf`",
+            "Current transitional path = `legacy/app_implementations/esp_idf`",
             "must not",
             "own build host files",
             "src/esp32_lvgl_app_shell.h",
             "target_family = esp32_lvgl",
             "default_ux_pack_id = compatibility",
-            "transitional_source = apps/esp_idf",
+            "transitional_source = legacy/app_implementations/esp_idf",
             "legacy_adapter_target = trailmate_esp_idf_legacy_adapter",
             "No behavior change in Phase 8 Build/AppShell Executable Convergence",
         ],
@@ -480,7 +496,7 @@ def check_app_shell_language() -> int:
             "ESP / ESP32-P4",
             "LVGL",
             "`builds/esp_idf`",
-            "`apps/esp_idf`",
+            "`legacy/app_implementations/esp_idf`",
             "own build host files",
             "Executable app shell baseline",
             "esp32_lvgl_app_shell.cpp",
@@ -492,14 +508,14 @@ def check_app_shell_language() -> int:
         "apps/nrf52_node/README.md": [
             "Role = product app shell / target app shell",
             "Build entrypoint = `builds/pio_nrf52`",
-            "Current transitional path = `apps/esp_pio`",
-            "apps/gat562_mesh_evb_pro",
+            "Current transitional path = `legacy/app_implementations/esp_pio`",
+            "legacy/app_implementations/gat562_mesh_evb_pro",
             "own build host files",
             "src/nrf52_node_app_shell.h",
             "target_family = nrf52_node",
             "default_ux_pack_id = tiny_node_status",
-            "transitional_source = apps/esp_pio",
-            "board_specific_transitional_source = apps/gat562_mesh_evb_pro",
+            "transitional_source = legacy/app_implementations/esp_pio",
+            "board_specific_transitional_source = legacy/app_implementations/gat562_mesh_evb_pro",
             "legacy_adapter_target = trailmate_nrf52_pio_legacy_adapter",
             "No behavior change in Phase 8 Build/AppShell Executable Convergence",
         ],
@@ -507,8 +523,8 @@ def check_app_shell_language() -> int:
             "Product app shell / target app shell",
             "nRF52",
             "`builds/pio_nrf52`",
-            "`apps/esp_pio`",
-            "`apps/gat562_mesh_evb_pro`",
+            "`legacy/app_implementations/esp_pio`",
+            "`legacy/app_implementations/gat562_mesh_evb_pro`",
             "own build host files",
             "Executable app shell baseline",
             "nrf52_node_app_shell.cpp",
@@ -520,12 +536,12 @@ def check_app_shell_language() -> int:
         "apps/linux_uconsole_gtk/README.md": [
             "Role = product app shell / target app shell",
             "Build entrypoint = `builds/linux_cmake`",
-            "Current transitional path = `apps/linux_uconsole`",
+            "Current transitional path = `legacy/app_implementations/linux_uconsole`",
             "own build host files",
             "src/linux_uconsole_gtk_app_shell.h",
             "target_id = uconsole",
             "ux_pack_id = uconsole_desktop",
-            "transitional_source = apps/linux_uconsole",
+            "transitional_source = legacy/app_implementations/linux_uconsole",
             "No GTK runtime behavior changes in Phase 8 Correction",
         ],
         "apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md": [
@@ -533,7 +549,7 @@ def check_app_shell_language() -> int:
             "Linux uConsole",
             "GTK",
             "`builds/linux_cmake`",
-            "`apps/linux_uconsole`",
+            "`legacy/app_implementations/linux_uconsole`",
             "own build host files",
             "Executable app shell baseline",
             "linux_uconsole_gtk_app_shell.cpp",
@@ -544,19 +560,19 @@ def check_app_shell_language() -> int:
         "apps/linux_sim_shell/README.md": [
             "Role = product app shell / target app shell",
             "Build entrypoint = `builds/linux_cmake`",
-            "Current transitional path = `apps/linux_sim`",
+            "Current transitional path = `legacy/app_implementations/linux_sim`",
             "own build host files",
             "src/linux_sim_app_shell.h",
             "target_id = linux_sim",
             "ux_pack_id = simulator_full",
-            "transitional_source = apps/linux_sim",
+            "transitional_source = legacy/app_implementations/linux_sim",
             "No simulator runtime behavior changes in Phase 8 Correction",
         ],
         "apps/linux_sim_shell/APP_SHELL_MANIFEST.md": [
             "Product app shell / target app shell",
             "Linux simulator",
             "`builds/linux_cmake`",
-            "`apps/linux_sim`",
+            "`legacy/app_implementations/linux_sim`",
             "own build host files",
             "Executable app shell baseline",
             "linux_sim_app_shell.cpp",
@@ -598,7 +614,7 @@ def check_app_shell_language() -> int:
             "apps/nrf52_node",
             "tiny_node_status",
             "transitional",
-            "apps/esp_pio",
+            "legacy/app_implementations/esp_pio",
             "No behavior change in Phase 8.3",
         ],
         "docs/targets/linux_targets.md": [
@@ -677,8 +693,8 @@ def check_build_entrypoint_language() -> int:
         "nRF52",
         "Linux",
         "CMake",
-        "apps/esp_idf",
-        "apps/esp_pio",
+        "legacy/app_implementations/esp_idf",
+        "legacy/app_implementations/esp_pio",
         "transitional",
         "thin wrapper",
         "App Shell composes",
@@ -700,11 +716,11 @@ def check_build_entrypoint_language() -> int:
         "docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md",
         build_tokens
         + [
-            "apps/linux_sim",
-            "apps/linux_uconsole",
-            "apps/linux_rpi",
-            "apps/linux_unoq",
-            "apps/gat562_mesh_evb_pro",
+            "legacy/app_implementations/linux_sim",
+            "legacy/app_implementations/linux_uconsole",
+            "legacy/app_implementations/linux_rpi",
+            "legacy/app_implementations/linux_unoq",
+            "legacy/app_implementations/gat562_mesh_evb_pro",
             "root `build/`",
             "build.cardputer",
             "build.tab5",
@@ -734,8 +750,8 @@ def check_build_entrypoint_language() -> int:
     failures += check_tokens(
         "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md",
         [
-            "apps/esp_idf",
-            "apps/esp_pio",
+            "legacy/app_implementations/esp_idf",
+            "legacy/app_implementations/esp_pio",
             "transitional historical build entrypoints",
             "They are not final product app shells",
             "New code must not treat this as final app shell semantics",
@@ -753,8 +769,8 @@ def check_build_entrypoint_language() -> int:
             "Build Entrypoint invokes",
             "App Shell composes",
             "thin wrappers",
-            "apps/esp_idf",
-            "apps/esp_pio",
+            "legacy/app_implementations/esp_idf",
+            "legacy/app_implementations/esp_pio",
         ],
         "builds README",
     )
@@ -765,7 +781,7 @@ def check_build_entrypoint_language() -> int:
             "Authoritative ESP build entrypoint",
             "ESP / ESP32-P4 -> ESP-IDF",
             "Current transitional path",
-            "apps/esp_idf",
+            "legacy/app_implementations/esp_idf",
             "apps/esp32_lvgl",
             "thin wrapper",
             "Build Entrypoint invokes",
@@ -779,7 +795,7 @@ def check_build_entrypoint_language() -> int:
         [
             "Authoritative nRF52 build entrypoint",
             "nRF52 -> PlatformIO",
-            "apps/esp_pio",
+            "legacy/app_implementations/esp_pio",
             "root platformio.ini",
             "apps/nrf52_node",
             "thin wrapper",
@@ -794,10 +810,10 @@ def check_build_entrypoint_language() -> int:
         [
             "Authoritative Linux build entrypoint",
             "Linux -> CMake",
-            "apps/linux_sim",
-            "apps/linux_uconsole",
-            "apps/linux_rpi",
-            "apps/linux_unoq",
+            "legacy/app_implementations/linux_sim",
+            "legacy/app_implementations/linux_uconsole",
+            "legacy/app_implementations/linux_rpi",
+            "legacy/app_implementations/linux_unoq",
             "selected Linux app shell",
             "thin wrapper",
             "Build Entrypoint invokes",
@@ -858,7 +874,7 @@ def check_executable_layout_convergence() -> int:
             "LinuxUConsoleGtkAppShellConfig",
             "target_id = \"uconsole\"",
             "ux_pack_id = \"uconsole_desktop\"",
-            "transitional_source = \"apps/linux_uconsole\"",
+            "transitional_source = \"legacy/app_implementations/linux_uconsole\"",
             "legacy_adapter_target = \"trailmate_linux_uconsole_legacy_adapter\"",
             "LinuxUConsoleGtkAppShell",
         ],
@@ -881,10 +897,10 @@ def check_executable_layout_convergence() -> int:
     )
 
     failures += check_tokens(
-        "apps/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
         [
             "UConsoleLegacyImplementationDescriptor",
-            "implementation_root = \"apps/linux_uconsole\"",
+            "implementation_root = \"legacy/app_implementations/linux_uconsole\"",
             "app_shell = \"apps/linux_uconsole_gtk\"",
             "target_id = \"uconsole\"",
             "UConsoleLegacyImplementationAdapter",
@@ -915,7 +931,7 @@ def check_executable_layout_convergence() -> int:
             "LinuxSimAppShellConfig",
             "target_id = \"linux_sim\"",
             "ux_pack_id = \"simulator_full\"",
-            "transitional_source = \"apps/linux_sim\"",
+            "transitional_source = \"legacy/app_implementations/linux_sim\"",
             "legacy_adapter_target = \"trailmate_linux_sim_legacy_adapter\"",
             "LinuxSimAppShell",
         ],
@@ -938,10 +954,10 @@ def check_executable_layout_convergence() -> int:
     )
 
     failures += check_tokens(
-        "apps/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
         [
             "LinuxSimLegacyImplementationDescriptor",
-            "implementation_root = \"apps/linux_sim\"",
+            "implementation_root = \"legacy/app_implementations/linux_sim\"",
             "app_shell = \"apps/linux_sim_shell\"",
             "target_id = \"linux_sim\"",
             "LinuxSimLegacyImplementationAdapter",
@@ -992,7 +1008,7 @@ def check_executable_layout_convergence() -> int:
             "Esp32LvglAppShellConfig",
             "target_family = \"esp32_lvgl\"",
             "default_ux_pack_id = \"compatibility\"",
-            "transitional_source = \"apps/esp_idf\"",
+            "transitional_source = \"legacy/app_implementations/esp_idf\"",
             "legacy_adapter_target = \"trailmate_esp_idf_legacy_adapter\"",
             "Esp32LvglAppShell",
         ],
@@ -1015,10 +1031,10 @@ def check_executable_layout_convergence() -> int:
     )
 
     failures += check_tokens(
-        "apps/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
+        "legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
         [
             "EspIdfLegacyImplementationDescriptor",
-            "implementation_root = \"apps/esp_idf\"",
+            "implementation_root = \"legacy/app_implementations/esp_idf\"",
             "app_shell = \"apps/esp32_lvgl\"",
             "build_wrapper = \"builds/esp_idf\"",
             "EspIdfLegacyImplementationAdapter",
@@ -1032,8 +1048,8 @@ def check_executable_layout_convergence() -> int:
             "Build Entrypoint invokes",
             "App Shell composes",
             "apps/nrf52_node",
-            "apps/esp_pio",
-            "apps/gat562_mesh_evb_pro",
+            "legacy/app_implementations/esp_pio",
+            "legacy/app_implementations/gat562_mesh_evb_pro",
             "env:nrf52_node_wrapper_baseline",
             "symlink://../../apps/nrf52_node",
             "symlink://../../modules/ui_lvgl_ux_packs",
@@ -1073,8 +1089,8 @@ def check_executable_layout_convergence() -> int:
             "Nrf52NodeAppShellConfig",
             "target_family = \"nrf52_node\"",
             "default_ux_pack_id = \"tiny_node_status\"",
-            "transitional_source = \"apps/esp_pio\"",
-            "board_specific_transitional_source = \"apps/gat562_mesh_evb_pro\"",
+            "transitional_source = \"legacy/app_implementations/esp_pio\"",
+            "board_specific_transitional_source = \"legacy/app_implementations/gat562_mesh_evb_pro\"",
             "legacy_adapter_target = \"trailmate_nrf52_pio_legacy_adapter\"",
             "Nrf52NodeAppShell",
         ],
@@ -1098,11 +1114,11 @@ def check_executable_layout_convergence() -> int:
     )
 
     failures += check_tokens(
-        "apps/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h",
+        "legacy/app_implementations/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h",
         [
             "Nrf52PioLegacyImplementationDescriptor",
-            "implementation_root = \"apps/esp_pio\"",
-            "board_specific_root = \"apps/gat562_mesh_evb_pro\"",
+            "implementation_root = \"legacy/app_implementations/esp_pio\"",
+            "board_specific_root = \"legacy/app_implementations/gat562_mesh_evb_pro\"",
             "app_shell = \"apps/nrf52_node\"",
             "build_wrapper = \"builds/pio_nrf52\"",
         ],
@@ -1110,11 +1126,11 @@ def check_executable_layout_convergence() -> int:
     )
 
     for path, app_shell, wrapper in [
-        ("apps/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_uconsole_gtk", "builds/linux_cmake"),
-        ("apps/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_sim_shell", "builds/linux_cmake"),
-        ("apps/esp_idf/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/esp32_lvgl", "builds/esp_idf"),
-        ("apps/esp_pio/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/nrf52_node", "builds/pio_nrf52"),
-        ("apps/gat562_mesh_evb_pro/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/nrf52_node", "builds/pio_nrf52"),
+        ("legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_uconsole_gtk", "builds/linux_cmake"),
+        ("legacy/app_implementations/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/linux_sim_shell", "builds/linux_cmake"),
+        ("legacy/app_implementations/esp_idf/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/esp32_lvgl", "builds/esp_idf"),
+        ("legacy/app_implementations/esp_pio/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/nrf52_node", "builds/pio_nrf52"),
+        ("legacy/app_implementations/gat562_mesh_evb_pro/TRANSITIONAL_IMPLEMENTATION_ROOT.md", "apps/nrf52_node", "builds/pio_nrf52"),
     ]:
         failures += check_tokens(
             path,
@@ -1179,6 +1195,28 @@ def check_ux_pack_runtime_binding() -> int:
             "void clear()",
             "bool add",
         ],
+        "modules/ui_presentation/include/ui_presentation/screen/screen_route.h": [
+            "ScreenRoute",
+            "ScreenOpenMode",
+            "routeForMenuScreen",
+            "MenuScreenId",
+            "Replace",
+            "valid",
+        ],
+        "modules/ui_presentation/include/ui_presentation/screen/screen_binding_registry.h": [
+            "ScreenBindingRegistry",
+            "ScreenBinding",
+            "MenuScreenId",
+            "kMaxBindings",
+            "find",
+            "bool add",
+        ],
+        "modules/ui_presentation/src/screen/screen_binding_registry.cpp": [
+            "ScreenBindingRegistry",
+            "find",
+            "screen_id",
+            "items_",
+        ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_menu_model.h": [
             "ui_presentation/menu/menu_model.h",
             "UxMenuModel",
@@ -1213,13 +1251,43 @@ def check_ux_pack_runtime_binding() -> int:
             "LvglMenuRuntimeAdapter",
             "LvglMenuEntry",
             "ui::menu::MenuModel",
+            "ScreenRoute",
+            "route",
             "buildEntries",
         ],
         "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp": [
             "LvglMenuRuntimeAdapter",
             "buildEntries",
             "MenuItem",
+            "routeForMenuScreen",
             "out_count",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h": [
+            "CompatibilityScreenFactory",
+            "CompatibilityScreenDescriptor",
+            "ScreenBindingRegistry",
+            "describe",
+            "buildBindingsForMenu",
+        ],
+        "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp": [
+            "CompatibilityScreenFactory",
+            "Dashboard",
+            "Chat",
+            "Map",
+            "Settings",
+            "binding_id",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_host_adapter.h": [
+            "LvglScreenHostAdapter",
+            "LvglScreenHostEntry",
+            "resolve",
+            "binding_id",
+        ],
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp": [
+            "LvglScreenHostAdapter",
+            "CompatibilityScreenFactory",
+            "resolve",
+            "binding_id",
         ],
         "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/ux/ux_pack.h": [
             "IUxPack",
@@ -1280,13 +1348,16 @@ def check_ux_pack_runtime_binding() -> int:
         "cmake/TrailMateUxPacks.cmake": [
             "trailmate_add_ui_lvgl_ux_packs",
             "menu_model.cpp",
+            "screen_binding_registry.cpp",
             "screen_registry.cpp",
             "input_binding_set.cpp",
             "ux_menu_model.cpp",
             "ux_screen_menu_adapter.cpp",
             "ux_menu_provider.cpp",
             "ux_pack_registry.cpp",
+            "compatibility_screen_factory.cpp",
             "lvgl_menu_runtime_adapter.cpp",
+            "lvgl_screen_host_adapter.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
             "tiny_node_status_ux_pack.cpp",
@@ -1381,9 +1452,12 @@ def check_composition_root_binding() -> int:
         "modules/product_composition/include/product_composition/presentation_bundle.h",
         [
             "ui_presentation/menu/menu_model.h",
+            "ui_presentation/screen/screen_binding_registry.h",
             "MenuModel",
             "ux_menu",
             "hasUxMenu",
+            "screen_bindings",
+            "hasScreenBindings",
         ],
         "presentation bundle UX menu slot",
     )
@@ -1396,12 +1470,12 @@ def check_composition_root_binding() -> int:
 
     for path, config_token, pack_id in [
         (
-            "apps/linux_uconsole/src/uconsole_composition_root.h",
+            "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
             "UConsoleCompositionRootConfig",
             "uconsole_desktop",
         ),
         (
-            "apps/linux_sim/src/linux_sim_composition_root.h",
+            "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
             "LinuxSimCompositionRootConfig",
             "simulator_full",
         ),
@@ -1411,6 +1485,7 @@ def check_composition_root_binding() -> int:
             [
                 "ui_presentation/menu/menu_model.h",
                 "MenuModel",
+                "ScreenBindingRegistry",
                 "ux_pack_id",
                 pack_id,
                 config_token,
@@ -1425,8 +1500,8 @@ def check_composition_root_binding() -> int:
             )
 
     for path in [
-        "apps/linux_uconsole/src/uconsole_composition_root.cpp",
-        "apps/linux_sim/src/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp",
     ]:
         failures += check_tokens(
             path,
@@ -1434,7 +1509,9 @@ def check_composition_root_binding() -> int:
                 "buildMenuForUxPack",
                 "config.ux_pack_id",
                 "ux_menu_",
+                "screen_bindings_",
                 "presentation_.ux_menu",
+                "presentation_.screen_bindings",
             ],
             "composition root UX menu wiring",
         )
@@ -1469,8 +1546,8 @@ def check_composition_root_binding() -> int:
         )
 
     for path in [
-        "apps/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
-        "apps/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
     ]:
         failures += check_tokens(
             path,
@@ -1478,12 +1555,13 @@ def check_composition_root_binding() -> int:
                 "uxMenu().size()",
                 "presentation().ux_menu",
                 "hasUxMenu",
+                "hasScreenBindings",
             ],
             "composition root UX menu smoke test",
         )
 
     failures += check_tokens(
-        "apps/linux_uconsole/CMakeLists.txt",
+        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
         [
             "TrailMateUxPacks.cmake",
             "trailmate_ui_lvgl_ux_packs",
@@ -1493,7 +1571,7 @@ def check_composition_root_binding() -> int:
     )
 
     failures += check_tokens(
-        "apps/linux_sim/CMakeLists.txt",
+        "legacy/app_implementations/linux_sim/CMakeLists.txt",
         [
             "TrailMateUxPacks.cmake",
             "trailmate_ui_lvgl_ux_packs",
@@ -1550,8 +1628,8 @@ def check_ui_runtime_consumption_boundary() -> int:
         )
 
     for path in [
-        "apps/linux_uconsole/src/uconsole_composition_root.h",
-        "apps/linux_sim/src/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
     ]:
         failures += check_tokens(
             path,
@@ -1572,12 +1650,12 @@ def check_ui_runtime_consumption_boundary() -> int:
             "buildMenuForUxPack",
             "MenuModel",
         ],
-        "apps/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp": [
+        "legacy/app_implementations/linux_sim/tests/ascii_menu_runtime_adapter_smoke.cpp": [
             "AsciiMenuRuntimeAdapter",
             "presentation().ux_menu",
             "hasUxMenu",
         ],
-        "apps/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp": [
+        "legacy/app_implementations/linux_uconsole/tests/gtk_menu_runtime_adapter_smoke.cpp": [
             "GtkMenuRuntimeAdapter",
             "presentation().ux_menu",
             "hasUxMenu",
@@ -1605,12 +1683,12 @@ def check_ui_runtime_consumption_boundary() -> int:
                 failures += fail(f"{path} contains forbidden runtime menu adapter token {token}")
 
     failures += check_tokens(
-        "apps/linux_sim/CMakeLists.txt",
+        "legacy/app_implementations/linux_sim/CMakeLists.txt",
         ["ascii_menu_runtime_adapter_smoke"],
         "ASCII menu runtime adapter test target",
     )
     failures += check_tokens(
-        "apps/linux_uconsole/CMakeLists.txt",
+        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
         ["gtk_menu_runtime_adapter_smoke"],
         "GTK menu runtime adapter test target",
     )
@@ -1619,6 +1697,161 @@ def check_ui_runtime_consumption_boundary() -> int:
         ["lvgl_menu_runtime_adapter"],
         "LVGL menu runtime adapter test target",
     )
+
+    return failures
+
+
+def check_screen_factory_host_binding() -> int:
+    failures = 0
+
+    portable_contracts = {
+        "modules/ui_presentation/include/ui_presentation/screen/screen_route.h": [
+            "ScreenRoute",
+            "ScreenOpenMode",
+            "routeForMenuScreen",
+        ],
+        "modules/ui_presentation/include/ui_presentation/screen/screen_binding_registry.h": [
+            "ScreenBindingRegistry",
+            "ScreenBinding",
+            "find",
+        ],
+        "modules/ui_presentation/tests/test_screen_binding_registry.cpp": [
+            "ScreenRoute",
+            "routeForMenuScreen",
+            "ScreenBindingRegistry",
+        ],
+    }
+    for path, tokens in portable_contracts.items():
+        failures += check_tokens(path, tokens, "portable screen binding contract")
+
+    screen_runtime_contracts = {
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h": [
+            "CompatibilityScreenFactory",
+            "CompatibilityScreenDescriptor",
+            "buildBindingsForMenu",
+        ],
+        "modules/ui_lvgl_ux_packs/tests/test_compatibility_screen_factory.cpp": [
+            "CompatibilityScreenFactory",
+            "Dashboard",
+            "Chat",
+            "Map",
+            "Settings",
+        ],
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_host_adapter.h": [
+            "LvglScreenHostAdapter",
+            "resolve",
+            "binding_id",
+        ],
+        "modules/ui_lvgl_ux_packs/tests/test_lvgl_screen_host_adapter.cpp": [
+            "LvglScreenHostAdapter",
+            "resolve",
+            "binding_id",
+        ],
+        "legacy/app_implementations/linux_sim/src/ascii_screen_host_adapter.h": [
+            "AsciiScreenHostAdapter",
+            "ScreenRoute",
+            "resolve",
+        ],
+        "legacy/app_implementations/linux_uconsole/src/gtk_screen_host_adapter.h": [
+            "GtkScreenHostAdapter",
+            "ScreenRoute",
+            "resolve",
+        ],
+    }
+    for path, tokens in screen_runtime_contracts.items():
+        failures += check_tokens(path, tokens, "screen factory host binding")
+
+    for path in [
+        "legacy/app_implementations/linux_sim/tests/ascii_screen_host_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/gtk_screen_host_adapter_smoke.cpp",
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "presentation().ux_menu",
+                "route",
+                "resolve",
+                "ScreenRoute",
+                "hasScreenBindings",
+            ],
+            "screen host adapter smoke route consumption",
+        )
+
+    for path in [
+        "legacy/app_implementations/linux_sim/src/ascii_menu_runtime_adapter.h",
+        "legacy/app_implementations/linux_uconsole/src/gtk_menu_runtime_adapter.h",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_menu_runtime_adapter.h",
+    ]:
+        failures += check_tokens(
+            path,
+            ["ScreenRoute", "route"],
+            "menu runtime route-bearing descriptor",
+        )
+
+    for path in [
+        "legacy/app_implementations/linux_sim/CMakeLists.txt",
+        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
+    ]:
+        failures += check_tokens(
+            path,
+            [
+                "screen_host_adapter_smoke",
+                "screen_host_adapter.cpp",
+            ],
+            "screen host adapter smoke target",
+        )
+
+    failures += check_tokens(
+        "apps/linux_sim_shell/CMakeLists.txt",
+        [
+            "compatibility_screen_factory",
+            "lvgl_screen_host_adapter",
+        ],
+        "LVGL screen factory smoke target",
+    )
+
+    forbidden_portable = [
+        "lvgl.h",
+        "gtk",
+        "apps/",
+        "apps\\",
+        "boards/",
+        "boards\\",
+        "platform/",
+        "platform\\",
+    ]
+    for path in [
+        "modules/ui_presentation/include/ui_presentation/screen/screen_route.h",
+        "modules/ui_presentation/include/ui_presentation/screen/screen_binding_registry.h",
+        "modules/ui_presentation/src/screen/screen_binding_registry.cpp",
+    ]:
+        text = read_text(path)
+        for token in forbidden_portable:
+            if token in text:
+                failures += fail(f"{path} contains forbidden portable screen token {token}")
+
+    for path in [
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp",
+        "modules/ui_lvgl_ux_packs/include/ui_lvgl_ux_packs/runtime/lvgl_screen_host_adapter.h",
+        "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp",
+    ]:
+        text = read_text(path)
+        for token in [
+            "lvgl.h",
+            "gtk",
+            "apps/",
+            "apps\\",
+            "boards/",
+            "boards\\",
+            "platform/",
+            "platform\\",
+            "ChatService",
+            "MapRuntime",
+            "GpsRuntime",
+        ]:
+            if token in text:
+                failures += fail(f"{path} contains forbidden screen factory token {token}")
 
     return failures
 
@@ -1803,13 +2036,13 @@ def check_build_manifest_authority() -> int:
     for manifest in [
         "platformio.ini",
         "modules/ui_shared/library.json",
-        "apps/esp_pio/library.json",
-        "apps/gat562_mesh_evb_pro/library.json",
+        "legacy/app_implementations/esp_pio/library.json",
+        "legacy/app_implementations/gat562_mesh_evb_pro/library.json",
     ]:
         failures += check_tokens(manifest, common_include_tokens, "new module include authority")
 
     failures += check_tokens(
-        "apps/esp_pio/library.json",
+        "legacy/app_implementations/esp_pio/library.json",
         [
             '"name":  "ui_chat_runtime"',
             '"name":  "ui_map_runtime"',
@@ -1822,7 +2055,7 @@ def check_build_manifest_authority() -> int:
     )
 
     failures += check_tokens(
-        "apps/esp_idf/CMakeLists.txt",
+        "legacy/app_implementations/esp_idf/CMakeLists.txt",
         [
             "modules/ui_chat_runtime/src/chat_page_runtime_event_pump.cpp",
             "modules/ui_map_runtime/src/map_tiles/filesystem_map_tile_source.cpp",
@@ -1842,7 +2075,9 @@ def check_build_manifest_authority() -> int:
             "modules/ui_lvgl_ux_packs/src/ux/ux_screen_menu_adapter.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/ux_menu_provider.cpp",
             "modules/ui_lvgl_ux_packs/src/ux/ux_pack_registry.cpp",
+            "modules/ui_lvgl_ux_packs/src/runtime/compatibility_screen_factory.cpp",
             "modules/ui_lvgl_ux_packs/src/runtime/lvgl_menu_runtime_adapter.cpp",
+            "modules/ui_lvgl_ux_packs/src/runtime/lvgl_screen_host_adapter.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/compatibility_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/uconsole_desktop_ux_pack.cpp",
             "modules/ui_lvgl_ux_packs/src/packs/tiny_node_status_ux_pack.cpp",
@@ -1869,11 +2104,14 @@ def check_build_manifest_authority() -> int:
             "filesystem_map_tile_source.cpp",
             "gps_page_runtime_pump.cpp",
             "menu_model.cpp",
+            "screen_binding_registry.cpp",
             "ux_menu_model.cpp",
             "ux_screen_menu_adapter.cpp",
             "ux_menu_provider.cpp",
             "ux_pack_registry.cpp",
+            "compatibility_screen_factory.cpp",
             "lvgl_menu_runtime_adapter.cpp",
+            "lvgl_screen_host_adapter.cpp",
             "compatibility_ux_pack.cpp",
             "uconsole_desktop_ux_pack.cpp",
             "tiny_node_status_ux_pack.cpp",
@@ -2017,7 +2255,13 @@ def check_transitional_app_markers() -> int:
     marker_path = "docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md"
     marker = read_text(marker_path) if exists(marker_path) else ""
 
-    for path in ["apps/esp_idf", "apps/esp_pio"]:
+    for path in [
+        "legacy/app_implementations/esp_idf",
+        "legacy/app_implementations/esp_pio",
+        "legacy/app_implementations/linux_sim",
+        "legacy/app_implementations/linux_uconsole",
+        "legacy/app_implementations/gat562_mesh_evb_pro",
+    ]:
         if exists(path) and path not in marker:
             failures += fail(f"{path} exists but is not marked transitional")
 
@@ -2025,17 +2269,31 @@ def check_transitional_app_markers() -> int:
     if not apps_root.exists():
         return failures
 
-    allowed = {"esp_idf", "esp_pio"}
-    suspicious_terms = ["idf", "pio", "platformio", "cmake"]
+    allowed = {
+        "README.md",
+        "esp32_lvgl",
+        "nrf52_node",
+        "linux_uconsole_gtk",
+        "linux_sim_shell",
+    }
     for child in apps_root.iterdir():
-        if not child.is_dir():
-            continue
-        name = child.name.lower()
-        if name in allowed:
-            continue
-        if any(term in name for term in suspicious_terms):
+        if child.name not in allowed:
             failures += fail(
-                f"apps/{child.name} looks build-system-named; use builds/ for new build entrypoints"
+                f"apps/{child.name} is not an allowed final app shell entry"
+            )
+
+    for legacy_name in [
+        "esp_idf",
+        "esp_pio",
+        "linux_uconsole",
+        "linux_sim",
+        "linux_rpi",
+        "linux_unoq",
+        "gat562_mesh_evb_pro",
+    ]:
+        if (apps_root / legacy_name).exists():
+            failures += fail(
+                f"apps/{legacy_name} must not contain a legacy implementation root"
             )
 
     return failures
@@ -2053,6 +2311,7 @@ def main() -> int:
     failures += check_ux_pack_runtime_binding()
     failures += check_composition_root_binding()
     failures += check_ui_runtime_consumption_boundary()
+    failures += check_screen_factory_host_binding()
     failures += check_forwarding_headers()
     failures += check_authoritative_include_paths()
     failures += check_build_manifest_authority()
