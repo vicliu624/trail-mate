@@ -36,8 +36,6 @@ Known build references that still touch legacy roots:
   `legacy/app_implementations/linux_rpi`, and
   `legacy/app_implementations/linux_uconsole`
 - `apps/esp32_lvgl/CMakeLists.txt` references `legacy/app_implementations/esp_idf`
-- `apps/linux_sim_shell/CMakeLists.txt` references `legacy/app_implementations/linux_sim`
-- `apps/linux_uconsole_gtk/CMakeLists.txt` references `legacy/app_implementations/linux_uconsole`
 - `legacy/app_implementations/esp_idf/CMakeLists.txt` is the ESP-IDF historical component root
 - `legacy/app_implementations/linux_sim/CMakeLists.txt` is the simulator historical CMake root
 - `legacy/app_implementations/linux_uconsole/CMakeLists.txt` is the uConsole historical CMake root
@@ -145,30 +143,32 @@ Known build references that still touch legacy roots:
 ## Root: `legacy/app_implementations/linux_sim`
 
 - Current purpose: historical simulator implementation root with old simulator
-  target files, local CMake, smoke tests, scripts, and compatibility adapter.
-- Current build callers: `apps/linux_sim_shell/CMakeLists.txt`,
-  `legacy/app_implementations/linux_sim/CMakeLists.txt`, and Linux build wrapper
-  documentation in `builds/linux_cmake/README.md`.
-- Current app shell callers: `apps/linux_sim_shell` uses the transitional source
-  string and `linux_sim_legacy_implementation_adapter`.
-- Current CMake / PlatformIO callers: `apps/linux_sim_shell/CMakeLists.txt` and
+  target files, local CMake, smoke tests, scripts, and a legacy-local
+  compatibility adapter.
+- Current build callers: `legacy/app_implementations/linux_sim/CMakeLists.txt`
+  and Linux build wrapper documentation in `builds/linux_cmake/README.md`.
+  `apps/linux_sim_shell/CMakeLists.txt` no longer compiles the legacy adapter.
+- Current app shell callers: none for the legacy adapter. `apps/linux_sim_shell`
+  owns `LinuxSimLegacySourceDescriptor` and keeps only the transitional source
+  path string.
+- Current CMake / PlatformIO callers:
   `legacy/app_implementations/linux_sim/CMakeLists.txt`.
-- Current include callers: `apps/linux_sim_shell/CMakeLists.txt` adds the legacy
-  adapter include directory for `linux_sim_legacy_implementation_adapter.h`.
+- Current include callers: only the legacy-local smoke test includes
+  `linux_sim_legacy_implementation_adapter.h`.
 - Runtime ownership status: contained historical root. Phase 9-11 runtime entry
   adoption, ASCII descriptor rendering, and screen graph presentation are owned
   by `apps/linux_sim_shell`, `modules/ui_ascii_runtime`, and
   `modules/product_composition`.
 - Safe to delete now? no.
 - First deletion blocker: legacy simulator composition root, simulator local
-  CMake target, adapter smoke coverage, and old simulator scripts still live
-  under this root.
+  CMake target, legacy-local adapter smoke coverage, and old simulator scripts
+  still live under this root.
 - Target replacement owner: `apps/linux_sim_shell`,
   `modules/ui_ascii_runtime`, `modules/product_composition`, and platform
   simulator support.
-- Burn-down step: move or retire the historical simulator composition root and
-  local CMake/script ownership after final app shell smoke coverage no longer
-  needs the legacy adapter.
+- Burn-down step: final app shell no longer depends on
+  `linux_sim_legacy_implementation_adapter`; next blocker is the legacy
+  composition root, local CMake target, and simulator scripts.
 - Deletion blocker: legacy simulator composition root and local CMake/script
   ownership still exist.
 - Replacement owner: `apps/linux_sim_shell` plus `modules/ui_ascii_runtime`.
@@ -176,28 +176,32 @@ Known build references that still touch legacy roots:
 ## Root: `legacy/app_implementations/linux_uconsole`
 
 - Current purpose: historical uConsole GTK implementation root with old GTK
-  widget/page code, local CMake, smoke tests, and compatibility adapter.
-- Current build callers: `apps/linux_uconsole_gtk/CMakeLists.txt`,
-  `legacy/app_implementations/linux_uconsole/CMakeLists.txt`, and Linux build
+  widget/page code, local CMake, smoke tests, and a legacy-local compatibility
+  adapter.
+- Current build callers:
+  `legacy/app_implementations/linux_uconsole/CMakeLists.txt` and Linux build
   wrapper documentation in `builds/linux_cmake/README.md`.
-- Current app shell callers: `apps/linux_uconsole_gtk` uses the transitional
-  source string and `uconsole_legacy_implementation_adapter`.
-- Current CMake / PlatformIO callers: `apps/linux_uconsole_gtk/CMakeLists.txt`
-  and `legacy/app_implementations/linux_uconsole/CMakeLists.txt`.
-- Current include callers: `apps/linux_uconsole_gtk/CMakeLists.txt` adds the
-  legacy adapter include directory for `uconsole_legacy_implementation_adapter.h`.
+  `apps/linux_uconsole_gtk/CMakeLists.txt` no longer compiles the legacy
+  adapter.
+- Current app shell callers: none for the legacy adapter.
+  `apps/linux_uconsole_gtk` owns `LinuxUConsoleGtkLegacySourceDescriptor` and
+  keeps only the transitional source path string.
+- Current CMake / PlatformIO callers:
+  `legacy/app_implementations/linux_uconsole/CMakeLists.txt`.
+- Current include callers: only the legacy-local smoke test includes
+  `uconsole_legacy_implementation_adapter.h`.
 - Runtime ownership status: contained historical GTK root. Phase 9-11 page
   registry adoption, GTK descriptor registry, and screen graph presentation are
   owned by `apps/linux_uconsole_gtk` and `modules/ui_gtk_runtime`.
 - Safe to delete now? no.
 - First deletion blocker: old GTK widget/page implementation, local CMake target,
-  uConsole composition root, and adapter smoke coverage still live under this
-  root.
+  uConsole composition root, and legacy-local adapter smoke coverage still live
+  under this root.
 - Target replacement owner: `apps/linux_uconsole_gtk`, `modules/ui_gtk_runtime`,
   `modules/product_composition`, and `platform/linux`.
-- Burn-down step: move real GTK widget creation to consume descriptor page
-  registry output, then retire the historical local CMake root or make it
-  forwarding-only.
+- Burn-down step: final app shell no longer depends on
+  `uconsole_legacy_implementation_adapter`; next blocker is old GTK widget/page
+  implementation and local CMake.
 - Deletion blocker: old GTK widget/page implementation and local CMake target
   still live here.
 - Replacement owner: `apps/linux_uconsole_gtk` plus `modules/ui_gtk_runtime`.

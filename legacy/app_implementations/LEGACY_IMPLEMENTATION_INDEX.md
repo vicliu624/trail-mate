@@ -49,8 +49,9 @@ authoritative build wrapper, and exit condition.
 - Deletion blocker: old GTK widget/page implementation, local CMake target, and
   adapter smoke coverage still live under this root.
 - Replacement owner: `apps/linux_uconsole_gtk` plus `modules/ui_gtk_runtime`.
-- Next deletion task: make real GTK widget creation consume descriptor page
-  registry output before retiring the local CMake root.
+- Next deletion task: final app shell no longer depends on
+  `uconsole_legacy_implementation_adapter`; next blocker is old GTK widget/page
+  implementation and local CMake.
 
 ## Linux Simulator
 
@@ -65,8 +66,9 @@ authoritative build wrapper, and exit condition.
 - Deletion blocker: legacy simulator composition root, local CMake target,
   adapter smoke coverage, and old simulator scripts still live under this root.
 - Replacement owner: `apps/linux_sim_shell` plus `modules/ui_ascii_runtime`.
-- Next deletion task: move or retire simulator composition/script ownership once
-  final app-shell smoke coverage no longer needs the legacy adapter.
+- Next deletion task: final app shell no longer depends on
+  `linux_sim_legacy_implementation_adapter`; next blocker is legacy composition
+  root, local CMake, and simulator scripts.
 
 ## Linux RPI
 

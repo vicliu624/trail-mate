@@ -1,5 +1,7 @@
 #pragma once
 
+#include "linux_sim_legacy_source_descriptor.h"
+
 namespace trailmate
 {
 namespace apps
@@ -11,8 +13,8 @@ struct LinuxSimAppShellConfig
 {
     const char* target_id = "linux_sim";
     const char* ux_pack_id = "simulator_full";
-    const char* transitional_source = "legacy/app_implementations/linux_sim";
-    const char* legacy_adapter_target = "trailmate_linux_sim_legacy_adapter";
+    const char* transitional_source =
+        linuxSimLegacySourceDescriptor().root_path;
 };
 
 class LinuxSimAppShell

@@ -155,13 +155,13 @@ Executable proof chains:
 ```text
 builds/linux_cmake
   -> apps/linux_uconsole_gtk
-  -> trailmate_linux_uconsole_legacy_adapter
-  -> legacy/app_implementations/linux_uconsole
+  -> linux_uconsole_gtk_legacy_source_descriptor
+  -> product_composition / modules/ui_gtk_runtime
 
 builds/linux_cmake
   -> apps/linux_sim_shell
-  -> trailmate_linux_sim_legacy_adapter
-  -> legacy/app_implementations/linux_sim
+  -> linux_sim_legacy_source_descriptor
+  -> product_composition / modules/ui_ascii_runtime
 
 builds/esp_idf
   -> apps/esp32_lvgl

@@ -21,6 +21,13 @@ include("${PROJECT_SOURCE_DIR}/../../../cmake/TrailMateUxPacks.cmake")
 # ---------------------------------------------------------------------------
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
+add_library(trailmate_linux_sim_legacy_local_adapter
+    src/linux_sim_legacy_implementation_adapter.cpp)
+target_include_directories(trailmate_linux_sim_legacy_local_adapter
+    PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_compile_features(trailmate_linux_sim_legacy_local_adapter
+    PUBLIC cxx_std_20)
+
 add_library(trailmate_linux_sim_composition_root
     src/linux_sim_composition_root.cpp
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
@@ -125,6 +132,13 @@ endif()
 # ---------------------------------------------------------------------------
 
 if(BUILD_TESTING)
+    add_executable(trailmate_linux_sim_legacy_adapter_smoke
+        tests/linux_sim_legacy_implementation_adapter_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_legacy_adapter_smoke
+        PRIVATE trailmate_linux_sim_legacy_local_adapter)
+    add_test(NAME trailmate_linux_sim_legacy_adapter_smoke
+             COMMAND trailmate_linux_sim_legacy_adapter_smoke)
+
     if(TRAIL_MATE_LINUX_SIM_ENABLE_FULL_APP)
     add_executable(trailmate_cardputer_zero_smoke tests/demo_app_smoke.cpp)
     target_link_libraries(trailmate_cardputer_zero_smoke

@@ -32,6 +32,6 @@ Exit condition:
 
 - `apps/linux_uconsole_gtk` owns the app shell startup contract;
 - `builds/linux_cmake` invokes the app shell;
-- `trailmate_linux_uconsole_legacy_adapter` exposes the transitional adapter
-  descriptor;
+- `apps/linux_uconsole_gtk` owns the transitional source descriptor;
+- the legacy adapter remains legacy-local compatibility only;
 - GTK implementation can be moved or wrapped without changing target behavior.

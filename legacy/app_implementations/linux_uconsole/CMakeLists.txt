@@ -42,6 +42,13 @@ include("${PROJECT_SOURCE_DIR}/../../../cmake/TrailMateUxPacks.cmake")
 trailmate_add_linux_common(trailmate_uconsole_linux_common)
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
+add_library(trailmate_linux_uconsole_legacy_local_adapter
+    src/uconsole_legacy_implementation_adapter.cpp)
+target_include_directories(trailmate_linux_uconsole_legacy_local_adapter
+    PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_compile_features(trailmate_linux_uconsole_legacy_local_adapter
+    PUBLIC cxx_std_20)
+
 if(TRAIL_MATE_UCONSOLE_ENABLE_LEGACY_SURFACE)
     include(FetchContent)
 
@@ -169,6 +176,13 @@ trailmate_apply_linux_common_warnings(trailmate_uconsole_shell)
 # ---------------------------------------------------------------------------
 
 if(BUILD_TESTING)
+    add_executable(trailmate_linux_uconsole_legacy_adapter_smoke
+        tests/uconsole_legacy_implementation_adapter_smoke.cpp)
+    target_link_libraries(trailmate_linux_uconsole_legacy_adapter_smoke
+        PRIVATE trailmate_linux_uconsole_legacy_local_adapter)
+    add_test(NAME trailmate_linux_uconsole_legacy_adapter_smoke
+             COMMAND trailmate_linux_uconsole_legacy_adapter_smoke)
+
     add_executable(trailmate_uconsole_map_workspace_smoke
         tests/uconsole_map_workspace_smoke.cpp
     )

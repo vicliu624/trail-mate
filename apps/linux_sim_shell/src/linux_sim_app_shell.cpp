@@ -26,11 +26,14 @@ const char* LinuxSimAppShell::activeUxPackId() const
 
 bool LinuxSimAppShell::validate() const
 {
+    const auto& legacy_source = linuxSimLegacySourceDescriptor();
     return config_.target_id != nullptr &&
            config_.ux_pack_id != nullptr &&
            ui_lvgl_ux::findUxPackById(activeUxPackId()) != nullptr &&
            config_.transitional_source != nullptr &&
-           config_.legacy_adapter_target != nullptr;
+           legacy_source.root_path != nullptr &&
+           legacy_source.historical_name != nullptr &&
+           legacy_source.replacement_owner != nullptr;
 }
 
 } // namespace linux_sim_shell

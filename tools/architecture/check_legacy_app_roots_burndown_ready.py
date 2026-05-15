@@ -65,10 +65,16 @@ SKIP_DIRS = {
 
 DECLARED_TRANSITIONAL_APP_HEADERS = {
     "esp_idf_legacy_implementation_adapter.h",
-    "linux_sim_legacy_implementation_adapter.h",
     "nrf52_pio_legacy_implementation_adapter.h",
-    "uconsole_legacy_implementation_adapter.h",
 }
+
+LINUX_LEGACY_ADAPTER_TOKENS = [
+    "linux_sim_legacy_implementation_adapter",
+    "uconsole_legacy_implementation_adapter",
+    "trailmate_linux_sim_legacy_adapter",
+    "trailmate_linux_uconsole_legacy_adapter",
+    "legacy_adapter_target",
+]
 
 
 def read(rel: str) -> str:
@@ -171,6 +177,69 @@ def check_apps_do_not_directly_include_legacy_roots(failures: list[str]) -> None
             )
 
 
+def check_final_linux_apps_do_not_reference_legacy_adapters(
+    failures: list[str],
+) -> None:
+    for root_name in ["apps/linux_sim_shell", "apps/linux_uconsole_gtk"]:
+        for path in iter_files(ROOT / root_name):
+            if path.suffix not in CODE_SUFFIXES and path.name != "CMakeLists.txt":
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for token in LINUX_LEGACY_ADAPTER_TOKENS:
+                if token in text:
+                    failures.append(
+                        f"{path.relative_to(ROOT).as_posix()} references burned-down Linux legacy adapter token: {token}"
+                    )
+
+
+def check_final_shell_owned_descriptors(failures: list[str]) -> None:
+    required_files = [
+        "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h",
+        "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.cpp",
+        "apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.cpp",
+        "apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp",
+        "docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md",
+    ]
+    for rel in required_files:
+        require_file(rel, failures)
+
+    require_tokens(
+        "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h",
+        [
+            "LinuxSimLegacySourceDescriptor",
+            "root_path = \"legacy/app_implementations/linux_sim\"",
+            "historical_name = \"linux_sim\"",
+            "replacement_owner = \"apps/linux_sim_shell\"",
+            "compatibility_required = true",
+        ],
+        failures,
+    )
+    require_tokens(
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h",
+        [
+            "LinuxUConsoleGtkLegacySourceDescriptor",
+            "root_path = \"legacy/app_implementations/linux_uconsole\"",
+            "historical_name = \"linux_uconsole\"",
+            "replacement_owner = \"apps/linux_uconsole_gtk\"",
+            "compatibility_required = true",
+        ],
+        failures,
+    )
+    require_tokens(
+        "docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md",
+        [
+            "linux_sim_legacy_implementation_adapter",
+            "uconsole_legacy_implementation_adapter",
+            "replacement owner",
+            "migration decision",
+            "legacy-local compatibility only",
+        ],
+        failures,
+    )
+
+
 def check_modules_do_not_reference_legacy_roots(failures: list[str]) -> None:
     for path in iter_code_files(ROOT / "modules"):
         text = path.read_text(encoding="utf-8", errors="ignore")
@@ -235,6 +304,8 @@ def main() -> int:
     check_audit_completeness(failures)
     check_index_burndown_fields(failures)
     check_apps_do_not_directly_include_legacy_roots(failures)
+    check_final_linux_apps_do_not_reference_legacy_adapters(failures)
+    check_final_shell_owned_descriptors(failures)
     check_modules_do_not_reference_legacy_roots(failures)
     check_legacy_roots_do_not_own_post_refactor_runtime(failures)
     check_build_references_are_listed(failures)

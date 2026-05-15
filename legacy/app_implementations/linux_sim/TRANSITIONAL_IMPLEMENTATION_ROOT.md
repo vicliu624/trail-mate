@@ -32,7 +32,7 @@ Exit condition:
 
 - `apps/linux_sim_shell` owns the app shell startup contract;
 - `builds/linux_cmake` invokes the app shell;
-- `trailmate_linux_sim_legacy_adapter` exposes the transitional adapter
-  descriptor;
+- `apps/linux_sim_shell` owns the transitional source descriptor;
+- the legacy adapter remains legacy-local compatibility only;
 - simulator implementation can be moved or wrapped without changing developer
   validation workflows.

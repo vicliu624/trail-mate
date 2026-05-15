@@ -82,8 +82,8 @@ physical build behavior in the transitional roots.
 
 Compatibility adapter targets and descriptors:
 
-- `trailmate_linux_uconsole_legacy_adapter`
-- `trailmate_linux_sim_legacy_adapter`
+- `linux_uconsole_gtk_legacy_source_descriptor`
+- `linux_sim_legacy_source_descriptor`
 - `trailmate_esp_idf_legacy_adapter`
 - `trailmate_nrf52_pio_legacy_adapter`
 

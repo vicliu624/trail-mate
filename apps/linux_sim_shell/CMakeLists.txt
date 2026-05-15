@@ -11,18 +11,9 @@ set(TRAIL_MATE_REPO_ROOT
 include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
-# Transitional Adapter delegates; legacy implementation still runs.
-add_library(trailmate_linux_sim_legacy_adapter
-    "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp")
-
-target_include_directories(trailmate_linux_sim_legacy_adapter
-    PUBLIC
-        "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_sim/src")
-
-target_compile_features(trailmate_linux_sim_legacy_adapter PUBLIC cxx_std_17)
-
 add_library(trailmate_linux_sim_shell
     src/linux_sim_app_shell.cpp
+    src/linux_sim_legacy_source_descriptor.cpp
     src/linux_sim_runtime_entry.cpp
     src/linux_sim_runtime_entry_adoption_probe.cpp
     src/linux_sim_runtime_renderer.cpp
@@ -40,7 +31,6 @@ target_include_directories(trailmate_linux_sim_shell
 
 target_link_libraries(trailmate_linux_sim_shell
     PUBLIC
-        trailmate_linux_sim_legacy_adapter
         trailmate_ui_lvgl_ux_packs)
 
 target_compile_features(trailmate_linux_sim_shell PUBLIC cxx_std_17)
@@ -52,6 +42,13 @@ if(BUILD_TESTING)
         PRIVATE trailmate_linux_sim_shell)
     add_test(NAME trailmate_linux_sim_app_shell_smoke
              COMMAND trailmate_linux_sim_app_shell_smoke)
+
+    add_executable(trailmate_linux_sim_legacy_source_descriptor_smoke
+        tests/linux_sim_legacy_source_descriptor_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_legacy_source_descriptor_smoke
+        PRIVATE trailmate_linux_sim_shell)
+    add_test(NAME trailmate_linux_sim_legacy_source_descriptor_smoke
+             COMMAND trailmate_linux_sim_legacy_source_descriptor_smoke)
 
     add_executable(trailmate_linux_sim_runtime_entry_adoption_probe_smoke
         tests/linux_sim_runtime_entry_adoption_probe_smoke.cpp)
@@ -175,13 +172,6 @@ if(BUILD_TESTING)
         PRIVATE cxx_std_17)
     add_test(NAME trailmate_legacy_map_overlay_source_alias_smoke
              COMMAND trailmate_legacy_map_overlay_source_alias_smoke)
-
-    add_executable(trailmate_linux_sim_legacy_adapter_smoke
-        "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp")
-    target_link_libraries(trailmate_linux_sim_legacy_adapter_smoke
-        PRIVATE trailmate_linux_sim_legacy_adapter)
-    add_test(NAME trailmate_linux_sim_legacy_adapter_smoke
-             COMMAND trailmate_linux_sim_legacy_adapter_smoke)
 
     add_executable(trailmate_ui_presentation_screen_binding_registry_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_screen_binding_registry.cpp")

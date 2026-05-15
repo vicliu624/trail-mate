@@ -1,5 +1,7 @@
 #pragma once
 
+#include "linux_uconsole_gtk_legacy_source_descriptor.h"
+
 namespace trailmate
 {
 namespace apps
@@ -11,8 +13,8 @@ struct LinuxUConsoleGtkAppShellConfig
 {
     const char* target_id = "uconsole";
     const char* ux_pack_id = "uconsole_desktop";
-    const char* transitional_source = "legacy/app_implementations/linux_uconsole";
-    const char* legacy_adapter_target = "trailmate_linux_uconsole_legacy_adapter";
+    const char* transitional_source =
+        linuxUConsoleGtkLegacySourceDescriptor().root_path;
 };
 
 class LinuxUConsoleGtkAppShell
