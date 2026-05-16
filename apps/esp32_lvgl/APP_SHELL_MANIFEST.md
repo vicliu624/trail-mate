@@ -64,8 +64,16 @@ UX Pack Runtime Binding:
 - `Esp32LvglAppShell::validate()` resolves `default_ux_pack_id` through
   `findUxPackById`.
 
-Current ESP-IDF compatibility adapter target:
+Current ESP-IDF final owner surfaces:
 
-- `trailmate_esp_idf_legacy_adapter`
+- `esp32_lvgl_startup_runtime.*`
+- `esp32_lvgl_loop_runtime.*`
+- `esp32_lvgl_runtime_config.*`
 
-No behavior change in Phase 8 Build/AppShell Executable Convergence.
+Component source ownership:
+
+- `builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake`
+
+Forbidden active dependency:
+
+- `esp_idf_legacy_implementation_adapter.cpp`

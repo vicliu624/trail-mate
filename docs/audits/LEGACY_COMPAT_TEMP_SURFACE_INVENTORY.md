@@ -346,13 +346,13 @@ Current location:
 - `legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.*`
 
 Current callers:
-- `apps/esp32_lvgl/CMakeLists.txt`
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.*`
-- `tools/architecture/check_phase8_layout_ready.py`
+- docs and inventory only after Batch 2.
+- `apps/esp32_lvgl` uses `esp32_lvgl_historical_source_descriptor.*`.
+- `builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake` owns migrated ESP-IDF
+  source lists.
 
 Current responsibility:
-- exposes ESP-IDF historical root identity and adapter target to the final
-  ESP32 LVGL app shell baseline.
+- historical adapter source retained under the ESP-IDF historical root.
 
 Is this final architecture?
 - No.
@@ -362,14 +362,15 @@ Final owner:
   entrypoint wiring.
 
 Disposition:
-- Must Migrate.
+- Must Delete after historical root deletion readiness.
 
 Delete condition:
 - `apps/esp32_lvgl` and `builds/esp_idf` no longer compile or include this
   legacy adapter, and ESP-IDF source ownership has moved to final owners.
 
 Risk:
-- high; active CMake still compiles this adapter.
+- medium; source is retained but no final app shell or build entrypoint should
+  compile it.
 
 ## Surface: nrf52_pio_legacy_implementation_adapter
 

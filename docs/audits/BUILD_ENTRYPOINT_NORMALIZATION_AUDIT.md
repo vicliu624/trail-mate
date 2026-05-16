@@ -155,19 +155,19 @@ Executable proof chains:
 ```text
 builds/linux_cmake
   -> apps/linux_uconsole_gtk
-  -> linux_uconsole_gtk_legacy_source_descriptor
+  -> linux_uconsole_gtk_historical_source_descriptor
   -> product_composition / modules/ui_gtk_runtime
 
 builds/linux_cmake
   -> apps/linux_sim_shell
-  -> linux_sim_legacy_source_descriptor
+  -> linux_sim_historical_source_descriptor
   -> product_composition / modules/ui_ascii_runtime
 
 builds/esp_idf
   -> apps/esp32_lvgl
   -> trailmate_esp32_lvgl_app_shell
-  -> trailmate_esp_idf_legacy_adapter
-  -> legacy/app_implementations/esp_idf
+  -> builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake
+  -> apps/esp32_lvgl + platform/esp/radio
 
 builds/pio_nrf52
   -> apps/nrf52_node

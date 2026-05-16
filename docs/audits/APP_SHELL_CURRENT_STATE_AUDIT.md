@@ -82,9 +82,10 @@ physical build behavior in the transitional roots.
 
 Compatibility adapter targets and descriptors:
 
-- `linux_uconsole_gtk_legacy_source_descriptor`
-- `linux_sim_legacy_source_descriptor`
-- `trailmate_esp_idf_legacy_adapter`
+- `linux_uconsole_gtk_historical_source_descriptor`
+- `linux_sim_historical_source_descriptor`
+- `esp32_lvgl_historical_source_descriptor`
+- `ESP_IDF_COMPONENT_SOURCES.cmake`
 - `trailmate_nrf52_pio_legacy_adapter`
 
 This changes the status of `apps/esp32_lvgl` and `apps/nrf52_node` from

@@ -1,5 +1,5 @@
 #include "apps/esp_idf/app_facade_runtime.h"
-#include "apps/esp_idf/meshtastic_radio_adapter.h"
+#include "platform/esp/radio/meshtastic_radio_adapter.h"
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
@@ -1499,7 +1499,7 @@ class MinimalAppFacade final : public app::IAppFacade
                          runtime_config_.target_name ? runtime_config_.target_name : "esp-idf");
                 return false;
             }
-            auto backend = std::make_unique<apps::esp_idf::MeshtasticRadioAdapter>(
+            auto backend = std::make_unique<platform::esp::radio::MeshtasticRadioAdapter>(
                 *lora_board_);
             meshtastic_adapter_ = backend.get();
             (void)mesh_router_->installBackend(protocol, std::move(backend));
@@ -1661,7 +1661,7 @@ class MinimalAppFacade final : public app::IAppFacade
     std::unique_ptr<chat::RamStore> chat_store_;
     std::unique_ptr<chat::MeshAdapterRouterCore> mesh_router_;
     LoopbackMeshAdapter* loopback_adapter_ = nullptr;
-    apps::esp_idf::MeshtasticRadioAdapter* meshtastic_adapter_ = nullptr;
+    platform::esp::radio::MeshtasticRadioAdapter* meshtastic_adapter_ = nullptr;
     std::unique_ptr<chat::ChatService> chat_service_;
 
     std::unique_ptr<MinimalTeamRuntime> team_runtime_;

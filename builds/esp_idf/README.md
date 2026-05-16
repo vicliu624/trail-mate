@@ -8,7 +8,7 @@ Build authority:
 ESP / ESP32-P4 -> ESP-IDF
 ```
 
-Current transitional path:
+Current transitional path / historical component root still present:
 
 ```text
 legacy/app_implementations/esp_idf
@@ -21,9 +21,16 @@ builds/esp_idf
   -> invokes apps/esp32_lvgl app shell
 ```
 
-This directory is a Phase 8.2 migration stub. It does not yet contain ESP-IDF
-CMake project files, component manifests, sdkconfig defaults, or generated build
-state.
+This directory now owns the migrated ESP-IDF source list and target defaults
+introduced in Batch 2:
+
+- `ESP_IDF_COMPONENT_SOURCES.cmake`
+- `targets/tab5/sdkconfig.defaults`
+- `targets/tdisplayp4_tft/sdkconfig.defaults`
+- `targets/tdisplayp4_amoled/sdkconfig.defaults`
+
+The physical ESP-IDF `idf_component_register` call may temporarily remain in
+the historical component root until component registration itself is moved.
 
 Rules:
 
@@ -33,5 +40,4 @@ Rules:
 - do not assemble Chat/Map/GPS runtime here
 - do not choose UX pack here
 - do not define board facts here
-- do not move current ESP-IDF files until equivalent wrapper invocation is
-  validated
+- do not invent target defaults that are not backed by repository evidence

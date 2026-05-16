@@ -7,6 +7,8 @@ file(GLOB_RECURSE trail_mate_idf_local_sources
     ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp
 )
 
+include(${CMAKE_CURRENT_LIST_DIR}/../../../builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake)
+
 file(GLOB_RECURSE trail_mate_idf_external_sources
     ${CMAKE_SOURCE_DIR}/modules/core_sys/src/*.c
     ${CMAKE_SOURCE_DIR}/modules/core_sys/src/*.cc
@@ -364,6 +366,20 @@ list(FILTER trail_mate_idf_external_sources EXCLUDE REGEX ".*/modules/core_chat/
 list(FILTER trail_mate_idf_external_sources EXCLUDE REGEX ".*/modules/core_chat/src/ble/.*\.cpp$")
 list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/idf_component_anchor\.cpp$")
 list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/gps_tracker_overlay\.cpp$")
+list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/startup_runtime\.cpp$")
+list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/loop_runtime\.cpp$")
+list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/runtime_config\.cpp$")
+list(FILTER trail_mate_idf_local_sources EXCLUDE REGEX ".*/src/meshtastic_radio_adapter\.cpp$")
+
+list(APPEND trail_mate_idf_external_sources
+    ${TRAILMATE_ESP_IDF_APP_SHELL_SOURCES}
+    ${TRAILMATE_ESP_IDF_PRODUCT_COMPOSITION_SOURCES}
+    ${TRAILMATE_ESP_IDF_PLATFORM_SOURCES}
+)
+
+list(APPEND trail_mate_idf_include_dirs
+    ${TRAILMATE_ESP_IDF_FINAL_INCLUDE_DIRS}
+)
 
 idf_component_register(
     SRCS "src/idf_component_anchor.cpp"

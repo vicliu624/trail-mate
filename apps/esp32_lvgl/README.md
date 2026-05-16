@@ -4,8 +4,8 @@ Role = product app shell / target app shell.
 
 `apps/esp32_lvgl` is the ESP + LVGL product app shell executable baseline.
 
-It is not an ESP-IDF project directory and does not contain build host files in
-Phase 8 Build/AppShell Executable Convergence.
+It is not an ESP-IDF project directory. Batch 2 gives this app shell final
+ownership of ESP32 LVGL startup, loop, and runtime-config source.
 
 ```text
 Build Entrypoint invokes.
@@ -20,6 +20,8 @@ UX Pack presents.
 Build entrypoint = `builds/esp_idf`
 
 Historical source identity = `legacy/app_implementations/esp_idf`
+
+Component source list = `builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake`
 
 ## Future Responsibilities
 
@@ -55,10 +57,20 @@ Current config:
 ```text
 target_family = esp32_lvgl
 default_ux_pack_id = compatibility
+build_entrypoint = builds/esp_idf
+component_sources = builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake
 historical_root_name = legacy/app_implementations/esp_idf
 historical_role = pre-refactor ESP-IDF/LVGL implementation root
 replacement_owner = apps/esp32_lvgl + builds/esp_idf
-legacy_adapter_target = trailmate_esp_idf_legacy_adapter
 ```
 
-No behavior change in Phase 8 Build/AppShell Executable Convergence.
+Runtime owner files:
+
+```text
+src/esp32_lvgl_startup_runtime.*
+src/esp32_lvgl_loop_runtime.*
+src/esp32_lvgl_runtime_config.*
+```
+
+`apps/esp32_lvgl` must not compile
+`esp_idf_legacy_implementation_adapter.cpp`.

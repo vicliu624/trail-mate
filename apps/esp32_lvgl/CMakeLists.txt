@@ -8,27 +8,24 @@ set(TRAIL_MATE_REPO_ROOT
 
 include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
-
-add_library(trailmate_esp_idf_legacy_adapter
-    "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp")
-
-target_include_directories(trailmate_esp_idf_legacy_adapter
-    PUBLIC
-        "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/esp_idf/src")
-
-target_compile_features(trailmate_esp_idf_legacy_adapter PUBLIC cxx_std_17)
+include(CTest)
 
 add_library(trailmate_esp32_lvgl_app_shell
     src/esp32_lvgl_app_shell.cpp
-    src/esp32_lvgl_historical_source_descriptor.cpp)
+    src/esp32_lvgl_historical_source_descriptor.cpp
+    src/esp32_lvgl_startup_runtime.cpp
+    src/esp32_lvgl_loop_runtime.cpp
+    src/esp32_lvgl_runtime_config.cpp
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_profile.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_build_binding.cpp")
 
 target_include_directories(trailmate_esp32_lvgl_app_shell
     PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}/src")
+        "${CMAKE_CURRENT_LIST_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include")
 
 target_link_libraries(trailmate_esp32_lvgl_app_shell
     PUBLIC
-        trailmate_esp_idf_legacy_adapter
         trailmate_ui_lvgl_ux_packs)
 
 target_compile_features(trailmate_esp32_lvgl_app_shell PUBLIC cxx_std_17)
@@ -47,4 +44,39 @@ if(BUILD_TESTING)
         PRIVATE trailmate_esp32_lvgl_app_shell)
     add_test(NAME trailmate_esp32_lvgl_historical_source_descriptor_smoke
              COMMAND trailmate_esp32_lvgl_historical_source_descriptor_smoke)
+
+    add_executable(trailmate_esp32_lvgl_startup_runtime_smoke
+        tests/esp32_lvgl_startup_runtime_smoke.cpp)
+    target_link_libraries(trailmate_esp32_lvgl_startup_runtime_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_esp32_lvgl_startup_runtime_smoke
+             COMMAND trailmate_esp32_lvgl_startup_runtime_smoke)
+
+    add_executable(trailmate_esp32_lvgl_loop_runtime_smoke
+        tests/esp32_lvgl_loop_runtime_smoke.cpp)
+    target_link_libraries(trailmate_esp32_lvgl_loop_runtime_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_esp32_lvgl_loop_runtime_smoke
+             COMMAND trailmate_esp32_lvgl_loop_runtime_smoke)
+
+    add_executable(trailmate_esp32_lvgl_runtime_config_smoke
+        tests/esp32_lvgl_runtime_config_smoke.cpp)
+    target_link_libraries(trailmate_esp32_lvgl_runtime_config_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_esp32_lvgl_runtime_config_smoke
+             COMMAND trailmate_esp32_lvgl_runtime_config_smoke)
+
+    add_executable(trailmate_product_target_profile_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/tests/test_target_profile.cpp")
+    target_link_libraries(trailmate_product_target_profile_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_product_target_profile_smoke
+             COMMAND trailmate_product_target_profile_smoke)
+
+    add_executable(trailmate_product_target_build_binding_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/tests/test_target_build_binding.cpp")
+    target_link_libraries(trailmate_product_target_build_binding_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_product_target_build_binding_smoke
+             COMMAND trailmate_product_target_build_binding_smoke)
 endif()

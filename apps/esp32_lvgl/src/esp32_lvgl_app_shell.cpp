@@ -24,10 +24,11 @@ bool Esp32LvglAppShell::validate() const
     return config_.target_family != nullptr &&
            config_.default_ux_pack_id != nullptr &&
            ui_lvgl_ux::findUxPackById(activeUxPackId()) != nullptr &&
+           config_.build_entrypoint != nullptr &&
+           config_.component_sources != nullptr &&
            config_.historical_root_name != nullptr &&
            config_.historical_role != nullptr &&
-           config_.replacement_owner != nullptr &&
-           config_.legacy_adapter_target != nullptr;
+           config_.replacement_owner != nullptr;
 }
 
 } // namespace esp32_lvgl
