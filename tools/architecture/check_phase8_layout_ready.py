@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +17,20 @@ def read_text(path: str) -> str:
 def fail(message: str) -> int:
     print(f"[phase8-layout-ready] FAIL: {message}")
     return 1
+
+
+def check_post_root_legacy_removed() -> int:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/architecture/check_no_root_legacy_ready.py")],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        output = (result.stdout + result.stderr).strip()
+        return fail(f"post-root legacy removal check failed:\n{output}")
+    print("[phase8-layout-ready] OK (root legacy removed)")
+    return 0
 
 
 def iter_code_files(root: Path):
@@ -2501,6 +2516,9 @@ def check_transitional_app_markers() -> int:
 
 
 def main() -> int:
+    if not exists("legacy"):
+        return check_post_root_legacy_removed()
+
     failures = 0
     failures += check_required_files()
     failures += check_specification_language()

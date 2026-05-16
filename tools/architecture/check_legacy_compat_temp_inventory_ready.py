@@ -75,6 +75,7 @@ ALLOWED_DISPOSITIONS = [
     "Must Delete",
     "Must Rename",
     "Must Migrate",
+    "Deleted",
     "Keep as Final Adapter",
     "Keep as Deprecated Alias Temporarily",
     "Test-only / Smoke-only",

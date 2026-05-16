@@ -9,9 +9,9 @@ int main()
         trailmate::apps::nrf52_node::nrf52HistoricalSourceDescriptor();
 
     assert(std::strcmp(descriptor.historical_generic_root_name,
-                       "legacy/app_implementations/esp_pio") == 0);
+                       "removed root esp_pio") == 0);
     assert(std::strcmp(descriptor.historical_board_root_name,
-                       "legacy/app_implementations/gat562_mesh_evb_pro") == 0);
+                       "removed root gat562_mesh_evb_pro") == 0);
     assert(std::strcmp(descriptor.historical_role,
                        "pre-refactor PlatformIO/nRF52 implementation roots") == 0);
     assert(std::strcmp(descriptor.replacement_owner,

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -415,6 +417,20 @@ def check_build_references_are_listed(failures: list[str]) -> None:
 
 
 def main() -> int:
+    if not (ROOT / "legacy").exists():
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools/architecture/check_no_root_legacy_ready.py")],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            output = (result.stdout + result.stderr).strip()
+            print(f"[legacy-app-roots-burndown] {output}")
+            return 1
+        print("[legacy-app-roots-burndown] historical helper: root legacy removed")
+        return 0
+
     failures: list[str] = []
 
     check_audit_completeness(failures)

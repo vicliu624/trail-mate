@@ -10,12 +10,12 @@ Current migrated source:
 
 Evidence:
 
-- migrated from `legacy/app_implementations/esp_idf/include/apps/esp_idf/meshtastic_radio_adapter.h`
-- migrated from `legacy/app_implementations/esp_idf/src/meshtastic_radio_adapter.cpp`
+- migrated from `removed root esp_idf/include/apps/esp_idf/meshtastic_radio_adapter.h`
+- migrated from `removed root esp_idf/src/meshtastic_radio_adapter.cpp`
 
 Rules:
 
 - do not select UX packs here
 - do not own app shell startup or loop sequencing here
-- do not include `legacy/app_implementations`
+- do not include `removed legacy app implementation roots`
 - keep protocol behavior unchanged unless a protocol-specific change is made

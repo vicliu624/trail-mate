@@ -10,7 +10,7 @@ int main()
             linuxUConsoleGtkHistoricalSourceDescriptor();
 
     assert(std::strcmp(descriptor.historical_root_name,
-                       "legacy/app_implementations/linux_uconsole") == 0);
+                       "removed root linux_uconsole") == 0);
     assert(std::strcmp(descriptor.historical_role,
                        "pre-refactor uConsole GTK implementation root") == 0);
     assert(std::strcmp(descriptor.replacement_owner,

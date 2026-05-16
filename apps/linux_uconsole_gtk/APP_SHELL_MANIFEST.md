@@ -20,7 +20,7 @@ Future authoritative build entrypoint:
 
 Current transitional path:
 
-- `legacy/app_implementations/linux_uconsole`
+- `removed root linux_uconsole`
 
 ## Future Responsibilities
 
@@ -71,6 +71,6 @@ UX Pack Runtime Binding:
 
 Transitional implementation root:
 
-- `legacy/app_implementations/linux_uconsole`
+- `removed root linux_uconsole`
 
 No GTK runtime behavior change in Phase 8 Correction.

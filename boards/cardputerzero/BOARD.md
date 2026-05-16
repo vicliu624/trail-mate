@@ -12,7 +12,7 @@ This record describes current repo evidence for the Linux Cardputer Zero route.
 
 - board id: `cardputerzero`
 - current build entry evidence: `builds/linux_cmake`
-- current implementation evidence: `legacy/app_implementations/linux_rpi`
+- current implementation evidence: `removed root linux_rpi`
 - current shared Linux code: `platform/linux/common`
 
 ## Confirmed Facts

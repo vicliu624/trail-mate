@@ -16,8 +16,8 @@ For Linux bring-up:
 
 - `apps/linux_sim_shell` is the final simulator and developer-tooling app shell.
 - `apps/linux_uconsole_gtk` is the final GTK/uConsole app shell.
-- `legacy/app_implementations/linux_sim` and
-  `legacy/app_implementations/linux_uconsole` are transitional historical roots
+- `removed root linux_sim` and
+  `removed root linux_uconsole` are transitional historical roots
   that may be reached only through declared compatibility adapters.
-- `legacy/app_implementations/linux_rpi` remains a historical bring-up root
+- `removed root linux_rpi` remains a historical bring-up root
   until a final Linux device app shell owns the product path.

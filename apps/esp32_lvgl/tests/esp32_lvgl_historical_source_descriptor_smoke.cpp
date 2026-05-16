@@ -9,7 +9,7 @@ int main()
         trailmate::apps::esp32_lvgl::esp32LvglHistoricalSourceDescriptor();
 
     assert(std::strcmp(descriptor.historical_root_name,
-                       "legacy/app_implementations/esp_idf") == 0);
+                       "removed root esp_idf") == 0);
     assert(std::strcmp(descriptor.historical_role,
                        "pre-refactor ESP-IDF/LVGL implementation root") == 0);
     assert(std::strcmp(descriptor.replacement_owner,

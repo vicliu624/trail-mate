@@ -20,8 +20,8 @@ Future authoritative build entrypoint:
 
 Historical source identities:
 
-- `legacy/app_implementations/esp_pio`
-- `legacy/app_implementations/gat562_mesh_evb_pro`
+- `removed root esp_pio`
+- `removed root gat562_mesh_evb_pro`
 
 ## Future Responsibilities
 

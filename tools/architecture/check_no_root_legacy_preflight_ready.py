@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,7 +26,18 @@ def main() -> int:
     failures: list[str] = []
 
     if not (ROOT / "legacy").is_dir():
-        failures.append("legacy/ is already absent; use the final no-root checker instead")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools/architecture/check_no_root_legacy_ready.py")],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            output = (result.stdout + result.stderr).strip()
+            print(f"[no-root-legacy-preflight] historical helper failed final checker:\n{output}")
+            return 1
+        print("[no-root-legacy-preflight] historical helper: root legacy already removed")
+        return 0
 
     inventory_path = ROOT / INVENTORY
     if not inventory_path.is_file():

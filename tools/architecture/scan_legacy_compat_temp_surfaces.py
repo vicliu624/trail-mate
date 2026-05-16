@@ -106,6 +106,8 @@ def scan() -> list[Match]:
         if not should_scan(rel):
             continue
         path = ROOT / rel
+        if not path.exists():
+            continue
         try:
             lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
         except OSError:

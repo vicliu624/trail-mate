@@ -12,7 +12,6 @@ architecture layers.
 | --- | --- | --- | --- |
 | `apps/` | final product app shells | product startup shell, active UX pack selection, app-owned probes | legacy implementation roots, board-specific historical roots, runtime service implementation sprawl |
 | `builds/` | build entrypoints | thin build wrappers and build target selection | product implementation, UX decisions, renderer ownership |
-| `legacy/app_implementations/` | historical implementation roots | compatibility containment for old roots | new runtime adoption code, new product features, new renderer descriptor ownership |
 | `modules/` | stable runtime / presentation / renderer / descriptor modules | reusable presentation, runtime, descriptor, renderer-safe DTO, adapter ports | dependencies on `apps/`, product shell policy, board facts as UX policy |
 | `platform/` | platform / HAL / SDK adapters | platform-specific SDK and HAL boundaries | app shell behavior, UX selection, product feature policy |
 | `boards/` | hardware facts only | pins, capabilities, hardware descriptions | UX decisions, page/menu selection, runtime routing |
@@ -36,7 +35,7 @@ default path again.
 4. App shells must not create concrete runtime services such as chat, map, GPS,
    or protocol services.
 5. Board facts must not decide UX.
-6. `legacy/app_implementations` must not gain new product features.
+6. Root `legacy/` and `legacy/app_implementations/` are forbidden.
 7. `modules/` must not depend on `apps/`.
 8. Renderers must not create legacy services.
 9. GTK descriptor consumption must not create `GtkWidget`.
@@ -44,6 +43,16 @@ default path again.
     or branch on `BOARD_`.
 11. New hardcoded page registries must not be primary sources.
 12. New `Legacy*` bridges are forbidden for runtime work.
+13. Active checkers must not require legacy roots to exist.
+14. `docs/archive` must not contain a source archive.
+15. New `legacy_source_descriptor` files are forbidden.
+16. New transitional UI layers are forbidden.
+
+## Removed Legacy Roots
+
+Root `legacy/` has been removed. Historical legacy source roots are recorded
+only in `docs/archive/REMOVED_LEGACY_ROOTS.md`. No active architecture layer may
+be named `legacy/`.
 
 ## Post-Freeze Work Classification
 

@@ -3,11 +3,11 @@ cmake_minimum_required(VERSION 3.16.0)
 set(TRAIL_MATE_IDF_TARGET "tab5" CACHE STRING "Active ESP-IDF target")
 set_property(CACHE TRAIL_MATE_IDF_TARGET PROPERTY STRINGS
     tab5
-    t_display_p4_tft
-    t_display_p4_amoled
+    tdisplayp4_tft
+    tdisplayp4_amoled
 )
 
-set(TRAIL_MATE_IDF_TARGET_DIR "${CMAKE_SOURCE_DIR}/legacy/app_implementations/esp_idf/targets/${TRAIL_MATE_IDF_TARGET}")
+set(TRAIL_MATE_IDF_TARGET_DIR "${CMAKE_SOURCE_DIR}/builds/esp_idf/targets/${TRAIL_MATE_IDF_TARGET}")
 if(NOT EXISTS "${TRAIL_MATE_IDF_TARGET_DIR}/sdkconfig.defaults")
     message(FATAL_ERROR "Missing sdkconfig.defaults for TRAIL_MATE_IDF_TARGET='${TRAIL_MATE_IDF_TARGET}' at ${TRAIL_MATE_IDF_TARGET_DIR}")
 endif()
@@ -18,13 +18,12 @@ endif()
 set(SDKCONFIG "${CMAKE_BINARY_DIR}/sdkconfig.${TRAIL_MATE_IDF_TARGET}")
 set(SDKCONFIG_DEFAULTS "${TRAIL_MATE_IDF_TARGET_DIR}/sdkconfig.defaults")
 
-# `legacy/app_implementations/esp_idf` is now the shared ESP-IDF component root.
+# `builds/esp_idf` owns ESP-IDF target defaults after root legacy removal.
 # Board choice stays explicit via `TRAIL_MATE_IDF_TARGET`, while board-specific
 # runtime logic continues to live under `platform/esp/boards/<board>`.
 message(STATUS "trail-mate IDF target: ${TRAIL_MATE_IDF_TARGET}")
 message(STATUS "trail-mate SDKCONFIG path: ${SDKCONFIG}")
 set(EXTRA_COMPONENT_DIRS
-    legacy/app_implementations/esp_idf
     platform/esp/idf_components
 )
 

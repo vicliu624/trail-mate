@@ -19,7 +19,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/pio_nrf52`
 
-Historical source identity = `legacy/app_implementations/esp_pio` and `legacy/app_implementations/gat562_mesh_evb_pro`
+Historical source identity = `removed root esp_pio` and `removed root gat562_mesh_evb_pro`
 
 ## Future Responsibilities
 
@@ -55,8 +55,8 @@ Current config:
 ```text
 target_family = nrf52_node
 default_ux_pack_id = tiny_node_status
-historical_generic_root_name = legacy/app_implementations/esp_pio
-historical_board_root_name = legacy/app_implementations/gat562_mesh_evb_pro
+historical_generic_root_name = removed root esp_pio
+historical_board_root_name = removed root gat562_mesh_evb_pro
 historical_role = pre-refactor PlatformIO/nRF52 implementation roots
 replacement_owner = apps/nrf52_node + builds/pio_nrf52 + boards/gat562_mesh_evb_pro
 ```

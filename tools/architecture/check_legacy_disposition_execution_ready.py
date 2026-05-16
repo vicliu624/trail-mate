@@ -267,7 +267,10 @@ def main() -> int:
     check_pio_nrf52_legacy_dependency_extracted(failures)
     check_esp_idf_landing_plan(failures)
     check_inventory_updated(failures)
-    run_checker("tools/architecture/check_no_root_legacy_preflight_ready.py", failures)
+    if (ROOT / "legacy").exists():
+        run_checker("tools/architecture/check_no_root_legacy_preflight_ready.py", failures)
+    else:
+        run_checker("tools/architecture/check_no_root_legacy_ready.py", failures)
 
     if failures:
         for failure in failures:

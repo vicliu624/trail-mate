@@ -33,6 +33,7 @@ The scan is discovery only; this inventory is the disposition ledger.
 - Must Delete
 - Must Rename
 - Must Migrate
+- Deleted
 - Keep as Final Adapter
 - Keep as Deprecated Alias Temporarily
 - Test-only / Smoke-only
@@ -63,12 +64,16 @@ Final owner:
 - docs/archive for historical records, plus concrete final owners per root.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- every child root has either migrated source ownership to final owners or has
-  been replaced by docs/archive history records; active final checker no longer
-  requires `legacy/` to exist.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - deleting before build and runtime ownership transfer would break ESP-IDF,
@@ -104,12 +109,16 @@ Final owner:
   stable runtime modules.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- ESP-IDF component registration, target defaults, startup/loop runtime, and
-  adapter includes build through final owners with no semantic dependency on
-  this root.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; this root is still an active build dependency.
@@ -141,11 +150,16 @@ Final owner:
   stable modules.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- PlatformIO include/source references no longer point at this root and the
-  nRF app shell owns product selection without legacy adapter headers.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; PIO include flags and wrapper baseline still reference it.
@@ -176,12 +190,16 @@ Final owner:
   `platform/nrf52`.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- concrete GAT562 behavior builds through final nRF app/build/board/platform
-  owners and this root no longer carries startup, loop, debug console, or
-  protocol runtime responsibilities.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; it is a concrete device path, not just documentation.
@@ -213,11 +231,16 @@ Final owner:
 - future Linux device app shell, `builds/linux_cmake`, and `platform/linux`.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- a final Linux device app shell owns this product path or the target is
-  retired; local CMake/SCons/script ownership no longer lives here.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - medium-high; no final RPI/Cardputer app shell currently replaces it.
@@ -249,14 +272,16 @@ Final owner:
   docs/archive for history.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- simulator workflows are covered by final app shell and platform modules;
-  historical source is summarized in docs/archive; final app shell stops
-  storing `legacy/app_implementations/linux_sim` as a runtime-reachable path.
-  Batch 1 renamed the final-shell descriptor to historical source metadata and
-  removed its `root_path` field.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - medium; source is archive-only but still referenced by descriptors and docs.
@@ -289,14 +314,16 @@ Final owner:
   `modules/ui_gtk_runtime`, and docs/archive for history.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- GTK page/widget/runtime and packaging responsibilities are owned by final
-  locations; historical source is summarized in docs/archive; final app shell
-  stops storing `legacy/app_implementations/linux_uconsole`.
-  Batch 1 renamed the final-shell descriptor to historical source metadata and
-  removed its `root_path` field.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; this archive still contains real business/page/packaging history that
@@ -328,11 +355,16 @@ Final owner:
   retired.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- product decision records whether UNO Q exists; if yes, final app shell owns
-  it; if no, placeholder root is removed.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - low-medium; deleting without product decision may lose target intent.
@@ -362,11 +394,16 @@ Final owner:
   entrypoint wiring.
 
 Disposition:
-- Must Delete after historical root deletion readiness.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- `apps/esp32_lvgl` and `builds/esp_idf` no longer compile or include this
-  legacy adapter, and ESP-IDF source ownership has moved to final owners.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - medium; source is retained but no final app shell or build entrypoint should
@@ -396,12 +433,16 @@ Final owner:
 - `apps/nrf52_node`, `builds/pio_nrf52`, and `boards/gat562_mesh_evb_pro`.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- wrapper baseline and app shell no longer include or depend on this legacy
-  adapter header. Batch 1 satisfies the active wrapper condition; the remaining
-  deletion condition is root-level source ownership cleanup.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; active PlatformIO wrapper includes it.
@@ -430,12 +471,16 @@ Final owner:
 - docs/archive or delete.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- historical adapter information is recorded in docs/archive and no checker
-  requires archive adapter source files. Batch 1 removed the archive adapter
-  source files.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - low; it is archive-only but still enforced by legacy root checker.
@@ -464,12 +509,16 @@ Final owner:
 - docs/archive or delete after uConsole final ownership is complete.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- historical adapter information is recorded in docs/archive and no checker
-  requires archive adapter source files. Batch 1 removed the archive adapter
-  source files.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - low-medium; uConsole root still contains other real source that needs
@@ -1002,11 +1051,16 @@ Final owner:
   `apps/linux_sim_shell` and `platform/linux`.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- historical details are summarized in docs/archive and checkers stop requiring
-  archive source paths.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - medium; archive still contains useful workflow history.
@@ -1035,11 +1089,16 @@ Final owner:
   `modules/ui_gtk_runtime`, and docs/archive for historical notes.
 
 Disposition:
-- Must Delete.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- page/widget/runtime and packaging responsibilities are migrated or replaced
-  in final owners, and source history is summarized in docs/archive.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; deleting this archive without migration loses real GTK and packaging
@@ -1074,11 +1133,16 @@ Final owner:
   shells, and platform modules.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- no final build wrapper or PlatformIO environment references legacy build
-  files and archive-only CMake files are no longer checker requirements.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; build files are sensitive and may be active.
@@ -1109,11 +1173,16 @@ Final owner:
 - `builds/esp_idf`, `builds/pio_nrf52`, and `builds/linux_cmake`.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- final build wrappers are the only build entrypoints needed for supported
-  workflows and docs/checkers no longer treat historical roots as active.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; this can break all build families if moved without proof.
@@ -1146,11 +1215,16 @@ Final owner:
   modules.
 
 Disposition:
-- Must Migrate.
+- Deleted.
+
+Final status:
+- Removed in Root Legacy Elimination.
+
+Historical record:
+- docs/archive/REMOVED_LEGACY_ROOTS.md
 
 Delete condition:
-- every product target has a final app shell and build entrypoint with no
-  semantic dependence on legacy roots.
+- Satisfied by Batch 4 Root Legacy Elimination.
 
 Risk:
 - high; these roots mix build, app, target, runtime, scripts, and archive

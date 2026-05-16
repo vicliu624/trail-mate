@@ -20,7 +20,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/linux_cmake`
 
-Historical source identity = `legacy/app_implementations/linux_sim`
+Historical source identity = `removed root linux_sim`
 
 ## Future Responsibilities
 
@@ -52,7 +52,7 @@ Current source:
 ```text
 target_id = linux_sim
 ux_pack_id = simulator_full
-historical_source = legacy/app_implementations/linux_sim
+historical_source = removed root linux_sim
 ```
 
 No simulator runtime behavior changes in Phase 8 Correction.

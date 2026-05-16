@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def check_post_root_legacy_removed() -> int:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/architecture/check_no_root_legacy_ready.py")],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        output = (result.stdout + result.stderr).strip()
+        print(f"[phase9-legacy-burndown] {output}")
+        return 1
+    print("[phase9-legacy-burndown] OK (root legacy removed)")
+    return 0
 
 
 def read(rel: str) -> str:
@@ -286,6 +303,9 @@ def check_build_lists(failures: list[str]) -> None:
 
 
 def main() -> int:
+    if not (ROOT / "legacy").exists():
+        return check_post_root_legacy_removed()
+
     failures: list[str] = []
 
     for rel in [

@@ -28,8 +28,8 @@ behavior.
 
 Current transitional paths remain valid until wrapper migration is proven:
 
-- `legacy/app_implementations/esp_idf`
-- `legacy/app_implementations/esp_pio`
-- Linux app-local CMake paths such as `legacy/app_implementations/linux_sim` and `legacy/app_implementations/linux_rpi`
+- `removed root esp_idf`
+- `removed root esp_pio`
+- Linux app-local CMake paths such as `removed root linux_sim` and `removed root linux_rpi`
 
 This directory is intentionally documentation-only in Phase 8.2.

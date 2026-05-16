@@ -1,10 +1,10 @@
 # Target UI Final Ownership Report
 
-Batch 3 completes final ownership metadata for all currently requested target
+Batch 3 completed final ownership metadata for all currently requested target
 IDs without moving old UI files into a new wrapper layer.
 
-legacy root removal is intentionally not part of this batch; this report only
-establishes final UI responsibility ownership for the target architecture.
+Batch 4 removed root `legacy/`. Historical legacy source roots are recorded
+only in `docs/archive/REMOVED_LEGACY_ROOTS.md`; no source archive is retained.
 
 ## Coverage
 
@@ -84,6 +84,7 @@ not hidden inside the shell.
 - No old UI file was copied wholesale into a new module.
 - No renderer is allowed to choose a target or UX pack.
 - No board fact file is allowed to choose product presentation.
+- No active architecture layer may be named `legacy/`.
 
 ## Remaining Gaps
 

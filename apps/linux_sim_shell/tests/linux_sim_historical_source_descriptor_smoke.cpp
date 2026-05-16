@@ -9,7 +9,7 @@ int main()
         trailmate::apps::linux_sim_shell::linuxSimHistoricalSourceDescriptor();
 
     assert(std::strcmp(descriptor.historical_root_name,
-                       "legacy/app_implementations/linux_sim") == 0);
+                       "removed root linux_sim") == 0);
     assert(std::strcmp(descriptor.historical_role,
                        "pre-refactor Linux simulator implementation root") == 0);
     assert(std::strcmp(descriptor.replacement_owner,

@@ -21,9 +21,9 @@ int main()
     assert(shell.targetProfile() != nullptr);
     assert(shell.targetProfile()->renderer == product_composition::TargetRenderer::Headless);
     assert(std::strcmp(config.historical_generic_root_name,
-                       "legacy/app_implementations/esp_pio") == 0);
+                       "removed root esp_pio") == 0);
     assert(std::strcmp(config.historical_board_root_name,
-                       "legacy/app_implementations/gat562_mesh_evb_pro") == 0);
+                       "removed root gat562_mesh_evb_pro") == 0);
     assert(std::strcmp(config.historical_role,
                        "pre-refactor PlatformIO/nRF52 implementation roots") == 0);
     assert(std::strcmp(config.replacement_owner,

@@ -24,7 +24,7 @@ int main()
     assert(std::strcmp(config.component_sources,
                        "builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake") == 0);
     assert(std::strcmp(config.historical_root_name,
-                       "legacy/app_implementations/esp_idf") == 0);
+                       "removed root esp_idf") == 0);
     assert(std::strcmp(config.historical_role,
                        "pre-refactor ESP-IDF/LVGL implementation root") == 0);
     assert(std::strcmp(config.replacement_owner,

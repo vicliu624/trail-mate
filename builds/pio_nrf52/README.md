@@ -11,7 +11,7 @@ nRF52 -> PlatformIO
 Current transitional path may be:
 
 ```text
-legacy/app_implementations/esp_pio
+removed root esp_pio
 root platformio.ini
 target-specific PlatformIO files
 ```

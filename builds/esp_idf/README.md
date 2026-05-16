@@ -8,10 +8,10 @@ Build authority:
 ESP / ESP32-P4 -> ESP-IDF
 ```
 
-Current transitional path / historical component root still present:
+Removed historical component root:
 
 ```text
-legacy/app_implementations/esp_idf
+esp_idf implementation root
 ```
 
 Final wrapper direction:
@@ -29,8 +29,9 @@ introduced in Batch 2:
 - `targets/tdisplayp4_tft/sdkconfig.defaults`
 - `targets/tdisplayp4_amoled/sdkconfig.defaults`
 
-The physical ESP-IDF `idf_component_register` call may temporarily remain in
-the historical component root until component registration itself is moved.
+Root legacy source has been removed. Any future physical ESP-IDF
+`idf_component_register` owner must live under final build/app/platform
+ownership, not under a restored historical source root.
 
 Rules:
 

@@ -90,33 +90,36 @@ def main() -> int:
         ],
         failures,
     )
-    require_tokens(
-        "legacy/app_implementations/esp_idf/CMakeLists.txt",
-        [
-            "ESP_IDF_COMPONENT_SOURCES.cmake",
-            "src/startup_runtime\\.cpp",
-            "src/loop_runtime\\.cpp",
-            "src/runtime_config\\.cpp",
-            "src/meshtastic_radio_adapter\\.cpp",
-        ],
-        failures,
-    )
-    require_tokens(
-        "legacy/app_implementations/esp_idf/src/app_facade_runtime.cpp",
-        [
-            "platform/esp/radio/meshtastic_radio_adapter.h",
-            "platform::esp::radio::MeshtasticRadioAdapter",
-        ],
-        failures,
-    )
-    forbid_tokens(
-        "legacy/app_implementations/esp_idf/src/app_facade_runtime.cpp",
-        [
-            "apps/esp_idf/meshtastic_radio_adapter.h",
-            "apps::esp_idf::MeshtasticRadioAdapter",
-        ],
-        failures,
-    )
+    if (ROOT / "legacy").exists():
+        require_tokens(
+            "legacy/app_implementations/esp_idf/CMakeLists.txt",
+            [
+                "ESP_IDF_COMPONENT_SOURCES.cmake",
+                "src/startup_runtime\\.cpp",
+                "src/loop_runtime\\.cpp",
+                "src/runtime_config\\.cpp",
+                "src/meshtastic_radio_adapter\\.cpp",
+            ],
+            failures,
+        )
+        require_tokens(
+            "legacy/app_implementations/esp_idf/src/app_facade_runtime.cpp",
+            [
+                "platform/esp/radio/meshtastic_radio_adapter.h",
+                "platform::esp::radio::MeshtasticRadioAdapter",
+            ],
+            failures,
+        )
+        forbid_tokens(
+            "legacy/app_implementations/esp_idf/src/app_facade_runtime.cpp",
+            [
+                "apps/esp_idf/meshtastic_radio_adapter.h",
+                "apps::esp_idf::MeshtasticRadioAdapter",
+            ],
+            failures,
+        )
+    else:
+        require_file("docs/archive/REMOVED_LEGACY_ROOTS.md", failures)
 
     require_tokens(
         "docs/audits/ESP_IDF_RUNTIME_SOURCE_OWNER_EXTRACTION_AUDIT.md",

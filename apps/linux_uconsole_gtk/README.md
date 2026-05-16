@@ -21,7 +21,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/linux_cmake`
 
-Historical source identity = `legacy/app_implementations/linux_uconsole`
+Historical source identity = `removed root linux_uconsole`
 
 ## Future Responsibilities
 
@@ -53,7 +53,7 @@ Current source:
 ```text
 target_id = uconsole
 ux_pack_id = uconsole_desktop
-historical_source = legacy/app_implementations/linux_uconsole
+historical_source = removed root linux_uconsole
 ```
 
 No GTK runtime behavior changes in Phase 8 Correction.

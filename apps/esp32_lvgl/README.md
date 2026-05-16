@@ -19,7 +19,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/esp_idf`
 
-Historical source identity = `legacy/app_implementations/esp_idf`
+Historical source identity = `removed root esp_idf`
 
 Component source list = `builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake`
 
@@ -59,7 +59,7 @@ target_family = esp32_lvgl
 default_ux_pack_id = compatibility
 build_entrypoint = builds/esp_idf
 component_sources = builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake
-historical_root_name = legacy/app_implementations/esp_idf
+historical_root_name = removed root esp_idf
 historical_role = pre-refactor ESP-IDF/LVGL implementation root
 replacement_owner = apps/esp32_lvgl + builds/esp_idf
 ```

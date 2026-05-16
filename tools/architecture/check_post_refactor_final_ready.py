@@ -95,7 +95,6 @@ def check_apps_directory(failures: list[str]) -> None:
 def check_legacy_app_implementations(failures: list[str]) -> None:
     legacy_root = ROOT / "legacy" / "app_implementations"
     if not legacy_root.is_dir():
-        failures.append("missing legacy/app_implementations")
         return
 
     forbidden = [
@@ -211,10 +210,10 @@ def check_phase12_docs(failures: list[str]) -> None:
         [
             "`apps/`",
             "`builds/`",
-            "`legacy/app_implementations/`",
             "`modules/`",
             "`platform/`",
             "`boards/`",
+            "Root `legacy/` has been removed",
             "Renderers must not select UX packs",
             "Runtime entries must not call `buildMenuForUxPack`",
             "`modules/` must not depend on `apps/`",
@@ -231,6 +230,7 @@ def check_phase12_docs(failures: list[str]) -> None:
             "Phase 10 primary path migration",
             "Phase 11 renderer descriptor consumption",
             "Phase 12 closeout",
+            "Batch 4 root legacy elimination",
             "Next work is not architecture refactor",
             "feature work",
             "targeted fallback deletion",
@@ -264,14 +264,13 @@ def main() -> int:
         "tools/architecture/check_phase10_primary_path_ready.py",
         "tools/architecture/check_phase11_renderer_consumption_ready.py",
         "tools/architecture/check_legacy_compat_temp_inventory_ready.py",
-        "tools/architecture/check_no_root_legacy_preflight_ready.py",
+        "tools/architecture/check_no_root_legacy_ready.py",
         "tools/architecture/check_legacy_disposition_execution_ready.py",
         "tools/architecture/check_esp_idf_final_owner_extraction_ready.py",
         "tools/architecture/check_target_architecture_foundation_ready.py",
         "tools/architecture/check_all_target_architecture_ready.py",
         "tools/architecture/check_no_intermediate_ui_layer_ready.py",
         "tools/architecture/check_board_facts_boundary_ready.py",
-        "tools/architecture/check_legacy_app_roots_burndown_ready.py",
     ]:
         require_file(rel, failures)
 
@@ -282,14 +281,13 @@ def main() -> int:
         "tools/architecture/check_phase10_primary_path_ready.py",
         "tools/architecture/check_phase11_renderer_consumption_ready.py",
         "tools/architecture/check_legacy_compat_temp_inventory_ready.py",
-        "tools/architecture/check_no_root_legacy_preflight_ready.py",
+        "tools/architecture/check_no_root_legacy_ready.py",
         "tools/architecture/check_legacy_disposition_execution_ready.py",
         "tools/architecture/check_esp_idf_final_owner_extraction_ready.py",
         "tools/architecture/check_target_architecture_foundation_ready.py",
         "tools/architecture/check_all_target_architecture_ready.py",
         "tools/architecture/check_no_intermediate_ui_layer_ready.py",
         "tools/architecture/check_board_facts_boundary_ready.py",
-        "tools/architecture/check_legacy_app_roots_burndown_ready.py",
     ]:
         run_checker(rel, failures)
 

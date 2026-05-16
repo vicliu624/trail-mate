@@ -1,9 +1,9 @@
 # TrailMateLinuxSources.cmake
 #
 # Shared source lists and helper functions for the Trail Mate Linux line.
-# legacy/app_implementations/linux_sim,
-# legacy/app_implementations/linux_rpi, and
-# legacy/app_implementations/linux_uconsole include this file so that a single
+# removed root linux_sim,
+# removed root linux_rpi, and
+# removed root linux_uconsole include this file so that a single
 # source list drives common app services and core-module targets.
 #
 # Usage from an app CMakeLists.txt:
@@ -18,7 +18,7 @@
 # these two targets plus any app-specific dependencies.
 #
 # ---------------------------------------------------------------------------
-# Path roots â€?derived from this file's location (cmake/), which gives
+# Path roots ï¿½?derived from this file's location (cmake/), which gives
 # the repo root via "..".  Independent of the including app's directory.
 # ---------------------------------------------------------------------------
 
@@ -284,7 +284,7 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
 )
 
 set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
-    # platform/linux/common â€?shared Linux UI layer
+    # platform/linux/common ï¿½?shared Linux UI layer
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/localization.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/shared_ui_shell.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/shell_ui_runner.cpp"
@@ -293,7 +293,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/gps_shared_compat.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/mt_protocol_air_compat.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/widgets/map/map_tiles.cpp"
-    # modules/ui_shared â€?assets
+    # modules/ui_shared ï¿½?assets
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/Chat.c"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/alert.c"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/AreaCleared.c"
@@ -314,7 +314,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/team.c"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/tracker.c"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/walkie_talkie.c"
-    # modules/ui_shared â€?components
+    # modules/ui_shared ï¿½?components
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/air_status_footer.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_air_device_status_source.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/legacy_gps_status_source.cpp"
@@ -344,7 +344,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/two_pane_layout.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/two_pane_nav.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/two_pane_styles.cpp"
-    # modules/ui_shared â€?shell / menu / page
+    # modules/ui_shared ï¿½?shell / menu / page
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/app_runtime.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/formatters.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/menu/menu_layout.cpp"
@@ -458,7 +458,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
 )
 
 # ---------------------------------------------------------------------------
-# Common include directories â€?reused by every Linux target.
+# Common include directories ï¿½?reused by every Linux target.
 # ---------------------------------------------------------------------------
 
 set(TRAIL_MATE_LINUX_COMMON_INCLUDES

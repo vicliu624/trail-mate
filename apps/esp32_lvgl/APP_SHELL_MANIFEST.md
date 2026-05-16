@@ -20,7 +20,7 @@ Future authoritative build entrypoint:
 
 Historical source identity:
 
-- `legacy/app_implementations/esp_idf`
+- `removed root esp_idf`
 
 ## Future Responsibilities
 

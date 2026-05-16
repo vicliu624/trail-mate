@@ -20,7 +20,7 @@ Future authoritative build entrypoint:
 
 Current transitional path:
 
-- `legacy/app_implementations/linux_sim`
+- `removed root linux_sim`
 
 ## Future Responsibilities
 
@@ -71,6 +71,6 @@ UX Pack Runtime Binding:
 
 Transitional implementation root:
 
-- `legacy/app_implementations/linux_sim`
+- `removed root linux_sim`
 
 No simulator runtime behavior change in Phase 8 Correction.
