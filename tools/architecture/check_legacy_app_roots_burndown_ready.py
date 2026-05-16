@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 AUDIT = "docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md"
 INDEX = "legacy/app_implementations/LEGACY_IMPLEMENTATION_INDEX.md"
+LINUX_COLLAPSE_AUDIT = "docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md"
 
 LEGACY_ROOTS = [
     "legacy/app_implementations/esp_idf",
@@ -240,6 +241,115 @@ def check_final_shell_owned_descriptors(failures: list[str]) -> None:
     )
 
 
+def check_linux_local_root_collapse(failures: list[str]) -> None:
+    require_file(LINUX_COLLAPSE_AUDIT, failures)
+    require_tokens(
+        LINUX_COLLAPSE_AUDIT,
+        [
+            "legacy/app_implementations/linux_sim",
+            "legacy/app_implementations/linux_uconsole",
+            "Current local CMake targets",
+            "Current smoke targets",
+            "Current composition root files",
+            "Current old runtime/widget files",
+            "Which targets are still referenced by final app shells",
+            "Which targets can be removed from normal build",
+            "Which files must remain as archive",
+            "Which files can move to tests/compatibility",
+            "Collapse decision",
+            "local CMake root should become archive-only",
+            "validation lives in `apps/linux_sim_shell`",
+            "validation lives in `apps/linux_uconsole_gtk`",
+        ],
+        failures,
+    )
+
+    marker_files = [
+        "legacy/app_implementations/linux_sim/ARCHIVE.md",
+        "legacy/app_implementations/linux_uconsole/ARCHIVE.md",
+    ]
+    for rel in marker_files:
+        require_tokens(
+            rel,
+            [
+                "archive-only",
+                "Replacement owner",
+                "Do not use from final app shells",
+            ],
+            failures,
+        )
+
+    cmake_files = [
+        "legacy/app_implementations/linux_sim/CMakeLists.txt",
+        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
+    ]
+    forbidden_cmake_tokens = ["add_library(", "add_executable(", "add_test("]
+    for rel in cmake_files:
+        require_file(rel, failures)
+        text = read(rel) if (ROOT / rel).is_file() else ""
+        for token in forbidden_cmake_tokens:
+            if token in text:
+                failures.append(f"{rel} contains active CMake target token: {token}")
+        require_tokens(
+            rel,
+            [
+                "archive-only",
+                "Use apps/",
+            ],
+            failures,
+        )
+
+    forbidden_active_paths = [
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp",
+    ]
+    for rel in forbidden_active_paths:
+        if (ROOT / rel).exists():
+            failures.append(f"active legacy Linux source should be archived, not present: {rel}")
+
+    required_archive_paths = [
+        "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_sim/archive/simulator/sdl_simulator.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_uconsole/archive/gtk/gtk/gtk_uconsole_pages.cpp",
+    ]
+    for rel in required_archive_paths:
+        require_file(rel, failures)
+
+    deleted_smokes = [
+        "legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
+    ]
+    for rel in deleted_smokes:
+        if (ROOT / rel).exists():
+            failures.append(f"old legacy adapter smoke should not remain active: {rel}")
+
+    final_shell_archive_tokens = [
+        "legacy/app_implementations/linux_sim/archive",
+        "legacy/app_implementations/linux_uconsole/archive",
+    ]
+    for root_name in ["apps/linux_sim_shell", "apps/linux_uconsole_gtk"]:
+        for path in iter_files(ROOT / root_name):
+            if path.suffix not in CODE_SUFFIXES and path.name != "CMakeLists.txt":
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for token in final_shell_archive_tokens:
+                if token in text:
+                    failures.append(
+                        f"{path.relative_to(ROOT).as_posix()} references archived legacy root: {token}"
+                    )
+
+
 def check_modules_do_not_reference_legacy_roots(failures: list[str]) -> None:
     for path in iter_code_files(ROOT / "modules"):
         text = path.read_text(encoding="utf-8", errors="ignore")
@@ -306,6 +416,7 @@ def main() -> int:
     check_apps_do_not_directly_include_legacy_roots(failures)
     check_final_linux_apps_do_not_reference_legacy_adapters(failures)
     check_final_shell_owned_descriptors(failures)
+    check_linux_local_root_collapse(failures)
     check_modules_do_not_reference_legacy_roots(failures)
     check_legacy_roots_do_not_own_post_refactor_runtime(failures)
     check_build_references_are_listed(failures)

@@ -45,13 +45,13 @@ authoritative build wrapper, and exit condition.
 - Exit condition: GTK/uConsole runtime code consumes the presentation graph
   from the composition root and remaining reusable code moves to modules or
   platform adapters.
-- Burn-down status: contained historical GTK implementation root.
-- Deletion blocker: old GTK widget/page implementation, local CMake target, and
-  adapter smoke coverage still live under this root.
+- Burn-down status: archive-only root; final app shell no longer depends on
+  local adapter or local CMake active target.
+- Deletion blocker: archived GTK widget/page implementation retained until GTK
+  widget renderer consumes descriptor pages.
 - Replacement owner: `apps/linux_uconsole_gtk` plus `modules/ui_gtk_runtime`.
-- Next deletion task: final app shell no longer depends on
-  `uconsole_legacy_implementation_adapter`; next blocker is old GTK widget/page
-  implementation and local CMake.
+- Next deletion task: delete archived GTK widget/page code after
+  descriptor-backed GTK renderer replaces it.
 
 ## Linux Simulator
 
@@ -62,13 +62,13 @@ authoritative build wrapper, and exit condition.
 - Exit condition: simulator UI/runtime code consumes the presentation graph
   through simulator-specific adapters and shared runtime behavior moves to
   official modules.
-- Burn-down status: contained historical simulator root.
-- Deletion blocker: legacy simulator composition root, local CMake target,
-  adapter smoke coverage, and old simulator scripts still live under this root.
+- Burn-down status: archive-only root; final app shell no longer depends on
+  local adapter or local CMake active target.
+- Deletion blocker: archived simulator code retained for reference and possible
+  targeted deletion.
 - Replacement owner: `apps/linux_sim_shell` plus `modules/ui_ascii_runtime`.
-- Next deletion task: final app shell no longer depends on
-  `linux_sim_legacy_implementation_adapter`; next blocker is legacy composition
-  root, local CMake, and simulator scripts.
+- Next deletion task: delete archived simulator code after final app shell covers
+  all simulator workflows.
 
 ## Linux RPI
 

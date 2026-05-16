@@ -1,7 +1,7 @@
 # Transitional Implementation Root: linux_uconsole
 
-This directory currently contains the executable uConsole implementation and
-CMake integration.
+This former transitional implementation root currently contains archived
+historical uConsole GTK implementation source.
 
 It is not the final app shell semantic root.
 
@@ -23,15 +23,16 @@ Authoritative build wrapper:
 
 Current status:
 
-- transitional implementation root
-- retains GTK/uConsole implementation files
-- retained to avoid changing runtime behavior during Phase 8 directory
-  semantic convergence
+- archive-only historical root
+- retains GTK/uConsole implementation files under `archive/`
+- does not own active CMake build targets
+- retained only as reference material until targeted deletion
 
 Exit condition:
 
 - `apps/linux_uconsole_gtk` owns the app shell startup contract;
 - `builds/linux_cmake` invokes the app shell;
 - `apps/linux_uconsole_gtk` owns the transitional source descriptor;
-- the legacy adapter remains legacy-local compatibility only;
-- GTK implementation can be moved or wrapped without changing target behavior.
+- final app shell validation no longer depends on this local CMake root;
+- archived GTK implementation can be deleted after descriptor-backed GTK
+  renderer replaces the old widget/page path.

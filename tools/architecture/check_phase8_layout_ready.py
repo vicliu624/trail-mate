@@ -80,19 +80,17 @@ def check_required_files() -> int:
         "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.cpp",
         "apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp",
         "apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
-        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
-        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp",
-        "legacy/app_implementations/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/tests/uconsole_composition_root_smoke.cpp",
         "legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
-        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
-        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.cpp",
-        "legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
-        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
-        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp",
-        "legacy/app_implementations/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/archive/tests/linux_sim_composition_root_smoke.cpp",
         "legacy/app_implementations/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md",
         "legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.h",
         "legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp",
@@ -943,7 +941,7 @@ def check_executable_layout_convergence() -> int:
     )
 
     failures += check_tokens(
-        "legacy/app_implementations/linux_uconsole/src/uconsole_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h",
         [
             "UConsoleLegacyImplementationDescriptor",
             "implementation_root = \"legacy/app_implementations/linux_uconsole\"",
@@ -1012,7 +1010,7 @@ def check_executable_layout_convergence() -> int:
     )
 
     failures += check_tokens(
-        "legacy/app_implementations/linux_sim/src/linux_sim_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h",
         [
             "LinuxSimLegacyImplementationDescriptor",
             "implementation_root = \"legacy/app_implementations/linux_sim\"",
@@ -1545,12 +1543,12 @@ def check_composition_root_binding() -> int:
 
     for path, config_token, pack_id in [
         (
-            "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
+            "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h",
             "UConsoleCompositionRootConfig",
             "uconsole_desktop",
         ),
         (
-            "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
+            "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h",
             "LinuxSimCompositionRootConfig",
             "simulator_full",
         ),
@@ -1575,8 +1573,8 @@ def check_composition_root_binding() -> int:
             )
 
     for path in [
-        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.cpp",
-        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.cpp",
+        "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.cpp",
     ]:
         failures += check_tokens(
             path,
@@ -1621,8 +1619,8 @@ def check_composition_root_binding() -> int:
         )
 
     for path in [
-        "legacy/app_implementations/linux_uconsole/tests/uconsole_composition_root_smoke.cpp",
-        "legacy/app_implementations/linux_sim/tests/linux_sim_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/tests/uconsole_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_sim/archive/tests/linux_sim_composition_root_smoke.cpp",
     ]:
         failures += check_tokens(
             path,
@@ -1638,9 +1636,8 @@ def check_composition_root_binding() -> int:
     failures += check_tokens(
         "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
         [
-            "TrailMateUxPacks.cmake",
-            "trailmate_ui_lvgl_ux_packs",
-            "trailmate_uconsole_shell",
+            "archive-only",
+            "Use apps/linux_uconsole_gtk",
         ],
         "uConsole composition root UX pack linkage",
     )
@@ -1648,10 +1645,8 @@ def check_composition_root_binding() -> int:
     failures += check_tokens(
         "legacy/app_implementations/linux_sim/CMakeLists.txt",
         [
-            "TrailMateUxPacks.cmake",
-            "trailmate_ui_lvgl_ux_packs",
-            "trailmate_linux_sim_composition_root",
-            "target_link_libraries(trailmate_linux_sim_composition_root",
+            "archive-only",
+            "Use apps/linux_sim_shell",
         ],
         "Linux sim composition root UX pack target",
     )
@@ -1743,8 +1738,8 @@ def check_ui_runtime_consumption_boundary() -> int:
         )
 
     for path in [
-        "legacy/app_implementations/linux_uconsole/src/uconsole_composition_root.h",
-        "legacy/app_implementations/linux_sim/src/linux_sim_composition_root.h",
+        "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h",
+        "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h",
     ]:
         failures += check_tokens(
             path,
@@ -1800,20 +1795,20 @@ def check_ui_runtime_consumption_boundary() -> int:
                 failures += fail(f"{path} contains forbidden runtime menu adapter token {token}")
 
     failures += check_tokens(
-        "legacy/app_implementations/linux_sim/CMakeLists.txt",
+        "apps/linux_sim_shell/CMakeLists.txt",
         [
-            "ascii_menu_runtime_adapter_smoke",
-            "ascii_screen_graph_bridge_smoke",
+            "ascii_menu_runtime_adapter.cpp",
+            "ascii_screen_graph_bridge.cpp",
         ],
-        "ASCII menu runtime adapter test target",
+        "ASCII menu runtime adapter final shell source",
     )
     failures += check_tokens(
-        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
+        "apps/linux_uconsole_gtk/CMakeLists.txt",
         [
-            "gtk_menu_runtime_adapter_smoke",
-            "gtk_uconsole_screen_graph_bridge_smoke",
+            "gtk_menu_runtime_adapter.cpp",
+            "gtk_uconsole_screen_graph_bridge.cpp",
         ],
-        "GTK menu runtime adapter test target",
+        "GTK menu runtime adapter final shell source",
     )
     failures += check_tokens(
         "apps/linux_sim_shell/CMakeLists.txt",
@@ -1967,17 +1962,16 @@ def check_screen_factory_host_binding() -> int:
         )
 
     for path in [
-        "legacy/app_implementations/linux_sim/CMakeLists.txt",
-        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
+        "apps/linux_sim_shell/CMakeLists.txt",
+        "apps/linux_uconsole_gtk/CMakeLists.txt",
     ]:
         failures += check_tokens(
             path,
             [
-                "screen_host_adapter_smoke",
                 "screen_host_adapter.cpp",
-                "screen_graph_bridge_smoke",
+                "screen_graph_bridge.cpp",
             ],
-            "screen host adapter smoke target",
+            "screen host adapter final shell source",
         )
 
     failures += check_tokens(

@@ -142,68 +142,62 @@ Known build references that still touch legacy roots:
 
 ## Root: `legacy/app_implementations/linux_sim`
 
-- Current purpose: historical simulator implementation root with old simulator
-  target files, local CMake, smoke tests, scripts, and a legacy-local
-  compatibility adapter.
-- Current build callers: `legacy/app_implementations/linux_sim/CMakeLists.txt`
-  and Linux build wrapper documentation in `builds/linux_cmake/README.md`.
-  `apps/linux_sim_shell/CMakeLists.txt` no longer compiles the legacy adapter.
+- Current purpose: archive-only historical simulator implementation root.
+- Current build callers: no active build callers. The local
+  `legacy/app_implementations/linux_sim/CMakeLists.txt` is an archive marker
+  only, and Linux build wrapper documentation in `builds/linux_cmake/README.md`
+  records the historical path.
 - Current app shell callers: none for the legacy adapter. `apps/linux_sim_shell`
   owns `LinuxSimLegacySourceDescriptor` and keeps only the transitional source
   path string.
-- Current CMake / PlatformIO callers:
-  `legacy/app_implementations/linux_sim/CMakeLists.txt`.
-- Current include callers: only the legacy-local smoke test includes
-  `linux_sim_legacy_implementation_adapter.h`.
-- Runtime ownership status: contained historical root. Phase 9-11 runtime entry
+- Current CMake / PlatformIO callers: none with active targets. The local
+  CMake file is archive-only.
+- Current include callers: none from active source. Historical adapter includes
+  are retained under `archive/adapters` only.
+- Runtime ownership status: archive-only root. Phase 9-11 runtime entry
   adoption, ASCII descriptor rendering, and screen graph presentation are owned
   by `apps/linux_sim_shell`, `modules/ui_ascii_runtime`, and
   `modules/product_composition`.
 - Safe to delete now? no.
-- First deletion blocker: legacy simulator composition root, simulator local
-  CMake target, legacy-local adapter smoke coverage, and old simulator scripts
-  still live under this root.
+- First deletion blocker: archived simulator code is retained for reference and
+  possible targeted deletion.
 - Target replacement owner: `apps/linux_sim_shell`,
   `modules/ui_ascii_runtime`, `modules/product_composition`, and platform
   simulator support.
-- Burn-down step: final app shell no longer depends on
-  `linux_sim_legacy_implementation_adapter`; next blocker is the legacy
-  composition root, local CMake target, and simulator scripts.
-- Deletion blocker: legacy simulator composition root and local CMake/script
-  ownership still exist.
+- Burn-down step: local CMake root collapsed to archive-only; next blocker is
+  deleting archived simulator code after final app shell covers all simulator
+  workflows.
+- Deletion blocker: archived simulator code retained for reference and possible
+  targeted deletion.
 - Replacement owner: `apps/linux_sim_shell` plus `modules/ui_ascii_runtime`.
 
 ## Root: `legacy/app_implementations/linux_uconsole`
 
-- Current purpose: historical uConsole GTK implementation root with old GTK
-  widget/page code, local CMake, smoke tests, and a legacy-local compatibility
-  adapter.
-- Current build callers:
-  `legacy/app_implementations/linux_uconsole/CMakeLists.txt` and Linux build
-  wrapper documentation in `builds/linux_cmake/README.md`.
-  `apps/linux_uconsole_gtk/CMakeLists.txt` no longer compiles the legacy
-  adapter.
+- Current purpose: archive-only historical uConsole GTK implementation root.
+- Current build callers: no active build callers. The local
+  `legacy/app_implementations/linux_uconsole/CMakeLists.txt` is an archive
+  marker only, and Linux build wrapper documentation in
+  `builds/linux_cmake/README.md` records the historical path.
 - Current app shell callers: none for the legacy adapter.
   `apps/linux_uconsole_gtk` owns `LinuxUConsoleGtkLegacySourceDescriptor` and
   keeps only the transitional source path string.
-- Current CMake / PlatformIO callers:
-  `legacy/app_implementations/linux_uconsole/CMakeLists.txt`.
-- Current include callers: only the legacy-local smoke test includes
-  `uconsole_legacy_implementation_adapter.h`.
-- Runtime ownership status: contained historical GTK root. Phase 9-11 page
+- Current CMake / PlatformIO callers: none with active targets. The local
+  CMake file is archive-only.
+- Current include callers: none from active source. Historical adapter includes
+  are retained under `archive/adapters` only.
+- Runtime ownership status: archive-only GTK root. Phase 9-11 page
   registry adoption, GTK descriptor registry, and screen graph presentation are
   owned by `apps/linux_uconsole_gtk` and `modules/ui_gtk_runtime`.
 - Safe to delete now? no.
-- First deletion blocker: old GTK widget/page implementation, local CMake target,
-  uConsole composition root, and legacy-local adapter smoke coverage still live
-  under this root.
+- First deletion blocker: archived GTK widget/page implementation retained until
+  GTK widget renderer consumes descriptor pages.
 - Target replacement owner: `apps/linux_uconsole_gtk`, `modules/ui_gtk_runtime`,
   `modules/product_composition`, and `platform/linux`.
-- Burn-down step: final app shell no longer depends on
-  `uconsole_legacy_implementation_adapter`; next blocker is old GTK widget/page
-  implementation and local CMake.
-- Deletion blocker: old GTK widget/page implementation and local CMake target
-  still live here.
+- Burn-down step: local CMake root collapsed to archive-only; next blocker is
+  deleting archived GTK widget/page code after descriptor-backed GTK renderer
+  replaces it.
+- Deletion blocker: archived GTK widget/page implementation retained until GTK
+  widget renderer consumes descriptor pages.
 - Replacement owner: `apps/linux_uconsole_gtk` plus `modules/ui_gtk_runtime`.
 
 ## Root: `legacy/app_implementations/linux_unoq`
@@ -231,23 +225,23 @@ Known build references that still touch legacy roots:
 
 ### `legacy/app_implementations/linux_sim`
 
-- Must remain for now: historical simulator implementation, local CMake, old
-  simulator target, adapter smoke test, and compatibility scripts.
+- Must remain for now: archived historical simulator implementation, archived
+  simulator target, archived scripts, and archive marker.
 - Must not return here: runtime entry adoption, descriptor renderer, app shell,
   or screen graph presenter ownership.
-- Candidate next move: retire or transfer the historical simulator composition
-  root once `apps/linux_sim_shell` owns all simulator entry validation.
+- Candidate next move: delete archived simulator code after
+  `apps/linux_sim_shell` covers all simulator workflows.
 - Baseline status: no `RuntimeEntryAdoption`, `DescriptorRenderer`, or
   `ScreenGraphPresenter` ownership remains under the root.
 
 ### `legacy/app_implementations/linux_uconsole`
 
-- Must remain for now: old GTK widget/page implementation, local CMake, adapter
-  smoke test, and compatibility app target.
+- Must remain for now: archived old GTK widget/page implementation, archived
+  composition root, and archive marker.
 - Must not return here: page registry adoption, runtime descriptor presenter,
   screen graph bridge, or stable GTK descriptor registry ownership.
-- Candidate next move: make real GTK widget creation consume descriptor page
-  registry output, then retire historical page registry ownership.
+- Candidate next move: delete archived GTK widget/page code after
+  descriptor-backed GTK renderer replaces it.
 - Baseline status: no `RuntimeEntryAdoption`, `DescriptorRenderer`, or
   `ScreenGraphPresenter` ownership remains under the root.
 

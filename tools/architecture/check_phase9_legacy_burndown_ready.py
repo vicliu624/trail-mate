@@ -258,8 +258,6 @@ def check_build_lists(failures: list[str]) -> None:
 
     for rel in [
         "cmake/TrailMateLinuxSources.cmake",
-        "legacy/app_implementations/linux_sim/CMakeLists.txt",
-        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
         "legacy/app_implementations/esp_idf/CMakeLists.txt",
     ]:
         require_tokens(
@@ -273,8 +271,6 @@ def check_build_lists(failures: list[str]) -> None:
 
     for rel in [
         "cmake/TrailMateLinuxSources.cmake",
-        "legacy/app_implementations/linux_sim/CMakeLists.txt",
-        "legacy/app_implementations/linux_uconsole/CMakeLists.txt",
         "legacy/app_implementations/esp_idf/CMakeLists.txt",
     ]:
         require_tokens(
