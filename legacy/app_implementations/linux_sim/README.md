@@ -15,7 +15,8 @@ app shells. Its `CMakeLists.txt` is an archive marker only.
 ## Archive Layout
 
 - `archive/composition`: old simulator composition root.
-- `archive/adapters`: old legacy implementation adapter.
+- `archive/adapters`: removed; old legacy implementation adapter metadata is
+  covered by the final-shell historical source descriptor.
 - `archive/simulator`: old SDL simulator and target entrypoint.
 - `archive/scripts`: old scripts, Docker files, and CMake presets.
 - `archive/tests`: old simulator smoke/probe files retained for reference.

@@ -19,7 +19,8 @@ target_include_directories(trailmate_esp_idf_legacy_adapter
 target_compile_features(trailmate_esp_idf_legacy_adapter PUBLIC cxx_std_17)
 
 add_library(trailmate_esp32_lvgl_app_shell
-    src/esp32_lvgl_app_shell.cpp)
+    src/esp32_lvgl_app_shell.cpp
+    src/esp32_lvgl_historical_source_descriptor.cpp)
 
 target_include_directories(trailmate_esp32_lvgl_app_shell
     PUBLIC
@@ -39,4 +40,11 @@ if(BUILD_TESTING)
         PRIVATE trailmate_esp32_lvgl_app_shell)
     add_test(NAME trailmate_esp32_lvgl_app_shell_smoke
              COMMAND trailmate_esp32_lvgl_app_shell_smoke)
+
+    add_executable(trailmate_esp32_lvgl_historical_source_descriptor_smoke
+        tests/esp32_lvgl_historical_source_descriptor_smoke.cpp)
+    target_link_libraries(trailmate_esp32_lvgl_historical_source_descriptor_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_esp32_lvgl_historical_source_descriptor_smoke
+             COMMAND trailmate_esp32_lvgl_historical_source_descriptor_smoke)
 endif()

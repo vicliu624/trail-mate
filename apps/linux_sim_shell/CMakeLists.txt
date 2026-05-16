@@ -13,7 +13,7 @@ trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
 add_library(trailmate_linux_sim_shell
     src/linux_sim_app_shell.cpp
-    src/linux_sim_legacy_source_descriptor.cpp
+    src/linux_sim_historical_source_descriptor.cpp
     src/linux_sim_runtime_entry.cpp
     src/linux_sim_runtime_entry_adoption_probe.cpp
     src/linux_sim_runtime_renderer.cpp
@@ -43,12 +43,12 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_linux_sim_app_shell_smoke
              COMMAND trailmate_linux_sim_app_shell_smoke)
 
-    add_executable(trailmate_linux_sim_legacy_source_descriptor_smoke
-        tests/linux_sim_legacy_source_descriptor_smoke.cpp)
-    target_link_libraries(trailmate_linux_sim_legacy_source_descriptor_smoke
+    add_executable(trailmate_linux_sim_historical_source_descriptor_smoke
+        tests/linux_sim_historical_source_descriptor_smoke.cpp)
+    target_link_libraries(trailmate_linux_sim_historical_source_descriptor_smoke
         PRIVATE trailmate_linux_sim_shell)
-    add_test(NAME trailmate_linux_sim_legacy_source_descriptor_smoke
-             COMMAND trailmate_linux_sim_legacy_source_descriptor_smoke)
+    add_test(NAME trailmate_linux_sim_historical_source_descriptor_smoke
+             COMMAND trailmate_linux_sim_historical_source_descriptor_smoke)
 
     add_executable(trailmate_linux_sim_runtime_entry_adoption_probe_smoke
         tests/linux_sim_runtime_entry_adoption_probe_smoke.cpp)

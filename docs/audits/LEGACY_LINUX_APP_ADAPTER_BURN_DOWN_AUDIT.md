@@ -8,12 +8,12 @@ dependency on the legacy implementation adapters.
 ## `linux_sim_legacy_implementation_adapter`
 
 - Current header:
-  `legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h`
+  deleted from `legacy/app_implementations/linux_sim/archive/adapters`.
 - Current source:
-  `legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.cpp`
+  deleted from `legacy/app_implementations/linux_sim/archive/adapters`.
 - Current callers:
   none in active source. The old adapter smoke was deleted after
-  `apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp`
+  `apps/linux_sim_shell/tests/linux_sim_historical_source_descriptor_smoke.cpp`
   took over the compatibility assertion.
 - Current CMake include/source usage:
   none. `legacy/app_implementations/linux_sim/CMakeLists.txt` is archive-only.
@@ -23,24 +23,24 @@ dependency on the legacy implementation adapters.
   historically it exposed only `implementation_root`, `app_shell`, and
   `target_id` strings plus a null-checking `validate()` method.
 - Which part is still needed:
-  final app shell still needs a transitional source descriptor to document the
+  final app shell still needs a historical source descriptor to document the
   historical root, but it does not need a legacy-root-owned adapter.
 - Replacement owner:
-  `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h` and
-  `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.cpp`.
+  `apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.h` and
+  `apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.cpp`.
 - Migration decision:
-  final app shell now owns `LinuxSimLegacySourceDescriptor`; the old adapter is
-  archived historical source only.
+  final app shell now owns `LinuxSimHistoricalSourceDescriptor`; the old adapter
+  source has been deleted.
 
 ## `uconsole_legacy_implementation_adapter`
 
 - Current header:
-  `legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h`
+  deleted from `legacy/app_implementations/linux_uconsole/archive/adapters`.
 - Current source:
-  `legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.cpp`
+  deleted from `legacy/app_implementations/linux_uconsole/archive/adapters`.
 - Current callers:
   none in active source. The old adapter smoke was deleted after
-  `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp`
+  `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_historical_source_descriptor_smoke.cpp`
   took over the compatibility assertion.
 - Current CMake include/source usage:
   none. `legacy/app_implementations/linux_uconsole/CMakeLists.txt` is
@@ -50,15 +50,15 @@ dependency on the legacy implementation adapters.
   historically it exposed only `implementation_root`, `app_shell`, and
   `target_id` strings plus a null-checking `validate()` method.
 - Which part is still needed:
-  final app shell still needs a transitional source descriptor to document the
+  final app shell still needs a historical source descriptor to document the
   historical root, but it does not need a legacy-root-owned adapter.
 - Replacement owner:
-  `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h`
+  `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.h`
   and
-  `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.cpp`.
+  `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.cpp`.
 - Migration decision:
-  final app shell now owns `LinuxUConsoleGtkLegacySourceDescriptor`; the old
-  adapter is archived historical source only.
+  final app shell now owns `LinuxUConsoleGtkHistoricalSourceDescriptor`; the old
+  adapter source has been deleted.
 
 ## Boundary Result
 
@@ -72,4 +72,5 @@ dependency on the legacy implementation adapters.
   `uconsole_legacy_implementation_adapter`.
 - `apps/linux_uconsole_gtk/CMakeLists.txt` does not compile
   `uconsole_legacy_implementation_adapter.cpp`.
-- Old adapter headers and sources remain only as archive-only historical source.
+- Old adapter headers and sources were deleted from archive-only historical
+  source after descriptor smoke coverage moved to final app shells.

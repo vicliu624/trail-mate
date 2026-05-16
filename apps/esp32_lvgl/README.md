@@ -19,7 +19,7 @@ UX Pack presents.
 
 Build entrypoint = `builds/esp_idf`
 
-Current transitional path = `legacy/app_implementations/esp_idf`
+Historical source identity = `legacy/app_implementations/esp_idf`
 
 ## Future Responsibilities
 
@@ -55,7 +55,9 @@ Current config:
 ```text
 target_family = esp32_lvgl
 default_ux_pack_id = compatibility
-transitional_source = legacy/app_implementations/esp_idf
+historical_root_name = legacy/app_implementations/esp_idf
+historical_role = pre-refactor ESP-IDF/LVGL implementation root
+replacement_owner = apps/esp32_lvgl + builds/esp_idf
 legacy_adapter_target = trailmate_esp_idf_legacy_adapter
 ```
 

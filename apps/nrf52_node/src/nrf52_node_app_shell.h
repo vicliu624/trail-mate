@@ -1,5 +1,7 @@
 #pragma once
 
+#include "nrf52_historical_source_descriptor.h"
+
 namespace trailmate
 {
 namespace apps
@@ -11,9 +13,14 @@ struct Nrf52NodeAppShellConfig
 {
     const char* target_family = "nrf52_node";
     const char* default_ux_pack_id = "tiny_node_status";
-    const char* transitional_source = "legacy/app_implementations/esp_pio";
-    const char* board_specific_transitional_source = "legacy/app_implementations/gat562_mesh_evb_pro";
-    const char* legacy_adapter_target = "trailmate_nrf52_pio_legacy_adapter";
+    const char* historical_generic_root_name =
+        nrf52HistoricalSourceDescriptor().historical_generic_root_name;
+    const char* historical_board_root_name =
+        nrf52HistoricalSourceDescriptor().historical_board_root_name;
+    const char* historical_role =
+        nrf52HistoricalSourceDescriptor().historical_role;
+    const char* replacement_owner =
+        nrf52HistoricalSourceDescriptor().replacement_owner;
 };
 
 class Nrf52NodeAppShell

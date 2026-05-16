@@ -29,8 +29,11 @@ Known build references that still touch legacy roots:
 
 - `CMakeLists.txt` references `legacy/app_implementations/esp_idf`
 - `builds/esp_idf/CMakeLists.txt` documents `legacy/app_implementations/esp_idf`
-- `builds/pio_nrf52/platformio.ini` references `legacy/app_implementations/esp_pio`
-- `builds/pio_nrf52/platformio.ini` references `legacy/app_implementations/gat562_mesh_evb_pro`
+- `builds/pio_nrf52/platformio.ini` records `legacy/app_implementations/esp_pio`
+  as historical source identity only.
+- `builds/pio_nrf52/platformio.ini` records
+  `legacy/app_implementations/gat562_mesh_evb_pro` as historical source
+  identity only.
 - `cmake/TrailMateLinuxSources.cmake` documents shared Linux source ownership
   for `legacy/app_implementations/linux_sim`,
   `legacy/app_implementations/linux_rpi`, and
@@ -72,35 +75,36 @@ Known build references that still touch legacy roots:
 
 - Current purpose: PlatformIO / Arduino compatibility root for nRF-oriented
   embedded builds and legacy PIO source layout.
-- Current build callers: `builds/pio_nrf52/platformio.ini` references this
-  root through include paths and compatibility source layout.
-- Current app shell callers: `apps/nrf52_node` exposes the transitional source
+- Current build callers: `builds/pio_nrf52/platformio.ini` records this root as
+  historical source identity only; it no longer adds this root as an include or
+  source dependency.
+- Current app shell callers: `apps/nrf52_node` exposes the historical source
   string `legacy/app_implementations/esp_pio`.
 - Current CMake / PlatformIO callers: `builds/pio_nrf52/platformio.ini`.
-- Current include callers: PlatformIO include flags still add
-  `legacy/app_implementations/esp_pio/src`.
+- Current include callers: none from `builds/pio_nrf52`.
 - Runtime ownership status: transitional PIO compatibility root; concrete device
   validation should use `gat562_mesh_evb_pro` as the board-specific target.
 - Safe to delete now? no.
-- First deletion blocker: PIO include/source layout still references this root.
+- First deletion blocker: PIO runtime source ownership still physically lives
+  under the historical root even though the wrapper no longer includes it.
 - Target replacement owner: `apps/nrf52_node`, `builds/pio_nrf52`,
   `boards/gat562_mesh_evb_pro`, platform adapters, and embedded runtime modules.
 - Burn-down step: split PIO compatibility glue from concrete device ownership,
   then make the PIO root forwarding-only or remove it after the wrapper owns
   all source and include paths.
-- Deletion blocker: PlatformIO source and include paths still point at this
-  historical root.
+- Deletion blocker: historical PIO runtime source files still need ownership
+  decisions before root deletion.
 - Replacement owner: `apps/nrf52_node` plus `builds/pio_nrf52`.
 
 ## Root: `legacy/app_implementations/gat562_mesh_evb_pro`
 
 - Current purpose: concrete GAT562 Mesh EVB Pro historical device root with
   board-adjacent runtime glue.
-- Current build callers: `builds/pio_nrf52/platformio.ini` lists this root as
-  part of the current PIO/nRF transitional layout.
+- Current build callers: `builds/pio_nrf52/platformio.ini` records this root as
+  historical source identity only.
 - Current app shell callers: `apps/nrf52_node` exposes
-  `legacy/app_implementations/gat562_mesh_evb_pro` as the board-specific
-  transitional source.
+  `legacy/app_implementations/gat562_mesh_evb_pro` as historical board root
+  identity.
 - Current CMake / PlatformIO callers: `builds/pio_nrf52/platformio.ini`.
 - Current include callers: no direct main-code header include is required by
   final app shells; remaining references are transitional source strings and
@@ -108,14 +112,14 @@ Known build references that still touch legacy roots:
 - Runtime ownership status: concrete board historical root; board facts must
   remain in `boards/gat562_mesh_evb_pro` and app semantics in `apps/nrf52_node`.
 - Safe to delete now? no.
-- First deletion blocker: board-specific nRF/PIO bring-up still uses this root
-  as a concrete device compatibility marker.
+- First deletion blocker: board-specific nRF/PIO runtime glue still physically
+  lives under this root even though active wrapper validation uses final owners.
 - Target replacement owner: `apps/nrf52_node`, `builds/pio_nrf52`,
   `boards/gat562_mesh_evb_pro`, and platform/embedded modules.
 - Burn-down step: prove concrete GAT562 validation through the final nRF app
   shell and build wrapper, then remove this root as an app semantic boundary.
-- Deletion blocker: concrete device compatibility marker is still referenced by
-  the nRF app shell and PIO wrapper.
+- Deletion blocker: concrete device runtime glue still needs migration or
+  deletion decisions before the root can be removed.
 - Replacement owner: `apps/nrf52_node` plus `boards/gat562_mesh_evb_pro`.
 
 ## Root: `legacy/app_implementations/linux_rpi`
@@ -148,12 +152,13 @@ Known build references that still touch legacy roots:
   only, and Linux build wrapper documentation in `builds/linux_cmake/README.md`
   records the historical path.
 - Current app shell callers: none for the legacy adapter. `apps/linux_sim_shell`
-  owns `LinuxSimLegacySourceDescriptor` and keeps only the transitional source
-  path string.
+  owns `LinuxSimHistoricalSourceDescriptor` and keeps only historical source
+  identity.
 - Current CMake / PlatformIO callers: none with active targets. The local
   CMake file is archive-only.
-- Current include callers: none from active source. Historical adapter includes
-  are retained under `archive/adapters` only.
+- Current include callers: none from active source. Historical adapter source
+  was deleted from archive after descriptor smoke coverage moved to the final
+  app shell.
 - Runtime ownership status: archive-only root. Phase 9-11 runtime entry
   adoption, ASCII descriptor rendering, and screen graph presentation are owned
   by `apps/linux_sim_shell`, `modules/ui_ascii_runtime`, and
@@ -179,12 +184,13 @@ Known build references that still touch legacy roots:
   marker only, and Linux build wrapper documentation in
   `builds/linux_cmake/README.md` records the historical path.
 - Current app shell callers: none for the legacy adapter.
-  `apps/linux_uconsole_gtk` owns `LinuxUConsoleGtkLegacySourceDescriptor` and
-  keeps only the transitional source path string.
+  `apps/linux_uconsole_gtk` owns `LinuxUConsoleGtkHistoricalSourceDescriptor`
+  and keeps only historical source identity.
 - Current CMake / PlatformIO callers: none with active targets. The local
   CMake file is archive-only.
-- Current include callers: none from active source. Historical adapter includes
-  are retained under `archive/adapters` only.
+- Current include callers: none from active source. Historical adapter source
+  was deleted from archive after descriptor smoke coverage moved to the final
+  app shell.
 - Runtime ownership status: archive-only GTK root. Phase 9-11 page
   registry adoption, GTK descriptor registry, and screen graph presentation are
   owned by `apps/linux_uconsole_gtk` and `modules/ui_gtk_runtime`.

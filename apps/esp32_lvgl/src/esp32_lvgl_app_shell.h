@@ -1,5 +1,7 @@
 #pragma once
 
+#include "esp32_lvgl_historical_source_descriptor.h"
+
 namespace trailmate
 {
 namespace apps
@@ -11,7 +13,12 @@ struct Esp32LvglAppShellConfig
 {
     const char* target_family = "esp32_lvgl";
     const char* default_ux_pack_id = "compatibility";
-    const char* transitional_source = "legacy/app_implementations/esp_idf";
+    const char* historical_root_name =
+        esp32LvglHistoricalSourceDescriptor().historical_root_name;
+    const char* historical_role =
+        esp32LvglHistoricalSourceDescriptor().historical_role;
+    const char* replacement_owner =
+        esp32LvglHistoricalSourceDescriptor().replacement_owner;
     const char* legacy_adapter_target = "trailmate_esp_idf_legacy_adapter";
 };
 

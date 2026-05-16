@@ -9,19 +9,19 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 
 | Keyword | Matches | Paths |
 | --- | ---: | ---: |
-| `legacy` | 3251 | 419 |
-| `compat` | 685 | 202 |
-| `compatibility` | 538 | 168 |
-| `transitional` | 227 | 62 |
+| `legacy` | 3158 | 408 |
+| `compat` | 677 | 200 |
+| `compatibility` | 528 | 164 |
+| `transitional` | 176 | 45 |
 | `temporary` | 41 | 19 |
 | `fallback` | 789 | 159 |
 | `shim` | 43 | 14 |
 | `deprecated` | 157 | 39 |
 | `archive-only` | 45 | 15 |
-| `adapter` | 2918 | 352 |
-| `bridge` | 920 | 157 |
-| `probe` | 581 | 111 |
-| `smoke` | 415 | 84 |
+| `adapter` | 2894 | 344 |
+| `bridge` | 921 | 157 |
+| `probe` | 579 | 110 |
+| `smoke` | 425 | 86 |
 
 ## Matched Paths
 
@@ -33,55 +33,51 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `NOTICE.md` | `compat` |
 | `README.md` | `adapter`, `compat`, `compatibility` |
 | `apps/README.md` | `adapter`, `compat`, `compatibility`, `legacy`, `transitional` |
-| `apps/esp32_lvgl/APP_SHELL_MANIFEST.md` | `adapter`, `compat`, `compatibility`, `legacy`, `transitional` |
+| `apps/esp32_lvgl/APP_SHELL_MANIFEST.md` | `adapter`, `compat`, `compatibility`, `legacy` |
 | `apps/esp32_lvgl/CMakeLists.txt` | `adapter`, `legacy`, `smoke` |
-| `apps/esp32_lvgl/README.md` | `adapter`, `compat`, `compatibility`, `legacy`, `transitional` |
-| `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp` | `adapter`, `legacy`, `transitional` |
-| `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h` | `adapter`, `compat`, `compatibility`, `legacy`, `transitional` |
-| `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp` | `adapter`, `compat`, `compatibility`, `legacy`, `smoke`, `transitional` |
+| `apps/esp32_lvgl/README.md` | `adapter`, `compat`, `compatibility`, `legacy` |
+| `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp` | `adapter`, `legacy` |
+| `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h` | `adapter`, `compat`, `compatibility`, `legacy` |
+| `apps/esp32_lvgl/src/esp32_lvgl_historical_source_descriptor.h` | `legacy` |
+| `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp` | `adapter`, `compat`, `compatibility`, `legacy`, `smoke` |
+| `apps/esp32_lvgl/tests/esp32_lvgl_historical_source_descriptor_smoke.cpp` | `legacy`, `smoke` |
 | `apps/linux_sim_shell/APP_SHELL_MANIFEST.md` | `legacy`, `smoke`, `transitional` |
 | `apps/linux_sim_shell/CMakeLists.txt` | `adapter`, `bridge`, `compat`, `compatibility`, `fallback`, `legacy`, `probe`, `smoke` |
 | `apps/linux_sim_shell/README.md` | `legacy`, `smoke`, `transitional` |
-| `apps/linux_sim_shell/src/linux_sim_app_shell.cpp` | `legacy`, `transitional` |
-| `apps/linux_sim_shell/src/linux_sim_app_shell.h` | `legacy`, `transitional` |
-| `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.cpp` | `legacy` |
-| `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h` | `compat`, `compatibility`, `legacy` |
+| `apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.h` | `legacy` |
 | `apps/linux_sim_shell/src/linux_sim_runtime_entry.cpp` | `fallback`, `probe` |
 | `apps/linux_sim_shell/src/linux_sim_runtime_entry.h` | `fallback`, `probe` |
 | `apps/linux_sim_shell/src/linux_sim_runtime_entry_adoption_probe.cpp` | `compat`, `compatibility`, `fallback`, `probe` |
 | `apps/linux_sim_shell/src/linux_sim_runtime_entry_adoption_probe.h` | `fallback`, `probe` |
 | `apps/linux_sim_shell/src/linux_sim_runtime_renderer.cpp` | `fallback` |
 | `apps/linux_sim_shell/src/linux_sim_runtime_renderer.h` | `fallback` |
-| `apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp` | `legacy`, `smoke`, `transitional` |
-| `apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp` | `compat`, `compatibility`, `legacy`, `smoke` |
+| `apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp` | `smoke` |
+| `apps/linux_sim_shell/tests/linux_sim_historical_source_descriptor_smoke.cpp` | `legacy`, `smoke` |
 | `apps/linux_sim_shell/tests/linux_sim_runtime_entry_adoption_probe_smoke.cpp` | `fallback`, `probe`, `smoke` |
 | `apps/linux_sim_shell/tests/linux_sim_runtime_entry_fallback_smoke.cpp` | `fallback`, `smoke` |
 | `apps/linux_sim_shell/tests/linux_sim_runtime_entry_smoke.cpp` | `fallback`, `smoke` |
 | `apps/linux_sim_shell/tests/linux_sim_runtime_renderer_smoke.cpp` | `fallback`, `smoke` |
 | `apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md` | `legacy`, `smoke`, `transitional` |
-| `apps/linux_uconsole_gtk/CMakeLists.txt` | `adapter`, `bridge`, `fallback`, `legacy`, `probe`, `smoke` |
+| `apps/linux_uconsole_gtk/CMakeLists.txt` | `adapter`, `bridge`, `fallback`, `probe`, `smoke` |
 | `apps/linux_uconsole_gtk/README.md` | `legacy`, `smoke`, `transitional` |
-| `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.cpp` | `legacy`, `transitional` |
-| `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.h` | `legacy`, `transitional` |
-| `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.cpp` | `legacy` |
-| `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h` | `compat`, `compatibility`, `legacy` |
+| `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.h` | `legacy` |
 | `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_page_registry_adoption.cpp` | `fallback`, `legacy`, `probe` |
 | `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_page_registry_adoption.h` | `fallback`, `probe` |
 | `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_page_registry_renderer.cpp` | `fallback` |
 | `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_page_registry_renderer.h` | `fallback` |
 | `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_runtime_entry_adoption_probe.cpp` | `compat`, `compatibility`, `fallback`, `probe` |
 | `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_runtime_entry_adoption_probe.h` | `fallback`, `probe` |
-| `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_app_shell_smoke.cpp` | `legacy`, `smoke`, `transitional` |
-| `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp` | `compat`, `compatibility`, `legacy`, `smoke` |
+| `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_app_shell_smoke.cpp` | `smoke` |
+| `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_historical_source_descriptor_smoke.cpp` | `legacy`, `smoke` |
 | `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_page_registry_adoption_smoke.cpp` | `fallback`, `smoke` |
 | `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_page_registry_fallback_smoke.cpp` | `fallback`, `smoke` |
 | `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_page_registry_renderer_smoke.cpp` | `fallback`, `smoke` |
 | `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_runtime_entry_adoption_probe_smoke.cpp` | `fallback`, `probe`, `smoke` |
-| `apps/nrf52_node/APP_SHELL_MANIFEST.md` | `adapter`, `legacy`, `transitional` |
-| `apps/nrf52_node/README.md` | `adapter`, `legacy`, `transitional` |
-| `apps/nrf52_node/src/nrf52_node_app_shell.cpp` | `adapter`, `legacy`, `transitional` |
-| `apps/nrf52_node/src/nrf52_node_app_shell.h` | `adapter`, `legacy`, `transitional` |
-| `apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp` | `adapter`, `legacy`, `smoke`, `transitional` |
+| `apps/nrf52_node/APP_SHELL_MANIFEST.md` | `legacy` |
+| `apps/nrf52_node/README.md` | `legacy` |
+| `apps/nrf52_node/src/nrf52_historical_source_descriptor.h` | `legacy` |
+| `apps/nrf52_node/tests/nrf52_historical_source_descriptor_smoke.cpp` | `legacy`, `smoke` |
+| `apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp` | `legacy`, `smoke` |
 | `boards/t_display_p4/README.md` | `fallback` |
 | `boards/t_display_p4/src/t_display_p4_board.cpp` | `probe` |
 | `boards/tab5/README.md` | `adapter` |
@@ -103,7 +99,6 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `builds/linux_cmake/README.md` | `legacy`, `transitional` |
 | `builds/pio_nrf52/README.md` | `legacy`, `transitional` |
 | `builds/pio_nrf52/platformio.ini` | `legacy`, `transitional` |
-| `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp` | `adapter`, `legacy` |
 | `cmake/TrailMateLinuxSources.cmake` | `adapter`, `bridge`, `compat`, `compatibility`, `legacy` |
 | `cmake/TrailMateUxPacks.cmake` | `adapter`, `bridge`, `compat`, `compatibility`, `probe` |
 | `docs/ARCHITECTURE.md` | `adapter`, `compat`, `compatibility`, `temporary` |
@@ -130,15 +125,16 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `docs/audits/CHAT_RUNTIME_EVENT_PUMP_AUDIT.md` | `adapter`, `bridge`, `legacy` |
 | `docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md` | `adapter`, `bridge`, `legacy`, `temporary` |
 | `docs/audits/CHAT_UI_CONTROLLER_LEGACY_OWNERSHIP_AUDIT.md` | `compat`, `compatibility`, `fallback`, `legacy` |
+| `docs/audits/ESP_IDF_FINAL_OWNER_MIGRATION_PLAN.md` | `adapter`, `legacy` |
 | `docs/audits/ESP_LVGL_COMPOSITION_BRIDGE_AUDIT.md` | `adapter`, `bridge`, `legacy` |
 | `docs/audits/GPS_CONSUMER_BOUNDARY_AUDIT.md` | `adapter`, `bridge`, `compat`, `compatibility`, `legacy`, `probe`, `smoke`, `temporary` |
 | `docs/audits/GPS_RUNTIME_SCHEDULING_OWNERSHIP_AUDIT.md` | `adapter`, `legacy` |
 | `docs/audits/KEY_VERIFICATION_MAP_OVERLAY_LEGACY_BURN_DOWN_AUDIT.md` | `adapter`, `compat`, `compatibility`, `deprecated`, `legacy`, `smoke` |
 | `docs/audits/KEY_VERIFICATION_OWNERSHIP_AUDIT.md` | `adapter`, `bridge`, `legacy` |
-| `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md` | `adapter`, `archive-only`, `bridge`, `compat`, `compatibility`, `legacy`, `transitional` |
+| `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md` | `adapter`, `archive-only`, `bridge`, `compat`, `compatibility`, `legacy`, `smoke`, `transitional` |
 | `docs/audits/LEGACY_BURNDOWN_REGISTER.md` | `adapter`, `bridge`, `compat`, `compatibility`, `deprecated`, `fallback`, `legacy`, `probe`, `smoke` |
 | `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md` | `adapter`, `archive-only`, `bridge`, `compat`, `compatibility`, `deprecated`, `fallback`, `legacy`, `probe`, `shim`, `smoke`, `temporary`, `transitional` |
-| `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md` | `adapter`, `archive-only`, `compat`, `compatibility`, `legacy`, `smoke`, `transitional` |
+| `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md` | `adapter`, `archive-only`, `compat`, `compatibility`, `legacy`, `smoke` |
 | `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md` | `adapter`, `archive-only`, `compat`, `compatibility`, `fallback`, `legacy`, `smoke` |
 | `docs/audits/MAP_OVERLAY_ROUTE_TRACKER_OWNERSHIP_AUDIT.md` | `compat`, `compatibility`, `legacy` |
 | `docs/audits/MAP_PRESENTATION_BOUNDARY_AUDIT.md` | `adapter`, `bridge`, `compat`, `compatibility`, `fallback`, `legacy`, `probe`, `smoke` |
@@ -322,8 +318,6 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `legacy/app_implementations/linux_sim/CMakeLists.txt` | `archive-only`, `legacy` |
 | `legacy/app_implementations/linux_sim/README.md` | `adapter`, `compat`, `compatibility`, `legacy`, `probe`, `smoke` |
 | `legacy/app_implementations/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md` | `archive-only`, `legacy`, `transitional` |
-| `legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.cpp` | `adapter`, `legacy` |
-| `legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h` | `adapter`, `legacy` |
 | `legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.cpp` | `compat`, `compatibility`, `legacy` |
 | `legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h` | `legacy` |
 | `legacy/app_implementations/linux_sim/archive/scripts/CMakePresets.json` | `legacy`, `smoke` |
@@ -332,7 +326,6 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `legacy/app_implementations/linux_sim/archive/simulator/simulator_main.cpp` | `legacy` |
 | `legacy/app_implementations/linux_sim/archive/tests/demo_app_smoke.cpp` | `legacy`, `smoke` |
 | `legacy/app_implementations/linux_sim/archive/tests/linux_runtime_smoke.cpp` | `legacy`, `smoke` |
-| `legacy/app_implementations/linux_sim/archive/tests/linux_sim_composition_root_smoke.cpp` | `legacy`, `probe`, `smoke` |
 | `legacy/app_implementations/linux_sim/archive/tests/map_workspace_ascii_probe.cpp` | `legacy`, `probe` |
 | `legacy/app_implementations/linux_sim/archive/tests/path_safety_smoke.cpp` | `legacy`, `smoke` |
 | `legacy/app_implementations/linux_sim/archive/tests/presentation_workspace_ascii_probe.cpp` | `legacy`, `probe` |
@@ -340,8 +333,6 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `legacy/app_implementations/linux_uconsole/CMakeLists.txt` | `archive-only`, `legacy` |
 | `legacy/app_implementations/linux_uconsole/README.md` | `adapter`, `compat`, `compatibility`, `fallback`, `legacy`, `probe`, `smoke` |
 | `legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md` | `archive-only`, `legacy`, `transitional` |
-| `legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.cpp` | `adapter`, `legacy` |
-| `legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h` | `adapter`, `legacy` |
 | `legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.cpp` | `compat`, `compatibility`, `legacy` |
 | `legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h` | `legacy` |
 | `legacy/app_implementations/linux_uconsole/archive/gtk/desktop/sdl_window_presenter.cpp` | `legacy` |
@@ -380,7 +371,6 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_chat_dedup_smoke.cpp` | `adapter`, `legacy`, `smoke` |
 | `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_chat_sqlite_store_smoke.cpp` | `adapter`, `legacy`, `smoke` |
 | `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_chat_workspace_smoke.cpp` | `legacy`, `smoke` |
-| `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_composition_root_smoke.cpp` | `legacy`, `smoke` |
 | `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_map_workspace_smoke.cpp` | `legacy`, `smoke` |
 | `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_meshtastic_node_payload_smoke.cpp` | `fallback`, `legacy`, `smoke` |
 | `legacy/app_implementations/linux_uconsole/archive/tests/uconsole_presentation_workspace_smoke.cpp` | `legacy`, `probe`, `smoke` |
@@ -818,6 +808,8 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 | `tools/architecture/KNOWN_PRODUCT_ARCHITECTURE_VIOLATIONS.md` | `adapter`, `bridge`, `compat`, `compatibility`, `fallback`, `legacy`, `probe` |
 | `tools/architecture/check_legacy_app_roots_burndown_ready.py` | `adapter`, `archive-only`, `compat`, `compatibility`, `legacy`, `smoke`, `transitional` |
 | `tools/architecture/check_legacy_compat_temp_inventory_ready.py` | `adapter`, `archive-only`, `bridge`, `compat`, `compatibility`, `deprecated`, `fallback`, `legacy`, `probe`, `shim`, `smoke`, `transitional` |
+| `tools/architecture/check_legacy_disposition_execution_ready.py` | `adapter`, `compat`, `legacy`, `smoke` |
+| `tools/architecture/check_no_root_legacy_preflight_ready.py` | `compat`, `legacy` |
 | `tools/architecture/check_phase10_primary_path_ready.py` | `fallback`, `smoke` |
 | `tools/architecture/check_phase11_renderer_consumption_ready.py` | `fallback`, `probe`, `smoke` |
 | `tools/architecture/check_phase45_ready.py` | `adapter`, `bridge`, `legacy`, `smoke` |
@@ -857,24 +849,19 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `apps/esp32_lvgl/CMakeLists.txt:15`: target_include_directories(trailmate_esp_idf_legacy_adapter
 - `apps/esp32_lvgl/CMakeLists.txt:17`: "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/esp_idf/src")
 - `apps/esp32_lvgl/CMakeLists.txt:19`: target_compile_features(trailmate_esp_idf_legacy_adapter PUBLIC cxx_std_17)
-- `apps/esp32_lvgl/CMakeLists.txt:30`: trailmate_esp_idf_legacy_adapter
-- `apps/esp32_lvgl/README.md:22`: Current transitional path = `legacy/app_implementations/esp_idf`
-- `apps/esp32_lvgl/README.md:58`: transitional_source = legacy/app_implementations/esp_idf
-- `apps/esp32_lvgl/README.md:59`: legacy_adapter_target = trailmate_esp_idf_legacy_adapter
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp:28`: config_.legacy_adapter_target != nullptr;
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:14`: const char* transitional_source = "legacy/app_implementations/esp_idf";
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:15`: const char* legacy_adapter_target = "trailmate_esp_idf_legacy_adapter";
-- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:19`: assert(std::strcmp(config.transitional_source, "legacy/app_implementations/esp_idf") == 0);
-- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:20`: assert(std::strcmp(config.legacy_adapter_target,
-- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:21`: "trailmate_esp_idf_legacy_adapter") == 0);
+- `apps/esp32_lvgl/CMakeLists.txt:31`: trailmate_esp_idf_legacy_adapter
+- `apps/esp32_lvgl/README.md:22`: Historical source identity = `legacy/app_implementations/esp_idf`
+- `apps/esp32_lvgl/README.md:58`: historical_root_name = legacy/app_implementations/esp_idf
+- `apps/esp32_lvgl/README.md:61`: legacy_adapter_target = trailmate_esp_idf_legacy_adapter
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp:30`: config_.legacy_adapter_target != nullptr;
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:22`: const char* legacy_adapter_target = "trailmate_esp_idf_legacy_adapter";
+- `apps/esp32_lvgl/src/esp32_lvgl_historical_source_descriptor.h:8`: const char* historical_root_name = "legacy/app_implementations/esp_idf";
+- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:20`: "legacy/app_implementations/esp_idf") == 0);
+- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:25`: assert(std::strcmp(config.legacy_adapter_target,
+- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:26`: "trailmate_esp_idf_legacy_adapter") == 0);
+- `apps/esp32_lvgl/tests/esp32_lvgl_historical_source_descriptor_smoke.cpp:12`: "legacy/app_implementations/esp_idf") == 0);
 - `apps/linux_sim_shell/APP_SHELL_MANIFEST.md:23`: - `legacy/app_implementations/linux_sim`
 - `apps/linux_sim_shell/APP_SHELL_MANIFEST.md:74`: - `legacy/app_implementations/linux_sim`
-- `apps/linux_sim_shell/CMakeLists.txt:16`: src/linux_sim_legacy_source_descriptor.cpp
-- `apps/linux_sim_shell/CMakeLists.txt:46`: add_executable(trailmate_linux_sim_legacy_source_descriptor_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:47`: tests/linux_sim_legacy_source_descriptor_smoke.cpp)
-- `apps/linux_sim_shell/CMakeLists.txt:48`: target_link_libraries(trailmate_linux_sim_legacy_source_descriptor_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:50`: add_test(NAME trailmate_linux_sim_legacy_source_descriptor_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:51`: COMMAND trailmate_linux_sim_legacy_source_descriptor_smoke)
 - `apps/linux_sim_shell/CMakeLists.txt:95`: add_executable(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:96`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge_legacy_alias.cpp")
 - `apps/linux_sim_shell/CMakeLists.txt:97`: target_include_directories(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
@@ -903,8 +890,13 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `apps/linux_sim_shell/CMakeLists.txt:171`: target_compile_features(trailmate_legacy_map_overlay_source_alias_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:173`: add_test(NAME trailmate_legacy_map_overlay_source_alias_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:174`: COMMAND trailmate_legacy_map_overlay_source_alias_smoke)
-- `apps/linux_sim_shell/README.md:23`: Current transitional path = `legacy/app_implementations/linux_sim`
-- ... 3191 additional matches omitted
+- `apps/linux_sim_shell/README.md:23`: Historical source identity = `legacy/app_implementations/linux_sim`
+- `apps/linux_sim_shell/README.md:55`: historical_source = legacy/app_implementations/linux_sim
+- `apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.h:8`: const char* historical_root_name = "legacy/app_implementations/linux_sim";
+- `apps/linux_sim_shell/tests/linux_sim_historical_source_descriptor_smoke.cpp:12`: "legacy/app_implementations/linux_sim") == 0);
+- `apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md:23`: - `legacy/app_implementations/linux_uconsole`
+- `apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md:74`: - `legacy/app_implementations/linux_uconsole`
+- ... 3098 additional matches omitted
 
 ### `compat`
 
@@ -921,21 +913,18 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `README.md:620`: **Trail-mate** is an offline-first field communication and situational-awareness system built around low-power radio devices (LoRa and compatible sub-GHz radios).
 - `apps/README.md:21`: that may be reached only through declared compatibility adapters.
 - `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:60`: - `compatibility`
+- `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:67`: Current ESP-IDF compatibility adapter target:
 - `apps/esp32_lvgl/README.md:57`: default_ux_pack_id = compatibility
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:13`: const char* default_ux_pack_id = "compatibility";
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:15`: const char* default_ux_pack_id = "compatibility";
 - `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:17`: assert(std::strcmp(config.default_ux_pack_id, "compatibility") == 0);
 - `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:18`: assert(std::strcmp(shell.activeUxPackId(), "compatibility") == 0);
 - `apps/linux_sim_shell/CMakeLists.txt:189`: compatibility_screen_factory
 - `apps/linux_sim_shell/CMakeLists.txt:198`: compatibility_menu_binding
 - `apps/linux_sim_shell/CMakeLists.txt:199`: compatibility_ux_pack
-- `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h:11`: bool compatibility_required = true;
 - `apps/linux_sim_shell/src/linux_sim_runtime_entry_adoption_probe.cpp:3`: #include "ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h"
 - `apps/linux_sim_shell/src/linux_sim_runtime_entry_adoption_probe.cpp:23`: ui_lvgl_ux::CompatibilityScreenFactory screen_factory;
-- `apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp:16`: assert(descriptor.compatibility_required);
-- `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h:11`: bool compatibility_required = true;
 - `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_runtime_entry_adoption_probe.cpp:3`: #include "ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h"
 - `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_runtime_entry_adoption_probe.cpp:24`: ui_lvgl_ux::CompatibilityScreenFactory screen_factory;
-- `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp:17`: assert(descriptor.compatibility_required);
 - `boards/tab5/include/boards/tab5/codec_compat.h`: path match
 - `boards/tab5/include/boards/tab5/codec_compat.h:9`: class CodecCompat
 - `boards/tab5/include/boards/tab5/codec_compat.h:12`: CodecCompat() = default;
@@ -968,7 +957,10 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/ARCHITECTURE.md:463`: Temporary wrappers, forwarding headers, and compatibility glue are acceptable if they reduce migration risk.
 - `docs/Best Practices/GAT562_STATUS_SNAPSHOT.md:30`: - GAT562 app facade still implements Team-related interface slots only as compatibility stubs returning `nullptr`, so Team capability stays structurally excluded instead of half-en
 - `docs/REPOSITORY_MIGRATION_PLAN.md:7`: For the current UI/shared-page migration and ESP-IDF compatibility work,
-- ... 625 additional matches omitted
+- `docs/REPOSITORY_MIGRATION_PLAN.md:171`: - legacy headers under `src/chat/domain` and `src/chat/ports` remain as compatibility shims
+- `docs/REPOSITORY_MIGRATION_PLAN.md:202`: - legacy include path `src/chat/infra/store/ram_store.h` remains as a compatibility shim
+- `docs/REPOSITORY_MIGRATION_PLAN.md:214`: - legacy headers remain as compatibility shims
+- ... 617 additional matches omitted
 
 ### `compatibility`
 
@@ -978,21 +970,18 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `README.md:568`: * [x] **Meshcore network compatibility** (selectable adapter)
 - `apps/README.md:21`: that may be reached only through declared compatibility adapters.
 - `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:60`: - `compatibility`
+- `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:67`: Current ESP-IDF compatibility adapter target:
 - `apps/esp32_lvgl/README.md:57`: default_ux_pack_id = compatibility
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:13`: const char* default_ux_pack_id = "compatibility";
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:15`: const char* default_ux_pack_id = "compatibility";
 - `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:17`: assert(std::strcmp(config.default_ux_pack_id, "compatibility") == 0);
 - `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:18`: assert(std::strcmp(shell.activeUxPackId(), "compatibility") == 0);
 - `apps/linux_sim_shell/CMakeLists.txt:189`: compatibility_screen_factory
 - `apps/linux_sim_shell/CMakeLists.txt:198`: compatibility_menu_binding
 - `apps/linux_sim_shell/CMakeLists.txt:199`: compatibility_ux_pack
-- `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h:11`: bool compatibility_required = true;
 - `apps/linux_sim_shell/src/linux_sim_runtime_entry_adoption_probe.cpp:3`: #include "ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h"
 - `apps/linux_sim_shell/src/linux_sim_runtime_entry_adoption_probe.cpp:23`: ui_lvgl_ux::CompatibilityScreenFactory screen_factory;
-- `apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp:16`: assert(descriptor.compatibility_required);
-- `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h:11`: bool compatibility_required = true;
 - `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_runtime_entry_adoption_probe.cpp:3`: #include "ui_lvgl_ux_packs/runtime/compatibility_screen_factory.h"
 - `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_runtime_entry_adoption_probe.cpp:24`: ui_lvgl_ux::CompatibilityScreenFactory screen_factory;
-- `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp:17`: assert(descriptor.compatibility_required);
 - `boards/tdeck/src/tdeck_board.cpp:660`: // Prefer a practical default speed; fallback ladder inside sd_utils preserves compatibility.
 - `cmake/TrailMateLinuxSources.cmake:383`: "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/runtime/compatibility_screen_factory.cpp"
 - `cmake/TrailMateLinuxSources.cmake:387`: "${TRAIL_MATE_UI_LVGL_UX_PACKS_SRC_ROOT}/packs/compatibility_ux_pack.cpp"
@@ -1032,50 +1021,24 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md:37`: entrypoint, compatibility app shell, and runtime glue.
 - `docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md:50`: | Future app shell | Current compatibility source | Build entrypoint | Renderer family | Status |
 - `docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md:83`: Compatibility adapter targets and descriptors:
-- ... 478 additional matches omitted
+- `docs/audits/APP_SHELL_CURRENT_STATE_AUDIT.md:124`: - legacy compatibility adapters have explicit exit conditions
+- `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:36`: | `legacy/app_implementations/esp_pio` | PlatformIO/Arduino compatibility entrypoint and legacy ESP app glue | split into `builds/pio_nrf52` for nRF52 authority and possible legacy
+- `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:42`: | root `platformio.ini` | current PlatformIO build authority for Arduino/PIO targets | invoked or wrapped by `builds/pio_nrf52` and any legacy PIO compatibility entrypoint | Enviro
+- ... 468 additional matches omitted
 
 ### `transitional`
 
 - `apps/README.md:20`: `legacy/app_implementations/linux_uconsole` are transitional historical roots
-- `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:21`: Current transitional path:
-- `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:67`: Transitional implementation adapter target:
-- `apps/esp32_lvgl/README.md:22`: Current transitional path = `legacy/app_implementations/esp_idf`
-- `apps/esp32_lvgl/README.md:58`: transitional_source = legacy/app_implementations/esp_idf
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp:27`: config_.transitional_source != nullptr &&
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:14`: const char* transitional_source = "legacy/app_implementations/esp_idf";
-- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:19`: assert(std::strcmp(config.transitional_source, "legacy/app_implementations/esp_idf") == 0);
 - `apps/linux_sim_shell/APP_SHELL_MANIFEST.md:21`: Current transitional path:
 - `apps/linux_sim_shell/APP_SHELL_MANIFEST.md:72`: Transitional implementation root:
 - `apps/linux_sim_shell/README.md:9`: the transitional simulator implementation root.
-- `apps/linux_sim_shell/README.md:23`: Current transitional path = `legacy/app_implementations/linux_sim`
-- `apps/linux_sim_shell/README.md:55`: transitional_source = legacy/app_implementations/linux_sim
-- `apps/linux_sim_shell/src/linux_sim_app_shell.cpp:33`: config_.transitional_source != nullptr &&
-- `apps/linux_sim_shell/src/linux_sim_app_shell.h:16`: const char* transitional_source =
-- `apps/linux_sim_shell/tests/linux_sim_app_shell_smoke.cpp:22`: assert(std::strcmp(config.transitional_source, descriptor.root_path) == 0);
 - `apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md:21`: Current transitional path:
 - `apps/linux_uconsole_gtk/APP_SHELL_MANIFEST.md:72`: Transitional implementation root:
 - `apps/linux_uconsole_gtk/README.md:10`: the transitional GTK implementation root.
-- `apps/linux_uconsole_gtk/README.md:24`: Current transitional path = `legacy/app_implementations/linux_uconsole`
-- `apps/linux_uconsole_gtk/README.md:56`: transitional_source = legacy/app_implementations/linux_uconsole
-- `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.cpp:34`: config_.transitional_source != nullptr &&
-- `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.h:16`: const char* transitional_source =
-- `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_app_shell_smoke.cpp:23`: assert(std::strcmp(config.transitional_source, descriptor.root_path) == 0);
-- `apps/nrf52_node/APP_SHELL_MANIFEST.md:21`: Current transitional path:
-- `apps/nrf52_node/APP_SHELL_MANIFEST.md:68`: Transitional implementation adapter target:
-- `apps/nrf52_node/README.md:22`: Current transitional path = `legacy/app_implementations/esp_pio` and `legacy/app_implementations/gat562_mesh_evb_pro`
-- `apps/nrf52_node/README.md:58`: transitional_source = legacy/app_implementations/esp_pio
-- `apps/nrf52_node/README.md:59`: board_specific_transitional_source = legacy/app_implementations/gat562_mesh_evb_pro
-- `apps/nrf52_node/src/nrf52_node_app_shell.cpp:27`: config_.transitional_source != nullptr &&
-- `apps/nrf52_node/src/nrf52_node_app_shell.cpp:28`: config_.board_specific_transitional_source != nullptr &&
-- `apps/nrf52_node/src/nrf52_node_app_shell.h:14`: const char* transitional_source = "legacy/app_implementations/esp_pio";
-- `apps/nrf52_node/src/nrf52_node_app_shell.h:15`: const char* board_specific_transitional_source = "legacy/app_implementations/gat562_mesh_evb_pro";
-- `apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp:19`: assert(std::strcmp(config.transitional_source, "legacy/app_implementations/esp_pio") == 0);
-- `apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp:20`: assert(std::strcmp(config.board_specific_transitional_source,
 - `builds/README.md:29`: Current transitional paths remain valid until wrapper migration is proven:
 - `builds/esp_idf/README.md:11`: Current transitional path:
 - `builds/linux_cmake/README.md:18`: Current transitional implementation roots:
 - `builds/pio_nrf52/README.md:11`: Current transitional path may be:
-- `builds/pio_nrf52/platformio.ini:4`: ; Current transitional PIO roots:
 - `builds/pio_nrf52/platformio.ini:12`: ; The existing root/platform app environments remain transitional until the
 - `docs/REPOSITORY_MIGRATION_PLAN.md:1245`: - this means `apps/esp_idf_tab5` should be treated as a transitional shell, not the final IDF app-layer shape
 - `docs/REPOSITORY_MIGRATION_PLAN.md:1264`: - introduced `apps/esp_idf_t_display_p4` as a second transitional IDF target shell so the repository no longer assumes Tab5 is the only IDF board
@@ -1096,7 +1059,36 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:130`: | App shell | Executable target | Transitional source | Status |
 - `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:137`: - `legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
 - `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:138`: - `legacy/app_implementations/linux_sim/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
-- ... 167 additional matches omitted
+- `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:184`: authority and transitional roots.
+- `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:186`: The following historical roots are explicitly transitional implementation
+- `docs/audits/BUILD_ENTRYPOINT_NORMALIZATION_AUDIT.md:201`: Transitional Adapter delegates.
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:9`: historical or transitional implementation root. It must not regain ownership
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:53`: - Current app shell callers: `apps/esp32_lvgl` uses the transitional source
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:59`: - Runtime ownership status: transitional embedded build root; reusable runtime
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:85`: - Runtime ownership status: transitional PIO compatibility root; concrete device
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:110`: final app shells; remaining references are transitional source strings and
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:215`: - Current CMake / PlatformIO callers: local transitional root files and Linux
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:8`: transitional, fallback, archive, adapter, bridge, probe, smoke, or checker
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:19`: - transitional descriptors
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:29`: - legacy/transitional/compatibility/shim/fallback names
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:96`: - transitional ESP-IDF build/component root, target sdkconfig defaults, and
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:131`: - `apps/nrf52_node` transitional source strings
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:166`: - `apps/nrf52_node` board-specific transitional source strings
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:202`: - `builds/linux_cmake/README.md` records it as a current transitional Linux
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:313`: - `legacy/app_implementations/linux_unoq/TRANSITIONAL_IMPLEMENTATION_ROOT.md`
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:316`: - `builds/linux_cmake/README.md` records it as a current transitional Linux
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:389`: - describes transitional PIO and board-specific roots for the nRF52 wrapper.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:480`: - transitional descriptors
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:517`: - transitional descriptors
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:555`: - transitional descriptors
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:590`: - transitional descriptors
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1095`: - `docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md`
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1135`: - app shell docs, build docs, legacy root checker, and transitional wrappers.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1247`: - `docs/audits/TRANSITIONAL_BUILD_ENTRYPOINTS.md`
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1308`: ## Surface: legacy/transitional/compatibility/shim/fallback names
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1311`: - legacy/transitional/compatibility/shim/fallback names
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1314`: - filenames and APIs containing `legacy`, `transitional`, `compatibility`,
+- ... 116 additional matches omitted
 
 ### `temporary`
 
@@ -1115,8 +1107,8 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/audits/CHAT_UI_CONTROLLER_BURNDOWN_AUDIT.md:9`: ## A. Temporary UI Responsibilities
 - `docs/audits/GPS_CONSUMER_BOUNDARY_AUDIT.md:38`: are accepted only as temporary inputs to the Phase 5 replacement plan.
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1`: # Legacy / Compatibility / Temporary Surface Inventory
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1207`: - mixed: some names describe real final adapters, some describe temporary debt,
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1282`: - No as a long-term module name; yes only as temporary compatibility
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1322`: - mixed: some names describe real final adapters, some describe temporary debt,
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1397`: - No as a long-term module name; yes only as temporary compatibility
 - `docs/audits/PHASE9_RUNTIME_ENTRY_ADOPTION_REPORT.md:89`: app-shell probes may adapt the selected UX pack into a temporary
 - `docs/audits/REPOSITORY_LAYOUT_CURRENT_STATE_AUDIT.md:206`: - temporary bridge to burn down
 - `docs/audits/TEAM_RICH_PAYLOAD_PRESENTATION_AUDIT.md:62`: ## Temporary Text Projection
@@ -1221,14 +1213,14 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/REPOSITORY_MIGRATION_PLAN.md:1173`: - The temporary `src/sys/clock.h` and `src/sys/ringbuf.h` compatibility shims have been removed, so `sys/clock.h` and `sys/ringbuf.h` now resolve directly from `modules/core_sys`.
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:17`: - compatibility shims
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:29`: - legacy/transitional/compatibility/shim/fallback names
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:538`: ## Surface: ui_shared compatibility shims
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:541`: - compatibility shims
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:547`: - `docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md`
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1193`: ## Surface: legacy/transitional/compatibility/shim/fallback names
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1196`: - legacy/transitional/compatibility/shim/fallback names
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1200`: `compat`, `shim`, `fallback`, `adapter`, `bridge`, `probe`, or `smoke` across
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1230`: - compatibility shims
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1265`: - compatibility shims
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:653`: ## Surface: ui_shared compatibility shims
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:656`: - compatibility shims
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:662`: - `docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md`
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1308`: ## Surface: legacy/transitional/compatibility/shim/fallback names
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1311`: - legacy/transitional/compatibility/shim/fallback names
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1315`: `compat`, `shim`, `fallback`, `adapter`, `bridge`, `probe`, or `smoke` across
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1345`: - compatibility shims
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1380`: - compatibility shims
 - `docs/audits/PHASE12_DEPRECATED_ALIAS_CLEANUP_PLAN.md:31`: compatibility shims with checker coverage.
 - `docs/audits/PHASE12_FALLBACK_DELETION_READINESS.md:19`: | `ui_shared` forwarding shims | deprecated forwarding shims only | stable runtime module headers | No | they protect old include paths while downstream references burn down | no p
 - `docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md`: path match
@@ -1245,10 +1237,10 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `tools/architecture/check_legacy_compat_temp_inventory_ready.py:26`: "legacy/transitional/compatibility/shim/fallback names",
 - `tools/architecture/check_legacy_compat_temp_inventory_ready.py:44`: "ui_shared compatibility shims",
 - `tools/architecture/check_phase8_layout_ready.py:35`: "docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
-- `tools/architecture/check_phase8_layout_ready.py:395`: "UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
-- `tools/architecture/check_phase8_layout_ready.py:404`: "docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
-- `tools/architecture/check_phase8_layout_ready.py:407`: "compatibility shims only",
-- `tools/architecture/check_phase8_layout_ready.py:428`: "ui_shared compatibility shim policy",
+- `tools/architecture/check_phase8_layout_ready.py:389`: "UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
+- `tools/architecture/check_phase8_layout_ready.py:398`: "docs/audits/UI_SHARED_COMPATIBILITY_SHIM_POLICY.md",
+- `tools/architecture/check_phase8_layout_ready.py:401`: "compatibility shims only",
+- `tools/architecture/check_phase8_layout_ready.py:422`: "ui_shared compatibility shim policy",
 - `tools/architecture/check_post_refactor_final_ready.py:189`: "`ui_shared` forwarding shims",
 - `tools/architecture/scan_legacy_compat_temp_surfaces.py:20`: "shim",
 
@@ -1280,28 +1272,28 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/audits/LEGACY_BURNDOWN_REGISTER.md:81`: - Map overlay legacy source: main runtime callers removed; deprecated aliases
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:18`: - deprecated aliases
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:37`: - Keep as Deprecated Alias Temporarily
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:566`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:578`: - deprecated aliases
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:589`: - deprecated alias to `ui_chat_runtime::ChatDeliveryActionPortAdapter`.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:598`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:609`: - deprecated aliases
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:620`: - deprecated alias to `ui_chat_runtime::ChatDeliveryEventProjectionAdapter`.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:629`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:640`: - deprecated aliases
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:651`: - deprecated alias to
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:661`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:672`: - deprecated aliases
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:683`: - deprecated alias to `ui_key_verification_runtime::KeyVerificationActionSink`.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:692`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:703`: - deprecated aliases
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:714`: - deprecated alias to
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:724`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:735`: - deprecated aliases
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:746`: - deprecated alias to `ui::map_overlay::MapOverlaySnapshotSource`.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:755`: - Keep as Deprecated Alias Temporarily.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1130`: - `docs/audits/PHASE12_DEPRECATED_ALIAS_CLEANUP_PLAN.md`
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1275`: - deprecated alias tests
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1289`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:681`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:693`: - deprecated aliases
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:704`: - deprecated alias to `ui_chat_runtime::ChatDeliveryActionPortAdapter`.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:713`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:724`: - deprecated aliases
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:735`: - deprecated alias to `ui_chat_runtime::ChatDeliveryEventProjectionAdapter`.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:744`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:755`: - deprecated aliases
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:766`: - deprecated alias to
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:776`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:787`: - deprecated aliases
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:798`: - deprecated alias to `ui_key_verification_runtime::KeyVerificationActionSink`.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:807`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:818`: - deprecated aliases
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:829`: - deprecated alias to
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:839`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:850`: - deprecated aliases
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:861`: - deprecated alias to `ui::map_overlay::MapOverlaySnapshotSource`.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:870`: - Keep as Deprecated Alias Temporarily.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1245`: - `docs/audits/PHASE12_DEPRECATED_ALIAS_CLEANUP_PLAN.md`
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1390`: - deprecated alias tests
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1404`: - Keep as Deprecated Alias Temporarily.
 - `docs/audits/PHASE12_DEPRECATED_ALIAS_CLEANUP_PLAN.md`: path match
 - `docs/audits/PHASE12_DEPRECATED_ALIAS_CLEANUP_PLAN.md:1`: # Phase 12 Deprecated Alias Cleanup Plan
 - `docs/audits/PHASE12_DEPRECATED_ALIAS_CLEANUP_PLAN.md:5`: Phase 9 burned selected `Legacy*` surfaces down to deprecated aliases. Phase 12
@@ -1318,36 +1310,36 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 
 ### `archive-only`
 
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:145`: - Current purpose: archive-only historical simulator implementation root.
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:154`: CMake file is archive-only.
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:157`: - Runtime ownership status: archive-only root. Phase 9-11 runtime entry
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:167`: - Burn-down step: local CMake root collapsed to archive-only; next blocker is
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:176`: - Current purpose: archive-only historical uConsole GTK implementation root.
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:185`: CMake file is archive-only.
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:188`: - Runtime ownership status: archive-only GTK root. Phase 9-11 page
-- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:196`: - Burn-down step: local CMake root collapsed to archive-only; next blocker is
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:149`: - Current purpose: archive-only historical simulator implementation root.
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:158`: CMake file is archive-only.
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:162`: - Runtime ownership status: archive-only root. Phase 9-11 runtime entry
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:172`: - Burn-down step: local CMake root collapsed to archive-only; next blocker is
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:181`: - Current purpose: archive-only historical uConsole GTK implementation root.
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:190`: CMake file is archive-only.
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:194`: - Runtime ownership status: archive-only GTK root. Phase 9-11 page
+- `docs/audits/LEGACY_APP_IMPLEMENTATION_ROOT_BURN_DOWN_AUDIT.md:202`: - Burn-down step: local CMake root collapsed to archive-only; next blocker is
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:21`: - archive-only roots
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:237`: - docs and checkers recognize it as archive-only.
 - `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:242`: - archive-only historical simulator source and scripts.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:260`: - medium; source is archive-only but still referenced by descriptors and docs.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:274`: - docs and checkers recognize it as archive-only.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:279`: - archive-only historical uConsole GTK source, packaging files, scripts, and
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:431`: - low; it is archive-only but still enforced by legacy root checker.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:868`: - archive-only roots
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:901`: - archive-only roots
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:951`: - keeps old build ownership alive or documents archive-only local roots.
-- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:965`: files and archive-only CMake files are no longer checker requirements.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:262`: - medium; source is archive-only but still referenced by descriptors and docs.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:276`: - docs and checkers recognize it as archive-only.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:281`: - archive-only historical uConsole GTK source, packaging files, scripts, and
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:440`: - low; it is archive-only but still enforced by legacy root checker.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:983`: - archive-only roots
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1016`: - archive-only roots
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1066`: - keeps old build ownership alive or documents archive-only local roots.
+- `docs/audits/LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md:1080`: files and archive-only CMake files are no longer checker requirements.
 - `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md:19`: none. `legacy/app_implementations/linux_sim/CMakeLists.txt` is archive-only.
 - `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md:47`: archive-only. `apps/linux_uconsole_gtk/CMakeLists.txt` no longer compiles this
 - `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md:66`: legacy-local compatibility only; archive-only.
-- `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md:75`: - Old adapter headers and sources remain only as archive-only historical source.
+- `docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md:75`: - Old adapter headers and sources were deleted from archive-only historical
 - `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:4`: archive-only directories. It does not affect ESP-IDF, PlatformIO, or GAT562
 - `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:11`: archive-only marker and must not define `add_library`, `add_executable`, or
-- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:38`: `linux_sim` local CMake root should become archive-only; final build
-- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:45`: archive-only marker and must not define `add_library`, `add_executable`, or
-- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:73`: `linux_uconsole` local CMake root should become archive-only; final build
-- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:78`: - LinuxSim: local CMake root should become archive-only; final build validation
-- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:80`: - uConsole: local CMake root should become archive-only; final build validation
+- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:39`: `linux_sim` local CMake root should become archive-only; final build
+- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:46`: archive-only marker and must not define `add_library`, `add_executable`, or
+- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:75`: `linux_uconsole` local CMake root should become archive-only; final build
+- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:80`: - LinuxSim: local CMake root should become archive-only; final build validation
+- `docs/audits/LEGACY_LINUX_LOCAL_ROOT_COLLAPSE_AUDIT.md:82`: - uConsole: local CMake root should become archive-only; final build validation
 - `legacy/app_implementations/LEGACY_IMPLEMENTATION_INDEX.md:48`: - Burn-down status: archive-only root; final app shell no longer depends on
 - `legacy/app_implementations/LEGACY_IMPLEMENTATION_INDEX.md:65`: - Burn-down status: archive-only root; final app shell no longer depends on
 - `legacy/app_implementations/linux_sim/ARCHIVE.md:3`: This root is archive-only.
@@ -1356,12 +1348,12 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `legacy/app_implementations/linux_uconsole/ARCHIVE.md:3`: This root is archive-only.
 - `legacy/app_implementations/linux_uconsole/CMakeLists.txt:5`: message(STATUS "legacy/app_implementations/linux_uconsole is archive-only. Use apps/linux_uconsole_gtk.")
 - `legacy/app_implementations/linux_uconsole/TRANSITIONAL_IMPLEMENTATION_ROOT.md:26`: - archive-only historical root
-- `tools/architecture/check_legacy_app_roots_burndown_ready.py:260`: "local CMake root should become archive-only",
-- `tools/architecture/check_legacy_app_roots_burndown_ready.py:275`: "archive-only",
-- `tools/architecture/check_legacy_app_roots_burndown_ready.py:296`: "archive-only",
+- `tools/architecture/check_legacy_app_roots_burndown_ready.py:258`: "local CMake root should become archive-only",
+- `tools/architecture/check_legacy_app_roots_burndown_ready.py:273`: "archive-only",
+- `tools/architecture/check_legacy_app_roots_burndown_ready.py:294`: "archive-only",
 - `tools/architecture/check_legacy_compat_temp_inventory_ready.py:18`: "archive-only roots",
-- `tools/architecture/check_phase8_layout_ready.py:1639`: "archive-only",
-- `tools/architecture/check_phase8_layout_ready.py:1648`: "archive-only",
+- `tools/architecture/check_phase8_layout_ready.py:1598`: "archive-only",
+- `tools/architecture/check_phase8_layout_ready.py:1607`: "archive-only",
 - `tools/architecture/scan_legacy_compat_temp_surfaces.py:22`: "archive-only",
 
 ### `adapter`
@@ -1370,18 +1362,18 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `README.md:568`: * [x] **Meshcore network compatibility** (selectable adapter)
 - `apps/README.md:9`: - selecting platform adapters
 - `apps/README.md:21`: that may be reached only through declared compatibility adapters.
-- `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:67`: Transitional implementation adapter target:
+- `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:67`: Current ESP-IDF compatibility adapter target:
 - `apps/esp32_lvgl/APP_SHELL_MANIFEST.md:69`: - `trailmate_esp_idf_legacy_adapter`
 - `apps/esp32_lvgl/CMakeLists.txt:12`: add_library(trailmate_esp_idf_legacy_adapter
 - `apps/esp32_lvgl/CMakeLists.txt:13`: "${TRAIL_MATE_REPO_ROOT}/legacy/app_implementations/esp_idf/src/esp_idf_legacy_implementation_adapter.cpp")
 - `apps/esp32_lvgl/CMakeLists.txt:15`: target_include_directories(trailmate_esp_idf_legacy_adapter
 - `apps/esp32_lvgl/CMakeLists.txt:19`: target_compile_features(trailmate_esp_idf_legacy_adapter PUBLIC cxx_std_17)
-- `apps/esp32_lvgl/CMakeLists.txt:30`: trailmate_esp_idf_legacy_adapter
-- `apps/esp32_lvgl/README.md:59`: legacy_adapter_target = trailmate_esp_idf_legacy_adapter
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp:28`: config_.legacy_adapter_target != nullptr;
-- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:15`: const char* legacy_adapter_target = "trailmate_esp_idf_legacy_adapter";
-- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:20`: assert(std::strcmp(config.legacy_adapter_target,
-- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:21`: "trailmate_esp_idf_legacy_adapter") == 0);
+- `apps/esp32_lvgl/CMakeLists.txt:31`: trailmate_esp_idf_legacy_adapter
+- `apps/esp32_lvgl/README.md:61`: legacy_adapter_target = trailmate_esp_idf_legacy_adapter
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.cpp:30`: config_.legacy_adapter_target != nullptr;
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.h:22`: const char* legacy_adapter_target = "trailmate_esp_idf_legacy_adapter";
+- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:25`: assert(std::strcmp(config.legacy_adapter_target,
+- `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp:26`: "trailmate_esp_idf_legacy_adapter") == 0);
 - `apps/linux_sim_shell/CMakeLists.txt:20`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
 - `apps/linux_sim_shell/CMakeLists.txt:21`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp"
 - `apps/linux_sim_shell/CMakeLists.txt:96`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/tests/test_legacy_chat_delivery_action_bridge_legacy_alias.cpp")
@@ -1409,24 +1401,24 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `apps/linux_sim_shell/CMakeLists.txt:190`: lvgl_screen_host_adapter
 - `apps/linux_uconsole_gtk/CMakeLists.txt:20`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/src/gtk_menu_runtime_adapter.cpp"
 - `apps/linux_uconsole_gtk/CMakeLists.txt:21`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/src/gtk_screen_host_adapter.cpp"
-- `apps/nrf52_node/APP_SHELL_MANIFEST.md:68`: Transitional implementation adapter target:
-- `apps/nrf52_node/APP_SHELL_MANIFEST.md:70`: - `trailmate_nrf52_pio_legacy_adapter`
-- `apps/nrf52_node/README.md:60`: legacy_adapter_target = trailmate_nrf52_pio_legacy_adapter
-- `apps/nrf52_node/src/nrf52_node_app_shell.cpp:29`: config_.legacy_adapter_target != nullptr;
-- `apps/nrf52_node/src/nrf52_node_app_shell.h:16`: const char* legacy_adapter_target = "trailmate_nrf52_pio_legacy_adapter";
-- `apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp:22`: assert(std::strcmp(config.legacy_adapter_target,
-- `apps/nrf52_node/tests/nrf52_node_app_shell_smoke.cpp:23`: "trailmate_nrf52_pio_legacy_adapter") == 0);
 - `boards/tab5/README.md:3`: Board-owned home for Tab5 support and board-specific ESP adapters.
 - `boards/tdeck/README.md:8`: - own T-Deck-specific ESP adapter glue under `boards/tdeck/platform_esp_board_runtime.h`
 - `boards/tlora_pager/README.md:8`: - own T-LoRa Pager-specific ESP adapter glue under `boards/tlora_pager/platform_esp_board_runtime.h`
 - `boards/twatchs3/README.md:8`: - own T-Watch S3-specific ESP adapter glue under `boards/twatchs3/platform_esp_board_runtime.h`
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp:2`: #include "nrf52_pio_legacy_implementation_adapter.h"
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp:14`: trailmate::apps::nrf52_node::Nrf52PioLegacyImplementationDescriptor adapter{};
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp:16`: adapter.implementation_root != nullptr &&
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp:17`: adapter.board_specific_root != nullptr &&
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp:18`: adapter.app_shell != nullptr &&
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp:19`: adapter.build_wrapper != nullptr;
-- ... 2858 additional matches omitted
+- `cmake/TrailMateLinuxSources.cmake:102`: set(TRAIL_MATE_UI_LEGACY_ADAPTERS_INCLUDE_ROOT
+- `cmake/TrailMateLinuxSources.cmake:103`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/include"
+- `cmake/TrailMateLinuxSources.cmake:105`: set(TRAIL_MATE_UI_LEGACY_ADAPTERS_SRC_ROOT
+- `cmake/TrailMateLinuxSources.cmake:106`: "${TRAIL_MATE_REPO_ROOT}/modules/ui_legacy_adapters/src"
+- `cmake/TrailMateLinuxSources.cmake:123`: set(TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_INCLUDE_ROOT
+- `cmake/TrailMateLinuxSources.cmake:124`: "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/include"
+- `cmake/TrailMateLinuxSources.cmake:126`: set(TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_SRC_ROOT
+- `cmake/TrailMateLinuxSources.cmake:127`: "${TRAIL_MATE_REPO_ROOT}/modules/chat_presentation_adapters/src"
+- `cmake/TrailMateLinuxSources.cmake:145`: "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_noop_mesh_adapter.cpp"
+- `cmake/TrailMateLinuxSources.cmake:146`: "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_raw_lora_mesh_adapter.cpp"
+- `cmake/TrailMateLinuxSources.cmake:281`: # modules/chat_presentation_adapters
+- `cmake/TrailMateLinuxSources.cmake:282`: "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_SRC_ROOT}/chat_conversation_mapper.cpp"
+- `cmake/TrailMateLinuxSources.cmake:283`: "${TRAIL_MATE_CHAT_PRESENTATION_ADAPTERS_SRC_ROOT}/chat_message_mapper.cpp"
+- ... 2834 additional matches omitted
 
 ### `bridge`
 
@@ -1490,7 +1482,7 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `docs/RETICULUM_LXMF_DEVICE_MODE.md:17`: - a USB CDC RNode KISS bridge so a real Reticulum host can use the device as a modem
 - `docs/RETICULUM_LXMF_DEVICE_MODE.md:35`: - `RNode Bridge`: host-controlled modem mode for an external Reticulum/LXMF stack
 - `docs/RETICULUM_LXMF_DEVICE_MODE.md:40`: - `RNode Bridge` is a modem/bridge mode
-- ... 860 additional matches omitted
+- ... 861 additional matches omitted
 
 ### `probe`
 
@@ -1554,30 +1546,36 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_runtime_entry_adoption_probe_smoke.cpp`: path match
 - `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_runtime_entry_adoption_probe_smoke.cpp:2`: #include "linux_uconsole_gtk_runtime_entry_adoption_probe.h"
 - `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_runtime_entry_adoption_probe_smoke.cpp:9`: trailmate::apps::linux_uconsole_gtk::LinuxUConsoleGtkRuntimeEntryAdoptionProbe
-- ... 521 additional matches omitted
+- ... 519 additional matches omitted
 
 ### `smoke`
 
 - `.github/workflows/cardputer-zero-linux.yml:43`: - name: Configure smoke tests
 - `.github/workflows/cardputer-zero-linux.yml:47`: - name: Build smoke tests
 - `.github/workflows/cardputer-zero-linux.yml:51`: - name: Run smoke tests
-- `apps/esp32_lvgl/CMakeLists.txt:36`: add_executable(trailmate_esp32_lvgl_app_shell_smoke
-- `apps/esp32_lvgl/CMakeLists.txt:37`: tests/esp32_lvgl_app_shell_smoke.cpp)
-- `apps/esp32_lvgl/CMakeLists.txt:38`: target_link_libraries(trailmate_esp32_lvgl_app_shell_smoke
-- `apps/esp32_lvgl/CMakeLists.txt:40`: add_test(NAME trailmate_esp32_lvgl_app_shell_smoke
-- `apps/esp32_lvgl/CMakeLists.txt:41`: COMMAND trailmate_esp32_lvgl_app_shell_smoke)
+- `apps/esp32_lvgl/CMakeLists.txt:37`: add_executable(trailmate_esp32_lvgl_app_shell_smoke
+- `apps/esp32_lvgl/CMakeLists.txt:38`: tests/esp32_lvgl_app_shell_smoke.cpp)
+- `apps/esp32_lvgl/CMakeLists.txt:39`: target_link_libraries(trailmate_esp32_lvgl_app_shell_smoke
+- `apps/esp32_lvgl/CMakeLists.txt:41`: add_test(NAME trailmate_esp32_lvgl_app_shell_smoke
+- `apps/esp32_lvgl/CMakeLists.txt:42`: COMMAND trailmate_esp32_lvgl_app_shell_smoke)
+- `apps/esp32_lvgl/CMakeLists.txt:44`: add_executable(trailmate_esp32_lvgl_historical_source_descriptor_smoke
+- `apps/esp32_lvgl/CMakeLists.txt:45`: tests/esp32_lvgl_historical_source_descriptor_smoke.cpp)
+- `apps/esp32_lvgl/CMakeLists.txt:46`: target_link_libraries(trailmate_esp32_lvgl_historical_source_descriptor_smoke
+- `apps/esp32_lvgl/CMakeLists.txt:48`: add_test(NAME trailmate_esp32_lvgl_historical_source_descriptor_smoke
+- `apps/esp32_lvgl/CMakeLists.txt:49`: COMMAND trailmate_esp32_lvgl_historical_source_descriptor_smoke)
 - `apps/esp32_lvgl/tests/esp32_lvgl_app_shell_smoke.cpp`: path match
+- `apps/esp32_lvgl/tests/esp32_lvgl_historical_source_descriptor_smoke.cpp`: path match
 - `apps/linux_sim_shell/APP_SHELL_MANIFEST.md:61`: - `tests/linux_sim_app_shell_smoke.cpp`
 - `apps/linux_sim_shell/CMakeLists.txt:39`: add_executable(trailmate_linux_sim_app_shell_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:40`: tests/linux_sim_app_shell_smoke.cpp)
 - `apps/linux_sim_shell/CMakeLists.txt:41`: target_link_libraries(trailmate_linux_sim_app_shell_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:43`: add_test(NAME trailmate_linux_sim_app_shell_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:44`: COMMAND trailmate_linux_sim_app_shell_smoke)
-- `apps/linux_sim_shell/CMakeLists.txt:46`: add_executable(trailmate_linux_sim_legacy_source_descriptor_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:47`: tests/linux_sim_legacy_source_descriptor_smoke.cpp)
-- `apps/linux_sim_shell/CMakeLists.txt:48`: target_link_libraries(trailmate_linux_sim_legacy_source_descriptor_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:50`: add_test(NAME trailmate_linux_sim_legacy_source_descriptor_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:51`: COMMAND trailmate_linux_sim_legacy_source_descriptor_smoke)
+- `apps/linux_sim_shell/CMakeLists.txt:46`: add_executable(trailmate_linux_sim_historical_source_descriptor_smoke
+- `apps/linux_sim_shell/CMakeLists.txt:47`: tests/linux_sim_historical_source_descriptor_smoke.cpp)
+- `apps/linux_sim_shell/CMakeLists.txt:48`: target_link_libraries(trailmate_linux_sim_historical_source_descriptor_smoke
+- `apps/linux_sim_shell/CMakeLists.txt:50`: add_test(NAME trailmate_linux_sim_historical_source_descriptor_smoke
+- `apps/linux_sim_shell/CMakeLists.txt:51`: COMMAND trailmate_linux_sim_historical_source_descriptor_smoke)
 - `apps/linux_sim_shell/CMakeLists.txt:53`: add_executable(trailmate_linux_sim_runtime_entry_adoption_probe_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:54`: tests/linux_sim_runtime_entry_adoption_probe_smoke.cpp)
 - `apps/linux_sim_shell/CMakeLists.txt:55`: target_link_libraries(trailmate_linux_sim_runtime_entry_adoption_probe_smoke
@@ -1612,10 +1610,4 @@ must be interpreted through `LEGACY_COMPAT_TEMP_SURFACE_INVENTORY.md`.
 - `apps/linux_sim_shell/CMakeLists.txt:103`: target_compile_features(trailmate_legacy_chat_delivery_action_bridge_alias_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:105`: add_test(NAME trailmate_legacy_chat_delivery_action_bridge_alias_smoke
 - `apps/linux_sim_shell/CMakeLists.txt:106`: COMMAND trailmate_legacy_chat_delivery_action_bridge_alias_smoke)
-- `apps/linux_sim_shell/CMakeLists.txt:108`: add_executable(trailmate_legacy_chat_delivery_event_bridge_alias_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:110`: target_include_directories(trailmate_legacy_chat_delivery_event_bridge_alias_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:115`: target_compile_features(trailmate_legacy_chat_delivery_event_bridge_alias_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:117`: add_test(NAME trailmate_legacy_chat_delivery_event_bridge_alias_smoke
-- `apps/linux_sim_shell/CMakeLists.txt:118`: COMMAND trailmate_legacy_chat_delivery_event_bridge_alias_smoke)
-- `apps/linux_sim_shell/CMakeLists.txt:120`: add_executable(trailmate_key_verification_runtime_adapters_smoke
-- ... 355 additional matches omitted
+- ... 365 additional matches omitted

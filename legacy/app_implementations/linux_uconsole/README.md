@@ -15,7 +15,8 @@ app shells. Its `CMakeLists.txt` is an archive marker only.
 ## Archive Layout
 
 - `archive/composition`: old uConsole composition root.
-- `archive/adapters`: old legacy implementation adapter.
+- `archive/adapters`: removed; old legacy implementation adapter metadata is
+  covered by the final-shell historical source descriptor.
 - `archive/gtk`: old GTK, desktop fallback, and target entrypoint sources.
 - `archive/scripts`: old packaging, tools, and CMake presets.
 - `archive/tests`: old uConsole smoke/probe files retained for reference.

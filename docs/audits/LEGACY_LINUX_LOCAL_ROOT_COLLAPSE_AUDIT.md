@@ -12,7 +12,7 @@ roots.
   `add_test`.
 - Current smoke targets:
   none under this root. Active validation lives in `apps/linux_sim_shell`,
-  including `linux_sim_legacy_source_descriptor_smoke`.
+  including `linux_sim_historical_source_descriptor_smoke`.
 - Current composition root files:
   archived at
   `legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h`
@@ -28,12 +28,13 @@ roots.
   all former local CMake targets, including the old simulator executable,
   composition root library, and legacy adapter smoke.
 - Which files must remain as archive:
-  historical simulator, composition, adapter, script, Docker, preset, and smoke
+  historical simulator, composition, script, Docker, preset, and smoke
   sources retained under `archive/` until targeted deletion.
 - Which files can move to tests/compatibility:
   the adapter-smoke meaning has already moved to
-  `apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp`.
-  The old adapter smoke source was deleted.
+  `apps/linux_sim_shell/tests/linux_sim_historical_source_descriptor_smoke.cpp`.
+  The old adapter smoke source and archived composition smoke source were
+  deleted.
 - Collapse decision:
   `linux_sim` local CMake root should become archive-only; final build
   validation lives in `apps/linux_sim_shell`.
@@ -46,7 +47,7 @@ roots.
   `add_test`.
 - Current smoke targets:
   none under this root. Active validation lives in `apps/linux_uconsole_gtk`,
-  including `linux_uconsole_gtk_legacy_source_descriptor_smoke`.
+  including `linux_uconsole_gtk_historical_source_descriptor_smoke`.
 - Current composition root files:
   archived at
   `legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h`
@@ -63,12 +64,13 @@ roots.
   all former local CMake targets, including the GTK app target, composition root
   library, old smoke targets, and legacy adapter smoke.
 - Which files must remain as archive:
-  historical GTK, desktop fallback, composition, adapter, packaging, tool, preset,
+  historical GTK, desktop fallback, composition, packaging, tool, preset,
   and smoke sources retained under `archive/` until targeted deletion.
 - Which files can move to tests/compatibility:
   the adapter-smoke meaning has already moved to
-  `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp`.
-  The old adapter smoke source was deleted.
+  `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_historical_source_descriptor_smoke.cpp`.
+  The old adapter smoke source and archived composition smoke source were
+  deleted.
 - Collapse decision:
   `linux_uconsole` local CMake root should become archive-only; final build
   validation lives in `apps/linux_uconsole_gtk`.

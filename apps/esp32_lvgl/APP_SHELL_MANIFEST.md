@@ -18,7 +18,7 @@ Future authoritative build entrypoint:
 
 - `builds/esp_idf`
 
-Current transitional path:
+Historical source identity:
 
 - `legacy/app_implementations/esp_idf`
 
@@ -64,7 +64,7 @@ UX Pack Runtime Binding:
 - `Esp32LvglAppShell::validate()` resolves `default_ux_pack_id` through
   `findUxPackById`.
 
-Transitional implementation adapter target:
+Current ESP-IDF compatibility adapter target:
 
 - `trailmate_esp_idf_legacy_adapter`
 

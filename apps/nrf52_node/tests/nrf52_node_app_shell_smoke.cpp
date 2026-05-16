@@ -16,11 +16,14 @@ int main()
     assert(std::strcmp(config.target_family, "nrf52_node") == 0);
     assert(std::strcmp(config.default_ux_pack_id, "tiny_node_status") == 0);
     assert(std::strcmp(shell.activeUxPackId(), "tiny_node_status") == 0);
-    assert(std::strcmp(config.transitional_source, "legacy/app_implementations/esp_pio") == 0);
-    assert(std::strcmp(config.board_specific_transitional_source,
+    assert(std::strcmp(config.historical_generic_root_name,
+                       "legacy/app_implementations/esp_pio") == 0);
+    assert(std::strcmp(config.historical_board_root_name,
                        "legacy/app_implementations/gat562_mesh_evb_pro") == 0);
-    assert(std::strcmp(config.legacy_adapter_target,
-                       "trailmate_nrf52_pio_legacy_adapter") == 0);
+    assert(std::strcmp(config.historical_role,
+                       "pre-refactor PlatformIO/nRF52 implementation roots") == 0);
+    assert(std::strcmp(config.replacement_owner,
+                       "apps/nrf52_node + builds/pio_nrf52 + boards/gat562_mesh_evb_pro") == 0);
     assert(ui_lvgl_ux::findUxPackById(shell.activeUxPackId()) != nullptr);
 
     ui::menu::MenuModel menu;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "linux_sim_legacy_source_descriptor.h"
+#include "linux_sim_historical_source_descriptor.h"
 
 namespace trailmate
 {
@@ -13,8 +13,8 @@ struct LinuxSimAppShellConfig
 {
     const char* target_id = "linux_sim";
     const char* ux_pack_id = "simulator_full";
-    const char* transitional_source =
-        linuxSimLegacySourceDescriptor().root_path;
+    const char* historical_source =
+        linuxSimHistoricalSourceDescriptor().historical_root_name;
 };
 
 class LinuxSimAppShell

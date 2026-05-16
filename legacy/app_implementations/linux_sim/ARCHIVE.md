@@ -7,7 +7,8 @@ This root is archive-only.
 - Do not use from final app shells.
 - Do not add active CMake targets here.
 - Historical composition sources live under `archive/composition/`.
-- Historical adapter sources live under `archive/adapters/`.
+- Historical adapter sources were deleted after final-shell historical source
+  descriptors took over the remaining metadata assertion.
 - Historical simulator runtime and target sources live under `archive/simulator/`.
 - Historical scripts, Docker files, and presets live under `archive/scripts/`.
 - Historical smoke/probe files live under `archive/tests/`.

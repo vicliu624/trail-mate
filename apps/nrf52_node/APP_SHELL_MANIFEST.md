@@ -18,7 +18,7 @@ Future authoritative build entrypoint:
 
 - `builds/pio_nrf52`
 
-Current transitional path:
+Historical source identities:
 
 - `legacy/app_implementations/esp_pio`
 - `legacy/app_implementations/gat562_mesh_evb_pro`
@@ -65,8 +65,8 @@ UX Pack Runtime Binding:
 - `Nrf52NodeAppShell::validate()` resolves `default_ux_pack_id` through
   `findUxPackById`.
 
-Transitional implementation adapter target:
+Historical source descriptor:
 
-- `trailmate_nrf52_pio_legacy_adapter`
+- `nrf52_historical_source_descriptor`
 
 No behavior change in Phase 8 Build/AppShell Executable Convergence.

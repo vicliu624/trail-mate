@@ -195,36 +195,34 @@ def check_final_linux_apps_do_not_reference_legacy_adapters(
 
 def check_final_shell_owned_descriptors(failures: list[str]) -> None:
     required_files = [
-        "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h",
-        "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.cpp",
-        "apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp",
-        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h",
-        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.cpp",
-        "apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp",
+        "apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.h",
+        "apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.cpp",
+        "apps/linux_sim_shell/tests/linux_sim_historical_source_descriptor_smoke.cpp",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.h",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.cpp",
+        "apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_historical_source_descriptor_smoke.cpp",
         "docs/audits/LEGACY_LINUX_APP_ADAPTER_BURN_DOWN_AUDIT.md",
     ]
     for rel in required_files:
         require_file(rel, failures)
 
     require_tokens(
-        "apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.h",
+        "apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.h",
         [
-            "LinuxSimLegacySourceDescriptor",
-            "root_path = \"legacy/app_implementations/linux_sim\"",
-            "historical_name = \"linux_sim\"",
-            "replacement_owner = \"apps/linux_sim_shell\"",
-            "compatibility_required = true",
+            "LinuxSimHistoricalSourceDescriptor",
+            "historical_root_name = \"legacy/app_implementations/linux_sim\"",
+            "historical_role = \"pre-refactor Linux simulator implementation root\"",
+            "replacement_owner = \"apps/linux_sim_shell + modules/ui_ascii_runtime\"",
         ],
         failures,
     )
     require_tokens(
-        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.h",
+        "apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.h",
         [
-            "LinuxUConsoleGtkLegacySourceDescriptor",
-            "root_path = \"legacy/app_implementations/linux_uconsole\"",
-            "historical_name = \"linux_uconsole\"",
-            "replacement_owner = \"apps/linux_uconsole_gtk\"",
-            "compatibility_required = true",
+            "LinuxUConsoleGtkHistoricalSourceDescriptor",
+            "historical_root_name = \"legacy/app_implementations/linux_uconsole\"",
+            "historical_role = \"pre-refactor uConsole GTK implementation root\"",
+            "replacement_owner = \"apps/linux_uconsole_gtk + modules/ui_gtk_runtime\"",
         ],
         failures,
     )
@@ -314,13 +312,9 @@ def check_linux_local_root_collapse(failures: list[str]) -> None:
     required_archive_paths = [
         "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.cpp",
         "legacy/app_implementations/linux_sim/archive/composition/linux_sim_composition_root.h",
-        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.cpp",
-        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h",
         "legacy/app_implementations/linux_sim/archive/simulator/sdl_simulator.cpp",
         "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.cpp",
         "legacy/app_implementations/linux_uconsole/archive/composition/uconsole_composition_root.h",
-        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.cpp",
-        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h",
         "legacy/app_implementations/linux_uconsole/archive/gtk/gtk/gtk_uconsole_pages.cpp",
     ]
     for rel in required_archive_paths:
@@ -329,10 +323,22 @@ def check_linux_local_root_collapse(failures: list[str]) -> None:
     deleted_smokes = [
         "legacy/app_implementations/linux_sim/tests/linux_sim_legacy_implementation_adapter_smoke.cpp",
         "legacy/app_implementations/linux_uconsole/tests/uconsole_legacy_implementation_adapter_smoke.cpp",
+        "legacy/app_implementations/linux_sim/archive/tests/linux_sim_composition_root_smoke.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/tests/uconsole_composition_root_smoke.cpp",
     ]
     for rel in deleted_smokes:
         if (ROOT / rel).exists():
             failures.append(f"old legacy adapter smoke should not remain active: {rel}")
+
+    deleted_archive_adapters = [
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.h",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.cpp",
+        "legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.h",
+    ]
+    for rel in deleted_archive_adapters:
+        if (ROOT / rel).exists():
+            failures.append(f"deleted archive adapter should not remain: {rel}")
 
     final_shell_archive_tokens = [
         "legacy/app_implementations/linux_sim/archive",

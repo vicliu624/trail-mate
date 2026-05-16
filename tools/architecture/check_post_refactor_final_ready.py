@@ -264,6 +264,8 @@ def main() -> int:
         "tools/architecture/check_phase10_primary_path_ready.py",
         "tools/architecture/check_phase11_renderer_consumption_ready.py",
         "tools/architecture/check_legacy_compat_temp_inventory_ready.py",
+        "tools/architecture/check_no_root_legacy_preflight_ready.py",
+        "tools/architecture/check_legacy_disposition_execution_ready.py",
         "tools/architecture/check_legacy_app_roots_burndown_ready.py",
     ]:
         require_file(rel, failures)
@@ -275,6 +277,8 @@ def main() -> int:
         "tools/architecture/check_phase10_primary_path_ready.py",
         "tools/architecture/check_phase11_renderer_consumption_ready.py",
         "tools/architecture/check_legacy_compat_temp_inventory_ready.py",
+        "tools/architecture/check_no_root_legacy_preflight_ready.py",
+        "tools/architecture/check_legacy_disposition_execution_ready.py",
         "tools/architecture/check_legacy_app_roots_burndown_ready.py",
     ]:
         run_checker(rel, failures)

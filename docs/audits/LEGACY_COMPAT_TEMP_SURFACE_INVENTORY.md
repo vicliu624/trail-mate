@@ -236,7 +236,7 @@ Current location:
 Current callers:
 - docs and checkers recognize it as archive-only.
 - final app shell records it through
-  `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.*`.
+  `apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.*`.
 
 Current responsibility:
 - archive-only historical simulator source and scripts.
@@ -255,6 +255,8 @@ Delete condition:
 - simulator workflows are covered by final app shell and platform modules;
   historical source is summarized in docs/archive; final app shell stops
   storing `legacy/app_implementations/linux_sim` as a runtime-reachable path.
+  Batch 1 renamed the final-shell descriptor to historical source metadata and
+  removed its `root_path` field.
 
 Risk:
 - medium; source is archive-only but still referenced by descriptors and docs.
@@ -273,7 +275,7 @@ Current location:
 Current callers:
 - docs and checkers recognize it as archive-only.
 - final app shell records it through
-  `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.*`.
+  `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.*`.
 
 Current responsibility:
 - archive-only historical uConsole GTK source, packaging files, scripts, and
@@ -293,6 +295,8 @@ Delete condition:
 - GTK page/widget/runtime and packaging responsibilities are owned by final
   locations; historical source is summarized in docs/archive; final app shell
   stops storing `legacy/app_implementations/linux_uconsole`.
+  Batch 1 renamed the final-shell descriptor to historical source metadata and
+  removed its `root_path` field.
 
 Risk:
 - high; this archive still contains real business/page/packaging history that
@@ -376,9 +380,10 @@ Current location:
 - `legacy/app_implementations/esp_pio/src/nrf52_pio_legacy_implementation_adapter.h`
 
 Current callers:
-- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp`
-- `builds/pio_nrf52/platformio.ini`
-- `apps/nrf52_node/src/nrf52_node_app_shell.*`
+- docs and inventory only after Batch 1.
+- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp` now uses
+  `apps/nrf52_node/src/nrf52_historical_source_descriptor.*`.
+- `builds/pio_nrf52/platformio.ini` no longer adds the legacy root include path.
 
 Current responsibility:
 - describes transitional PIO and board-specific roots for the nRF52 wrapper.
@@ -394,7 +399,8 @@ Disposition:
 
 Delete condition:
 - wrapper baseline and app shell no longer include or depend on this legacy
-  adapter header.
+  adapter header. Batch 1 satisfies the active wrapper condition; the remaining
+  deletion condition is root-level source ownership cleanup.
 
 Risk:
 - high; active PlatformIO wrapper includes it.
@@ -405,13 +411,15 @@ Category:
 - adapter / bridge / facade layers
 
 Current location:
-- `legacy/app_implementations/linux_sim/archive/adapters/linux_sim_legacy_implementation_adapter.*`
+- deleted from `legacy/app_implementations/linux_sim/archive/adapters` in
+  Batch 1.
 
 Current callers:
-- docs and checkers only; old adapter smoke source is deleted.
+- docs and checkers only; old adapter smoke source and archived adapter source
+  are deleted.
 
 Current responsibility:
-- archived historical adapter after final shell moved to its own source
+- historical record only after final shell moved to its own historical source
   descriptor.
 
 Is this final architecture?
@@ -425,7 +433,8 @@ Disposition:
 
 Delete condition:
 - historical adapter information is recorded in docs/archive and no checker
-  requires archive adapter source files.
+  requires archive adapter source files. Batch 1 removed the archive adapter
+  source files.
 
 Risk:
 - low; it is archive-only but still enforced by legacy root checker.
@@ -436,13 +445,15 @@ Category:
 - adapter / bridge / facade layers
 
 Current location:
-- `legacy/app_implementations/linux_uconsole/archive/adapters/uconsole_legacy_implementation_adapter.*`
+- deleted from `legacy/app_implementations/linux_uconsole/archive/adapters` in
+  Batch 1.
 
 Current callers:
-- docs and checkers only; old adapter smoke source is deleted.
+- docs and checkers only; old adapter smoke source and archived adapter source
+  are deleted.
 
 Current responsibility:
-- archived historical adapter after final shell moved to its own source
+- historical record only after final shell moved to its own historical source
   descriptor.
 
 Is this final architecture?
@@ -456,20 +467,21 @@ Disposition:
 
 Delete condition:
 - historical adapter information is recorded in docs/archive and no checker
-  requires archive adapter source files.
+  requires archive adapter source files. Batch 1 removed the archive adapter
+  source files.
 
 Risk:
 - low-medium; uConsole root still contains other real source that needs
   separate handling.
 
-## Surface: linux_sim_legacy_source_descriptor
+## Surface: linux_sim_historical_source_descriptor (formerly linux_sim_legacy_source_descriptor)
 
 Category:
 - transitional descriptors
 
 Current location:
-- `apps/linux_sim_shell/src/linux_sim_legacy_source_descriptor.*`
-- `apps/linux_sim_shell/tests/linux_sim_legacy_source_descriptor_smoke.cpp`
+- `apps/linux_sim_shell/src/linux_sim_historical_source_descriptor.*`
+- `apps/linux_sim_shell/tests/linux_sim_historical_source_descriptor_smoke.cpp`
 
 Current callers:
 - `apps/linux_sim_shell/src/linux_sim_app_shell.*`
@@ -478,8 +490,8 @@ Current callers:
 - `tools/architecture/check_phase8_layout_ready.py`
 
 Current responsibility:
-- records `root_path = "legacy/app_implementations/linux_sim"` and replacement
-  owner metadata for the final LinuxSim app shell.
+- records `historical_root_name`, `historical_role`, and replacement owner
+  metadata for the final LinuxSim app shell.
 
 Is this final architecture?
 - No.
@@ -493,19 +505,20 @@ Disposition:
 
 Delete condition:
 - rename to historical source descriptor or delete once docs/archive records
-  the legacy root history; remove the concrete `legacy/...` root_path string.
+  the legacy root history; remove the concrete `legacy/...` root_path field.
+  Batch 1 completed the rename and removed the `root_path` field.
 
 Risk:
 - medium; app shell validation currently reads this descriptor.
 
-## Surface: linux_uconsole_gtk_legacy_source_descriptor
+## Surface: linux_uconsole_gtk_historical_source_descriptor (formerly linux_uconsole_gtk_legacy_source_descriptor)
 
 Category:
 - transitional descriptors
 
 Current location:
-- `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_legacy_source_descriptor.*`
-- `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_legacy_source_descriptor_smoke.cpp`
+- `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_historical_source_descriptor.*`
+- `apps/linux_uconsole_gtk/tests/linux_uconsole_gtk_historical_source_descriptor_smoke.cpp`
 
 Current callers:
 - `apps/linux_uconsole_gtk/src/linux_uconsole_gtk_app_shell.*`
@@ -514,8 +527,8 @@ Current callers:
 - `tools/architecture/check_phase8_layout_ready.py`
 
 Current responsibility:
-- records `root_path = "legacy/app_implementations/linux_uconsole"` and
-  replacement owner metadata for the final uConsole GTK app shell.
+- records `historical_root_name`, `historical_role`, and replacement owner
+  metadata for the final uConsole GTK app shell.
 
 Is this final architecture?
 - No.
@@ -529,11 +542,113 @@ Disposition:
 
 Delete condition:
 - rename to historical source descriptor or delete once docs/archive records
-  the legacy root history; remove the concrete `legacy/...` root_path string.
+  the legacy root history; remove the concrete `legacy/...` root_path field.
+  Batch 1 completed the rename and removed the `root_path` field.
 
 Risk:
 - high; it currently hides the fact that uConsole archive still contains
   page and packaging material that may need migration.
+
+## Surface: nrf52_historical_source_descriptor
+
+Category:
+- transitional descriptors
+
+Current location:
+- `apps/nrf52_node/src/nrf52_historical_source_descriptor.*`
+- `apps/nrf52_node/tests/nrf52_historical_source_descriptor_smoke.cpp`
+
+Current callers:
+- `apps/nrf52_node/src/nrf52_node_app_shell.*`
+- `builds/pio_nrf52/src/nrf52_node_wrapper_baseline.cpp`
+
+Current responsibility:
+- records historical PIO and GAT562 root identity after active wrapper stopped
+  including `nrf52_pio_legacy_implementation_adapter.h`.
+
+Is this final architecture?
+- No as a permanent source descriptor; yes as a short-lived historical record
+  during root deletion preparation.
+
+Final owner:
+- `apps/nrf52_node`, `builds/pio_nrf52`, and `boards/gat562_mesh_evb_pro`.
+
+Disposition:
+- Must Rename.
+
+Delete condition:
+- delete once `docs/archive` records removed root history and PIO/GAT562 source
+  ownership no longer requires historical source identity in app/runtime code.
+
+Risk:
+- medium; it is intentionally metadata-only and does not expose a root path
+  field, but it still names historical roots.
+
+## Surface: esp32_lvgl_historical_source_descriptor
+
+Category:
+- transitional descriptors
+
+Current location:
+- `apps/esp32_lvgl/src/esp32_lvgl_historical_source_descriptor.*`
+- `apps/esp32_lvgl/tests/esp32_lvgl_historical_source_descriptor_smoke.cpp`
+
+Current callers:
+- `apps/esp32_lvgl/src/esp32_lvgl_app_shell.*`
+
+Current responsibility:
+- records historical ESP-IDF root identity while the ESP-IDF final owner
+  migration plan is established.
+
+Is this final architecture?
+- No as a permanent source descriptor; it is a migration landing record only.
+
+Final owner:
+- `apps/esp32_lvgl` and `builds/esp_idf`.
+
+Disposition:
+- Must Rename.
+
+Delete condition:
+- delete once ESP-IDF component/source ownership has moved out of
+  `legacy/app_implementations/esp_idf` and historical root removal is recorded.
+
+Risk:
+- medium-high; ESP-IDF is still an active build dependency.
+
+## Surface: ui_headless_runtime descriptor consumer
+
+Category:
+- adapter / bridge / facade layers
+
+Current location:
+- `modules/ui_headless_runtime/include/ui_headless_runtime/headless_descriptor_consumer.h`
+- `modules/ui_headless_runtime/src/headless_descriptor_consumer.cpp`
+- `modules/ui_headless_runtime/tests/test_headless_descriptor_consumer.cpp`
+
+Current callers:
+- tests and architecture checker only in Batch 1.
+
+Current responsibility:
+- final renderer-safe descriptor consumer for targets that need a non-widget
+  descriptor path.
+
+Is this final architecture?
+- Yes as a final adapter.
+
+Final owner:
+- `modules/ui_headless_runtime`.
+
+Disposition:
+- Keep as Final Adapter.
+
+Delete condition:
+- none for the final adapter; delete only if a later final architecture chooses
+  a different headless descriptor consumer and updates the checker.
+
+Risk:
+- low; it consumes DTO-style descriptors and does not choose UX, board, or
+  build behavior.
 
 ## Surface: ui_shared compatibility shims
 
