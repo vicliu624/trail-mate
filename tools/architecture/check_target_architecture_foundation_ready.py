@@ -37,9 +37,24 @@ def main() -> int:
         "modules/product_composition/include/product_composition/target_build_binding.h",
         "modules/product_composition/src/target_build_binding.cpp",
         "modules/product_composition/tests/test_target_build_binding.cpp",
+        "modules/product_composition/include/product_composition/target_ux_binding.h",
+        "modules/product_composition/src/target_ux_binding.cpp",
+        "modules/product_composition/tests/test_target_ux_binding.cpp",
         "docs/targets/TARGET_MATRIX.md",
     ]:
         require_file(rel, failures)
+
+    all_targets = [
+        "tab5",
+        "tdisplayp4_tft",
+        "tdisplayp4_amoled",
+        "tlora_pager",
+        "tdeck",
+        "twatch",
+        "uconsole",
+        "cardputerzero",
+        "gat562_mesh_evb_pro",
+    ]
 
     for rel in [
         "modules/product_composition/src/target_profile.cpp",
@@ -47,7 +62,13 @@ def main() -> int:
         "modules/product_composition/tests/test_target_profile.cpp",
         "modules/product_composition/tests/test_target_build_binding.cpp",
     ]:
-        require_tokens(rel, ["tab5", "tdisplayp4_tft", "tdisplayp4_amoled"], failures)
+        require_tokens(rel, all_targets, failures)
+
+    require_tokens(
+        "modules/product_composition/src/target_ux_binding.cpp",
+        all_targets,
+        failures,
+    )
 
     require_tokens(
         "modules/product_composition/include/product_composition/target_profile.h",
@@ -60,6 +81,10 @@ def main() -> int:
             "build_entrypoint",
             "app_shell",
             "ux_pack_id",
+            "ui_profile_id",
+            "page_manifest_id",
+            "layout_profile_id",
+            "TargetSupportStatus",
             "findTargetProfile",
         ],
         failures,
@@ -79,14 +104,15 @@ def main() -> int:
             "tab5",
             "tdisplayp4_tft",
             "tdisplayp4_amoled",
-            "migrated_foundation",
             "tdeck",
             "tlora_pager",
             "twatch",
             "uconsole",
             "cardputerzero",
             "gat562_mesh_evb_pro",
-            "pending_final_profile",
+            "ActiveWithFallback",
+            "PendingHardwareValidation",
+            "Headless",
             "Final owner",
         ],
         failures,

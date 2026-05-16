@@ -1,0 +1,8 @@
+{
+  "name": "product_composition",
+  "version": "0.0.0",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

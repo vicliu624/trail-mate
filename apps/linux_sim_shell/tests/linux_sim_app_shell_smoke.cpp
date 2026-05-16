@@ -15,8 +15,12 @@ int main()
 
     const auto& config = shell.config();
     assert(std::strcmp(config.target_id, "linux_sim") == 0);
+    assert(std::strcmp(config.product_target_id, "cardputerzero") == 0);
+    assert(std::strcmp(shell.targetId(), "cardputerzero") == 0);
     assert(std::strcmp(config.ux_pack_id, "simulator_full") == 0);
     assert(std::strcmp(shell.activeUxPackId(), "simulator_full") == 0);
+    assert(shell.targetProfile() != nullptr);
+    assert(std::strcmp(shell.targetProfile()->app_shell, "apps/linux_sim_shell") == 0);
     const auto& descriptor =
         trailmate::apps::linux_sim_shell::linuxSimHistoricalSourceDescriptor();
     assert(std::strcmp(config.historical_source,

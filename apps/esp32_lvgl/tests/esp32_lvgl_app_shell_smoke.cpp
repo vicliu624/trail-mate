@@ -13,9 +13,13 @@ int main()
     assert(shell.validate());
 
     const auto& config = shell.config();
+    assert(std::strcmp(config.target_id, "tab5") == 0);
+    assert(std::strcmp(shell.targetId(), "tab5") == 0);
     assert(std::strcmp(config.target_family, "esp32_lvgl") == 0);
     assert(std::strcmp(config.default_ux_pack_id, "compatibility") == 0);
     assert(std::strcmp(shell.activeUxPackId(), "compatibility") == 0);
+    assert(shell.targetProfile() != nullptr);
+    assert(std::strcmp(shell.targetProfile()->ux_pack_id, "tab5_touch") == 0);
     assert(std::strcmp(config.build_entrypoint, "builds/esp_idf") == 0);
     assert(std::strcmp(config.component_sources,
                        "builds/esp_idf/ESP_IDF_COMPONENT_SOURCES.cmake") == 0);

@@ -12,6 +12,9 @@ function(trailmate_add_ui_lvgl_ux_packs target_name)
     add_library(${target_name}
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/menu/menu_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/screen/screen_binding_registry.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/target_ui_profile.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/page/page_manifest.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/layout/layout_profile.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/screen_registry.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/input_binding_set.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/src/ux/ux_menu_model.cpp"

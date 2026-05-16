@@ -15,8 +15,12 @@ int main()
 
     const auto& config = shell.config();
     assert(std::strcmp(config.target_id, "uconsole") == 0);
+    assert(std::strcmp(shell.targetId(), "uconsole") == 0);
     assert(std::strcmp(config.ux_pack_id, "uconsole_desktop") == 0);
     assert(std::strcmp(shell.activeUxPackId(), "uconsole_desktop") == 0);
+    assert(shell.targetProfile() != nullptr);
+    assert(shell.targetProfile()->renderer ==
+           product_composition::TargetRenderer::Gtk);
     const auto& descriptor =
         trailmate::apps::linux_uconsole_gtk::
             linuxUConsoleGtkHistoricalSourceDescriptor();

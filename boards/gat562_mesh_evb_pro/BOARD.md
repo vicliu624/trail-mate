@@ -5,8 +5,8 @@ This board fact record is derived from:
 - `docs/boards/gat562.board.yaml`
 - `boards/gat562_mesh_evb_pro/include/boards/gat562_mesh_evb_pro/board_profile.h`
 
-It records hardware facts only. It does not choose a UX pack, page manifest,
-renderer, protocol behavior, debug console behavior, or runtime service.
+It records hardware facts only. It does not choose product presentation,
+protocol behavior, debug console behavior, or runtime service.
 
 ## Identity
 
@@ -62,6 +62,6 @@ These remain outside board facts:
 - protocol factory selection
 - runtime apply service behavior
 - debug console behavior
-- UI page state
-- UX pack selection
-- renderer selection
+- presentation page state
+- product presentation package selection
+- draw path selection

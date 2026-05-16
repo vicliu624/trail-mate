@@ -17,6 +17,8 @@ add_library(trailmate_linux_sim_shell
     src/linux_sim_runtime_entry.cpp
     src/linux_sim_runtime_entry_adoption_probe.cpp
     src/linux_sim_runtime_renderer.cpp
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_profile.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_ux_binding.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_menu_runtime_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_host_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/src/ascii_screen_graph_bridge.cpp"
@@ -27,6 +29,7 @@ add_library(trailmate_linux_sim_shell
 target_include_directories(trailmate_linux_sim_shell
     PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_ascii_runtime/include")
 
 target_link_libraries(trailmate_linux_sim_shell

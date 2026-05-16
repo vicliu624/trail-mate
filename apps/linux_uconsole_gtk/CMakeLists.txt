@@ -17,6 +17,8 @@ add_library(trailmate_linux_uconsole_gtk_shell
     src/linux_uconsole_gtk_page_registry_adoption.cpp
     src/linux_uconsole_gtk_page_registry_renderer.cpp
     src/linux_uconsole_gtk_runtime_entry_adoption_probe.cpp
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_profile.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_ux_binding.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/src/gtk_menu_runtime_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/src/gtk_screen_host_adapter.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/src/gtk_uconsole_screen_graph_bridge.cpp"
@@ -27,6 +29,7 @@ add_library(trailmate_linux_uconsole_gtk_shell
 target_include_directories(trailmate_linux_uconsole_gtk_shell
     PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}/src"
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/include"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_gtk_runtime/include")
 
 target_link_libraries(trailmate_linux_uconsole_gtk_shell

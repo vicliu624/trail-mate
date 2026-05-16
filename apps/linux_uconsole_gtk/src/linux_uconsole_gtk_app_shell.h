@@ -2,6 +2,8 @@
 
 #include "linux_uconsole_gtk_historical_source_descriptor.h"
 
+#include "product_composition/target_profile.h"
+
 namespace trailmate
 {
 namespace apps
@@ -24,6 +26,8 @@ class LinuxUConsoleGtkAppShell
     explicit LinuxUConsoleGtkAppShell(LinuxUConsoleGtkAppShellConfig config);
 
     const LinuxUConsoleGtkAppShellConfig& config() const;
+    const char* targetId() const;
+    const product_composition::TargetProfile* targetProfile() const;
     const char* activeUxPackId() const;
     bool validate() const;
 

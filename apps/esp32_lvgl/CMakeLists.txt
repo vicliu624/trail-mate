@@ -17,7 +17,8 @@ add_library(trailmate_esp32_lvgl_app_shell
     src/esp32_lvgl_loop_runtime.cpp
     src/esp32_lvgl_runtime_config.cpp
     "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_profile.cpp"
-    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_build_binding.cpp")
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_build_binding.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/src/target_ux_binding.cpp")
 
 target_include_directories(trailmate_esp32_lvgl_app_shell
     PUBLIC
@@ -79,4 +80,32 @@ if(BUILD_TESTING)
         PRIVATE trailmate_esp32_lvgl_app_shell)
     add_test(NAME trailmate_product_target_build_binding_smoke
              COMMAND trailmate_product_target_build_binding_smoke)
+
+    add_executable(trailmate_product_target_ux_binding_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/product_composition/tests/test_target_ux_binding.cpp")
+    target_link_libraries(trailmate_product_target_ux_binding_smoke
+        PRIVATE trailmate_esp32_lvgl_app_shell)
+    add_test(NAME trailmate_product_target_ux_binding_smoke
+             COMMAND trailmate_product_target_ux_binding_smoke)
+
+    add_executable(trailmate_ui_presentation_target_ui_profile_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_target_ui_profile.cpp")
+    target_link_libraries(trailmate_ui_presentation_target_ui_profile_smoke
+        PRIVATE trailmate_ui_lvgl_ux_packs)
+    add_test(NAME trailmate_ui_presentation_target_ui_profile_smoke
+             COMMAND trailmate_ui_presentation_target_ui_profile_smoke)
+
+    add_executable(trailmate_ui_presentation_page_manifest_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_page_manifest.cpp")
+    target_link_libraries(trailmate_ui_presentation_page_manifest_smoke
+        PRIVATE trailmate_ui_lvgl_ux_packs)
+    add_test(NAME trailmate_ui_presentation_page_manifest_smoke
+             COMMAND trailmate_ui_presentation_page_manifest_smoke)
+
+    add_executable(trailmate_ui_presentation_layout_profile_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_layout_profile.cpp")
+    target_link_libraries(trailmate_ui_presentation_layout_profile_smoke
+        PRIVATE trailmate_ui_lvgl_ux_packs)
+    add_test(NAME trailmate_ui_presentation_layout_profile_smoke
+             COMMAND trailmate_ui_presentation_layout_profile_smoke)
 endif()

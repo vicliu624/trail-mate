@@ -5,11 +5,15 @@
     "includeDir": "src",
     "srcDir": "src",
     "flags": [
+      "-I../../modules/product_composition/include",
       "-I../../modules/ui_presentation/include",
       "-I../../modules/ui_lvgl_ux_packs/include"
     ]
   },
   "dependencies": [
+    {
+      "name": "product_composition"
+    },
     {
       "name": "ui_lvgl_ux_packs"
     }

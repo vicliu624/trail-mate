@@ -268,6 +268,9 @@ def main() -> int:
         "tools/architecture/check_legacy_disposition_execution_ready.py",
         "tools/architecture/check_esp_idf_final_owner_extraction_ready.py",
         "tools/architecture/check_target_architecture_foundation_ready.py",
+        "tools/architecture/check_all_target_architecture_ready.py",
+        "tools/architecture/check_no_intermediate_ui_layer_ready.py",
+        "tools/architecture/check_board_facts_boundary_ready.py",
         "tools/architecture/check_legacy_app_roots_burndown_ready.py",
     ]:
         require_file(rel, failures)
@@ -283,6 +286,9 @@ def main() -> int:
         "tools/architecture/check_legacy_disposition_execution_ready.py",
         "tools/architecture/check_esp_idf_final_owner_extraction_ready.py",
         "tools/architecture/check_target_architecture_foundation_ready.py",
+        "tools/architecture/check_all_target_architecture_ready.py",
+        "tools/architecture/check_no_intermediate_ui_layer_ready.py",
+        "tools/architecture/check_board_facts_boundary_ready.py",
         "tools/architecture/check_legacy_app_roots_burndown_ready.py",
     ]:
         run_checker(rel, failures)
