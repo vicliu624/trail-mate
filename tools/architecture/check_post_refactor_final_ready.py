@@ -271,6 +271,10 @@ def main() -> int:
         "tools/architecture/check_all_target_architecture_ready.py",
         "tools/architecture/check_no_intermediate_ui_layer_ready.py",
         "tools/architecture/check_board_facts_boundary_ready.py",
+        "tools/architecture/check_uconsole_real_ui_restored.py",
+        "tools/architecture/check_pio_real_env_restored.py",
+        "tools/architecture/check_esp_idf_real_targets_restored.py",
+        "tools/architecture/check_real_target_regression_recovery_ready.py",
     ]:
         require_file(rel, failures)
 
@@ -288,6 +292,7 @@ def main() -> int:
         "tools/architecture/check_all_target_architecture_ready.py",
         "tools/architecture/check_no_intermediate_ui_layer_ready.py",
         "tools/architecture/check_board_facts_boundary_ready.py",
+        "tools/architecture/check_real_target_regression_recovery_ready.py",
     ]:
         run_checker(rel, failures)
 

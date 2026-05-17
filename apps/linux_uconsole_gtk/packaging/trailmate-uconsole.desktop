@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Trail Mate
+GenericName=Mesh handheld console
+Comment=Trail Mate uConsole GTK shell
+Exec=env TRAIL_MATE_RUNTIME_MODE=mesh trailmate-uconsole
+TryExec=trailmate-uconsole
+Icon=trailmate-uconsole
+Terminal=false
+Categories=Network;
+Keywords=Trail;Mate;uConsole;Mesh;LoRa;AIO2;
+StartupNotify=true

@@ -9,7 +9,11 @@ Migrated from the historical ESP-IDF component root:
 | `tab5` | `builds/esp_idf/targets/tab5/sdkconfig.defaults` | `removed root esp_idf/targets/tab5/sdkconfig.defaults` |
 | `tdisplayp4_tft` | `builds/esp_idf/targets/tdisplayp4_tft/sdkconfig.defaults` | `removed root esp_idf/targets/t_display_p4_tft/sdkconfig.defaults` |
 | `tdisplayp4_amoled` | `builds/esp_idf/targets/tdisplayp4_amoled/sdkconfig.defaults` | `removed root esp_idf/targets/t_display_p4_amoled/sdkconfig.defaults` |
+| `tdeck` | `builds/esp_idf/targets/tdeck/sdkconfig.defaults` | minimal compile baseline from `boards/T-Deck.json` |
+| `tlora_pager` | `builds/esp_idf/targets/tlora_pager/sdkconfig.defaults` | minimal compile baseline from `boards/lilygo-t-lora-pager.json` |
+| `twatch` | `builds/esp_idf/targets/twatch/sdkconfig.defaults` | minimal compile baseline from `boards/lilygo-t-watch-s3.json` |
 
-Deferred targets such as `tdeck`, `tlora_pager`, and `twatch` are not invented
-here. They remain pending until the repository has target defaults to migrate or
-an explicit target-defaults decision is recorded.
+`tdeck`, `tlora_pager`, and `twatch` now have final target-default owners under
+`builds/esp_idf/targets`. Their current defaults are compile baselines derived
+from repository board metadata; hardware-specific PSRAM, display, input, NFC,
+and audio validation remains pending.

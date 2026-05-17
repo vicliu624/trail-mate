@@ -4,10 +4,33 @@
   "build": {
     "includeDir": "src",
     "srcDir": "src",
+    "srcFilter": [
+      "-<*>",
+      "+<nrf52_historical_source_descriptor.cpp>",
+      "+<nrf52_node_app_shell.cpp>",
+      "+<nrf52_node_runtime_config.cpp>"
+    ],
     "flags": [
+      "-std=gnu++17",
+      "-I../..",
       "-I../../modules/product_composition/include",
       "-I../../modules/ui_presentation/include",
-      "-I../../modules/ui_lvgl_ux_packs/include"
+      "-I../../modules/ui_lvgl_ux_packs/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_chat/generated",
+      "-I../../modules/core_chat/third_party/nanopb",
+      "-I../../modules/core_gps/include",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_mesh/include",
+      "-I../../modules/core_phone/include",
+      "-I../../modules/ui_mono_128x64/include",
+      "-I../../modules/ui_shared/include",
+      "-I../../modules/chat_presentation_adapters/include",
+      "-I../../platform/shared/include",
+      "-I../../platform/nrf52",
+      "-I../../platform/nrf52/arduino_common/include",
+      "-I../../boards/gat562_mesh_evb_pro/include",
+      "-I../../variants/gat562_mesh_evb_pro"
     ]
   },
   "dependencies": [
@@ -16,6 +39,30 @@
     },
     {
       "name": "ui_lvgl_ux_packs"
+    },
+    {
+      "name": "core_chat"
+    },
+    {
+      "name": "core_mesh"
+    },
+    {
+      "name": "core_phone"
+    },
+    {
+      "name": "core_sys"
+    },
+    {
+      "name": "ui_mono_128x64"
+    },
+    {
+      "name": "boards_gat562_mesh_evb_pro"
+    },
+    {
+      "name": "platform_nrf52"
+    },
+    {
+      "name": "platform_nrf52_arduino_common"
     }
   ]
 }

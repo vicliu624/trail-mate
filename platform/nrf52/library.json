@@ -1,0 +1,54 @@
+{
+  "name": "platform_nrf52",
+  "version": "0.1.0",
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "nordicnrf52"
+  ],
+  "build": {
+    "includeDir": ".",
+    "srcDir": ".",
+    "srcFilter": [
+      "+<debug/*.cpp>",
+      "+<protocol/*.cpp>",
+      "+<runtime/*.cpp>",
+      "-<arduino_common/>"
+    ],
+    "flags": [
+      "-std=gnu++17",
+      "-I.",
+      "-I../..",
+      "-I../../boards/gat562_mesh_evb_pro/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_chat/generated",
+      "-I../../modules/core_chat/third_party/nanopb",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_mesh/include",
+      "-I../../modules/core_phone/include",
+      "-I../../platform/shared/include",
+      "-I../../platform/nrf52/arduino_common/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "core_chat"
+    },
+    {
+      "name": "core_mesh"
+    },
+    {
+      "name": "core_phone"
+    },
+    {
+      "name": "core_sys"
+    },
+    {
+      "name": "platform_nrf52_arduino_common"
+    },
+    {
+      "name": "boards_gat562_mesh_evb_pro"
+    }
+  ]
+}
