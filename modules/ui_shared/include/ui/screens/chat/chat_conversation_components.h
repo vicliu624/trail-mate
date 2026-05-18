@@ -14,6 +14,11 @@
 #include "ui/widgets/top_bar.h"
 #include <vector>
 
+namespace ui::chat
+{
+struct MessageRow;
+}
+
 namespace chat
 {
 namespace ui
@@ -30,7 +35,7 @@ class ChatConversationScreen
     ChatConversationScreen(lv_obj_t* parent, chat::ConversationId conv);
     ~ChatConversationScreen();
 
-    void addMessage(const chat::ChatMessage& msg);
+    void addMessage(const ::ui::chat::MessageRow& row);
     void clearMessages();
     void scrollToBottom();
     bool updateMessageStatus(chat::MessageId msg_id, chat::MessageStatus status);
@@ -123,7 +128,7 @@ class ChatConversationScreen
     ActionContext reply_ctx_{};
     bool reply_enabled_ = true;
 
-    void createMessageItem(const chat::ChatMessage& msg);
+    void createMessageItem(const chat::ChatMessage& msg, const char* sender_label = nullptr);
 
     static void action_event_cb(lv_event_t* e);
     static void async_action_cb(void* user_data);

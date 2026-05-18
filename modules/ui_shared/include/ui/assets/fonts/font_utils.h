@@ -250,11 +250,8 @@ inline void apply_font(lv_obj_t* label, const lv_font_t* font)
 {
     if (label && font)
     {
-        if (lv_obj_get_style_text_font(label, LV_PART_MAIN) == font)
-        {
-            return;
-        }
         lv_obj_set_style_text_font(label, font, 0);
+        lv_obj_invalidate(label);
     }
 }
 

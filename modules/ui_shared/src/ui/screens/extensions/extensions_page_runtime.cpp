@@ -558,6 +558,7 @@ void on_primary_action_clicked(lv_event_t* event)
     s_runtime.selected_package_id = package_id;
     s_runtime.view = MainView::Detail;
     refresh_catalog_and_render();
+    ui_request_rebuild_active_app();
 }
 
 void on_uninstall_clicked(lv_event_t* event)
@@ -588,6 +589,7 @@ void on_uninstall_clicked(lv_event_t* event)
     s_runtime.selected_package_id = package.id;
     s_runtime.view = MainView::Detail;
     refresh_catalog_and_render();
+    ui_request_rebuild_active_app();
 }
 
 lv_obj_t* create_action_button(lv_obj_t* parent,

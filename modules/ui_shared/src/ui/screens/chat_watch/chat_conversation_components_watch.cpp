@@ -4,11 +4,72 @@
 
 #include "ui/localization.h"
 #include "ui/ui_theme.h"
+#include "ui_presentation/chat/chat_workspace_snapshot.h"
+
+#include <cstdlib>
+#include <string>
 
 namespace
 {
 constexpr lv_coord_t kActionBarHeight = 36;
 constexpr lv_coord_t kActionButtonHeight = 26;
+
+chat::MessageStatus status_from_presentation_delivery(
+    ::ui::chat::MessageDeliveryState delivery)
+{
+    switch (delivery)
+    {
+    case ::ui::chat::MessageDeliveryState::Received:
+        return chat::MessageStatus::Incoming;
+    case ::ui::chat::MessageDeliveryState::Queued:
+    case ::ui::chat::MessageDeliveryState::Sending:
+    case ::ui::chat::MessageDeliveryState::Draft:
+        return chat::MessageStatus::Queued;
+    case ::ui::chat::MessageDeliveryState::Sent:
+    case ::ui::chat::MessageDeliveryState::Delivered:
+        return chat::MessageStatus::Sent;
+    case ::ui::chat::MessageDeliveryState::Failed:
+        return chat::MessageStatus::Failed;
+    case ::ui::chat::MessageDeliveryState::Unknown:
+        break;
+    }
+    return chat::MessageStatus::Incoming;
+}
+
+uint32_t timestamp_from_presentation_label(const ::ui::FixedText<24>& label)
+{
+    const char* text = label.c_str();
+    if (!text || text[0] == '\0')
+    {
+        return 0;
+    }
+
+    char* end = nullptr;
+    const unsigned long value = std::strtoul(text, &end, 10);
+    if (end == text || (end && *end != '\0'))
+    {
+        return 0;
+    }
+    return static_cast<uint32_t>(value);
+}
+
+chat::ChatMessage message_from_presentation_row(
+    const ::ui::chat::MessageRow& row,
+    const chat::ConversationId& conversation)
+{
+    chat::ChatMessage msg;
+    msg.protocol = conversation.protocol;
+    msg.channel = conversation.channel;
+    msg.peer = conversation.peer;
+    msg.msg_id = row.ref.protocol_id != 0
+                     ? row.ref.protocol_id
+                     : static_cast<chat::MessageId>(row.ref.local_id);
+    msg.from = row.outgoing ? 0 : row.sender_node_id;
+    msg.text = row.text.c_str();
+    msg.timestamp = timestamp_from_presentation_label(row.time_label);
+    msg.status = status_from_presentation_delivery(row.delivery);
+    return msg;
+}
 } // namespace
 
 namespace chat::ui
@@ -93,7 +154,7 @@ ChatConversationScreen::~ChatConversationScreen()
     guard_ = nullptr;
 }
 
-void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
+void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
 {
     if (!msg_list_)
     {
@@ -138,6 +199,19 @@ void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
     lv_obj_set_style_radius(item.text_label, 6, 0);
 
     messages_.push_back(item);
+}
+
+void ChatConversationScreen::addMessage(const ::ui::chat::MessageRow& row)
+{
+    chat::ChatMessage msg = message_from_presentation_row(row, conv_);
+    if (!row.outgoing && !row.sender_label.empty())
+    {
+        std::string labeled_text = row.sender_label.c_str();
+        labeled_text += ": ";
+        labeled_text += row.text.c_str();
+        msg.text = labeled_text;
+    }
+    createMessageItem(msg);
 }
 
 void ChatConversationScreen::clearMessages()

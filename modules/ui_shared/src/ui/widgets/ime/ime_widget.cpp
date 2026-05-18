@@ -29,7 +29,7 @@ static constexpr lv_coord_t kCompactImeControlHeight = 18;
 
 bool script_input_available()
 {
-    return ::ui::i18n::active_locale_supports_script_input();
+    return ::ui::i18n::any_enabled_script_input();
 }
 
 #if UI_SHARED_TOUCH_IME_ENABLED
@@ -343,7 +343,7 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
 
     toggle_label_ = lv_label_create(toggle_btn_);
     lv_label_set_text(toggle_label_, "EN");
-    lv_obj_set_style_text_font(toggle_label_, ::ui::fonts::ui_chrome_font(), 0);
+    lv_obj_set_style_text_font(toggle_label_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), 0);
     lv_obj_set_style_text_color(toggle_label_, lv_color_hex(0x3A2A1A), 0);
     lv_obj_center(toggle_label_);
 
@@ -411,7 +411,8 @@ void ImeWidget::init_touch_ui(lv_obj_t* parent)
     lv_obj_set_style_pad_all(keyboard_matrix_, 6, LV_PART_MAIN);
     lv_obj_set_style_pad_row(keyboard_matrix_, 6, LV_PART_ITEMS);
     lv_obj_set_style_pad_column(keyboard_matrix_, 6, LV_PART_ITEMS);
-    lv_obj_set_style_text_font(keyboard_matrix_, ::ui::fonts::ui_chrome_font(), LV_PART_ITEMS);
+    lv_obj_set_style_text_font(
+        keyboard_matrix_, ::ui::fonts::localized_font(::ui::fonts::ui_chrome_font()), LV_PART_ITEMS);
     lv_obj_set_style_text_color(keyboard_matrix_, lv_color_hex(0x3A2A1A), LV_PART_ITEMS);
     lv_obj_set_style_bg_color(keyboard_matrix_, lv_color_hex(0xFFF7E9), LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(keyboard_matrix_, LV_OPA_COVER, LV_PART_ITEMS);

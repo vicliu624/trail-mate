@@ -95,27 +95,6 @@ bool isTeamConversationId(const chat::ConversationId& conv)
     return conv.channel == kTeamChatChannel && conv.peer == 0;
 }
 
-chat::MessageStatus legacyStatusFromDelivery(::ui::chat::MessageDeliveryState delivery)
-{
-    switch (delivery)
-    {
-    case ::ui::chat::MessageDeliveryState::Received:
-        return chat::MessageStatus::Incoming;
-    case ::ui::chat::MessageDeliveryState::Queued:
-    case ::ui::chat::MessageDeliveryState::Sending:
-    case ::ui::chat::MessageDeliveryState::Draft:
-        return chat::MessageStatus::Queued;
-    case ::ui::chat::MessageDeliveryState::Sent:
-    case ::ui::chat::MessageDeliveryState::Delivered:
-        return chat::MessageStatus::Sent;
-    case ::ui::chat::MessageDeliveryState::Failed:
-        return chat::MessageStatus::Failed;
-    case ::ui::chat::MessageDeliveryState::Unknown:
-        break;
-    }
-    return chat::MessageStatus::Incoming;
-}
-
 chat::ConversationMeta legacyConversationMetaFromRow(
     const ::ui::chat::ConversationRow& row)
 {
@@ -129,43 +108,6 @@ chat::ConversationMeta legacyConversationMetaFromRow(
     meta.unread = static_cast<int>(row.unread_count);
     meta.last_timestamp = 0;
     return meta;
-}
-
-uint32_t timestampFromTimeLabel(const ::ui::FixedText<24>& label)
-{
-    const char* text = label.c_str();
-    if (!text || text[0] == '\0')
-    {
-        return 0;
-    }
-
-    char* end = nullptr;
-    const unsigned long value = std::strtoul(text, &end, 10);
-    if (end == text || (end && *end != '\0'))
-    {
-        return 0;
-    }
-    return static_cast<uint32_t>(value);
-}
-
-chat::ChatMessage legacyMessageFromRow(const ::ui::chat::MessageRow& row)
-{
-    chat::ChatMessage msg;
-    chat::ConversationId core_id;
-    if (chat_presentation_adapters::toCoreConversationId(row.conversation, core_id))
-    {
-        msg.protocol = core_id.protocol;
-        msg.channel = core_id.channel;
-        msg.peer = core_id.peer;
-    }
-    msg.msg_id = row.ref.protocol_id != 0
-                     ? row.ref.protocol_id
-                     : static_cast<chat::MessageId>(row.ref.local_id);
-    msg.from = row.outgoing ? 0 : row.sender_node_id;
-    msg.text = row.text.c_str();
-    msg.timestamp = timestampFromTimeLabel(row.time_label);
-    msg.status = legacyStatusFromDelivery(row.delivery);
-    return msg;
 }
 
 void appendSnapshotConversationsToLegacy(const ::ui::chat::ChatWorkspaceSnapshot& snapshot,
@@ -220,7 +162,7 @@ void applySnapshotMessagesToConversation(
     conversation.clearMessages();
     for (size_t i = 0; i < snapshot.message_count; ++i)
     {
-        conversation.addMessage(legacyMessageFromRow(snapshot.messages[i]));
+        conversation.addMessage(snapshot.messages[i]);
     }
     conversation.scrollToBottom();
 }

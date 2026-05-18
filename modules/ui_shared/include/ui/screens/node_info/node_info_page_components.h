@@ -32,6 +32,7 @@ struct NodeInfoWidgets
     lv_obj_t* map_stage = nullptr;
     lv_obj_t* tile_layer = nullptr;
     lv_obj_t* map_overlay_layer = nullptr;
+    lv_obj_t* node_overlay_layer = nullptr;
     lv_obj_t* map_gesture_surface = nullptr;
 
     lv_obj_t* id_label = nullptr;

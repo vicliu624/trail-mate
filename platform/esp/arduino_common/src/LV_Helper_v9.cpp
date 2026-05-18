@@ -39,7 +39,6 @@ static lv_indev_t* indev_keyboard;
 static lv_color16_t* buf = nullptr;
 static lv_color16_t* buf1 = nullptr;
 
-#if UI_FS_HAS_FLASH_PACK_STORAGE
 namespace
 {
 constexpr char kLvglFlashFsLetter = 'F';
@@ -96,12 +95,42 @@ bool flash_fs_ready_for_io()
     return ::ui::fs::ensure_flash_storage_ready(false);
 }
 
+bool flash_fs_ready_cb(lv_fs_drv_t* drv)
+{
+    LV_UNUSED(drv);
+    return flash_fs_ready_for_io();
+}
+
+void flash_fs_make_full_path(const char* path, char* out, size_t out_size)
+{
+    if (path == nullptr || path[0] == '\0')
+    {
+        lv_snprintf(out, out_size, "%s", kLvglFlashFsMountPoint);
+        return;
+    }
+
+    if (path[0] == '/')
+    {
+        lv_snprintf(out, out_size, "%s%s", kLvglFlashFsMountPoint, path);
+        return;
+    }
+
+    lv_snprintf(out, out_size, "%s/%s", kLvglFlashFsMountPoint, path);
+}
+
 void* flash_fs_open(lv_fs_drv_t* drv, const char* path, lv_fs_mode_t mode)
 {
     LV_UNUSED(drv);
+    static uint8_t s_open_fail_log_count = 0;
 
     if (!flash_fs_ready_for_io())
     {
+        if (s_open_fail_log_count < 8)
+        {
+            Serial.printf("[LVGL][FS] F open blocked: flash not ready path=%s\n",
+                          path ? path : "<null>");
+            ++s_open_fail_log_count;
+        }
         return nullptr;
     }
 
@@ -120,11 +149,20 @@ void* flash_fs_open(lv_fs_drv_t* drv, const char* path, lv_fs_mode_t mode)
     }
 
     char full_path[LV_FS_MAX_PATH_LEN];
-    lv_snprintf(full_path, sizeof(full_path), "%s%s", kLvglFlashFsMountPoint, path);
+    flash_fs_make_full_path(path, full_path, sizeof(full_path));
 
     const int fd = ::open(full_path, flags, 0666);
     if (fd < 0)
     {
+        if (s_open_fail_log_count < 8)
+        {
+            Serial.printf("[LVGL][FS] F open failed path=%s full=%s errno=%d mode=%u\n",
+                          path ? path : "<null>",
+                          full_path,
+                          errno,
+                          static_cast<unsigned>(mode));
+            ++s_open_fail_log_count;
+        }
         return nullptr;
     }
 
@@ -220,15 +258,31 @@ lv_fs_res_t flash_fs_tell(lv_fs_drv_t* drv, void* file_p, uint32_t* pos_p)
 void* flash_fs_dir_open(lv_fs_drv_t* drv, const char* path)
 {
     LV_UNUSED(drv);
+    static uint8_t s_dir_fail_log_count = 0;
 
     if (!flash_fs_ready_for_io())
     {
+        if (s_dir_fail_log_count < 8)
+        {
+            Serial.printf("[LVGL][FS] F dir_open blocked: flash not ready path=%s\n",
+                          path ? path : "<null>");
+            ++s_dir_fail_log_count;
+        }
         return nullptr;
     }
 
     char full_path[LV_FS_MAX_PATH_LEN];
-    lv_snprintf(full_path, sizeof(full_path), "%s%s", kLvglFlashFsMountPoint, path);
-    return ::opendir(full_path);
+    flash_fs_make_full_path(path, full_path, sizeof(full_path));
+    DIR* dir = ::opendir(full_path);
+    if (!dir && s_dir_fail_log_count < 8)
+    {
+        Serial.printf("[LVGL][FS] F dir_open failed path=%s full=%s errno=%d\n",
+                      path ? path : "<null>",
+                      full_path,
+                      errno);
+        ++s_dir_fail_log_count;
+    }
+    return dir;
 }
 
 lv_fs_res_t flash_fs_dir_read(lv_fs_drv_t* drv, void* dir_p, char* fn, uint32_t fn_len)
@@ -279,6 +333,7 @@ void init_flash_fs_driver()
 
     lv_fs_drv_init(&s_flash_fs_drv);
     s_flash_fs_drv.letter = kLvglFlashFsLetter;
+    s_flash_fs_drv.ready_cb = flash_fs_ready_cb;
     s_flash_fs_drv.open_cb = flash_fs_open;
     s_flash_fs_drv.close_cb = flash_fs_close;
     s_flash_fs_drv.read_cb = flash_fs_read;
@@ -290,9 +345,16 @@ void init_flash_fs_driver()
     s_flash_fs_drv.dir_close_cb = flash_fs_dir_close;
     lv_fs_drv_register(&s_flash_fs_drv);
     s_flash_fs_ready = true;
+
+    char letters[16];
+    letters[0] = '\0';
+    lv_fs_get_letters(letters);
+    Serial.printf("[LVGL][FS] flash driver registered letter=%c ready=%d letters=%s\n",
+                  kLvglFlashFsLetter,
+                  lv_fs_is_ready(kLvglFlashFsLetter) ? 1 : 0,
+                  letters);
 }
 } // namespace
-#endif
 
 static void disp_flush(lv_display_t* disp_drv, const lv_area_t* area, uint8_t* color_p)
 {
@@ -661,9 +723,7 @@ void beginLvglHelper(LilyGo_Display& board, bool debug)
     lv_init();
     Serial.println("[LVGL] init done");
 
-#if UI_FS_HAS_FLASH_PACK_STORAGE
     init_flash_fs_driver();
-#endif
 
 #if LV_USE_LOG
     if (debug)

@@ -14,6 +14,7 @@
 #include "ui/screens/chat/chat_conversation_layout.h"
 #include "ui/screens/chat/chat_conversation_styles.h"
 #include "ui/ui_common.h"
+#include "ui_presentation/chat/chat_workspace_snapshot.h"
 
 #include "sys/clock.h"
 #include "team/protocol/team_location_marker.h"
@@ -21,6 +22,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 
 #ifndef CHAT_CONVERSATION_LOG_ENABLE
@@ -58,6 +60,63 @@ constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
 constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
 constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
 constexpr size_t kMaxPrefixedSenderLen = 20;
+
+chat::MessageStatus status_from_presentation_delivery(
+    ::ui::chat::MessageDeliveryState delivery)
+{
+    switch (delivery)
+    {
+    case ::ui::chat::MessageDeliveryState::Received:
+        return chat::MessageStatus::Incoming;
+    case ::ui::chat::MessageDeliveryState::Queued:
+    case ::ui::chat::MessageDeliveryState::Sending:
+    case ::ui::chat::MessageDeliveryState::Draft:
+        return chat::MessageStatus::Queued;
+    case ::ui::chat::MessageDeliveryState::Sent:
+    case ::ui::chat::MessageDeliveryState::Delivered:
+        return chat::MessageStatus::Sent;
+    case ::ui::chat::MessageDeliveryState::Failed:
+        return chat::MessageStatus::Failed;
+    case ::ui::chat::MessageDeliveryState::Unknown:
+        break;
+    }
+    return chat::MessageStatus::Incoming;
+}
+
+uint32_t timestamp_from_presentation_label(const ::ui::FixedText<24>& label)
+{
+    const char* text = label.c_str();
+    if (!text || text[0] == '\0')
+    {
+        return 0;
+    }
+
+    char* end = nullptr;
+    const unsigned long value = std::strtoul(text, &end, 10);
+    if (end == text || (end && *end != '\0'))
+    {
+        return 0;
+    }
+    return static_cast<uint32_t>(value);
+}
+
+chat::ChatMessage message_from_presentation_row(
+    const ::ui::chat::MessageRow& row,
+    const chat::ConversationId& conversation)
+{
+    chat::ChatMessage msg;
+    msg.protocol = conversation.protocol;
+    msg.channel = conversation.channel;
+    msg.peer = conversation.peer;
+    msg.msg_id = row.ref.protocol_id != 0
+                     ? row.ref.protocol_id
+                     : static_cast<chat::MessageId>(row.ref.local_id);
+    msg.from = row.outgoing ? 0 : row.sender_node_id;
+    msg.text = row.text.c_str();
+    msg.timestamp = timestamp_from_presentation_label(row.time_label);
+    msg.status = status_from_presentation_delivery(row.delivery);
+    return msg;
+}
 } // namespace
 
 static const lv_image_dsc_t* team_location_icon_src(uint8_t icon_id)
@@ -301,7 +360,7 @@ ChatConversationScreen::~ChatConversationScreen()
     }
 }
 
-void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
+void ChatConversationScreen::addMessage(const ::ui::chat::MessageRow& row)
 {
     if (!guard_ || !guard_->alive || !msg_list_ || !lv_obj_is_valid(msg_list_))
     {
@@ -317,7 +376,8 @@ void ChatConversationScreen::addMessage(const chat::ChatMessage& msg)
         messages_.erase(messages_.begin());
     }
 
-    createMessageItem(msg);
+    const chat::ChatMessage msg = message_from_presentation_row(row, conv_);
+    createMessageItem(msg, row.sender_label.c_str());
     scrollToBottom();
 }
 
@@ -444,7 +504,7 @@ void ChatConversationScreen::setReplyEnabled(bool enabled)
     }
 }
 
-void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
+void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg, const char* sender_label)
 {
     if (!guard_ || !guard_->alive || !msg_list_)
     {
@@ -503,6 +563,10 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg)
         if (is_self)
         {
             sender = app::configFacade().getConfig().short_name;
+        }
+        else if (sender_label && sender_label[0] != '\0')
+        {
+            sender = sender_label;
         }
         else if (msg.from == 0)
         {

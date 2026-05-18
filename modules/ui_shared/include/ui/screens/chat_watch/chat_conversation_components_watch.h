@@ -4,6 +4,11 @@
 #include "lvgl.h"
 #include <vector>
 
+namespace ui::chat
+{
+struct MessageRow;
+}
+
 namespace chat::ui
 {
 
@@ -18,7 +23,7 @@ class ChatConversationScreen
     ChatConversationScreen(lv_obj_t* parent, chat::ConversationId conv);
     ~ChatConversationScreen();
 
-    void addMessage(const chat::ChatMessage& msg);
+    void addMessage(const ::ui::chat::MessageRow& row);
     void clearMessages();
     void scrollToBottom();
     bool updateMessageStatus(chat::MessageId msg_id, chat::MessageStatus status);
@@ -85,6 +90,8 @@ class ChatConversationScreen
 
     LifetimeGuard* guard_ = nullptr;
     bool reply_enabled_ = true;
+
+    void createMessageItem(const chat::ChatMessage& msg);
 
     void schedule_action_async(ActionIntent intent);
     void schedule_back_async();

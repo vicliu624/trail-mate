@@ -39,7 +39,7 @@ constexpr const char* kLegacyDisplayLanguageKey = "display_language";
 constexpr const char* kDefaultLocaleId = "en";
 constexpr const char* kBuiltinEnglishName = "English";
 constexpr const char* kBuiltinLatinFontPackId = "builtin-latin-ui";
-#if defined(ARDUINO_ARCH_ESP32)
+#if UI_FS_HAS_FLASH_PACK_STORAGE
 constexpr const char* kFlashPackRoot = "/fs/trailmate/packs";
 constexpr const char* kFlashFontPackRoot = "/fs/trailmate/packs/fonts";
 constexpr const char* kFlashLocalePackRoot = "/fs/trailmate/packs/locales";
@@ -51,6 +51,19 @@ constexpr const char* kLocalePackRoot = "/trailmate/packs/locales";
 constexpr const char* kImePackRoot = "/trailmate/packs/ime";
 constexpr const char* kDisabledImeSentinel = "__none__";
 constexpr std::size_t kFontLoadOverlayThresholdBytes = 64U * 1024U;
+constexpr unsigned kMaxMissingFontDiagnostics = 20;
+
+#if defined(LV_USE_FS_POSIX) && LV_USE_FS_POSIX
+constexpr bool kLvFsPosixEnabled = true;
+#else
+constexpr bool kLvFsPosixEnabled = false;
+#endif
+
+#if UI_FS_HAS_FLASH_PACK_STORAGE
+constexpr bool kFlashPackStorageEnabled = true;
+#else
+constexpr bool kFlashPackStorageEnabled = false;
+#endif
 
 enum class FontPackUsage : uint8_t
 {
@@ -133,6 +146,7 @@ FontChainState s_content_font_chain;
 std::vector<FontPackRecord*> s_content_supplement_packs;
 
 bool s_registry_ready = false;
+unsigned s_missing_content_font_diagnostics = 0;
 
 class ScopedFontLoadOverlay
 {
@@ -193,7 +207,7 @@ const char* usage_name(FontPackUsage usage)
 
 bool external_pack_scan_enabled()
 {
-#if defined(LV_USE_FS_POSIX) && LV_USE_FS_POSIX
+#if (defined(LV_USE_FS_POSIX) && LV_USE_FS_POSIX) || UI_FS_HAS_FLASH_PACK_STORAGE
     return true;
 #else
     return false;
@@ -434,16 +448,22 @@ bool list_directory_entries(const char* path, std::vector<std::string>& out)
         return false;
     }
 
-#if defined(LV_USE_FS_POSIX) && LV_USE_FS_POSIX
     const std::string normalized = ::ui::fs::normalize_path(path);
     if (normalized.empty())
     {
+        std::printf("%s external pack scan skip path=%s reason=normalize_failed\n",
+                    kLogTag,
+                    safe_text(path));
         return false;
     }
 
     lv_fs_dir_t dir;
     if (lv_fs_dir_open(&dir, normalized.c_str()) != LV_FS_RES_OK)
     {
+        std::printf("%s external pack scan skip path=%s normalized=%s reason=open_failed\n",
+                    kLogTag,
+                    safe_text(path),
+                    normalized.c_str());
         return false;
     }
 
@@ -471,11 +491,12 @@ bool list_directory_entries(const char* path, std::vector<std::string>& out)
 
     lv_fs_dir_close(&dir);
     std::sort(out.begin(), out.end());
+    std::printf("%s external pack scan path=%s normalized=%s entries=%lu\n",
+                kLogTag,
+                safe_text(path),
+                normalized.c_str(),
+                static_cast<unsigned long>(out.size()));
     return true;
-#else
-    (void)path;
-    return false;
-#endif
 }
 
 template <typename TPack>
@@ -571,9 +592,16 @@ bool parse_codepoint_token(const std::string& token, uint32_t& out_codepoint)
         return false;
     }
 
+    const char* start = token.c_str();
+    int base = 16;
+    if ((start[0] == 'U' || start[0] == 'u') && start[1] == '+')
+    {
+        start += 2;
+    }
+
     char* end = nullptr;
-    const unsigned long value = std::strtoul(token.c_str(), &end, 0);
-    if (end == token.c_str() || (end && *end != '\0') || value > 0x10FFFFUL)
+    const unsigned long value = std::strtoul(start, &end, base);
+    if (end == start || (end && *end != '\0') || value > 0x10FFFFUL)
     {
         return false;
     }
@@ -635,6 +663,11 @@ bool parse_ranges_file(const std::string& path, std::vector<CodepointRange>& out
         std::string token = contents.substr(
             token_start,
             token_end == std::string::npos ? std::string::npos : (token_end - token_start));
+        const std::size_t comment = token.find('#');
+        if (comment != std::string::npos)
+        {
+            token.resize(comment);
+        }
         trim_in_place(token);
         if (!token.empty())
         {
@@ -746,7 +779,7 @@ const lv_font_t* resolved_font(const FontPackRecord* pack)
 
 bool is_font_runtime_loaded(const FontPackRecord& pack)
 {
-    return resolved_font(&pack) != nullptr;
+    return pack.builtin || resolved_font(&pack) != nullptr;
 }
 
 bool font_pack_covers_codepoint(const FontPackRecord& pack, uint32_t codepoint)
@@ -1145,6 +1178,41 @@ bool ensure_active_content_pack_loaded()
     if (changed)
     {
         rebuild_runtime_font_chains();
+    }
+
+    static std::string s_last_logged_ui_pack;
+    static std::string s_last_logged_content_pack;
+    static bool s_last_logged_ui_loaded = false;
+    static bool s_last_logged_content_loaded = false;
+    static bool s_logged_once = false;
+
+    const std::string ui_pack_id = s_active_ui_font_pack ? s_active_ui_font_pack->id : std::string{};
+    const std::string content_pack_id =
+        s_active_content_font_pack ? s_active_content_font_pack->id : std::string{};
+    const bool ui_loaded =
+        s_active_ui_font_pack && is_font_runtime_loaded(*s_active_ui_font_pack);
+    const bool content_loaded =
+        s_active_content_font_pack && is_font_runtime_loaded(*s_active_content_font_pack);
+    const bool should_log = changed || !s_logged_once ||
+                            ui_pack_id != s_last_logged_ui_pack ||
+                            content_pack_id != s_last_logged_content_pack ||
+                            ui_loaded != s_last_logged_ui_loaded ||
+                            content_loaded != s_last_logged_content_loaded;
+
+    if (should_log && (s_active_content_font_pack != nullptr || s_active_ui_font_pack != nullptr))
+    {
+        std::printf("%s ensure active fonts ui=%s loaded=%d content=%s loaded=%d changed=%d\n",
+                    kLogTag,
+                    ui_pack_id.empty() ? "<none>" : ui_pack_id.c_str(),
+                    ui_loaded ? 1 : 0,
+                    content_pack_id.empty() ? "<none>" : content_pack_id.c_str(),
+                    content_loaded ? 1 : 0,
+                    changed ? 1 : 0);
+        s_last_logged_ui_pack = ui_pack_id;
+        s_last_logged_content_pack = content_pack_id;
+        s_last_logged_ui_loaded = ui_loaded;
+        s_last_logged_content_loaded = content_loaded;
+        s_logged_once = true;
     }
 
     return true;
@@ -1747,33 +1815,113 @@ void scan_pack_group(const char* root_path, bool (*loader)(const std::string&))
     }
 }
 
+void scan_pack_group(const char* root_path, const char* label, bool (*loader)(const std::string&))
+{
+    std::vector<std::string> entries;
+    if (!list_directory_entries(root_path, entries))
+    {
+        std::printf("%s external pack group unavailable label=%s root=%s\n",
+                    kLogTag,
+                    safe_text(label),
+                    safe_text(root_path));
+        return;
+    }
+
+    std::size_t directories = 0;
+    std::size_t loaded = 0;
+    for (const auto& entry : entries)
+    {
+        const std::string pack_dir = join_path(root_path, entry);
+        if (!::ui::fs::dir_exists(pack_dir.c_str()))
+        {
+            continue;
+        }
+
+        ++directories;
+        if (loader(pack_dir))
+        {
+            ++loaded;
+        }
+    }
+
+    std::printf("%s external pack group scan label=%s root=%s entries=%lu dirs=%lu loaded=%lu\n",
+                kLogTag,
+                safe_text(label),
+                safe_text(root_path),
+                static_cast<unsigned long>(entries.size()),
+                static_cast<unsigned long>(directories),
+                static_cast<unsigned long>(loaded));
+}
+
+void log_pack_root_probe(const char* pack_root,
+                         const char* font_root,
+                         const char* ime_root,
+                         const char* locale_root)
+{
+    std::printf("%s external pack root probe pack=%s exists=%d fonts=%s exists=%d ime=%s exists=%d locales=%s exists=%d\n",
+                kLogTag,
+                safe_text(pack_root),
+                pack_root && ::ui::fs::dir_exists(pack_root) ? 1 : 0,
+                safe_text(font_root),
+                font_root && ::ui::fs::dir_exists(font_root) ? 1 : 0,
+                safe_text(ime_root),
+                ime_root && ::ui::fs::dir_exists(ime_root) ? 1 : 0,
+                safe_text(locale_root),
+                locale_root && ::ui::fs::dir_exists(locale_root) ? 1 : 0);
+}
+
 void catalog_external_packs_from_root(const char* pack_root,
                                       const char* font_root,
                                       const char* ime_root,
                                       const char* locale_root)
 {
+    log_pack_root_probe(pack_root, font_root, ime_root, locale_root);
     if (!pack_root || !::ui::fs::dir_exists(pack_root))
     {
+        std::printf("%s external pack root unavailable path=%s\n", kLogTag, safe_text(pack_root));
         return;
     }
 
-    scan_pack_group(font_root, catalog_external_font_pack);
-    scan_pack_group(ime_root, catalog_external_ime_pack);
-    scan_pack_group(locale_root, catalog_external_locale_pack);
+    const std::size_t fonts_before = s_font_packs.size();
+    const std::size_t imes_before = s_ime_packs.size();
+    const std::size_t locales_before = s_locale_packs.size();
+
+    std::printf("%s external pack root scan path=%s\n", kLogTag, pack_root);
+    scan_pack_group(font_root, "fonts", catalog_external_font_pack);
+    scan_pack_group(ime_root, "ime", catalog_external_ime_pack);
+    scan_pack_group(locale_root, "locales", catalog_external_locale_pack);
+
+    std::printf("%s external pack root result path=%s added_fonts=%lu added_ime=%lu added_locales=%lu\n",
+                kLogTag,
+                pack_root,
+                static_cast<unsigned long>(s_font_packs.size() - fonts_before),
+                static_cast<unsigned long>(s_ime_packs.size() - imes_before),
+                static_cast<unsigned long>(s_locale_packs.size() - locales_before));
 }
 
 void catalog_external_packs()
 {
+    std::printf("%s external pack scan begin enabled=%d lv_fs_posix=%d flash_storage=%d\n",
+                kLogTag,
+                external_pack_scan_enabled() ? 1 : 0,
+                kLvFsPosixEnabled ? 1 : 0,
+                kFlashPackStorageEnabled ? 1 : 0);
     if (!external_pack_scan_enabled())
     {
+        std::printf("%s external pack scan disabled\n", kLogTag);
         return;
     }
 
-#if defined(ARDUINO_ARCH_ESP32)
+#if UI_FS_HAS_FLASH_PACK_STORAGE
     catalog_external_packs_from_root(
         kFlashPackRoot, kFlashFontPackRoot, kFlashImePackRoot, kFlashLocalePackRoot);
 #endif
     catalog_external_packs_from_root(kPackRoot, kFontPackRoot, kImePackRoot, kLocalePackRoot);
+    std::printf("%s external pack scan end fonts=%lu ime=%lu locales=%lu\n",
+                kLogTag,
+                static_cast<unsigned long>(s_font_packs.size()),
+                static_cast<unsigned long>(s_ime_packs.size()),
+                static_cast<unsigned long>(s_locale_packs.size()));
 }
 
 bool locale_dependencies_resolved(const LocalePackRecord& locale)
@@ -1868,6 +2016,7 @@ bool locale_dependencies_resolved(const LocalePackRecord& locale)
 
 void prune_unresolved_locales()
 {
+    const std::size_t before = s_locale_packs.size();
     s_locale_packs.erase(
         std::remove_if(
             s_locale_packs.begin(),
@@ -1877,6 +2026,11 @@ void prune_unresolved_locales()
                 return !locale_dependencies_resolved(locale);
             }),
         s_locale_packs.end());
+    std::printf("%s locale dependency prune before=%lu after=%lu removed=%lu\n",
+                kLogTag,
+                static_cast<unsigned long>(before),
+                static_cast<unsigned long>(s_locale_packs.size()),
+                static_cast<unsigned long>(before - s_locale_packs.size()));
 }
 
 ImePackRecord* resolve_enabled_ime_pack()
@@ -1968,6 +2122,9 @@ std::string migrate_legacy_locale_if_needed()
     if (::platform::ui::settings_store::get_string(kSettingsNamespace, kDisplayLocaleKey, locale_id) &&
         !locale_id.empty())
     {
+        std::printf("%s preferred locale source=settings display_locale=%s\n",
+                    kLogTag,
+                    locale_id.c_str());
         return locale_id;
     }
 
@@ -1975,6 +2132,7 @@ std::string migrate_legacy_locale_if_needed()
         ::platform::ui::settings_store::get_int(kSettingsNamespace, kLegacyDisplayLanguageKey, -1);
     if (legacy_value < 0)
     {
+        std::printf("%s preferred locale source=default display_locale=<none>\n", kLogTag);
         return {};
     }
 
@@ -1996,15 +2154,25 @@ LocalePackRecord* resolve_active_locale(const std::string& preferred_id)
     {
         if (LocalePackRecord* preferred = find_pack_by_id(s_locale_packs, preferred_id.c_str()))
         {
+            std::printf("%s resolve active locale preferred=%s result=preferred\n",
+                        kLogTag,
+                        preferred_id.c_str());
             return preferred;
         }
+        std::printf("%s resolve active locale preferred=%s result=missing fallback=en\n",
+                    kLogTag,
+                    preferred_id.c_str());
     }
 
     if (LocalePackRecord* english = find_pack_by_id(s_locale_packs, kDefaultLocaleId))
     {
+        std::printf("%s resolve active locale result=en\n", kLogTag);
         return english;
     }
 
+    std::printf("%s resolve active locale result=%s\n",
+                kLogTag,
+                s_locale_packs.empty() ? "<none>" : s_locale_packs.front().id.c_str());
     return s_locale_packs.empty() ? nullptr : &s_locale_packs.front();
 }
 
@@ -2095,10 +2263,17 @@ bool activate_locale(LocalePackRecord* locale)
 
 void rebuild_registry()
 {
+    std::printf("%s registry rebuild begin ready=%d\n", kLogTag, s_registry_ready ? 1 : 0);
+    s_missing_content_font_diagnostics = 0;
     clear_registry();
     add_builtin_font_packs();
     add_builtin_locale_packs();
     catalog_external_packs();
+    std::printf("%s registry cataloged before_prune fonts=%lu ime=%lu locales=%lu\n",
+                kLogTag,
+                static_cast<unsigned long>(s_font_packs.size()),
+                static_cast<unsigned long>(s_ime_packs.size()),
+                static_cast<unsigned long>(s_locale_packs.size()));
     prune_unresolved_locales();
     rebuild_locale_views();
     rebuild_ime_views();
@@ -2107,6 +2282,15 @@ void rebuild_registry()
 
     const std::string preferred_locale = migrate_legacy_locale_if_needed();
     (void)activate_locale(resolve_active_locale(preferred_locale));
+    std::printf("%s registry rebuild end active_locale=%s locale_count=%lu ime_count=%lu enabled_ime=%lu active_ime=%s ui_chain=%s content_chain=%s\n",
+                kLogTag,
+                s_active_locale ? s_active_locale->id.c_str() : "<none>",
+                static_cast<unsigned long>(s_locale_views.size()),
+                static_cast<unsigned long>(s_ime_views.size()),
+                static_cast<unsigned long>(s_enabled_ime_ids.size()),
+                active_ime_pack_id() ? active_ime_pack_id() : "<none>",
+                s_ui_font_chain.desc.empty() ? "<none>" : s_ui_font_chain.desc.c_str(),
+                s_content_font_chain.desc.empty() ? "<none>" : s_content_font_chain.desc.c_str());
 }
 
 void ensure_registry()
@@ -2145,6 +2329,7 @@ const char* lookup_translation(const LocalePackRecord& locale, const char* engli
 
 void reload_language()
 {
+    std::printf("%s reload_language requested\n", kLogTag);
     rebuild_registry();
 }
 
@@ -2216,6 +2401,9 @@ bool set_locale(const char* locale_id, bool persist)
     LocalePackRecord* next_locale = find_pack_by_id(s_locale_packs, locale_id);
     if (next_locale == nullptr)
     {
+        std::printf("%s set_locale failed requested=%s reason=not_cataloged\n",
+                    kLogTag,
+                    safe_text(locale_id));
         return false;
     }
 
@@ -2229,6 +2417,14 @@ bool set_locale(const char* locale_id, bool persist)
         remove_legacy_locale_key();
     }
 
+    std::printf("%s set_locale requested=%s active=%s changed=%d persist=%d ui_chain=%s content_chain=%s\n",
+                kLogTag,
+                safe_text(locale_id),
+                s_active_locale ? s_active_locale->id.c_str() : "<none>",
+                previous_locale != s_active_locale ? 1 : 0,
+                persist ? 1 : 0,
+                s_ui_font_chain.desc.empty() ? "<none>" : s_ui_font_chain.desc.c_str(),
+                s_content_font_chain.desc.empty() ? "<none>" : s_content_font_chain.desc.c_str());
     return previous_locale != s_active_locale;
 }
 
@@ -2310,6 +2506,18 @@ bool ensure_content_font_for_text(const char* text)
     if (changed)
     {
         rebuild_runtime_font_chains();
+    }
+
+    if (!missing.empty() && s_missing_content_font_diagnostics < kMaxMissingFontDiagnostics)
+    {
+        std::printf("%s content font missing count=%lu first=U+%04lX active_locale=%s content_chain=%s text_sample='%.32s'\n",
+                    kLogTag,
+                    static_cast<unsigned long>(missing.size()),
+                    static_cast<unsigned long>(missing.front()),
+                    s_active_locale ? s_active_locale->id.c_str() : "<none>",
+                    s_content_font_chain.desc.empty() ? "<none>" : s_content_font_chain.desc.c_str(),
+                    text);
+        ++s_missing_content_font_diagnostics;
     }
 
     return missing.empty();
