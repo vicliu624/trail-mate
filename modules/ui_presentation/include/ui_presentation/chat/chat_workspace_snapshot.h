@@ -37,6 +37,7 @@ struct MessageRow
     MessageDeliveryState delivery = MessageDeliveryState::Unknown;
     MessageFailureKind failure = MessageFailureKind::None;
 
+    uint32_t sender_node_id = 0;
     ui::FixedText<160> text;
     ui::FixedText<24> time_label;
     ui::FixedText<32> sender_label;
@@ -88,6 +89,7 @@ inline void resetMessageRow(MessageRow& row)
     row.outgoing = false;
     row.delivery = MessageDeliveryState::Unknown;
     row.failure = MessageFailureKind::None;
+    row.sender_node_id = 0;
     row.text.clear();
     row.time_label.clear();
     row.sender_label.clear();

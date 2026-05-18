@@ -15,7 +15,7 @@ It exists to prevent drift between:
 - Flash / PSRAM: `16MB QSPI flash + 8MB QSPI PSRAM`
 - Display: `ST7796` SPI TFT
 - UI resolution used by this repo: `480x222`
-- Radio: `SX1262` or `SX1280` depending on build environment
+- Radio: `SX1262`
 - GNSS: `u-blox MIA-M10Q`
 - Input: `rotary encoder + center key + I2C keyboard`
 - Power / battery: `BQ25896 + BQ27220`
@@ -74,7 +74,7 @@ Rules:
 
 - pin truth belongs in `variants/lilygo_tlora_pager/pins_arduino.h`
 - board bring-up behavior belongs in `boards/tlora_pager/src/tlora_pager_board.cpp`
-- environment-specific radio and display choices belong in `variants/lilygo_tlora_pager/envs/tlora_pager.ini`
+- radio and display build choices belong in `variants/lilygo_tlora_pager/envs/tlora_pager.ini`
 - device docs should reflect what this repository actually builds, not just vendor marketing material
 
 ## Important Boundary
@@ -97,14 +97,11 @@ Defined in [tlora_pager.ini](../../variants/lilygo_tlora_pager/envs/tlora_pager.
 
 - `tlora_pager_sx1262`
 - `tlora_pager_sx1262_debug`
-- `tlora_pager_sx1280`
-- `tlora_pager_sx1280_debug`
 
 Current build-time facts:
 
 - all Pager environments define `ARDUINO_T_LORA_PAGER`
 - `SX1262` builds define `ARDUINO_LILYGO_LORA_SX1262`
-- `SX1280` builds define `ARDUINO_LILYGO_LORA_SX1280`
 - the display driver is built as `ST7796`
 - this repo currently builds the Pager UI with `SCREEN_WIDTH=480` and `SCREEN_HEIGHT=222`
 

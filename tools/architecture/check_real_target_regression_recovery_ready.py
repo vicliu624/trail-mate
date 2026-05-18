@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CHECKERS = [
     "tools/architecture/check_uconsole_real_ui_restored.py",
     "tools/architecture/check_pio_real_env_restored.py",
+    "tools/architecture/check_esp_arduino_real_targets_restored.py",
     "tools/architecture/check_esp_idf_real_targets_restored.py",
     "tools/architecture/check_no_root_legacy_ready.py",
     "tools/architecture/check_all_target_architecture_ready.py",

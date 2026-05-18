@@ -172,6 +172,7 @@ bool TeamChatPresentationSource::buildChatWorkspaceSnapshot(
         ui::chat::MessageRow& row = out.messages[i];
         row.conversation = team_id;
         row.outgoing = !entry.incoming;
+        row.sender_node_id = entry.incoming ? entry.peer_id : 0;
         row.delivery = entry.incoming ? ui::chat::MessageDeliveryState::Received
                                       : ui::chat::MessageDeliveryState::Sent;
         row.failure = ui::chat::MessageFailureKind::None;

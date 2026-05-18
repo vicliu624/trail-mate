@@ -161,7 +161,7 @@ chat::ChatMessage legacyMessageFromRow(const ::ui::chat::MessageRow& row)
     msg.msg_id = row.ref.protocol_id != 0
                      ? row.ref.protocol_id
                      : static_cast<chat::MessageId>(row.ref.local_id);
-    msg.from = row.outgoing ? 0 : row.conversation.primary;
+    msg.from = row.outgoing ? 0 : row.sender_node_id;
     msg.text = row.text.c_str();
     msg.timestamp = timestampFromTimeLabel(row.time_label);
     msg.status = legacyStatusFromDelivery(row.delivery);

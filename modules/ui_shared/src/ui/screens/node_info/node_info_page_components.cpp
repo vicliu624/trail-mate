@@ -148,16 +148,21 @@ static const lv_color_t kColorReadoutSnr = lv_color_hex(kHexReadoutGreen);
 static const lv_color_t kColorReadoutSeen = lv_color_hex(kHexReadoutLight);
 static const lv_color_t kColorReadoutZoom = lv_color_hex(kHexReadoutLightStrong);
 
+bool valid_obj(lv_obj_t* obj)
+{
+    return obj && lv_obj_is_valid(obj);
+}
+
 bool is_hidden(lv_obj_t* obj)
 {
-    return obj ? lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) : true;
+    return valid_obj(obj) ? lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) : true;
 }
 
 void log_widget_box(const char* stage, const char* name, lv_obj_t* obj)
 {
-    if (!obj)
+    if (!valid_obj(obj))
     {
-        NODE_INFO_LOG("%s %s=<null>\n", stage, name);
+        NODE_INFO_LOG("%s %s=%s\n", stage, name, obj ? "<invalid>" : "<null>");
         return;
     }
 
@@ -352,6 +357,11 @@ double clamp_double(double value, double min_value, double max_value)
 
 void make_plain(lv_obj_t* obj)
 {
+    if (!valid_obj(obj))
+    {
+        return;
+    }
+
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_style_pad_all(obj, 0, 0);
@@ -361,7 +371,7 @@ void make_plain(lv_obj_t* obj)
 
 void set_label_text(lv_obj_t* label, const char* text)
 {
-    if (!label || !text)
+    if (!valid_obj(label) || !text)
     {
         return;
     }
@@ -385,7 +395,7 @@ lv_obj_t* create_label(lv_obj_t* parent,
 
 void apply_info_panel_style(lv_obj_t* panel)
 {
-    if (!panel)
+    if (!valid_obj(panel))
     {
         return;
     }
@@ -402,7 +412,7 @@ void apply_info_panel_style(lv_obj_t* panel)
 
 void apply_zoom_button_style(lv_obj_t* button, lv_obj_t* label)
 {
-    if (!button)
+    if (!valid_obj(button))
     {
         return;
     }
@@ -426,7 +436,7 @@ void apply_zoom_button_style(lv_obj_t* button, lv_obj_t* label)
     lv_obj_clear_flag(button, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(button, LV_SCROLLBAR_MODE_OFF);
 
-    if (label)
+    if (valid_obj(label))
     {
         lv_obj_set_style_text_font(label, font_montserrat_22_safe(), 0);
         lv_obj_set_style_text_color(label, kColorTextPrimary, 0);
@@ -436,7 +446,7 @@ void apply_zoom_button_style(lv_obj_t* button, lv_obj_t* label)
 
 void apply_layer_button_style(lv_obj_t* button, lv_obj_t* label, bool compact)
 {
-    if (!button)
+    if (!valid_obj(button))
     {
         return;
     }
@@ -457,7 +467,7 @@ void apply_layer_button_style(lv_obj_t* button, lv_obj_t* label, bool compact)
     lv_obj_clear_flag(button, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(button, LV_SCROLLBAR_MODE_OFF);
 
-    if (label)
+    if (valid_obj(label))
     {
         const lv_font_t* font = compact ? font_montserrat_12_safe() : font_montserrat_14_safe();
         lv_obj_set_style_text_font(label, font, 0);
@@ -468,7 +478,7 @@ void apply_layer_button_style(lv_obj_t* button, lv_obj_t* label, bool compact)
 
 void update_layer_popup_button_selected(lv_obj_t* btn, bool selected)
 {
-    if (!btn)
+    if (!valid_obj(btn))
     {
         return;
     }
@@ -481,7 +491,8 @@ void update_layer_popup_button_selected(lv_obj_t* btn, bool selected)
     lv_obj_set_style_outline_color(btn, lv_color_hex(kHexAmberDark), 0);
     lv_obj_set_style_outline_pad(btn, 0, 0);
 
-    if (lv_obj_t* label = lv_obj_get_child(btn, 0))
+    lv_obj_t* label = lv_obj_get_child(btn, 0);
+    if (valid_obj(label))
     {
         lv_obj_set_style_text_color(label, kColorTextPrimary, 0);
     }
@@ -896,7 +907,7 @@ void on_layer_button_clicked(lv_event_t* e)
 
 void apply_marker_style(lv_obj_t* obj, lv_coord_t size, lv_color_t color, bool filled)
 {
-    if (!obj)
+    if (!valid_obj(obj))
     {
         return;
     }
@@ -916,13 +927,13 @@ ViewMetrics view_metrics()
     ViewMetrics metrics{};
     const auto& profile = ::ui::page_profile::current();
 
-    metrics.width = s_widgets.content ? lv_obj_get_width(s_widgets.content) : 0;
-    metrics.height = s_widgets.content ? lv_obj_get_height(s_widgets.content) : 0;
-    if (metrics.width <= 0 && s_widgets.root)
+    metrics.width = valid_obj(s_widgets.content) ? lv_obj_get_width(s_widgets.content) : 0;
+    metrics.height = valid_obj(s_widgets.content) ? lv_obj_get_height(s_widgets.content) : 0;
+    if (metrics.width <= 0 && valid_obj(s_widgets.root))
     {
         metrics.width = lv_obj_get_width(s_widgets.root);
     }
-    if (metrics.height <= 0 && s_widgets.root)
+    if (metrics.height <= 0 && valid_obj(s_widgets.root))
     {
         metrics.height = lv_obj_get_height(s_widgets.root) - profile.top_bar_height;
     }
@@ -1114,7 +1125,7 @@ int select_zoom_after_delta(int current_zoom, int delta)
 
 void set_hidden(lv_obj_t* obj, bool hidden)
 {
-    if (!obj)
+    if (!valid_obj(obj))
     {
         return;
     }
@@ -1235,7 +1246,7 @@ std::string preferred_node_title(const chat::contacts::NodeInfo& node)
 
 void set_top_bar_title(const chat::contacts::NodeInfo& node)
 {
-    if (!s_top_bar.container)
+    if (!valid_obj(s_top_bar.container))
     {
         return;
     }
@@ -1260,9 +1271,18 @@ bool append_info_line(std::size_t& count, const char* text, lv_color_t color)
         return false;
     }
 
-    set_label_text(s_widgets.info_labels[count], text);
-    lv_obj_set_style_text_color(s_widgets.info_labels[count], color, 0);
-    set_hidden(s_widgets.info_labels[count], false);
+    lv_obj_t* label = s_widgets.info_labels[count];
+    if (!valid_obj(label))
+    {
+        NODE_INFO_LOG("append_info_line skipped invalid label index=%u text='%s'\n",
+                      static_cast<unsigned>(count),
+                      text);
+        return false;
+    }
+
+    set_label_text(label, text);
+    lv_obj_set_style_text_color(label, color, 0);
+    set_hidden(label, false);
     NODE_INFO_LOG("append_info_line index=%u text='%s'\n",
                   static_cast<unsigned>(count),
                   text);
@@ -1315,7 +1335,7 @@ bool build_seen_line(const chat::contacts::NodeInfo& node, char* out, size_t out
 
 void update_zoom_status_label(bool visible)
 {
-    if (!s_widgets.zoom_status_label)
+    if (!valid_obj(s_widgets.zoom_status_label))
     {
         return;
     }
@@ -1398,16 +1418,16 @@ void update_overlay_text()
     update_zoom_status_label(node_point.valid);
     NODE_INFO_LOG("update_overlay_text done line_count=%u title='%s' id='%s' lon='%s' lat='%s'\n",
                   static_cast<unsigned>(line_count),
-                  s_widgets.title_label ? lv_label_get_text(s_widgets.title_label) : "<null>",
-                  s_widgets.id_label ? lv_label_get_text(s_widgets.id_label) : "<null>",
-                  s_widgets.lon_label ? lv_label_get_text(s_widgets.lon_label) : "<null>",
-                  s_widgets.lat_label ? lv_label_get_text(s_widgets.lat_label) : "<null>");
+                  valid_obj(s_widgets.title_label) ? lv_label_get_text(s_widgets.title_label) : "<invalid>",
+                  valid_obj(s_widgets.id_label) ? lv_label_get_text(s_widgets.id_label) : "<invalid>",
+                  valid_obj(s_widgets.lon_label) ? lv_label_get_text(s_widgets.lon_label) : "<invalid>",
+                  valid_obj(s_widgets.lat_label) ? lv_label_get_text(s_widgets.lat_label) : "<invalid>");
 }
 
 void position_overlay_widgets()
 {
     const ViewMetrics metrics = view_metrics();
-    if (!s_widgets.map_stage)
+    if (!valid_obj(s_widgets.map_stage))
     {
         NODE_INFO_LOG("position_overlay_widgets skipped: map_stage missing\n");
         return;
@@ -1417,19 +1437,28 @@ void position_overlay_widgets()
 
     map_viewport::set_size(s_state.viewport, metrics.width, metrics.height);
 
-    lv_obj_set_pos(s_widgets.id_label, metrics.pad, metrics.pad);
-    lv_obj_set_size(s_widgets.id_label, metrics.left_w, LV_SIZE_CONTENT);
+    if (valid_obj(s_widgets.id_label))
+    {
+        lv_obj_set_pos(s_widgets.id_label, metrics.pad, metrics.pad);
+        lv_obj_set_size(s_widgets.id_label, metrics.left_w, LV_SIZE_CONTENT);
+    }
 
     const lv_coord_t layer_x = (metrics.width - metrics.layer_w) / 2;
     const lv_coord_t layer_y = metrics.height - metrics.pad - metrics.layer_h;
     const lv_coord_t coord_label_w =
         clamp_coord(layer_x - metrics.pad - 10, 92, metrics.left_w);
 
-    lv_obj_set_pos(s_widgets.lon_label, metrics.pad, metrics.height - metrics.pad - 28);
-    lv_obj_set_size(s_widgets.lon_label, coord_label_w, LV_SIZE_CONTENT);
+    if (valid_obj(s_widgets.lon_label))
+    {
+        lv_obj_set_pos(s_widgets.lon_label, metrics.pad, metrics.height - metrics.pad - 28);
+        lv_obj_set_size(s_widgets.lon_label, coord_label_w, LV_SIZE_CONTENT);
+    }
 
-    lv_obj_set_pos(s_widgets.lat_label, metrics.pad, metrics.height - metrics.pad - 14);
-    lv_obj_set_size(s_widgets.lat_label, coord_label_w, LV_SIZE_CONTENT);
+    if (valid_obj(s_widgets.lat_label))
+    {
+        lv_obj_set_pos(s_widgets.lat_label, metrics.pad, metrics.height - metrics.pad - 14);
+        lv_obj_set_size(s_widgets.lat_label, coord_label_w, LV_SIZE_CONTENT);
+    }
 
     lv_obj_t* info_items[kNodeInfoInfoLineCount + 1]{};
     lv_coord_t info_item_widths[kNodeInfoInfoLineCount + 1]{};
@@ -1437,7 +1466,7 @@ void position_overlay_widgets()
     std::size_t visible_info_items = 0;
     auto collect_info_item = [&](lv_obj_t* item)
     {
-        if (!item || is_hidden(item))
+        if (!valid_obj(item) || is_hidden(item))
         {
             return;
         }
@@ -1464,7 +1493,7 @@ void position_overlay_widgets()
     }
     collect_info_item(s_widgets.zoom_status_label);
 
-    if (s_widgets.info_panel)
+    if (valid_obj(s_widgets.info_panel))
     {
         if (visible_info_items == 0)
         {
@@ -1514,35 +1543,56 @@ void position_overlay_widgets()
         }
     }
 
-    lv_obj_set_pos(s_widgets.no_position_label, metrics.pad, 0);
-    lv_obj_set_size(s_widgets.no_position_label, metrics.left_w, LV_SIZE_CONTENT);
-    lv_obj_update_layout(s_widgets.no_position_label);
-    const lv_coord_t no_pos_w = lv_obj_get_width(s_widgets.no_position_label);
-    const lv_coord_t no_pos_h = lv_obj_get_height(s_widgets.no_position_label);
-    lv_obj_set_pos(s_widgets.no_position_label,
-                   metrics.pad + ((metrics.left_w - no_pos_w) / 2),
-                   (metrics.height - no_pos_h) / 2);
+    if (valid_obj(s_widgets.no_position_label))
+    {
+        lv_obj_set_pos(s_widgets.no_position_label, metrics.pad, 0);
+        lv_obj_set_size(s_widgets.no_position_label, metrics.left_w, LV_SIZE_CONTENT);
+        lv_obj_update_layout(s_widgets.no_position_label);
+        const lv_coord_t no_pos_w = lv_obj_get_width(s_widgets.no_position_label);
+        const lv_coord_t no_pos_h = lv_obj_get_height(s_widgets.no_position_label);
+        lv_obj_set_pos(s_widgets.no_position_label,
+                       metrics.pad + ((metrics.left_w - no_pos_w) / 2),
+                       (metrics.height - no_pos_h) / 2);
+    }
 
     const lv_coord_t zoom_x = metrics.width - metrics.pad - metrics.zoom_size;
     const lv_coord_t zoom_out_y = metrics.height - metrics.pad - metrics.zoom_size;
     const lv_coord_t zoom_in_y = zoom_out_y - metrics.zoom_size - metrics.zoom_gap;
-    lv_obj_set_size(s_widgets.zoom_in_btn, metrics.zoom_size, metrics.zoom_size);
-    lv_obj_set_size(s_widgets.zoom_out_btn, metrics.zoom_size, metrics.zoom_size);
-    lv_obj_set_pos(s_widgets.zoom_in_btn, zoom_x, zoom_in_y);
-    lv_obj_set_pos(s_widgets.zoom_out_btn, zoom_x, zoom_out_y);
-    lv_obj_center(s_widgets.zoom_in_label);
-    lv_obj_center(s_widgets.zoom_out_label);
+    if (valid_obj(s_widgets.zoom_in_btn))
+    {
+        lv_obj_set_size(s_widgets.zoom_in_btn, metrics.zoom_size, metrics.zoom_size);
+        lv_obj_set_pos(s_widgets.zoom_in_btn, zoom_x, zoom_in_y);
+    }
+    if (valid_obj(s_widgets.zoom_out_btn))
+    {
+        lv_obj_set_size(s_widgets.zoom_out_btn, metrics.zoom_size, metrics.zoom_size);
+        lv_obj_set_pos(s_widgets.zoom_out_btn, zoom_x, zoom_out_y);
+    }
+    if (valid_obj(s_widgets.zoom_in_label))
+    {
+        lv_obj_center(s_widgets.zoom_in_label);
+    }
+    if (valid_obj(s_widgets.zoom_out_label))
+    {
+        lv_obj_center(s_widgets.zoom_out_label);
+    }
 
     apply_layer_button_style(s_widgets.layer_btn, s_widgets.layer_label, metrics.compact);
-    lv_obj_set_size(s_widgets.layer_btn, metrics.layer_w, metrics.layer_h);
-    lv_obj_set_pos(s_widgets.layer_btn, layer_x, layer_y);
-    lv_obj_center(s_widgets.layer_label);
+    if (valid_obj(s_widgets.layer_btn))
+    {
+        lv_obj_set_size(s_widgets.layer_btn, metrics.layer_w, metrics.layer_h);
+        lv_obj_set_pos(s_widgets.layer_btn, layer_x, layer_y);
+    }
+    if (valid_obj(s_widgets.layer_label))
+    {
+        lv_obj_center(s_widgets.layer_label);
+    }
     log_scene_widgets("position_overlay_widgets");
 }
 
 void position_circle_center(lv_obj_t* obj, lv_coord_t center_x, lv_coord_t center_y)
 {
-    if (!obj)
+    if (!valid_obj(obj))
     {
         return;
     }
@@ -1566,17 +1616,32 @@ void apply_current_map_view(const map_viewport::GeoPoint& node_point, const View
     render_connection_and_markers(node_point, metrics);
 }
 
+void hide_connection_and_markers()
+{
+    set_hidden(s_widgets.connection_line, true);
+    set_hidden(s_widgets.marker_node_ring, true);
+    set_hidden(s_widgets.marker_node_dot, true);
+    set_hidden(s_widgets.marker_self_ring, true);
+    set_hidden(s_widgets.marker_self_dot, true);
+    set_hidden(s_widgets.distance_label, true);
+}
+
 void render_connection_and_markers(const map_viewport::GeoPoint& node_point, const ViewMetrics& metrics)
 {
     if (!node_point.valid)
     {
         NODE_INFO_LOG("render_connection_and_markers: node invalid -> hide all markers\n");
-        set_hidden(s_widgets.connection_line, true);
-        set_hidden(s_widgets.marker_node_ring, true);
-        set_hidden(s_widgets.marker_node_dot, true);
-        set_hidden(s_widgets.marker_self_ring, true);
-        set_hidden(s_widgets.marker_self_dot, true);
-        set_hidden(s_widgets.distance_label, true);
+        hide_connection_and_markers();
+        return;
+    }
+
+    if (!valid_obj(s_widgets.map_stage) ||
+        !valid_obj(s_widgets.marker_node_ring) ||
+        !valid_obj(s_widgets.marker_node_dot) ||
+        !valid_obj(s_widgets.distance_label))
+    {
+        NODE_INFO_LOG("render_connection_and_markers skipped: marker widgets invalid\n");
+        hide_connection_and_markers();
         return;
     }
 
@@ -1584,12 +1649,7 @@ void render_connection_and_markers(const map_viewport::GeoPoint& node_point, con
     if (!map_viewport::project_point(s_state.viewport, node_point, node_screen))
     {
         NODE_INFO_LOG("render_connection_and_markers: node projection failed\n");
-        set_hidden(s_widgets.connection_line, true);
-        set_hidden(s_widgets.marker_node_ring, true);
-        set_hidden(s_widgets.marker_node_dot, true);
-        set_hidden(s_widgets.marker_self_ring, true);
-        set_hidden(s_widgets.marker_self_dot, true);
-        set_hidden(s_widgets.distance_label, true);
+        hide_connection_and_markers();
         return;
     }
 
@@ -1632,9 +1692,12 @@ void render_connection_and_markers(const map_viewport::GeoPoint& node_point, con
     s_state.link_points[0].y = static_cast<float>(node_screen.y);
     s_state.link_points[1].x = static_cast<float>(draw_x);
     s_state.link_points[1].y = static_cast<float>(draw_y);
-    lv_line_set_points(s_widgets.connection_line, s_state.link_points, 2);
-    lv_obj_set_pos(s_widgets.connection_line, 0, 0);
-    set_hidden(s_widgets.connection_line, false);
+    if (valid_obj(s_widgets.connection_line))
+    {
+        lv_line_set_points(s_widgets.connection_line, s_state.link_points, 2);
+        lv_obj_set_pos(s_widgets.connection_line, 0, 0);
+        set_hidden(s_widgets.connection_line, false);
+    }
 
     position_circle_center(s_widgets.marker_self_ring, draw_x, draw_y);
     position_circle_center(s_widgets.marker_self_dot, draw_x, draw_y);
@@ -1655,6 +1718,10 @@ void render_connection_and_markers(const map_viewport::GeoPoint& node_point, con
                   distance_buf,
                   dashboard::compass_rose(bearing));
     set_label_text(s_widgets.distance_label, distance_text);
+    if (!valid_obj(s_widgets.distance_label))
+    {
+        return;
+    }
     lv_obj_update_layout(s_widgets.distance_label);
 
     lv_coord_t label_x = static_cast<lv_coord_t>((node_screen.x + draw_x) / 2);
@@ -1675,7 +1742,7 @@ void render_connection_and_markers(const map_viewport::GeoPoint& node_point, con
                   static_cast<int>(node_screen.y),
                   static_cast<int>(draw_x),
                   static_cast<int>(draw_y),
-                  s_widgets.distance_label ? lv_label_get_text(s_widgets.distance_label) : "<null>",
+                  valid_obj(s_widgets.distance_label) ? lv_label_get_text(s_widgets.distance_label) : "<invalid>",
                   static_cast<int>(label_x),
                   static_cast<int>(label_y));
 }
@@ -1754,7 +1821,7 @@ void on_map_gesture(const map_viewport::GestureEvent& event, void* /*user_data*/
 
 void update_zoom_button_state(bool enabled)
 {
-    if (!s_widgets.zoom_in_btn || !s_widgets.zoom_out_btn)
+    if (!valid_obj(s_widgets.zoom_in_btn) || !valid_obj(s_widgets.zoom_out_btn))
     {
         NODE_INFO_LOG("update_zoom_button_state skipped: buttons missing\n");
         return;

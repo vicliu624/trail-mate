@@ -2374,7 +2374,7 @@ void Runtime::renderNodeCompass()
     constexpr int kInfoRightX = 127;
     constexpr int kInfoW = 58;
     constexpr int kInfoMinX = kInfoRightX - kInfoW + 1;
-    auto drawInfoRight = [this](int y, const char* text)
+    auto drawInfoRight = [this, kInfoRightX, kInfoW, kInfoMinX](int y, const char* text)
     {
         if (!text || text[0] == '\0')
         {

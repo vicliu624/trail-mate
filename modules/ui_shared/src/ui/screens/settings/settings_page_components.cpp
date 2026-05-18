@@ -161,6 +161,7 @@ static void open_enabled_imes_modal(settings::ui::ItemWidget& widget);
 static bool option_labels_are_translated(const settings::ui::SettingItem& item);
 static bool option_labels_use_content_font(const settings::ui::SettingItem& item);
 static void apply_locale_preview_font(lv_obj_t* label, const settings::ui::SettingItem& item, int value);
+static void refresh_language_pack_options();
 
 static void copy_bounded(char* out, size_t out_len, const char* text)
 {
@@ -919,26 +920,7 @@ static void settings_load()
         }
     }
 
-    kLocaleOptionCount = 0;
-    const size_t locale_limit = sizeof(kLocaleOptions) / sizeof(kLocaleOptions[0]);
-    for (size_t index = 0; index < ::ui::i18n::locale_count() && kLocaleOptionCount < locale_limit; ++index)
-    {
-        const ::ui::i18n::LocaleInfo* locale = ::ui::i18n::locale_at(index);
-        if (!locale)
-        {
-            continue;
-        }
-
-        const char* display_name =
-            (locale->native_name && locale->native_name[0] != '\0') ? locale->native_name : locale->display_name;
-        std::snprintf(kLocaleOptionLabels[kLocaleOptionCount],
-                      sizeof(kLocaleOptionLabels[kLocaleOptionCount]),
-                      "%s",
-                      display_name ? display_name : "");
-        kLocaleOptions[kLocaleOptionCount].label = kLocaleOptionLabels[kLocaleOptionCount];
-        kLocaleOptions[kLocaleOptionCount].value = static_cast<int>(index);
-        ++kLocaleOptionCount;
-    }
+    refresh_language_pack_options();
 
     app_ctx.getEffectiveUserInfo(g_settings.user_name,
                                  sizeof(g_settings.user_name),
@@ -1121,6 +1103,31 @@ static void settings_load()
              wifi_runtime::is_supported() ? 1 : 0,
              static_cast<unsigned>(kWifiNetworkOptionCount));
 #endif
+}
+
+static void refresh_language_pack_options()
+{
+    kLocaleOptionCount = 0;
+    const size_t locale_limit = sizeof(kLocaleOptions) / sizeof(kLocaleOptions[0]);
+    for (size_t index = 0; index < ::ui::i18n::locale_count() && kLocaleOptionCount < locale_limit; ++index)
+    {
+        const ::ui::i18n::LocaleInfo* locale = ::ui::i18n::locale_at(index);
+        if (!locale)
+        {
+            continue;
+        }
+
+        const char* display_name =
+            (locale->native_name && locale->native_name[0] != '\0') ? locale->native_name : locale->display_name;
+        std::snprintf(kLocaleOptionLabels[kLocaleOptionCount],
+                      sizeof(kLocaleOptionLabels[kLocaleOptionCount]),
+                      "%s",
+                      display_name ? display_name : "");
+        kLocaleOptions[kLocaleOptionCount].label = kLocaleOptionLabels[kLocaleOptionCount];
+        kLocaleOptions[kLocaleOptionCount].value = static_cast<int>(index);
+        ++kLocaleOptionCount;
+    }
+    g_settings.display_locale_index = ::ui::i18n::current_locale_index();
 }
 
 static void format_value(const settings::ui::SettingItem& item, char* out, size_t out_len)
@@ -2322,6 +2329,9 @@ static void open_enabled_imes_modal(settings::ui::ItemWidget& widget)
         return;
     }
 
+    refresh_language_pack_options();
+    update_item_value(widget);
+
     const std::size_t ime_total = ::ui::i18n::ime_count();
     if (ime_total == 0)
     {
@@ -2437,6 +2447,11 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
     if (g_state.modal_root)
     {
         return;
+    }
+    if (item.pref_key && std::strcmp(item.pref_key, "display_locale") == 0)
+    {
+        refresh_language_pack_options();
+        update_item_value(widget);
     }
     modal_prepare_group();
 
@@ -3413,6 +3428,11 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
     }
     if (item.type == settings::ui::SettingType::Enum)
     {
+        if (item.pref_key && strcmp(item.pref_key, "display_locale") == 0)
+        {
+            refresh_language_pack_options();
+            update_item_value(widget);
+        }
         open_option_modal(item, widget);
         return true;
     }
@@ -3425,6 +3445,8 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
     {
         if (item.pref_key && strcmp(item.pref_key, "enabled_imes") == 0)
         {
+            refresh_language_pack_options();
+            update_item_value(widget);
             open_enabled_imes_modal(widget);
         }
         else if (item.pref_key && strcmp(item.pref_key, "gps_diagnostics") == 0)

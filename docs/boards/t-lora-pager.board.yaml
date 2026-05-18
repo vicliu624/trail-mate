@@ -34,7 +34,7 @@ facts:
 
   lora:
     present: true
-    chip: "sx1262_or_sx1280_by_build_env"
+    chip: "sx1262"
     spi_bus: "shared_spi"
     sck_pin: 35
     miso_pin: 33
@@ -79,4 +79,3 @@ forbidden_content:
   - "direct message policy"
   - "Meshtastic or MeshCore phone protocol"
   - "UI page state"
-

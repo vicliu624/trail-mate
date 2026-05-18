@@ -1,7 +1,7 @@
 #include "platform/esp/arduino_common/app_runtime_bootstrap_support.h"
 
+#include "app/app_context.h"
 #include "app/app_facade_access.h"
-#include "apps/esp_pio/app_context.h"
 #include "ble/ble_manager.h"
 #include "platform/esp/arduino_common/app_context_platform_bindings.h"
 #include "platform/esp/arduino_common/app_event_runtime_support.h"

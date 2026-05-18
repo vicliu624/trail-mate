@@ -22,7 +22,7 @@ struct TLoRaPagerBoardFacts
     bool rotary_encoder_present = true;
     bool trackball_present = false;
     bool lora_present = true;
-    const char* lora_chip = "sx1262_or_sx1280_by_build_env";
+    const char* lora_chip = "sx1262";
     bool gps_present = true;
     bool sd_card_present = true;
     bool audio_codec_present = true;

@@ -1,0 +1,81 @@
+{
+  "name": "trailmate_esp32_lvgl_app_shell",
+  "version": "0.1.0",
+  "frameworks": [
+    "arduino"
+  ],
+  "build": {
+    "includeDir": "src",
+    "srcDir": "src",
+    "srcFilter": [
+      "-<*>",
+      "+<esp32_lvgl_arduino_app_registry.cpp>",
+      "+<esp32_lvgl_arduino_app_runtime_access.cpp>",
+      "+<esp32_lvgl_arduino_entry.cpp>",
+      "+<esp32_lvgl_arduino_loop_runtime.cpp>",
+      "+<esp32_lvgl_arduino_startup_runtime.cpp>"
+    ],
+    "flags": [
+      "-I../../modules/ui_shared/include",
+      "-I../../modules/core_device/include",
+      "-I../../modules/core_mesh/include",
+      "-I../../modules/core_phone/include",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_gps/include",
+      "-I../../modules/core_hostlink/include",
+      "-I../../modules/core_team/include",
+      "-I../../modules/ui_presentation/include",
+      "-I../../modules/chat_presentation_adapters/include",
+      "-I../../modules/ui_chat_runtime/include",
+      "-I../../modules/ui_map_runtime/include",
+      "-I../../modules/ui_gps_runtime/include",
+      "-I../../modules/ui_legacy_adapters/include",
+      "-I../../modules/ui_lvgl_core/include",
+      "-I../../modules/ui_lvgl_ux_packs/include",
+      "-I../../platform/esp/arduino_common/include",
+      "-I../../platform/esp/common/include"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "core_device"
+    },
+    {
+      "name": "core_mesh"
+    },
+    {
+      "name": "core_phone"
+    },
+    {
+      "name": "chat_presentation_adapters"
+    },
+    {
+      "name": "ui_chat_runtime"
+    },
+    {
+      "name": "ui_map_runtime"
+    },
+    {
+      "name": "ui_gps_runtime"
+    },
+    {
+      "name": "ui_legacy_adapters"
+    },
+    {
+      "name": "ui_lvgl_core"
+    },
+    {
+      "name": "ui_lvgl_ux_packs"
+    },
+    {
+      "name": "esp_arduino_common"
+    },
+    {
+      "name": "esp_boards"
+    },
+    {
+      "name": "Preferences"
+    }
+  ]
+}

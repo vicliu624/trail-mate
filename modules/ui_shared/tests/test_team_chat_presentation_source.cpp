@@ -120,10 +120,12 @@ int main()
            ui::chat::MessageDeliveryState::Received);
     assert(selected.messages[0].ref.origin ==
            ui::chat::MessageOrigin::RemoteStored);
+    assert(selected.messages[0].sender_node_id == 0x12345678);
     assert(std::strcmp(selected.messages[0].sender_label.c_str(), "Ada") == 0);
     assert(std::strcmp(selected.messages[0].text.c_str(), "hello team") == 0);
 
     assert(selected.messages[1].outgoing);
+    assert(selected.messages[1].sender_node_id == 0);
     assert(selected.messages[1].delivery ==
            ui::chat::MessageDeliveryState::Sent);
     assert(selected.messages[1].ref.origin ==

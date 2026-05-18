@@ -8,6 +8,7 @@
 #include "ui/presentation_sources/chat_presentation_source.h"
 
 #include <cassert>
+#include <deque>
 #include <cstring>
 #include <string>
 
@@ -33,7 +34,16 @@ class FakeMeshAdapter final : public ::chat::IMeshAdapter
         return send_ok;
     }
 
-    bool pollIncomingText(::chat::MeshIncomingText*) override { return false; }
+    bool pollIncomingText(::chat::MeshIncomingText* out) override
+    {
+        if (!out || incoming.empty())
+        {
+            return false;
+        }
+        *out = incoming.front();
+        incoming.pop_front();
+        return true;
+    }
     bool sendAppData(::chat::ChannelId,
                      uint32_t,
                      const uint8_t*,
@@ -56,6 +66,7 @@ class FakeMeshAdapter final : public ::chat::IMeshAdapter
     ::chat::ChannelId last_channel = ::chat::ChannelId::PRIMARY;
     std::string last_text;
     ::chat::NodeId last_peer = 0;
+    std::deque<::chat::MeshIncomingText> incoming;
 };
 
 ui::chat::ConversationId directPeer(uint32_t peer)
@@ -80,7 +91,7 @@ ui::chat::ConversationId teamConversation()
 ui::chat::ConversationId broadcastConversation()
 {
     ui::chat::ConversationId id;
-    id.kind = ui::chat::ConversationKind::Broadcast;
+    id.kind = ui::chat::ConversationKind::Channel;
     id.protocol = ui::chat::ChatProtocolKind::Meshtastic;
     id.primary = static_cast<uint32_t>(::chat::ChannelId::PRIMARY);
     return id;
@@ -162,6 +173,25 @@ int main()
 
     assert(sink.markRead(ada).ok);
 
+    ::chat::MeshIncomingText incoming{};
+    incoming.channel = ::chat::ChannelId::PRIMARY;
+    incoming.from = 0x648144D4;
+    incoming.to = 0xFFFFFFFFUL;
+    incoming.msg_id = 900;
+    incoming.text = "broadcast hello";
+    mesh.incoming.push_back(incoming);
+    service.processIncoming();
+
+    const ui::chat::ConversationId broadcast = broadcastConversation();
+    request.selected = broadcast;
+    assert(source.buildChatWorkspaceSnapshot(request, snapshot));
+    assert(snapshot.header.valid);
+    assert(snapshot.message_count == 1);
+    assert(snapshot.messages[0].conversation == broadcast);
+    assert(!snapshot.messages[0].outgoing);
+    assert(snapshot.messages[0].sender_node_id == 0x648144D4);
+    assert(std::strcmp(snapshot.messages[0].sender_label.c_str(), "44D4") == 0);
+
     const ui::chat::ConversationId team = teamConversation();
     assert(!sink.selectConversation(team).ok);
     assert(!sink.markRead(team).ok);
@@ -175,11 +205,10 @@ int main()
     assert(!snapshot.can_send);
     assert(!snapshot.composer_enabled);
 
-    const ui::chat::ConversationId broadcast = broadcastConversation();
     send.conversation = broadcast;
+    mesh.send_ok = true;
     const auto broadcast_send = sink.sendMessage(send);
-    assert(!broadcast_send.ok);
-    assert(broadcast_send.failure == ui::UiActionFailure::Unsupported);
+    assert(broadcast_send.ok);
 
     const ui::chat::ConversationId system = systemConversation();
     send.conversation = system;

@@ -471,8 +471,6 @@ class TLoRaPagerBoard : public BoardBase,
 
 #if defined(ARDUINO_LILYGO_LORA_SX1262)
     SX1262Access radio_ = newModule();
-#elif defined(ARDUINO_LILYGO_LORA_SX1280)
-    SX1280 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_CC1101)
     CC1101 radio_ = newModule();
 #elif defined(ARDUINO_LILYGO_LORA_LR1121)

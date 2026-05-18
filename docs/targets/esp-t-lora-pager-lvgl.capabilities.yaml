@@ -130,12 +130,9 @@ race_policy:
   ui_update: "ui_thread_only"
 
 build:
-  app: "legacy/app_implementations/esp_pio"
+  app: "apps/esp32_lvgl"
   board_package: "boards/tlora_pager"
-  platformio_envs: ["tlora_pager_sx1262", "tlora_pager_sx1280"]
+  platformio_envs: ["tlora_pager_sx1262"]
   enabled_modules: ["core_chat", "core_device", "core_gps", "core_hostlink", "core_phone", "core_mesh", "ui_presentation", "core_sys", "core_team", "ui_shared"]
   disabled_modules: []
-
-draft_notes:
-  - "SX1280 env is still represented by the same target family; split later if product policy diverges."
 
