@@ -12,6 +12,7 @@
 #include "chat_conversation_input.h"
 #include "lvgl.h"
 #include "ui/widgets/top_bar.h"
+#include "ui_presentation/chat/chat_message_ref.h"
 #include <vector>
 
 namespace ui::chat
@@ -112,7 +113,9 @@ class ChatConversationScreen
 
     struct MessageItem
     {
-        chat::ChatMessage msg;
+        ::ui::chat::MessageRef ref;
+        ::ui::chat::MessageDeliveryState delivery =
+            ::ui::chat::MessageDeliveryState::Unknown;
         lv_obj_t* container = nullptr;    // row
         lv_obj_t* text_label = nullptr;   // inside bubble
         lv_obj_t* time_label = nullptr;   // reserved (not used)
@@ -128,7 +131,7 @@ class ChatConversationScreen
     ActionContext reply_ctx_{};
     bool reply_enabled_ = true;
 
-    void createMessageItem(const chat::ChatMessage& msg, const char* sender_label = nullptr);
+    void createMessageItem(const ::ui::chat::MessageRow& row);
 
     static void action_event_cb(lv_event_t* e);
     static void async_action_cb(void* user_data);

@@ -17,7 +17,6 @@
 #include "ui_presentation/chat/chat_workspace_snapshot.h"
 
 #include "sys/clock.h"
-#include "team/protocol/team_location_marker.h"
 
 #include <algorithm>
 #include <cctype>
@@ -35,15 +34,6 @@
 #define CHAT_CONVERSATION_LOG(...)
 #endif
 
-extern "C"
-{
-    extern const lv_image_dsc_t AreaCleared;
-    extern const lv_image_dsc_t BaseCamp;
-    extern const lv_image_dsc_t GoodFind;
-    extern const lv_image_dsc_t rally;
-    extern const lv_image_dsc_t sos;
-}
-
 namespace chat
 {
 namespace ui
@@ -54,33 +44,37 @@ namespace
 {
 constexpr lv_coord_t kBubbleMaxWidth = 322; // same as original
 constexpr lv_coord_t kBubblePadX = 10;      // keep in sync with styles.cpp
-constexpr lv_coord_t kTeamLocationIconSize = 24;
 constexpr uint32_t kSecondsPerDay = 24U * 60U * 60U;
 constexpr uint32_t kSecondsPerMonth = 30U * kSecondsPerDay;
 constexpr uint32_t kSecondsPerYear = 365U * kSecondsPerDay;
 constexpr uint32_t kMinValidEpochSeconds = 1577836800U; // 2020-01-01
 constexpr size_t kMaxPrefixedSenderLen = 20;
 
-chat::MessageStatus status_from_presentation_delivery(
-    ::ui::chat::MessageDeliveryState delivery)
+::ui::chat::MessageDeliveryState delivery_from_message_status(
+    chat::MessageStatus status)
 {
-    switch (delivery)
+    switch (status)
     {
-    case ::ui::chat::MessageDeliveryState::Received:
-        return chat::MessageStatus::Incoming;
-    case ::ui::chat::MessageDeliveryState::Queued:
-    case ::ui::chat::MessageDeliveryState::Sending:
-    case ::ui::chat::MessageDeliveryState::Draft:
-        return chat::MessageStatus::Queued;
-    case ::ui::chat::MessageDeliveryState::Sent:
-    case ::ui::chat::MessageDeliveryState::Delivered:
-        return chat::MessageStatus::Sent;
-    case ::ui::chat::MessageDeliveryState::Failed:
-        return chat::MessageStatus::Failed;
-    case ::ui::chat::MessageDeliveryState::Unknown:
-        break;
+    case chat::MessageStatus::Incoming:
+        return ::ui::chat::MessageDeliveryState::Received;
+    case chat::MessageStatus::Queued:
+        return ::ui::chat::MessageDeliveryState::Queued;
+    case chat::MessageStatus::Sent:
+        return ::ui::chat::MessageDeliveryState::Sent;
+    case chat::MessageStatus::Failed:
+        return ::ui::chat::MessageDeliveryState::Failed;
     }
-    return chat::MessageStatus::Incoming;
+    return ::ui::chat::MessageDeliveryState::Unknown;
+}
+
+bool message_ref_matches_id(const ::ui::chat::MessageRef& ref,
+                            chat::MessageId msg_id)
+{
+    if (ref.protocol_id != 0)
+    {
+        return ref.protocol_id == msg_id;
+    }
+    return ref.local_id == static_cast<uint64_t>(msg_id);
 }
 
 uint32_t timestamp_from_presentation_label(const ::ui::FixedText<24>& label)
@@ -99,44 +93,7 @@ uint32_t timestamp_from_presentation_label(const ::ui::FixedText<24>& label)
     }
     return static_cast<uint32_t>(value);
 }
-
-chat::ChatMessage message_from_presentation_row(
-    const ::ui::chat::MessageRow& row,
-    const chat::ConversationId& conversation)
-{
-    chat::ChatMessage msg;
-    msg.protocol = conversation.protocol;
-    msg.channel = conversation.channel;
-    msg.peer = conversation.peer;
-    msg.msg_id = row.ref.protocol_id != 0
-                     ? row.ref.protocol_id
-                     : static_cast<chat::MessageId>(row.ref.local_id);
-    msg.from = row.outgoing ? 0 : row.sender_node_id;
-    msg.text = row.text.c_str();
-    msg.timestamp = timestamp_from_presentation_label(row.time_label);
-    msg.status = status_from_presentation_delivery(row.delivery);
-    return msg;
-}
 } // namespace
-
-static const lv_image_dsc_t* team_location_icon_src(uint8_t icon_id)
-{
-    switch (static_cast<team::proto::TeamLocationMarkerIcon>(icon_id))
-    {
-    case team::proto::TeamLocationMarkerIcon::AreaCleared:
-        return &AreaCleared;
-    case team::proto::TeamLocationMarkerIcon::BaseCamp:
-        return &BaseCamp;
-    case team::proto::TeamLocationMarkerIcon::GoodFind:
-        return &GoodFind;
-    case team::proto::TeamLocationMarkerIcon::Rally:
-        return &rally;
-    case team::proto::TeamLocationMarkerIcon::Sos:
-        return &sos;
-    default:
-        return nullptr;
-    }
-}
 
 static bool is_valid_epoch_ts(uint32_t ts)
 {
@@ -376,8 +333,7 @@ void ChatConversationScreen::addMessage(const ::ui::chat::MessageRow& row)
         messages_.erase(messages_.begin());
     }
 
-    const chat::ChatMessage msg = message_from_presentation_row(row, conv_);
-    createMessageItem(msg, row.sender_label.c_str());
+    createMessageItem(row);
     scrollToBottom();
 }
 
@@ -415,11 +371,11 @@ bool ChatConversationScreen::updateMessageStatus(const chat::MessageId msg_id,
 
     for (auto& item : messages_)
     {
-        if (item.msg.msg_id != msg_id)
+        if (!message_ref_matches_id(item.ref, msg_id))
         {
             continue;
         }
-        item.msg.status = status;
+        item.delivery = delivery_from_message_status(status);
         if (!item.status_label)
         {
             return true;
@@ -504,30 +460,31 @@ void ChatConversationScreen::setReplyEnabled(bool enabled)
     }
 }
 
-void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg, const char* sender_label)
+void ChatConversationScreen::createMessageItem(const ::ui::chat::MessageRow& row)
 {
     if (!guard_ || !guard_->alive || !msg_list_)
     {
         return;
     }
     MessageItem item;
-    item.msg = msg;
+    item.ref = row.ref;
+    item.delivery = row.delivery;
 
     // ----- Layout: row + bubble + time + text + status -----
     item.container = chat::ui::layout::create_message_row(msg_list_);
     chat::ui::conversation::styles::apply_message_row(item.container);
 
-    const bool is_self = (msg.status != MessageStatus::Incoming);
-    std::string display_text = msg.text;
+    const bool is_self = row.outgoing;
+    std::string display_text = row.text.c_str();
     std::string inferred_sender;
     if (!is_self &&
-        msg.protocol == chat::MeshProtocol::MeshCore &&
+        conv_.protocol == chat::MeshProtocol::MeshCore &&
         conv_.peer == 0 &&
-        msg.from == 0)
+        row.sender_node_id == 0)
     {
         std::string parsed_sender;
         std::string parsed_body;
-        if (split_prefixed_sender_text(msg.text, &parsed_sender, &parsed_body))
+        if (split_prefixed_sender_text(display_text, &parsed_sender, &parsed_body))
         {
             inferred_sender = parsed_sender;
             display_text = parsed_body;
@@ -556,30 +513,42 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg, con
     item.time_label = chat::ui::layout::create_bubble_time(bubble);
     chat::ui::conversation::styles::apply_bubble_time(item.time_label);
     char time_buf[16];
-    format_message_time(time_buf, sizeof(time_buf), msg.timestamp);
+    format_message_time(
+        time_buf,
+        sizeof(time_buf),
+        timestamp_from_presentation_label(row.time_label));
     if (conv_.peer == 0)
     {
         std::string sender;
         if (is_self)
         {
             sender = app::configFacade().getConfig().short_name;
+            if (sender.empty() && !row.sender_label.empty())
+            {
+                sender = row.sender_label.c_str();
+            }
+            if (sender.empty())
+            {
+                sender = "Me";
+            }
         }
-        else if (sender_label && sender_label[0] != '\0')
+        else if (!row.sender_label.empty())
         {
-            sender = sender_label;
+            sender = row.sender_label.c_str();
         }
-        else if (msg.from == 0)
+        else if (row.sender_node_id == 0)
         {
             sender = inferred_sender.empty() ? ::ui::i18n::tr("Unknown") : inferred_sender;
         }
         else
         {
-            sender = app::messagingFacade().getContactService().getContactName(msg.from);
+            sender = app::messagingFacade().getContactService().getContactName(
+                row.sender_node_id);
             if (sender.empty())
             {
                 char buf[16];
                 snprintf(buf, sizeof(buf), "%04lX",
-                         static_cast<unsigned long>(msg.from & 0xFFFF));
+                         static_cast<unsigned long>(row.sender_node_id & 0xFFFF));
                 sender = buf;
             }
         }
@@ -591,19 +560,6 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg, con
         ::ui::i18n::set_label_text_raw(item.time_label, time_buf);
         ::ui::fonts::apply_localized_font(
             item.time_label, lv_label_get_text(item.time_label), ::ui::fonts::ui_chrome_font());
-    }
-
-    if (team::proto::team_location_marker_icon_is_valid(msg.team_location_icon))
-    {
-        const lv_image_dsc_t* icon = team_location_icon_src(msg.team_location_icon);
-        if (icon)
-        {
-            lv_obj_t* marker_icon = lv_image_create(bubble);
-            lv_image_set_src(marker_icon, icon);
-            lv_obj_set_size(marker_icon, kTeamLocationIconSize, kTeamLocationIconSize);
-            lv_image_set_inner_align(marker_icon, LV_IMAGE_ALIGN_CONTAIN);
-            lv_obj_set_style_pad_bottom(marker_icon, 2, 0);
-        }
     }
 
     item.text_label = chat::ui::layout::create_bubble_text(bubble);
@@ -625,7 +581,7 @@ void ChatConversationScreen::createMessageItem(const chat::ChatMessage& msg, con
 
     item.status_label = chat::ui::layout::create_bubble_status(bubble);
     chat::ui::conversation::styles::apply_bubble_status(item.status_label);
-    if (msg.status == MessageStatus::Failed)
+    if (row.delivery == ::ui::chat::MessageDeliveryState::Failed)
     {
         ::ui::i18n::set_label_text(item.status_label, "Failed");
         ::ui::fonts::apply_localized_font(
