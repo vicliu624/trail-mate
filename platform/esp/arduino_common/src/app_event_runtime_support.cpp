@@ -21,6 +21,14 @@ namespace platform::esp::arduino_common
 namespace
 {
 
+constexpr const char* kSettingsNs = "settings";
+constexpr const char* kMessageAlertsKey = "chat_message_alerts";
+
+bool messageAlertsEnabled()
+{
+    return platform::ui::settings_store::get_int(kSettingsNs, kMessageAlertsKey, 1) != 0;
+}
+
 void triggerMessageFeedback(app::IAppFacade& app_context)
 {
     BoardBase* board = app_context.getBoard();
@@ -28,7 +36,7 @@ void triggerMessageFeedback(app::IAppFacade& app_context)
     {
         return;
     }
-    if (platform::ui::settings_store::get_bool("settings", "vibration_enabled", true))
+    if (platform::ui::settings_store::get_bool(kSettingsNs, "vibration_enabled", true))
     {
         board->vibrator();
     }
@@ -50,6 +58,10 @@ std::string resolveContactName(app::IAppFacade& app_context, chat::NodeId node_i
 
 void handleTeamChatNotification(app::IAppFacade& app_context, const sys::TeamChatEvent& team_event)
 {
+    if (!messageAlertsEnabled())
+    {
+        return;
+    }
     triggerMessageFeedback(app_context);
 
     std::string notice = ::ui::i18n::tr("Team: ");
@@ -136,8 +148,11 @@ bool handleUiEvent(app::IAppFacade& app_context, sys::Event* event)
     case sys::EventType::ChatNewMessage:
     {
         auto* msg_event = static_cast<sys::ChatNewMessageEvent*>(event);
-        triggerMessageFeedback(app_context);
-        ::ui::SystemNotification::show(msg_event->text, 3000);
+        if (messageAlertsEnabled())
+        {
+            triggerMessageFeedback(app_context);
+            ::ui::SystemNotification::show(msg_event->text, 3000);
+        }
         break;
     }
     case sys::EventType::TeamChat:

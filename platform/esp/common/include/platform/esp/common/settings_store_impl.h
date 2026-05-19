@@ -26,6 +26,8 @@ constexpr StorageKeyAlias kStorageKeyAliases[] = {
     {"display_locale", "disp_locale"},
     {"screen_brightness", "screen_bright"},
     {"vibration_enabled", "vibe_enabled"},
+    {"chat_message_alerts", "chat_msg_alert"},
+    {"chat_contact_alerts", "chat_ct_alert"},
     {"gauge_design_mah", "gauge_dsgn"},
 };
 

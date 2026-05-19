@@ -71,6 +71,9 @@ constexpr size_t kMaxItems = 32;
 constexpr size_t kMaxOptions = 40;
 constexpr size_t kMaxWifiNetworks = 24;
 constexpr const char* kPrefsNs = "settings";
+constexpr int kChatContactAlertsNone = 0;
+constexpr int kChatContactAlertsContacts = 1;
+constexpr int kChatContactAlertsAll = 2;
 constexpr int kNetTxPowerMin = app::AppConfig::kTxPowerMinDbm;
 constexpr int kNetTxPowerMax = app::AppConfig::kTxPowerMaxDbm;
 constexpr int kGpsInitProbeMinMs = 250;
@@ -542,7 +545,9 @@ static bool is_settings_store_owned_enum_setting(const char* key)
         return false;
     }
     return strcmp(key, "screen_brightness") == 0 ||
-           strcmp(key, "speaker_volume") == 0;
+           strcmp(key, "speaker_volume") == 0 ||
+           strcmp(key, "chat_message_alerts") == 0 ||
+           strcmp(key, "chat_contact_alerts") == 0;
 }
 
 static bool is_settings_store_owned_toggle_setting(const char* key)
@@ -978,6 +983,13 @@ static void settings_load()
 
     g_settings.chat_region = mt_cfg.region;
     g_settings.chat_channel = cfg.chat_channel;
+    g_settings.chat_message_alerts = prefs_get_int("chat_message_alerts", 1) ? 1 : 0;
+    g_settings.chat_contact_alerts = prefs_get_int("chat_contact_alerts", kChatContactAlertsContacts);
+    if (g_settings.chat_contact_alerts < kChatContactAlertsNone ||
+        g_settings.chat_contact_alerts > kChatContactAlertsAll)
+    {
+        g_settings.chat_contact_alerts = kChatContactAlertsContacts;
+    }
     const uint8_t* active_psk = nullptr;
     size_t active_psk_len = 0;
     if (cfg.mesh_protocol == chat::MeshProtocol::MeshCore)
@@ -2694,6 +2706,11 @@ static const settings::ui::SettingOption kBoolOptions[] = {
     {"OFF", 0},
     {"ON", 1},
 };
+static const settings::ui::SettingOption kChatContactAlertOptions[] = {
+    {"OFF", kChatContactAlertsNone},
+    {"Contacts Only", kChatContactAlertsContacts},
+    {"All", kChatContactAlertsAll},
+};
 static const settings::ui::SettingOption kNetManualBwOptions[] = {
     {"125 kHz", 125},
     {"250 kHz", 250},
@@ -2885,6 +2902,8 @@ static settings::ui::SettingItem kChatItems[] = {
     {"Channel", settings::ui::SettingType::Enum, kChatChannelOptions, 2, &g_settings.chat_channel, nullptr, nullptr, 0, false, "chat_channel"},
     {"Channel Key / PSK", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.chat_psk, sizeof(g_settings.chat_psk), true, "chat_psk"},
     {"Encryption Mode", settings::ui::SettingType::Enum, kPrivacyEncryptOptions, 3, &g_settings.privacy_encrypt_mode, nullptr, nullptr, 0, false, "privacy_encrypt"},
+    {"Message Alerts", settings::ui::SettingType::Enum, kBoolOptions, sizeof(kBoolOptions) / sizeof(kBoolOptions[0]), &g_settings.chat_message_alerts, nullptr, nullptr, 0, false, "chat_message_alerts"},
+    {"Contact Alerts", settings::ui::SettingType::Enum, kChatContactAlertOptions, sizeof(kChatContactAlertOptions) / sizeof(kChatContactAlertOptions[0]), &g_settings.chat_contact_alerts, nullptr, nullptr, 0, false, "chat_contact_alerts"},
     {"Reset Mesh Profiles", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_mesh"},
     {"Reset Node DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_reset_nodes"},
     {"Clear Message DB", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "chat_clear_messages"},

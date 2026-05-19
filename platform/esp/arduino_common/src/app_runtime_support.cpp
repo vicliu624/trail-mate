@@ -26,6 +26,12 @@ namespace platform::esp::arduino_common
 namespace
 {
 
+constexpr const char* kSettingsNs = "settings";
+constexpr const char* kContactAlertsKey = "chat_contact_alerts";
+constexpr int kContactAlertsNone = 0;
+constexpr int kContactAlertsContacts = 1;
+constexpr int kContactAlertsAll = 2;
+
 void triggerNodeInfoFeedback(app::IAppFacade& app_context)
 {
     BoardBase* board = app_context.getBoard();
@@ -34,7 +40,7 @@ void triggerNodeInfoFeedback(app::IAppFacade& app_context)
         return;
     }
 
-    if (platform::ui::settings_store::get_bool("settings", "vibration_enabled", true))
+    if (platform::ui::settings_store::get_bool(kSettingsNs, "vibration_enabled", true))
     {
         board->vibrator();
     }
@@ -68,6 +74,26 @@ std::string resolveNodeInfoName(app::IAppFacade& app_context, const sys::NodeInf
 void notifyNodeInfoUpdate(app::IAppFacade& app_context, const sys::NodeInfoUpdateEvent& node_event)
 {
     if (node_event.node_id == 0 || node_event.node_id == app_context.getSelfNodeId() || node_event.is_ignored)
+    {
+        return;
+    }
+
+    int alert_mode = platform::ui::settings_store::get_int(kSettingsNs,
+                                                           kContactAlertsKey,
+                                                           kContactAlertsContacts);
+    if (alert_mode < kContactAlertsNone || alert_mode > kContactAlertsAll)
+    {
+        alert_mode = kContactAlertsContacts;
+    }
+    if (alert_mode == kContactAlertsNone)
+    {
+        return;
+    }
+
+    const chat::contacts::NodeInfo* node_info =
+        app_context.getContactService().getNodeInfo(node_event.node_id);
+    const bool is_contact = node_info && node_info->is_contact;
+    if (alert_mode == kContactAlertsContacts && !is_contact)
     {
         return;
     }
