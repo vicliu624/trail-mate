@@ -1,0 +1,62 @@
+name: uConsole Linux
+
+on:
+  push:
+    paths:
+      - "apps/linux_uconsole_gtk/**"
+      - "builds/linux_cmake/**"
+      - "cmake/**"
+      - "modules/**"
+      - "platform/linux/**"
+      - ".github/workflows/uconsole-linux.yml"
+  pull_request:
+    paths:
+      - "apps/linux_uconsole_gtk/**"
+      - "builds/linux_cmake/**"
+      - "cmake/**"
+      - "modules/**"
+      - "platform/linux/**"
+      - ".github/workflows/uconsole-linux.yml"
+
+jobs:
+  uconsole:
+    name: uConsole GTK shell
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify shared/platform UI boundaries
+        run: python3 scripts/check_platform_ui_boundaries.py
+
+      - name: Install uConsole build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build dpkg-dev xorg-dev libasound2-dev libegl1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols libgtk-4-dev libsqlite3-dev libcurl4-openssl-dev
+
+      - name: Configure uConsole Linux shell
+        working-directory: builds/linux_cmake
+        run: cmake --preset linux-uconsole-debug
+
+      - name: Build uConsole Linux shell
+        working-directory: builds/linux_cmake
+        run: cmake --build --preset linux-uconsole-debug-build
+
+      - name: Run uConsole smoke tests
+        working-directory: builds/linux_cmake
+        run: ctest --preset linux-uconsole-debug-test
+
+      - name: Configure uConsole Debian package
+        working-directory: builds/linux_cmake
+        run: cmake --preset linux-uconsole-release
+
+      - name: Build uConsole Debian package
+        working-directory: builds/linux_cmake
+        run: cmake --build --preset linux-uconsole-deb
+
+      - name: Upload uConsole Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: trailmate-uconsole-deb
+          path: builds/linux_cmake/build/uconsole-release/*.deb
+          if-no-files-found: error

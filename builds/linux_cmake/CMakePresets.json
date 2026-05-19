@@ -1,0 +1,98 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-debug",
+      "displayName": "Linux app shells debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON",
+        "TRAIL_MATE_BUILD_LINUX_SIM_SHELL": "ON",
+        "TRAIL_MATE_BUILD_LINUX_UCONSOLE_GTK": "ON"
+      }
+    },
+    {
+      "name": "linux-simulator-debug",
+      "displayName": "Linux simulator shell debug",
+      "inherits": "linux-debug",
+      "binaryDir": "${sourceDir}/build/linux-simulator-debug",
+      "cacheVariables": {
+        "TRAIL_MATE_BUILD_LINUX_SIM_SHELL": "ON",
+        "TRAIL_MATE_BUILD_LINUX_UCONSOLE_GTK": "OFF"
+      }
+    },
+    {
+      "name": "linux-uconsole-debug",
+      "displayName": "Linux uConsole GTK shell debug",
+      "inherits": "linux-debug",
+      "binaryDir": "${sourceDir}/build/linux-uconsole-debug",
+      "cacheVariables": {
+        "TRAIL_MATE_BUILD_LINUX_SIM_SHELL": "OFF",
+        "TRAIL_MATE_BUILD_LINUX_UCONSOLE_GTK": "ON"
+      }
+    },
+    {
+      "name": "linux-uconsole-release",
+      "displayName": "Linux uConsole GTK package release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/uconsole-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "TRAIL_MATE_BUILD_LINUX_SIM_SHELL": "OFF",
+        "TRAIL_MATE_BUILD_LINUX_UCONSOLE_GTK": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-debug-build",
+      "configurePreset": "linux-debug"
+    },
+    {
+      "name": "linux-simulator-debug-build",
+      "configurePreset": "linux-simulator-debug"
+    },
+    {
+      "name": "linux-uconsole-debug-build",
+      "configurePreset": "linux-uconsole-debug"
+    },
+    {
+      "name": "linux-uconsole-deb",
+      "configurePreset": "linux-uconsole-release",
+      "targets": [
+        "package"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-debug-test",
+      "configurePreset": "linux-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-simulator-debug-test",
+      "configurePreset": "linux-simulator-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-uconsole-debug-test",
+      "configurePreset": "linux-uconsole-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

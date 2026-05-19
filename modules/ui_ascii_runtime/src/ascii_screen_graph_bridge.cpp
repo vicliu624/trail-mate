@@ -8,12 +8,18 @@ namespace
 using MenuRuntimeAdapterContract = AsciiMenuRuntimeAdapter;
 using ScreenHostAdapterContract = AsciiScreenHostAdapter;
 
+void resetGraph(AsciiScreenGraph& graph)
+{
+    graph.menu_count = 0;
+    graph.screen_count = 0;
+}
+
 } // namespace
 
 bool AsciiScreenGraphBridge::load(
     const product_composition::PresentationBundle& presentation)
 {
-    graph_ = {};
+    resetGraph(graph_);
 
     if (!product_composition::hasUxMenu(presentation) ||
         !product_composition::hasScreenBindings(presentation))
@@ -26,7 +32,7 @@ bool AsciiScreenGraphBridge::load(
                                   ui::menu::MenuModel::kMaxItems,
                                   graph_.menu_count))
     {
-        graph_ = {};
+        resetGraph(graph_);
         return false;
     }
 

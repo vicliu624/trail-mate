@@ -1,0 +1,63 @@
+name: Linux Simulator
+
+on:
+  push:
+    paths:
+      - "apps/linux_sim_shell/**"
+      - "builds/linux_cmake/**"
+      - "cmake/**"
+      - "modules/core_chat/**"
+      - "modules/core_sys/**"
+      - "modules/product_composition/**"
+      - "modules/ui_ascii_runtime/**"
+      - "modules/ui_key_verification_runtime/**"
+      - "modules/ui_legacy_adapters/**"
+      - "modules/ui_lvgl_ux_packs/**"
+      - "modules/ui_map_runtime/**"
+      - "modules/ui_presentation/**"
+      - "platform/linux/**"
+      - ".github/workflows/linux-simulator.yml"
+  pull_request:
+    paths:
+      - "apps/linux_sim_shell/**"
+      - "builds/linux_cmake/**"
+      - "cmake/**"
+      - "modules/core_chat/**"
+      - "modules/core_sys/**"
+      - "modules/product_composition/**"
+      - "modules/ui_ascii_runtime/**"
+      - "modules/ui_key_verification_runtime/**"
+      - "modules/ui_legacy_adapters/**"
+      - "modules/ui_lvgl_ux_packs/**"
+      - "modules/ui_map_runtime/**"
+      - "modules/ui_presentation/**"
+      - "platform/linux/**"
+      - ".github/workflows/linux-simulator.yml"
+
+jobs:
+  simulator:
+    name: Linux simulator shell
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify shared/platform UI boundaries
+        run: python3 scripts/check_platform_ui_boundaries.py
+
+      - name: Install simulator build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure simulator
+        working-directory: builds/linux_cmake
+        run: cmake --preset linux-simulator-debug
+
+      - name: Build simulator
+        working-directory: builds/linux_cmake
+        run: cmake --build --preset linux-simulator-debug-build
+
+      - name: Run simulator smoke tests
+        working-directory: builds/linux_cmake
+        run: ctest --preset linux-simulator-debug-test

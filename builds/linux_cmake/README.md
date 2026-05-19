@@ -15,6 +15,17 @@ apps/linux_uconsole_gtk
 apps/linux_sim_shell
 ```
 
+Current CI owners:
+
+```text
+.github/workflows/uconsole-linux.yml
+.github/workflows/linux-simulator.yml
+```
+
+There is intentionally no active `cardputer-zero-linux.yml` workflow. Cardputer
+Zero Linux remains lower-completion device bring-up work until it has a
+dedicated final app shell and hardware-oriented validation gate.
+
 Current transitional implementation roots:
 
 ```text
