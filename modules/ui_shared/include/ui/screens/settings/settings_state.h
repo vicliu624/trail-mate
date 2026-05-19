@@ -138,6 +138,7 @@ struct SettingsData
     char fw_current_version[24] = "";
     char fw_latest_version[24] = "";
     char fw_update_status[96] = "";
+    char settings_backup_status[96] = "";
     bool advanced_debug_logs = false;
 };
 

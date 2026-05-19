@@ -21,6 +21,7 @@
 #include "platform/ui/firmware_update_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/screen_runtime.h"
+#include "platform/ui/settings_backup_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/team_ui_store_runtime.h"
 #include "platform/ui/time_runtime.h"
@@ -63,6 +64,7 @@ namespace device_runtime = ::platform::ui::device;
 namespace firmware_update_runtime = ::platform::ui::firmware_update;
 namespace gps_runtime = ::platform::ui::gps;
 namespace screen_runtime = ::platform::ui::screen;
+namespace settings_backup_runtime = ::platform::ui::settings_backup;
 namespace settings_store = ::platform::ui::settings_store;
 namespace tracker_runtime = ::platform::ui::tracker;
 namespace wifi_runtime = ::platform::ui::wifi;
@@ -159,6 +161,7 @@ static bool apply_settings_bool_patch(const char* key, bool value)
 
 static void update_item_value(settings::ui::ItemWidget& widget);
 static void open_factory_reset_modal();
+static void open_settings_restore_modal();
 static void open_gps_diagnostics_modal();
 static void open_enabled_imes_modal(settings::ui::ItemWidget& widget);
 static bool option_labels_are_translated(const settings::ui::SettingItem& item);
@@ -311,6 +314,17 @@ static void refresh_firmware_update_state_from_runtime()
                      status.checked ? g_settings.fw_current_version : "Not checked");
     }
     firmware_status_summary(status, g_settings.fw_update_status, sizeof(g_settings.fw_update_status));
+}
+
+static void refresh_settings_backup_state_from_runtime()
+{
+    const settings_backup_runtime::Status status = settings_backup_runtime::status();
+    const char* message = status.message[0] != '\0'
+                              ? status.message
+                              : (status.supported ? "No backup found" : "Backup unsupported");
+    copy_bounded(g_settings.settings_backup_status,
+                 sizeof(g_settings.settings_backup_status),
+                 message);
 }
 
 static void refresh_visible_item_values()
@@ -1108,6 +1122,7 @@ static void settings_load()
     g_settings.vibration_enabled = prefs_get_bool("vibration_enabled", true);
     refresh_wifi_state_from_runtime();
     refresh_firmware_update_state_from_runtime();
+    refresh_settings_backup_state_from_runtime();
 
     g_settings.advanced_debug_logs = prefs_get_bool("adv_debug", false);
 
@@ -2121,6 +2136,87 @@ static void on_factory_reset_cancel_clicked(lv_event_t* e)
     modal_close();
 }
 
+static void on_settings_restore_confirm_clicked(lv_event_t* e)
+{
+    (void)e;
+    modal_close();
+    if (!settings_backup_runtime::restore())
+    {
+        refresh_settings_backup_state_from_runtime();
+        ::ui::SystemNotification::show(::ui::i18n::tr("Restore failed"), 3500);
+        refresh_visible_item_values();
+        return;
+    }
+    ::ui::SystemNotification::show(::ui::i18n::tr("Settings restored. Restarting..."), 1500);
+    platform_delay_ms(300);
+    platform_restart();
+}
+
+static void on_settings_restore_cancel_clicked(lv_event_t* e)
+{
+    (void)e;
+    modal_close();
+}
+
+static void open_settings_restore_modal()
+{
+    if (g_state.modal_root)
+    {
+        return;
+    }
+
+    modal_prepare_group();
+    g_state.modal_root = create_modal_root(300, 180);
+    lv_obj_t* win = lv_obj_get_child(g_state.modal_root, 0);
+
+    lv_obj_t* title = lv_label_create(win);
+    ::ui::i18n::set_label_text(title, "Restore Settings");
+    style::apply_label_primary(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+
+    lv_obj_t* body = lv_label_create(win);
+    lv_obj_set_width(body, LV_PCT(100));
+    ::ui::i18n::set_label_text(body, "Overwrite current settings and restart?");
+    style::apply_label_muted(body);
+    lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(body, LV_ALIGN_CENTER, 0, -8);
+
+    lv_obj_t* btn_row = lv_obj_create(win);
+    lv_obj_set_size(btn_row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_align(btn_row, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_row,
+                          LV_FLEX_ALIGN_SPACE_EVENLY,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(btn_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn_row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_row, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* cancel_btn = lv_btn_create(btn_row);
+    lv_obj_set_size(cancel_btn,
+                    ::ui::page_profile::resolve_control_button_min_width(),
+                    ::ui::page_profile::resolve_control_button_height());
+    lv_obj_t* cancel_label = lv_label_create(cancel_btn);
+    ::ui::i18n::set_label_text(cancel_label, "Cancel");
+    lv_obj_center(cancel_label);
+    lv_obj_add_event_cb(cancel_btn, on_settings_restore_cancel_clicked, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t* confirm_btn = lv_btn_create(btn_row);
+    lv_obj_set_size(confirm_btn,
+                    ::ui::page_profile::resolve_control_button_min_width(),
+                    ::ui::page_profile::resolve_control_button_height());
+    lv_obj_t* confirm_label = lv_label_create(confirm_btn);
+    ::ui::i18n::set_label_text(confirm_label, "Restore");
+    lv_obj_center(confirm_label);
+    lv_obj_add_event_cb(confirm_btn, on_settings_restore_confirm_clicked, LV_EVENT_CLICKED, nullptr);
+
+    lv_group_add_obj(g_state.modal_group, cancel_btn);
+    lv_group_add_obj(g_state.modal_group, confirm_btn);
+    lv_group_focus_obj(cancel_btn);
+}
+
 static void open_factory_reset_modal()
 {
     if (g_state.modal_root)
@@ -2978,6 +3074,9 @@ static settings::ui::SettingItem kAdvancedItems[] = {
     {"OTA Status", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.fw_update_status, sizeof(g_settings.fw_update_status), false, "fw_status"},
     {"Check for Updates", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "fw_check"},
     {"Install Update", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "fw_install"},
+    {"Backup Status", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.settings_backup_status, sizeof(g_settings.settings_backup_status), false, "settings_backup_status"},
+    {"Backup Settings", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "settings_backup"},
+    {"Restore Settings", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "settings_restore"},
     {"Debug Logs", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.advanced_debug_logs, nullptr, 0, false, "adv_debug"},
 };
 
@@ -3131,6 +3230,13 @@ static bool should_show_item(const settings::ui::SettingItem& item)
          has_pref_key(item, "fw_status") || has_pref_key(item, "fw_check") ||
          has_pref_key(item, "fw_install")) &&
         !firmware_update_runtime::is_supported())
+    {
+        return false;
+    }
+    if ((has_pref_key(item, "settings_backup_status") ||
+         has_pref_key(item, "settings_backup") ||
+         has_pref_key(item, "settings_restore")) &&
+        !settings_backup_runtime::is_supported())
     {
         return false;
     }
@@ -3620,6 +3726,43 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
             {
                 sync_firmware_update_ui(false);
             }
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "settings_backup") == 0)
+        {
+            const settings_backup_runtime::Status before = settings_backup_runtime::status();
+            if (!before.sd_present)
+            {
+                ::ui::SystemNotification::show(::ui::i18n::tr("Insert SD card to backup settings"), 3000);
+            }
+            else if (!settings_backup_runtime::backup())
+            {
+                refresh_settings_backup_state_from_runtime();
+                ::ui::SystemNotification::show(::ui::i18n::tr("Backup failed"), 3000);
+            }
+            else
+            {
+                refresh_settings_backup_state_from_runtime();
+                ::ui::SystemNotification::show(::ui::i18n::tr("Settings backup saved to SD"), 2500);
+            }
+            refresh_visible_item_values();
+        }
+        else if (item.pref_key && strcmp(item.pref_key, "settings_restore") == 0)
+        {
+            const settings_backup_runtime::Status status = settings_backup_runtime::status();
+            if (!status.sd_present)
+            {
+                ::ui::SystemNotification::show(::ui::i18n::tr("Insert SD card to restore settings"), 3000);
+            }
+            else if (!status.has_backup)
+            {
+                ::ui::SystemNotification::show(::ui::i18n::tr("No settings backup found"), 3000);
+            }
+            else
+            {
+                open_settings_restore_modal();
+            }
+            refresh_settings_backup_state_from_runtime();
+            refresh_visible_item_values();
         }
         return true;
     }

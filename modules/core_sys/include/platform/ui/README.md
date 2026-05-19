@@ -48,6 +48,9 @@ They must not depend on concrete implementations under `platform/esp/*`,
   lifecycle hooks.
 - `settings_store.h`
   Persistent key/value and blob storage for shared UI/runtime settings.
+- `settings_backup_runtime.h`
+  SD-card Trail-Mate settings backup/restore contract for shared Settings UI
+  while keeping filesystem and platform persistence details out of shared code.
 - `sstv_runtime.h`
   SSTV support and session lifecycle hooks.
 - `team_ui_store_runtime.h`
