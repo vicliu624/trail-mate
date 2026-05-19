@@ -125,7 +125,7 @@ Notes:
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/zh-Hans-1.1.0.zip`
+- `site/assets/packs/zh-Hans-1.1.1.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact used by the Extensions downloader. Its `payload/`

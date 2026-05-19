@@ -616,7 +616,23 @@ Update Interval	الفاصل الزمني للتحديث
 Use Preset	استخدم الإعداد المسبق
 Wi-Fi Enabled	Wi-Fi ممكّن
 Wi-Fi start failed	Wi-Fi فشل البدء
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	الكل
+Contact Alerts	تنبيهات جهات الاتصال
+Contacts Only	جهات الاتصال فقط
+Message Alerts	تنبيهات الرسائل
+Backup Status	حالة النسخ الاحتياطي
+Backup Settings	نسخ الإعدادات احتياطيًا
+Restore Settings	استعادة الإعدادات
+No backup found	لم يتم العثور على نسخة احتياطية
+Backup unsupported	النسخ الاحتياطي غير مدعوم
+SD not detected	لم يتم اكتشاف بطاقة SD
+Backup found	تم العثور على نسخة احتياطية
+Insert SD card to backup settings	أدخل بطاقة SD لنسخ الإعدادات احتياطيًا
+Backup failed	فشل النسخ الاحتياطي
+Settings backup saved to SD	تم حفظ نسخة الإعدادات على بطاقة SD
+Insert SD card to restore settings	أدخل بطاقة SD لاستعادة الإعدادات
+No settings backup found	لم يتم العثور على نسخة إعدادات احتياطية
+Restore failed	فشلت الاستعادة
+Settings restored. Restarting...	تمت استعادة الإعدادات. جارٍ إعادة التشغيل...
+Overwrite current settings and restart?	هل تريد استبدال الإعدادات الحالية وإعادة التشغيل؟
+Restore	استعادة

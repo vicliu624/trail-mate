@@ -616,7 +616,23 @@ Update Interval	Intervallo di aggiornamento
 Use Preset	Usa preimpostazione
 Wi-Fi Enabled	Wi-Fi Abilitato
 Wi-Fi start failed	Wi-Fi avvio non riuscito
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	Tutti
+Contact Alerts	Avvisi contatti
+Contacts Only	Solo contatti
+Message Alerts	Avvisi messaggi
+Backup Status	Stato backup
+Backup Settings	Backup impostazioni
+Restore Settings	Ripristina impostazioni
+No backup found	Nessun backup trovato
+Backup unsupported	Backup non supportato
+SD not detected	Scheda SD non rilevata
+Backup found	Backup trovato
+Insert SD card to backup settings	Inserisci una scheda SD per salvare le impostazioni
+Backup failed	Backup non riuscito
+Settings backup saved to SD	Backup impostazioni salvato su SD
+Insert SD card to restore settings	Inserisci una scheda SD per ripristinare le impostazioni
+No settings backup found	Nessun backup impostazioni trovato
+Restore failed	Ripristino non riuscito
+Settings restored. Restarting...	Impostazioni ripristinate. Riavvio...
+Overwrite current settings and restart?	Sovrascrivere le impostazioni correnti e riavviare?
+Restore	Ripristina

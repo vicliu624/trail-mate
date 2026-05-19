@@ -616,7 +616,23 @@ Update Interval	Update-interval
 Use Preset	Voorinstelling gebruiken
 Wi-Fi Enabled	Wi-Fi Ingeschakeld
 Wi-Fi start failed	Wi-Fi starten mislukt
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	Alles
+Contact Alerts	Contactmeldingen
+Contacts Only	Alleen contacten
+Message Alerts	Berichtmeldingen
+Backup Status	Back-upstatus
+Backup Settings	Instellingen back-uppen
+Restore Settings	Instellingen herstellen
+No backup found	Geen back-up gevonden
+Backup unsupported	Back-up niet ondersteund
+SD not detected	SD-kaart niet gedetecteerd
+Backup found	Back-up gevonden
+Insert SD card to backup settings	Plaats een SD-kaart om instellingen te back-uppen
+Backup failed	Back-up mislukt
+Settings backup saved to SD	Instellingenback-up opgeslagen op SD
+Insert SD card to restore settings	Plaats een SD-kaart om instellingen te herstellen
+No settings backup found	Geen instellingenback-up gevonden
+Restore failed	Herstellen mislukt
+Settings restored. Restarting...	Instellingen hersteld. Opnieuw starten...
+Overwrite current settings and restart?	Huidige instellingen overschrijven en opnieuw starten?
+Restore	Herstellen

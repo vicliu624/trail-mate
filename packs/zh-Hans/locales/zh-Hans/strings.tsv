@@ -620,3 +620,19 @@ All	全部
 Contact Alerts	联系人提示
 Contacts Only	仅联系人
 Message Alerts	消息提示
+Backup Status	备份状态
+Backup Settings	备份设置
+Restore Settings	还原设置
+No backup found	未找到备份
+Backup unsupported	不支持备份
+SD not detected	未检测到 SD 卡
+Backup found	已找到备份
+Insert SD card to backup settings	插入 SD 卡后再备份设置
+Backup failed	备份失败
+Settings backup saved to SD	设置备份已保存到 SD 卡
+Insert SD card to restore settings	插入 SD 卡后再还原设置
+No settings backup found	未找到设置备份
+Restore failed	还原失败
+Settings restored. Restarting...	设置已还原，正在重启...
+Overwrite current settings and restart?	覆盖当前设置并重启?
+Restore	还原

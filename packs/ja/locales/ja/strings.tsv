@@ -616,7 +616,23 @@ Update Interval	更新間隔
 Use Preset	プリセットを使用する
 Wi-Fi Enabled	Wi-Fi 有効
 Wi-Fi start failed	Wi-Fi の開始に失敗しました
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	すべて
+Contact Alerts	連絡先通知
+Contacts Only	連絡先のみ
+Message Alerts	メッセージ通知
+Backup Status	バックアップ状態
+Backup Settings	設定をバックアップ
+Restore Settings	設定を復元
+No backup found	バックアップが見つかりません
+Backup unsupported	バックアップは未対応です
+SD not detected	SDカードが検出されません
+Backup found	バックアップが見つかりました
+Insert SD card to backup settings	設定をバックアップするにはSDカードを挿入してください
+Backup failed	バックアップに失敗しました
+Settings backup saved to SD	設定バックアップをSDに保存しました
+Insert SD card to restore settings	設定を復元するにはSDカードを挿入してください
+No settings backup found	設定バックアップが見つかりません
+Restore failed	復元に失敗しました
+Settings restored. Restarting...	設定を復元しました。再起動中...
+Overwrite current settings and restart?	現在の設定を上書きして再起動しますか？
+Restore	復元

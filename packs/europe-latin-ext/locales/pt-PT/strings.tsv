@@ -616,7 +616,23 @@ Update Interval	Intervalo de atualização
 Use Preset	Usar predefinição
 Wi-Fi Enabled	Wi-Fi Ativado
 Wi-Fi start failed	Wi-Fi falha na inicialização
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	Todos
+Contact Alerts	Alertas de contactos
+Contacts Only	Só contactos
+Message Alerts	Alertas de mensagens
+Backup Status	Estado da cópia
+Backup Settings	Guardar definições
+Restore Settings	Restaurar definições
+No backup found	Nenhuma cópia encontrada
+Backup unsupported	Cópia não suportada
+SD not detected	Cartão SD não detetado
+Backup found	Cópia encontrada
+Insert SD card to backup settings	Insira um cartão SD para guardar definições
+Backup failed	Falha ao guardar cópia
+Settings backup saved to SD	Cópia das definições guardada no SD
+Insert SD card to restore settings	Insira um cartão SD para restaurar definições
+No settings backup found	Nenhuma cópia de definições encontrada
+Restore failed	Falha ao restaurar
+Settings restored. Restarting...	Definições restauradas. A reiniciar...
+Overwrite current settings and restart?	Substituir as definições atuais e reiniciar?
+Restore	Restaurar

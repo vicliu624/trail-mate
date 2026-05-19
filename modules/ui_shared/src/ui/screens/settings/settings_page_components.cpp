@@ -324,7 +324,7 @@ static void refresh_settings_backup_state_from_runtime()
                               : (status.supported ? "No backup found" : "Backup unsupported");
     copy_bounded(g_settings.settings_backup_status,
                  sizeof(g_settings.settings_backup_status),
-                 message);
+                 ::ui::i18n::tr(message));
 }
 
 static void refresh_visible_item_values()

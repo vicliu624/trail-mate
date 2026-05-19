@@ -616,7 +616,23 @@ Update Interval	Interwał aktualizacji
 Use Preset	Użyj ustawienia wstępnego
 Wi-Fi Enabled	Wi-Fi Włączone
 Wi-Fi start failed	Wi-Fi uruchomienie nie powiodło się
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	Wszystkie
+Contact Alerts	Alerty kontaktów
+Contacts Only	Tylko kontakty
+Message Alerts	Alerty wiadomości
+Backup Status	Stan kopii
+Backup Settings	Kopia ustawień
+Restore Settings	Przywróć ustawienia
+No backup found	Nie znaleziono kopii
+Backup unsupported	Kopia nieobsługiwana
+SD not detected	Nie wykryto karty SD
+Backup found	Znaleziono kopię
+Insert SD card to backup settings	Włóż kartę SD, aby zapisać ustawienia
+Backup failed	Tworzenie kopii nie powiodło się
+Settings backup saved to SD	Kopia ustawień zapisana na SD
+Insert SD card to restore settings	Włóż kartę SD, aby przywrócić ustawienia
+No settings backup found	Nie znaleziono kopii ustawień
+Restore failed	Przywracanie nie powiodło się
+Settings restored. Restarting...	Ustawienia przywrócone. Restart...
+Overwrite current settings and restart?	Nadpisać bieżące ustawienia i uruchomić ponownie?
+Restore	Przywróć

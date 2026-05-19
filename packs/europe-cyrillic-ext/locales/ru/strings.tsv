@@ -616,7 +616,23 @@ Update Interval	Интервал обновления
 Use Preset	Использовать предустановку
 Wi-Fi Enabled	Wi-Fi Включено
 Wi-Fi start failed	Wi-Fi не удалось запустить
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	Все
+Contact Alerts	Оповещения контактов
+Contacts Only	Только контакты
+Message Alerts	Оповещения сообщений
+Backup Status	Статус резервной копии
+Backup Settings	Сохранить настройки
+Restore Settings	Восстановить настройки
+No backup found	Резервная копия не найдена
+Backup unsupported	Резервное копирование не поддерживается
+SD not detected	SD-карта не обнаружена
+Backup found	Резервная копия найдена
+Insert SD card to backup settings	Вставьте SD-карту для сохранения настроек
+Backup failed	Не удалось создать резервную копию
+Settings backup saved to SD	Резервная копия настроек сохранена на SD
+Insert SD card to restore settings	Вставьте SD-карту для восстановления настроек
+No settings backup found	Резервная копия настроек не найдена
+Restore failed	Восстановление не удалось
+Settings restored. Restarting...	Настройки восстановлены. Перезапуск...
+Overwrite current settings and restart?	Перезаписать текущие настройки и перезапустить?
+Restore	Восстановить

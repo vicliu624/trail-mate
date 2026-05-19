@@ -616,7 +616,23 @@ Update Interval	Intervalle de mise à jour
 Use Preset	Utiliser le préréglage
 Wi-Fi Enabled	Wi-Fi Activé
 Wi-Fi start failed	Wi-Fi échec du démarrage
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	Tous
+Contact Alerts	Alertes contacts
+Contacts Only	Contacts uniquement
+Message Alerts	Alertes messages
+Backup Status	État de sauvegarde
+Backup Settings	Sauvegarder les réglages
+Restore Settings	Restaurer les réglages
+No backup found	Aucune sauvegarde trouvée
+Backup unsupported	Sauvegarde non prise en charge
+SD not detected	Carte SD non détectée
+Backup found	Sauvegarde trouvée
+Insert SD card to backup settings	Insérez une carte SD pour sauvegarder les réglages
+Backup failed	Échec de la sauvegarde
+Settings backup saved to SD	Sauvegarde des réglages enregistrée sur SD
+Insert SD card to restore settings	Insérez une carte SD pour restaurer les réglages
+No settings backup found	Aucune sauvegarde de réglages trouvée
+Restore failed	Échec de la restauration
+Settings restored. Restarting...	Réglages restaurés. Redémarrage...
+Overwrite current settings and restart?	Remplacer les réglages actuels et redémarrer ?
+Restore	Restaurer

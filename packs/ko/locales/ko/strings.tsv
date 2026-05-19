@@ -616,7 +616,23 @@ Update Interval	업데이트 간격
 Use Preset	프리셋 사용
 Wi-Fi Enabled	Wi-Fi 활성화됨
 Wi-Fi start failed	Wi-Fi 시작 실패
-All	All
-Contact Alerts	Contact Alerts
-Contacts Only	Contacts Only
-Message Alerts	Message Alerts
+All	전체
+Contact Alerts	연락처 알림
+Contacts Only	연락처만
+Message Alerts	메시지 알림
+Backup Status	백업 상태
+Backup Settings	설정 백업
+Restore Settings	설정 복원
+No backup found	백업을 찾을 수 없음
+Backup unsupported	백업을 지원하지 않음
+SD not detected	SD 카드가 감지되지 않음
+Backup found	백업을 찾음
+Insert SD card to backup settings	설정을 백업하려면 SD 카드를 넣으세요
+Backup failed	백업 실패
+Settings backup saved to SD	설정 백업이 SD에 저장됨
+Insert SD card to restore settings	설정을 복원하려면 SD 카드를 넣으세요
+No settings backup found	설정 백업을 찾을 수 없음
+Restore failed	복원 실패
+Settings restored. Restarting...	설정이 복원되었습니다. 다시 시작 중...
+Overwrite current settings and restart?	현재 설정을 덮어쓰고 다시 시작할까요?
+Restore	복원

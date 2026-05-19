@@ -75,7 +75,7 @@ Notes:
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/europe-cyrillic-ext-1.1.0.zip`
+- `site/assets/packs/europe-cyrillic-ext-1.1.1.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact for a future Extensions downloader. Its `payload/` directory unpacks into `/trailmate/packs/...`.
