@@ -28,4 +28,3 @@ struct AuthorityBinding
 };
 
 } // namespace device
-

@@ -3251,8 +3251,8 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
         meshtastic_KeyVerification kv = meshtastic_KeyVerification_init_default;
         bool handled = false;
         if (::chat::meshtastic::decodeKeyVerificationMessage(plaintext,
-                                                              plaintext_len,
-                                                              &kv) &&
+                                                             plaintext_len,
+                                                             &kv) &&
             header.channel == 0)
         {
             if (kv.hash1.size == 0 && kv.hash2.size == 0)

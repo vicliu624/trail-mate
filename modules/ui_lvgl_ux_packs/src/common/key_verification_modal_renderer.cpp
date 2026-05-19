@@ -1,10 +1,10 @@
 #include "ui_lvgl_ux_packs/common/key_verification_modal_renderer.h"
 
-#include "ui_lvgl_core/lvgl_focus_group.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/widgets/ime/ime_widget.h"
+#include "ui_lvgl_core/lvgl_focus_group.h"
 
 #include <string>
 

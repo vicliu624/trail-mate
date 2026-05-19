@@ -1,6 +1,6 @@
+#include "linux_sim_composition_root.h"
 #include "ui_ascii_runtime/ascii_menu_runtime_adapter.h"
 #include "ui_ascii_runtime/ascii_screen_host_adapter.h"
-#include "linux_sim_composition_root.h"
 
 #include "product_composition/presentation_bundle.h"
 

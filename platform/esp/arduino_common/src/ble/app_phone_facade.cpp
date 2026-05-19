@@ -1,8 +1,8 @@
 #include "ble/app_phone_facade.h"
 
 #include "board/BoardBase.h"
-#include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/ble/meshtastic_phone_config_bridge.h"
+#include "chat/infra/meshcore/meshcore_ble_backend.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/ports/i_node_store.h"
 #include "chat/usecase/chat_service.h"

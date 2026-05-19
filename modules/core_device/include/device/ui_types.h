@@ -35,4 +35,3 @@ struct UiBinding
 };
 
 } // namespace device
-

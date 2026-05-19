@@ -1,13 +1,13 @@
+#include "uconsole_composition_root.h"
 #include "ui_gtk_runtime/gtk_menu_runtime_adapter.h"
 #include "ui_gtk_runtime/gtk_screen_host_adapter.h"
-#include "uconsole_composition_root.h"
 
 #include "product_composition/presentation_bundle.h"
 
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <string>
 

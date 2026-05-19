@@ -1,7 +1,7 @@
 #pragma once
 
-#include "phone/common/phone_app_facade.h"
 #include "chat/domain/chat_types.h"
+#include "phone/common/phone_app_facade.h"
 
 #include <array>
 #include <cstdint>

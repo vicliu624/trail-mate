@@ -8,9 +8,9 @@
 
 #include "platform/ui/gps_runtime.h"
 #include "sys/clock.h"
-#include "ui/presentation_sources/legacy_gps_status_source.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
+#include "ui/presentation_sources/legacy_gps_status_source.h"
 #include "ui_presentation/gps/gps_status_model.h"
 
 namespace ui::menu::dashboard

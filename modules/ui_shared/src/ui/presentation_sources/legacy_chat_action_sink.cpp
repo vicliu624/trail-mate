@@ -35,7 +35,7 @@ ui::UiActionResult LegacyChatActionSink::sendMessage(
 
     ::chat::ConversationId core_id;
     if (!chat_presentation_adapters::toCoreConversationId(message.conversation,
-                                                         core_id))
+                                                          core_id))
     {
         return ui::UiActionResult::fail(ui::UiActionFailure::Unsupported);
     }

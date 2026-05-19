@@ -1,12 +1,12 @@
 #include "phone/meshtastic/meshtastic_phone_core.h"
 
-#include "phone/meshtastic/meshtastic_defaults.h"
-#include "phone/meshtastic/meshtastic_phone_config_bridge.h"
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/runtime/self_identity_policy.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
+#include "phone/meshtastic/meshtastic_defaults.h"
+#include "phone/meshtastic/meshtastic_phone_config_bridge.h"
 #include "sys/clock.h"
 
 #include <algorithm>

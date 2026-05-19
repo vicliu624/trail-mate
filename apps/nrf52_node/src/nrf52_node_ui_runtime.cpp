@@ -1,9 +1,9 @@
 ﻿#include "nrf52_node_ui_runtime.h"
 
-#include "nrf52_node_app_facade_runtime.h"
-#include "platform/nrf52/debug/nrf52_debug_console.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
+#include "nrf52_node_app_facade_runtime.h"
 #include "platform/nrf52/arduino_common/internal_fs_utils.h"
+#include "platform/nrf52/debug/nrf52_debug_console.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/time_runtime.h"

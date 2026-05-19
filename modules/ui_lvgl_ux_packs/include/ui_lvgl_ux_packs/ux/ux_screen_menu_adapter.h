@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ui_presentation/menu/menu_model.h"
 #include "ui_lvgl_ux_packs/ux/screen_registry.h"
+#include "ui_presentation/menu/menu_model.h"
 
 namespace ui_lvgl_ux
 {

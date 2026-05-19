@@ -16,4 +16,3 @@ enum class HostKind : std::uint8_t
 };
 
 } // namespace device
-

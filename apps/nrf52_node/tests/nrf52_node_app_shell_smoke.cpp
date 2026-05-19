@@ -1,9 +1,5 @@
 #include "nrf52_node_app_shell.h"
 
-#include "ui_lvgl_ux_packs/ux/ux_menu_provider.h"
-#include "ui_lvgl_ux_packs/ux/ux_pack_registry.h"
-#include "ui_presentation/menu/menu_model.h"
-
 #include <cassert>
 #include <cstring>
 
@@ -28,10 +24,5 @@ int main()
                        "pre-refactor PlatformIO/nRF52 implementation roots") == 0);
     assert(std::strcmp(config.replacement_owner,
                        "apps/nrf52_node + builds/pio_nrf52 + boards/gat562_mesh_evb_pro") == 0);
-    assert(ui_lvgl_ux::findUxPackById(shell.activeUxPackId()) != nullptr);
-
-    ui::menu::MenuModel menu;
-    assert(ui_lvgl_ux::buildMenuForUxPack(shell.activeUxPackId(), menu));
-    assert(menu.size() > 0);
     return 0;
 }

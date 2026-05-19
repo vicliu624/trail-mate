@@ -52,7 +52,7 @@ const MemoryProfile& current_memory_profile()
     {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
         return make_extended_profile();
-#elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO) || \
+#elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO) ||                  \
     defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_T_WATCH_S3) || \
     defined(BOARD_HAS_PSRAM) || defined(HAS_PSRAM)
         return make_standard_profile();

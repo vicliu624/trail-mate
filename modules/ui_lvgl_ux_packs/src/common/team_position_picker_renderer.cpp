@@ -1,9 +1,9 @@
 #include "ui_lvgl_ux_packs/common/team_position_picker_renderer.h"
 
 #include "team/protocol/team_location_marker.h"
-#include "ui_lvgl_core/lvgl_focus_group.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
+#include "ui_lvgl_core/lvgl_focus_group.h"
 
 extern "C"
 {

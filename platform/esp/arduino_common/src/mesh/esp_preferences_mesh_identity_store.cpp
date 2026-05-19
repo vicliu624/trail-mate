@@ -204,7 +204,8 @@ EspPreferencesPeerKeyStore::EspPreferencesPeerKeyStore(const Options& options)
 
     keys.erase(std::remove_if(keys.begin(),
                               keys.end(),
-                              [node_id](const ::mesh::PeerPublicKey& key) {
+                              [node_id](const ::mesh::PeerPublicKey& key)
+                              {
                                   return key.node_id == node_id;
                               }),
                keys.end());
@@ -335,7 +336,8 @@ EspPreferencesPeerKeyStore::EspPreferencesPeerKeyStore(const Options& options)
         std::sort(keys.begin(),
                   keys.end(),
                   [](const ::mesh::PeerPublicKey& left,
-                     const ::mesh::PeerPublicKey& right) {
+                     const ::mesh::PeerPublicKey& right)
+                  {
                       return left.updated_at_ms < right.updated_at_ms;
                   });
         keys.erase(keys.begin(),

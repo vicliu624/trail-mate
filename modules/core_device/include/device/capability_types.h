@@ -67,4 +67,3 @@ const char* to_string(RadioLinkMode mode) noexcept;
 const char* to_string(GpsLinkMode mode) noexcept;
 
 } // namespace device
-

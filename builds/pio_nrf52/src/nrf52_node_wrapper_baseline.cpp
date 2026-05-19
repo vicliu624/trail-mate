@@ -1,5 +1,5 @@
-#include "nrf52_node_app_shell.h"
 #include "nrf52_historical_source_descriptor.h"
+#include "nrf52_node_app_shell.h"
 
 namespace
 {

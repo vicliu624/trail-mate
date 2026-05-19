@@ -5,8 +5,8 @@
 int main()
 {
     static_assert(std::is_same<
-                  ui::presentation_sources::LegacyChatDeliveryActionBridge,
-                  ui_chat_runtime::ChatDeliveryActionPortAdapter>::value,
+                      ui::presentation_sources::LegacyChatDeliveryActionBridge,
+                      ui_chat_runtime::ChatDeliveryActionPortAdapter>::value,
                   "LegacyChatDeliveryActionBridge must stay an alias only");
     return 0;
 }

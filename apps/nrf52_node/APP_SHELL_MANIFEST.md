@@ -63,7 +63,8 @@ Default UX Pack:
 UX Pack Runtime Binding:
 
 - `Nrf52NodeAppShell::validate()` resolves `default_ux_pack_id` through
-  `findUxPackById`.
+  product-composition target UX binding. The nRF52 shell stays independent of
+  LVGL UX pack runtime code.
 
 Historical source descriptor:
 

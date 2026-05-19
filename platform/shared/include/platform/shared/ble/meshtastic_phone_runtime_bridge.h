@@ -1,12 +1,12 @@
 #pragma once
 
-#include "phone/common/phone_app_facade.h"
-#include "phone/meshtastic/meshtastic_defaults.h"
-#include "phone/meshtastic/meshtastic_phone_core.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "gps/ports/i_location_source.h"
 #include "meshtastic/localonly.pb.h"
+#include "phone/common/phone_app_facade.h"
+#include "phone/meshtastic/meshtastic_defaults.h"
+#include "phone/meshtastic/meshtastic_phone_core.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
 

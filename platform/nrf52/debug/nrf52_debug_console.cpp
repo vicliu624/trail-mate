@@ -1,4 +1,4 @@
-﻿#include "platform/nrf52/debug/nrf52_debug_console.h"
+﻿#include "nrf52_debug_console.h"
 
 #include <Arduino.h>
 #include <cstring>

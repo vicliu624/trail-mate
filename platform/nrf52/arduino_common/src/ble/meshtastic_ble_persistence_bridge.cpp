@@ -7,8 +7,8 @@
 #endif
 
 #include <Arduino.h>
-#include <cstddef>
 #include <cstdarg>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #if !defined(GAT562_MESH_EVB_PRO)

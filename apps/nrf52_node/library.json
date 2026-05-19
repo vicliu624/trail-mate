@@ -7,15 +7,20 @@
     "srcFilter": [
       "-<*>",
       "+<nrf52_historical_source_descriptor.cpp>",
+      "+<nrf52_node_app_facade_runtime.cpp>",
+      "+<nrf52_node_app_runtime_access.cpp>",
       "+<nrf52_node_app_shell.cpp>",
-      "+<nrf52_node_runtime_config.cpp>"
+      "+<nrf52_node_arduino_entry.cpp>",
+      "+<nrf52_node_loop_runtime.cpp>",
+      "+<nrf52_node_runtime_config.cpp>",
+      "+<nrf52_node_startup_runtime.cpp>",
+      "+<nrf52_node_ui_runtime.cpp>"
     ],
     "flags": [
       "-std=gnu++17",
       "-I../..",
       "-I../../modules/product_composition/include",
       "-I../../modules/ui_presentation/include",
-      "-I../../modules/ui_lvgl_ux_packs/include",
       "-I../../modules/core_chat/include",
       "-I../../modules/core_chat/generated",
       "-I../../modules/core_chat/third_party/nanopb",
@@ -36,9 +41,6 @@
   "dependencies": [
     {
       "name": "product_composition"
-    },
-    {
-      "name": "ui_lvgl_ux_packs"
     },
     {
       "name": "core_chat"

@@ -41,10 +41,10 @@
 #include "ui/screens/settings/settings_page_styles.h"
 #include "ui/screens/settings/settings_state.h"
 #include "ui/ui_common.h"
-#include "ui_presentation/settings/settings_model.h"
 #include "ui/widgets/busy_overlay.h"
 #include "ui/widgets/system_notification.h"
 #include "ui/widgets/top_bar.h"
+#include "ui_presentation/settings/settings_model.h"
 
 #if defined(ESP_PLATFORM)
 #include "esp_log.h"

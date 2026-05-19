@@ -2,11 +2,11 @@
 
 #include <Arduino.h>
 
+#include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "nrf52_node_app_facade_runtime.h"
 #include "nrf52_node_app_runtime_access.h"
-#include "platform/nrf52/debug/nrf52_debug_console.h"
 #include "nrf52_node_ui_runtime.h"
-#include "boards/gat562_mesh_evb_pro/gat562_board.h"
+#include "platform/nrf52/debug/nrf52_debug_console.h"
 #include "sys/clock.h"
 
 namespace trailmate::apps::nrf52_node::startup_runtime

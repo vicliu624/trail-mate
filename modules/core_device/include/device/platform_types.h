@@ -15,4 +15,3 @@ enum class PlatformKind : std::uint8_t
 };
 
 } // namespace device
-

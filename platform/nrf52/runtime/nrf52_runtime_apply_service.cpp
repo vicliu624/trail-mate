@@ -1,12 +1,12 @@
 ﻿#include "platform/nrf52/runtime/nrf52_runtime_apply_service.h"
 
-#include "platform/nrf52/debug/nrf52_debug_console.h"
 #include "ble/ble_manager.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
 #include "chat/infra/mesh_adapter_router_core.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/usecase/chat_service.h"
+#include "platform/nrf52/debug/nrf52_debug_console.h"
 
 #include <cstring>
 
@@ -29,9 +29,9 @@ void RuntimeApplyService::applyMesh(app::AppConfig& config,
                                     boards::gat562_mesh_evb_pro::Gat562Board* board) const
 {
     platform::nrf52::debug_console::printf("[gat562][cfg] applyMesh start proto=%u ok_to_mqtt=%u ignore_mqtt=%u\n",
-                          static_cast<unsigned>(config.mesh_protocol),
-                          config.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
-                          config.meshtastic_config.ignore_mqtt ? 1U : 0U);
+                                           static_cast<unsigned>(config.mesh_protocol),
+                                           config.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                                           config.meshtastic_config.ignore_mqtt ? 1U : 0U);
     ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config);
 
     if (mesh_router)
@@ -57,12 +57,12 @@ void RuntimeApplyService::applyMesh(app::AppConfig& config,
 
     const chat::MeshConfig& mesh = config.activeMeshConfig();
     platform::nrf52::debug_console::printf("[gat562] radio cfg %s region=%u preset=%u ch=%u tx=%d hop=%u\n",
-                          protocolLabel(config.mesh_protocol),
-                          static_cast<unsigned>(mesh.region),
-                          static_cast<unsigned>(mesh.modem_preset),
-                          static_cast<unsigned>(mesh.channel_num),
-                          static_cast<int>(mesh.tx_power),
-                          static_cast<unsigned>(mesh.hop_limit));
+                                           protocolLabel(config.mesh_protocol),
+                                           static_cast<unsigned>(mesh.region),
+                                           static_cast<unsigned>(mesh.modem_preset),
+                                           static_cast<unsigned>(mesh.channel_num),
+                                           static_cast<int>(mesh.tx_power),
+                                           static_cast<unsigned>(mesh.hop_limit));
 }
 
 void RuntimeApplyService::applyUserInfo(const chat::runtime::EffectiveSelfIdentity& previous_identity,

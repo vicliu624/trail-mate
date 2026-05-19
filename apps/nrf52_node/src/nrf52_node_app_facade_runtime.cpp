@@ -1,9 +1,6 @@
 ﻿#include "nrf52_node_app_facade_runtime.h"
 
 #include "app/app_facade_access.h"
-#include "platform/nrf52/debug/nrf52_debug_console.h"
-#include "platform/nrf52/protocol/nrf52_protocol_factory.h"
-#include "platform/nrf52/runtime/nrf52_runtime_apply_service.h"
 #include "boards/gat562_mesh_evb_pro/gat562_board.h"
 #include "boards/gat562_mesh_evb_pro/settings_store.h"
 #include "chat/domain/chat_model.h"
@@ -20,6 +17,9 @@
 #include "platform/nrf52/arduino_common/chat/infra/store/internal_fs_store.h"
 #include "platform/nrf52/arduino_common/device_identity.h"
 #include "platform/nrf52/arduino_common/self_identity_bridge.h"
+#include "platform/nrf52/debug/nrf52_debug_console.h"
+#include "platform/nrf52/protocol/nrf52_protocol_factory.h"
+#include "platform/nrf52/runtime/nrf52_runtime_apply_service.h"
 #include "sys/clock.h"
 
 #include <Arduino.h>
@@ -173,7 +173,7 @@ bool AppFacadeRuntime::initialize()
     }
     initialized_ = true;
     platform::nrf52::debug_console::printf("[gat562] app facade ready node=%08lX\n",
-                          static_cast<unsigned long>(effective_identity_.node_id));
+                                           static_cast<unsigned long>(effective_identity_.node_id));
     return true;
 }
 
@@ -254,9 +254,9 @@ void AppFacadeRuntime::initializeChatRuntime()
 
     (void)installMeshBackend(chat::MeshProtocol::Meshtastic,
                              platform::nrf52::protocol::createProtocolAdapter(chat::MeshProtocol::Meshtastic,
-                                                   identityProvider(),
-                                                   static_cast<platform::nrf52::arduino_common::chat::meshtastic::NodeStore*>(node_store_.get()),
-                                                   contact_service_.get()));
+                                                                              identityProvider(),
+                                                                              static_cast<platform::nrf52::arduino_common::chat::meshtastic::NodeStore*>(node_store_.get()),
+                                                                              contact_service_.get()));
     (void)installMeshBackend(chat::MeshProtocol::MeshCore,
                              platform::nrf52::protocol::createProtocolAdapter(chat::MeshProtocol::MeshCore, identityProvider()));
 
@@ -309,14 +309,14 @@ void AppFacadeRuntime::saveConfig()
     ScopedGpsSuspend suspend_gps(board_);
     clearPostSaveApplySkips();
     platform::nrf52::debug_console::printf("[gat562][cfg] save start proto=%u ok_to_mqtt=%u ignore_mqtt=%u ble=%u\n",
-                          static_cast<unsigned>(config_.mesh_protocol),
-                          config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
-                          config_.meshtastic_config.ignore_mqtt ? 1U : 0U,
-                          config_.ble_enabled ? 1U : 0U);
+                                           static_cast<unsigned>(config_.mesh_protocol),
+                                           config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                                           config_.meshtastic_config.ignore_mqtt ? 1U : 0U,
+                                           config_.ble_enabled ? 1U : 0U);
     ::boards::gat562_mesh_evb_pro::settings_store::normalizeConfig(config_);
     platform::nrf52::debug_console::printf("[gat562][cfg] save post-normalize ok_to_mqtt=%u ignore_mqtt=%u\n",
-                          config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
-                          config_.meshtastic_config.ignore_mqtt ? 1U : 0U);
+                                           config_.meshtastic_config.config_ok_to_mqtt ? 1U : 0U,
+                                           config_.meshtastic_config.ignore_mqtt ? 1U : 0U);
     refreshEffectiveIdentity();
     platform::nrf52::debug_console::printf("[gat562][cfg] save post-identity\n");
     applyMeshConfig();
@@ -455,9 +455,9 @@ bool AppFacadeRuntime::switchMeshProtocol(chat::MeshProtocol protocol, bool pers
     ScopedGpsSuspend suspend_gps(board_);
     const bool protocol_changed = (config_.mesh_protocol != protocol);
     platform::nrf52::debug_console::printf("[gat562][cfg] switch proto=%u persist=%u changed=%u\n",
-                          static_cast<unsigned>(protocol),
-                          persist ? 1U : 0U,
-                          protocol_changed ? 1U : 0U);
+                                           static_cast<unsigned>(protocol),
+                                           persist ? 1U : 0U,
+                                           protocol_changed ? 1U : 0U);
     config_.mesh_protocol = protocol;
     ::boards::gat562_mesh_evb_pro::settings_store::cacheAppConfig(config_);
 
@@ -468,11 +468,11 @@ bool AppFacadeRuntime::switchMeshProtocol(chat::MeshProtocol protocol, bool pers
         {
             config_save_pending_ = ::boards::gat562_mesh_evb_pro::settings_store::hasDeferredSavePending();
             platform::nrf52::debug_console::printf("[gat562][cfg] switch persist save=ok deferred=%u\n",
-                                  config_save_pending_ ? 1U : 0U);
+                                                   config_save_pending_ ? 1U : 0U);
             if (protocol_changed)
             {
                 platform::nrf52::debug_console::printf("[gat562][cfg] switch persist rebooting for proto=%u\n",
-                                      static_cast<unsigned>(protocol));
+                                                       static_cast<unsigned>(protocol));
                 restartDevice();
             }
         }
@@ -723,7 +723,7 @@ bool AppFacadeRuntime::consumePostSaveApplySkip(uint8_t bit, const char* label)
 
     post_save_apply_skip_mask_ &= static_cast<uint8_t>(~bit);
     platform::nrf52::debug_console::printf("[gat562][cfg] %s skipped: already applied in save\n",
-                          label ? label : "apply");
+                                           label ? label : "apply");
     return true;
 }
 

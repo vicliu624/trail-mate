@@ -10,10 +10,10 @@
 #include <string>
 #include <vector>
 
+#include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "cJSON.h"
 #include "chat/domain/chat_types.h"
-#include "app/app_config.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/settings_store.h"
 

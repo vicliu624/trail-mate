@@ -58,4 +58,3 @@ struct TargetManifestView
 };
 
 } // namespace device
-

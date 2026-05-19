@@ -133,8 +133,8 @@ void ChatPageRuntimeEventPump::handleKeyVerificationNumberInform(
     if (key_verification_source_ != nullptr)
     {
         key_verification_source_->onNumberInform(event.node_id,
-                                                event.nonce,
-                                                event.security_number);
+                                                 event.nonce,
+                                                 event.security_number);
     }
     showKeyVerificationForPeer(
         chat::ui::support::active_mesh_protocol(),
@@ -147,9 +147,9 @@ void ChatPageRuntimeEventPump::handleKeyVerificationFinal(
     if (key_verification_source_ != nullptr)
     {
         key_verification_source_->onFinal(event.node_id,
-                                         event.nonce,
-                                         event.is_sender,
-                                         event.verification_code);
+                                          event.nonce,
+                                          event.is_sender,
+                                          event.verification_code);
     }
     showKeyVerificationForPeer(
         chat::ui::support::active_mesh_protocol(),

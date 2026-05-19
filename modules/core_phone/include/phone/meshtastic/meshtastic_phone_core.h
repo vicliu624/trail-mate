@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#include "phone/common/phone_app_facade.h"
 #include "chat/domain/chat_types.h"
 #include "meshtastic/admin.pb.h"
 #include "meshtastic/channel.pb.h"
@@ -11,6 +10,7 @@
 #include "meshtastic/mesh.pb.h"
 #include "meshtastic/module_config.pb.h"
 #include "meshtastic/telemetry.pb.h"
+#include "phone/common/phone_app_facade.h"
 
 #include <deque>
 

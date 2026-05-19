@@ -10,12 +10,12 @@
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "sys/clock.h"
-#include "ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
-#include "ui_map_runtime/map_tiles/map_tile_decoder_cache.h"
 #include "ui/page/page_profile.h"
 #include "ui/runtime/memory_profile.h"
 #include "ui/screens/gps/gps_constants.h"
 #include "ui/support/lvgl_fs_utils.h"
+#include "ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
+#include "ui_map_runtime/map_tiles/map_tile_decoder_cache.h"
 
 #include <algorithm>
 #include <cmath>

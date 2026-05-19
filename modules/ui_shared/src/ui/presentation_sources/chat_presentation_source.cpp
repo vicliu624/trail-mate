@@ -150,7 +150,7 @@ bool ChatPresentationSource::buildChatWorkspaceSnapshot(
 
     ::chat::ConversationId core_selected;
     if (chat_presentation_adapters::toCoreConversationId(request.selected,
-                                                        core_selected))
+                                                         core_selected))
     {
         const auto messages =
             chat_service_.getRecentMessages(core_selected, kMaxMessageRows);

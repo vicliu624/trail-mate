@@ -1,15 +1,15 @@
-#include "chat/domain/chat_model.h"
 #include "chat/delivery/chat_delivery_read_model.h"
 #include "chat/delivery/legacy_chat_delivery_bridge.h"
+#include "chat/domain/chat_model.h"
 #include "chat/infra/store/ram_store.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/chat_service.h"
-#include "ui/presentation_sources/legacy_chat_action_sink.h"
 #include "ui/presentation_sources/chat_presentation_source.h"
+#include "ui/presentation_sources/legacy_chat_action_sink.h"
 
 #include <cassert>
-#include <deque>
 #include <cstring>
+#include <deque>
 #include <string>
 
 namespace

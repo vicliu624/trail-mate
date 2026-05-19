@@ -38,4 +38,3 @@ struct InputFacts
 };
 
 } // namespace device
-

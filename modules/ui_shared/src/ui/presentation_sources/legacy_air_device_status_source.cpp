@@ -6,8 +6,8 @@
 #include "chat/infra/meshcore/mc_region_presets.h"
 #include "chat/infra/meshtastic/mt_radio_config.h"
 
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 
 namespace ui::presentation_sources

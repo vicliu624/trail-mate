@@ -2953,8 +2953,8 @@ void MtAdapter::updateChannelKeys()
     else
     {
         primary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.primary_key,
-                                                                   sizeof(config_.primary_key),
-                                                                   config_.primary_key_len);
+                                                                  sizeof(config_.primary_key),
+                                                                  config_.primary_key_len);
         memcpy(primary_psk_, config_.primary_key, primary_psk_len_);
     }
 
@@ -2966,8 +2966,8 @@ void MtAdapter::updateChannelKeys()
     else
     {
         secondary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.secondary_key,
-                                                                     sizeof(config_.secondary_key),
-                                                                     config_.secondary_key_len);
+                                                                    sizeof(config_.secondary_key),
+                                                                    config_.secondary_key_len);
         memcpy(secondary_psk_, config_.secondary_key, secondary_psk_len_);
     }
 

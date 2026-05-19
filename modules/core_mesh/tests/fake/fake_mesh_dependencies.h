@@ -171,7 +171,8 @@ class FakePeerKeyStore final : public IPeerKeyStore
     {
         keys.erase(std::remove_if(keys.begin(),
                                   keys.end(),
-                                  [node_id](const PeerPublicKey& key) {
+                                  [node_id](const PeerPublicKey& key)
+                                  {
                                       return key.node_id == node_id;
                                   }),
                    keys.end());

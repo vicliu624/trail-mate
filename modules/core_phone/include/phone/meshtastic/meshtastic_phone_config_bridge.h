@@ -1,10 +1,10 @@
 #pragma once
 
-#include "phone/meshtastic/meshtastic_defaults.h"
 #include "meshtastic/config.pb.h"
 #include "meshtastic/connection_status.pb.h"
 #include "meshtastic/localonly.pb.h"
 #include "meshtastic/mesh.pb.h"
+#include "phone/meshtastic/meshtastic_defaults.h"
 
 #include <cstdint>
 #include <cstring>

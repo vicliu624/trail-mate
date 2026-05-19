@@ -98,4 +98,3 @@ const char* to_string(GpsLinkMode mode) noexcept
 }
 
 } // namespace device
-

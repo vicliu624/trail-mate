@@ -198,14 +198,14 @@ ProtocolResult MeshCoreProtocolStrategy::buildDirectMessage(
         const uint8_t dest_hash = lowNodeHash(command.to);
         const uint8_t src_hash = lowNodeHash(context.local_node);
         if (src_hash == 0 || !chat::meshcore::buildPeerDatagramPayload(dest_hash,
-                                                                        src_hash,
-                                                                        key16,
-                                                                        key32,
-                                                                        plain,
-                                                                        plain_len,
-                                                                        payload,
-                                                                        sizeof(payload),
-                                                                        &payload_len))
+                                                                       src_hash,
+                                                                       key16,
+                                                                       key32,
+                                                                       plain,
+                                                                       plain_len,
+                                                                       payload,
+                                                                       sizeof(payload),
+                                                                       &payload_len))
         {
             return ProtocolResult::fail(ProtocolFailure::EncodeFailed);
         }
@@ -259,11 +259,11 @@ ProtocolResult MeshCoreProtocolStrategy::buildDirectMessage(
 
     uint8_t encrypted[kMeshCoreMaxPayloadSize] = {};
     const size_t encrypted_len = chat::meshcore::encryptThenMac(key16,
-                                                               key32,
-                                                               encrypted,
-                                                               sizeof(encrypted),
-                                                               plain,
-                                                               plain_len);
+                                                                key32,
+                                                                encrypted,
+                                                                sizeof(encrypted),
+                                                                plain,
+                                                                plain_len);
     if (encrypted_len == 0 || encrypted_len > (kMeshCoreMaxPayloadSize - 1))
     {
         return ProtocolResult::fail(ProtocolFailure::CryptoFailed);

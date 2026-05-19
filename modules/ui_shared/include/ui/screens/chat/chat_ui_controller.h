@@ -13,11 +13,11 @@
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_components.h"
 #include "ui/screens/chat/chat_message_list_components.h"
+#include "ui/team_actions/team_action_sink.h"
+#include "ui/widgets/ime/ime_widget.h"
 #include "ui_chat_runtime/chat_ui_refresh_sink.h"
 #include "ui_lvgl_ux_packs/common/key_verification_modal_renderer.h"
 #include "ui_lvgl_ux_packs/common/team_position_picker_renderer.h"
-#include "ui/team_actions/team_action_sink.h"
-#include "ui/widgets/ime/ime_widget.h"
 #include "ui_presentation/chat/chat_workspace_model.h"
 #include <cstdint>
 #include <memory>
@@ -28,7 +28,7 @@ namespace ui::key_verification
 {
 class KeyVerificationModel;
 struct KeyVerificationSnapshot;
-}
+} // namespace ui::key_verification
 
 namespace chat
 {

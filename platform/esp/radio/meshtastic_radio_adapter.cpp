@@ -638,8 +638,8 @@ void MeshtasticRadioAdapter::updateChannelKeys()
     else
     {
         primary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.primary_key,
-                                                                   sizeof(config_.primary_key),
-                                                                   config_.primary_key_len);
+                                                                  sizeof(config_.primary_key),
+                                                                  config_.primary_key_len);
         std::memcpy(primary_psk_, config_.primary_key, primary_psk_len_);
     }
 
@@ -651,8 +651,8 @@ void MeshtasticRadioAdapter::updateChannelKeys()
     else
     {
         secondary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.secondary_key,
-                                                                     sizeof(config_.secondary_key),
-                                                                     config_.secondary_key_len);
+                                                                    sizeof(config_.secondary_key),
+                                                                    config_.secondary_key_len);
         std::memcpy(secondary_psk_, config_.secondary_key, secondary_psk_len_);
     }
 
@@ -661,9 +661,9 @@ void MeshtasticRadioAdapter::updateChannelKeys()
                                              primary_psk_,
                                              primary_psk_len_);
     secondary_channel_hash_ = chat::meshtastic::computeChannelHash(
-                                                                   chat::meshtastic::secondaryChannelName(config_),
-                                                                   secondary_psk_len_ > 0 ? secondary_psk_ : nullptr,
-                                                                   secondary_psk_len_);
+        chat::meshtastic::secondaryChannelName(config_),
+        secondary_psk_len_ > 0 ? secondary_psk_ : nullptr,
+        secondary_psk_len_);
 }
 
 void MeshtasticRadioAdapter::initNodeIdentity()

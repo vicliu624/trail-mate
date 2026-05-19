@@ -102,10 +102,10 @@ bool MeshtasticSelfAnnouncementCore::buildNodeInfoPacket(const MeshtasticAnnounc
     size_t key_len = 0;
     const uint8_t* key = resolveChannelKey(request.mesh_config, request.channel, &key_len);
     out_packet->channel_hash = chat::meshtastic::computeChannelHash(
-                                                                    chat::meshtastic::channelName(request.mesh_config,
-                                                                                                  request.channel),
-                                                                    key,
-                                                                    key_len);
+        chat::meshtastic::channelName(request.mesh_config,
+                                      request.channel),
+        key,
+        key_len);
     out_packet->wire_size = sizeof(out_packet->wire);
     if (!chat::meshtastic::buildWirePacket(payload,
                                            payload_size,

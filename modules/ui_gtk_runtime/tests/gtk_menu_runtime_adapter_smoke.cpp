@@ -1,5 +1,5 @@
-#include "ui_gtk_runtime/gtk_menu_runtime_adapter.h"
 #include "uconsole_composition_root.h"
+#include "ui_gtk_runtime/gtk_menu_runtime_adapter.h"
 
 #include "product_composition/presentation_bundle.h"
 

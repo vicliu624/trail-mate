@@ -1,7 +1,6 @@
 #include "nrf52_node_app_shell.h"
 
 #include "product_composition/target_ux_binding.h"
-#include "ui_lvgl_ux_packs/ux/ux_pack_registry.h"
 
 #include <cstring>
 
@@ -41,7 +40,6 @@ bool Nrf52NodeAppShell::validate() const
            config_.target_family != nullptr &&
            config_.default_ux_pack_id != nullptr &&
            std::strcmp(config_.default_ux_pack_id, activeUxPackId()) == 0 &&
-           ui_lvgl_ux::findUxPackById(activeUxPackId()) != nullptr &&
            config_.historical_generic_root_name != nullptr &&
            config_.historical_board_root_name != nullptr &&
            config_.historical_role != nullptr &&

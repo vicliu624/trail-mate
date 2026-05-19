@@ -36,4 +36,3 @@ struct RuntimePolicy
 };
 
 } // namespace device
-
