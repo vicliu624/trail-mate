@@ -21,6 +21,7 @@ struct RegionPreset
     float bw_khz;
     uint8_t sf;
     uint8_t cr;
+    int8_t tx_power_dbm;
 };
 
 const RegionPreset* getRegionPresetTable(size_t* out_count);

@@ -3,6 +3,7 @@
 #include "chat/infra/meshtastic/mt_codec_pb.h"
 #include "chat/infra/meshtastic/mt_packet_wire.h"
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
+#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/infra/meshtastic/mt_region.h"
 
 #include <cstdio>
@@ -23,25 +24,6 @@ std::string buildMeshtasticUserId(NodeId node_id)
 
 constexpr uint8_t kDefaultPskIndex = 1;
 
-const char* resolveChannelName(const MeshConfig& config, ChannelId channel)
-{
-    if (channel == ChannelId::SECONDARY)
-    {
-        return "Secondary";
-    }
-
-    if (config.use_preset)
-    {
-        const char* preset_name = chat::meshtastic::presetDisplayName(
-            static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(config.modem_preset));
-        if (preset_name && preset_name[0] != '\0' && std::strcmp(preset_name, "Invalid") != 0)
-        {
-            return preset_name;
-        }
-    }
-    return "Custom";
-}
-
 const uint8_t* resolveChannelKey(const MeshConfig& config, ChannelId channel, size_t* out_len)
 {
     if (out_len)
@@ -51,22 +33,28 @@ const uint8_t* resolveChannelKey(const MeshConfig& config, ChannelId channel, si
 
     if (channel == ChannelId::SECONDARY)
     {
-        if (!chat::meshtastic::isZeroKey(config.secondary_key, sizeof(config.secondary_key)))
+        const uint8_t key_len = chat::normalizeMeshtasticChannelKeyLen(config.secondary_key,
+                                                                       sizeof(config.secondary_key),
+                                                                       config.secondary_key_len);
+        if (key_len > 0)
         {
             if (out_len)
             {
-                *out_len = sizeof(config.secondary_key);
+                *out_len = key_len;
             }
             return config.secondary_key;
         }
         return nullptr;
     }
 
-    if (!chat::meshtastic::isZeroKey(config.primary_key, sizeof(config.primary_key)))
+    const uint8_t key_len = chat::normalizeMeshtasticChannelKeyLen(config.primary_key,
+                                                                   sizeof(config.primary_key),
+                                                                   config.primary_key_len);
+    if (key_len > 0)
     {
         if (out_len)
         {
-            *out_len = sizeof(config.primary_key);
+            *out_len = key_len;
         }
         return config.primary_key;
     }
@@ -113,8 +101,9 @@ bool MeshtasticSelfAnnouncementCore::buildNodeInfoPacket(const MeshtasticAnnounc
 
     size_t key_len = 0;
     const uint8_t* key = resolveChannelKey(request.mesh_config, request.channel, &key_len);
-    out_packet->channel_hash = chat::meshtastic::computeChannelHash(resolveChannelName(request.mesh_config,
-                                                                                       request.channel),
+    out_packet->channel_hash = chat::meshtastic::computeChannelHash(
+                                                                    chat::meshtastic::channelName(request.mesh_config,
+                                                                                                  request.channel),
                                                                     key,
                                                                     key_len);
     out_packet->wire_size = sizeof(out_packet->wire);

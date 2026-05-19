@@ -26,6 +26,12 @@ constexpr const char* kChatKeySecondaryEnabled = "sec_enabled";
 constexpr const char* kChatKeyPrimaryDownlink = "pri_downlink";
 constexpr const char* kChatKeySecondaryUplink = "sec_uplink";
 constexpr const char* kChatKeySecondaryDownlink = "sec_downlink";
+constexpr const char* kChatKeyPrimaryChannelName = "pri_ch_name";
+constexpr const char* kChatKeySecondaryChannelName = "sec_ch_name";
+constexpr const char* kChatKeyPrimaryChannelId = "pri_ch_id";
+constexpr const char* kChatKeySecondaryChannelId = "sec_ch_id";
+constexpr const char* kChatKeyPrimaryKeyLen = "pri_key_len";
+constexpr const char* kChatKeySecondaryKeyLen = "sec_key_len";
 constexpr const char* kGpsKeyInitBaud = "init_baud";
 constexpr const char* kGpsKeyInitProbeMs = "init_probe_ms";
 constexpr const char* kGpsKeyInitProfile = "init_profile";
@@ -245,6 +251,26 @@ size_t get_bytes_logged(Preferences& prefs,
     return read;
 }
 
+uint8_t normalize_stored_meshtastic_key(uint8_t* key,
+                                        size_t capacity,
+                                        uint8_t stored_len,
+                                        size_t read_len)
+{
+    uint8_t normalized = chat::normalizeMeshtasticChannelKeyLen(key, capacity, stored_len);
+    if (normalized == 0 && (read_len == chat::kMeshtasticChannelKeyDefaultLen ||
+                            read_len == chat::kMeshtasticChannelKeyMaxLen))
+    {
+        normalized = chat::normalizeMeshtasticChannelKeyLen(key,
+                                                            capacity,
+                                                            static_cast<uint8_t>(read_len));
+    }
+    if (normalized < capacity)
+    {
+        memset(key + normalized, 0, capacity - normalized);
+    }
+    return normalized;
+}
+
 bool put_bool_logged(Preferences& prefs,
                      const char* ns,
                      const char* key,
@@ -398,12 +424,14 @@ bool remove_key_logged(Preferences& prefs,
                        const char* key,
                        bool emit_logs)
 {
-    const bool ok = prefs.remove(key);
+    const bool existed = prefs.isKey(key);
+    const bool ok = !existed || prefs.remove(key);
     if (emit_logs)
     {
-        Serial.printf("[AppCfg][REMOVE] ns=%s key=%s ok=%s\n",
+        Serial.printf("[AppCfg][REMOVE] ns=%s key=%s existed=%s ok=%s\n",
                       safe_label(ns),
                       safe_label(key),
+                      bool_label(existed),
                       bool_label(ok));
     }
     return ok;
@@ -549,6 +577,18 @@ void log_config_delta(const AppConfig& before, const AppConfig& after)
                     after.meshtastic_config.tx_enabled, any_change);
     log_change_u16("meshtastic.channel_num", before.meshtastic_config.channel_num,
                    after.meshtastic_config.channel_num, any_change);
+    log_change_text("meshtastic.primary_name", before.meshtastic_config.primary_channel_name,
+                    after.meshtastic_config.primary_channel_name, any_change);
+    log_change_text("meshtastic.secondary_name", before.meshtastic_config.secondary_channel_name,
+                    after.meshtastic_config.secondary_channel_name, any_change);
+    log_change_u32("meshtastic.primary_id", before.meshtastic_config.primary_channel_id,
+                   after.meshtastic_config.primary_channel_id, any_change);
+    log_change_u32("meshtastic.secondary_id", before.meshtastic_config.secondary_channel_id,
+                   after.meshtastic_config.secondary_channel_id, any_change);
+    log_change_u8("meshtastic.primary_key_len", before.meshtastic_config.primary_key_len,
+                  after.meshtastic_config.primary_key_len, any_change);
+    log_change_u8("meshtastic.secondary_key_len", before.meshtastic_config.secondary_key_len,
+                  after.meshtastic_config.secondary_key_len, any_change);
     log_change_float("meshtastic.freq_offset", before.meshtastic_config.frequency_offset_mhz,
                      after.meshtastic_config.frequency_offset_mhz, any_change);
     log_change_float("meshtastic.freq_override", before.meshtastic_config.override_frequency_mhz,
@@ -647,7 +687,7 @@ void log_config_summary(const char* phase, const AppConfig& config)
                   config.node_name,
                   config.short_name,
                   bool_label(config.ble_enabled));
-    Serial.printf("[AppCfg][%s][radio] region=%u mc_preset=%u relay=%s hop_limit=%u chat_channel=%u tx_power_mt=%d tx_power_mc=%d tx_power_rn=%d\n",
+    Serial.printf("[AppCfg][%s][radio] region=%u mc_preset=%u relay=%s hop_limit=%u chat_channel=%u tx_power_mt=%d tx_power_mc=%d tx_power_rn=%d primary_name=%s secondary_name=%s primary_id=%lu secondary_id=%lu primary_key_len=%u secondary_key_len=%u\n",
                   safe_label(phase),
                   static_cast<unsigned>(config.meshtastic_config.region),
                   static_cast<unsigned>(config.meshcore_config.meshcore_region_preset),
@@ -656,7 +696,13 @@ void log_config_summary(const char* phase, const AppConfig& config)
                   static_cast<unsigned>(config.chat_channel),
                   static_cast<int>(config.meshtastic_config.tx_power),
                   static_cast<int>(config.meshcore_config.tx_power),
-                  static_cast<int>(config.rnode_config.tx_power));
+                  static_cast<int>(config.rnode_config.tx_power),
+                  config.meshtastic_config.primary_channel_name,
+                  config.meshtastic_config.secondary_channel_name,
+                  static_cast<unsigned long>(config.meshtastic_config.primary_channel_id),
+                  static_cast<unsigned long>(config.meshtastic_config.secondary_channel_id),
+                  static_cast<unsigned>(config.meshtastic_config.primary_key_len),
+                  static_cast<unsigned>(config.meshtastic_config.secondary_key_len));
     Serial.printf("[AppCfg][%s][gps_init] baud=%lu probe_ms=%lu profile=%u rxm=%u gnss=%u nmea=%u\n",
                   safe_label(phase),
                   static_cast<unsigned long>(config.gps_init_baud),
@@ -780,6 +826,10 @@ bool loadAppConfigFromPreferences(AppConfig& config,
         {
             return get_ushort_logged(prefs, "chat", key, default_value, emit_logs);
         };
+        auto get_uint = [&](const char* key, uint32_t default_value) -> uint32_t
+        {
+            return get_uint_logged(prefs, "chat", key, default_value, emit_logs);
+        };
         auto get_int = [&](const char* key, int default_value) -> int
         {
             return get_int_logged(prefs, "chat", key, default_value, emit_logs);
@@ -825,6 +875,20 @@ bool loadAppConfigFromPreferences(AppConfig& config,
         meshtastic_config.override_frequency_mhz = get_float(kChatKeyMeshFreqOverride, 0.0f);
         meshtastic_config.ignore_mqtt = get_bool(kChatKeyMeshIgnoreMqtt, false);
         meshtastic_config.config_ok_to_mqtt = get_bool("mesh_ok_to_mqtt", false);
+        String primary_name = get_string(kChatKeyPrimaryChannelName,
+                                         meshtastic_config.primary_channel_name);
+        strncpy(meshtastic_config.primary_channel_name,
+                primary_name.c_str(),
+                sizeof(meshtastic_config.primary_channel_name) - 1);
+        meshtastic_config.primary_channel_name[sizeof(meshtastic_config.primary_channel_name) - 1] = '\0';
+        String secondary_name = get_string(kChatKeySecondaryChannelName,
+                                           meshtastic_config.secondary_channel_name);
+        strncpy(meshtastic_config.secondary_channel_name,
+                secondary_name.c_str(),
+                sizeof(meshtastic_config.secondary_channel_name) - 1);
+        meshtastic_config.secondary_channel_name[sizeof(meshtastic_config.secondary_channel_name) - 1] = '\0';
+        meshtastic_config.primary_channel_id = get_uint(kChatKeyPrimaryChannelId, 0);
+        meshtastic_config.secondary_channel_id = get_uint(kChatKeySecondaryChannelId, 0);
 
         // Load meshcore profile (protocol-specific keys)
         meshcore_config.meshcore_freq_mhz = get_float("mc_freq", meshcore_config.meshcore_freq_mhz);
@@ -887,7 +951,19 @@ bool loadAppConfigFromPreferences(AppConfig& config,
         primary_downlink_enabled = get_bool(kChatKeyPrimaryDownlink, false);
         secondary_uplink_enabled = get_bool(kChatKeySecondaryUplink, false);
         secondary_downlink_enabled = get_bool(kChatKeySecondaryDownlink, false);
-        get_bytes("secondary_key", secondary_key, sizeof(secondary_key));
+        const size_t primary_key_read =
+            get_bytes("primary_key", meshtastic_config.primary_key, sizeof(meshtastic_config.primary_key));
+        meshtastic_config.primary_key_len =
+            normalize_stored_meshtastic_key(meshtastic_config.primary_key,
+                                            sizeof(meshtastic_config.primary_key),
+                                            get_uchar(kChatKeyPrimaryKeyLen, 0),
+                                            primary_key_read);
+        const size_t secondary_key_read = get_bytes("secondary_key", secondary_key, sizeof(secondary_key));
+        meshtastic_config.secondary_key_len =
+            normalize_stored_meshtastic_key(secondary_key,
+                                            sizeof(secondary_key),
+                                            get_uchar(kChatKeySecondaryKeyLen, 0),
+                                            secondary_key_read);
         memcpy(meshtastic_config.secondary_key, secondary_key, sizeof(meshtastic_config.secondary_key));
 
         prefs.end();
@@ -1117,6 +1193,10 @@ bool saveAppConfigToPreferences(AppConfig& config,
         {
             ok = put_ushort_logged(prefs, "chat", key, value, emit_logs) && ok;
         };
+        auto put_uint = [&](const char* key, uint32_t value)
+        {
+            ok = put_uint_logged(prefs, "chat", key, value, emit_logs) && ok;
+        };
         auto put_float = [&](const char* key, float value)
         {
             ok = put_float_logged(prefs, "chat", key, value, emit_logs) && ok;
@@ -1154,6 +1234,10 @@ bool saveAppConfigToPreferences(AppConfig& config,
         put_float(kChatKeyMeshFreqOverride, meshtastic_config.override_frequency_mhz);
         put_bool(kChatKeyMeshIgnoreMqtt, meshtastic_config.ignore_mqtt);
         put_bool("mesh_ok_to_mqtt", meshtastic_config.config_ok_to_mqtt);
+        put_string(kChatKeyPrimaryChannelName, meshtastic_config.primary_channel_name);
+        put_string(kChatKeySecondaryChannelName, meshtastic_config.secondary_channel_name);
+        put_uint(kChatKeyPrimaryChannelId, meshtastic_config.primary_channel_id);
+        put_uint(kChatKeySecondaryChannelId, meshtastic_config.secondary_channel_id);
 
         // Save meshcore profile
         put_float("mc_freq", meshcore_config.meshcore_freq_mhz);
@@ -1193,8 +1277,33 @@ bool saveAppConfigToPreferences(AppConfig& config,
         put_bool(kChatKeyPrimaryDownlink, primary_downlink_enabled);
         put_bool(kChatKeySecondaryUplink, secondary_uplink_enabled);
         put_bool(kChatKeySecondaryDownlink, secondary_downlink_enabled);
+        meshtastic_config.primary_key_len =
+            chat::normalizeMeshtasticChannelKeyLen(meshtastic_config.primary_key,
+                                                   sizeof(meshtastic_config.primary_key),
+                                                   meshtastic_config.primary_key_len);
+        meshtastic_config.secondary_key_len =
+            chat::normalizeMeshtasticChannelKeyLen(meshtastic_config.secondary_key,
+                                                   sizeof(meshtastic_config.secondary_key),
+                                                   meshtastic_config.secondary_key_len);
+        if (meshtastic_config.primary_key_len > 0)
+        {
+            put_bytes("primary_key", meshtastic_config.primary_key, meshtastic_config.primary_key_len);
+        }
+        else
+        {
+            ok = remove_key_logged(prefs, "chat", "primary_key", emit_logs) && ok;
+        }
+        put_uchar(kChatKeyPrimaryKeyLen, meshtastic_config.primary_key_len);
         memcpy(secondary_key, meshtastic_config.secondary_key, sizeof(secondary_key));
-        put_bytes("secondary_key", secondary_key, sizeof(secondary_key));
+        if (meshtastic_config.secondary_key_len > 0)
+        {
+            put_bytes("secondary_key", secondary_key, meshtastic_config.secondary_key_len);
+        }
+        else
+        {
+            ok = remove_key_logged(prefs, "chat", "secondary_key", emit_logs) && ok;
+        }
+        put_uchar(kChatKeySecondaryKeyLen, meshtastic_config.secondary_key_len);
     }
     prefs.end();
 

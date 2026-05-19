@@ -34,6 +34,8 @@ struct RadioConfig
 };
 
 const char* primaryChannelName(const MeshConfig& config);
+const char* secondaryChannelName(const MeshConfig& config);
+const char* channelName(const MeshConfig& config, ChannelId channel);
 RadioConfig deriveRadioConfig(const MeshConfig& config);
 
 } // namespace meshtastic

@@ -116,6 +116,7 @@ RadioConfig defaultMeshCoreRadioConfig()
         defaults.meshcore_bw_khz = preset->bw_khz;
         defaults.meshcore_sf = preset->sf;
         defaults.meshcore_cr = preset->cr;
+        defaults.tx_power = preset->tx_power_dbm;
     }
 
     RadioConfig radio;

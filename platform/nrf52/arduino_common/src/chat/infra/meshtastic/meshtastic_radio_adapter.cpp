@@ -6,6 +6,7 @@
 #include "chat/infra/meshtastic/mt_packet_wire.h"
 #include "chat/infra/meshtastic/mt_pki_crypto.h"
 #include "chat/infra/meshtastic/mt_protocol_helpers.h"
+#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "chat/runtime/meshtastic_self_announcement_core.h"
 #include "chat/runtime/self_identity_policy.h"
@@ -132,22 +133,28 @@ const uint8_t* selectKey(const ::chat::MeshConfig& config,
 
     if (channel == ::chat::ChannelId::SECONDARY)
     {
-        if (!isZeroKey(config.secondary_key, sizeof(config.secondary_key)))
+        const uint8_t key_len = ::chat::normalizeMeshtasticChannelKeyLen(config.secondary_key,
+                                                                         sizeof(config.secondary_key),
+                                                                         config.secondary_key_len);
+        if (key_len > 0)
         {
             if (out_len)
             {
-                *out_len = sizeof(config.secondary_key);
+                *out_len = key_len;
             }
             return config.secondary_key;
         }
         return nullptr;
     }
 
-    if (!isZeroKey(config.primary_key, sizeof(config.primary_key)))
+    const uint8_t key_len = ::chat::normalizeMeshtasticChannelKeyLen(config.primary_key,
+                                                                     sizeof(config.primary_key),
+                                                                     config.primary_key_len);
+    if (key_len > 0)
     {
         if (out_len)
         {
-            *out_len = sizeof(config.primary_key);
+            *out_len = key_len;
         }
         return config.primary_key;
     }
@@ -164,21 +171,7 @@ const uint8_t* selectKey(const ::chat::MeshConfig& config,
 
 const char* channelNameFor(const ::chat::MeshConfig& config, ::chat::ChannelId channel)
 {
-    if (channel == ::chat::ChannelId::SECONDARY)
-    {
-        return "Secondary";
-    }
-
-    if (config.use_preset)
-    {
-        const char* preset_name = ::chat::meshtastic::presetDisplayName(
-            static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(config.modem_preset));
-        if (preset_name && preset_name[0] != '\0' && std::strcmp(preset_name, "Invalid") != 0)
-        {
-            return preset_name;
-        }
-    }
-    return "Custom";
+    return ::chat::meshtastic::channelName(config, channel);
 }
 
 const char* channelDebugLabel(::chat::ChannelId channel)

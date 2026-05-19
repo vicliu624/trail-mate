@@ -756,19 +756,19 @@ bool MeshCoreAdapter::resolveGroupSecret(ChannelId channel, uint8_t out_key16[16
     }
 
     const uint8_t* selected = nullptr;
-    if (channel == ChannelId::SECONDARY && !isZeroKey(config_.secondary_key, sizeof(config_.secondary_key)))
+    if (channel == ChannelId::SECONDARY && !isZeroKey(config_.secondary_key, chat::kMeshCoreChannelKeyLen))
     {
         selected = config_.secondary_key;
     }
-    else if (channel == ChannelId::PRIMARY && !isZeroKey(config_.primary_key, sizeof(config_.primary_key)))
+    else if (channel == ChannelId::PRIMARY && !isZeroKey(config_.primary_key, chat::kMeshCoreChannelKeyLen))
     {
         selected = config_.primary_key;
     }
-    else if (!isZeroKey(config_.secondary_key, sizeof(config_.secondary_key)))
+    else if (!isZeroKey(config_.secondary_key, chat::kMeshCoreChannelKeyLen))
     {
         selected = config_.secondary_key;
     }
-    else if (!isZeroKey(config_.primary_key, sizeof(config_.primary_key)))
+    else if (!isZeroKey(config_.primary_key, chat::kMeshCoreChannelKeyLen))
     {
         selected = config_.primary_key;
     }
@@ -798,7 +798,7 @@ ChannelId MeshCoreAdapter::resolveChannelFromHash(uint8_t channel_hash, bool* ou
         *out_match = false;
     }
 
-    if (!isZeroKey(config_.primary_key, sizeof(config_.primary_key)) &&
+    if (!isZeroKey(config_.primary_key, chat::kMeshCoreChannelKeyLen) &&
         computeChannelHash(config_.primary_key) == channel_hash)
     {
         if (out_match)
@@ -807,7 +807,7 @@ ChannelId MeshCoreAdapter::resolveChannelFromHash(uint8_t channel_hash, bool* ou
         }
         return ChannelId::PRIMARY;
     }
-    if (!isZeroKey(config_.secondary_key, sizeof(config_.secondary_key)) &&
+    if (!isZeroKey(config_.secondary_key, chat::kMeshCoreChannelKeyLen) &&
         computeChannelHash(config_.secondary_key) == channel_hash)
     {
         if (out_match)
@@ -3112,8 +3112,8 @@ void MeshCoreAdapter::applyConfig(const MeshConfig& config)
         self_hash_ = static_cast<uint8_t>(node_id_ & 0xFFU);
     }
 
-    const bool has_primary_key = !isZeroKey(config_.primary_key, sizeof(config_.primary_key));
-    const bool has_secondary_key = !isZeroKey(config_.secondary_key, sizeof(config_.secondary_key));
+    const bool has_primary_key = !isZeroKey(config_.primary_key, chat::kMeshCoreChannelKeyLen);
+    const bool has_secondary_key = !isZeroKey(config_.secondary_key, chat::kMeshCoreChannelKeyLen);
     const uint8_t primary_hash = has_primary_key ? computeChannelHash(config_.primary_key) : 0xFF;
     const uint8_t secondary_hash = has_secondary_key ? computeChannelHash(config_.secondary_key) : 0xFF;
     const bool has_public = shouldUsePublicChannelFallback(config_);
@@ -4373,8 +4373,8 @@ void MeshCoreAdapter::handleRawPacketInternal(const uint8_t* data, size_t size, 
 
     auto logUnknownGroupHash = [&](const char* kind, uint8_t channel_hash) -> void
     {
-        const bool has_primary_key = !isZeroKey(config_.primary_key, sizeof(config_.primary_key));
-        const bool has_secondary_key = !isZeroKey(config_.secondary_key, sizeof(config_.secondary_key));
+        const bool has_primary_key = !isZeroKey(config_.primary_key, chat::kMeshCoreChannelKeyLen);
+        const bool has_secondary_key = !isZeroKey(config_.secondary_key, chat::kMeshCoreChannelKeyLen);
         const uint8_t primary_hash = has_primary_key ? computeChannelHash(config_.primary_key) : 0xFF;
         const uint8_t secondary_hash = has_secondary_key ? computeChannelHash(config_.secondary_key) : 0xFF;
         const bool has_public = shouldUsePublicChannelFallback(config_);

@@ -672,11 +672,15 @@ static bool parse_hex_char(char c, uint8_t& out)
     return false;
 }
 
-static bool parse_psk(const char* text, uint8_t* out, size_t out_len)
+static bool parse_psk(const char* text, uint8_t* out, size_t out_len, size_t* parsed_len = nullptr)
 {
     if (!out || out_len == 0)
     {
         return false;
+    }
+    if (parsed_len)
+    {
+        *parsed_len = 0;
     }
     if (!text || text[0] == '\0')
     {
@@ -684,9 +688,10 @@ static bool parse_psk(const char* text, uint8_t* out, size_t out_len)
         return true;
     }
     size_t len = strlen(text);
-    if (len == 32)
+    if ((len == 32 || len == 64) && out_len >= len / 2)
     {
-        for (size_t i = 0; i < 16; ++i)
+        const size_t byte_len = len / 2;
+        for (size_t i = 0; i < byte_len; ++i)
         {
             uint8_t hi = 0;
             uint8_t lo = 0;
@@ -696,11 +701,19 @@ static bool parse_psk(const char* text, uint8_t* out, size_t out_len)
             }
             out[i] = static_cast<uint8_t>((hi << 4) | lo);
         }
+        if (parsed_len)
+        {
+            *parsed_len = byte_len;
+        }
         return true;
     }
-    if (len == 16)
+    if ((len == 16 || len == 32) && out_len >= len)
     {
-        memcpy(out, text, 16);
+        memcpy(out, text, len);
+        if (parsed_len)
+        {
+            *parsed_len = len;
+        }
         return true;
     }
     return false;
@@ -966,22 +979,27 @@ static void settings_load()
     g_settings.chat_region = mt_cfg.region;
     g_settings.chat_channel = cfg.chat_channel;
     const uint8_t* active_psk = nullptr;
+    size_t active_psk_len = 0;
     if (cfg.mesh_protocol == chat::MeshProtocol::MeshCore)
     {
         active_psk = mc_cfg.secondary_key;
+        active_psk_len = chat::kMeshCoreChannelKeyLen;
     }
     else if (cfg.mesh_protocol == chat::MeshProtocol::Meshtastic)
     {
         active_psk = mt_cfg.secondary_key;
+        active_psk_len = chat::normalizeMeshtasticChannelKeyLen(mt_cfg.secondary_key,
+                                                                sizeof(mt_cfg.secondary_key),
+                                                                mt_cfg.secondary_key_len);
     }
-    if (!active_psk || is_zero_key(active_psk, sizeof(mt_cfg.secondary_key)))
+    if (!active_psk || active_psk_len == 0 || is_zero_key(active_psk, active_psk_len))
     {
         g_settings.chat_psk[0] = '\0';
     }
     else
     {
         bytes_to_hex(active_psk,
-                     sizeof(mt_cfg.secondary_key),
+                     active_psk_len,
                      g_settings.chat_psk,
                      sizeof(g_settings.chat_psk));
     }
@@ -1045,13 +1063,13 @@ static void settings_load()
     g_settings.mc_channel_slot = mc_cfg.meshcore_channel_slot;
     strncpy(g_settings.mc_channel_name, mc_cfg.meshcore_channel_name, sizeof(g_settings.mc_channel_name) - 1);
     g_settings.mc_channel_name[sizeof(g_settings.mc_channel_name) - 1] = '\0';
-    if (is_zero_key(mc_cfg.secondary_key, sizeof(mc_cfg.secondary_key)))
+    if (is_zero_key(mc_cfg.secondary_key, chat::kMeshCoreChannelKeyLen))
     {
         g_settings.mc_channel_key[0] = '\0';
     }
     else
     {
-        bytes_to_hex(mc_cfg.secondary_key, sizeof(mc_cfg.secondary_key),
+        bytes_to_hex(mc_cfg.secondary_key, chat::kMeshCoreChannelKeyLen,
                      g_settings.mc_channel_key, sizeof(g_settings.mc_channel_key));
     }
 
@@ -1335,20 +1353,33 @@ static void on_text_save_clicked(lv_event_t* e)
         if (g_state.editing_item->pref_key && strcmp(g_state.editing_item->pref_key, "chat_psk") == 0)
         {
             app::IAppFacade& app_ctx = app::appFacade();
-            uint8_t key[16] = {};
-            if (!parse_psk(g_state.editing_item->text_value, key, sizeof(key)))
+            uint8_t key[chat::kMeshtasticChannelKeyMaxLen] = {};
+            size_t parsed_key_len = 0;
+            const size_t key_capacity =
+                (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
+                    ? chat::kMeshCoreChannelKeyLen
+                    : chat::kMeshtasticChannelKeyMaxLen;
+            if (!parse_psk(g_state.editing_item->text_value, key, key_capacity, &parsed_key_len))
             {
-                ::ui::SystemNotification::show(::ui::i18n::tr("PSK must be 32 hex or 16 chars"), 4000);
+                ::ui::SystemNotification::show(::ui::i18n::tr("PSK must be 32/64 hex or 16/32 chars"), 4000);
                 modal_close();
                 return;
             }
             if (app_ctx.getConfig().mesh_protocol == chat::MeshProtocol::MeshCore)
             {
-                memcpy(app_ctx.getConfig().meshcore_config.secondary_key, key, sizeof(key));
+                memset(app_ctx.getConfig().meshcore_config.secondary_key, 0,
+                       sizeof(app_ctx.getConfig().meshcore_config.secondary_key));
+                memcpy(app_ctx.getConfig().meshcore_config.secondary_key, key, chat::kMeshCoreChannelKeyLen);
             }
             else
             {
-                memcpy(app_ctx.getConfig().meshtastic_config.secondary_key, key, sizeof(key));
+                auto& mesh = app_ctx.getConfig().meshtastic_config;
+                memset(mesh.secondary_key, 0, sizeof(mesh.secondary_key));
+                memcpy(mesh.secondary_key, key, parsed_key_len);
+                mesh.secondary_key_len =
+                    chat::normalizeMeshtasticChannelKeyLen(mesh.secondary_key,
+                                                           sizeof(mesh.secondary_key),
+                                                           static_cast<uint8_t>(parsed_key_len));
             }
             app_ctx.saveConfig();
             app_ctx.applyMeshConfig();
@@ -1955,10 +1986,12 @@ static void on_option_clicked(lv_event_t* e)
                 mc_cfg.meshcore_bw_khz = preset->bw_khz;
                 mc_cfg.meshcore_sf = preset->sf;
                 mc_cfg.meshcore_cr = preset->cr;
+                mc_cfg.tx_power = preset->tx_power_dbm;
                 float_to_text(mc_cfg.meshcore_freq_mhz, g_settings.mc_freq, sizeof(g_settings.mc_freq), 3);
                 float_to_text(mc_cfg.meshcore_bw_khz, g_settings.mc_bw, sizeof(g_settings.mc_bw), 3);
                 g_settings.mc_sf = mc_cfg.meshcore_sf;
                 g_settings.mc_cr = mc_cfg.meshcore_cr;
+                g_settings.mc_tx_power = mc_cfg.tx_power;
             }
         }
         app_ctx.saveConfig();
@@ -1987,6 +2020,8 @@ static void on_option_clicked(lv_event_t* e)
     {
         app::IAppFacade& app_ctx = app::appFacade();
         app_ctx.getConfig().meshcore_config.tx_power = static_cast<int8_t>(payload->value);
+        app_ctx.getConfig().meshcore_config.meshcore_region_preset = 0;
+        g_settings.mc_region_preset = 0;
         app_ctx.saveConfig();
         app_ctx.applyMeshConfig();
     }

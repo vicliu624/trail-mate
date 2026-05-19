@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -13,6 +14,59 @@
 
 namespace chat
 {
+
+constexpr std::size_t kMeshCoreChannelKeyLen = 16;
+constexpr std::size_t kMeshtasticChannelKeyDefaultLen = 16;
+constexpr std::size_t kMeshtasticChannelKeyMaxLen = 32;
+
+inline bool isAllZeroKeyBytes(const uint8_t* key, std::size_t len)
+{
+    if (!key || len == 0)
+    {
+        return true;
+    }
+    for (std::size_t index = 0; index < len; ++index)
+    {
+        if (key[index] != 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+inline uint8_t normalizeMeshtasticChannelKeyLen(const uint8_t* key,
+                                                std::size_t capacity,
+                                                uint8_t stored_len)
+{
+    if (!key || capacity < kMeshtasticChannelKeyDefaultLen)
+    {
+        return 0;
+    }
+
+    if ((stored_len == kMeshtasticChannelKeyDefaultLen ||
+         stored_len == kMeshtasticChannelKeyMaxLen) &&
+        stored_len <= capacity)
+    {
+        return isAllZeroKeyBytes(key, stored_len) ? 0 : stored_len;
+    }
+
+    const std::size_t inspect_len =
+        capacity >= kMeshtasticChannelKeyMaxLen ? kMeshtasticChannelKeyMaxLen
+                                                : kMeshtasticChannelKeyDefaultLen;
+    if (isAllZeroKeyBytes(key, inspect_len))
+    {
+        return 0;
+    }
+
+    if (capacity >= kMeshtasticChannelKeyMaxLen &&
+        !isAllZeroKeyBytes(key + kMeshtasticChannelKeyDefaultLen,
+                           kMeshtasticChannelKeyDefaultLen))
+    {
+        return kMeshtasticChannelKeyMaxLen;
+    }
+    return kMeshtasticChannelKeyDefaultLen;
+}
 
 /**
  * @brief Channel identifier
@@ -274,9 +328,15 @@ struct MeshConfig
     bool ignore_mqtt;             // Ignore incoming packets that arrived via MQTT
     bool config_ok_to_mqtt;       // Set ok_to_mqtt bit on outgoing packets
 
-    // Channel encryption keys (PSK for encrypted channels)
-    uint8_t primary_key[16];   // Primary channel key (usually empty for public)
-    uint8_t secondary_key[16]; // Secondary channel key (Squad PSK)
+    // Meshtastic channel identity and encryption keys
+    char primary_channel_name[32];
+    char secondary_channel_name[32];
+    uint32_t primary_channel_id;
+    uint32_t secondary_channel_id;
+    uint8_t primary_key[kMeshtasticChannelKeyMaxLen];   // Meshtastic PSK storage; MeshCore uses first 16 bytes.
+    uint8_t primary_key_len;                            // Meshtastic PSK length: 0, 16, or 32.
+    uint8_t secondary_key[kMeshtasticChannelKeyMaxLen]; // Meshtastic PSK storage; MeshCore uses first 16 bytes.
+    uint8_t secondary_key_len;                          // Meshtastic PSK length: 0, 16, or 32.
 
     // MeshCore radio/channel tuning
     uint8_t meshcore_region_preset; // 0=Custom, >0 preset id
@@ -309,6 +369,10 @@ struct MeshConfig
           enable_relay(true),
           ignore_mqtt(false),
           config_ok_to_mqtt(false),
+          primary_channel_id(0),
+          secondary_channel_id(0),
+          primary_key_len(0),
+          secondary_key_len(0),
           meshcore_region_preset(0),
           meshcore_freq_mhz(915.0f),
           meshcore_bw_khz(125.0f),
@@ -321,8 +385,12 @@ struct MeshConfig
           meshcore_multi_acks(false),
           meshcore_channel_slot(0)
     {
-        memset(primary_key, 0, 16);
-        memset(secondary_key, 0, 16);
+        strncpy(primary_channel_name, "LongFast", sizeof(primary_channel_name) - 1);
+        primary_channel_name[sizeof(primary_channel_name) - 1] = '\0';
+        strncpy(secondary_channel_name, "Secondary", sizeof(secondary_channel_name) - 1);
+        secondary_channel_name[sizeof(secondary_channel_name) - 1] = '\0';
+        memset(primary_key, 0, sizeof(primary_key));
+        memset(secondary_key, 0, sizeof(secondary_key));
         meshcore_channel_name[0] = '\0';
     }
 };

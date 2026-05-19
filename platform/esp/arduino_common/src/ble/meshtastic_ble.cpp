@@ -279,8 +279,10 @@ class MeshtasticToRadioCallbacks : public NimBLECharacteristicCallbacks
         NimBLEAttValue val = characteristic->getValue();
         if (val.length() == 0 || val.length() > kMaxToRadio)
         {
+            ble_log("fromPhone drop invalid len=%u", static_cast<unsigned>(val.length()));
             return;
         }
+        ble_log("fromPhone write len=%u", static_cast<unsigned>(val.length()));
         if (owner_.last_to_radio_len_ == val.length() &&
             memcmp(owner_.last_to_radio_.data(), val.data(), val.length()) == 0)
         {

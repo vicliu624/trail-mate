@@ -3,6 +3,7 @@
 #include "phone/common/phone_app_facade.h"
 #include "phone/meshtastic/meshtastic_defaults.h"
 #include "phone/meshtastic/meshtastic_phone_core.h"
+#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/infra/meshtastic/mt_region.h"
 #include "gps/ports/i_location_source.h"
 #include "meshtastic/localonly.pb.h"
@@ -23,13 +24,9 @@ constexpr const char* kTimezoneTzdefKey = "timezone_tzdef";
 
 inline std::string meshtasticChannelDisplayName(const ::phone::MeshtasticPhoneConfigSnapshot& cfg, uint8_t idx)
 {
-    if (idx == 1)
-    {
-        return "Secondary";
-    }
-
-    auto preset = static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(cfg.mesh.modem_preset);
-    return cfg.mesh.use_preset ? std::string(::chat::meshtastic::presetDisplayName(preset)) : std::string("Custom");
+    return std::string(::chat::meshtastic::channelName(
+        cfg.mesh,
+        idx == 1 ? ::chat::ChannelId::SECONDARY : ::chat::ChannelId::PRIMARY));
 }
 
 inline bool loadTimezoneTzdefFromSettings(char* out, std::size_t out_len)

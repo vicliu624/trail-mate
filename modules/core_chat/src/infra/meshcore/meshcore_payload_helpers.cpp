@@ -62,8 +62,8 @@ using chat::meshcore::isZeroKey;
 
 bool shouldUsePublicChannelFallback(const chat::MeshConfig& cfg)
 {
-    const bool has_primary = !isZeroKey(cfg.primary_key, sizeof(cfg.primary_key));
-    const bool has_secondary = !isZeroKey(cfg.secondary_key, sizeof(cfg.secondary_key));
+    const bool has_primary = !isZeroKey(cfg.primary_key, chat::kMeshCoreChannelKeyLen);
+    const bool has_secondary = !isZeroKey(cfg.secondary_key, chat::kMeshCoreChannelKeyLen);
     if (!has_primary && !has_secondary)
     {
         return true;
@@ -112,19 +112,19 @@ const uint8_t* selectChannelKey(const chat::MeshConfig& cfg, size_t* out_len)
     {
         *out_len = 0;
     }
-    if (!isZeroKey(cfg.secondary_key, sizeof(cfg.secondary_key)))
+    if (!isZeroKey(cfg.secondary_key, chat::kMeshCoreChannelKeyLen))
     {
         if (out_len)
         {
-            *out_len = sizeof(cfg.secondary_key);
+            *out_len = chat::kMeshCoreChannelKeyLen;
         }
         return cfg.secondary_key;
     }
-    if (!isZeroKey(cfg.primary_key, sizeof(cfg.primary_key)))
+    if (!isZeroKey(cfg.primary_key, chat::kMeshCoreChannelKeyLen))
     {
         if (out_len)
         {
-            *out_len = sizeof(cfg.primary_key);
+            *out_len = chat::kMeshCoreChannelKeyLen;
         }
         return cfg.primary_key;
     }

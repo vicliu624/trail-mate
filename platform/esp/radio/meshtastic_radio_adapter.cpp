@@ -32,7 +32,6 @@ constexpr uint16_t kIrqCrcErr = 0x0040;
 constexpr uint16_t kIrqTimeout = 0x0200;
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
 constexpr uint32_t kRadioOk = 0;
-constexpr char kSecondaryChannelName[] = "Squad";
 
 uint32_t now_millis()
 {
@@ -638,8 +637,10 @@ void MeshtasticRadioAdapter::updateChannelKeys()
     }
     else
     {
-        std::memcpy(primary_psk_, config_.primary_key, sizeof(primary_psk_));
-        primary_psk_len_ = sizeof(primary_psk_);
+        primary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.primary_key,
+                                                                   sizeof(config_.primary_key),
+                                                                   config_.primary_key_len);
+        std::memcpy(primary_psk_, config_.primary_key, primary_psk_len_);
     }
 
     if (chat::meshtastic::isZeroKey(config_.secondary_key, sizeof(config_.secondary_key)))
@@ -649,15 +650,18 @@ void MeshtasticRadioAdapter::updateChannelKeys()
     }
     else
     {
-        std::memcpy(secondary_psk_, config_.secondary_key, sizeof(secondary_psk_));
-        secondary_psk_len_ = sizeof(secondary_psk_);
+        secondary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.secondary_key,
+                                                                     sizeof(config_.secondary_key),
+                                                                     config_.secondary_key_len);
+        std::memcpy(secondary_psk_, config_.secondary_key, secondary_psk_len_);
     }
 
     primary_channel_hash_ =
         chat::meshtastic::computeChannelHash(chat::meshtastic::primaryChannelName(config_),
                                              primary_psk_,
                                              primary_psk_len_);
-    secondary_channel_hash_ = chat::meshtastic::computeChannelHash(kSecondaryChannelName,
+    secondary_channel_hash_ = chat::meshtastic::computeChannelHash(
+                                                                   chat::meshtastic::secondaryChannelName(config_),
                                                                    secondary_psk_len_ > 0 ? secondary_psk_ : nullptr,
                                                                    secondary_psk_len_);
 }

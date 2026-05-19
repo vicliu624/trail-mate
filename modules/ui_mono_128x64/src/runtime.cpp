@@ -972,6 +972,16 @@ const char* radioRegionLabel(const app::AppConfig& cfg)
     return preset ? preset->title : "Custom";
 }
 
+void applyMeshCoreRegionPreset(chat::MeshConfig& config, const chat::meshcore::RegionPreset& preset)
+{
+    config.meshcore_region_preset = preset.id;
+    config.meshcore_freq_mhz = preset.freq_mhz;
+    config.meshcore_bw_khz = preset.bw_khz;
+    config.meshcore_sf = preset.sf;
+    config.meshcore_cr = preset.cr;
+    config.tx_power = preset.tx_power_dbm;
+}
+
 const char* gpsSatMaskLabel(uint8_t mask)
 {
     switch (mask)
@@ -4191,7 +4201,7 @@ void Runtime::adjustSettingPopup(int delta)
                         }
                     }
                     index = clampValue(index + delta, 0, static_cast<int>(count) - 1);
-                    cfg.meshcore_config.meshcore_region_preset = table[index].id;
+                    applyMeshCoreRegionPreset(cfg.meshcore_config, table[index]);
                 }
             }
             break;
@@ -4226,11 +4236,7 @@ void Runtime::adjustSettingPopup(int delta)
                         }
                     }
                     index = clampValue(index + delta, 0, static_cast<int>(count) - 1);
-                    cfg.meshcore_config.meshcore_region_preset = table[index].id;
-                    cfg.meshcore_config.meshcore_freq_mhz = table[index].freq_mhz;
-                    cfg.meshcore_config.meshcore_bw_khz = table[index].bw_khz;
-                    cfg.meshcore_config.meshcore_sf = table[index].sf;
-                    cfg.meshcore_config.meshcore_cr = table[index].cr;
+                    applyMeshCoreRegionPreset(cfg.meshcore_config, table[index]);
                 }
             }
             break;

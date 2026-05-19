@@ -120,10 +120,10 @@ class MtAdapter : public chat::IMeshAdapter
     uint8_t mac_addr_[6];
     uint32_t last_nodeinfo_ms_;
     uint8_t primary_channel_hash_;
-    uint8_t primary_psk_[16];
+    uint8_t primary_psk_[chat::kMeshtasticChannelKeyMaxLen];
     size_t primary_psk_len_;
     uint8_t secondary_channel_hash_;
-    uint8_t secondary_psk_[16];
+    uint8_t secondary_psk_[chat::kMeshtasticChannelKeyMaxLen];
     size_t secondary_psk_len_;
     bool pki_ready_;
     std::array<uint8_t, 32> pki_public_key_;

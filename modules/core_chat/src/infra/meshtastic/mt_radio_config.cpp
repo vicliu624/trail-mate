@@ -63,6 +63,11 @@ std::uint32_t channelCount(const RegionInfo& region, float bw_khz)
 
 const char* primaryChannelName(const MeshConfig& config)
 {
+    if (config.primary_channel_name[0] != '\0')
+    {
+        return config.primary_channel_name;
+    }
+
     if (!config.use_preset)
     {
         return "Custom";
@@ -72,6 +77,16 @@ const char* primaryChannelName(const MeshConfig& config)
         static_cast<meshtastic_Config_LoRaConfig_ModemPreset>(config.modem_preset);
     const char* name = presetDisplayName(preset);
     return (name != nullptr && name[0] != '\0') ? name : "Custom";
+}
+
+const char* secondaryChannelName(const MeshConfig& config)
+{
+    return (config.secondary_channel_name[0] != '\0') ? config.secondary_channel_name : "Secondary";
+}
+
+const char* channelName(const MeshConfig& config, ChannelId channel)
+{
+    return (channel == ChannelId::SECONDARY) ? secondaryChannelName(config) : primaryChannelName(config);
 }
 
 RadioConfig deriveRadioConfig(const MeshConfig& config)
@@ -141,8 +156,7 @@ RadioConfig deriveRadioConfig(const MeshConfig& config)
         }
     }
 
-    out.channel_name =
-        out.using_preset ? presetDisplayName(out.modem_preset) : "Custom";
+    out.channel_name = primaryChannelName(config);
     if (out.channel_name == nullptr || out.channel_name[0] == '\0')
     {
         out.channel_name = "Custom";

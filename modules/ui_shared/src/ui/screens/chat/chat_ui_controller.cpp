@@ -4,9 +4,11 @@
  */
 
 #include "ui/screens/chat/chat_ui_controller.h"
+#include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat_presentation_adapters/chat_conversation_mapper.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/ui/screen_runtime.h"
 #include "sys/event_bus.h"
@@ -55,8 +57,13 @@ const char* protocol_short_label(chat::MeshProtocol protocol)
     return chat::infra::meshProtocolShortName(protocol);
 }
 
-const char* channel_display_name(chat::ChannelId channel)
+const char* channel_display_name(chat::MeshProtocol protocol, chat::ChannelId channel)
 {
+    if (protocol == chat::MeshProtocol::Meshtastic)
+    {
+        return chat::meshtastic::channelName(app::configFacade().getConfig().meshtastic_config,
+                                             channel);
+    }
     switch (channel)
     {
     case chat::ChannelId::SECONDARY:
@@ -906,7 +913,7 @@ void UiController::normalizeConversationNames(std::vector<chat::ConversationMeta
         if (channel_variant_count > 1)
         {
             conv.name += " (";
-            conv.name += channel_display_name(conv.id.channel);
+            conv.name += channel_display_name(conv.id.protocol, conv.id.channel);
             conv.name += ")";
         }
     }

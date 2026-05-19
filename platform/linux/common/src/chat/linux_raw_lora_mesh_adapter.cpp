@@ -45,7 +45,6 @@ constexpr std::size_t kHeaderSize = 26;
 constexpr std::size_t kMaxPayloadSize = 190;
 constexpr std::uint32_t kBroadcastNodeId = 0xFFFFFFFFUL;
 constexpr std::uint8_t kDefaultPskIndex = 1;
-constexpr char kSecondaryChannelName[] = "Squad";
 constexpr std::uint32_t kRxMonitorHeartbeatSeconds = 15;
 constexpr std::uint8_t kBitfieldWantResponseMask = 0x02;
 constexpr std::uint32_t kNodeInfoReplySuppressMs = 60000;
@@ -56,9 +55,9 @@ constexpr std::size_t kPkiKeySize = 32;
 struct MeshtasticAirPlan
 {
     ::chat::meshtastic::RadioConfig radio{};
-    std::uint8_t primary_psk[16]{};
+    std::uint8_t primary_psk[::chat::kMeshtasticChannelKeyMaxLen]{};
     std::size_t primary_psk_len = 0;
-    std::uint8_t secondary_psk[16]{};
+    std::uint8_t secondary_psk[::chat::kMeshtasticChannelKeyMaxLen]{};
     std::size_t secondary_psk_len = 0;
     std::uint8_t primary_channel_hash = 0;
     std::uint8_t secondary_channel_hash = 0;
@@ -375,19 +374,23 @@ MeshtasticAirPlan build_meshtastic_air_plan(
     }
     else
     {
+        plan.primary_psk_len = ::chat::normalizeMeshtasticChannelKeyLen(config.primary_key,
+                                                                        sizeof(config.primary_key),
+                                                                        config.primary_key_len);
         std::memcpy(plan.primary_psk,
                     config.primary_key,
-                    sizeof(plan.primary_psk));
-        plan.primary_psk_len = sizeof(plan.primary_psk);
+                    plan.primary_psk_len);
     }
 
     if (!::chat::meshtastic::isZeroKey(config.secondary_key,
                                        sizeof(config.secondary_key)))
     {
+        plan.secondary_psk_len = ::chat::normalizeMeshtasticChannelKeyLen(config.secondary_key,
+                                                                          sizeof(config.secondary_key),
+                                                                          config.secondary_key_len);
         std::memcpy(plan.secondary_psk,
                     config.secondary_key,
-                    sizeof(plan.secondary_psk));
-        plan.secondary_psk_len = sizeof(plan.secondary_psk);
+                    plan.secondary_psk_len);
     }
 
     plan.primary_channel_hash = ::chat::meshtastic::computeChannelHash(
@@ -395,7 +398,7 @@ MeshtasticAirPlan build_meshtastic_air_plan(
         plan.primary_psk,
         plan.primary_psk_len);
     plan.secondary_channel_hash = ::chat::meshtastic::computeChannelHash(
-        kSecondaryChannelName,
+        ::chat::meshtastic::secondaryChannelName(config),
         plan.secondary_psk_len > 0 ? plan.secondary_psk : nullptr,
         plan.secondary_psk_len);
     return plan;

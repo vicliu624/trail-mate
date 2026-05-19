@@ -7,6 +7,7 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "chat/infra/mesh_protocol_utils.h"
+#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
@@ -472,7 +473,8 @@ static std::string format_broadcast_target_label(const BroadcastTargetSpec& spec
     if (spec.protocol == chat::MeshProtocol::Meshtastic)
     {
         return std::string("[MT] ") +
-               ::ui::i18n::format("Slot %u", static_cast<unsigned>(spec.channel_index));
+               chat::meshtastic::channelName(app::appFacade().getConfig().meshtastic_config,
+                                             spec.channel);
     }
     if (spec.protocol == chat::MeshProtocol::RNode)
     {
@@ -496,7 +498,8 @@ static std::string format_broadcast_target_status(const BroadcastTargetSpec& spe
         }
         if (spec.channel_index == 1)
         {
-            return ::ui::i18n::tr("Secondary");
+            return chat::meshtastic::channelName(app::appFacade().getConfig().meshtastic_config,
+                                                 spec.channel);
         }
         return spec.chat_supported ? ::ui::i18n::tr("Ready") : ::ui::i18n::tr("Slot");
     }

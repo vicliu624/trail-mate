@@ -52,7 +52,6 @@
 namespace
 {
 constexpr uint8_t kDefaultPskIndex = 1;
-constexpr const char* kSecondaryChannelName = "Squad";
 constexpr uint8_t kBitfieldWantResponseMask = 0x02;
 constexpr size_t kMaxMqttProxyQueue = 12;
 constexpr uint32_t kBroadcastNodeId = 0xFFFFFFFFu;
@@ -2514,11 +2513,7 @@ bool MtAdapter::sendPacket(const PendingSend& pending)
         }
     }
 
-    const char* channel_name = kSecondaryChannelName;
-    if (channel != ChannelId::SECONDARY)
-    {
-        channel_name = chat::meshtastic::primaryChannelName(config_);
-    }
+    const char* channel_name = chat::meshtastic::channelName(config_, channel);
     LORA_LOG("[LORA] TX channel name='%s' hash=0x%02X psk=%u pki=%u dest=%08lX\n",
              channel_name,
              channel_hash,
@@ -2957,8 +2952,10 @@ void MtAdapter::updateChannelKeys()
     }
     else
     {
-        memcpy(primary_psk_, config_.primary_key, sizeof(primary_psk_));
-        primary_psk_len_ = sizeof(primary_psk_);
+        primary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.primary_key,
+                                                                   sizeof(config_.primary_key),
+                                                                   config_.primary_key_len);
+        memcpy(primary_psk_, config_.primary_key, primary_psk_len_);
     }
 
     if (isZeroKey(config_.secondary_key, sizeof(config_.secondary_key)))
@@ -2968,14 +2965,17 @@ void MtAdapter::updateChannelKeys()
     }
     else
     {
-        memcpy(secondary_psk_, config_.secondary_key, sizeof(secondary_psk_));
-        secondary_psk_len_ = sizeof(secondary_psk_);
+        secondary_psk_len_ = chat::normalizeMeshtasticChannelKeyLen(config_.secondary_key,
+                                                                     sizeof(config_.secondary_key),
+                                                                     config_.secondary_key_len);
+        memcpy(secondary_psk_, config_.secondary_key, secondary_psk_len_);
     }
 
     const char* primary_name = chat::meshtastic::primaryChannelName(config_);
+    const char* secondary_name = chat::meshtastic::secondaryChannelName(config_);
     primary_channel_hash_ = computeChannelHash(primary_name, primary_psk_, primary_psk_len_);
     secondary_channel_hash_ =
-        computeChannelHash(kSecondaryChannelName,
+        computeChannelHash(secondary_name,
                            (secondary_psk_len_ > 0) ? secondary_psk_ : nullptr,
                            secondary_psk_len_);
     std::string primary_psk_hex = toHex(primary_psk_, primary_psk_len_, primary_psk_len_);
@@ -2988,7 +2988,7 @@ void MtAdapter::updateChannelKeys()
              (unsigned)primary_psk_len_,
              primary_psk_hex.c_str());
     LORA_LOG("[LORA] channel secondary='%s' hash=0x%02X psk=%u hex=%s\n",
-             kSecondaryChannelName,
+             secondary_name,
              secondary_channel_hash_,
              (unsigned)secondary_psk_len_,
              secondary_psk_hex.c_str());

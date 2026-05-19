@@ -2,6 +2,8 @@
 
 #include "phone/meshtastic/meshtastic_defaults.h"
 #include "phone/meshtastic/meshtastic_phone_config_bridge.h"
+#include "chat/infra/meshtastic/mt_protocol_helpers.h"
+#include "chat/infra/meshtastic/mt_radio_config.h"
 #include "chat/runtime/self_identity_policy.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
@@ -74,6 +76,63 @@ void copyBounded(char* dst, size_t dst_len, const char* src)
     }
     std::strncpy(dst, src, dst_len - 1);
     dst[dst_len - 1] = '\0';
+}
+
+void applyChannelPsk(uint8_t* dst,
+                     size_t dst_len,
+                     uint8_t* dst_key_len,
+                     const meshtastic_ChannelSettings_psk_t& psk)
+{
+    if (!dst || !dst_key_len || dst_len == 0)
+    {
+        return;
+    }
+    std::memset(dst, 0, dst_len);
+    *dst_key_len = 0;
+    if (psk.size == 16 || psk.size == 32)
+    {
+        const size_t copy_len = std::min(static_cast<size_t>(psk.size), dst_len);
+        std::memcpy(dst, psk.bytes, copy_len);
+        if (copy_len == 16 || copy_len == 32)
+        {
+            *dst_key_len = static_cast<uint8_t>(copy_len);
+        }
+    }
+    else if (psk.size == 1)
+    {
+        size_t expanded_len = 0;
+        chat::meshtastic::expandShortPsk(psk.bytes[0], dst, &expanded_len);
+        if (expanded_len == 16 && expanded_len <= dst_len)
+        {
+            *dst_key_len = static_cast<uint8_t>(expanded_len);
+        }
+    }
+}
+
+size_t meshtasticKeyLen(const uint8_t* key, size_t key_capacity, uint8_t stored_len)
+{
+    return chat::normalizeMeshtasticChannelKeyLen(key, key_capacity, stored_len);
+}
+
+void logChannelSummary(const char* prefix, const meshtastic_Channel& channel)
+{
+    const char* name = channel.has_settings ? channel.settings.name : "<none>";
+    const unsigned psk_size = channel.has_settings ? static_cast<unsigned>(channel.settings.psk.size) : 0U;
+    const unsigned channel_num = channel.has_settings ? static_cast<unsigned>(channel.settings.channel_num) : 0U;
+    const unsigned id = channel.has_settings ? static_cast<unsigned>(channel.settings.id) : 0U;
+    const unsigned uplink = channel.has_settings && channel.settings.uplink_enabled ? 1U : 0U;
+    const unsigned downlink = channel.has_settings && channel.settings.downlink_enabled ? 1U : 0U;
+    logDual("[BLE][mtcore][channel] %s idx=%d role=%u has_settings=%u ch_num=%u name=%s id=%u psk_size=%u uplink=%u downlink=%u\n",
+            prefix ? prefix : "channel",
+            static_cast<int>(channel.index),
+            static_cast<unsigned>(channel.role),
+            channel.has_settings ? 1U : 0U,
+            channel_num,
+            name,
+            id,
+            psk_size,
+            uplink,
+            downlink);
 }
 
 bool parsePosixTzOffsetMinutes(const char* tzdef, int* out_offset_min)
@@ -532,11 +591,6 @@ bool MeshtasticPhoneCore::handleToRadio(const uint8_t* data, size_t len)
     {
         return false;
     }
-
-    if (last_to_radio_len_ == len && std::memcmp(last_to_radio_, data, len) == 0)
-    {
-        return true;
-    }
     std::memcpy(last_to_radio_, data, len);
     last_to_radio_len_ = len;
 
@@ -722,39 +776,41 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
         has_resp = true;
         break;
     case meshtastic_AdminMessage_set_channel_tag:
+        logChannelSummary("set_req", req.set_channel);
         if (req.set_channel.index == 0)
         {
             cfg.primary_enabled = (req.set_channel.role != meshtastic_Channel_Role_DISABLED);
             cfg.primary_uplink_enabled = req.set_channel.settings.uplink_enabled;
             cfg.primary_downlink_enabled = req.set_channel.settings.downlink_enabled;
-            if (req.set_channel.settings.psk.size == 16)
-            {
-                std::memcpy(cfg.mesh.primary_key, req.set_channel.settings.psk.bytes, 16);
-            }
-            else if (req.set_channel.settings.psk.size == 0)
-            {
-                std::memset(cfg.mesh.primary_key, 0, sizeof(cfg.mesh.primary_key));
-            }
+            copyBounded(cfg.mesh.primary_channel_name,
+                        sizeof(cfg.mesh.primary_channel_name),
+                        req.set_channel.settings.name);
+            cfg.mesh.primary_channel_id = req.set_channel.settings.id;
+            applyChannelPsk(cfg.mesh.primary_key,
+                            sizeof(cfg.mesh.primary_key),
+                            &cfg.mesh.primary_key_len,
+                            req.set_channel.settings.psk);
         }
         else if (req.set_channel.index == 1)
         {
             cfg.secondary_enabled = (req.set_channel.role != meshtastic_Channel_Role_DISABLED);
             cfg.secondary_uplink_enabled = req.set_channel.settings.uplink_enabled;
             cfg.secondary_downlink_enabled = req.set_channel.settings.downlink_enabled;
-            if (req.set_channel.settings.psk.size == 16)
-            {
-                std::memcpy(cfg.mesh.secondary_key, req.set_channel.settings.psk.bytes, 16);
-            }
-            else if (req.set_channel.settings.psk.size == 0)
-            {
-                std::memset(cfg.mesh.secondary_key, 0, sizeof(cfg.mesh.secondary_key));
-            }
+            copyBounded(cfg.mesh.secondary_channel_name,
+                        sizeof(cfg.mesh.secondary_channel_name),
+                        req.set_channel.settings.name);
+            cfg.mesh.secondary_channel_id = req.set_channel.settings.id;
+            applyChannelPsk(cfg.mesh.secondary_key,
+                            sizeof(cfg.mesh.secondary_key),
+                            &cfg.mesh.secondary_key_len,
+                            req.set_channel.settings.psk);
         }
         app_.setMeshtasticPhoneConfig(cfg);
         app_.saveConfig();
         app_.applyMeshConfig();
         resp.which_payload_variant = meshtastic_AdminMessage_get_channel_response_tag;
         resp.get_channel_response = buildChannel(req.set_channel.index);
+        logChannelSummary("set_resp", resp.get_channel_response);
         has_resp = true;
         break;
     case meshtastic_AdminMessage_set_config_tag:
@@ -1028,7 +1084,6 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
     }
     reply.decoded.payload.size = static_cast<pb_size_t>(out_stream.bytes_written);
     packet_queue_.push_back(reply);
-    notifyFromNum(reply.id);
     return true;
 }
 
@@ -1322,6 +1377,7 @@ bool MeshtasticPhoneCore::popConfigSnapshotFrame(MeshtasticBleFrame* out)
     {
         from.which_payload_variant = meshtastic_FromRadio_channel_tag;
         fillChannel(channel_slot, &from.channel);
+        logChannelSummary("snapshot", from.channel);
         ++config_channel_index_;
         return encodeFromRadio(from, from_num, out);
     }
@@ -1381,8 +1437,14 @@ bool MeshtasticPhoneCore::encodeFromRadio(const meshtastic_FromRadio& from, uint
         return false;
     }
 
+    meshtastic_FromRadio encoded = from;
+    if (from.which_payload_variant == meshtastic_FromRadio_queueStatus_tag ||
+        from.which_payload_variant == meshtastic_FromRadio_packet_tag)
+    {
+        encoded.id = from_num;
+    }
     pb_ostream_t ostream = pb_ostream_from_buffer(out->buf, sizeof(out->buf));
-    if (!pb_encode(&ostream, meshtastic_FromRadio_fields, const_cast<meshtastic_FromRadio*>(&from)))
+    if (!pb_encode(&ostream, meshtastic_FromRadio_fields, &encoded))
     {
         logDual("[BLE][mtcore] encode from_radio failed: variant=%u from_num=%08lX\n",
                 static_cast<unsigned>(from.which_payload_variant),
@@ -1735,20 +1797,25 @@ void MeshtasticPhoneCore::fillChannel(uint8_t idx, meshtastic_Channel* out) cons
         channel.settings = settings;
     }
     channel.settings.channel_num = idx;
-    channel.settings.id = 0;
     channel.settings.uplink_enabled = (idx == 0) ? cfg.primary_uplink_enabled : cfg.secondary_uplink_enabled;
     channel.settings.downlink_enabled = (idx == 0) ? cfg.primary_downlink_enabled : cfg.secondary_downlink_enabled;
     channel.settings.has_module_settings = false;
 
     if (idx == 0)
     {
-        copyBounded(channel.settings.name, sizeof(channel.settings.name), "Primary");
-        if (cfg.mesh.primary_key[0] != 0)
+        copyBounded(channel.settings.name,
+                    sizeof(channel.settings.name),
+                    chat::meshtastic::primaryChannelName(cfg.mesh));
+        channel.settings.id = cfg.mesh.primary_channel_id;
+        const size_t key_len = meshtasticKeyLen(cfg.mesh.primary_key,
+                                                sizeof(cfg.mesh.primary_key),
+                                                cfg.mesh.primary_key_len);
+        if (key_len > 0)
         {
-            channel.settings.psk.size = sizeof(cfg.mesh.primary_key);
+            channel.settings.psk.size = key_len;
             std::memcpy(channel.settings.psk.bytes,
                         cfg.mesh.primary_key,
-                        sizeof(cfg.mesh.primary_key));
+                        key_len);
         }
         else
         {
@@ -1758,13 +1825,19 @@ void MeshtasticPhoneCore::fillChannel(uint8_t idx, meshtastic_Channel* out) cons
     }
     else
     {
-        copyBounded(channel.settings.name, sizeof(channel.settings.name), "Secondary");
-        if (cfg.mesh.secondary_key[0] != 0)
+        copyBounded(channel.settings.name,
+                    sizeof(channel.settings.name),
+                    chat::meshtastic::secondaryChannelName(cfg.mesh));
+        channel.settings.id = cfg.mesh.secondary_channel_id;
+        const size_t key_len = meshtasticKeyLen(cfg.mesh.secondary_key,
+                                                sizeof(cfg.mesh.secondary_key),
+                                                cfg.mesh.secondary_key_len);
+        if (key_len > 0)
         {
-            channel.settings.psk.size = sizeof(cfg.mesh.secondary_key);
+            channel.settings.psk.size = key_len;
             std::memcpy(channel.settings.psk.bytes,
                         cfg.mesh.secondary_key,
-                        sizeof(cfg.mesh.secondary_key));
+                        key_len);
         }
     }
 }

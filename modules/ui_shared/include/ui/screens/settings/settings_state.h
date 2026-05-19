@@ -72,7 +72,7 @@ struct SettingsData
     int chat_protocol = 1;
     int chat_region = 0;
     int chat_channel = 0;
-    char chat_psk[33] = {};
+    char chat_psk[65] = {};
 
     // Network
     int net_use_preset = 1;
