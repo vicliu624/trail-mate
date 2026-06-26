@@ -159,8 +159,15 @@ jobs:
           } > "${SYMBOL_DIR}/manifest.txt"
 
           if [ -f "${BUILD_DIR}/firmware.bin" ]; then
-            python ~/.platformio/packages/tool-esptoolpy/esptool.py image_info --version 2 \
-              "${BUILD_DIR}/firmware.bin" > "${SYMBOL_DIR}/firmware-image-info.txt"
+            if ! python ~/.platformio/packages/tool-esptoolpy/esptool.py image_info --version 2 \
+              "${BUILD_DIR}/firmware.bin" > "${SYMBOL_DIR}/firmware-image-info.txt" 2> "${SYMBOL_DIR}/firmware-image-info.err"; then
+              {
+                echo "esptool image_info failed for ${BUILD_DIR}/firmware.bin"
+                echo "The firmware image is still included; image metadata is best-effort."
+                cat "${SYMBOL_DIR}/firmware-image-info.err"
+              } > "${SYMBOL_DIR}/firmware-image-info.txt"
+            fi
+            rm -f "${SYMBOL_DIR}/firmware-image-info.err"
           fi
 
           (cd "${SYMBOL_DIR}" && sha256sum * > SHA256SUMS)
