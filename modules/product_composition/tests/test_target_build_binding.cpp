@@ -8,7 +8,7 @@ int main()
     std::size_t count = 0;
     const auto* all = product_composition::allTargetBuildBindings(&count);
     assert(all != nullptr);
-    assert(count == 11);
+    assert(count == 12);
 
     const auto* bindings = product_composition::esp32LvglTargetBuildBindings(&count);
     assert(bindings != nullptr);
@@ -66,6 +66,13 @@ int main()
     assert(gat562 != nullptr);
     assert(std::strcmp(gat562->build_entrypoint, "builds/pio_nrf52") == 0);
     assert(std::strcmp(gat562->app_shell, "apps/nrf52_node") == 0);
+
+    const auto* impulse = product_composition::findTargetBuildBinding("t-impulse-plus");
+    assert(impulse != nullptr);
+    assert(std::strcmp(impulse->build_entrypoint, "builds/pio_nrf52") == 0);
+    assert(std::strcmp(impulse->app_shell, "apps/nrf52_node") == 0);
+    assert(impulse->sdkconfig_defaults == nullptr);
+    assert(std::strcmp(impulse->status, "platformio") == 0);
 
     assert(product_composition::findTargetBuildBinding("unknown") == nullptr);
     return 0;

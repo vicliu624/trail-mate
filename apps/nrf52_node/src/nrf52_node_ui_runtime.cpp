@@ -1,5 +1,358 @@
 #include "nrf52_node_ui_runtime.h"
 
+#if defined(TRAILMATE_TARGET_T_IMPULSE_PLUS)
+
+#include "nrf52_node_app_facade_runtime.h"
+#include "platform/nrf52/debug/nrf52_debug_console.h"
+#include "sys/clock.h"
+
+#include <Arduino.h>
+
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+
+namespace trailmate::apps::nrf52_node::ui_runtime
+{
+namespace
+{
+
+using target_board::BoardInputEvent;
+using target_board::BoardInputKey;
+
+enum class TinyView : uint8_t
+{
+    Time = 0,
+    Protocol,
+    SwitchConfirm,
+    Notice,
+};
+
+bool s_initialized = false;
+bool s_display_ok = false;
+TinyView s_view = TinyView::Time;
+TinyView s_notice_return_view = TinyView::Time;
+uint32_t s_last_render_ms = 0;
+uint32_t s_notice_until_ms = 0;
+bool s_press_active = false;
+bool s_long_handled = false;
+uint32_t s_press_started_ms = 0;
+char s_notice[16] = {};
+
+uint32_t nowMs()
+{
+    return millis();
+}
+
+const char* protocolLabel(chat::MeshProtocol protocol)
+{
+    return protocol == chat::MeshProtocol::MeshCore ? "MESHCORE" : "MESHTASTIC";
+}
+
+chat::MeshProtocol activeProtocol()
+{
+    if (!AppFacadeRuntime::instance().isInitialized())
+    {
+        return chat::MeshProtocol::Meshtastic;
+    }
+    return AppFacadeRuntime::instance().getMeshProtocol();
+}
+
+chat::MeshProtocol oppositeProtocol(chat::MeshProtocol protocol)
+{
+    return protocol == chat::MeshProtocol::MeshCore ? chat::MeshProtocol::Meshtastic : chat::MeshProtocol::MeshCore;
+}
+
+void formatTime(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    out[0] = '\0';
+    const uint32_t epoch = sys::epoch_seconds_now();
+    if (epoch == 0)
+    {
+        std::snprintf(out, out_len, "--:--");
+        return;
+    }
+
+    const time_t now = static_cast<time_t>(epoch);
+    std::tm tm{};
+#if defined(_WIN32)
+    gmtime_s(&tm, &now);
+#else
+    gmtime_r(&now, &tm);
+#endif
+    std::snprintf(out, out_len, "%02d:%02d", tm.tm_hour, tm.tm_min);
+}
+
+bool formatPairingPin(char* out, size_t out_len)
+{
+    if (!out || out_len == 0 || !AppFacadeRuntime::instance().isInitialized())
+    {
+        return false;
+    }
+
+#if !TRAILMATE_NRF52_BLE_DISABLED
+    auto* ble_manager = AppFacadeRuntime::instance().getBleManager();
+    ble::BlePairingStatus status{};
+    if (ble_manager && ble_manager->getPairingStatus(&status) &&
+        status.available &&
+        status.requires_passkey &&
+        status.is_pairing_active &&
+        !status.is_connected &&
+        status.passkey != 0)
+    {
+        std::snprintf(out, out_len, "PIN %06lu", static_cast<unsigned long>(status.passkey % 1000000UL));
+        return true;
+    }
+#endif
+    return false;
+}
+
+void setNotice(const char* text, uint32_t duration_ms)
+{
+    std::snprintf(s_notice, sizeof(s_notice), "%s", text ? text : "");
+    s_notice_return_view = (s_view == TinyView::Notice) ? TinyView::Time : s_view;
+    s_view = TinyView::Notice;
+    s_notice_until_ms = nowMs() + duration_ms;
+    s_last_render_ms = 0;
+}
+
+void drawCenteredLine(const char* text, uint8_t size)
+{
+    auto& board = target_board::instance();
+    const int char_w = 6 * size;
+    const int char_h = 8 * size;
+    const int len = text ? static_cast<int>(std::strlen(text)) : 0;
+    int x = (board.displayWidth() - (len * char_w)) / 2;
+    if (x < 0)
+    {
+        x = 0;
+    }
+    int y = (board.displayHeight() - char_h) / 2;
+    if (y < 0)
+    {
+        y = 0;
+    }
+    board.drawDisplayText(x, y, text ? text : "", size);
+}
+
+void render()
+{
+    if (!s_display_ok)
+    {
+        return;
+    }
+
+    const uint32_t now = nowMs();
+    if (s_view == TinyView::Notice && s_notice_until_ms != 0 && static_cast<int32_t>(now - s_notice_until_ms) >= 0)
+    {
+        s_view = s_notice_return_view;
+        s_notice_until_ms = 0;
+    }
+
+    char text[20] = {};
+    uint8_t text_size = 1;
+    if (formatPairingPin(text, sizeof(text)))
+    {
+        text_size = 1;
+    }
+    else
+    {
+        switch (s_view)
+        {
+        case TinyView::Time:
+            formatTime(text, sizeof(text));
+            text_size = 2;
+            break;
+        case TinyView::Protocol:
+            std::snprintf(text, sizeof(text), "%s", protocolLabel(activeProtocol()));
+            text_size = 1;
+            break;
+        case TinyView::SwitchConfirm:
+            std::snprintf(text, sizeof(text), "TO %s",
+                          oppositeProtocol(activeProtocol()) == chat::MeshProtocol::MeshCore ? "MC" : "MT");
+            text_size = 1;
+            break;
+        case TinyView::Notice:
+            std::snprintf(text, sizeof(text), "%s", s_notice);
+            text_size = 1;
+            break;
+        }
+    }
+
+    auto& board = target_board::instance();
+    board.clearDisplay();
+    drawCenteredLine(text, text_size);
+    board.presentDisplay();
+    s_last_render_ms = now;
+}
+
+void switchProtocolAndRestart()
+{
+    if (!AppFacadeRuntime::instance().isInitialized())
+    {
+        setNotice("APP WAIT", 1200);
+        return;
+    }
+
+    const chat::MeshProtocol next = oppositeProtocol(activeProtocol());
+    platform::nrf52::debug_console::printf("%s button switch protocol target=%u\n",
+                                           target_board::kLogTag,
+                                           static_cast<unsigned>(next));
+    setNotice("RESTART", 500);
+    render();
+    (void)AppFacadeRuntime::instance().switchMeshProtocol(next, true);
+}
+
+void handleShortPress()
+{
+    if (s_view == TinyView::SwitchConfirm)
+    {
+        s_view = TinyView::Protocol;
+        platform::nrf52::debug_console::printf("%s button short cancel switch\n", target_board::kLogTag);
+    }
+    else
+    {
+        s_view = (s_view == TinyView::Time) ? TinyView::Protocol : TinyView::Time;
+        platform::nrf52::debug_console::printf("%s button short view=%u\n",
+                                               target_board::kLogTag,
+                                               static_cast<unsigned>(s_view));
+    }
+    s_last_render_ms = 0;
+}
+
+void handleLongPress()
+{
+    if (s_view == TinyView::SwitchConfirm)
+    {
+        platform::nrf52::debug_console::printf("%s button long confirm switch\n", target_board::kLogTag);
+        switchProtocolAndRestart();
+        return;
+    }
+
+    if (s_view == TinyView::Protocol)
+    {
+        s_view = TinyView::SwitchConfirm;
+        platform::nrf52::debug_console::printf("%s button long enter switch\n", target_board::kLogTag);
+    }
+    else
+    {
+        s_view = TinyView::Protocol;
+        platform::nrf52::debug_console::printf("%s button long show protocol\n", target_board::kLogTag);
+    }
+    s_last_render_ms = 0;
+}
+
+void handleInput(const BoardInputEvent* event)
+{
+    if (!event || event->key != BoardInputKey::Function)
+    {
+        return;
+    }
+
+    const uint32_t now = nowMs();
+    platform::nrf52::debug_console::printf("%s button event=%s t=%lu\n",
+                                           target_board::kLogTag,
+                                           event->pressed ? "down" : "up",
+                                           static_cast<unsigned long>(now));
+    if (event->pressed)
+    {
+        s_press_active = true;
+        s_long_handled = false;
+        s_press_started_ms = now;
+        return;
+    }
+
+    if (!s_press_active)
+    {
+        return;
+    }
+
+    const uint32_t duration = now - s_press_started_ms;
+    s_press_active = false;
+    platform::nrf52::debug_console::printf("%s button release duration_ms=%lu long=%u\n",
+                                           target_board::kLogTag,
+                                           static_cast<unsigned long>(duration),
+                                           duration >= target_board::instance().inputLongPressMs() ? 1U : 0U);
+    if (duration >= target_board::instance().inputLongPressMs())
+    {
+        s_long_handled = true;
+        handleLongPress();
+    }
+    else if (!s_long_handled)
+    {
+        handleShortPress();
+    }
+}
+
+} // namespace
+
+bool initialize()
+{
+    if (s_initialized)
+    {
+        return s_display_ok;
+    }
+    s_initialized = true;
+    auto& board = target_board::instance();
+    s_display_ok = board.beginDisplay();
+    platform::nrf52::debug_console::printf("%s tiny ui init display=%s\n",
+                                           target_board::kLogTag,
+                                           s_display_ok ? "ok" : "fail");
+    render();
+    return s_display_ok;
+}
+
+void appendBootLog(const char* line)
+{
+    platform::nrf52::debug_console::printf("%s boot: %s\n", target_board::kLogTag, line ? line : "");
+    if (!s_display_ok)
+    {
+        (void)initialize();
+    }
+}
+
+void bindChatObservers()
+{
+}
+
+void tick(const BoardInputEvent* event)
+{
+    if (!initialize())
+    {
+        return;
+    }
+    handleInput(event);
+    const uint32_t now = nowMs();
+    if (s_last_render_ms == 0 || (now - s_last_render_ms) >= 1000UL)
+    {
+        render();
+    }
+}
+
+void showDisplayProbe()
+{
+    if (!initialize())
+    {
+        platform::nrf52::debug_console::printf("%s display probe skipped: ui init failed\n", target_board::kLogTag);
+        return;
+    }
+    auto& board = target_board::instance();
+    board.clearDisplay();
+    board.drawDisplayFrame();
+    board.drawDisplayText(17, 12, "TIP", 1);
+    board.presentDisplay();
+    delay(900);
+    s_last_render_ms = 0;
+}
+
+} // namespace trailmate::apps::nrf52_node::ui_runtime
+
+#else
+
 #include "nrf52_node_app_facade_runtime.h"
 #include "platform/nrf52/arduino_common/internal_fs_utils.h"
 #include "platform/nrf52/debug/nrf52_debug_console.h"
@@ -446,3 +799,5 @@ void showDisplayProbe()
 }
 
 } // namespace trailmate::apps::nrf52_node::ui_runtime
+
+#endif

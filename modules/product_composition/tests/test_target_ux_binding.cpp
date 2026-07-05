@@ -8,7 +8,7 @@ int main()
     std::size_t count = 0;
     const auto* bindings = product_composition::allTargetUxBindings(&count);
     assert(bindings != nullptr);
-    assert(count == 11);
+    assert(count == 12);
 
     const auto* tab5 = product_composition::findTargetUxBinding("tab5");
     assert(tab5 != nullptr);
@@ -55,6 +55,12 @@ int main()
     assert(gat562 != nullptr);
     assert(std::strcmp(gat562->desired_ux_pack_id, "node_headless") == 0);
     assert(std::strcmp(gat562->active_ux_pack_id, "tiny_node_status") == 0);
+
+    const auto* impulse = product_composition::findTargetUxBinding("t-impulse-plus");
+    assert(impulse != nullptr);
+    assert(std::strcmp(impulse->desired_ux_pack_id, "node_headless") == 0);
+    assert(std::strcmp(impulse->active_ux_pack_id, "tiny_node_status_64x32") == 0);
+    assert(!impulse->final_ux_pack_available);
 
     assert(product_composition::findTargetUxBinding("unknown") == nullptr);
     return 0;

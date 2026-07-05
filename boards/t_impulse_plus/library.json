@@ -1,0 +1,31 @@
+{
+  "name": "boards_t_impulse_plus",
+  "version": "0.1.0",
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "nordicnrf52"
+  ],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-std=gnu++17",
+      "-Iinclude",
+      "-I../..",
+      "-I../../platform/shared/include",
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_chat/include",
+      "-I../../modules/core_chat/generated",
+      "-I../../modules/core_gps/include",
+      "-I../../platform/nrf52/arduino_common/include",
+      "-I../../variants/t_impulse_plus_nrf52840",
+      "-I../../.pio/libdeps/t-impulse-plus/RadioLib/src",
+      "-I../../.pio/libdeps/t-impulse-plus/TinyGPSPlus/src",
+      "-I../../.pio/libdeps/t-impulse-plus/Adafruit\\ GFX\\ Library",
+      "-I../../.pio/libdeps/t-impulse-plus/Adafruit\\ SSD1306",
+      "-I../../.pio/libdeps/t-impulse-plus/Adafruit\\ BusIO"
+    ]
+  }
+}

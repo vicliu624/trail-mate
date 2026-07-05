@@ -8,7 +8,7 @@ int main()
     std::size_t count = 0;
     const auto* all = product_composition::allTargetProfiles(&count);
     assert(all != nullptr);
-    assert(count == 11);
+    assert(count == 12);
 
     const auto* profiles = product_composition::esp32LvglTargetProfiles(&count);
     assert(profiles != nullptr);
@@ -107,6 +107,19 @@ int main()
     assert(gat562->has_display);
     assert(gat562->has_lora);
     assert(gat562->has_gps);
+
+    const auto* impulse = product_composition::findTargetProfile("t-impulse-plus");
+    assert(impulse != nullptr);
+    assert(std::strcmp(impulse->board_id, "lilygo_t_impulse_plus_nrf52840") == 0);
+    assert(std::strcmp(impulse->layout_profile_id, "screen_64x32") == 0);
+    assert(impulse->renderer == product_composition::TargetRenderer::Headless);
+    assert(impulse->has_display);
+    assert(impulse->has_touch);
+    assert(impulse->has_lora);
+    assert(impulse->has_gps);
+    assert(!impulse->has_keyboard);
+    assert(!impulse->has_motion_sensor);
+    assert(impulse->ble_backend == product_composition::BleBackend::Local);
 
     assert(product_composition::findTargetProfile("unknown") == nullptr);
     return 0;

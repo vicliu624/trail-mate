@@ -1,6 +1,9 @@
 #pragma once
 
-#if defined(TRAILMATE_TARGET_T_ECHO_LITE)
+#if defined(TRAILMATE_TARGET_T_IMPULSE_PLUS)
+#include "boards/t_impulse_plus/settings_store.h"
+#include "boards/t_impulse_plus/t_impulse_plus_board.h"
+#elif defined(TRAILMATE_TARGET_T_ECHO_LITE)
 #include "boards/t_echo_lite/settings_store.h"
 #include "boards/t_echo_lite/t_echo_lite_board.h"
 #else
@@ -13,7 +16,15 @@
 namespace trailmate::apps::nrf52_node::target_board
 {
 
-#if defined(TRAILMATE_TARGET_T_ECHO_LITE)
+#if defined(TRAILMATE_TARGET_T_IMPULSE_PLUS)
+using Board = ::boards::t_impulse_plus::TImpulsePlusBoard;
+using BoardInputEvent = ::boards::t_impulse_plus::BoardInputEvent;
+using BoardInputKey = ::boards::t_impulse_plus::BoardInputKey;
+namespace settings_store = ::boards::t_impulse_plus::settings_store;
+constexpr const char* kLogTag = "[t-impulse-plus]";
+constexpr const char* kTargetId = "t-impulse-plus";
+constexpr uint32_t kFsTotalBytes = 7U * 4096U;
+#elif defined(TRAILMATE_TARGET_T_ECHO_LITE)
 using Board = ::boards::t_echo_lite::TEchoLiteBoard;
 using BoardInputEvent = ::boards::t_echo_lite::BoardInputEvent;
 using BoardInputKey = ::boards::t_echo_lite::BoardInputKey;
