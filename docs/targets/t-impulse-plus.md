@@ -92,6 +92,9 @@ not grow a private protocol side path for this target.
 - The app shell manifest may cause PlatformIO to install `ui_mono` as a known
   library, but the `t-impulse-plus` environment must keep `ui_mono` out of the
   dependency graph and link through `lib_ignore = ui_mono`.
+- Default upload protocol is `nrfutil`, matching the official demo and the
+  Adafruit nRF52 bootloader flow. J-Link remains available as an explicit
+  recovery/debug protocol, but it is not the default.
 
 ## Verification Baseline
 

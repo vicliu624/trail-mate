@@ -48,14 +48,17 @@
     "maximum_size": 815104,
     "require_upload_port": true,
     "speed": 115200,
-    "protocol": "jlink",
+    "protocol": "nrfutil",
     "protocols": [
+      "nrfutil",
       "jlink",
       "nrfjprog",
       "stlink",
       "cmsis-dap",
       "blackmagic"
-    ]
+    ],
+    "use_1200bps_touch": true,
+    "wait_for_upload_port": true
   },
   "url": "https://wiki.lilygo.cc/products/t-impulse-series/t-impulse-plus/",
   "vendor": "LilyGO"
