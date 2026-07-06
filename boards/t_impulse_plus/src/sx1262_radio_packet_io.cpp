@@ -19,6 +19,7 @@ namespace
 constexpr uint8_t kMeshCoreSyncWord = 0x12;
 constexpr uint16_t kDefaultPreambleLen = 16;
 constexpr uint8_t kDefaultCrcLen = 2;
+constexpr uint32_t kRadioDropLogIntervalMs = 5000UL;
 
 SPIClass& radioSpi()
 {
@@ -167,14 +168,32 @@ bool Sx1262RadioPacketIo::pollReceive(platform::nrf52::arduino_common::chat::inf
     }
 
     const int state = radio_->readData(out_packet->data, packet_len);
-    out_packet->size = ((state == RADIOLIB_ERR_NONE || state == RADIOLIB_ERR_CRC_MISMATCH) && packet_len > 0)
-                           ? packet_len
-                           : 0;
     out_packet->rx_meta.rssi_dbm_x10 = static_cast<int16_t>(radio_->getRSSI() * 10.0f);
     out_packet->rx_meta.snr_db_x10 = static_cast<int16_t>(radio_->getSNR() * 10.0f);
 
     (void)radio_->finishReceive();
     (void)enterReceiveMode();
+    if (state != RADIOLIB_ERR_NONE)
+    {
+        static uint32_t drop_count = 0;
+        static uint32_t last_drop_log_ms = 0;
+        ++drop_count;
+        const uint32_t now_ms = millis();
+        if (drop_count <= 4 || (now_ms - last_drop_log_ms) >= kRadioDropLogIntervalMs)
+        {
+            last_drop_log_ms = now_ms;
+            Serial.printf("[t-impulse-plus][radio] rx drop state=%d len=%u drops=%lu rssi_x10=%d snr_x10=%d\n",
+                          state,
+                          static_cast<unsigned>(packet_len),
+                          static_cast<unsigned long>(drop_count),
+                          static_cast<int>(out_packet->rx_meta.rssi_dbm_x10),
+                          static_cast<int>(out_packet->rx_meta.snr_db_x10));
+        }
+        out_packet->size = 0;
+        return false;
+    }
+
+    out_packet->size = packet_len;
     return out_packet->size > 0;
 }
 

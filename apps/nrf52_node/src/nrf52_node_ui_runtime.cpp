@@ -2,6 +2,7 @@
 
 #if defined(TRAILMATE_TARGET_T_IMPULSE_PLUS)
 
+#include "chat/runtime/self_identity_policy.h"
 #include "nrf52_node_app_facade_runtime.h"
 #include "platform/nrf52/debug/nrf52_debug_console.h"
 #include "sys/clock.h"
@@ -44,9 +45,9 @@ uint32_t nowMs()
     return millis();
 }
 
-const char* protocolLabel(chat::MeshProtocol protocol)
+const char* protocolShortLabel(chat::MeshProtocol protocol)
 {
-    return protocol == chat::MeshProtocol::MeshCore ? "MESHCORE" : "MESHTASTIC";
+    return protocol == chat::MeshProtocol::MeshCore ? "MC" : "MT";
 }
 
 chat::MeshProtocol activeProtocol()
@@ -87,6 +88,28 @@ void formatTime(char* out, size_t out_len)
     std::snprintf(out, out_len, "%02d:%02d", tm.tm_hour, tm.tm_min);
 }
 
+void formatProtocolIdentity(char* out, size_t out_len)
+{
+    if (!out || out_len == 0)
+    {
+        return;
+    }
+    out[0] = '\0';
+
+    const chat::MeshProtocol protocol = activeProtocol();
+    if (!AppFacadeRuntime::instance().isInitialized())
+    {
+        std::snprintf(out, out_len, "%s #----", protocolShortLabel(protocol));
+        return;
+    }
+
+    char node_label[8] = {};
+    chat::runtime::formatScreenNodeLabel(AppFacadeRuntime::instance().getSelfNodeId(),
+                                         node_label,
+                                         sizeof(node_label));
+    std::snprintf(out, out_len, "%s %s", protocolShortLabel(protocol), node_label);
+}
+
 bool formatPairingPin(char* out, size_t out_len)
 {
     if (!out || out_len == 0 || !AppFacadeRuntime::instance().isInitialized())
@@ -101,7 +124,6 @@ bool formatPairingPin(char* out, size_t out_len)
         status.available &&
         status.requires_passkey &&
         status.is_pairing_active &&
-        !status.is_connected &&
         status.passkey != 0)
     {
         std::snprintf(out, out_len, "PIN %06lu", static_cast<unsigned long>(status.passkey % 1000000UL));
@@ -168,7 +190,7 @@ void render()
             text_size = 2;
             break;
         case TinyView::Protocol:
-            std::snprintf(text, sizeof(text), "%s", protocolLabel(activeProtocol()));
+            formatProtocolIdentity(text, sizeof(text));
             text_size = 1;
             break;
         case TinyView::SwitchConfirm:

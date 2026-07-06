@@ -1895,7 +1895,7 @@ bool MeshtasticBleService::isPhoneBleConnected() const
 
 uint32_t MeshtasticBleService::pendingPhoneBlePasskey() const
 {
-    return effectivePasskey();
+    return pending_passkey_.load();
 }
 
 void MeshtasticBleService::requestPhoneHighThroughputConnection()
@@ -2358,26 +2358,7 @@ void MeshtasticBleService::logDeferredBleEvents()
 
 uint32_t MeshtasticBleService::effectivePasskey() const
 {
-    const uint32_t pending = pending_passkey_.load();
-    if (pending != 0)
-    {
-        return pending;
-    }
-
-    if (isBleConnected())
-    {
-        return 0;
-    }
-
-    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN)
-    {
-        return ble_config_.fixed_pin;
-    }
-    if (ble_config_.mode == meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN)
-    {
-        return configured_passkey_.load();
-    }
-    return 0;
+    return pending_passkey_.load();
 }
 
 } // namespace ble

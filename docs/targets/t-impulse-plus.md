@@ -24,6 +24,9 @@ not grow a private protocol side path for this target.
 
 - MCU: nRF52840.
 - Radio: SX1262, board-level RadioLib driver owned by `boards/t_impulse_plus`.
+- RadioLib CRC mismatch results are board-level receive errors. They must be
+  dropped inside `boards/t_impulse_plus` and must not be surfaced as mesh
+  packets through `IRadioPacketIo`.
 - Display: physical 128x64 SSD1306 I2C panel, constrained to a logical
   `screen_64x32` status layout.
 - Input: Reset and Boot are board/system buttons. The integration exposes only
@@ -38,9 +41,14 @@ not grow a private protocol side path for this target.
 - T-Impulse Plus does not render chat/message content.
 - The firmware uses a tiny one-line status UI instead of `ui_mono::Runtime`.
 - Default line alternates by user action between time and current protocol.
+- The protocol line includes the compact node identity so the physical device
+  can be matched with the phone app, for example `MT #C96E` or `MC #C96E`.
 - Meshtastic BLE PIN is displayed only while Meshtastic pairing is active,
-  passkey is required, and BLE is not connected. The PIN value is owned by the
-  BLE module; the board/UI only projects `BlePairingStatus`.
+  passkey is required, and the BLE stack has a pending passkey-display event.
+  A configured random or fixed PIN must not be displayed merely because the
+  device is advertising after disconnect; bonded reconnects do not need user
+  PIN entry. The PIN value is owned by the BLE module; the board/UI only
+  projects `BlePairingStatus`.
 - MeshCore must not invent or display a fake PIN.
 - Short press toggles the one-line view between time and protocol.
 - Long press on the protocol view enters switch-confirm mode.
