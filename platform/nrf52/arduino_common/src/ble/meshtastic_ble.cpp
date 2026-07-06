@@ -40,6 +40,10 @@ constexpr uint8_t kSteadyPublishedFromRadioWindow = 1;
 constexpr uint32_t kFromRadioReadHoldMs = 250UL;
 constexpr uint32_t kUnsetAgeMs = 0xFFFFFFFFUL;
 
+#ifndef TRAILMATE_NRF52_MT_DIRECTED_ADV_ENABLED
+#define TRAILMATE_NRF52_MT_DIRECTED_ADV_ENABLED 1
+#endif
+
 bool usbSerialWritable(std::size_t len)
 {
     return static_cast<bool>(Serial) && Serial.dtr() != 0 && Serial.availableForWrite() >= static_cast<int>(len);
@@ -1605,6 +1609,15 @@ void MeshtasticBleService::rememberPhonePeer(uint16_t conn_handle, const char* r
 
 void MeshtasticBleService::startPhoneAdvertising(bool prefer_directed)
 {
+#if !TRAILMATE_NRF52_MT_DIRECTED_ADV_ENABLED
+    (void)prefer_directed;
+    directed_advertising_attempted_ = true;
+    directed_advertising_active_ = false;
+    directed_advertising_until_ms_ = 0;
+    bleLogBoth("[BLE][nrf52][mt] directed advertising disabled; using undirected");
+    (void)startAdvertising(service_, nullptr);
+    return;
+#else
     const uint32_t now_ms = millis();
     if (prefer_directed && remembered_phone_peer_valid_ && !directed_advertising_attempted_)
     {
@@ -1622,6 +1635,7 @@ void MeshtasticBleService::startPhoneAdvertising(bool prefer_directed)
     directed_advertising_active_ = false;
     directed_advertising_until_ms_ = 0;
     (void)startAdvertising(service_, nullptr);
+#endif
 }
 
 void MeshtasticBleService::handleConnectEvent(uint16_t conn_handle)
