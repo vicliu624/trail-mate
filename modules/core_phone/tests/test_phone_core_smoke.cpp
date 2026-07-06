@@ -1363,7 +1363,7 @@ int main()
     assert(custom_module_hooks.save_count == 1);
     assert(custom_module_hooks.last_saved.has_mqtt);
     assert(custom_module_hooks.last_saved.mqtt.enabled);
-    assert(custom_runtime.restart_device_count == 1);
+    assert(custom_runtime.restart_device_count == 0);
 
     phone::tests::FakePhoneRuntimeContext config_runtime;
     phone::PhoneNodeView observation_only_node{};

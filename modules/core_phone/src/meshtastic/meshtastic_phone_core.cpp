@@ -1514,15 +1514,8 @@ bool MeshtasticPhoneCore::handleAdmin(meshtastic_MeshPacket& packet)
                     req.set_module_config.payload_variant.mqtt.root);
             module_config_.has_mqtt = true;
             module_config_.mqtt = req.set_module_config.payload_variant.mqtt;
+            // MQTT bridge settings are applied by module_config_hooks_ after save.
             applyLegacyMqttDefaults(&module_config_);
-            if (admin_edit_transaction_open_)
-            {
-                admin_edit_transaction_restart_pending_ = true;
-            }
-            else
-            {
-                restart_pending_ = true;
-            }
             break;
         case meshtastic_ModuleConfig_serial_tag:
             module_config_.has_serial = true;
