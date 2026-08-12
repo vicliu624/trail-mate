@@ -78,6 +78,9 @@ struct GtkUConsoleAppState
 
     GtkWidget* window = nullptr;
     GtkWidget* stack = nullptr;
+    GtkWidget* navigation_rail = nullptr;
+    GtkWindow* shortcut_window = nullptr;
+    bool navigation_collapsed = false;
     GtkWidget* nav_overview = nullptr;
     GtkWidget* nav_chat = nullptr;
     GtkWidget* nav_chat_badge = nullptr;
@@ -177,6 +180,8 @@ struct GtkUConsoleAppState
     GtkWidget* settings_tx_retries = nullptr;
     GtkWidget* settings_max_channels = nullptr;
     GtkWidget* settings_gps_enabled = nullptr;
+    GtkWidget* settings_gps_receiver_path = nullptr;
+    GtkWidget* settings_gps_receiver_baud = nullptr;
     GtkWidget* settings_gps_interval = nullptr;
     GtkWidget* settings_gps_mode = nullptr;
     GtkWidget* settings_gps_strategy = nullptr;
@@ -230,6 +235,8 @@ struct GtkUConsoleAppState
     GtkWidget* map_title = nullptr;
     GtkWidget* map_meta = nullptr;
     GtkWidget* map_canvas = nullptr;
+    GtkWidget* map_layers_drawer = nullptr;
+    GtkWidget* map_tools_drawer = nullptr;
     GtkWidget* map_marker_layer = nullptr;
     GtkWidget* map_grid = nullptr;
     GtkWidget* map_contour_grid = nullptr;

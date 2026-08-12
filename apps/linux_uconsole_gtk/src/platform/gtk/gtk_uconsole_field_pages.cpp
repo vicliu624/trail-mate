@@ -50,11 +50,11 @@ void onFieldNodeChatClicked(GtkButton* button, gpointer data)
     showPage(state, "chat");
 }
 
-GtkWidget* makeContactNodeCard(GtkUConsoleAppState& state,
-                               const ChatNodeInfoItem& item)
+GtkWidget* makeContactNodeRow(GtkUConsoleAppState& state,
+                              const ChatNodeInfoItem& item)
 {
-    GtkWidget* card = makePanel();
-    gtk_widget_add_css_class(card, "field-contact-card");
+    GtkWidget* row = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_widget_add_css_class(row, "field-contact-row");
 
     GtkWidget* title_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     GtkWidget* title = makeLabel(item.title.c_str(), "row-title", true);
@@ -62,14 +62,14 @@ GtkWidget* makeContactNodeCard(GtkUConsoleAppState& state,
     gtk_box_append(GTK_BOX(title_row), title);
     gtk_box_append(GTK_BOX(title_row),
                    makeLabel(item.via_mqtt ? "MQTT" : "LoRa", "mini-chip"));
-    gtk_box_append(GTK_BOX(card), title_row);
-    gtk_box_append(GTK_BOX(card),
+    gtk_box_append(GTK_BOX(row), title_row);
+    gtk_box_append(GTK_BOX(row),
                    makeLabel(item.subtitle.c_str(), "row-meta", true));
-    gtk_box_append(GTK_BOX(card),
+    gtk_box_append(GTK_BOX(row),
                    makeLabel(item.status.c_str(), "row-meta", true));
-    gtk_box_append(GTK_BOX(card),
+    gtk_box_append(GTK_BOX(row),
                    makeLabel(item.signal.c_str(), "row-meta", true));
-    gtk_box_append(GTK_BOX(card),
+    gtk_box_append(GTK_BOX(row),
                    makeLabel(item.position.c_str(),
                              item.has_position ? "chat-node-position"
                                                : "row-meta",
@@ -115,8 +115,8 @@ GtkWidget* makeContactNodeCard(GtkUConsoleAppState& state,
                         G_CALLBACK(onChatNodeVerifyKeyClicked),
                         state,
                         !item.key_verified));
-    gtk_box_append(GTK_BOX(card), actions);
-    return card;
+    gtk_box_append(GTK_BOX(row), actions);
+    return row;
 }
 
 void appendNodeGroup(GtkUConsoleAppState& state,
@@ -131,7 +131,7 @@ void appendNodeGroup(GtkUConsoleAppState& state,
         {
             continue;
         }
-        gtk_box_append(GTK_BOX(panel), makeContactNodeCard(state, item));
+        gtk_box_append(GTK_BOX(panel), makeContactNodeRow(state, item));
         appended = true;
     }
     if (!appended)
@@ -158,34 +158,35 @@ void refreshContactsLogic(GtkUConsoleAppState& state,
     const ChatWorkspaceSnapshot chat = state.chat_model.snapshot(
         kFieldConversationLimit, 0, state.chat_sort_mode);
 
-    GtkWidget* metrics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(metrics, "metric-strip");
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Contacts",
-                                  std::to_string(
-                                      snapshot.dashboard.contact_count),
-                                  "Saved identities"));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Nearby",
-                                  std::to_string(
-                                      snapshot.dashboard.nearby_count),
-                                  "Recently discovered"));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Ignored",
-                                  std::to_string(
-                                      snapshot.dashboard.ignored_count),
-                                  "Hidden from normal lists",
-                                  snapshot.dashboard.ignored_count > 0));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Protocol",
-                                  snapshot.dashboard.mesh_protocol,
-                                  std::to_string(chat.nodes.size()) +
-                                      " decoded nodes"));
-    gtk_box_append(GTK_BOX(state.contacts_page_box), metrics);
+    GtkWidget* summary = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_add_css_class(summary, "list-summary");
+    gtk_box_append(GTK_BOX(summary),
+                   makeLabel((std::to_string(snapshot.dashboard.contact_count) +
+                              " saved contacts")
+                                 .c_str(),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(summary),
+                   makeLabel((std::to_string(snapshot.dashboard.nearby_count) +
+                              " nearby")
+                                 .c_str(),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(summary),
+                   makeLabel((std::to_string(snapshot.dashboard.ignored_count) +
+                              " ignored")
+                                 .c_str(),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(summary),
+                   makeLabel((snapshot.dashboard.mesh_protocol + " / " +
+                              std::to_string(chat.nodes.size()) + " nodes")
+                                 .c_str(),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(state.contacts_page_box), summary);
 
     GtkWidget* workbench = makeWorkbench(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget* contacts = makePanel();
-    GtkWidget* nearby = makePanel();
+    GtkWidget* contacts = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    GtkWidget* nearby = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_widget_add_css_class(contacts, "field-list");
+    gtk_widget_add_css_class(nearby, "field-list");
     gtk_widget_set_hexpand(contacts, TRUE);
     gtk_widget_set_hexpand(nearby, TRUE);
     gtk_box_append(GTK_BOX(contacts),
@@ -257,35 +258,32 @@ void refreshGpsLogic(GtkUConsoleAppState& state,
         has_snapshot,
         kFieldSatelliteLimit);
 
-    GtkWidget* metrics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(metrics, "metric-strip");
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Fix",
-                                  snapshot.dashboard.location.state,
-                                  snapshot.dashboard.location.coordinates,
-                                  snapshot.dashboard.location.attention));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Satellites used",
-                                  std::to_string(
-                                      state.overview_gnss_view.status
-                                          .sats_in_use),
-                                  std::to_string(
-                                      state.overview_gnss_view.status
-                                          .sats_in_view) +
-                                      " in view"));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Map zoom",
-                                  std::to_string(snapshot.map.zoom),
-                                  snapshot.map.source_label));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Receiver",
-                                  has_snapshot ? "Live" : "Waiting",
-                                  snapshot.dashboard.location.detail,
-                                  !has_snapshot));
-    gtk_box_append(GTK_BOX(state.gps_page_box), metrics);
+    GtkWidget* receiver = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 14);
+    gtk_widget_add_css_class(receiver, "receiver-status-row");
+    gtk_box_append(GTK_BOX(receiver),
+                   makeLabel(snapshot.dashboard.location.state.c_str(),
+                             "receiver-status-state"));
+    gtk_box_append(GTK_BOX(receiver),
+                   makeLabel(snapshot.dashboard.location.coordinates.c_str(),
+                             "receiver-status-coordinate"));
+    gtk_box_append(GTK_BOX(receiver),
+                   makeLabel((std::to_string(
+                                  state.overview_gnss_view.status.sats_in_use) +
+                              " used / " +
+                              std::to_string(
+                                  state.overview_gnss_view.status.sats_in_view) +
+                              " in view")
+                                 .c_str(),
+                             "receiver-status-detail"));
+    GtkWidget* receiver_detail = makeLabel(
+        snapshot.dashboard.location.detail.c_str(), "receiver-status-detail", true);
+    gtk_widget_set_hexpand(receiver_detail, TRUE);
+    gtk_box_append(GTK_BOX(receiver), receiver_detail);
+    gtk_box_append(GTK_BOX(state.gps_page_box), receiver);
 
     GtkWidget* workbench = makeWorkbench(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget* sky_panel = makePanel();
+    GtkWidget* sky_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(sky_panel, "gps-skyplot-workspace");
     gtk_widget_set_hexpand(sky_panel, TRUE);
     gtk_box_append(GTK_BOX(sky_panel),
                    makeLabel("Satellite sky plot", "pane-heading"));
@@ -300,7 +298,8 @@ void refreshGpsLogic(GtkUConsoleAppState& state,
                                    nullptr);
     gtk_box_append(GTK_BOX(sky_panel), state.gps_skyplot);
 
-    GtkWidget* satellite_panel = makePanel();
+    GtkWidget* satellite_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(satellite_panel, "gps-satellite-list");
     gtk_widget_set_size_request(satellite_panel, 320, -1);
     gtk_box_append(GTK_BOX(satellite_panel),
                    makeLabel("Satellites", "pane-heading"));
@@ -521,33 +520,27 @@ void refreshTrackerLogic(GtkUConsoleAppState& state,
     std::string current_path{};
     (void)::platform::ui::tracker::current_path(current_path);
 
-    GtkWidget* metrics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(metrics, "metric-strip");
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Recorder",
-                                  recording ? "Recording" : "Stopped",
-                                  supported ? "Linux track writer ready"
-                                            : "Track directory unavailable",
-                                  !supported));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Format",
-                                  trackerFormatLabel(
-                                      config.map_track_format),
-                                  "Persistent setting"));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Interval",
-                                  std::to_string(
-                                      config.map_track_interval) +
-                                      " s",
-                                  "Sampling cadence"));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("GPS",
-                                  snapshot.dashboard.location.state,
-                                  snapshot.dashboard.location.coordinates,
-                                  snapshot.dashboard.location.attention));
-    gtk_box_append(GTK_BOX(state.tracker_page_box), metrics);
+    GtkWidget* tracker_status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_add_css_class(tracker_status, "list-summary");
+    gtk_box_append(GTK_BOX(tracker_status),
+                   makeLabel(recording ? "Recording" : "Stopped",
+                             recording ? "tracker-state-active"
+                                       : "tracker-state-idle"));
+    gtk_box_append(GTK_BOX(tracker_status),
+                   makeLabel(trackerFormatLabel(config.map_track_format),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(tracker_status),
+                   makeLabel((std::to_string(config.map_track_interval) +
+                              " second interval")
+                                 .c_str(),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(tracker_status),
+                   makeLabel(snapshot.dashboard.location.state.c_str(),
+                             "list-summary-item"));
+    gtk_box_append(GTK_BOX(state.tracker_page_box), tracker_status);
 
-    GtkWidget* controls = makePanel();
+    GtkWidget* controls = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(controls, "tracker-controls");
     GtkWidget* header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget* title = makeLabel("Recording session", "pane-heading");
     gtk_widget_set_hexpand(title, TRUE);
@@ -580,7 +573,8 @@ void refreshTrackerLogic(GtkUConsoleAppState& state,
 
     std::vector<std::string> tracks{};
     (void)::platform::ui::tracker::list_tracks(tracks, 32);
-    GtkWidget* history = makePanel();
+    GtkWidget* history = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(history, "tracker-history");
     gtk_box_append(GTK_BOX(history),
                    makeLabel("Recorded tracks", "pane-heading"));
     if (tracks.empty())

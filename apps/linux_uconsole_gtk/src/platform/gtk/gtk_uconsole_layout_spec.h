@@ -6,8 +6,8 @@ namespace trailmate::uconsole::gtk::layout_spec
 // These constants mirror docs/specs/uconsole-aio2-linux.md.
 // Update the specification before changing product geometry here.
 
-constexpr int kGlobalStatusBarHeight = 28;
-constexpr int kNavigationRailWidth = 184;
+constexpr int kGlobalStatusBarHeight = 30;
+constexpr int kNavigationRailWidth = 168;
 
 constexpr int kOverviewGpsRailWidth = 208;
 constexpr int kOverviewTimelineRailWidth = 252;
@@ -22,8 +22,8 @@ constexpr int kOverviewSatelliteListHeight = 132;
 constexpr int kChatConversationRailWidth = 216;
 constexpr int kChatNodeInspectorWidth = 220;
 
-constexpr int kMapSideRailWidth = 152;
-constexpr int kMapRailTextWidthChars = 15;
+constexpr int kMapDrawerWidth = 236;
+constexpr int kMapDrawerTextWidthChars = 25;
 constexpr int kMapStatusValueMaxChars = 28;
 
 } // namespace trailmate::uconsole::gtk::layout_spec

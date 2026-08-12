@@ -20,8 +20,15 @@ struct UConsoleBoardFacts
     bool trackball_present = false;
     const char* lora_state = "optional";
     const char* lora_default_spi = "/dev/spidev1.0";
+    const char* lora_power_gpio = "GPIO16";
+    const char* lora_reset_gpio = "GPIO25";
+    const char* lora_busy_gpio = "GPIO24";
+    const char* lora_irq_gpio = "GPIO26";
     const char* gps_state = "optional";
-    const char* gps_device_source = "/dev/serial/by-id_or_env_override";
+    const char* gps_device_source =
+        "AIO2 CM4 default /dev/ttyS0 @ 9600; TRAIL_MATE_GPS_DEVICE overrides";
+    const char* gps_power_gpio = "GPIO27";
+    bool gps_usb_control_serial_is_receiver = false;
     bool posix_filesystem_present = true;
 };
 

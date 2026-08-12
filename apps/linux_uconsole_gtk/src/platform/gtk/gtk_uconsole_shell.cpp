@@ -1,5 +1,6 @@
 #include "platform/gtk/gtk_uconsole_shell.h"
 
+#include <array>
 #include <string>
 
 #include "platform/gtk/gtk_uconsole_layout_spec.h"
@@ -11,6 +12,153 @@ namespace trailmate::uconsole::gtk
 
 namespace
 {
+
+struct WorkspaceShortcut
+{
+    guint keyval = 0;
+    const char* page = "";
+};
+
+constexpr std::array<WorkspaceShortcut, 11> kWorkspaceShortcuts{{
+    {GDK_KEY_c, "chat"},
+    {GDK_KEY_m, "map"},
+    {GDK_KEY_n, "contacts"},
+    {GDK_KEY_g, "gps"},
+    {GDK_KEY_t, "team"},
+    {GDK_KEY_r, "tracker"},
+    {GDK_KEY_l, "radio-tools"},
+    {GDK_KEY_e, "extensions"},
+    {GDK_KEY_v, "hardware"},
+    {GDK_KEY_d, "data"},
+    {GDK_KEY_p, "logs"},
+}};
+
+bool textInputHasFocus(const GtkUConsoleAppState& state)
+{
+    if (state.window == nullptr)
+    {
+        return false;
+    }
+    GtkWidget* focused = gtk_window_get_focus(GTK_WINDOW(state.window));
+    return focused != nullptr &&
+           (GTK_IS_EDITABLE(focused) || GTK_IS_TEXT_VIEW(focused));
+}
+
+void onShortcutWindowDestroyed(GtkWidget* widget, gpointer data)
+{
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    if (state.shortcut_window == GTK_WINDOW(widget))
+    {
+        state.shortcut_window = nullptr;
+    }
+}
+
+void onShortcutWindowCloseClicked(GtkButton*, gpointer data)
+{
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    if (state.shortcut_window != nullptr)
+    {
+        gtk_window_destroy(state.shortcut_window);
+    }
+}
+
+gboolean onShortcutWindowKeyPressed(GtkEventControllerKey*,
+                                    guint keyval,
+                                    guint,
+                                    GdkModifierType,
+                                    gpointer data)
+{
+    if (keyval != GDK_KEY_Escape)
+    {
+        return GDK_EVENT_PROPAGATE;
+    }
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    if (state.shortcut_window != nullptr)
+    {
+        gtk_window_destroy(state.shortcut_window);
+    }
+    return GDK_EVENT_STOP;
+}
+
+GtkWidget* makeShortcutRow(const char* keys, const char* action)
+{
+    GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_add_css_class(row, "shortcut-row");
+    GtkWidget* key_label = makeLabel(keys, "shortcut-key");
+    gtk_widget_set_size_request(key_label, 86, -1);
+    gtk_box_append(GTK_BOX(row), key_label);
+    gtk_box_append(GTK_BOX(row), makeLabel(action, "shortcut-action", true));
+    return row;
+}
+
+void showShortcutReference(GtkUConsoleAppState& state)
+{
+    if (state.shortcut_window != nullptr)
+    {
+        gtk_window_present(state.shortcut_window);
+        return;
+    }
+
+    GtkWidget* window = gtk_window_new();
+    state.shortcut_window = GTK_WINDOW(window);
+    gtk_window_set_title(state.shortcut_window,
+                         "Trail Mate keyboard shortcuts");
+    gtk_window_set_transient_for(state.shortcut_window,
+                                 GTK_WINDOW(state.window));
+    gtk_window_set_modal(state.shortcut_window, TRUE);
+    gtk_window_set_default_size(state.shortcut_window, 500, 420);
+    gtk_widget_add_css_class(window, "shortcut-window");
+    g_signal_connect(window, "destroy", G_CALLBACK(onShortcutWindowDestroyed),
+                     &state);
+    GtkEventController* key_controller = gtk_event_controller_key_new();
+    g_signal_connect(key_controller,
+                     "key-pressed",
+                     G_CALLBACK(onShortcutWindowKeyPressed),
+                     &state);
+    gtk_widget_add_controller(window, key_controller);
+
+    GtkWidget* content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(content, "shortcut-content");
+    GtkWidget* heading = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget* title = makeLabel("Keyboard shortcuts", "shortcut-title");
+    gtk_widget_set_hexpand(title, TRUE);
+    gtk_box_append(GTK_BOX(heading), title);
+    GtkWidget* close = gtk_button_new_with_label("Close");
+    gtk_widget_add_css_class(close, "nav-button");
+    g_signal_connect(close, "clicked", G_CALLBACK(onShortcutWindowCloseClicked),
+                     &state);
+    gtk_box_append(GTK_BOX(heading), close);
+    gtk_box_append(GTK_BOX(content), heading);
+
+    GtkWidget* scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                   GTK_POLICY_NEVER,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_vexpand(scroll, TRUE);
+    GtkWidget* rows = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_add_css_class(rows, "shortcut-list");
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("C", "Chat"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("M", "Map"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("N", "Contacts & nodes"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("G", "GPS & sky plot"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("T", "Team operations"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("R", "Tracker"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("L", "Radio tools"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("E", "Extensions"));
+    gtk_box_append(GTK_BOX(rows),
+                   makeShortcutRow("V / D / P", "Hardware / Data / Logs"));
+    gtk_box_append(GTK_BOX(rows), makeShortcutRow("S", "Settings"));
+    gtk_box_append(GTK_BOX(rows),
+                   makeShortcutRow("[ / ]", "Previous / next workspace"));
+    gtk_box_append(GTK_BOX(rows),
+                   makeShortcutRow("\\", "Show or hide navigation"));
+    gtk_box_append(GTK_BOX(rows),
+                   makeShortcutRow("F1 / H", "This shortcut reference"));
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), rows);
+    gtk_box_append(GTK_BOX(content), scroll);
+    gtk_window_set_child(state.shortcut_window, content);
+    gtk_window_present(state.shortcut_window);
+}
 
 const GtkUConsolePageLifecycle* findPage(const GtkUConsoleAppState& state,
                                          const std::string& name)
@@ -57,7 +205,6 @@ void setActiveNav(GtkUConsoleAppState& state, const char* page)
         }
     };
 
-    apply(state.nav_overview, "overview");
     apply(state.nav_chat, "chat");
     apply(state.nav_contacts, "contacts");
     apply(state.nav_map, "map");
@@ -72,9 +219,40 @@ void setActiveNav(GtkUConsoleAppState& state, const char* page)
     apply(state.nav_settings, "settings");
 }
 
-void onOverviewClicked(GtkButton*, gpointer data)
+void showAdjacentPage(GtkUConsoleAppState& state, int direction)
 {
-    showPage(*static_cast<GtkUConsoleAppState*>(data), "overview");
+    if (state.page_lifecycle.empty())
+    {
+        return;
+    }
+
+    std::size_t current = 0;
+    for (std::size_t index = 0; index < state.page_lifecycle.size(); ++index)
+    {
+        if (state.active_page == state.page_lifecycle[index].name)
+        {
+            current = index;
+            break;
+        }
+    }
+    const auto total = static_cast<int>(state.page_lifecycle.size());
+    const int next = (static_cast<int>(current) + direction + total) % total;
+    showPage(state, state.page_lifecycle[static_cast<std::size_t>(next)].name);
+}
+
+void toggleNavigationRail(GtkUConsoleAppState& state)
+{
+    if (state.navigation_rail == nullptr)
+    {
+        return;
+    }
+    state.navigation_collapsed = !state.navigation_collapsed;
+    gtk_widget_set_visible(state.navigation_rail,
+                           state.navigation_collapsed ? FALSE : TRUE);
+    if (state.navigation_collapsed && state.stack != nullptr)
+    {
+        gtk_widget_grab_focus(state.stack);
+    }
 }
 
 void onChatClicked(GtkButton*, gpointer data)
@@ -151,6 +329,7 @@ void styleNavigationButton(GtkWidget* button)
 GtkWidget* buildMenuBar(GtkUConsoleAppState& state)
 {
     GtkWidget* bar = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+    state.navigation_rail = bar;
     gtk_widget_add_css_class(bar, "navigation-rail");
     gtk_widget_set_size_request(bar, layout_spec::kNavigationRailWidth, -1);
     gtk_widget_set_hexpand(bar, FALSE);
@@ -165,12 +344,6 @@ GtkWidget* buildMenuBar(GtkUConsoleAppState& state)
 
     gtk_box_append(GTK_BOX(bar),
                    makeLabel("WORKSPACES", "navigation-section-label"));
-
-    state.nav_overview = gtk_button_new_with_label("Overview");
-    styleNavigationButton(state.nav_overview);
-    g_signal_connect(state.nav_overview, "clicked",
-                     G_CALLBACK(onOverviewClicked), &state);
-    gtk_box_append(GTK_BOX(bar), state.nav_overview);
 
     state.nav_chat = gtk_button_new();
     styleNavigationButton(state.nav_chat);
@@ -317,9 +490,69 @@ GtkWidget* buildStatusBar(GtkUConsoleAppState& state)
 
 } // namespace
 
+bool handleUConsoleShortcut(GtkUConsoleAppState& state,
+                            guint keyval,
+                            GdkModifierType modifiers)
+{
+    if ((modifiers & (GDK_CONTROL_MASK | GDK_ALT_MASK | GDK_SUPER_MASK)) != 0)
+    {
+        return false;
+    }
+    if (keyval == GDK_KEY_F1)
+    {
+        showShortcutReference(state);
+        return true;
+    }
+    if (keyval == GDK_KEY_Escape && state.shortcut_window != nullptr)
+    {
+        gtk_window_destroy(state.shortcut_window);
+        return true;
+    }
+    if (textInputHasFocus(state))
+    {
+        return false;
+    }
+    if (keyval == GDK_KEY_backslash)
+    {
+        toggleNavigationRail(state);
+        return true;
+    }
+    if (keyval == GDK_KEY_bracketleft)
+    {
+        showAdjacentPage(state, -1);
+        return true;
+    }
+    if (keyval == GDK_KEY_bracketright)
+    {
+        showAdjacentPage(state, 1);
+        return true;
+    }
+
+    const guint normalized = gdk_keyval_to_lower(keyval);
+    if (normalized == GDK_KEY_h)
+    {
+        showShortcutReference(state);
+        return true;
+    }
+    if (normalized == GDK_KEY_s)
+    {
+        showPage(state, "settings");
+        return true;
+    }
+    for (const auto& shortcut : kWorkspaceShortcuts)
+    {
+        if (normalized == shortcut.keyval)
+        {
+            showPage(state, shortcut.page);
+            return true;
+        }
+    }
+    return false;
+}
+
 void showPage(GtkUConsoleAppState& state, const char* page_name)
 {
-    const std::string next_name(page_name ? page_name : "overview");
+    const std::string next_name(page_name ? page_name : "map");
     auto* next = findPage(state, next_name);
     if (next == nullptr)
     {
@@ -376,7 +609,7 @@ GtkWidget* buildRoot(GtkUConsoleAppState& state)
 
     gtk_box_append(GTK_BOX(root), body);
     gtk_box_append(GTK_BOX(root), buildStatusBar(state));
-    showPage(state, "overview");
+    showPage(state, "map");
     return root;
 }
 

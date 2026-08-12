@@ -5,8 +5,7 @@ namespace trailmate::uconsole::gtk
 
 std::vector<GtkUConsolePageLifecycle> buildGtkUConsolePageRegistry()
 {
-    return {makeOverviewPageLifecycle(),
-            makeChatPageLifecycle(),
+    return {makeChatPageLifecycle(),
             makeContactsPageLifecycle(),
             makeMapPageLifecycle(),
             makeGpsPageLifecycle(),

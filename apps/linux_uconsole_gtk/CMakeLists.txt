@@ -61,7 +61,28 @@ function(trailmate_add_uconsole_lvgl)
 endfunction()
 
 set(TRAIL_MATE_UCONSOLE_REAL_GTK_SOURCES
-    src/platform/gtk/gtk_canvas_presenter.cpp)
+    src/platform/gtk/gtk_uconsole_app.cpp
+    src/platform/gtk/gtk_uconsole_chat_layout.cpp
+    src/platform/gtk/gtk_uconsole_chat_logic.cpp
+    src/platform/gtk/gtk_uconsole_data_layout.cpp
+    src/platform/gtk/gtk_uconsole_data_logic.cpp
+    src/platform/gtk/gtk_uconsole_field_pages.cpp
+    src/platform/gtk/gtk_uconsole_hardware_layout.cpp
+    src/platform/gtk/gtk_uconsole_hardware_logic.cpp
+    src/platform/gtk/gtk_uconsole_logs_layout.cpp
+    src/platform/gtk/gtk_uconsole_logs_logic.cpp
+    src/platform/gtk/gtk_uconsole_map_layout.cpp
+    src/platform/gtk/gtk_uconsole_map_logic.cpp
+    src/platform/gtk/gtk_uconsole_mqtt_settings.cpp
+    src/platform/gtk/gtk_uconsole_overview_layout.cpp
+    src/platform/gtk/gtk_uconsole_overview_logic.cpp
+    src/platform/gtk/gtk_uconsole_pages.cpp
+    src/platform/gtk/gtk_uconsole_radio_tools.cpp
+    src/platform/gtk/gtk_uconsole_settings_layout.cpp
+    src/platform/gtk/gtk_uconsole_settings_logic.cpp
+    src/platform/gtk/gtk_uconsole_shell.cpp
+    src/platform/gtk/gtk_uconsole_style.cpp
+    src/platform/gtk/gtk_uconsole_widgets.cpp)
 
 add_library(trailmate_linux_uconsole_gtk_shell
     src/linux_uconsole_gtk_app_shell.cpp
@@ -100,6 +121,9 @@ if(TRAIL_MATE_UCONSOLE_BUILD_REAL_GTK_UI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxSources.cmake")
         find_package(Threads REQUIRED)
 
+        # Linux app services still expose shared LVGL-compatible runtime types;
+        # the production uConsole executable itself is GTK-only.
+        trailmate_add_uconsole_lvgl()
         trailmate_add_linux_common(trailmate_uconsole_linux_common)
 
         add_library(trailmate_uconsole_runtime_models
@@ -123,8 +147,6 @@ if(TRAIL_MATE_UCONSOLE_BUILD_REAL_GTK_UI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             PUBLIC trailmate_uconsole_linux_common)
         trailmate_apply_linux_common_warnings(trailmate_uconsole_runtime_models)
 
-        trailmate_add_uconsole_lvgl()
-
         target_sources(trailmate_uconsole_linux_common
             PRIVATE
                 "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_message_ledger.cpp"
@@ -133,27 +155,6 @@ if(TRAIL_MATE_UCONSOLE_BUILD_REAL_GTK_UI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
                 "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/read/chat_read_state_ledger.cpp"
                 "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/runtime/meshtastic_position_core.cpp"
                 "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/runtime/meshtastic_waypoint_core.cpp")
-
-        add_library(trailmate_uconsole_canvas_shell
-            "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_chat_workspace_model.cpp"
-            "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_dashboard_model.cpp"
-            "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_desktop_shell.cpp"
-            "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_hardware_probe.cpp"
-            "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/src/uconsole_map_workspace_model.cpp")
-        target_include_directories(trailmate_uconsole_canvas_shell
-            PUBLIC
-                "${TRAIL_MATE_REPO_ROOT}/platform/linux/uconsole/include"
-                "${TRAIL_MATE_LINUX_COMMON_INCLUDE_ROOT}"
-                "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}")
-        target_compile_features(trailmate_uconsole_canvas_shell PUBLIC cxx_std_20)
-        target_compile_definitions(trailmate_uconsole_canvas_shell
-            PRIVATE TRAIL_MATE_UCONSOLE_LINUX=1)
-        target_link_libraries(trailmate_uconsole_canvas_shell
-            PUBLIC
-                lvgl
-                trailmate_uconsole_linux_common
-                trailmate_uconsole_runtime_models)
-        trailmate_apply_linux_common_warnings(trailmate_uconsole_canvas_shell)
 
         add_executable(trailmate_uconsole
             ${TRAIL_MATE_UCONSOLE_REAL_GTK_SOURCES}
@@ -165,8 +166,7 @@ if(TRAIL_MATE_UCONSOLE_BUILD_REAL_GTK_UI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_link_libraries(trailmate_uconsole
             PRIVATE
                 PkgConfig::GTK4
-                trailmate_uconsole_runtime_models
-                trailmate_uconsole_canvas_shell)
+                trailmate_uconsole_runtime_models)
         target_compile_features(trailmate_uconsole PRIVATE cxx_std_20)
         set_target_properties(trailmate_uconsole
             PROPERTIES OUTPUT_NAME "trailmate-uconsole")
@@ -187,6 +187,13 @@ if(TRAIL_MATE_UCONSOLE_BUILD_REAL_GTK_UI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             add_test(NAME trailmate_uconsole_map_workspace_smoke
                      COMMAND trailmate_uconsole_map_workspace_smoke)
 
+            add_executable(trailmate_uconsole_hardware_probe_smoke
+                tests/uconsole_hardware_probe_smoke.cpp)
+            target_link_libraries(trailmate_uconsole_hardware_probe_smoke
+                PRIVATE trailmate_uconsole_runtime_models)
+            add_test(NAME trailmate_uconsole_hardware_probe_smoke
+                     COMMAND trailmate_uconsole_hardware_probe_smoke)
+
             add_executable(trailmate_uconsole_chat_dedup_smoke
                 tests/uconsole_chat_dedup_smoke.cpp)
             target_link_libraries(trailmate_uconsole_chat_dedup_smoke
@@ -200,6 +207,13 @@ if(TRAIL_MATE_UCONSOLE_BUILD_REAL_GTK_UI AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
                 PRIVATE trailmate_uconsole_runtime_models)
             add_test(NAME trailmate_uconsole_chat_workspace_smoke
                      COMMAND trailmate_uconsole_chat_workspace_smoke)
+
+            add_executable(trailmate_uconsole_protocol_switch_smoke
+                tests/uconsole_protocol_switch_smoke.cpp)
+            target_link_libraries(trailmate_uconsole_protocol_switch_smoke
+                PRIVATE trailmate_uconsole_linux_common)
+            add_test(NAME trailmate_uconsole_protocol_switch_smoke
+                     COMMAND trailmate_uconsole_protocol_switch_smoke)
 
             add_executable(trailmate_uconsole_meshtastic_node_payload_smoke
                 tests/uconsole_meshtastic_node_payload_smoke.cpp)
@@ -375,5 +389,12 @@ if(BUILD_TESTING)
         PRIVATE trailmate_linux_uconsole_gtk_shell)
     add_test(NAME trailmate_gtk_descriptor_page_registry_smoke
              COMMAND trailmate_gtk_descriptor_page_registry_smoke)
+
+    add_executable(trailmate_uconsole_page_manifest_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/tests/test_page_manifest.cpp")
+    target_link_libraries(trailmate_uconsole_page_manifest_smoke
+        PRIVATE trailmate_ui_lvgl_ux_packs)
+    add_test(NAME trailmate_uconsole_page_manifest_smoke
+             COMMAND trailmate_uconsole_page_manifest_smoke)
 
 endif()

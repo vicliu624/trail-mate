@@ -13,6 +13,7 @@
 
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/infra/meshtastic/mt_region.h"
+#include "uconsole/uconsole_hardware_probe.h"
 
 namespace trailmate::uconsole::gtk
 {
@@ -36,6 +37,36 @@ constexpr std::array<meshtastic_Config_LoRaConfig_ModemPreset, 10>
         meshtastic_Config_LoRaConfig_ModemPreset_SHORT_TURBO,
         meshtastic_Config_LoRaConfig_ModemPreset_LONG_TURBO,
     }};
+
+int gpsReceiverBaudFromIndex(int index)
+{
+    constexpr std::array<int, 6> kGpsBauds = {
+        4800,
+        9600,
+        19200,
+        38400,
+        57600,
+        115200,
+    };
+    return kGpsBauds[static_cast<std::size_t>(std::clamp(
+        index, 0, static_cast<int>(kGpsBauds.size() - 1)))];
+}
+
+int gpsReceiverBaudIndex(int baud)
+{
+    constexpr std::array<int, 6> kGpsBauds = {
+        4800,
+        9600,
+        19200,
+        38400,
+        57600,
+        115200,
+    };
+    const auto it = std::find(kGpsBauds.begin(), kGpsBauds.end(), baud);
+    return it == kGpsBauds.end()
+               ? 1
+               : static_cast<int>(std::distance(kGpsBauds.begin(), it));
+}
 
 int protocolIndex(::chat::MeshProtocol protocol)
 {
@@ -551,6 +582,18 @@ void populateSettingsControls(GtkUConsoleAppState& state)
         gtk_switch_set_active(GTK_SWITCH(state.settings_gps_enabled),
                               config.gps_enabled);
     }
+    const auto gps_source = loadUConsoleGpsSourceSettings();
+    if (state.settings_gps_receiver_path != nullptr)
+    {
+        gtk_editable_set_text(GTK_EDITABLE(state.settings_gps_receiver_path),
+                              gps_source.device_path.c_str());
+    }
+    if (state.settings_gps_receiver_baud != nullptr)
+    {
+        gtk_combo_box_set_active(
+            GTK_COMBO_BOX(state.settings_gps_receiver_baud),
+            gpsReceiverBaudIndex(gps_source.baud));
+    }
     if (state.settings_gps_interval != nullptr)
     {
         gtk_spin_button_set_value(GTK_SPIN_BUTTON(state.settings_gps_interval),
@@ -707,6 +750,22 @@ void onSettingsProtocolChanged(GtkComboBox*, gpointer data)
     const int index = gtk_combo_box_get_active(
         GTK_COMBO_BOX(state.settings_protocol));
     const auto protocol = protocolFromIndex(index);
+    const bool switched = state.services.meshProtocol() != protocol;
+    if (switched && !state.services.switchMeshProtocol(protocol, true))
+    {
+        showSettingsNotice(state, "Protocol switch failed; active transport was not changed.");
+        return;
+    }
+
+    if (switched)
+    {
+        const char* label = ::chat::infra::meshProtocolName(protocol);
+        showSettingsNotice(state,
+                           (std::string("Active transport switched to ") +
+                            label + "; LoRa reconfigured and saved.")
+                               .c_str());
+    }
+
     const auto& mesh = meshConfigForProtocol(state.services.config(), protocol);
     if (state.settings_lora_region != nullptr)
     {
@@ -856,6 +915,19 @@ void onSettingsApplyClicked(GtkButton*, gpointer data)
     auto& state = *static_cast<GtkUConsoleAppState*>(data);
     auto& config = state.services.config();
 
+    UConsoleGpsSourceSettings gps_source{};
+    gps_source.device_path = gtk_editable_get_text(
+        GTK_EDITABLE(state.settings_gps_receiver_path));
+    gps_source.baud = gpsReceiverBaudFromIndex(gtk_combo_box_get_active(
+        GTK_COMBO_BOX(state.settings_gps_receiver_baud)));
+    if (!isAllowedUConsoleGpsDevicePath(gps_source.device_path))
+    {
+        showSettingsNotice(
+            state,
+            "GPS source was not saved: uConsole USB control serial is not GNSS.");
+        return;
+    }
+
     copyBounded(config.node_name,
                 sizeof(config.node_name),
                 gtk_editable_get_text(GTK_EDITABLE(state.settings_node_name)));
@@ -983,6 +1055,12 @@ void onSettingsApplyClicked(GtkButton*, gpointer data)
 
     config.gps_enabled =
         gtk_switch_get_active(GTK_SWITCH(state.settings_gps_enabled));
+    saveUConsoleGpsSourceSettings(gps_source);
+    gps_source.is_configured = !gps_source.device_path.empty();
+    applyUConsoleGpsSourceSettings(gps_source);
+    config.gps_init_baud = static_cast<std::uint32_t>(
+        gps_source.is_configured ? gps_source.baud
+                                 : uConsoleAio2DefaultGpsBaud());
     config.gps_interval_ms = static_cast<std::uint32_t>(
         std::clamp(gtk_spin_button_get_value_as_int(
                        GTK_SPIN_BUTTON(state.settings_gps_interval)),

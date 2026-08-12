@@ -6,52 +6,60 @@
 namespace trailmate::uconsole::gtk
 {
 
-GtkWidget* buildHardwareCard(const HardwareStatusItem& item)
+void appendHardwareTableRow(GtkWidget* table,
+                            const HardwareStatusItem& item,
+                            int row)
 {
-    GtkWidget* card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
-    gtk_widget_add_css_class(card, "hardware-card");
+    GtkWidget* name = makeLabel(item.name.c_str(), "hardware-table-name");
+    GtkWidget* state = makeLabel(item.state.c_str(), "hardware-table-state");
     if (item.attention)
     {
-        gtk_widget_add_css_class(card, "hardware-card-alert");
+        gtk_widget_add_css_class(state, "hardware-state-alert");
     }
-    gtk_widget_set_hexpand(card, TRUE);
-
-    gtk_box_append(GTK_BOX(card), makeLabel(item.name.c_str(), "metric-label"));
-    GtkWidget* state_label = makeLabel(item.state.c_str(), "hardware-state");
-    if (item.attention)
-    {
-        gtk_widget_add_css_class(state_label, "hardware-state-alert");
-    }
-    gtk_box_append(GTK_BOX(card), state_label);
-    gtk_box_append(GTK_BOX(card),
-                   makeLabel(item.detail.c_str(), "row-meta", true));
-    return card;
+    GtkWidget* detail = makeLabel(item.detail.c_str(), "row-meta", true);
+    gtk_widget_set_hexpand(detail, TRUE);
+    gtk_grid_attach(GTK_GRID(table), name, 0, row, 1, 1);
+    gtk_grid_attach(GTK_GRID(table), state, 1, row, 1, 1);
+    gtk_grid_attach(GTK_GRID(table), detail, 2, row, 1, 1);
 }
 static void refreshHardwarePage(GtkUConsoleAppState& state,
                                 const UConsoleDashboardSnapshot& snapshot)
 {
     clearBox(state.hardware_page_box);
 
-    GtkWidget* grid = gtk_grid_new();
-    gtk_widget_add_css_class(grid, "detail-grid");
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
-    gtk_grid_set_column_homogeneous(GTK_GRID(grid), TRUE);
-    gtk_widget_set_hexpand(grid, TRUE);
+    GtkWidget* table = gtk_grid_new();
+    gtk_widget_add_css_class(table, "hardware-table");
+    gtk_grid_set_row_spacing(GTK_GRID(table), 0);
+    gtk_grid_set_column_spacing(GTK_GRID(table), 12);
+    gtk_widget_set_hexpand(table, TRUE);
+    gtk_grid_attach(GTK_GRID(table),
+                    makeLabel("Hardware", "hardware-table-header"),
+                    0,
+                    0,
+                    1,
+                    1);
+    gtk_grid_attach(GTK_GRID(table),
+                    makeLabel("State", "hardware-table-header"),
+                    1,
+                    0,
+                    1,
+                    1);
+    gtk_grid_attach(GTK_GRID(table),
+                    makeLabel("Driver / endpoint", "hardware-table-header"),
+                    2,
+                    0,
+                    1,
+                    1);
     for (std::size_t index = 0; index < snapshot.hardware.size(); ++index)
     {
-        const auto& item = snapshot.hardware[index];
-        gtk_grid_attach(GTK_GRID(grid),
-                        buildHardwareCard(item),
-                        static_cast<int>(index % 3U),
-                        static_cast<int>(index / 3U),
-                        1,
-                        1);
+        appendHardwareTableRow(table,
+                               snapshot.hardware[index],
+                               static_cast<int>(index) + 1);
     }
-    gtk_box_append(GTK_BOX(state.hardware_page_box), grid);
+    gtk_box_append(GTK_BOX(state.hardware_page_box), table);
 
-    GtkWidget* detail = makePanel();
-    gtk_widget_add_css_class(detail, "inspector-pane");
+    GtkWidget* detail = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(detail, "hardware-capabilities");
     gtk_box_append(GTK_BOX(detail),
                    makeLabel("Capability and driver state", "pane-heading"));
     for (const auto& line : snapshot.capability_lines)

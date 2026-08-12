@@ -277,13 +277,41 @@ void pushOverviewTimeline(std::vector<OverviewTimelineItem>& out,
 
 [[nodiscard]] bool gpsSourceConfigured()
 {
-    std::string auto_path{};
     return envConfigured("TRAIL_MATE_GPS_DEVICE") ||
            envConfigured("TRAIL_MATE_GPS_NMEA_FILE") ||
            envConfigured("TRAIL_MATE_GPS_VALID") ||
            envConfigured("TRAIL_MATE_GPS_LAT") ||
-           envConfigured("TRAIL_MATE_GPS_LNG") ||
-           uconsoleAutoGpsSerialPath(auto_path);
+           envConfigured("TRAIL_MATE_GPS_LNG");
+}
+
+[[nodiscard]] std::string gpsNoFixDetail(
+    const ::platform::ui::gps::GpsDiagnosticsSnapshot& diagnostics)
+{
+    switch (diagnostics.code)
+    {
+    case ::gps::GpsDiagnosticCode::NoTraffic:
+        return "GPS UART is open but no NMEA traffic has arrived.";
+    case ::gps::GpsDiagnosticCode::TrafficStalled:
+        return "GPS NMEA traffic has stopped; check receiver power and wiring.";
+    case ::gps::GpsDiagnosticCode::NoFix:
+        return "NMEA traffic is live but the receiver has no valid fix yet.";
+    default:
+        return "GPS/NMEA source is present but has no valid fix yet.";
+    }
+}
+
+[[nodiscard]] const char* gpsNoFixState(
+    const ::platform::ui::gps::GpsDiagnosticsSnapshot& diagnostics)
+{
+    switch (diagnostics.code)
+    {
+    case ::gps::GpsDiagnosticCode::NoTraffic:
+        return "Waiting NMEA";
+    case ::gps::GpsDiagnosticCode::TrafficStalled:
+        return "NMEA stalled";
+    default:
+        return "No fix";
+    }
 }
 
 [[nodiscard]] bool parseEnvDouble(const char* name, double& out)
@@ -872,30 +900,25 @@ UConsoleDashboardSnapshot UConsoleDashboardModel::snapshot() const
     }
     else if (!gpsSourceConfigured())
     {
-        gps_status.state = "No source";
-        gps_status.detail = "No GPS serial endpoint or NMEA file configured.";
+        gps_status.state = "Source required";
+        gps_status.detail =
+            "AIO2 GPS is powered; configure TRAIL_MATE_GPS_DEVICE or a "
+            "NMEA file. The uConsole USB control serial is not GPS.";
         gps_status.attention = true;
     }
     else
     {
+        const auto diagnostics = ::platform::ui::gps::diagnostics();
         const auto gps = ::platform::ui::gps::get_data();
         if (gps.valid)
         {
             gps_status.state = "Fix";
             gps_status.detail = "GPS/NMEA source has a valid fix.";
         }
-        else if (hardware_probe.gps_serial_detected)
-        {
-            gps_status.state = "Endpoint";
-            gps_status.detail = "Serial endpoint present at " +
-                                hardware_probe.gps_serial_path +
-                                "; waiting for valid NMEA fix.";
-        }
         else
         {
-            gps_status.state = "No fix";
-            gps_status.detail =
-                "GPS/NMEA source is present but no valid fix yet.";
+            gps_status.state = gpsNoFixState(diagnostics);
+            gps_status.detail = gpsNoFixDetail(diagnostics);
         }
         gps_status.attention = !gps.valid;
     }
@@ -947,24 +970,21 @@ UConsoleDashboardSnapshot UConsoleDashboardModel::snapshot() const
     {
         out.location.state = "No location source";
         out.location.coordinates = "No coordinates";
-        out.location.detail = "No GPS serial endpoint or NMEA file configured.";
+        out.location.detail =
+            "AIO2 GPS is powered; configure its UART with "
+            "TRAIL_MATE_GPS_DEVICE. USB control serial is excluded.";
         out.location.attention = true;
     }
     else
     {
+        const auto diagnostics = ::platform::ui::gps::diagnostics();
         const auto gps = ::platform::ui::gps::get_data();
-        out.location.state = gps.valid ? "GPS fix" : "Waiting for fix";
+        out.location.state = gps.valid ? "GPS fix" : gpsNoFixState(diagnostics);
         out.location.coordinates =
             gps.valid ? formatCoordinate(gps.lat, gps.lng) : "No coordinates";
         out.location.detail =
             gps.valid ? "Configured GPS/NMEA source is reporting position."
-                      : "GPS/NMEA source is present but has no valid fix.";
-        if (!gps.valid && hardware_probe.gps_serial_detected)
-        {
-            out.location.detail = "AIO2 serial endpoint present at " +
-                                  hardware_probe.gps_serial_path +
-                                  "; waiting for NMEA fix.";
-        }
+                      : gpsNoFixDetail(diagnostics);
         if (gps.valid && gps.has_speed)
         {
             out.location.detail += " Speed " + formatSpeed(gps.speed_mps) + ".";

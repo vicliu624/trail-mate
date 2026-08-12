@@ -1999,7 +1999,19 @@ bool LinuxAppServices::switchMeshProtocol(::chat::MeshProtocol protocol,
     }
     if (persist)
     {
-        saveConfig();
+        // A protocol selection changes the live SX1262 air configuration.
+        // Persist it synchronously so a restart cannot return to a different
+        // transport than the one the user just activated.
+        const uint32_t now_ms = ::sys::millis_now();
+        const auto submission = config_persistence_runtime_.submit(
+            config_,
+            ::app::AppConfigChangeSet::mesh(),
+            now_ms,
+            ::app::ConfigPersistenceUrgency::Immediate);
+        if (submission.queued)
+        {
+            flushConfigPersistence(now_ms);
+        }
     }
     return true;
 }

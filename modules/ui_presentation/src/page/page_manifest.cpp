@@ -67,10 +67,18 @@ constexpr PageManifestItem kWatchCompactItems[] = {
 constexpr PageManifestItem kUConsoleDesktopItems[] = {
     {PageId::Dashboard, "dashboard", true, true},
     {PageId::Chat, "chat", true, true},
-    {PageId::Map, "map", true, true},
+    {PageId::Contacts, "contacts", true, true},
     {PageId::Team, "team", true, true},
+    {PageId::Map, "map", true, true},
     {PageId::Gps, "gps", true, true},
+    // Desktop workspaces deliberately consolidate closely related handheld
+    // pages. These bindings retain parity without creating duplicate menu rows.
+    {PageId::SkyPlot, "gps", true, false},
     {PageId::Tracker, "tracker", true, true},
+    {PageId::EnergySweep, "radio-tools", true, false},
+    {PageId::WalkieTalkie, "radio-tools", true, false},
+    {PageId::Sstv, "radio-tools", true, false},
+    {PageId::Extensions, "extensions", true, true},
     {PageId::Settings, "settings", true, true},
     {PageId::Diagnostics, "diagnostics", true, true},
 };

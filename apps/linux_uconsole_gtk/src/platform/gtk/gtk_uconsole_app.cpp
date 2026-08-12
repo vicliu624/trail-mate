@@ -1,6 +1,7 @@
 #include "platform/gtk/gtk_uconsole_app.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <utility>
 
@@ -10,6 +11,7 @@
 #include "platform/gtk/gtk_uconsole_shell.h"
 #include "platform/gtk/gtk_uconsole_style.h"
 #include "platform/gtk/gtk_uconsole_widgets.h"
+#include "uconsole/uconsole_hardware_probe.h"
 
 namespace trailmate::uconsole::gtk
 {
@@ -47,6 +49,30 @@ void onFullscreenClicked(GtkButton* button, gpointer data)
 void onCloseClicked(GtkButton*, gpointer data)
 {
     gtk_window_destroy(GTK_WINDOW(data));
+}
+
+void applyAio2GpsReceiverDefault(GtkUConsoleAppState& state)
+{
+    if (!isUsingUConsoleAio2DefaultGps())
+    {
+        return;
+    }
+
+    state.services.config().gps_init_baud =
+        static_cast<std::uint32_t>(uConsoleAio2DefaultGpsBaud());
+    state.services.applyPositionConfig();
+}
+
+gboolean onKeyPressed(GtkEventControllerKey*,
+                      guint keyval,
+                      guint,
+                      GdkModifierType modifiers,
+                      gpointer data)
+{
+    auto& state = *static_cast<GtkUConsoleAppState*>(data);
+    return handleUConsoleShortcut(state, keyval, modifiers)
+               ? GDK_EVENT_STOP
+               : GDK_EVENT_PROPAGATE;
 }
 
 GtkWidget* makeWindowControl(const char* label, const char* tooltip)
@@ -123,6 +149,12 @@ void onActivate(GtkApplication* app, gpointer data)
         GINT_TO_POINTER(state.options.fullscreen ? TRUE : FALSE));
     g_signal_connect(state.window, "destroy", G_CALLBACK(onWindowDestroy),
                      &state);
+    GtkEventController* key_controller = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(key_controller,
+                                               GTK_PHASE_BUBBLE);
+    g_signal_connect(key_controller, "key-pressed", G_CALLBACK(onKeyPressed),
+                     &state);
+    gtk_widget_add_controller(state.window, key_controller);
 
     if (!state.services.initialize())
     {
@@ -132,6 +164,7 @@ void onActivate(GtkApplication* app, gpointer data)
     }
     else
     {
+        applyAio2GpsReceiverDefault(state);
         gtk_window_set_child(GTK_WINDOW(state.window),
                              buildWindowContent(state, buildRoot(state)));
         state.refresh_source = g_timeout_add(500, onRefresh, &state);

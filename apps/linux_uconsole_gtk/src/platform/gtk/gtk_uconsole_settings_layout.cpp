@@ -3,9 +3,11 @@
 #include "platform/gtk/gtk_uconsole_widgets.h"
 
 #include <algorithm>
+#include <array>
 #include <vector>
 
 #include "chat/infra/mesh_protocol_utils.h"
+#include "uconsole/uconsole_hardware_probe.h"
 
 namespace trailmate::uconsole::gtk
 {
@@ -80,6 +82,26 @@ GtkWidget* makeSwitch(bool active)
     gtk_widget_set_halign(sw, GTK_ALIGN_END);
     gtk_widget_set_size_request(sw, 48, -1);
     return sw;
+}
+
+int gpsSourceBaudIndex(int baud)
+{
+    constexpr std::array<int, 6> kGpsBauds = {
+        4800,
+        9600,
+        19200,
+        38400,
+        57600,
+        115200,
+    };
+    for (std::size_t index = 0; index < kGpsBauds.size(); ++index)
+    {
+        if (kGpsBauds[index] == baud)
+        {
+            return static_cast<int>(index);
+        }
+    }
+    return 1;
 }
 
 GtkWidget* wrapSettingsGroup(GtkWidget* section)
@@ -446,11 +468,31 @@ GtkWidget* launchSettingsLayout(GtkUConsoleAppState& state)
                      chat);
 
     GtkWidget* gps = makeSettingsSection("GPS");
+    const auto gps_source = loadUConsoleGpsSourceSettings();
     state.settings_gps_enabled = makeSwitch(config.gps_enabled);
     gtk_box_append(GTK_BOX(gps),
                    makeSettingsRow("GPS enabled",
                                    "Applies to the Linux GPS runtime.",
                                    state.settings_gps_enabled));
+    state.settings_gps_receiver_path = gtk_entry_new();
+    gtk_entry_set_placeholder_text(
+        GTK_ENTRY(state.settings_gps_receiver_path),
+        "Leave blank for AIO2 default: /dev/ttyS0");
+    gtk_editable_set_text(GTK_EDITABLE(state.settings_gps_receiver_path),
+                          gps_source.device_path.c_str());
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow(
+                       "Receiver UART",
+                       "Leave blank for the AIO2 CM4 default /dev/ttyS0. USB CDC /dev/ttyACM* is rejected because it is the uConsole control serial.",
+                       state.settings_gps_receiver_path));
+    state.settings_gps_receiver_baud = makeCombo(
+        {"4800", "9600", "19200", "38400", "57600", "115200"},
+        gpsSourceBaudIndex(gps_source.baud));
+    gtk_box_append(GTK_BOX(gps),
+                   makeSettingsRow(
+                       "Receiver baud",
+                       "AIO2 default is 9600. Applied to a selected GPS UART immediately when settings are saved.",
+                       state.settings_gps_receiver_baud));
     state.settings_gps_interval =
         makeSpin(1000.0, 3600000.0, 1000.0, config.gps_interval_ms);
     gtk_box_append(GTK_BOX(gps),

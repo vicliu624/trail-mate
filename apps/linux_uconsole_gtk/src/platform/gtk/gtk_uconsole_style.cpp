@@ -134,10 +134,10 @@ window {
   background: #e8ebe5;
 }
 .panel {
-  background: #fbfcfa;
-  border: 1px solid #cbd4ca;
-  border-radius: 6px;
-  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
 }
 .pane {
   background: #fbfcfa;
@@ -206,10 +206,11 @@ window {
   padding: 0;
 }
 .gnss-sat-row {
-  background: #ffffff;
-  border: 1px solid #d6ded5;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #d6ded5;
   border-left: 4px solid #6d7771;
-  border-radius: 5px;
+  border-radius: 0;
   padding: 4px 6px;
 }
 .gnss-sat-used {
@@ -366,10 +367,11 @@ window {
   min-width: 260px;
 }
 .row {
-  background: #ffffff;
-  border: 1px solid #d5ddd4;
-  border-radius: 5px;
-  padding: 7px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #cbd4ca;
+  border-radius: 0;
+  padding: 7px 4px;
 }
 .row-active {
   background: #e6f0e9;
@@ -702,10 +704,11 @@ window {
   padding: 0;
 }
 .hardware-card {
-  background: #fbfcfa;
-  border: 1px solid #cbd4ca;
-  border-radius: 5px;
-  padding: 7px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #cbd4ca;
+  border-radius: 0;
+  padding: 7px 4px;
 }
 .hardware-card-alert {
   background: #fff4e4;
@@ -745,6 +748,10 @@ window {
 .map-tools-panel {
   background: #f8faf6;
   padding: 6px 6px 32px 6px;
+}
+.map-drawer {
+  background: rgba(248, 250, 246, 0.96);
+  border-right: 1px solid #aebaae;
 }
 .map-tool-section {
   background: #ffffff;
@@ -799,9 +806,99 @@ window {
 .map-tool-row switch {
   min-width: 44px;
 }
+.map-toolbar {
+  background: rgba(29, 34, 33, 0.90);
+  border: 1px solid rgba(235, 243, 237, 0.42);
+  border-radius: 5px;
+  padding: 4px;
+}
+.map-toolbar-button {
+  background: transparent;
+  color: #f4f8f5;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-weight: 700;
+}
+.map-toolbar-button:hover,
+.map-toolbar-button:focus-visible {
+  background: #3b574e;
+  border-color: #9fc0ae;
+}
 .map-side-panel button,
 .map-tools-panel button {
   padding: 3px 6px;
+}
+.field-list,
+.tracker-controls,
+.tracker-history,
+.gps-skyplot-workspace,
+.gps-satellite-list {
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+}
+.field-contact-row {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #cbd4ca;
+  border-radius: 0;
+  padding: 8px 4px;
+}
+.list-summary,
+.receiver-status-row {
+  background: #f1e1be;
+  border-top: 1px solid #d9b06a;
+  border-bottom: 1px solid #d9b06a;
+  border-radius: 0;
+  padding: 6px 8px;
+}
+.list-summary-item,
+.receiver-status-detail {
+  color: #5c472f;
+  font-size: 12px;
+}
+.receiver-status-state,
+.tracker-state-active,
+.tracker-state-idle {
+  color: #2a1a05;
+  font-weight: 700;
+}
+.receiver-status-coordinate {
+  color: #2a1a05;
+  font-family: monospace;
+  font-weight: 700;
+}
+.tracker-state-active {
+  color: #245c2b;
+}
+.tracker-state-idle {
+  color: #6a5646;
+}
+.hardware-table {
+  background: transparent;
+  border-top: 1px solid #c0aa82;
+  border-bottom: 1px solid #c0aa82;
+  padding: 0;
+}
+.hardware-table-header {
+  color: #5c472f;
+  background: #f1e1be;
+  border-bottom: 1px solid #c0aa82;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.hardware-table-name,
+.hardware-table-state {
+  color: #2a1a05;
+  border-bottom: 1px solid #dfceb0;
+  padding: 7px 8px;
+  font-weight: 700;
+}
+.hardware-capabilities {
+  border-top: 1px solid #c0aa82;
+  padding: 8px 0;
 }
 .map-marker {
   background: rgba(224, 247, 239, 0.92);
@@ -860,16 +957,17 @@ window {
   border-color: #6f9f8d;
 }
 .settings-section {
-  background: #fbfcfa;
-  border: 1px solid #cbd4ca;
-  border-radius: 6px;
-  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 6px 0;
 }
 .settings-row {
-  background: #ffffff;
-  border: 1px solid #d7ded5;
-  border-radius: 5px;
-  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #d7ded5;
+  border-radius: 0;
+  padding: 7px 4px;
 }
 .settings-control {
   min-width: 172px;
@@ -965,6 +1063,36 @@ window {
   color: #9b2f22;
   font-family: monospace;
   font-weight: 700;
+}
+.shortcut-content {
+  background: #fff7e9;
+  color: #3a2a1a;
+  padding: 12px;
+}
+.shortcut-title {
+  color: #2a1a05;
+  font-size: 17px;
+  font-weight: 700;
+}
+.shortcut-list {
+  border-top: 1px solid #d9b06a;
+  border-bottom: 1px solid #d9b06a;
+}
+.shortcut-row {
+  border-bottom: 1px solid #ead7b7;
+  padding: 6px 3px;
+}
+.shortcut-key {
+  background: #f0d3a4;
+  color: #2a1a05;
+  border: 1px solid #d9b06a;
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-family: monospace;
+  font-weight: 700;
+}
+.shortcut-action {
+  color: #5c472f;
 }
 /* uConsole embedded visual language: warm paper surfaces and amber focus. */
 window,
@@ -1080,6 +1208,10 @@ window,
   background: #faf0d8;
   border-color: #d9b06a;
 }
+.map-drawer {
+  background: rgba(255, 247, 233, 0.97);
+  border-color: #d9b06a;
+}
 .map-canvas,
 .map-grid,
 .location-map,
@@ -1100,6 +1232,101 @@ window,
 button.send {
   border-radius: 6px;
   padding: 6px 13px;
+}
+/* Workspaces use hierarchy and dividers. Only purpose-built surfaces such as
+   map drawers, message bubbles, and status chips receive a card treatment. */
+.panel,
+.settings-section {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.row,
+.settings-row,
+.field-contact-row,
+.gnss-sat-row {
+  background: transparent;
+  border-radius: 0;
+}
+.runtime-status-table,
+.data-status-table,
+.extension-list {
+  background: transparent;
+  border-top: 1px solid #d9b06a;
+  border-bottom: 1px solid #d9b06a;
+}
+.runtime-status-row,
+.data-status-row,
+.extension-list-row {
+  background: transparent;
+  border-bottom: 1px solid #ead7b7;
+  border-radius: 0;
+  padding: 7px 4px;
+}
+.runtime-status-row:last-child,
+.data-status-row:last-child,
+.extension-list-row:last-child {
+  border-bottom: none;
+}
+.runtime-status-tool,
+.data-status-category {
+  color: #2a1a05;
+  font-weight: 700;
+}
+.runtime-status-value,
+.data-status-value {
+  color: #5c472f;
+  font-family: monospace;
+  font-weight: 700;
+}
+.runtime-status-detail,
+.data-status-detail {
+  color: #6a5646;
+  font-size: 12px;
+}
+.runtime-status-attention,
+.data-status-attention {
+  color: #9b2f22;
+}
+.radio-sweep-workspace,
+.radio-tool-section,
+.data-operation-section {
+  background: transparent;
+  border-top: 1px solid #d9b06a;
+  border-radius: 0;
+  padding: 10px 0;
+}
+.radio-tool-columns {
+  margin-top: 4px;
+}
+.list-toolbar {
+  border-bottom: 1px solid #d9b06a;
+  padding: 2px 0 8px;
+}
+.log-entry {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #d9b06a;
+  border-radius: 0;
+  padding: 8px 0;
+}
+.log-entry:first-child {
+  border-top: 1px solid #d9b06a;
+}
+.log-source,
+.log-direction {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+.log-hex {
+  background: #f6e7c8;
+  border-radius: 0;
+}
+.map-side-panel,
+.map-tools-panel {
+  background: #faf0d8;
 }
 )CSS";
 void installCss()

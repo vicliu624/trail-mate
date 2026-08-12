@@ -24,6 +24,34 @@ void onDataRetryMapDownloadsClicked(GtkButton*, gpointer data)
     refreshUi(state);
 }
 
+GtkWidget* buildDataStatusRow(const char* category,
+                              const std::string& value,
+                              const std::string& detail,
+                              bool needs_attention = false)
+{
+    GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_add_css_class(row, "data-status-row");
+    gtk_widget_set_hexpand(row, TRUE);
+
+    GtkWidget* category_label = makeLabel(category, "data-status-category");
+    gtk_widget_set_size_request(category_label, 108, -1);
+    gtk_box_append(GTK_BOX(row), category_label);
+
+    GtkWidget* value_label = makeLabel(value.c_str(), "data-status-value");
+    gtk_widget_set_size_request(value_label, 94, -1);
+    if (needs_attention)
+    {
+        gtk_widget_add_css_class(value_label, "data-status-attention");
+    }
+    gtk_box_append(GTK_BOX(row), value_label);
+
+    GtkWidget* detail_label =
+        makeLabel(detail.c_str(), "data-status-detail", true);
+    gtk_widget_set_hexpand(detail_label, TRUE);
+    gtk_box_append(GTK_BOX(row), detail_label);
+    return row;
+}
+
 } // namespace
 
 static void refreshDataPage(GtkUConsoleAppState& state,
@@ -32,34 +60,32 @@ static void refreshDataPage(GtkUConsoleAppState& state,
 {
     clearBox(state.data_page_box);
 
-    GtkWidget* strip = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(strip, "metric-strip");
-    gtk_widget_set_hexpand(strip, TRUE);
-    gtk_box_append(GTK_BOX(strip),
-                   makeMetricCard("Messages",
-                                  std::to_string(dashboard.conversation_count),
-                                  std::to_string(dashboard.unread_count) +
-                                      " unread",
-                                  dashboard.unread_count > 0));
-    gtk_box_append(GTK_BOX(strip),
-                   makeMetricCard("Contacts",
-                                  std::to_string(dashboard.contact_count),
-                                  std::to_string(dashboard.nearby_count) +
-                                      " nearby / " +
-                                      std::to_string(dashboard.ignored_count) +
-                                      " ignored"));
-    gtk_box_append(GTK_BOX(strip),
-                   makeMetricCard("Map cache",
-                                  std::to_string(
-                                      map_snapshot.cache_stats.cached_tiles),
-                                  formatBytes(
-                                      map_snapshot.cache_stats.total_bytes),
-                                  map_snapshot.cache_stats.failed_tiles > 0));
-    gtk_box_append(GTK_BOX(strip),
-                   makeMetricCard("Storage", "SQLite",
-                                  map_snapshot.cache_stats.database.filename()
-                                      .string()));
-    gtk_box_append(GTK_BOX(state.data_page_box), strip);
+    GtkWidget* inventory = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_add_css_class(inventory, "data-status-table");
+    gtk_box_append(GTK_BOX(inventory),
+                   buildDataStatusRow(
+                       "Messages",
+                       std::to_string(dashboard.conversation_count),
+                       std::to_string(dashboard.unread_count) + " unread",
+                       dashboard.unread_count > 0));
+    gtk_box_append(GTK_BOX(inventory),
+                   buildDataStatusRow(
+                       "Contacts",
+                       std::to_string(dashboard.contact_count),
+                       std::to_string(dashboard.nearby_count) + " nearby / " +
+                           std::to_string(dashboard.ignored_count) + " ignored"));
+    gtk_box_append(
+        GTK_BOX(inventory),
+        buildDataStatusRow("Map cache",
+                           std::to_string(map_snapshot.cache_stats.cached_tiles),
+                           formatBytes(map_snapshot.cache_stats.total_bytes),
+                           map_snapshot.cache_stats.failed_tiles > 0));
+    gtk_box_append(GTK_BOX(inventory),
+                   buildDataStatusRow(
+                       "Storage",
+                       "SQLite",
+                       map_snapshot.cache_stats.database.filename().string()));
+    gtk_box_append(GTK_BOX(state.data_page_box), inventory);
 
     const std::size_t visible_cached = static_cast<std::size_t>(std::count_if(
         map_snapshot.tiles.begin(),
@@ -69,8 +95,8 @@ static void refreshDataPage(GtkUConsoleAppState& state,
     const std::size_t visible_total = map_snapshot.tiles.size();
     const std::size_t visible_missing = visible_total - visible_cached;
 
-    GtkWidget* downloads = makePanel();
-    gtk_widget_add_css_class(downloads, "map-download-panel");
+    GtkWidget* downloads = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(downloads, "data-operation-section");
     GtkWidget* download_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget* download_title =
         makeLabel("Automatic offline map downloads", "pane-heading");
@@ -96,36 +122,36 @@ static void refreshDataPage(GtkUConsoleAppState& state,
     gtk_box_append(GTK_BOX(download_header), open_map);
     gtk_box_append(GTK_BOX(downloads), download_header);
 
-    GtkWidget* download_metrics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(download_metrics, "metric-strip");
-    gtk_box_append(GTK_BOX(download_metrics),
-                   makeMetricCard("Visible tiles",
-                                  std::to_string(visible_cached) + " / " +
-                                      std::to_string(visible_total),
-                                  std::to_string(visible_missing) +
-                                      " waiting",
-                                  visible_missing > 0));
-    gtk_box_append(GTK_BOX(download_metrics),
-                   makeMetricCard("Active downloads",
-                                  std::to_string(state.map_fetch_jobs.size()),
-                                  "Up to " +
-                                      std::to_string(
-                                          kMaxConcurrentMapFetches) +
-                                      " concurrent"));
-    gtk_box_append(GTK_BOX(download_metrics),
-                   makeMetricCard("Retry queue",
-                                  std::to_string(
-                                      state.map_failed_tiles.size()),
-                                  state.map_failed_tiles.empty()
-                                      ? "Healthy"
-                                      : "Exponential backoff",
-                                  !state.map_failed_tiles.empty()));
-    gtk_box_append(GTK_BOX(download_metrics),
-                   makeMetricCard("Base layer",
-                                  map_snapshot.source_label,
-                                  "Zoom " +
-                                      std::to_string(map_snapshot.zoom)));
-    gtk_box_append(GTK_BOX(downloads), download_metrics);
+    GtkWidget* download_status = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_add_css_class(download_status, "data-status-table");
+    gtk_box_append(GTK_BOX(download_status),
+                   buildDataStatusRow(
+                       "Visible tiles",
+                       std::to_string(visible_cached) + " / " +
+                           std::to_string(visible_total),
+                       std::to_string(visible_missing) + " waiting",
+                       visible_missing > 0));
+    gtk_box_append(
+        GTK_BOX(download_status),
+        buildDataStatusRow("Downloads",
+                           std::to_string(state.map_fetch_jobs.size()),
+                           "Up to " +
+                               std::to_string(kMaxConcurrentMapFetches) +
+                               " concurrent"));
+    gtk_box_append(
+        GTK_BOX(download_status),
+        buildDataStatusRow("Retry queue",
+                           std::to_string(state.map_failed_tiles.size()),
+                           state.map_failed_tiles.empty()
+                               ? "Healthy"
+                               : "Exponential backoff",
+                           !state.map_failed_tiles.empty()));
+    gtk_box_append(GTK_BOX(download_status),
+                   buildDataStatusRow(
+                       "Base layer",
+                       map_snapshot.source_label,
+                       "Zoom " + std::to_string(map_snapshot.zoom)));
+    gtk_box_append(GTK_BOX(downloads), download_status);
 
     const std::string download_state =
         state.map_fetch_status.empty()
@@ -141,8 +167,8 @@ static void refreshDataPage(GtkUConsoleAppState& state,
                        "Fetch visible base tiles on demand, keep them on disk, and reuse them offline."));
     gtk_box_append(GTK_BOX(state.data_page_box), downloads);
 
-    GtkWidget* detail = makePanel();
-    gtk_widget_add_css_class(detail, "inspector-pane");
+    GtkWidget* detail = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(detail, "data-operation-section");
     gtk_box_append(GTK_BOX(detail),
                    makeLabel("Local data roots", "pane-heading"));
     gtk_box_append(GTK_BOX(detail),

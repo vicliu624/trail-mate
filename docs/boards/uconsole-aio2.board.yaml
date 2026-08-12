@@ -26,17 +26,17 @@ facts:
     present: "optional"
     chip: "sx1262"
     spi_bus: "/dev/spidev1.0"
-    reset_pin: "aio2_control_plane"
-    busy_pin: "aio2_control_plane"
-    dio1_pin: "aio2_control_plane"
-    power_enable_pin: "aio2_control_plane"
+    reset_pin: "GPIO25"
+    busy_pin: "GPIO24"
+    dio1_pin: "GPIO26"
+    power_enable_pin: "GPIO16"
     dio2_as_rf_switch: true
     dio3_tcxo_voltage: 1.8
 
   gps:
     present: "optional"
-    uart: "/dev/serial/by-id/*ClockworkPI*uConsole* or configured path"
-    power_enable_pin: "aio2_control_plane_or_none"
+    uart: "CM4 AIO2 default /dev/ttyS0 @ 9600; persisted Settings or explicit TRAIL_MATE_GPS_DEVICE overrides; USB CDC control serial is excluded"
+    power_enable_pin: "GPIO27"
     pps_pin: null
 
   storage:
@@ -50,17 +50,18 @@ facts:
     deep_sleep: false
 
   linux_devices:
-    serial_auto_detect: "/dev/serial/by-id"
+    serial_auto_detect: "disabled: uConsole USB CDC is control-plane serial"
     spi_default: "/dev/spidev1.0"
-    gps_env_override: "TRAIL_MATE_GPS_DEVICE"
+    gps_default: "/dev/ttyS0 @ 9600 on CM4 AIO2 with GPIO27 power control"
+    gps_env_override: "TRAIL_MATE_GPS_DEVICE, NMEA file, and position injection override the AIO2 default"
     lora_env_override: "TRAIL_MATE_LORA_SPI"
 
 draft_notes:
   - "This manifest records Linux-visible AIO2 endpoints, not low-level HAT schematic truth."
+  - "The CM4 target was verified to emit NMEA through /dev/ttyS0 at 9600 after GPIO27 is asserted; GPS fix quality remains an antenna and sky-visibility fact."
 
 forbidden_content:
   - "business behavior"
   - "direct message policy"
   - "Meshtastic or MeshCore phone protocol"
   - "GTK page state"
-

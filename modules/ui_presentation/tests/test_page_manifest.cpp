@@ -59,8 +59,18 @@ int main()
     assert(contains(*watch, ui::presentation::PageId::Gps));
     assert(!contains(*watch, ui::presentation::PageId::Extensions));
 
+    const auto* deck = ui::presentation::findPageManifest("deck_full_manifest");
+    assert(deck != nullptr);
     const auto* uconsole = ui::presentation::findPageManifest("uconsole_desktop_manifest");
     assert(uconsole != nullptr);
+    for (std::size_t index = 0; index < deck->item_count; ++index)
+    {
+        assert(contains(*uconsole, deck->items[index].page_id));
+    }
+    assert(contains(*uconsole, ui::presentation::PageId::SkyPlot));
+    assert(contains(*uconsole, ui::presentation::PageId::EnergySweep));
+    assert(contains(*uconsole, ui::presentation::PageId::WalkieTalkie));
+    assert(contains(*uconsole, ui::presentation::PageId::Sstv));
     assert(contains(*uconsole, ui::presentation::PageId::Diagnostics));
 
     const auto* cardputer = ui::presentation::findPageManifest("cardputer_compact_manifest");

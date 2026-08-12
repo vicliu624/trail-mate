@@ -9,6 +9,9 @@ namespace trailmate::uconsole::gtk
 
 GtkWidget* buildRoot(GtkUConsoleAppState& state);
 void showPage(GtkUConsoleAppState& state, const char* page);
+bool handleUConsoleShortcut(GtkUConsoleAppState& state,
+                            guint keyval,
+                            GdkModifierType modifiers);
 void refreshUi(GtkUConsoleAppState& state);
 gboolean onRefresh(gpointer data);
 void onWindowDestroy(GtkWidget*, gpointer data);

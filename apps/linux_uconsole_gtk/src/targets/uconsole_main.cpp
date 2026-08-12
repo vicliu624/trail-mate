@@ -4,20 +4,11 @@
 #include <string>
 #include <string_view>
 
-#include "platform/gtk/gtk_canvas_presenter.h"
-#include "uconsole/uconsole_desktop_shell.h"
+#include "platform/gtk/gtk_uconsole_app.h"
+#include "uconsole/uconsole_hardware_probe.h"
 
 namespace
 {
-
-std::string envString(const char* name, const char* fallback)
-{
-    if (const char* value = std::getenv(name))
-    {
-        if (*value != '\0') return value;
-    }
-    return fallback;
-}
 
 int envInt(const char* name, int fallback)
 {
@@ -81,28 +72,18 @@ int main(int argc, char** argv)
     try
     {
         const LaunchOptions options = parseOptions(argc, argv);
-        trailmate::uconsole::gtk::GtkCanvasPresenter window{
+        trailmate::uconsole::UConsoleHardwareRuntime hardware{};
+        if (!hardware.initialize())
+        {
+            std::cerr << "uConsole hardware setup failed: "
+                      << hardware.lastError() << '\n';
+        }
+
+        return trailmate::uconsole::gtk::runGtkUConsoleApp(
             {.width = options.width,
              .height = options.height,
              .fullscreen = options.fullscreen,
-             .title = "Trail Mate uConsole",
-             .screenshot_path =
-                 envString("TRAIL_MATE_UCONSOLE_SCREENSHOT", ""),
-             .screenshot_after_frames =
-                 envInt("TRAIL_MATE_UCONSOLE_SCREENSHOT_AFTER_FRAMES", 45),
-             .initial_nav_steps =
-                 envInt("TRAIL_MATE_UCONSOLE_INITIAL_NAV_STEPS", 0),
-             .initial_shortcut =
-                 envString("TRAIL_MATE_UCONSOLE_INITIAL_SHORTCUT", "")
-                         .empty()
-                     ? '\0'
-                     : envString("TRAIL_MATE_UCONSOLE_INITIAL_SHORTCUT", "")
-                           .front()}};
-        trailmate::uconsole::UConsoleShellOptions shell{};
-        shell.width = options.width;
-        shell.height = options.height;
-        trailmate::uconsole::runUConsoleShell(window, shell);
-        return 0;
+             .title = "Trail Mate uConsole"});
     }
     catch (const std::exception& ex)
     {

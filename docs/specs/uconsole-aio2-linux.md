@@ -328,6 +328,16 @@ Current AIO2 LoRa binding facts:
   `dtoverlay=spi1-1cs` boot overlay. Treating an unrelated visible spidev node
   such as `spidev4.0` as the LoRa endpoint is invalid unless the board overlay
   explicitly proves that wiring.
+- GPS power (`GPIO27`) and a GPS fix are separate facts. On the verified CM4
+  AIO2 image, `/dev/ttyS0` at `9600` is the receiver default after GPIO27 is
+  asserted. The Settings → GPS receiver path and baud form a persisted override
+  choice; it rejects the ClockworkPi USB CDC control serial. An explicit
+  `TRAIL_MATE_GPS_DEVICE`, NMEA file, or position injection remains
+  authoritative. NMEA traffic without a valid fix is reported as `No fix`, not
+  as a working position; antenna state and sky visibility remain physical facts.
+- The uConsole startup binding sets `TRAIL_MATE_GPS_AUTO_SERIAL=0` explicitly,
+  even when inherited process state requested probing. This prevents the shared
+  Linux candidate list from reintroducing the uConsole USB control serial.
 
 Forbidden ownership:
 
@@ -494,44 +504,44 @@ Normative GTK layout geometry:
 - The bottom status bar is a global surface and must remain visible on every
   workspace. Workspace bodies reserve status-bar space; no page-level layout may
   push the status bar below the visible window.
-- Overview is three columns: compact GPS/location rail, dominant center column,
-  compact activity timeline rail. The center column is the only horizontally
-  expanding column.
-- Overview GPS/location rail width is `208px`. The GPS/location rail must not
-  render page headers, prose, coordinate summaries, or cache summaries above the
-  map. The rail starts with compact location map context, then skyplot, then
-  satellite list.
-- Overview location map maximum viewport is `200x128px` today and must remain
-  within a `200x200px` product envelope unless this specification is explicitly
-  changed first.
-- Overview timeline rail width is `252px`. Timeline badges and event text must
-  wrap inside this rail rather than increasing the rail width.
+- There is no Overview/Dashboard workspace. It duplicated live information
+  without providing a field task, so it is not a launch surface or a navigation
+  destination. The initial workspace is Map.
+- Location is operated in Map and GPS & sky plot; conversations are operated in
+  Chat; packet history is operated in Logs; radio configuration and diagnostics
+  are operated in Radio tools. The global status bar is the only cross-workspace
+  runtime summary.
 - Chat is three columns: narrow conversation rail, dominant transcript/composer
   column, narrow node/contact inspector rail. Conversation rail is `216px`; node
   inspector rail is `220px`; only the transcript/composer column expands.
-- Map is canvas-first. Left map controls rail and right map tools rail are equal
-  narrow rails at `152px` each. The left rail must never be wider than the
-  right rail. The map canvas is the only horizontally expanding area.
-- Map side rails own their vertical overflow. If controls, tile status, contour
-  status, cache status, or tools exceed the visible height, the rail scrolls
-  internally at its fixed width; content must not disappear behind the bottom
-  status bar or force the global window/body to scroll.
+- Map is canvas-first. The tile viewport owns all available workspace area by
+  default. Layer controls and measurement tools are explicit buttons in a
+  compact overlay toolbar; their detailed inspectors are overlay drawers, not
+  permanently reserved rails. Opening a drawer may cover tiles temporarily but
+  must never shrink the tile viewport.
+- The layer and tools overlay drawers have a maximum width of `236px`; their
+  toolbar is compact and must not become a second navigation rail.
+- Map overlay drawers own their vertical overflow. If controls, tile status,
+  contour status, cache status, or tools exceed the visible height, the drawer
+  scrolls internally. Closing it returns every pixel of workspace width to the
+  map and must not force the global window/body to scroll.
 - The map tile viewport must fill the available canvas. Fixed-aspect frames,
   letterboxing, permanent grey bands, or any other decorative area between the
-  side rails and the rendered tile surface are invalid. Grey may appear only as
-  a transient missing/loading tile placeholder inside the tile grid.
+  map workspace and the rendered tile surface are invalid. Grey may appear only
+  as a transient missing/loading tile placeholder inside the tile grid.
 - Map coordinates must be displayed as separate rows, such as `lat:` and `lon:`,
   not as a single sentence. Tile/cache/download status must be rendered as
   short multi-row data items, not as one long prose line.
-- If a label, switch, button, or status field needs more room than its rail,
+- If a label, switch, button, or status field needs more room than its drawer,
   the fix is wrapping, a tooltip, or moving secondary detail to Logs/Data.
   Shortening established domain labels such as `Terrain`, `Satellite`, region
   codes, protocol names, or radio parameter names is invalid unless the
-  abbreviation is already standard in that domain. Increasing the rail width is
-  invalid without updating this specification first.
+  abbreviation is already standard in that domain. Changing overlay drawer
+  geometry requires updating this specification first.
 - The default uConsole GTK shell is designed for a landscape desktop-class
-  handheld workspace. Changes that make side rails visually dominate the map,
-  transcript, or overview center column are specification drift.
+  handheld workspace. Persistent chrome must not visually dominate the map,
+  transcript, or overview center column; map inspectors appear only when the
+  user explicitly opens them.
 
 Workspace rules:
 

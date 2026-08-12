@@ -53,6 +53,34 @@ bool capabilityNeedsAttention(const ::platform::ui::CapabilityStatus& status)
            status.state == ::platform::ui::CapabilityState::Error;
 }
 
+GtkWidget* buildRadioStatusRow(const char* tool,
+                               const char* activity,
+                               const std::string& capability,
+                               bool needs_attention)
+{
+    GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_add_css_class(row, "runtime-status-row");
+    gtk_widget_set_hexpand(row, TRUE);
+
+    GtkWidget* tool_label = makeLabel(tool, "runtime-status-tool");
+    gtk_widget_set_size_request(tool_label, 116, -1);
+    gtk_box_append(GTK_BOX(row), tool_label);
+
+    GtkWidget* activity_label = makeLabel(activity, "runtime-status-value");
+    gtk_widget_set_size_request(activity_label, 92, -1);
+    if (needs_attention)
+    {
+        gtk_widget_add_css_class(activity_label, "runtime-status-attention");
+    }
+    gtk_box_append(GTK_BOX(row), activity_label);
+
+    GtkWidget* capability_label =
+        makeLabel(capability.c_str(), "runtime-status-detail", true);
+    gtk_widget_set_hexpand(capability_label, TRUE);
+    gtk_box_append(GTK_BOX(row), capability_label);
+    return row;
+}
+
 SweepPlan makeSweepPlan(const GtkUConsoleAppState& state)
 {
     SweepPlan plan{};
@@ -337,33 +365,34 @@ void refreshRadioToolsLogic(GtkUConsoleAppState& state,
     const auto sstv_status = ::platform::ui::sstv::get_status();
     const auto walkie_status = ::platform::ui::walkie::get_status();
 
-    GtkWidget* metrics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(metrics, "metric-strip");
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("LoRa sweep",
-                                  state.radio_sweep_running ? "Scanning"
-                                                            : "Ready",
-                                  capabilityLabel(lora_capability),
-                                  capabilityNeedsAttention(lora_capability)));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("SSTV",
-                                  ::platform::ui::sstv::is_active()
-                                      ? "Receiving"
-                                      : "Idle",
-                                  capabilityLabel(sstv_capability),
-                                  capabilityNeedsAttention(sstv_capability)));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Walkie",
-                                  walkie_status.tx
-                                      ? "Transmitting"
-                                      : (walkie_status.active ? "Listening"
-                                                              : "Stopped"),
-                                  capabilityLabel(walkie_capability),
-                                  capabilityNeedsAttention(
-                                      walkie_capability)));
-    gtk_box_append(GTK_BOX(state.radio_tools_page_box), metrics);
+    GtkWidget* status_table = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_add_css_class(status_table, "runtime-status-table");
+    gtk_box_append(GTK_BOX(status_table),
+                   buildRadioStatusRow(
+                       "LoRa sweep",
+                       state.radio_sweep_running ? "Scanning" : "Ready",
+                       capabilityLabel(lora_capability),
+                       capabilityNeedsAttention(lora_capability)));
+    gtk_box_append(
+        GTK_BOX(status_table),
+        buildRadioStatusRow("SSTV",
+                            ::platform::ui::sstv::is_active() ? "Receiving"
+                                                              : "Idle",
+                            capabilityLabel(sstv_capability),
+                            capabilityNeedsAttention(sstv_capability)));
+    gtk_box_append(
+        GTK_BOX(status_table),
+        buildRadioStatusRow("Walkie",
+                            walkie_status.tx
+                                ? "Transmitting"
+                                : (walkie_status.active ? "Listening"
+                                                        : "Stopped"),
+                            capabilityLabel(walkie_capability),
+                            capabilityNeedsAttention(walkie_capability)));
+    gtk_box_append(GTK_BOX(state.radio_tools_page_box), status_table);
 
-    GtkWidget* spectrum = makePanel();
+    GtkWidget* spectrum = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(spectrum, "radio-sweep-workspace");
     GtkWidget* spectrum_header =
         gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget* spectrum_title = makeLabel("Energy sweep", "pane-heading");
@@ -412,8 +441,11 @@ void refreshRadioToolsLogic(GtkUConsoleAppState& state,
     }
     gtk_box_append(GTK_BOX(state.radio_tools_page_box), spectrum);
 
-    GtkWidget* lower = makeWorkbench(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget* sstv = makePanel();
+    GtkWidget* lower = makeWorkbench(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_add_css_class(lower, "radio-tool-columns");
+    GtkWidget* sstv = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(sstv, "radio-tool-section");
+    gtk_widget_set_hexpand(sstv, TRUE);
     GtkWidget* sstv_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget* sstv_title = makeLabel("SSTV receiver", "pane-heading");
     gtk_widget_set_hexpand(sstv_title, TRUE);
@@ -451,7 +483,9 @@ void refreshRadioToolsLogic(GtkUConsoleAppState& state,
                                       ? saved_path
                                       : "No decoded image yet"));
 
-    GtkWidget* walkie = makePanel();
+    GtkWidget* walkie = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(walkie, "radio-tool-section");
+    gtk_widget_set_hexpand(walkie, TRUE);
     GtkWidget* walkie_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget* walkie_title = makeLabel("Walkie", "pane-heading");
     gtk_widget_set_hexpand(walkie_title, TRUE);
@@ -604,25 +638,22 @@ void refreshExtensionsLogic(GtkUConsoleAppState& state,
     {
         installed += package.installed ? 1U : 0U;
     }
-    GtkWidget* metrics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(metrics, "metric-strip");
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Catalog",
-                                  std::to_string(
-                                      state.extension_catalog.size()),
-                                  ::ui::runtime::packs::is_supported()
-                                      ? "Local package source ready"
-                                      : "Package source unavailable",
-                                  !::ui::runtime::packs::is_supported()));
-    gtk_box_append(GTK_BOX(metrics),
-                   makeMetricCard("Installed",
-                                  std::to_string(installed),
-                                  "Persisted desktop package state"));
-    gtk_box_append(GTK_BOX(state.extensions_page_box), metrics);
+    GtkWidget* catalog_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_add_css_class(catalog_header, "list-toolbar");
+    GtkWidget* catalog_title =
+        makeLabel("Available packages", "pane-heading");
+    gtk_widget_set_hexpand(catalog_title, TRUE);
+    gtk_box_append(GTK_BOX(catalog_header), catalog_title);
+    gtk_box_append(GTK_BOX(catalog_header),
+                   makeLabel((std::to_string(state.extension_catalog.size()) +
+                              " catalog / " + std::to_string(installed) +
+                              " installed")
+                                 .c_str(),
+                             "row-meta"));
+    gtk_box_append(GTK_BOX(state.extensions_page_box), catalog_header);
 
-    GtkWidget* catalog = makePanel();
-    gtk_box_append(GTK_BOX(catalog),
-                   makeLabel("Available packages", "pane-heading"));
+    GtkWidget* catalog = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_add_css_class(catalog, "extension-list");
     if (state.extension_catalog.empty())
     {
         gtk_box_append(GTK_BOX(catalog),
@@ -632,7 +663,7 @@ void refreshExtensionsLogic(GtkUConsoleAppState& state,
     for (const auto& package : state.extension_catalog)
     {
         GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-        gtk_widget_add_css_class(row, "row");
+        gtk_widget_add_css_class(row, "extension-list-row");
         GtkWidget* details = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
         gtk_widget_set_hexpand(details, TRUE);
         gtk_box_append(GTK_BOX(details),
