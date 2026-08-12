@@ -86,36 +86,6 @@ MenuLayoutProfile make_tdeck_profile()
     return profile;
 }
 
-MenuLayoutProfile make_tdeck_pro_profile()
-{
-#if defined(ARDUINO_T_DECK_PRO)
-    MenuLayoutProfile profile = make_tdeck_profile();
-    profile.name = "tdeck_pro";
-
-    // EPD icon artwork is authored at the exact 48x48 size used by a menu
-    // card. A non-unit LVGL transform turns deliberate one-bit pixels into
-    // uneven stair-steps, so this value must remain 256 (1.0).
-    profile.icon_scale = 256;
-    profile.card_pad_top = 2;
-    profile.card_pad_bottom = 2;
-    profile.card_pad_row = 1;
-
-    // UNSCII is a native 1-bit, 16-pixel bitmap font. It reaches the EPD
-    // framebuffer without the grey anti-alias samples that break apart when
-    // a RGB565 UI is converted to monochrome.
-    profile.card_label_font = &lv_font_unscii_16;
-    profile.desc_font = &lv_font_unscii_16;
-    profile.node_id_font = &lv_font_unscii_16;
-    profile.top_bar_font = &lv_font_unscii_16;
-    profile.badge_font = &lv_font_unscii_16;
-    return profile;
-#else
-    // Keep the public profile factory linkable for desktop/unit-test builds;
-    // only the physical T-Deck Pro selects its one-bit specialization.
-    return make_tdeck_profile();
-#endif
-}
-
 MenuLayoutProfile make_pager_profile()
 {
     MenuLayoutProfile profile{};
@@ -298,9 +268,7 @@ const MenuLayoutProfile& current()
         return make_t_display_p4_profile();
 #elif defined(ARDUINO_T_LORA_PAGER)
         return make_pager_profile();
-#elif defined(ARDUINO_T_DECK_PRO)
-        return make_tdeck_pro_profile();
-#elif defined(ARDUINO_T_DECK)
+#elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO)
         return make_tdeck_profile();
 #elif defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         return make_cardputer_zero_profile();

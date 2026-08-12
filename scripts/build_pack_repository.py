@@ -226,8 +226,11 @@ def build_font_if_missing(
         command.append("--no-prefilter")
     if parse_bool(build.get("no_kerning"), default=False):
         command.append("--no-kerning")
+    if parse_bool(build.get("autohint_off"), default=False):
+        command.append("--autohint-off")
 
     subprocess.run(command, check=True)
+
 
 
 def stage_bundle(
@@ -338,10 +341,17 @@ def collect_locale_records(stage_bundle_dir: Path) -> list[dict[str, object]]:
                 "content_font_pack_id": manifest.get(
                     "content_font_pack", manifest.get("ui_font_pack", "")
                 ),
+                "tdeck_pro_ui_font_pack_id": manifest.get("tdeck_pro_ui_font_pack", ""),
+                "tdeck_pro_content_font_pack_id": manifest.get(
+                    "tdeck_pro_content_font_pack", manifest.get("tdeck_pro_ui_font_pack", "")
+                ),
                 "translation_status": manifest.get("translation_status", "release"),
                 "direction": manifest.get("direction", "ltr"),
                 "preferred_content_supplement_pack_ids": split_csv(
                     manifest.get("preferred_content_supplement_packs", manifest.get("content_supplement_packs", ""))
+                ),
+                "tdeck_pro_preferred_content_supplement_pack_ids": split_csv(
+                    manifest.get("tdeck_pro_preferred_content_supplement_packs", "")
                 ),
                 "ime_pack_id": manifest.get("ime_pack", ""),
             }

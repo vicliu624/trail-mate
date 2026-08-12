@@ -24,17 +24,8 @@ namespace
 {
 constexpr std::size_t kMaxTargets = 8;
 constexpr std::size_t kLabelLen = 32;
-#if defined(ARDUINO_T_DECK_PRO)
-// An EPD update takes about 700 ms and is visibly disruptive. Battery voltage
-// is inherently noisy, so presenting every one-percent ADC swing as a UI
-// change makes a static top bar pulse continuously. Keep the UX responsive
-// enough for charging indication while using a stable five-percent value.
-constexpr uint32_t kRefreshIntervalMs = 15000;
-constexpr int kBatteryLevelStepPercent = 5;
-#else
 constexpr uint32_t kRefreshIntervalMs = 1000;
 constexpr int kBatteryLevelStepPercent = 1;
-#endif
 constexpr uint8_t kChargingChangeStableSamples = 2;
 
 struct PresenterState
@@ -54,19 +45,6 @@ PresenterState& state()
 {
     static PresenterState s_state;
     return s_state;
-}
-
-int presented_battery_level(int level)
-{
-    if (level < 0 || kBatteryLevelStepPercent <= 1)
-    {
-        return level;
-    }
-
-    const int rounded = ((level + (kBatteryLevelStepPercent / 2)) /
-                         kBatteryLevelStepPercent) *
-                        kBatteryLevelStepPercent;
-    return rounded > 100 ? 100 : rounded;
 }
 
 bool has_target(const PresenterState& presenter)
@@ -152,7 +130,7 @@ void sample_and_apply(PresenterState& presenter, uint32_t now_ms)
     observe_charging(presenter, info.charging);
 
     char next_label[kLabelLen] = "--";
-    ui_format_battery(presented_battery_level(info.level),
+    ui_format_battery(info.level,
                       presenter.has_charging ? presenter.charging : info.charging,
                       next_label,
                       sizeof(next_label));

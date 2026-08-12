@@ -18,6 +18,10 @@
 #include "ui/widgets/foreground_operation_overlay.h"
 #include "ui/widgets/text_candidate_data.h"
 
+#if defined(ARDUINO_T_DECK_PRO)
+#include "ui/tdeck_pro/text_font.h"
+#endif
+
 #if (defined(ESP_PLATFORM) || defined(ARDUINO_ARCH_ESP32)) && __has_include("esp_heap_caps.h")
 #include "esp_heap_caps.h"
 #define UI_I18N_HAVE_HEAP_CAPS 1
@@ -536,6 +540,28 @@ std::vector<std::string> split_csv_strings(const char* value)
     }
 
     return items;
+}
+
+bool pack_targets_current_board(const char* value)
+{
+    if (!value || value[0] == '\0')
+    {
+        return true;
+    }
+
+    for (const std::string& target : split_csv_strings(value))
+    {
+        const std::string normalized = lowercase_ascii(target);
+#if defined(ARDUINO_T_DECK_PRO)
+        if (normalized == "tdeck-pro")
+        {
+            return true;
+        }
+#else
+        (void)normalized;
+#endif
+    }
+    return false;
 }
 
 std::string join_csv_strings(const std::vector<std::string>& items)
@@ -1783,6 +1809,12 @@ void rebuild_runtime_font_chains()
         last_content_chain = s_content_font_chain.desc;
     }
     ::ui::fonts::refresh_locale_font_bindings();
+#if defined(ARDUINO_T_DECK_PRO)
+    // Existing shared pages point at the Pro font proxy through the legacy
+    // font guard. Keep that primary font fixed at native English while
+    // attaching the activated pack chain for downloaded CJK glyphs.
+    ::ui::tdeck_pro::set_text_font_fallback(s_ui_font_chain.head);
+#endif
 }
 
 bool preload_small_content_supplements()
@@ -2326,6 +2358,11 @@ bool catalog_external_font_pack(const std::string& pack_dir)
         return false;
     }
 
+    if (!pack_targets_current_board(manifest_value(manifest, "targets")))
+    {
+        return false;
+    }
+
     const char* id = manifest_value(manifest, "id");
     if (!id || id[0] == '\0' || find_pack_by_id(s_font_packs, id) != nullptr)
     {
@@ -2645,6 +2682,46 @@ bool catalog_external_locale_pack(const std::string& pack_dir)
     {
         pack.preferred_content_supplement_pack_ids = split_csv_strings(supplements);
     }
+#if defined(ARDUINO_T_DECK_PRO)
+    // Locale packages are shared by every board.  A T-Deck Pro can opt into
+    // its own monochrome Unifont subsets without changing the established
+    // high-density font choice made by colour-display targets. A locale which
+    // explicitly declares a Pro font set is unavailable until every declared
+    // Pro dependency has been installed: falling back to the colour-display
+    // font would reintroduce scaled/antialiased glyphs on the e-paper UI.
+    const char* pro_ui_font_pack = manifest_value(manifest, "tdeck_pro_ui_font_pack");
+    const char* pro_content_font_pack = manifest_value(manifest, "tdeck_pro_content_font_pack");
+    const char* pro_preferred_supplements =
+        manifest_value(manifest, "tdeck_pro_preferred_content_supplement_packs");
+    const std::vector<std::string> pro_supplement_ids = split_csv_strings(pro_preferred_supplements);
+    bool pro_font_set_available = pro_ui_font_pack && pro_ui_font_pack[0] != '\0' &&
+                                  find_pack_by_id(s_font_packs, pro_ui_font_pack) != nullptr;
+    if (pro_content_font_pack && pro_content_font_pack[0] != '\0')
+    {
+        pro_font_set_available = pro_font_set_available &&
+                                 find_pack_by_id(s_font_packs, pro_content_font_pack) != nullptr;
+    }
+    for (const std::string& supplement_id : pro_supplement_ids)
+    {
+        pro_font_set_available = pro_font_set_available &&
+                                 find_pack_by_id(s_font_packs, supplement_id.c_str()) != nullptr;
+    }
+    if (pro_ui_font_pack && pro_ui_font_pack[0] != '\0')
+    {
+        if (!pro_font_set_available)
+        {
+            std::printf("%s skip locale pack id=%s reason=missing_tdeck_pro_fonts\n",
+                        kLogTag,
+                        pack.id.c_str());
+            return false;
+        }
+        pack.ui_font_pack_id = pro_ui_font_pack;
+        pack.content_font_pack_id = (pro_content_font_pack && pro_content_font_pack[0] != '\0')
+                                        ? pro_content_font_pack
+                                        : pro_ui_font_pack;
+        pack.preferred_content_supplement_pack_ids = pro_supplement_ids;
+    }
+#endif
     if (pack.content_font_pack_id.empty())
     {
         pack.content_font_pack_id = pack.ui_font_pack_id;

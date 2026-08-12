@@ -2,6 +2,10 @@
 
 #include <algorithm>
 
+#if defined(ARDUINO_T_DECK_PRO)
+#include "ui/tdeck_pro/text_font.h"
+#endif
+
 #if !defined(LV_FONT_MONTSERRAT_10) || !LV_FONT_MONTSERRAT_10
 #define lv_font_montserrat_10 lv_font_montserrat_12
 #endif
@@ -125,20 +129,51 @@ PageLayoutProfile make_tdeck_profile()
 
 PageLayoutProfile make_tdeck_pro_profile()
 {
+    PageLayoutProfile profile{};
+    profile.name = "tdeck-pro-text";
+    profile.variant = LayoutVariant::HybridCompact;
+    profile.top_bar_height = 26;
+    profile.top_content_gap = 4;
 #if defined(ARDUINO_T_DECK_PRO)
-    PageLayoutProfile profile = make_tdeck_profile();
-    profile.name = "tdeck_pro";
-    profile.top_bar_height = 28;
-    profile.top_content_gap = 2;
-    profile.title_font = &lv_font_unscii_16;
-    profile.body_font = &lv_font_unscii_16;
-    profile.caption_font = &lv_font_unscii_16;
-    profile.tiny_font = &lv_font_unscii_16;
-    return profile;
+    profile.title_font = ui::tdeck_pro::text_font();
+    profile.body_font = ui::tdeck_pro::text_font();
+    profile.caption_font = ui::tdeck_pro::text_font();
+    profile.tiny_font = ui::tdeck_pro::text_font();
 #else
-    // Keep the factory available in builds that do not include the EPD font.
-    return make_tdeck_profile();
+    profile.title_font = &lv_font_montserrat_16;
+    profile.body_font = &lv_font_montserrat_16;
+    profile.caption_font = &lv_font_montserrat_16;
+    profile.tiny_font = &lv_font_montserrat_16;
 #endif
+    profile.dense = true;
+    profile.content_pad_left = 8;
+    profile.content_pad_right = 8;
+    profile.content_pad_top = 4;
+    profile.content_pad_bottom = 4;
+    profile.filter_panel_width = 84;
+    profile.filter_panel_pad_row = 1;
+    profile.filter_button_height = 22;
+    profile.list_panel_pad_row = 1;
+    profile.list_panel_pad_left = 2;
+    profile.list_panel_pad_right = 2;
+    profile.list_panel_margin_bottom = 2;
+    profile.list_item_height = 22;
+    profile.control_button_height = 22;
+    profile.control_button_min_width = 72;
+    profile.compact_button_min_width = 48;
+    profile.modal_min_width = 200;
+    profile.modal_min_height = 132;
+    profile.modal_margin = 8;
+    profile.modal_pad = 6;
+    profile.popup_title_height = 24;
+    profile.icon_picker_button_size = 44;
+    profile.ime_bar_height = 24;
+    profile.ime_toggle_width = 40;
+    profile.ime_toggle_height = 18;
+    profile.ime_candidate_button_height = 22;
+    profile.ime_keyboard_height = 0;
+    profile.large_touch_hitbox = false;
+    return profile;
 }
 
 PageLayoutProfile make_tab5_profile()

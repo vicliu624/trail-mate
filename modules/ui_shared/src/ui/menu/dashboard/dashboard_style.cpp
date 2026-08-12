@@ -30,28 +30,7 @@ float rad_to_deg(float value)
 
 } // namespace
 
-#if defined(ARDUINO_T_DECK_PRO)
-lv_color_t color_amber()
-{
-    return lv_color_black();
-}
-lv_color_t color_amber_dark() { return lv_color_black(); }
-lv_color_t color_panel_bg() { return lv_color_white(); }
-lv_color_t color_line() { return lv_color_black(); }
-lv_color_t color_text() { return lv_color_black(); }
-lv_color_t color_text_dim() { return lv_color_black(); }
-lv_color_t color_warn() { return lv_color_black(); }
-lv_color_t color_ok() { return lv_color_black(); }
-lv_color_t color_info() { return lv_color_black(); }
-lv_color_t color_soft_amber() { return lv_color_white(); }
-lv_color_t color_soft_blue() { return lv_color_white(); }
-lv_color_t color_soft_green() { return lv_color_white(); }
-lv_color_t color_soft_warn() { return lv_color_white(); }
-#else
-lv_color_t color_amber()
-{
-    return lv_color_hex(0xEBA341);
-}
+lv_color_t color_amber() { return lv_color_hex(0xEBA341); }
 lv_color_t color_amber_dark() { return lv_color_hex(0xC98118); }
 lv_color_t color_panel_bg() { return lv_color_hex(0xFAF0D8); }
 lv_color_t color_line() { return lv_color_hex(0xE7C98F); }
@@ -64,7 +43,6 @@ lv_color_t color_soft_amber() { return lv_color_hex(0xF3D39C); }
 lv_color_t color_soft_blue() { return lv_color_hex(0xDCE8F7); }
 lv_color_t color_soft_green() { return lv_color_hex(0xDCEFD8); }
 lv_color_t color_soft_warn() { return lv_color_hex(0xF5D9D1); }
-#endif
 
 DashboardCardChrome create_card_chrome(lv_obj_t* parent,
                                        const char* title,
@@ -101,9 +79,9 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
 
     chrome.title = lv_label_create(chrome.header);
     lv_label_set_text(chrome.title, title);
-    lv_obj_set_style_text_color(chrome.title, color_text(), 0);
-    lv_obj_set_style_text_font(chrome.title, ::ui::fonts::ui_chrome_font(), 0);
-    ::ui::fonts::apply_localized_font(chrome.title, title, ::ui::fonts::ui_chrome_font());
+    lv_obj_set_style_text_color(chrome.title, lv_color_hex(0x2A1A05), 0);
+    lv_obj_set_style_text_font(chrome.title, &lv_font_montserrat_14, 0);
+    ::ui::fonts::apply_localized_font(chrome.title, title, &lv_font_montserrat_14);
     lv_obj_align(chrome.title, LV_ALIGN_LEFT_MID, 0, 0);
 
     chrome.status_chip = lv_obj_create(chrome.header);
@@ -122,8 +100,8 @@ DashboardCardChrome create_card_chrome(lv_obj_t* parent,
     chrome.status_label = lv_label_create(chrome.status_chip);
     lv_label_set_text(chrome.status_label, "--");
     lv_obj_set_style_text_color(chrome.status_label, color_text(), 0);
-    lv_obj_set_style_text_font(chrome.status_label, ::ui::fonts::ui_chrome_font(), 0);
-    ::ui::fonts::apply_localized_font(chrome.status_label, "--", ::ui::fonts::ui_chrome_font());
+    lv_obj_set_style_text_font(chrome.status_label, &lv_font_montserrat_12, 0);
+    ::ui::fonts::apply_localized_font(chrome.status_label, "--", &lv_font_montserrat_12);
     lv_obj_center(chrome.status_label);
 
     chrome.body = lv_obj_create(chrome.card);
@@ -176,7 +154,7 @@ void set_status_chip(DashboardCardChrome& chrome, const char* text, lv_color_t b
     if (text != nullptr && (current == nullptr || std::strcmp(current, text) != 0))
     {
         lv_label_set_text(chrome.status_label, text);
-        ::ui::fonts::apply_localized_font(chrome.status_label, text, ::ui::fonts::ui_chrome_font());
+        ::ui::fonts::apply_localized_font(chrome.status_label, text, &lv_font_montserrat_12);
     }
 }
 
@@ -202,9 +180,9 @@ void style_body_label(lv_obj_t* label, const lv_font_t* font, lv_color_t color)
 
 void style_footer_label(lv_obj_t* label)
 {
-    lv_obj_set_style_text_font(label, ::ui::fonts::ui_chrome_font(), 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(label, color_text_dim(), 0);
-    ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), ::ui::fonts::ui_chrome_font());
+    ::ui::fonts::apply_localized_font(label, lv_label_get_text(label), &lv_font_montserrat_12);
 }
 
 void style_ring_object(lv_obj_t* obj, lv_coord_t diameter, lv_coord_t border, lv_color_t color)

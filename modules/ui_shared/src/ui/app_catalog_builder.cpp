@@ -10,6 +10,9 @@
 #include "ui/assets/images.h"
 #include "ui/callback_app_screen.h"
 #include "ui/page/page_host.h"
+#if defined(ARDUINO_T_DECK_PRO)
+#include "ui/tdeck_pro/text_app_adapter.h"
+#endif
 #if defined(ESP_PLATFORM)
 #include "ui/runtime/ui_feedback.h"
 #endif
@@ -59,6 +62,7 @@ constexpr bool kTab5SkipSkyPlot = true;
 constexpr bool kTab5SkipSkyPlot = false;
 #endif
 
+#if !defined(ARDUINO_T_DECK_PRO)
 extern "C"
 {
     extern const lv_image_dsc_t Chat;
@@ -82,6 +86,13 @@ extern "C"
     extern const lv_image_dsc_t walkie_talkie;
     extern const lv_image_dsc_t shutdown;
 }
+#define CATALOG_ICON(symbol) (&symbol)
+#else
+// The T-Deck Pro's text shell does not render application images.  Keeping
+// the catalog icon-free also prevents the visual adapter from keeping the
+// legacy image catalogue alive through AppScreen pointers.
+#define CATALOG_ICON(symbol) nullptr
+#endif
 
 void request_menu_exit(void*)
 {
@@ -97,65 +108,107 @@ ui::page::Host make_menu_host()
 
 ui::page::Host s_menu_host = make_menu_host();
 
-ui::CallbackAppScreen s_chat_app("chat", "Chat", &Chat,
+#if defined(ARDUINO_T_DECK_PRO)
+// These descriptors use the same catalogue identities as other targets, but
+// never hold legacy shell callbacks. The text adapter calls typed sources and
+// action ports directly, so the retired visual page has no Pro link root.
+ui::tdeck_pro::TextAppAdapter s_pro_map_app("map", "Map", ui::tdeck_pro::TextAppPageKind::Map);
+ui::tdeck_pro::TextAppAdapter s_pro_chat_app("chat", "Chat", ui::tdeck_pro::TextAppPageKind::Chat);
+ui::tdeck_pro::TextAppAdapter s_pro_team_app("team", "Team", ui::tdeck_pro::TextAppPageKind::Team);
+ui::tdeck_pro::TextAppAdapter s_pro_contacts_app("contacts", "Contacts", ui::tdeck_pro::TextAppPageKind::Contacts);
+ui::tdeck_pro::TextAppAdapter s_pro_sky_plot_app("sky_plot", "Sky Plot", ui::tdeck_pro::TextAppPageKind::SkyPlot);
+ui::tdeck_pro::TextAppAdapter s_pro_network_app("network", "Network", ui::tdeck_pro::TextAppPageKind::Network);
+ui::tdeck_pro::TextAppAdapter s_pro_settings_app("settings", "Setting", ui::tdeck_pro::TextAppPageKind::Settings);
+ui::tdeck_pro::TextAppAdapter s_pro_tracker_app("tracker", "Tracker", ui::tdeck_pro::TextAppPageKind::Tracker);
+ui::tdeck_pro::TextAppAdapter s_pro_walkie_app("walkie_talkie", "Walkie Talkie", ui::tdeck_pro::TextAppPageKind::Walkie);
+ui::tdeck_pro::TextAppAdapter s_pro_extensions_app("extensions", "Extensions", ui::tdeck_pro::TextAppPageKind::Extensions);
+ui::tdeck_pro::TextAppAdapter s_pro_protocol_probe_app(
+    "energy_sweep", "Protocol Probe", ui::tdeck_pro::TextAppPageKind::ProtocolProbe);
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
+ui::tdeck_pro::TextAppAdapter s_pro_sstv_app("sstv", "SSTV", ui::tdeck_pro::TextAppPageKind::Sstv);
+#endif
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
+ui::tdeck_pro::TextAppAdapter s_pro_usb_app("usb_mass_storage", "USB Disk", ui::tdeck_pro::TextAppPageKind::UsbStorage);
+#endif
+// Preserve the shared catalogue assembly order without keeping a callback to
+// any legacy page. These aliases deliberately name the Pro descriptors.
+AppScreen& s_chat_app = s_pro_chat_app;
+AppScreen& s_gps_app = s_pro_map_app;
+AppScreen& s_skyplot_app = s_pro_sky_plot_app;
+AppScreen& s_contacts_app = s_pro_contacts_app;
+AppScreen& s_team_app = s_pro_team_app;
+AppScreen& s_tracker_app = s_pro_tracker_app;
+AppScreen& s_setting_app = s_pro_settings_app;
+AppScreen& s_network_app = s_pro_network_app;
+AppScreen& s_extensions_app = s_pro_extensions_app;
+AppScreen& s_walkie_app = s_pro_walkie_app;
+#if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
+AppScreen& s_sstv_app = s_pro_sstv_app;
+#endif
+#if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
+AppScreen& s_usb_app = s_pro_usb_app;
+#endif
+#else
+ui::CallbackAppScreen s_chat_app("chat", "Chat", CATALOG_ICON(Chat),
                                  chat::ui::shell::enter,
                                  chat::ui::shell::exit,
                                  &s_menu_host);
-ui::CallbackAppScreen s_gps_app("map", "Map", &gps_icon,
+ui::CallbackAppScreen s_gps_app("map", "Map", CATALOG_ICON(gps_icon),
                                 gps::ui::shell::enter,
                                 gps::ui::shell::exit,
                                 &s_menu_host);
-ui::CallbackAppScreen s_skyplot_app("sky_plot", "Sky Plot", &Satellite,
+ui::CallbackAppScreen s_skyplot_app("sky_plot", "Sky Plot", CATALOG_ICON(Satellite),
                                     gnss::ui::shell::enter,
                                     gnss::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_contacts_app("contacts", "Contacts", &contact,
+ui::CallbackAppScreen s_contacts_app("contacts", "Contacts", CATALOG_ICON(contact),
                                      contacts::ui::shell::enter,
                                      contacts::ui::shell::exit,
                                      &s_menu_host);
-ui::CallbackAppScreen s_energy_sweep_app("energy_sweep", "Protocol Probe", &radar,
+ui::CallbackAppScreen s_energy_sweep_app("energy_sweep", "Protocol Probe", CATALOG_ICON(radar),
                                          energy_sweep::ui::shell::enter,
                                          energy_sweep::ui::shell::exit,
                                          &s_menu_host);
 #if !defined(GAT562_NO_TEAM) || !GAT562_NO_TEAM
-ui::CallbackAppScreen s_team_app("team", "Team", &team_icon,
+ui::CallbackAppScreen s_team_app("team", "Team", CATALOG_ICON(team_icon),
                                  team::ui::shell::enter,
                                  team::ui::shell::exit,
                                  &s_menu_host);
 #endif
-ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", &tracker_icon,
+ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", CATALOG_ICON(tracker_icon),
                                     tracker::ui::shell::enter,
                                     tracker::ui::shell::exit,
                                     &s_menu_host);
 #if !defined(TRAIL_MATE_ENABLE_SSTV) || TRAIL_MATE_ENABLE_SSTV
-ui::CallbackAppScreen s_sstv_app("sstv", "SSTV", &sstv,
+ui::CallbackAppScreen s_sstv_app("sstv", "SSTV", CATALOG_ICON(sstv),
                                  sstv_page::ui::shell::enter,
                                  sstv_page::ui::shell::exit,
                                  &s_menu_host);
 #endif
 #if !defined(GAT562_NO_HOSTLINK) || !GAT562_NO_HOSTLINK
-ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Disk", &img_usb,
+ui::CallbackAppScreen s_usb_app("usb_mass_storage", "USB Disk", CATALOG_ICON(img_usb),
                                 usb_storage::ui::shell::enter,
                                 usb_storage::ui::shell::exit,
                                 &s_menu_host);
 #endif
-ui::CallbackAppScreen s_setting_app("settings", "Setting", &Setting,
+ui::CallbackAppScreen s_setting_app("settings", "Setting", CATALOG_ICON(Setting),
                                     settings::ui::shell::enter,
                                     settings::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_network_app("network", "Network", &nomad,
+ui::CallbackAppScreen s_network_app("network", "Network", CATALOG_ICON(nomad),
                                     network::ui::shell::enter,
                                     network::ui::shell::exit,
                                     &s_menu_host);
-ui::CallbackAppScreen s_extensions_app("extensions", "Extensions", &ext,
+ui::CallbackAppScreen s_extensions_app("extensions", "Extensions", CATALOG_ICON(ext),
                                        extensions::ui::shell::enter,
                                        extensions::ui::shell::exit,
                                        &s_menu_host);
-ui::CallbackAppScreen s_walkie_app("walkie_talkie", "Walkie Talkie", &walkie_talkie,
+ui::CallbackAppScreen s_walkie_app("walkie_talkie", "Walkie Talkie", CATALOG_ICON(walkie_talkie),
                                    walkie_page::ui::shell::enter,
                                    walkie_page::ui::shell::exit,
                                    &s_menu_host);
-#if defined(ESP_PLATFORM)
+#endif
+#if defined(ESP_PLATFORM) && !defined(ARDUINO_T_DECK_PRO)
 constexpr uint32_t kPowerOffAmber = 0xEBA341;
 constexpr uint32_t kPowerOffAmberDark = 0xC98118;
 constexpr uint32_t kPowerOffWarmBg = 0xF6E6C6;
@@ -320,7 +373,7 @@ void power_off_exit(void*, lv_obj_t* parent)
     (void)parent;
 }
 
-ui::CallbackAppScreen s_power_off_app("shutdown", "Shutdown", &shutdown,
+ui::CallbackAppScreen s_power_off_app("shutdown", "Shutdown", CATALOG_ICON(shutdown),
                                       power_off_enter,
                                       power_off_exit,
                                       nullptr,
@@ -386,7 +439,11 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_energy_sweep)
         {
+#if defined(ARDUINO_T_DECK_PRO)
+            add(&s_pro_protocol_probe_app);
+#else
             add(&s_energy_sweep_app);
+#endif
         }
         if (flags.include_walkie_talkie)
         {
@@ -414,7 +471,7 @@ AppCatalog build(const FeatureFlags& flags)
         }
         if (flags.include_power_off)
         {
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) && !defined(ARDUINO_T_DECK_PRO)
             add(&s_power_off_app);
 #endif
         }

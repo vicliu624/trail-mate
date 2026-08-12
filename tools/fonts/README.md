@@ -1,6 +1,32 @@
 # Font Assets
 
-This directory stores source vector fonts used to generate Trail Mate font assets.
+This directory stores source fonts used to generate Trail Mate font assets.
+
+## GNU Unifont for T-Deck Pro
+
+- Pixel source: `unifont-17.0.05.bdf.gz`
+- Source: `https://unifoundry.com/unifont/index.html`
+- Release: GNU Unifont 17.0.05
+- License: GNU GPL v2 or later with the GNU font embedding exception, or SIL
+  Open Font License 1.1.
+- T-Deck Pro output: an English-only 16px, 1bpp subset at
+  `modules/ui_shared/src/ui/tdeck_pro/font/tdeck_pro_unifont_16.c`.
+  Localized glyphs remain downloadable `font.bin` packs. The `zh-Hans` bundle
+  supplies matching Pro-only `tdeckpro-zh-hans-core` and
+  `tdeckpro-zh-hans-ext` subsets without changing the Noto packs used on other
+  displays.
+
+The generator reads the BDF rows directly and writes them as LVGL 1bpp pixels;
+it does not invoke a scalable-font renderer, hinting stage, or resampler. Regenerate
+the committed source from the repository root with:
+
+```bash
+python tools/generate_tdeck_pro_unifont.py
+```
+
+The generator rejects any glyph that is not a native 8x16/16x16 Unifont cell.
+Its generated source contains exactly ASCII `U+0020` through `U+007E`; Chinese
+and every other localized glyph remain in downloadable font packs.
 
 ## Noto Sans CJK SC
 
@@ -100,14 +126,19 @@ python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-
 python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-id zh-hans-ext
 ```
 
-4. Generate `font.bin` files with `lv_font_conv` using:
+4. Generate T-Deck Pro `font.bin` files through the pack builder using:
 
-- font source: `tools/fonts/NotoSansCJKsc-Regular.otf`
+- font source for the T-Deck Pro pixel profile:
+  `tools/fonts/unifont-17.0.05.bdf.gz`
 - glyph subsets:
-  - `packs/zh-Hans/fonts/zh-hans-core/charset.txt`
-  - `packs/zh-Hans/fonts/zh-hans-ext/charset.txt`
+  - `packs/zh-Hans/fonts/tdeckpro-zh-hans-core/charset.txt`
+  - `packs/zh-Hans/fonts/tdeckpro-zh-hans-ext/charset.txt`
 - output format: `bin`
 - size: `16`
-- bpp: `2`
+- bpp: `1`
+
+   For `.bdf` input the wrapper feeds the original BDF rows directly to the
+   LVGL binary-font writer. It never converts the glyphs through TrueType,
+   FreeType, antialiasing, or scaling.
 
 5. Copy the pack directories onto the SD card under `/trailmate/packs/...`.

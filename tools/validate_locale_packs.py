@@ -54,6 +54,7 @@ CJK_REQUIRED_PUNCTUATION_PATH = Path("common/cjk-punctuation.txt")
 CJK_REQUIRED_PUNCTUATION_BUILD_REF = "packs/common/cjk-punctuation.txt"
 CJK_PRIMARY_FONT_PACKS = (
     ("zh-Hans/fonts/zh-hans-core", False),
+    ("zh-Hans/fonts/tdeckpro-zh-hans-core", False),
     ("zh-Hant/fonts/zh-hant-cjk", True),
     ("ja/fonts/ja-cjk", True),
     ("ko/fonts/ko-cjk", True),
@@ -257,9 +258,37 @@ def validate_manifests(pack_root: Path) -> list[str]:
     errors: list[str] = []
 
     font_ids: set[str] = set()
+    font_manifests: dict[str, tuple[Path, dict[str, str]]] = {}
     for manifest_path in sorted(pack_root.glob("*/fonts/*/manifest.ini")):
         manifest = parse_key_value_file(manifest_path)
-        font_ids.add(manifest.get("id", manifest_path.parent.name))
+        font_id = manifest.get("id", manifest_path.parent.name)
+        font_ids.add(font_id)
+        font_manifests[font_id] = (manifest_path, manifest)
+
+    for font_id, (manifest_path, manifest) in font_manifests.items():
+        targets = split_csv(manifest.get("targets"))
+        if not targets:
+            continue
+        if targets != ["tdeck-pro"]:
+            errors.append(f"{manifest_path}: unsupported targets declaration: {manifest.get('targets', '')}")
+        if not font_id.startswith("tdeckpro-"):
+            errors.append(f"{manifest_path}: target-specific font id must start with tdeckpro-")
+
+        build_path = manifest_path.parent / "build.ini"
+        build = parse_key_value_file(build_path) if build_path.is_file() else {}
+        expected = {
+            "font": "tools/fonts/unifont-17.0.05.bdf.gz",
+            "size": "16",
+            "bpp": "1",
+            "no_compress": "true",
+            "no_prefilter": "true",
+            "no_kerning": "true",
+        }
+        for key, expected_value in expected.items():
+            if build.get(key) != expected_value:
+                errors.append(
+                    f"{build_path}: T-Deck Pro pixel font requires {key}={expected_value}"
+                )
 
     ime_backends: dict[str, str] = {}
     for manifest_path in sorted(pack_root.glob("*/ime/*/manifest.ini")):
@@ -289,6 +318,30 @@ def validate_manifests(pack_root: Path) -> list[str]:
             font_id = manifest.get(field, "")
             if font_id and font_id not in font_ids:
                 errors.append(f"{manifest_path}: missing {field} dependency: {font_id}")
+
+        pro_ui_font_id = manifest.get("tdeck_pro_ui_font_pack", "")
+        pro_content_font_id = manifest.get("tdeck_pro_content_font_pack", pro_ui_font_id)
+        pro_supplement_ids = split_csv(manifest.get("tdeck_pro_preferred_content_supplement_packs"))
+        if pro_ui_font_id:
+            for field, font_id in (
+                ("tdeck_pro_ui_font_pack", pro_ui_font_id),
+                ("tdeck_pro_content_font_pack", pro_content_font_id),
+            ):
+                font_entry = font_manifests.get(font_id)
+                if font_entry is None:
+                    errors.append(f"{manifest_path}: missing {field} dependency: {font_id}")
+                elif "tdeck-pro" not in split_csv(font_entry[1].get("targets")):
+                    errors.append(f"{manifest_path}: {field} must target tdeck-pro: {font_id}")
+            for font_id in pro_supplement_ids:
+                font_entry = font_manifests.get(font_id)
+                if font_entry is None:
+                    errors.append(
+                        f"{manifest_path}: missing tdeck_pro_preferred_content_supplement_packs dependency: {font_id}"
+                    )
+                elif "tdeck-pro" not in split_csv(font_entry[1].get("targets")):
+                    errors.append(
+                        f"{manifest_path}: T-Deck Pro supplement must target tdeck-pro: {font_id}"
+                    )
 
         ime_id = manifest.get("ime_pack", "")
         if ime_id:

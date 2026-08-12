@@ -11,7 +11,10 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+from unifont_bdf import make_lv_font_data, parse_bdf_glyphs, read_bdf, requested_codepoints
 
+
+ROOT = Path(__file__).resolve().parents[1]
 NODE_DRIVER = r"""
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +23,6 @@ async function main() {
   const configPath = process.argv[2];
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const convert = require(path.resolve(config.package_dir, 'lib', 'convert'));
-  const charset = fs.readFileSync(config.charset_file, 'utf8').replace(/\r/g, '').replace(/\n/g, '');
 
   const args = {
     size: config.size,
@@ -30,20 +32,29 @@ async function main() {
     no_compress: config.no_compress,
     no_prefilter: config.no_prefilter,
     no_kerning: config.no_kerning,
+    autohint_off: config.autohint_off,
     fast_kerning: false,
     lcd: false,
     lcd_v: false,
     use_color_info: false,
-    font: [
+  };
+
+  let files;
+  if (config.direct_font_data) {
+    const writeBin = require(path.resolve(config.package_dir, 'lib', 'writers', 'bin'));
+    const fontData = JSON.parse(fs.readFileSync(config.direct_font_data, 'utf8'));
+    files = writeBin(args, fontData);
+  } else {
+    const charset = fs.readFileSync(config.charset_file, 'utf8').replace(/\r/g, '').replace(/\n/g, '');
+    args.font = [
       {
         source_path: config.font,
         source_bin: fs.readFileSync(config.font),
         ranges: [{ symbols: charset }]
       }
-    ]
-  };
-
-  const files = await convert(args);
+    ];
+    files = await convert(args);
+  }
   for (const [outputPath, data] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, Buffer.isBuffer(data) ? data : Buffer.from(data));
@@ -88,6 +99,10 @@ def infer_npm_from_node(node_exe: str) -> str | None:
     return None
 
 
+def is_bdf_source(path: Path) -> bool:
+    return path.suffix == ".bdf" or path.name.endswith(".bdf.gz")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate an LVGL binary font from a charset file via lv_font_conv.")
     parser.add_argument("--font", type=Path, required=True, help="Source font file, for example tools/fonts/NotoSansCJKsc-Regular.otf")
@@ -101,6 +116,11 @@ def main() -> int:
     parser.add_argument("--no-compress", action="store_true", help="Disable lv_font_conv RLE compression")
     parser.add_argument("--no-prefilter", action="store_true", help="Disable lv_font_conv XOR prefilter")
     parser.add_argument("--no-kerning", action="store_true", help="Disable kerning generation")
+    parser.add_argument(
+        "--autohint-off",
+        action="store_true",
+        help="Disable FreeType autohinting for an outline-font source (unused for direct BDF input)",
+    )
     args = parser.parse_args()
 
     node_exe = resolve_executable(args.node_exe)
@@ -118,6 +138,15 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="lv-font-conv-") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
+        direct_font_data_path: Path | None = None
+        if is_bdf_source(font_path):
+            wanted = requested_codepoints(charset_path, [], "")
+            bdf_glyphs = parse_bdf_glyphs(read_bdf(font_path), wanted)
+            direct_font_data_path = temp_dir / "unifont_native_bdf.json"
+            direct_font_data_path.write_text(
+                json.dumps(make_lv_font_data(bdf_glyphs, args.size), separators=(",", ":")),
+                encoding="utf-8",
+            )
         subprocess.run(
             [npm_exe, "pack", args.package_spec],
             cwd=temp_dir,
@@ -146,12 +175,14 @@ def main() -> int:
                     "package_dir": str(package_dir),
                     "font": str(font_path),
                     "charset_file": str(charset_path),
+                    "direct_font_data": str(direct_font_data_path) if direct_font_data_path else None,
                     "output": str(output_path),
                     "size": args.size,
                     "bpp": args.bpp,
                     "no_compress": args.no_compress,
                     "no_prefilter": args.no_prefilter,
                     "no_kerning": args.no_kerning,
+                    "autohint_off": args.autohint_off,
                 },
                 indent=2,
             ),

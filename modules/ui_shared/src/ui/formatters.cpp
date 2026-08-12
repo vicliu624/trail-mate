@@ -80,15 +80,6 @@ void ui_format_battery(int level, bool charging, char* out, size_t out_len)
         return;
     }
 
-#if defined(ARDUINO_T_DECK_PRO)
-    // Font Awesome battery/charge glyphs are anti-aliased four-bit glyphs.
-    // They are not part of the UNSCII 1-bit font used by the EPD profile and
-    // therefore degrade into broken fragments after RGB565 conversion.
-    // Keep the compact status readout to characters that the native bitmap
-    // font owns exactly.
-    snprintf(out, out_len, charging ? "CHG %d%%" : "%d%%", level);
-    return;
-#else
     const char* symbol;
     if (charging)
     {
@@ -115,7 +106,6 @@ void ui_format_battery(int level, bool charging, char* out, size_t out_len)
         symbol = LV_SYMBOL_BATTERY_EMPTY;
     }
     snprintf(out, out_len, "%s %d%%", symbol, level);
-#endif
 }
 
 void ui_format_coords(double lat, double lon, uint8_t coord_format, char* out, size_t out_len)

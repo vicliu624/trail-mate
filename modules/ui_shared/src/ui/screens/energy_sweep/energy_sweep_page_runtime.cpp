@@ -254,6 +254,8 @@ PacketProbePageState* s_page_state = nullptr;
 #define s_layout (s_page_state->layout)
 
 lv_timer_t* s_refresh_timer = nullptr;
+lv_timer_t* s_text_scan_timer = nullptr;
+bool s_text_runtime_active = false;
 
 PacketProbePageState* allocate_page_state()
 {
@@ -1452,6 +1454,35 @@ void refresh_timer_cb(lv_timer_t*)
     refresh_all_ui();
 }
 
+void text_scan_timer_cb(lv_timer_t*)
+{
+    // Radio cadence is intentionally independent from the display cadence.
+    // This timer advances the scan only; the text adapter renders a snapshot
+    // after an explicit user action and never receives timer-driven LVGL work.
+    if (!s_text_runtime_active || !s_page_state)
+    {
+        return;
+    }
+    process_scan_step();
+}
+
+void stop_text_runtime()
+{
+    if (s_text_scan_timer != nullptr)
+    {
+        lv_timer_del(s_text_scan_timer);
+        s_text_scan_timer = nullptr;
+    }
+    if (s_page_state != nullptr)
+    {
+        stop_probe();
+        s_state = {};
+        s_radio = {};
+        release_page_state();
+    }
+    s_text_runtime_active = false;
+}
+
 void restore_page_focus()
 {
     if (!::app_g)
@@ -2169,6 +2200,140 @@ namespace energy_sweep::ui::runtime
 bool is_available()
 {
     return platform::ui::lora::is_supported();
+}
+
+bool text_start()
+{
+    if (s_text_runtime_active)
+    {
+        if (!s_state.scanning)
+        {
+            s_state.applied = false;
+            start_probe();
+        }
+        return s_state.scanning;
+    }
+    if (!ensure_page_state())
+    {
+        return false;
+    }
+
+    s_state = {};
+    setup_radio_context();
+    s_text_runtime_active = true;
+    platform::ui::screen::disable_sleep();
+    start_probe();
+    if (!s_state.scanning)
+    {
+        stop_text_runtime();
+        platform::ui::screen::enable_sleep();
+        return false;
+    }
+
+    s_text_scan_timer = lv_timer_create(text_scan_timer_cb, kRefreshIntervalMs, nullptr);
+    if (s_text_scan_timer == nullptr)
+    {
+        stop_text_runtime();
+        platform::ui::screen::enable_sleep();
+        return false;
+    }
+    return true;
+}
+
+void text_stop()
+{
+    stop_text_runtime();
+    platform::ui::screen::enable_sleep();
+}
+
+bool text_snapshot(TextSnapshot& out)
+{
+    out = {};
+    out.available = is_available();
+    if (!s_text_runtime_active || !s_page_state)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", out.available ? "READY" : "RADIO UNAVAILABLE");
+        return out.available;
+    }
+
+    out.scanning = s_state.scanning;
+    out.radio_error = s_state.radio_error;
+    out.applied = s_state.applied;
+    out.has_selection = s_state.observation_count > 0;
+    out.candidate_index = static_cast<std::uint32_t>(std::max(0, s_state.candidate_index));
+    out.candidate_count = static_cast<std::uint32_t>(active_candidate_count());
+    out.completed_passes = s_state.completed_passes;
+    out.observation_count = static_cast<std::uint32_t>(std::max(0, s_state.observation_count));
+    out.evidence_count = total_protocol_evidence();
+    out.crc_frame_count = s_state.crc_frame_count;
+
+    if (!s_radio.supported_protocol)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "UNSUPPORTED PROTOCOL");
+        return true;
+    }
+    if (s_state.radio_error)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "RADIO UNAVAILABLE");
+        return true;
+    }
+    if (s_state.applied)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "PROFILE APPLIED");
+        return true;
+    }
+    if (s_state.verification.kind == VerificationKind::MeshCoreDiscover)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "MESHCORE VERIFYING");
+    }
+    else if (s_state.verification.kind == VerificationKind::MeshtasticAck)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "MESHTASTIC VERIFYING");
+    }
+    else if (s_state.scanning)
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "SCANNING");
+    }
+    else
+    {
+        std::snprintf(out.status, sizeof(out.status), "%s", "READY");
+    }
+
+    if (active_candidate_count() > 0)
+    {
+        format_profile_params(current_candidate().profile,
+                              out.current_profile,
+                              sizeof(out.current_profile));
+    }
+    if (out.has_selection)
+    {
+        format_profile_params(s_state.observations[clamp_observation_index(s_state.selected_observation)].profile,
+                              out.selected_profile,
+                              sizeof(out.selected_profile));
+    }
+    return true;
+}
+
+bool text_select_observation_delta(int delta)
+{
+    if (!s_text_runtime_active || !s_page_state || s_state.observation_count <= 0 || delta == 0)
+    {
+        return false;
+    }
+    const int count = s_state.observation_count;
+    int selected = s_state.selected_observation + delta;
+    selected %= count;
+    if (selected < 0)
+    {
+        selected += count;
+    }
+    s_state.selected_observation = selected;
+    return true;
+}
+
+bool text_apply_selected()
+{
+    return s_text_runtime_active && s_page_state != nullptr && apply_selected_profile();
 }
 
 void enter(const shell::Host* host, lv_obj_t* parent)

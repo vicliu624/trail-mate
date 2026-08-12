@@ -1,6 +1,3 @@
-#if defined(ARDUINO_T_DECK_PRO)
-#include "tdeckpro_epd/gps.inc"
-#else
 #ifdef __has_include
 #if __has_include("lvgl.h")
 #ifndef LV_LVGL_H_INCLUDE_SIMPLE
@@ -12325,4 +12322,3 @@ const lv_image_dsc_t gps_icon = {
     .data_size = sizeof(gps_map),
     .data = gps_map,
 };
-#endif // defined(ARDUINO_T_DECK_PRO)

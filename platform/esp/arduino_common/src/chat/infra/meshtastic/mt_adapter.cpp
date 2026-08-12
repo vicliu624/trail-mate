@@ -3350,7 +3350,9 @@ bool MtAdapter::sendNodeInfoTo(uint32_t dest, bool want_response, ChannelId chan
     }
 
     meshtastic_HardwareModel hw_model = meshtastic_HardwareModel_UNSET;
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK_PRO)
+    hw_model = meshtastic_HardwareModel_T_DECK_PRO;
+#elif defined(ARDUINO_T_DECK)
     hw_model = meshtastic_HardwareModel_T_DECK;
 #elif defined(ARDUINO_LILYGO_TWATCH_S3)
     hw_model = meshtastic_HardwareModel_T_WATCH_S3;

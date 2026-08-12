@@ -1,6 +1,3 @@
-#if defined(ARDUINO_T_DECK_PRO)
-#include "tdeckpro_epd/route_topbar.inc"
-#else
 #ifdef __has_include
     #if __has_include("lvgl.h")
         #ifndef LV_LVGL_H_INCLUDE_SIMPLE
@@ -86,4 +83,3 @@ const lv_image_dsc_t route_topbar = {
     .data_size = sizeof(route_topbar_map),
     .data = route_topbar_map,
   };
-#endif // defined(ARDUINO_T_DECK_PRO)

@@ -4,6 +4,8 @@ zh-hans-pinyin IME registration used by the built-in Pinyin input backend.
 The bundle ships:
 - zh-hans-core: the common-glyph UI/content font loaded first for fast startup and lower steady-state RAM use
 - zh-hans-ext: the remaining Chinese glyph coverage that the runtime can load on demand as a content supplement
+- tdeckpro-zh-hans-core: matching 16px/1bpp GNU Unifont core coverage, selected only on T-Deck Pro
+- tdeckpro-zh-hans-ext: matching 16px/1bpp GNU Unifont extension coverage, selected only on T-Deck Pro
 - zh-hans-pinyin: the built-in Pinyin IME registration layer
 
 Use this bundle when you want a Chinese interface, Chinese text entry, or reliable

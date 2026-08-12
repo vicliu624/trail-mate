@@ -1,13 +1,17 @@
 # zh-Hans Pack Bundle
 
 This bundle keeps Simplified Chinese external to the firmware image and splits the CJK
-coverage into a smaller core font plus an on-demand extension font.
+coverage into a smaller core font plus an on-demand extension font. Both are built with
+the source appropriate to the target: the existing Noto 16px/2bpp files for general
+displays and GNU Unifont at its native 16px/1bpp pixel profile for T-Deck Pro.
 
 It contains:
 
 - locale pack: `zh-Hans`
 - font pack: `zh-hans-core`
 - font pack: `zh-hans-ext`
+- font pack: `tdeckpro-zh-hans-core`
+- font pack: `tdeckpro-zh-hans-ext`
 - IME pack: `zh-hans-pinyin`
 
 The locale manifest points to:
@@ -15,6 +19,9 @@ The locale manifest points to:
 - `ui_font_pack=zh-hans-core`
 - `content_font_pack=zh-hans-core`
 - `preferred_content_supplement_packs=zh-hans-ext`
+- `tdeck_pro_ui_font_pack=tdeckpro-zh-hans-core`
+- `tdeck_pro_content_font_pack=tdeckpro-zh-hans-core`
+- `tdeck_pro_preferred_content_supplement_packs=tdeckpro-zh-hans-ext`
 - `ime_pack=zh-hans-pinyin`
 
 Bundle-level package metadata lives in:
@@ -40,6 +47,18 @@ Bundle-level package metadata lives in:
   - `charset.txt`
   - `ranges.txt`
   - `font.bin` after generation
+- `fonts/tdeckpro-zh-hans-core/`
+  - `manifest.ini`
+  - `build.ini`
+  - `charset.txt`
+  - `ranges.txt`
+  - `font.bin` after generation
+- `fonts/tdeckpro-zh-hans-ext/`
+  - `manifest.ini`
+  - `build.ini`
+  - `charset.txt`
+  - `ranges.txt`
+  - `font.bin` after generation
 - `locales/zh-Hans/`
   - `manifest.ini`
   - `strings.tsv`
@@ -52,6 +71,9 @@ Bundle-level package metadata lives in:
   glyphs from the built-in Pinyin dictionary.
 - `zh-hans-ext` contains the remaining glyphs from the Pinyin dictionary that are not
   already present in `zh-hans-core`.
+- `tdeckpro-zh-hans-core` and `tdeckpro-zh-hans-ext` carry the identical glyph
+  coverage using 16px/1bpp GNU Unifont. The locale manifest selects those packs only
+  for a T-Deck Pro build; every other target keeps the established Noto pair.
 - On Chinese UI locale, ESP targets load `zh-hans-core` immediately and may preload
   `zh-hans-ext` during locale activation when the current memory profile allows the
   preferred content supplement. This keeps common chat/content glyphs available before
@@ -82,6 +104,13 @@ Extension pack:
 
 ```bash
 python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-id zh-hans-ext
+```
+
+T-Deck Pro core and extension packs:
+
+```bash
+python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-id tdeckpro-zh-hans-core
+python tools/build_locale_pack_charset.py --pack-root packs/zh-Hans --font-pack-id tdeckpro-zh-hans-ext
 ```
 
 The `build.ini` files are the source of truth. `scripts/build_pack_repository.py` uses
@@ -115,6 +144,23 @@ python tools/generate_binfont_with_lv_font_conv.py `
   --no-compress
 ```
 
+T-Deck Pro core pack:
+
+```powershell
+python tools/generate_binfont_with_lv_font_conv.py `
+  --font tools/fonts/unifont-17.0.05.bdf.gz `
+  --charset-file packs/zh-Hans/fonts/tdeckpro-zh-hans-core/charset.txt `
+  --output packs/zh-Hans/fonts/tdeckpro-zh-hans-core/font.bin `
+  --size 16 `
+  --bpp 1 `
+  --node-exe C:\Users\VicLi\AppData\Local\nodejs22\current\node.exe `
+  --no-compress `
+  --no-prefilter `
+  --no-kerning
+```
+
+Use the same command for `tdeckpro-zh-hans-ext`, replacing `core` with `ext`.
+
 Notes:
 
 - `estimated_ram_bytes` in each font manifest should track the generated `font.bin` size.
@@ -127,7 +173,7 @@ Notes:
 
 `python scripts/build_pack_repository.py --pack-root packs --site-root site` produces:
 
-- `site/assets/packs/zh-Hans-1.1.4.zip`
+- `site/assets/packs/zh-Hans-1.3.0.zip`
 - `site/data/packs.json`
 
 The zip is the bundle artifact used by the Extensions downloader. Its `payload/`
@@ -144,6 +190,12 @@ Copy the bundle contents so the SD card ends up with:
 /trailmate/packs/fonts/zh-hans-ext/manifest.ini
 /trailmate/packs/fonts/zh-hans-ext/ranges.txt
 /trailmate/packs/fonts/zh-hans-ext/font.bin
+/trailmate/packs/fonts/tdeckpro-zh-hans-core/manifest.ini
+/trailmate/packs/fonts/tdeckpro-zh-hans-core/ranges.txt
+/trailmate/packs/fonts/tdeckpro-zh-hans-core/font.bin
+/trailmate/packs/fonts/tdeckpro-zh-hans-ext/manifest.ini
+/trailmate/packs/fonts/tdeckpro-zh-hans-ext/ranges.txt
+/trailmate/packs/fonts/tdeckpro-zh-hans-ext/font.bin
 /trailmate/packs/locales/zh-Hans/manifest.ini
 /trailmate/packs/locales/zh-Hans/strings.tsv
 /trailmate/packs/ime/zh-hans-pinyin/manifest.ini

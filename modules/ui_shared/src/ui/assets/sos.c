@@ -1,6 +1,3 @@
-#if defined(ARDUINO_T_DECK_PRO)
-#include "tdeckpro_epd/sos.inc"
-#else
 #ifdef __has_include
     #if __has_include("lvgl.h")
         #ifndef LV_LVGL_H_INCLUDE_SIMPLE
@@ -134,4 +131,3 @@ const lv_image_dsc_t sos = {
   .data_size = sizeof(sos_map),
   .data = sos_map,
 };
-#endif // defined(ARDUINO_T_DECK_PRO)

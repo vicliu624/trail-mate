@@ -523,14 +523,7 @@
 
 /*Pixel perfect monospace fonts*/
 #define LV_FONT_UNSCII_8  0
-#if defined(ARDUINO_T_DECK_PRO)
-// The T-Deck Pro panel is driven as one-bit EPD. Its UI must therefore use a
-// final-pixel bitmap font instead of a four-bit anti-aliased outline that
-// would later be thresholded by the display driver.
-#define LV_FONT_UNSCII_16 1
-#else
 #define LV_FONT_UNSCII_16 0
-#endif
 
 /*Optionally declare custom fonts here.
  *You can use these fonts as default font too and they will be available globally.
@@ -538,11 +531,15 @@
  *
  * Keep ESP-only fonts declared from ESP-owned paths so NRF builds don't
  * accidentally pull large bitmap assets into their source lists.*/
+#if defined(ARDUINO_T_DECK_PRO)
+#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(tdeck_pro_unifont_16) extern lv_font_t tdeck_pro_ui_font_16;
+#else
 #define LV_FONT_CUSTOM_DECLARE
+#endif
 
 /*Always set a default font*/
 #if defined(ARDUINO_T_DECK_PRO)
-#define LV_FONT_DEFAULT &lv_font_unscii_16
+#define LV_FONT_DEFAULT &tdeck_pro_ui_font_16
 #else
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 #endif

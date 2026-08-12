@@ -255,7 +255,9 @@ bool parseBoolValue(const char* value, bool* out)
 
 const char* meshCoreCompatManufacturerName()
 {
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK_PRO)
+    return "LilyGo T-Deck Pro";
+#elif defined(ARDUINO_T_DECK)
     return "LilyGo T-Deck";
 #elif defined(ARDUINO_LILYGO_TWATCH_S3)
     return "LilyGo T-Watch S3";

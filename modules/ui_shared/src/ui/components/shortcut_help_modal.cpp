@@ -2,6 +2,11 @@
 
 #include "ui/app_runtime.h"
 
+#if defined(ARDUINO_T_DECK_PRO)
+#include "ui/assets/fonts/font_utils.h"
+#include "ui/tdeck_pro/text_font.h"
+#endif
+
 #include <cstring>
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
@@ -79,27 +84,67 @@ lv_coord_t keycap_width(const char* text, bool compact)
     return 72;
 }
 
+const lv_font_t* help_font()
+{
+#if defined(ARDUINO_T_DECK_PRO)
+    return ::ui::tdeck_pro::text_font();
+#else
+    return &lv_font_montserrat_10;
+#endif
+}
+
+void apply_help_text(lv_obj_t* label, const char* text)
+{
+#if defined(ARDUINO_T_DECK_PRO)
+    ::ui::fonts::apply_localized_font(label, text, help_font());
+#else
+    (void)text;
+    lv_obj_set_style_text_font(label, help_font(), 0);
+#endif
+}
+
 lv_obj_t* create_keycap(lv_obj_t* parent, const char* text, lv_coord_t width)
 {
     lv_obj_t* keycap = lv_label_create(parent);
-    lv_obj_set_size(keycap, width, 14);
+    lv_obj_set_size(keycap, width,
+#if defined(ARDUINO_T_DECK_PRO)
+                    16
+#else
+                    14
+#endif
+    );
+#if defined(ARDUINO_T_DECK_PRO)
+    lv_obj_set_style_bg_color(keycap, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(keycap, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(keycap, 1, 0);
+    lv_obj_set_style_border_color(keycap, lv_color_black(), 0);
+    lv_obj_set_style_radius(keycap, 0, 0);
+    lv_obj_set_style_text_color(keycap, lv_color_black(), 0);
+#else
     lv_obj_set_style_bg_color(keycap, lv_color_hex(kKeycap), 0);
     lv_obj_set_style_bg_opa(keycap, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(keycap, 1, 0);
     lv_obj_set_style_border_color(keycap, lv_color_hex(kBorder), 0);
     lv_obj_set_style_radius(keycap, 3, 0);
-    lv_obj_set_style_text_font(keycap, &lv_font_montserrat_10, 0);
     lv_obj_set_style_text_color(keycap, lv_color_hex(kText), 0);
+#endif
     lv_obj_set_style_text_align(keycap, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(keycap, LV_LABEL_LONG_CLIP);
     lv_label_set_text(keycap, text ? text : "");
+    apply_help_text(keycap, text ? text : "");
     return keycap;
 }
 
 void add_row(lv_obj_t* parent, const Row& row)
 {
     lv_obj_t* row_obj = lv_obj_create(parent);
-    lv_obj_set_size(row_obj, LV_PCT(100), 15);
+    lv_obj_set_size(row_obj, LV_PCT(100),
+#if defined(ARDUINO_T_DECK_PRO)
+                    18
+#else
+                    15
+#endif
+    );
     lv_obj_set_flex_flow(row_obj, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row_obj,
                           LV_FLEX_ALIGN_START,
@@ -112,7 +157,13 @@ void add_row(lv_obj_t* parent, const Row& row)
     lv_obj_clear_flag(row_obj, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* keys = lv_obj_create(row_obj);
-    lv_obj_set_size(keys, 76, 15);
+    lv_obj_set_size(keys, 76,
+#if defined(ARDUINO_T_DECK_PRO)
+                    18
+#else
+                    15
+#endif
+    );
     lv_obj_set_flex_flow(keys, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(keys,
                           LV_FLEX_ALIGN_START,
@@ -137,10 +188,14 @@ void add_row(lv_obj_t* parent, const Row& row)
     lv_obj_t* text = lv_label_create(row_obj);
     lv_obj_set_width(text, 0);
     lv_obj_set_flex_grow(text, 1);
-    lv_obj_set_style_text_font(text, &lv_font_montserrat_10, 0);
+#if defined(ARDUINO_T_DECK_PRO)
+    lv_obj_set_style_text_color(text, lv_color_black(), 0);
+#else
     lv_obj_set_style_text_color(text, lv_color_hex(kTextDim), 0);
+#endif
     lv_label_set_long_mode(text, LV_LABEL_LONG_DOT);
     lv_label_set_text(text, row.description ? row.description : "");
+    apply_help_text(text, row.description ? row.description : "");
 }
 
 void on_key(lv_event_t* event)
@@ -205,8 +260,13 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     lv_obj_update_layout(host);
     const lv_coord_t host_w = lv_obj_get_width(host);
     const lv_coord_t host_h = lv_obj_get_height(host);
+#if defined(ARDUINO_T_DECK_PRO)
+    const lv_coord_t panel_w = fitted_size(config.width, host_w - 16, 200);
+    const lv_coord_t panel_h = fitted_size(config.height, host_h - 16, 144);
+#else
     const lv_coord_t panel_w = fitted_size(config.width, host_w - 8, 220);
     const lv_coord_t panel_h = fitted_size(config.height, host_h - 8, 132);
+#endif
 
     state.previous_group = config.restore_group ? config.restore_group : lv_group_get_default();
     state.group = lv_group_create();
@@ -220,8 +280,13 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     lv_obj_align(state.overlay, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_add_flag(state.overlay, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_add_flag(state.overlay, LV_OBJ_FLAG_CLICKABLE);
+#if defined(ARDUINO_T_DECK_PRO)
+    lv_obj_set_style_bg_color(state.overlay, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(state.overlay, LV_OPA_COVER, 0);
+#else
     lv_obj_set_style_bg_color(state.overlay, lv_color_hex(kScrim), 0);
     lv_obj_set_style_bg_opa(state.overlay, LV_OPA_70, 0);
+#endif
     lv_obj_set_style_border_width(state.overlay, 0, 0);
     lv_obj_set_style_pad_all(state.overlay, 4, 0);
     lv_obj_clear_flag(state.overlay, LV_OBJ_FLAG_SCROLLABLE);
@@ -231,15 +296,30 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     lv_obj_set_size(state.panel, panel_w, panel_h);
     lv_obj_center(state.panel);
     lv_obj_set_flex_flow(state.panel, LV_FLEX_FLOW_COLUMN);
+#if defined(ARDUINO_T_DECK_PRO)
+    lv_obj_set_style_bg_color(state.panel, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(state.panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(state.panel, 1, 0);
+    lv_obj_set_style_border_color(state.panel, lv_color_black(), 0);
+    lv_obj_set_style_radius(state.panel, 0, 0);
+#else
     lv_obj_set_style_bg_color(state.panel, lv_color_hex(kPanel), 0);
     lv_obj_set_style_bg_opa(state.panel, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(state.panel, 1, 0);
     lv_obj_set_style_border_color(state.panel, lv_color_hex(kBorder), 0);
     lv_obj_set_style_radius(state.panel, 4, 0);
+#endif
+#if defined(ARDUINO_T_DECK_PRO)
+    lv_obj_set_style_pad_left(state.panel, 6, 0);
+    lv_obj_set_style_pad_right(state.panel, 6, 0);
+    lv_obj_set_style_pad_top(state.panel, 6, 0);
+    lv_obj_set_style_pad_bottom(state.panel, 6, 0);
+#else
     lv_obj_set_style_pad_left(state.panel, 7, 0);
     lv_obj_set_style_pad_right(state.panel, 7, 0);
     lv_obj_set_style_pad_top(state.panel, 5, 0);
     lv_obj_set_style_pad_bottom(state.panel, 5, 0);
+#endif
     lv_obj_set_style_pad_row(state.panel, 3, 0);
     lv_obj_add_flag(state.panel, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(state.panel, LV_OBJ_FLAG_CLICK_FOCUSABLE);
@@ -247,7 +327,13 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     lv_obj_add_event_cb(state.panel, on_key, LV_EVENT_KEY, &state);
 
     lv_obj_t* title_row = lv_obj_create(state.panel);
-    lv_obj_set_size(title_row, LV_PCT(100), 20);
+    lv_obj_set_size(title_row, LV_PCT(100),
+#if defined(ARDUINO_T_DECK_PRO)
+                    18
+#else
+                    20
+#endif
+    );
     lv_obj_set_flex_flow(title_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(title_row,
                           LV_FLEX_ALIGN_SPACE_BETWEEN,
@@ -262,8 +348,12 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     lv_label_set_text(title, config.title ? config.title : "Help");
     lv_obj_set_width(title, 0);
     lv_obj_set_flex_grow(title, 1);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_12, 0);
+#if defined(ARDUINO_T_DECK_PRO)
+    lv_obj_set_style_text_color(title, lv_color_black(), 0);
+#else
     lv_obj_set_style_text_color(title, lv_color_hex(kText), 0);
+#endif
+    apply_help_text(title, config.title ? config.title : "Help");
 
     state.body = lv_obj_create(state.panel);
     lv_obj_set_width(state.body, LV_PCT(100));

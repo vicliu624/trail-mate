@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "archive_layout": "trailmate-pack-v1",
-  "generated_at": "2026-07-20T16:35:53.479169Z",
+  "generated_at": "2026-08-12T07:51:43.792870Z",
   "packages": [
     {
       "id": "ar",
@@ -31,9 +31,12 @@
             "native_name": "العربية",
             "ui_font_pack_id": "ar-naskh",
             "content_font_pack_id": "ar-naskh",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "rtl",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
         ],
@@ -56,8 +59,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/ar-1.2.0.zip",
-        "size_bytes": 33804,
-        "sha256": "90b9e0fc7fb4a9f869f1a007d5a0057518a67a03c32b5605313a2ccf7bf6f917"
+        "size_bytes": 33806,
+        "sha256": "f5c84b167f85d16cd1d57cce6b3ad9e626ae7ddf502c71f2dce42c63ed316e27"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -96,9 +99,12 @@
             "native_name": "Русский",
             "ui_font_pack_id": "cyrillic-eu",
             "content_font_pack_id": "cyrillic-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": "ru-cyrillic-keyboard"
           }
         ],
@@ -129,7 +135,7 @@
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/europe-cyrillic-ext-1.3.0.zip",
         "size_bytes": 17486,
-        "sha256": "07dfed0f9966b01be0b7b4b1a424e49f3f611007771c0fa69eaa1c66ffdfb2dc"
+        "sha256": "a00ca1f2269013bb5cf95390c63aaa15581ef8b650ee2ccd0b85a04af4a08339"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -166,9 +172,12 @@
             "native_name": "Deutsch",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
           {
@@ -177,9 +186,12 @@
             "native_name": "Español",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
           {
@@ -188,9 +200,12 @@
             "native_name": "Français",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
           {
@@ -199,9 +214,12 @@
             "native_name": "Italiano",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
           {
@@ -210,9 +228,12 @@
             "native_name": "Nederlands",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
           {
@@ -221,9 +242,12 @@
             "native_name": "Polski",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           },
           {
@@ -232,9 +256,12 @@
             "native_name": "Português (Portugal)",
             "ui_font_pack_id": "latin-ext-eu",
             "content_font_pack_id": "latin-ext-eu",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
         ],
@@ -257,8 +284,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/europe-latin-ext-1.2.0.zip",
-        "size_bytes": 73431,
-        "sha256": "1c3e5863732603a96db61ebed32954df0b7a91f9a914a6c2f27d84d03ca3b691"
+        "size_bytes": 73459,
+        "sha256": "5f384f103b6ca6dada9459233e88d47ff14f59821343e2986d5e8e9d4f7127a4"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -295,9 +322,12 @@
             "native_name": "日本語",
             "ui_font_pack_id": "ja-cjk",
             "content_font_pack_id": "ja-cjk",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
         ],
@@ -320,8 +350,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/ja-1.2.0.zip",
-        "size_bytes": 33861,
-        "sha256": "da281f04da0693cbe51ab4bce3972751b10ce7cee62cf1cbccec97f151877ceb"
+        "size_bytes": 33863,
+        "sha256": "7cd4de864f7206d50e4b29d3ff6089444028c1d8d31ed1784a1e631a42e121a4"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -358,9 +388,12 @@
             "native_name": "한국어",
             "ui_font_pack_id": "ko-cjk",
             "content_font_pack_id": "ko-cjk",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
         ],
@@ -383,8 +416,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/ko-1.2.0.zip",
-        "size_bytes": 25701,
-        "sha256": "10739e7b1514a7f153effee36582db2c7e9f164c2193cc432de2183bb7b41f96"
+        "size_bytes": 25703,
+        "sha256": "5a351e6d3d495c4e1896b085f8eb65233c1eea269182c5f0c1fc7653fc154606"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -395,13 +428,13 @@
     {
       "id": "zh-Hans",
       "package_type": "locale-bundle",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "display_name": "Simplified Chinese",
-      "summary": "Tiered Simplified Chinese locale bundle with a fast core font, an on-demand extension font, and the built-in Pinyin IME backend.",
-      "description": "Simplified Chinese installs the zh-Hans locale, a tiered two-pack font stack, and the\nzh-hans-pinyin IME registration used by the built-in Pinyin input backend.\n\nThe bundle ships:\n- zh-hans-core: the common-glyph UI/content font loaded first for fast startup and lower steady-state RAM use\n- zh-hans-ext: the remaining Chinese glyph coverage that the runtime can load on demand as a content supplement\n- zh-hans-pinyin: the built-in Pinyin IME registration layer\n\nUse this bundle when you want a Chinese interface, Chinese text entry, or reliable\nrendering of Chinese names and chat content while another locale remains active, without\npaying the full monolithic CJK font cost up front.",
+      "summary": "Tiered Simplified Chinese locale bundle with standard-display fonts and T-Deck Pro 16px 1bpp GNU Unifont variants, plus the built-in Pinyin IME backend.",
+      "description": "Simplified Chinese installs the zh-Hans locale, a tiered two-pack font stack, and the\nzh-hans-pinyin IME registration used by the built-in Pinyin input backend.\n\nThe bundle ships:\n- zh-hans-core: the common-glyph UI/content font loaded first for fast startup and lower steady-state RAM use\n- zh-hans-ext: the remaining Chinese glyph coverage that the runtime can load on demand as a content supplement\n- tdeckpro-zh-hans-core: matching 16px/1bpp GNU Unifont core coverage, selected only on T-Deck Pro\n- tdeckpro-zh-hans-ext: matching 16px/1bpp GNU Unifont extension coverage, selected only on T-Deck Pro\n- zh-hans-pinyin: the built-in Pinyin IME registration layer\n\nUse this bundle when you want a Chinese interface, Chinese text entry, or reliable\nrendering of Chinese names and chat content while another locale remains active, without\npaying the full monolithic CJK font cost up front.",
       "author": "Trail Mate",
       "homepage": "https://vicliu624.github.io/trail-mate/",
-      "min_firmware_version": "0.1.24-alpha",
+      "min_firmware_version": "0.1.40-alpha",
       "supported_memory_profiles": [
         "standard",
         "extended"
@@ -420,15 +453,32 @@
             "native_name": "简体中文",
             "ui_font_pack_id": "zh-hans-core",
             "content_font_pack_id": "zh-hans-core",
+            "tdeck_pro_ui_font_pack_id": "tdeckpro-zh-hans-core",
+            "tdeck_pro_content_font_pack_id": "tdeckpro-zh-hans-core",
             "translation_status": "release",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [
               "zh-hans-ext"
             ],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [
+              "tdeckpro-zh-hans-ext"
+            ],
             "ime_pack_id": "zh-hans-pinyin"
           }
         ],
         "fonts": [
+          {
+            "id": "tdeckpro-zh-hans-core",
+            "display_name": "Simplified Chinese Core (T-Deck Pro)",
+            "usage": "both",
+            "estimated_ram_bytes": 130560
+          },
+          {
+            "id": "tdeckpro-zh-hans-ext",
+            "display_name": "Simplified Chinese Extension (T-Deck Pro)",
+            "usage": "content",
+            "estimated_ram_bytes": 144388
+          },
           {
             "id": "zh-hans-core",
             "display_name": "Simplified Chinese Core",
@@ -452,16 +502,16 @@
         ]
       },
       "runtime": {
-        "estimated_unique_font_ram_bytes": 466092,
+        "estimated_unique_font_ram_bytes": 741040,
         "locale_count": 1,
-        "font_count": 2,
+        "font_count": 4,
         "ime_count": 1
       },
       "archive": {
         "layout": "trailmate-pack-v1",
-        "path": "assets/packs/zh-Hans-1.2.0.zip",
-        "size_bytes": 342026,
-        "sha256": "d104d34952c8cf958ba2c0d920be4b870adcbcb76d9741c2246bc7a41096a277"
+        "path": "assets/packs/zh-Hans-1.3.0.zip",
+        "size_bytes": 517869,
+        "sha256": "765a06c9195c387f8371a52d0de26d94432db2194673db2e3dd4c3ca0e35883e"
       },
       "files": {
         "package_manifest": "package.ini",
@@ -499,9 +549,12 @@
             "native_name": "繁體中文（台灣）",
             "ui_font_pack_id": "zh-hant-cjk",
             "content_font_pack_id": "zh-hant-cjk",
+            "tdeck_pro_ui_font_pack_id": "",
+            "tdeck_pro_content_font_pack_id": "",
             "translation_status": "review",
             "direction": "ltr",
             "preferred_content_supplement_pack_ids": [],
+            "tdeck_pro_preferred_content_supplement_pack_ids": [],
             "ime_pack_id": ""
           }
         ],
@@ -524,8 +577,8 @@
       "archive": {
         "layout": "trailmate-pack-v1",
         "path": "assets/packs/zh-Hant-1.2.0.zip",
-        "size_bytes": 37556,
-        "sha256": "72eded6a39fb8d1a6b97a21bd3aabf21864105a670bb0912c5ec91c7ffec2ff5"
+        "size_bytes": 37560,
+        "sha256": "d43d43e5f16c25b25e9e1a57ca21e4d252024e7a3fdbe88476a9b622db6b277e"
       },
       "files": {
         "package_manifest": "package.ini",

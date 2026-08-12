@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
+#include <cstdint>
 
 #include "lvgl.h"
 #include "ui/assets/fonts/fonts.h"
@@ -65,16 +65,9 @@ inline bool utf8_has_non_ascii(const char* text)
 
 inline const lv_font_t* ui_chrome_font()
 {
-#if defined(ARDUINO_T_DECK_PRO)
-    // Keep general-purpose UI labels on the same native 1-bit font as the
-    // page/menu profiles. This covers widgets which request chrome text
-    // without receiving a profile font explicitly.
-    return &lv_font_unscii_16;
-#else
     return ::ui::page_profile::current().large_touch_hitbox
                ? &lv_font_montserrat_18
                : ::ui::page_profile::resolve_title_font();
-#endif
 }
 
 inline const lv_font_t* unwrap_localized_font(const lv_font_t* font)

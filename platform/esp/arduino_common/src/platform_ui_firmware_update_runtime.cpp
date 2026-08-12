@@ -337,7 +337,11 @@ int compare_versions(const std::string& lhs, const std::string& rhs)
 
 const char* firmware_target_id()
 {
-#if defined(ARDUINO_T_DECK)
+#if defined(ARDUINO_T_DECK_PRO) && defined(TRAIL_MATE_TDECK_PRO_A7682E)
+    return "tdeck-pro-a7682e";
+#elif defined(ARDUINO_T_DECK_PRO) && defined(TRAIL_MATE_TDECK_PRO_PCM512A)
+    return "tdeck-pro-pcm512a";
+#elif defined(ARDUINO_T_DECK)
     return "tdeck";
 #elif defined(ARDUINO_T_LORA_PAGER) && defined(ARDUINO_LILYGO_LORA_SX1262)
     return "tlora-pager-sx1262";

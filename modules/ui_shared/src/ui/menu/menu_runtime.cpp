@@ -13,13 +13,19 @@
 #include "platform/ui/screen_brightness_steps.h"
 #include "platform/ui/time_runtime.h"
 #include "platform/ui/walkie_runtime.h"
+#if !defined(ARDUINO_T_DECK_PRO)
 #include "ui/components/shortcut_help_modal.h"
+#endif
 #include "ui/formatters.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_profile.h"
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
 #include "ui/ui_theme.h"
+
+#if defined(ARDUINO_T_DECK_PRO)
+#include "ui/tdeck_pro/text_shell.h"
+#endif
 
 namespace ui
 {
@@ -46,7 +52,9 @@ struct RuntimeState
     lv_timer_t* walkie_record_timer = nullptr;
     lv_obj_t* walkie_record_overlay = nullptr;
     lv_obj_t* walkie_record_bars[kWalkieRecordBarCount]{};
+#if !defined(ARDUINO_T_DECK_PRO)
     ::ui::components::shortcut_help_modal::State menu_help_modal{};
+#endif
     int watch_face_battery = -1;
     bool menu_active = true;
     bool walkie_recording = false;
@@ -220,6 +228,7 @@ bool screenBrightnessShortcutEnabled()
            platform::ui::device::screen_brightness_max() > 0;
 }
 
+#if !defined(ARDUINO_T_DECK_PRO)
 void closeMenuHelpModal()
 {
     ::ui::components::shortcut_help_modal::close(s_runtime.menu_help_modal);
@@ -278,6 +287,7 @@ void openMenuHelpModal()
         parent,
         config);
 }
+#endif
 
 uint8_t nextScreenBrightnessLevel()
 {
@@ -296,7 +306,9 @@ bool cycleScreenBrightness()
 
     platform::ui::device::set_screen_brightness(nextScreenBrightnessLevel());
     ui::menu_layout::set_bottom_bar_help_text("H Help");
+#if !defined(ARDUINO_T_DECK_PRO)
     closeMenuHelpModal();
+#endif
     return true;
 }
 
@@ -331,7 +343,9 @@ bool cycleKeyboardBacklight()
         max_level);
     platform::ui::device::set_keyboard_backlight(next);
     ui::menu_layout::set_bottom_bar_help_text("H Help");
+#if !defined(ARDUINO_T_DECK_PRO)
     closeMenuHelpModal();
+#endif
     return true;
 }
 
@@ -423,6 +437,15 @@ void watchFaceUnlock()
 
 void refreshTimeLabel()
 {
+#if defined(ARDUINO_T_DECK_PRO)
+    {
+        char time_str[16] = {};
+        ui::tdeck_pro::text_shell::set_time_text(
+            formatMenuTime(time_str, sizeof(time_str)) ? time_str : "--:--");
+        return;
+    }
+#endif
+
     if (s_runtime.time_label == nullptr)
     {
         updateWatchFaceTime();
@@ -442,12 +465,7 @@ void refreshTimeLabel()
     }
     else
     {
-        static constexpr const char* kUnknownTime = "--:--";
-        const char* current = lv_label_get_text(s_runtime.time_label);
-        if (current == nullptr || std::strcmp(current, kUnknownTime) != 0)
-        {
-            lv_label_set_text(s_runtime.time_label, kUnknownTime);
-        }
+        lv_label_set_text(s_runtime.time_label, "--:--");
     }
 
     updateWatchFaceTime();
@@ -455,6 +473,24 @@ void refreshTimeLabel()
 
 void refreshBatteryLabel()
 {
+#if defined(ARDUINO_T_DECK_PRO)
+    {
+        char battery_str[32] = {};
+        const platform::ui::device::BatteryInfo battery = platform::ui::device::battery_info();
+        if (battery.level < 0)
+        {
+            ui::tdeck_pro::text_shell::set_battery_text(battery.charging ? "USB" : "BAT --");
+            return;
+        }
+
+        platform::ui::device::handle_low_battery(battery);
+        ui_format_battery(battery.level, battery.charging, battery_str, sizeof(battery_str));
+        ui::tdeck_pro::text_shell::set_battery_text(battery_str);
+        refreshBottomBar();
+        return;
+    }
+#endif
+
     if (s_runtime.battery_label == nullptr)
     {
         return;
@@ -467,12 +503,7 @@ void refreshBatteryLabel()
     if (level < 0)
     {
         s_runtime.watch_face_battery = -1;
-        const char* unknown = charging ? "USB" : "--";
-        const char* current = lv_label_get_text(s_runtime.battery_label);
-        if (current == nullptr || std::strcmp(current, unknown) != 0)
-        {
-            lv_label_set_text(s_runtime.battery_label, unknown);
-        }
+        lv_label_set_text(s_runtime.battery_label, charging ? "USB" : "--");
         updateWatchFaceTime();
         return;
     }
@@ -549,10 +580,10 @@ void ensureWalkieRecordOverlay()
     lv_obj_add_flag(overlay, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_color(overlay, ui::theme::surface(), 0);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(0xFFF1D5), 0);
     lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(overlay, 1, 0);
-    lv_obj_set_style_border_color(overlay, ui::theme::border(), 0);
+    lv_obj_set_style_border_color(overlay, lv_color_hex(0xD28B2E), 0);
     lv_obj_set_style_radius(overlay, 8, 0);
     lv_obj_set_style_shadow_width(overlay, 0, 0);
     lv_obj_set_style_pad_left(overlay, 10, 0);
@@ -568,7 +599,7 @@ void ensureWalkieRecordOverlay()
         lv_obj_t* bar = lv_obj_create(overlay);
         s_runtime.walkie_record_bars[i] = bar;
         lv_obj_set_size(bar, 7, 6);
-        lv_obj_set_style_bg_color(bar, ui::theme::accent(), 0);
+        lv_obj_set_style_bg_color(bar, lv_color_hex(0xE55F2A), 0);
         lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(bar, 0, 0);
         lv_obj_set_style_radius(bar, 3, 0);
@@ -579,6 +610,12 @@ void ensureWalkieRecordOverlay()
 
 void setWalkieRecording(bool recording)
 {
+#if defined(ARDUINO_T_DECK_PRO)
+    s_runtime.walkie_recording = recording;
+    ui::tdeck_pro::text_shell::set_walkie_recording(recording);
+    return;
+#endif
+
     if (s_runtime.walkie_recording == recording)
     {
         return;
@@ -736,6 +773,12 @@ void initWatchFace()
 
 void createTimers()
 {
+#if defined(ARDUINO_T_DECK_PRO)
+    // The text shell refreshes status at explicit lifecycle boundaries and
+    // user actions. A clock/battery timer would otherwise issue a periodic
+    // EPD update while the menu is idle.
+    return;
+#else
     constexpr uint32_t time_update_interval_ms = 60000;
     constexpr uint32_t battery_update_interval_ms = 60000;
 
@@ -758,6 +801,7 @@ void createTimers()
         battery_update_interval_ms,
         nullptr);
     lv_timer_set_repeat_count(s_runtime.battery_timer, -1);
+#endif
 }
 
 } // namespace
@@ -769,10 +813,16 @@ void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, co
     s_runtime.main_screen = main_screen;
     s_runtime.menu_panel = menu_panel;
 
+#if !defined(ARDUINO_T_DECK_PRO)
     createTopBar();
+#endif
     ui::menu_layout::bringContentToFront();
+#if !defined(ARDUINO_T_DECK_PRO)
     ui::status::init();
+#endif
+#if !defined(ARDUINO_T_DECK_PRO)
     initWatchFace();
+#endif
     createTimers();
     refreshTimeLabel();
     refreshBatteryLabel();
@@ -782,6 +832,13 @@ void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, co
 
 void showWatchFace()
 {
+#if defined(ARDUINO_T_DECK_PRO)
+    // A sleeping Pro returns to the text menu.  The old decorative watch face
+    // is intentionally not instantiated on this profile.
+    showMainMenu();
+    return;
+#endif
+
     if (!watchFaceReady() || s_runtime.main_screen == nullptr)
     {
         return;
@@ -803,9 +860,12 @@ void setMenuActive(bool active)
     {
         platform::ui::walkie::set_ptt(false);
         setWalkieRecording(false);
+#if !defined(ARDUINO_T_DECK_PRO)
         closeMenuHelpModal();
+#endif
     }
 
+#if !defined(ARDUINO_T_DECK_PRO)
     if (s_runtime.time_timer != nullptr)
     {
         if (active)
@@ -829,6 +889,7 @@ void setMenuActive(bool active)
             lv_timer_pause(s_runtime.battery_timer);
         }
     }
+#endif
 
     if (active)
     {
@@ -870,8 +931,14 @@ bool handleShortcutKey(char key, int state)
 
     if (isMenuHelpKey(key))
     {
+#if defined(ARDUINO_T_DECK_PRO)
+        // The retired modal is not part of the fixed text-shell grammar.
+        // Keep the key consumed so it cannot create a legacy overlay.
+        return true;
+#else
         openMenuHelpModal();
         return true;
+#endif
     }
 
     if (isScreenBrightnessKey(key))
