@@ -152,6 +152,14 @@ class QueryClient
     }
     bool hasMore() const { return phase_ == QueryClientPhase::PageReady && cursor_size_ != 0; }
 
+    bool pendingRequest(Destination& destination, RequestId& id) const
+    {
+        if (!selected_ || (phase_ != QueryClientPhase::CheckingCapabilities && phase_ != QueryClientPhase::Querying)) return false;
+        destination = selected_->delivery;
+        id = request_;
+        return true;
+    }
+
     // A live request is already identified in memory. Historical receipt
     // lookups are only needed for retries after it has left the waiting state.
     bool expectsResponse(const Destination& source, const RequestId& id) const

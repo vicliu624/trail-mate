@@ -53,7 +53,7 @@ class SdIndexLookup
             if (inspectSdVolume(current) != SdVolumeResult::Ready) return fail(IndexLookupStep::IoError);
             if (current != volume_) return fail(IndexLookupStep::VolumeChanged);
             if (phase_ == Phase::VerifyVolume) return result_ = completion_;
-            phase_ = length_ ? Phase::Probe : Phase::VerifyVolume;
+            phase_ = length_ ? Phase::Open : Phase::VerifyVolume;
             return result_;
         }
         if (phase_ == Phase::Probe || phase_ == Phase::Open)
@@ -64,12 +64,18 @@ class SdIndexLookup
             {
                 const auto probe = storage::sd_read_file(path, bytes_.data(), 1);
                 if (probe.status == storage::SdFileReadStatus::Missing) return fail(IndexLookupStep::Invalid);
-                if (probe.status != storage::SdFileReadStatus::Ready && probe.status != storage::SdFileReadStatus::Invalid) return fail(IndexLookupStep::IoError);
-                if (probe.file_size < length_) return fail(IndexLookupStep::Invalid);
-                phase_ = Phase::Open;
-                return result_;
+                // Only classify an unsuccessful open. A present file that
+                // could not be opened is an I/O error, never an empty index.
+                return fail(IndexLookupStep::IoError);
             }
-            if (!file_.open(path, "r")) return fail(IndexLookupStep::IoError);
+            // Avoid the old one-byte whole-file probe: normal shards always
+            // exceeded it, logged Invalid, then had to be opened a second time.
+            phase_ = file_.open(path, "r") ? Phase::CheckLength : Phase::Probe;
+            return result_;
+        }
+        if (phase_ == Phase::CheckLength)
+        {
+            if (file_.size() < length_) return fail(IndexLookupStep::Invalid);
             phase_ = Phase::Seek;
             return result_;
         }
@@ -129,6 +135,7 @@ class SdIndexLookup
         Volume,
         Probe,
         Open,
+        CheckLength,
         Seek,
         Read,
         CheckSize,

@@ -7,13 +7,31 @@ RequestDispatcher::RequestDispatcher(chat::MeshAdapterRouter& router, RequestDis
                                      uint32_t retry_delay_ms, uint64_t attempt_timeout_ms)
     : router_(router), store_(store), retry_delay_ms_(retry_delay_ms), attempt_timeout_ms_(attempt_timeout_ms) {}
 
-DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::StoredTime& now)
+DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::StoredTime& now, ::geocaching::ByteView preferred)
 {
     using namespace ::geocaching::storage;
     if (store_.needsRecovery()) return {DispatchStatus::StorageBlocked};
     const auto defer = [&]()
     {
         not_before_ = now.monotonic_ms > UINT64_MAX - retry_delay_ms_ ? UINT64_MAX : now.monotonic_ms + retry_delay_ms_;
+    };
+    const auto begin = [&](const ::geocaching::Destination& local) -> DispatchResult
+    {
+        esp_fill_random(attempt_id_.data(), attempt_id_.size());
+        const auto begun = store_.beginAttempt(local, {cursor_.data(), cursor_.size()}, attempt_id_, now);
+        if (begun == JournalWriteResult::InProgress)
+        {
+            phase_ = Phase::BeginCommit;
+            return {DispatchStatus::Deferred};
+        }
+        if (begun == JournalWriteResult::Verified)
+        {
+            phase_ = Phase::Send;
+            return {DispatchStatus::Deferred};
+        }
+        return {begun == JournalWriteResult::StateRejected || begun == JournalWriteResult::Busy
+                    ? DispatchStatus::Deferred
+                    : DispatchStatus::StorageBlocked};
     };
     if (phase_ != Phase::Select && phase_ != Phase::SelectRequest && phase_ != Phase::Send)
     {
@@ -82,11 +100,36 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
         boot_ = now.boot_id;
         not_before_ = 0;
         has_cursor_ = false;
+        has_preferred_ = false;
         recovery_started_ms_ = now.monotonic_ms;
         clock_initialized_ = true;
     }
     if (phase_ == Phase::Select)
     {
+        // A background scan may already have selected the same request before
+        // the caller supplied its hint. Do not reserve it a second time.
+        if (preferred.data && preferred.size == preferred_.size() && has_cursor_ &&
+            !std::memcmp(preferred.data, cursor_.data(), cursor_.size()))
+        {
+            preferred_ = cursor_;
+            has_preferred_ = true;
+        }
+        if (preferred.data && preferred.size == preferred_.size() &&
+            (!has_preferred_ || std::memcmp(preferred.data, preferred_.data(), preferred_.size())))
+        {
+            ::geocaching::Destination local;
+            if (!router_.getGeocachingDispatchDestination(local.bytes.data()) || std::memcmp(preferred.data, local.bytes.data(), 16))
+                return {DispatchStatus::Deferred, chat::MeshOperationFailure::NotReady};
+            std::memcpy(cursor_.data(), preferred.data, cursor_.size());
+            has_cursor_ = true;
+            const auto result = begin(local);
+            if (phase_ == Phase::BeginCommit || phase_ == Phase::Send)
+            {
+                preferred_ = cursor_;
+                has_preferred_ = true;
+            }
+            return result;
+        }
         bool expired = false;
         const auto expiration = store_.expireOneAttempt(now, recovery_started_ms_, attempt_timeout_ms_, expired);
         if (expiration == JournalWriteResult::Busy) return {DispatchStatus::Deferred};
@@ -121,20 +164,6 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
     if (selected == DispatchReadResult::None) return {DispatchStatus::Idle};
     cursor_ = pending.key;
     has_cursor_ = true;
-    esp_fill_random(attempt_id_.data(), attempt_id_.size());
-    const auto begun = store_.beginAttempt(local, {cursor_.data(), cursor_.size()}, attempt_id_, now);
-    if (begun == JournalWriteResult::InProgress)
-    {
-        phase_ = Phase::BeginCommit;
-        return {DispatchStatus::Deferred};
-    }
-    if (begun == JournalWriteResult::Verified)
-    {
-        phase_ = Phase::Send;
-        return {DispatchStatus::Deferred};
-    }
-    return {begun == JournalWriteResult::StateRejected || begun == JournalWriteResult::Busy
-                ? DispatchStatus::Deferred
-                : DispatchStatus::StorageBlocked};
+    return begin(local);
 }
 } // namespace platform::esp::arduino_common::geocaching

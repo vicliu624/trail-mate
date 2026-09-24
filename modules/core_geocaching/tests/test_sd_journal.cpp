@@ -274,15 +274,18 @@ int checkIncrementalDispatch()
             return SdRequestStore::expireOneAttempt(now, started, timeout, expired);
         }
     };
-    for (unsigned scenario = 0; scenario < 8; ++scenario)
+    for (unsigned scenario = 0; scenario < 16; ++scenario)
     {
         const auto mode = scenario % 4;
+        const bool foreground = scenario >= 8;
+        const std::array<uint8_t, 48> preferred{};
         fixture::files.clear();
         fixture::flush_ok = true;
         uint8_t first[2048]{}, second[2048]{}, request[128]{};
         ::geocaching::storage::LogicalState state(first, second, sizeof(first));
         auto store = std::make_unique<DelayedStore>(fixture::volume, 0, state);
-        store->selection_wait = store->send_wait = scenario >= 4 ? 3 : 0;
+        store->send_wait = scenario % 8 >= 4 ? 3 : 0;
+        store->selection_wait = foreground ? 0 : store->send_wait;
         ::geocaching::RequestId id;
         size_t size = 0;
         if (!::geocaching::protocol::encodeCapabilitiesRequest(id, request, sizeof(request), size) ||
@@ -304,7 +307,8 @@ int checkIncrementalDispatch()
             fixture::step_io_calls = fixture::step_data_calls = 0;
             fixture::step_data_bytes = 0;
             const auto old_sends = router.sends;
-            const auto result = dispatcher->dispatchOne({});
+            const auto result = dispatcher->dispatchOne({}, foreground ? ::geocaching::ByteView{preferred.data(), preferred.size()} : ::geocaching::ByteView{});
+            if (foreground && store->expiration_calls) return 242;
             if (store->selection_wait && (router.sends || store->expiration_calls != 1)) return 240;
             if (store->send_wait && router.sends) return 241;
             if (!stepBudgetOk()) return 112;
@@ -313,6 +317,13 @@ int checkIncrementalDispatch()
             {
                 if (router.sends != 1 || store->committedSequence() != 3 ||
                     router.sent_bytes.size() != size || std::memcmp(router.sent_bytes.data(), request, size)) return 114;
+                // A repeated hint after submission must not start another
+                // attempt against the already in-flight durable request.
+                if (foreground)
+                {
+                    const auto repeated = dispatcher->dispatchOne({}, {preferred.data(), preferred.size()});
+                    if (repeated.status == DispatchStatus::StorageBlocked || router.sends != 1 || store->committedSequence() != 3) return 243;
+                }
                 done = true;
                 break;
             }

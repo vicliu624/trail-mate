@@ -2373,7 +2373,17 @@ void step()
         next_step.store(millis() + 1000);
         return;
     }
-    const auto sent = s.dispatcher->dispatchOne(now(nullptr));
+    gc::Destination destination;
+    gc::RequestId request;
+    std::array<uint8_t, 48> preferred{};
+    const bool foreground = s.client->pendingRequest(destination, request);
+    if (foreground)
+    {
+        std::memcpy(preferred.data(), s.local.bytes.data(), 16);
+        std::memcpy(preferred.data() + 16, destination.bytes.data(), 16);
+        std::memcpy(preferred.data() + 32, request.bytes.data(), 16);
+    }
+    const auto sent = s.dispatcher->dispatchOne(now(nullptr), foreground ? gc::ByteView{preferred.data(), preferred.size()} : gc::ByteView{});
     if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
         fail("Query storage is blocked");
     else if (!s.dispatch_store->busy()) next_step.store(millis() + 250);

@@ -25,7 +25,9 @@ class RequestDispatcher
   public:
     RequestDispatcher(chat::MeshAdapterRouter& router, RequestDispatchStore& store,
                       uint32_t retry_delay_ms, uint64_t attempt_timeout_ms);
-    DispatchResult dispatchOne(const ::geocaching::storage::StoredTime& now);
+    // Optional key of a newly committed foreground request. It bypasses only
+    // history selection; beginAttempt/readForSend still validate durable state.
+    DispatchResult dispatchOne(const ::geocaching::storage::StoredTime& now, ::geocaching::ByteView preferred = {});
 
   private:
     enum class Phase : uint8_t
@@ -51,6 +53,8 @@ class RequestDispatcher
     std::array<uint8_t, 16> boot_{};
     std::array<uint8_t, 48> cursor_{};
     bool has_cursor_ = false;
+    std::array<uint8_t, 48> preferred_{};
+    bool has_preferred_ = false;
 };
-static_assert(sizeof(RequestDispatcher) <= 192, "Dispatcher retains metadata only, not a request-sized buffer");
+static_assert(sizeof(RequestDispatcher) <= 256, "Dispatcher retains metadata only, not a request-sized buffer");
 } // namespace platform::esp::arduino_common::geocaching

@@ -44,7 +44,12 @@ int main(int argc, char** argv)
     app.insert(app.end(), {0, 0xa1, 'x'});
     assert(client->observe(discovery, delivery, {key.data(), 64}, {app.data(), app.size()}, 0));
     assert(client->query({300000000, 1200000000, 310000000, 1210000000}));
+    geocaching::Destination pending_destination;
+    geocaching::RequestId pending_id;
+    assert(!client->pendingRequest(pending_destination, pending_id));
     assert(client->tick(0) && port.requests == 1);
+    assert(client->pendingRequest(pending_destination, pending_id) && pending_destination.bytes == delivery.bytes);
+    assert(pending_id.bytes[0] == 1);
     geocaching::RequestId active;
     active.bytes.fill(1);
     assert(client->expectsResponse(delivery, active));
@@ -64,4 +69,5 @@ int main(int argc, char** argv)
     assert(port.requests == 2 && port.pages == 1 && client->phase() == geocaching::QueryClientPhase::PageReady);
     active.bytes.fill(3);
     assert(!client->expectsResponse(delivery, active));
+    assert(!client->pendingRequest(pending_destination, pending_id));
 }
