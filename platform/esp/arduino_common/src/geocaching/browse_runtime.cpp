@@ -123,7 +123,9 @@ struct Session
         }
     };
     std::unique_ptr<Publication> publication;
-    uint64_t publication_restore_sequence = UINT64_MAX;
+    // Recovery discovers work left by a previous session. New work in this
+    // session already has an owner; unrelated query commits must not rescan it.
+    bool publication_recovery_complete = false;
     bool publication_restore_pending = false, publication_restore_background = false;
     struct DraftSave
     {
@@ -213,7 +215,7 @@ struct Session
     };
     std::unique_ptr<DownloadStart> download_start;
     const char* download_start_error = nullptr;
-    uint64_t download_restore_sequence = UINT64_MAX;
+    bool download_recovery_complete = false;
     bool download_restore_pending = false;
     std::unique_ptr<SdDownloadPort<Digest>> download_port;
     std::unique_ptr<gc::DownloadClient> download;
@@ -494,7 +496,7 @@ bool startCheckpoint(Session& s)
 
 bool resumeWaitingDownload(Session& s)
 {
-    if (!s.download_restore_pending && s.download_restore_sequence == s.store->committedSequence()) return false;
+    if (s.download_recovery_complete) return false;
     gc::storage::DownloadRecoveryRequest recovered;
     gc::protocol::SummaryView summary;
     const auto result = s.download_store->readWaitingDownload(s.local, recovered, summary);
@@ -508,7 +510,7 @@ bool resumeWaitingDownload(Session& s)
     }
     if (result == DownloadRecoveryRead::End)
     {
-        s.download_restore_sequence = s.store->committedSequence();
+        s.download_recovery_complete = true;
         return false;
     }
     if (result != DownloadRecoveryRead::Ready)
@@ -642,7 +644,8 @@ bool receiveResponse(const chat::lxmf::CustomDeliveryView& message, uint8_t** ow
         !reader.binary(id, 16) || id.size != 16) return false;
     gc::RequestId request;
     std::memcpy(request.bytes.data(), id.data, 16);
-    if (session->port->accepted(source, request, {message.data.data, message.data.size})) return true;
+    const bool live_query = session->client && session->client->expectsResponse(source, request);
+    if (!live_query && session->port->accepted(source, request, {message.data.data, message.data.size})) return true;
     if (value == 1 && (!session->publication || !session->publication->attempt ||
                        session->publication->attempt->phase() != gc::PublishAttemptPhase::Waiting || message.data.size > 512)) return false;
     if (value == 3 && (!session->download || session->download->phase() != gc::DownloadPhase::Waiting ||
@@ -759,7 +762,7 @@ PublicationRestore restorePublication(Session& s, const gc::GeocacheId* cache = 
                                       const gc::RevisionHash* hash = nullptr, const gc::Destination* remote = nullptr)
 {
     const bool background = !cache && !hash && !remote;
-    if (background && s.publication_restore_sequence == s.store->committedSequence()) return PublicationRestore::None;
+    if (background && s.publication_recovery_complete) return PublicationRestore::None;
     gc::storage::PublicationRecoveryFilter filter;
     filter.local = s.local;
     filter.has_cache = cache != nullptr;
@@ -787,7 +790,7 @@ PublicationRestore restorePublication(Session& s, const gc::GeocacheId* cache = 
     } lease{*s.store};
     if (result == DraftReadResult::NotFound)
     {
-        if (background) s.publication_restore_sequence = s.store->committedSequence();
+        if (background) s.publication_recovery_complete = true;
         return PublicationRestore::None;
     }
     if (result != DraftReadResult::Ready || !selected.request.data || selected.request.size > gc::kMaxApplicationBytes)
@@ -2363,6 +2366,13 @@ void step()
         return;
     }
     if (startCheckpoint(s)) return;
+    // Completed browsing has nothing to send. Active publication/download
+    // dispatch is handled above; do not keep scanning attempt history here.
+    if (s.client->phase() == gc::QueryClientPhase::PageReady)
+    {
+        next_step.store(millis() + 1000);
+        return;
+    }
     const auto sent = s.dispatcher->dispatchOne(now(nullptr));
     if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
         fail("Query storage is blocked");

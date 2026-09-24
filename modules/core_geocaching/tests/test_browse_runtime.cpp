@@ -303,6 +303,11 @@ int main(int argc, char** argv)
     std::array<uint8_t, 16> reply_remote{};
     require(router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
             "durably committed reply was not acknowledged on retry");
+    test::profile_reads = true;
+    test::read_bytes_by_path.clear();
+    for (unsigned i = 0; i < 500; ++i) tick();
+    require(test::read_bytes_by_path.empty(), "completed browsing kept scanning recovery or dispatch history");
+    test::profile_reads = false;
     ui::geocaching::Item item;
     uint64_t generation = 0;
     test::source->requestWindow(Section::Discover, 0, 1);

@@ -152,6 +152,13 @@ class QueryClient
     }
     bool hasMore() const { return phase_ == QueryClientPhase::PageReady && cursor_size_ != 0; }
 
+    // A live request is already identified in memory. Historical receipt
+    // lookups are only needed for retries after it has left the waiting state.
+    bool expectsResponse(const Destination& source, const RequestId& id) const
+    {
+        return selected_ && source.bytes == selected_->delivery.bytes && id.bytes == request_.bytes &&
+               (phase_ == QueryClientPhase::CheckingCapabilities || phase_ == QueryClientPhase::Querying);
+    }
     bool accept(const Destination& source, ByteView response)
     {
         if (!selected_ || source.bytes != selected_->delivery.bytes) return false;

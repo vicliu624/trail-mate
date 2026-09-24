@@ -45,6 +45,14 @@ int main(int argc, char** argv)
     assert(client->observe(discovery, delivery, {key.data(), 64}, {app.data(), app.size()}, 0));
     assert(client->query({300000000, 1200000000, 310000000, 1210000000}));
     assert(client->tick(0) && port.requests == 1);
+    geocaching::RequestId active;
+    active.bytes.fill(1);
+    assert(client->expectsResponse(delivery, active));
+    auto other = delivery;
+    other.bytes[0] = 9;
+    assert(!client->expectsResponse(other, active));
+    active.bytes.fill(2);
+    assert(!client->expectsResponse(delivery, active));
     for (int i = 1; i < 3; ++i)
     {
         std::ifstream f(argv[i], std::ios::binary);
@@ -54,4 +62,6 @@ int main(int argc, char** argv)
         if (i == 1) assert(client->tick(1));
     }
     assert(port.requests == 2 && port.pages == 1 && client->phase() == geocaching::QueryClientPhase::PageReady);
+    active.bytes.fill(3);
+    assert(!client->expectsResponse(delivery, active));
 }
