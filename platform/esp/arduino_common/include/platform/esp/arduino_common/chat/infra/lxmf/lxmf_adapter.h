@@ -288,7 +288,8 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
                              const uint8_t* packed_payload,
                              size_t packed_payload_len,
                              bool track_user_message,
-                             OutboundLxmfDispatch* out_dispatch);
+                             OutboundLxmfDispatch* out_dispatch,
+                             bool allow_propagation = true);
     bool queuePropagationUpload(PeerInfo& recipient,
                                 const uint8_t* lxmf_message,
                                 size_t lxmf_message_len,

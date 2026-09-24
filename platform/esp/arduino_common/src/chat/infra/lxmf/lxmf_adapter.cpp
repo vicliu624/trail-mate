@@ -1145,7 +1145,8 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
                                       const uint8_t* packed_payload,
                                       size_t packed_payload_len,
                                       bool track_user_message,
-                                      OutboundLxmfDispatch* out_dispatch)
+                                      OutboundLxmfDispatch* out_dispatch,
+                                      bool allow_propagation)
 {
     if (!packed_payload || packed_payload_len == 0 || packed_payload_len > 8448 || !out_dispatch)
     {
@@ -1194,8 +1195,9 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
                                            LocalDestinationKind::Delivery);
     const bool use_opportunistic = !active_link && packed_payload_len <= 256 && peerHasUsableRatchet(peer);
     const auto& propagation_config = rtnet::active().propagation;
+    const bool propagation_enabled = allow_propagation && propagation_config.enabled;
     bool propagation_peer_available = false;
-    if (propagation_config.enabled &&
+    if (propagation_enabled &&
         propagation_config.delivery ==
             chat::reticulum::LxmfDeliveryPreference::Automatic &&
         !active_link && !use_opportunistic)
@@ -1207,7 +1209,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
             runtime::OutboundDeliveryPlanInput{
                 active_link != nullptr,
                 use_opportunistic,
-                propagation_config.enabled,
+                propagation_enabled,
                 propagation_config.delivery,
                 propagation_peer_available});
     if (plan.propagation_first)
@@ -2145,7 +2147,9 @@ MeshSendResult LxmfAdapter::sendCustomDataToDestination(const uint8_t destinatio
                                  custom_type, data, payload.data(), &size))
         return MeshSendResult::fail(MeshOperationFailure::EncodeFailed);
     OutboundLxmfDispatch dispatch{};
-    const bool ok = dispatchLxmfPayload(*peer, payload.data(), size, false, &dispatch);
+    // Geocaching exchanges require a live response. Store-and-forward delivery
+    // can finish postage work without ever reaching the active directory.
+    const bool ok = dispatchLxmfPayload(*peer, payload.data(), size, false, &dispatch, false);
     if (ok && accepted_lxmf_hash) std::memcpy(accepted_lxmf_hash->data(), dispatch.message_hash, accepted_lxmf_hash->size());
     MeshSendResult result = ok ? MeshSendResult::success(dispatch.message_id)
                                : MeshSendResult::fail(dispatch.failure, dispatch.message_id);

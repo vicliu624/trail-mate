@@ -362,6 +362,27 @@ int main()
                            OutboundDeliveryPath::DeferredLink),
                        "deferred_link") == 0);
 
+    // Interactive directory exchanges disable propagation independently of
+    // the user's chat preference, including propagated-only chat delivery.
+    for (const auto preference : {reticulum::LxmfDeliveryPreference::Automatic,
+                                  reticulum::LxmfDeliveryPreference::Propagated})
+    {
+        for (const bool active_link : {false, true})
+        {
+            for (const bool ratchet : {false, true})
+            {
+                const auto live_plan = ReticulumDeliveryPlanner::plan(
+                    OutboundDeliveryPlanInput{active_link, ratchet, false, preference, true});
+                assert(!live_plan.propagation_first);
+                assert(!live_plan.propagation_only);
+                assert(live_plan.may_fallback_to_link);
+                assert(live_plan.path == (active_link ? OutboundDeliveryPath::Link
+                                          : ratchet   ? OutboundDeliveryPath::Opportunistic
+                                                      : OutboundDeliveryPath::DeferredLink));
+            }
+        }
+    }
+
     DeliveryAttemptLedger attempt_ledger{};
     const auto attempt_packet_hash =
         filled_hash<reticulum::kFullHashSize>(0x31);
