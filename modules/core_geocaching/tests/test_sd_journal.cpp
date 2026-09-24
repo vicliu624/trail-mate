@@ -3,6 +3,7 @@
 #include "geocaching/protocol/publish_request.h"
 #include "geocaching/protocol/query_request.h"
 #include "geocaching/protocol/record_encoder.h"
+#include "geocaching/storage/download_recovery.h"
 #include "geocaching/storage/draft_publication.h"
 #include "geocaching/storage/task_record.h"
 #include "platform/esp/arduino_common/geocaching/query_browse_source.h"
@@ -615,14 +616,15 @@ int checkDownloadController(const char* query_path, const char* response_path)
                                      { return storage::validateTaskReferences(candidate) && storage::validateAttemptReferences(candidate); })) return 190;
                 sequence = frame.sequence;
             }
-            ByteView task_bytes;
-            storage::TaskView recovered_task;
-            if (!recovered.view().find(10, {task.data(), task.size()}, task_bytes) ||
-                !storage::decodeTask({task.data(), task.size()}, task_bytes, recovered_task)) return 191;
-            if (recovered_task.state != 3)
+            storage::DownloadRecoveryRequest selected;
+            SdRequestStore recovered_store(fixture::volume, sequence, recovered);
+            LogicalDownloadStore recovered_downloads(recovered_store, recovered);
+            DownloadStore& downloads = recovered_downloads;
+            if (downloads.readRecovery({}, selected) != DownloadRecoveryRead::Ready ||
+                selected.task != task || selected.identity.generation != generation ||
+                std::memcmp(selected.key.data() + 32, id.bytes.data(), 16)) return 191;
             {
-                SdRequestStore recovered_store(fixture::volume, sequence, recovered);
-                SdDownloadPort<FileDigest> recovered_port(recovered_store, recovered, crypto, {}, {summary.id, summary.hash, generation}, task, {});
+                SdDownloadPort<FileDigest> recovered_port(downloads, crypto, {}, selected.identity, selected.task, selected.created);
                 auto result = recovered_port.resume({}, id);
                 for (unsigned attempt = 0; result == DownloadOperationResult::Pending && attempt < 512; ++attempt)
                 {
@@ -633,23 +635,46 @@ int checkDownloadController(const char* query_path, const char* response_path)
                 if (result != DownloadOperationResult::Complete || !fixture::files.count(target) ||
                     fixture::files.at(target).find("<name>Test</name>") == std::string::npos) return 193;
             }
+            const auto after = selected.key;
+            if (downloads.readRecovery({after.data(), after.size()}, selected) != DownloadRecoveryRead::End) return 244;
             fixture::files = disk;
             return 0;
         };
         SdDownloadPort<FileDigest> port(*store, state, crypto, {}, {summary.id, summary.hash, 1}, task, {});
         DownloadClient client(port, crypto);
+        LogicalDownloadStore generation_store(*store, state);
+        uint64_t next_generation = 0;
+        if (generation_store.readNextGeneration(summary.id, next_generation) != DownloadRecoveryRead::Ready || next_generation != 1) return 257;
         if (!client.begin({}, id, summary, 1)) return 171;
+        if (generation_store.readNextGeneration(summary.id, next_generation) != DownloadRecoveryRead::Busy || next_generation) return 258;
         for (unsigned i = 0; client.phase() == DownloadPhase::Submitting && i < 256; ++i) client.advance();
         if (client.phase() != DownloadPhase::Waiting) return 172;
+        if (generation_store.readNextGeneration(summary.id, next_generation) != DownloadRecoveryRead::Ready || next_generation != 2) return 259;
         if (scenario == 4)
         {
+            RequestId query_id;
+            query_id.bytes.fill(3);
+            std::array<uint8_t, 16> query_task;
+            query_task.fill(0x71);
+            uint8_t query_request[256];
+            size_t query_size = 0;
+            if (!protocol::encodeQueryRequest(query_id, {-900000000, -1800000000, 900000000, 1800000000},
+                                              7, {}, 4, {}, 8192, query_request, sizeof(query_request), query_size) ||
+                drainStore(*store, store->persistNewTask({}, {}, query_id, query_task, 3, {query_request, query_size}, {})) != JournalWriteResult::Verified ||
+                drainStore(*store, store->commitQueryResult({}, {}, query_id, {query.data(), query.size()})) != JournalWriteResult::Verified) return 255;
+            LogicalDownloadStore downloads(*store, state);
+            storage::DownloadRecoveryRequest selected;
+            protocol::SummaryView selected_preview;
+            if (downloads.readWaitingDownload({}, selected, selected_preview) != DownloadRecoveryRead::Ready ||
+                selected.task != task || selected.identity.generation != 1 || selected_preview.name != summary.name) return 256;
             const auto disk = fixture::files;
             const auto sequence = store->committedSequence();
-            SdDownloadPort<FileDigest> resumed_port(*store, state, crypto, {}, {summary.id, summary.hash, 1}, task, {});
+            SdDownloadPort<FileDigest> resumed_port(downloads, crypto, {}, selected.identity, selected.task, selected.created);
             DownloadClient resumed(resumed_port, crypto);
             if (resumed_port.resumeWaiting({}, id) != DownloadOperationResult::Complete ||
-                !resumed.resume({}, id, summary, 1) || resumed.phase() != DownloadPhase::Waiting ||
+                !resumed.resume({}, id, selected_preview, 1) || resumed.phase() != DownloadPhase::Waiting ||
                 store->committedSequence() != sequence || store->commitPending() || fixture::files != disk) return 194;
+            downloads.releaseRead();
             Destination wrong_source;
             wrong_source.bytes.fill(0x99);
             std::vector<uint8_t> scratch(summary.signed_bytes + 64);
@@ -690,7 +715,8 @@ int checkDownloadController(const char* query_path, const char* response_path)
         else if (client.phase() != DownloadPhase::Stored || fixture::files.at(target).find("<name>Test</name>") == std::string::npos) return 178;
         if (scenario == 0)
         {
-            SavedCacheCatalog<FileDigest> saved(state, crypto);
+            LogicalDownloadStore catalog_store(*store, state);
+            SavedCacheCatalog<FileDigest> saved(catalog_store, crypto);
             ::ui::geocaching::Snapshot snapshot;
             saved.snapshot(snapshot);
             if (snapshot.count) return 184;
@@ -700,6 +726,38 @@ int checkDownloadController(const char* query_path, const char* response_path)
             fixture::step_io_calls = 0;
             if (snapshot.count != 1 || !saved.item(0, snapshot.generation, item) || !item.downloaded ||
                 std::strcmp(item.name.data(), "Test") || fixture::step_io_calls) return 185;
+            // The projection owns only the requested rows. A window change
+            // preserves the total so the UI does not jump back to page zero.
+            const auto old_generation = snapshot.generation;
+            saved.requestWindow(1, 1);
+            saved.snapshot(snapshot);
+            if (snapshot.count != 1 || saved.item(0, old_generation, item) || fixture::step_io_calls) return 341;
+            for (unsigned i = 0; saved.pending() && i < 256; ++i) saved.advance();
+            saved.snapshot(snapshot);
+            if (snapshot.count != 1 || saved.item(1, snapshot.generation, item)) return 342;
+            // Reset during hashing must be a UI-only notification. The next
+            // owner step discards the old reader and starts the new window.
+            saved.requestWindow(0, 1);
+            saved.advance();
+            fixture::step_io_calls = 0;
+            saved.reset();
+            if (fixture::step_io_calls || saved.contains(summary.id.bytes, summary.hash.bytes)) return 343;
+            for (unsigned i = 0; saved.pending() && i < 256; ++i) saved.advance();
+            auto missing = summary.id.bytes;
+            missing[0] ^= 1;
+            fixture::step_io_calls = 0;
+            if (!saved.requestPreview(1, 0, 2)) return 344;
+            saved.previewRow(0, summary.id.bytes, summary.hash.bytes);
+            saved.previewRow(1, missing, summary.hash.bytes);
+            if (saved.checked(missing, summary.hash.bytes) || fixture::step_io_calls) return 345;
+            for (unsigned i = 0; saved.pending() && i < 256; ++i) saved.advance();
+            fixture::step_io_calls = 0;
+            if (!saved.checked(missing, summary.hash.bytes) || saved.contains(missing, summary.hash.bytes) ||
+                !saved.contains(summary.id.bytes, summary.hash.bytes) || saved.requestPreview(1, 0, 2) || fixture::step_io_calls) return 346;
+            if (!saved.requestPreview(2, 0, 1)) return 347;
+            saved.previewRow(0, missing, summary.hash.bytes);
+            if (saved.checked(missing, summary.hash.bytes) || saved.contains(summary.id.bytes, summary.hash.bytes)) return 348;
+            saved.requestWindow(0, 4);
             const auto valid_file = fixture::files[target];
             fixture::files[target][0] ^= 1;
             saved.reset();
@@ -723,10 +781,53 @@ int checkDownloadController(const char* query_path, const char* response_path)
                 replayed = frame.sequence;
             }
             if (replayed != store->committedSequence()) return 189;
-            SavedCacheCatalog<FileDigest> reopened(restored, crypto);
+            SdRequestStore restored_store(fixture::volume, replayed, restored);
+            LogicalDownloadStore restored_catalog_store(restored_store, restored);
+            SavedCacheCatalog<FileDigest> reopened(restored_catalog_store, crypto);
             for (unsigned i = 0; reopened.pending() && i < 256; ++i) reopened.advance();
             reopened.snapshot(snapshot);
             if (snapshot.count != 1) return 187;
+            // More than 64 heads before the real installed cache. The larger
+            // host-only ledger is fixture input, never a device allocation.
+            std::vector<uint8_t> many_a(16384), many_b(16384);
+            storage::LogicalState many(many_a.data(), many_b.data(), many_a.size());
+            for (unsigned i = 0; i < 70; ++i)
+            {
+                std::array<uint8_t, 32> key{};
+                key[0] = uint8_t(i);
+                if (key == summary.id.bytes) return 349;
+                storage::CacheHeadView empty_head;
+                empty_head.install_generation = 1;
+                uint8_t value[128];
+                size_t size = 0;
+                if (!storage::encodeCacheHead({key.data(), key.size()}, empty_head, value, sizeof(value), size)) return 350;
+                storage::MutationView mutation{2, {key.data(), key.size()}, {value, size}, false};
+                if (!many.apply(&mutation, 1, [](const auto&)
+                                { return true; })) return 351;
+            }
+            size_t cursor = 0;
+            storage::MutationView row;
+            while (restored.view().next(cursor, row))
+                if (!many.apply(&row, 1, [](const auto&)
+                                { return true; })) return 352;
+            SdRequestStore many_store(fixture::volume, replayed, many);
+            LogicalDownloadStore many_catalog_store(many_store, many);
+            SavedCacheCatalog<FileDigest> expanded(many_catalog_store, crypto);
+            for (unsigned i = 0; expanded.pending() && i < 512; ++i) expanded.advance();
+            expanded.snapshot(snapshot);
+            if (expanded.pending() || snapshot.count != 1 || !expanded.item(0, snapshot.generation, item)) return 353;
+            // UI getters do not touch the ledger after projection. Invalidation
+            // belongs to its serialized owner when mutations are published.
+            storage::MutationView erase{2, {summary.id.bytes.data(), 32}, {}, true};
+            if (!many.apply(&erase, 1, [](const auto&)
+                            { return true; })) return 354;
+            fixture::step_io_calls = 0;
+            if (!expanded.item(0, snapshot.generation, item) || !expanded.contains(summary.id.bytes, summary.hash.bytes) ||
+                std::strcmp(item.name.data(), "Test") || fixture::step_io_calls) return 355;
+            expanded.reset();
+            for (unsigned i = 0; expanded.pending() && i < 512; ++i) expanded.advance();
+            expanded.snapshot(snapshot);
+            if (snapshot.count || expanded.contains(summary.id.bytes, summary.hash.bytes)) return 356;
         }
         if (scenario == 0 || scenario == 3)
         {
@@ -810,6 +911,13 @@ int checkDraftPersistence()
     if (drainStore(store, store.bindDraftAuthor(key, 2, {author.data(), author.size()}, encoded, sizeof(encoded))) != JournalWriteResult::Verified ||
         !state.view().find(4, key, stored) || !storage::decodeDraft(key, stored, draft) || draft.generation != 3 || draft.author.size != 64) return 219;
     const auto sequence = store.committedSequence();
+    storage::PublicationHistory history;
+    GeocacheId cache;
+    if (store.readPublicationHistory(key, 3, cache, {author.data(), author.size()}, history) != DraftReadResult::Ready ||
+        history.latest_revision || history.confirmed_revision || store.committedSequence() != sequence ||
+        store.readPublicationHistory(key, 2, cache, {author.data(), author.size()}, history) != DraftReadResult::NotFound ||
+        store.readPublicationHistory(key, 3, cache, {other_author.data(), other_author.size()}, history) != DraftReadResult::NotFound ||
+        store.needsRecovery()) return 225;
     if (store.bindDraftAuthor(key, 3, {author.data(), author.size()}, encoded, sizeof(encoded)) != JournalWriteResult::Verified ||
         store.committedSequence() != sequence || store.commitPending() ||
         store.bindDraftAuthor(key, 3, {other_author.data(), other_author.size()}, encoded, sizeof(encoded)) != JournalWriteResult::StateRejected ||
@@ -818,15 +926,32 @@ int checkDraftPersistence()
     draft.generation = 4;
     if (!storage::encodeDraft(key, draft, encoded, sizeof(encoded), size) ||
         store.saveDraft(key, {encoded, size}, 3) != JournalWriteResult::StateRejected) return 221;
+    draft.author = {};
+    draft.name = "Edited without UI identity metadata";
+    if (!storage::encodeDraft(key, draft, encoded, sizeof(encoded), size) ||
+        store.editDraft(key, encoded, size, sizeof(encoded), 3) != JournalWriteResult::InProgress ||
+        !store.inputConsumed() || store.readDraft(key, stored) != DraftReadResult::Busy) return 222;
+    std::memset(encoded, 0xa5, sizeof(encoded));
+    if (drainStore(store, JournalWriteResult::InProgress) != JournalWriteResult::Verified ||
+        store.readDraft(key, stored) != DraftReadResult::Ready || !storage::decodeDraft(key, stored, draft) ||
+        draft.generation != 4 || draft.name != "Edited without UI identity metadata" || draft.author.size != 64 ||
+        std::memcmp(draft.author.data, author.data(), 64)) return 223;
+    store.releaseDraftRead();
+    NativeRecordCrypto catalog_crypto;
+    storage::DraftCatalogPage catalog;
+    if (store.readDraftCatalog(0, catalog_crypto, catalog) != DraftReadResult::Ready || catalog.total != 1 || catalog.count != 1 ||
+        catalog.rows[0].generation != 4 || std::strcmp(catalog.rows[0].name.data(), "Edited without UI identity metadata") ||
+        !catalog.rows[0].has_author || catalog.rows[0].publication.latest_revision ||
+        store.readDraftCatalog(1, catalog_crypto, catalog) != DraftReadResult::Ready || catalog.total != 1 || catalog.count) return 224;
     draft.author = {author.data(), author.size()};
     draft.name = "Must not replace saved text";
-    draft.generation = 4;
+    draft.generation = 5;
     if (!storage::encodeDraft(key, draft, encoded, sizeof(encoded), size)) return 202;
     fixture::flush_ok = false;
-    const auto failed = drainStore(store, store.saveDraft(key, {encoded, size}, 3));
+    const auto failed = drainStore(store, store.saveDraft(key, {encoded, size}, 4));
     fixture::flush_ok = true;
     if (failed == JournalWriteResult::Verified || !state.view().find(4, key, stored) ||
-        !storage::decodeDraft(key, stored, draft) || draft.generation != 3 || draft.name != "New cache") return 203;
+        !storage::decodeDraft(key, stored, draft) || draft.generation != 4 || draft.name != "Edited without UI identity metadata") return 203;
     fixture::files.clear();
     return 0;
 }
@@ -1007,6 +1132,9 @@ int checkPublishPort(const char* record_path, const char* response_path)
                 !storage::decodeTask({task.data(), task.size()}, value, stopped) || stopped.state != 5 || stopped.continue_intent) return 215;
             const auto history = storage::draftPublication(state.view(), verified.record.creation_nonce, draft);
             if (history.latest_revision != 1 || history.confirmed_revision || !history.stopped || history.pending) return 225;
+            storage::PublicationRecoveryFilter filter;
+            storage::PublicationRecoveryView selected;
+            if (store.readPublicationRecovery(filter, selected) != DraftReadResult::NotFound) return 240;
             continue;
         }
         if (attempt.phase() != PublishAttemptPhase::Waiting) return 216;
@@ -1019,24 +1147,31 @@ int checkPublishPort(const char* record_path, const char* response_path)
         for (unsigned i = 0; i < 512 && !sent; ++i)
             sent = dispatcher.dispatchOne({}).status == DispatchStatus::Submitted;
         if (!sent || router.sends != 1) return 217;
-        std::array<uint8_t, 48> request_key{};
-        std::memcpy(request_key.data() + 32, request.bytes.data(), 16);
-        ByteView outgoing_bytes;
-        storage::OutgoingView outgoing;
-        if (!state.view().find(5, {request_key.data(), request_key.size()}, outgoing_bytes) ||
-            !storage::decodeOutgoing({request_key.data(), request_key.size()}, outgoing_bytes, outgoing)) return 222;
+        storage::PublicationRecoveryFilter filter;
+        storage::PublicationRecoveryView selected;
+        if (store.readPublicationRecovery(filter, selected) != DraftReadResult::Ready || selected.confirmed ||
+            selected.task != task || selected.cache.bytes != verified.id.bytes || selected.hash.bytes != verified.hash.bytes ||
+            std::memcmp(selected.key.data() + 32, request.bytes.data(), 16)) return 222;
         const auto sequence = store.committedSequence();
         SdPublishPort restored_port(store, crypto, {}, verified.id, verified.hash, task, {});
         PublishAttempt restored(restored_port, crypto);
         if (!restored_port.attachRestoredRequest({}, request) ||
-            !restored.resume({}, request, outgoing.request, workspace.data(), workspace.size(), verified.id, verified.hash) ||
+            !restored.resume({}, request, selected.request, workspace.data(), workspace.size(), selected.cache, selected.hash, selected.response) ||
             store.committedSequence() != sequence || store.commitPending() || router.sends != 1) return 223;
+        store.releaseDraftRead();
         if (restored.accept({}, {response.data(), response.size()}) || restored.phase() != PublishAttemptPhase::Committing) return 224;
         for (unsigned i = 0; i < 512 && restored.phase() == PublishAttemptPhase::Committing; ++i) restored.advance();
         ByteView value;
         storage::TaskView completed;
         if (restored.phase() != PublishAttemptPhase::Confirmed || !state.view().find(10, {task.data(), task.size()}, value) ||
             !storage::decodeTask({task.data(), task.size()}, value, completed) || completed.state != 3) return 218;
+        if (store.readPublicationRecovery(filter, selected) != DraftReadResult::NotFound) return 241;
+        filter.has_cache = filter.has_hash = true;
+        filter.cache = verified.id;
+        filter.hash = verified.hash;
+        if (store.readPublicationRecovery(filter, selected) != DraftReadResult::Ready || !selected.confirmed ||
+            selected.response.size != response.size() || std::memcmp(selected.response.data, response.data(), response.size())) return 242;
+        store.releaseDraftRead();
         const auto published_history = storage::draftPublication(state.view(), verified.record.creation_nonce, draft);
         if (published_history.latest_revision != 1 || published_history.confirmed_revision != 1 || published_history.local_changes) return 227;
         auto changed_draft = draft;
@@ -1048,9 +1183,80 @@ int checkPublishPort(const char* record_path, const char* response_path)
     return 0;
 }
 
+int checkDownloadRecoveryCursor()
+{
+    using namespace ::geocaching;
+    using namespace ::geocaching::storage;
+    // Metadata-only selection: payload signatures and files are exercised by
+    // checkDownloadController. Arrange requests out of key order and change
+    // encoded row lengths between selections, as installation commits do.
+    std::array<uint8_t, 8192> first{}, second{};
+    LogicalState state(first.data(), second.data(), first.size());
+    uint8_t request_bytes[128], outgoing_bytes[256], task_bytes[256], head_bytes[64], install_bytes[160];
+    std::array<uint8_t, 48> key{};
+    std::array<uint8_t, 16> task_id{};
+    GeocacheId cache;
+    RevisionHash hash;
+    OutgoingView outgoing;
+    TaskView task;
+    const uint8_t terminal[] = {0x90};
+    for (uint8_t number : {uint8_t(30), uint8_t(10), uint8_t(20)})
+    {
+        RequestId request;
+        request.bytes.fill(number);
+        task_id.fill(number);
+        cache.bytes.fill(number);
+        hash.bytes.fill(number + 1);
+        size_t request_size = 0, outgoing_size = 0, task_size = 0, head_size = 0;
+        if (!protocol::encodeGetRequest(request, cache, &hash, nullptr, 8192, request_bytes, sizeof(request_bytes), request_size) ||
+            !describeNewRequestTask({}, {}, request, task_id, 2, {request_bytes, request_size}, {}, key, outgoing, task,
+                                    {{cache.bytes.data(), 32}, {hash.bytes.data(), 32}, 1})) return 245;
+        outgoing.state = 4;
+        outgoing.terminal_data = {terminal, sizeof(terminal)};
+        task.state = number == 20 ? 5 : 1;
+        task.continue_intent = number != 20;
+        CacheHeadView head;
+        head.install_generation = 1;
+        if (!encodeOutgoing({key.data(), key.size()}, outgoing, outgoing_bytes, sizeof(outgoing_bytes), outgoing_size) ||
+            !encodeTask({task_id.data(), task_id.size()}, task, task_bytes, sizeof(task_bytes), task_size) ||
+            !encodeCacheHead({cache.bytes.data(), 32}, head, head_bytes, sizeof(head_bytes), head_size)) return 246;
+        const MutationView rows[] = {{5, {key.data(), key.size()}, {outgoing_bytes, outgoing_size}, false},
+                                     {10, {task_id.data(), task_id.size()}, {task_bytes, task_size}, false},
+                                     {2, {cache.bytes.data(), 32}, {head_bytes, head_size}, false}};
+        if (!state.apply(rows, 3, [](const auto& view)
+                         { return validateTaskReferences(view); })) return 247;
+    }
+    DownloadRecoveryRequest selected;
+    if (nextDownloadRecovery(state.view(), {}, selected) != DownloadRecoverySelection::Found || selected.key[32] != 10 || selected.installed) return 248;
+    const auto after = selected.key;
+    ByteView value;
+    if (!state.view().find(10, {selected.task.data(), selected.task.size()}, value) || !decodeTask({selected.task.data(), selected.task.size()}, value, task)) return 249;
+    task.state = 3;
+    CacheHeadView head;
+    head.install_generation = 1;
+    head.highest_seen_revision = 1;
+    head.current_hash = {selected.identity.hash.bytes.data(), 32};
+    InstallRecordView install{{selected.identity.id.bytes.data(), 32}, head.current_hash, head.current_hash, {}, 1, InstallPhase::Installed};
+    size_t task_size = 0, head_size = 0, install_size = 0;
+    if (!encodeTask({selected.task.data(), selected.task.size()}, task, task_bytes, sizeof(task_bytes), task_size) ||
+        !encodeCacheHead(install.cache_id, head, head_bytes, sizeof(head_bytes), head_size) ||
+        !encodeInstallRecord({selected.task.data(), selected.task.size()}, install, install_bytes, sizeof(install_bytes), install_size)) return 250;
+    const MutationView completed[] = {{10, {selected.task.data(), selected.task.size()}, {task_bytes, task_size}, false},
+                                      {2, install.cache_id, {head_bytes, head_size}, false},
+                                      {12, {selected.task.data(), selected.task.size()}, {install_bytes, install_size}, false}};
+    if (!state.apply(completed, 3, [](const auto& view)
+                     { return validateTaskReferences(view); })) return 251;
+    if (nextDownloadRecovery(state.view(), {}, selected) != DownloadRecoverySelection::Found || selected.key != after || !selected.installed) return 252;
+    if (nextDownloadRecovery(state.view(), {after.data(), after.size()}, selected) != DownloadRecoverySelection::Found || selected.key[32] != 30) return 253;
+    const auto last = selected.key;
+    if (nextDownloadRecovery(state.view(), {last.data(), last.size()}, selected) != DownloadRecoverySelection::End) return 254;
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
     if (argc != 6) return 22;
+    if (const int result = checkDownloadRecoveryCursor()) return result;
     if (const int result = checkPublishPort(argv[1], argv[2])) return result;
     if (const int result = checkAuthorPort(argv[1])) return result;
     if (const int result = checkDraftPersistence()) return result;

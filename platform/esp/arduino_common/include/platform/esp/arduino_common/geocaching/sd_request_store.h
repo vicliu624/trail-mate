@@ -12,6 +12,7 @@
 #include "geocaching/storage/attempt_references.h"
 #include "geocaching/storage/attempt_timeout.h"
 #include "geocaching/storage/author_history.h"
+#include "geocaching/storage/draft_edit.h"
 #include "geocaching/storage/draft_publication.h"
 #include "geocaching/storage/draft_record.h"
 #include "geocaching/storage/install_record.h"
@@ -20,6 +21,7 @@
 #include "geocaching/storage/pending_request.h"
 #include "geocaching/storage/queued_request.h"
 #include "geocaching/storage/task_references.h"
+#include "platform/esp/arduino_common/geocaching/publication_store.h"
 #include "platform/esp/arduino_common/geocaching/request_dispatch_store.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal.h"
 
@@ -28,7 +30,7 @@ namespace platform::esp::arduino_common::geocaching
 // Construct only after volume/checkpoint/journal recovery has established the
 // committed sequence. One serialized storage worker owns this object; its
 // buffers must be allocated off ESP task stacks. No network calls occur here.
-class SdRequestStore : public RequestDispatchStore
+class SdRequestStore : public RequestDispatchStore, public PublicationStore
 {
   public:
     SdRequestStore(const ::geocaching::storage::VolumeInstance& volume, uint64_t recovered_sequence,
@@ -38,6 +40,57 @@ class SdRequestStore : public RequestDispatchStore
     bool needsRecovery() const { return needs_recovery_; }
 
     bool commitPending() const { return pending_; }
+
+    DraftReadResult readDraft(::geocaching::ByteView key, ::geocaching::ByteView& value) override
+    {
+        value = {};
+        if (needs_recovery_) return DraftReadResult::Unavailable;
+        if (pending_) return DraftReadResult::Busy;
+        if (!key.data || key.size != 16) return DraftReadResult::Invalid;
+        return state_.view().find(4, key, value) ? DraftReadResult::Ready : DraftReadResult::NotFound;
+    }
+    void releaseDraftRead() override {}
+    DraftReadResult readPublicationRecovery(const ::geocaching::storage::PublicationRecoveryFilter& filter,
+                                            ::geocaching::storage::PublicationRecoveryView& out) override
+    {
+        out = {};
+        if (needs_recovery_) return DraftReadResult::Unavailable;
+        if (pending_) return DraftReadResult::Busy;
+        const auto result = ::geocaching::storage::readLogicalPublicationRecovery(state_.view(), filter, out);
+        return result == ::geocaching::storage::PublicationRecoveryResult::Ready  ? DraftReadResult::Ready
+               : result == ::geocaching::storage::PublicationRecoveryResult::None ? DraftReadResult::NotFound
+                                                                                  : DraftReadResult::Invalid;
+    }
+    DraftReadResult readDraftCatalog(size_t offset, ::geocaching::protocol::RecordCrypto& crypto, ::geocaching::storage::DraftCatalogPage& page) override
+    {
+        if (needs_recovery_) return DraftReadResult::Unavailable;
+        if (pending_) return DraftReadResult::Busy;
+        return ::geocaching::storage::readLogicalDraftCatalog(state_.view(), offset, crypto, page) ? DraftReadResult::Ready : DraftReadResult::Invalid;
+    }
+    bool inputConsumed() const override { return true; }
+    DraftReadResult readPublicationHistory(::geocaching::ByteView key, uint64_t generation,
+                                           const ::geocaching::GeocacheId& cache, ::geocaching::ByteView author,
+                                           ::geocaching::storage::PublicationHistory& out) override
+    {
+        if (needs_recovery_) return DraftReadResult::Unavailable;
+        if (pending_) return DraftReadResult::Busy;
+        const auto result = ::geocaching::storage::readLogicalPublicationHistory(state_.view(), key, generation, cache, author, out);
+        return result == ::geocaching::storage::PublicationHistoryResult::Ready      ? DraftReadResult::Ready
+               : result == ::geocaching::storage::PublicationHistoryResult::NotFound ? DraftReadResult::NotFound
+                                                                                     : DraftReadResult::Invalid;
+    }
+    JournalWriteResult editDraft(::geocaching::ByteView key, uint8_t* bytes, size_t size, size_t capacity, uint64_t expected) override
+    {
+        if (needs_recovery_) return JournalWriteResult::Unavailable;
+        if (pending_) return JournalWriteResult::Busy;
+        using namespace ::geocaching::storage;
+        ::geocaching::ByteView value;
+        DraftView previous;
+        const bool found = state_.view().find(4, key, value);
+        if ((found && !decodeDraft(key, value, previous)) ||
+            !restoreDraftIdentity(key, found ? &previous : nullptr, expected, bytes, capacity, size)) return JournalWriteResult::StateRejected;
+        return saveDraft(key, {bytes, size}, expected);
+    }
 
     DispatchReadResult readPending(const ::geocaching::Destination& local, ::geocaching::ByteView after,
                                    ::geocaching::storage::PendingRequestView& out) override

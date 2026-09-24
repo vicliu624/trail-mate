@@ -69,7 +69,11 @@ class SdIndexReferences
                 get_.reset();
                 return result_;
             }
-            if (!references_.accept(value)) return finish(IndexScanStep::Invalid);
+            uint8_t target_table = 0;
+            ::geocaching::ByteView target_key;
+            if (!references_.next(target_table, target_key) || !references_.accept(value)) return finish(IndexScanStep::Invalid);
+            remember(table_ == 5 ? target_key : ::geocaching::ByteView{attempt_key_.data(), 16},
+                     table_ == 5 ? ::geocaching::ByteView{attempt_key_.data(), 48} : target_key);
             get_.reset();
             return startReference();
         }
@@ -136,11 +140,47 @@ class SdIndexReferences
         {
             TxAttemptView attempt;
             if (!decodeTxAttempt(row.key, row.value, attempt)) return finish(IndexScanStep::Invalid);
+            if (known({}, attempt.request_key)) return result_;
             std::memcpy(attempt_key_.data(), attempt.request_key.data, attempt_key_.size());
             return loadReference(5, {attempt_key_.data(), attempt_key_.size()});
         }
+        // Every row still passes the normal scan/frame/shape checks. Only the
+        // repeated relationship lookup is elided, within this pinned root and
+        // immutable mutation overlay. Eviction merely causes another lookup.
+        if (table_ == 5)
+        {
+            OutgoingView outgoing;
+            if (!decodeOutgoing(row.key, row.value, outgoing)) return finish(IndexScanStep::Invalid);
+            if (known(outgoing.task_id, row.key)) return result_;
+        }
+        else if (table_ == 10)
+        {
+            TaskView task;
+            if (!decodeTask(row.key, row.value, task)) return finish(IndexScanStep::Invalid);
+            bool complete = true;
+            for (size_t i = 0; i < task.request_count; ++i) complete &= known(row.key, task.requests[i]);
+            if (complete) return result_;
+        }
+        std::memcpy(attempt_key_.data(), row.key.data, row.key.size);
         if (!references_.begin(row)) return finish(IndexScanStep::Invalid);
         return startReference();
+    }
+
+    bool known(::geocaching::ByteView task, ::geocaching::ByteView request) const
+    {
+        for (size_t i = 0; i < proof_count_; ++i)
+            if ((!task.size || (task.size == 16 && !std::memcmp(proofs_[i].data(), task.data, 16))) &&
+                request.size == 48 && !std::memcmp(proofs_[i].data() + 16, request.data, 48)) return true;
+        return false;
+    }
+    void remember(::geocaching::ByteView task, ::geocaching::ByteView request)
+    {
+        if (known(task, request)) return;
+        auto& proof = proofs_[proof_next_];
+        std::memcpy(proof.data(), task.data, 16);
+        std::memcpy(proof.data() + 16, request.data, 48);
+        proof_next_ = (proof_next_ + 1) % proofs_.size();
+        if (proof_count_ < proofs_.size()) ++proof_count_;
     }
 
     IndexScanStep startReference()
@@ -163,6 +203,8 @@ class SdIndexReferences
     std::optional<SdIndexGet> get_;
     ::geocaching::storage::TaskReferenceCheck references_;
     std::array<uint8_t, 48> attempt_key_{};
+    std::array<std::array<uint8_t, 64>, 4> proofs_{};
+    uint8_t proof_count_ = 0, proof_next_ = 0;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0;
     const ::geocaching::storage::MutationView* mutations_ = nullptr;
@@ -172,5 +214,5 @@ class SdIndexReferences
     uint8_t table_ = 5;
     IndexScanStep result_ = IndexScanStep::Idle;
 };
-static_assert(sizeof(SdIndexReferences) <= 1792, "Reference recovery must use bounded metadata and an external frame");
+static_assert(sizeof(SdIndexReferences) <= 2048, "Reference recovery keeps only four proven relationships and an external frame");
 } // namespace platform::esp::arduino_common::geocaching

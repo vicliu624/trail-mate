@@ -1,5 +1,8 @@
 #pragma once
 #include "geocaching/protocol/directory_reply.h"
+#include "geocaching/protocol/publish_request.h"
+#include "geocaching/protocol/publish_response.h"
+#include "geocaching/protocol/verify_record.h"
 #include "geocaching/storage/queued_request.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
 
@@ -14,11 +17,13 @@ class SdIndexedDirectoryReply
     bool begin(const ::geocaching::storage::IndexRootView& root, unsigned copy, ::geocaching::ByteView key,
                uint8_t operation, ::geocaching::ByteView response,
                ::geocaching::storage::QueuedRequestWorkspace& workspace, uint8_t* frame, size_t capacity,
-               ::geocaching::storage::IndexRootBytes& candidate)
+               ::geocaching::storage::IndexRootBytes& candidate,
+               ::geocaching::protocol::RecordCrypto* crypto = nullptr, uint8_t* verification = nullptr, size_t verification_capacity = 0)
     {
         using namespace ::geocaching;
         if (result_ != IndexedCommitStep::Idle || key.size != key_.size() || !key.data || copy > 1 ||
-            (operation != 0 && operation != 2) || !response.data || response.size > kMaxApplicationBytes) return false;
+            operation > 2 || !response.data || response.size > kMaxApplicationBytes ||
+            (operation == 1 && (!crypto || !verification || !verification_capacity || response.size > 512))) return false;
         const auto overlaps = [](ByteView a, ByteView b)
         {
             const auto x = reinterpret_cast<uintptr_t>(a.data), y = reinterpret_cast<uintptr_t>(b.data);
@@ -28,9 +33,14 @@ class SdIndexedDirectoryReply
         for (size_t i = 0; i < 5; ++i)
         {
             if (overlaps(response, buffers[i])) return false;
+            if (operation == 1 && overlaps({verification, verification_capacity}, buffers[i])) return false;
             for (size_t j = 0; j < i; ++j)
                 if (overlaps(buffers[i], buffers[j])) return false;
         }
+        if (operation == 1 && overlaps({verification, verification_capacity}, response)) return false;
+        crypto_ = crypto;
+        verification_ = verification;
+        verification_capacity_ = verification_capacity;
         std::memcpy(key_.data(), key.data, key_.size());
         root_ = root;
         copy_ = copy;
@@ -80,9 +90,23 @@ class SdIndexedDirectoryReply
             RequestId id;
             std::memcpy(id.bytes.data(), key_.data() + 32, 16);
             protocol::DirectoryCapabilities capabilities;
-            const bool valid = operation_code_ == 0
-                                   ? protocol::decodeDirectoryCapabilities(response_, id, capabilities) && protocol::matchesCapabilitiesRequest(outgoing.request, id, response_.size)
-                                   : protocol::matchesQueryReply(outgoing.request, response_, id);
+            bool valid = operation_code_ == 0
+                             ? protocol::decodeDirectoryCapabilities(response_, id, capabilities) && protocol::matchesCapabilitiesRequest(outgoing.request, id, response_.size)
+                             : protocol::matchesQueryReply(outgoing.request, response_, id);
+            if (operation_code_ == 1)
+            {
+                protocol::PublishRequestView request;
+                protocol::VerifiedRecordView record;
+                protocol::PublishDisposition disposition;
+                valid = protocol::decodePublishRequest(outgoing.request, id, request) && response_.size <= request.budget &&
+                        protocol::verifyGeocache(request.signed_cache, *crypto_, verification_, verification_capacity_, record) == protocol::VerificationResult::Valid &&
+                        protocol::decodePublishResponse(response_, id, record.id, record.hash, record.record.revision, record.record.state, disposition);
+                if (valid)
+                {
+                    cache_ = record.id;
+                    hash_ = record.hash;
+                }
+            }
             if (!valid) return fail(IndexedCommitStep::Invalid);
             duplicate_ = outgoing.state == 4;
             if (duplicate_ && (outgoing.terminal_data.size != response_.size ||
@@ -101,9 +125,12 @@ class SdIndexedDirectoryReply
             TaskView task;
             OutgoingView outgoing;
             const ByteView task_key{task_id_.data(), task_id_.size()}, key{key_.data(), key_.size()};
-            if (!decodeTask(task_key, read.value(), task) || task.kind != 3 ||
+            if (!decodeTask(task_key, read.value(), task) || task.kind != (operation_code_ == 1 ? 1 : 3) ||
                 !decodeOutgoing(key, {workspace_->outgoing, outgoing_size_}, outgoing) ||
                 !requestBelongsToTask(task_key, task, key, outgoing)) return fail(IndexedCommitStep::Invalid);
+            if (operation_code_ == 1 && (task.cache_id.size != 32 || task.revision_hash.size != 32 ||
+                                         std::memcmp(task.cache_id.data, cache_.bytes.data(), 32) ||
+                                         std::memcmp(task.revision_hash.data, hash_.bytes.data(), 32))) return fail(IndexedCommitStep::Invalid);
             if (duplicate_) return fail(IndexedCommitStep::Verified);
             if (!task.continue_intent || task.state == 5 || read.value().size > workspace_->task.size()) return fail(IndexedCommitStep::Invalid);
             task_size_ = read.value().size;
@@ -163,6 +190,11 @@ class SdIndexedDirectoryReply
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::ByteView response_;
+    ::geocaching::protocol::RecordCrypto* crypto_ = nullptr;
+    ::geocaching::GeocacheId cache_;
+    ::geocaching::RevisionHash hash_;
+    uint8_t* verification_ = nullptr;
+    size_t verification_capacity_ = 0;
     ::geocaching::storage::QueuedRequestWorkspace* workspace_ = nullptr;
     ::geocaching::storage::IndexRootBytes* candidate_ = nullptr;
     std::array<::geocaching::storage::MutationView, 2> mutations_{};

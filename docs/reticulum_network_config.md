@@ -1,16 +1,83 @@
 # Reticulum Network Configuration
 
-Trail Mate reads its Reticulum interface and LXMF propagation client setup from:
+Trail Mate stores its Reticulum interface and LXMF propagation client setup in
+the canonical TMS configuration:
 
 ```text
-/trailmate/reticulum/config.json
+/trailmate/config.tms
 ```
 
-The file is loaded after the SD card becomes available. A valid SD configuration
-becomes the active configuration and is cached in NVS as the last-known-good
-copy. If the SD card or file is unavailable at the next boot, Trail Mate uses the
-cached copy. Legacy Settings values are only used to construct factory defaults
-when neither source exists.
+An explicit TMS network configuration takes precedence over factory defaults,
+including entries the user has removed or disabled. The older
+`/trailmate/reticulum/config.json` is a one-time migration input, not the normal
+runtime configuration. The JSON example below describes that legacy format.
+
+## Built-in TCP entries and device editing
+
+The device retains its limit of three TCP entries. When IP interfaces are
+allowed and no explicit network configuration or legacy custom gateway exists,
+factory defaults add these enabled entries on port 4242, in this order:
+
+1. `sydney.reticulum.au`
+2. `node.reticulumnet.nl`
+3. `rmap.world`
+
+In **Settings → Mesh**, select **TCP Entry** 1, 2 or 3,
+then edit **Gateway Host** and **Gateway Port**. These fields read the active
+network snapshot and changes use the existing TMS save path. Clearing the host
+removes that entry and shifts subsequent TCP entries forward. Add entries in
+order, starting with the first empty slot. LoRa, AutoInterface, propagation
+settings and the other TCP entries are preserved. An explicit empty TCP list
+stays empty after reload. A pre-existing custom legacy gateway remains the sole
+TCP default during migration; factory seeds do not replace it. LoRa-only policy
+does not add the public defaults.
+
+**Restore Reticulum TCP defaults** explicitly replaces the TCP entries with the
+three enabled factory entries, while preserving LoRa, AutoInterface, identity
+and propagation settings. It uses the existing TMS save path. TCP fields and
+the restore action remain visible on Wi-Fi-capable devices regardless of the
+selected chat protocol or bearer; editing these entries does not itself change
+the bearer policy. Switching chat protocols reloads settings before rebuilding
+the list so previously hidden fields do not show stale `Not set` values.
+These UI fixes have passed targeted syntax checks and the TCP restore host
+regression. The updated L2 firmware was built and flashed on 2026-09-24;
+physical verification of the restore action and public TCP connection remains pending.
+
+The ESP settings-model snapshot and action sink use this same active network
+configuration. Their `rt_tcp_slot` choice selects the entry addressed by
+`rt_wifi_host` and `rt_wifi_port`; ports accept explicit values from 1 to 65535.
+The bounded radio section still fits its existing 12-option capacity, without
+enlarging the settings snapshot. Direct action clients may also address a slot
+with `rt_tcp_1_host` / `rt_tcp_1_port` through `rt_tcp_3_host` /
+`rt_tcp_3_port`. These actions preserve other interfaces and request the normal
+TMS configuration save. Slot selection itself is transient UI state.
+
+### Selection evidence (2026-09-24)
+
+All three defaults use domains rather than a bare IP. The
+[RMAP discovery list](https://rmap.world/nodes.php) showed approximately 173 days
+since first observation for Sydney (3,883 announces), 185 days for RMAP's RNS
+transport (854 announces), and 125 days for ReticulumNet NL (480 announces),
+with recent announces. These are observation ages and counts, **not continuous
+uptime percentages**. [RMAP](https://rmap.world/info.html) and
+[ReticulumNet NL](https://www.reticulumnet.nl/en/get-started/) explicitly publish
+these public connection endpoints. Sydney is also listed by
+[directory.rns.recipes](https://directory.rns.recipes/).
+
+The available evidence supports choosing established, recently observed public
+nodes; it does not prove an SLA or a measured 30-day availability rate.
+`rns.fyi` describes uptime monitoring but returned HTTP 502 during this review.
+Local DNS currently resolves these domains through a proxy's 198.18.0.0/15
+addresses, so a successful local TCP connect is not treated as independent
+proof of the origin server's availability. Review this list before release;
+public services can change. The previous bare-IP candidate `103.195.4.226`
+was removed from defaults because a one-off connection was insufficient evidence.
+
+The host regression `test_reticulum_tcp_defaults.cpp` exercises the actual
+runtime implementation: default population, isolated edits, invalid inputs,
+removal/re-addition, TMS snapshot restoration, retention of an empty TCP list,
+legacy custom gateway preservation and LoRa-only policy. It does not simulate
+physical SD persistence or live device network connectivity.
 
 The embedded parser accepts at most 2 KB, five nesting levels, 128 structural
 tokens, and 128 bytes per JSON string. Its DOM exists only during boot or an

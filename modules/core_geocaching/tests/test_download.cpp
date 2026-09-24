@@ -89,5 +89,44 @@ int main(int argc, char** argv)
     delayed.polled = DownloadOperationResult::Complete;
     pending.advance();
     if (pending.phase() != DownloadPhase::Cancelled) return 15;
+
+    // Recovery borrows its preview for this call only. A late read must not
+    // expose Waiting or accept a response until the persistent port is ready.
+    for (unsigned scenario = 0; scenario < 3; ++scenario)
+    {
+        Port restored_port;
+        DownloadClient restored(restored_port, crypto);
+        auto preview = summary;
+        std::string transient_name(summary.name);
+        preview.name = transient_name;
+        if (restored.resume(source, id, preview, 1, DownloadOperationResult::Rejected) ||
+            restored.phase() != DownloadPhase::Idle ||
+            !restored.resume(source, id, preview, 1, DownloadOperationResult::Pending)) return 16;
+        transient_name.assign(transient_name.size(), 'x');
+        restored.advance();
+        if (restored.phase() != DownloadPhase::Submitting ||
+            restored.accept(source, response, scratch.data(), scratch.size()) || restored_port.commits) return 17;
+        if (scenario == 1)
+        {
+            restored_port.polled = DownloadOperationResult::Rejected;
+            restored.advance();
+            if (restored.phase() != DownloadPhase::Failed) return 18;
+        }
+        else if (scenario == 2)
+        {
+            if (!restored.cancel() || restored.phase() != DownloadPhase::Cancelling) return 19;
+            restored_port.polled = DownloadOperationResult::Complete;
+            restored.advance();
+            if (restored.phase() != DownloadPhase::Cancelled) return 20;
+        }
+        else
+        {
+            restored_port.polled = restored_port.installation = DownloadOperationResult::Complete;
+            restored.advance();
+            if (restored.phase() != DownloadPhase::Waiting ||
+                !restored.accept(source, response, scratch.data(), scratch.size()) ||
+                restored.phase() != DownloadPhase::Stored || restored_port.commits != 1) return 21;
+        }
+    }
     return 0;
 }

@@ -22,6 +22,7 @@ class IndexedDispatchStore final : public RequestDispatchStore
         blocked_ = copy > 1 || !::geocaching::storage::validIndexRoot(root) || root.shards.data != roots_[copy]->data() + 48;
     }
     bool needsRecovery() const override { return blocked_; }
+    void bindWorkspace(uint8_t* frame) { frame_ = frame; }
     ~IndexedDispatchStore() override { clear(); }
     bool busy() const { return phase_ != Phase::None; }
     bool commitPending() const override { return phase_ == Phase::Begin || phase_ == Phase::Update || phase_ == Phase::Expire; }
@@ -65,6 +66,7 @@ class IndexedDispatchStore final : public RequestDispatchStore
             if (!owner_.acquire(this)) return DispatchReadResult::Pending;
             revision_ = root_.revision;
             std::memcpy(key_.data(), key.data, 48);
+            send_size_ = 0;
             if (!io_.emplace<SdIndexGet>(volume_).begin(root_, 5, {key_.data(), 48}, frame_, capacity_)) return readError();
             phase_ = Phase::SendRequest;
             return DispatchReadResult::Pending;
@@ -89,6 +91,13 @@ class IndexedDispatchStore final : public RequestDispatchStore
                 clear();
                 return DispatchReadResult::Ready;
             }
+            if (send_size_)
+            {
+                out.request = {workspace_.outgoing, send_size_};
+                out.stopped = false;
+                clear();
+                return DispatchReadResult::Ready;
+            }
             if (!io_.emplace<SdIndexGet>(volume_).begin(root_, 5, {key_.data(), 48}, frame_, capacity_)) return readError();
             phase_ = Phase::SendReload;
             return DispatchReadResult::Pending;
@@ -104,6 +113,22 @@ class IndexedDispatchStore final : public RequestDispatchStore
         }
         std::memcpy(task_id_.data(), outgoing.task_id.data, task_id_.size());
         stopped_ = !outgoing.continue_intent;
+        // The encoding workspace is idle between the durable begin-attempt
+        // commit and transport submission. Preserve the request there while
+        // the task lookup reuses frame_. Small/aliased workspaces fall back to
+        // the original reload path; no extra payload allocation is required.
+        const auto disjoint = [&](const uint8_t* bytes, size_t size)
+        {
+            const auto a = reinterpret_cast<uintptr_t>(workspace_.outgoing), b = reinterpret_cast<uintptr_t>(bytes);
+            return a <= b ? b - a >= outgoing.request.size : a - b >= size;
+        };
+        if (workspace_.outgoing && outgoing.request.size <= workspace_.outgoing_capacity &&
+            disjoint(frame_, capacity_) && disjoint(roots_[0]->data(), roots_[0]->size()) &&
+            disjoint(roots_[1]->data(), roots_[1]->size()))
+        {
+            std::memcpy(workspace_.outgoing, outgoing.request.data, outgoing.request.size);
+            send_size_ = outgoing.request.size;
+        }
         if (!io_.emplace<SdIndexGet>(volume_).begin(root_, 10, {task_id_.data(), task_id_.size()}, frame_, capacity_)) return readError();
         phase_ = Phase::SendTask;
         return DispatchReadResult::Pending;
@@ -267,7 +292,7 @@ class IndexedDispatchStore final : public RequestDispatchStore
     IndexWorkspaceOwner& owner_;
     ::geocaching::storage::QueuedRequestWorkspace& workspace_;
     uint8_t* frame_;
-    size_t capacity_;
+    size_t capacity_, send_size_ = 0;
     ::geocaching::storage::StoredTime now_;
     std::array<uint8_t, 64> key_{};
     std::array<uint8_t, 16> task_id_{};

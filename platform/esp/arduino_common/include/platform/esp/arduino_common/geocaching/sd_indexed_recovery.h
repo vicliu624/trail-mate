@@ -2,6 +2,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_checkpoint_index_import.h"
 #include "platform/esp/arduino_common/geocaching/sd_checkpoint_selection.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_initialize.h"
+#include "platform/esp/arduino_common/geocaching/sd_index_references.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_replay.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_root_reader.h"
 
@@ -12,6 +13,7 @@ enum class IndexedRecoveryStep : uint8_t
     Working,
     Restored,
     IoError,
+    OutOfMemory,
     VolumeChanged,
     RecoveryRequired
 };
@@ -157,10 +159,42 @@ class SdIndexedRecovery
                 if (!replay.accept(true, validation_frame_, validation_capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
                 return result_;
             }
-            if (status == IndexReplayStep::RetryLater) return finish(IndexedRecoveryStep::IoError);
+            if (status == IndexReplayStep::RetryLater || status == IndexReplayStep::IoError) return finish(IndexedRecoveryStep::IoError);
+            if (status == IndexReplayStep::OutOfMemory) return finish(IndexedRecoveryStep::OutOfMemory);
             if (status == IndexReplayStep::VolumeChanged) return finish(IndexedRecoveryStep::VolumeChanged);
             if (status != IndexReplayStep::Complete || !replay.selected(root_, copy_)) return finish(IndexedRecoveryStep::RecoveryRequired);
-            return finish(IndexedRecoveryStep::Restored);
+            // Root selection and replay only prove the newly applied suffix.
+            // Existing shards and their referenced values must also be readable
+            // before the application can publish new work on this snapshot.
+            if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+            phase_ = Phase::Audit;
+            return result_;
+        }
+        case Phase::Audit:
+        {
+            auto& scan = std::get<SdIndexScan>(io_);
+            const auto status = scan.step();
+            if (status == IndexScanStep::Working) return result_;
+            if (status == IndexScanStep::Item)
+            {
+                if (!scan.advance()) return finish(IndexedRecoveryStep::RecoveryRequired);
+                return result_;
+            }
+            if (status != IndexScanStep::End) return error(status);
+            if (++audit_table_ <= 13)
+            {
+                if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+                return result_;
+            }
+            if (!io_.template emplace<SdIndexReferences>(volume_).begin(root_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+            phase_ = Phase::References;
+            return result_;
+        }
+        case Phase::References:
+        {
+            const auto status = std::get<SdIndexReferences>(io_).step();
+            if (status == IndexScanStep::Working) return result_;
+            return status == IndexScanStep::End ? finish(IndexedRecoveryStep::Restored) : error(status);
         }
         }
         return finish(IndexedRecoveryStep::RecoveryRequired);
@@ -177,7 +211,9 @@ class SdIndexedRecovery
         Initialize,
         Import,
         Inventory,
-        Replay
+        Replay,
+        Audit,
+        References
     };
     IndexedRecoveryStep inventory()
     {
@@ -207,9 +243,10 @@ class SdIndexedRecovery
     size_t mutation_capacity_;
     Digest import_digest_;
     std::variant<std::monostate, SdIndexRootReader, SdCheckpointSelection<Digest>, SdIndexInitialize,
-                 SdCheckpointIndexImport<Digest>, SdJournalInventory, SdIndexReplay>
+                 SdCheckpointIndexImport<Digest>, SdJournalInventory, SdIndexReplay, SdIndexScan, SdIndexReferences>
         io_;
     unsigned copy_ = 0;
+    uint8_t audit_table_ = 1;
     bool root_present_ = false;
     Phase phase_ = Phase::Volume;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;

@@ -240,6 +240,7 @@ void refreshView()
         if (!source) return;
         ::ui::geocaching::Snapshot current;
         source->snapshot(page->section, current);
+        if (current.busy) return;
         if (current.generation == page->detail_generation) return;
         ::ui::geocaching::Item item;
         const bool same = source->item(page->section, page->detail_index, current.generation, item) &&
@@ -263,13 +264,17 @@ void refreshView()
             focused_row = true;
             break;
         }
-    p.snapshot = {};
-    if (source) source->snapshot(p.section, p.snapshot);
-    else std::snprintf(p.snapshot.status.data(), p.snapshot.status.size(), "Geocaching service unavailable");
+    ::ui::geocaching::Snapshot current;
+    if (source) source->snapshot(p.section, current);
+    else std::snprintf(current.status.data(), current.status.size(), "Geocaching service unavailable");
+    if (current.busy && p.valid && p.rendered_source == source && p.rendered_section == p.section &&
+        p.rendered_offset == p.offset) return;
+    p.snapshot = current;
     if (p.offset >= p.snapshot.count) p.offset = p.snapshot.count ? ((p.snapshot.count - 1) / p.window) * p.window : 0;
+    if (source) source->requestWindow(p.section, p.offset, p.window);
     if (p.valid && p.rendered_source == source && p.rendered_section == p.section &&
         p.rendered_offset == p.offset && old_generation == p.snapshot.generation) return;
-    p.valid = true;
+    p.valid = !current.busy;
     p.rendered_source = source;
     p.rendered_section = p.section;
     p.rendered_offset = p.offset;
@@ -318,7 +323,8 @@ void refreshView()
     if (!p.row_count)
     {
         auto* empty = lv_label_create(p.list);
-        lv_label_set_text(empty, source ? "No caches in this view" : "No cached items");
+        lv_label_set_text(empty, p.snapshot.busy ? "Loading caches..." : source ? "No caches in this view"
+                                                                                : "No cached items");
         styles::apply_label_muted(empty);
         lv_obj_set_width(empty, LV_PCT(100));
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);

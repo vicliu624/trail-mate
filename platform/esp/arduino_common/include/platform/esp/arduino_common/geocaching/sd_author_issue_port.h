@@ -1,6 +1,6 @@
 #pragma once
 #include "geocaching/usecase/author_issue.h"
-#include "platform/esp/arduino_common/geocaching/sd_request_store.h"
+#include "platform/esp/arduino_common/geocaching/publication_store.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -10,7 +10,7 @@ template <class Transport>
 class SdAuthorIssuePort final : public ::geocaching::AuthorIssuePort
 {
   public:
-    SdAuthorIssuePort(Transport& transport, SdRequestStore& store,
+    SdAuthorIssuePort(Transport& transport, PublicationStore& store,
                       ::geocaching::protocol::RecordCrypto& crypto,
                       const ::geocaching::storage::StoredTime& issued, ::geocaching::ByteView draft = {}, uint64_t generation = 0)
         : store_(store), transport_(transport), crypto_(crypto), issued_(issued), draft_(draft), generation_(generation) {}
@@ -52,7 +52,7 @@ class SdAuthorIssuePort final : public ::geocaching::AuthorIssuePort
     }
 
   private:
-    SdRequestStore& store_;
+    PublicationStore& store_;
     Transport& transport_;
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::StoredTime issued_;

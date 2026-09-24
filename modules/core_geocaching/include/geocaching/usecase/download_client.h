@@ -42,12 +42,14 @@ class DownloadClient
 {
   public:
     DownloadClient(DownloadPort& port, protocol::RecordCrypto& crypto) : port_(port), crypto_(crypto) {}
-    // Owner has restored the matching durable request and prepared its port.
-    // Preserve all preview checks, without submitting a second task.
+    // Owner has restored the matching durable request and started preparing its
+    // port. Pending preparation is polled before accepting network responses;
+    // it never submits a second task. Copy the borrowed preview immediately.
     bool resume(const Destination& source, const RequestId& request,
-                const protocol::SummaryView& summary, std::uint64_t generation)
+                const protocol::SummaryView& summary, std::uint64_t generation,
+                DownloadOperationResult prepared = DownloadOperationResult::Complete)
     {
-        if (phase_ != DownloadPhase::Idle || generation == 0 || summary.name.size() > kMaxNameBytes ||
+        if (prepared == DownloadOperationResult::Rejected || phase_ != DownloadPhase::Idle || generation == 0 || summary.name.size() > kMaxNameBytes ||
             !protocol::validRecordText(summary.name, false, true)) return false;
         expected_ = summary;
         std::memcpy(name_.data(), summary.name.data(), summary.name.size());
@@ -55,7 +57,7 @@ class DownloadClient
         source_ = source;
         request_ = request;
         generation_ = generation;
-        phase_ = DownloadPhase::Waiting;
+        phase_ = prepared == DownloadOperationResult::Pending ? DownloadPhase::Submitting : DownloadPhase::Waiting;
         return true;
     }
     bool begin(const Destination& source, const RequestId& request,

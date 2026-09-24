@@ -8,9 +8,10 @@
 #include "board/LoraBoard.h"
 #include "chat/infra/lxmf/lxmf_wire.h"
 #include "chat/infra/mesh_incoming_queue.h"
-#include "chat/ports/i_mesh_adapter.h"
 #include "chat/ports/i_geocaching_transport.h"
+#include "chat/ports/i_mesh_adapter.h"
 #include "chat/ports/i_mesh_peer_directory.h"
+#include "platform/esp/arduino_common/chat/infra/lxmf/geocaching_discovery_budget.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter_scratch.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_announce_ingestor.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_announce_scheduler.h"
@@ -205,6 +206,7 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
     std::string user_short_name_;
     runtime::AnnounceScheduler announce_scheduler_;
     runtime::RawRxTelemetry rx_telemetry_;
+    runtime::GeocachingDiscoveryBudget geocaching_discovery_budget_;
     std::size_t link_request_packet_len_ = 0;
     uint32_t next_app_packet_id_ = 1;
     bool peers_loaded_ = false;

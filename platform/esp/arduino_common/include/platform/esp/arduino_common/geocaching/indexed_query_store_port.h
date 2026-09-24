@@ -39,6 +39,9 @@ class IndexedQueryStorePort final : public QueryBrowsePort
         io_.reset();
         owner_.release(this);
     }
+    // The current response/page has its own lifetime and is not rebound.
+    void bindWorkspace(uint8_t* frame) { frame_ = frame; }
+    bool needsRecovery() const { return blocked_; }
     bool newRequestId(::geocaching::RequestId& out) override { return random_ && random_(context_, out.bytes.data()); }
     ::geocaching::QueryPersistence submit(const ::geocaching::DirectoryEntry& directory, const ::geocaching::RequestId& id,
                                           ::geocaching::ByteView request) override
@@ -99,7 +102,11 @@ class IndexedQueryStorePort final : public QueryBrowsePort
                                                                              pending_ == Pending::Page ? 2 : 0, {response_, response_size_}, workspace_, frame_, capacity_, *roots_[1 - copy_]);
             return begun ? Result::Pending : reject();
         }
-        if (!owner_.heldBy(this) || root_.revision != revision_) return reject();
+        if (!owner_.heldBy(this) || root_.revision != revision_)
+        {
+            blocked_ = true;
+            return reject();
+        }
         IndexedCommitStep status;
         ::geocaching::storage::IndexRootView committed;
         bool selected = false;
@@ -122,7 +129,12 @@ class IndexedQueryStorePort final : public QueryBrowsePort
             if (status == IndexedCommitStep::Verified) selected = operation.committed(committed);
         }
         if (status == IndexedCommitStep::Working) return Result::Pending;
-        if (status != IndexedCommitStep::Verified || !selected) return reject();
+        if (status != IndexedCommitStep::Verified || !selected)
+        {
+            blocked_ = status == IndexedCommitStep::IoError || status == IndexedCommitStep::VolumeChanged ||
+                       status == IndexedCommitStep::RecoveryRequired || status == IndexedCommitStep::Verified;
+            return reject();
+        }
         if (committed.revision != root_.revision) copy_ = 1 - copy_;
         root_ = committed;
         if (pending_ == Pending::Capabilities || pending_ == Pending::Page)
@@ -169,7 +181,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
     }
     bool accepted(const ::geocaching::Destination& source, const ::geocaching::RequestId& id, ::geocaching::ByteView response) const override
     {
-        if (!valid_ || !response.data || response.size > ::geocaching::kMaxApplicationBytes) return false;
+        if (!valid_ || blocked_ || !response.data || response.size > ::geocaching::kMaxApplicationBytes) return false;
         std::array<uint8_t, 48> key;
         makeKey(source, id, key);
         if (has_stop_ && stopped_revision_ == root_.revision && key == stopped_key_) return true;
@@ -188,7 +200,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
     void maintenanceStep() override
     {
         using namespace ::geocaching::storage;
-        if (pending_ != Pending::None || !maintenancePending()) return;
+        if (blocked_ || pending_ != Pending::None || !maintenancePending()) return;
         if (proof_ == Proof::Queued)
         {
             if (!owner_.acquire(this)) return;
@@ -213,6 +225,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
         if (status == IndexGetStep::Working) return;
         if (status != IndexGetStep::Ready)
         {
+            blocked_ = status == IndexGetStep::IoError || status == IndexGetStep::VolumeChanged || status == IndexGetStep::Invalid;
             finishProof(false);
             return;
         }
@@ -271,7 +284,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
         ::geocaching::storage::StoredTime time;
     };
     using Operation = std::variant<std::monostate, QueuedRequest, SdIndexedNewTask, SdIndexedDirectoryReply, SdIndexedStopTask, SdIndexGet>;
-    bool available() const { return valid_ && pending_ == Pending::None && proof_ != Proof::Outgoing && proof_ != Proof::Task && copy_ < 2; }
+    bool available() const { return valid_ && !blocked_ && pending_ == Pending::None && proof_ != Proof::Outgoing && proof_ != Proof::Task && copy_ < 2; }
     bool allocate()
     {
         io_.reset(new (std::nothrow) Operation);
@@ -330,7 +343,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
     mutable size_t proof_size_ = 0;
     uint64_t generation_ = 0, revision_ = 0;
     uint64_t stopped_revision_ = 0, proof_revision_ = 0;
-    bool valid_ = false;
+    bool valid_ = false, blocked_ = false;
     bool response_committed_ = false, page_visible_ = false, has_stop_ = false;
     Pending pending_ = Pending::None;
     mutable Proof proof_ = Proof::None;

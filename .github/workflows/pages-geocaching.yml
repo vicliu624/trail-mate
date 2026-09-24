@@ -1,0 +1,63 @@
+name: Pages Geocaching
+
+on:
+  workflow_dispatch:
+    inputs:
+      previous_pages_run:
+        description: Successful main-branch Pages run whose unchanged simulator and release assets can be reused
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/configure-pages@v6
+      - name: Reuse a verified Pages artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_RUN: ${{ inputs.previous_pages_run }}
+        run: |
+          [[ "$BASE_RUN" =~ ^[0-9]+$ ]]
+          gh run view "$BASE_RUN" --json conclusion,headBranch,workflowName > "$RUNNER_TEMP/base-run.json"
+          jq -e '.conclusion == "success" and .headBranch == "main" and .workflowName == "Pages"' "$RUNNER_TEMP/base-run.json"
+          gh run download "$BASE_RUN" -n github-pages -D "$RUNNER_TEMP/base-pages"
+          mkdir -p "$RUNNER_TEMP/publish"
+          tar -xf "$RUNNER_TEMP/base-pages/artifact.tar" -C "$RUNNER_TEMP/publish"
+      - name: Build and verify the Geocaching page
+        working-directory: site
+        run: |
+          npm ci --ignore-scripts
+          npm run build:geocaching
+          node --test ../tests/site/geocaching-protocol.test.mjs
+      - name: Overlay the Geocaching page and navigation
+        run: |
+          cp -a site/geocaching "$RUNNER_TEMP/publish/"
+          cp site/index.html site/THIRD_PARTY.md "$RUNNER_TEMP/publish/"
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/publish
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v5
+        id: deployment

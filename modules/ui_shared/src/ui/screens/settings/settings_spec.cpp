@@ -68,6 +68,8 @@ constexpr SettingSpec kSpecs[] = {
     {SettingId::RtIdentityHash, "rt_identity_hash", DynamicOptionKind::None},
     {SettingId::RtLxmfAddress, "rt_lxmf_address", DynamicOptionKind::None},
     {SettingId::RtWifiGateway, "rt_wifi_gateway", DynamicOptionKind::None},
+    {SettingId::RtTcpSlot, "rt_tcp_slot", DynamicOptionKind::None},
+    {SettingId::RtTcpDefaults, "rt_tcp_defaults", DynamicOptionKind::None},
     {SettingId::RtWifiHost, "rt_wifi_host", DynamicOptionKind::None},
     {SettingId::RtWifiPort, "rt_wifi_port", DynamicOptionKind::None},
     {SettingId::RtWifiAuto, "rt_wifi_auto", DynamicOptionKind::None},
@@ -271,6 +273,7 @@ bool is_reticulum_mesh(SettingId id)
     case SettingId::RtIdentityHash:
     case SettingId::RtLxmfAddress:
     case SettingId::RtWifiGateway:
+    case SettingId::RtTcpSlot:
     case SettingId::RtWifiHost:
     case SettingId::RtWifiPort:
     case SettingId::RtWifiAuto:
@@ -348,6 +351,7 @@ bool is_reticulum_wifi_detail(SettingId id)
 {
     switch (id)
     {
+    case SettingId::RtTcpSlot:
     case SettingId::RtWifiHost:
     case SettingId::RtWifiPort:
     case SettingId::RtWifiAuto:
@@ -520,6 +524,13 @@ bool is_settings_store_owned_toggle(SettingId id)
 
 bool should_show(SettingId id, const VisibilityContext& context)
 {
+    // Geocaching uses Reticulum independently of the selected chat protocol.
+    // Keep IP configuration editable even when the current bearer is LoRa-only.
+    if (id == SettingId::RtTcpSlot || id == SettingId::RtTcpDefaults ||
+        id == SettingId::RtWifiHost || id == SettingId::RtWifiPort)
+    {
+        return context.wifi_supported;
+    }
     if (id == SettingId::Unknown)
     {
         return true;

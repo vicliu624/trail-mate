@@ -1,4 +1,5 @@
 #pragma once
+#include "geocaching/storage/draft_edit.h"
 #include "geocaching/storage/draft_publication.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
 
@@ -10,6 +11,22 @@ class SdIndexedDraftSave
 {
   public:
     explicit SdIndexedDraftSave(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    bool beginEdit(const ::geocaching::storage::IndexRootView& root, unsigned copy, ::geocaching::ByteView key,
+                   uint8_t* bytes, size_t size, size_t writable_capacity, uint64_t expected, uint8_t* frame, size_t capacity,
+                   ::geocaching::storage::IndexRootBytes& candidate)
+    {
+        if (!bytes || size > writable_capacity) return false;
+        const ::geocaching::ByteView other[] = {root.shards, {candidate.data(), candidate.size()}, {frame, capacity}};
+        for (const auto buffer : other)
+        {
+            const auto a = reinterpret_cast<uintptr_t>(bytes), b = reinterpret_cast<uintptr_t>(buffer.data);
+            if (buffer.size && writable_capacity && (a <= b ? b - a < writable_capacity : a - b < buffer.size)) return false;
+        }
+        if (!begin(root, copy, key, {bytes, size}, expected, frame, capacity, candidate)) return false;
+        edit_bytes_ = bytes;
+        edit_capacity_ = writable_capacity;
+        return true;
+    }
     bool begin(const ::geocaching::storage::IndexRootView& root, unsigned copy, ::geocaching::ByteView key,
                ::geocaching::ByteView encoded, uint64_t expected_generation, uint8_t* frame, size_t capacity,
                ::geocaching::storage::IndexRootBytes& candidate)
@@ -59,6 +76,13 @@ class SdIndexedDraftSave
             if (status != IndexGetStep::Ready && status != IndexGetStep::NotFound) return readFailure(status);
             DraftView previous;
             if (status == IndexGetStep::Ready && !decodeDraft(mutation_.key, read.value(), previous)) return fail(IndexedCommitStep::Invalid);
+            if (edit_bytes_)
+            {
+                size_t size = mutation_.value.size;
+                if (!restoreDraftIdentity(mutation_.key, status == IndexGetStep::Ready ? &previous : nullptr, expected_, edit_bytes_, edit_capacity_, size) ||
+                    !decodeDraft(mutation_.key, {edit_bytes_, size}, next_)) return fail(IndexedCommitStep::Invalid);
+                mutation_.value = {edit_bytes_, size};
+            }
             const auto check = checkDraftUpdate(status == IndexGetStep::Ready ? &previous : nullptr, next_, expected_);
             if (check == DraftUpdateCheck::Allowed) return startCommit();
             if (check != DraftUpdateCheck::NeedsRetainedPublication) return fail(IndexedCommitStep::Invalid);
@@ -159,6 +183,8 @@ class SdIndexedDraftSave
     std::array<uint8_t, 16> task_key_{};
     std::array<uint8_t, 48> request_key_{};
     uint8_t* frame_ = nullptr;
+    uint8_t* edit_bytes_ = nullptr;
+    size_t edit_capacity_ = 0;
     size_t capacity_ = 0;
     uint64_t expected_ = 0;
     unsigned copy_ = 0;

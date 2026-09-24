@@ -1,0 +1,4 @@
+{
+  "endpoint": "wss://vertex-valuation-liz-projected.trycloudflare.com",
+  "discoverySeeds": ["cc2faac2e9a60045f2f37a903992e852"]
+}

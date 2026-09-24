@@ -2118,15 +2118,15 @@ bool LxmfAdapter::getGeocachingAuthorKey(uint8_t out[64]) const
 }
 
 bool LxmfAdapter::signGeocachingRecord(ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
-                                      uint8_t* output, size_t output_capacity, size_t& written)
+                                       uint8_t* output, size_t output_capacity, size_t& written)
 {
     return ::geocaching::protocol::signGeocacheRecord({record.data, record.size}, identity_,
-                                                     workspace, workspace_capacity, output, output_capacity, written);
+                                                      workspace, workspace_capacity, output, output_capacity, written);
 }
 
 MeshSendResult LxmfAdapter::sendCustomDataToDestination(const uint8_t destination_hash[16],
-                                                       const char* custom_type, ByteSpan data,
-                                                       bool response, std::array<uint8_t, 32>* accepted_lxmf_hash)
+                                                        const char* custom_type, ByteSpan data,
+                                                        bool response, std::array<uint8_t, 32>* accepted_lxmf_hash)
 {
     if (accepted_lxmf_hash) accepted_lxmf_hash->fill(0);
     if (!destination_hash || !custom_type || !custom_type[0] || strlen(custom_type) > 96 ||
@@ -2146,7 +2146,7 @@ MeshSendResult LxmfAdapter::sendCustomDataToDestination(const uint8_t destinatio
     const bool ok = dispatchLxmfPayload(*peer, payload.data(), size, false, &dispatch);
     if (ok && accepted_lxmf_hash) std::memcpy(accepted_lxmf_hash->data(), dispatch.message_hash, accepted_lxmf_hash->size());
     MeshSendResult result = ok ? MeshSendResult::success(dispatch.message_id)
-                              : MeshSendResult::fail(dispatch.failure, dispatch.message_id);
+                               : MeshSendResult::fail(dispatch.failure, dispatch.message_id);
     result.reticulum_identity = runtime::reticulumIdentityForPeer(*peer);
     return result;
 }
@@ -3588,7 +3588,9 @@ bool LxmfAdapter::processOneRadioPacket(
             return false;
         }
     }
-    if (budget.drop_public_discovery &&
+    const bool geocaching_discovery = runtime::GeocachingDiscoveryBudget::matches(
+        parsed, geocaching_announcement_handler_ != nullptr, budget);
+    if (budget.drop_public_discovery && !geocaching_discovery &&
         isPublicDiscoveryPacket(parsed) &&
         !isForegroundDiscoveryDestination(parsed.destination_hash))
     {
@@ -3646,7 +3648,12 @@ bool LxmfAdapter::processOneRadioPacket(
         return false;
     }
 
-    if (shouldDeferDiscoveryPacket(parsed, ingress_interface, budget))
+    if (geocaching_discovery && !geocaching_discovery_budget_.consume(millis()))
+    {
+        noteRxSummary(false, false, false, false, false, true);
+        return false;
+    }
+    if (!geocaching_discovery && shouldDeferDiscoveryPacket(parsed, ingress_interface, budget))
     {
         if (deferred_replay)
         {
@@ -3663,7 +3670,7 @@ bool LxmfAdapter::processOneRadioPacket(
         return false;
     }
 
-    if (!deferred_replay && ingress_wifi && !shouldProcessWifiIngressPacket(parsed, budget))
+    if (!geocaching_discovery && !deferred_replay && ingress_wifi && !shouldProcessWifiIngressPacket(parsed, budget))
     {
         if (budget.phase && std::strcmp(budget.phase, "nomad") == 0 &&
             (packet_len >= 256U ||

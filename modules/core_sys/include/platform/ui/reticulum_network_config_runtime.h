@@ -48,6 +48,11 @@ void poll(const chat::MeshConfig& legacy_config);
 const chat::reticulum::ReticulumNetworkConfig& active();
 bool validateForTms(const chat::reticulum::ReticulumNetworkConfig& config);
 bool setFromTms(const chat::reticulum::ReticulumNetworkConfig& config);
+// TCP ordinal, independent of LoRa/Auto interface ordering. Empty host removes
+// an existing entry; adding is allowed at the next unused ordinal only.
+bool updateTcpEndpoint(std::size_t slot, const char* host, uint16_t port);
+// Replace TCP entries only. The caller persists the updated TMS snapshot.
+bool restoreDefaultTcpEndpoints();
 bool snapshotForTms(const chat::MeshConfig& legacy_config,
                     chat::reticulum::ReticulumNetworkConfig* out);
 LegacyImportResult importLegacy(const chat::MeshConfig& legacy_config);

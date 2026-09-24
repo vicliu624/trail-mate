@@ -32,7 +32,7 @@ struct TestSource : ui::geocaching::Source
 {
     ui::geocaching::DraftInput draft;
     std::string draft_name, draft_description, draft_hint;
-    bool has_draft = false, fail_save = false;
+    bool has_draft = false, fail_save = false, snapshot_busy = false;
     unsigned pending_reads = 0;
     unsigned cancelled_reads = 0;
     bool fail_read = false;
@@ -42,9 +42,24 @@ struct TestSource : ui::geocaching::Source
     size_t saved_index = SIZE_MAX;
     size_t last_open = 0;
     uint64_t generation = 1;
+    size_t requested_offset = 0, requested_count = 0;
+    unsigned pending_windows = 0;
+    ui::geocaching::Section requested_section = ui::geocaching::Section::Discover;
+    void requestWindow(ui::geocaching::Section section, size_t offset, size_t count) override
+    {
+        requested_section = section;
+        requested_offset = offset;
+        requested_count = count;
+    }
     void snapshot(ui::geocaching::Section section, ui::geocaching::Snapshot& out) override
     {
         out = {};
+        if (snapshot_busy)
+        {
+            out.busy = true;
+            std::snprintf(out.status.data(), out.status.size(), "Updating...");
+            return;
+        }
         out.generation = generation;
         out.count = 20;
         out.can_refresh = true;
@@ -58,6 +73,13 @@ struct TestSource : ui::geocaching::Source
     bool item(ui::geocaching::Section section, size_t index, uint64_t expected, ui::geocaching::Item& out) override
     {
         ++reads;
+        if (!requested_count || requested_count > 4 ||
+            (section == ui::geocaching::Section::Published && requested_section != section)) return false;
+        if (pending_windows)
+        {
+            --pending_windows;
+            return false;
+        }
         if (index >= 20 || expected != generation) return false;
         out = {};
         if (section == ui::geocaching::Section::Published)
@@ -203,10 +225,32 @@ int main(int argc, char** argv)
     const auto visible = lv_obj_get_child_count(list);
     if (visible < 2 || visible > 4 || source.reads != visible) return 4;
     if (!save(std::string(argv[3]) + "-list.ppm", screen)) return 5;
+    auto* first_row = lv_obj_get_child(list, 0);
+    const auto reads_before_busy = source.reads;
+    source.snapshot_busy = true;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (lv_obj_get_child_count(list) != visible || lv_obj_get_child(list, 0) != first_row ||
+        source.reads != reads_before_busy || std::strcmp(lv_label_get_text(lv_obj_get_child(root, 2)), "20 shared caches")) return 60;
+    lv_obj_send_event(lv_obj_get_child(tabs, 1), LV_EVENT_CLICKED, nullptr);
+    if (lv_obj_get_child_count(list) != 1 ||
+        std::strcmp(lv_label_get_text(lv_obj_get_child(list, 0)), "Loading caches...")) return 61;
+    lv_obj_send_event(lv_obj_get_child(tabs, 0), LV_EVENT_CLICKED, nullptr);
+    source.snapshot_busy = false;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (lv_obj_get_child_count(list) != visible) return 62;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     if (source.opens != 1 || source.last_open != 0) return 6;
     if (!save(std::string(argv[3]) + "-detail.ppm", screen)) return 11;
     auto* details_footer = lv_obj_get_child(root, 4);
+    const auto detail_reads = source.reads;
+    source.snapshot_busy = true;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (source.reads != detail_reads || lv_obj_has_state(lv_obj_get_child(details_footer, 3), LV_STATE_DISABLED) ||
+        std::strcmp(lv_label_get_text(lv_obj_get_child(list, 0)), "Cache 01 - woodland trail")) return 63;
+    source.snapshot_busy = false;
     lv_obj_send_event(lv_obj_get_child(details_footer, 3), LV_EVENT_CLICKED, nullptr);
     if (source.downloads != 1 || source.saved_index != 0 ||
         lv_obj_has_state(lv_obj_get_child(details_footer, 3), LV_STATE_DISABLED)) return 14;
@@ -234,7 +278,14 @@ int main(int argc, char** argv)
     lv_obj_send_event(lv_obj_get_child(lv_obj_get_child(root, 0), 0), LV_EVENT_CLICKED, nullptr);
     if (exits || lv_obj_get_child_count(list) != visible) return 12;
     auto* footer = lv_obj_get_child(root, 4);
+    source.pending_windows = 1;
     lv_obj_send_event(lv_obj_get_child(footer, 3), LV_EVENT_CLICKED, nullptr);
+    if (source.requested_offset != visible || source.requested_count != visible ||
+        !lv_obj_has_state(lv_obj_get_child(footer, 3), LV_STATE_DISABLED)) return 51;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (lv_obj_get_child_count(list) != visible || source.requested_offset != visible ||
+        lv_obj_has_state(lv_obj_get_child(footer, 3), LV_STATE_DISABLED)) return 52;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     if (source.opens != 2 || source.last_open != visible) return 7;
     lv_obj_send_event(lv_obj_get_child(lv_obj_get_child(root, 0), 0), LV_EVENT_CLICKED, nullptr);

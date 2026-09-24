@@ -1,6 +1,6 @@
 #pragma once
 #include "geocaching/usecase/publish_attempt.h"
-#include "platform/esp/arduino_common/geocaching/sd_request_store.h"
+#include "platform/esp/arduino_common/geocaching/publication_store.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -8,7 +8,7 @@ class SdPublishPort final : public ::geocaching::PublishAttemptPort
 {
   public:
     using Result = ::geocaching::PublishPersistence;
-    SdPublishPort(SdRequestStore& store, ::geocaching::protocol::RecordCrypto& crypto,
+    SdPublishPort(PublicationStore& store, ::geocaching::protocol::RecordCrypto& crypto,
                   const ::geocaching::Destination& local, const ::geocaching::GeocacheId& cache,
                   const ::geocaching::RevisionHash& hash, const std::array<uint8_t, 16>& task,
                   const ::geocaching::storage::StoredTime& created)
@@ -54,6 +54,7 @@ class SdPublishPort final : public ::geocaching::PublishAttemptPort
     }
     Result poll() override
     {
+        if (phase_ == Phase::Waiting && stop_after_submit_) return stop();
         if (phase_ != Phase::Submitting && phase_ != Phase::Committing && phase_ != Phase::Stopping) return Result::Rejected;
         const auto result = store_.stepCommit();
         if (result == JournalWriteResult::InProgress) return Result::Pending;
@@ -91,11 +92,16 @@ class SdPublishPort final : public ::geocaching::PublishAttemptPort
     Result stop()
     {
         const auto result = store_.stopTask(task_);
+        if (result == JournalWriteResult::Busy)
+        {
+            stop_after_submit_ = true;
+            return Result::Pending;
+        }
         phase_ = result == JournalWriteResult::InProgress ? Phase::Stopping : result == JournalWriteResult::Verified ? Phase::Complete
                                                                                                                      : Phase::Failed;
         return convert(result);
     }
-    SdRequestStore& store_;
+    PublicationStore& store_;
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::Destination local_, remote_;
     ::geocaching::RequestId request_;

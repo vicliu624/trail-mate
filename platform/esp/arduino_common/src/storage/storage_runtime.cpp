@@ -71,8 +71,14 @@ class SdMaintenanceAdapter final : public Adapter
 
     Result begin(Operation operation, OperationGeneration generation) override
     {
+        // A retry keeps the backend's logical cursor and lease. Fairness may
+        // choose another service only for a new owner generation; otherwise a
+        // Geocaching slice could complete a generation still held by chat/peers.
+        const bool retry = operation == previous_operation_ && generation == previous_generation_;
+        previous_operation_ = operation;
+        previous_generation_ = generation;
         next_step_ = Step::None;
-        if (operation == Operation::Persist && geocaching::browse_runtime::workPending())
+        if (!retry && operation == Operation::Persist && geocaching::browse_runtime::workPending())
         {
             const bool other_pending = (context_.chat_store && context_.chat_store->persistencePending()) ||
                                        (context_.peer_directory && context_.peer_directory->persistencePending());
@@ -317,6 +323,8 @@ class SdMaintenanceAdapter final : public Adapter
     }
 
     WorkerContext& context_;
+    Operation previous_operation_ = Operation::None;
+    OperationGeneration previous_generation_ = 0;
     Step next_step_ = Step::None;
     bool geocaching_turn_ = true;
     uint8_t geocaching_steps_ = 0;

@@ -1,0 +1,34 @@
+# Operator-owned configuration. Copy this directory to private persistent storage.
+# Public upstream candidates from directory.rns.recipes, checked 2026-09-24.
+[reticulum]
+  enable_transport = yes
+  share_instance = yes
+
+[logging]
+  loglevel = 4
+
+[interfaces]
+  # The WSS packet bridge connects here. Do not expose this listener publicly.
+  [[Browser packet bridge]]
+    type = TCPServerInterface
+    enabled = yes
+    listen_ip = 127.0.0.1
+    listen_port = 44242
+
+  [[Public upstream - Sydney]]
+    type = TCPClientInterface
+    enabled = yes
+    target_host = sydney.reticulum.au
+    target_port = 4242
+
+  [[Public upstream - ReticulumNet NL]]
+    type = TCPClientInterface
+    enabled = yes
+    target_host = node.reticulumnet.nl
+    target_port = 4242
+
+  [[Public upstream - RMAP]]
+    type = TCPClientInterface
+    enabled = yes
+    target_host = rmap.world
+    target_port = 4242

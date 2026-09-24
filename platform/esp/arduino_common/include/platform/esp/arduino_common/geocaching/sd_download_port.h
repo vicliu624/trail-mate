@@ -1,16 +1,16 @@
 #pragma once
 #include "geocaching/usecase/download_client.h"
 #include "geocaching/usecase/gpx_install.h"
+#include "platform/esp/arduino_common/geocaching/logical_download_store.h"
 #include "platform/esp/arduino_common/geocaching/sd_gpx_hash.h"
 #include "platform/esp/arduino_common/geocaching/sd_gpx_stage.h"
-#include "platform/esp/arduino_common/geocaching/sd_request_store.h"
 #include <memory>
 #include <new>
 
 namespace platform::esp::arduino_common::geocaching
 {
 // One storage-owner job. While staging, the owner must not admit another state
-// mutation: the GPX serializer borrows the committed Get response's arena.
+// mutation: the GPX serializer borrows the committed Get response's read lease.
 template <class Digest>
 class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocaching::GpxInstallPort
 {
@@ -20,7 +20,16 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
                    ::geocaching::protocol::RecordCrypto& crypto, const ::geocaching::Destination& local,
                    const ::geocaching::InstallIdentity& identity, const std::array<uint8_t, 16>& task,
                    const ::geocaching::storage::StoredTime& created)
-        : store_(store), state_(state), crypto_(crypto), local_(local), identity_(identity), task_(task), created_(created) {}
+        : legacy_(store, state), store_(legacy_), crypto_(crypto), local_(local), identity_(identity), task_(task), created_(created) {}
+    SdDownloadPort(DownloadStore& store, ::geocaching::protocol::RecordCrypto& crypto, const ::geocaching::Destination& local,
+                   const ::geocaching::InstallIdentity& identity, const std::array<uint8_t, 16>& task,
+                   const ::geocaching::storage::StoredTime& created)
+        : store_(store), crypto_(crypto), local_(local), identity_(identity), task_(task), created_(created) {}
+    ~SdDownloadPort() override
+    {
+        stage_.reset();
+        store_.releaseRead();
+    }
     Result submit(const ::geocaching::Destination& remote, const ::geocaching::RequestId& id, ::geocaching::ByteView request) override
     {
         if (phase_ != Phase::Idle) return Result::Rejected;
@@ -52,16 +61,23 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         std::memcpy(key_.data(), local_.bytes.data(), 16);
         std::memcpy(key_.data() + 16, remote.bytes.data(), 16);
         std::memcpy(key_.data() + 32, id.bytes.data(), 16);
-        ::geocaching::ByteView bytes;
+        phase_ = Phase::ReadWaiting;
+        return readWaiting();
+    }
+    Result readWaiting()
+    {
+        const auto loaded = store_.readDownload(key(), identity_.generation);
+        if (loaded == JournalWriteResult::InProgress || loaded == JournalWriteResult::Busy) return Result::Pending;
+        if (loaded != JournalWriteResult::Verified) return fail();
         ::geocaching::storage::OutgoingView outgoing;
         ::geocaching::protocol::GetRequestView request;
-        if (!store_.downloadIntentActive(key(), identity_.generation) || !state_.view().find(5, key(), bytes) ||
-            !::geocaching::storage::decodeOutgoing(key(), bytes, outgoing) || outgoing.state >= 4 ||
-            !::geocaching::protocol::decodeGetRequest(outgoing.request, id, request) || request.wanted_hash.size != 32 ||
+        if (!store_.downloadIntentActive(key(), identity_.generation) || !store_.readOutgoing(key(), outgoing) || outgoing.state >= 4 ||
+            !::geocaching::protocol::decodeGetRequest(outgoing.request, request_, request) || request.wanted_hash.size != 32 ||
             std::memcmp(request.cache_id.data, identity_.id.bytes.data(), 32) ||
             std::memcmp(request.wanted_hash.data, identity_.hash.bytes.data(), 32) ||
             std::memcmp(outgoing.task_id.data, task_.data(), 16)) return fail();
         phase_ = Phase::Waiting;
+        store_.releaseRead();
         return Result::Complete;
     }
     // Reconstruct an installation whose exact Get response is already durable.
@@ -74,20 +90,29 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         std::memcpy(key_.data(), local_.bytes.data(), 16);
         std::memcpy(key_.data() + 16, remote.bytes.data(), 16);
         std::memcpy(key_.data() + 32, id.bytes.data(), 16);
+        phase_ = Phase::ReadRecovery;
+        return Result::Pending;
+    }
+    Result readRecovery()
+    {
+        const auto loaded = store_.readDownload(key(), identity_.generation);
+        if (loaded == JournalWriteResult::InProgress || loaded == JournalWriteResult::Busy) return Result::Pending;
+        if (loaded != JournalWriteResult::Verified) return fail();
         ::geocaching::protocol::VerifiedRecordView record;
         if (!readRecord(record)) return fail();
         path(target_, "/trailmate/geocaching/caches/", identity_.id.bytes.data(), 32, ".gpx");
         path(staged_, "/trailmate/geocaching/.state/staging/", task_.data(), 16, ".gpx");
         path(backup_, "/trailmate/geocaching/.state/staging/", task_.data(), 16, ".old.gpx");
         ::geocaching::ByteView value;
-        if (!state_.view().find(12, {task_.data(), task_.size()}, value))
+        if (!store_.readInstall(task_, value))
         {
             phase_ = Phase::RecoverUnprepared;
             return Result::Pending;
         }
         ::geocaching::storage::InstallRecordView install;
         if (!::geocaching::storage::decodeInstallRecord({task_.data(), task_.size()}, value, install) ||
-            install.phase != ::geocaching::storage::InstallPhase::Prepared || install.generation != identity_.generation ||
+            (install.phase != ::geocaching::storage::InstallPhase::Prepared && install.phase != ::geocaching::storage::InstallPhase::Installed) ||
+            install.generation != identity_.generation ||
             std::memcmp(install.cache_id.data, identity_.id.bytes.data(), 32) ||
             std::memcmp(install.revision_hash.data, identity_.hash.bytes.data(), 32)) return fail();
         std::memcpy(new_hash_.data(), install.new_file_hash.data, 32);
@@ -98,7 +123,12 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             std::array<uint8_t, 32> recorded;
             if (!store_.installedFileProof(key(), identity_.generation, recorded, old_revision_) || recorded != old_hash_) return fail();
         }
-        phase_ = Phase::RecoverTarget;
+        if (install.phase == ::geocaching::storage::InstallPhase::Installed)
+        {
+            if (!store_.downloadCompleted(key(), identity_.generation)) return fail();
+            phase_ = Phase::RecoverInstalledTarget;
+        }
+        else phase_ = Phase::RecoverTarget;
         return Result::Pending;
     }
 
@@ -123,9 +153,15 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             return submitted ? Result::Complete : Result::Pending;
         }
         if (cancel_requested_) return stop();
+        if (phase_ == Phase::ReadWaiting) return readWaiting();
+        if (phase_ == Phase::ReadRecovery) return readRecovery();
+        if (phase_ >= Phase::RecoverInstalledTarget) return recoverInstalled();
         if (phase_ >= Phase::RecoverUnprepared) return recover();
         if (phase_ == Phase::StartStage)
         {
+            const auto loaded = store_.readDownload(key(), identity_.generation);
+            if (loaded == JournalWriteResult::InProgress || loaded == JournalWriteResult::Busy) return Result::Pending;
+            if (loaded != JournalWriteResult::Verified) return fail();
             ::geocaching::protocol::VerifiedRecordView record;
             if (!readRecord(record)) return fail();
             stage_.reset(new (std::nothrow) SdGpxStage);
@@ -170,6 +206,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             {
                 if (storage::sd_exists(history.data()))
                 {
+                    store_.releaseRead();
                     phase_ = Phase::Complete;
                     return Result::Complete;
                 }
@@ -179,6 +216,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             // The new target is already committed. On retention failure keep
             // the backup and its Installed marker as recovery evidence.
             if (storage::sd_rename(backup_.data(), history.data())) backup_moved_ = false;
+            store_.releaseRead();
             phase_ = Phase::Complete;
             return Result::Complete;
         }
@@ -210,6 +248,8 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         Stopping,
         Complete,
         Failed,
+        ReadWaiting,
+        ReadRecovery,
         RecoverUnprepared,
         RecoverOrphanName,
         RecoverOrphanMove,
@@ -221,11 +261,20 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         RecoverBackupHash,
         RecoverStage,
         RecoverStageOpen,
-        RecoverStageHash
+        RecoverStageHash,
+        RecoverInstalledTarget,
+        RecoverInstalledTargetHash,
+        RecoverInstalledBackup,
+        RecoverInstalledBackupOpen,
+        RecoverInstalledBackupHash,
+        RecoverInstalledHistoryOpen,
+        RecoverInstalledHistoryHash
     };
     ::geocaching::ByteView key() const { return {key_.data(), key_.size()}; }
     Result fail()
     {
+        stage_.reset();
+        store_.releaseRead();
         phase_ = Phase::Failed;
         return Result::Rejected;
     }
@@ -244,6 +293,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             return Result::Pending;
         }
         const auto stopped = store_.stopTask(task_);
+        if (stopped == JournalWriteResult::Busy) return Result::Pending;
         if (stopped == JournalWriteResult::InProgress)
         {
             phase_ = Phase::Stopping;
@@ -268,18 +318,67 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
     }
     bool readRecord(::geocaching::protocol::VerifiedRecordView& record)
     {
-        ::geocaching::ByteView bytes;
         ::geocaching::storage::OutgoingView outgoing;
         ::geocaching::protocol::GetResponseView response;
-        if (!store_.downloadIntentActive(key(), identity_.generation) || !state_.view().find(5, key(), bytes) ||
-            !::geocaching::storage::decodeOutgoing(key(), bytes, outgoing) ||
+        if ((!store_.downloadIntentActive(key(), identity_.generation) && !store_.downloadCompleted(key(), identity_.generation)) || !store_.readOutgoing(key(), outgoing) ||
+            outgoing.state != 4 || outgoing.task_id.size != task_.size() || std::memcmp(outgoing.task_id.data, task_.data(), task_.size()) ||
             !::geocaching::protocol::decodeGetResponse(outgoing.terminal_data, request_, 8192, response)) return false;
-        auto verified = ::geocaching::protocol::VerificationResult::WorkspaceTooSmall;
-        state_.withScratch([&](uint8_t* scratch, size_t capacity)
-                           { verified = ::geocaching::protocol::verifyGeocache(response.signed_cache, crypto_, scratch, capacity, record, &identity_.id, &identity_.hash); });
-        if (verified != ::geocaching::protocol::VerificationResult::Valid) return false;
-
-        return true;
+        return store_.verifyRecord(response.signed_cache, crypto_, identity_.id, identity_.hash, record);
+    }
+    Result recoverInstalled()
+    {
+        if (!store_.downloadCompleted(key(), identity_.generation)) return fail();
+        if (phase_ == Phase::RecoverInstalledHistoryOpen)
+        {
+            std::array<char, 128> history;
+            path(history, "/trailmate/geocaching/.state/history/", old_revision_.bytes.data(), 32, ".gpx");
+            if (!startHash(history.data())) return fail();
+            phase_ = Phase::RecoverInstalledHistoryHash;
+            return Result::Pending;
+        }
+        if (phase_ == Phase::RecoverInstalledTarget || phase_ == Phase::RecoverInstalledBackupOpen)
+        {
+            if (!startHash(phase_ == Phase::RecoverInstalledTarget ? target_.data() : backup_.data())) return fail();
+            phase_ = phase_ == Phase::RecoverInstalledTarget ? Phase::RecoverInstalledTargetHash : Phase::RecoverInstalledBackupHash;
+            return Result::Pending;
+        }
+        if (phase_ == Phase::RecoverInstalledBackup)
+        {
+            if (storage::sd_exists(backup_.data()))
+            {
+                phase_ = Phase::RecoverInstalledBackupOpen;
+                return Result::Pending;
+            }
+            // Retention may already have finished before the restart. Verify
+            // its destination rather than treating a missing backup as proof.
+            phase_ = Phase::RecoverInstalledHistoryOpen;
+            return Result::Pending;
+        }
+        if (hasher_->step() == GpxHashStep::Reading) return Result::Pending;
+        std::array<uint8_t, 32> actual;
+        if (!hasher_->result(actual)) return fail();
+        if (phase_ == Phase::RecoverInstalledTargetHash)
+        {
+            if (actual != new_hash_) return fail();
+            if (old_present_)
+            {
+                phase_ = Phase::RecoverInstalledBackup;
+                return Result::Pending;
+            }
+            store_.releaseRead();
+            phase_ = Phase::Complete;
+            return Result::Complete;
+        }
+        if (actual != old_hash_) return fail();
+        if (phase_ == Phase::RecoverInstalledHistoryHash)
+        {
+            store_.releaseRead();
+            phase_ = Phase::Complete;
+            return Result::Complete;
+        }
+        backup_moved_ = true;
+        phase_ = Phase::RetainHistory;
+        return Result::Pending;
     }
     Result continueInstall()
     {
@@ -469,8 +568,8 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             return Effect::Failed;
         }
     }
-    SdRequestStore& store_;
-    ::geocaching::storage::LogicalState& state_;
+    LogicalDownloadStore legacy_;
+    DownloadStore& store_;
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::Destination local_, remote_;
     ::geocaching::RequestId request_;

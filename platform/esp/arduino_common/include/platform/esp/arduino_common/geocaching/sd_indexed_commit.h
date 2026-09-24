@@ -15,6 +15,7 @@ enum class IndexedCommitStep : uint8_t
     Verified,
     Invalid,
     IoError,
+    OutOfMemory,
     VolumeChanged,
     RecoveryRequired,
     NeedsValidation,
@@ -58,7 +59,12 @@ class SdIndexedCommit
         if (references)
         {
             references_.reset(new (std::nothrow) SdIndexReferences(volume_));
-            if (!references_ || !references_->begin(parent, frame, capacity, mutations, count))
+            if (!references_)
+            {
+                fail(IndexedCommitStep::OutOfMemory);
+                return false;
+            }
+            if (!references_->begin(parent, frame, capacity, mutations, count))
             {
                 fail(IndexedCommitStep::Invalid);
                 return false;

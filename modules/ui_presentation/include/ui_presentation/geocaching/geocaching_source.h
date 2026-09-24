@@ -37,6 +37,9 @@ struct Snapshot
     bool can_refresh = false;
     bool has_more = false;
     bool can_create = false;
+    // No snapshot was acquired this time. Keep the last rendered view; this
+    // is neither a new generation nor evidence that the result list is empty.
+    bool busy = false;
 };
 struct DraftInput
 {
@@ -69,6 +72,9 @@ class Source
     // a section, including status and action availability. Strings are NUL
     // terminated. No list-sized copy or I/O is allowed here.
     virtual void snapshot(Section section, Snapshot& out) = 0;
+    // UI-thread notification only. A backend may asynchronously prepare this
+    // bounded window; item() returns false until its projection is ready.
+    virtual void requestWindow(Section, std::size_t, std::size_t) {}
     // Read a single row from this generation without I/O. False means stale.
     virtual bool item(Section section, std::size_t index, std::uint64_t generation, Item& out) = 0;
     virtual void refresh(Section section) = 0;

@@ -6,6 +6,7 @@
 #include "chat/infra/meshtastic/mt_region.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
+#include "platform/ui/reticulum_network_config_runtime.h"
 #include "platform/ui/screen_brightness_steps.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/time_runtime.h"
@@ -17,6 +18,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace ui::presentation_sources
@@ -320,6 +322,20 @@ void applyMeshCoreRegionPreset(chat::MeshConfig& mesh, uint8_t preset_id)
     mesh.tx_power = preset->tx_power_dbm;
 }
 
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+size_t selected_tcp_slot = 0;
+const chat::reticulum::NetworkInterfaceConfig* tcpEntry(size_t slot)
+{
+    const auto& network = platform::ui::reticulum_network_config::active();
+    for (size_t i = 0; i < network.interface_count; ++i)
+    {
+        const auto& entry = network.interfaces[i];
+        if (entry.type == chat::reticulum::NetworkInterfaceType::TcpClient && slot-- == 0) return &entry;
+    }
+    return nullptr;
+}
+#endif
+
 void buildProfileSection(ui::settings::SettingsSnapshot& out, const app::AppConfig& config)
 {
     ui::settings::SettingsSection* const section = addSection(out, "Profile");
@@ -395,12 +411,23 @@ void buildRadioSection(ui::settings::SettingsSnapshot& out, const app::AppConfig
         addBoolOption(section, "rt_wifi_auto", "Wi-Fi Auto", mesh.reticulum_wifi_auto_connect);
         addBoolOption(section, "rt_anonymous", "Anonymous Peer", mesh.reticulum_anonymous_peer);
         addBoolOption(section, "rt_location", "Location Requests", mesh.reticulum_allow_location_requests);
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+        {
+            const auto* entry = tcpEntry(selected_tcp_slot);
+            char port[6];
+            addUnsignedOption(section, "rt_tcp_slot", "TCP Entry", selected_tcp_slot + 1, ui::settings::SettingControlKind::Choice);
+            addOption(section, "rt_wifi_host", "Gateway Host", entry ? entry->target_host : "", ui::settings::SettingControlKind::Text);
+            std::snprintf(port, sizeof(port), "%u", static_cast<unsigned>(entry ? entry->target_port : 4242));
+            addOption(section, "rt_wifi_port", "Gateway Port", port, ui::settings::SettingControlKind::Text);
+        }
+#else
         addOption(section,
                   "rt_wifi_host",
                   "Gateway Host",
                   mesh.reticulum_wifi_gateway_host[0] ? mesh.reticulum_wifi_gateway_host : "UNSET",
                   ui::settings::SettingControlKind::Text);
         addUnsignedOption(section, "rt_wifi_port", "Gateway Port", mesh.reticulum_wifi_gateway_port);
+#endif
         addSignedOption(section, "rt_power", "TX Power", mesh.tx_power,
                         ui::settings::SettingControlKind::Choice);
         addBoolOption(section, "rt_tx", "Transmit", mesh.tx_enabled);
@@ -670,6 +697,42 @@ ui::UiActionResult RuntimeSettingsActionSink::applySetting(
 {
     const Direction direction = patchDirection(patch);
     const app::AppConfig& current = app::configFacade().readConfig();
+
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+    if (keyEquals(patch, "rt_tcp_slot"))
+    {
+        if (direction == Direction::None) return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
+        selected_tcp_slot = static_cast<size_t>(cycleInt(static_cast<int>(selected_tcp_slot), 0, 2, direction));
+        return ui::UiActionResult::success();
+    }
+    for (size_t slot = 0; slot < chat::reticulum::kMaxTcpClientInterfaces; ++slot)
+    {
+        char host_key[24], port_key[24];
+        std::snprintf(host_key, sizeof(host_key), "rt_tcp_%u_host", static_cast<unsigned>(slot + 1));
+        std::snprintf(port_key, sizeof(port_key), "rt_tcp_%u_port", static_cast<unsigned>(slot + 1));
+        const bool host = keyEquals(patch, host_key) || (slot == selected_tcp_slot && keyEquals(patch, "rt_wifi_host"));
+        const bool port = keyEquals(patch, port_key) || (slot == selected_tcp_slot && keyEquals(patch, "rt_wifi_port"));
+        if (!host && !port) continue;
+        const auto* entry = tcpEntry(slot);
+        char target[chat::reticulum::kInterfaceHostMaxLen + 1]{};
+        std::snprintf(target, sizeof(target), "%s", entry ? entry->target_host : "");
+        long number = entry ? entry->target_port : 4242;
+        if (port)
+        {
+            char* end = nullptr;
+            number = std::strtol(patch.value.c_str(), &end, 10);
+            if (!end || end == patch.value.c_str() || *end || number < 1 || number > 65535)
+                return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
+        }
+        if (!platform::ui::reticulum_network_config::updateTcpEndpoint(
+                slot, host ? patch.value.c_str() : target, static_cast<uint16_t>(number)))
+            return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
+        auto& facade = app::appFacade();
+        facade.requestSaveConfig(app::AppConfigChangeSet::mesh());
+        facade.applyMeshConfig();
+        return ui::UiActionResult::success();
+    }
+#endif
 
     if (keyEquals(patch, "node_name") || keyEquals(patch, "short_name"))
     {

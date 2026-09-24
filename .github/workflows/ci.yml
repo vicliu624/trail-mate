@@ -8,6 +8,22 @@ on:
   pull_request:
 
 jobs:
+  geocaching:
+    name: Geocaching Core and Device Session
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify protocol, storage and device session
+        run: |
+          cmake -S modules/core_geocaching/tests -B .codex-build/geocaching-native -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/geocaching-native --parallel 2
+          ctest --test-dir .codex-build/geocaching-native --output-on-failure --parallel 2
+
+      - name: Verify device session memory safety
+        run: sh modules/core_geocaching/tests/run_browse_runtime_asan.sh
+
   boundary:
     name: Boundary Check
     runs-on: ubuntu-latest
@@ -61,6 +77,9 @@ jobs:
 
       - name: Verify Settings navigation contract
         run: python3 tests/settings_navigation/test_contract.py
+
+      - name: Verify shared storage retry ownership and fairness
+        run: python3 platform/esp/common/tests/run_storage_adapter_retry.py
 
       - name: Verify ESP stack hygiene
         run: python3 scripts/check_esp_stack_hygiene.py

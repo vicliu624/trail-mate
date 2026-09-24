@@ -54,3 +54,17 @@ else()
 endif()
 add_test(NAME settings_item_layout COMMAND settings_item_layout)
 set_tests_properties(settings_item_layout PROPERTIES TIMEOUT 30)
+
+add_executable(settings_reticulum_tcp_visibility test_reticulum_tcp_visibility.cpp
+    "${REPO}/modules/ui_shared/src/ui/screens/settings/settings_spec.cpp"
+    "${REPO}/modules/core_chat/src/infra/mesh_protocol_utils.cpp")
+target_include_directories(settings_reticulum_tcp_visibility PRIVATE
+    "${REPO}/modules/ui_shared/include" "${REPO}/modules/core_chat/include"
+    "${REPO}/modules/core_sys/include")
+target_link_libraries(settings_reticulum_tcp_visibility PRIVATE lvgl)
+if(MSVC)
+    target_compile_options(settings_reticulum_tcp_visibility PRIVATE /UNDEBUG)
+else()
+    target_compile_options(settings_reticulum_tcp_visibility PRIVATE -UNDEBUG)
+endif()
+add_test(NAME settings_reticulum_tcp_visibility COMMAND settings_reticulum_tcp_visibility)

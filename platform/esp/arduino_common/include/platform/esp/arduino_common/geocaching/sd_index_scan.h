@@ -52,6 +52,15 @@ class SdIndexScan
         result_ = IndexScanStep::Working;
         return true;
     }
+    // Same lifetime as item(): the key is borrowed until advance(). Used by
+    // maintenance to preserve the backing checkpoint/journal reference.
+    bool indexedItem(::geocaching::storage::IndexedMutation& out) const
+    {
+        out = {};
+        if (result_ != IndexScanStep::Item) return false;
+        out = entry_;
+        return true;
+    }
     IndexScanStep step()
     {
         using namespace ::geocaching::storage;
@@ -108,15 +117,41 @@ class SdIndexScan
         }
         if (phase_ == Phase::Read)
         {
-            const int count = file_.read(bytes_.data() + read_, bytes_.size() - read_);
+            // After advance(), the previous value lease is released. Reuse
+            // that workspace to retain the previous reference while reading
+            // the next one. Small callers retain the original lookup path.
+            auto* incoming = capacity_ >= bytes_.size() ? frame_ : bytes_.data();
+            const int count = file_.read(incoming + read_, bytes_.size() - read_);
             if (count < 0) return fail(IndexScanStep::IoError);
             if (!count || static_cast<size_t>(count) > bytes_.size() - read_) return fail(IndexScanStep::Invalid);
             read_ += static_cast<uint16_t>(count);
             if (read_ != bytes_.size()) return result_;
-            if (!decodeIndexEntry({bytes_.data(), bytes_.size()}, volume_, entry_) || entry_.table != table_ ||
+            if (!decodeIndexEntry({incoming, bytes_.size()}, volume_, entry_) || entry_.table != table_ ||
                 static_cast<uint8_t>(::sys::crc32(entry_.key.data, entry_.key.size)) != bucket_ || entry_.location.record_sequence > newer_ ||
                 (position_ == head_.length - kIndexEntrySize && entry_.location.record_sequence != head_.sequence)) return fail(IndexScanStep::Invalid);
             newer_ = entry_.location.record_sequence;
+            const bool newest = position_ == head_.length - kIndexEntrySize;
+            const bool superseded = incoming != bytes_.data() && !newest && bytes_[21] == entry_.key.size &&
+                                    !std::memcmp(bytes_.data() + 52, entry_.key.data, entry_.key.size);
+            if (incoming != bytes_.data())
+            {
+                std::memcpy(bytes_.data(), incoming, bytes_.size());
+                entry_.key.data = bytes_.data() + 52;
+            }
+            // A preceding reference of the exact same key proves this older
+            // one obsolete, including when the newer entry is a tombstone.
+            // CRC, bucket and sequence checks above still cover every entry.
+            if (superseded)
+            {
+                phase_ = Phase::Seek;
+                return result_;
+            }
+            if (newest)
+            {
+                if (!operation_.emplace<SdIndexedValueReader>(volume_).begin(entry_, frame_, capacity_)) return fail(IndexScanStep::Invalid);
+                phase_ = Phase::Value;
+                return result_;
+            }
             if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head_.sequence, head_.length).begin(table_, entry_.key)) return fail(IndexScanStep::Invalid);
             phase_ = Phase::Latest;
             return result_;

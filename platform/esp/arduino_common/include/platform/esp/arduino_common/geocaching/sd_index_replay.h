@@ -13,6 +13,8 @@ enum class IndexReplayStep : uint8_t
     NeedsValidation,
     Complete,
     RetryLater,
+    IoError,
+    OutOfMemory,
     Invalid,
     VolumeChanged,
     RecoveryRequired
@@ -76,11 +78,18 @@ class SdIndexReplay
         if (!validation_frame || !validation_capacity ||
             (a <= b ? b - a < pending_frame.size : a - b < validation_capacity)) return false;
         validation_.reset(new (std::nothrow) SdIndexedCommit(volume_));
-        if (!validation_ || !validation_->begin(root_, copy_, pending_.mutations, pending_.count,
-                                                validation_frame, validation_capacity, *roots_[1 - copy_], true))
+        if (!validation_)
         {
+            result_ = IndexReplayStep::OutOfMemory;
+            return true;
+        }
+        if (!validation_->begin(root_, copy_, pending_.mutations, pending_.count,
+                                validation_frame, validation_capacity, *roots_[1 - copy_], true))
+        {
+            // A failed begin leaves a terminal result. Read it before releasing
+            // the validator so allocator pressure cannot masquerade as damage.
+            result_ = validation_->step() == IndexedCommitStep::OutOfMemory ? IndexReplayStep::OutOfMemory : IndexReplayStep::Invalid;
             validation_.reset();
-            result_ = IndexReplayStep::Invalid;
         }
         else result_ = IndexReplayStep::Working;
         return true;
@@ -94,6 +103,7 @@ class SdIndexReplay
             const auto status = validation_->step();
             if (status == IndexedCommitStep::Working) return result_;
             validation_.reset();
+            if (status == IndexedCommitStep::IoError) return result_ = IndexReplayStep::IoError;
             if (status != IndexedCommitStep::Validated)
                 return result_ = status == IndexedCommitStep::VolumeChanged ? IndexReplayStep::VolumeChanged : IndexReplayStep::Invalid;
             const auto frame = replay_.pendingFrame();
@@ -109,6 +119,7 @@ class SdIndexReplay
         {
             const auto status = index_->step();
             if (status == IndexTransactionStep::Working) return result_;
+            if (status == IndexTransactionStep::IoError) return result_ = IndexReplayStep::IoError;
             if (status == IndexTransactionStep::VolumeChanged) return result_ = IndexReplayStep::VolumeChanged;
             ::geocaching::storage::IndexRootView committed;
             if (status != IndexTransactionStep::Verified || !index_->committed(committed) ||

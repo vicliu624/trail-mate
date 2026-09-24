@@ -27,6 +27,8 @@ constexpr const char* kLegacyConfigPath = "/trailmate/reticulum/config.json";
 constexpr const char* kLegacyTempPath = "/trailmate/reticulum/config.tmp";
 constexpr const char* kLegacySchema = "trail-mate.reticulum";
 constexpr std::size_t kLegacyMaxBytes = 2U * 1024U;
+constexpr const char* kDefaultTcpHosts[] = {
+    "sydney.reticulum.au", "node.reticulumnet.nl", "rmap.world"};
 
 // This is the one long-lived Reticulum network configuration. It is allocated
 // in PSRAM because the Reticulum packet path reads it throughout normal
@@ -193,6 +195,25 @@ bool build_defaults(const chat::MeshConfig& legacy_config, NetworkConfig* out)
             tcp->target_port = legacy_config.reticulum_wifi_gateway_port != 0U
                                    ? legacy_config.reticulum_wifi_gateway_port
                                    : 4242U;
+        }
+        else
+        {
+            // Factory seeds only: an explicit TMS configuration (including
+            // removed or disabled entries) always takes precedence.
+            const auto& hosts = kDefaultTcpHosts;
+            static_assert(sizeof(hosts) / sizeof(hosts[0]) <= chat::reticulum::kMaxTcpClientInterfaces);
+            for (size_t i = 0; i < sizeof(hosts) / sizeof(hosts[0]); ++i)
+            {
+                char id[24];
+                std::snprintf(id, sizeof(id), "public-tcp-%u", static_cast<unsigned>(i + 1));
+                InterfaceConfig* tcp = nullptr;
+                if (!append_default_interface(out, chat::reticulum::NetworkInterfaceType::TcpClient, id, &tcp))
+                {
+                    return false;
+                }
+                std::snprintf(tcp->target_host, sizeof(tcp->target_host), "%s", hosts[i]);
+                tcp->target_port = 4242U;
+            }
         }
     }
     return true;
@@ -586,6 +607,114 @@ bool setFromTms(const NetworkConfig& config)
     *s_active = config;
     activate(Source::Tms, true);
     set_status("Reticulum configuration loaded from TMS");
+    return true;
+}
+
+bool updateTcpEndpoint(std::size_t slot, const char* host, uint16_t port)
+{
+    if (!host || slot >= chat::reticulum::kMaxTcpClientInterfaces || !valid_port(port) ||
+        !ensure_active() || !validate_config(*s_active)) return false;
+    for (std::size_t i = 0; host[i]; ++i)
+        if (i >= chat::reticulum::kInterfaceHostMaxLen || static_cast<unsigned char>(host[i]) <= 32 ||
+            host[i] == '/' || host[i] == '\\') return false;
+    std::size_t ordinal = 0;
+    std::size_t index = 0;
+    for (; index < s_active->interface_count; ++index)
+    {
+        if (s_active->interfaces[index].type != chat::reticulum::NetworkInterfaceType::TcpClient) continue;
+        if (ordinal++ == slot) break;
+    }
+    const bool append = index == s_active->interface_count;
+    if (append && (ordinal != slot || index >= chat::reticulum::kMaxNetworkInterfaces || !host[0])) return false;
+    if (!host[0])
+    {
+        for (std::size_t i = index + 1; i < s_active->interface_count; ++i)
+            s_active->interfaces[i - 1] = s_active->interfaces[i];
+        s_active->interfaces[--s_active->interface_count] = InterfaceConfig{};
+    }
+    else
+    {
+        const InterfaceConfig previous = s_active->interfaces[index];
+        auto& entry = s_active->interfaces[index];
+        if (append)
+        {
+            entry = InterfaceConfig{};
+            entry.type = chat::reticulum::NetworkInterfaceType::TcpClient;
+            entry.enabled = true;
+            // Select an unused ID even after earlier entries were removed.
+            for (unsigned suffix = 1; suffix <= chat::reticulum::kMaxNetworkInterfaces + 1; ++suffix)
+            {
+                std::snprintf(entry.id, sizeof(entry.id), "user-tcp-%u", suffix);
+                bool duplicate = false;
+                for (std::size_t i = 0; i < index; ++i)
+                    duplicate |= std::strcmp(entry.id, s_active->interfaces[i].id) == 0;
+                if (!duplicate) break;
+            }
+            ++s_active->interface_count;
+        }
+        std::snprintf(entry.target_host, sizeof(entry.target_host), "%s", host);
+        entry.target_port = port;
+        if (!validate_config(*s_active))
+        {
+            entry = previous;
+            if (append) --s_active->interface_count;
+            return false;
+        }
+    }
+    activate(Source::Tms, true);
+    set_status("Reticulum TCP configuration updated");
+    return true;
+}
+
+bool restoreDefaultTcpEndpoints()
+{
+    if (!ensure_active() || !validate_config(*s_active)) return false;
+#if defined(ESP_PLATFORM)
+    void* raw = heap_caps_malloc(sizeof(NetworkConfig), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#else
+    void* raw = std::malloc(sizeof(NetworkConfig));
+#endif
+    if (!raw) return false;
+    auto* candidate = new (raw) NetworkConfig(*s_active);
+    size_t kept = 0;
+    for (size_t i = 0; i < candidate->interface_count; ++i)
+    {
+        if (candidate->interfaces[i].type != chat::reticulum::NetworkInterfaceType::TcpClient)
+            candidate->interfaces[kept++] = candidate->interfaces[i];
+    }
+    candidate->interface_count = kept;
+    for (size_t i = kept; i < chat::reticulum::kMaxNetworkInterfaces; ++i)
+        candidate->interfaces[i] = InterfaceConfig{};
+    bool valid = true;
+    for (size_t i = 0; i < sizeof(kDefaultTcpHosts) / sizeof(kDefaultTcpHosts[0]); ++i)
+    {
+        char id[24];
+        // Avoid collisions with preserved non-TCP interface IDs.
+        unsigned suffix = 1;
+        bool duplicate;
+        do
+        {
+            std::snprintf(id, sizeof(id), "public-tcp-%u", suffix++);
+            duplicate = false;
+            for (size_t j = 0; j < candidate->interface_count; ++j)
+                duplicate |= std::strcmp(id, candidate->interfaces[j].id) == 0;
+        } while (duplicate);
+        InterfaceConfig* tcp = nullptr;
+        if (!append_default_interface(candidate, chat::reticulum::NetworkInterfaceType::TcpClient, id, &tcp))
+        {
+            valid = false;
+            break;
+        }
+        std::snprintf(tcp->target_host, sizeof(tcp->target_host), "%s", kDefaultTcpHosts[i]);
+        tcp->target_port = 4242;
+    }
+    valid = valid && validate_config(*candidate);
+    if (valid) *s_active = *candidate;
+    candidate->~NetworkConfig();
+    std::free(raw);
+    if (!valid) return false;
+    activate(Source::Tms, true);
+    set_status("Built-in Reticulum TCP entries restored");
     return true;
 }
 

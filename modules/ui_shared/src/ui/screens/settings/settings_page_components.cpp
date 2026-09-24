@@ -1447,6 +1447,48 @@ static bool perform_factory_reset()
     return true;
 }
 
+static void refresh_reticulum_tcp_fields()
+{
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+    const auto& network = ::platform::ui::reticulum_network_config::active();
+    size_t ordinal = 0;
+    g_settings.rt_wifi_gateway_host[0] = '\0';
+    copy_bounded(g_settings.rt_wifi_gateway_port, sizeof(g_settings.rt_wifi_gateway_port), "4242");
+    for (size_t i = 0; i < network.interface_count; ++i)
+    {
+        const auto& entry = network.interfaces[i];
+        if (entry.type != chat::reticulum::NetworkInterfaceType::TcpClient) continue;
+        if (ordinal++ != static_cast<size_t>(g_settings.rt_tcp_slot)) continue;
+        copy_bounded(g_settings.rt_wifi_gateway_host, sizeof(g_settings.rt_wifi_gateway_host), entry.target_host);
+        std::snprintf(g_settings.rt_wifi_gateway_port, sizeof(g_settings.rt_wifi_gateway_port), "%u", static_cast<unsigned>(entry.target_port));
+        break;
+    }
+#endif
+}
+
+static bool save_reticulum_tcp_fields()
+{
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+    char* end = nullptr;
+    const long port = std::strtol(g_settings.rt_wifi_gateway_port, &end, 10);
+    if (!end || *end || port < 1 || port > 65535 ||
+        !::platform::ui::reticulum_network_config::updateTcpEndpoint(
+            static_cast<size_t>(g_settings.rt_tcp_slot), g_settings.rt_wifi_gateway_host, static_cast<uint16_t>(port)))
+    {
+        ::ui::feedback::show_notice(::ui::i18n::tr("Invalid TCP entry; fill earlier slots first"), 3500);
+        refresh_reticulum_tcp_fields();
+        return false;
+    }
+    auto& app_ctx = app::appFacade();
+    app_ctx.requestSaveConfig(app::AppConfigChangeSet::mesh());
+    app_ctx.applyMeshConfig();
+    refresh_reticulum_tcp_fields();
+    return true;
+#else
+    return false;
+#endif
+}
+
 static void settings_load()
 {
 #if defined(ESP_PLATFORM)
@@ -1607,6 +1649,7 @@ static void settings_load()
                                               sizeof(g_settings.chat_psk));
     }
     refresh_reticulum_identity_fields(app_ctx, cfg);
+    refresh_reticulum_tcp_fields();
 
     if (chat::infra::isReticulumMeshProtocol(cfg.mesh_protocol))
     {
@@ -1635,6 +1678,7 @@ static void settings_load()
                           reticulum_cfg.reticulum_wifi_gateway_port != 0
                               ? reticulum_cfg.reticulum_wifi_gateway_port
                               : 4242));
+        refresh_reticulum_tcp_fields();
     }
     else
     {
@@ -2618,6 +2662,10 @@ static void on_text_save_clicked(lv_event_t* e)
         }
         if (id == settings::ui::SettingId::RtWifiHost)
         {
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+            save_reticulum_tcp_fields();
+            refresh_visible_item_values();
+#else
             app::IAppFacade& app_ctx = app::appFacade();
             commit_app_config(
                 app_ctx,
@@ -2630,9 +2678,14 @@ static void on_text_save_clicked(lv_event_t* e)
                         g_state.editing_item->text_value);
                 });
             app_ctx.applyMeshConfig();
+#endif
         }
         if (id == settings::ui::SettingId::RtWifiPort)
         {
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+            save_reticulum_tcp_fields();
+            refresh_visible_item_values();
+#else
             char* end = nullptr;
             long value = strtol(g_state.editing_item->text_value, &end, 10);
             if (end == g_state.editing_item->text_value || (end && *end != '\0') ||
@@ -2656,6 +2709,7 @@ static void on_text_save_clicked(lv_event_t* e)
                           sizeof(g_settings.rt_wifi_gateway_port),
                           "%u",
                           static_cast<unsigned>(value));
+#endif
         }
         if (id == settings::ui::SettingId::MtMqttHost)
         {
@@ -3469,6 +3523,13 @@ static void on_option_clicked(lv_event_t* e)
         prefs_put_int(payload->item->pref_key, payload->value);
     }
     update_item_value(*payload->widget);
+    if (id == settings::ui::SettingId::RtTcpSlot)
+    {
+        refresh_reticulum_tcp_fields();
+        refresh_visible_item_values();
+        modal_close();
+        return;
+    }
     if (id == settings::ui::SettingId::DisplayLocale)
     {
         if (!::ui::i18n::request_locale_by_index(
@@ -3543,6 +3604,7 @@ static void on_option_clicked(lv_event_t* e)
         }
         else
         {
+            settings_load();
             rebuild_list = true;
             ::ui::feedback::show_notice(::ui::i18n::tr("Protocol switched"), 2000);
         }
@@ -5049,6 +5111,8 @@ static const settings::ui::SettingOption kReticulumBearerOptions[] = {
     {"LoRa", static_cast<int>(chat::ReticulumInterfacePolicy::LoRaOnly)},
     {"Wi-Fi", static_cast<int>(chat::ReticulumInterfacePolicy::WifiGatewayOnly)},
 };
+static const settings::ui::SettingOption kReticulumTcpSlotOptions[] = {
+    {"1", 0}, {"2", 1}, {"3", 2}};
 static const settings::ui::SettingOption kChatContactAlertOptions[] = {
     {"OFF", kChatContactAlertsNone},
     {"Contacts Only", kChatContactAlertsContacts},
@@ -5239,6 +5303,10 @@ static settings::ui::SettingItem kMeshItems[] = {
     {"Display Name", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_display_name, sizeof(g_settings.rt_display_name), false, "rt_display_name"},
     {"Identity Hash", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_identity_hash, sizeof(g_settings.rt_identity_hash), false, "rt_identity_hash"},
     {"LXMF Address", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_lxmf_address, sizeof(g_settings.rt_lxmf_address), false, "rt_lxmf_address"},
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+    {"TCP Entry", settings::ui::SettingType::Enum, kReticulumTcpSlotOptions, 3, &g_settings.rt_tcp_slot, nullptr, nullptr, 0, false, "rt_tcp_slot"},
+    {"Restore Reticulum TCP defaults", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "rt_tcp_defaults"},
+#endif
     {"Gateway Host", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.rt_wifi_gateway_host, sizeof(g_settings.rt_wifi_gateway_host), false, "rt_wifi_host"},
     {"Gateway Port", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.rt_wifi_gateway_port, sizeof(g_settings.rt_wifi_gateway_port), false, "rt_wifi_port"},
     {"Auto Wi-Fi", settings::ui::SettingType::Toggle, nullptr, 0, nullptr, &g_settings.rt_wifi_auto_connect, nullptr, 0, false, "rt_wifi_auto"},
@@ -6256,6 +6324,26 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
         case settings::ui::SettingId::McChannelClear:
             clear_meshcore_channel();
             break;
+        case settings::ui::SettingId::RtTcpDefaults:
+        {
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+            if (::platform::ui::reticulum_network_config::restoreDefaultTcpEndpoints())
+            {
+                auto& app_ctx = app::appFacade();
+                app_ctx.requestSaveConfig(app::AppConfigChangeSet::mesh());
+                app_ctx.applyMeshConfig();
+                g_settings.rt_tcp_slot = 0;
+                refresh_reticulum_tcp_fields();
+                refresh_visible_item_values();
+                ::ui::feedback::show_notice(::ui::i18n::tr("Reticulum TCP defaults restored"), 3000);
+            }
+            else
+            {
+                ::ui::feedback::show_notice(::ui::i18n::tr("Unable to restore TCP defaults"), 3000);
+            }
+#endif
+            break;
+        }
         case settings::ui::SettingId::EnabledImes:
             refresh_language_pack_options();
             update_item_value(widget);
