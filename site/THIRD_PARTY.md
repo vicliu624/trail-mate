@@ -1,5 +1,10 @@
 # Website credits
 
+- Geocaching country search uses public-domain Natural Earth 1:50m boundaries.
+  Ocean/sea search uses Flanders Marine Institute (2018), IHO Sea Areas v3,
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), via Alvin Bryan's
+  simplified web conversion. [Dataset sources, changes and notices](./geocaching/data/README.md).
+
 - **Animal Island UI 1.10.0**, by **guokaigdg**:
   <https://guokaigdg.github.io/animal-island-ui/>.
   Licensed under **Creative Commons Attribution–NonCommercial 4.0 International**:

@@ -35,6 +35,7 @@ function SimulatorDevicePicker({element}) {
 }
 
 const navigationIcons = {
+  './geocaching/':'icon-map',
   '#overview':'page', '#explorer':'icon-variant', '#capabilities':'icon-design',
   '#features':'icon-map', '#languages':'icon-encyclopedia',
   '#webflasher':'icon-diy', '#docs':'page',

@@ -26,6 +26,24 @@ export function mountIslandShell() {
           <h1 data-label="heading"/><p data-label="intro"/>
         </Card>
         <p id="directory-status" className="help" data-label="noDirectory"/>
+        <fieldset className="region-filters">
+          <legend data-label="region"/>
+          <label htmlFor="region-kind" data-label="regionKind"/>
+          <select id="region-kind" defaultValue="map">
+            <option value="map" data-label="mapRegion"/>
+            <option value="countries" data-label="countries"/>
+            <option value="seas" data-label="seas"/>
+          </select>
+          <div id="region-picker" hidden>
+            <label htmlFor="region-search" data-label="findRegion"/>
+            <input id="region-search" type="search" autoComplete="off"/>
+            <label htmlFor="region-select" data-label="chooseRegion"/>
+            <select id="region-select" disabled defaultValue=""><option value="" data-label="chooseRegion"/></select>
+          </div>
+          <p id="region-state" className="help" aria-live="polite"/>
+          <a className="boundary-credit" href="./data/README.md">Natural Earth · Marine Regions / IHO · CC BY 4.0</a>
+          <Button id="region-apply" type="primary" disabled><Label name="searchRegion"/></Button>
+        </fieldset>
         <fieldset className="filters"><legend data-label="show"/>
           {['active','disabled','archived'].map((name,i)=><label key={name}><input type="checkbox" name="state" value={1<<i} defaultChecked={i<2}/><Label name={name}/></label>)}
         </fieldset>

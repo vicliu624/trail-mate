@@ -3,6 +3,7 @@ import {WebSocketClientInterface} from '@reticulum/core/src/interfaces/websocket
 import {LXMessage, LXMRouter} from '@reticulum/lxmf';
 import {APP_TYPE, bytes, decode, encode, equal, integer, validText, validateSummary, verifySigned, viewportBoxes} from './protocol.js';
 import {compressionProvider, MAX_LXMF_BYTES} from './compression.js';
+import {countryContains} from './country-boundaries.js';
 
 // These limits apply to the dedicated worker's stack instance, before links
 // are accepted. Large LXMF messages still use normal RNS Resource transport.
@@ -193,18 +194,19 @@ export class DirectoryClient {
     }
   }
 
-  query(bounds, stateMask = 3) {
+  query(bounds, stateMask = 3, region = null, queryToken = 0) {
     if (!integer(stateMask, 1, 7)) return Promise.reject(Error('Invalid state filter'));
     const generation = ++this.generation;
     return this.enqueue(async () => {
       this.rows.clear(); this.pages = [];
+      this.queryToken=queryToken;
       const sources = [...this.directories.values()].filter(d => d.ready).slice(0, 3);
       if (!sources.length) throw Error('No verified public directory is available');
       let succeeded = 0;
       for (const directory of sources) for (const bbox of viewportBoxes(bounds)) {
         if (generation !== this.generation) return;
-        const page = {directory, bbox, stateMask, cursor: null, snapshot: null, last: null};
-        try { await this.readPage(page, generation); succeeded++; }
+        const page = {directory, bbox, stateMask, region, cursor: null, snapshot: null, last: null};
+        try { await this.readRegionPage(page, generation); succeeded++; }
         catch (error) { this.notify({type: 'source-error', name: directory.name, message: error.message}); }
       }
       if (!succeeded) throw Error('All directory queries failed. Results are not live.');
@@ -224,6 +226,7 @@ export class DirectoryClient {
       const id = toHex(summary[0]);
       if (page.last && id <= page.last) throw Error('Directory page order changed');
       page.last = id;
+      if (page.region && !countryContains(page.region,summary[4]/1e7,summary[5]/1e7)) continue;
       const previous = this.rows.get(id);
       if (!previous && this.rows.size >= 500) break;
       if (previous && previous.summary[1] === summary[1] && !equal(previous.summary[2], summary[2])) {
@@ -237,13 +240,25 @@ export class DirectoryClient {
     this.emitRows(generation);
   }
 
+  async readRegionPage(page, generation) {
+    const before=this.rows.size;
+    // A rectangular query may start with neighbors or land outside a sea.
+    // Advance a bounded batch automatically rather than showing a false end.
+    for(let scanned=0;scanned<5;scanned++) {
+      await this.readPage(page,generation);
+      if(generation!==this.generation || !page.region || !page.cursor || this.rows.size>before || scanned===4) return;
+      const queued=this.pages.indexOf(page);
+      if(queued>=0)this.pages.splice(queued,1);
+    }
+  }
+
   more() {
     const generation = this.generation;
     return this.enqueue(async () => {
       const pages = this.pages.splice(0);
       for (const page of pages) {
         if (generation !== this.generation) return;
-        await this.readPage(page, generation);
+        await this.readRegionPage(page, generation);
       }
       this.emitRows(generation);
     });
@@ -251,7 +266,7 @@ export class DirectoryClient {
 
   emitRows(generation) {
     if (generation === this.generation) this.notify({type: 'results', generation,
-      rows: [...this.rows.values()], more: this.pages.length > 0, limited: this.rows.size >= 500});
+      queryToken:this.queryToken, rows: [...this.rows.values()], more: this.pages.length > 0, limited: this.rows.size >= 500});
   }
 
   get(id) {

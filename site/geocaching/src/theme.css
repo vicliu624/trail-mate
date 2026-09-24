@@ -1,4 +1,6 @@
 /* Match the main Trail Mate site's palette, typography and raised surfaces. */
+.boundary-credit{font-size:10px;line-height:1.5;color:#8a7b66}
+.region-filters{display:flex;flex-direction:column;gap:8px;margin:0;border:1px dashed #c4b89e;border-radius:16px;padding:14px;background:#f7f3df;flex-shrink:0}.region-filters legend{padding:0 6px;font-weight:800}.region-filters label{font-size:12px;font-weight:700}.region-filters select,.region-filters input{width:100%;min-width:0;box-sizing:border-box;border:1px solid #c4b89e;border-radius:10px;padding:9px;background:#fffaf0;color:#725d42;font:inherit}.region-filters #region-picker:not([hidden]){display:flex;flex-direction:column;gap:8px}.region-filters .help{font-size:11px;line-height:1.5}
 .island-wallpaper{position:fixed!important;inset:0;z-index:-1;pointer-events:none}.library-credit{font-size:11px;color:#8a7b66;text-align:center}.intro{flex-shrink:0}.sidebar>div{flex-shrink:0}#download-one{margin-top:12px;flex-shrink:0;width:100%}
 :root{font-family:Nunito,'Noto Sans SC','Segoe UI',sans-serif;color:#725d42;background:#f8f8f0;--green:#19c8b9;--line:#c4b89e}
 body{background:repeating-linear-gradient(90deg,#19c8b90c 0 1px,transparent 1px 56px),linear-gradient(180deg,#e6f9f6,#fff8e7)}

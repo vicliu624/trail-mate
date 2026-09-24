@@ -14,7 +14,7 @@ self.onmessage = async ({data}) => {
       await client?.close(); client = null;
     } else {
       if (!client) throw Error('Connect to Reticulum first');
-      if (command === 'query') await client.query(args.bounds, args.stateMask);
+      if (command === 'query') await client.query(args.bounds, args.stateMask, args.region, args.queryToken);
       else if (command === 'more') await client.more();
       else if (command === 'get') result = await client.get(args.cacheId);
       else if (command === 'download') {
