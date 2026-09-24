@@ -41,14 +41,16 @@ inline VerificationResult deriveGeocacheHashes(ByteView encoded, RecordCrypto& c
                                                uint8_t* workspace, size_t capacity,
                                                GeocacheId& id, RevisionHash& hash)
 {
-    id = {}; hash = {};
+    id = {};
+    hash = {};
     RecordView record;
     if (!decodeGeocacheRecord(encoded, record)) return VerificationResult::InvalidRecord;
     constexpr char id_domain[] = "trailmate.geocache/id/v1";
     constexpr char revision_domain[] = "trailmate.geocache/revision/v1";
     const auto required = sizeof(revision_domain) + encoded.size;
     if (!workspace || capacity < required || capacity < sizeof(id_domain) + 80) return VerificationResult::WorkspaceTooSmall;
-    GeocacheId candidate_id; RevisionHash candidate_hash;
+    GeocacheId candidate_id;
+    RevisionHash candidate_hash;
     std::memcpy(workspace, id_domain, sizeof(id_domain));
     std::memcpy(workspace + sizeof(id_domain), record.author_public_key.data, 64);
     std::memcpy(workspace + sizeof(id_domain) + 64, record.creation_nonce.data, 16);
@@ -56,7 +58,8 @@ inline VerificationResult deriveGeocacheHashes(ByteView encoded, RecordCrypto& c
     std::memcpy(workspace, revision_domain, sizeof(revision_domain));
     std::memcpy(workspace + sizeof(revision_domain), encoded.data, encoded.size);
     if (!crypto.sha256({workspace, required}, candidate_hash.bytes.data())) return VerificationResult::CryptoUnavailable;
-    id = candidate_id; hash = candidate_hash;
+    id = candidate_id;
+    hash = candidate_hash;
     return VerificationResult::Valid;
 }
 

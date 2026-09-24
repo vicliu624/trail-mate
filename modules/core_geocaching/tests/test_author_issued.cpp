@@ -3,9 +3,12 @@ int main()
 {
     using namespace geocaching;
     uint8_t key[36]{}, public_key[64]{}, bytes[192]{};
-    key[35] = 1; public_key[0] = 7;
-    RevisionHash hash; hash.bytes[0] = 9;
-    storage::StoredTime time; time.monotonic_ms = 123;
+    key[35] = 1;
+    public_key[0] = 7;
+    RevisionHash hash;
+    hash.bytes[0] = 9;
+    storage::StoredTime time;
+    time.monotonic_ms = 123;
     size_t size = 0;
     if (!storage::encodeAuthorIssued(hash, {public_key, 64}, time, bytes, sizeof(bytes), size)) return 1;
     storage::AuthorIssuedView out;

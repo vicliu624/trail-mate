@@ -1,12 +1,12 @@
 #pragma once
-#include "gps/gpx/text_writer.h"
 #include "geocaching/protocol/verify_record.h"
+#include "gps/gpx/text_writer.h"
 #include <ctime>
 
 namespace geocaching::gpx
 {
-using gps::gpx::OutputSink;
 using gps::gpx::GpxTextWriter;
+using gps::gpx::OutputSink;
 inline bool writeGeocacheGpx(const protocol::VerifiedRecordView& verified,
                              protocol::RecordCrypto& crypto, OutputSink& sink)
 {

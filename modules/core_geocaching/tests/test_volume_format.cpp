@@ -3,7 +3,9 @@
 int main()
 {
     using namespace geocaching::storage;
-    VolumeInstance id{}; id[0] = 9; id[15] = 17;
+    VolumeInstance id{};
+    id[0] = 9;
+    id[15] = 17;
     auto header = encodeVolumeHeader(id);
     VolumeInstance decoded;
     if (decodeVolumeHeader({header.data(), header.size()}, decoded) != VolumeFormatResult::Supported || decoded != id) return 1;

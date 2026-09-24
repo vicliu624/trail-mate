@@ -1,12 +1,16 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 #include <cstdio>
+#include <string_view>
 
 namespace gps::gpx
 {
-struct ByteView { const std::uint8_t* data = nullptr; std::size_t size = 0; };
+struct ByteView
+{
+    const std::uint8_t* data = nullptr;
+    std::size_t size = 0;
+};
 class OutputSink
 {
   public:

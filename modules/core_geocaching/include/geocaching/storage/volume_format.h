@@ -8,7 +8,12 @@ namespace geocaching::storage
 {
 using VolumeInstance = std::array<uint8_t, 16>;
 using VolumeHeader = std::array<uint8_t, 28>;
-enum class VolumeFormatResult : uint8_t { Supported, Unsupported, Corrupt };
+enum class VolumeFormatResult : uint8_t
+{
+    Supported,
+    Unsupported,
+    Corrupt
+};
 
 inline VolumeHeader encodeVolumeHeader(const VolumeInstance& instance)
 {

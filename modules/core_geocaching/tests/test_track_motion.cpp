@@ -1,5 +1,5 @@
-#include "gps/gpx/track_writer.h"
 #include "gps/gpx/ostream_sink.h"
+#include "gps/gpx/track_writer.h"
 #include <cassert>
 #include <fstream>
 #include <sstream>

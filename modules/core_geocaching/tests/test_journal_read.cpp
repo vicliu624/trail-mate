@@ -13,14 +13,15 @@ SdFileReadResult sd_read_file(const char*, uint8_t* buffer, size_t capacity)
     if (result.bytes_read) std::memcpy(buffer, disk.data(), result.bytes_read);
     return result;
 }
-}
+} // namespace platform::esp::arduino_common::storage
 int main()
 {
     using namespace platform::esp::arduino_common::geocaching;
     const uint8_t payload[] = {0x93, 1, 0, 0x91, 0x93, 5, 0xc4, 1, 0xab, 0xc0};
     ::geocaching::storage::RecordHeader header;
     if (!::geocaching::storage::makeRecordHeader(::geocaching::storage::RecordKind::Transaction, 1, {payload, sizeof(payload)}, header)) return 1;
-    disk.assign(header.begin(), header.end()); disk.insert(disk.end(), payload, payload + sizeof(payload));
+    disk.assign(header.begin(), header.end());
+    disk.insert(disk.end(), payload, payload + sizeof(payload));
     std::array<uint8_t, 128> buffer{};
     ::geocaching::storage::MutationView scratch;
     ::geocaching::storage::TransactionView out;

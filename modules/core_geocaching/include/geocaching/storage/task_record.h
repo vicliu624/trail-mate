@@ -56,10 +56,12 @@ inline bool encodeTask(ByteView key, const TaskView& task, uint8_t* output, size
         !(task.revision_hash.size ? writer.binary(task.revision_hash) : writer.nil()) ||
         !writer.unsignedInteger(task.state) || !writer.unsignedInteger(task.continue_intent ? 1 : 0) ||
         !writer.array(static_cast<uint32_t>(task.request_count))) return false;
-    for (size_t i = 0; i < task.request_count; ++i) if (!writer.binary(task.requests[i])) return false;
+    for (size_t i = 0; i < task.request_count; ++i)
+        if (!writer.binary(task.requests[i])) return false;
     TaskView checked;
     if (!decodeTask(key, {output, writer.size()}, checked)) return false;
-    written = writer.size(); return true;
+    written = writer.size();
+    return true;
 }
 
 // Both records must first pass their decoders. Recovery checks every task child

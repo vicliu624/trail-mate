@@ -21,7 +21,10 @@ inline bool encodeStoredTime(protocol::CmpWriter& writer, const StoredTime& time
 inline bool decodeStoredTime(protocol::CmpReader& reader, StoredTime& out)
 {
     out = {};
-    StoredTime candidate; ByteView boot; size_t fields = 0; uint64_t trusted = 0;
+    StoredTime candidate;
+    ByteView boot;
+    size_t fields = 0;
+    uint64_t trusted = 0;
     if (!reader.array(fields, 4) || fields != 4 || !reader.binary(boot, 16) || boot.size != 16 ||
         !reader.unsignedInteger(candidate.monotonic_ms)) return false;
     std::memcpy(candidate.boot_id.data(), boot.data, 16);
@@ -34,6 +37,7 @@ inline bool decodeStoredTime(protocol::CmpReader& reader, StoredTime& out)
     }
     if (!reader.unsignedInteger(trusted) || trusted > 1 || (trusted && !candidate.has_utc)) return false;
     candidate.utc_trusted = trusted != 0;
-    out = candidate; return true;
+    out = candidate;
+    return true;
 }
 } // namespace geocaching::storage

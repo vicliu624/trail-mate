@@ -1,8 +1,8 @@
 #pragma once
 #include "chat/domain/chat_types.h"
 #include "chat/infra/lxmf/lxmf_wire.h"
-#include <cstring>
 #include <array>
+#include <cstring>
 
 namespace chat
 {
@@ -28,7 +28,7 @@ struct GeocachingAnnouncementView
     ByteSpan app_data;
 };
 using GeocachingAnnouncementHandler = void (*)(const GeocachingAnnouncementView&, void*);
-}
+} // namespace lxmf
 // Optional application transport capability; unrelated adapters need not
 // implement it. The owning router controls lifetime and serializes access.
 class IGeocachingTransport
@@ -36,9 +36,15 @@ class IGeocachingTransport
   public:
     virtual ~IGeocachingTransport() = default;
     virtual bool getGeocachingAuthorKey(uint8_t out[64])
-    { if (out) std::memset(out, 0, 64); return false; }
+    {
+        if (out) std::memset(out, 0, 64);
+        return false;
+    }
     virtual bool signGeocachingRecord(lxmf::ByteSpan, uint8_t*, size_t, uint8_t*, size_t, size_t& written)
-    { written = 0; return false; }
+    {
+        written = 0;
+        return false;
+    }
     // Input bytes are borrowed for this call only; deferred transport work must
     // own its encoded payload and must not retain the caller's pointer.
     virtual MeshSendResult sendGeocachingData(const uint8_t destination_hash[16],

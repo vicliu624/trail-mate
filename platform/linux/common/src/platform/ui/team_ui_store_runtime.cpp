@@ -1,6 +1,6 @@
 #include "platform/ui/team_ui_store_runtime.h"
-#include "gps/gpx/track_writer.h"
 #include "gps/gpx/ostream_sink.h"
+#include "gps/gpx/track_writer.h"
 
 #include "platform/linux/runtime_paths.h"
 #include <algorithm>

@@ -9,7 +9,8 @@ namespace geocaching::storage
 // deleting a reservation would permit a second signed version at the same key.
 inline bool validateAuthorHistory(const LogicalState::View& before, const LogicalState::View& candidate)
 {
-    size_t cursor = 0; MutationView entry;
+    size_t cursor = 0;
+    MutationView entry;
     while (candidate.next(cursor, entry))
     {
         if (entry.table != 3) continue;

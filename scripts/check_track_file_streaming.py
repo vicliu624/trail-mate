@@ -43,7 +43,8 @@ FORBIDDEN_LINE_PATTERNS = (
     ("rdbuf_slurp", re.compile(r"<<\s*[^;]+\.rdbuf\s*\(")),
 )
 
-SIZE_READ_PATTERN = re.compile(r"\b(?:size|available)\s*\(\s*\)")
+SIZE_READ_PATTERN = re.compile(r"\b(?:(?P<receiver>\w+)\s*\.\s*)?(?:size|available)\s*\(\s*\)")
+FIXED_ARRAY_PATTERN = re.compile(r"\bstd::array\s*<[^;{}]+>\s+(\w+)\s*(?:\{|;|=)")
 READ_CALL_PATTERN = re.compile(r"\.read\s*\(")
 
 
@@ -118,6 +119,7 @@ def collect_violations() -> list[Violation]:
             continue
 
         lines = text.splitlines()
+        fixed_arrays = set(FIXED_ARRAY_PATTERN.findall(text))
         for line_number, line in enumerate(lines, start=1):
             for rule, pattern in FORBIDDEN_LINE_PATTERNS:
                 if pattern.search(line) and local_track_context(lines, line_number - 1):
@@ -132,7 +134,10 @@ def collect_violations() -> list[Violation]:
                     )
 
         for index, line in enumerate(lines):
-            if not SIZE_READ_PATTERN.search(line):
+            # Fixed array capacity is a streaming bound, not a file length.
+            # Keep all other size/available calls subject to the original rule.
+            if not any(match.group("receiver") not in fixed_arrays
+                       for match in SIZE_READ_PATTERN.finditer(line)):
                 continue
             window = lines[index : min(index + 6, len(lines))]
             if any(READ_CALL_PATTERN.search(candidate) for candidate in window) and local_track_context(

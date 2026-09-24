@@ -48,7 +48,7 @@ inline bool decodeOutgoing(ByteView key, ByteView value, OutgoingView& out)
 }
 // Updates reuse original request/time views. Input views must not overlap output.
 inline bool encodeOutgoing(ByteView key, const OutgoingView& value,
-                            uint8_t* output, size_t capacity, size_t& written)
+                           uint8_t* output, size_t capacity, size_t& written)
 {
     written = 0;
     if (!value.request.data || value.request.size > 8192 || value.terminal_data.size > 8192) return false;
@@ -60,6 +60,7 @@ inline bool encodeOutgoing(ByteView key, const OutgoingView& value,
         !(value.terminal_data.size ? writer.binary(value.terminal_data) : writer.nil())) return false;
     OutgoingView checked;
     if (!decodeOutgoing(key, {output, writer.size()}, checked)) return false;
-    written = writer.size(); return true;
+    written = writer.size();
+    return true;
 }
 } // namespace geocaching::storage

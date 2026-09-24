@@ -1,6 +1,6 @@
-#include "platform/ui/tracker_runtime.h"
 #include "gps/gpx/track_writer.h"
 #include "platform/esp/arduino_common/gps/sd_gpx_output.h"
+#include "platform/ui/tracker_runtime.h"
 
 #include "esp_timer.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"

@@ -97,7 +97,9 @@ jobs:
         run: python3 scripts/check_reticulum_runtime_budget_policy.py
 
       - name: Verify track file streaming
-        run: python3 scripts/check_track_file_streaming.py
+        run: |
+          python3 tests/test_track_file_streaming_guard.py
+          python3 scripts/check_track_file_streaming.py
 
       - name: Verify repository root has no build artifacts
         run: python3 scripts/check_root_build_artifacts.py

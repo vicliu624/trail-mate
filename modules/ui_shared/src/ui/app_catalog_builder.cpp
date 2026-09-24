@@ -74,7 +74,7 @@
 namespace
 {
 
-constexpr size_t kMaxMenuApps = 16;
+constexpr size_t kMaxMenuApps = 17;
 
 #define APP_CATALOG_LOG(...) std::printf("[UI][Catalog] " __VA_ARGS__)
 

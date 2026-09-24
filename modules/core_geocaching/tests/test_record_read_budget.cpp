@@ -5,10 +5,20 @@ std::vector<uint8_t> data;
 size_t bytes_read = 0, calls = 0, short_limit = SIZE_MAX;
 namespace platform::esp::arduino_common::storage
 {
-class SdRuntimeFile::Impl { public: bool open = false; size_t offset = 0; };
+class SdRuntimeFile::Impl
+{
+  public:
+    bool open = false;
+    size_t offset = 0;
+};
 SdRuntimeFile::SdRuntimeFile() : impl_(new Impl) {}
 SdRuntimeFile::~SdRuntimeFile() { delete impl_; }
-bool SdRuntimeFile::open(const char*, const char*) { impl_->open = true; impl_->offset = 0; return true; }
+bool SdRuntimeFile::open(const char*, const char*)
+{
+    impl_->open = true;
+    impl_->offset = 0;
+    return true;
+}
 void SdRuntimeFile::close() { impl_->open = false; }
 bool SdRuntimeFile::is_open() const { return impl_->open; }
 uint64_t SdRuntimeFile::size() const { return data.size(); }
@@ -16,18 +26,22 @@ int SdRuntimeFile::read(void* out, size_t count)
 {
     ++calls;
     const auto n = std::min(std::min(count, short_limit), data.size() - impl_->offset);
-    std::memcpy(out, data.data() + impl_->offset, n); impl_->offset += n; bytes_read += n;
+    std::memcpy(out, data.data() + impl_->offset, n);
+    impl_->offset += n;
+    bytes_read += n;
     return static_cast<int>(n);
 }
-}
+} // namespace platform::esp::arduino_common::storage
 bool exercise(size_t size, size_t read_limit)
 {
     using namespace platform::esp::arduino_common::geocaching;
     std::vector<uint8_t> payload(size, 7), output(size + 24);
     ::geocaching::storage::RecordHeader header;
     if (!::geocaching::storage::makeRecordHeader(::geocaching::storage::RecordKind::Transaction, 1, {payload.data(), payload.size()}, header)) return false;
-    data.assign(header.begin(), header.end()); data.insert(data.end(), payload.begin(), payload.end());
-    bytes_read = calls = 0; short_limit = read_limit;
+    data.assign(header.begin(), header.end());
+    data.insert(data.end(), payload.begin(), payload.end());
+    bytes_read = calls = 0;
+    short_limit = read_limit;
     SdJournalSegment segment;
     if (!segment.open(1)) return false;
     bool yielded = false;
@@ -40,10 +54,11 @@ bool exercise(size_t size, size_t read_limit)
         if (result == SegmentReadResult::InProgress)
         {
             if (frame.payload.data || frame.payload.size) return false;
-            yielded = true; continue;
+            yielded = true;
+            continue;
         }
         return result == SegmentReadResult::Record && yielded && frame.payload.size == payload.size() &&
-            !std::memcmp(frame.payload.data, payload.data(), payload.size()) && bytes_read == data.size();
+               !std::memcmp(frame.payload.data, payload.data(), payload.size()) && bytes_read == data.size();
     }
     return false;
 }

@@ -13,6 +13,7 @@ class OstreamSink final : public OutputSink
         stream_.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
         return stream_.good();
     }
+
   private:
     std::ostream& stream_;
 };

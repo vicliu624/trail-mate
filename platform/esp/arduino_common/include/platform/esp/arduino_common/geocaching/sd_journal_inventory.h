@@ -4,7 +4,14 @@
 
 namespace platform::esp::arduino_common::geocaching
 {
-enum class InventoryStep : uint8_t { Scanning, Complete, RetryLater, Corrupt, VolumeChanged };
+enum class InventoryStep : uint8_t
+{
+    Scanning,
+    Complete,
+    RetryLater,
+    Corrupt,
+    VolumeChanged
+};
 
 struct JournalSegmentRange
 {
@@ -36,7 +43,8 @@ class SdJournalInventory
         if (volume != SdVolumeResult::Ready) return finish(InventoryStep::Corrupt);
         if (current != volume_) return finish(InventoryStep::VolumeChanged);
         if (!directory_.is_open() && !directory_.open("/trailmate/geocaching/.state/journal")) return restart();
-        char name[128]{}; bool is_dir = false;
+        char name[128]{};
+        bool is_dir = false;
         const auto result = directory_.read_next_status(name, sizeof(name), &is_dir);
         if (result == storage::SdDirReadStatus::Busy) return InventoryStep::RetryLater;
         if (result == storage::SdDirReadStatus::IoError || result == storage::SdDirReadStatus::Unavailable) return restart();
@@ -59,10 +67,16 @@ class SdJournalInventory
     }
 
   private:
-    InventoryStep finish(InventoryStep state) { directory_.close(); return state_ = state; }
+    InventoryStep finish(InventoryStep state)
+    {
+        directory_.close();
+        return state_ = state;
+    }
     InventoryStep restart()
     {
-        directory_.close(); first_ = 0; last_ = 0;
+        directory_.close();
+        first_ = 0;
+        last_ = 0;
         return state_ = InventoryStep::RetryLater;
     }
     const ::geocaching::storage::VolumeInstance volume_;

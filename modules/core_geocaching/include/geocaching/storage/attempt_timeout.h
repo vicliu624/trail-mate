@@ -6,7 +6,7 @@ namespace geocaching::storage
 // Expiry means outcome unknown and eligible for policy-controlled retry, not
 // proof that the remote side did not receive it. Never reuse the old LXMF hash.
 inline bool attemptTimeoutReached(const TxAttemptView& attempt, const StoredTime& now,
-                                   uint64_t recovery_started_ms, uint64_t timeout_ms)
+                                  uint64_t recovery_started_ms, uint64_t timeout_ms)
 {
     if (!timeout_ms || attempt.has_finished) return false;
     if (attempt.submitted.boot_id == now.boot_id)

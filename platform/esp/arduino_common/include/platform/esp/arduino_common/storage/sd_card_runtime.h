@@ -178,7 +178,15 @@ class SdRuntimeFile
     Impl* impl_;
 };
 
-enum class SdDirReadStatus : uint8_t { Entry, End, Busy, Unavailable, Invalid, IoError };
+enum class SdDirReadStatus : uint8_t
+{
+    Entry,
+    End,
+    Busy,
+    Unavailable,
+    Invalid,
+    IoError
+};
 
 class SdRuntimeDir
 {

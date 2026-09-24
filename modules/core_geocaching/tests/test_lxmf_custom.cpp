@@ -1,9 +1,9 @@
 #include "chat/infra/lxmf/lxmf_wire.h"
 #include "geocaching/protocol/cmp_reader.h"
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
-#include <cstdlib>
 #ifdef _MSC_VER
 #include <crtdbg.h>
 #endif

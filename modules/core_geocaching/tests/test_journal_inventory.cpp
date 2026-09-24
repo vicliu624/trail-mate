@@ -1,22 +1,36 @@
 #include "platform/esp/arduino_common/geocaching/sd_journal_inventory.h"
-#include <vector>
-#include <string>
 #include <algorithm>
+#include <string>
+#include <vector>
 
 std::vector<std::string> names;
 bool busy_once = false;
 bool fail_after_first = false;
 namespace platform::esp::arduino_common::storage
 {
-class SdRuntimeDir::Impl { public: bool open = false; size_t index = 0; };
+class SdRuntimeDir::Impl
+{
+  public:
+    bool open = false;
+    size_t index = 0;
+};
 SdRuntimeDir::SdRuntimeDir() : impl_(new Impl) {}
 SdRuntimeDir::~SdRuntimeDir() { delete impl_; }
-bool SdRuntimeDir::open(const char*) { impl_->open = true; impl_->index = 0; return true; }
+bool SdRuntimeDir::open(const char*)
+{
+    impl_->open = true;
+    impl_->index = 0;
+    return true;
+}
 void SdRuntimeDir::close() { impl_->open = false; }
 bool SdRuntimeDir::is_open() const { return impl_->open; }
 SdDirReadStatus SdRuntimeDir::read_next_status(char* name, size_t capacity, bool* is_dir)
 {
-    if (busy_once) { busy_once = false; return SdDirReadStatus::Busy; }
+    if (busy_once)
+    {
+        busy_once = false;
+        return SdDirReadStatus::Busy;
+    }
     if (fail_after_first && impl_->index == 1)
     {
         fail_after_first = false;
@@ -24,17 +38,21 @@ SdDirReadStatus SdRuntimeDir::read_next_status(char* name, size_t capacity, bool
         return SdDirReadStatus::IoError;
     }
     if (impl_->index == names.size()) return SdDirReadStatus::End;
-    std::snprintf(name, capacity, "%s", names[impl_->index++].c_str()); *is_dir = false;
+    std::snprintf(name, capacity, "%s", names[impl_->index++].c_str());
+    *is_dir = false;
     return SdDirReadStatus::Entry;
 }
 SdFileReadResult sd_read_file(const char*, uint8_t* buffer, size_t capacity)
 {
     const auto header = ::geocaching::storage::encodeVolumeHeader({});
-    SdFileReadResult result; result.status = SdFileReadStatus::Ready;
-    result.file_size = header.size(); result.bytes_read = std::min(capacity, header.size());
-    std::memcpy(buffer, header.data(), result.bytes_read); return result;
+    SdFileReadResult result;
+    result.status = SdFileReadStatus::Ready;
+    result.file_size = header.size();
+    result.bytes_read = std::min(capacity, header.size());
+    std::memcpy(buffer, header.data(), result.bytes_read);
+    return result;
 }
-}
+} // namespace platform::esp::arduino_common::storage
 int main()
 {
     using namespace platform::esp::arduino_common::geocaching;

@@ -14,14 +14,17 @@ inline bool decodeSummaryCache(ByteView key, ByteView value, SummaryCacheView& o
 {
     out = {};
     if (!key.data || key.size != 48 || !value.data || value.size > 32768) return false;
-    protocol::CmpReader reader(value); size_t fields = 0; SummaryCacheView candidate;
+    protocol::CmpReader reader(value);
+    size_t fields = 0;
+    SummaryCacheView candidate;
     if (!reader.array(fields, 3) || fields != 3 || !protocol::decodeSummary(reader, candidate.summary) ||
         std::memcmp(key.data + 16, candidate.summary.id.bytes.data(), 32) || !reader.binary(candidate.snapshot_id, 16) ||
         candidate.snapshot_id.size != 16 || !decodeStoredTime(reader, candidate.received) || !reader.finished()) return false;
-    out = candidate; return true;
+    out = candidate;
+    return true;
 }
 inline bool encodeSummaryCache(ByteView key, const protocol::SummaryView& item, ByteView snapshot_id, const StoredTime& received,
-                                uint8_t* output, size_t capacity, size_t& written)
+                               uint8_t* output, size_t capacity, size_t& written)
 {
     written = 0;
     protocol::CmpWriter writer(output, capacity);
@@ -33,6 +36,7 @@ inline bool encodeSummaryCache(ByteView key, const protocol::SummaryView& item, 
         !writer.binary(snapshot_id) || !encodeStoredTime(writer, received)) return false;
     SummaryCacheView checked;
     if (!decodeSummaryCache(key, {output, writer.size()}, checked)) return false;
-    written = writer.size(); return true;
+    written = writer.size();
+    return true;
 }
 } // namespace geocaching::storage

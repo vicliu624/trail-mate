@@ -6,13 +6,13 @@
 #pragma once
 
 #include "chat/domain/chat_types.h"
-#include "chat/infra/mesh_adapter_router_core.h"
 #include "chat/infra/lxmf/lxmf_wire.h"
-#include <array>
+#include "chat/infra/mesh_adapter_router_core.h"
 #include "chat/ports/i_incoming_delivery_commit_port.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include <array>
 
 namespace chat
 {
@@ -20,7 +20,7 @@ namespace lxmf
 {
 struct GeocachingAnnouncementView;
 struct CustomDeliveryView;
-}
+} // namespace lxmf
 
 class MeshAdapterRouter : public IMeshAdapter,
                           public IIncomingDeliveryCommitPort

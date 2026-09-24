@@ -8,7 +8,11 @@ struct FileSink : geocaching::gpx::OutputSink
 {
     std::ofstream file;
     explicit FileSink(const char* path) : file(path, std::ios::binary) {}
-    bool write(std::string_view bytes) override { file.write(bytes.data(), bytes.size()); return file.good(); }
+    bool write(std::string_view bytes) override
+    {
+        file.write(bytes.data(), bytes.size());
+        return file.good();
+    }
 };
 struct FixtureCrypto : geocaching::protocol::RecordCrypto
 {
@@ -16,10 +20,13 @@ struct FixtureCrypto : geocaching::protocol::RecordCrypto
     bool sha256(geocaching::ByteView input, std::uint8_t output[32]) override
     {
         if (input.size != 64) return false;
-        std::memcpy(output, author_hash.data(), 32); return true;
+        std::memcpy(output, author_hash.data(), 32);
+        return true;
     }
     geocaching::protocol::VerificationResult verifyEd25519(geocaching::ByteView, geocaching::ByteView, geocaching::ByteView) override
-    { return geocaching::protocol::VerificationResult::CryptoUnavailable; }
+    {
+        return geocaching::protocol::VerificationResult::CryptoUnavailable;
+    }
 };
 int main(int argc, char** argv)
 {

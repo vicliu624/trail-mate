@@ -5,7 +5,16 @@
 
 namespace platform::esp::arduino_common::geocaching
 {
-enum class SegmentReadResult : uint8_t { Record, End, Truncated, Corrupt, IoError, WorkspaceTooSmall, InProgress };
+enum class SegmentReadResult : uint8_t
+{
+    Record,
+    End,
+    Truncated,
+    Corrupt,
+    IoError,
+    WorkspaceTooSmall,
+    InProgress
+};
 
 struct SdRecordReadCursor
 {
@@ -40,7 +49,9 @@ inline SegmentReadResult readSdRecord(storage::SdRuntimeFile& file, uint64_t len
         const int n = file.read(buffer + cursor.header_read, needed);
         if (n == 0) return SegmentReadResult::Truncated;
         if (n < 0 || static_cast<size_t>(n) > needed) return SegmentReadResult::IoError;
-        cursor.header_read += static_cast<uint8_t>(n); offset += static_cast<size_t>(n); budget -= static_cast<size_t>(n);
+        cursor.header_read += static_cast<uint8_t>(n);
+        offset += static_cast<size_t>(n);
+        budget -= static_cast<size_t>(n);
         if (cursor.header_read != 24) return SegmentReadResult::InProgress;
         if (std::memcmp(buffer, "GCR1", 4) || buffer[4] < 2 || buffer[4] > 4 || buffer[5] || buffer[6] || buffer[7] != 24)
             return SegmentReadResult::Corrupt;
@@ -63,7 +74,8 @@ inline SegmentReadResult readSdRecord(storage::SdRuntimeFile& file, uint64_t len
     if (n == 0) return SegmentReadResult::Truncated;
     if (n < 0 || static_cast<size_t>(n) > requested) return SegmentReadResult::IoError;
     cursor.crc = ::sys::crc32(destination, static_cast<size_t>(n), cursor.crc);
-    cursor.payload_read += static_cast<uint32_t>(n); offset += static_cast<size_t>(n);
+    cursor.payload_read += static_cast<uint32_t>(n);
+    offset += static_cast<size_t>(n);
     if (cursor.payload_read != cursor.payload_size) return SegmentReadResult::InProgress;
     if (cursor.crc != cursor.expected_crc) return SegmentReadResult::Corrupt;
     out = {cursor.kind, cursor.sequence, {buffer + 24, cursor.payload_size}};

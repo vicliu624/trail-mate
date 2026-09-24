@@ -24,6 +24,7 @@ bool show_notice(const char*, uint32_t) { return true; }
     }
 STUB_PAGE(chat::ui::shell)
 STUB_PAGE(calculator::ui::shell)
+STUB_PAGE(geocaching::ui::shell)
 STUB_PAGE(gps::ui::shell)
 namespace gps::ui::shell
 {
@@ -67,6 +68,11 @@ extern "C"
 #undef STUB_ICON
 }
 
+namespace catalog_icons
+{
+extern "C" const lv_image_dsc_t geocaching = {};
+}
+
 int main()
 {
     ui::CallbackAppScreen calendar("calendar", "Calendar", nullptr,
@@ -74,27 +80,28 @@ int main()
     ui::app_catalog_builder::FeatureFlags flags;
     flags.include_usb = flags.include_network = flags.include_walkie_talkie = flags.include_power_off = true;
     auto catalog = ui::app_catalog_builder::build(flags);
-    assert(ui::catalogCount(catalog) == 15);
+    assert(ui::catalogCount(catalog) == 16);
     flags.calendar_app = &calendar;
     catalog = ui::app_catalog_builder::build(flags);
-    assert(ui::catalogCount(catalog) == 16);
+    assert(ui::catalogCount(catalog) == 17);
     assert(ui::catalogAt(catalog, 0) == &calendar);
-    bool settings = false, shutdown = false;
+    bool settings = false, shutdown = false, geocaching = false;
     for (std::size_t i = 0; i < ui::catalogCount(catalog); ++i)
     {
         auto* app = ui::catalogAt(catalog, i);
         assert(app);
         settings |= std::strcmp(app->stable_id(), "settings") == 0;
         shutdown |= std::strcmp(app->stable_id(), "shutdown") == 0;
+        geocaching |= std::strcmp(app->stable_id(), "geocaching") == 0;
         for (std::size_t j = i + 1; j < ui::catalogCount(catalog); ++j)
             assert(std::strcmp(app->stable_id(), ui::catalogAt(catalog, j)->stable_id()) != 0);
     }
-    assert(settings && shutdown && !ui::catalogAt(catalog, 16));
+    assert(settings && shutdown && geocaching && !ui::catalogAt(catalog, 17));
     // The IDF catalog and callers that do not inject Agenda retain their shape.
     flags.calendar_app = nullptr;
     flags.profile = ui::app_catalog_builder::CatalogProfile::IdfDefault;
     catalog = ui::app_catalog_builder::build(flags);
-    assert(ui::catalogCount(catalog) == 15);
+    assert(ui::catalogCount(catalog) == 16);
     for (std::size_t i = 0; i < ui::catalogCount(catalog); ++i)
         assert(std::strcmp(ui::catalogAt(catalog, i)->stable_id(), "calendar") != 0);
 }

@@ -21,7 +21,7 @@ struct Port : geocaching::QueryClientPort
     geocaching::QueryPersistence cancel(const geocaching::Destination&, const geocaching::RequestId&) override { return geocaching::QueryPersistence::Committed; }
     geocaching::QueryPersistence commitCapabilities(const geocaching::Destination&, const geocaching::RequestId&, geocaching::ByteView) override { return geocaching::QueryPersistence::Committed; }
     geocaching::QueryPersistence commitPage(const geocaching::Destination&, const geocaching::RequestId&, geocaching::ByteView,
-                    const geocaching::protocol::QueryPageView& page) override
+                                            const geocaching::protocol::QueryPageView& page) override
     {
         geocaching::protocol::CmpReader rows(page.encoded_items);
         geocaching::protocol::SummaryView item;

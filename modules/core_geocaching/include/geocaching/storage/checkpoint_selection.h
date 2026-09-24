@@ -4,7 +4,13 @@
 
 namespace geocaching::storage
 {
-enum class CheckpointCandidateState : uint8_t { Missing, Unavailable, Invalid, Verified };
+enum class CheckpointCandidateState : uint8_t
+{
+    Missing,
+    Unavailable,
+    Invalid,
+    Verified
+};
 struct CheckpointCandidate
 {
     // Verified may be set only after full file framing, tail and EOF checks.
@@ -12,7 +18,14 @@ struct CheckpointCandidate
     uint64_t sequence = 0;
     std::array<uint8_t, 32> digest{};
 };
-enum class CheckpointChoice : uint8_t { NoCheckpoint, SlotA, SlotB, RetryLater, Corrupt };
+enum class CheckpointChoice : uint8_t
+{
+    NoCheckpoint,
+    SlotA,
+    SlotB,
+    RetryLater,
+    Corrupt
+};
 
 inline CheckpointChoice selectCheckpoint(const CheckpointCandidate& a, const CheckpointCandidate& b)
 {

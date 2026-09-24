@@ -23,7 +23,7 @@ class MeshAdapterRouter
         return true;
     }
     MeshSendResult sendGeocachingData(const uint8_t[16], lxmf::ByteSpan bytes, bool,
-                                     std::array<uint8_t, 32>* hash, const uint8_t expected[16])
+                                      std::array<uint8_t, 32>* hash, const uint8_t expected[16])
     {
         ++sends;
         if (!ready || std::memcmp(expected, local.data(), 16)) return MeshSendResult::fail(MeshOperationFailure::NotReady);

@@ -1,5 +1,5 @@
-#include "geocaching/storage/cache_head.h"
 #include "geocaching/protocol/cmp_writer.h"
+#include "geocaching/storage/cache_head.h"
 int main()
 {
     using namespace geocaching;
@@ -15,7 +15,8 @@ int main()
     if (!storage::decodeCacheHead({key, 32}, {empty, sizeof(empty)}, head) || head.current_hash.size) return 4;
     empty[3] = 0;
     if (storage::decodeCacheHead({key, 32}, {empty, sizeof(empty)}, head)) return 5;
-    empty[3] = 1; empty[2] = 3;
+    empty[3] = 1;
+    empty[2] = 3;
     if (storage::decodeCacheHead({key, 32}, {empty, sizeof(empty)}, head)) return 6;
     return 0;
 }

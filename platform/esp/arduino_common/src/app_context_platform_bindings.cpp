@@ -15,11 +15,11 @@
 #include "platform/esp/arduino_common/chat/infra/store/sd_protocol_peer_repository.h"
 #include "platform/esp/arduino_common/chat/infra/store/sd_store.h"
 #include "platform/esp/arduino_common/device_identity.h"
+#include "platform/esp/arduino_common/geocaching/browse_runtime.h"
 #include "platform/esp/arduino_common/gps/gps_service.h"
 #include "platform/esp/arduino_common/gps/track_recorder.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
 #include "platform/esp/arduino_common/storage/storage_runtime.h"
-#include "platform/esp/arduino_common/geocaching/browse_runtime.h"
 #include "platform/esp/arduino_common/team/crypto/team_crypto.h"
 #include "platform/esp/arduino_common/team/event/team_app_data_event_bus_bridge.h"
 #include "platform/esp/arduino_common/team/event/team_event_bus_sink.h"
@@ -277,7 +277,6 @@ app::ChatServicesBundle create_chat_services(const app::AppConfig& config,
             }
         }
     }
-
 
     bundle.service = std::unique_ptr<chat::ChatService>(
         new chat::ChatService(*bundle.model, *bundle.mesh_runtime, *bundle.store, config.mesh_protocol));

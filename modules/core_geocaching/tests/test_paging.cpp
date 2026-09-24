@@ -26,7 +26,7 @@ struct PagingPort : geocaching::QueryClientPort
     geocaching::QueryPersistence cancel(const geocaching::Destination&, const geocaching::RequestId&) override { return geocaching::QueryPersistence::Committed; }
     geocaching::QueryPersistence commitCapabilities(const geocaching::Destination&, const geocaching::RequestId&, geocaching::ByteView) override { return geocaching::QueryPersistence::Committed; }
     geocaching::QueryPersistence commitPage(const geocaching::Destination&, const geocaching::RequestId&, geocaching::ByteView,
-                    const geocaching::protocol::QueryPageView&) override
+                                            const geocaching::protocol::QueryPageView&) override
     {
         if (fail_commit) return geocaching::QueryPersistence::Rejected;
         ++commits;

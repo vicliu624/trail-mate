@@ -1,6 +1,6 @@
-#include "geocaching/protocol/verify_record.h"
-#include "chat/infra/reticulum/reticulum_wire.h"
 #include "chat/infra/meshcore/crypto/ed25519/ed_25519.h"
+#include "chat/infra/reticulum/reticulum_wire.h"
+#include "geocaching/protocol/verify_record.h"
 #include <cassert>
 #include <fstream>
 #include <iterator>
@@ -9,7 +9,10 @@
 struct NativeCrypto : geocaching::protocol::RecordCrypto
 {
     bool sha256(geocaching::ByteView in, std::uint8_t out[32]) override
-    { chat::reticulum::fullHash(in.data, in.size, out); return true; }
+    {
+        chat::reticulum::fullHash(in.data, in.size, out);
+        return true;
+    }
     geocaching::protocol::VerificationResult verifyEd25519(geocaching::ByteView key, geocaching::ByteView sig, geocaching::ByteView msg) override
     {
         using R = geocaching::protocol::VerificationResult;

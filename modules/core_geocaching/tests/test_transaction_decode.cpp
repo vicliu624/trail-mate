@@ -8,7 +8,8 @@ int main()
                        0x93, 6, 0xc4, 1, 0xab, 0xc0};
     std::array<storage::MutationView, 2> scratch;
     storage::TransactionView transaction;
-    auto decode = [&](size_t size, uint64_t previous = 7, size_t capacity = 2) {
+    auto decode = [&](size_t size, uint64_t previous = 7, size_t capacity = 2)
+    {
         return storage::decodeTransaction({bytes, size}, previous, scratch.data(), capacity, transaction);
     };
     if (!decode(sizeof(bytes)) || transaction.count != 2 || scratch[0].erase ||
@@ -20,7 +21,8 @@ int main()
     if (decode(sizeof(bytes))) return 4;
     bytes[12] = 14;
     if (decode(sizeof(bytes))) return 5;
-    bytes[12] = 6; bytes[1] = 2;
+    bytes[12] = 6;
+    bytes[1] = 2;
     if (decode(sizeof(bytes))) return 6;
     bytes[1] = 1;
     std::array<uint8_t, sizeof(bytes) + 1> trailing{};

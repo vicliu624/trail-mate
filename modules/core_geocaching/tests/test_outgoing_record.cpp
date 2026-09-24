@@ -1,20 +1,26 @@
+#include "geocaching/protocol/query_request.h"
 #include "geocaching/storage/outgoing_record.h"
 #include "geocaching/storage/queued_request.h"
-#include "geocaching/protocol/query_request.h"
 #include <memory>
 int main()
 {
     using namespace geocaching;
-    RequestId id; id.bytes[0] = 1;
-    uint8_t request[64]; size_t request_size = 0;
+    RequestId id;
+    id.bytes[0] = 1;
+    uint8_t request[64];
+    size_t request_size = 0;
     if (!protocol::encodeCapabilitiesRequest(id, request, sizeof(request), request_size)) return 1;
     std::array<uint8_t, 512> value_buffer{};
     auto scratch = std::make_unique<storage::QueuedRequestWorkspace>(value_buffer.data(), value_buffer.size());
-    std::array<uint8_t, 9000> bytes; size_t size = 0;
-    storage::StoredTime time; time.monotonic_ms = 123; time.boot_id[0] = 7;
+    std::array<uint8_t, 9000> bytes;
+    size_t size = 0;
+    storage::StoredTime time;
+    time.monotonic_ms = 123;
+    time.boot_id[0] = 7;
     if (!storage::encodeNewRequestTask(0, {}, {}, id, {}, 3, {request, request_size}, time,
                                        *scratch, bytes.data(), bytes.size(), size)) return 2;
-    storage::MutationView mutations[2]; storage::TransactionView transaction;
+    storage::MutationView mutations[2];
+    storage::TransactionView transaction;
     if (!storage::decodeTransaction({bytes.data(), size}, 0, mutations, 2, transaction)) return 3;
     storage::OutgoingView out;
     if (!storage::decodeOutgoing(mutations[0].key, mutations[0].value, out) || out.state != 0 ||

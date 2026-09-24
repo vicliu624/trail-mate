@@ -4,7 +4,15 @@
 
 namespace platform::esp::arduino_common::geocaching
 {
-enum class SdVolumeResult : uint8_t { Ready, Missing, Unavailable, Unsupported, Corrupt, IoError };
+enum class SdVolumeResult : uint8_t
+{
+    Ready,
+    Missing,
+    Unavailable,
+    Unsupported,
+    Corrupt,
+    IoError
+};
 
 inline SdVolumeResult inspectSdVolume(::geocaching::storage::VolumeInstance& instance)
 {
@@ -13,19 +21,27 @@ inline SdVolumeResult inspectSdVolume(::geocaching::storage::VolumeInstance& ins
     const auto result = storage::sd_read_file("/trailmate/geocaching/.state/format.bin", header.data(), header.size());
     switch (result.status)
     {
-    case storage::SdFileReadStatus::Missing: return SdVolumeResult::Missing;
+    case storage::SdFileReadStatus::Missing:
+        return SdVolumeResult::Missing;
     case storage::SdFileReadStatus::Busy:
-    case storage::SdFileReadStatus::Unavailable: return SdVolumeResult::Unavailable;
-    case storage::SdFileReadStatus::IoError: return SdVolumeResult::IoError;
-    case storage::SdFileReadStatus::Invalid: return SdVolumeResult::Corrupt;
-    case storage::SdFileReadStatus::Ready: break;
+    case storage::SdFileReadStatus::Unavailable:
+        return SdVolumeResult::Unavailable;
+    case storage::SdFileReadStatus::IoError:
+        return SdVolumeResult::IoError;
+    case storage::SdFileReadStatus::Invalid:
+        return SdVolumeResult::Corrupt;
+    case storage::SdFileReadStatus::Ready:
+        break;
     }
     if (result.bytes_read != result.file_size || result.bytes_read > header.size()) return SdVolumeResult::Corrupt;
     switch (::geocaching::storage::decodeVolumeHeader({header.data(), result.bytes_read}, instance))
     {
-    case ::geocaching::storage::VolumeFormatResult::Supported: return SdVolumeResult::Ready;
-    case ::geocaching::storage::VolumeFormatResult::Unsupported: return SdVolumeResult::Unsupported;
-    case ::geocaching::storage::VolumeFormatResult::Corrupt: return SdVolumeResult::Corrupt;
+    case ::geocaching::storage::VolumeFormatResult::Supported:
+        return SdVolumeResult::Ready;
+    case ::geocaching::storage::VolumeFormatResult::Unsupported:
+        return SdVolumeResult::Unsupported;
+    case ::geocaching::storage::VolumeFormatResult::Corrupt:
+        return SdVolumeResult::Corrupt;
     }
     return SdVolumeResult::Corrupt;
 }

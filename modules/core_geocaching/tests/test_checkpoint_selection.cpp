@@ -8,9 +8,11 @@ int main()
     if (selectCheckpoint(a, b) != CheckpointChoice::NoCheckpoint) return 2;
     a.state = CheckpointCandidateState::Invalid;
     if (selectCheckpoint(a, b) != CheckpointChoice::Corrupt) return 3;
-    b.state = CheckpointCandidateState::Verified; b.sequence = 4;
+    b.state = CheckpointCandidateState::Verified;
+    b.sequence = 4;
     if (selectCheckpoint(a, b) != CheckpointChoice::SlotB) return 4;
-    a.state = CheckpointCandidateState::Verified; a.sequence = 5;
+    a.state = CheckpointCandidateState::Verified;
+    a.sequence = 5;
     if (selectCheckpoint(a, b) != CheckpointChoice::SlotA) return 5;
     a.sequence = 4;
     if (selectCheckpoint(a, b) != CheckpointChoice::SlotA) return 6;
