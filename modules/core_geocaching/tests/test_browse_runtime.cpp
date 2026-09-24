@@ -225,10 +225,12 @@ int main(int argc, char** argv)
     const auto semaphore = xSemaphoreCreateMutex();
     require(xSemaphoreTake(semaphore, 0) == pdTRUE, "cannot simulate a busy storage owner");
     const auto busy_view = snapshot(Section::Discover);
+    // The network task can receive the only directory announcement while the
+    // storage owner holds the session mutex. It must survive that contention.
+    announce(router);
     xSemaphoreGive(semaphore);
     require(busy_view.busy, "storage contention was reported as an empty current snapshot");
     require(!snapshot(Section::Discover).busy, "snapshot did not recover after storage lock release");
-    announce(router);
     until([&]
           { return router.sends == 1; },
           "capabilities request not dispatched");

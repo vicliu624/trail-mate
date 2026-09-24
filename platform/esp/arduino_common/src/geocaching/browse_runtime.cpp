@@ -63,6 +63,12 @@ struct Announcement
     std::array<uint8_t, 128> data{};
     size_t size = 0;
 };
+// One producer (callbacks serialized by the mesh router) and one consumer
+// (the storage owner). Keep the first pending announcement until consumed.
+// No session mutex or allocation is needed by the network callback.
+Announcement pending_announcement;
+std::atomic<bool> announcement_pending{false};
+static_assert(sizeof(Announcement) <= 240);
 struct Session
 {
     struct Publication
@@ -160,7 +166,6 @@ struct Session
     gc::Destination local;
     gc::RequestId response_id;
     uint8_t response_operation = 0;
-    std::unique_ptr<Announcement> announcement;
     std::array<gc::storage::MutationView, 3> mutations{};
     std::unique_ptr<SdIndexRepair<Digest>> recovery;
     std::unique_ptr<SdCheckpointRotation<Digest>> checkpoint;
@@ -436,7 +441,7 @@ bool startCheckpoint(Session& s)
     constexpr uint64_t interval = 256;
     if (!s.client || s.client->phase() != gc::QueryClientPhase::PageReady || s.client->persistencePending() ||
         s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval ||
-        s.workspace_owner.holder() || s.response || s.announcement || downloadActive() || publicationActive() || draftSaveActive()) return false;
+        s.workspace_owner.holder() || s.response || announcement_pending.load(std::memory_order_acquire) || downloadActive() || publicationActive() || draftSaveActive()) return false;
     s.checkpoint.reset(new (std::nothrow) SdCheckpointRotation<Digest>(s.volume));
     if (!s.checkpoint)
     {
@@ -584,17 +589,16 @@ bool advanceDownloadStart(Session& s)
 
 void announcementReceived(const chat::lxmf::GeocachingAnnouncementView& message, void*)
 {
-    Guard guard;
-    if (!guard.locked || !session || !wanted.load() || message.discovery_destination.size != 16 ||
-        message.delivery_destination.size != 16 || message.public_key.size != 64 || message.app_data.size > 128) return;
-    if (!session->announcement) session->announcement.reset(new (std::nothrow) Announcement);
-    if (!session->announcement) return;
-    auto& out = *session->announcement;
+    if (!wanted.load() || announcement_pending.load(std::memory_order_acquire) || message.discovery_destination.size != 16 ||
+        message.delivery_destination.size != 16 || message.public_key.size != 64 || message.app_data.size > 128 ||
+        !message.discovery_destination.data || !message.delivery_destination.data || !message.public_key.data || !message.app_data.data) return;
+    auto& out = pending_announcement;
     std::memcpy(out.discovery.bytes.data(), message.discovery_destination.data, 16);
     std::memcpy(out.delivery.bytes.data(), message.delivery_destination.data, 16);
     std::memcpy(out.key.data(), message.public_key.data, 64);
     std::memcpy(out.data.data(), message.app_data.data, message.app_data.size);
     out.size = message.app_data.size;
+    announcement_pending.store(true, std::memory_order_release);
     next_step.store(0);
 }
 bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
@@ -1460,6 +1464,8 @@ bool closeSession()
         }
     }
     if (!router->bindGeocachingHandlers(nullptr, nullptr, nullptr)) return false;
+    // Unbinding joins any router callback before clearing its pending payload.
+    announcement_pending.store(false, std::memory_order_release);
     if (session->created_backend && router->backendForProtocol(chat::MeshProtocol::Reticulum) == session->created_backend &&
         router->backendProtocol() != chat::MeshProtocol::Reticulum && router->backendProtocol() != chat::MeshProtocol::RNode)
     {
@@ -2175,12 +2181,13 @@ void step()
         ++epoch;
         return;
     }
-    if (s.announcement)
+    if (announcement_pending.load(std::memory_order_acquire))
     {
-        const auto& incoming = *s.announcement;
-        s.client->observe(incoming.discovery, incoming.delivery, {incoming.key.data(), incoming.key.size()},
-                          {incoming.data.data(), incoming.size}, now(nullptr).monotonic_ms);
-        s.announcement.reset();
+        const auto& incoming = pending_announcement;
+        const bool accepted = s.client->observe(incoming.discovery, incoming.delivery, {incoming.key.data(), incoming.key.size()},
+                                                {incoming.data.data(), incoming.size}, now(nullptr).monotonic_ms);
+        Serial.printf("[Geocaching][Discovery] directory_metadata accepted=%u\n", accepted ? 1U : 0U);
+        announcement_pending.store(false, std::memory_order_release);
     }
     if (s.port->maintenancePending())
     {
