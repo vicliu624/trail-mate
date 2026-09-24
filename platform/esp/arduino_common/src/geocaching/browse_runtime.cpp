@@ -70,6 +70,17 @@ struct Announcement
 Announcement pending_announcement;
 std::atomic<bool> announcement_pending{false};
 static_assert(sizeof(Announcement) <= 240);
+// Router callbacks are serialized. The storage owner consumes this one-slot
+// mailbox without sharing its long-lived session/SD mutex with the producer.
+// A full mailbox applies backpressure: no receipt is acknowledged or replaced.
+struct PendingReply
+{
+    gc::Destination source, destination;
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    ~PendingReply() { heap_caps_free(bytes); }
+};
+std::atomic<PendingReply*> pending_reply{nullptr};
 struct Session
 {
     struct Publication
@@ -306,7 +317,7 @@ struct WorkspaceSlice
         static unsigned reported_phase = ~0U;
         const unsigned query = session.client ? static_cast<unsigned>(session.client->phase()) : 255;
         const unsigned phase = (static_cast<unsigned>(session.phase) << 8) | query;
-        if (phase == reported_phase && static_cast<uint32_t>(now_ms - reported_ms) < 5000) return;
+        if (phase == reported_phase && static_cast<uint32_t>(now_ms - reported_ms) < 60000) return;
         reported_ms = now_ms;
         reported_phase = phase;
         const auto& owner = session.workspace_owner;
@@ -615,12 +626,9 @@ void announcementReceived(const chat::lxmf::GeocachingAnnouncementView& message,
     announcement_pending.store(true, std::memory_order_release);
     next_step.store(0);
 }
-bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
+bool receiveResponse(const chat::lxmf::CustomDeliveryView& message, uint8_t** owned = nullptr)
 {
-    ++replies_seen;
-    Guard guard;
-    if (!guard.locked) ++replies_busy;
-    if (!guard.locked || !session || !session->port || (!wanted.load() && !downloadActive() && !publicationActive()) || message.source.size != 16 ||
+    if (!session || !session->port || (!wanted.load() && !downloadActive() && !publicationActive()) || message.source.size != 16 ||
         message.destination.size != 16 || !message.data.data || message.data.size > 8192) return false;
     if (std::memcmp(message.destination.data, session->local.bytes.data(), 16)) return false;
     gc::Destination source;
@@ -641,9 +649,10 @@ bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
                        message.data.size > session->download_scratch)) return false;
     if (value != 3 && message.data.size > 2048) return false;
     if (session->response) return false;
-    auto* bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.rx", message.data.size, false));
+    auto* bytes = owned ? *owned : static_cast<uint8_t*>(mem::allocatePreferred("geocaching.rx", message.data.size, false));
     if (!bytes) return false;
-    std::memcpy(bytes, message.data.data, message.data.size);
+    if (owned) *owned = nullptr;
+    else std::memcpy(bytes, message.data.data, message.data.size);
     session->response = bytes;
     session->response_size = message.data.size;
     session->response_source = source;
@@ -653,6 +662,69 @@ bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
     next_step.store(0);
     // The sender can retry; only the exact committed response is acknowledged.
     return false;
+}
+
+bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
+{
+    ++replies_seen;
+    if (!message.source.data || message.source.size != 16 || !message.destination.data || message.destination.size != 16 ||
+        !message.data.data || !message.data.size || message.data.size > 8192) return false;
+    Guard guard;
+    if (guard.locked) return receiveResponse(message);
+    ++replies_busy;
+    if (!active.load() || pending_reply.load(std::memory_order_acquire)) return false;
+    auto reply = std::unique_ptr<PendingReply>(new (std::nothrow) PendingReply);
+    if (!reply) return false;
+    reply->bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.rx", message.data.size, false));
+    if (!reply->bytes) return false;
+    std::memcpy(reply->source.bytes.data(), message.source.data, 16);
+    std::memcpy(reply->destination.bytes.data(), message.destination.data, 16);
+    std::memcpy(reply->bytes, message.data.data, message.data.size);
+    reply->size = message.data.size;
+    pending_reply.store(reply.release(), std::memory_order_release);
+    next_step.store(0);
+    return false; // Queued in RAM only; durable acceptance still controls ACKs.
+}
+
+void drainReply(Session& s)
+{
+    if (s.response || s.phase != Phase::Ready || !s.port) return;
+    std::unique_ptr<PendingReply> reply(pending_reply.exchange(nullptr, std::memory_order_acq_rel));
+    if (!reply) return;
+    receiveResponse({{reply->source.bytes.data(), 16}, {reply->destination.bytes.data(), 16}, {}, {reply->bytes, reply->size}}, &reply->bytes);
+}
+
+bool processResponse(Session& s)
+{
+    if (!s.response || s.client->persistencePending() || s.dispatch_store->busy()) return false;
+    ++replies_processed;
+    if (s.response_operation == 1 && s.publication && s.publication->attempt)
+    {
+        s.publication->attempt->accept(s.response_source, {s.response, s.response_size});
+        ++epoch;
+    }
+    else if (s.response_operation == 3 && s.download)
+    {
+        auto* scratch = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.verify", s.download_scratch, false));
+        if (!scratch) return false;
+        const auto before = s.download->phase();
+        s.download->accept(s.response_source, {s.response, s.response_size}, scratch, s.download_scratch);
+        if (before != s.download->phase()) ++epoch;
+        heap_caps_free(scratch);
+    }
+    else
+    {
+        const bool accepted = s.client->accept(s.response_source, {s.response, s.response_size});
+        if (accepted) ++replies_accepted;
+        Serial.printf("[Geocaching] reply operation=%u result=%s query=%u bytes=%u\n",
+                      s.response_operation, accepted ? "committed" : s.client->persistencePending() ? "persisting"
+                                                                                                    : "ignored",
+                      static_cast<unsigned>(s.client->phase()), static_cast<unsigned>(s.response_size));
+    }
+    heap_caps_free(s.response);
+    s.response = nullptr;
+    s.response_size = 0;
+    return true;
 }
 
 void startRecovery()
@@ -1569,6 +1641,7 @@ bool closeSession()
     if (!router->bindGeocachingHandlers(nullptr, nullptr, nullptr)) return false;
     // Unbinding joins any router callback before clearing its pending payload.
     announcement_pending.store(false, std::memory_order_release);
+    delete pending_reply.exchange(nullptr, std::memory_order_acq_rel);
     if (session->created_backend && router->backendForProtocol(chat::MeshProtocol::Reticulum) == session->created_backend &&
         router->backendProtocol() != chat::MeshProtocol::Reticulum && router->backendProtocol() != chat::MeshProtocol::RNode)
     {
@@ -1682,6 +1755,7 @@ void step()
         fail("Storage interrupted - reopen to recover");
         return;
     }
+    drainReply(s);
     if (cancel_draft_read.exchange(false))
     {
         s.draft_read.reset();
@@ -1695,26 +1769,26 @@ void step()
         s.draft_io_reset = false;
     }
     if (s.draft_catalog && s.draft_catalog->reading &&
-        (!s.draft_catalog_wanted || downloadActive() || publicationActive() || draftSaveActive()))
+        (!s.draft_catalog_wanted || s.response || downloadActive() || publicationActive() || draftSaveActive()))
     {
         s.store->releaseDraftRead();
         s.draft_catalog->reading = false;
     }
     if (s.publication_restore_pending && s.publication_restore_background &&
-        (downloadActive() || publicationActive() || draftSaveActive() ||
+        (s.response || downloadActive() || publicationActive() || draftSaveActive() ||
          (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending)))
     {
         s.store->releaseDraftRead();
         s.publication_restore_pending = false;
     }
     if (s.download_restore_pending &&
-        (downloadActive() || publicationActive() || draftSaveActive() ||
+        (s.response || downloadActive() || publicationActive() || draftSaveActive() ||
          (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending)))
     {
         s.download_store->releaseRead();
         s.download_restore_pending = false;
     }
-    if (s.saved && (downloadActive() || publicationActive() || draftSaveActive() || s.draft_catalog_wanted ||
+    if (s.saved && (s.response || downloadActive() || publicationActive() || draftSaveActive() || s.draft_catalog_wanted ||
                     (s.client && s.client->persistencePending()) ||
                     (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending) ||
                     !storage::sd_card_ready() || storage::sd_external_block_owner_active()))
@@ -1768,6 +1842,7 @@ void step()
         else s.port->maintenanceStep();
         return;
     }
+    if (s.phase == Phase::Ready && !s.workspace_owner.holder() && processResponse(s)) return;
     // Continue the current read owner before background catalogs that would
     // otherwise wait on its lease. Foreground jobs cancelled it above.
     if (s.saved && s.saved->reading())
@@ -2247,37 +2322,7 @@ void step()
         s.dispatcher->dispatchOne(now(nullptr));
         return;
     }
-    if (s.response)
-    {
-        ++replies_processed;
-        if (s.response_operation == 1 && s.publication && s.publication->attempt)
-        {
-            s.publication->attempt->accept(s.response_source, {s.response, s.response_size});
-            ++epoch;
-        }
-        else if (s.response_operation == 3 && s.download)
-        {
-            auto* scratch = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.verify", s.download_scratch, false));
-            if (scratch)
-            {
-                const auto before = s.download->phase();
-                s.download->accept(s.response_source, {s.response, s.response_size}, scratch, s.download_scratch);
-                if (before != s.download->phase()) ++epoch;
-                heap_caps_free(scratch);
-            }
-        }
-        else
-        {
-            const bool accepted = s.client->accept(s.response_source, {s.response, s.response_size});
-            if (accepted) ++replies_accepted;
-            Serial.printf("[Geocaching] reply operation=%u accepted=%u query=%u bytes=%u\n",
-                          s.response_operation, accepted, static_cast<unsigned>(s.client->phase()), static_cast<unsigned>(s.response_size));
-        }
-        heap_caps_free(s.response);
-        s.response = nullptr;
-        s.response_size = 0;
-        return;
-    }
+    if (processResponse(s)) return;
     if (s.download && s.download->phase() == gc::DownloadPhase::Waiting &&
         now(nullptr).monotonic_ms - s.download_started >= s.download_wait_ms)
     {

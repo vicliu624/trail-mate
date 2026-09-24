@@ -11,6 +11,8 @@
 namespace rt = platform::esp::arduino_common::geocaching::browse_runtime;
 namespace test = runtime_test;
 using Section = ui::geocaching::Section;
+uint32_t tick_ms = 5;
+std::vector<uint8_t> last_reply;
 
 void require(bool result, const char* message)
 {
@@ -22,7 +24,7 @@ void require(bool result, const char* message)
 }
 void tick()
 {
-    test::clock_ms += 5;
+    test::clock_ms += tick_ms;
     test::io_bytes = 0;
     test::in_ui = false;
     test::maintenance::tick(static_cast<uint32_t>(test::clock_ms));
@@ -107,8 +109,17 @@ void reply(chat::MeshAdapterRouter& router, std::vector<uint8_t> response, unsig
     std::memcpy(response.data() + (response_id.data - response.data()), id.data, 16);
     std::array<uint8_t, 16> remote{};
     require(router.delivery != nullptr, "delivery callback missing");
+    const auto semaphore = xSemaphoreCreateMutex();
+    require(xSemaphoreTake(semaphore, 0) == pdTRUE, "cannot occupy the storage mutex during delivery");
     require(!router.delivery({{remote.data(), remote.size()}, {router.local.data(), router.local.size()}, {}, {response.data(), response.size()}}, router.context),
             "volatile reply acknowledged before persistence");
+    // A duplicate while full must not overwrite the first owned payload or
+    // acknowledge it early. Destroy borrowed network bytes before SD resumes.
+    require(!router.delivery({{remote.data(), remote.size()}, {router.local.data(), router.local.size()}, {}, {response.data(), response.size()}}, router.context),
+            "full receive mailbox acknowledged a volatile response");
+    last_reply = response;
+    std::fill(response.begin(), response.end(), 0xa5);
+    xSemaphoreGive(semaphore);
 }
 std::vector<uint8_t> paginationFixture(const std::string& folder, bool final_page)
 {
@@ -239,10 +250,12 @@ int main(int argc, char** argv)
     const auto interrupted_files = test::files;
     const auto interrupted_directories = test::directories;
     const auto obsolete_request = router.sent_bytes;
+    reply(router, fixture(folder, "capabilities-response-v1.bin"), 0);
     test::source->activate(false);
     until([&]
           { return !router.service; },
           "interrupted query did not close");
+    require(!test::allocated("geocaching.rx"), "closing session leaked its pending network reply");
     test::files = interrupted_files;
     test::directories = interrupted_directories;
     test::clock_ms += 180000; // the retained attempt is eligible for retry after reboot
@@ -273,6 +286,9 @@ int main(int argc, char** argv)
           { return router.sends == 1; },
           "fresh query was blocked by an obsolete request");
     require(router.sent_bytes != obsolete_request, "restart retransmitted the old session's query");
+    // Real SD operations in the remote capture take tens of milliseconds.
+    // Exercise the receive handoff and response scheduling at that cadence.
+    tick_ms = 40;
     reply(router, fixture(folder, "capabilities-response-v1.bin"), 0);
     until([&]
           { return router.sends == 2; },
@@ -283,6 +299,10 @@ int main(int argc, char** argv)
     until([&]
           { const auto view = snapshot(Section::Discover); return view.count == 1 && view.can_refresh; },
           "query page not persisted");
+    tick_ms = 5;
+    std::array<uint8_t, 16> reply_remote{};
+    require(router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
+            "durably committed reply was not acknowledged on retry");
     ui::geocaching::Item item;
     uint64_t generation = 0;
     test::source->requestWindow(Section::Discover, 0, 1);
