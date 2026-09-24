@@ -4,13 +4,17 @@
  */
 
 #include "ui/widgets/map/map_viewport.h"
+#include "ui/widgets/map/map_diagnostics.h"
 
 #include "app/app_config.h"
 #include "app/app_config_changes.h"
 #include "app/app_facade_access.h"
 #include "platform/ui/device_runtime.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/localization.h"
 #include "ui/widgets/map/map_tiles.h"
+#include "ui_map_runtime/map_geo_coordinates.h"
+#include "ui_presentation/map/map_marker_cache.h"
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
 #include "ui/widgets/map/poi_overlay.h"
 #include "ui_map_runtime/map_poi/annotation_frame.h"
@@ -43,6 +47,18 @@ void* allocate_annotation_memory(std::size_t bytes, void*)
 void release_annotation_memory(void* memory, void*) { heap_caps_free(memory); }
 #endif
 
+struct MarkerSession
+{
+    ui::map::MapMarkerCache cache;
+    GeoPoint reference;
+    lv_point_t reference_pixel{};
+    int zoom = -1;
+    uint8_t coord_system = 0;
+    int width = 0;
+    int height = 0;
+    uint32_t retry_at = 0;
+};
+
 struct RuntimeImpl
 {
 #if defined(ESP_PLATFORM)
@@ -69,6 +85,11 @@ struct RuntimeImpl
     Widgets widgets{};
     Model model{};
     ui::map::MapOverlaySnapshot overlay{};
+    const ui::map::MapMarkerBinding* marker_binding = nullptr;
+    MarkerSession* markers = nullptr;
+    uint32_t marker_retry_at = 0;
+    int marker_drag_dx = 0;
+    int marker_drag_dy = 0;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     PoiOverlay poi_overlay;
     ui::map_poi::AnnotationFrame annotation_frame{allocate_annotation_memory, release_annotation_memory};
@@ -114,63 +135,7 @@ namespace
 #endif
 
 constexpr double kCoordPi = 3.14159265358979323846;
-constexpr double kCoordA = 6378245.0;
-constexpr double kCoordEe = 0.00669342162296594323;
 constexpr int kGestureDragStartPx = 6;
-
-bool coord_out_of_china(double lat, double lon)
-{
-    return (lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271);
-}
-
-double coord_transform_lat(double x, double y)
-{
-    double ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y +
-                 0.2 * std::sqrt(std::fabs(x));
-    ret += (20.0 * std::sin(6.0 * x * kCoordPi) + 20.0 * std::sin(2.0 * x * kCoordPi)) * 2.0 / 3.0;
-    ret += (20.0 * std::sin(y * kCoordPi) + 40.0 * std::sin(y / 3.0 * kCoordPi)) * 2.0 / 3.0;
-    ret += (160.0 * std::sin(y / 12.0 * kCoordPi) + 320 * std::sin(y * kCoordPi / 30.0)) * 2.0 / 3.0;
-    return ret;
-}
-
-double coord_transform_lon(double x, double y)
-{
-    double ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y +
-                 0.1 * std::sqrt(std::fabs(x));
-    ret += (20.0 * std::sin(6.0 * x * kCoordPi) + 20.0 * std::sin(2.0 * x * kCoordPi)) * 2.0 / 3.0;
-    ret += (20.0 * std::sin(x * kCoordPi) + 40.0 * std::sin(x / 3.0 * kCoordPi)) * 2.0 / 3.0;
-    ret += (150.0 * std::sin(x / 12.0 * kCoordPi) + 300.0 * std::sin(x / 30.0 * kCoordPi)) * 2.0 / 3.0;
-    return ret;
-}
-
-void wgs84_to_gcj02(double lat, double lon, double& out_lat, double& out_lon)
-{
-    if (coord_out_of_china(lat, lon))
-    {
-        out_lat = lat;
-        out_lon = lon;
-        return;
-    }
-
-    double dlat = coord_transform_lat(lon - 105.0, lat - 35.0);
-    double dlon = coord_transform_lon(lon - 105.0, lat - 35.0);
-    double radlat = lat / 180.0 * kCoordPi;
-    double magic = std::sin(radlat);
-    magic = 1 - kCoordEe * magic * magic;
-    double sqrt_magic = std::sqrt(magic);
-    dlat = (dlat * 180.0) / ((kCoordA * (1 - kCoordEe)) / (magic * sqrt_magic) * kCoordPi);
-    dlon = (dlon * 180.0) / (kCoordA / sqrt_magic * std::cos(radlat) * kCoordPi);
-    out_lat = lat + dlat;
-    out_lon = lon + dlon;
-}
-
-void gcj02_to_bd09(double lat, double lon, double& out_lat, double& out_lon)
-{
-    double z = std::sqrt(lon * lon + lat * lat) + 0.00002 * std::sin(lat * kCoordPi);
-    double theta = std::atan2(lat, lon) + 0.000003 * std::cos(lon * kCoordPi);
-    out_lon = z * std::cos(theta) + 0.0065;
-    out_lat = z * std::sin(theta) + 0.006;
-}
 
 void make_plain(lv_obj_t* obj)
 {
@@ -322,10 +287,11 @@ void gesture_surface_event_cb(lv_event_t* e)
 
         if (impl->gesture_dragging)
         {
-            if (lv_indev_t* indev = resolve_event_indev(e))
-            {
-                lv_indev_stop_processing(indev);
-            }
+            // This is an object callback, not an input-device interceptor.
+            // stop_processing persists across PRESSING in LVGL 9.4 and can
+            // swallow the following RELEASED before it reaches this object.
+            // Consume only this event's bubbling; preserve the release lifecycle.
+            lv_event_stop_bubbling(e);
             MAP_VIEWPORT_LOG("drag_update root=%p dx=%d dy=%d\n",
                              impl->widgets.root,
                              static_cast<int>(point.x - impl->gesture_start.x),
@@ -348,10 +314,10 @@ void gesture_surface_event_cb(lv_event_t* e)
 
         if (impl->gesture_dragging)
         {
-            if (lv_indev_t* indev = resolve_event_indev(e))
-            {
-                lv_indev_stop_processing(indev);
-            }
+            lv_event_stop_bubbling(e);
+            MAP_DIAG("[MAPD][gesture-end] t=%lu code=%d dx=%d dy=%d\n",
+                     static_cast<unsigned long>(lv_tick_get()), static_cast<int>(code),
+                     static_cast<int>(point.x - impl->gesture_start.x), static_cast<int>(point.y - impl->gesture_start.y));
             MAP_VIEWPORT_LOG("drag_end root=%p dx=%d dy=%d code=%d\n",
                              impl->widgets.root,
                              static_cast<int>(point.x - impl->gesture_start.x),
@@ -627,6 +593,124 @@ bool screen_center_from_model_pan(const RuntimeImpl& impl, double& lat, double& 
     return true;
 }
 
+void collect_marker(const ui::map::MapMarker& marker, void* context)
+{
+    auto& impl = *static_cast<RuntimeImpl*>(context);
+    auto& session = *impl.markers;
+    lv_point_t point{};
+    if (!project_geo_point(impl, {true, marker.latitude_e7 / 1e7, marker.longitude_e7 / 1e7}, point)) return;
+    constexpr int margin = 64;
+    if (point.x < -margin || point.y < -margin || point.x > session.width + margin || point.y > session.height + margin) return;
+    const int64_t dx = point.x - session.width / 2;
+    const int64_t dy = point.y - session.height / 2;
+    uint64_t distance = static_cast<uint64_t>(dx * dx + dy * dy);
+    // Visible markers always precede candidates kept only for the pan margin.
+    if (point.x < 0 || point.y < 0 || point.x > session.width || point.y > session.height) distance += uint64_t{1} << 48;
+    session.cache.offer(marker, distance);
+}
+
+void refresh_markers(RuntimeImpl& impl)
+{
+    const auto* binding = impl.marker_binding;
+    if (!binding || !binding->source || !binding->allocate || !binding->release || !is_runtime_alive(impl)) return;
+    const auto status = binding->source->markerStatus();
+    if (!status.ready)
+    {
+        if (impl.markers)
+        {
+            impl.markers->~MarkerSession();
+            binding->release(impl.markers);
+            impl.markers = nullptr;
+            lv_obj_invalidate(impl.widgets.overlay_layer);
+        }
+        return;
+    }
+    const auto now = lv_tick_get();
+    if (!impl.markers)
+    {
+        if (impl.marker_retry_at && static_cast<int32_t>(now - impl.marker_retry_at) < 0) return;
+        void* memory = binding->allocate(sizeof(MarkerSession));
+        if (!memory)
+        {
+            impl.marker_retry_at = now + 3000;
+            return;
+        }
+        impl.markers = new (memory) MarkerSession{};
+        impl.marker_retry_at = 0;
+    }
+    auto& session = *impl.markers;
+    if (session.retry_at && static_cast<int32_t>(now - session.retry_at) < 0 &&
+        session.cache.seen.revision == status.revision) return;
+    const int width = lv_obj_get_width(impl.widgets.root);
+    const int height = lv_obj_get_height(impl.widgets.root);
+    if (!impl.anchor.valid || width <= 0 || height <= 0) return;
+    lv_point_t reference{};
+    const int margin = session.cache.truncated ? 0 : 64;
+    const bool moved = session.zoom != impl.model.zoom || session.coord_system != impl.model.coord_system ||
+                       session.width != width || session.height != height ||
+                       !project_geo_point(impl, session.reference, reference) ||
+                       std::abs(reference.x - session.reference_pixel.x) > margin ||
+                       std::abs(reference.y - session.reference_pixel.y) > margin;
+    if (!moved && !session.cache.stale(status)) return;
+    session.cache.reset();
+    session.width = width;
+    session.height = height;
+    session.zoom = impl.model.zoom;
+    session.coord_system = impl.model.coord_system;
+    session.reference = impl.model.focus_point;
+    project_geo_point(impl, session.reference, session.reference_pixel);
+    if (!binding->source->visitMarkers(collect_marker, &impl, session.cache.scratch, sizeof(session.cache.scratch)))
+    {
+        session.cache.reset(); // Never display a partially read card/session.
+        session.cache.seen = status;
+        session.retry_at = now + 3000;
+    }
+    else
+    {
+        session.cache.commit(status);
+        session.retry_at = 0;
+    }
+    lv_obj_invalidate(impl.widgets.overlay_layer);
+}
+
+void draw_markers(lv_event_t* event)
+{
+    const auto& impl = *static_cast<RuntimeImpl*>(lv_event_get_user_data(event));
+    if (!impl.markers || !impl.markers->cache.valid || !impl.marker_binding) return;
+    const auto status = impl.marker_binding->source->markerStatus();
+    if (!status.ready || status.revision != impl.markers->cache.seen.revision) return;
+    auto* layer = lv_event_get_layer(event);
+    lv_area_t origin{};
+    lv_obj_get_coords(impl.widgets.overlay_layer, &origin);
+    const auto* font = lv_obj_get_style_text_font(impl.widgets.overlay_layer, LV_PART_MAIN);
+    for (std::size_t i = 0; i < impl.markers->cache.count; ++i)
+    {
+        const auto& marker = impl.markers->cache.entries[i].marker;
+        lv_point_t point{};
+        if (!project_geo_point(impl, {true, marker.latitude_e7 / 1e7, marker.longitude_e7 / 1e7}, point)) continue;
+        point.x += impl.marker_drag_dx;
+        point.y += impl.marker_drag_dy;
+        if (point.x < -8 || point.y < -8 || point.x >= lv_area_get_width(&origin) || point.y >= lv_area_get_height(&origin)) continue;
+        const auto color = lv_color_hex(status.clock_valid && status.now <= marker.active_until ? 0xDC2626 : 0x808080);
+        lv_draw_rect_dsc_t dot;
+        lv_draw_rect_dsc_init(&dot);
+        dot.bg_color = color;
+        dot.bg_opa = LV_OPA_COVER;
+        dot.radius = LV_RADIUS_CIRCLE;
+        lv_area_t area{origin.x1 + point.x - 3, origin.y1 + point.y - 3,
+                       origin.x1 + point.x + 3, origin.y1 + point.y + 3};
+        lv_draw_rect(layer, &dot, &area);
+        lv_draw_label_dsc_t label;
+        lv_draw_label_dsc_init(&label);
+        label.font = ui::fonts::content_font(marker.title, font);
+        label.text = marker.title;
+        label.text_local = 1;
+        label.color = color;
+        area = {origin.x1 + point.x + 6, origin.y1 + point.y - 8, origin.x2, origin.y1 + point.y - 8 + label.font->line_height};
+        if (area.x1 <= area.x2) lv_draw_label(layer, &label, &area);
+    }
+}
+
 void render_overlay(RuntimeImpl& impl)
 {
     if (!is_runtime_alive(impl) ||
@@ -637,6 +721,9 @@ void render_overlay(RuntimeImpl& impl)
     }
 
     clear_overlay_layer(impl);
+    impl.marker_drag_dx = 0;
+    impl.marker_drag_dy = 0;
+    refresh_markers(impl);
     if (!impl.overlay.header.valid)
     {
         return;
@@ -735,11 +822,25 @@ void refresh_poi_overlay(RuntimeImpl& impl, bool force)
 void loader_timer_cb(lv_timer_t* timer)
 {
     auto* impl = static_cast<RuntimeImpl*>(lv_timer_get_user_data(timer));
-    if (!impl || !is_runtime_alive(*impl) || !impl->model.focus_point.valid ||
-        impl->gesture_pressed || impl->gesture_dragging || impl->drag_preview_active)
+#if TRAIL_MATE_MAP_DIAGNOSTICS
+    static uint32_t last_diagnostic_ms = 0;
+    if (impl && lv_tick_get() - last_diagnostic_ms >= 2000U)
+    {
+        last_diagnostic_ms = lv_tick_get();
+        MAP_DIAG("[MAPD][heartbeat] t=%lu alive=%d focus=%d pressed=%d dragging=%d preview=%d paused=%d z=%d pan=%d,%d records=%u\n",
+                 static_cast<unsigned long>(last_diagnostic_ms), is_runtime_alive(*impl), impl->model.focus_point.valid,
+                 impl->gesture_pressed, impl->gesture_dragging, impl->drag_preview_active, impl->loader_paused,
+                 impl->model.zoom, impl->model.pan_x, impl->model.pan_y, static_cast<unsigned>(impl->tiles.size()));
+    }
+#endif
+    if (!impl || !is_runtime_alive(*impl) || !impl->model.focus_point.valid)
     {
         return;
     }
+
+    tile_loader_maintenance(impl->tile_ctx);
+    if (impl->gesture_pressed || impl->gesture_dragging || impl->drag_preview_active) return;
+    refresh_markers(*impl);
 
     const uint32_t now_ms = lv_tick_get();
     if (impl->last_loader_active_log_ms == 0 ||
@@ -930,6 +1031,11 @@ void destroy(Runtime& runtime)
         lv_obj_del(impl->widgets.root);
     }
 
+    if (impl->markers)
+    {
+        impl->markers->~MarkerSession();
+        impl->marker_binding->release(impl->markers);
+    }
     delete impl;
     runtime.impl_ = nullptr;
     MAP_VIEWPORT_LOG("destroy end\n");
@@ -973,6 +1079,9 @@ void apply_model(Runtime& runtime, const Model& model)
     }
     RuntimeImpl* impl = runtime.impl_;
     impl->drag_preview_active = false;
+    MAP_DIAG("[MAPD][commit-view] t=%lu focus=%.7f,%.7f z=%d pan=%d,%d source=%u\n",
+             static_cast<unsigned long>(lv_tick_get()), model.focus_point.lat, model.focus_point.lon,
+             model.zoom, model.pan_x, model.pan_y, static_cast<unsigned>(model.map_source));
     impl->model = model;
     impl->model.map_source = sanitize_map_source(impl->model.map_source);
     MAP_VIEWPORT_LOG("apply_model focus_valid=%d lat=%.7f lon=%.7f zoom=%d pan=%d,%d src=%u contour=%d coord=%u\n",
@@ -1002,6 +1111,9 @@ void apply_model_lightweight(Runtime& runtime, const Model& model)
     RuntimeImpl* impl = runtime.impl_;
     const int dx = model.pan_x - impl->model.pan_x;
     const int dy = model.pan_y - impl->model.pan_y;
+    if (!impl->drag_preview_active)
+        MAP_DIAG("[MAPD][preview-begin] t=%lu z=%d pan=%d,%d\n",
+                 static_cast<unsigned long>(lv_tick_get()), model.zoom, model.pan_x, model.pan_y);
     impl->model = model;
     impl->model.map_source = sanitize_map_source(impl->model.map_source);
     MAP_VIEWPORT_LOG("apply_model_lightweight focus_valid=%d lat=%.7f lon=%.7f zoom=%d pan=%d,%d src=%u contour=%d coord=%u\n",
@@ -1016,10 +1128,34 @@ void apply_model_lightweight(Runtime& runtime, const Model& model)
                      static_cast<unsigned>(impl->model.coord_system));
     translate_loaded_tiles(*impl, dx, dy);
     translate_children(impl->widgets.overlay_layer, dx, dy);
+    impl->marker_drag_dx += dx;
+    impl->marker_drag_dy += dy;
+    if (impl->markers) lv_obj_invalidate(impl->widgets.overlay_layer);
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     impl->poi_overlay.translate(dx, dy);
 #endif
     impl->drag_preview_active = true;
+}
+
+void set_marker_binding(Runtime& runtime, const ui::map::MapMarkerBinding* binding)
+{
+    auto* impl = runtime.impl_;
+    if (!impl || !is_runtime_alive(*impl) || impl->marker_binding == binding) return;
+    if (impl->markers)
+    {
+        impl->markers->~MarkerSession();
+        impl->marker_binding->release(impl->markers);
+        impl->markers = nullptr;
+    }
+    lv_obj_remove_event_cb(impl->widgets.overlay_layer, draw_markers);
+    impl->marker_binding = binding;
+    impl->marker_retry_at = 0;
+    if (binding)
+    {
+        lv_obj_add_event_cb(impl->widgets.overlay_layer, draw_markers, LV_EVENT_DRAW_MAIN, impl);
+        refresh_markers(*impl);
+    }
+    lv_obj_invalidate(impl->widgets.overlay_layer);
 }
 
 void apply_overlay(Runtime& runtime, const ui::map::MapOverlaySnapshot& overlay)
@@ -1231,24 +1367,8 @@ bool transform_geo_point(const GeoPoint& point, uint8_t coord_system, GeoPoint& 
         return false;
     }
 
-    out_point.valid = true;
-    if (coord_system == 1)
-    {
-        wgs84_to_gcj02(point.lat, point.lon, out_point.lat, out_point.lon);
-        return true;
-    }
-    if (coord_system == 2)
-    {
-        double gcj_lat = 0.0;
-        double gcj_lon = 0.0;
-        wgs84_to_gcj02(point.lat, point.lon, gcj_lat, gcj_lon);
-        gcj02_to_bd09(gcj_lat, gcj_lon, out_point.lat, out_point.lon);
-        return true;
-    }
-
-    out_point.lat = point.lat;
-    out_point.lon = point.lon;
-    return true;
+    out_point.valid = ::ui::map_geo::transform(point.lat, point.lon, coord_system, out_point.lat, out_point.lon);
+    return out_point.valid;
 }
 
 LayerState current_layer_state()

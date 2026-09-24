@@ -23,6 +23,7 @@ enum class MenuScreenId : uint8_t
     WalkieTalkie,
     Sstv,
     Extensions,
+    Calendar,
 };
 
 struct MenuItem

@@ -608,6 +608,11 @@ bool ui_is_overlay_active()
     return s_overlay_active;
 }
 
+bool ui_is_transition_pending()
+{
+    return s_pending_exit != nullptr || s_exit_timer != nullptr || s_rebuild_timer != nullptr;
+}
+
 lv_obj_t* create_menu(lv_obj_t* parent, lv_event_cb_t event_cb)
 {
     lv_obj_t* menu = lv_menu_create(parent);

@@ -1191,6 +1191,7 @@ if(BUILD_TESTING)
 
     add_executable(trailmate_runtime_map_presentation_adapters_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_runtime_map_presentation_adapters.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/map/map_workspace_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/presentation_sources/runtime_map_workspace_source.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/team_presence/team_presence_model.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp")

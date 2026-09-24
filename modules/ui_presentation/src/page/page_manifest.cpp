@@ -36,6 +36,7 @@ constexpr PageManifestItem kTDisplayP4TouchItems[] = {
 };
 
 constexpr PageManifestItem kPagerCompactItems[] = {
+    {PageId::Calendar, "calendar", true, true},
     {PageId::Dashboard, "dashboard", true, true},
     {PageId::Chat, "chat", true, true},
     {PageId::Gps, "gps", true, true},
@@ -45,6 +46,7 @@ constexpr PageManifestItem kPagerCompactItems[] = {
 };
 
 constexpr PageManifestItem kDeckFullItems[] = {
+    {PageId::Calendar, "calendar", true, true},
     {PageId::Dashboard, "dashboard", true, true},
     {PageId::Chat, "chat", true, true},
     {PageId::Team, "team", true, true},

@@ -25,6 +25,9 @@ bool screenId(PageId id, ScreenId& screen)
 {
     switch (id)
     {
+    case PageId::Calendar:
+        screen = ScreenId::Calendar;
+        return true;
     case PageId::Dashboard:
         screen = ScreenId::Dashboard;
         return true;

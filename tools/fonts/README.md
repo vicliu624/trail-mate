@@ -37,10 +37,27 @@ and every other localized glyph remain in downloadable font packs.
 
 ## Noto Naskh Arabic
 
+The Arabic recipe retains Naskh for all available Arabic glyphs and uses
+Noto Sans only for missing symbols such as the ellipsis. Outline fallback
+sources are specified with `fallback_font=` in `build.ini` and repeated
+`--fallback-font` arguments in the generator; they never override primary
+glyphs or resample the native BDF pixel font.
+
 - File: `NotoNaskhArabic-Regular.otf`
 - Source:
   `https://raw.githubusercontent.com/googlefonts/noto-fonts/main/unhinted/otf/NotoNaskhArabic/NotoNaskhArabic-Regular.otf`
 - License: SIL Open Font License 1.1 (OFL)
+
+## Noto Sans (Latin extensions and symbol fallback)
+
+- File: `NotoSans-Regular.ttf`
+- Source:
+  `https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf`
+- SHA-256: `b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5`
+- License: SIL Open Font License 1.1, reproduced in `NotoSans-LICENSE.txt`.
+- Used for the European Latin extension pack because the CJK source does not
+  contain every required Polish glyph. It remains an external downloadable
+  font, not another compiled-in firmware font.
 
 ## Noto Emoji Monochrome
 

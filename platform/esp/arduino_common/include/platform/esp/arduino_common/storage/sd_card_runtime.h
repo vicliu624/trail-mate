@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/esp/arduino_common/storage/sd_transport_config.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -63,10 +64,28 @@ bool mount_sd_card(int sd_cs,
 void unmount_sd_card();
 
 #if defined(TRAIL_MATE_SDFAT_SDMMC)
+bool mount_sd_card(const SdmmcSdConfig& config);
+// Compatibility for existing one-bit callers; new boards use typed config.
 bool mount_sdmmc_card(int clock, int command, int data0);
 #endif
 
 bool sd_card_ready();
+// Changes on mount/reset and ownership transitions, even if both transitions
+// occur between a consumer's polls. Equality is a session check, not a card ID.
+uint32_t sd_media_session();
+enum class SdMediaStatus : uint8_t
+{
+    Ready,
+    Busy,
+    Unavailable,
+    IoError,
+};
+// Rate-limited physical read, not a filesystem-cache lookup. I/O failure is
+// latched for this session; recovery requires a new validated mount/session.
+SdMediaStatus sd_probe_media();
+// Bounded-frequency recovery through the existing board mount policy. Never
+// formats media or takes ownership from USB. False includes deferred/absent.
+bool sd_recover_media();
 bool sd_card_uses_sdfat();
 bool sd_card_is_exfat();
 SdCardBackend sd_card_backend();
@@ -92,6 +111,7 @@ bool sd_mkdir(const char* path);
 bool sd_rmdir(const char* path);
 bool sd_remove(const char* path);
 bool sd_rename(const char* old_path, const char* new_path);
+bool sd_rename(const char* old_path, const char* new_path, uint32_t expected_session);
 
 enum class SdFileReadStatus : uint8_t
 {
@@ -109,6 +129,14 @@ struct SdFileReadResult
     std::size_t bytes_read = 0;
     uint64_t file_size = 0;
     int32_t error = -1;
+    uint32_t lock_wait_ms = 0;
+    uint32_t open_ms = 0;
+    uint32_t read_ms = 0;
+    uint32_t block_calls = 0;
+    uint32_t block_sectors = 0;
+    uint32_t block_max_sectors = 0;
+    uint32_t block_us = 0;
+    bool block_timing_available = false;
 };
 
 // Reads a file through bounded device-owned transactions. Callers receive a
@@ -127,6 +155,8 @@ class SdRuntimeFile
     SdRuntimeFile& operator=(const SdRuntimeFile&) = delete;
 
     bool open(const char* path, const char* mode);
+    // Reject a replaced or faulted medium under the filesystem lock.
+    bool open(const char* path, const char* mode, uint32_t expected_session);
     void close();
     bool is_open() const;
     int available() const;

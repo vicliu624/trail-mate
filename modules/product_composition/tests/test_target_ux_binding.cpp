@@ -22,7 +22,12 @@ int main()
     assert(std::strcmp(wio->desired_ux_pack_id, "deck_touch") == 0);
     assert(std::strcmp(wio->active_ux_pack_id, "deck_touch") == 0);
     assert(wio->final_ux_pack_available && wio->fallback_ux_pack_id == nullptr);
-    assert(std::strcmp(deck->active_ux_pack_id, "compatibility") == 0);
+    assert(std::strcmp(deck->active_ux_pack_id, "deck_full") == 0);
+    assert(!deck->final_ux_pack_available); // Manifest-backed compatibility renderer.
+    const auto* pager = product_composition::findTargetUxBinding("tlora_pager");
+    assert(pager && std::strcmp(pager->active_ux_pack_id, "pager_compact") == 0);
+    const auto* watch = product_composition::findTargetUxBinding("twatch");
+    assert(watch && std::strcmp(watch->active_ux_pack_id, "compatibility") == 0);
 
     const auto* tft = product_composition::findTargetUxBinding("t_display_p4_tft");
     assert(tft != nullptr);

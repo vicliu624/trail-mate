@@ -1,3 +1,4 @@
+#include "esp32_lvgl_arduino_agenda.h"
 #include "ui/app_registry.h"
 
 #include "app/app_config.h"
@@ -22,6 +23,8 @@ namespace
 ui::app_catalog_builder::FeatureFlags buildFeatureFlags()
 {
     ui::app_catalog_builder::FeatureFlags flags{};
+    flags.calendar_app = trailmate::apps::esp32_lvgl::arduino_agenda::application();
+    flags.map_markers = trailmate::apps::esp32_lvgl::arduino_agenda::mapMarkers();
     flags.profile = ui::app_catalog_builder::CatalogProfile::PioDefault;
     flags.include_gps_map = platform::ui::device::gps_supported();
     flags.include_gnss_skyplot = platform::ui::device::gps_supported();

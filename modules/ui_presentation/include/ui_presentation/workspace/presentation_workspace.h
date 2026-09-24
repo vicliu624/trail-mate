@@ -7,6 +7,12 @@
 #include "ui_presentation/mesh/mesh_status_model.h"
 #include "ui_presentation/settings/settings_model.h"
 
+namespace ui::agenda
+{
+class AgendaWorkspaceModel;
+class IAgendaReminderSource;
+} // namespace ui::agenda
+
 namespace ui::workspace
 {
 
@@ -21,6 +27,8 @@ struct PresentationWorkspace
     ui::chat::ChatWorkspaceModel* chat = nullptr;
     ui::chat::ChatWorkspaceModel* team_chat = nullptr;
     ui::map::MapWorkspaceModel* map = nullptr;
+    ui::agenda::AgendaWorkspaceModel* agenda = nullptr;
+    ui::agenda::IAgendaReminderSource* agenda_reminders = nullptr;
 
     bool hasDevice() const { return device != nullptr; }
     bool hasGps() const { return gps != nullptr; }
@@ -29,6 +37,7 @@ struct PresentationWorkspace
     bool hasChat() const { return chat != nullptr; }
     bool hasTeamChat() const { return team_chat != nullptr; }
     bool hasMap() const { return map != nullptr; }
+    bool hasAgenda() const { return agenda != nullptr && agenda_reminders != nullptr; }
 };
 
 inline bool hasCoreStatusModels(const PresentationWorkspace& workspace)
@@ -44,7 +53,8 @@ inline bool hasInteractiveWorkspaceModels(
     return workspace.settings != nullptr ||
            workspace.chat != nullptr ||
            workspace.team_chat != nullptr ||
-           workspace.map != nullptr;
+           workspace.map != nullptr ||
+           workspace.hasAgenda();
 }
 
 } // namespace ui::workspace

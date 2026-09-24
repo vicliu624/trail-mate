@@ -78,6 +78,8 @@ bool tile_in_rect(int sx, int sy, int w, int h, int margin);
 void update_map_anchor(TileContext& ctx, double lat, double lng, int zoom, int pan_x, int pan_y, bool has_fix);
 void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom, int pan_x, int pan_y, bool has_fix);
 void tile_loader_step(TileContext& ctx);
+// This backend loads synchronously and has no worker completions to reclaim.
+inline void tile_loader_maintenance(TileContext&) {}
 uint8_t sanitize_map_source(uint8_t map_source);
 const char* map_source_label(uint8_t map_source);
 bool build_base_tile_path(int z, int x, int y, uint8_t map_source, char* out_path, size_t out_size);

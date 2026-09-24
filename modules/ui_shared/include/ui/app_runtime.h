@@ -15,6 +15,8 @@ void ui_exit_active_app(lv_obj_t* parent);
 bool ui_present_interruption_app(AppScreen* app, lv_obj_t* parent);
 void ui_dismiss_interruption_app(lv_obj_t* parent);
 bool ui_is_interruption_app_active();
+// Global modal renderers must wait until a queued exit/rebuild has completed.
+bool ui_is_transition_pending();
 void ui_request_exit_to_menu();
 void ui_request_rebuild_active_app();
 void ui_set_overlay_active(bool active);

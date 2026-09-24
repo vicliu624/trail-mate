@@ -202,10 +202,14 @@ ui::CallbackAppScreen s_chat_app("chat", "Chat", CATALOG_ICON(Chat),
                                  chat::ui::shell::enter,
                                  chat::ui::shell::exit,
                                  &s_menu_host);
-ui::CallbackAppScreen s_gps_app("map", "Map", CATALOG_ICON(gps_icon),
-                                gps::ui::shell::enter,
-                                gps::ui::shell::exit,
-                                &s_menu_host);
+gps::ui::shell::RouteSpec s_map_route{&s_menu_host};
+ui::CallbackAppScreen s_gps_app(
+    "map", "Map", CATALOG_ICON(gps_icon),
+    [](void* context, lv_obj_t* parent)
+    { gps::ui::shell::enter_route(static_cast<const gps::ui::shell::RouteSpec*>(context), parent); },
+    [](void* context, lv_obj_t* parent)
+    { gps::ui::shell::exit_route(static_cast<const gps::ui::shell::RouteSpec*>(context), parent); },
+    &s_map_route);
 ui::CallbackAppScreen s_skyplot_app("sky_plot", "Sky Plot", CATALOG_ICON(Satellite),
                                     gnss::ui::shell::enter,
                                     gnss::ui::shell::exit,
@@ -464,6 +468,9 @@ namespace ui::app_catalog_builder
 
 AppCatalog build(const FeatureFlags& flags)
 {
+#if !TRAIL_MATE_USE_MONO_SCREEN_240X320
+    s_map_route.markers = flags.map_markers;
+#endif
     size_t count = 0;
     auto add = [&](AppScreen* app)
     {
@@ -475,6 +482,10 @@ AppCatalog build(const FeatureFlags& flags)
                             app->name());
         }
     };
+
+    // Calendar plus the 15 existing optional entries fits the fixed capacity.
+    // A null descriptor leaves every other target's catalog unchanged.
+    add(flags.calendar_app);
 
     const auto add_common_tail = [&]()
     {

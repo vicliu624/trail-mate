@@ -22,6 +22,26 @@ const Esp32LvglRuntimeConfig& esp32LvglRuntimeConfig()
         12288,
         5,
     };
+#elif defined(ARDUINO_T_LORA_PAGER)
+    static const Esp32LvglRuntimeConfig kConfig = {
+        "tlora_pager",
+        "trail-mate-tlora-pager",
+        "T-LoRa Pager",
+        "pager_app_loop",
+        10,
+        12288,
+        5,
+    };
+#elif defined(ARDUINO_T_DECK)
+    static const Esp32LvglRuntimeConfig kConfig = {
+        "tdeck",
+        "trail-mate-tdeck",
+        "T-Deck",
+        "tdeck_app_loop",
+        10,
+        12288,
+        5,
+    };
 #elif defined(TRAIL_MATE_ESP_BOARD_TAB5)
     static const Esp32LvglRuntimeConfig kConfig = {
         "tab5",

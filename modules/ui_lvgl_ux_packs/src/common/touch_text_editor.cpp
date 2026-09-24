@@ -138,4 +138,45 @@ void attach_touch_text_editor(lv_obj_t* textarea, ImeWidget* owner)
     lv_obj_remove_event_cb(textarea, on_field_event);
     lv_obj_add_event_cb(textarea, on_field_event, LV_EVENT_ALL, owner);
 }
+
+TouchEditorCapture capture_touch_text_editor(lv_obj_t* source, char* text,
+                                             std::size_t capacity, ImeEditState& state)
+{
+    if (!source || s_source != source || !s_root || !s_draft) return TouchEditorCapture::Inactive;
+    return s_keyboard.captureEditState(text, capacity, state) ? TouchEditorCapture::Captured
+                                                              : TouchEditorCapture::InsufficientCapacity;
+}
+
+bool restore_touch_text_editor(lv_obj_t* source, const char* text,
+                               const ImeEditState& state, ImeWidget* owner)
+{
+    if (!text) return false;
+    return restore_touch_text_editor(
+        source, state, [](const void* value, lv_obj_t* draft)
+        {
+                                         lv_textarea_set_text(draft, static_cast<const char*>(value));
+                                         return true; },
+        text, owner);
+}
+
+TouchEditorCapture capture_touch_text_editor(lv_obj_t* source, TouchTextCapture capture,
+                                             void* context, ImeEditState& state)
+{
+    if (!source || s_source != source || !s_root || !s_draft) return TouchEditorCapture::Inactive;
+    return capture && s_keyboard.captureEditState(nullptr, 0, state) && capture(context, lv_textarea_get_text(s_draft))
+               ? TouchEditorCapture::Captured
+               : TouchEditorCapture::InsufficientCapacity;
+}
+
+bool restore_touch_text_editor(lv_obj_t* source, const ImeEditState& state,
+                               TouchTextRestore restore, const void* context, ImeWidget* owner)
+{
+    if (!restore || s_root || !source || !lv_obj_is_valid(source) ||
+        !::ui::page_profile::current().compact_touch_keyboard) return false;
+    open_editor(source, owner);
+    if (s_source == source && s_draft && restore(context, s_draft) &&
+        s_keyboard.restoreEditState(lv_textarea_get_text(s_draft), state)) return true;
+    finish_editor(false);
+    return false;
+}
 } // namespace ui::widgets

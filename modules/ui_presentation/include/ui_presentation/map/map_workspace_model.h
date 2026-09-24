@@ -22,12 +22,21 @@ class MapWorkspaceModel
     MapViewport viewport() const;
     MapToolKind activeTool() const;
 
+    // Temporary workspace mode, shared by any caller that needs a coordinate.
+    // The renderer must synchronize its visible centre before confirming.
+    ui::UiActionResult beginLocationSelection();
+    ui::UiActionResult pickLocation();
+    ui::UiActionResult cancelLocationSelection();
+    MapLocationSelection locationSelection() const;
+
   private:
     IMapPresentationSource& source_;
     IMapActionSink& sink_;
 
     MapViewport viewport_{};
     MapToolKind active_tool_ = MapToolKind::Pan;
+    MapToolKind previous_tool_ = MapToolKind::Pan;
+    MapLocationSelection selection_{};
 };
 
 } // namespace ui::map

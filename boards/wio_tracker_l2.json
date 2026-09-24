@@ -19,7 +19,8 @@
     "psram_type": "opi",
     "hwids": [["0x303A", "0x1001"]],
     "mcu": "esp32s3",
-    "variant": "esp32s3"
+    "variant": "wio_tracker_l2",
+    "variants_dir": "variants"
   },
   "connectivity": ["wifi", "bluetooth", "lora"],
   "debug": {

@@ -7,6 +7,7 @@
 
 // Keep the codec library's GPIO class out of the global ESP/Lovyan namespace.
 #define NO_USING_NAMESPACE_AUDIO_DRIVER 1
+#define TRAIL_MATE_AUDIO_DRIVER_EXPLICIT_INSTANCES 1
 #include <AudioDriver.h>
 #include <DriverDeviceInfo.h>
 #include <LovyanGFX.hpp>
@@ -22,10 +23,21 @@
 #include <esp_sleep.h>
 #include <freertos/semphr.h>
 #include <limits>
+#include <new>
 #include <sys/time.h>
 
 namespace boards::wio_tracker_l2
 {
+static_assert(SDA == gpio::kI2cSda && SCL == gpio::kI2cScl,
+              "Arduino variant I2C pins must match the WIO board profile");
+static_assert(TX == gpio::kGpsTx && RX == gpio::kGpsRx,
+              "Arduino variant UART pins must match the WIO board profile");
+static_assert(SCK == gpio::kRadioSck && MISO == gpio::kRadioMiso &&
+                  MOSI == gpio::kRadioMosi && SS == gpio::kRadioCs,
+              "Arduino variant SPI pins must match the WIO board profile");
+#if defined(RGB_BUILTIN) || defined(LED_BUILTIN)
+#error "WIO's user LED belongs to the expander, not an Arduino GPIO/NeoPixel alias"
+#endif
 namespace
 {
 StaticSemaphore_t s_i2c_mutex_storage;
@@ -36,7 +48,7 @@ StaticSemaphore_t s_audio_mutex_storage;
 SemaphoreHandle_t s_audio_mutex = nullptr;
 std::atomic<bool> s_tone_pending{false};
 audio_driver::DriverDeviceInfo s_codec_pins;
-auto& s_codec = audio_driver::AudioDriverES8311;
+audio_driver::AudioDriverES8311Class s_codec;
 constexpr uint32_t kAudioSampleRate = 16000;
 int16_t s_tone_pcm[256];
 
@@ -155,8 +167,23 @@ WioTrackerL2Board::WioTrackerL2Board()
 
 WioTrackerL2Board& WioTrackerL2Board::instance()
 {
-    static WioTrackerL2Board board;
-    return board;
+    // Match T-Deck's placement policy. The current OPI SDK initializes PSRAM
+    // before global constructors; internal RAM remains the fallback. This
+    // object is task-context state (radio IRQs are polled). RTOS locks and
+    // peripheral DMA buffers retain their separate internal-memory ownership.
+    static WioTrackerL2Board* board = []() -> WioTrackerL2Board*
+    {
+        void* storage = heap_caps_malloc_prefer(sizeof(WioTrackerL2Board),
+                                                2,
+                                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
+                                                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (storage == nullptr)
+        {
+            storage = ::operator new(sizeof(WioTrackerL2Board));
+        }
+        return new (storage) WioTrackerL2Board();
+    }();
+    return *board;
 }
 
 bool WioTrackerL2Board::writeExpander(ExpanderPin pin, bool high)
@@ -471,8 +498,11 @@ bool WioTrackerL2Board::installSD()
 {
     if (!writeExpander(ExpanderPin::SdPower, true)) return false;
     delay(10);
-    return platform::esp::arduino_common::storage::mount_sdmmc_card(
-        gpio::kSdClock, gpio::kSdCommand, gpio::kSdData0);
+    platform::esp::arduino_common::storage::SdmmcSdConfig config;
+    config.clock = gpio::kSdClock;
+    config.command = gpio::kSdCommand;
+    config.data0 = gpio::kSdData0;
+    return platform::esp::arduino_common::storage::mount_sd_card(config);
 }
 bool WioTrackerL2Board::ensureSDReady() { return isCardReady() || installSD(); }
 bool WioTrackerL2Board::isSDReady() const { return platform::esp::arduino_common::storage::sd_card_ready(); }

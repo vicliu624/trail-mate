@@ -4,5 +4,6 @@
   "build": {
     "includeDir": "include",
     "srcDir": "src"
-  }
+  },
+  "dependencies": [{ "name": "core_agenda" }, { "name": "core_waypoint" }]
 }

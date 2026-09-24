@@ -23,14 +23,14 @@ class FakeCommandSink final : public ui::map_tiles::IMapTileCommandSink
     std::size_t count = 0;
     std::size_t cancelled = 0;
 
-    bool enqueue(const ui::map_tiles::LoadTileCommand& command) override
+    ui::map_tiles::TileSubmitResult enqueue(const ui::map_tiles::LoadTileCommand& command) override
     {
         if (count >= 8)
         {
-            return false;
+            return {ui::map_tiles::TileSubmitStatus::Backpressured, {}};
         }
         commands[count++] = command;
-        return true;
+        return {ui::map_tiles::TileSubmitStatus::Accepted, {command.runtime.generation, command.runtime.command_id}};
     }
 
     std::size_t cancelGeneration(uint32_t generation) override
@@ -112,13 +112,24 @@ class FakeEventSink final : public ui::map_tiles::IMapTileEventSink
   public:
     ui::map_tiles::MapTileAsyncEvent events[4]{};
     std::size_t count = 0;
+    bool reserved = false;
+    bool cancelled = false;
+
+    ui::map_tiles::MapTileReservationStatus reserve(const ui::map_tiles::LoadTileCommand&) override
+    {
+        if (cancelled) return ui::map_tiles::MapTileReservationStatus::Cancelled;
+        if (count == 4) return ui::map_tiles::MapTileReservationStatus::Backpressured;
+        assert(!reserved);
+        reserved = true;
+        return ui::map_tiles::MapTileReservationStatus::Reserved;
+    }
+
+    void releaseReservation() override { reserved = false; }
 
     bool publish(const ui::map_tiles::MapTileAsyncEvent& event) override
     {
-        if (count >= 4)
-        {
-            return false;
-        }
+        assert(reserved && count < 4);
+        if (cancelled) return false;
         events[count++] = event;
         return true;
     }
@@ -260,7 +271,7 @@ void test_worker_success_publishes_ready()
     command.runtime.deadline_ms = 333;
     command.tile = make_tile(40);
 
-    assert(worker.execute(command, 300));
+    assert(worker.execute(command, 300) == ui::map_tiles::MapTileExecutionStatus::Completed);
     assert(backend.lookup_count == 0);
     assert(backend.read_count == 1);
     assert(events.count == 1);
@@ -286,7 +297,7 @@ void test_worker_missing_reads_once_without_lookup_probe()
     command.runtime.priority = sys::runtime::RuntimePriority::Normal;
     command.tile = make_tile(41);
 
-    assert(!worker.execute(command, 310));
+    assert(worker.execute(command, 310) == ui::map_tiles::MapTileExecutionStatus::Completed);
     assert(backend.lookup_count == 0);
     assert(backend.read_count == 1);
     assert(events.count == 1);
@@ -311,7 +322,7 @@ void test_worker_retry_later_read_publishes_retry_later()
     command.runtime.priority = sys::runtime::RuntimePriority::Normal;
     command.tile = make_tile(42);
 
-    assert(!worker.execute(command, 320));
+    assert(worker.execute(command, 320) == ui::map_tiles::MapTileExecutionStatus::Completed);
     assert(backend.read_count == 1);
     assert(events.count == 1);
     assert(events.events[0].kind == ui::map_tiles::MapTileAsyncEventKind::RetryLater);

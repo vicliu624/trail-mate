@@ -33,8 +33,43 @@ jobs:
       - name: Verify USB MSC SD transaction boundary
         run: python3 scripts/check_shared_spi_usb_msc_boundary.py
 
+      - name: Verify SD transport strategies and FAT/exFAT transfers
+        run: |
+          cmake -S tests/sd_transport -B .codex-build/sd-transport -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/sd-transport --parallel 2
+          ctest --test-dir .codex-build/sd-transport --output-on-failure
+          python3 tests/sd_transport/test_build_configuration.py
+
+      - name: Verify bounded map request and completion delivery
+        run: |
+          cmake -S tests/map_tile_pipeline -B .codex-build/map-tile-pipeline -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/map-tile-pipeline --parallel 2
+          ctest --test-dir .codex-build/map-tile-pipeline --output-on-failure
+          python3 tests/map_tile_pipeline/test_ui_contract.py
+
+      - name: Verify Agenda, saved waypoints and SD session isolation
+        run: |
+          cmake -S modules/core_agenda -B .codex-build/agenda-core -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/agenda-core --parallel 2
+          ctest --test-dir .codex-build/agenda-core --output-on-failure
+          cmake -S modules/core_waypoint -B .codex-build/waypoint -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/waypoint --parallel 2
+          ctest --test-dir .codex-build/waypoint --output-on-failure
+          cmake -S tests/sd_record_io -B .codex-build/sd-record-io -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/sd-record-io --parallel 2
+          ctest --test-dir .codex-build/sd-record-io --output-on-failure
+
+      - name: Verify Settings navigation contract
+        run: python3 tests/settings_navigation/test_contract.py
+
       - name: Verify ESP stack hygiene
         run: python3 scripts/check_esp_stack_hygiene.py
+
+      - name: Verify firmware version selection
+        run: python3 tests/test_firmware_version.py
+
+      - name: Verify OTA partition size validation
+        run: python3 tests/test_ota_slot_size.py
 
       - name: Verify Wi-Fi access policy
         run: python3 scripts/check_wifi_access_policy.py
@@ -112,7 +147,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION=$(iconv -f UTF-16LE -t UTF-8 CHANGELOG.md | awk -F'[][]' '/^## \\[[0-9]/ {print $2; exit}')
+            VERSION=$(iconv -f UTF-16LE -t UTF-8 CHANGELOG.md | awk -F'[][]' '/^## \[[0-9]/ {print $2; exit}')
           fi
           if [ -z "$VERSION" ]; then
             VERSION="unknown"
@@ -138,19 +173,13 @@ jobs:
         run: pio run -d ${{ matrix.project_dir }} -e ${{ matrix.env }}
 
       - name: Validate OTA slot size
+        if: matrix.env != 'gat562_mesh_evb_pro' && matrix.env != 't-echo-lite'
         run: |
           BUILD_DIR="${{ matrix.build_root }}/${{ matrix.env }}"
           if [ -f "${BUILD_DIR}/firmware.bin" ]; then
-            SIZE=$(stat -c%s "${BUILD_DIR}/firmware.bin")
-            MAX_SIZE=$((0x400000))
-            if [ "${{ matrix.env }}" = "wio_tracker_l2" ]; then
-              MAX_SIZE=$((0x600000))
-            fi
-            echo "firmware.bin size=${SIZE} max=${MAX_SIZE}"
-            if [ "${SIZE}" -gt "${MAX_SIZE}" ]; then
-              echo "firmware.bin exceeds OTA slot size" >&2
-              exit 1
-            fi
+            python scripts/check_ota_slot_size.py \
+              --firmware "${BUILD_DIR}/firmware.bin" \
+              --partitions "${BUILD_DIR}/partitions.bin"
           fi
 
       - name: Verify compact touch editor with LVGL
@@ -161,6 +190,24 @@ jobs:
             -DLVGL_SOURCE_DIR="$PWD/.pio/libdeps/wio_tracker_l2/lvgl"
           cmake --build .codex-build/wio-touch --parallel 2
           ctest --test-dir .codex-build/wio-touch --output-on-failure
+
+      - name: Verify Agenda layouts, reminders and input with LVGL
+        if: matrix.env == 'wio_tracker_l2'
+        run: |
+          cmake -S modules/ui_shared/tests/agenda -B .codex-build/agenda-ui \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DLVGL_SOURCE_DIR="$PWD/.pio/libdeps/wio_tracker_l2/lvgl"
+          cmake --build .codex-build/agenda-ui --parallel 2
+          ctest --test-dir .codex-build/agenda-ui --output-on-failure
+
+      - name: Verify map gestures and settings navigation with LVGL
+        if: matrix.env == 'wio_tracker_l2'
+        run: |
+          cmake -S tests/map_gesture -B .codex-build/map-gesture \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DLVGL_DIR="$PWD/.pio/libdeps/wio_tracker_l2/lvgl"
+          cmake --build .codex-build/map-gesture --parallel 2
+          ctest --test-dir .codex-build/map-gesture --output-on-failure
 
       - name: Prepare and verify nRF52840 UF2
         if: matrix.env == 'gat562_mesh_evb_pro' || matrix.env == 't-echo-lite'

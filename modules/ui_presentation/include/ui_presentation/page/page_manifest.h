@@ -22,6 +22,7 @@ enum class PageId
     Extensions,
     NodeStatus,
     Diagnostics,
+    Calendar,
 };
 
 struct PageManifestItem

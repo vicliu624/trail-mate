@@ -37,7 +37,8 @@ void enter_route(const RouteSpec* spec, lv_obj_t* parent)
         return;
     }
 
-    runtime::enter(route.host, parent, route.projection);
+    runtime::enter(route.host, parent, route.projection, route.location, route.target);
+    runtime::set_marker_binding(route.projection == Projection::Map ? route.markers : nullptr);
 }
 
 void exit_route(const RouteSpec* spec, lv_obj_t* parent)

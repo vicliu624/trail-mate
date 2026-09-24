@@ -6,6 +6,7 @@
 #pragma once
 
 #include "lvgl.h"
+#include "ui_presentation/map/map_marker_source.h"
 #include "ui_presentation/map/map_overlay_snapshot.h"
 
 #include <cstdint>
@@ -121,6 +122,7 @@ class Runtime
     friend void apply_model_lightweight(Runtime& runtime, const Model& model);
     friend void apply_overlay(Runtime& runtime, const ui::map::MapOverlaySnapshot& overlay);
     friend void clear(Runtime& runtime);
+    friend void set_marker_binding(Runtime& runtime, const ui::map::MapMarkerBinding* binding);
     friend bool project_point(const Runtime& runtime, const GeoPoint& point, lv_point_t& out_screen_point);
     friend bool screen_center(const Runtime& runtime, GeoPoint& out_center);
     friend Status status(const Runtime& runtime);
@@ -138,6 +140,7 @@ void apply_model(Runtime& runtime, const Model& model);
 void apply_model_lightweight(Runtime& runtime, const Model& model);
 void apply_overlay(Runtime& runtime, const ui::map::MapOverlaySnapshot& overlay);
 void clear(Runtime& runtime);
+void set_marker_binding(Runtime& runtime, const ui::map::MapMarkerBinding* binding);
 bool project_point(const Runtime& runtime, const GeoPoint& point, lv_point_t& out_screen_point);
 bool screen_center(const Runtime& runtime, GeoPoint& out_center);
 bool preview_project_point(lv_obj_t* viewport_root, const Model& model, const GeoPoint& point, lv_point_t& out_screen_point);

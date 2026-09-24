@@ -159,6 +159,7 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/device_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/firmware_update_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/gps_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/map_diagnostics.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/hostlink_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/lora_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/orientation_runtime.cpp"

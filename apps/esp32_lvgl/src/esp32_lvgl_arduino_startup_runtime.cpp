@@ -5,6 +5,7 @@
 #include "app/app_facade_access.h"
 #include "board/BoardBase.h"
 #include "display/DisplayConfig.h"
+#include "esp32_lvgl_arduino_agenda.h"
 #include "esp32_lvgl_arduino_app_runtime_access.h"
 #include "esp32_lvgl_runtime_config.h"
 #include "platform/esp/arduino_common/debug/sd_debug_log.h"
@@ -202,6 +203,7 @@ void run()
             runtime_status.background_tasks_started ? 1 : 0);
     }
 
+    trailmate::apps::esp32_lvgl::arduino_agenda::initialize();
     ui::startup_shell::setBootLogLine("Building main menu...");
     if (!initializeShell()) return;
     ui::startup_shell::setBootLogLine("Startup complete");

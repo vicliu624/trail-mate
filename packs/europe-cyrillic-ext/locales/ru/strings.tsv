@@ -758,3 +758,72 @@ Start recording	Начать запись
 Stop recording	Остановить запись
 Not recording	Запись не ведётся
 Add KML files to the routes folder	Добавьте файлы KML в папку маршрутов
+
+# Agenda / Calendar
+1 day before	За 1 день
+1 hour before	За 1 час
+10 min before	За 10 мин
+30 min before	За 30 мин
+Agenda	Расписание
+Agenda storage unavailable	Хранилище событий недоступно
+Another reminder is already snoozed	Другое напоминание уже отложено
+At time	В момент начала
+Changes apply to the entire series	Изменения применяются ко всей серии
+Choose on map	Выбрать на карте
+Could not read events	Не удалось прочитать события
+Could not save changes	Не удалось сохранить изменения
+Could not update reminder	Не удалось обновить напоминание
+Current position	Текущая позиция
+Current position unavailable	Текущая позиция недоступна
+Daily	Ежедневно
+Date or time is out of range	Дата или время вне допустимого диапазона
+Delete this event?	Удалить это событие?
+Discard	Отбросить
+Discard changes?	Отбросить изменения?
+Done	Готово
+Edit Event	Изменить событие
+End <= start: next day	Конец ≤ начала: следующий день
+End time (optional)	Время окончания (необязательно)
+Enter a title and valid date/time	Введите название и корректные дату и время
+Event Detail	Сведения о событии
+Event is unavailable	Событие недоступно
+Event Reminder	Напоминание о событии
+Fri	Пт
+Invalid location	Недопустимое место
+Keep editing	Продолжить редактирование
+Location is optional	Место указывать необязательно
+Map is unavailable on this target.	Карта недоступна на этом устройстве.
+Mon	Пн
+Monthly	Ежемесячно
+More	Ещё
+Navigate	Навигация
+New Event	Новое событие
+No upcoming events	Предстоящих событий нет
+Note	Заметка
+Pick Date	Выбрать дату
+Pick Time	Выбрать время
+Reminder	Напоминание
+Remove location	Убрать место
+Repeat	Повтор
+Sat	Сб
+Saving...	Сохранение…
+Set the device time first	Сначала установите время устройства
+Snooze 10 min	Отложить на 10 мин
+Start time	Время начала
+Sun	Вс
+Text exceeds the UTF-8 byte limit	Текст превышает лимит байтов UTF-8
+Thu	Чт
+Title	Название
+Today	Сегодня
+Tomorrow	Завтра
+Tue	Вт
+Wed	Ср
+Weekly	Еженедельно
+Yearly	Ежегодно
+Calendar	Календарь
+Pick	Выбрать
+Could not read waypoints	Не удалось прочитать точки
+First	Первая
+No saved waypoints	Нет сохранённых точек
+Saved waypoint	Сохранённая точка
+Waypoint unavailable	Точка недоступна

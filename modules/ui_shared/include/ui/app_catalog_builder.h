@@ -2,6 +2,11 @@
 
 #include "ui/app_catalog.h"
 
+namespace ui::map
+{
+struct MapMarkerBinding;
+}
+
 namespace ui::app_catalog_builder
 {
 
@@ -13,6 +18,10 @@ enum class CatalogProfile : uint8_t
 
 struct FeatureFlags
 {
+    // Optional descriptor supplied by the owning target composition. The
+    // catalog does not construct or locate Agenda services.
+    AppScreen* calendar_app = nullptr;
+    const ui::map::MapMarkerBinding* map_markers = nullptr;
     CatalogProfile profile = CatalogProfile::PioDefault;
     bool include_chat = true;
     bool include_gps_map = true;

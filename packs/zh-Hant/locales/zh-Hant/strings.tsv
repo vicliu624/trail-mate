@@ -758,3 +758,72 @@ Start recording	開始記錄
 Stop recording	停止記錄
 Not recording	未在記錄
 Add KML files to the routes folder	請將 KML 檔案放入路線資料夾
+
+# Agenda / Calendar
+1 day before	提前 1 天
+1 hour before	提前 1 小時
+10 min before	提前 10 分鐘
+30 min before	提前 30 分鐘
+Agenda	行程
+Agenda storage unavailable	行程儲存空間無法使用
+Another reminder is already snoozed	已有其他提醒正在延後
+At time	準時
+Changes apply to the entire series	變更將套用至整個重複系列
+Choose on map	在地圖上選取
+Could not read events	無法讀取行程
+Could not save changes	無法儲存變更
+Could not update reminder	無法更新提醒
+Current position	目前位置
+Current position unavailable	無法取得目前位置
+Daily	每天
+Date or time is out of range	日期或時間超出範圍
+Delete this event?	刪除此行程？
+Discard	捨棄
+Discard changes?	捨棄變更？
+Done	完成
+Edit Event	編輯行程
+End <= start: next day	結束不晚於開始：隔天
+End time (optional)	結束時間（選填）
+Enter a title and valid date/time	請輸入標題及有效的日期和時間
+Event Detail	行程詳細資訊
+Event is unavailable	行程無法使用
+Event Reminder	行程提醒
+Fri	週五
+Invalid location	位置無效
+Keep editing	繼續編輯
+Location is optional	位置為選填項目
+Map is unavailable on this target.	此裝置不支援地圖。
+Mon	週一
+Monthly	每月
+More	更多
+Navigate	導航
+New Event	新增行程
+No upcoming events	目前沒有後續行程
+Note	備註
+Pick Date	選取日期
+Pick Time	選取時間
+Reminder	提醒
+Remove location	移除位置
+Repeat	重複
+Sat	週六
+Saving...	正在儲存…
+Set the device time first	請先設定裝置時間
+Snooze 10 min	10 分鐘後提醒
+Start time	開始時間
+Sun	週日
+Text exceeds the UTF-8 byte limit	文字超出 UTF-8 位元組限制
+Thu	週四
+Title	標題
+Today	今天
+Tomorrow	明天
+Tue	週二
+Wed	週三
+Weekly	每週
+Yearly	每年
+Calendar	行事曆
+Pick	選取
+Could not read waypoints	無法讀取航點
+First	首頁
+No saved waypoints	沒有已儲存的航點
+Saved waypoint	已儲存航點
+Waypoint unavailable	航點無法使用

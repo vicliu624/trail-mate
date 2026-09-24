@@ -21,6 +21,7 @@ enum class ScreenId : uint8_t
     WalkieTalkie,
     Sstv,
     Extensions,
+    Calendar,
 };
 
 struct ScreenDescriptor

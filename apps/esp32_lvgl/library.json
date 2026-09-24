@@ -9,6 +9,7 @@
     "srcDir": "src",
     "srcFilter": [
       "-<*>",
+      "+<esp32_lvgl_arduino_agenda.cpp>",
       "+<esp32_lvgl_arduino_app_registry.cpp>",
       "+<esp32_lvgl_arduino_app_runtime_access.cpp>",
       "+<esp32_lvgl_arduino_entry.cpp>",
@@ -19,6 +20,7 @@
     "flags": [
       "-I../../modules/ui_shared/include",
       "-I../../modules/core_device/include",
+      "-I../../modules/core_agenda/include",
       "-I../../modules/core_mesh/include",
       "-I../../modules/core_phone/include",
       "-I../../modules/core_sys/include",
@@ -38,6 +40,10 @@
     ]
   },
   "dependencies": [
+    { "name": "core_waypoint" },
+    {
+      "name": "core_agenda"
+    },
     {
       "name": "product_composition"
     },

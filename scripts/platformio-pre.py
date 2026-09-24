@@ -60,7 +60,7 @@ def extract_version_from_ci_tag():
     tag_name = ""
     if github_ref.startswith("refs/tags/"):
         tag_name = github_ref.rsplit("/", 1)[-1]
-    elif github_ref_name:
+    elif os.environ.get("GITHUB_REF_TYPE") == "tag" and github_ref_name:
         tag_name = github_ref_name
 
     if not tag_name:
@@ -299,6 +299,41 @@ def configure_esp8266audio_for_esp32():
         {"srcFilter": desired_src_filter},
         f"ESP8266Audio for {pio_env}",
     )
+
+
+def configure_explicit_audio_driver_instances():
+    # audio-driver 0.3.1 instantiates every codec in AudioDriver.h, including
+    # codecs with nontrivial constructors. Offer an opt-out in the env-local
+    # dependency; the board then owns only its actual codec. Other environments
+    # and translation units retain the upstream default.
+    if not is_esp32_env or pio_env != "wio_tracker_l2":
+        return
+    library_dir = os.path.join(project_dir, ".pio", "libdeps", pio_env, "audio-driver")
+    header = os.path.join(library_dir, "src", "AudioDriver.h")
+    if not os.path.isfile(header):
+        raise RuntimeError("audio-driver dependency is required for WIO codec configuration")
+    with open(os.path.join(library_dir, "library.properties"), encoding="utf-8") as fp:
+        properties = fp.read()
+    if "version=0.3.1" not in properties.splitlines():
+        raise RuntimeError("Review the explicit-instance patch for this audio-driver version")
+    with open(header, encoding="utf-8") as fp:
+        source = fp.read()
+    guard = "#ifndef TRAIL_MATE_AUDIO_DRIVER_EXPLICIT_INSTANCES"
+    if guard in source:
+        return
+    start_marker = "// -- Drivers\n"
+    end_marker = "}  // namespace audio_driver"
+    if source.count(start_marker) != 1 or source.count(end_marker) != 1:
+        raise RuntimeError("Unexpected AudioDriver.h layout; refusing to patch codec instances")
+    start = source.index(start_marker) + len(start_marker)
+    end = source.index(end_marker, start)
+    instances = source[start:end]
+    if "static AudioDriverES8311Class AudioDriverES8311;" not in instances:
+        raise RuntimeError("Expected ES8311 instance declaration missing")
+    patched = source[:start] + guard + "\n" + instances + "#endif\n\n" + source[end:]
+    with open(header, "w", encoding="utf-8", newline="\n") as fp:
+        fp.write(patched)
+    print("[pio] pre: Enabled explicit audio-driver codec instances for WIO")
 
 
 def configure_radiolib_for_sx1262_esp32():
@@ -650,6 +685,7 @@ def disable_arduino_tinyusb_dfu_for_release_esp32():
         "tdeck",
         "tdeck_pro_a7682e",
         "tdeck_pro_pcm512a",
+        "wio_tracker_l2",
     }
     if not is_esp32_env or pio_env not in dfu_disabled_envs:
         return
@@ -765,6 +801,7 @@ guard_no_arduino_sd_audio_paths()
 configure_radiolib_for_gat562()
 configure_crypto_for_gat562()
 configure_esp8266audio_for_esp32()
+configure_explicit_audio_driver_instances()
 configure_radiolib_for_sx1262_esp32()
 configure_lvgl_for_esp32_ui()
 configure_crypto_for_sx1262_esp32()

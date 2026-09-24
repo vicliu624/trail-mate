@@ -111,6 +111,7 @@ static Adapter make_adapter()
         adapter.handle_list_back_activate = handle_list_back_activate;
     }
     adapter.filter_top_back_placement = BackPlacement::Leading;
+    adapter.list_top_back_placement = BackPlacement::Leading;
     return adapter;
 }
 

@@ -19,12 +19,28 @@ enum class MapTileReadStatus : uint8_t
     Invalid,
 };
 
+// Optional file-stage evidence. Cached/generated sources leave available false;
+// zero milliseconds on a measured stage is a valid sub-tick measurement.
+struct MapTileReadTiming
+{
+    uint32_t lock_wait_ms = 0;
+    uint32_t open_ms = 0;
+    uint32_t read_ms = 0;
+    bool available = false;
+    uint32_t block_calls = 0;
+    uint32_t block_sectors = 0;
+    uint32_t block_max_sectors = 0;
+    uint32_t block_us = 0;
+    bool block_available = false;
+};
+
 struct MapTileReadResult
 {
     MapTileReadStatus status = MapTileReadStatus::Error;
     std::size_t size = 0;
     int32_t error = -1;
     MapTileFormat format = MapTileFormat::Unknown;
+    MapTileReadTiming timing{};
 };
 
 class IMapTileSource

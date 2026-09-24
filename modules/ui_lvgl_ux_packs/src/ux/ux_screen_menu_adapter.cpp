@@ -9,6 +9,8 @@ ui::menu::MenuScreenId toMenuScreenId(ScreenId id)
 {
     switch (id)
     {
+    case ScreenId::Calendar:
+        return ui::menu::MenuScreenId::Calendar;
     case ScreenId::Dashboard:
         return ui::menu::MenuScreenId::Dashboard;
     case ScreenId::Chat:

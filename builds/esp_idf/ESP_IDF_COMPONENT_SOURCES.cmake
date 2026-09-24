@@ -471,6 +471,7 @@ set(TRAILMATE_ESP_IDF_PLATFORM_COMMON_SOURCES
     "${TRAILMATE_ROOT}/platform/esp/idf_common/src/gps_runtime.cpp"
     "${TRAILMATE_ROOT}/platform/esp/idf_common/src/lv_helper.cpp"
     "${TRAILMATE_ROOT}/platform/esp/idf_common/src/platform_ui_device_runtime.cpp"
+    "${TRAILMATE_ROOT}/platform/esp/idf_common/src/platform_ui_map_diagnostics.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/platform_ui_firmware_update_runtime.cpp"
     "${TRAILMATE_ROOT}/platform/esp/idf_common/src/platform_ui_gps_runtime.cpp"
     "${TRAILMATE_ROOT}/platform/esp/idf_common/src/platform_ui_http_client_runtime.cpp"

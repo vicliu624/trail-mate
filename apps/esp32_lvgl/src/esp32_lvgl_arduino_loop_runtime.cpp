@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "board/BoardBase.h"
+#include "esp32_lvgl_arduino_agenda.h"
 #include "esp32_lvgl_arduino_app_runtime_access.h"
 #include "platform/esp/arduino_common/display_runtime.h"
 #include "platform/esp/boards/board_runtime.h"
@@ -78,6 +79,8 @@ void tick()
     hooks.idle_sleep_ms = 2;
     ui::widgets::reticulum_call_overlay::tick();
     ui::loop_shell::tick(hooks);
+    // Also runs while an overlay is active; no Agenda page is required.
+    trailmate::apps::esp32_lvgl::arduino_agenda::tick();
 }
 
 } // namespace trailmate::apps::esp32_lvgl::arduino_loop_runtime

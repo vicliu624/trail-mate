@@ -48,7 +48,9 @@ map_tiles::MapTileReadResult PoiTileSource::read(const map_tiles::MapTileRef& re
         if (written < 0 || static_cast<std::size_t>(written) >= sizeof(path))
             return {MapTileReadStatus::Invalid, 0, -2, MapTileFormat::PoiRecords};
         const auto read = files_.readFile(path, raw, raw_capacity);
-        if (read.status == MapTileReadStatus::RetryLater) return read;
+        // Only a definitive missing/invalid package may be remembered. A
+        // transient SD failure must not disable annotations until page reopen.
+        if (read.status == MapTileReadStatus::RetryLater || read.status == MapTileReadStatus::Error) return read;
         policy_checked_ = true;
         policy_valid_ = read.status == MapTileReadStatus::Ready &&
                         parser_.manifest(reinterpret_cast<char*>(raw), read.size, policy_);

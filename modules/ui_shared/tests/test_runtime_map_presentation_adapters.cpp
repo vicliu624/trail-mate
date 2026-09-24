@@ -2,6 +2,7 @@
 #include "sys/clock.h"
 #include "ui/presentation_sources/runtime_map_workspace_source.h"
 #include "ui_presentation/common/fixed_text.h"
+#include "ui_presentation/map/map_workspace_model.h"
 
 #include <cassert>
 #include <cstring>
@@ -214,6 +215,27 @@ int main()
     gps.available = true;
     assert(source.buildMapWorkspaceSnapshot(request, snapshot));
     assert(!snapshot.team.available);
+
+    // Location selection uses the real runtime state/source/sink path. Once
+    // the renderer commits a centre, a moving GPS fix must not replace it.
+    ui::map::MapWorkspaceModel model(source, sink);
+    assert(model.setActiveTool(ui::map::MapToolKind::MeasureDistance).ok);
+    assert(model.beginLocationSelection().ok);
+    assert(state.active_tool == ui::map::MapToolKind::SelectLocation);
+    assert(model.setViewport(viewport(0.0, 0.0, 12)).ok);
+    gps.snapshot.latitude = 35.0;
+    gps.snapshot.longitude = 110.0;
+    assert(model.pickLocation().ok);
+    const auto selected = model.locationSelection();
+    assert(selected.state == ui::map::MapLocationSelectionState::Picked);
+    assert(selected.latitude == 0.0 && selected.longitude == 0.0);
+    assert(state.active_tool == ui::map::MapToolKind::MeasureDistance);
+    assert(state.layers.terrain && !state.layers.contour);
+    assert(model.beginLocationSelection().ok);
+    assert(model.setViewport(viewport(-30.0, -120.0, 10)).ok);
+    assert(model.cancelLocationSelection().ok);
+    assert(model.locationSelection().state == ui::map::MapLocationSelectionState::Cancelled);
+    assert(state.active_tool == ui::map::MapToolKind::MeasureDistance);
 
     return 0;
 }

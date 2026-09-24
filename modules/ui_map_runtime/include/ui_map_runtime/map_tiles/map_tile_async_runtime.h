@@ -42,6 +42,35 @@ struct LoadTileCommand
     MapTileRef tile{};
 };
 
+struct TileRequestHandle
+{
+    uint32_t generation = 0;
+    uint32_t command_id = 0;
+    explicit operator bool() const { return generation != 0 && command_id != 0; }
+    bool matches(uint32_t event_generation, uint32_t event_id) const
+    {
+        return *this && generation == event_generation && command_id == event_id;
+    }
+};
+
+enum class TileSubmitStatus : uint8_t
+{
+    Accepted,
+    AlreadyPending,
+    Backpressured,
+    Unavailable
+};
+
+struct TileSubmitResult
+{
+    TileSubmitStatus status = TileSubmitStatus::Unavailable;
+    TileRequestHandle handle{};
+    explicit operator bool() const
+    {
+        return status == TileSubmitStatus::Accepted || status == TileSubmitStatus::AlreadyPending;
+    }
+};
+
 using MapTileEventKind = MapTileAsyncEventKind;
 
 class MapTileEvent
@@ -55,6 +84,11 @@ class MapTileEvent
     MapTilePayload payload{};
     std::size_t payload_size = 0;
     int32_t error = 0;
+    MapTileReadTiming read_timing{};
+    uint32_t command_wait_ms = 0;
+    uint32_t worker_started_ms = 0;
+    uint32_t published_ms = 0;
+    bool timing_available = false;
 };
 
 using MapTileAsyncEvent = MapTileEvent;
@@ -93,8 +127,22 @@ class IMapTileCommandSink
   public:
     virtual ~IMapTileCommandSink() = default;
 
-    virtual bool enqueue(const LoadTileCommand& command) = 0;
+    virtual TileSubmitResult enqueue(const LoadTileCommand& command) = 0;
     virtual std::size_t cancelGeneration(uint32_t generation) = 0;
+};
+
+enum class MapTileReservationStatus : uint8_t
+{
+    Reserved,
+    Backpressured,
+    Cancelled,
+};
+
+enum class MapTileExecutionStatus : uint8_t
+{
+    Completed,
+    Backpressured,
+    Cancelled,
 };
 
 class IMapTileEventSink
@@ -102,7 +150,13 @@ class IMapTileEventSink
   public:
     virtual ~IMapTileEventSink() = default;
 
+    // Single producer: reserve before reading. A successful reservation makes
+    // publication capacity-safe. false from publish means cancellation only,
+    // not queue-full or transient lock contention. Payload copying is owned
+    // by the adapter; allocation failure must publish a Failed completion.
+    virtual MapTileReservationStatus reserve(const LoadTileCommand& command) = 0;
     virtual bool publish(const MapTileAsyncEvent& event) = 0;
+    virtual void releaseReservation() = 0;
 };
 
 class IMapTileWorkerBackend
@@ -173,6 +227,8 @@ class MapTileAsyncRuntime
     explicit MapTileAsyncRuntime(IMapTileCommandSink& commands);
 
     uint32_t activeGeneration() const;
+    TileSubmitResult requestTile(const MapTileRef& tile, uint32_t generation,
+                                 MapTileInteractionMode mode, uint32_t now_ms);
     std::size_t requestVisibleTiles(const MapViewportPlan& plan, uint32_t now_ms);
     std::size_t cancelGeneration(uint32_t generation);
     bool handleEvent(const MapTileAsyncEvent& event, MapTileRenderQueue& render_queue);
@@ -200,6 +256,12 @@ class MapTileRuntime
     std::size_t requestVisibleTiles(const MapViewportPlan& plan, uint32_t now_ms)
     {
         return runtime_.requestVisibleTiles(plan, now_ms);
+    }
+
+    TileSubmitResult requestTile(const MapTileRef& tile, uint32_t generation,
+                                 MapTileInteractionMode mode, uint32_t now_ms)
+    {
+        return runtime_.requestTile(tile, generation, mode, now_ms);
     }
 
     std::size_t cancelGeneration(uint32_t generation)
@@ -243,7 +305,7 @@ class MapTileWorker
                   uint8_t* scratch,
                   std::size_t scratch_size);
 
-    bool execute(const LoadTileCommand& command, uint32_t now_ms);
+    MapTileExecutionStatus execute(const LoadTileCommand& command, uint32_t now_ms);
 
   private:
     IMapTileWorkerBackend& backend_;

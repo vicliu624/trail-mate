@@ -10,6 +10,13 @@
 
 #include <stdint.h>
 
+namespace ui::map
+{
+struct MapLocationRequest;
+struct MapTargetRequest;
+struct MapMarkerBinding;
+} // namespace ui::map
+
 namespace gps::ui::shell
 {
 
@@ -25,6 +32,9 @@ struct RouteSpec
 {
     const Host* host = nullptr;
     Projection projection = Projection::Map;
+    ::ui::map::MapLocationRequest* location = nullptr;
+    ::ui::map::MapTargetRequest* target = nullptr;
+    const ::ui::map::MapMarkerBinding* markers = nullptr;
 };
 
 void enter(void* user_data, lv_obj_t* parent);

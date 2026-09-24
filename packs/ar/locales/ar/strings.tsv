@@ -758,3 +758,72 @@ Start recording	بدء التسجيل
 Stop recording	إيقاف التسجيل
 Not recording	لا يجري التسجيل
 Add KML files to the routes folder	أضف ملفات KML إلى مجلد المسارات
+
+# Agenda / Calendar
+1 day before	قبل يوم واحد
+1 hour before	قبل ساعة واحدة
+10 min before	قبل 10 دقائق
+30 min before	قبل 30 دقيقة
+Agenda	جدول المواعيد
+Agenda storage unavailable	تخزين المواعيد غير متاح
+Another reminder is already snoozed	يوجد تذكير آخر مؤجل بالفعل
+At time	في الموعد
+Changes apply to the entire series	تسري التغييرات على السلسلة بأكملها
+Choose on map	اختيار على الخريطة
+Could not read events	تعذرت قراءة المواعيد
+Could not save changes	تعذر حفظ التغييرات
+Could not update reminder	تعذر تحديث التذكير
+Current position	الموقع الحالي
+Current position unavailable	الموقع الحالي غير متاح
+Daily	يوميًا
+Date or time is out of range	التاريخ أو الوقت خارج النطاق
+Delete this event?	هل تريد حذف هذا الموعد؟
+Discard	تجاهل
+Discard changes?	هل تريد تجاهل التغييرات؟
+Done	تم
+Edit Event	تعديل الموعد
+End <= start: next day	النهاية قبل البداية أو تساويها: اليوم التالي
+End time (optional)	وقت النهاية (اختياري)
+Enter a title and valid date/time	أدخل عنوانًا وتاريخًا ووقتًا صالحين
+Event Detail	تفاصيل الموعد
+Event is unavailable	الموعد غير متاح
+Event Reminder	تذكير بالموعد
+Fri	الجمعة
+Invalid location	موقع غير صالح
+Keep editing	متابعة التعديل
+Location is optional	الموقع اختياري
+Map is unavailable on this target.	الخريطة غير متاحة على هذا الجهاز.
+Mon	الاثنين
+Monthly	شهريًا
+More	المزيد
+Navigate	الملاحة
+New Event	موعد جديد
+No upcoming events	لا توجد مواعيد قادمة
+Note	ملاحظة
+Pick Date	اختيار التاريخ
+Pick Time	اختيار الوقت
+Reminder	تذكير
+Remove location	إزالة الموقع
+Repeat	التكرار
+Sat	السبت
+Saving...	جارٍ الحفظ…
+Set the device time first	اضبط وقت الجهاز أولًا
+Snooze 10 min	تأجيل 10 دقائق
+Start time	وقت البداية
+Sun	الأحد
+Text exceeds the UTF-8 byte limit	النص يتجاوز حد بايتات UTF-8
+Thu	الخميس
+Title	العنوان
+Today	اليوم
+Tomorrow	غدًا
+Tue	الثلاثاء
+Wed	الأربعاء
+Weekly	أسبوعيًا
+Yearly	سنويًا
+Calendar	التقويم
+Pick	اختيار
+Could not read waypoints	تعذر قراءة نقاط الطريق
+First	الأولى
+No saved waypoints	لا توجد نقاط طريق محفوظة
+Saved waypoint	نقطة طريق محفوظة
+Waypoint unavailable	نقطة الطريق غير متاحة

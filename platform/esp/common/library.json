@@ -9,6 +9,10 @@
     "srcDir": "src"
   },
   "dependencies": [
+    { "name": "core_waypoint" },
+    {
+      "name": "core_agenda"
+    },
     {
       "name": "core_sys"
     },

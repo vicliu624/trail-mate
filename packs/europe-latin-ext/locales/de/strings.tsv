@@ -758,3 +758,72 @@ Start recording	Aufzeichnung starten
 Stop recording	Aufzeichnung stoppen
 Not recording	Keine Aufzeichnung
 Add KML files to the routes folder	KML-Dateien im Routenordner ablegen
+
+# Agenda / Calendar
+1 day before	1 Tag vorher
+1 hour before	1 Stunde vorher
+10 min before	10 Min. vorher
+30 min before	30 Min. vorher
+Agenda	Terminübersicht
+Agenda storage unavailable	Terminspeicher nicht verfügbar
+Another reminder is already snoozed	Eine andere Erinnerung ist bereits verschoben
+At time	Zum Beginn
+Changes apply to the entire series	Änderungen gelten für die gesamte Serie
+Choose on map	Auf Karte wählen
+Could not read events	Termine konnten nicht gelesen werden
+Could not save changes	Änderungen konnten nicht gespeichert werden
+Could not update reminder	Erinnerung konnte nicht aktualisiert werden
+Current position	Aktuelle Position
+Current position unavailable	Aktuelle Position nicht verfügbar
+Daily	Täglich
+Date or time is out of range	Datum oder Uhrzeit außerhalb des Bereichs
+Delete this event?	Diesen Termin löschen?
+Discard	Verwerfen
+Discard changes?	Änderungen verwerfen?
+Done	Fertig
+Edit Event	Termin bearbeiten
+End <= start: next day	Ende ≤ Beginn: nächster Tag
+End time (optional)	Endzeit (optional)
+Enter a title and valid date/time	Titel und gültiges Datum/Uhrzeit eingeben
+Event Detail	Termindetails
+Event is unavailable	Termin nicht verfügbar
+Event Reminder	Terminerinnerung
+Fri	Fr
+Invalid location	Ungültiger Ort
+Keep editing	Weiter bearbeiten
+Location is optional	Ort ist optional
+Map is unavailable on this target.	Karte auf diesem Gerät nicht verfügbar.
+Mon	Mo
+Monthly	Monatlich
+More	Mehr
+Navigate	Navigieren
+New Event	Neuer Termin
+No upcoming events	Keine anstehenden Termine
+Note	Notiz
+Pick Date	Datum wählen
+Pick Time	Uhrzeit wählen
+Reminder	Erinnerung
+Remove location	Ort entfernen
+Repeat	Wiederholung
+Sat	Sa
+Saving...	Wird gespeichert…
+Set the device time first	Zuerst Gerätezeit einstellen
+Snooze 10 min	In 10 Min. erinnern
+Start time	Startzeit
+Sun	So
+Text exceeds the UTF-8 byte limit	Text überschreitet das UTF-8-Byte-Limit
+Thu	Do
+Title	Titel
+Today	Heute
+Tomorrow	Morgen
+Tue	Di
+Wed	Mi
+Weekly	Wöchentlich
+Yearly	Jährlich
+Calendar	Kalender
+Pick	Auswählen
+Could not read waypoints	Wegpunkte konnten nicht gelesen werden
+First	Erste
+No saved waypoints	Keine gespeicherten Wegpunkte
+Saved waypoint	Gespeicherter Wegpunkt
+Waypoint unavailable	Wegpunkt nicht verfügbar

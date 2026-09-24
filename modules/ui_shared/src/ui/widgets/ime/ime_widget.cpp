@@ -138,37 +138,37 @@ bool hardware_keyboard_available()
 }
 
 #if UI_SHARED_TOUCH_IME_ENABLED
-static const char* kTouchEnMap[] = {
+static const char* const kTouchEnMap[] = {
     "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "Bksp", "\n",
     "a", "s", "d", "f", "g", "h", "j", "k", "l", "Enter", "\n",
     "z", "x", "c", "v", "b", "n", "m", ",", ".", "?", "\n",
     "Space", ""};
 
-static const char* kCompactTouchEnMap[] = {
+static const char* const kCompactTouchEnMap[] = {
     "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\n",
     "a", "s", "d", "f", "g", "h", "j", "k", "l", "\n",
     "Shift", "z", "x", "c", "v", "b", "n", "m", "Bksp", "\n",
     ",", ".", "Space", "?", "Enter", ""};
 
-static const char* kCompactTouchUpperMap[] = {
+static const char* const kCompactTouchUpperMap[] = {
     "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "\n",
     "A", "S", "D", "F", "G", "H", "J", "K", "L", "\n",
     "Shift", "Z", "X", "C", "V", "B", "N", "M", "Bksp", "\n",
     ",", ".", "Space", "?", "Enter", ""};
 
-static const char* kCompactTouchNumMap[] = {
+static const char* const kCompactTouchNumMap[] = {
     "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "\n",
     "@", "#", "$", "%", "&", "*", "-", "_", "=", "\n",
     "Shift", "/", ":", ";", "(", ")", "+", "!", "Bksp", "\n",
     "'", "\"", "Space", ".", "Enter", ""};
 
-static const char* kCompactTouchSymbolMap[] = {
+static const char* const kCompactTouchSymbolMap[] = {
     "[", "]", "{", "}", "<", ">", "\\", "|", "~", "^", "\n",
     "@", "#", "$", "%", "&", "*", "-", "_", "=", "\n",
     "Shift", "/", ":", ";", "(", ")", "+", "!", "Bksp", "\n",
     "'", "`", "Space", ".", "Enter", ""};
 
-static const char* kTouchNumMap[] = {
+static const char* const kTouchNumMap[] = {
     "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Bksp", "\n",
     "-", "/", ":", ";", "(", ")", "$", "&", "@", "Enter", "\n",
     ".", ",", "?", "!", "'", "\"", "%", "+", "\n",
@@ -910,6 +910,46 @@ void ImeWidget::setText(const char* text)
         ime_.reset();
     }
     refresh_labels();
+}
+
+bool ImeWidget::captureEditState(char* text, std::size_t capacity, ImeEditState& out) const
+{
+    if (!textarea_ || (!text && capacity)) return false;
+    const char* accepted = lv_textarea_get_text(textarea_);
+    const auto bytes = std::strlen(accepted);
+    if ((text && bytes >= capacity) || ime_.buffer().size() >= sizeof(out.composition)) return false;
+    out = {};
+    out.cursor = lv_textarea_get_cursor_pos(textarea_);
+    out.script_index = script_input_index_;
+    out.candidate_index = ime_.candidateIndex();
+    out.candidate_window = candidate_window_start_;
+    out.mode = static_cast<uint8_t>(mode_);
+    out.shift = touch_shift_;
+    if (pinyin_mode()) std::strcpy(out.composition, ime_.buffer().c_str());
+    if (text) std::memcpy(text, accepted, bytes + 1);
+    return true;
+}
+
+bool ImeWidget::restoreEditState(const char* text, const ImeEditState& state)
+{
+    if (!textarea_ || !text || state.mode > static_cast<uint8_t>(Mode::NUM) ||
+        !std::memchr(state.composition, '\0', sizeof(state.composition))) return false;
+    // text may alias textarea_'s buffer; setMode can replace that buffer.
+    // Take ownership through setText before changing input mode.
+    setText(text);
+    script_input_index_ = state.script_index;
+    setMode(static_cast<Mode>(state.mode)); // Validates the available script list.
+    if (pinyin_mode())
+    {
+        for (const char* letter = state.composition; *letter; ++letter) ime_.appendLetter(*letter);
+        if (state.candidate_index >= 0) ime_.moveCandidate(state.candidate_index);
+        candidate_window_start_ = std::max(0, std::min(state.candidate_window,
+                                                       static_cast<int>(ime_.candidates().size())));
+    }
+    touch_shift_ = state.shift;
+    refresh_labels();
+    lv_textarea_set_cursor_pos(textarea_, static_cast<int32_t>(state.cursor));
+    return true;
 }
 
 #if UI_SHARED_TOUCH_IME_ENABLED

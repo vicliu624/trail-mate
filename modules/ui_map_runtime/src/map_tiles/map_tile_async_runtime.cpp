@@ -36,43 +36,47 @@ uint32_t MapTileAsyncRuntime::activeGeneration() const
     return active_generation_;
 }
 
+TileSubmitResult MapTileAsyncRuntime::requestTile(const MapTileRef& tile, uint32_t generation,
+                                                  MapTileInteractionMode mode, uint32_t now_ms)
+{
+    if (generation == 0) return {};
+    if (generation != active_generation_)
+    {
+        if (active_generation_ != 0) (void)commands_.cancelGeneration(active_generation_);
+        active_generation_ = generation;
+    }
+    sys::runtime::RuntimeIntent intent{};
+    intent.kind = sys::runtime::RuntimeCommandKind::MapTileLoad;
+    intent.priority_hint = priorityFor(mode);
+    intent.cancel_policy = sys::runtime::RuntimeCancelPolicy::CancelByGeneration;
+    intent.submitted_at_ms = now_ms;
+    intent.generation = generation;
+    intent.origin = static_cast<uint32_t>(mode);
+    intent.dedupe_key = dedupeKeyForTile(tile);
+    LoadTileCommand command{};
+    command.tile = tile;
+    command.runtime = commandFromIntent(intent);
+    const auto result = commands_.enqueue(command);
+    if (result)
+    {
+        state_.status = sys::runtime::RuntimeStatus::Queued;
+        state_.active_kind = command.runtime.kind;
+        state_.active_command_id = result.handle.command_id;
+    }
+    return result;
+}
+
 std::size_t MapTileAsyncRuntime::requestVisibleTiles(const MapViewportPlan& plan, uint32_t now_ms)
 {
     if (plan.generation != active_generation_)
     {
-        if (active_generation_ != 0)
-        {
-            (void)commands_.cancelGeneration(active_generation_);
-        }
+        if (active_generation_ != 0) (void)commands_.cancelGeneration(active_generation_);
         active_generation_ = plan.generation;
     }
-
     std::size_t queued = 0;
-    const std::size_t count = plan.tile_count < MapViewportPlan::kMaxTiles ? plan.tile_count
-                                                                           : MapViewportPlan::kMaxTiles;
+    const auto count = plan.tile_count < MapViewportPlan::kMaxTiles ? plan.tile_count : MapViewportPlan::kMaxTiles;
     for (std::size_t i = 0; i < count; ++i)
-    {
-        sys::runtime::RuntimeIntent intent{};
-        intent.kind = sys::runtime::RuntimeCommandKind::MapTileLoad;
-        intent.priority_hint = priorityFor(plan.interaction_mode);
-        intent.cancel_policy = sys::runtime::RuntimeCancelPolicy::CancelByGeneration;
-        intent.submitted_at_ms = now_ms;
-        intent.generation = plan.generation;
-        intent.origin = static_cast<uint32_t>(plan.interaction_mode);
-        intent.dedupe_key = dedupeKeyForTile(plan.tiles[i]);
-
-        LoadTileCommand command{};
-        command.tile = plan.tiles[i];
-        command.runtime = commandFromIntent(intent);
-
-        if (commands_.enqueue(command))
-        {
-            ++queued;
-            state_.status = sys::runtime::RuntimeStatus::Queued;
-            state_.active_kind = command.runtime.kind;
-            state_.active_command_id = command.runtime.command_id;
-        }
-    }
+        if (requestTile(plan.tiles[i], plan.generation, plan.interaction_mode, now_ms)) ++queued;
     return queued;
 }
 
@@ -124,6 +128,7 @@ sys::runtime::RuntimeCommand MapTileAsyncRuntime::commandFromIntent(
 {
     sys::runtime::RuntimeCommand command{};
     command.command_id = next_command_id_++;
+    if (command.command_id == 0) command.command_id = next_command_id_++;
     command.kind = intent.kind;
     command.priority = intent.priority_hint;
     command.cancel_policy = intent.cancel_policy;
@@ -146,12 +151,23 @@ MapTileWorker::MapTileWorker(IMapTileWorkerBackend& backend,
 {
 }
 
-bool MapTileWorker::execute(const LoadTileCommand& command, uint32_t now_ms)
+MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, uint32_t now_ms)
 {
+    const auto reservation = events_.reserve(command);
+    if (reservation == MapTileReservationStatus::Backpressured) return MapTileExecutionStatus::Backpressured;
+    if (reservation == MapTileReservationStatus::Cancelled) return MapTileExecutionStatus::Cancelled;
+    struct ReleaseReservation
+    {
+        IMapTileEventSink& sink;
+        ~ReleaseReservation() { sink.releaseReservation(); }
+    } release{events_};
+
     MapTileAsyncEvent event{};
     event.command_id = command.runtime.command_id;
     event.generation = command.runtime.generation;
     event.tile = command.tile;
+    event.command_wait_ms = now_ms - command.runtime.created_at_ms;
+    event.worker_started_ms = now_ms;
 
     const MapTileReadResult read_result =
         backend_.read(command.tile, scratch_, scratch_size_);
@@ -165,6 +181,7 @@ bool MapTileWorker::execute(const LoadTileCommand& command, uint32_t now_ms)
         event.kind = ok ? MapTileAsyncEventKind::Ready : MapTileAsyncEventKind::Failed;
     }
     event.format = read_result.format;
+    event.read_timing = read_result.timing;
     event.payload_size = read_result.size;
     if (ok)
     {
@@ -174,9 +191,9 @@ bool MapTileWorker::execute(const LoadTileCommand& command, uint32_t now_ms)
         event.payload.size = read_result.size;
     }
     event.error = ok ? 0 : read_result.error;
-    (void)events_.publish(event);
+    const bool delivered = events_.publish(event);
     (void)now_ms;
-    return ok;
+    return delivered ? MapTileExecutionStatus::Completed : MapTileExecutionStatus::Cancelled;
 }
 
 } // namespace map_tiles

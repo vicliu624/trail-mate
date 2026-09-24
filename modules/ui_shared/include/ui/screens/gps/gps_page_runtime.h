@@ -19,9 +19,12 @@ struct MapTarget
 };
 // Target is borrowed until exit; caller owns its lifetime.
 bool enter_target(const shell::Host* host, lv_obj_t* parent, const MapTarget& target);
+void set_marker_binding(const ::ui::map::MapMarkerBinding* binding);
 void enter(const shell::Host* host,
            lv_obj_t* parent,
-           shell::Projection projection = shell::Projection::Map);
+           shell::Projection projection = shell::Projection::Map,
+           ::ui::map::MapLocationRequest* location = nullptr,
+           ::ui::map::MapTargetRequest* target = nullptr);
 void exit(lv_obj_t* parent);
 void remember_gps_view_state();
 bool restore_gps_view_state();

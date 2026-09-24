@@ -51,8 +51,12 @@ int main()
     assert(pager != nullptr);
     for (std::size_t index = 0; index < pager->item_count; ++index)
     {
-        assert(contains(*t_display_p4, pager->items[index].page_id));
+        const auto page = pager->items[index].page_id;
+        // Calendar is intentionally restricted to the approved handhelds.
+        assert(page == ui::presentation::PageId::Calendar || contains(*t_display_p4, page));
     }
+    assert(contains(*pager, ui::presentation::PageId::Calendar));
+    assert(!contains(*t_display_p4, ui::presentation::PageId::Calendar));
 
     const auto* watch = ui::presentation::findPageManifest("watch_compact_manifest");
     assert(watch != nullptr);

@@ -758,3 +758,72 @@ Start recording	Rozpocznij zapis
 Stop recording	Zatrzymaj zapis
 Not recording	Zapis nieaktywny
 Add KML files to the routes folder	Dodaj pliki KML do folderu tras
+
+# Agenda / Calendar
+1 day before	1 dzień wcześniej
+1 hour before	1 godzinę wcześniej
+10 min before	10 min wcześniej
+30 min before	30 min wcześniej
+Agenda	Harmonogram
+Agenda storage unavailable	Pamięć wydarzeń niedostępna
+Another reminder is already snoozed	Inne przypomnienie jest już odłożone
+At time	O czasie
+Changes apply to the entire series	Zmiany dotyczą całej serii
+Choose on map	Wybierz na mapie
+Could not read events	Nie można odczytać wydarzeń
+Could not save changes	Nie można zapisać zmian
+Could not update reminder	Nie można zaktualizować przypomnienia
+Current position	Bieżąca pozycja
+Current position unavailable	Bieżąca pozycja niedostępna
+Daily	Codziennie
+Date or time is out of range	Data lub godzina poza zakresem
+Delete this event?	Usunąć to wydarzenie?
+Discard	Odrzuć
+Discard changes?	Odrzucić zmiany?
+Done	Gotowe
+Edit Event	Edytuj wydarzenie
+End <= start: next day	Koniec ≤ początek: następny dzień
+End time (optional)	Godzina zakończenia (opcjonalna)
+Enter a title and valid date/time	Wpisz tytuł oraz prawidłową datę i godzinę
+Event Detail	Szczegóły wydarzenia
+Event is unavailable	Wydarzenie niedostępne
+Event Reminder	Przypomnienie o wydarzeniu
+Fri	Pt
+Invalid location	Nieprawidłowe miejsce
+Keep editing	Kontynuuj edycję
+Location is optional	Miejsce jest opcjonalne
+Map is unavailable on this target.	Mapa niedostępna na tym urządzeniu.
+Mon	Pon
+Monthly	Co miesiąc
+More	Więcej
+Navigate	Nawiguj
+New Event	Nowe wydarzenie
+No upcoming events	Brak nadchodzących wydarzeń
+Note	Notatka
+Pick Date	Wybierz datę
+Pick Time	Wybierz godzinę
+Reminder	Przypomnienie
+Remove location	Usuń miejsce
+Repeat	Powtarzanie
+Sat	Sob
+Saving...	Zapisywanie…
+Set the device time first	Najpierw ustaw czas urządzenia
+Snooze 10 min	Odłóż na 10 min
+Start time	Godzina rozpoczęcia
+Sun	Niedz
+Text exceeds the UTF-8 byte limit	Tekst przekracza limit bajtów UTF-8
+Thu	Czw
+Title	Tytuł
+Today	Dzisiaj
+Tomorrow	Jutro
+Tue	Wt
+Wed	Śr
+Weekly	Co tydzień
+Yearly	Co rok
+Calendar	Kalendarz
+Pick	Wybierz
+Could not read waypoints	Nie można odczytać punktów
+First	Pierwsza
+No saved waypoints	Brak zapisanych punktów
+Saved waypoint	Zapisany punkt
+Waypoint unavailable	Punkt niedostępny

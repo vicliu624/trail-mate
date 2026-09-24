@@ -758,3 +758,72 @@ Start recording	Avvia registrazione
 Stop recording	Ferma registrazione
 Not recording	Registrazione inattiva
 Add KML files to the routes folder	Aggiungi i file KML alla cartella dei percorsi
+
+# Agenda / Calendar
+1 day before	1 giorno prima
+1 hour before	1 ora prima
+10 min before	10 min prima
+30 min before	30 min prima
+Agenda	Agenda
+Agenda storage unavailable	Archivio eventi non disponibile
+Another reminder is already snoozed	Un altro promemoria è già rinviato
+At time	All'ora prevista
+Changes apply to the entire series	Le modifiche si applicano all'intera serie
+Choose on map	Scegli sulla mappa
+Could not read events	Impossibile leggere gli eventi
+Could not save changes	Impossibile salvare le modifiche
+Could not update reminder	Impossibile aggiornare il promemoria
+Current position	Posizione attuale
+Current position unavailable	Posizione attuale non disponibile
+Daily	Ogni giorno
+Date or time is out of range	Data o ora fuori intervallo
+Delete this event?	Eliminare questo evento?
+Discard	Scarta
+Discard changes?	Scartare le modifiche?
+Done	Fatto
+Edit Event	Modifica evento
+End <= start: next day	Fine ≤ inizio: giorno successivo
+End time (optional)	Ora di fine (facoltativa)
+Enter a title and valid date/time	Inserisci un titolo e una data/ora valide
+Event Detail	Dettagli evento
+Event is unavailable	Evento non disponibile
+Event Reminder	Promemoria evento
+Fri	Ven
+Invalid location	Posizione non valida
+Keep editing	Continua a modificare
+Location is optional	La posizione è facoltativa
+Map is unavailable on this target.	Mappa non disponibile su questo dispositivo.
+Mon	Lun
+Monthly	Ogni mese
+More	Altro
+Navigate	Naviga
+New Event	Nuovo evento
+No upcoming events	Nessun evento in programma
+Note	Nota
+Pick Date	Scegli data
+Pick Time	Scegli ora
+Reminder	Promemoria
+Remove location	Rimuovi posizione
+Repeat	Ripeti
+Sat	Sab
+Saving...	Salvataggio…
+Set the device time first	Imposta prima l'ora del dispositivo
+Snooze 10 min	Rinvia di 10 min
+Start time	Ora di inizio
+Sun	Dom
+Text exceeds the UTF-8 byte limit	Il testo supera il limite di byte UTF-8
+Thu	Gio
+Title	Titolo
+Today	Oggi
+Tomorrow	Domani
+Tue	Mar
+Wed	Mer
+Weekly	Ogni settimana
+Yearly	Ogni anno
+Calendar	Calendario
+Pick	Scegli
+Could not read waypoints	Impossibile leggere i punti
+First	Prima
+No saved waypoints	Nessun punto salvato
+Saved waypoint	Punto salvato
+Waypoint unavailable	Punto non disponibile

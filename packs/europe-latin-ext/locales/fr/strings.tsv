@@ -758,3 +758,72 @@ Start recording	Démarrer le suivi
 Stop recording	Arrêter le suivi
 Not recording	Suivi inactif
 Add KML files to the routes folder	Ajoutez les fichiers KML au dossier des itinéraires
+
+# Agenda / Calendar
+1 day before	1 jour avant
+1 hour before	1 heure avant
+10 min before	10 min avant
+30 min before	30 min avant
+Agenda	Agenda
+Agenda storage unavailable	Stockage des événements indisponible
+Another reminder is already snoozed	Un autre rappel est déjà reporté
+At time	À l'heure
+Changes apply to the entire series	Les modifications concernent toute la série
+Choose on map	Choisir sur la carte
+Could not read events	Impossible de lire les événements
+Could not save changes	Impossible d'enregistrer les modifications
+Could not update reminder	Impossible de mettre à jour le rappel
+Current position	Position actuelle
+Current position unavailable	Position actuelle indisponible
+Daily	Chaque jour
+Date or time is out of range	Date ou heure hors limites
+Delete this event?	Supprimer cet événement ?
+Discard	Abandonner
+Discard changes?	Abandonner les modifications ?
+Done	Terminé
+Edit Event	Modifier l'événement
+End <= start: next day	Fin ≤ début : jour suivant
+End time (optional)	Heure de fin (facultative)
+Enter a title and valid date/time	Saisissez un titre et une date/heure valides
+Event Detail	Détails de l'événement
+Event is unavailable	Événement indisponible
+Event Reminder	Rappel d'événement
+Fri	Ven
+Invalid location	Lieu non valide
+Keep editing	Continuer la modification
+Location is optional	Le lieu est facultatif
+Map is unavailable on this target.	Carte indisponible sur cet appareil.
+Mon	Lun
+Monthly	Chaque mois
+More	Plus
+Navigate	Naviguer
+New Event	Nouvel événement
+No upcoming events	Aucun événement à venir
+Note	Note
+Pick Date	Choisir la date
+Pick Time	Choisir l'heure
+Reminder	Rappel
+Remove location	Retirer le lieu
+Repeat	Répétition
+Sat	Sam
+Saving...	Enregistrement…
+Set the device time first	Réglez d'abord l'heure de l'appareil
+Snooze 10 min	Reporter de 10 min
+Start time	Heure de début
+Sun	Dim
+Text exceeds the UTF-8 byte limit	Le texte dépasse la limite d'octets UTF-8
+Thu	Jeu
+Title	Titre
+Today	Aujourd'hui
+Tomorrow	Demain
+Tue	Mar
+Wed	Mer
+Weekly	Chaque semaine
+Yearly	Chaque année
+Calendar	Calendrier
+Pick	Choisir
+Could not read waypoints	Lecture des points impossible
+First	Première
+No saved waypoints	Aucun point enregistré
+Saved waypoint	Point enregistré
+Waypoint unavailable	Point indisponible

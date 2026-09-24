@@ -758,3 +758,72 @@ Start recording	記録を開始
 Stop recording	記録を停止
 Not recording	記録していません
 Add KML files to the routes folder	KML ファイルをルートフォルダーに入れてください
+
+# Agenda / Calendar
+1 day before	1日前
+1 hour before	1時間前
+10 min before	10分前
+30 min before	30分前
+Agenda	予定一覧
+Agenda storage unavailable	予定の保存領域を利用できません
+Another reminder is already snoozed	別の通知がすでに再通知待ちです
+At time	開始時刻
+Changes apply to the entire series	変更は繰り返し予定全体に適用されます
+Choose on map	地図で選択
+Could not read events	予定を読み込めませんでした
+Could not save changes	変更を保存できませんでした
+Could not update reminder	通知を更新できませんでした
+Current position	現在地
+Current position unavailable	現在地を取得できません
+Daily	毎日
+Date or time is out of range	日付または時刻が範囲外です
+Delete this event?	この予定を削除しますか？
+Discard	破棄
+Discard changes?	変更を破棄しますか？
+Done	完了
+Edit Event	予定を編集
+End <= start: next day	終了≦開始の場合は翌日
+End time (optional)	終了時刻（任意）
+Enter a title and valid date/time	件名と有効な日時を入力してください
+Event Detail	予定の詳細
+Event is unavailable	予定を利用できません
+Event Reminder	予定の通知
+Fri	金
+Invalid location	無効な場所
+Keep editing	編集を続ける
+Location is optional	場所は任意です
+Map is unavailable on this target.	この端末では地図を利用できません。
+Mon	月
+Monthly	毎月
+More	もっと見る
+Navigate	ナビ
+New Event	新しい予定
+No upcoming events	今後の予定はありません
+Note	メモ
+Pick Date	日付を選択
+Pick Time	時刻を選択
+Reminder	通知
+Remove location	場所を削除
+Repeat	繰り返し
+Sat	土
+Saving...	保存中…
+Set the device time first	先に端末の時刻を設定してください
+Snooze 10 min	10分後に再通知
+Start time	開始時刻
+Sun	日
+Text exceeds the UTF-8 byte limit	文字列がUTF-8のバイト数制限を超えています
+Thu	木
+Title	件名
+Today	今日
+Tomorrow	明日
+Tue	火
+Wed	水
+Weekly	毎週
+Yearly	毎年
+Calendar	カレンダー
+Pick	決定
+Could not read waypoints	ウェイポイントを読み取れません
+First	最初
+No saved waypoints	保存済みのウェイポイントはありません
+Saved waypoint	保存済みウェイポイント
+Waypoint unavailable	ウェイポイントを利用できません

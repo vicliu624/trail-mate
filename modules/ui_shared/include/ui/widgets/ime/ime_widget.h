@@ -24,6 +24,20 @@ namespace ui
 namespace widgets
 {
 
+// Transient UI recovery metadata. Text storage belongs to the caller; this is
+// not a persistent format and does not retain widgets or candidate collections.
+struct ImeEditState
+{
+    uint32_t cursor = 0;
+    int script_index = 0;
+    int candidate_index = 0;
+    int candidate_window = 0;
+    char composition[9]{};
+    uint8_t mode = 0;
+    bool shift = false;
+};
+static_assert(sizeof(ImeEditState) <= 32, "IME recovery metadata must remain bounded");
+
 class ImeWidget
 {
   public:
@@ -45,6 +59,8 @@ class ImeWidget
 
     bool handle_key(lv_event_t* e);
     void setText(const char* text);
+    bool captureEditState(char* text, std::size_t capacity, ImeEditState& out) const;
+    bool restoreEditState(const char* text, const ImeEditState& state);
 
     lv_obj_t* container() const { return container_; }
     lv_obj_t* toggle_btn() const { return toggle_btn_; }

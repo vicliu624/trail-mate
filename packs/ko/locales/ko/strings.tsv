@@ -758,3 +758,72 @@ Start recording	기록 시작
 Stop recording	기록 중지
 Not recording	기록 중 아님
 Add KML files to the routes folder	경로 폴더에 KML 파일을 넣어 주세요
+
+# Agenda / Calendar
+1 day before	1일 전
+1 hour before	1시간 전
+10 min before	10분 전
+30 min before	30분 전
+Agenda	일정
+Agenda storage unavailable	일정 저장소를 사용할 수 없습니다
+Another reminder is already snoozed	이미 미룬 다른 알림이 있습니다
+At time	정시
+Changes apply to the entire series	변경 사항은 반복 일정 전체에 적용됩니다
+Choose on map	지도에서 선택
+Could not read events	일정을 읽을 수 없습니다
+Could not save changes	변경 사항을 저장할 수 없습니다
+Could not update reminder	알림을 갱신할 수 없습니다
+Current position	현재 위치
+Current position unavailable	현재 위치를 확인할 수 없습니다
+Daily	매일
+Date or time is out of range	날짜 또는 시간이 범위를 벗어났습니다
+Delete this event?	이 일정을 삭제할까요?
+Discard	버리기
+Discard changes?	변경 사항을 버릴까요?
+Done	완료
+Edit Event	일정 편집
+End <= start: next day	종료가 시작 이하이면 다음 날
+End time (optional)	종료 시간(선택)
+Enter a title and valid date/time	제목과 올바른 날짜 및 시간을 입력하세요
+Event Detail	일정 상세
+Event is unavailable	일정을 사용할 수 없습니다
+Event Reminder	일정 알림
+Fri	금
+Invalid location	잘못된 위치
+Keep editing	계속 편집
+Location is optional	위치는 선택 사항입니다
+Map is unavailable on this target.	이 기기에서는 지도를 사용할 수 없습니다.
+Mon	월
+Monthly	매월
+More	더 보기
+Navigate	길 안내
+New Event	새 일정
+No upcoming events	예정된 일정이 없습니다
+Note	메모
+Pick Date	날짜 선택
+Pick Time	시간 선택
+Reminder	알림
+Remove location	위치 삭제
+Repeat	반복
+Sat	토
+Saving...	저장 중…
+Set the device time first	먼저 기기 시간을 설정하세요
+Snooze 10 min	10분 후 다시 알림
+Start time	시작 시간
+Sun	일
+Text exceeds the UTF-8 byte limit	텍스트가 UTF-8 바이트 제한을 초과했습니다
+Thu	목
+Title	제목
+Today	오늘
+Tomorrow	내일
+Tue	화
+Wed	수
+Weekly	매주
+Yearly	매년
+Calendar	달력
+Pick	선택
+Could not read waypoints	지점을 읽을 수 없습니다
+First	처음
+No saved waypoints	저장된 지점이 없습니다
+Saved waypoint	저장된 지점
+Waypoint unavailable	지점을 사용할 수 없습니다

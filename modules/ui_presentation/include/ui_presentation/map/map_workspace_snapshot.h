@@ -22,7 +22,24 @@ enum class MapToolKind : uint8_t
     Pan,
     CenterOnSelf,
     MeasureDistance,
+    SelectLocation,
 };
+
+enum class MapLocationSelectionState : uint8_t
+{
+    Idle,
+    Selecting,
+    Picked,
+    Cancelled,
+};
+
+struct MapLocationSelection
+{
+    double latitude = 0.0;
+    double longitude = 0.0;
+    MapLocationSelectionState state = MapLocationSelectionState::Idle;
+};
+static_assert(sizeof(MapLocationSelection) <= 24, "Location selection must remain bounded");
 
 struct MapViewport
 {

@@ -21,6 +21,11 @@ They must not depend on concrete implementations under `platform/esp/*`,
 
 ## Current contract set
 
+- `map_diagnostics.h`
+  Optional map diagnostic output. Shared UI submits formatted records without
+  choosing an SDK or output device; platform implementations select Arduino
+  serial or the native console. Disabled builds do not evaluate diagnostic calls.
+
 - `capability_status.h`
   Shared `CapabilityState` / `CapabilityStatus` types used by all runtime
   contracts to honestly signal Unsupported / Simulated / Available / Degraded /

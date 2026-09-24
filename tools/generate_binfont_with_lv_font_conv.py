@@ -53,6 +53,21 @@ async function main() {
         ranges: [{ symbols: charset }]
       }
     ];
+    if (config.fallback_fonts.length) {
+      // Assign each glyph to its first supporting source. Passing overlapping
+      // ranges directly to the converter would overwrite primary glyphs.
+      const opentype = require(path.resolve(config.package_dir, 'node_modules', 'opentype.js'));
+      let remaining = Array.from(charset);
+      args.font = [];
+      for (const source_path of [config.font, ...config.fallback_fonts]) {
+        const source_bin = fs.readFileSync(source_path);
+        const face = opentype.parse(source_bin.buffer.slice(source_bin.byteOffset, source_bin.byteOffset + source_bin.byteLength));
+        const supported = remaining.filter(ch => face.charToGlyphIndex(ch) !== 0);
+        remaining = remaining.filter(ch => face.charToGlyphIndex(ch) === 0);
+        if (supported.length) args.font.push({ source_path, source_bin, ranges: [{ symbols: supported.join('') }] });
+      }
+      if (!args.font.length) throw new Error('No requested glyphs exist in the configured font sources');
+    }
     files = await convert(args);
   }
   for (const [outputPath, data] of Object.entries(files)) {
@@ -106,6 +121,7 @@ def is_bdf_source(path: Path) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate an LVGL binary font from a charset file via lv_font_conv.")
     parser.add_argument("--font", type=Path, required=True, help="Source font file, for example tools/fonts/NotoSansCJKsc-Regular.otf")
+    parser.add_argument("--fallback-font", type=Path, action="append", default=[], help="Outline font used only for glyphs missing from earlier sources; repeatable")
     parser.add_argument("--charset-file", type=Path, required=True, help="UTF-8 charset.txt file listing glyphs to include")
     parser.add_argument("--output", type=Path, required=True, help="Output font.bin path")
     parser.add_argument("--size", type=int, default=16, help="Font size in pixels")
@@ -130,11 +146,17 @@ def main() -> int:
     font_path = args.font.resolve()
     charset_path = args.charset_file.resolve()
     output_path = args.output.resolve()
+    fallback_paths = [path.resolve() for path in args.fallback_font]
 
     if not font_path.exists():
         raise FileNotFoundError(f"font file not found: {font_path}")
     if not charset_path.exists():
         raise FileNotFoundError(f"charset file not found: {charset_path}")
+    for path in fallback_paths:
+        if not path.exists():
+            raise FileNotFoundError(f"fallback font file not found: {path}")
+    if fallback_paths and any(is_bdf_source(path) for path in [font_path, *fallback_paths]):
+        raise ValueError("Fallback sources require outline fonts; native BDF glyphs must not be resampled")
 
     with tempfile.TemporaryDirectory(prefix="lv-font-conv-") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -174,6 +196,7 @@ def main() -> int:
                 {
                     "package_dir": str(package_dir),
                     "font": str(font_path),
+                    "fallback_fonts": [str(path) for path in fallback_paths],
                     "charset_file": str(charset_path),
                     "direct_font_data": str(direct_font_data_path) if direct_font_data_path else None,
                     "output": str(output_path),

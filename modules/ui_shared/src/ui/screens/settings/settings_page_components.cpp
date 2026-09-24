@@ -3,6 +3,7 @@
  * @brief Settings UI components implementation
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -39,13 +40,13 @@
 #include "platform/ui/wireless_companion_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
-#include "ui/components/info_card.h"
 #include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/page/page_profile.h"
 #include "ui/presentation_sources/runtime_settings_source.h"
 #include "ui/runtime/ui_feedback.h"
 #include "ui/screens/settings/settings_channel_actions.h"
+#include "ui/screens/settings/settings_item_layout.h"
 #include "ui/screens/settings/settings_page_components.h"
 #include "ui/screens/settings/settings_page_input.h"
 #include "ui/screens/settings/settings_page_layout.h"
@@ -881,11 +882,6 @@ static void firmware_update_timer_cb(lv_timer_t* /*timer*/)
     sync_firmware_update_ui(true);
 }
 
-static bool use_tdeck_info_card_layout()
-{
-    return ::ui::components::info_card::use_tdeck_layout();
-}
-
 static constexpr bool use_touch_first_settings_mode()
 {
 #if defined(ARDUINO_T_DECK)
@@ -900,27 +896,9 @@ static bool should_show_settings_list_back_button()
     return !use_touch_first_settings_mode();
 }
 
-static lv_coord_t resolve_settings_list_item_height()
-{
-    const lv_coord_t base = ::ui::page_profile::resolve_control_button_height();
-    if (!use_tdeck_info_card_layout())
-    {
-        return base;
-    }
-
-    return ::ui::components::info_card::resolve_height(base);
-}
-
 static void configure_list_item_button(lv_obj_t* btn)
 {
-    if (use_tdeck_info_card_layout())
-    {
-        ::ui::components::info_card::configure_item(
-            btn, ::ui::page_profile::resolve_control_button_height());
-        return;
-    }
-
-    lv_obj_set_size(btn, LV_PCT(100), resolve_settings_list_item_height());
+    lv_obj_set_width(btn, LV_PCT(100));
     const bool dense = ::ui::page_profile::is_dense();
     lv_obj_set_style_pad_left(btn, dense ? 6 : 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(btn, dense ? 6 : 10, LV_PART_MAIN);
@@ -932,64 +910,21 @@ static void configure_list_item_button(lv_obj_t* btn)
 
 static void create_item_content(settings::ui::ItemWidget& widget, lv_obj_t* btn)
 {
-    if (use_tdeck_info_card_layout())
-    {
-        const auto slots = ::ui::components::info_card::create_content(btn);
-        ::ui::i18n::set_label_text(slots.header_main_label, widget.def->label);
-        style::apply_label_primary(slots.header_main_label);
-
-        widget.value_label = slots.body_main_label;
-        style::apply_label_primary(widget.value_label);
-        update_item_value(widget);
-        return;
-    }
-
-    const settings::ui::SettingId id = item_id(*widget.def);
-    const bool reticulum_hash_item =
-        id == settings::ui::SettingId::RtIdentityHash ||
-        id == settings::ui::SettingId::RtLxmfAddress;
-    if (reticulum_hash_item)
-    {
-        lv_obj_set_height(btn, ::ui::page_profile::is_dense() ? 64 : 72);
-        lv_obj_set_style_pad_row(btn, 3, LV_PART_MAIN);
-        lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(btn,
-                              LV_FLEX_ALIGN_START,
-                              LV_FLEX_ALIGN_START,
-                              LV_FLEX_ALIGN_START);
-
-        lv_obj_t* label = lv_label_create(btn);
-        ::ui::i18n::set_label_text(label, widget.def->label);
-        style::apply_label_primary(label);
-        lv_obj_set_width(label, LV_PCT(100));
-
-        widget.value_label = lv_label_create(btn);
-        style::apply_label_muted(widget.value_label);
-        lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_WRAP);
-        lv_obj_set_width(widget.value_label, LV_PCT(100));
-        update_item_value(widget);
-        return;
-    }
-
     lv_obj_t* label = lv_label_create(btn);
     ::ui::i18n::set_label_text(label, widget.def->label);
     style::apply_label_primary(label);
-    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
-    if (::ui::page_profile::is_dense())
-    {
-        lv_obj_set_width(label, 0);
-        lv_obj_set_flex_grow(label, 1);
-    }
 
     widget.value_label = lv_label_create(btn);
     style::apply_label_muted(widget.value_label);
-    lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_DOT);
-    if (::ui::page_profile::is_dense())
-    {
-        lv_obj_set_width(widget.value_label, 72);
-        lv_obj_set_style_text_align(widget.value_label, LV_TEXT_ALIGN_RIGHT, 0);
-    }
     update_item_value(widget);
+    const auto id = item_id(*widget.def);
+    const bool action_only = widget.def->type == settings::ui::SettingType::Action &&
+                             id != settings::ui::SettingId::EnabledImes &&
+                             id != settings::ui::SettingId::ManualTimeSet;
+    const bool multiline_value = id == settings::ui::SettingId::RtIdentityHash ||
+                                 id == settings::ui::SettingId::RtLxmfAddress;
+    settings::ui::item_layout::apply(btn, label, widget.value_label,
+                                     ::ui::page_profile::resolve_control_button_height(), !action_only, multiline_value);
 }
 
 static void build_item_list();
@@ -1998,23 +1933,34 @@ static void modal_prepare_group()
     s_modal_prev_group = settings::ui::input::get_group();
     g_state.modal_group = lv_group_create();
     set_default_group(g_state.modal_group);
+    // The visible header belongs to the active modal's navigation scope.
+    if (g_state.top_bar.back_btn)
+    {
+        lv_group_add_obj(g_state.modal_group, g_state.top_bar.back_btn);
+    }
+    lv_group_set_editing(g_state.modal_group, false);
 }
 
-static void modal_restore_group()
+static void modal_restore_group(bool restore_focus)
 {
     if (g_state.modal_group)
     {
         lv_group_del(g_state.modal_group);
         g_state.modal_group = nullptr;
     }
-    if (s_modal_prev_group)
+    lv_group_t* previous_group = s_modal_prev_group;
+    s_modal_prev_group = nullptr;
+    if (restore_focus && previous_group)
     {
-        set_default_group(s_modal_prev_group);
+        set_default_group(previous_group);
     }
-    settings::ui::input::on_ui_refreshed();
+    if (restore_focus)
+    {
+        settings::ui::input::on_ui_refreshed();
+    }
 }
 
-static void modal_close()
+static void modal_close(bool restore_focus = true)
 {
     if (s_text_modal_ime)
     {
@@ -2043,7 +1989,7 @@ static void modal_close()
     s_manual_datetime_focus_count = 0;
     s_option_click_count = 0;
     s_ime_toggle_count = 0;
-    modal_restore_group();
+    modal_restore_group(restore_focus);
 }
 
 static void on_modal_key(lv_event_t* e)
@@ -2256,8 +2202,15 @@ static lv_coord_t resolve_text_modal_height(
 
 static lv_obj_t* create_modal_root(lv_coord_t width, lv_coord_t height)
 {
+    const auto& profile = ::ui::page_profile::current();
+    const lv_coord_t top_bar_height = profile.top_bar_height > 0 ? profile.top_bar_height
+                                                                 : static_cast<lv_coord_t>(::ui::widgets::kTopBarHeight);
+    lv_obj_update_layout(g_state.root);
+    const lv_coord_t content_height = std::max<lv_coord_t>(1, lv_obj_get_height(g_state.root) - top_bar_height);
     lv_obj_t* bg = lv_obj_create(g_state.root);
-    lv_obj_set_size(bg, LV_PCT(100), LV_PCT(100));
+    lv_obj_add_flag(bg, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_size(bg, LV_PCT(100), content_height);
+    lv_obj_set_pos(bg, 0, top_bar_height);
     style::apply_modal_bg(bg);
     lv_obj_set_style_border_width(bg, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bg, 0, LV_PART_MAIN);
@@ -2266,7 +2219,7 @@ static lv_obj_t* create_modal_root(lv_coord_t width, lv_coord_t height)
 
     const auto modal_size = ::ui::page_profile::resolve_modal_size(width, height, lv_screen_active());
     lv_obj_t* win = lv_obj_create(bg);
-    lv_obj_set_size(win, modal_size.width, modal_size.height);
+    lv_obj_set_size(win, modal_size.width, std::min<lv_coord_t>(modal_size.height, content_height));
     lv_obj_center(win);
     style::apply_modal_panel(win);
     lv_obj_set_style_pad_all(win, ::ui::page_profile::resolve_modal_pad(), LV_PART_MAIN);
@@ -4780,6 +4733,7 @@ static void open_enabled_imes_modal(settings::ui::ItemWidget& widget)
     const lv_coord_t content_h = lv_obj_get_height(g_state.root) - top_bar_h;
 
     g_state.modal_root = lv_obj_create(g_state.root);
+    lv_obj_add_flag(g_state.modal_root, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_set_size(g_state.modal_root, LV_PCT(100), content_h);
     lv_obj_set_pos(g_state.modal_root, 0, top_bar_h);
     style::apply_modal_bg(g_state.modal_root);
@@ -4894,6 +4848,7 @@ static void open_option_modal(const settings::ui::SettingItem& item, settings::u
 
     lv_coord_t content_h = lv_obj_get_height(g_state.root) - kTopBarH;
     g_state.modal_root = lv_obj_create(g_state.root);
+    lv_obj_add_flag(g_state.modal_root, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_set_size(g_state.modal_root, LV_PCT(100), content_h);
     lv_obj_set_pos(g_state.modal_root, 0, kTopBarH);
     style::apply_modal_bg(g_state.modal_root);
@@ -6544,6 +6499,11 @@ static void on_list_back_clicked(lv_event_t* /*e*/)
 
 static void settings_back_cb(void* /*user_data*/)
 {
+    if (g_state.modal_root)
+    {
+        modal_close();
+        return;
+    }
     ui_request_exit_to_menu();
 }
 
@@ -6711,7 +6671,7 @@ void destroy()
 {
     if (g_state.modal_root)
     {
-        modal_close();
+        modal_close(false);
     }
     if (s_firmware_update_timer)
     {

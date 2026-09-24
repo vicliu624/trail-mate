@@ -220,6 +220,8 @@ def build_font_if_missing(
     ]
     if npm_exe:
         command.extend(["--npm-exe", npm_exe])
+    for fallback in split_csv(build.get("fallback_font")):
+        command.extend(["--fallback-font", str((repo_root / fallback).resolve())])
     if parse_bool(build.get("no_compress"), default=False):
         command.append("--no-compress")
     if parse_bool(build.get("no_prefilter"), default=False):

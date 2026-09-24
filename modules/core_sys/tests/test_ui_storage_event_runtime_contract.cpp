@@ -13,14 +13,14 @@ namespace
 class MapCommandSink final : public ui::map_tiles::IMapTileCommandSink
 {
   public:
-    bool enqueue(const ui::map_tiles::LoadTileCommand& command) override
+    ui::map_tiles::TileSubmitResult enqueue(const ui::map_tiles::LoadTileCommand& command) override
     {
         if (count >= 4)
         {
-            return false;
+            return {ui::map_tiles::TileSubmitStatus::Backpressured, {}};
         }
         commands[count++] = command;
-        return true;
+        return {ui::map_tiles::TileSubmitStatus::Accepted, {command.runtime.generation, command.runtime.command_id}};
     }
 
     std::size_t cancelGeneration(uint32_t generation) override
@@ -187,6 +187,20 @@ void test_map_tile_runtime_contract()
     assert(runtime.handle(ready, render_queue));
     assert(ui.count == 1);
     assert(runtime.snapshot().ready_count == 1);
+
+    for (std::size_t i = 1; i < 4; ++i)
+    {
+        auto tile = tileRef();
+        tile.x += static_cast<uint32_t>(i);
+        const auto result = async.requestTile(tile, 7, ui::map_tiles::MapTileInteractionMode::Idle, 20);
+        assert(result.status == ui::map_tiles::TileSubmitStatus::Accepted);
+        assert(result.handle.matches(commands.commands[i].runtime.generation,
+                                     commands.commands[i].runtime.command_id));
+    }
+    const auto full = async.requestTile(tileRef(), 7, ui::map_tiles::MapTileInteractionMode::Idle, 30);
+    assert(full.status == ui::map_tiles::TileSubmitStatus::Backpressured);
+    assert(!full.handle);
+    assert(commands.count == 4);
 }
 
 void test_feedback_runtime_contract()

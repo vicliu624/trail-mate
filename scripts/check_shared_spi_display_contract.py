@@ -237,10 +237,10 @@ def main() -> int:
         and "const SdSpiBusConfig& spi_bus" in sd_runtime_header
         and "s_active_spi_bus.spi->begin" in sd_runtime
         and "s_sdfat_mounted = sdfat_ok;" in sd_runtime
-        and "bool clear_sdfat()" in sd_runtime
+        and "bool clear_sdfat(" in sd_runtime
         and "SdFat cleanup deferred: shared SPI unavailable" in sd_runtime
         and "sd_spi_bus_acquire(bus_token)" in between(
-            sd_runtime, "bool clear_sdfat()", "void reset_info()"
+            sd_runtime, "bool clear_sdfat(", "void reset_info()"
         )
         and "if (!clear_sdfat())" in between(
             sd_runtime, "void unmount_sd_card()", "bool sd_card_ready()"

@@ -758,3 +758,72 @@ Start recording	Opname starten
 Stop recording	Opname stoppen
 Not recording	Geen opname actief
 Add KML files to the routes folder	Plaats KML-bestanden in de routemap
+
+# Agenda / Calendar
+1 day before	1 dag vooraf
+1 hour before	1 uur vooraf
+10 min before	10 min vooraf
+30 min before	30 min vooraf
+Agenda	Agenda
+Agenda storage unavailable	Opslag voor afspraken niet beschikbaar
+Another reminder is already snoozed	Een andere herinnering is al uitgesteld
+At time	Op de begintijd
+Changes apply to the entire series	Wijzigingen gelden voor de hele reeks
+Choose on map	Op kaart kiezen
+Could not read events	Kan afspraken niet lezen
+Could not save changes	Kan wijzigingen niet opslaan
+Could not update reminder	Kan herinnering niet bijwerken
+Current position	Huidige positie
+Current position unavailable	Huidige positie niet beschikbaar
+Daily	Dagelijks
+Date or time is out of range	Datum of tijd buiten bereik
+Delete this event?	Deze afspraak verwijderen?
+Discard	Verwerpen
+Discard changes?	Wijzigingen verwerpen?
+Done	Gereed
+Edit Event	Afspraak bewerken
+End <= start: next day	Einde ≤ begin: volgende dag
+End time (optional)	Eindtijd (optioneel)
+Enter a title and valid date/time	Voer een titel en geldige datum/tijd in
+Event Detail	Afspraakdetails
+Event is unavailable	Afspraak niet beschikbaar
+Event Reminder	Afspraakherinnering
+Fri	Vr
+Invalid location	Ongeldige locatie
+Keep editing	Verder bewerken
+Location is optional	Locatie is optioneel
+Map is unavailable on this target.	Kaart niet beschikbaar op dit apparaat.
+Mon	Ma
+Monthly	Maandelijks
+More	Meer
+Navigate	Navigeren
+New Event	Nieuwe afspraak
+No upcoming events	Geen komende afspraken
+Note	Notitie
+Pick Date	Datum kiezen
+Pick Time	Tijd kiezen
+Reminder	Herinnering
+Remove location	Locatie verwijderen
+Repeat	Herhalen
+Sat	Za
+Saving...	Opslaan…
+Set the device time first	Stel eerst de apparaattijd in
+Snooze 10 min	10 min uitstellen
+Start time	Begintijd
+Sun	Zo
+Text exceeds the UTF-8 byte limit	Tekst overschrijdt de UTF-8-bytelimiet
+Thu	Do
+Title	Titel
+Today	Vandaag
+Tomorrow	Morgen
+Tue	Di
+Wed	Wo
+Weekly	Wekelijks
+Yearly	Jaarlijks
+Calendar	Kalender
+Pick	Kiezen
+Could not read waypoints	Kan routepunten niet lezen
+First	Eerste
+No saved waypoints	Geen opgeslagen routepunten
+Saved waypoint	Opgeslagen routepunt
+Waypoint unavailable	Routepunt niet beschikbaar
