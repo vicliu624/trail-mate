@@ -4,6 +4,7 @@
  */
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
+#include "geocaching/protocol/sign_record.h"
 
 #include "platform/esp/arduino_common/voice/vmp_pager_session.h"
 
@@ -1069,9 +1070,11 @@ bool computeLinkIdFromLinkRequest(const uint8_t* raw_packet, size_t raw_len,
 } // namespace
 
 LxmfAdapter::LxmfAdapter(LoraBoard& board,
-                         IMeshPeerDirectory* peer_directory)
-    : interfaces_(board),
-      peer_directory_service_(peer_directory)
+                         IMeshPeerDirectory* peer_directory,
+                         bool owns_integrated_radio)
+    : interfaces_(board, owns_integrated_radio),
+      peer_directory_service_(peer_directory),
+      geocaching_only_(!owns_integrated_radio)
 {
     uint8_t seed[sizeof(next_app_packet_id_)] = {};
     fillRandomBytes(seed, sizeof(seed));
@@ -1144,7 +1147,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
                                       bool track_user_message,
                                       OutboundLxmfDispatch* out_dispatch)
 {
-    if (!packed_payload || packed_payload_len == 0 || !out_dispatch)
+    if (!packed_payload || packed_payload_len == 0 || packed_payload_len > 8448 || !out_dispatch)
     {
         return false;
     }
@@ -1155,7 +1158,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
         (void)sendPathRequest(peer);
     }
 
-    runtime::RuntimeByteBuffer signed_part(kSignedPartMaxLen, 0);
+    runtime::RuntimeByteBuffer signed_part(packed_payload_len + 64, 0);
     size_t signed_part_len = signed_part.size();
     if (!buildSignedPart(peer.destination_hash,
                          identity_.destinationHash(),
@@ -1170,7 +1173,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
     }
 
     uint8_t signature[reticulum::kSignatureSize] = {};
-    runtime::RuntimeByteBuffer lxmf_message(kMaxLxmfMessageLen, 0);
+    runtime::RuntimeByteBuffer lxmf_message(packed_payload_len + 96, 0);
     size_t lxmf_message_len = lxmf_message.size();
     if (!identity_.sign(signed_part.data(), signed_part_len, signature) ||
         !packMessage(peer.destination_hash,
@@ -1189,7 +1192,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
     LinkSession* active_link =
         findActiveLinkSessionByDestination(peer.destination_hash,
                                            LocalDestinationKind::Delivery);
-    const bool use_opportunistic = !active_link && peerHasUsableRatchet(peer);
+    const bool use_opportunistic = !active_link && packed_payload_len <= 256 && peerHasUsableRatchet(peer);
     const auto& propagation_config = rtnet::active().propagation;
     bool propagation_peer_available = false;
     if (propagation_config.enabled &&
@@ -2103,6 +2106,49 @@ bool LxmfAdapter::respondToSidebandTelemetryRequest(
                   static_cast<unsigned long>(request.timebase),
                   request.collector_request ? 1U : 0U);
     return sent;
+}
+
+bool LxmfAdapter::getGeocachingAuthorKey(uint8_t out[64]) const
+{
+    if (!out) return false;
+    std::memset(out, 0, 64);
+    if (!identity_.isReady()) return false;
+    identity_.combinedPublicKey(out);
+    return true;
+}
+
+bool LxmfAdapter::signGeocachingRecord(ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
+                                      uint8_t* output, size_t output_capacity, size_t& written)
+{
+    return ::geocaching::protocol::signGeocacheRecord({record.data, record.size}, identity_,
+                                                     workspace, workspace_capacity, output, output_capacity, written);
+}
+
+MeshSendResult LxmfAdapter::sendCustomDataToDestination(const uint8_t destination_hash[16],
+                                                       const char* custom_type, ByteSpan data,
+                                                       bool response, std::array<uint8_t, 32>* accepted_lxmf_hash)
+{
+    if (accepted_lxmf_hash) accepted_lxmf_hash->fill(0);
+    if (!destination_hash || !custom_type || !custom_type[0] || strlen(custom_type) > 96 ||
+        !data.data || data.size == 0 || data.size > 8192)
+        return MeshSendResult::fail(MeshOperationFailure::InvalidInput);
+    if (!isReady()) return MeshSendResult::fail(MeshOperationFailure::NotReady);
+    PeerInfo* peer = findOrLoadPeerByDestinationHash(destination_hash);
+    if (!peer) return MeshSendResult::fail(MeshOperationFailure::PeerKeyMissing);
+    runtime::RuntimeByteBuffer payload(data.size + 256, 0);
+    size_t size = payload.size();
+    if (!encodeCustomDataPayload(static_cast<double>(currentTimestampSeconds()),
+                                 "Trail Mate Geocache v1",
+                                 response ? "Geocache response" : "Geocache request",
+                                 custom_type, data, payload.data(), &size))
+        return MeshSendResult::fail(MeshOperationFailure::EncodeFailed);
+    OutboundLxmfDispatch dispatch{};
+    const bool ok = dispatchLxmfPayload(*peer, payload.data(), size, false, &dispatch);
+    if (ok && accepted_lxmf_hash) std::memcpy(accepted_lxmf_hash->data(), dispatch.message_hash, accepted_lxmf_hash->size());
+    MeshSendResult result = ok ? MeshSendResult::success(dispatch.message_id)
+                              : MeshSendResult::fail(dispatch.failure, dispatch.message_id);
+    result.reticulum_identity = runtime::reticulumIdentityForPeer(*peer);
+    return result;
 }
 
 MeshSendResult LxmfAdapter::sendTextDetailed(ChannelId channel,
@@ -4027,6 +4073,30 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
         !ingest.path)
     {
         return false;
+    }
+
+    if (geocaching_announcement_handler_ && !ingest.local_destination && ingest.announce.name_hash &&
+        ingest.announce.public_key && ingest.announce.app_data && ingest.announce.app_data_len <= 96)
+    {
+        uint8_t name_hash[reticulum::kNameHashSize] = {};
+        reticulum::computeNameHash("trailmate", "geocache.directory", name_hash);
+        if (hashesEqual(name_hash, ingest.announce.name_hash, sizeof(name_hash)))
+        {
+            // The verified service announcement authenticates the same identity
+            // used by lxmf.delivery. Retain its encryption key without adding a
+            // service announcement to the user's contact presentation.
+            rememberPeerIdentity(ingest.announce.public_key, nullptr, false);
+            uint8_t delivery_hash[reticulum::kTruncatedHashSize] = {};
+            reticulum::computeNameHash("lxmf", "delivery", name_hash);
+            reticulum::computeDestinationHash(name_hash, ingest.identity_hash, delivery_hash);
+            const GeocachingAnnouncementView view{
+                {packet.destination_hash, reticulum::kTruncatedHashSize},
+                {delivery_hash, sizeof(delivery_hash)},
+                {ingest.announce.public_key, reticulum::kCombinedPublicKeySize},
+                {ingest.announce.app_data, ingest.announce.app_data_len}};
+            // Borrowed only for this callback; consumers copy bounded metadata.
+            geocaching_announcement_handler_(view, geocaching_announcement_context_);
+        }
     }
 
     PathEntry& path = *ingest.path;
@@ -9299,7 +9369,7 @@ void LxmfAdapter::cullLinkSessions()
 
 LxmfAdapter::PeerInfo* LxmfAdapter::rememberPeerIdentity(
     const uint8_t combined_pub[reticulum::kCombinedPublicKeySize],
-    const char* display_name)
+    const char* display_name, bool publish_contact)
 {
     if (!combined_pub)
     {
@@ -9324,6 +9394,10 @@ LxmfAdapter::PeerInfo* LxmfAdapter::rememberPeerIdentity(
     if (display_name && display_name[0] != '\0')
     {
         copyCString(peer.display_name, sizeof(peer.display_name), display_name);
+    }
+    if (!publish_contact)
+    {
+        return &peer;
     }
     const bool allow_persistence =
         screen_runtime::is_sleeping() && !screen_runtime::is_saver_active();
@@ -9602,6 +9676,11 @@ bool LxmfAdapter::acceptVerifiedEnvelopeForDestination(
                       source_hash);
     }
 
+    if (geocaching_only_ && delivery.kind != runtime::LxmfDeliveryKind::Text)
+    {
+        release_packet_for_retry();
+        return false;
+    }
     if (delivery.kind == runtime::LxmfDeliveryKind::AppData)
     {
         if (delivery.app_data.incoming.portnum ==
@@ -9664,6 +9743,40 @@ bool LxmfAdapter::acceptVerifiedEnvelopeForDestination(
         return false;
     }
 
+    ByteSpan custom_type, custom_data;
+    const auto custom_result = extractCustomData(delivery.text.payload, &custom_type, &custom_data);
+    if (custom_result == CustomDataResult::Invalid)
+    {
+        release_packet_for_retry();
+        return false;
+    }
+    constexpr char geocaching_type[] = "trailmate.geocache";
+    if (custom_result == CustomDataResult::Valid && custom_type.size == sizeof(geocaching_type) - 1 &&
+        std::memcmp(custom_type.data, geocaching_type, custom_type.size) == 0)
+    {
+        if (delivery_context.source_unverified || destination_is_group || !geocaching_handler_)
+        {
+            release_packet_for_retry();
+            return false;
+        }
+        const CustomDeliveryView view{
+            {envelope.source_hash, sizeof(envelope.source_hash)},
+            {expected_destination_hash, reticulum::kTruncatedHashSize},
+            {delivery_context.message_hash, sizeof(delivery_context.message_hash)},
+            custom_data};
+        if (!geocaching_handler_(view, geocaching_handler_context_))
+        {
+            release_packet_for_retry();
+            return false;
+        }
+        return true;
+    }
+
+    if (geocaching_only_)
+    {
+        release_packet_for_retry();
+        return false;
+    }
     if (!delivery_context.source_unverified)
     {
         SidebandTelemetryLocation location{};

@@ -903,6 +903,36 @@ bool encodeTextPayload(double timestamp,
     return true;
 }
 
+bool encodeCustomDataPayload(double timestamp, const char* title, const char* content,
+                             const char* custom_type, ByteSpan custom_data,
+                             uint8_t* out_payload, size_t* inout_len)
+{
+    if (!inout_len) return false;
+    const size_t capacity = *inout_len;
+    *inout_len = 0;
+    if (!out_payload || !custom_type || !custom_type[0] ||
+        (!custom_data.data && custom_data.size) || custom_data.size > 65535) return false;
+    const auto* title_bytes = reinterpret_cast<const uint8_t*>(title ? title : "");
+    const auto* content_bytes = reinterpret_cast<const uint8_t*>(content ? content : "");
+    const auto* type_bytes = reinterpret_cast<const uint8_t*>(custom_type);
+    const size_t title_len = title ? strlen(title) : 0;
+    const size_t content_len = content ? strlen(content) : 0;
+    const size_t type_len = strlen(custom_type);
+    if (title_len > 65535 || content_len > 65535 || type_len > 65535) return false;
+    size_t used = 0;
+    if (!appendArrayHeader(4, out_payload, capacity, used) ||
+        !appendFloat64(timestamp, out_payload, capacity, used) ||
+        !appendBin(title_bytes, title_len, out_payload, capacity, used) ||
+        !appendBin(content_bytes, content_len, out_payload, capacity, used) ||
+        !appendMapHeader(2, out_payload, capacity, used) ||
+        !appendUint(0xfb, out_payload, capacity, used) ||
+        !appendString(type_bytes, type_len, out_payload, capacity, used) ||
+        !appendUint(0xfc, out_payload, capacity, used) ||
+        !appendBin(custom_data.data, custom_data.size, out_payload, capacity, used)) return false;
+    *inout_len = used;
+    return true;
+}
+
 bool encodeSidebandTelemetryLocationPayload(
     double message_timestamp,
     const SidebandTelemetryLocation& location,
@@ -2472,8 +2502,15 @@ bool unpackTextPayload(const uint8_t* data, size_t len, DecodedTextPayload* out_
         if (numeric_key &&
             (field_key == kFieldTelemetry ||
              field_key == kFieldTelemetryStream ||
-             field_key == kFieldCommands))
+             field_key == kFieldCommands ||
+             field_key == kFieldCustomType ||
+             field_key == kFieldCustomData))
         {
+            if ((field_key == kFieldCustomType && cursor.pos - value_start > 258) ||
+                (field_key == kFieldCustomData && cursor.pos - value_start > 8195))
+            {
+                return false;
+            }
             DecodedField field{};
             field.key = field_key;
             field.encoded_value.assign(data + value_start, data + cursor.pos);
@@ -2507,6 +2544,43 @@ bool unpackTextPayload(const uint8_t* data, size_t len, DecodedTextPayload* out_
 
     *out_payload = std::move(decoded);
     return true;
+}
+
+CustomDataResult extractCustomData(const DecodedTextPayload& payload,
+                                   ByteSpan* out_type, ByteSpan* out_data)
+{
+    if (!out_type || !out_data) return CustomDataResult::Invalid;
+    *out_type = {};
+    *out_data = {};
+    const DecodedField* type = nullptr;
+    const DecodedField* data = nullptr;
+    for (const auto& field : payload.fields)
+    {
+        if (field.key == kFieldCustomType)
+        {
+            if (type) return CustomDataResult::Invalid;
+            type = &field;
+        }
+        if (field.key == kFieldCustomData)
+        {
+            if (data) return CustomDataResult::Invalid;
+            data = &field;
+        }
+    }
+    if (!type && !data) return CustomDataResult::NotCustom;
+    if (!type || !data || type->encoded_value.empty() || data->encoded_value.empty()) return CustomDataResult::Invalid;
+    const uint8_t type_tag = type->encoded_value[0];
+    const uint8_t data_tag = data->encoded_value[0];
+    if (!((type_tag & 0xe0) == 0xa0 || type_tag == 0xd9 || type_tag == 0xda) ||
+        !(data_tag == 0xc4 || data_tag == 0xc5)) return CustomDataResult::Invalid;
+    Cursor tc{type->encoded_value.data(), type->encoded_value.size(), 0};
+    Cursor dc{data->encoded_value.data(), data->encoded_value.size(), 0};
+    ByteSpan tv, dv;
+    if (!readBinarySpan(tc, &tv.data, &tv.size) || tc.pos != tc.len || tv.size == 0 || tv.size > 96 ||
+        !readBinarySpan(dc, &dv.data, &dv.size) || dc.pos != dc.len || dv.size > 8192) return CustomDataResult::Invalid;
+    *out_type = tv;
+    *out_data = dv;
+    return CustomDataResult::Valid;
 }
 
 const DecodedField* findField(const DecodedTextPayload& payload, uint32_t key)

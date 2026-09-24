@@ -18,8 +18,10 @@
 #if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || \
     defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
 #define TRAIL_MATE_ENABLE_CALCULATOR_APP 1
+#define TRAIL_MATE_ENABLE_GEOCACHING_APP 1
 #else
 #define TRAIL_MATE_ENABLE_CALCULATOR_APP 0
+#define TRAIL_MATE_ENABLE_GEOCACHING_APP 0
 #endif
 #if TRAIL_MATE_USE_MONO_SCREEN_240X320
 #include "ui/mono/screens/screen_240x320/screen_app.h"
@@ -45,6 +47,9 @@
 #include "ui/screens/chat/chat_page_shell.h"
 #if TRAIL_MATE_ENABLE_CALCULATOR_APP
 #include "ui/screens/calculator/calculator_page_shell.h"
+#endif
+#if TRAIL_MATE_ENABLE_GEOCACHING_APP
+#include "ui/screens/geocaching/geocaching_page_shell.h"
 #endif
 #include "ui/screens/contacts/contacts_page_shell.h"
 #include "ui/screens/energy_sweep/energy_sweep_page_shell.h"
@@ -84,6 +89,7 @@ extern "C"
 {
     extern const lv_image_dsc_t Chat;
     extern const lv_image_dsc_t calc;
+    extern const lv_image_dsc_t geocaching;
     extern const lv_image_dsc_t gps_icon;
     extern const lv_image_dsc_t Satellite;
     extern const lv_image_dsc_t contact;
@@ -222,6 +228,12 @@ ui::CallbackAppScreen s_tracker_app("tracker", "Tracker", CATALOG_ICON(tracker_i
                                     tracker::ui::shell::enter,
                                     tracker::ui::shell::exit,
                                     &s_menu_host);
+#if TRAIL_MATE_ENABLE_GEOCACHING_APP
+ui::CallbackAppScreen s_geocaching_app("geocaching", "Geocaching", CATALOG_ICON(geocaching),
+                                       ::geocaching::ui::shell::enter,
+                                       ::geocaching::ui::shell::exit,
+                                       &s_menu_host);
+#endif
 #if TRAIL_MATE_ENABLE_CALCULATOR_APP
 ui::CallbackAppScreen s_calculator_app("calculator", "Calculator", CATALOG_ICON(calc),
                                        calculator::ui::shell::enter,
@@ -476,6 +488,9 @@ AppCatalog build(const FeatureFlags& flags)
             add(&s_team_app);
 #endif
         }
+#if TRAIL_MATE_ENABLE_GEOCACHING_APP
+        add(&s_geocaching_app);
+#endif
 #if TRAIL_MATE_ENABLE_CALCULATOR_APP
         add(&s_calculator_app);
 #endif

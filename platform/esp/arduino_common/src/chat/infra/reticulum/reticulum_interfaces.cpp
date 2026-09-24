@@ -1600,8 +1600,8 @@ AutoReticulumInterface::Peer* AutoReticulumInterface::findPeer(
     return nullptr;
 }
 
-ReticulumInterfaceSet::ReticulumInterfaceSet(LoraBoard& board)
-    : lora_(board)
+ReticulumInterfaceSet::ReticulumInterfaceSet(LoraBoard& board, bool owns_integrated_radio)
+    : lora_(board), owns_integrated_radio_(owns_integrated_radio)
 {
 }
 
@@ -1611,6 +1611,16 @@ void ReticulumInterfaceSet::applyConfig(
 {
     config_ = config;
     network_config_ = network_config;
+
+    // Service-local effective policy only: never change persisted user settings.
+    // Reapply on every config refresh so a radio interface in the shared network
+    // configuration cannot seize the active chat protocol's hardware.
+    if (!owns_integrated_radio_)
+    {
+        config_.reticulum_lora_enabled = false;
+        config_.reticulum_wifi_gateway_enabled = true;
+        config_.reticulum_interface_policy = ReticulumInterfacePolicy::WifiGatewayOnly;
+    }
 
     bool lora_configured = false;
     const reticulum::NetworkInterfaceConfig* auto_config = nullptr;
@@ -1633,7 +1643,7 @@ void ReticulumInterfaceSet::applyConfig(
         switch (interface_config.type)
         {
         case reticulum::NetworkInterfaceType::IntegratedLoRa:
-            lora_configured = true;
+            lora_configured = owns_integrated_radio_;
             break;
         case reticulum::NetworkInterfaceType::Auto:
             if (!auto_config)
@@ -1987,6 +1997,10 @@ float ReticulumInterfaceSet::lastRxSnr() const
 
 bool ReticulumInterfaceSet::loraAllowed() const
 {
+    if (!owns_integrated_radio_)
+    {
+        return false;
+    }
     if (::platform::ui::reticulum_call::resource_preempt_active())
     {
         return false;
@@ -2060,6 +2074,11 @@ bool ReticulumInterfaceSet::hasConfiguredIpInterface() const
 
 void ReticulumInterfaceSet::syncSharedLoRaRxGate()
 {
+    // Background IP services must not suppress Meshtastic/MeshCore reception.
+    if (!owns_integrated_radio_)
+    {
+        return;
+    }
     const bool suppress = !loraSelectedForRuntime();
 #if defined(ARDUINO)
     if (shared_lora_rx_suppressed_ == suppress &&

@@ -8,6 +8,7 @@
 #include "platform/esp/arduino_common/chat/infra/meshcore/meshcore_adapter.h"
 #include "platform/esp/arduino_common/chat/infra/meshtastic/mt_adapter.h"
 #include "platform/esp/arduino_common/chat/infra/reticulum/reticulum_adapter.h"
+#include "platform/ui/reticulum_call_runtime.h"
 
 namespace chat
 {
@@ -47,13 +48,135 @@ MeshAdapterRouter::~MeshAdapterRouter()
 bool MeshAdapterRouter::installBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend)
 {
     LockGuard lock(mutex_);
-    return lock.locked() && core_.installBackend(protocol, std::move(backend));
+    if (!lock.locked()) return false;
+    applyGeocachingHandlers(protocol, backend.get());
+    return core_.installBackend(protocol, std::move(backend));
 }
 
 bool MeshAdapterRouter::hasBackend() const
 {
     LockGuard lock(mutex_);
     return lock.locked() && core_.hasBackend();
+}
+
+bool MeshAdapterRouter::installServiceBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend)
+{
+    LockGuard lock(mutex_);
+    if (!lock.locked()) return false;
+    applyGeocachingHandlers(protocol, backend.get());
+    return core_.installServiceBackend(protocol, std::move(backend));
+}
+
+void MeshAdapterRouter::applyGeocachingHandlers(MeshProtocol protocol, IMeshAdapter* backend)
+{
+    if (!backend || (protocol != MeshProtocol::Reticulum && protocol != MeshProtocol::RNode)) return;
+    auto* service = backend->geocachingTransport();
+    if (!service) return;
+    service->setGeocachingAnnouncementHandler(geocaching_announcement_, geocaching_context_);
+    service->setGeocachingDeliveryHandler(geocaching_delivery_, geocaching_context_);
+}
+
+bool MeshAdapterRouter::bindGeocachingHandlers(
+    void (*announcement)(const lxmf::GeocachingAnnouncementView&, void*),
+    bool (*delivery)(const lxmf::CustomDeliveryView&, void*), void* context)
+{
+    LockGuard lock(mutex_);
+    if (!lock.locked()) return false;
+    geocaching_announcement_ = announcement;
+    geocaching_delivery_ = delivery;
+    geocaching_context_ = context;
+    applyGeocachingHandlers(MeshProtocol::Reticulum, core_.backendForProtocol(MeshProtocol::Reticulum));
+    return true;
+}
+
+bool MeshAdapterRouter::processServiceQueue(MeshProtocol protocol)
+{
+    LockGuard lock(mutex_, 0);
+    return lock.locked() && core_.processServiceQueue(protocol);
+}
+
+std::unique_ptr<IMeshAdapter> MeshAdapterRouter::takeServiceBackend(MeshProtocol protocol, const IMeshAdapter* expected)
+{
+    LockGuard lock(mutex_, 0);
+    return lock.locked() ? core_.takeServiceBackend(protocol, expected) : nullptr;
+}
+
+std::unique_ptr<IMeshAdapter> MeshAdapterRouter::takeInactiveReticulumCache()
+{
+    LockGuard lock(mutex_, 0);
+    if (!lock.locked() || core_.isServiceBackend(MeshProtocol::Reticulum)) return {};
+    return core_.takeInactiveBackend(MeshProtocol::Reticulum);
+}
+
+MeshSendResult MeshAdapterRouter::sendGeocachingData(const uint8_t destination_hash[16],
+                                                     lxmf::ByteSpan data, bool response, std::array<uint8_t, 32>* accepted_lxmf_hash,
+                                                     const uint8_t expected_source[16])
+{
+    if (accepted_lxmf_hash) accepted_lxmf_hash->fill(0);
+    LockGuard lock(mutex_, 0);
+    if (!lock.locked()) return MeshSendResult::fail(MeshOperationFailure::Busy);
+    auto* service = geocachingTransportLocked();
+    if (!service) return MeshSendResult::fail(MeshOperationFailure::NotReady);
+    if (expected_source)
+    {
+        uint8_t current[16]{};
+        if (!geocachingDestinationLocked(current) || std::memcmp(current, expected_source, 16))
+            return MeshSendResult::fail(MeshOperationFailure::LocalIdentityMissing);
+    }
+    return service->sendGeocachingData(destination_hash, data, response, accepted_lxmf_hash);
+}
+
+bool MeshAdapterRouter::geocachingDestinationLocked(uint8_t out[16])
+{
+    auto* service = geocachingTransportLocked();
+    uint8_t public_key[64]{}, identity[16]{}, name[reticulum::kNameHashSize]{};
+    if (!service || !service->getGeocachingAuthorKey(public_key)) return false;
+    reticulum::computeIdentityHash(public_key, identity);
+    reticulum::computeNameHash("lxmf", "delivery", name);
+    reticulum::computeDestinationHash(name, identity, out);
+    return true;
+}
+
+bool MeshAdapterRouter::getGeocachingDispatchDestination(uint8_t out[16])
+{
+    if (!out) return false;
+    std::memset(out, 0, 16);
+    LockGuard lock(mutex_, 0);
+    if (!lock.locked() || !geocachingTransportLocked()) return false;
+    auto* backend = core_.backendForProtocol(MeshProtocol::Reticulum);
+    return backend && backend->isReady() && geocachingDestinationLocked(out);
+}
+
+IGeocachingTransport* MeshAdapterRouter::geocachingTransportLocked()
+{
+    const auto active = core_.backendProtocol();
+    if (active != MeshProtocol::Reticulum && active != MeshProtocol::RNode &&
+        !core_.isServiceBackend(MeshProtocol::Reticulum))
+    {
+        return nullptr;
+    }
+    auto* backend = core_.backendForProtocol(MeshProtocol::Reticulum);
+    return backend ? backend->geocachingTransport() : nullptr;
+}
+
+bool MeshAdapterRouter::getGeocachingAuthorKey(uint8_t out[64])
+{
+    if (!out) return false;
+    std::memset(out, 0, 64);
+    LockGuard lock(mutex_, 0);
+    if (!lock.locked()) return false;
+    auto* service = geocachingTransportLocked();
+    return service && service->getGeocachingAuthorKey(out);
+}
+
+bool MeshAdapterRouter::signGeocachingRecord(lxmf::ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
+                                             uint8_t* output, size_t output_capacity, size_t& written)
+{
+    written = 0;
+    LockGuard lock(mutex_, 0);
+    if (!lock.locked()) return false;
+    auto* service = geocachingTransportLocked();
+    return service && service->signGeocachingRecord(record, workspace, workspace_capacity, output, output_capacity, written);
 }
 
 MeshProtocol MeshAdapterRouter::backendProtocol() const
@@ -394,6 +517,12 @@ void MeshAdapterRouter::processSendQueue()
     if (lock.locked())
     {
         core_.processSendQueue();
+        if (!::platform::ui::reticulum_call::realtime_mode_active())
+        {
+            // Only an explicitly installed service is eligible. The core also
+            // skips the active Reticulum/RNode slot to prevent double polling.
+            core_.processServiceQueue(MeshProtocol::Reticulum);
+        }
     }
 }
 

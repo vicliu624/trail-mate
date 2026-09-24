@@ -7,6 +7,8 @@
 
 #include "chat/domain/chat_types.h"
 #include "chat/infra/mesh_adapter_router_core.h"
+#include "chat/infra/lxmf/lxmf_wire.h"
+#include <array>
 #include "chat/ports/i_incoming_delivery_commit_port.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "freertos/FreeRTOS.h"
@@ -14,6 +16,11 @@
 
 namespace chat
 {
+namespace lxmf
+{
+struct GeocachingAnnouncementView;
+struct CustomDeliveryView;
+}
 
 class MeshAdapterRouter : public IMeshAdapter,
                           public IIncomingDeliveryCommitPort
@@ -23,6 +30,28 @@ class MeshAdapterRouter : public IMeshAdapter,
     ~MeshAdapterRouter() override;
 
     bool installBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend) override;
+    bool installServiceBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend);
+    std::unique_ptr<IMeshAdapter> takeServiceBackend(MeshProtocol protocol, const IMeshAdapter* expected = nullptr);
+    // Retire a cached former chat instance, never an active/shared service.
+    std::unique_ptr<IMeshAdapter> takeInactiveReticulumCache();
+    bool processServiceQueue(MeshProtocol protocol);
+    // Worker-thread call. Resolves the current instance while holding the
+    // router lock; callers must not retain a backend pointer across switches.
+    MeshSendResult sendGeocachingData(const uint8_t destination_hash[16],
+                                      lxmf::ByteSpan data, bool response = false,
+                                      std::array<uint8_t, 32>* accepted_lxmf_hash = nullptr,
+                                      const uint8_t expected_source[16] = nullptr);
+    bool getGeocachingDispatchDestination(uint8_t out[16]);
+    bool getGeocachingAuthorKey(uint8_t out[64]);
+    // The storage owner must reserve the author revision before publication.
+    bool signGeocachingRecord(lxmf::ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
+                              uint8_t* output, size_t output_capacity, size_t& written);
+    // Callbacks run under the router lock: enqueue/copy bounded work, never
+    // reenter the router. Delivery true means durable acceptance, not queued
+    // volatile work. Unbind before destroying the context object.
+    bool bindGeocachingHandlers(void (*announcement)(const lxmf::GeocachingAnnouncementView&, void*),
+                                bool (*delivery)(const lxmf::CustomDeliveryView&, void*),
+                                void* context);
     bool hasBackend() const override;
     MeshProtocol backendProtocol() const override;
     IMeshAdapter* backendForProtocol(MeshProtocol protocol) override;
@@ -99,6 +128,12 @@ class MeshAdapterRouter : public IMeshAdapter,
 
     mutable SemaphoreHandle_t mutex_ = nullptr;
     chat::MeshAdapterRouterCore core_;
+    IGeocachingTransport* geocachingTransportLocked();
+    bool geocachingDestinationLocked(uint8_t out[16]);
+    void applyGeocachingHandlers(MeshProtocol protocol, IMeshAdapter* backend);
+    void (*geocaching_announcement_)(const lxmf::GeocachingAnnouncementView&, void*) = nullptr;
+    bool (*geocaching_delivery_)(const lxmf::CustomDeliveryView&, void*) = nullptr;
+    void* geocaching_context_ = nullptr;
 };
 
 } // namespace chat

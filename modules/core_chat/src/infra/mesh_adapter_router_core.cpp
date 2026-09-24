@@ -5,6 +5,22 @@ namespace chat
 namespace
 {
 
+uint8_t serviceBit(MeshProtocol protocol)
+{
+    switch (protocol)
+    {
+    case MeshProtocol::Meshtastic:
+        return 1;
+    case MeshProtocol::MeshCore:
+        return 2;
+    case MeshProtocol::RNode:
+    case MeshProtocol::Reticulum:
+        return 4;
+    default:
+        return 0;
+    }
+}
+
 std::unique_ptr<IMeshAdapter>& backendSlot(MeshProtocol protocol,
                                            std::unique_ptr<IMeshAdapter>& meshtastic_backend,
                                            std::unique_ptr<IMeshAdapter>& meshcore_backend,
@@ -51,6 +67,7 @@ bool MeshAdapterRouterCore::installBackend(MeshProtocol protocol, std::unique_pt
     }
 
     backendSlot(protocol, meshtastic_backend_, meshcore_backend_, reticulum_backend_) = std::move(backend);
+    service_backend_mask_ &= static_cast<uint8_t>(~serviceBit(protocol));
     active_protocol_ = protocol;
     return true;
 }
@@ -60,9 +77,43 @@ void MeshAdapterRouterCore::setActiveProtocol(MeshProtocol protocol)
     active_protocol_ = protocol;
 }
 
+bool MeshAdapterRouterCore::installServiceBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend)
+{
+    if (!backend || (protocol != MeshProtocol::Meshtastic && protocol != MeshProtocol::MeshCore &&
+                     protocol != MeshProtocol::Reticulum && protocol != MeshProtocol::RNode))
+    {
+        return false;
+    }
+    auto& slot = backendSlot(protocol, meshtastic_backend_, meshcore_backend_, reticulum_backend_);
+    if (slot)
+    {
+        return false;
+    }
+    slot = std::move(backend);
+    service_backend_mask_ |= serviceBit(protocol);
+    return true;
+}
+
 bool MeshAdapterRouterCore::hasBackend() const
 {
     return activeBackend() != nullptr;
+}
+
+std::unique_ptr<IMeshAdapter> MeshAdapterRouterCore::takeServiceBackend(MeshProtocol protocol, const IMeshAdapter* expected)
+{
+    const auto bit = serviceBit(protocol);
+    if (!bit || !(service_backend_mask_ & bit)) return {};
+    return takeInactiveBackend(protocol, expected);
+}
+
+std::unique_ptr<IMeshAdapter> MeshAdapterRouterCore::takeInactiveBackend(MeshProtocol protocol, const IMeshAdapter* expected)
+{
+    const auto bit = serviceBit(protocol);
+    if (!bit || serviceBit(active_protocol_) == bit) return {};
+    auto& slot = backendSlot(protocol, meshtastic_backend_, meshcore_backend_, reticulum_backend_);
+    if (expected && slot.get() != expected) return {};
+    service_backend_mask_ &= static_cast<uint8_t>(~bit);
+    return std::move(slot);
 }
 
 MeshProtocol MeshAdapterRouterCore::backendProtocol() const
@@ -351,6 +402,32 @@ void MeshAdapterRouterCore::processSendQueue()
 IMeshAdapter* MeshAdapterRouterCore::activeBackend()
 {
     return backendForProtocol(active_protocol_);
+}
+
+bool MeshAdapterRouterCore::processServiceQueue(MeshProtocol protocol)
+{
+    if ((service_backend_mask_ & serviceBit(protocol)) == 0)
+    {
+        return false;
+    }
+    if (protocol != MeshProtocol::Meshtastic && protocol != MeshProtocol::MeshCore &&
+        protocol != MeshProtocol::Reticulum && protocol != MeshProtocol::RNode)
+    {
+        return false;
+    }
+    IMeshAdapter* service = backendForProtocol(protocol);
+    if (!service || service == activeBackend())
+    {
+        return false;
+    }
+    // A not-yet-ready service still needs polling to establish its IP path.
+    service->processSendQueue();
+    return true;
+}
+
+bool MeshAdapterRouterCore::isServiceBackend(MeshProtocol protocol) const
+{
+    return (service_backend_mask_ & serviceBit(protocol)) != 0 && backendForProtocol(protocol) != nullptr;
 }
 
 const IMeshAdapter* MeshAdapterRouterCore::activeBackend() const

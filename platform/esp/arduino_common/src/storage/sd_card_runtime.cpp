@@ -1788,15 +1788,21 @@ bool SdRuntimeDir::is_open() const
 
 bool SdRuntimeDir::read_next(char* name, std::size_t name_size, bool* is_dir)
 {
-    if (!is_open() || name == nullptr || name_size == 0)
+    return read_next_status(name, name_size, is_dir) == SdDirReadStatus::Entry;
+}
+
+SdDirReadStatus SdRuntimeDir::read_next_status(char* name, std::size_t name_size, bool* is_dir)
+{
+    if (name == nullptr || name_size == 0)
     {
-        return false;
+        return SdDirReadStatus::Invalid;
     }
     name[0] = '\0';
     if (is_dir != nullptr)
     {
         *is_dir = false;
     }
+    if (!is_open()) return SdDirReadStatus::Unavailable;
 
     if (impl_->backend == SdCardBackend::SdFat)
     {
@@ -1805,7 +1811,7 @@ bool SdRuntimeDir::read_next(char* name, std::size_t name_size, bool* is_dir)
         if (!guard.locked())
         {
             sd_io_end("dir_read", impl_->path, start_ms, false, 0, -2);
-            return false;
+            return SdDirReadStatus::Busy;
         }
         if (impl_->entry_scratch)
         {
@@ -1815,8 +1821,9 @@ bool SdRuntimeDir::read_next(char* name, std::size_t name_size, bool* is_dir)
         FsFile& entry = impl_->entry_scratch;
         if (!entry)
         {
-            sd_io_end("dir_read", impl_->path, start_ms, true, 0, 0);
-            return false;
+            const bool failed = impl_->sdfat_dir.getError() != 0;
+            sd_io_end("dir_read", impl_->path, start_ms, !failed, 0, failed ? -1 : 0);
+            return failed ? SdDirReadStatus::IoError : SdDirReadStatus::End;
         }
         entry.getName(name, name_size);
         if (is_dir != nullptr)
@@ -1825,10 +1832,10 @@ bool SdRuntimeDir::read_next(char* name, std::size_t name_size, bool* is_dir)
         }
         entry.close();
         sd_io_end("dir_read", impl_->path, start_ms, true, 0, name[0] != '\0' ? 1 : 0);
-        return name[0] != '\0';
+        return name[0] != '\0' ? SdDirReadStatus::Entry : SdDirReadStatus::IoError;
     }
 
-    return false;
+    return SdDirReadStatus::Unavailable;
 }
 
 bool sd_read_raw(uint32_t lba, uint8_t* buffer)

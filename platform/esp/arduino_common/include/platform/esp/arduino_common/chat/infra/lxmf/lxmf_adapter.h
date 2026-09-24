@@ -9,6 +9,7 @@
 #include "chat/infra/lxmf/lxmf_wire.h"
 #include "chat/infra/mesh_incoming_queue.h"
 #include "chat/ports/i_mesh_adapter.h"
+#include "chat/ports/i_geocaching_transport.h"
 #include "chat/ports/i_mesh_peer_directory.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter_scratch.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_announce_ingestor.h"
@@ -45,13 +46,30 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
 {
   public:
     explicit LxmfAdapter(LoraBoard& board,
-                         IMeshPeerDirectory* peer_directory = nullptr);
+                         IMeshPeerDirectory* peer_directory = nullptr,
+                         bool owns_integrated_radio = true);
 
     static void* operator new(std::size_t size);
     static void operator delete(void* ptr) noexcept;
     static void operator delete(void* ptr, std::size_t size) noexcept;
 
     MeshCapabilities getCapabilities() const override;
+    bool getGeocachingAuthorKey(uint8_t out[64]) const;
+    bool signGeocachingRecord(ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
+                              uint8_t* output, size_t output_capacity, size_t& written);
+    void setGeocachingAnnouncementHandler(GeocachingAnnouncementHandler handler, void* context)
+    {
+        geocaching_announcement_handler_ = handler;
+        geocaching_announcement_context_ = context;
+    }
+    void setGeocachingDeliveryHandler(CustomDeliveryHandler handler, void* context)
+    {
+        geocaching_handler_ = handler;
+        geocaching_handler_context_ = context;
+    }
+    MeshSendResult sendCustomDataToDestination(const uint8_t destination_hash[16],
+                                               const char* custom_type, ByteSpan data,
+                                               bool response, std::array<uint8_t, 32>* accepted_lxmf_hash = nullptr);
     bool sendText(ChannelId channel, const std::string& text,
                   MessageId* out_msg_id, NodeId peer = 0) override;
     MeshSendResult sendTextDetailed(ChannelId channel, const std::string& text,
@@ -105,6 +123,10 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
     void processSendQueue() override;
 
   private:
+    CustomDeliveryHandler geocaching_handler_ = nullptr;
+    GeocachingAnnouncementHandler geocaching_announcement_handler_ = nullptr;
+    void* geocaching_announcement_context_ = nullptr;
+    void* geocaching_handler_context_ = nullptr;
     using PeerInfo = runtime::PeerInfo;
     using PathEntry = runtime::PathEntry;
     using PacketFilterEntry = runtime::PacketFilterEntry;
@@ -177,6 +199,7 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
     runtime::PropagationClient propagation_client_;
     runtime::LxstTelephonyClient lxst_telephony_client_;
     runtime::PeerDirectoryService peer_directory_service_;
+    const bool geocaching_only_;
     runtime::LxmfDeliveryNotifier delivery_notifier_;
     std::string user_long_name_;
     std::string user_short_name_;
@@ -336,7 +359,8 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
                                bool update_favorite,
                                bool favorite) const;
     PeerInfo* rememberPeerIdentity(const uint8_t combined_pub[reticulum::kCombinedPublicKeySize],
-                                   const char* display_name = nullptr);
+                                   const char* display_name = nullptr,
+                                   bool publish_contact = true);
     void pumpPendingPeerUpdates();
     void publishPeerUpdate(const PeerInfo& peer) override;
     void loadPersistedPeers();

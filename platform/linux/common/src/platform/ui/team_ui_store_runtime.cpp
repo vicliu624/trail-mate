@@ -1,4 +1,6 @@
 #include "platform/ui/team_ui_store_runtime.h"
+#include "gps/gpx/track_writer.h"
+#include "gps/gpx/ostream_sink.h"
 
 #include "platform/linux/runtime_paths.h"
 #include <algorithm>
@@ -452,21 +454,9 @@ bool team_ui_append_member_track(const TeamId& team_id,
         const double lon = static_cast<double>(pt.lon_e7) / 1e7;
         const uint32_t ts = track.start_ts + static_cast<uint32_t>(track.interval_s) * static_cast<uint32_t>(i);
 
-        char line[128] = {0};
-        std::snprintf(line, sizeof(line), "<trkpt lat=\"%.7f\" lon=\"%.7f\">\n", lat, lon);
-        stream << line;
-        stream << "  <ele>0.0</ele>\n";
-        if (ts >= kMinValidEpoch)
-        {
-            stream << "  <time>" << iso_time(static_cast<std::time_t>(ts)) << "</time>\n";
-        }
-        stream << "  <extensions>\n";
-        stream << "    <speed>0.00</speed>\n";
-        stream << "    <course>0.0</course>\n";
-        stream << "    <hdop>0.0</hdop>\n";
-        stream << "    <sat>0</sat>\n";
-        stream << "  </extensions>\n";
-        stream << "</trkpt>\n";
+        const std::string time_str = ts >= kMinValidEpoch ? iso_time(static_cast<std::time_t>(ts)) : "";
+        ::gps::gpx::OstreamSink output(stream);
+        if (!::gps::gpx::writeTrackPoint(output, lat, lon, time_str, 0, 7)) return false;
     }
     stream.flush();
     return stream.good();

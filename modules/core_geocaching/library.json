@@ -1,0 +1,9 @@
+{
+  "name": "core_geocaching",
+  "version": "0.1.0",
+  "dependencies": [{"name": "core_gps"}, {"name": "core_sys"}],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

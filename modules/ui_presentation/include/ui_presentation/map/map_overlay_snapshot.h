@@ -20,6 +20,7 @@ enum class MapOverlayKind : uint8_t
     MeasurementPoint,
     SelectedTarget,
     Warning,
+    Geocache,
 };
 
 enum class MapOverlayStyle : uint8_t

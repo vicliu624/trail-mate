@@ -1,3 +1,5 @@
+#include "gps/gpx/track_writer.h"
+#include "platform/esp/arduino_common/gps/sd_gpx_output.h"
 /**
  * @file team_ui_store.cpp
  * @brief ESP/SD-backed Team UI snapshot store (kept outside ui_shared)
@@ -1617,20 +1619,9 @@ bool team_ui_append_member_track(const TeamId& team_id,
         const double lat = static_cast<double>(pt.lat_e7) / 1e7;
         const double lon = static_cast<double>(pt.lon_e7) / 1e7;
         const uint32_t ts = track.start_ts + static_cast<uint32_t>(track.interval_s) * static_cast<uint32_t>(i);
-        f.printf("<trkpt lat=\"%.7f\" lon=\"%.7f\">\n", lat, lon);
-        f.printf("  <ele>%.1f</ele>\n", 0.0);
-        if (ts >= kMinValidEpoch)
-        {
-            const std::string time_str = iso_time(static_cast<time_t>(ts));
-            f.printf("  <time>%s</time>\n", time_str.c_str());
-        }
-        f.print("  <extensions>\n");
-        f.printf("    <speed>%.2f</speed>\n", 0.0);
-        f.printf("    <course>%.1f</course>\n", 0.0);
-        f.printf("    <hdop>%.1f</hdop>\n", 0.0);
-        f.printf("    <sat>%u</sat>\n", 0u);
-        f.print("  </extensions>\n");
-        f.print("</trkpt>\n");
+        const std::string time_str = ts >= kMinValidEpoch ? iso_time(static_cast<time_t>(ts)) : "";
+        ::platform::esp::arduino_common::gps::SdGpxOutput output(f);
+        if (!::gps::gpx::writeTrackPoint(output, lat, lon, time_str, 0, 7)) return false;
     }
     f.flush();
     f.close();

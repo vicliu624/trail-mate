@@ -1,4 +1,7 @@
 #include "platform/ui/tracker_runtime.h"
+#include "gps/gpx/track_writer.h"
+#include "gps/gpx/ostream_sink.h"
+#include <ctime>
 
 #include <algorithm>
 #include <chrono>
@@ -116,31 +119,24 @@ void append_gpx_point(std::ofstream& stream,
                       const platform::ui::gps::GpsState& state,
                       uint32_t epoch_s)
 {
-    stream << "<trkpt lat=\""
-           << std::fixed << std::setprecision(7) << state.lat
-           << "\" lon=\""
-           << std::fixed << std::setprecision(7) << state.lng
-           << "\">";
-    if (state.has_alt)
+    char iso[32]{};
+    const std::time_t seconds = static_cast<std::time_t>(epoch_s);
+    if (epoch_s != 0)
     {
-        stream << "<ele>"
-               << std::fixed << std::setprecision(1) << state.alt_m
-               << "</ele>";
+        const std::tm* utc = std::gmtime(&seconds);
+        if (utc) std::strftime(iso, sizeof(iso), "%Y-%m-%dT%H:%M:%SZ", utc);
     }
-    stream << "<time>" << epoch_s << "</time>";
-    if (state.has_speed)
-    {
-        stream << "<speed>"
-               << std::fixed << std::setprecision(2) << state.speed_mps
-               << "</speed>";
-    }
-    if (state.has_course)
-    {
-        stream << "<course>"
-               << std::fixed << std::setprecision(1) << state.course_deg
-               << "</course>";
-    }
-    stream << "</trkpt>\n";
+    ::gps::gpx::TrackPointOptions options;
+    options.has_elevation = state.has_alt;
+    options.elevation = state.alt_m;
+    options.legacy_extensions = false;
+    options.has_speed = state.has_speed;
+    options.speed_mps = state.speed_mps;
+    options.has_course = state.has_course;
+    options.course_deg = state.course_deg;
+    ::gps::gpx::OstreamSink output(stream);
+    if (!::gps::gpx::writeTrackPoint(output, state.lat, state.lng, iso, state.satellites, 7, options))
+        stream.setstate(std::ios::badbit);
 }
 
 void append_binary_point(std::ofstream& stream,

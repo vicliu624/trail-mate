@@ -19,6 +19,7 @@
 #include "platform/esp/arduino_common/gps/track_recorder.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
 #include "platform/esp/arduino_common/storage/storage_runtime.h"
+#include "platform/esp/arduino_common/geocaching/browse_runtime.h"
 #include "platform/esp/arduino_common/team/crypto/team_crypto.h"
 #include "platform/esp/arduino_common/team/event/team_app_data_event_bus_bridge.h"
 #include "platform/esp/arduino_common/team/event/team_event_bus_sink.h"
@@ -277,6 +278,7 @@ app::ChatServicesBundle create_chat_services(const app::AppConfig& config,
         }
     }
 
+
     bundle.service = std::unique_ptr<chat::ChatService>(
         new chat::ChatService(*bundle.model, *bundle.mesh_runtime, *bundle.store, config.mesh_protocol));
     if (!bundle.service)
@@ -295,6 +297,9 @@ app::ChatServicesBundle create_chat_services(const app::AppConfig& config,
     {
         bundle.start_deferred_storage = start_deferred_storage;
     }
+    if (lora_board)
+        ::platform::esp::arduino_common::geocaching::browse_runtime::configure(
+            *static_cast<chat::MeshAdapterRouter*>(bundle.mesh_runtime.get()), *lora_board);
     return bundle;
 }
 

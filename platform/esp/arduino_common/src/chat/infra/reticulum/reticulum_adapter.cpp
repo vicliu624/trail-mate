@@ -99,9 +99,15 @@ bool cancelIncomingResource(
 } // namespace
 
 ReticulumAdapter::ReticulumAdapter(LoraBoard& board,
-                                   IMeshPeerDirectory* peer_directory)
-    : service_(new lxmf::LxmfAdapter(board, peer_directory))
+                                   IMeshPeerDirectory* peer_directory,
+                                   ReticulumUsage usage)
+    : service_(new lxmf::LxmfAdapter(board, peer_directory, usage == ReticulumUsage::ActiveChat)),
+      usage_(usage)
 {
+    if (usage_ != ReticulumUsage::ActiveChat)
+    {
+        return;
+    }
     rtpage::bind_request_start_handler(startNomadPageRequest, service_.get());
     rtpage::bind_request_cancel_handler(cancelNomadPageRequest, service_.get());
     ::platform::ui::reticulum_receive::bind_cancel_handler(
@@ -110,6 +116,10 @@ ReticulumAdapter::ReticulumAdapter(LoraBoard& board,
 
 ReticulumAdapter::~ReticulumAdapter()
 {
+    if (usage_ != ReticulumUsage::ActiveChat)
+    {
+        return;
+    }
     rtpage::bind_request_start_handler(nullptr, nullptr);
     rtpage::bind_request_cancel_handler(nullptr, nullptr);
     ::platform::ui::reticulum_receive::bind_cancel_handler(nullptr, nullptr);
@@ -118,6 +128,35 @@ ReticulumAdapter::~ReticulumAdapter()
 MeshCapabilities ReticulumAdapter::getCapabilities() const
 {
     return service_->getCapabilities();
+}
+
+void ReticulumAdapter::setGeocachingAnnouncementHandler(
+    void (*handler)(const lxmf::GeocachingAnnouncementView&, void*), void* context)
+{
+    service_->setGeocachingAnnouncementHandler(handler, context);
+}
+
+bool ReticulumAdapter::getGeocachingAuthorKey(uint8_t out[64])
+{
+    return service_->getGeocachingAuthorKey(out);
+}
+
+bool ReticulumAdapter::signGeocachingRecord(lxmf::ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
+                                            uint8_t* output, size_t output_capacity, size_t& written)
+{
+    return service_->signGeocachingRecord(record, workspace, workspace_capacity, output, output_capacity, written);
+}
+
+MeshSendResult ReticulumAdapter::sendGeocachingData(const uint8_t destination_hash[16],
+                                                    lxmf::ByteSpan data, bool response, std::array<uint8_t, 32>* accepted_lxmf_hash)
+{
+    return service_->sendCustomDataToDestination(destination_hash, "trailmate.geocache", data, response, accepted_lxmf_hash);
+}
+
+void ReticulumAdapter::setGeocachingDeliveryHandler(
+    bool (*handler)(const lxmf::CustomDeliveryView&, void*), void* context)
+{
+    service_->setGeocachingDeliveryHandler(handler, context);
 }
 
 bool ReticulumAdapter::sendText(ChannelId channel, const std::string& text,

@@ -1,5 +1,7 @@
 #include "platform/esp/arduino_common/gps/track_recorder.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
+#include "platform/esp/arduino_common/gps/sd_gpx_output.h"
+#include "gps/gpx/track_writer.h"
 
 #include <cmath>
 #include <esp_heap_caps.h>
@@ -107,16 +109,8 @@ void write_track_point(SdRuntimeFile& f, TrackFormat format, const TrackPoint& p
     else
     {
         const String time_str = track_iso_time(pt.timestamp);
-        f.printf("<trkpt lat=\"%.6f\" lon=\"%.6f\">\n", pt.lat, pt.lon);
-        f.printf("  <ele>%.1f</ele>\n", 0.0);
-        f.printf("  <time>%s</time>\n", time_str.c_str());
-        f.print("  <extensions>\n");
-        f.printf("    <speed>%.2f</speed>\n", 0.0);
-        f.printf("    <course>%.1f</course>\n", 0.0);
-        f.printf("    <hdop>%.1f</hdop>\n", 0.0);
-        f.printf("    <sat>%u</sat>\n", (unsigned)pt.satellites);
-        f.print("  </extensions>\n");
-        f.print("</trkpt>\n");
+        ::platform::esp::arduino_common::gps::SdGpxOutput output(f);
+        (void)::gps::gpx::writeTrackPoint(output, pt.lat, pt.lon, time_str.c_str(), pt.satellites);
     }
 }
 

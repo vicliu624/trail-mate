@@ -1,4 +1,5 @@
 #include "platform/esp/arduino_common/storage/storage_runtime.h"
+#include "platform/esp/arduino_common/geocaching/browse_runtime.h"
 
 #include "platform/esp/arduino_common/chat/infra/store/sd_protocol_peer_repository.h"
 #include "platform/esp/arduino_common/chat/infra/store/sd_store.h"
@@ -71,6 +72,19 @@ class SdMaintenanceAdapter final : public Adapter
     Result begin(Operation operation, OperationGeneration generation) override
     {
         next_step_ = Step::None;
+        if (operation == Operation::Persist && geocaching::browse_runtime::workPending())
+        {
+            const bool other_pending = (context_.chat_store && context_.chat_store->persistencePending()) ||
+                                       (context_.peer_directory && context_.peer_directory->persistencePending());
+            if (geocaching_turn_ || !other_pending)
+            {
+                geocaching_turn_ = false;
+                geocaching_steps_ = 8;
+                next_step_ = Step::Geocaching;
+                return Result::inProgressResult(operation, generation);
+            }
+        }
+        geocaching_turn_ = true;
         if (operation == Operation::Hydrate)
         {
             const Result chat_result = hydrateChat(generation);
@@ -144,6 +158,21 @@ class SdMaintenanceAdapter final : public Adapter
                     budget) override
     {
         const Step step = next_step_;
+        if (step == Step::Geocaching)
+        {
+            if (budget.max_work_items == 0) return Result::inProgressResult(operation, generation);
+            if (geocaching::browse_runtime::workPending()) geocaching::browse_runtime::step();
+            // Recheck demand after every slice: messages or contacts may have
+            // become dirty after this Geocaching batch was admitted. Return to
+            // the shared owner instead of consuming the remaining batch first.
+            const bool other_pending = (context_.chat_store && context_.chat_store->persistencePending()) ||
+                                       (context_.peer_directory && context_.peer_directory->persistencePending());
+            if (geocaching_steps_) --geocaching_steps_;
+            if (!other_pending && geocaching_steps_ && geocaching::browse_runtime::workPending())
+                return Result::inProgressResult(operation, generation);
+            next_step_ = Step::None;
+            return Result::completedResult(operation, generation);
+        }
         if (step == Step::Chat)
         {
             if (!context_.chat_store)
@@ -248,6 +277,7 @@ class SdMaintenanceAdapter final : public Adapter
         HydratePeer,
         PersistPeer,
         CompactPeer,
+        Geocaching,
     };
 
     Result hydrateChat(OperationGeneration generation)
@@ -288,6 +318,8 @@ class SdMaintenanceAdapter final : public Adapter
 
     WorkerContext& context_;
     Step next_step_ = Step::None;
+    bool geocaching_turn_ = true;
+    uint8_t geocaching_steps_ = 0;
 };
 
 SdMaintenanceAdapter s_adapter(s_context);
@@ -407,6 +439,7 @@ void tick_deferred_storage()
 
     Demand demand{};
     demand.persistence_pending =
+        geocaching::browse_runtime::workPending() ||
         (s_context.chat_store &&
          s_context.chat_store->persistencePending()) ||
         (s_context.peer_directory &&

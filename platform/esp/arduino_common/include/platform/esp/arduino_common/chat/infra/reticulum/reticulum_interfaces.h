@@ -258,7 +258,7 @@ class AutoReticulumInterface
 class ReticulumInterfaceSet
 {
   public:
-    explicit ReticulumInterfaceSet(LoraBoard& board);
+    explicit ReticulumInterfaceSet(LoraBoard& board, bool owns_integrated_radio = true);
 
     void applyConfig(const MeshConfig& config,
                      const reticulum::ReticulumNetworkConfig& network_config);
@@ -290,6 +290,7 @@ class ReticulumInterfaceSet
 
   private:
     LoRaReticulumInterface lora_;
+    const bool owns_integrated_radio_;
     AutoReticulumInterface auto_;
     std::array<WifiGatewayReticulumInterface,
                reticulum::kMaxTcpClientInterfaces>

@@ -148,6 +148,8 @@ class SdRuntimeFile
     Impl* impl_;
 };
 
+enum class SdDirReadStatus : uint8_t { Entry, End, Busy, Unavailable, Invalid, IoError };
+
 class SdRuntimeDir
 {
   public:
@@ -161,6 +163,7 @@ class SdRuntimeDir
     void close();
     bool is_open() const;
     bool read_next(char* name, std::size_t name_size, bool* is_dir);
+    SdDirReadStatus read_next_status(char* name, std::size_t name_size, bool* is_dir);
 
   private:
     class Impl;

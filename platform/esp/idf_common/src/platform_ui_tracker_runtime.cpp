@@ -1,4 +1,6 @@
 #include "platform/ui/tracker_runtime.h"
+#include "gps/gpx/track_writer.h"
+#include "platform/esp/arduino_common/gps/sd_gpx_output.h"
 
 #include "esp_timer.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
@@ -266,18 +268,13 @@ void write_point(TrackerRuntimeState& runtime,
     {
         char iso[24] = {};
         format_iso_time(seconds, iso, sizeof(iso));
-        runtime.file.printf("    <trkpt lat=\"%.7f\" lon=\"%.7f\">",
-                            gps.lat,
-                            gps.lng);
-        if (gps.has_alt)
-        {
-            runtime.file.printf("<ele>%.2f</ele>", gps.alt_m);
-        }
-        if (iso[0] != '\0')
-        {
-            runtime.file.printf("<time>%s</time>", iso);
-        }
-        runtime.file.print("</trkpt>\n");
+        ::gps::gpx::TrackPointOptions options;
+        options.has_elevation = gps.has_alt;
+        options.elevation = gps.alt_m;
+        options.elevation_precision = 2;
+        options.legacy_extensions = false;
+        ::platform::esp::arduino_common::gps::SdGpxOutput output(runtime.file);
+        (void)::gps::gpx::writeTrackPoint(output, gps.lat, gps.lng, iso, gps.satellites, 7, options);
         break;
     }
     }

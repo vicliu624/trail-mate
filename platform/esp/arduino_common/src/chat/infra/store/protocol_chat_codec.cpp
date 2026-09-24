@@ -1,4 +1,5 @@
 #include "platform/esp/arduino_common/chat/infra/store/protocol_chat_codec.h"
+#include "sys/crc32.h"
 
 #include <algorithm>
 #include <cstring>
@@ -371,18 +372,7 @@ bool decodeReadPrefix(MeshProtocol protocol,
 
 uint32_t crc32(const void* data, std::size_t len)
 {
-    const auto* bytes = static_cast<const uint8_t*>(data);
-    uint32_t crc = 0xFFFFFFFFU;
-    for (std::size_t index = 0; index < len; ++index)
-    {
-        crc ^= bytes[index];
-        for (uint8_t bit = 0; bit < 8; ++bit)
-        {
-            crc = (crc & 1U) != 0U ? (crc >> 1U) ^ 0xEDB88320U
-                                   : crc >> 1U;
-        }
-    }
-    return ~crc;
+    return ::sys::crc32(data, len);
 }
 
 MeshProtocol canonicalProtocol(MeshProtocol protocol)

@@ -362,6 +362,10 @@ void gesture_surface_event_cb(lv_event_t* e)
                                point);
         }
 
+        else if (code == LV_EVENT_RELEASED)
+        {
+            emit_gesture_event(*impl, GesturePhase::Tapped, point);
+        }
         reset_gesture_state(*impl);
         break;
 

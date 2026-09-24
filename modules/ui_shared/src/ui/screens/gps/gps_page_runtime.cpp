@@ -6,6 +6,7 @@ using Projection = gps::ui::shell::Projection;
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "gps/domain/gps_diagnostics.h"
+#include "gps/gpx/attribute_reader.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/route_storage.h"
@@ -35,6 +36,7 @@ using Projection = gps::ui::shell::Projection;
 #include "ui_presentation/map/map_overlay_snapshot.h"
 #include "ui_presentation/map/map_workspace_model.h"
 
+#include "ui/menu/dashboard/dashboard_style.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -166,6 +168,7 @@ int s_map_pan_y = 0;
 bool s_map_view_initialized = false;
 bool s_map_info_visible = true;
 ::ui::map::MapOverlaySnapshot* s_overlay_snapshot = nullptr;
+const ::gps::ui::runtime::MapTarget* s_map_target = nullptr;
 Projection s_projection = Projection::Map;
 bool s_gps_power_lease_active = false;
 lv_obj_t* s_gps_status_label = nullptr;
@@ -381,7 +384,7 @@ bool has_valid_viewport_center(const ::ui::map::MapViewport& viewport)
 {
     return std::isfinite(viewport.center_lat) &&
            std::isfinite(viewport.center_lon) &&
-           (viewport.center_lat != 0.0 || viewport.center_lon != 0.0);
+           (s_map_target || viewport.center_lat != 0.0 || viewport.center_lon != 0.0);
 }
 
 void sync_workspace_layers_from_renderer()
@@ -1683,6 +1686,29 @@ void sync_map_notice_overlay()
         lv_obj_move_foreground(s_map_notice_panel);
         return;
     }
+    if (s_map_target)
+    {
+        char notice[64]{};
+        double lat = 0.0, lon = 0.0;
+        if (current_fix_lat_lon(lat, lon))
+        {
+            const double target_lat = s_map_target->latitude_e7 / 10000000.0;
+            const double target_lon = s_map_target->longitude_e7 / 10000000.0;
+            const double meters = ::ui::menu::dashboard::haversine_m(lat, lon, target_lat, target_lon);
+            const float bearing = ::ui::menu::dashboard::bearing_between(lat, lon, target_lat, target_lon);
+            char distance[20]{};
+            ::ui::menu::dashboard::format_distance(meters, distance, sizeof(distance));
+            if (meters < 1.0) std::snprintf(notice, sizeof(notice), "Cache: <1 m (straight line)");
+            else std::snprintf(notice, sizeof(notice), "Cache: %s  %s %.0f deg N", distance,
+                               ::ui::menu::dashboard::compass_rose(bearing), static_cast<double>(bearing));
+        }
+        else std::snprintf(notice, sizeof(notice), "Cache: waiting for GPS fix");
+        set_compact_label(s_map_notice_label, notice);
+        lv_obj_set_style_bg_color(s_map_notice_panel, lv_color_hex(0x25170D), 0);
+        lv_obj_clear_flag(s_map_notice_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(s_map_notice_panel);
+        return;
+    }
     lv_obj_set_style_bg_color(s_map_notice_panel, lv_color_hex(0x25170D), 0);
     lv_obj_add_flag(s_map_notice_panel, LV_OBJ_FLAG_HIDDEN);
 }
@@ -1948,19 +1974,7 @@ bool parse_double_token(const std::string& token, double& out)
 
 bool parse_attr_double(const std::string& line, const char* key, double& out)
 {
-    const std::string token = std::string(key) + "=\"";
-    const std::size_t start = line.find(token);
-    if (start == std::string::npos)
-    {
-        return false;
-    }
-    const std::size_t value_start = start + token.size();
-    const std::size_t value_end = line.find('"', value_start);
-    if (value_end == std::string::npos || value_end <= value_start)
-    {
-        return false;
-    }
-    return parse_double_token(line.substr(value_start, value_end - value_start), out);
+    return key && ::gps::gpx::readDoubleAttribute(line, key, out);
 }
 
 bool ascii_equal_ignore_case(const std::string& value, const char* expected)
@@ -3103,10 +3117,43 @@ bool load_map_track_file_impl(const char* path, bool show_fail_toast)
     return true;
 }
 
+bool select_cache_at(lv_point_t point)
+{
+    if (!s_map_target || !s_map_target->select_overlay || !s_overlay_snapshot) return false;
+    const ::ui::map::MapOverlayItem* closest = nullptr;
+    int64_t best = 24 * 24 + 1;
+    for (size_t index = 0; index < s_overlay_snapshot->item_count; ++index)
+    {
+        const auto& item = s_overlay_snapshot->items[index];
+        if (item.kind != ::ui::map::MapOverlayKind::Geocache || !item.visible || !item.point.valid) continue;
+        lv_point_t projected;
+        if (!::ui::widgets::map::project_point(s_map_runtime, {true, item.point.lat, item.point.lon}, projected)) continue;
+        const int64_t dx = int64_t(point.x) - projected.x, dy = int64_t(point.y) - projected.y;
+        const auto distance = dx * dx + dy * dy;
+        if (distance < best)
+        {
+            best = distance;
+            closest = &item;
+        }
+    }
+    if (!closest) return false;
+    s_map_target->select_overlay(s_map_target->overlay_context, closest->stable_id);
+    return true;
+}
+
 void map_gesture_callback(const ::ui::widgets::map::GestureEvent& event, void*)
 {
     switch (event.phase)
     {
+    case ::ui::widgets::map::GesturePhase::Tapped:
+    {
+        const auto* root = ::ui::widgets::map::widgets(s_map_runtime).root;
+        if (!root) break;
+        lv_area_t bounds;
+        lv_obj_get_coords(root, &bounds);
+        (void)select_cache_at({event.point.x - bounds.x1, event.point.y - bounds.y1});
+        break;
+    }
     case ::ui::widgets::map::GesturePhase::Pressed:
         s_map_drag_start_pan_x = s_map_pan_x;
         s_map_drag_start_pan_y = s_map_pan_y;
@@ -3179,8 +3226,22 @@ void refresh_view()
     sync_workspace_layers_from_renderer();
     auto snapshot = map_workspace_model().snapshot();
     (void)map_overlay_source().buildMapOverlaySnapshot(*s_overlay_snapshot);
+    if (s_map_target && s_overlay_snapshot->item_count < ::ui::map::MapOverlaySnapshot::kMaxItems)
+    {
+        auto& target = s_overlay_snapshot->items[s_overlay_snapshot->item_count++];
+        target = ::ui::map::MapOverlayItem{};
+        target.kind = ::ui::map::MapOverlayKind::Geocache;
+        target.style = ::ui::map::MapOverlayStyle::Warning;
+        target.point.valid = true;
+        target.point.lat = s_map_target->latitude_e7 / 10000000.0;
+        target.point.lon = s_map_target->longitude_e7 / 10000000.0;
+        target.selected = target.visible = true;
+        ::ui::copyText(target.label, s_map_target->name);
+    }
     append_route_image_overlay(*s_overlay_snapshot);
     append_track_overlay(*s_overlay_snapshot);
+    if (s_map_target && s_map_target->append_overlays)
+        s_map_target->append_overlays(s_map_target->overlay_context, *s_overlay_snapshot);
     if (!s_map_info_visible)
     {
         keep_only_current_position_overlay(*s_overlay_snapshot);
@@ -3915,6 +3976,14 @@ void on_map_control_clicked(lv_event_t* e)
 
 bool handle_map_key(uint32_t key, lv_event_t* e)
 {
+    if (s_map_target && (key == 'g' || key == 'G'))
+    {
+        auto* root = ::ui::widgets::map::widgets(s_map_runtime).root;
+        if (root && !select_cache_at({lv_obj_get_width(root) / 2, lv_obj_get_height(root) / 2}))
+            set_map_notice("No cache near map center", 1200);
+        consume_key_event(e);
+        return true;
+    }
     if (::ui::widgets::route_image_strip::handle_key(s_route_image_strip, key))
     {
         consume_key_event(e);
@@ -4491,9 +4560,28 @@ void enter(const shell::Host* host, lv_obj_t* parent, shell::Projection projecti
     }
 }
 
+bool enter_target(const shell::Host* host, lv_obj_t* parent, const MapTarget& target)
+{
+    if (!parent || s_root || target.latitude_e7 < -900000000 || target.latitude_e7 > 900000000 ||
+        target.longitude_e7 < -1800000000 || target.longitude_e7 >= 1800000000 || !is_available()) return false;
+    enter(host, parent, shell::Projection::Map);
+    if (!s_root) return false;
+    s_map_target = &target;
+    auto viewport = map_workspace_model().viewport();
+    viewport.center_lat = target.latitude_e7 / 10000000.0;
+    viewport.center_lon = target.longitude_e7 / 10000000.0;
+    viewport.zoom = current_map_zoom();
+    (void)map_workspace_model().setViewport(viewport);
+    s_map_pan_x = s_map_pan_y = 0;
+    set_map_notice("Tap cache or G near map center", 3500);
+    refresh_view();
+    return true;
+}
+
 void exit(lv_obj_t* parent)
 {
     (void)parent;
+    s_map_target = nullptr;
 
     if (s_timer)
     {

@@ -11,6 +11,15 @@ class MeshAdapterRouterCore : public IMeshAdapter
 {
   public:
     bool installBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend);
+    // Installs a background service without changing the selected chat protocol.
+    // Refuses to replace any existing backend; its lifetime may have borrowers.
+    bool installServiceBackend(MeshProtocol protocol, std::unique_ptr<IMeshAdapter> backend);
+    std::unique_ptr<IMeshAdapter> takeServiceBackend(MeshProtocol protocol, const IMeshAdapter* expected = nullptr);
+    std::unique_ptr<IMeshAdapter> takeInactiveBackend(MeshProtocol protocol, const IMeshAdapter* expected = nullptr);
+    // Advances an inactive service only. The caller must configure its carrier
+    // so it cannot contend with the active backend for a shared radio.
+    bool processServiceQueue(MeshProtocol protocol);
+    bool isServiceBackend(MeshProtocol protocol) const;
     void setActiveProtocol(MeshProtocol protocol);
     bool hasBackend() const;
     MeshProtocol backendProtocol() const;
@@ -74,6 +83,8 @@ class MeshAdapterRouterCore : public IMeshAdapter
     std::unique_ptr<IMeshAdapter> meshcore_backend_;
     std::unique_ptr<IMeshAdapter> reticulum_backend_;
     MeshProtocol active_protocol_ = MeshProtocol::Meshtastic;
+    // Only explicitly installed service backends may run while inactive.
+    uint8_t service_backend_mask_ = 0;
 };
 
 } // namespace chat
