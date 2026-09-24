@@ -3645,7 +3645,12 @@ bool LxmfAdapter::processOneRadioPacket(
 
     uint8_t packet_hash[reticulum::kFullHashSize] = {};
     reticulum::computePacketHash(packet, packet_len, packet_hash);
-    if (path_manager_.isDuplicatePacket(packet_hash))
+    // A requested path response may contain exactly the cached announcement
+    // seen before this Geocaching session opened. Re-run normal verification
+    // under the discovery budget; other duplicate traffic remains rejected.
+    const bool geocaching_path_response = geocaching_discovery &&
+                                          parsed.context == static_cast<uint8_t>(reticulum::PacketContext::PathResponse);
+    if (path_manager_.isDuplicatePacket(packet_hash) && !geocaching_path_response)
     {
         noteRxSummary(false, true, false);
         if (!ingress_wifi && !deferred_replay)
@@ -4068,28 +4073,15 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
         return false;
     }
 
-    if (ingest.status == runtime::AnnounceIngestResult::Status::Ignored)
-    {
-        if (ingest.local_destination)
-        {
-            char destination_hex[(reticulum::kTruncatedHashSize * 2U) + 1U] = {};
-            formatHashHex(packet.destination_hash,
-                          reticulum::kTruncatedHashSize,
-                          destination_hex,
-                          sizeof(destination_hex));
-            Serial.printf("[LXMF][AnnounceRX] ignore reason=local_destination dest=%s kind=%s\n",
-                          destination_hex,
-                          localDestinationKindLabel(ingest.local_kind));
-        }
-        return true;
-    }
-    if (ingest.status != runtime::AnnounceIngestResult::Status::Accepted ||
-        !ingest.path)
-    {
-        return false;
-    }
-
-    if (geocaching_announcement_handler_ && !ingest.local_destination && ingest.announce.name_hash &&
+    // The ingestor has verified the signature and destination binding before
+    // reporting path_rejected. An identical cached path response can refresh
+    // application discovery without replacing a route or accepting stale paths.
+    const bool cached_discovery = packet.context == static_cast<uint8_t>(reticulum::PacketContext::PathResponse) &&
+                                  ingest.status == runtime::AnnounceIngestResult::Status::Ignored &&
+                                  ingest.path_decision == runtime::PathAnnounceDecision::RejectReplay &&
+                                  ingest.reason && std::strcmp(ingest.reason, "path_rejected") == 0;
+    if ((ingest.status == runtime::AnnounceIngestResult::Status::Accepted || cached_discovery) &&
+        geocaching_announcement_handler_ && !ingest.local_destination && ingest.announce.name_hash &&
         ingest.announce.public_key && ingest.announce.app_data && ingest.announce.app_data_len <= 96)
     {
         uint8_t name_hash[reticulum::kNameHashSize] = {};
@@ -4114,6 +4106,23 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
                           static_cast<unsigned>(ingest.announce.app_data_len));
         }
     }
+
+    if (ingest.status == runtime::AnnounceIngestResult::Status::Ignored)
+    {
+        if (ingest.local_destination)
+        {
+            char destination_hex[(reticulum::kTruncatedHashSize * 2U) + 1U] = {};
+            formatHashHex(packet.destination_hash,
+                          reticulum::kTruncatedHashSize,
+                          destination_hex,
+                          sizeof(destination_hex));
+            Serial.printf("[LXMF][AnnounceRX] ignore reason=local_destination dest=%s kind=%s\n",
+                          destination_hex,
+                          localDestinationKindLabel(ingest.local_kind));
+        }
+        return true;
+    }
+    if (ingest.status != runtime::AnnounceIngestResult::Status::Accepted || !ingest.path) return false;
 
     PathEntry& path = *ingest.path;
     link_manager_.forEachSession(

@@ -1274,6 +1274,31 @@ int main(int argc, char** argv)
     auto journal = std::make_unique<SdGeocachingJournal>(fixture::volume);
     if (drainJournal(*journal, journal->begin(0, {payload, size})) != JournalWriteResult::Verified) return 2;
     const auto saved = fixture::files;
+    // Cut power after every writer step. The authoritative journal must be
+    // absent or byte-for-byte complete; an unpublished staging file is retryable.
+    bool reached_verified = false;
+    for (unsigned cut = 0; cut < 128 && !reached_verified; ++cut)
+    {
+        fixture::files.clear();
+        auto interrupted = std::make_unique<SdGeocachingJournal>(fixture::volume);
+        auto result = interrupted->begin(0, {payload, size});
+        for (unsigned step = 0; step < cut && result == JournalWriteResult::InProgress; ++step)
+        {
+            fixture::step_io_calls = fixture::step_data_calls = 0;
+            fixture::step_data_bytes = 0;
+            result = interrupted->step();
+            if (!stepBudgetOk()) return 90;
+        }
+        reached_verified = result == JournalWriteResult::Verified;
+        interrupted.reset();
+        const auto published = fixture::files.find("/trailmate/geocaching/.state/journal/0000000000000001.gcj");
+        const bool committed = published != fixture::files.end();
+        if (committed && published->second != saved.at(published->first)) return 91;
+        auto retry = std::make_unique<SdGeocachingJournal>(fixture::volume);
+        const auto resumed = drainJournal(*retry, retry->begin(0, {payload, size}));
+        if (resumed != (committed ? JournalWriteResult::Exists : JournalWriteResult::Verified) || fixture::files != saved) return 92;
+    }
+    if (!reached_verified) return 93;
     fixture::files.clear();
     if (drainJournal(*journal, journal->begin(0, &mutation, 1)) != JournalWriteResult::Verified || fixture::files != saved) return 80;
     for (size_t offset : {size_t(0), size_t(24), size_t(24 + size - 1)})

@@ -17,6 +17,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_checkpoint_rotation.h"
 #include "platform/esp/arduino_common/geocaching/sd_download_port.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_repair.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_publish_port.h"
 #include "platform/esp/common/geocaching_crypto.h"
 #include "platform/esp/common/memory_budget.h"
@@ -169,6 +170,17 @@ struct Session
     std::array<gc::storage::MutationView, 3> mutations{};
     std::unique_ptr<SdIndexRepair<Digest>> recovery;
     std::unique_ptr<SdCheckpointRotation<Digest>> checkpoint;
+    struct PreviousQueries
+    {
+        explicit PreviousQueries(const gc::storage::VolumeInstance& volume) : scan(volume) {}
+        gc::storage::IndexRootBytes snapshot{};
+        SdIndexScan scan;
+        std::unique_ptr<SdIndexedStopTask> stop;
+        bool started = false;
+        size_t stopped = 0;
+    };
+    std::unique_ptr<PreviousQueries> previous_queries;
+    bool previous_queries_retired = false;
     uint64_t checkpoint_attempt_sequence = 0;
     bool checkpoint_recovery_required = false;
     bool load_more_pending = false;
@@ -245,6 +257,8 @@ struct Session
     }
     ~Session()
     {
+        workspace_owner.release(previous_queries.get());
+        previous_queries.reset();
         workspace_owner.release(checkpoint.get());
         checkpoint.reset();
         if (store && store->commitPending()) store->cancelCommit();
@@ -1390,6 +1404,89 @@ class Facade final : public ::ui::geocaching::Source
     }
 } facade;
 
+// QueryClient does not restore an old page's request ID. Its durable read
+// tasks must therefore stop before the dispatcher can send for a new session.
+// Keep history and all publication/download tasks. Scan one pinned snapshot;
+// each stop only appends to the currently scanned bucket, whose head is pinned.
+bool retirePreviousQueries(Session& s, const gc::Destination& local)
+{
+    if (s.previous_queries_retired) return false;
+    if (!s.previous_queries) s.previous_queries.reset(new (std::nothrow) Session::PreviousQueries(s.volume));
+    if (!s.previous_queries || !s.workspace_owner.acquire(s.previous_queries.get()))
+    {
+        next_step.store(millis() + 1000);
+        return true;
+    }
+    auto& job = *s.previous_queries;
+    if (!job.started)
+    {
+        job.snapshot = s.roots[s.root_copy];
+        gc::storage::IndexRootView pinned;
+        if (!gc::storage::decodeIndexRoot({job.snapshot.data(), job.snapshot.size()}, s.volume, pinned) ||
+            !job.scan.begin(pinned, 10, s.frame, kFrameCapacity))
+        {
+            fail("Cannot inspect previous queries");
+            return true;
+        }
+        job.started = true;
+        s.status = "Restoring previous queries...";
+        ++epoch;
+        return true;
+    }
+    if (job.stop)
+    {
+        const auto result = job.stop->step();
+        if (result == IndexedCommitStep::Working) return true;
+        if (result != IndexedCommitStep::Verified || !job.stop->committed(s.root))
+        {
+            s.checkpoint_recovery_required = true;
+            fail("Previous query stop interrupted - reopen to recover");
+            return true;
+        }
+        s.root_copy = 1 - s.root_copy;
+        job.stop.reset();
+        ++job.stopped;
+        return true;
+    }
+    const auto result = job.scan.step();
+    if (result == IndexScanStep::Working) return true;
+    if (result == IndexScanStep::End)
+    {
+        if (job.stopped) Serial.printf("[Geocaching] retired_previous_queries=%u\n", static_cast<unsigned>(job.stopped));
+        s.workspace_owner.release(&job);
+        s.previous_queries.reset();
+        s.previous_queries_retired = true;
+        return false;
+    }
+    gc::storage::MutationView row;
+    gc::storage::TaskView task;
+    if (result != IndexScanStep::Item || !job.scan.item(row) || !gc::storage::decodeTask(row.key, row.value, task))
+    {
+        fail("Cannot read previous queries - reopen to recover");
+        return true;
+    }
+    bool own = task.request_count != 0;
+    for (size_t i = 0; i < task.request_count; ++i)
+        own = own && !std::memcmp(task.requests[i].data, local.bytes.data(), local.bytes.size());
+    if (own && task.kind == 3 && task.continue_intent && task.state != 3 && task.state != 5)
+    {
+        job.stop.reset(new (std::nothrow) SdIndexedStopTask(s.volume));
+        if (!job.stop)
+        {
+            next_step.store(millis() + 1000);
+            return true;
+        }
+        if (!job.stop->begin(s.root, s.root_copy, row.key, false, s.frame, kFrameCapacity, s.roots[1 - s.root_copy]))
+        {
+            s.checkpoint_recovery_required = true;
+            fail("Cannot stop previous query - reopen to recover");
+            return true;
+        }
+    }
+    job.scan.advance();
+    return true;
+}
+
 bool closeSession()
 {
     if (!session) return true;
@@ -1400,6 +1497,12 @@ bool closeSession()
     {
         next_step.store(millis() + 1000);
         return false;
+    }
+    if (session->previous_queries)
+    {
+        session->checkpoint_recovery_required = true;
+        session->workspace_owner.release(session->previous_queries.get());
+        session->previous_queries.reset();
     }
     if (session->checkpoint)
     {
@@ -1998,6 +2101,7 @@ void step()
             ++epoch;
             return;
         }
+        if (retirePreviousQueries(s, local)) return;
         if (!s.ensureBuffers(true))
         {
             next_step.store(millis() + 1000);

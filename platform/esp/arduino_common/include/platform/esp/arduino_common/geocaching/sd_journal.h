@@ -124,7 +124,8 @@ class SdGeocachingJournal
     }
 
     // Cancellation is a single boundary action; closing may itself block in the
-    // filesystem. A created or partially written file always requires recovery.
+    // filesystem. Recovery reconciles a published journal, while an unpublished
+    // staging file can be replaced by the next serialized writer.
     JournalWriteResult cancel()
     {
         if (result_ != JournalWriteResult::InProgress) return result_;
@@ -170,12 +171,18 @@ class SdGeocachingJournal
             break;
         case Phase::VolumeBefore:
         case Phase::VolumeAfter:
+        case Phase::PublishedVolume:
         {
             VolumeInstance volume;
             const auto inspected = inspectSdVolume(volume);
             if (inspected != SdVolumeResult::Ready) return fail(volumeFailure(inspected));
             if (volume != volume_) return fail(JournalWriteResult::VolumeChanged);
-            if (phase_ == Phase::VolumeAfter) return result_ = JournalWriteResult::Verified;
+            if (phase_ == Phase::PublishedVolume) return result_ = JournalWriteResult::Verified;
+            if (phase_ == Phase::VolumeAfter)
+            {
+                phase_ = Phase::Publish;
+                break;
+            }
             phase_ = Phase::Exists;
             break;
         }
@@ -185,7 +192,7 @@ class SdGeocachingJournal
             break;
         case Phase::OpenWrite:
             may_have_written_ = true;
-            if (!file_.open(path_.data(), "w")) return fail(JournalWriteResult::IoError);
+            if (!file_.open(kStagingPath, "w")) return fail(JournalWriteResult::IoError);
             opened_ = true;
             phase_ = Phase::WriteHeader;
             break;
@@ -209,7 +216,7 @@ class SdGeocachingJournal
             phase_ = Phase::OpenRead;
             break;
         case Phase::OpenRead:
-            if (!file_.open(path_.data(), "r")) return fail(JournalWriteResult::IoError);
+            if (!file_.open(kStagingPath, "r")) return fail(JournalWriteResult::IoError);
             opened_ = true;
             phase_ = Phase::ReadSize;
             break;
@@ -236,6 +243,10 @@ class SdGeocachingJournal
             opened_ = false;
             phase_ = Phase::VolumeAfter;
             break;
+        case Phase::Publish:
+            if (!storage::sd_rename(kStagingPath, path_.data())) return fail(JournalWriteResult::IoError);
+            phase_ = Phase::PublishedVolume;
+            break;
         case Phase::CloseFailure:
             break;
         }
@@ -243,6 +254,9 @@ class SdGeocachingJournal
     }
 
   private:
+    // A single storage owner serializes all transactions. Keep incomplete bytes
+    // outside the journal inventory; only a flushed, verified frame is published.
+    static constexpr const char* kStagingPath = "/trailmate/geocaching/.state/journal.pending";
     enum class Phase : uint8_t
     {
         Checksum,
@@ -260,6 +274,8 @@ class SdGeocachingJournal
         ReadPayload,
         CloseRead,
         VolumeAfter,
+        Publish,
+        PublishedVolume,
         CloseFailure
     };
 

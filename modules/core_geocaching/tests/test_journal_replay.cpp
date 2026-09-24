@@ -486,6 +486,7 @@ int checkIndexedCommitCapacity()
         size_t size = 0;
         if (!encodeDraft({key.data(), key.size()}, draft, encoded, sizeof(encoded), size)) return 106;
         logical_bytes += key.size() + size + 4;
+        const auto staged_reads = read_bytes["/trailmate/geocaching/.state/journal.pending"];
         auto commit = std::make_unique<SdIndexedDraftSave>(volume);
         if (!commit->begin(current, copy, {key.data(), key.size()}, {encoded, size}, 0, frame, sizeof(frame), roots[1 - copy])) return 107;
         auto result = IndexedCommitStep::Working;
@@ -505,7 +506,9 @@ int checkIndexedCommitCapacity()
         if (result != IndexedCommitStep::Verified || !commit->committed(current) || current.sequence != row || !released) return 109;
         char journal_path[96];
         std::snprintf(journal_path, sizeof(journal_path), "/trailmate/geocaching/.state/journal/%016llx.gcj", static_cast<unsigned long long>(row));
-        if (read_bytes[journal_path] != files[journal_path].size()) return 118;
+        // The single readback is now performed before publishing the filename.
+        if (read_bytes[journal_path] != 0 ||
+            read_bytes["/trailmate/geocaching/.state/journal.pending"] - staged_reads != files[journal_path].size()) return 118;
         copy = 1 - copy;
     }
     if (logical_bytes <= 4096) return 110;
@@ -561,6 +564,7 @@ int checkIndexedCommitCapacity()
     if (!encodeDraft({extra_key.data(), extra_key.size()}, extra, frame, sizeof(frame), extra_size)) return 119;
     extra_mutation.value = {frame, extra_size};
     SdIndexedCommit aliased(volume);
+    const auto alias_staged_reads = read_bytes["/trailmate/geocaching/.state/journal.pending"];
     if (!aliased.begin(current, copy, &extra_mutation, 1, frame, sizeof(frame), roots[1 - copy])) return 120;
     auto aliased_result = IndexedCommitStep::Working;
     bool released_alias = false;
@@ -574,7 +578,8 @@ int checkIndexedCommitCapacity()
         }
     }
     const std::string alias_path = "/trailmate/geocaching/.state/journal/0000000000000029.gcj";
-    if (aliased_result != IndexedCommitStep::Verified || !released_alias || read_bytes[alias_path] != 2 * files[alias_path].size()) return 121;
+    if (aliased_result != IndexedCommitStep::Verified || !released_alias || read_bytes[alias_path] != files[alias_path].size() ||
+        read_bytes["/trailmate/geocaching/.state/journal.pending"] - alias_staged_reads != files[alias_path].size()) return 121;
     if (!aliased.committed(current)) return 122;
     copy = 1 - copy;
     extra_key[0] = 42;

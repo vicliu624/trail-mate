@@ -234,6 +234,45 @@ int main(int argc, char** argv)
     until([&]
           { return router.sends == 1; },
           "capabilities request not dispatched");
+    // Simulate a power loss with a durable query still awaiting its response.
+    // Close only to release this process's resources, then restore crash media.
+    const auto interrupted_files = test::files;
+    const auto interrupted_directories = test::directories;
+    const auto obsolete_request = router.sent_bytes;
+    test::source->activate(false);
+    until([&]
+          { return !router.service; },
+          "interrupted query did not close");
+    test::files = interrupted_files;
+    test::directories = interrupted_directories;
+    test::clock_ms += 180000; // the retained attempt is eligible for retry after reboot
+    router.sends = 0;
+    test::source->activate(true);
+    until([&]
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Restoring previous queries"); },
+          "previous query retirement did not start");
+    until([&]
+          { return test::files != interrupted_files; },
+          "previous query retirement did not write");
+    // A second power loss during cancellation must recover its journal before
+    // starting a fresh query, without losing the original task history.
+    const auto retiring_files = test::files;
+    const auto retiring_directories = test::directories;
+    test::source->activate(false);
+    until([&]
+          { return !router.service; },
+          "interrupted retirement did not close");
+    test::files = retiring_files;
+    test::directories = retiring_directories;
+    test::source->activate(true);
+    until([&]
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+          "interrupted query did not recover");
+    announce(router);
+    until([&]
+          { return router.sends == 1; },
+          "fresh query was blocked by an obsolete request");
+    require(router.sent_bytes != obsolete_request, "restart retransmitted the old session's query");
     reply(router, fixture(folder, "capabilities-response-v1.bin"), 0);
     until([&]
           { return router.sends == 2; },
