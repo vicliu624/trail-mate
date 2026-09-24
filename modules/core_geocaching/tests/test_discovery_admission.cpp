@@ -1,4 +1,5 @@
 #include "platform/esp/arduino_common/chat/infra/lxmf/geocaching_discovery_budget.h"
+#include "platform/esp/arduino_common/chat/infra/lxmf/geocaching_discovery_probe.h"
 #include <cassert>
 #include <vector>
 
@@ -48,4 +49,28 @@ int main()
     for (unsigned i = 0; i < 4; ++i) assert(wrap.consume(UINT32_MAX - 5000));
     assert(!wrap.consume(0));
     assert(wrap.consume(5000));
+
+    using lxmf::runtime::GeocachingDiscoveryProbe;
+    GeocachingDiscoveryProbe probe;
+    assert(!probe.take(0, false, true, budget));
+    assert(!probe.take(0, true, false, budget));
+    assert(probe.take(0, true, true, budget));
+    assert(!probe.take(59999, true, true, budget));
+    assert(probe.take(60000, true, true, budget));
+    assert(probe.take(120000, true, true, budget));
+    assert(!probe.take(179999, true, true, budget));
+    assert(probe.take(720000, true, true, budget));
+    for (auto phase : {"call", "nomad", "saver"})
+    {
+        budget.phase = phase;
+        assert(!probe.take(780000, true, true, budget));
+    }
+    budget.phase = "screen";
+    assert(probe.take(780000, true, true, budget));
+    assert(!probe.take(780001, false, true, budget));
+    assert(probe.take(780002, true, true, budget)); // reopen immediately discovers again
+    probe.reset();
+    assert(probe.take(UINT32_MAX - 30000, true, true, budget));
+    assert(!probe.take(29998, true, true, budget));
+    assert(probe.take(29999, true, true, budget));
 }

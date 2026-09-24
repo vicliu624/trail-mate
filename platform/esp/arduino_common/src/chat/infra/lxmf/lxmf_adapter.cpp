@@ -3438,6 +3438,7 @@ void LxmfAdapter::processRuntime()
         link_manager_.clear();
         path_manager_.clear();
         deferred_discovery_.clear();
+        geocaching_discovery_probe_.reset();
 
         propagation_client_.resetForNetworkConfig(
             rtnet::active().propagation.sync_on_start);
@@ -3452,6 +3453,12 @@ void LxmfAdapter::processRuntime()
 
     const RuntimeBudget budget = makeRuntimeBudget();
     processRadioPackets(budget);
+    if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
+                                         identity_.isReady() && interfaces_.hasReadyWifiGateway(), budget))
+    {
+        const bool requested = sendPathRequestForDestination(runtime::kGeocachingDiscoverySeed.data());
+        Serial.printf("[Geocaching][Discovery] path_request requested=%u retry_ms=60000\n", requested ? 1U : 0U);
+    }
     pumpPendingPingRequests();
     pumpReticulumAudioCall();
     cullTransportState();
@@ -4103,6 +4110,8 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
                 {ingest.announce.app_data, ingest.announce.app_data_len}};
             // Borrowed only for this callback; consumers copy bounded metadata.
             geocaching_announcement_handler_(view, geocaching_announcement_context_);
+            Serial.printf("[Geocaching][Discovery] verified_announce bytes=%u\n",
+                          static_cast<unsigned>(ingest.announce.app_data_len));
         }
     }
 

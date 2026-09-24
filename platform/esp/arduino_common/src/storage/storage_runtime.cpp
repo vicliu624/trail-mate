@@ -364,6 +364,7 @@ void ownerStarted(void*,
                   Operation operation,
                   OperationGeneration generation)
 {
+    if (operation == Operation::Persist) return;
     Serial.printf("[Storage] owner begin mode=%s generation=%lu active_protocol=%u\n",
                   operationName(operation),
                   static_cast<unsigned long>(generation),
@@ -377,6 +378,10 @@ void ownerFinished(void*,
                    uint32_t elapsed_ms,
                    uint32_t stack_free_bytes)
 {
+    // Geocaching schedules small persistence steps continuously. Keep errors
+    // and stalls visible without printing two lines for every successful step.
+    if (operation == Operation::Persist && elapsed_ms < 1000 &&
+        (result == ResultKind::Completed || result == ResultKind::InProgress)) return;
     Serial.printf("[Storage] owner end mode=%s generation=%lu ok=%u result=%u "
                   "elapsed_ms=%lu stack_free_bytes=%lu\n",
                   operationName(operation),

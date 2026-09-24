@@ -12,6 +12,7 @@
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/ports/i_mesh_peer_directory.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/geocaching_discovery_budget.h"
+#include "platform/esp/arduino_common/chat/infra/lxmf/geocaching_discovery_probe.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter_scratch.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_announce_ingestor.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_announce_scheduler.h"
@@ -60,6 +61,8 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
                               uint8_t* output, size_t output_capacity, size_t& written);
     void setGeocachingAnnouncementHandler(GeocachingAnnouncementHandler handler, void* context)
     {
+        if (handler != geocaching_announcement_handler_ || context != geocaching_announcement_context_)
+            geocaching_discovery_probe_.reset();
         geocaching_announcement_handler_ = handler;
         geocaching_announcement_context_ = context;
     }
@@ -207,6 +210,7 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
     runtime::AnnounceScheduler announce_scheduler_;
     runtime::RawRxTelemetry rx_telemetry_;
     runtime::GeocachingDiscoveryBudget geocaching_discovery_budget_;
+    runtime::GeocachingDiscoveryProbe geocaching_discovery_probe_;
     std::size_t link_request_packet_len_ = 0;
     uint32_t next_app_packet_id_ = 1;
     bool peers_loaded_ = false;

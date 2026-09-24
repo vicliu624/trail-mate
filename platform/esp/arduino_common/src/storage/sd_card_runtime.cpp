@@ -65,7 +65,7 @@ constexpr std::size_t kSdTransferSliceBytes = ActiveSdTransferPolicy::file_slice
 #endif
 
 #ifndef TRAIL_MATE_SD_IO_LOG_INTERVAL_MS
-#define TRAIL_MATE_SD_IO_LOG_INTERVAL_MS 1000
+#define TRAIL_MATE_SD_IO_LOG_INTERVAL_MS 10000
 #endif
 
 #if defined(TRAIL_MATE_SDFAT_SDMMC)
