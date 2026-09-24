@@ -135,10 +135,12 @@ void* allocatePreferred(const char* owner, std::size_t bytes, bool allow_interna
         return nullptr;
     }
 
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
     std::printf("[Mem][Budget] allocation owner=%s bytes=%u domain=%s\n",
                 owner ? owner : "<unnamed>",
                 static_cast<unsigned>(bytes),
                 esp_ptr_external_ram(storage) ? "psram" : "internal");
+#endif
     return storage;
 }
 

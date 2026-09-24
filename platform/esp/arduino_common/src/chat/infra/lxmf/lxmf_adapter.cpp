@@ -1667,6 +1667,7 @@ void LxmfAdapter::processPropagationClient()
                 {
                     propagation_client_.markUploadFailed(upload);
                 }
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
                 else if (stamp_state ==
                              runtime::PropagationStampRuntime::State::Expanding &&
                          propagation_client_.stamp().expandedRounds() != 0U &&
@@ -1691,6 +1692,7 @@ void LxmfAdapter::processPropagationClient()
                                   static_cast<unsigned long>(
                                       propagation_client_.stamp().searchRounds()));
                 }
+#endif
             }
 
             if (upload.state == runtime::PropagationUploadState::Ready &&

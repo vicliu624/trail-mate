@@ -869,9 +869,15 @@ void WifiGatewayReticulumInterface::enqueueFrame(const uint8_t* data, size_t len
         ++rx_stats_drops_;
     }
     const uint32_t now_ms = millis();
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
+    constexpr uint32_t log_interval_ms = kRxStatsLogIntervalMs;
+#else
+    constexpr uint32_t log_interval_ms = 60000;
+#endif
     if (rx_stats_last_log_ms_ == 0 ||
-        (now_ms - rx_stats_last_log_ms_) >= kRxStatsLogIntervalMs)
+        (now_ms - rx_stats_last_log_ms_) >= log_interval_ms)
     {
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
         Serial.printf("[Reticulum][IF][WiFi][RX] stats frames=%u priority=%u drops=%u bytes=%u read_skips=%u depth=%u prio_depth=%u last_len=%u\n",
                       static_cast<unsigned>(rx_stats_frames_),
                       static_cast<unsigned>(rx_stats_priority_frames_),
@@ -881,6 +887,12 @@ void WifiGatewayReticulumInterface::enqueueFrame(const uint8_t* data, size_t len
                       static_cast<unsigned>(rx_queue_.size()),
                       static_cast<unsigned>(rx_priority_queue_.size()),
                       static_cast<unsigned>(len));
+#else
+        if (rx_stats_drops_ != 0)
+            Serial.printf("[Reticulum][IF][WiFi][RX] queue_drops=%u frames=%u interval_ms=%lu\n",
+                          static_cast<unsigned>(rx_stats_drops_), static_cast<unsigned>(rx_stats_frames_),
+                          static_cast<unsigned long>(now_ms - rx_stats_last_log_ms_));
+#endif
         rx_stats_last_log_ms_ = now_ms;
         rx_stats_frames_ = 0;
         rx_stats_priority_frames_ = 0;
