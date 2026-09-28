@@ -7,8 +7,13 @@
 
 - **Animal Island UI 1.10.0**, by **guokaigdg**:
   <https://guokaigdg.github.io/animal-island-ui/>.
-  Licensed under **Creative Commons Attribution–NonCommercial 4.0 International**:
-  <https://creativecommons.org/licenses/by-nc/4.0/>.
+  The upstream project now uses the [MIT license](https://github.com/guokaigdg/animal-island-ui/blob/main/LICENSE)
+  (Copyright © 2026 guokaigdg).
+  This site currently pins the previously published 1.10.0 package, whose
+  included license and npm metadata still state
+  [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+  Its original notices are retained; the upstream license change does not
+  change the package version bundled here.
   The site uses Select, Title, Icon, Background and BackTop; the Geocaching page
   also uses Button, Card and Divider. These use custom layout,
   colors, sizing and localized labels. The shopping-bag icon is extracted from
