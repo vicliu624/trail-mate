@@ -4,6 +4,21 @@ import {SnapshotClient} from './snapshot-client.js';
 
 let client = null, snapshot = null, liveReady = false, selected = null;
 const notify = event => self.postMessage({event});
+async function readSelected(provider, cacheId) {
+  if (!provider) throw Error('Search for caches first');
+  if (provider === snapshot) return provider.get(cacheId);
+  const row = provider.rows.get(cacheId), copy = snapshot?.rows.get(cacheId);
+  const matches = row && !row.conflict && copy && row.summary[1] === copy.summary[1] &&
+    row.summary[2].length === copy.summary[2].length &&
+    row.summary[2].every((byte, index) => byte === copy.summary[2][index]);
+  try {
+    if (!liveReady || provider !== client) throw Error('Map connection interrupted');
+    return await provider.get(cacheId);
+  } catch (error) {
+    if (!matches) throw error;
+    return snapshot.get(cacheId);
+  }
+}
 self.onmessage = async ({data}) => {
   const {id, command, args = {}} = data;
   try {
@@ -37,12 +52,12 @@ self.onmessage = async ({data}) => {
         }
       }
       else if (command === 'more') { if (selected === client) await client.more(); }
-      else if (command === 'get') result = await selected.get(args.cacheId);
+      else if (command === 'get') result = await readSelected(selected, args.cacheId);
       else if (command === 'download') {
         if (!Array.isArray(args.cacheIds) || !args.cacheIds.length || args.cacheIds.length > 20) throw Error('Select 1–20 caches');
         const records = [], failures = [], provider = selected;
         for (const cacheId of args.cacheIds) {
-          try { records.push((await provider.get(cacheId)).signed); }
+          try { records.push((await readSelected(provider, cacheId)).signed); }
           catch (error) { failures.push({cacheId, message: error.message}); }
         }
         result = {gpx: records.length ? await makeGpx(records) : null, succeeded: records.length, failures};

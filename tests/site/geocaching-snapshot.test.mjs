@@ -67,3 +67,55 @@ test('published San Jose record remains readable and verifies against its summar
   assert.ok(detail.record[9].length>20);
   assert.equal(detail.cacheId,row.id);
 });
+
+test('worker uses only a matching published revision after a live detail failure or disconnect', async () => {
+  const events=[], originalFetch=globalThis.fetch;
+  const methods=['connect','query','get','close'];
+  const original=Object.fromEntries(methods.map(name=>[name,DirectoryClient.prototype[name]]));
+  let live, attempts=0;
+  globalThis.self={postMessage:value=>events.push(value)};
+  globalThis.fetch=fetcher;
+  DirectoryClient.prototype.connect=async function() { live=this; this.notify({type:'directory'}); };
+  DirectoryClient.prototype.query=async function() {
+    this.rows.set(verified.cacheId,{summary:verified.summary,conflict:false});
+  };
+  DirectoryClient.prototype.get=async()=>{attempts++; throw Error('Live request failed');};
+  DirectoryClient.prototype.close=async()=>{};
+  let sequence=0;
+  const send=async(command,args={})=>{
+    const id=++sequence;
+    await self.onmessage({data:{id,command,args}});
+    return events.find(value=>value.id===id);
+  };
+  try {
+    await import('../../site/geocaching/src/reticulum-worker.js?disconnect-regression');
+    await send('snapshot',{url:'https://example.org/data/public/index.json'});
+    await send('connect',{url:'wss://example.org'});
+    await send('query',{});
+    const detail=await send('get',{cacheId:verified.cacheId});
+    assert.equal(detail.result.record[9],verified.record[9]);
+    assert.equal(detail.result.isCurrent,false);
+    assert.equal(detail.result.snapshotAt,manifest.updatedAt);
+    assert.equal(attempts,1);
+    live.notify({type:'status',state:'disconnected'});
+    const download=await send('download',{cacheIds:[verified.cacheId]});
+    assert.equal(download.result.succeeded,1);
+    assert.equal(attempts,1,'disconnected clients must not delay fallback with another request');
+    const row=live.rows.get(verified.cacheId);
+    row.summary=[...verified.summary];
+    row.summary[1]++;
+    assert.match((await send('get',{cacheId:verified.cacheId})).error,/interrupted/);
+    row.summary=[...verified.summary];
+    row.summary[2]=Uint8Array.from(row.summary[2]); row.summary[2][0]^=1;
+    assert.match((await send('get',{cacheId:verified.cacheId})).error,/interrupted/);
+    row.summary=verified.summary; row.conflict=true;
+    assert.match((await send('get',{cacheId:verified.cacheId})).error,/interrupted/);
+    row.conflict=false;
+    await send('disconnect');
+    assert.equal((await send('get',{cacheId:verified.cacheId})).result.cacheId,verified.cacheId);
+  } finally {
+    globalThis.fetch=originalFetch;
+    for (const name of methods) DirectoryClient.prototype[name]=original[name];
+    delete globalThis.self;
+  }
+});
