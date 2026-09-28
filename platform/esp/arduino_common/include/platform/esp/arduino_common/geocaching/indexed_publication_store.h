@@ -44,6 +44,9 @@ class IndexedPublicationStore final : public PublicationStore
     }
     bool commitPending() const override { return io_ != nullptr; }
     uint64_t committedSequence() const { return root_.sequence; }
+    // Only commits through this store change drafts or their publication
+    // projection. Downloads, transport attempts and index maintenance do not.
+    uint64_t catalogGeneration() const { return catalog_generation_; }
     DraftReadResult readDraft(::geocaching::ByteView key, ::geocaching::ByteView& value) override
     {
         value = {};
@@ -324,6 +327,7 @@ class IndexedPublicationStore final : public PublicationStore
         if (result == IndexedCommitStep::Working) return JournalWriteResult::InProgress;
         if (result == IndexedCommitStep::Verified)
         {
+            if (committed.sequence != root_.sequence) ++catalog_generation_;
             if (committed.revision != root_.revision) copy_ = 1 - copy_;
             root_ = committed;
         }
@@ -405,8 +409,8 @@ class IndexedPublicationStore final : public PublicationStore
     ::geocaching::storage::DraftCatalogPage* catalog_page_ = nullptr;
     std::array<uint8_t, 16> read_key_{};
     std::array<uint8_t, 48> key_{};
-    uint64_t revision_ = 0;
+    uint64_t revision_ = 0, catalog_generation_ = 0;
     bool valid_ = false, blocked_ = false;
 };
-static_assert(sizeof(IndexedPublicationStore) <= 256, "Idle publication storage owns leases and small metadata only");
+static_assert(sizeof(IndexedPublicationStore) <= 264, "Idle publication storage owns leases and small metadata only");
 } // namespace platform::esp::arduino_common::geocaching

@@ -2923,6 +2923,7 @@ int checkIndexedAuthorReservation(const char* path)
     const auto key = record.creation_nonce;
     if (!encodeDraft(key, draft, draft_bytes, sizeof(draft_bytes), size) ||
         finish(store.saveDraft(key, {draft_bytes, size}, 0)) != JournalWriteResult::Verified || root.sequence != 1) return 7;
+    if (store.catalogGeneration() != 1) return 112;
     const auto unbound = files;
     if (finish(store.bindDraftAuthor(key, 2, record.author_public_key, signing, sizeof(signing))) != JournalWriteResult::StateRejected ||
         files != unbound || store.needsRecovery() || owner.holder()) return 8;
@@ -2950,7 +2951,9 @@ int checkIndexedAuthorReservation(const char* path)
     const auto bound = files;
     const auto bound_roots = std::array<IndexRootBytes, 2>{roots[0], roots[1]};
     const auto bound_copy = copy;
+    const auto bound_catalog_generation = store.catalogGeneration();
     if (finish(store.bindDraftAuthor(key, 2, record.author_public_key, signing, sizeof(signing))) != JournalWriteResult::Verified || files != bound) return 10;
+    if (store.catalogGeneration() != bound_catalog_generation) return 113;
     PublicationHistory history;
     const auto read_history = [&](uint64_t generation)
     {
@@ -3151,6 +3154,7 @@ int checkIndexedAuthorReservation(const char* path)
         if (step_bytes > 512) return 29;
     }
     if (publication.phase() != PublishAttemptPhase::Confirmed || root.sequence != 5) return 30;
+    if (store.catalogGeneration() <= bound_catalog_generation) return 114;
     const auto confirmed_files = files;
     if (select_publication(recovery_filter) != DraftReadResult::NotFound || owner.holder()) return 94;
     auto exact_publication = recovery_filter;
@@ -3406,6 +3410,25 @@ int checkIndexedAuthorReservation(const char* path)
     if (!another_publication.cancel()) return 110;
     for (unsigned i = 0; i < 32768 && another_publication.phase() == PublishAttemptPhase::Cancelling; ++i) another_publication.advance();
     if (another_publication.phase() != PublishAttemptPhase::Cancelled || select_publication(recovery_filter) != DraftReadResult::NotFound) return 111;
+    // Commit unrelated saved-cache metadata through the same live root. It
+    // must not invalidate a loaded draft/publication projection.
+    const auto publication_generation = store.catalogGeneration();
+    const auto before_unrelated = root.sequence;
+    CacheHeadView unrelated_head;
+    unrelated_head.install_generation = 1;
+    uint8_t head_bytes[64];
+    size_t head_size = 0;
+    const ByteView head_key{verified.id.bytes.data(), 32};
+    if (!encodeCacheHead(head_key, unrelated_head, head_bytes, sizeof(head_bytes), head_size)) return 115;
+    const MutationView unrelated{2, head_key, {head_bytes, head_size}, false};
+    auto unrelated_commit = std::make_unique<SdIndexedCommit>(volume);
+    if (!unrelated_commit->begin(root, copy, &unrelated, 1, frame, sizeof(frame), roots[1 - copy])) return 116;
+    auto unrelated_status = IndexedCommitStep::Working;
+    for (unsigned i = 0; i < 32768 && unrelated_status == IndexedCommitStep::Working; ++i) unrelated_status = unrelated_commit->step();
+    if (unrelated_status != IndexedCommitStep::Verified || !unrelated_commit->committed(root)) return 117;
+    copy = 1 - copy;
+    if (root.sequence != before_unrelated + 1 || store.catalogGeneration() != publication_generation ||
+        read_catalog(0) != DraftReadResult::Ready || catalog.total != 9) return 118;
     // Recreate the pre-reservation disk state and fail the first flush. A
     // possibly partial durable write must never reach the signing transport.
     files = bound;

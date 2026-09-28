@@ -359,7 +359,7 @@ bool draftSaveActive() { return session && session->draft_save && !session->draf
 bool draftCatalogReady(const Session& s)
 {
     return s.draft_catalog && s.draft_catalog->ready && s.store && !s.needsRecovery() &&
-           s.draft_catalog->sequence == s.store->committedSequence() && s.draft_catalog->page.offset == s.draft_catalog->requested_offset;
+           s.draft_catalog->sequence == s.store->catalogGeneration() && s.draft_catalog->page.offset == s.draft_catalog->requested_offset;
 }
 bool advanceDraftCatalog(Session& s)
 {
@@ -367,10 +367,10 @@ bool advanceDraftCatalog(Session& s)
     if (!s.draft_catalog) s.draft_catalog.reset(new (std::nothrow) Session::DraftCatalog);
     if (!s.draft_catalog) return false;
     auto& catalog = *s.draft_catalog;
-    if (draftCatalogReady(s) || (catalog.failed && catalog.sequence == s.store->committedSequence())) return false;
+    if (draftCatalogReady(s) || (catalog.failed && catalog.sequence == s.store->catalogGeneration())) return false;
     if (!catalog.reading)
     {
-        catalog.sequence = s.store->committedSequence();
+        catalog.sequence = s.store->catalogGeneration();
         catalog.ready = false;
         catalog.failed = false;
     }
@@ -614,7 +614,6 @@ bool advanceDownloadStart(Session& s)
     s.download_started = now(nullptr).monotonic_ms;
     s.download_wait_ms = gc::QueryClient::kReplyTimeoutMs;
     s.download_scratch = scratch;
-    if (s.saved) s.saved->reset();
     ++epoch;
     return true;
 }
@@ -2304,7 +2303,9 @@ void step()
         s.download->advance();
         if (before != s.download->phase())
         {
-            if (s.saved) s.saved->reset();
+            // Queuing, waiting and cancelling requests do not change saved
+            // rows. Installation may have committed even if cleanup failed.
+            if (s.saved && before == gc::DownloadPhase::Installing) s.saved->reset();
             ++epoch;
         }
         return;

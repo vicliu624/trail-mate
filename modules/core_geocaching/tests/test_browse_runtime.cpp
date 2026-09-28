@@ -379,6 +379,11 @@ int main(int argc, char** argv)
     until([&]
           { return detailText(item).status == ui::geocaching::DetailStatus::Ready; },
           "reopened detail not verified");
+    test::source->requestWindow(Section::Published, 0, 4);
+    until([&]
+          { return std::strstr(snapshot(Section::Published).status.data(), "No local drafts"); },
+          "initial publication projection did not load");
+    test::source->requestWindow(Section::Discover, 0, 1);
     generation = snapshot(Section::Discover).generation;
     require(test::source->download(item, generation), "download not queued");
     test::source->closeDetail();
@@ -387,6 +392,10 @@ int main(int argc, char** argv)
           "download did not finish");
     require(router.sends == 4, "saving verified detail sent a redundant network request");
     require(!test::allocated("geocaching.detail.rx"), "saved detail retained its response buffer");
+    // A complete download writes requests, attempts, objects and installed
+    // heads. None changes the publication projection we already loaded.
+    require(std::strstr(snapshot(Section::Published).status.data(), "No local drafts"),
+            "unrelated download invalidated the loaded publication projection");
     test::source->requestWindow(Section::Downloaded, 0, 4);
     until([&]
           {
