@@ -20,7 +20,15 @@ transaction, so descriptions and hints remain available offline after restart.
 The GPX also includes both fields and the signed record; no second sidecar file
 or background detail synchronization is introduced.
 
-Storage starts when the user opens Downloaded or Published, or saves a cache.
+Storage starts when the user opens Downloaded, Published or the standalone Map,
+or saves a cache. The standalone Map also displays local drafts with a selected
+position, regardless of publication status, alongside downloaded caches. It
+requests four metadata rows per asynchronous window, retains at most 32 markers
+nearest the map center, and stops reading once that pass completes. Panning or
+zooming selects a new nearby set. The shared map overlay capacity also includes
+other layers, so dense views can show fewer than 32 geocaches. Drafts without a
+selected position are excluded; an explicitly selected (0, 0) is valid. No GPX
+parse or network discovery is performed by the map projection.
 The draft editor uses the shared map location-selection route instead of latitude
 and longitude text inputs. Confirming writes WGS84 E7 coordinates; cancellation
 preserves the original position and all live editor fields. Existing coordinates

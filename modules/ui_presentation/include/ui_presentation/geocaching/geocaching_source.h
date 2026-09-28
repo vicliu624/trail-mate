@@ -15,8 +15,9 @@ enum class Section : std::uint8_t
 struct Item
 {
     // Draft rows use their 16-byte local draft ID in the leading bytes of id;
-    // they are never cache IDs and cannot be downloaded or navigated to.
+    // they are never cache IDs and cannot be downloaded.
     bool is_draft = false;
+    bool has_coordinates = false;
     uint64_t edit_generation = 0;
     uint32_t publication_revision = 0;
     bool publication_confirmed = false;
@@ -30,6 +31,8 @@ struct Item
 };
 struct Snapshot
 {
+    // The requested local window has finished loading (including an empty one).
+    bool ready = false;
     std::uint64_t generation = 0;
     // Metadata only; count covers all results, rows are read individually.
     std::size_t count = 0;

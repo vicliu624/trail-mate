@@ -1250,6 +1250,7 @@ class Facade final : public ::ui::geocaching::Source
             const auto* catalog = session->draft_catalog.get();
             out.count = catalog ? catalog->total : 0;
             out.generation = catalog ? catalog->generation : 0;
+            out.ready = draftCatalogReady(*session);
             out.can_create = !session->store->commitPending() && !downloadActive() && !publicationActive() && !draftSaveActive() &&
                              storage::sd_card_ready() && !storage::sd_external_block_owner_active();
             std::snprintf(out.status.data(), out.status.size(), "%s", catalog && catalog->failed ? "Draft list could not be read" : !draftCatalogReady(*session) ? "Loading drafts and publication status..."
@@ -1379,6 +1380,7 @@ class Facade final : public ::ui::geocaching::Source
             if ((generation ^ (epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
             const auto& draft = catalog.page.rows[index - catalog.page.offset];
             out.is_draft = true;
+            out.has_coordinates = draft.has_coordinates;
             out.edit_generation = draft.generation;
             std::memcpy(out.id.data(), draft.id.data(), 16);
             if (!draft.name[0]) std::snprintf(out.name.data(), out.name.size(), "Untitled draft");

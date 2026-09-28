@@ -4,6 +4,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
 #include "runtime_environment.h"
 #include "storage_owner.h"
+#include "ui_presentation/geocaching/local_map_overlay.h"
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -422,6 +423,21 @@ int main(int argc, char** argv)
               draft_generation = item.edit_generation;
               return item.is_draft; },
           "saved draft missing from publication list");
+    {
+        auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
+        auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
+        until([&]
+              {
+                  overlays->update(*test::source, 31, 121, 15);
+                  *map = {};
+                  overlays->append(*map);
+                  return map->item_count == 2; },
+              "map did not include unpublished draft and downloaded cache");
+        require(map->items[0].point.lat == 31 && map->items[0].point.lon == 121 &&
+                    map->items[0].style == ui::map::MapOverlayStyle::Warning,
+                "unpublished map position or state lost");
+        test::source->requestWindow(Section::Published, 0, 4);
+    }
     std::array<uint8_t, 64> author;
     uint32_t from = 0, to = 0;
     until([&]
@@ -491,6 +507,19 @@ int main(int argc, char** argv)
               const auto view = snapshot(Section::Downloaded);
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
+    {
+        auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
+        auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
+        until([&]
+              {
+                  overlays->update(*test::source, 31, 121, 15);
+                  *map = {};
+                  overlays->append(*map);
+                  return map->item_count == 2; },
+              "cold offline map lost local cache markers");
+        require(!router.service && !router.announcement && !router.delivery,
+                "local map started network discovery");
+    }
     require(test::fail_read_path == installed_gpx->first, "completed download reopened GPX during startup or listing");
     test::fail_read_path.clear();
     require(test::files == disk, "read-only restart changed persisted files");

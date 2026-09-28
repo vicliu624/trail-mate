@@ -5,6 +5,7 @@
 #include "ui/screens/gps/gps_page_runtime.h"
 #include "ui/widgets/top_bar.h"
 #include "ui_lvgl_ux_packs/common/touch_text_editor.h"
+#include "ui_presentation/geocaching/local_map_overlay.h"
 #include "ui_presentation/map/map_location_request.h"
 #include <algorithm>
 #include <cmath>
@@ -55,6 +56,7 @@ struct PageState
 static_assert(sizeof(PageState) <= 640, "Page state must not contain an entire result list");
 ::ui::geocaching::Source* source = nullptr;
 PageState* page = nullptr;
+::ui::geocaching::LocalMapOverlay* local_map = nullptr;
 struct MapVisit
 {
     ::ui::map::MapLocationRequest location;
@@ -878,9 +880,29 @@ void openEditor(const ::ui::geocaching::Item* item)
 
 void bind(::ui::geocaching::Source* value)
 {
+    endMapOverlays();
     if (value != source && page && page->editor && page->editor->loading) closeEditor();
     source = value;
     if (page) page->valid = false;
+}
+void beginMapOverlays()
+{
+    endMapOverlays();
+    if (!source) return;
+    local_map = new (std::nothrow)::ui::geocaching::LocalMapOverlay;
+    if (local_map && !page) source->activate(true);
+}
+void appendMapOverlays(::ui::map::MapOverlaySnapshot& out, double latitude, double longitude, uint8_t zoom)
+{
+    if (!source || !local_map) return;
+    local_map->update(*source, latitude, longitude, zoom);
+    local_map->append(out);
+}
+void endMapOverlays()
+{
+    if (local_map && source && !page) source->activate(false);
+    delete local_map;
+    local_map = nullptr;
 }
 void enter(void* user_data, lv_obj_t* parent)
 {

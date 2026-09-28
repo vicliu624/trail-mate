@@ -1,4 +1,5 @@
 #include "ui/screens/gps/gps_page_runtime.h"
+#include "ui/screens/geocaching/geocaching_page_shell.h"
 
 using Host = gps::ui::shell::Host;
 using Projection = gps::ui::shell::Projection;
@@ -3264,6 +3265,8 @@ void refresh_view()
     sync_workspace_layers_from_renderer();
     auto snapshot = map_workspace_model().snapshot();
     (void)map_overlay_source().buildMapOverlaySnapshot(*s_overlay_snapshot);
+    if (!s_map_target)
+        ::geocaching::ui::shell::appendMapOverlays(*s_overlay_snapshot, snapshot.viewport.center_lat, snapshot.viewport.center_lon, current_map_zoom());
     if (s_map_target && s_overlay_snapshot->item_count < ::ui::map::MapOverlaySnapshot::kMaxItems)
     {
         auto& target = s_overlay_snapshot->items[s_overlay_snapshot->item_count++];
@@ -4605,6 +4608,7 @@ void enter(const shell::Host* host, lv_obj_t* parent, shell::Projection projecti
     s_location_request = projection == Projection::Map ? location : nullptr;
     s_target_request = target;
     s_projection = projection;
+    if (projection == Projection::Map && !s_map_target) ::geocaching::ui::shell::beginMapOverlays();
     clear_gps_status_labels();
     clear_map_controls();
     if (s_projection == Projection::Map)
@@ -4742,6 +4746,7 @@ bool enter_target(const shell::Host* host, lv_obj_t* parent, const MapTarget& ta
 
 void exit(lv_obj_t* parent)
 {
+    ::geocaching::ui::shell::endMapOverlays();
     (void)parent;
     s_map_target = nullptr;
     if (s_target_request) s_target_request->entered = false;

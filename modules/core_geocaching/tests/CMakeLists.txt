@@ -403,6 +403,16 @@ target_compile_features(geocaching_browse_runtime_test PRIVATE cxx_std_17)
 target_link_libraries(geocaching_browse_runtime_test PRIVATE geocaching_native_hash)
 add_test(NAME geocaching_browse_runtime COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures)
 
+add_executable(geocaching_local_map_test test_local_map_overlay.cpp)
+target_include_directories(geocaching_local_map_test PRIVATE ../../ui_presentation/include)
+target_compile_features(geocaching_local_map_test PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(geocaching_local_map_test PRIVATE /UNDEBUG)
+else()
+    target_compile_options(geocaching_local_map_test PRIVATE -UNDEBUG)
+endif()
+add_test(NAME geocaching_local_map COMMAND geocaching_local_map_test)
+
 # These are ordinary user-mode tests. A 32-bit MinGW executable containing
 # "install" in its name otherwise triggers Windows installer detection.
 if(MINGW)

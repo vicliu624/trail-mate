@@ -165,6 +165,7 @@ class SavedCacheCatalog
         out = {};
         out.generation = generation_;
         out.can_refresh = !checking_;
+        out.ready = !checking_ && !error();
         out.count = count_;
         out.has_more = !preview_ && store_.hasSavedPages() && count_ > offset_ && count_ - offset_ > window_;
         std::snprintf(out.status.data(), out.status.size(), "%s", error() ? error() : checking_ ? "Loading downloaded caches..."
