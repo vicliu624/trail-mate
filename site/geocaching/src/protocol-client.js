@@ -118,9 +118,14 @@ export class DirectoryClient {
     if (this.directories.has(key) || this.directories.size >= 32) return;
     const entry = {key, destination: data[1], identity, name: data[4], ready: false};
     this.directories.set(key, entry);
-    await this.rns.transport.rememberIdentity(await packet.getHash(), data[1], await identity.getPublicKey(), null);
-    this.enqueue(() => this.checkDirectory(entry))
-      .catch(error => this.notify({type: 'source-error', name: entry.name, message: error.message}));
+    try {
+      await this.rns.transport.rememberIdentity(await packet.getHash(), data[1], await identity.getPublicKey(), null);
+      await this.enqueue(() => this.checkDirectory(entry));
+    } catch (error) {
+      // A failed first handshake must not permanently suppress later announces.
+      if (this.directories.get(key) === entry && !entry.ready) this.directories.delete(key);
+      this.notify({type: 'source-error', name: entry.name, message: error.message});
+    }
   }
 
   async checkDirectory(entry) {
