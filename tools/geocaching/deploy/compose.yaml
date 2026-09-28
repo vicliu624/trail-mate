@@ -21,6 +21,9 @@ x-runtime: &runtime
 services:
   directory:
     <<: *runtime
+    # Bridge shares this namespace; publish only its TLS listener.
+    ports:
+      - "${WSS_PORT:-18433}:8787/tcp"
     command:
       - python
       - directory_service.py
@@ -53,7 +56,7 @@ services:
       - python
       - packet_bridge.py
       - --listen
-      - 127.0.0.1
+      - 0.0.0.0
       - --port
       - "8787"
       - --tcp-host
@@ -64,37 +67,25 @@ services:
       - ${SITE_ORIGIN:-https://vicliu624.github.io}
       - --max-clients
       - "32"
+      - --tls-cert
+      - /certs/fullchain.pem
+      - --tls-key
+      - /certs/privkey.pem
+    volumes:
+      - type: bind
+        source: ${TLS_CERT_DIR:-./certs}
+        target: /certs
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
-      test: [CMD, python, -c, "import os; from websockets.sync.client import connect; c=connect('ws://127.0.0.1:8787',origin=os.environ['SITE_ORIGIN'],open_timeout=3); c.close()"]
+      test: [CMD, python, -c, "import os,socket,ssl; c=ssl.create_default_context().wrap_socket(socket.create_connection(('127.0.0.1',8787),3),server_hostname=os.environ['WSS_HOST']); c.close()"]
       interval: 60s
       timeout: 5s
       retries: 3
       start_period: 10s
     environment:
-      SITE_ORIGIN: ${SITE_ORIGIN:-https://vicliu624.github.io}
-
-  tunnel:
-    image: cloudflare/cloudflared:2026.9.3
-    restart: unless-stopped
-    network_mode: service:directory
-    depends_on:
-      directory:
-        condition: service_healthy
-        restart: true
-      bridge:
-        condition: service_healthy
-        restart: true
-    command: [tunnel, --no-autoupdate, --protocol, http2, run]
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set the named Cloudflare tunnel token in .env}
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "3"
+      WSS_HOST: ${WSS_HOST:-vicliu.i234.me}
 
 volumes:
   directory-data:

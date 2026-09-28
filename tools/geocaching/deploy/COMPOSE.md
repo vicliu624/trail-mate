@@ -1,21 +1,27 @@
-# NAS deployment without inbound ports
+# Synology DDNS deployment on TCP 18433
 
-This Compose project runs a persistent geocaching directory, a raw Reticulum WebSocket bridge, and a named Cloudflare Tunnel. It publishes no NAS ports. There is no host networking, Docker socket mount, certificate server or static cache export.
+Use `vicliu.i234.me` with public TCP **18433** forwarded to NAS TCP **18433**. This replaces the previous Cloudflare setup. No Cloudflare account, tunnel token or NAS ports 80/443 are needed. A dynamic public IP is supported through DDNS; the router must have a reachable public IP and allow port forwarding.
 
-The directory owns a private container network namespace. Bridge and tunnel share it, so `127.0.0.1:44242` and `127.0.0.1:8787` are internal to these containers, not the NAS host. Cloudflare terminates public TLS. Browser queries and responses pass through the tunnel in real time.
+```text
+Browser -> wss://vicliu.i234.me:18433/
+        -> router TCP 18433 -> NAS TCP 18433
+        -> bridge TLS listener, container port 8787
+        -> loopback Reticulum TCP 44242 + persistent directory
+```
 
-## Prerequisites
+Two containers use the same locally built Python image. Bridge shares directory's private network namespace, so its published port is declared on `directory`. Port 44242 remains loopback-only and unpublished. Neither container uses host networking or the Docker socket. All cache queries are live.
 
-- Linux Docker Engine with Docker Compose v2.17 or later (for dependency restart propagation). Use the complete project; deploying the services separately loses their shared-network relationship.
-- An amd64 or arm64 NAS able to pull the Python and Cloudflare images and install the pinned Python dependencies.
-- A Cloudflare account and a domain that can be configured for a published application hostname. A DDNS hostname you cannot manage in Cloudflare is not automatically sufficient.
-- Outbound DNS, HTTPS for image/dependency installation, TCP 7844 to Cloudflare, and TCP 4242 to the configured Reticulum peers. No inbound 80, 443 or other router forwarding is required.
+## Requirements
 
-The tunnel uses HTTP/2 over outbound TCP 7844, so UDP is not required. This is the connector transport; browser-facing WebSocket traffic still passes through it. Availability and latency must be checked from the NAS and actual visitors.
+- Linux Docker Engine and Docker Compose v2.17 or later.
+- An amd64 or arm64 NAS able to pull the Python image and install pinned Python packages.
+- Working DDNS and a router forwarding TCP 18433 to a reserved/stable NAS LAN address on port 18433.
+- A valid browser-trusted certificate covering `vicliu.i234.me`, its full chain and matching private key.
+- Outbound DNS, HTTPS for installation and TCP 4242 for the configured Reticulum peers.
 
-## 1. Get the files
+A certificate covers the hostname, not the port. Use the appropriate DSM-managed certificate or establish issuance/renewal supported by your DSM setup. Compose does not issue certificates and does not assume HTTP-01 can use blocked port 80. Do not use a self-signed certificate or disable browser verification.
 
-For a new checkout on your NAS:
+## Get the files
 
 ```sh
 git clone --branch codex/geocaching --single-branch https://github.com/vicliu624/trail-mate.git
@@ -23,69 +29,101 @@ cd trail-mate/tools/geocaching/deploy
 cp .env.example .env
 ```
 
-For an existing checkout, update `codex/geocaching` and enter the same deployment directory. The build context is the repository root; copying only `compose.yaml` is insufficient. The Dockerfile-specific ignore file sends only the service files and requirement files to the builder, excluding local keys, databases and firmware output.
+For an existing checkout, preserve local changes and update the branch. The complete repository is required because the Dockerfile uses the service source files. Its ignore file excludes certificates, databases and firmware output from the build context.
 
-## 2. Create a named tunnel
+Configure `.env`:
 
-In Cloudflare's tunnel dashboard, create a remotely managed Cloudflared tunnel. Obtain its tunnel token and put it in `.env` as `TUNNEL_TOKEN=...`. This is the tunnel token, not an API key. Keep it local.
+```dotenv
+WSS_HOST=vicliu.i234.me
+WSS_PORT=18433
+TLS_CERT_DIR=./certs
+DIRECTORY_NAME=Trail Mate public directory
+SITE_ORIGIN=https://vicliu624.github.io
+```
 
-Add a published application route:
+Origin must not include the website path. Directory name is limited to 40 UTF-8 bytes. `WSS_HOST` controls certificate health verification; DDNS and the website endpoint are configured separately. Remove the unused `TUNNEL_TOKEN` from an earlier deployment's `.env`.
 
-| Setting | Value |
-|---|---|
-| Public hostname | A hostname you control, such as `geocaching.your-domain.example` |
-| Path | Leave empty |
-| Service type | **HTTP** |
-| Service URL | **127.0.0.1:8787** |
+## Prepare the certificate
 
-Use HTTP for the internal service, not Cloudflare's arbitrary TCP application mode. The bridge already speaks WebSocket over HTTP. The resulting browser endpoint is `wss://geocaching.your-domain.example/`. Do not put an interactive Access login in front of this public endpoint: the map worker cannot complete that login flow.
+Export or copy the correct DSM-managed certificate into a dedicated deployment directory:
 
-Leave `SITE_ORIGIN=https://vicliu624.github.io` for the current website. It is the origin, not the full `/trail-mate/geocaching/` URL. `DIRECTORY_NAME` must fit in 40 UTF-8 bytes. The existing `reticulum/config` provides three editable upstream TCP entries and one loopback-only listener.
+```text
+certs/
+  fullchain.pem
+  privkey.pem
+```
 
-## 3. Build and start
+`fullchain.pem` contains the leaf certificate followed by its intermediates. `privkey.pem` is its matching unencrypted private key. Inspect the actual DSM export rather than assuming its file names. Confirm the subject alternative names include `vicliu.i234.me`, expiry is valid, and certificate/private-key public keys match.
+
+The image runs as UID/GID **10001:10001**. Set permissions on the deployment copy only:
+
+```sh
+sudo chown -R 10001:10001 ./certs
+sudo chmod 700 ./certs
+sudo chmod 600 ./certs/fullchain.pem ./certs/privkey.pem
+```
+
+Do not change DSM's system certificate-store ownership or mount all NAS keys. The deployment certificate directory is ignored by Git, excluded from the image and mounted read-only. `TLS_CERT_DIR` can instead name an absolute dedicated directory. The bind mount refuses to create a missing source directory.
+
+## Router and firewall
+
+Forward **TCP 18433 external -> NAS LAN IP:18433 internal** and allow it in the NAS firewall. No UDP forwarding is required. Do not forward 44242 or 8787 directly. Verify existing services are not using NAS TCP 18433.
+
+If an AAAA record exists, verify its IPv6 routing/firewall too; an unreachable IPv6 destination can disrupt access even when IPv4 works. Check DDNS after WAN address changes. Test externally because LAN NAT loopback behavior varies.
+
+## Build and start
 
 ```sh
 docker compose config --quiet
 docker compose build directory
-docker compose up -d --no-build
+docker compose up -d --no-build --remove-orphans
 docker compose ps
-docker compose logs --tail=60 directory bridge tunnel
+docker compose logs --tail=60 directory bridge
 ```
 
-The first build installs the service dependencies; it does not compile Trail Mate firmware. Both Python services use the same local image. Container logs rotate at 5 MB, retaining at most three files per service.
+Only Python services are built, not device firmware. `--remove-orphans` removes the previous `tunnel` container from this same Compose project, if present, without deleting named volumes. Check the project name before using it.
 
-Expected milestones:
+Directory emits a `ready` event containing `delivery`, **`discovery`**, epoch and sequence. Bridge emits `bridge_ready` with `tls: true`. Both processes restart after exit and their logs rotate at 5 MB with three retained files.
 
-- Directory emits JSON with `event: "ready"`, `delivery`, and **`discovery`** addresses.
-- Bridge emits `event: "bridge_ready"`.
-- Cloudflared reports a registered tunnel connection, and the dashboard shows the connector online.
+Directory health verifies its local TCP listener. Bridge health verifies a local TLS handshake using the real hostname, system trust roots and expiry checks. These do not prove public port forwarding or application queries. An unhealthy running container is not automatically restarted by Docker.
 
-The directory health check establishes a local TCP connection. The bridge check performs a local WebSocket handshake with the allowed Origin. These checks establish local readiness only; they do not prove public directory discovery, author verification or successful spatial queries. Docker restarts exited services, but does not restart a running process merely because its health status changes.
+## External verification and handoff
 
-Send the operator the public **WSS URL** and the **discovery** value from the directory's ready log. Do not send the tunnel token, private identity file or database. The operator then updates `site/geocaching/network.json` and, where needed, device discovery seeds. That initial configuration deployment is separate from publishing cache data. Later cache publications and updates require no website deployment.
+Test `wss://vicliu.i234.me:18433/` from another Internet connection with Origin **`https://vicliu624.github.io`**. Other Origins are intentionally rejected. An ordinary HTTPS GET may be rejected because this is a WebSocket endpoint, not a homepage.
+
+Return the WSS URL, the **discovery** hash from the ready log, service status and external connectivity results to the website operator. Never send the private key or database. The operator then updates website connection configuration and any required device discovery hints, and verifies spatial queries, signed details and GPX.
+
+Only that initial connection configuration needs a website deployment. New cache publications and revisions do not. A new directory starts empty with a new identity and cannot automatically recover data whose only source is offline. Existing identity/data migration must be deliberate and performed with the relevant service stopped.
+
+## Certificate renewal
+
+The bridge loads TLS material at startup. DSM renewal alone does not refresh the deployment copy or reload the process. Configure a privileged DSM scheduled task or supported renewal hook to:
+
+1. Select the correct certificate from the actual DSM certificate configuration.
+2. Stage the renewed chain and key privately; verify hostname, expiry and key match before replacing anything.
+3. Copy both files into the existing deployment `certs` directory with UID/GID 10001 and the permissions above. Keep the mounted directory itself in place; replace its files rather than swapping its directory inode.
+4. Once both files are ready, execute `docker compose restart bridge` from the deployment directory.
+5. Check bridge health and external TLS. Retain the previous working pair if staging validation fails.
+
+Run this when the certificate changes. Restart briefly interrupts browser sessions. Preserve the renewal task across NAS upgrades; never log private-key contents. The NAS operator must implement the hook using the actual DSM certificate paths, which this repository does not guess.
 
 ## Persistence and upgrades
 
-The named volumes `trail-mate-geocaching_directory-data` and `trail-mate-geocaching_reticulum-data` preserve the directory identity, database, LXMF state and Reticulum state. A new empty deployment creates a new directory identity and an empty catalogue. It does not automatically restore previously published records whose only source is offline.
+Named volumes `trail-mate-geocaching_directory-data` and `trail-mate-geocaching_reticulum-data` retain identity, SQLite, LXMF and Reticulum state. Back up consistently while services are stopped; identity material is private. Bind-mount replacements require write access for UID 10001.
 
-The database, requests, snapshots and records are not shared with a browser build. To retain an existing directory identity and content, migrate its complete stopped service state deliberately before starting this deployment; do not overwrite a running volume.
-
-Upgrade all three services together because bridge and tunnel share the directory container's network namespace:
+Upgrade the services together because they share a network namespace:
 
 ```sh
 docker compose down
 git pull --ff-only
 docker compose build directory
-docker compose pull tunnel
-docker compose up -d --no-build
+docker compose up -d --no-build --remove-orphans
 ```
 
-`down` retains named volumes. **Do not add `--volumes` or `-v`** unless intentionally deleting all saved directory data and identity. Use NAS volume backup tooling while services are stopped for a consistent backup; identity material is private. The Python service user is UID/GID 10001. Replacing named volumes with NAS bind mounts requires granting that user write access.
+`down` preserves data. **Do not add `-v` or `--volumes`.** Preserve certificate copies and the renewal procedure separately from the directory data volumes.
 
-## Verification and limits
+## Verification boundary
 
-Compose configuration is validated before release. A live Docker build/run and end-to-end public query still need validation on the NAS; the development machine's Linux Docker engine was unavailable when this deployment was prepared.
+The Compose model is checked locally for exactly one host-port mapping and no tunnel service. The development machine's Linux Docker engine is unavailable, so image build and container startup still need NAS verification. The bridge's existing TLS options are reused without protocol code changes.
 
-After startup, verify a live query, exact signed detail and GPX download. Then publish a new revision and query again without rebuilding or deploying the website. Restart the NAS containers and verify the directory identity and data survive. The bridge admits 32 concurrent clients; this is a connection limit, not a tested NAS capacity guarantee.
-
-Reference: [Cloudflare setup](https://developers.cloudflare.com/tunnel/get-started/), [outbound firewall requirements](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/tunnel-with-firewall/), [tunnel run parameters](https://developers.cloudflare.com/tunnel/reference/run-parameters/).
+The bridge limit is 32 concurrent clients, not a tested NAS capacity guarantee. Acceptance requires a publication and a later revision appearing in fresh browser queries without website deployment, plus identity/data persistence across service restart.
