@@ -87,19 +87,35 @@ class SdIndexedDownloadRecovery
                 current_.created = outgoing.created;
                 current_.identity.generation = outgoing.install_generation;
                 intent_ = outgoing.continue_intent;
-                if (!get_.emplace(volume_).begin(root_, 10, {current_.task.data(), current_.task.size()}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
-                phase_ = Phase::Task;
+                if (!get_.emplace(volume_).begin(root_, waiting_ ? 10 : 12, {current_.task.data(), current_.task.size()}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+                phase_ = waiting_ ? Phase::Task : Phase::Completion;
             }
             if (!scan_->advance()) return finish(IndexScanStep::Invalid);
             return result_;
         }
         const auto status = get_->step();
         if (status == IndexGetStep::Working) return result_;
-        if (status != IndexGetStep::Ready && !(phase_ == Phase::Install && status == IndexGetStep::NotFound))
+        if (status != IndexGetStep::Ready && !((phase_ == Phase::Install || phase_ == Phase::Completion) && status == IndexGetStep::NotFound))
             return finish(status == IndexGetStep::VolumeChanged ? IndexScanStep::VolumeChanged : status == IndexGetStep::IoError         ? IndexScanStep::IoError
                                                                                              : status == IndexGetStep::WorkspaceTooSmall ? IndexScanStep::WorkspaceTooSmall
                                                                                                                                          : IndexScanStep::Invalid);
         TaskView task;
+        if (phase_ == Phase::Completion)
+        {
+            InstallRecordView installed;
+            const ByteView task_key{current_.task.data(), current_.task.size()};
+            if (status == IndexGetStep::Ready)
+            {
+                if (!decodeInstallRecord(task_key, get_->value(), installed)) return finish(IndexScanStep::Invalid);
+                // This durable marker is written only after installation and
+                // cleanup finish. A completed generation has no recovery work;
+                // do not reopen its task, cache head or GPX to rediscover that.
+                if (installed.cleanup_complete && installed.generation == current_.identity.generation) return continueScan(false);
+            }
+            if (!get_.emplace(volume_).begin(root_, 10, task_key, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+            phase_ = Phase::Task;
+            return result_;
+        }
         if (phase_ == Phase::Task)
         {
             if (!decodeTask({current_.task.data(), current_.task.size()}, get_->value(), task)) return finish(IndexScanStep::Invalid);
@@ -154,7 +170,8 @@ class SdIndexedDownloadRecovery
         Task,
         Head,
         Install,
-        Preview
+        Preview,
+        Completion
     };
     IndexScanStep continueScan(bool eligible)
     {

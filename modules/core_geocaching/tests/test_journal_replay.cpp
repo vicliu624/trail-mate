@@ -2466,10 +2466,17 @@ int checkIndexedDownloadReceipt(const char* path)
         if (client.phase() != DownloadPhase::Stored || !files.count(target) || owner.holder()) return 276;
         {
             DownloadRecoveryRequest completed;
+            const auto reads_before = read_bytes;
             auto status = DownloadRecoveryRead::Pending;
             for (unsigned i = 0; i < 32768 && status == DownloadRecoveryRead::Pending; ++i)
                 status = indexed->readRecovery({}, completed);
             if (status != DownloadRecoveryRead::End || owner.holder()) return 426;
+            for (const auto& read : read_bytes)
+            {
+                if (read.first.find("/0a/") == std::string::npos && read.first.find("/02/") == std::string::npos) continue;
+                const auto before = reads_before.find(read.first);
+                if (read.second != (before == reads_before.end() ? 0 : before->second)) return 427;
+            }
         }
         {
             const auto disk = files;
