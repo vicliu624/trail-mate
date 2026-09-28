@@ -498,6 +498,25 @@ int main(int argc, char** argv)
     // Cold offline startup has no dispatch destination or QueryClient yet.
     // Saved rows and full details must not wait for either to become available.
     router.ready = false;
+    // Open the main map directly, without warming either Geocaching list.
+    {
+        test::source->activate(true);
+        auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
+        auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
+        for (unsigned frame = 0; frame < 100 && map->item_count != 2; ++frame)
+        {
+            overlays->update(*test::source, 31, 121, 15);
+            *map = {};
+            overlays->append(*map);
+            for (unsigned work = 0; work < 150; ++work) tick();
+        }
+        require(map->item_count == 2 && map->header.valid, "direct main map did not load local markers");
+        test::source->activate(false);
+        tick();
+        until([&]
+              { return std::strstr(snapshot(Section::Published).status.data(), "Starting Geocaching"); },
+              "direct map session did not close");
+    }
     const auto installed_gpx = std::find_if(disk.begin(), disk.end(), [](const auto& file)
                                             { return file.first.find("/.state/") == std::string::npos && file.first.size() >= 4 && file.first.substr(file.first.size() - 4) == ".gpx"; });
     require(installed_gpx != disk.end(), "restart test requires an installed GPX");

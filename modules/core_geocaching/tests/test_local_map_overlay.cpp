@@ -5,6 +5,19 @@
 #include <vector>
 
 using namespace ui::geocaching;
+namespace
+{
+enum class TrackOverlayFileKind
+{
+    Track,
+    Route
+};
+bool s_track_overlay_active = false;
+bool s_route_image_strip_visible = false;
+TrackOverlayFileKind s_track_overlay_kind = TrackOverlayFileKind::Track;
+// Compile the actual shared Map filter, rather than duplicating its rules.
+#include "geocaching_map_filter.inc"
+} // namespace
 struct LocalSource : Source
 {
     std::vector<Item> drafts, downloaded;
@@ -68,6 +81,8 @@ int main()
     projection->append(*out);
     assert(out->item_count == 10); // Includes drafts beyond the first four rows.
     assert(out->header.valid);     // Local markers render even without a GPS fix.
+    keep_only_current_position_overlay(*out);
+    assert(out->item_count == 10); // Hiding map chrome must retain saved places.
     assert(out->items[0].style == ui::map::MapOverlayStyle::Warning);
     assert(out->items[9].style == ui::map::MapOverlayStyle::Default);
     const auto requests = source.requests;

@@ -3025,6 +3025,9 @@ void keep_only_current_position_overlay(::ui::map::MapOverlaySnapshot& snapshot)
         const auto& item = snapshot.items[read];
         const bool keep_item =
             item.kind == ::ui::map::MapOverlayKind::CurrentPosition ||
+            // Saved places remain visible like Agenda markers and POIs when
+            // map chrome is hidden; this toggle only hides transient info.
+            item.kind == ::ui::map::MapOverlayKind::Geocache ||
             (keep_route_points && item.kind == ::ui::map::MapOverlayKind::RoutePoint) ||
             (keep_selected_route_image &&
              item.kind == ::ui::map::MapOverlayKind::SelectedTarget);
