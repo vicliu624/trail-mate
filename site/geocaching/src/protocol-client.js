@@ -74,21 +74,13 @@ export class DirectoryClient {
       this.notify({type: 'status', state: 'discovering'});
       this.enqueue(async () => {
         await this.router.announce('Trail Mate web visitor');
+        // Drop failed reconnect handshakes before soliciting new announces;
+        // otherwise discover() suppresses their responses as known peers.
+        await this.revalidateDirectories();
         // Operator-owned discovery hints only: discover() still verifies the
         // signed announcement and binds the service to its delivery identity.
         for (const seed of discoverySeeds) {
           await this.rns.transport.requestPathAuto(Uint8Array.from(seed.match(/../g), pair => parseInt(pair, 16)));
-        }
-        // A service may announce only every six hours. Revalidate known peers
-        // immediately after reconnect instead of leaving the UI disabled until
-        // another discovery announce happens to arrive.
-        for (const entry of [...this.directories.values()].filter(d => d.ready).slice(0, 3)) {
-          try {
-            await this.router.recoverDirectLink(entry.destination);
-            await this.checkDirectory(entry);
-          } catch (error) {
-            this.notify({type: 'source-error', name: entry.name, message: error.message});
-          }
         }
       }).catch(() => {});
     });
@@ -102,6 +94,21 @@ export class DirectoryClient {
     const task = this.tail.then(() => { if (this.closed) throw Error('Connection closed'); return action(); });
     this.tail = task.catch(() => {});
     return task;
+  }
+
+  async revalidateDirectories() {
+    // A service may announce only every six hours. Revalidate known peers
+    // immediately after reconnect, and let failed peers be discovered again.
+    for (const entry of [...this.directories.values()].filter(d => d.ready).slice(0, 3)) {
+      entry.ready = false;
+      try {
+        await this.router.recoverDirectLink(entry.destination);
+        await this.checkDirectory(entry);
+      } catch (error) {
+        if (this.directories.get(entry.key) === entry) this.directories.delete(entry.key);
+        this.notify({type: 'source-error', name: entry.name, message: error.message});
+      }
+    }
   }
 
   async discover({destinationHash, identity, appData, packet}) {
