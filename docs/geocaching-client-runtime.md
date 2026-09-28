@@ -21,6 +21,10 @@ The GPX also includes both fields and the signed record; no second sidecar file
 or background detail synchronization is introduced.
 
 Storage starts when the user opens Downloaded or Published, or saves a cache.
+Reticulum starts when Discover is requested or publication readiness is checked.
+Opening saved lists, saved details or the local draft list does not create a
+network backend. Once started, the backend remains available to that session
+and its pending network operations; closing the session releases its ownership.
 Downloads and publications retain signature checks, durable transaction state,
 verified GPX installation, restart recovery and durable reply receipts. Storage
 failure or USB ownership does not prevent Discover from receiving a page.

@@ -484,9 +484,7 @@ int main(int argc, char** argv)
     require(installed_gpx != disk.end(), "restart test requires an installed GPX");
     test::fail_read_path = installed_gpx->first;
     test::source->activate(true);
-    until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Waiting for Reticulum IP connection"); },
-          "offline startup did not wait for its online identity");
+    tick();
     test::source->requestWindow(Section::Downloaded, 0, 4);
     until([&]
           {
@@ -496,6 +494,7 @@ int main(int argc, char** argv)
     require(test::fail_read_path == installed_gpx->first, "completed download reopened GPX during startup or listing");
     test::fail_read_path.clear();
     require(test::files == disk, "read-only restart changed persisted files");
+    require(!router.service && !router.announcement && !router.delivery, "local list started a network service");
     const auto offline_sends = router.sends;
     test::source->open(item, snapshot(Section::Downloaded).generation);
     until([&]
@@ -504,18 +503,20 @@ int main(int argc, char** argv)
     require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
             "saved detail lost description or hint");
     require(router.sends == offline_sends && test::files == disk, "offline detail used network or rewrote storage");
+    require(!router.service, "local detail started a network service");
     test::source->closeDetail();
     tick();
-    router.ready = true;
-    until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
-          "offline session did not resume discovery when transport became ready");
     test::source->requestWindow(Section::Published, 0, 4);
     until([&]
           {
               const auto view = snapshot(Section::Published);
               return view.count == 1 && test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed && item.publication_revision == 2; },
           "restart lost publication confirmation");
+    require(!router.service, "local publication list started a network service");
+    router.ready = true;
+    until([&]
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+          "offline session did not start discovery on demand");
     test::source->activate(false);
     until([&]
           { return !router.service; },
@@ -610,7 +611,7 @@ int main(int argc, char** argv)
     require(test::files == disk, "healthy recovery after faults changed persistent data");
     test::source->activate(false);
     until([&]
-          { return !router.service; },
+          { return !router.service && std::strstr(snapshot(Section::Published).status.data(), "Starting Geocaching"); },
           "healthy session after faults did not close");
     require(test::allocations.empty() && !test::open_files && !test::open_dirs, "healthy recovery after faults leaked resources");
     // Capture actual disk states from the device startup, then recreate the
@@ -795,6 +796,9 @@ int main(int argc, char** argv)
         until([&]
               { return snapshot(Section::Published).can_create; },
               "maintenance fixture did not open");
+        until([&]
+              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              "maintenance network browser did not start on demand");
         announce(router);
         until([&]
               { return router.sends == initial_sends + 1; },
@@ -824,6 +828,9 @@ int main(int argc, char** argv)
               { return snapshot(Section::Published).can_create; },
               "session checkpoint failed restart recovery");
         const auto resumed_sends = router.sends;
+        until([&]
+              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              "resumed network browser did not start on demand");
         announce(router);
         until([&]
               { return router.sends == resumed_sends + 1; },
@@ -853,6 +860,9 @@ int main(int argc, char** argv)
               { return snapshot(Section::Published).can_create; },
               "pagination restart failed");
         const auto paging_sends = router.sends;
+        until([&]
+              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              "pagination network browser did not start on demand");
         announce(router);
         until([&]
               { return router.sends == paging_sends + 1; },
@@ -900,6 +910,9 @@ int main(int argc, char** argv)
               { return snapshot(Section::Published).can_create; },
               "reclamation session did not recover");
         const auto reclaim_sends = router.sends;
+        until([&]
+              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              "reclamation network browser did not start on demand");
         announce(router);
         until([&]
               { return router.sends == reclaim_sends + 1; },

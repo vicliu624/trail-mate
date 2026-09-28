@@ -295,6 +295,7 @@ SemaphoreHandle_t mutex = nullptr;
 std::unique_ptr<Session> session;
 std::array<uint8_t, 16> boot{};
 std::atomic<bool> wanted{false}, active{false}, restart{false};
+std::atomic<bool> network_requested{false};
 std::atomic<bool> cancel_draft_read{false};
 std::atomic<bool> cancel_detail{false};
 std::atomic<uint32_t> next_step{0};
@@ -750,6 +751,7 @@ bool processResponse(Session& s)
 // while saved data is recovering, unavailable, or held by USB.
 void advanceBrowse(Session& s)
 {
+    if (!network_requested.load() && !s.client && !downloadActive() && !publicationActive()) return;
     if (auto cached = router->takeInactiveReticulumCache())
     {
         s.created_backend = nullptr;
@@ -1185,6 +1187,7 @@ bool publicationDraftReady(const std::array<uint8_t, 16>& id, uint64_t generatio
                            uint32_t* from = nullptr, uint32_t* to = nullptr)
 {
     if (!session) return false;
+    network_requested.store(true);
     if (!draftCatalogReady(*session))
     {
         session->draft_catalog_wanted = true;
@@ -1224,6 +1227,7 @@ class Facade final : public ::ui::geocaching::Source
   public:
     void activate(bool open) override
     {
+        if (open && !wanted.load()) network_requested.store(false);
         wanted.store(open);
         if (!open) cancel_detail.store(true);
         next_step.store(0);
@@ -1231,6 +1235,7 @@ class Facade final : public ::ui::geocaching::Source
     void snapshot(::ui::geocaching::Section section, ::ui::geocaching::Snapshot& out) override
     {
         out = {};
+        if (section == ::ui::geocaching::Section::Discover) network_requested.store(true);
         Guard guard;
         if (!guard.locked)
         {
@@ -1320,6 +1325,7 @@ class Facade final : public ::ui::geocaching::Source
     }
     void requestWindow(::ui::geocaching::Section section, size_t offset, size_t count) override
     {
+        if (section == ::ui::geocaching::Section::Discover) network_requested.store(true);
         Guard guard;
         if (!guard.locked || !session) return;
         if (section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
