@@ -21,6 +21,10 @@ The GPX also includes both fields and the signed record; no second sidecar file
 or background detail synchronization is introduced.
 
 Storage starts when the user opens Downloaded or Published, or saves a cache.
+The draft editor uses the shared map location-selection route instead of latitude
+and longitude text inputs. Confirming writes WGS84 E7 coordinates; cancellation
+preserves the original position and all live editor fields. Existing coordinates
+seed the map viewport, and the selected position is displayed read-only.
 Reticulum starts when Discover is requested or publication readiness is checked.
 Opening saved lists, saved details or the local draft list does not create a
 network backend. Once started, the backend remains available to that session

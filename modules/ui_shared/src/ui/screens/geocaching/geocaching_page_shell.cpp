@@ -5,7 +5,9 @@
 #include "ui/screens/gps/gps_page_runtime.h"
 #include "ui/widgets/top_bar.h"
 #include "ui_lvgl_ux_packs/common/touch_text_editor.h"
+#include "ui_presentation/map/map_location_request.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <new>
@@ -55,6 +57,8 @@ static_assert(sizeof(PageState) <= 640, "Page state must not contain an entire r
 PageState* page = nullptr;
 struct MapVisit
 {
+    ::ui::map::MapLocationRequest location;
+    bool picking = false;
     ::gps::ui::runtime::MapTarget target;
     std::array<uint8_t, 32> selected_id{};
     uint64_t overlay_generation = 0;
@@ -72,10 +76,39 @@ void saveEditor();
 void closeEditor();
 void previewPublication();
 
+void updateEditorLocation()
+{
+    if (!page || !page->editor) return;
+    auto& editor = *page->editor;
+    if (editor.input.has_coordinates)
+        lv_label_set_text_fmt(editor.fields[2], "%.7f, %.7f", editor.input.latitude_e7 / 10000000.0, editor.input.longitude_e7 / 10000000.0);
+    else lv_label_set_text(editor.fields[2], "No location selected");
+}
+
 void returnFromMap(void*)
 {
     if (!map_visit) return;
     ::gps::ui::runtime::exit(map_visit->parent);
+    bool invalid_location = false;
+    if (map_visit->picking && page && page->editor)
+    {
+        const auto& result = map_visit->location.result;
+        if (result.state == ::ui::map::MapLocationSelectionState::Picked)
+        {
+            if (std::isfinite(result.latitude) && std::isfinite(result.longitude) &&
+                result.latitude >= -90 && result.latitude <= 90 && result.longitude >= -180 && result.longitude <= 180)
+            {
+                auto& editor = *page->editor;
+                editor.input.latitude_e7 = static_cast<int32_t>(std::llround(result.latitude * 10000000.0));
+                const auto longitude = std::llround(result.longitude * 10000000.0);
+                editor.input.longitude_e7 = static_cast<int32_t>(longitude == 1800000000 ? -1800000000 : longitude);
+                editor.input.has_coordinates = true;
+                editor.dirty = true;
+                updateEditorLocation();
+            }
+            else invalid_location = true;
+        }
+    }
     delete map_visit;
     map_visit = nullptr;
     if (!page) return;
@@ -83,7 +116,37 @@ void returnFromMap(void*)
     set_default_group(page->group);
     if (page->timer) lv_timer_resume(page->timer);
     refreshView();
-    if (page->group) lv_group_focus_obj(page->topbar.back_btn);
+    if (invalid_location) lv_label_set_text(page->status, "Invalid map location; previous position retained");
+    else if (page->editor) lv_label_set_text(page->status, "Editing local draft");
+    if (page->group) lv_group_focus_obj(page->editor ? page->editor->fields[1] : page->topbar.back_btn);
+}
+
+void openLocationMap(void*)
+{
+    if (!page || !page->editor || map_visit || page->editor->saving || page->editor->loading || page->editor->public_confirmation) return;
+    map_visit = new (std::nothrow) MapVisit;
+    if (!map_visit)
+    {
+        lv_label_set_text(page->status, "Cannot open map; edits retained");
+        return;
+    }
+    map_visit->picking = true;
+    const auto& input = page->editor->input;
+    map_visit->location.has_initial_viewport = input.has_coordinates;
+    map_visit->location.initial_viewport.center_lat = input.latitude_e7 / 10000000.0;
+    map_visit->location.initial_viewport.center_lon = input.longitude_e7 / 10000000.0;
+    map_visit->parent = lv_obj_get_parent(page->root);
+    map_visit->host.request_exit = [](void*)
+    { lv_async_call_cancel(returnFromMap, nullptr); lv_async_call(returnFromMap, nullptr); };
+    lv_obj_add_flag(page->root, LV_OBJ_FLAG_HIDDEN);
+    if (page->timer) lv_timer_pause(page->timer);
+    for (auto* indev = lv_indev_get_next(nullptr); indev; indev = lv_indev_get_next(indev)) lv_indev_wait_release(indev);
+    ::gps::ui::runtime::enter(&map_visit->host, map_visit->parent, ::gps::ui::shell::Projection::Map, &map_visit->location);
+    if (map_visit->location.result.state != ::ui::map::MapLocationSelectionState::Selecting)
+    {
+        returnFromMap(nullptr);
+        if (page) lv_label_set_text(page->status, "Map unavailable; edits retained");
+    }
 }
 
 bool openMap(const ::ui::geocaching::Item& item)
@@ -630,16 +693,11 @@ void saveEditor()
         return;
     }
     auto& input = editor.input;
-    const char* lat = lv_textarea_get_text(editor.fields[1]);
-    const char* lon = lv_textarea_get_text(editor.fields[2]);
-    input.has_coordinates = *lat || *lon;
     int32_t difficulty = 0, terrain = 0;
-    if ((input.has_coordinates && (!parseDecimal(lat, input.latitude_e7) || !parseDecimal(lon, input.longitude_e7) ||
-                                   input.latitude_e7 < -900000000 || input.latitude_e7 > 900000000 || input.longitude_e7 >= 1800000000)) ||
-        !parseDecimal(lv_textarea_get_text(editor.fields[5]), difficulty) || difficulty < 10000000 || difficulty > 50000000 || difficulty % 5000000 ||
+    if (!parseDecimal(lv_textarea_get_text(editor.fields[5]), difficulty) || difficulty < 10000000 || difficulty > 50000000 || difficulty % 5000000 ||
         !parseDecimal(lv_textarea_get_text(editor.fields[6]), terrain) || terrain < 10000000 || terrain > 50000000 || terrain % 5000000)
     {
-        lv_label_set_text(page->status, "Check coordinates and 1-5 ratings (step 0.5)");
+        lv_label_set_text(page->status, "Check 1-5 ratings (step 0.5)");
         return;
     }
     input.difficulty_x2 = static_cast<uint8_t>(difficulty / 5000000);
@@ -674,13 +732,32 @@ void openEditor(const ::ui::geocaching::Item* item)
         page->rows.fill(nullptr);
         lv_obj_clean(page->list);
         lv_obj_add_flag(page->list, LV_OBJ_FLAG_SCROLLABLE);
-        const char* names[] = {"Name", "Latitude (blank if unset)", "Longitude", "Description", "Hint", "Difficulty (1-5)", "Terrain (1-5)"};
+        const char* names[] = {"Name", "Location", "Selected position", "Description", "Hint", "Difficulty (1-5)", "Terrain (1-5)"};
         const uint32_t limits[] = {96, 12, 13, 2048, 512, 3, 3};
         for (size_t i = 0; i < editor.fields.size(); ++i)
         {
             auto* label = lv_label_create(page->list);
             lv_label_set_text(label, names[i]);
             styles::apply_label_primary(label);
+            if (i == 1)
+            {
+                auto* pick = editor.fields[i] = button(page->list, "Choose on map", ::ui::page_profile::current().control_button_height);
+                lv_obj_set_width(pick, LV_PCT(100));
+                lv_obj_add_event_cb(
+                    pick, [](lv_event_t*)
+                    { lv_async_call_cancel(openLocationMap, nullptr); lv_async_call(openLocationMap, nullptr); },
+                    LV_EVENT_CLICKED, nullptr);
+                continue;
+            }
+            if (i == 2)
+            {
+                editor.fields[i] = lv_label_create(page->list);
+                lv_obj_set_width(editor.fields[i], LV_PCT(100));
+                lv_label_set_long_mode(editor.fields[i], LV_LABEL_LONG_WRAP);
+                styles::apply_label_primary(editor.fields[i]);
+                updateEditorLocation();
+                continue;
+            }
             auto* field = editor.fields[i] = lv_textarea_create(page->list);
             lv_obj_set_width(field, LV_PCT(100));
             lv_textarea_set_one_line(field, i != 3 && i != 4);
@@ -748,11 +825,7 @@ void openEditor(const ::ui::geocaching::Item* item)
                 }
             }
             char text[24];
-            if (input.has_coordinates)
-            {
-                std::snprintf(text, sizeof(text), "%.7f", input.latitude_e7 / 10000000.0); lv_textarea_set_text(e.fields[1], text);
-                std::snprintf(text, sizeof(text), "%.7f", input.longitude_e7 / 10000000.0); lv_textarea_set_text(e.fields[2], text);
-            }
+            updateEditorLocation();
             std::snprintf(text, sizeof(text), "%.1f", input.difficulty_x2 / 2.0); lv_textarea_set_text(e.fields[5], text);
             std::snprintf(text, sizeof(text), "%.1f", input.terrain_x2 / 2.0); lv_textarea_set_text(e.fields[6], text);
             lv_dropdown_set_selected(e.container, input.container_size);
@@ -763,7 +836,8 @@ void openEditor(const ::ui::geocaching::Item* item)
             editor.loading = true;
             editor.input.id = id;
             editor.dirty = false;
-            for (auto* field : editor.fields) setEnabled(field, false);
+            for (auto* field : editor.fields)
+                if (field != editor.fields[2]) setEnabled(field, false);
             setEnabled(editor.container, false);
             for (auto* tab : page->tabs) setEnabled(tab, false);
             setEnabled(page->previous, false);
@@ -782,7 +856,8 @@ void openEditor(const ::ui::geocaching::Item* item)
         }
     }
     editor.loading = false;
-    for (auto* field : editor.fields) setEnabled(field, true);
+    for (auto* field : editor.fields)
+        if (field != editor.fields[2]) setEnabled(field, true);
     setEnabled(editor.container, true);
     editor.dirty = !item;
     for (auto* tab : page->tabs) setEnabled(tab, false);
@@ -947,6 +1022,7 @@ void enter(void* user_data, lv_obj_t* parent)
 }
 void exit(void*, lv_obj_t*)
 {
+    lv_async_call_cancel(openLocationMap, nullptr);
     if (!page) return;
     if (page->editor && page->editor->loading && source) source->cancelDraftRead(page->editor->input.id);
     delete page->editor;

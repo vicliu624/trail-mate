@@ -3,6 +3,7 @@
 #include "ui/screens/geocaching/geocaching_page_shell.h"
 #include "ui/screens/gps/gps_page_runtime.h"
 #include "ui/widgets/top_bar_power_presenter.h"
+#include "ui_presentation/map/map_location_request.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,13 +15,25 @@ namespace gps::ui::runtime
 {
 const shell::Host* test_map_host = nullptr;
 MapTarget test_map_target;
+::ui::map::MapLocationRequest* test_location = nullptr;
+bool test_map_available = true;
+void enter(const shell::Host* host, lv_obj_t*, shell::Projection, ::ui::map::MapLocationRequest* location, ::ui::map::MapTargetRequest*)
+{
+    test_map_host = host;
+    test_location = location;
+    location->result.state = test_map_available ? ::ui::map::MapLocationSelectionState::Selecting : ::ui::map::MapLocationSelectionState::Cancelled;
+}
 bool enter_target(const shell::Host* host, lv_obj_t*, const MapTarget& target)
 {
     test_map_host = host;
     test_map_target = target;
     return true;
 }
-void exit(lv_obj_t*) { test_map_host = nullptr; }
+void exit(lv_obj_t*)
+{
+    test_map_host = nullptr;
+    test_location = nullptr;
+}
 } // namespace gps::ui::runtime
 
 namespace ui::widgets::top_bar_power
@@ -341,6 +354,7 @@ int main(int argc, char** argv)
     auto* name_field = lv_obj_get_child(list, 1);
     for (unsigned field = 0; field < 7; ++field)
     {
+        if (field == 1 || field == 2) continue;
         auto* input = lv_obj_get_child(list, 2 * field + 1);
         const auto layers = lv_obj_get_child_count(lv_layer_top());
         lv_obj_send_event(input, LV_EVENT_CLICKED, nullptr);
@@ -368,8 +382,50 @@ int main(int argc, char** argv)
         else if (lv_obj_get_child_count(lv_layer_top()) != layers) return 44;
     }
     lv_textarea_set_text(name_field, "林间宝藏");
-    lv_textarea_set_text(lv_obj_get_child(list, 3), "30.5");
-    lv_textarea_set_text(lv_obj_get_child(list, 5), "120.5");
+    auto* location_button = lv_obj_get_child(list, 3);
+    if (!lv_obj_check_type(location_button, &lv_button_class) ||
+        !lv_obj_check_type(lv_obj_get_child(list, 5), &lv_label_class)) return 53;
+    lv_obj_send_event(location_button, LV_EVENT_CLICKED, nullptr);
+    lv_timer_handler();
+    if (!gps::ui::runtime::test_location || !lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN) ||
+        gps::ui::runtime::test_location->has_initial_viewport) return 54;
+    gps::ui::runtime::test_location->result = {30.5, 120.5, ui::map::MapLocationSelectionState::Picked};
+    gps::ui::runtime::test_map_host->request_exit(nullptr);
+    lv_timer_handler();
+    if (lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN) || std::strcmp(lv_textarea_get_text(name_field), "林间宝藏") ||
+        !std::strstr(lv_label_get_text(lv_obj_get_child(list, 5)), "30.5000000")) return 55;
+    // Cancelling a second selection retains the previous position and live text.
+    lv_obj_send_event(location_button, LV_EVENT_CLICKED, nullptr);
+    lv_timer_handler();
+    if (!gps::ui::runtime::test_location || !gps::ui::runtime::test_location->has_initial_viewport ||
+        gps::ui::runtime::test_location->initial_viewport.center_lon != 120.5) return 56;
+    gps::ui::runtime::test_location->result = {0, 0, ui::map::MapLocationSelectionState::Cancelled};
+    gps::ui::runtime::test_map_host->request_exit(nullptr);
+    lv_timer_handler();
+    if (!std::strstr(lv_label_get_text(lv_obj_get_child(list, 5)), "120.5000000")) return 57;
+    gps::ui::runtime::test_map_available = false;
+    lv_obj_send_event(location_button, LV_EVENT_CLICKED, nullptr);
+    lv_timer_handler();
+    if (lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN) || std::strcmp(lv_textarea_get_text(name_field), "林间宝藏")) return 58;
+    gps::ui::runtime::test_map_available = true;
+    // Date-line coordinates use the protocol's canonical -180 representation.
+    lv_obj_send_event(location_button, LV_EVENT_CLICKED, nullptr);
+    lv_timer_handler();
+    gps::ui::runtime::test_location->result = {0, 180, ui::map::MapLocationSelectionState::Picked};
+    gps::ui::runtime::test_map_host->request_exit(nullptr);
+    lv_timer_handler();
+    if (!std::strstr(lv_label_get_text(lv_obj_get_child(list, 5)), "-180.0000000")) return 59;
+    lv_obj_send_event(location_button, LV_EVENT_CLICKED, nullptr);
+    lv_timer_handler();
+    gps::ui::runtime::test_location->result = {91, 0, ui::map::MapLocationSelectionState::Picked};
+    gps::ui::runtime::test_map_host->request_exit(nullptr);
+    lv_timer_handler();
+    if (!std::strstr(lv_label_get_text(lv_obj_get_child(list, 5)), "-180.0000000")) return 60;
+    lv_obj_send_event(location_button, LV_EVENT_CLICKED, nullptr);
+    lv_timer_handler();
+    gps::ui::runtime::test_location->result = {30.5, 120.5, ui::map::MapLocationSelectionState::Picked};
+    gps::ui::runtime::test_map_host->request_exit(nullptr);
+    lv_timer_handler();
     const std::string description = std::string(63, 'a') + "宝藏";
     lv_textarea_set_text(lv_obj_get_child(list, 7), description.c_str());
     if (!save(std::string(argv[3]) + "-editor.ppm", screen)) return 27;
