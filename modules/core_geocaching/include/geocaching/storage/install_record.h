@@ -19,6 +19,7 @@ struct InstallRecordView
     ByteView old_file_hash;
     uint64_t generation = 0;
     InstallPhase phase = InstallPhase::Prepared;
+    bool cleanup_complete = false;
 };
 inline bool decodeInstallRecord(ByteView key, ByteView value, InstallRecordView& out)
 {
@@ -28,15 +29,22 @@ inline bool decodeInstallRecord(ByteView key, ByteView value, InstallRecordView&
     InstallRecordView candidate;
     size_t fields = 0;
     uint64_t phase = 0;
-    if (!reader.array(fields, 6) || fields != 6 || !reader.binary(candidate.cache_id, 32) || candidate.cache_id.size != 32 ||
+    if (!reader.array(fields, 7) || (fields != 6 && fields != 7) || !reader.binary(candidate.cache_id, 32) || candidate.cache_id.size != 32 ||
         !reader.binary(candidate.revision_hash, 32) || candidate.revision_hash.size != 32 ||
         !reader.binary(candidate.new_file_hash, 32) || candidate.new_file_hash.size != 32) return false;
     auto nullable = reader;
     if (nullable.nil()) reader = nullable;
     else if (!reader.binary(candidate.old_file_hash, 32) || candidate.old_file_hash.size != 32) return false;
     if (!reader.unsignedInteger(candidate.generation) || candidate.generation == 0 ||
-        !reader.unsignedInteger(phase) || phase > 3 || !reader.finished()) return false;
+        !reader.unsignedInteger(phase) || phase > 3) return false;
     candidate.phase = static_cast<InstallPhase>(phase);
+    if (fields == 7)
+    {
+        uint64_t complete = 0;
+        if (!reader.unsignedInteger(complete) || complete != 1 || candidate.phase != InstallPhase::Installed) return false;
+        candidate.cleanup_complete = true;
+    }
+    if (!reader.finished()) return false;
     out = candidate;
     return true;
 }
@@ -45,9 +53,10 @@ inline bool encodeInstallRecord(ByteView key, const InstallRecordView& install, 
 {
     written = 0;
     protocol::CmpWriter writer(output, capacity);
-    if (!writer.array(6) || !writer.binary(install.cache_id) || !writer.binary(install.revision_hash) ||
+    if (!writer.array(install.cleanup_complete ? 7 : 6) || !writer.binary(install.cache_id) || !writer.binary(install.revision_hash) ||
         !writer.binary(install.new_file_hash) || !(install.old_file_hash.size ? writer.binary(install.old_file_hash) : writer.nil()) ||
         !writer.unsignedInteger(install.generation) || !writer.unsignedInteger(static_cast<uint8_t>(install.phase))) return false;
+    if (install.cleanup_complete && !writer.unsignedInteger(1)) return false;
     InstallRecordView checked;
     if (!decodeInstallRecord(key, {output, writer.size()}, checked)) return false;
     written = writer.size();

@@ -27,6 +27,16 @@ failure or USB ownership does not prevent Discover from receiving a page.
 Checkpoint rotation shares storage ownership with persistent operations but
 does not delay network queries or pagination.
 
+Installed downloads have a separate durable completion marker for file cleanup.
+The optional seventh GpxInstall field is integer `1`, accepted only for the
+Installed phase. Older six-field records remain eligible for one recovery pass.
+The marker is committed only after target verification and successful history
+retention; interrupted cleanup remains recoverable. Recovery also fills missing
+list metadata from the retained signed record. Subsequent startup skips these
+completed installations without reopening their GPX files. Downloaded pages use
+the current head/object/install indexes, with four rows and one lookahead, rather
+than scanning request history or hashing GPX files.
+
 Legacy kind-3 browse tasks remain readable on existing cards. The indexed
 dispatcher skips them without a startup scan that rewrites each task. Older
 query storage adapters are retained for storage-format compatibility tests;

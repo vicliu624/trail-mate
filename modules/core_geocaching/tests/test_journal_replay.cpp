@@ -2436,6 +2436,7 @@ int checkIndexedDownloadReceipt(const char* path)
         std::fill(received.begin(), received.end(), 0xcc);
         uint64_t last_sequence = root.sequence;
         bool backup_seen = false;
+        decltype(files) retained_disk;
         std::string backup = "/trailmate/geocaching/.state/staging/";
         for (const auto byte : task_id)
         {
@@ -2451,6 +2452,7 @@ int checkIndexedDownloadReceipt(const char* path)
             if (scenario == 2 && client.phase() == DownloadPhase::Installing)
             {
                 const bool backup_exists = files.count(backup);
+                if (backup_seen && !backup_exists && retained_disk.empty()) retained_disk = files;
                 if ((!backup_seen && backup_exists) || root.sequence != last_sequence)
                     interrupted.push_back({files, task_id, request_id, generation});
                 backup_seen |= backup_exists;
@@ -2458,6 +2460,13 @@ int checkIndexedDownloadReceipt(const char* path)
             }
         }
         if (client.phase() != DownloadPhase::Stored || !files.count(target) || owner.holder()) return 276;
+        {
+            DownloadRecoveryRequest completed;
+            auto status = DownloadRecoveryRead::Pending;
+            for (unsigned i = 0; i < 32768 && status == DownloadRecoveryRead::Pending; ++i)
+                status = indexed->readRecovery({}, completed);
+            if (status != DownloadRecoveryRead::End || owner.holder()) return 426;
+        }
         {
             const auto disk = files;
             SavedCacheRecord saved;
@@ -2594,11 +2603,12 @@ int checkIndexedDownloadReceipt(const char* path)
             }
             history += ".gpx";
             if (!files.count(history) || files.at(history) != files.at(target)) return 278;
-            interrupted.push_back({files, task_id, request_id, generation});
-            auto missing_history = files;
+            if (retained_disk.empty()) return 427;
+            interrupted.push_back({retained_disk, task_id, request_id, generation});
+            auto missing_history = retained_disk;
             missing_history.erase(history);
             interrupted.push_back({std::move(missing_history), task_id, request_id, generation, false});
-            auto changed_history = files;
+            auto changed_history = retained_disk;
             changed_history.at(history)[0] ^= 1;
             interrupted.push_back({std::move(changed_history), task_id, request_id, generation, false});
         }
@@ -2606,6 +2616,7 @@ int checkIndexedDownloadReceipt(const char* path)
     // Recreate the root, store, port, digest and read buffers from SD alone at
     // staging, Prepared, and target-replacement boundaries.
     if (interrupted.size() < 3) return 258;
+    bool migrated_legacy = false;
     for (const auto& interrupted_download : interrupted)
     {
         files = interrupted_download.disk;
@@ -2743,6 +2754,32 @@ int checkIndexedDownloadReceipt(const char* path)
         if (select_download({}) != DownloadRecoveryRead::Ready || owner.holder() ||
             selected.task != interrupted_download.task || selected.identity.generation != interrupted_download.generation ||
             std::memcmp(selected.key.data() + 32, interrupted_download.request.bytes.data(), 16)) return 286;
+        const bool migrate = selected.installed && interrupted_download.recoverable && !migrated_legacy;
+        if (migrate)
+        {
+            // Simulate an older firmware's installed object without list
+            // metadata. Its unfinished finalization must migrate that row.
+            SdIndexGet get(volume);
+            const ByteView hash{record.hash.bytes.data(), 32};
+            if (!get.begin(root, 1, hash, frame, sizeof(frame))) return 429;
+            auto status = IndexGetStep::Working;
+            for (unsigned i = 0; i < 32768 && status == IndexGetStep::Working; ++i) status = get.step();
+            ObjectRefView old;
+            if (status != IndexGetStep::Ready || !decodeObjectRef(hash, get.value(), old)) return 430;
+            old.name = {};
+            old.saved_request = {};
+            old.saved_task = {};
+            uint8_t bytes[320];
+            size_t size = 0;
+            if (!encodeObjectRef(hash, old, bytes, sizeof(bytes), size)) return 431;
+            const MutationView mutation{1, hash, {bytes, size}, false};
+            auto commit = std::make_unique<SdIndexedCommit>(volume);
+            if (!commit->begin(root, copy, &mutation, 1, frame, sizeof(frame), roots[1 - copy])) return 432;
+            auto written = IndexedCommitStep::Working;
+            for (unsigned i = 0; i < 32768 && written == IndexedCommitStep::Working; ++i) written = commit->step();
+            if (written != IndexedCommitStep::Verified || !commit->committed(root)) return 433;
+            copy = 1 - copy;
+        }
         // The selector returned owned metadata, so install may immediately
         // reuse its frame and workspace. No view into the selector survives.
         std::memset(frame, 0xa5, sizeof(frame));
@@ -2767,8 +2804,22 @@ int checkIndexedDownloadReceipt(const char* path)
         if (result != DownloadOperationResult::Complete || !files.count(target) || owner.holder()) return 262;
         const std::string gpx(files.at(target).begin(), files.at(target).end());
         if (gpx.find("<name>Test</name>") == std::string::npos) return 263;
+        if (migrate)
+        {
+            SdIndexGet get(volume);
+            const ByteView hash{record.hash.bytes.data(), 32};
+            if (!get.begin(root, 1, hash, frame, sizeof(frame))) return 434;
+            auto status = IndexGetStep::Working;
+            for (unsigned i = 0; i < 32768 && status == IndexGetStep::Working; ++i) status = get.step();
+            ObjectRefView updated;
+            if (status != IndexGetStep::Ready || !decodeObjectRef(hash, get.value(), updated) || updated.name != "Test" ||
+                updated.saved_request.size != selected.key.size() || std::memcmp(updated.saved_request.data, selected.key.data(), selected.key.size()) ||
+                updated.saved_task.size != selected.task.size() || std::memcmp(updated.saved_task.data, selected.task.data(), selected.task.size())) return 435;
+            migrated_legacy = true;
+        }
         port.reset();
         const auto after = selected.key;
+        if (select_download({}) != DownloadRecoveryRead::End || owner.holder()) return 428;
         if (select_download({after.data(), after.size()}) != DownloadRecoveryRead::End || owner.holder() || downloads.needsRecovery()) return 288;
         // The recovered device can immediately list/map the installed file
         // using only the newly loaded index and the public GPX read path.
@@ -2785,6 +2836,7 @@ int checkIndexedDownloadReceipt(const char* path)
         if (catalog.pending() || catalog.error() || snapshot.count != 1 || !catalog.item(0, snapshot.generation, item) ||
             !item.downloaded || item.id != record.id.bytes || item.revision_hash != record.hash.bytes || owner.holder()) return 387;
     }
+    if (!migrated_legacy) return 436;
     // Exercise the real last reservable generation, then reject wraparound
     // without treating an exhausted counter as damaged storage.
     {

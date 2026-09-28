@@ -193,8 +193,9 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             if (install_->step() == ::geocaching::InstallStep::Failed || install_->step() == ::geocaching::InstallStep::Cancelled) return fail();
             if (install_->installed())
             {
-                phase_ = backup_moved_ ? Phase::RetainHistory : Phase::Complete;
-                return phase_ == Phase::Complete ? Result::Complete : Result::Pending;
+                if (!backup_moved_) return finalize();
+                phase_ = Phase::RetainHistory;
+                return Result::Pending;
             }
             return Result::Pending;
         }
@@ -215,7 +216,20 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             }
             // The new target is already committed. On retention failure keep
             // the backup and its Installed marker as recovery evidence.
-            if (storage::sd_rename(backup_.data(), history.data())) backup_moved_ = false;
+            if (storage::sd_rename(backup_.data(), history.data()))
+            {
+                backup_moved_ = false;
+                return finalize();
+            }
+            store_.releaseRead();
+            phase_ = Phase::Complete;
+            return Result::Complete;
+        }
+        if (phase_ == Phase::Finalize)
+        {
+            const auto result = store_.commitPending() ? store_.stepCommit() : store_.finalizeDownloadInstall(key(), identity_.generation, new_hash_);
+            if (result == JournalWriteResult::InProgress || result == JournalWriteResult::Busy) return Result::Pending;
+            if (result != JournalWriteResult::Verified) return fail();
             store_.releaseRead();
             phase_ = Phase::Complete;
             return Result::Complete;
@@ -245,6 +259,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         Staging,
         Installing,
         RetainHistory,
+        Finalize,
         Stopping,
         Complete,
         Failed,
@@ -325,6 +340,12 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             !::geocaching::protocol::decodeGetResponse(outgoing.terminal_data, request_, 8192, response)) return false;
         return store_.verifyRecord(response.signed_cache, crypto_, identity_.id, identity_.hash, record);
     }
+    Result finalize()
+    {
+        store_.releaseRead();
+        phase_ = Phase::Finalize;
+        return Result::Pending;
+    }
     Result recoverInstalled()
     {
         if (!store_.downloadCompleted(key(), identity_.generation)) return fail();
@@ -365,16 +386,12 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
                 phase_ = Phase::RecoverInstalledBackup;
                 return Result::Pending;
             }
-            store_.releaseRead();
-            phase_ = Phase::Complete;
-            return Result::Complete;
+            return finalize();
         }
         if (actual != old_hash_) return fail();
         if (phase_ == Phase::RecoverInstalledHistoryHash)
         {
-            store_.releaseRead();
-            phase_ = Phase::Complete;
-            return Result::Complete;
+            return finalize();
         }
         backup_moved_ = true;
         phase_ = Phase::RetainHistory;

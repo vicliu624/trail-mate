@@ -29,5 +29,16 @@ int main()
     if (storage::classifyInstallRecovery({cache, 32}, head, record) != Action::VerifyFiles) return 8;
     for (size_t n = 0; n < writer.size(); ++n)
         if (storage::decodeInstallRecord({key, 16}, {bytes, n}, record) || record.cache_id.data) return 9;
+    storage::InstallRecordView complete{{cache, 32}, {revision, 32}, {file_hash, 32}, {}, 1, storage::InstallPhase::Installed, true};
+    size_t written = 0;
+    if (!storage::encodeInstallRecord({key, 16}, complete, bytes, sizeof(bytes), written) ||
+        !storage::decodeInstallRecord({key, 16}, {bytes, written}, record) || !record.cleanup_complete) return 10;
+    for (size_t n = 0; n < written; ++n)
+        if (storage::decodeInstallRecord({key, 16}, {bytes, n}, record)) return 11;
+    complete.phase = storage::InstallPhase::Prepared;
+    if (storage::encodeInstallRecord({key, 16}, complete, bytes, sizeof(bytes), written)) return 12;
+    complete.cleanup_complete = false;
+    if (!storage::encodeInstallRecord({key, 16}, complete, bytes, sizeof(bytes), written) ||
+        !storage::decodeInstallRecord({key, 16}, {bytes, written}, record) || record.cleanup_complete) return 13;
     return 0;
 }

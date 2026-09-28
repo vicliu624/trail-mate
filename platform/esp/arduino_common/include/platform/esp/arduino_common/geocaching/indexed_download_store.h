@@ -474,6 +474,16 @@ class IndexedDownloadStore final : public DownloadStore
         phase_ = Phase::Finish;
         return JournalWriteResult::InProgress;
     }
+    JournalWriteResult finalizeDownloadInstall(::geocaching::ByteView request, uint64_t generation,
+                                               const std::array<uint8_t, 32>& hash) override
+    {
+        if (blocked_) return JournalWriteResult::Unavailable;
+        if (commitPending() || !acquire()) return JournalWriteResult::Busy;
+        cached_ = false;
+        if (!io_->emplace<SdIndexedInstall>(volume_, crypto_).beginFinalize(root_, copy_, request, generation, hash, frame_, capacity_, verification_, verification_capacity_, *roots_[1 - copy_])) return fail();
+        phase_ = Phase::Finish;
+        return JournalWriteResult::InProgress;
+    }
     JournalWriteResult stepCommit() override
     {
         if (!commitPending() || !io_ || !owner_.heldBy(this) || root_.revision != revision_) return fail();

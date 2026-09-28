@@ -112,7 +112,7 @@ inline bool downloadRecoveryEligible(ByteView key, const OutgoingView& outgoing,
         !requestBelongsToTask(outgoing.task_id, task, key, outgoing) ||
         head.install_generation != outgoing.install_generation) return false;
     if (task.state == 3)
-        return install && install->phase == InstallPhase::Installed &&
+        return install && !install->cleanup_complete && install->phase == InstallPhase::Installed &&
                install->generation == outgoing.install_generation &&
                !std::memcmp(install->revision_hash.data, task.revision_hash.data, 32) &&
                classifyInstallRecovery(task.cache_id, head, *install) == InstallRecoveryAction::VerifyFiles;

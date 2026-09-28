@@ -40,6 +40,17 @@ class SdIndexedInstall
         return true;
     }
 
+    bool beginFinalize(const ::geocaching::storage::IndexRootView& root, unsigned copy, ::geocaching::ByteView request,
+                       uint64_t generation, const std::array<uint8_t, 32>& observed_hash,
+                       uint8_t* frame, size_t capacity, uint8_t* verification, size_t verification_capacity,
+                       ::geocaching::storage::IndexRootBytes& candidate)
+    {
+        if (!verification || !verification_capacity ||
+            !begin(root, copy, request, generation, observed_hash, frame, capacity, verification, verification_capacity, candidate)) return false;
+        finishing_ = finalizing_ = true;
+        return true;
+    }
+
     bool committed(::geocaching::storage::IndexRootView& out) const
     {
         out = {};
@@ -72,7 +83,7 @@ class SdIndexedInstall
             std::memcpy(hash_.bytes.data(), task.revision_hash.data, 32);
             if (!encodeTask({task_id_.data(), task_id_.size()}, task, task_.data(), task_.size(), task_size_) ||
                 !encodeCacheHead(task.cache_id, head, head_.data(), head_.size(), head_size_)) return fail();
-            if (finishing_) return read(12, {task_id_.data(), task_id_.size()}, Phase::Install);
+            if (finishing_ && !finalizing_) return read(12, {task_id_.data(), task_id_.size()}, Phase::Install);
             RequestId id;
             std::memcpy(id.bytes.data(), key_.data() + 32, 16);
             protocol::GetRequestView request;
@@ -95,6 +106,7 @@ class SdIndexedInstall
             object.saved_request = {key_.data(), key_.size()};
             object.saved_task = {task_id_.data(), task_id_.size()};
             if (!encodeObjectRef({hash_.bytes.data(), 32}, object, object_.data(), object_.size(), object_size_)) return fail();
+            if (finalizing_) return read(12, {task_id_.data(), task_id_.size()}, Phase::Install);
             if (head.current_hash.size)
             {
                 // read() copies its key before destroying the context.
@@ -278,10 +290,28 @@ class SdIndexedInstall
         if (install.phase == InstallPhase::Installed)
         {
             if (task.state != 3 || head.current_hash.size != 32 || std::memcmp(head.current_hash.data, hash_.bytes.data(), 32)) return fail();
+            if (finalizing_ && !install.cleanup_complete)
+            {
+                ObjectRefView projected;
+                if (!decodeObjectRef({hash_.bytes.data(), 32}, {object_.data(), object_size_}, projected)) return fail();
+                projected.has_deadline = object.has_deadline;
+                projected.retained_until = object.retained_until;
+                size_t size = 0;
+                if (!encodeObjectRef({hash_.bytes.data(), 32}, projected, frame_, capacity_, size) || size > object_.size()) return fail();
+                object_size_ = size;
+                std::memcpy(object_.data(), frame_, size);
+                install.cleanup_complete = true;
+                if (!encodeInstallRecord({task_id_.data(), task_id_.size()}, install, frame_, capacity_, size) || size > install_.size()) return fail();
+                install_size_ = size;
+                std::memcpy(install_.data(), frame_, size);
+                mutations_[0] = {1, {hash_.bytes.data(), 32}, {object_.data(), object_size_}, false};
+                mutations_[1] = {12, {task_id_.data(), task_id_.size()}, {install_.data(), install_size_}, false};
+                return commit(2);
+            }
             duplicate_ = true;
             return result_ = IndexedCommitStep::Verified;
         }
-        if (install.phase != InstallPhase::Prepared || !active_ || object.revision < head.highest_seen_revision || head.conflict_state == 2) return fail();
+        if (finalizing_ || install.phase != InstallPhase::Prepared || !active_ || object.revision < head.highest_seen_revision || head.conflict_state == 2) return fail();
         head.current_hash = {hash_.bytes.data(), 32};
         head.highest_seen_revision = object.revision;
         install.phase = InstallPhase::Installed;
@@ -338,7 +368,7 @@ class SdIndexedInstall
     size_t capacity_ = 0, verification_capacity_ = 0, task_size_ = 0, head_size_ = 0, object_size_ = 0, install_size_ = 0;
     uint64_t generation_ = 0, proof_generation_ = 0;
     unsigned copy_ = 0;
-    bool finishing_ = false, active_ = false, old_present_ = false, duplicate_ = false, object_present_ = false;
+    bool finishing_ = false, finalizing_ = false, active_ = false, old_present_ = false, duplicate_ = false, object_present_ = false;
     std::variant<std::monostate, SdIndexedDownloadContext, SdIndexGet, SdIndexScan, SdIndexedCommit> io_;
     Phase phase_ = Phase::Context;
     IndexedCommitStep result_ = IndexedCommitStep::Idle;

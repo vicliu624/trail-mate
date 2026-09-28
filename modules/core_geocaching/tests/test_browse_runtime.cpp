@@ -479,6 +479,10 @@ int main(int argc, char** argv)
     // Cold offline startup has no dispatch destination or QueryClient yet.
     // Saved rows and full details must not wait for either to become available.
     router.ready = false;
+    const auto installed_gpx = std::find_if(disk.begin(), disk.end(), [](const auto& file)
+                                            { return file.first.find("/.state/") == std::string::npos && file.first.size() >= 4 && file.first.substr(file.first.size() - 4) == ".gpx"; });
+    require(installed_gpx != disk.end(), "restart test requires an installed GPX");
+    test::fail_read_path = installed_gpx->first;
     test::source->activate(true);
     until([&]
           { return std::strstr(snapshot(Section::Discover).status.data(), "Waiting for Reticulum IP connection"); },
@@ -489,6 +493,8 @@ int main(int argc, char** argv)
               const auto view = snapshot(Section::Downloaded);
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
+    require(test::fail_read_path == installed_gpx->first, "completed download reopened GPX during startup or listing");
+    test::fail_read_path.clear();
     require(test::files == disk, "read-only restart changed persisted files");
     const auto offline_sends = router.sends;
     test::source->open(item, snapshot(Section::Downloaded).generation);

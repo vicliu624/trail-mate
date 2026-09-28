@@ -78,5 +78,11 @@ class DownloadStore
                                                       ::geocaching::ByteView old_hash, ::geocaching::protocol::RecordCrypto& crypto) = 0;
     virtual JournalWriteResult finishDownloadInstall(::geocaching::ByteView request, const std::array<uint8_t, 16>& task,
                                                      uint64_t generation, const std::array<uint8_t, 32>& observed_hash) = 0;
+    // Called only after target verification and successful history retention.
+    // Legacy adapters may retain their existing recovery behavior.
+    virtual JournalWriteResult finalizeDownloadInstall(::geocaching::ByteView, uint64_t, const std::array<uint8_t, 32>&)
+    {
+        return JournalWriteResult::Verified;
+    }
 };
 } // namespace platform::esp::arduino_common::geocaching
