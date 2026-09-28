@@ -218,10 +218,34 @@ void appendMaintenanceHistory(unsigned count)
         copy = 1 - copy;
     }
 }
+struct DetailText
+{
+    ui::geocaching::DetailStatus status = ui::geocaching::DetailStatus::Pending;
+    std::string description, hint, error;
+};
+DetailText detailText(const ui::geocaching::Item& item)
+{
+    test::in_ui = true;
+    DetailText result;
+    test::source->readDetail(
+        item.id, item.revision_hash, [](const ui::geocaching::DetailView& value, void* context)
+        {
+        auto& out = *static_cast<DetailText*>(context);
+        out.status = value.status;
+        out.description = value.description;
+        out.hint = value.hint;
+        out.error = value.error; },
+        &result);
+    require(!test::ui_io, "detail UI callback touched SD");
+    return result;
+}
 int main(int argc, char** argv)
 {
     require(argc == 2, "expected fixture directory");
     const std::string folder(argv[1]);
+    const auto encoded_record = fixture(folder, "record-v1.bin");
+    geocaching::RecordView expected_record;
+    require(geocaching::protocol::decodeGeocacheRecord({encoded_record.data(), encoded_record.size()}, expected_record), "detail record fixture invalid");
     std::fprintf(stderr, "Runtime: discovery/download/publication\n");
     chat::MeshAdapterRouter router;
     LoraBoard board;
@@ -321,9 +345,35 @@ int main(int argc, char** argv)
               generation = view.generation;
               return test::source->item(Section::Discover, 0, generation, item) && item.can_download; },
           "discovered row did not become downloadable");
-    require(test::source->download(item, generation), "download not queued");
+    test::card_ready = false;
+    test::source->open(item, generation);
     until([&]
           { return router.sends == 3; },
+          "online detail request missing");
+    auto invalid_detail = fixture(folder, "get-response-v1.bin");
+    invalid_detail[invalid_detail.size() - 4] ^= 1;
+    reply(router, invalid_detail, 3);
+    for (unsigned i = 0; i < 30; ++i) tick();
+    require(detailText(item).status == ui::geocaching::DetailStatus::Pending, "invalid detail signature was displayed");
+    reply(router, fixture(folder, "get-response-v1.bin"), 3);
+    until([&]
+          { return detailText(item).status == ui::geocaching::DetailStatus::Ready; },
+          "online detail not displayed");
+    require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
+            "online detail omitted full description or hint");
+    require(test::files.empty() && !test::blocked_io, "online detail required SD");
+    require(router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
+            "verified detail duplicate was not acknowledged");
+    require(xSemaphoreTake(semaphore, 0) == pdTRUE, "cannot lock during detail close");
+    test::source->closeDetail();
+    xSemaphoreGive(semaphore);
+    tick();
+    require(detailText(item).status == ui::geocaching::DetailStatus::Failed, "busy close lost the cancellation");
+    require(!test::allocated("geocaching.detail.rx") && !test::allocated("geocaching.detail.verify"), "closed detail retained temporary buffers");
+    test::card_ready = true;
+    require(test::source->download(item, generation), "download not queued");
+    until([&]
+          { return router.sends == 4; },
           "download request not dispatched");
     reply(router, fixture(folder, "get-response-v1.bin"), 3);
     until([&]
@@ -362,7 +412,7 @@ int main(int argc, char** argv)
           "draft not ready for publication confirmation");
     require(from == 0 && to == 1 && test::source->publishDraft(draft.id, draft_generation, author, to), "publication confirmation rejected");
     until([&]
-          { return router.sends == 4; },
+          { return router.sends == 5; },
           "publication request not dispatched");
     reply(router, publicationReply(router, 1), 1);
     until([&]
@@ -391,7 +441,7 @@ int main(int argc, char** argv)
           "edited draft not ready for publication");
     require(from == 1 && to == 2 && test::source->publishDraft(draft.id, draft_generation, author, to), "second publication confirmation rejected");
     until([&]
-          { return router.sends == 5; },
+          { return router.sends == 6; },
           "second publication request not dispatched");
     reply(router, publicationReply(router, 2), 1);
     until([&]
@@ -420,6 +470,18 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
     require(test::files == disk, "read-only restart changed persisted files");
+    router.ready = false;
+    const auto offline_sends = router.sends;
+    test::source->open(item, snapshot(Section::Downloaded).generation);
+    until([&]
+          { return detailText(item).status == ui::geocaching::DetailStatus::Ready; },
+          "saved detail unavailable offline after restart");
+    require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
+            "saved detail lost description or hint");
+    require(router.sends == offline_sends && test::files == disk, "offline detail used network or rewrote storage");
+    test::source->closeDetail();
+    tick();
+    router.ready = true;
     test::source->requestWindow(Section::Published, 0, 4);
     until([&]
           {

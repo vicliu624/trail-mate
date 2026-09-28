@@ -34,6 +34,22 @@ struct TestSource : ui::geocaching::Source
     std::string draft_name, draft_description, draft_hint;
     bool has_draft = false, fail_save = false, snapshot_busy = false;
     unsigned pending_reads = 0;
+    bool detail_ready = false;
+    unsigned detail_closes = 0;
+    bool readDetail(const std::array<uint8_t, 32>&, const std::array<uint8_t, 32>&,
+                    void (*sink)(const ui::geocaching::DetailView&, void*), void* context) override
+    {
+        ui::geocaching::DetailView view;
+        if (detail_ready)
+        {
+            view.status = ui::geocaching::DetailStatus::Ready;
+            view.description = "A woodland cache beside the old trail.\nFollow the stream to the stone bridge.";
+            view.hint = "Look beneath the large flat stone.";
+        }
+        sink(view, context);
+        return true;
+    }
+    void closeDetail() override { ++detail_closes; }
     unsigned cancelled_reads = 0;
     bool fail_read = false;
     unsigned publications = 0;
@@ -242,7 +258,18 @@ int main(int argc, char** argv)
     if (lv_obj_get_child_count(list) != visible) return 62;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     if (source.opens != 1 || source.last_open != 0) return 6;
+    if (std::strcmp(lv_label_get_text(lv_obj_get_child(list, 2)), "Loading details...")) return 64;
+    source.detail_ready = true;
+    // Detail completion is independent of list generation changes.
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (!std::strstr(lv_label_get_text(lv_obj_get_child(list, 2)), "Follow the stream") ||
+        !std::strstr(lv_label_get_text(lv_obj_get_child(list, 3)), "large flat stone") ||
+        lv_obj_has_flag(lv_obj_get_child(list, 3), LV_OBJ_FLAG_HIDDEN)) return 65;
     if (!save(std::string(argv[3]) + "-detail.ppm", screen)) return 11;
+    lv_obj_scroll_to_y(list, LV_COORD_MAX, LV_ANIM_OFF);
+    if (!save(std::string(argv[3]) + "-detail-hint.ppm", screen)) return 66;
+    if (lv_obj_get_scroll_y(list) <= 0) return 67;
     auto* details_footer = lv_obj_get_child(root, 4);
     const auto detail_reads = source.reads;
     source.snapshot_busy = true;

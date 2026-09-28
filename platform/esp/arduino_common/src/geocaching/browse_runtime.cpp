@@ -7,6 +7,7 @@
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
 #include "platform/esp/arduino_common/chat/infra/reticulum/reticulum_adapter.h"
 #include "platform/esp/arduino_common/geocaching/author_issue_port.h"
+#include "platform/esp/arduino_common/geocaching/cache_detail.h"
 #include "platform/esp/arduino_common/geocaching/indexed_dispatch_store.h"
 #include "platform/esp/arduino_common/geocaching/indexed_download_store.h"
 #include "platform/esp/arduino_common/geocaching/indexed_publication_store.h"
@@ -191,6 +192,7 @@ struct Session
     std::unique_ptr<IndexedPublicationStore> store;
     std::unique_ptr<IndexedDispatchStore> dispatch_store;
     std::unique_ptr<LiveQueryPort> port;
+    std::unique_ptr<CacheDetail> detail, pending_detail;
     std::unique_ptr<StoredReplyReceipt> receipts;
     std::unique_ptr<gc::QueryClient> client;
     std::unique_ptr<RequestDispatcher> dispatcher;
@@ -261,6 +263,8 @@ struct Session
     }
     ~Session()
     {
+        workspace_owner.release(detail.get());
+        detail.reset();
         workspace_owner.release(checkpoint.get());
         checkpoint.reset();
         if (store && store->commitPending()) store->cancelCommit();
@@ -288,6 +292,7 @@ std::unique_ptr<Session> session;
 std::array<uint8_t, 16> boot{};
 std::atomic<bool> wanted{false}, active{false}, restart{false};
 std::atomic<bool> cancel_draft_read{false};
+std::atomic<bool> cancel_detail{false};
 std::atomic<uint32_t> next_step{0};
 std::atomic<uint32_t> replies_seen{0}, replies_busy{0}, replies_queued{0};
 uint32_t replies_processed = 0, replies_accepted = 0;
@@ -421,7 +426,7 @@ void fail(const char* reason)
 bool advanceCheckpoint(Session& s)
 {
     if (!s.checkpoint) return false;
-    const bool foreground = s.response || downloadActive() || publicationActive() || draftSaveActive() ||
+    const bool foreground = s.response || (s.detail && s.detail->state == CacheDetail::State::Saved) || downloadActive() || publicationActive() || draftSaveActive() ||
                             (s.saved && s.saved->pending() && !s.draft_catalog_wanted) ||
                             (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending) ||
                             (s.draft_catalog_wanted && !draftCatalogReady(s));
@@ -631,6 +636,12 @@ bool receiveResponse(const chat::lxmf::CustomDeliveryView& message, uint8_t** ow
         !reader.binary(id, 16) || id.size != 16) return false;
     gc::RequestId request;
     std::memcpy(request.bytes.data(), id.data, 16);
+    if (value == 3 && session->detail && session->detail->matches(source, request))
+    {
+        const bool accepted = session->detail->receive(source, request, {message.data.data, message.data.size}, session->crypto, owned);
+        next_step.store(0);
+        return accepted;
+    }
     if (value == 0 || value == 2)
     {
         const gc::ByteView bytes{message.data.data, message.data.size};
@@ -803,6 +814,45 @@ void startRecovery()
     s.phase = Phase::Recover;
     s.status = "Restoring geocaching tasks...";
     ++epoch;
+}
+
+// Use the same installed-record lookup as the saved list, but retain the full
+// verified text for the open detail. No new files or persistent tasks.
+bool advanceSavedDetail(Session& s)
+{
+    if (!s.detail || s.detail->state != CacheDetail::State::Saved) return false;
+    auto& job = *s.detail;
+    const auto finish = [&](const char* error)
+    {
+        job.saved_read.reset();
+        s.workspace_owner.release(&job);
+        if (error)
+        {
+            job.error = error;
+            job.state = CacheDetail::State::Failed;
+        }
+        return true;
+    };
+    if (s.phase == Phase::Failed || s.needsRecovery()) return finish("Saved details need storage recovery.");
+    if (!storage::sd_card_ready() || storage::sd_external_block_owner_active()) return finish("SD card unavailable. Go back and reopen to retry.");
+    if (now(nullptr).monotonic_ms - job.started >= 120000) return finish("Saved details timed out. Go back and reopen to retry.");
+    if (s.phase != Phase::Ready) return false;
+    if (!job.saved_read)
+    {
+        if (downloadActive() || publicationActive() || draftSaveActive()) return false;
+        if (!s.workspace_owner.acquire(&job)) return false;
+        job.saved_read.reset(new (std::nothrow) SdIndexedSavedCache(s.volume));
+        if (!job.saved_read || !job.saved_read->begin(s.root, {job.id.bytes.data(), job.id.bytes.size()}, true, s.frame, kFrameCapacity))
+            return finish("Insufficient memory to read saved details.");
+    }
+    const auto result = job.saved_read->step();
+    if (result == IndexScanStep::Working) return true;
+    gc::storage::SavedCacheRecord saved;
+    gc::ByteView signed_cache;
+    if (result != IndexScanStep::Item || !job.saved_read->result(saved, signed_cache) ||
+        saved.hash != job.hash.bytes || !job.verify(signed_cache, s.crypto))
+        return finish("Saved details could not be verified.");
+    return finish(nullptr);
 }
 
 enum class PublicationRestore : uint8_t
@@ -1160,6 +1210,7 @@ class Facade final : public ::ui::geocaching::Source
     void activate(bool open) override
     {
         wanted.store(open);
+        if (!open) cancel_detail.store(true);
         next_step.store(0);
     }
     void snapshot(::ui::geocaching::Section section, ::ui::geocaching::Snapshot& out) override
@@ -1358,7 +1409,62 @@ class Facade final : public ::ui::geocaching::Source
         if (begun) next_step.store(0);
         return begun;
     }
-    void open(const ::ui::geocaching::Item&, uint64_t) override {}
+    void open(const ::ui::geocaching::Item& item, uint64_t) override
+    {
+        Guard guard;
+        if (!guard.locked || !session || item.is_draft) return;
+        auto job = std::unique_ptr<CacheDetail>(new (std::nothrow) CacheDetail);
+        if (!job) return;
+        job->id.bytes = item.id;
+        job->hash.bytes = item.revision_hash;
+        job->started = now(nullptr).monotonic_ms;
+        if (item.downloaded)
+        {
+            job->state = CacheDetail::State::Saved;
+            session->storage_requested = true;
+        }
+        else if (!session->port || !session->port->pageSource(job->remote) ||
+                 !randomId(nullptr, job->request.bytes.data()) ||
+                 !gc::protocol::encodeGetRequest(job->request, job->id, &job->hash, nullptr, 8192,
+                                                 job->request_bytes.data(), job->request_bytes.size(), job->request_size))
+            job->state = CacheDetail::State::Failed;
+        session->pending_detail = std::move(job);
+        cancel_detail.store(false);
+        next_step.store(0);
+    }
+    bool readDetail(const std::array<uint8_t, 32>& id, const std::array<uint8_t, 32>& hash,
+                    void (*sink)(const ::ui::geocaching::DetailView&, void*), void* context) override
+    {
+        Guard guard;
+        if (!guard.locked || !session || !sink) return false;
+        const auto* job = session->pending_detail ? session->pending_detail.get() : session->detail.get();
+        ::ui::geocaching::DetailView view;
+        if (!job || cancel_detail.load() || !job->matches(id, hash))
+        {
+            view.status = ::ui::geocaching::DetailStatus::Failed;
+            view.error = "Details unavailable. Go back and reopen to retry.";
+            sink(view, context);
+            return true;
+        }
+        if (job->state == CacheDetail::State::Ready)
+        {
+            view.status = ::ui::geocaching::DetailStatus::Ready;
+            view.description = job->description.data();
+            view.hint = job->hint.data();
+        }
+        else if (job->state == CacheDetail::State::Failed)
+        {
+            view.status = ::ui::geocaching::DetailStatus::Failed;
+            view.error = job->error;
+        }
+        sink(view, context);
+        return true;
+    }
+    void closeDetail() override
+    {
+        cancel_detail.store(true);
+        next_step.store(0);
+    }
     bool publicationAuthor(const std::array<uint8_t, 16>& id, uint64_t generation, std::array<uint8_t, 64>& author, uint32_t* from, uint32_t* to) override
     {
         Guard guard;
@@ -1684,13 +1790,25 @@ void step()
         ++epoch;
     }
     auto& s = *session;
+    const bool close_detail = cancel_detail.exchange(false);
+    if (close_detail || s.pending_detail)
+    {
+        s.workspace_owner.release(s.detail.get());
+        s.detail.reset();
+        if (close_detail) s.pending_detail.reset();
+        else s.detail = std::move(s.pending_detail);
+    }
     advanceBrowse(s);
+    if (s.detail) s.detail->advanceNetwork(*router, s.local, s.crypto, now(nullptr).monotonic_ms);
     if (!s.storage_requested || !s.client)
     {
         next_step.store(millis() + 100);
         return;
     }
     WorkspaceSlice workspace_slice{s};
+    if (s.detail && s.detail->state == CacheDetail::State::Saved &&
+        (s.phase == Phase::Failed || !storage::sd_card_ready() || storage::sd_external_block_owner_active()))
+        advanceSavedDetail(s);
     if (s.phase == Phase::Failed)
     {
         next_step.store(millis() + 2000);
@@ -1766,6 +1884,7 @@ void step()
     // The active holder must run before new foreground work waiting for it.
     // Saved reply receipts share the lease with persistent operations.
     if (advanceCheckpoint(s)) return;
+    if (s.detail && s.workspace_owner.heldBy(s.detail.get()) && advanceSavedDetail(s)) return;
     if (s.dispatcher && s.dispatch_store->busy() && s.workspace_owner.heldBy(s.dispatch_store.get()))
     {
         const auto sent = s.dispatcher->dispatchOne(now(nullptr));
@@ -1849,6 +1968,7 @@ void step()
         // Advance the operation that currently owns storage before retrying.
     }
     if (s.phase == Phase::Ready && s.download_start && advanceDownloadStart(s)) return;
+    if (advanceSavedDetail(s)) return;
     if (s.saved && s.saved->pending() && !s.draft_catalog_wanted && s.phase != Phase::ResumeDownloads && !downloadActive() && !publicationActive() && !draftSaveActive() &&
         !s.store->commitPending() && !s.needsRecovery())
     {

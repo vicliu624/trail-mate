@@ -12,6 +12,14 @@ a rejected submission retries after one second. The query client's existing
 120-second deadline cancels further sends. Closing abandons the RAM request.
 Exact accepted duplicates can be acknowledged without disk access.
 
+Opening an item requests its exact signed revision and shows the full description
+and hint after author verification. Only the open detail owns these text buffers;
+closing it cancels further requests. Online detail reads do not require SD.
+Saved items read the complete signed record already retained by the download
+transaction, so descriptions and hints remain available offline after restart.
+The GPX also includes both fields and the signed record; no second sidecar file
+or background detail synchronization is introduced.
+
 Storage starts when the user opens Downloaded or Published, or saves a cache.
 Downloads and publications retain signature checks, durable transaction state,
 verified GPX installation, restart recovery and durable reply receipts. Storage

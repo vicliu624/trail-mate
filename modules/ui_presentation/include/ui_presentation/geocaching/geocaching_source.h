@@ -62,6 +62,17 @@ enum class DraftReadStatus : uint8_t
     Pending,
     Ready
 };
+enum class DetailStatus : uint8_t
+{
+    Pending,
+    Ready,
+    Failed
+};
+struct DetailView
+{
+    DetailStatus status = DetailStatus::Pending;
+    std::string_view description, hint, error;
+};
 class Source
 {
   public:
@@ -79,6 +90,11 @@ class Source
     virtual bool item(Section section, std::size_t index, std::uint64_t generation, Item& out) = 0;
     virtual void refresh(Section section) = 0;
     virtual void open(const Item& item, std::uint64_t generation) = 0;
+    // Borrowed text is consumed synchronously under the source lock. No I/O
+    // or retained pointers; large descriptions never become stack-local Items.
+    virtual bool readDetail(const std::array<uint8_t, 32>&, const std::array<uint8_t, 32>&,
+                            void (*)(const DetailView&, void*), void*) { return false; }
+    virtual void closeDetail() {}
     virtual bool loadMore() { return false; }
     virtual bool download(const Item&, std::uint64_t) { return false; }
     // UI-thread call: enqueue/poll without I/O. Pending never calls or retains

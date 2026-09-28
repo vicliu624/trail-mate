@@ -45,6 +45,7 @@ struct PageState
     size_t offset = 0, rendered_offset = 0, row_count = 0, window = kVisibleRows;
     size_t detail_index = 0;
     uint64_t detail_generation = 0;
+    uint8_t detail_status = 255;
     std::array<uint8_t, 32> detail_id{}, detail_hash{};
     bool valid = false, details = false;
 };
@@ -197,6 +198,36 @@ lv_obj_t* button(lv_obj_t* parent, const char* text, lv_coord_t height)
     addFocusable(object);
     return object;
 }
+void refreshDetailText()
+{
+    if (!page || !page->details || !source) return;
+    source->readDetail(
+        page->detail_id, page->detail_hash,
+        [](const ::ui::geocaching::DetailView& view, void*)
+        {
+            auto& p = *page;
+            const auto status = static_cast<uint8_t>(view.status);
+            if (p.detail_status == status) return;
+            p.detail_status = status;
+            auto* description = lv_obj_get_child(p.list, 2);
+            auto* hint = lv_obj_get_child(p.list, 3);
+            if (view.status == ::ui::geocaching::DetailStatus::Ready)
+            {
+                lv_label_set_text_fmt(description, "Description\n%.*s", int(view.description.size()), view.description.empty() ? "" : view.description.data());
+                if (view.description.empty()) lv_label_set_text(description, "No description provided.");
+                lv_label_set_text_fmt(hint, "Hint\n%.*s", int(view.hint.size()), view.hint.empty() ? "" : view.hint.data());
+                if (view.hint.empty()) lv_obj_add_flag(hint, LV_OBJ_FLAG_HIDDEN);
+                else lv_obj_remove_flag(hint, LV_OBJ_FLAG_HIDDEN);
+            }
+            else
+            {
+                if (view.status == ::ui::geocaching::DetailStatus::Pending) lv_label_set_text(description, "Loading details...");
+                else lv_label_set_text_fmt(description, "%.*s", int(view.error.size()), view.error.empty() ? "" : view.error.data());
+                lv_obj_add_flag(hint, LV_OBJ_FLAG_HIDDEN);
+            }
+        },
+        nullptr);
+}
 void refreshView()
 {
     if (!page) return;
@@ -238,6 +269,7 @@ void refreshView()
     if (page->details)
     {
         if (!source) return;
+        refreshDetailText();
         ::ui::geocaching::Snapshot current;
         source->snapshot(page->section, current);
         if (current.busy) return;
@@ -353,6 +385,7 @@ void refreshView()
 void closeDetails()
 {
     if (!page) return;
+    if (page->details && source) source->closeDetail();
     page->details = false;
     page->valid = false;
     lv_obj_remove_flag(page->previous, LV_OBJ_FLAG_HIDDEN);
@@ -371,6 +404,7 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
     }
     auto& p = *page;
     p.details = true;
+    p.detail_status = 255;
     p.detail_index = index;
     p.detail_generation = p.snapshot.generation;
     p.detail_id = item.id;
@@ -387,7 +421,18 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
     lv_obj_set_width(body, LV_PCT(100));
     lv_label_set_text(body, item.detail.data());
     styles::apply_label_muted(body);
-    lv_label_set_text(p.range, "Preview");
+    auto* description = lv_label_create(p.list);
+    lv_obj_set_width(description, LV_PCT(100));
+    lv_label_set_long_mode(description, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(description, "Loading details...");
+    styles::apply_label_primary(description);
+    auto* hint = lv_label_create(p.list);
+    lv_obj_set_width(hint, LV_PCT(100));
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    styles::apply_label_primary(hint);
+    lv_obj_add_flag(hint, LV_OBJ_FLAG_HIDDEN);
+    refreshDetailText();
+    lv_label_set_text(p.range, "Details");
     lv_label_set_text(lv_obj_get_child(p.refresh, 0), "Back");
     setEnabled(p.refresh, true);
     setEnabled(p.previous, false);
