@@ -5,19 +5,18 @@
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), via Alvin Bryan's
   simplified web conversion. [Dataset sources, changes and notices](./geocaching/data/README.md).
 
-- **Animal Island UI 1.10.0**, by **guokaigdg**:
+- **Animal Island UI 2.0.0**, by **guokaigdg**:
   <https://guokaigdg.github.io/animal-island-ui/>.
-  The upstream project now uses the [MIT license](https://github.com/guokaigdg/animal-island-ui/blob/main/LICENSE)
+  Licensed under the [MIT license](./licenses/animal-island-ui-MIT.txt)
   (Copyright © 2026 guokaigdg).
-  This site currently pins the previously published 1.10.0 package, whose
-  included license and npm metadata still state
-  [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
-  Its original notices are retained; the upstream license change does not
-  change the package version bundled here.
-  The site uses Select, Title, Icon, Background and BackTop; the Geocaching page
+  The site uses Select, Title, Background and BackTop; the Geocaching page
   also uses Button, Card and Divider. These use custom layout,
   colors, sizing and localized labels. The shopping-bag icon is extracted from
   this library for device purchase links.
+- **Naive Icons 1.2.0** provides React icons under the
+  [MIT license](./licenses/naive-icons-MIT.txt).
+  Static artwork retained from Animal Island UI 1.10.0 keeps its original
+  [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) notice.
 - React and React DOM are distributed under the MIT license; their license
   notices are preserved in the generated component bundle.
 - Noto Sans SC font assets are bundled through Animal Island UI and are licensed

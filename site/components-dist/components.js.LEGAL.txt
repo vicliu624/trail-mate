@@ -50,36 +50,3 @@ classnames/index.js:
     Licensed under the MIT License (MIT), see
     http://jedwatson.github.io/classnames
   */
-
-lucide-react/dist/esm/shared/src/utils/toKebabCase.mjs:
-lucide-react/dist/esm/shared/src/utils/toLucideIconData.mjs:
-lucide-react/dist/esm/shared/src/utils/toCamelCase.mjs:
-lucide-react/dist/esm/shared/src/utils/toPascalCase.mjs:
-lucide-react/dist/esm/shared/src/utils/mergeClasses.mjs:
-lucide-react/dist/esm/shared/src/build/defaultAttributes.mjs:
-lucide-react/dist/esm/shared/src/build/buildLucideIconNode.mjs:
-lucide-react/dist/esm/shared/src/build/buildLucideIconForReact.mjs:
-lucide-react/dist/esm/shared/src/utils/hasA11yProp.mjs:
-lucide-react/dist/esm/context.mjs:
-lucide-react/dist/esm/Icon.mjs:
-lucide-react/dist/esm/createLucideIcon.mjs:
-lucide-react/dist/esm/icons/book-open.mjs:
-lucide-react/dist/esm/icons/camera.mjs:
-lucide-react/dist/esm/icons/chevron-left.mjs:
-lucide-react/dist/esm/icons/chevron-right.mjs:
-lucide-react/dist/esm/icons/file-text.mjs:
-lucide-react/dist/esm/icons/hammer.mjs:
-lucide-react/dist/esm/icons/map-pin.mjs:
-lucide-react/dist/esm/icons/map.mjs:
-lucide-react/dist/esm/icons/message-circle.mjs:
-lucide-react/dist/esm/icons/palette.mjs:
-lucide-react/dist/esm/icons/shopping-cart.mjs:
-lucide-react/dist/esm/icons/shuffle.mjs:
-lucide-react/dist/esm/icons/wifi.mjs:
-lucide-react/dist/esm/lucide-react.mjs:
-  /**
-   * @license lucide-react v1.45.0 - ISC
-   *
-   * This source code is licensed under the ISC license.
-   * See the LICENSE file in the root directory of this source tree.
-   */

@@ -1,6 +1,7 @@
 import React, {useState, useEffect} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Select, Background, BackTop, Title, Icon} from 'animal-island-ui';
+import {Select, Background, BackTop, Title} from 'animal-island-ui';
+import {Icon} from './island-icon.jsx';
 import 'animal-island-ui/style';
 import {locales} from './i18n/registry.js';
 function useWebsiteLabels() {

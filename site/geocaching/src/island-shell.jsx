@@ -1,7 +1,8 @@
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {Background, Button, Card, Divider, Icon, Title} from 'animal-island-ui';
+import {Background, Button, Card, Divider, Title} from 'animal-island-ui';
+import {Icon} from '../../island-icon.jsx';
 import 'animal-island-ui/style';
 import brandLogo from '../../../docs/images/logo_big.png';
 
