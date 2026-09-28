@@ -3315,6 +3315,7 @@ int checkIndexedAuthorReservation(const char* path)
     for (unsigned i = 0; i < 4096 && read_result == DraftReadResult::Pending; ++i) read_result = limited.readDraft(key, read_value);
     if (read_result != DraftReadResult::WorkspaceTooSmall || limited.needsRecovery() || owner.holder() || files != edited_files) return 48;
     DraftCatalogPage catalog;
+    bool metadata_before_history = false;
     const auto read_catalog = [&](size_t offset)
     {
         auto result = DraftReadResult::Pending;
@@ -3322,6 +3323,7 @@ int checkIndexedAuthorReservation(const char* path)
         {
             step_bytes = 0;
             result = store.readDraftCatalog(offset, crypto, catalog);
+            metadata_before_history |= result == DraftReadResult::Pending && catalog.metadata_ready;
             if (step_bytes > 512) return DraftReadResult::Invalid;
         }
         return result;
@@ -3329,7 +3331,7 @@ int checkIndexedAuthorReservation(const char* path)
     if (store.readDraftCatalog(0, crypto, catalog) != DraftReadResult::Pending ||
         store.stopTask(task) != JournalWriteResult::Busy) return 49;
     store.releaseDraftRead();
-    if (owner.holder() || store.needsRecovery() || read_catalog(0) != DraftReadResult::Ready || catalog.total != 1 || catalog.count != 1) return 50;
+    if (owner.holder() || store.needsRecovery() || read_catalog(0) != DraftReadResult::Ready || catalog.total != 1 || catalog.count != 1 || !metadata_before_history) return 50;
     const auto& projection = catalog.rows[0];
     if (projection.generation != 4 || std::strcmp(projection.name.data(), "Edited on device") ||
         projection.publication.latest_revision != 1 || projection.publication.confirmed_revision != 1 ||
@@ -3361,7 +3363,7 @@ int checkIndexedAuthorReservation(const char* path)
     std::set<std::array<uint8_t, 16>> seen;
     for (size_t offset : {size_t(0), size_t(4), size_t(8)})
     {
-        if (read_catalog(offset) != DraftReadResult::Ready || catalog.offset != offset || catalog.total != 9 ||
+        if (read_catalog(offset) != DraftReadResult::Ready || !catalog.metadata_ready || catalog.offset != offset || catalog.total != std::min(size_t(9), offset + 5) ||
             catalog.count != std::min(size_t(4), size_t(9) - offset) || owner.holder()) return 53;
         for (size_t i = 0; i < catalog.count; ++i)
             if (!seen.insert(catalog.rows[i].id).second) return 54;
@@ -3484,7 +3486,7 @@ int checkIndexedAuthorReservation(const char* path)
     if (unrelated_status != IndexedCommitStep::Verified || !unrelated_commit->committed(root)) return 117;
     copy = 1 - copy;
     if (root.sequence != before_unrelated + 1 || store.catalogGeneration() != publication_generation ||
-        read_catalog(0) != DraftReadResult::Ready || catalog.total != 9) return 118;
+        read_catalog(0) != DraftReadResult::Ready || catalog.total != 5) return 118;
     // Recreate the pre-reservation disk state and fail the first flush. A
     // possibly partial durable write must never reach the signing transport.
     files = bound;

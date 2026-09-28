@@ -181,7 +181,13 @@ class SdIndexedRecovery
                 return result_;
             }
             if (status != IndexScanStep::End) return error(status);
-            if (++audit_table_ <= 13)
+            // References scans every live row of these three tables using the
+            // same CRC/shape-checked reader. Do not read them twice at startup.
+            do
+            {
+                ++audit_table_;
+            } while (audit_table_ == 5 || audit_table_ == 10 || audit_table_ == 13);
+            if (audit_table_ <= 13)
             {
                 if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
                 return result_;

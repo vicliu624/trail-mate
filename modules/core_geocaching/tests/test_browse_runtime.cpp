@@ -416,6 +416,7 @@ int main(int argc, char** argv)
           "draft was not saved");
     test::source->requestWindow(Section::Published, 0, 4);
     uint64_t draft_generation = 0;
+    const auto draft_list_started = test::clock_ms;
     until([&]
           {
               const auto view = snapshot(Section::Published);
@@ -423,6 +424,8 @@ int main(int argc, char** argv)
               draft_generation = item.edit_generation;
               return item.is_draft; },
           "saved draft missing from publication list");
+    require((test::clock_ms - draft_list_started) / tick_ms < 40,
+            "unbound draft listing regressed into publication-history work");
     {
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
@@ -502,11 +505,14 @@ int main(int argc, char** argv)
     test::source->activate(true);
     tick();
     test::source->requestWindow(Section::Downloaded, 0, 4);
+    const auto local_list_started = test::clock_ms;
     until([&]
           {
               const auto view = snapshot(Section::Downloaded);
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
+    require((test::clock_ms - local_list_started) / tick_ms < 850,
+            "local startup regressed into duplicate index scans or blocking download recovery");
     {
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
@@ -517,6 +523,11 @@ int main(int argc, char** argv)
                   overlays->append(*map);
                   return map->item_count == 2; },
               "cold offline map lost local cache markers");
+        ui::geocaching::Item local_draft;
+        const auto local_view = snapshot(Section::Published);
+        require(local_view.ready && test::source->item(Section::Published, 0, local_view.generation, local_draft) &&
+                    local_draft.has_coordinates && std::strstr(local_draft.detail.data(), "Checking publication status"),
+                "map waited for publication history instead of showing committed draft metadata");
         require(!router.service && !router.announcement && !router.delivery,
                 "local map started network discovery");
     }

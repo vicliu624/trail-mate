@@ -29,6 +29,13 @@ zooming selects a new nearby set. The shared map overlay capacity also includes
 other layers, so dense views can show fewer than 32 geocaches. Drafts without a
 selected position are excluded; an explicitly selected (0, 0) is valid. No GPX
 parse or network discovery is performed by the map projection.
+Downloaded rows may be displayed while unfinished downloads are being recovered;
+creation and writes still wait for that recovery to finish. Draft pages read four
+rows and one lookahead, expose committed names and positions before publication
+history is resolved, and skip publication history entirely for unbound drafts.
+Publication preparation still requires the complete history projection. Startup
+validates request/task/attempt tables in the reference pass rather than scanning
+the same tables a second time in the preceding integrity pass.
 The draft editor uses the shared map location-selection route instead of latitude
 and longitude text inputs. Confirming writes WGS84 E7 coordinates; cancellation
 preserves the original position and all live editor fields. Existing coordinates

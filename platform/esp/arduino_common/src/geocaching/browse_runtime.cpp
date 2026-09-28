@@ -362,9 +362,15 @@ bool draftCatalogReady(const Session& s)
     return s.draft_catalog && s.draft_catalog->ready && s.store && !s.needsRecovery() &&
            s.draft_catalog->sequence == s.store->catalogGeneration() && s.draft_catalog->page.offset == s.draft_catalog->requested_offset;
 }
+bool draftMetadataReady(const Session& s)
+{
+    return s.draft_catalog && s.draft_catalog->page.metadata_ready && s.store && !s.needsRecovery() &&
+           s.draft_catalog->sequence == s.store->catalogGeneration() &&
+           s.draft_catalog->page.offset == s.draft_catalog->requested_offset;
+}
 bool advanceDraftCatalog(Session& s)
 {
-    if (!s.draft_catalog_wanted || !s.store || s.needsRecovery() || s.phase != Phase::Ready) return false;
+    if (!s.draft_catalog_wanted || !s.store || s.needsRecovery() || (s.phase != Phase::Ready && s.phase != Phase::ResumeDownloads)) return false;
     if (!s.draft_catalog) s.draft_catalog.reset(new (std::nothrow) Session::DraftCatalog);
     if (!s.draft_catalog) return false;
     auto& catalog = *s.draft_catalog;
@@ -373,9 +379,16 @@ bool advanceDraftCatalog(Session& s)
     {
         catalog.sequence = s.store->catalogGeneration();
         catalog.ready = false;
+        catalog.page.metadata_ready = false;
         catalog.failed = false;
     }
+    const bool had_metadata = catalog.page.metadata_ready;
     const auto result = s.store->readDraftCatalog(catalog.requested_offset, s.crypto, catalog.page);
+    if (!had_metadata && catalog.page.metadata_ready)
+    {
+        catalog.total = catalog.page.total;
+        ++catalog.generation;
+    }
     if (result == DraftReadResult::Busy) return false;
     catalog.reading = result == DraftReadResult::Pending;
     if (catalog.reading) return true;
@@ -1244,21 +1257,21 @@ class Facade final : public ::ui::geocaching::Source
             return;
         }
         if (session && section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
-        if (section == ::ui::geocaching::Section::Published && session && session->phase == Phase::Ready && session->store && !session->needsRecovery())
+        if (section == ::ui::geocaching::Section::Published && session && (session->phase == Phase::Ready || session->phase == Phase::ResumeDownloads) && session->store && !session->needsRecovery())
         {
             session->draft_catalog_wanted = true;
             const auto* catalog = session->draft_catalog.get();
             out.count = catalog ? catalog->total : 0;
             out.generation = catalog ? catalog->generation : 0;
-            out.ready = draftCatalogReady(*session);
-            out.can_create = !session->store->commitPending() && !downloadActive() && !publicationActive() && !draftSaveActive() &&
+            out.ready = draftMetadataReady(*session);
+            out.can_create = session->phase == Phase::Ready && !session->store->commitPending() && !downloadActive() && !publicationActive() && !draftSaveActive() &&
                              storage::sd_card_ready() && !storage::sd_external_block_owner_active();
-            std::snprintf(out.status.data(), out.status.size(), "%s", catalog && catalog->failed ? "Draft list could not be read" : !draftCatalogReady(*session) ? "Loading drafts and publication status..."
-                                                                                                                                : out.count                      ? "Drafts and saved publication status"
-                                                                                                                                                                 : "No local drafts");
+            std::snprintf(out.status.data(), out.status.size(), "%s", catalog && catalog->failed ? "Draft list could not be read" : !draftMetadataReady(*session) ? "Loading local caches..."
+                                                                                                                                : out.count                       ? "Drafts and saved publication status"
+                                                                                                                                                                  : "No local drafts");
             if (!draftCatalogReady(*session) && (!catalog || !catalog->failed)) next_step.store(0);
         }
-        else if (section == ::ui::geocaching::Section::Downloaded && session && session->phase == Phase::Ready && session->saved && !session->needsRecovery())
+        else if (section == ::ui::geocaching::Section::Downloaded && session && (session->phase == Phase::Ready || session->phase == Phase::ResumeDownloads) && session->saved && !session->needsRecovery())
             session->saved->snapshot(out);
         else if (section == ::ui::geocaching::Section::Discover && session && session->source) session->source->snapshot(section, out);
         else
@@ -1375,7 +1388,7 @@ class Facade final : public ::ui::geocaching::Source
         if (guard.locked && section == ::ui::geocaching::Section::Published && session && session->store && !session->needsRecovery())
         {
             out = {};
-            if (!draftCatalogReady(*session)) return false;
+            if (!draftMetadataReady(*session)) return false;
             const auto& catalog = *session->draft_catalog;
             if ((generation ^ (epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
             const auto& draft = catalog.page.rows[index - catalog.page.offset];
@@ -1387,6 +1400,11 @@ class Facade final : public ::ui::geocaching::Source
             else out.name = draft.name;
             out.latitude_e7 = draft.latitude_e7;
             out.longitude_e7 = draft.longitude_e7;
+            if (!draftCatalogReady(*session))
+            {
+                std::snprintf(out.detail.data(), out.detail.size(), "Saved locally\n%s\nChecking publication status...", draft.has_coordinates ? "Location set" : "Location not set");
+                return true;
+            }
             std::snprintf(out.detail.data(), out.detail.size(), "Local draft - not published\n%s\n%s", draft.has_coordinates ? "Location set" : "Location not set", draft.has_author ? "Author selected" : "Author not selected");
             const auto& publication = draft.publication;
             out.publication_revision = publication.latest_revision;
@@ -2002,7 +2020,7 @@ void step()
     }
     if (s.phase == Phase::Ready && s.download_start && advanceDownloadStart(s)) return;
     if (advanceSavedDetail(s)) return;
-    if (s.saved && s.saved->pending() && !s.draft_catalog_wanted && s.phase != Phase::ResumeDownloads && !downloadActive() && !publicationActive() && !draftSaveActive() &&
+    if (s.saved && s.saved->pending() && !s.draft_catalog_wanted && !(s.phase == Phase::ResumeDownloads && s.download_port) && !downloadActive() && !publicationActive() && !draftSaveActive() &&
         !s.store->commitPending() && !s.needsRecovery())
     {
         const auto before = s.saved->generation();

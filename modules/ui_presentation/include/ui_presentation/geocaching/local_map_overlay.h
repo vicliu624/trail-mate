@@ -23,7 +23,7 @@ class LocalMapOverlay
             latitude_ = latitude;
             longitude_ = longitude;
             zoom_ = zoom;
-            section_ = Section::Published;
+            section_ = Section::Downloaded;
             offset_ = count_ = 0;
             finished_ = truncated_ = false;
         }
@@ -42,9 +42,9 @@ class LocalMapOverlay
             retain(item);
         }
         if (offset_ < snapshot.count) return;
-        if (section_ == Section::Published)
+        if (section_ == Section::Downloaded)
         {
-            section_ = Section::Downloaded;
+            section_ = Section::Published;
             offset_ = 0;
         }
         else finished_ = true;
@@ -101,7 +101,7 @@ class LocalMapOverlay
         marker.point = {lat, lon, true};
         marker.stable_id = UINT32_MAX; // Not a row index in the Geocaching page.
         ui::copyText(marker.label, item.name.data());
-        ui::copyText(marker.detail, item.is_draft ? item.publication_confirmed ? "Published cache" : "Local draft - not published" : "Downloaded cache");
+        ui::copyText(marker.detail, item.is_draft ? item.publication_confirmed ? "Published cache" : "Local cache - publication unconfirmed" : "Downloaded cache");
     }
     std::array<Entry, map::MapOverlaySnapshot::kMaxItems> entries_{};
     size_t offset_ = 0, count_ = 0;

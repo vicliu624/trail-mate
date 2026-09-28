@@ -27,6 +27,7 @@ class SdIndexedDraftCatalog
         }
         if (!scan_->begin(root, 4, frame, capacity)) return false;
         page.count = page.total = 0;
+        page.metadata_ready = false;
         page.offset = offset;
         page_ = &page;
         entries_ = page.rows.data();
@@ -104,17 +105,7 @@ class SdIndexedDraftCatalog
         if (status == IndexScanStep::Working) return IndexGetStep::Working;
         if (status == IndexScanStep::End)
         {
-            if (requests_ || !page_->count) return IndexGetStep::Ready;
-            scan_.reset(new (std::nothrow) SdIndexScan(volume_));
-            if (!scan_)
-            {
-                unavailable_ = true;
-                return IndexGetStep::Invalid;
-            }
-            if (!scan_->begin(root_, 5, frame_, capacity_)) return IndexGetStep::Invalid;
-            requests_ = true;
-            count_ = page_->count;
-            return IndexGetStep::Working;
+            return requests_ ? IndexGetStep::Ready : finishDraftPage();
         }
         if (status != IndexScanStep::Item)
             return status == IndexScanStep::IoError ? IndexGetStep::IoError : status == IndexScanStep::VolumeChanged   ? IndexGetStep::VolumeChanged
@@ -125,6 +116,9 @@ class SdIndexedDraftCatalog
         if (!requests_)
         {
             const auto ordinal = page_->total++;
+            // Four visible rows and one lookahead are enough for pagination.
+            // Do not walk the rest of the catalog merely to display this page.
+            if (ordinal >= page_->offset && page_->count == page_->rows.size()) return finishDraftPage();
             if (ordinal >= page_->offset && page_->count < page_->rows.size())
             {
                 DraftView draft;
@@ -205,6 +199,24 @@ class SdIndexedDraftCatalog
     }
 
   private:
+    IndexGetStep finishDraftPage()
+    {
+        page_->metadata_ready = true;
+        bool has_author = false;
+        for (size_t i = 0; i < page_->count; ++i) has_author |= page_->rows[i].has_author;
+        // An unbound draft cannot have publication history.
+        if (!has_author) return IndexGetStep::Ready;
+        scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+        if (!scan_)
+        {
+            unavailable_ = true;
+            return IndexGetStep::Invalid;
+        }
+        if (!scan_->begin(root_, 5, frame_, capacity_)) return IndexGetStep::Invalid;
+        requests_ = true;
+        count_ = page_->count;
+        return IndexGetStep::Working;
+    }
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::IndexRootView root_;

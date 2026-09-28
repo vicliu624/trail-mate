@@ -20,7 +20,10 @@ struct DraftCatalogEntry
 };
 struct DraftCatalogPage
 {
+    bool metadata_ready = false;
     std::array<DraftCatalogEntry, 4> rows{};
+    // Indexed readers return a known count through one lookahead, not a global
+    // count that would require walking every draft before showing this window.
     size_t offset = 0, count = 0, total = 0;
 };
 static_assert(sizeof(DraftCatalogPage) <= 1536, "Draft catalog retains four small projections only");
@@ -62,6 +65,7 @@ inline bool draftContentMatches(const DraftCatalogEntry& draft, const RecordView
 template <class View>
 bool readLogicalDraftCatalog(const View& view, size_t offset, protocol::RecordCrypto& crypto, DraftCatalogPage& page)
 {
+    page.metadata_ready = false;
     page.count = page.total = 0;
     page.offset = offset;
     size_t cursor = 0;
@@ -77,6 +81,7 @@ bool readLogicalDraftCatalog(const View& view, size_t offset, protocol::RecordCr
         entry.publication = draftPublication(view, row.key, draft);
         ++page.count;
     }
+    page.metadata_ready = true;
     return true;
 }
 } // namespace geocaching::storage
