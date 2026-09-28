@@ -205,6 +205,10 @@ struct Session
         gc::protocol::SummaryView summary;
         std::array<char, gc::kMaxNameBytes> name{};
         gc::Destination remote;
+        gc::RequestId request;
+        uint8_t* response = nullptr;
+        size_t response_size = 0;
+        ~DownloadStart() { heap_caps_free(response); }
     };
     std::unique_ptr<DownloadStart> download_start;
     const char* download_start_error = nullptr;
@@ -576,7 +580,8 @@ bool advanceDownloadStart(Session& s)
     std::array<uint8_t, 16> task;
     gc::RequestId request;
     randomId(nullptr, task.data());
-    randomId(nullptr, request.bytes.data());
+    if (job.response) request = job.request;
+    else randomId(nullptr, request.bytes.data());
     s.download_port.reset(new (std::nothrow) SdDownloadPort<Digest>(*s.download_store, s.crypto, s.local,
                                                                     {job.summary.id, job.summary.hash, generation}, task, now(nullptr)));
     if (s.download_port) s.download.reset(new (std::nothrow) gc::DownloadClient(*s.download_port, s.crypto));
@@ -589,6 +594,14 @@ bool advanceDownloadStart(Session& s)
     }
     const auto scratch = job.summary.signed_bytes + 64;
     const bool begun = s.download->begin(job.remote, request, job.summary, generation);
+    if (begun && job.response)
+    {
+        s.response = job.response;
+        job.response = nullptr;
+        s.response_size = job.response_size;
+        s.response_source = job.remote;
+        s.response_operation = 3;
+    }
     s.download_start.reset();
     if (!begun)
     {
@@ -710,6 +723,9 @@ void drainReply(Session& s)
 bool processResponse(Session& s)
 {
     if (!s.response || !s.dispatch_store || s.dispatch_store->busy()) return false;
+    // The retained detail is already available while its durable download
+    // request is still being committed. Do not consume it before Waiting.
+    if (s.response_operation == 3 && s.download && s.download->phase() == gc::DownloadPhase::Submitting) return false;
     ++replies_processed;
     if (s.response_operation == 1 && s.publication && s.publication->attempt)
     {
@@ -1625,6 +1641,16 @@ class Facade final : public ::ui::geocaching::Source
         std::memcpy(job->name.data(), summary.name.data(), summary.name.size());
         job->summary.name = {job->name.data(), summary.name.size()};
         job->remote = remote;
+        auto* detail = session->detail.get();
+        if (!session->response && detail && detail->state == CacheDetail::State::Ready && detail->response &&
+            detail->matches(item.id, item.revision_hash) && detail->remote.bytes == remote.bytes)
+        {
+            job->request = detail->request;
+            job->response = detail->response;
+            job->response_size = detail->response_size;
+            detail->response = nullptr;
+            detail->response_size = 0;
+        }
         session->storage_requested = true;
         session->download_start = std::move(job);
         session->download_start_error = nullptr;

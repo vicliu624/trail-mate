@@ -371,14 +371,22 @@ int main(int argc, char** argv)
     require(detailText(item).status == ui::geocaching::DetailStatus::Failed, "busy close lost the cancellation");
     require(!test::allocated("geocaching.detail.rx") && !test::allocated("geocaching.detail.verify"), "closed detail retained temporary buffers");
     test::card_ready = true;
-    require(test::source->download(item, generation), "download not queued");
+    test::source->open(item, generation);
     until([&]
           { return router.sends == 4; },
-          "download request not dispatched");
+          "reopened detail request not dispatched");
     reply(router, fixture(folder, "get-response-v1.bin"), 3);
+    until([&]
+          { return detailText(item).status == ui::geocaching::DetailStatus::Ready; },
+          "reopened detail not verified");
+    generation = snapshot(Section::Discover).generation;
+    require(test::source->download(item, generation), "download not queued");
+    test::source->closeDetail();
     until([&]
           { return std::strstr(snapshot(Section::Discover).status.data(), "Shared caches"); },
           "download did not finish");
+    require(router.sends == 4, "saving verified detail sent a redundant network request");
+    require(!test::allocated("geocaching.detail.rx"), "saved detail retained its response buffer");
     test::source->requestWindow(Section::Downloaded, 0, 4);
     until([&]
           {

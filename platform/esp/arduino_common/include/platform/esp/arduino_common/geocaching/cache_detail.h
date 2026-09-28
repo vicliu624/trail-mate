@@ -96,10 +96,12 @@ struct CacheDetail
             if (::geocaching::protocol::decodeGetResponse({response, response_size}, request, 8192, parsed) && !parsed.has_conflict &&
                 verify(parsed.signed_cache, crypto))
                 has_receipt = crypto.sha256({response, response_size}, receipt.data());
+            // Keep only the open, verified response so Save can transfer it to
+            // the durable installation without another network request.
+            if (state == State::Ready) return;
             heap_caps_free(response);
             response = nullptr;
             response_size = 0;
-            if (state == State::Ready) return;
         }
         if (now - started >= 120000)
         {
