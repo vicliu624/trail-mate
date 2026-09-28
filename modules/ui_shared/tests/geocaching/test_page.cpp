@@ -205,6 +205,14 @@ bool save(const std::string& path, lv_obj_t* screen)
     lv_draw_buf_destroy(image);
     return out.good();
 }
+lv_obj_t* findKeyboard(lv_obj_t* root)
+{
+    if (lv_obj_check_type(root, &lv_buttonmatrix_class)) return root;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i)
+        if (auto* found = findKeyboard(lv_obj_get_child(root, i))) return found;
+    return nullptr;
+}
+
 int main(int argc, char** argv)
 {
     if (argc != 4) return 1;
@@ -216,7 +224,9 @@ int main(int argc, char** argv)
     lv_display_set_buffers(display, pixels.data(), nullptr, pixels.size(), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(display, [](lv_display_t* display, const lv_area_t*, uint8_t*)
                             { lv_display_flush_ready(display); });
-    const auto profile = width == 480 ? ui::page_profile::make_pager_profile() : ui::page_profile::make_tdeck_profile();
+    auto profile = width == 480 ? ui::page_profile::make_pager_profile() : ui::page_profile::make_tdeck_profile();
+    profile.compact_touch_keyboard = width == 320;
+    if (profile.compact_touch_keyboard) profile.ime_keyboard_height = 108;
     ui::page_profile::set_active_profile(&profile);
     auto* screen = lv_screen_active();
     auto* old_group = lv_group_create();
@@ -329,6 +339,34 @@ int main(int argc, char** argv)
     lv_obj_send_event(lv_obj_get_child(footer, 0), LV_EVENT_CLICKED, nullptr);
     list = lv_obj_get_child(root, 3);
     auto* name_field = lv_obj_get_child(list, 1);
+    for (unsigned field = 0; field < 7; ++field)
+    {
+        auto* input = lv_obj_get_child(list, 2 * field + 1);
+        const auto layers = lv_obj_get_child_count(lv_layer_top());
+        lv_obj_send_event(input, LV_EVENT_CLICKED, nullptr);
+        if (profile.compact_touch_keyboard)
+        {
+            if (lv_obj_get_child_count(lv_layer_top()) != layers + 1) return 40;
+            auto* modal = lv_obj_get_child(lv_layer_top(), -1);
+            auto* draft = lv_obj_get_child(modal, 1);
+            if (!lv_obj_check_type(draft, &lv_textarea_class)) return 41;
+            auto* keyboard = findKeyboard(modal);
+            if (!keyboard) return 45;
+            if (field == 0)
+            {
+                lv_buttonmatrix_set_selected_button(keyboard, 0);
+                lv_obj_send_event(keyboard, LV_EVENT_VALUE_CHANGED, nullptr);
+                if (std::strcmp(lv_textarea_get_text(draft), "q")) return 46;
+            }
+            lv_textarea_set_text(draft, field == 0 ? "Touch input" : "1.5");
+            if (field == 0 && !save(std::string(argv[3]) + "-keyboard.ppm", modal)) return 42;
+            auto* actions = lv_obj_get_child(modal, 0);
+            lv_obj_send_event(lv_obj_get_child(actions, 1), LV_EVENT_CLICKED, nullptr);
+            if (std::strcmp(lv_textarea_get_text(input), field == 0 ? "Touch input" : "1.5") ||
+                lv_obj_get_child_count(lv_layer_top()) != layers) return 43;
+        }
+        else if (lv_obj_get_child_count(lv_layer_top()) != layers) return 44;
+    }
     lv_textarea_set_text(name_field, "林间宝藏");
     lv_textarea_set_text(lv_obj_get_child(list, 3), "30.5");
     lv_textarea_set_text(lv_obj_get_child(list, 5), "120.5");

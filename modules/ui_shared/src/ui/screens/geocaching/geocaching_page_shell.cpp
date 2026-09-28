@@ -4,6 +4,7 @@
 #include "ui/page/page_profile.h"
 #include "ui/screens/gps/gps_page_runtime.h"
 #include "ui/widgets/top_bar.h"
+#include "ui_lvgl_ux_packs/common/touch_text_editor.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -292,6 +293,9 @@ void refreshView()
     auto& p = *page;
     const auto old_generation = p.snapshot.generation;
     auto* focused = p.group ? lv_group_get_focused(p.group) : nullptr;
+    bool focus_survives = focused != nullptr;
+    for (auto* object = focused; object; object = lv_obj_get_parent(object))
+        if (object == p.list) focus_survives = false;
     std::array<uint8_t, 32> focused_id{};
     bool focused_row = false;
     for (size_t i = 0; i < p.row_count; ++i)
@@ -383,7 +387,7 @@ void refreshView()
                 if (p.row_ids[i] == focused_id) restore = p.rows[i];
             lv_group_focus_obj(restore);
         }
-        else if (focused && !lv_obj_has_state(focused, LV_STATE_DISABLED)) lv_group_focus_obj(focused);
+        else if (focus_survives && !lv_obj_has_state(focused, LV_STATE_DISABLED)) lv_group_focus_obj(focused);
         else lv_group_focus_obj(p.tabs[static_cast<size_t>(p.section)]);
     }
 }
@@ -683,6 +687,7 @@ void openEditor(const ::ui::geocaching::Item* item)
             lv_obj_set_height(field, i == 3 || i == 4 ? 64 : 32);
             lv_textarea_set_max_length(field, limits[i]);
             lv_textarea_set_text(field, i == 5 || i == 6 ? "1.0" : "");
+            ::ui::widgets::attach_touch_text_editor(field);
             lv_obj_set_style_bg_color(field, lv_color_hex(styles::kSidePanelBg), 0);
             lv_obj_set_style_text_color(field, lv_color_hex(styles::kTextPrimary), 0);
             lv_obj_set_style_border_color(field, lv_color_hex(styles::kBorder), 0);

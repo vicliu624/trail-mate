@@ -10,13 +10,22 @@ target_compile_definitions(page_test_lvgl PUBLIC LV_CONF_SKIP=1 LV_USE_STDLIB_MA
     LV_MEM_SIZE=1048576 LV_USE_STDLIB_STRING=1 LV_USE_STDLIB_SPRINTF=1
     LV_USE_SNAPSHOT=1 LV_FONT_MONTSERRAT_12=1 LV_FONT_MONTSERRAT_16=1 LV_FONT_MONTSERRAT_20=1)
 add_executable(geocaching_page_test test_page.cpp
+    "${REPO_ROOT}/modules/ui_lvgl_ux_packs/tests/touch_editor/test_support.cpp"
+    "${REPO_ROOT}/modules/ui_lvgl_ux_packs/src/common/touch_text_editor.cpp"
+    "${REPO_ROOT}/modules/ui_lvgl_ux_packs/src/common/input_layout.cpp"
+    "${REPO_ROOT}/modules/ui_shared/src/ui/widgets/ime/ime_widget.cpp"
+    "${REPO_ROOT}/modules/ui_shared/src/ui/widgets/ime/pinyin_ime.cpp"
+    "${REPO_ROOT}/modules/ui_shared/src/ui/widgets/ime/ime_input_mode_descriptor.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/screens/geocaching/geocaching_page_shell.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/components/two_pane_styles.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/widgets/top_bar.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/page/page_profile.cpp")
 target_include_directories(geocaching_page_test PRIVATE stubs
+    "${REPO_ROOT}/modules/ui_lvgl_ux_packs/tests/touch_editor/stubs"
+    "${REPO_ROOT}/modules/ui_lvgl_ux_packs/include"
     "${REPO_ROOT}/modules/ui_shared/include" "${REPO_ROOT}/modules/ui_presentation/include")
 target_compile_features(geocaching_page_test PRIVATE cxx_std_17)
+target_compile_definitions(geocaching_page_test PRIVATE UI_SHARED_TOUCH_IME_ENABLED=1)
 target_link_libraries(geocaching_page_test PRIVATE page_test_lvgl)
 if(MSVC)
     target_compile_options(geocaching_page_test PRIVATE /utf-8)
