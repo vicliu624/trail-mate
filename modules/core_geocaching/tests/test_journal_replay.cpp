@@ -3449,6 +3449,112 @@ int checkIndexedAuthorReservation(const char* path)
     return 0;
 }
 
+int checkSavedIndexPages()
+{
+    using namespace ::geocaching;
+    using namespace ::geocaching::storage;
+    struct NoCrypto : protocol::RecordCrypto
+    {
+        unsigned calls = 0;
+        bool sha256(ByteView, uint8_t[32]) override
+        {
+            ++calls;
+            return false;
+        }
+        protocol::VerificationResult verifyEd25519(ByteView, ByteView, ByteView) override
+        {
+            ++calls;
+            return protocol::VerificationResult::CryptoUnavailable;
+        }
+    } crypto;
+    files.clear();
+    index_directories.clear();
+    VolumeInstance volume{};
+    const auto format = encodeVolumeHeader(volume);
+    files["/trailmate/geocaching/.state/format.bin"] = {format.begin(), format.end()};
+    IndexRootBytes roots[2];
+    SdIndexInitialize initialize(volume);
+    if (!initialize.begin(roots[0])) return 1;
+    auto initialized = IndexRootWriteStep::Working;
+    for (unsigned i = 0; i < 128 && initialized == IndexRootWriteStep::Working; ++i) initialized = initialize.step();
+    if (initialized != IndexRootWriteStep::Verified) return 2;
+    roots[1] = roots[0];
+    IndexRootView root;
+    if (!decodeIndexRoot({roots[0].data(), roots[0].size()}, volume, root)) return 3;
+    unsigned copy = 0;
+    uint8_t frame[2048], verification[1024];
+    // Only current installed metadata exists. There are deliberately no GPX,
+    // outgoing request or task history files to consult for these list rows.
+    for (uint8_t i = 1; i <= 9; ++i)
+    {
+        std::array<uint8_t, 32> id{}, hash{}, file_hash{};
+        std::array<uint8_t, 48> request{};
+        std::array<uint8_t, 16> task{};
+        id[0] = i;
+        hash[0] = i + 20;
+        task[0] = i;
+        request[0] = i;
+        CacheHeadView head;
+        head.current_hash = {hash.data(), 32};
+        head.install_generation = 1;
+        head.highest_seen_revision = 1;
+        ObjectRefView object;
+        object.cache_id = {id.data(), 32};
+        object.revision = 1;
+        object.name = "Indexed cache";
+        object.latitude_e7 = i;
+        object.longitude_e7 = -i;
+        object.saved_request = {request.data(), 48};
+        object.saved_task = {task.data(), 16};
+        InstallRecordView install{{id.data(), 32}, {hash.data(), 32}, {file_hash.data(), 32}, {}, 1, InstallPhase::Installed};
+        uint8_t head_bytes[64], object_bytes[320], install_bytes[160];
+        size_t head_size = 0, object_size = 0, install_size = 0;
+        if (!encodeCacheHead({id.data(), 32}, head, head_bytes, sizeof(head_bytes), head_size) ||
+            !encodeObjectRef({hash.data(), 32}, object, object_bytes, sizeof(object_bytes), object_size) ||
+            !encodeInstallRecord({task.data(), 16}, install, install_bytes, sizeof(install_bytes), install_size)) return 4;
+        const MutationView changes[] = {{2, {id.data(), 32}, {head_bytes, head_size}, false},
+                                        {1, {hash.data(), 32}, {object_bytes, object_size}, false},
+                                        {12, {task.data(), 16}, {install_bytes, install_size}, false}};
+        auto commit = std::make_unique<SdIndexedCommit>(volume);
+        if (!commit->begin(root, copy, changes, 3, frame, sizeof(frame), roots[1 - copy])) return 5;
+        auto status = IndexedCommitStep::Working;
+        for (unsigned n = 0; n < 32768 && status == IndexedCommitStep::Working; ++n) status = commit->step();
+        if (status != IndexedCommitStep::Verified || !commit->committed(root)) return 6;
+        copy = 1 - copy;
+    }
+    std::array<SavedCacheEntry, 4> rows;
+    std::set<uint8_t> seen;
+    const auto disk = files;
+    read_bytes.clear();
+    for (size_t offset : {size_t(0), size_t(4), size_t(8), size_t(12)})
+    {
+        size_t total = 0;
+        auto page = std::make_unique<SdIndexedSavedPage>(volume, crypto);
+        if (!page->begin(root, offset, 4, rows, total, frame, sizeof(frame), verification, sizeof(verification))) return 7;
+        auto status = IndexScanStep::Working;
+        for (unsigned n = 0; n < 65536 && status == IndexScanStep::Working; ++n)
+        {
+            step_bytes = 0;
+            status = page->step();
+            if (step_bytes > 512) return 8;
+        }
+        if (status != IndexScanStep::End || total != std::min(size_t(9), offset + 5)) return 9;
+        for (size_t n = 0; n < 4 && offset + n < 9; ++n)
+        {
+            const auto& row = rows[n];
+            if (!seen.insert(row.id[0]).second || row.latitude_e7 != row.id[0] || row.longitude_e7 != -int(row.id[0]) ||
+                std::strcmp(row.name.data(), "Indexed cache") || row.revision != 1) return 10;
+        }
+    }
+    if (seen.size() != 9 || crypto.calls || files != disk) return 11;
+    for (const auto& read : read_bytes)
+        if (read.first.find("/05/") != std::string::npos || read.first.find("/0a/") != std::string::npos ||
+            read.first.find(".gpx") != std::string::npos) return 12;
+    files.clear();
+    index_directories.clear();
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
     if (argc != 2) return 1;
@@ -3461,6 +3567,7 @@ int main(int argc, char** argv)
     };
     if (failed("indexed download", checkIndexedDownloadReceipt(argv[1]))) return 1;
     if (failed("indexed author reservation", checkIndexedAuthorReservation(argv[1]))) return 1;
+    if (failed("saved index pages", checkSavedIndexPages())) return 1;
     if (failed("checkpoint indexed read", checkCheckpointIndexedRead())) return 1;
     if (failed("indexed draft publication", checkIndexedDraftPublication())) return 1;
     if (failed("indexed commit capacity", checkIndexedCommitCapacity())) return 1;

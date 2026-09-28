@@ -371,9 +371,9 @@ void refreshView()
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_pad_top(empty, 12, 0);
     }
-    lv_label_set_text_fmt(p.range, "%lu-%lu / %lu",
+    lv_label_set_text_fmt(p.range, "%lu-%lu / %lu%s",
                           static_cast<unsigned long>(p.row_count ? p.offset + 1 : 0),
-                          static_cast<unsigned long>(p.offset + p.row_count), static_cast<unsigned long>(p.snapshot.count));
+                          static_cast<unsigned long>(p.offset + p.row_count), static_cast<unsigned long>(p.snapshot.count), p.snapshot.has_more ? "+" : "");
     setEnabled(p.refresh, p.section == Section::Published ? p.snapshot.can_create : p.snapshot.can_refresh);
     lv_label_set_text(lv_obj_get_child(p.refresh, 0), p.section == Section::Published ? "New" : "Refresh");
     setEnabled(p.previous, p.offset != 0);

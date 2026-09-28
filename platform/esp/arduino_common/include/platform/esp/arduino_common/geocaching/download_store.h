@@ -27,6 +27,14 @@ class DownloadStore
   public:
     virtual ~DownloadStore() = default;
     virtual bool needsRecovery() const = 0;
+    virtual bool hasSavedPages() const { return false; }
+    // A bounded index page in storage order. total is the number of heads
+    // visited, including at most one lookahead row, not an expensive full count.
+    // Output is usable only after Ready. Pending is cancelled by releaseRead().
+    virtual DownloadRecoveryRead readSavedPage(size_t, size_t, std::array<::geocaching::storage::SavedCacheEntry, 4>&, size_t&)
+    {
+        return DownloadRecoveryRead::Invalid;
+    }
     // exact: key is one cache ID; otherwise key is empty or the last returned
     // ID (exclusive, bytewise order). Ready owns all metadata and releases the
     // read lease. End means no installed candidate, never a storage error.

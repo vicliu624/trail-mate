@@ -89,6 +89,11 @@ class SdIndexedInstall
             object.revision = verified.record.revision;
             object.state = verified.record.state;
             object.created_at = verified.record.created_at;
+            object.name = verified.record.name;
+            object.latitude_e7 = verified.record.latitude_e7;
+            object.longitude_e7 = verified.record.longitude_e7;
+            object.saved_request = {key_.data(), key_.size()};
+            object.saved_task = {task_id_.data(), task_id_.size()};
             if (!encodeObjectRef({hash_.bytes.data(), 32}, object, object_.data(), object_.size(), object_size_)) return fail();
             if (head.current_hash.size)
             {
@@ -139,8 +144,15 @@ class SdIndexedInstall
                     !decodeObjectRef({hash_.bytes.data(), 32}, {object_.data(), object_size_}, proposed) ||
                     object.revision != proposed.revision || object.state != proposed.state || object.created_at != proposed.created_at ||
                     std::memcmp(object.cache_id.data, proposed.cache_id.data, 32) || object.previous_hash.size != proposed.previous_hash.size ||
-                    (object.previous_hash.size && std::memcmp(object.previous_hash.data, proposed.previous_hash.data, object.previous_hash.size)) ||
-                    !encodeObjectRef({hash_.bytes.data(), 32}, object, object_.data(), object_.size(), object_size_)) return fail();
+                    (object.previous_hash.size && std::memcmp(object.previous_hash.data, proposed.previous_hash.data, object.previous_hash.size))) return fail();
+                // Keep the new verified projection, including its current
+                // install/request keys, while preserving retention metadata.
+                proposed.has_deadline = object.has_deadline;
+                proposed.retained_until = object.retained_until;
+                size_t size = 0;
+                if (!encodeObjectRef({hash_.bytes.data(), 32}, proposed, frame_, capacity_, size) || size > object_.size()) return fail();
+                object_size_ = size;
+                std::memcpy(object_.data(), frame_, size);
             }
             return read(12, {task_id_.data(), task_id_.size()}, Phase::Install);
         }
@@ -319,7 +331,8 @@ class SdIndexedInstall
     std::array<uint8_t, 32> file_hash_{}, old_hash_{}, proof_hash_{};
     std::array<uint8_t, 256> task_{};
     std::array<uint8_t, 64> head_{};
-    std::array<uint8_t, 160> object_{}, install_{};
+    std::array<uint8_t, 320> object_{};
+    std::array<uint8_t, 160> install_{};
     std::array<::geocaching::storage::MutationView, 3> mutations_{};
     uint8_t *frame_ = nullptr, *verification_ = nullptr;
     size_t capacity_ = 0, verification_capacity_ = 0, task_size_ = 0, head_size_ = 0, object_size_ = 0, install_size_ = 0;

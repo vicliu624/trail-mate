@@ -15,12 +15,13 @@ class SdIndexedSavedCache
   public:
     explicit SdIndexedSavedCache(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
     bool begin(const ::geocaching::storage::IndexRootView& root, ::geocaching::ByteView key, bool exact,
-               uint8_t* frame, size_t capacity)
+               uint8_t* frame, size_t capacity, bool metadata_only = false)
     {
         if (status_ != IndexScanStep::Idle || (key.size && (!key.data || key.size != 32)) || (exact && key.size != 32)) return false;
         root_ = root;
         frame_ = frame;
         capacity_ = capacity;
+        metadata_only_ = metadata_only;
         has_after_ = key.size != 0;
         if (has_after_) std::memcpy(after_.data(), key.data, 32);
         phase_ = exact ? Phase::Head : Phase::Heads;
@@ -51,7 +52,7 @@ class SdIndexedSavedCache
             if (status == IndexScanStep::Working) return status_;
             if (status == IndexScanStep::End)
             {
-                if (phase_ == Phase::Heads) return head_generation_ ? startInstalls() : finish(IndexScanStep::End);
+                if (phase_ == Phase::Heads) return head_generation_ ? startObject() : finish(IndexScanStep::End);
                 if (!installed_generation_ || !operation_.emplace<SdIndexGet>(volume_).begin(root_, 10, {task_.data(), task_.size()}, frame_, capacity_))
                     return finish(IndexScanStep::Invalid);
                 phase_ = Phase::Task;
@@ -86,6 +87,7 @@ class SdIndexedSavedCache
         const auto status = get.step();
         if (status == IndexGetStep::Working) return status_;
         if (phase_ == Phase::Head && status == IndexGetStep::NotFound) return finish(IndexScanStep::End);
+        if (phase_ == Phase::DirectInstall && status == IndexGetStep::NotFound) return startInstalls();
         if (status != IndexGetStep::Ready)
             return finish(status == IndexGetStep::IoError ? IndexScanStep::IoError : status == IndexGetStep::VolumeChanged   ? IndexScanStep::VolumeChanged
                                                                                  : status == IndexGetStep::WorkspaceTooSmall ? IndexScanStep::WorkspaceTooSmall
@@ -96,7 +98,39 @@ class SdIndexedSavedCache
             if (!decodeCacheHead({after_.data(), after_.size()}, get.value(), head)) return finish(IndexScanStep::Invalid);
             if (!head.current_hash.size) return finish(IndexScanStep::End);
             saveHead({after_.data(), after_.size()}, head);
-            return startInstalls();
+            return startObject();
+        }
+        if (phase_ == Phase::Object)
+        {
+            ObjectRefView object;
+            if (!decodeObjectRef({record_.hash.data(), 32}, get.value(), object) ||
+                std::memcmp(object.cache_id.data, record_.id.data(), 32)) return finish(IndexScanStep::Invalid);
+            if (!object.saved_request.size) return startInstalls();
+            std::memcpy(task_.data(), object.saved_task.data, 16);
+            std::memcpy(requests_[0].data(), object.saved_request.data, 48);
+            request_count_ = 1;
+            record_.revision = object.revision;
+            record_.latitude_e7 = object.latitude_e7;
+            record_.longitude_e7 = object.longitude_e7;
+            std::memcpy(record_.name.data(), object.name.data(), object.name.size());
+            if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 12, {task_.data(), 16}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+            phase_ = Phase::DirectInstall;
+            return status_;
+        }
+        if (phase_ == Phase::DirectInstall)
+        {
+            InstallRecordView install;
+            if (!decodeInstallRecord({task_.data(), 16}, get.value(), install) ||
+                std::memcmp(install.cache_id.data, record_.id.data(), 32) ||
+                std::memcmp(install.revision_hash.data, record_.hash.data(), 32)) return finish(IndexScanStep::Invalid);
+            // A same-revision reinstall can replace the object projection
+            // before its file is installed. Keep reading the previous install.
+            if (install.phase != InstallPhase::Installed || install.generation > head_generation_) return startInstalls();
+            installed_generation_ = install.generation;
+            std::memcpy(record_.file_hash.data(), install.new_file_hash.data, 32);
+            if (metadata_only_) return status_ = IndexScanStep::Item;
+            phase_ = Phase::Outgoing;
+            return startRequest();
         }
         if (phase_ == Phase::Task)
         {
@@ -130,6 +164,8 @@ class SdIndexedSavedCache
     {
         Heads,
         Head,
+        Object,
+        DirectInstall,
         Installs,
         Task,
         Outgoing
@@ -142,8 +178,16 @@ class SdIndexedSavedCache
     }
     IndexScanStep startInstalls()
     {
+        installed_generation_ = 0;
+        request_ = request_count_ = 0;
         if (!operation_.emplace<SdIndexScan>(volume_).begin(root_, 12, frame_, capacity_)) return finish(IndexScanStep::Invalid);
         phase_ = Phase::Installs;
+        return status_;
+    }
+    IndexScanStep startObject()
+    {
+        if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 1, {record_.hash.data(), 32}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+        phase_ = Phase::Object;
         return status_;
     }
     IndexScanStep startRequest()
@@ -169,6 +213,6 @@ class SdIndexedSavedCache
     uint64_t head_generation_ = 0, installed_generation_ = 0;
     Phase phase_ = Phase::Heads;
     IndexScanStep status_ = IndexScanStep::Idle;
-    bool has_after_ = false;
+    bool has_after_ = false, metadata_only_ = false;
 };
 } // namespace platform::esp::arduino_common::geocaching

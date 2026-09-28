@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/download_store.h"
 #include "ui_presentation/geocaching/geocaching_source.h"
+#include <algorithm>
 #include <cstdio>
 
 namespace platform::esp::arduino_common::geocaching
@@ -87,6 +88,21 @@ class SavedCacheCatalog
             restart_ = false;
         }
         if (!checking_) return false;
+        if (!preview_ && store_.hasSavedPages())
+        {
+            const auto result = store_.readSavedPage(offset_, window_, rows_, total_);
+            if (result == DownloadRecoveryRead::Pending)
+            {
+                reading_ = true;
+                return true;
+            }
+            if (result == DownloadRecoveryRead::Busy) return false;
+            reading_ = false;
+            if (result != DownloadRecoveryRead::Ready) return readError(result, result == DownloadRecoveryRead::Unavailable);
+            const auto count = total_ > offset_ ? std::min(window_, total_ - offset_) : 0;
+            valid_ = uint8_t((1u << count) - 1u);
+            return complete();
+        }
         {
             if (preview_)
             {
@@ -150,6 +166,7 @@ class SavedCacheCatalog
         out.generation = generation_;
         out.can_refresh = !checking_;
         out.count = count_;
+        out.has_more = !preview_ && store_.hasSavedPages() && count_ > offset_ && count_ - offset_ > window_;
         std::snprintf(out.status.data(), out.status.size(), "%s", error() ? error() : checking_ ? "Loading downloaded caches..."
                                                                                   : out.count   ? "Saved GPX - available offline"
                                                                                                 : "No downloaded caches");

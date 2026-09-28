@@ -6,6 +6,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_indexed_install.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_new_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_saved_cache.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_saved_page.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
 
 namespace platform::esp::arduino_common::geocaching
@@ -40,9 +41,49 @@ class IndexedDownloadStore final : public DownloadStore
         io_.reset();
         recovery_.reset();
         saved_.reset();
+        page_.reset();
         owner_.release(this);
     }
     bool needsRecovery() const override { return blocked_; }
+    bool hasSavedPages() const override { return true; }
+    DownloadRecoveryRead readSavedPage(size_t offset, size_t limit, std::array<::geocaching::storage::SavedCacheEntry, 4>& rows, size_t& total) override
+    {
+        if (!valid_ || !limit || limit > rows.size()) return DownloadRecoveryRead::Invalid;
+        if (blocked_) return DownloadRecoveryRead::Unavailable;
+        if (!page_)
+        {
+            if (phase_ != Phase::None || saved_ || recovery_ || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
+            page_.reset(new (std::nothrow) SdIndexedSavedPage(volume_, crypto_));
+            if (!page_)
+            {
+                owner_.release(this);
+                return DownloadRecoveryRead::Unavailable;
+            }
+            revision_ = root_.revision;
+            if (!page_->begin(root_, offset, limit, rows, total, frame_, capacity_, verification_, verification_capacity_))
+            {
+                releaseRead();
+                return DownloadRecoveryRead::Invalid;
+            }
+            return DownloadRecoveryRead::Pending;
+        }
+        if (!page_->matches(offset, limit, rows, total)) return DownloadRecoveryRead::Busy;
+        if (!owner_.heldBy(this) || revision_ != root_.revision)
+        {
+            fail();
+            return DownloadRecoveryRead::Invalid;
+        }
+        const auto status = page_->step();
+        if (status == IndexScanStep::Working) return DownloadRecoveryRead::Pending;
+        const auto result = page_->unavailable() ? DownloadRecoveryRead::Unavailable : status == IndexScanStep::End             ? DownloadRecoveryRead::Ready
+                                                                                   : status == IndexScanStep::WorkspaceTooSmall ? DownloadRecoveryRead::WorkspaceTooSmall
+                                                                                   : status == IndexScanStep::IoError           ? DownloadRecoveryRead::IoError
+                                                                                   : status == IndexScanStep::VolumeChanged     ? DownloadRecoveryRead::VolumeChanged
+                                                                                                                                : DownloadRecoveryRead::Invalid;
+        blocked_ = result == DownloadRecoveryRead::Invalid || result == DownloadRecoveryRead::IoError || result == DownloadRecoveryRead::VolumeChanged;
+        releaseRead();
+        return result;
+    }
     // Called by the workspace owner's prepare callback, before acquiring a
     // fresh lease. No borrowed view or operation may outlive its prior lease.
     void bindWorkspace(uint8_t* frame, uint8_t* response, uint8_t* verification)
@@ -117,7 +158,7 @@ class IndexedDownloadStore final : public DownloadStore
             fail();
             return DownloadRecoveryRead::Invalid;
         }
-        if (saved_ || recovery_ || cached_ || (phase_ != Phase::None && phase_ != Phase::Generation && phase_ != Phase::GenerationReady)) return DownloadRecoveryRead::Busy;
+        if (saved_ || page_ || recovery_ || cached_ || (phase_ != Phase::None && phase_ != Phase::Generation && phase_ != Phase::GenerationReady)) return DownloadRecoveryRead::Busy;
         if (phase_ == Phase::None)
         {
             if (owner_.holder()) return DownloadRecoveryRead::Busy;
@@ -167,6 +208,7 @@ class IndexedDownloadStore final : public DownloadStore
         io_.reset();
         recovery_.reset();
         saved_.reset();
+        page_.reset();
         phase_ = Phase::None;
         cached_ = active_ = completed_ = false;
         outgoing_ = {};
@@ -203,7 +245,7 @@ class IndexedDownloadStore final : public DownloadStore
         }
         else
         {
-            if (saved_ || phase_ != Phase::None || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
+            if (saved_ || page_ || phase_ != Phase::None || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
             recovery_.reset(new (std::nothrow) SdIndexedDownloadRecovery(volume_));
             if (!recovery_)
             {
@@ -242,7 +284,7 @@ class IndexedDownloadStore final : public DownloadStore
         if (!valid_ || !key.data || key.size != key_.size() || !generation) return JournalWriteResult::Invalid;
         if (blocked_) return JournalWriteResult::Unavailable;
         if (owner_.heldBy(this) && revision_ != root_.revision) return fail();
-        if (commitPending() || saved_ || recovery_ || phase_ == Phase::Generation || phase_ == Phase::GenerationReady) return JournalWriteResult::Busy;
+        if (commitPending() || saved_ || page_ || recovery_ || phase_ == Phase::Generation || phase_ == Phase::GenerationReady) return JournalWriteResult::Busy;
         if (cached_ && matches(key, generation)) return JournalWriteResult::Verified;
         if (phase_ == Phase::None)
         {
@@ -485,7 +527,7 @@ class IndexedDownloadStore final : public DownloadStore
     }
     bool acquire(bool promote_generation = false)
     {
-        if (!valid_ || blocked_ || saved_ || recovery_ || phase_ == Phase::Generation || (phase_ == Phase::GenerationReady && !promote_generation) ||
+        if (!valid_ || blocked_ || saved_ || page_ || recovery_ || phase_ == Phase::Generation || (phase_ == Phase::GenerationReady && !promote_generation) ||
             copy_ > 1 || !owner_.acquire(this)) return false;
         if (!io_) io_.reset(new (std::nothrow) Operation);
         if (!io_)
@@ -533,6 +575,7 @@ class IndexedDownloadStore final : public DownloadStore
     std::unique_ptr<Operation> io_;
     std::unique_ptr<SdIndexedDownloadRecovery> recovery_;
     std::unique_ptr<SdIndexedSavedCache> saved_;
+    std::unique_ptr<SdIndexedSavedPage> page_;
     ::geocaching::ByteView outgoing_;
     ::geocaching::RevisionHash old_revision_;
     std::array<uint8_t, 48> key_{};
