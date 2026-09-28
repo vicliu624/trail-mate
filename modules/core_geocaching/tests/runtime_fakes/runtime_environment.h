@@ -73,7 +73,10 @@ inline int64_t esp_timer_get_time() { return static_cast<int64_t>(runtime_test::
 struct RuntimeTestSerial
 {
     template <class... Args>
-    void printf(const char*, Args...) {}
+    void printf(const char* format, Args... args)
+    {
+        if (std::getenv("TRAIL_MATE_TEST_RUNTIME_LOG")) std::fprintf(stderr, format, args...);
+    }
 };
 inline RuntimeTestSerial Serial;
 inline void heap_caps_free(void* bytes)

@@ -1186,12 +1186,11 @@ int checkIndexedDraftPublication()
             if (step_bytes > 512) return 104;
         }
         PendingRequestView selected_request;
-        if (selection < 2)
+        // Legacy browse tasks remain readable but must never be dispatched.
+        if (selection == 0)
         {
             if (status != IndexedPendingStep::Ready || !pending->selected(selected_request) ||
-                selected_request.key != (selection ? reply_key : publication_key)) return 105;
-            if (selection && (selected_request.request.size != request_size ||
-                              std::memcmp(selected_request.request.data, request_bytes, request_size))) return 106;
+                selected_request.key != publication_key) return 105;
         }
         else if (status != IndexedPendingStep::None || pending->selected(selected_request)) return 107;
     }

@@ -103,11 +103,11 @@ class QueryBrowseSource final : public ::ui::geocaching::Source
         case Phase::Failed:
             if (client_.failure() == ::geocaching::QueryFailure::Timeout) return "Directory did not reply - Refresh to retry";
             if (client_.failure() == ::geocaching::QueryFailure::Cancelled) return "Query cancelled";
-            return "Storage failed - recovery required";
+            return "Query could not complete - Refresh to retry";
         case Phase::Cancelling:
             return "Stopping query...";
         default:
-            return "Saving query progress...";
+            return "Processing directory response...";
         }
     }
     ::geocaching::QueryClient& client_;

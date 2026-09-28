@@ -62,6 +62,8 @@ void until(Predicate ready, const char* message)
         ui::geocaching::Snapshot view;
         test::source->snapshot(Section::Discover, view);
         std::fprintf(stderr, "Runtime terminal status: %s\n", view.status.data());
+        test::source->snapshot(Section::Published, view);
+        std::fprintf(stderr, "Runtime storage status: %s\n", view.status.data());
         for (const auto& file : test::files)
             if (file.first.find("checkpoint/") != std::string::npos || file.first.find("staging/") != std::string::npos)
                 std::fprintf(stderr, "Maintenance file: %s (%u bytes)\n", file.first.c_str(), static_cast<unsigned>(file.second.size()));
@@ -245,47 +247,29 @@ int main(int argc, char** argv)
     until([&]
           { return router.sends == 1; },
           "capabilities request not dispatched");
-    // Simulate a power loss with a durable query still awaiting its response.
-    // Close only to release this process's resources, then restore crash media.
-    const auto interrupted_files = test::files;
-    const auto interrupted_directories = test::directories;
+    // Browsing must remain disposable, even without an SD card or while USB
+    // owns it. Closing abandons the request without any journal transaction.
+    require(test::files.empty(), "browse startup wrote storage");
     const auto obsolete_request = router.sent_bytes;
     reply(router, fixture(folder, "capabilities-response-v1.bin"), 0);
     test::source->activate(false);
+    test::external_owner = true;
     until([&]
           { return !router.service; },
-          "interrupted query did not close");
-    require(!test::allocated("geocaching.rx"), "closing session leaked its pending network reply");
-    test::files = interrupted_files;
-    test::directories = interrupted_directories;
-    test::clock_ms += 180000; // the retained attempt is eligible for retry after reboot
+          "RAM query did not close while USB owned SD");
+    require(!test::allocated("geocaching.rx") && !test::blocked_io, "close touched SD or leaked reply");
+    test::external_owner = false;
+    test::card_ready = false;
     router.sends = 0;
     test::source->activate(true);
     until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Restoring previous queries"); },
-          "previous query retirement did not start");
-    until([&]
-          { return test::files != interrupted_files; },
-          "previous query retirement did not write");
-    // A second power loss during cancellation must recover its journal before
-    // starting a fresh query, without losing the original task history.
-    const auto retiring_files = test::files;
-    const auto retiring_directories = test::directories;
-    test::source->activate(false);
-    until([&]
-          { return !router.service; },
-          "interrupted retirement did not close");
-    test::files = retiring_files;
-    test::directories = retiring_directories;
-    test::source->activate(true);
-    until([&]
           { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
-          "interrupted query did not recover");
+          "SD-free browse did not start");
     announce(router);
     until([&]
           { return router.sends == 1; },
-          "fresh query was blocked by an obsolete request");
-    require(router.sent_bytes != obsolete_request, "restart retransmitted the old session's query");
+          "SD-free capabilities missing");
+    require(router.sent_bytes != obsolete_request, "restart reused the abandoned query");
     // Real SD operations in the remote capture take tens of milliseconds.
     // Exercise the receive handoff and response scheduling at that cadence.
     tick_ms = 40;
@@ -295,16 +279,34 @@ int main(int argc, char** argv)
           { return router.sends == 2; },
           "query request not dispatched");
     require(router.busy_sends_remaining == 0, "query did not exercise router contention");
-    require(test::maintenance::begins * 2 < test::maintenance::slices,
-            "ongoing Geocaching work restarted the shared owner for every small slice");
+
     reply(router, fixture(folder, "query-response-v1.bin"), 2);
     until([&]
           { const auto view = snapshot(Section::Discover); return view.count == 1 && view.can_refresh; },
-          "query page not persisted");
+          "query page not displayed");
+    require(test::files.empty() && !test::blocked_io && !test::allocated("geocaching.index.read") &&
+                !test::allocated("geocaching.index.encode"),
+            "browsing depends on SD or its workspaces");
+    test::card_ready = true;
     tick_ms = 5;
     std::array<uint8_t, 16> reply_remote{};
     require(router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
-            "durably committed reply was not acknowledged on retry");
+            "accepted RAM reply was not acknowledged on retry");
+    auto changed_reply = last_reply;
+    changed_reply.back() ^= 1;
+    require(!router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {changed_reply.data(), changed_reply.size()}}, router.context),
+            "modified duplicate reply was acknowledged");
+    reply_remote[0] = 1;
+    require(!router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
+            "reply from another directory was acknowledged");
+    reply_remote[0] = 0;
+    // Protocol switching can remove a background backend between UI ticks.
+    // Recreate it without losing the RAM page or opening storage.
+    router.service.reset();
+    until([&]
+          { return router.service != nullptr; },
+          "browse transport did not reconnect");
+    require(snapshot(Section::Discover).count == 1 && test::files.empty(), "transport reconnection lost the RAM page");
     test::profile_reads = true;
     test::read_bytes_by_path.clear();
     for (unsigned i = 0; i < 500; ++i) tick();
@@ -431,48 +433,28 @@ int main(int argc, char** argv)
     require(test::allocations.empty() && !test::open_files && !test::open_dirs, "restored session leaked resources");
     // External USB ownership can arrive during an asynchronous query write.
     // Closing the UI must neither touch the card nor busy-spin during it.
-    test::source->activate(true);
-    until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
-          "ownership case did not open");
-    announce(router);
-    until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Saving query progress") && test::allocated("geocaching.index.read"); },
-          "query never acquired storage workspace");
-    const auto before_external = test::files;
+    // Browse refresh is independent of USB ownership and SD workspace allocation.
     test::external_owner = true;
-    test::source->activate(false);
-    tick();
-    require(!test::blocked_io && test::files == before_external, "closing query accessed externally owned SD");
-    for (unsigned i = 0; i < 20; ++i) tick();
-    require(!test::blocked_io, "waiting close touched externally owned SD");
-    require(!rt::workPending(), "closed UI ignored SD retry backoff");
-    test::external_owner = false;
-    until([&]
-          { return !router.service; },
-          "query close did not resume after SD ownership returned");
-    require(test::allocations.empty() && !test::open_files && !test::open_dirs, "ownership case leaked resources");
-
-    // A temporary allocation failure is retryable and must not write anything.
     test::source->activate(true);
     until([&]
           { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
-          "allocation case did not open");
+          "USB browse did not open");
     test::memory_available = false;
+    const auto no_sd = test::files;
+    const auto before_sends = router.sends;
     announce(router);
-    const auto before_memory_wait = test::files;
     until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Waiting for storage workspace"); },
-          "allocation failure was not deferred");
-    require(test::files == before_memory_wait && !test::allocated("geocaching.index.read"), "allocation failure retained buffers or changed storage");
+          { return router.sends == before_sends + 1; },
+          "browse allocated SD workspace");
+    require(test::files == no_sd && !test::blocked_io, "USB browse accessed SD");
     test::source->activate(false);
-    for (unsigned i = 0; i < 20 && rt::workPending(); ++i) tick();
-    require(!rt::workPending(), "closed UI ignored allocation retry backoff");
-    test::memory_available = true;
     until([&]
           { return !router.service; },
-          "allocation recovery did not finish close");
-    require(test::allocations.empty() && !test::open_files && !test::open_dirs, "allocation case leaked resources");
+          "USB browse did not close");
+    test::memory_available = true;
+    test::external_owner = false;
+    require(test::allocations.empty() && !test::open_files && !test::open_dirs, "browse resources leaked");
+    ui::geocaching::Snapshot item_snapshot;
     // Corrupt derived metadata must be rebuilt from authoritative facts. A
     // transient read failure must instead preserve the tree and report I/O.
     unsigned damaged_files = 0;
@@ -487,17 +469,18 @@ int main(int argc, char** argv)
             if (fault == 0) test::files[entry.first].back() ^= 1;
             else if (fault == 1) test::files[entry.first].pop_back();
             else test::fail_read_path = entry.first;
-            const char* expected = fault == 2 ? "Cannot read cached storage" : "Finding a public directory";
+            const char* expected = fault == 2 ? "Cannot read cached storage" : "";
             const auto damaged = test::files;
             std::fprintf(stderr, "Startup fault %u: %s\n", fault, entry.first.c_str());
             test::source->activate(true);
+            tick();
+            test::source->snapshot(Section::Published, item_snapshot);
             until([&]
                   {
-                  const auto view = snapshot(Section::Discover);
-                      return std::strstr(view.status.data(), expected) || std::strstr(view.status.data(), "Cached index needs recovery") ||
-                         std::strstr(view.status.data(), "Finding a public directory"); },
+                  const auto view = snapshot(Section::Published);
+                      return view.can_create || std::strstr(view.status.data(), "Cannot read cached storage") || std::strstr(view.status.data(), "Cached index needs recovery"); },
                   "damaged-index startup did not reach a terminal status");
-            require(std::strstr(snapshot(Section::Discover).status.data(), expected),
+            require(fault == 2 ? std::strstr(snapshot(Section::Published).status.data(), expected) != nullptr : snapshot(Section::Published).can_create,
                     "index repair did not reach the expected result");
             require(test::fail_read_path.empty(), "startup did not reach the injected read failure");
             if (fault == 2) require(test::files == damaged, "I/O failure modified persistent evidence");
@@ -529,8 +512,10 @@ int main(int argc, char** argv)
     test::files = disk;
     test::directories = disk_directories;
     test::source->activate(true);
+    tick();
+    test::source->snapshot(Section::Published, item_snapshot);
     until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+          { return snapshot(Section::Published).can_create; },
           "healthy storage did not recover after failed startups");
     require(test::files == disk, "healthy recovery after faults changed persistent data");
     test::source->activate(false);
@@ -576,6 +561,8 @@ int main(int argc, char** argv)
         if (!file.first.compare(0, index.size(), index)) ++original_index_files;
     test::files[index + "root.h0"].back() ^= 1;
     test::source->activate(true);
+    tick();
+    test::source->snapshot(Section::Published, item_snapshot);
     until([&]
           {
               const bool archived = test::directories.count("/trailmate/geocaching/.state/index.repair");
@@ -601,7 +588,7 @@ int main(int argc, char** argv)
                                      archived && sequence >= committed && archive_files < original_index_files};
               for (size_t i = 0; i < cuts.size(); ++i)
                   if (points[i] && !cuts[i].captured) cuts[i] = {test::files, test::directories, true};
-              return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              return snapshot(Section::Published).can_create; },
           "repair baseline for interruption testing failed");
     closeRuntime();
     for (size_t cut = 0; cut < cuts.size(); ++cut)
@@ -611,8 +598,10 @@ int main(int argc, char** argv)
         test::files = cuts[cut].files;
         test::directories = cuts[cut].directories;
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              { return snapshot(Section::Published).can_create; },
               "interrupted repair did not resume");
         require(!test::directories.count("/trailmate/geocaching/.state/index.repair"), "resumed repair retained archive");
         for (const auto& original : disk)
@@ -651,8 +640,10 @@ int main(int argc, char** argv)
     for (unsigned restart = 0; restart < 2; ++restart)
     {
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Cached index needs recovery"); },
+              { return std::strstr(snapshot(Section::Published).status.data(), "Cached index needs recovery"); },
               "missing committed journal tail was accepted");
         require(last_frame ? test::files.at(journal) == incomplete_journal : !test::files.count(journal), "failed repair modified incomplete journal");
         require(test::directories.count("/trailmate/geocaching/.state/index.repair"), "failed repair lost its archive");
@@ -663,8 +654,10 @@ int main(int argc, char** argv)
     }
     test::files[journal] = disk.at(journal);
     test::source->activate(true);
+    tick();
+    test::source->snapshot(Section::Published, item_snapshot);
     until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+          { return snapshot(Section::Published).can_create; },
           "restored authoritative journal did not finish repair");
     closeRuntime();
     std::puts("Interrupted repair resumed at 8 disk states; missing committed journal tail rejected across restarts");
@@ -707,8 +700,10 @@ int main(int argc, char** argv)
         const char old_slot = root.slot;
         const auto initial_sends = router.sends;
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              { return snapshot(Section::Published).can_create; },
               "maintenance fixture did not open");
         announce(router);
         until([&]
@@ -733,8 +728,10 @@ int main(int argc, char** argv)
         // Add real committed history before testing foreground interruption.
         appendMaintenanceHistory(256);
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              { return snapshot(Section::Published).can_create; },
               "session checkpoint failed restart recovery");
         const auto resumed_sends = router.sends;
         announce(router);
@@ -760,8 +757,10 @@ int main(int argc, char** argv)
         require(!test::files.count("/trailmate/geocaching/.state/checkpoint/b.gcs"), "foreground unnecessarily waited for checkpoint publication");
         closeRuntime();
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              { return snapshot(Section::Published).can_create; },
               "pagination restart failed");
         const auto paging_sends = router.sends;
         announce(router);
@@ -793,7 +792,7 @@ int main(int argc, char** argv)
         reply(router, paginationFixture(folder, true), 2);
         until([&]
               { const auto view = snapshot(Section::Discover); return view.can_refresh && !view.has_more && view.count == 0; },
-              "final pagination response was not persisted");
+              "final pagination response was not displayed");
         require(router.sends == paging_sends + 3, "pagination request sent twice");
         closeRuntime();
         const auto journalCount = []
@@ -805,8 +804,10 @@ int main(int argc, char** argv)
         };
         const auto journals_before = journalCount();
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              { return snapshot(Section::Published).can_create; },
               "reclamation session did not recover");
         const auto reclaim_sends = router.sends;
         announce(router);
@@ -829,8 +830,10 @@ int main(int argc, char** argv)
         // Verify business state through the same UI source the device uses.
         test::files.at("/trailmate/geocaching/.state/checkpoint/b.gcs").back() ^= 1;
         test::source->activate(true);
+        tick();
+        test::source->snapshot(Section::Published, item_snapshot);
         until([&]
-              { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+              { return snapshot(Section::Published).can_create; },
               "reclaimed journal fallback could not recover session");
         test::source->requestWindow(Section::Downloaded, 0, 4);
         until([&]
@@ -862,5 +865,30 @@ int main(int argc, char** argv)
         require(preserved_gpx > 0, "reclamation test had no installed GPX to verify");
         closeRuntime();
     }
+    // A missing directory response has a bounded lifetime without any SD work.
+    const auto disk_before_timeout = test::files;
+    test::card_ready = false;
+    test::source->activate(true);
+    until([&]
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+          "timeout session did not open");
+    const auto sends_before_timeout = router.sends;
+    announce(router);
+    until([&]
+          { return router.sends > sends_before_timeout; },
+          "timeout query missing");
+    const auto retry_request = router.sent_bytes;
+    tick_ms = 1000;
+    until([&]
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Directory did not reply"); },
+          "query did not time out");
+    require(router.sends > sends_before_timeout + 1 && router.sends <= sends_before_timeout + 9 && router.sent_bytes == retry_request,
+            "query retries were unbounded or changed the request");
+    const auto stopped_sends = router.sends;
+    for (unsigned i = 0; i < 20; ++i) tick();
+    require(router.sends == stopped_sends && test::files == disk_before_timeout && !test::blocked_io,
+            "timed out browsing retried or accessed SD");
+    tick_ms = 5;
+    closeRuntime();
     std::puts("Production runtime discovery/download/publication/GPX/restart/ownership/allocation/checkpoint rotation passed");
 }

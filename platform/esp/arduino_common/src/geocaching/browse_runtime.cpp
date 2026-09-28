@@ -10,7 +10,7 @@
 #include "platform/esp/arduino_common/geocaching/indexed_dispatch_store.h"
 #include "platform/esp/arduino_common/geocaching/indexed_download_store.h"
 #include "platform/esp/arduino_common/geocaching/indexed_publication_store.h"
-#include "platform/esp/arduino_common/geocaching/indexed_query_store_port.h"
+#include "platform/esp/arduino_common/geocaching/live_query_port.h"
 #include "platform/esp/arduino_common/geocaching/query_browse_source.h"
 #include "platform/esp/arduino_common/geocaching/request_dispatcher.h"
 #include "platform/esp/arduino_common/geocaching/saved_cache_catalog.h"
@@ -19,6 +19,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_index_repair.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_publish_port.h"
+#include "platform/esp/arduino_common/geocaching/stored_reply_receipt.h"
 #include "platform/esp/common/geocaching_crypto.h"
 #include "platform/esp/common/memory_budget.h"
 #include "platform/esp/common/meshcore_runtime_compat.h"
@@ -39,7 +40,7 @@ namespace gc = ::geocaching;
 namespace mem = ::platform::esp::common::memory;
 using Digest = ::platform::esp::common::meshcore_runtime::Sha256Digest;
 constexpr size_t kFrameCapacity = 8192, kEncodingCapacity = 8192, kPayloadCapacity = 8192;
-constexpr size_t kVerificationCapacity = gc::kMaxRecordBytes + 64, kPageCapacity = 2048;
+constexpr size_t kVerificationCapacity = gc::kMaxRecordBytes + 64;
 constexpr gc::protocol::QueryRegion kWorld{-900000000, -1800000000, 900000000, 1800000000};
 enum class Phase : uint8_t
 {
@@ -53,7 +54,6 @@ enum class Phase : uint8_t
     VerifyFormat,
     Recover,
     ResumeDownloads,
-    Connect,
     Ready,
     Failed
 };
@@ -160,10 +160,12 @@ struct Session
     Phase phase = Phase::Inspect;
     const char* status = "Opening geocaching storage...";
     const char* notice = nullptr;
+    const char* browse_status = "Connecting to Reticulum...";
+    bool storage_requested = false;
+    size_t saved_offset = 0, saved_count = 0;
     gc::storage::VolumeInstance volume{};
     storage::SdRuntimeFile format;
     size_t directory = 0;
-    uint64_t connect_since = 0;
     bool mkdir_pending = false;
     // Roots and the current query page survive between operations. All other
     // byte buffers belong to the single active storage lease and are trimmed
@@ -174,7 +176,7 @@ struct Session
     IndexWorkspaceOwner workspace_owner;
     gc::storage::QueuedRequestWorkspace workspace{nullptr, kEncodingCapacity};
     uint8_t *frame = nullptr, *encoded = nullptr, *payload = nullptr, *verification = nullptr;
-    uint8_t *query_page = nullptr, *response = nullptr;
+    uint8_t* response = nullptr;
     bool workspace_unavailable = false;
     size_t response_size = 0;
     gc::Destination response_source;
@@ -184,24 +186,12 @@ struct Session
     std::array<gc::storage::MutationView, 3> mutations{};
     std::unique_ptr<SdIndexRepair<Digest>> recovery;
     std::unique_ptr<SdCheckpointRotation<Digest>> checkpoint;
-    struct PreviousQueries
-    {
-        explicit PreviousQueries(const gc::storage::VolumeInstance& volume) : scan(volume) {}
-        gc::storage::IndexRootBytes snapshot{};
-        SdIndexScan scan;
-        std::unique_ptr<SdIndexedStopTask> stop;
-        bool started = false;
-        size_t stopped = 0;
-    };
-    std::unique_ptr<PreviousQueries> previous_queries;
-    bool previous_queries_retired = false;
     uint64_t checkpoint_attempt_sequence = 0;
     bool checkpoint_recovery_required = false;
-    bool load_more_pending = false;
-    uint64_t load_more_generation = 0;
     std::unique_ptr<IndexedPublicationStore> store;
     std::unique_ptr<IndexedDispatchStore> dispatch_store;
-    std::unique_ptr<IndexedQueryStorePort> port;
+    std::unique_ptr<LiveQueryPort> port;
+    std::unique_ptr<StoredReplyReceipt> receipts;
     std::unique_ptr<gc::QueryClient> client;
     std::unique_ptr<RequestDispatcher> dispatcher;
     std::unique_ptr<QueryBrowseSource> source;
@@ -252,7 +242,7 @@ struct Session
         if (s.store) s.store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.download_store) s.download_store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.dispatch_store) s.dispatch_store->bindWorkspace(s.frame);
-        if (s.port) s.port->bindWorkspace(s.frame);
+        if (s.receipts) s.receipts->bindWorkspace(s.frame);
         return true;
     }
     void trimBuffers()
@@ -267,12 +257,10 @@ struct Session
     bool needsRecovery() const
     {
         return checkpoint_recovery_required || (store && store->needsRecovery()) || (download_store && download_store->needsRecovery()) ||
-               (dispatch_store && dispatch_store->needsRecovery()) || (port && port->needsRecovery());
+               (dispatch_store && dispatch_store->needsRecovery());
     }
     ~Session()
     {
-        workspace_owner.release(previous_queries.get());
-        previous_queries.reset();
         workspace_owner.release(checkpoint.get());
         checkpoint.reset();
         if (store && store->commitPending()) store->cancelCommit();
@@ -289,7 +277,7 @@ struct Session
         store.reset();
         recovery.reset();
         heap_caps_free(response);
-        heap_caps_free(query_page);
+        receipts.reset();
         trimBuffers();
     }
 };
@@ -325,7 +313,7 @@ struct WorkspaceSlice
         reported_phase = phase;
         const auto& owner = session.workspace_owner;
         const char* lease = !owner.holder()                              ? "none"
-                            : owner.heldBy(session.port.get())           ? "query"
+                            : owner.heldBy(session.receipts.get())       ? "query"
                             : owner.heldBy(session.dispatch_store.get()) ? "dispatch"
                             : owner.heldBy(session.download_store.get()) ? "download"
                             : owner.heldBy(session.store.get())          ? "publication"
@@ -333,7 +321,7 @@ struct WorkspaceSlice
         Serial.printf("[Geocaching] state=%u query=%u sequence=%llu lease=%s dispatch=%u response=%u proof=%u restore_pub=%u restore_download=%u rx=%lu busy=%lu queued=%lu processed=%lu accepted=%lu\n",
                       static_cast<unsigned>(session.phase), query, static_cast<unsigned long long>(session.root.sequence), lease,
                       session.dispatch_store && session.dispatch_store->busy(), session.response != nullptr,
-                      session.port && session.port->maintenancePending(), session.publication_restore_pending, session.download_restore_pending,
+                      session.receipts && session.receipts->pending(), session.publication_restore_pending, session.download_restore_pending,
                       static_cast<unsigned long>(replies_seen.load()), static_cast<unsigned long>(replies_busy.load()),
                       static_cast<unsigned long>(replies_queued.load()), static_cast<unsigned long>(replies_processed),
                       static_cast<unsigned long>(replies_accepted));
@@ -433,11 +421,10 @@ void fail(const char* reason)
 bool advanceCheckpoint(Session& s)
 {
     if (!s.checkpoint) return false;
-    const bool foreground = s.load_more_pending || s.response || downloadActive() || publicationActive() || draftSaveActive() ||
-                            (s.saved && s.saved->pending()) ||
+    const bool foreground = s.response || downloadActive() || publicationActive() || draftSaveActive() ||
+                            (s.saved && s.saved->pending() && !s.draft_catalog_wanted) ||
                             (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending) ||
-                            (s.draft_catalog_wanted && !draftCatalogReady(s)) ||
-                            (s.client && s.client->phase() != gc::QueryClientPhase::PageReady);
+                            (s.draft_catalog_wanted && !draftCatalogReady(s));
     if (foreground) s.checkpoint->yieldToForeground();
     const auto result = s.checkpoint->step();
     if (result == CheckpointRotationStep::Working) return true;
@@ -467,8 +454,7 @@ bool startCheckpoint(Session& s)
     // transaction. All consumers use the same workspace lease; acquiring it
     // proves their borrowed index cursors have been released.
     constexpr uint64_t interval = 256;
-    if (!s.client || s.client->phase() != gc::QueryClientPhase::PageReady || s.client->persistencePending() ||
-        s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval ||
+    if (s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval ||
         s.workspace_owner.holder() || s.response || announcement_pending.load(std::memory_order_acquire) || downloadActive() || publicationActive() || draftSaveActive()) return false;
     s.checkpoint.reset(new (std::nothrow) SdCheckpointRotation<Digest>(s.volume));
     if (!s.checkpoint)
@@ -645,8 +631,20 @@ bool receiveResponse(const chat::lxmf::CustomDeliveryView& message, uint8_t** ow
         !reader.binary(id, 16) || id.size != 16) return false;
     gc::RequestId request;
     std::memcpy(request.bytes.data(), id.data, 16);
-    const bool live_query = session->client && session->client->expectsResponse(source, request);
-    if (!live_query && session->port->accepted(source, request, {message.data.data, message.data.size})) return true;
+    if (value == 0 || value == 2)
+    {
+        const gc::ByteView bytes{message.data.data, message.data.size};
+        if (session->port->accepted(source, request, bytes)) return true;
+        if (!session->client || !session->client->expectsResponse(source, request)) return false;
+        const bool accepted = session->client->accept(source, bytes);
+        if (accepted)
+        {
+            ++replies_accepted;
+            next_step.store(0);
+        }
+        return accepted;
+    }
+    if (session->receipts && session->receipts->accepted(source, request, {message.data.data, message.data.size})) return true;
     if (value == 1 && (!session->publication || !session->publication->attempt ||
                        session->publication->attempt->phase() != gc::PublishAttemptPhase::Waiting || message.data.size > 512)) return false;
     if (value == 3 && (!session->download || session->download->phase() != gc::DownloadPhase::Waiting ||
@@ -687,12 +685,12 @@ bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
     reply->size = message.data.size;
     pending_reply.store(reply.release(), std::memory_order_release);
     next_step.store(0);
-    return false; // Queued in RAM only; durable acceptance still controls ACKs.
+    return false; // A queued reply is acknowledged after validation.
 }
 
 void drainReply(Session& s)
 {
-    if (s.response || s.phase != Phase::Ready || !s.port) return;
+    if (s.response || !s.port) return;
     std::unique_ptr<PendingReply> reply(pending_reply.exchange(nullptr, std::memory_order_acq_rel));
     if (!reply) return;
     receiveResponse({{reply->source.bytes.data(), 16}, {reply->destination.bytes.data(), 16}, {}, {reply->bytes, reply->size}}, &reply->bytes);
@@ -700,7 +698,7 @@ void drainReply(Session& s)
 
 bool processResponse(Session& s)
 {
-    if (!s.response || s.client->persistencePending() || s.dispatch_store->busy()) return false;
+    if (!s.response || !s.dispatch_store || s.dispatch_store->busy()) return false;
     ++replies_processed;
     if (s.response_operation == 1 && s.publication && s.publication->attempt)
     {
@@ -716,19 +714,74 @@ bool processResponse(Session& s)
         if (before != s.download->phase()) ++epoch;
         heap_caps_free(scratch);
     }
-    else
-    {
-        const bool accepted = s.client->accept(s.response_source, {s.response, s.response_size});
-        if (accepted) ++replies_accepted;
-        Serial.printf("[Geocaching] reply operation=%u result=%s query=%u bytes=%u\n",
-                      s.response_operation, accepted ? "committed" : s.client->persistencePending() ? "persisting"
-                                                                                                    : "ignored",
-                      static_cast<unsigned>(s.client->phase()), static_cast<unsigned>(s.response_size));
-    }
     heap_caps_free(s.response);
     s.response = nullptr;
     s.response_size = 0;
     return true;
+}
+
+// Browsing has no volume dependency. Run before every storage slice, including
+// while saved data is recovering, unavailable, or held by USB.
+void advanceBrowse(Session& s)
+{
+    if (auto cached = router->takeInactiveReticulumCache())
+    {
+        s.created_backend = nullptr;
+        return;
+    }
+    if (!s.client || !router->backendForProtocol(chat::MeshProtocol::Reticulum))
+    {
+        if (!router->bindGeocachingHandlers(announcementReceived, responseReceived, nullptr)) return;
+        if (!router->backendForProtocol(chat::MeshProtocol::Reticulum))
+        {
+            if (!mem::admit("geocaching.transport", sizeof(chat::reticulum::ReticulumAdapter) + 4096, 0,
+                            sizeof(chat::lxmf::LxmfAdapter), 40 * 1024, 0, 4096))
+            {
+                s.browse_status = "Insufficient transport memory";
+                return;
+            }
+            auto backend = std::unique_ptr<chat::reticulum::ReticulumAdapter>(new (std::nothrow)
+                                                                                  chat::reticulum::ReticulumAdapter(*board, nullptr, chat::reticulum::ReticulumUsage::BackgroundIpService));
+            if (!backend) return;
+            backend->applyConfig(app::AppContext::getInstance().readConfig().reticulumConfig());
+            auto* created = backend.get();
+            if (!router->installServiceBackend(chat::MeshProtocol::Reticulum, std::move(backend))) return;
+            s.created_backend = created;
+        }
+    }
+    if (!s.client)
+    {
+        if (!router->getGeocachingDispatchDestination(s.local.bytes.data()))
+        {
+            s.browse_status = "Waiting for Reticulum IP connection";
+            return;
+        }
+        if (!s.port) s.port.reset(new (std::nothrow) LiveQueryPort(s.crypto, randomId));
+        if (!s.port) return;
+        s.client.reset(new (std::nothrow) gc::QueryClient(*s.port));
+        if (!s.client) return;
+        s.source.reset(new (std::nothrow) QueryBrowseSource(*s.client, *s.port, kWorld));
+        if (!s.source)
+        {
+            s.client.reset();
+            return;
+        }
+        s.client->query(kWorld);
+        ++epoch;
+    }
+    drainReply(s);
+    if (announcement_pending.load(std::memory_order_acquire))
+    {
+        const auto& incoming = pending_announcement;
+        s.client->observe(incoming.discovery, incoming.delivery, {incoming.key.data(), incoming.key.size()},
+                          {incoming.data.data(), incoming.size}, now(nullptr).monotonic_ms);
+        announcement_pending.store(false, std::memory_order_release);
+    }
+    s.client->tick(now(nullptr).monotonic_ms);
+    const auto sent = s.port->dispatch(*router, s.local, now(nullptr).monotonic_ms);
+    if (sent.failure != chat::MeshOperationFailure::None && sent.failure != s.last_dispatch_failure)
+        Serial.printf("[Geocaching][Query] send_deferred failure=%u\n", static_cast<unsigned>(sent.failure));
+    if (sent.ok || sent.failure != chat::MeshOperationFailure::None) s.last_dispatch_failure = sent.failure;
 }
 
 void startRecovery()
@@ -1087,7 +1140,7 @@ bool publicationDraftReady(const std::array<uint8_t, 16>& id, uint64_t generatio
     gc::Destination remote;
     const auto utc = std::time(nullptr);
     const bool ready = session && session->phase == Phase::Ready && session->port && session->store &&
-                       !session->needsRecovery() && !session->store->commitPending() && !session->client->persistencePending() &&
+                       !session->needsRecovery() && !session->store->commitPending() &&
                        !downloadActive() && !publicationActive() && !draftSaveActive() && utc >= 946684800 &&
                        static_cast<uint64_t>(utc) <= 253402300799ULL && session->port->pageSource(remote) &&
                        draft->has_coordinates &&
@@ -1119,7 +1172,8 @@ class Facade final : public ::ui::geocaching::Source
             std::snprintf(out.status.data(), out.status.size(), "Updating...");
             return;
         }
-        if (section == ::ui::geocaching::Section::Published && session && session->store && !session->needsRecovery())
+        if (session && section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
+        if (section == ::ui::geocaching::Section::Published && session && session->phase == Phase::Ready && session->store && !session->needsRecovery())
         {
             session->draft_catalog_wanted = true;
             const auto* catalog = session->draft_catalog.get();
@@ -1132,19 +1186,17 @@ class Facade final : public ::ui::geocaching::Source
                                                                                                                                                                  : "No local drafts");
             if (!draftCatalogReady(*session) && (!catalog || !catalog->failed)) next_step.store(0);
         }
-        else if (section == ::ui::geocaching::Section::Downloaded && session && session->saved && !session->needsRecovery())
+        else if (section == ::ui::geocaching::Section::Downloaded && session && session->phase == Phase::Ready && session->saved && !session->needsRecovery())
             session->saved->snapshot(out);
-        else if (session && session->source && session->phase == Phase::Ready) session->source->snapshot(section, out);
+        else if (section == ::ui::geocaching::Section::Discover && session && session->source) session->source->snapshot(section, out);
         else
         {
-            std::snprintf(out.status.data(), out.status.size(), "%s", session ? session->status : "Starting Geocaching...");
+            std::snprintf(out.status.data(), out.status.size(), "%s", session ? (section == ::ui::geocaching::Section::Discover ? session->browse_status : session->status) : "Starting Geocaching...");
             out.can_refresh = session && session->phase == Phase::Failed;
         }
         if (session && session->recovery_attention && section == ::ui::geocaching::Section::Downloaded)
             std::snprintf(out.status.data(), out.status.size(), "Some saved GPX files or history need attention");
-        if (session && session->saved && session->saved->error() && section == ::ui::geocaching::Section::Discover)
-            std::snprintf(out.status.data(), out.status.size(), "%s", session->saved->error());
-        if (session && session->notice) std::snprintf(out.status.data(), out.status.size(), "%s", session->notice);
+        if (session && session->notice && section != ::ui::geocaching::Section::Discover) std::snprintf(out.status.data(), out.status.size(), "%s", session->notice);
         if (downloadActive())
         {
             out.can_refresh = false;
@@ -1190,21 +1242,26 @@ class Facade final : public ::ui::geocaching::Source
                 out.has_more = false;
             }
         }
-        if (session && session->workspace_unavailable)
+        if (session && session->workspace_unavailable && section != ::ui::geocaching::Section::Discover)
             std::snprintf(out.status.data(), out.status.size(), "Waiting for storage workspace...");
-        if (session && session->phase == Phase::Failed)
+        if (session && session->phase == Phase::Failed && section != ::ui::geocaching::Section::Discover)
         {
             std::snprintf(out.status.data(), out.status.size(), "%s", session->status);
             out.can_refresh = true;
             out.can_create = out.has_more = false;
         }
-        if (session && session->load_more_pending) out.has_more = false;
         out.generation ^= epoch << 32;
     }
     void requestWindow(::ui::geocaching::Section section, size_t offset, size_t count) override
     {
         Guard guard;
         if (!guard.locked || !session) return;
+        if (section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
+        if (section == ::ui::geocaching::Section::Downloaded && count && count <= 4)
+        {
+            session->saved_offset = offset;
+            session->saved_count = count;
+        }
         session->draft_catalog_wanted = section == ::ui::geocaching::Section::Published;
         if (session->saved && count && count <= 4)
         {
@@ -1274,9 +1331,8 @@ class Facade final : public ::ui::geocaching::Source
             return session->saved->item(index, generation ^ (epoch << 32), out);
         if (!guard.locked || !session || !session->source || !session->source->item(section, index, generation ^ (epoch << 32), out)) return false;
         out.downloaded = session->saved && session->saved->contains(out.id, out.revision_hash);
-        out.can_download = !out.downloaded && !downloadActive() && !publicationActive() && !draftSaveActive() && !session->store->commitPending() &&
-                           session->saved && session->saved->checked(out.id, out.revision_hash) &&
-                           !session->needsRecovery() && storage::sd_card_ready() &&
+        out.can_download = !out.downloaded && !downloadActive() && !publicationActive() && !draftSaveActive() && (!session->store || !session->store->commitPending()) &&
+                           !session->needsRecovery() && session->phase != Phase::Failed && storage::sd_card_ready() && !storage::sd_external_block_owner_active() &&
                            (session->client->phase() == gc::QueryClientPhase::PageReady || session->client->phase() == gc::QueryClientPhase::Failed);
         if (out.downloaded)
         {
@@ -1290,23 +1346,14 @@ class Facade final : public ::ui::geocaching::Source
         Guard guard;
         if (!guard.locked || downloadActive() || publicationActive() || draftSaveActive()) return;
         if (section == ::ui::geocaching::Section::Downloaded && session && session->saved && !session->needsRecovery()) session->saved->reset();
-        else if (session && session->phase == Phase::Failed) restart.store(true);
+        else if (section != ::ui::geocaching::Section::Discover && session && session->phase == Phase::Failed) restart.store(true);
         else if (session && session->source) session->source->refresh(section);
         next_step.store(0);
     }
     bool loadMore() override
     {
         Guard guard;
-        if (!guard.locked || downloadActive() || publicationActive() || draftSaveActive() || !session || !session->source || session->load_more_pending) return false;
-        if (session->checkpoint)
-        {
-            if (!session->client || !session->client->hasMore() || !session->port || session->needsRecovery()) return false;
-            session->load_more_pending = true;
-            session->load_more_generation = session->port->generation();
-            next_step.store(0);
-            ++epoch;
-            return true;
-        }
+        if (!guard.locked || downloadActive() || publicationActive() || draftSaveActive() || !session || !session->source) return false;
         const bool begun = session->source->loadMore();
         if (begun) next_step.store(0);
         return begun;
@@ -1408,7 +1455,7 @@ class Facade final : public ::ui::geocaching::Source
         Guard guard;
         if (!guard.locked || !session || !session->store || session->needsRecovery() || session->store->commitPending() ||
             downloadActive() || publicationActive() || draftSaveActive() || session->phase == Phase::ResumeDownloads ||
-            (session->client && session->client->persistencePending()) || input.generation == UINT64_MAX ||
+            input.generation == UINT64_MAX ||
             input.name.size() > 96 || input.description.size() > 2048 || input.hint.size() > 512) return false;
         gc::storage::DraftView draft;
         if (!input.generation && input.id == std::array<uint8_t, 16>{}) esp_fill_random(input.id.data(), input.id.size());
@@ -1449,10 +1496,10 @@ class Facade final : public ::ui::geocaching::Source
     bool download(const ::ui::geocaching::Item& item, uint64_t generation) override
     {
         Guard guard;
-        if (!guard.locked || !session || session->phase != Phase::Ready || !session->source || !session->port || !session->download_store ||
-            session->needsRecovery() || downloadActive() || publicationActive() || draftSaveActive() || session->store->commitPending()) return false;
+        if (!guard.locked || !session || session->phase == Phase::Failed || !session->source || !session->port || !storage::sd_card_ready() || storage::sd_external_block_owner_active() ||
+            session->needsRecovery() || downloadActive() || publicationActive() || draftSaveActive() || (session->store && session->store->commitPending())) return false;
         if (session->client->phase() != gc::QueryClientPhase::PageReady && session->client->phase() != gc::QueryClientPhase::Failed) return false;
-        if (!session->saved || !session->saved->checked(item.id, item.revision_hash) || session->saved->contains(item.id, item.revision_hash)) return false;
+        if (session->saved && session->saved->contains(item.id, item.revision_hash)) return false;
         ::ui::geocaching::Snapshot snapshot;
         session->source->snapshot(::ui::geocaching::Section::Discover, snapshot);
         if ((generation ^ (epoch << 32)) != snapshot.generation) return false;
@@ -1472,6 +1519,7 @@ class Facade final : public ::ui::geocaching::Source
         std::memcpy(job->name.data(), summary.name.data(), summary.name.size());
         job->summary.name = {job->name.data(), summary.name.size()};
         job->remote = remote;
+        session->storage_requested = true;
         session->download_start = std::move(job);
         session->download_start_error = nullptr;
         ++epoch;
@@ -1480,105 +1528,16 @@ class Facade final : public ::ui::geocaching::Source
     }
 } facade;
 
-// QueryClient does not restore an old page's request ID. Its durable read
-// tasks must therefore stop before the dispatcher can send for a new session.
-// Keep history and all publication/download tasks. Scan one pinned snapshot;
-// each stop only appends to the currently scanned bucket, whose head is pinned.
-bool retirePreviousQueries(Session& s, const gc::Destination& local)
-{
-    if (s.previous_queries_retired) return false;
-    if (!s.previous_queries) s.previous_queries.reset(new (std::nothrow) Session::PreviousQueries(s.volume));
-    if (!s.previous_queries || !s.workspace_owner.acquire(s.previous_queries.get()))
-    {
-        next_step.store(millis() + 1000);
-        return true;
-    }
-    auto& job = *s.previous_queries;
-    if (!job.started)
-    {
-        job.snapshot = s.roots[s.root_copy];
-        gc::storage::IndexRootView pinned;
-        if (!gc::storage::decodeIndexRoot({job.snapshot.data(), job.snapshot.size()}, s.volume, pinned) ||
-            !job.scan.begin(pinned, 10, s.frame, kFrameCapacity))
-        {
-            fail("Cannot inspect previous queries");
-            return true;
-        }
-        job.started = true;
-        s.status = "Restoring previous queries...";
-        ++epoch;
-        return true;
-    }
-    if (job.stop)
-    {
-        const auto result = job.stop->step();
-        if (result == IndexedCommitStep::Working) return true;
-        if (result != IndexedCommitStep::Verified || !job.stop->committed(s.root))
-        {
-            s.checkpoint_recovery_required = true;
-            fail("Previous query stop interrupted - reopen to recover");
-            return true;
-        }
-        s.root_copy = 1 - s.root_copy;
-        job.stop.reset();
-        ++job.stopped;
-        return true;
-    }
-    const auto result = job.scan.step();
-    if (result == IndexScanStep::Working) return true;
-    if (result == IndexScanStep::End)
-    {
-        if (job.stopped) Serial.printf("[Geocaching] retired_previous_queries=%u\n", static_cast<unsigned>(job.stopped));
-        s.workspace_owner.release(&job);
-        s.previous_queries.reset();
-        s.previous_queries_retired = true;
-        return false;
-    }
-    gc::storage::MutationView row;
-    gc::storage::TaskView task;
-    if (result != IndexScanStep::Item || !job.scan.item(row) || !gc::storage::decodeTask(row.key, row.value, task))
-    {
-        fail("Cannot read previous queries - reopen to recover");
-        return true;
-    }
-    bool own = task.request_count != 0;
-    for (size_t i = 0; i < task.request_count; ++i)
-        own = own && !std::memcmp(task.requests[i].data, local.bytes.data(), local.bytes.size());
-    if (own && task.kind == 3 && task.continue_intent && task.state != 3 && task.state != 5)
-    {
-        job.stop.reset(new (std::nothrow) SdIndexedStopTask(s.volume));
-        if (!job.stop)
-        {
-            next_step.store(millis() + 1000);
-            return true;
-        }
-        if (!job.stop->begin(s.root, s.root_copy, row.key, false, s.frame, kFrameCapacity, s.roots[1 - s.root_copy]))
-        {
-            s.checkpoint_recovery_required = true;
-            fail("Cannot stop previous query - reopen to recover");
-            return true;
-        }
-    }
-    job.scan.advance();
-    return true;
-}
-
 bool closeSession()
 {
     if (!session) return true;
     // Closing still persists query cancellation and may finish an active
     // write. Preserve its inputs while USB owns the volume, without touching
     // storage or turning temporary ownership into a recovery fault.
-    if (storage::sd_external_block_owner_active())
+    if (session->storage_requested && storage::sd_external_block_owner_active())
     {
         next_step.store(millis() + 1000);
         return false;
-    }
-    if (session->previous_queries)
-    {
-        session->checkpoint_recovery_required = true;
-        session->workspace_owner.release(session->previous_queries.get());
-        session->previous_queries.reset();
     }
     if (session->checkpoint)
     {
@@ -1599,10 +1558,9 @@ bool closeSession()
             session->dispatcher->dispatchOne(now(nullptr));
             return false;
         }
-        if (session->port && session->workspace_owner.heldBy(session->port.get()))
+        if (session->receipts && session->workspace_owner.heldBy(session->receipts.get()))
         {
-            if (session->client->persistencePending()) session->client->tick(now(nullptr).monotonic_ms);
-            else session->port->maintenanceStep();
+            session->receipts->step();
             return false;
         }
         if (session->store && session->store->commitPending())
@@ -1617,31 +1575,10 @@ bool closeSession()
         }
     }
     if (session->saved) session->saved->releaseRead();
-    // Read-only projections must not hold the shared lease while the query
-    // client persists cancellation during shutdown.
+    // Release projection cursors before destroying their shared workspace.
     if (session->store) session->store->releaseDraftRead();
     if (session->download_store) session->download_store->releaseRead();
     if (session->draft_catalog) session->draft_catalog->reading = false;
-    if (session->client && session->store && !session->needsRecovery())
-    {
-        WorkspaceSlice workspace_slice{*session};
-        if (session->client->persistencePending())
-        {
-            session->client->tick(now(nullptr).monotonic_ms);
-            return false;
-        }
-        if (session->dispatch_store->busy())
-        {
-            session->dispatcher->dispatchOne(now(nullptr));
-            return false;
-        }
-        const auto phase = session->client->phase();
-        if (phase == gc::QueryClientPhase::FindingDirectory || phase == gc::QueryClientPhase::CheckingCapabilities ||
-            phase == gc::QueryClientPhase::Querying)
-        {
-            if (!session->client->cancel() || session->client->persistencePending()) return false;
-        }
-    }
     if (!router->bindGeocachingHandlers(nullptr, nullptr, nullptr)) return false;
     // Unbinding joins any router callback before clearing its pending payload.
     announcement_pending.store(false, std::memory_order_release);
@@ -1673,7 +1610,6 @@ bool queueDraftSave(const uint8_t id[16], const uint8_t* bytes, size_t size, uin
     gc::storage::DraftView draft;
     if (!guard.locked || !id || !session || !session->store || session->store->commitPending() || session->needsRecovery() ||
         downloadActive() || publicationActive() || draftSaveActive() || session->phase == Phase::ResumeDownloads ||
-        (session->client && session->client->persistencePending()) ||
         !gc::storage::decodeDraft({id, 16}, {bytes, size}, draft) || expected == UINT64_MAX || draft.generation != expected + 1) return false;
     auto job = std::unique_ptr<Session::DraftSave>(new (std::nothrow) Session::DraftSave);
     if (!job) return false;
@@ -1695,7 +1631,7 @@ bool queuePublication(const uint8_t* bytes, size_t size)
     Guard guard;
     if (!guard.locked || !bytes || !size || size > 4166 || !session || session->phase != Phase::Ready ||
         !session->port || !session->store || session->store->commitPending() || session->needsRecovery() ||
-        session->client->persistencePending() || downloadActive() || publicationActive() || draftSaveActive()) return false;
+        downloadActive() || publicationActive() || draftSaveActive()) return false;
     gc::Destination remote;
     if (!session->port->pageSource(remote)) return false;
     auto job = std::unique_ptr<Session::Publication>(new (std::nothrow) Session::Publication);
@@ -1748,6 +1684,12 @@ void step()
         ++epoch;
     }
     auto& s = *session;
+    advanceBrowse(s);
+    if (!s.storage_requested || !s.client)
+    {
+        next_step.store(millis() + 100);
+        return;
+    }
     WorkspaceSlice workspace_slice{s};
     if (s.phase == Phase::Failed)
     {
@@ -1793,7 +1735,6 @@ void step()
         s.download_restore_pending = false;
     }
     if (s.saved && (s.response || downloadActive() || publicationActive() || draftSaveActive() || s.draft_catalog_wanted ||
-                    (s.client && s.client->persistencePending()) ||
                     (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending) ||
                     !storage::sd_card_ready() || storage::sd_external_block_owner_active()))
     {
@@ -1823,16 +1764,8 @@ void step()
         ++epoch;
     }
     // The active holder must run before new foreground work waiting for it.
-    // Query proof reads use the same lease as query persistence.
+    // Saved reply receipts share the lease with persistent operations.
     if (advanceCheckpoint(s)) return;
-    if (s.load_more_pending && !s.workspace_owner.holder())
-    {
-        s.load_more_pending = false;
-        if (s.client && s.client->hasMore() && s.port && s.port->generation() == s.load_more_generation)
-            s.source->loadMore();
-        ++epoch;
-        return;
-    }
     if (s.dispatcher && s.dispatch_store->busy() && s.workspace_owner.heldBy(s.dispatch_store.get()))
     {
         const auto sent = s.dispatcher->dispatchOne(now(nullptr));
@@ -1840,10 +1773,9 @@ void step()
             fail("Dispatch storage is blocked");
         return;
     }
-    if (s.port && s.workspace_owner.heldBy(s.port.get()))
+    if (s.receipts && s.workspace_owner.heldBy(s.receipts.get()))
     {
-        if (s.client && s.client->persistencePending()) s.client->tick(now(nullptr).monotonic_ms);
-        else s.port->maintenanceStep();
+        s.receipts->step();
         return;
     }
     if (s.phase == Phase::Ready && !s.workspace_owner.holder() && processResponse(s)) return;
@@ -1916,9 +1848,9 @@ void step()
         }
         // Advance the operation that currently owns storage before retrying.
     }
-    if (s.download_start && advanceDownloadStart(s)) return;
+    if (s.phase == Phase::Ready && s.download_start && advanceDownloadStart(s)) return;
     if (s.saved && s.saved->pending() && !s.draft_catalog_wanted && s.phase != Phase::ResumeDownloads && !downloadActive() && !publicationActive() && !draftSaveActive() &&
-        !s.store->commitPending() && !s.needsRecovery() && (!s.client || !s.client->persistencePending()))
+        !s.store->commitPending() && !s.needsRecovery())
     {
         const auto before = s.saved->generation();
         const bool worked = s.saved->advance();
@@ -1927,7 +1859,7 @@ void step()
     }
     if (!downloadActive() && !publicationActive() && !draftSaveActive() &&
         (!s.draft_read || s.draft_read->status != ::ui::geocaching::DraftReadStatus::Pending) &&
-        s.store && !s.store->commitPending() && (!s.client || !s.client->persistencePending()) && advanceDraftCatalog(s)) return;
+        s.store && !s.store->commitPending() && advanceDraftCatalog(s)) return;
     if (s.phase == Phase::Failed)
     {
         next_step.store(millis() + 2000);
@@ -2055,12 +1987,20 @@ void step()
             fail("Insufficient indexed storage memory");
             return;
         }
+        s.dispatcher.reset(new (std::nothrow) RequestDispatcher(*router, *s.dispatch_store, 5000, 120000));
+        s.receipts.reset(new (std::nothrow) StoredReplyReceipt(s.volume, s.root, s.local, s.workspace_owner, s.crypto));
+        if (!s.dispatcher || !s.receipts)
+        {
+            fail("Insufficient storage service memory");
+            return;
+        }
         s.saved.reset(new (std::nothrow) SavedCacheCatalog<Digest>(*s.download_store, s.crypto));
         if (!s.saved)
         {
             fail("Insufficient catalogue memory");
             return;
         }
+        if (s.saved_count) s.saved->requestWindow(s.saved_offset, s.saved_count);
         s.phase = Phase::ResumeDownloads;
         s.status = "Recovering downloaded GPX files...";
         ++epoch;
@@ -2119,103 +2059,8 @@ void step()
                 fail("Cannot resume downloaded GPX");
             return;
         }
-        s.phase = Phase::Connect;
-        s.connect_since = now(nullptr).monotonic_ms;
-        s.status = "Connecting to Reticulum...";
-        ++epoch;
-        return;
-    }
-    case Phase::Connect:
-    {
-        // A previous chat selection can leave an inactive Reticulum instance.
-        // Release it outside the router lock before allocating the IP service.
-        if (auto cached = router->takeInactiveReticulumCache()) return;
-        if (!router->bindGeocachingHandlers(announcementReceived, responseReceived, nullptr)) return;
-        if (!router->backendForProtocol(chat::MeshProtocol::Reticulum))
-        {
-            // The existing LXMF allocator uses PSRAM, not the internal heap.
-            // Check its actual object size and contiguous capacity before creation.
-            if (!mem::admit("geocaching.transport", sizeof(chat::reticulum::ReticulumAdapter) + 4096, 0,
-                            sizeof(chat::lxmf::LxmfAdapter), 40 * 1024, 0, 4096))
-            {
-                fail("Insufficient transport memory");
-                return;
-            }
-            auto backend = std::unique_ptr<chat::reticulum::ReticulumAdapter>(new (std::nothrow)
-                                                                                  chat::reticulum::ReticulumAdapter(*board, nullptr, chat::reticulum::ReticulumUsage::BackgroundIpService));
-            if (!backend)
-            {
-                fail("Cannot start Reticulum");
-                return;
-            }
-            backend->applyConfig(app::AppContext::getInstance().readConfig().reticulumConfig());
-            auto* created = backend.get();
-            if (!router->installServiceBackend(chat::MeshProtocol::Reticulum, std::move(backend))) return;
-            s.created_backend = created;
-        }
-        gc::Destination local;
-        if (!router->getGeocachingDispatchDestination(local.bytes.data()))
-        {
-            if (now(nullptr).monotonic_ms - s.connect_since >= gc::QueryClient::kReplyTimeoutMs)
-            {
-                fail("Reticulum IP unavailable - check connection settings");
-                return;
-            }
-            if (std::strcmp(s.status, "Waiting for Reticulum IP connection"))
-            {
-                s.status = "Waiting for Reticulum IP connection";
-                ++epoch;
-            }
-            next_step.store(millis() + 500);
-            return;
-        }
-        if (s.client)
-        {
-            if (local.bytes != s.local.bytes)
-            {
-                fail("Reticulum identity changed - reopen Geocaching");
-                return;
-            }
-            s.phase = Phase::Ready;
-            ++epoch;
-            return;
-        }
-        if (retirePreviousQueries(s, local)) return;
-        if (!s.ensureBuffers(true))
-        {
-            next_step.store(millis() + 1000);
-            return;
-        }
-        if (!s.query_page) s.query_page = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.query.page", kPageCapacity, false));
-        if (!s.query_page)
-        {
-            fail("Insufficient query page memory");
-            return;
-        }
-        s.port.reset(new (std::nothrow) IndexedQueryStorePort(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1], local,
-                                                              s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
-                                                              s.query_page, kPageCapacity, s.crypto, randomId, now, nullptr));
-        s.local = local;
-        if (!s.port)
-        {
-            fail("Insufficient memory");
-            return;
-        }
-        s.client.reset(new (std::nothrow) gc::QueryClient(*s.port));
-        s.dispatcher.reset(new (std::nothrow) RequestDispatcher(*router, *s.dispatch_store, 5000, 120000));
-        if (!s.client || !s.dispatcher)
-        {
-            fail("Insufficient memory");
-            return;
-        }
-        s.source.reset(new (std::nothrow) QueryBrowseSource(*s.client, *s.port, kWorld));
-        if (!s.source)
-        {
-            fail("Insufficient memory");
-            return;
-        }
-        s.client->query(kWorld);
         s.phase = Phase::Ready;
+        s.status = "Saved storage ready";
         ++epoch;
         return;
     }
@@ -2283,7 +2128,7 @@ void step()
             return;
         }
     }
-    if (!s.publication && !downloadActive() && !s.store->commitPending() && !s.client->persistencePending())
+    if (!s.publication && !downloadActive() && !s.store->commitPending())
     {
         const auto restored = restorePublication(s);
         if (restored == PublicationRestore::Invalid)
@@ -2293,7 +2138,7 @@ void step()
         }
         if (restored == PublicationRestore::Restored || restored == PublicationRestore::Pending) return;
     }
-    if (!s.download && !publicationActive() && !s.store->commitPending() && !s.client->persistencePending() && resumeWaitingDownload(s)) return;
+    if (!s.download && !publicationActive() && !s.store->commitPending() && resumeWaitingDownload(s)) return;
     if (s.download && (s.download->phase() == gc::DownloadPhase::Submitting || s.download->phase() == gc::DownloadPhase::Installing ||
                        s.download->phase() == gc::DownloadPhase::Cancelling))
     {
@@ -2306,47 +2151,6 @@ void step()
         }
         return;
     }
-    if (auto cached = router->takeInactiveReticulumCache())
-    {
-        s.created_backend = nullptr;
-        s.phase = Phase::Connect;
-        s.connect_since = now(nullptr).monotonic_ms;
-        s.status = "Reconnecting Reticulum service...";
-        ++epoch;
-        return;
-    }
-    const auto phase = s.client->phase();
-    const auto dispatch = [&](gc::ByteView preferred = {})
-    {
-        const auto result = s.dispatcher->dispatchOne(now(nullptr), preferred);
-        if (result.failure != chat::MeshOperationFailure::None && result.failure != s.last_dispatch_failure)
-        {
-            const char* reason = result.failure == chat::MeshOperationFailure::Busy       ? "router_busy"
-                                 : result.failure == chat::MeshOperationFailure::NotReady ? "transport_not_ready"
-                                                                                          : "transport_rejected";
-            Serial.printf("[Geocaching][Dispatch] deferred reason=%s failure=%u query=%u\n", reason,
-                          static_cast<unsigned>(result.failure), static_cast<unsigned>(s.client->phase()));
-            s.last_dispatch_failure = result.failure;
-        }
-        if (result.status == DispatchStatus::Submitted)
-        {
-            Serial.printf("[Geocaching][Dispatch] submitted query=%u\n", static_cast<unsigned>(s.client->phase()));
-            s.last_dispatch_failure = chat::MeshOperationFailure::None;
-        }
-        return result;
-    };
-    if (s.client->persistencePending())
-    {
-        s.client->tick(now(nullptr).monotonic_ms);
-        return;
-    }
-    if (s.dispatch_store->busy())
-    {
-        const auto sent = dispatch();
-        if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
-            fail("Query storage is blocked");
-        return;
-    }
     if (processResponse(s)) return;
     if (s.download && s.download->phase() == gc::DownloadPhase::Waiting &&
         now(nullptr).monotonic_ms - s.download_started >= s.download_wait_ms)
@@ -2355,17 +2159,9 @@ void step()
         ++epoch;
         return;
     }
-    if (announcement_pending.load(std::memory_order_acquire))
+    if (s.receipts && s.receipts->pending())
     {
-        const auto& incoming = pending_announcement;
-        const bool accepted = s.client->observe(incoming.discovery, incoming.delivery, {incoming.key.data(), incoming.key.size()},
-                                                {incoming.data.data(), incoming.size}, now(nullptr).monotonic_ms);
-        Serial.printf("[Geocaching][Discovery] directory_metadata accepted=%u\n", accepted ? 1U : 0U);
-        announcement_pending.store(false, std::memory_order_release);
-    }
-    if (s.port->maintenancePending())
-    {
-        s.port->maintenanceStep();
+        s.receipts->step();
         return;
     }
     if (publicationActive() || (s.download && s.download->phase() == gc::DownloadPhase::Waiting))
@@ -2375,39 +2171,7 @@ void step()
             fail("Download storage is blocked");
         return;
     }
-    if (phase == gc::QueryClientPhase::FindingDirectory)
-    {
-        if (!s.client->tick(now(nullptr).monotonic_ms)) next_step.store(millis() + 500);
-        return;
-    }
-    if (s.client->tick(now(nullptr).monotonic_ms)) return;
-    if (s.client->persistencePending()) return;
-    if (s.client->phase() == gc::QueryClientPhase::Failed)
-    {
-        next_step.store(millis() + 2000);
-        return;
-    }
-    if (startCheckpoint(s)) return;
-    // Completed browsing has nothing to send. Active publication/download
-    // dispatch is handled above; do not keep scanning attempt history here.
-    if (s.client->phase() == gc::QueryClientPhase::PageReady)
-    {
-        next_step.store(millis() + 1000);
-        return;
-    }
-    gc::Destination destination;
-    gc::RequestId request;
-    std::array<uint8_t, 48> preferred{};
-    const bool foreground = s.client->pendingRequest(destination, request);
-    if (foreground)
-    {
-        std::memcpy(preferred.data(), s.local.bytes.data(), 16);
-        std::memcpy(preferred.data() + 16, destination.bytes.data(), 16);
-        std::memcpy(preferred.data() + 32, request.bytes.data(), 16);
-    }
-    const auto sent = dispatch(foreground ? gc::ByteView{preferred.data(), preferred.size()} : gc::ByteView{});
-    if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
-        fail("Query storage is blocked");
-    else if (!s.dispatch_store->busy()) next_step.store(millis() + 250);
+
+    if (!startCheckpoint(s)) next_step.store(millis() + 100);
 }
 } // namespace platform::esp::arduino_common::geocaching::browse_runtime

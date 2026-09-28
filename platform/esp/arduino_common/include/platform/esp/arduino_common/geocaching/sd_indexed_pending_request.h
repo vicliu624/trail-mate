@@ -97,7 +97,9 @@ class SdIndexedPendingRequest
             bool linked = false;
             for (size_t i = 0; i < task.request_count; ++i) linked |= !std::memcmp(task.requests[i].data, key_.data(), key_.size());
             if (!linked) return finish(IndexedPendingStep::Invalid);
-            if (!task.continue_intent || task.state > 2) return continueScan(false);
+            // Legacy browse tasks are disposable reads, never background sends.
+            // Retain their history without rewriting it during every startup.
+            if (task.kind == 3 || !task.continue_intent || task.state > 2) return continueScan(false);
             if ((task.kind == 2 || task.kind == 4) && generation_)
             {
                 if (task.cache_id.size != cache_.size()) return finish(IndexedPendingStep::Invalid);
