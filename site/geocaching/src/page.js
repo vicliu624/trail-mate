@@ -17,7 +17,7 @@ const labels = {
   show:tr('Show caches','显示藏宝点'),active:tr('Active','开放'),disabled:tr('Disabled','停用'),archived:tr('Archived','归档'),
   emptyCount:tr('Loaded 0 caches','已加载 0 个藏宝点'),start:tr('Preparing your map…','正在准备你的寻宝地图…'),
   more:tr('Load more','加载更多'),downloadSelected:tr('Download selected GPX','下载所选 GPX'),downloadPartial:tr('Download successful items only','仅下载成功的项目'),
-  scope:tr('Results cover the directories reached in this session, not a global total.','结果来自本次连接到的目录，数量仅指已加载内容，不代表全网总数。'),
+  scope:tr('Results cover published copies or live directories, not a global total.','结果来自已同步副本或实时目录，数量不代表全网总数。'),
   search:tr('Search this area','搜索此区域'),download:tr('Download GPX','下载 GPX'),
   region:tr('Where to explore','探索范围'),regionKind:tr('Search by','按范围查找'),
   mapRegion:tr('Current map area','当前地图区域'),countries:tr('Country / region','国家／地区'),seas:tr('Ocean / sea','海洋／海域'),
@@ -28,6 +28,7 @@ for (const node of document.querySelectorAll('[data-label]')) node.textContent =
 const $ = id => document.getElementById(id);
 const worker = new Worker(new URL('./reticulum-worker.js', import.meta.url), {type:'module'});
 let nextId = 0, ready = false, rows = [], detailId = null, detailGeneration = 0, partial = null;
+let snapshotAt = null;
 const pending = new Map(), selected = new Set();
 const map = L.map('map', {worldCopyJump:true, minZoom:0}).fitWorld();
 const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, updateWhenIdle:true,
@@ -153,7 +154,7 @@ function renderMarkers() {
   for (const cluster of cells.values()) {
     const {row,lat,lon} = cluster[0], multi = cluster.length > 1;
     const content = document.createElement('span'), image = document.createElement('img');
-    image.src = cacheIconUrl; image.alt = ''; image.width = image.height = 32;
+    image.src = new URL(cacheIconUrl, import.meta.url).href; image.alt = ''; image.width = image.height = 32;
     content.append(image);
     if (multi) {
       const count = document.createElement('span');
@@ -176,13 +177,14 @@ async function openDetail(row) {
   try {
     const item = await rpc('get',{cacheId:row.id});
     if (generation !== detailGeneration) return;
-    $('detail-state').textContent = item.isCurrent ? tr('AUTHOR SIGNATURE VERIFIED','作者签名已验证') : tr('VERIFIED HISTORICAL VERSION','已验证的历史版本');
+    $('detail-state').textContent = item.snapshotAt ? tr('VERIFIED PUBLISHED COPY','已验证的公开副本') : item.isCurrent ? tr('AUTHOR SIGNATURE VERIFIED','作者签名已验证') : tr('VERIFIED HISTORICAL VERSION','已验证的历史版本');
     const description = document.createElement('p'); description.textContent = item.record[9];
     const hint = document.createElement('details'), summary = document.createElement('summary'), text = document.createElement('p');
     summary.textContent = tr('Show hint','展开提示'); text.textContent = item.record[10] || tr('No hint provided.','未提供提示。'); hint.append(summary,text);
     const metadata = document.createElement('p'); metadata.className = 'fingerprint';
     metadata.textContent = `${tr('Author','作者')}: ${item.authorHash}\n${tr('Version','版本')}: ${item.record[3]}\n` +
-      `${tr('Verified at','验证时间')}: ${new Date(item.checkedAt).toLocaleString()}\n${item.sourceName}`;
+      `${tr('Verified at','验证时间')}: ${new Date(item.checkedAt).toLocaleString()}\n${item.sourceName}` +
+      (item.snapshotAt ? `\n${tr('Directory synced','目录同步时间')}: ${new Date(item.snapshotAt).toLocaleString()}` : '');
     $('detail-content').append(description,hint,metadata); $('download-one').disabled = false;
   } catch (error) { if (generation === detailGeneration) $('detail-state').textContent = error.message; }
 }
@@ -216,7 +218,17 @@ worker.onmessage = ({data}) => {
     return;
   }
   const event=data.event;
-  if (event.type==='status') {
+  if (event.type==='snapshot') {
+    snapshotAt = event.updatedAt; ready=true;
+    $('search').disabled=false; $('region-apply').disabled=false;
+    $('connection-state').textContent=tr('Published directory','已同步目录');
+    $('directory-status').textContent=tr('Directory synced: ','目录同步时间：')+new Date(snapshotAt).toLocaleString();
+    initialLocation.finally(()=>{if(ready && querySerial===0)search();});
+  } else if (event.type==='status') {
+    if (snapshotAt) {
+      $('connection-state').textContent=tr('Published directory','已同步目录');
+      return;
+    }
     $('connection-state').textContent = event.state==='disconnected'?tr('Disconnected','连接已断开'):tr('Discovering directories…','正在发现目录…');
     if (event.state==='disconnected') { ready=false; $('search').disabled=true; $('region-apply').disabled=true; $('connection-state').classList.remove('ready'); updateSelection(); }
   } else if (event.type==='directory') {
@@ -229,11 +241,14 @@ worker.onmessage = ({data}) => {
     rows=event.rows; $('more').hidden=!event.more; renderRows();
     notice(event.limited?tr('500-item display limit reached. Narrow the area to explore more.','已达到 500 项显示上限，请缩小区域继续探索。'):
       !rows.length && event.more?tr('No matches in these pages yet. Load more to continue searching this region.','当前批次暂无匹配点，可加载更多继续检索此区域。'):
+      event.snapshotAt ? tr('Showing the published directory. Last synced: ','正在显示已同步目录，最后同步：')+new Date(event.snapshotAt).toLocaleString() :
       tr('Loaded from live directory responses. Open a cache to verify its details.','已加载目录实时响应。打开藏宝点以验证完整详情。'));
   } else if (event.type==='source-error') notice(`${event.name}: ${event.message}`);
 };
 worker.onerror = () => { notice(tr('The map service stopped. Refresh the page to try again.','地图服务已停止，请刷新页面重试。')); ready=false; $('search').disabled=true; $('region-apply').disabled=true; };
 async function startService() {
+  try { await rpc('snapshot', {url:new URL('../data/public/index.json', import.meta.url).href}); }
+  catch { /* Live discovery can still work when no published copy is available. */ }
   try {
     const response = await fetch(new URL('../network.json', import.meta.url), {cache:'no-store'});
     if (!response.ok) throw Error('Missing deployment configuration');
@@ -242,6 +257,11 @@ async function startService() {
     if (url.protocol !== 'wss:' && !(url.protocol === 'ws:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw Error('Invalid deployment endpoint');
     await rpc('connect',{url:url.href,discoverySeeds:config.discoverySeeds});
   } catch {
+    if (snapshotAt) {
+      $('connection-state').textContent=tr('Published directory','已同步目录');
+      notice(tr('Live updates unavailable. Published caches, details and GPX remain accessible.','实时更新暂不可用，仍可查看已同步藏宝点、详情并下载 GPX。'));
+      return;
+    }
     $('connection-state').textContent = tr('Service unavailable','服务暂不可用');
     $('directory-status').textContent = tr('Please try again later.','请稍后再试。');
     notice(tr('The map service is temporarily unavailable. No setup is needed on your side.','寻宝地图服务暂时不可用，你无需进行任何网络设置。'));

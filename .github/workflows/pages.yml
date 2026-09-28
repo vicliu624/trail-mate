@@ -102,6 +102,7 @@ jobs:
           npm run build:components
           node build-geocaching.mjs
           node --test ../tests/site/geocaching-protocol.test.mjs
+          node --test ../tests/site/geocaching-snapshot.test.mjs
           rm -rf node_modules
 
       - name: Upload GitHub Pages artifact
