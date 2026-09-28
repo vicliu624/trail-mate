@@ -1,5 +1,6 @@
 #include "screen_app_internal.h"
 
+#include "ui/screens/geocaching/geocaching_page_shell.h"
 #include "ui/widgets/map/map_viewport.h"
 
 #include <cstdio>
@@ -35,6 +36,8 @@ struct MapPageState
     int pan_y = 0;
     bool drag_active = false;
     bool refresh_scheduled = false;
+    bool geocaching_active = false;
+    lv_timer_t* overlay_timer = nullptr;
 };
 
 MapPageState* s_map_page_storage = nullptr;
@@ -338,6 +341,16 @@ void cycle_map_base_layer()
 
 } // namespace
 
+void refresh_local_cache_overlays(lv_timer_t*)
+{
+    if (!s_map_page_storage || s_map_page.drag_active || !s_map_page.model.focus_point.valid) return;
+    build_position_overlay();
+    ::geocaching::ui::shell::appendMapOverlays(s_map_page.overlay,
+                                               s_map_page.model.focus_point.lat, s_map_page.model.focus_point.lon,
+                                               static_cast<uint8_t>(s_map_page.model.zoom));
+    ::ui::widgets::map::apply_overlay(s_map_page.runtime, s_map_page.overlay);
+}
+
 void reset_map_page_state()
 {
     release_map_page_state();
@@ -350,6 +363,10 @@ void destroy_map_page()
         return;
     }
     s_map_page.refresh_scheduled = false;
+    if (s_map_page.overlay_timer) lv_timer_delete(s_map_page.overlay_timer);
+    s_map_page.overlay_timer = nullptr;
+    if (s_map_page.geocaching_active) ::geocaching::ui::shell::endMapOverlays();
+    s_map_page.geocaching_active = false;
     ::ui::widgets::map::destroy(s_map_page.runtime);
     s_map_page.widgets = ::ui::widgets::map::Widgets{};
     s_map_page.stage = nullptr;
@@ -369,6 +386,12 @@ void render_map()
         return;
     }
     ensure_map_viewport();
+    if (!s_map_page.geocaching_active)
+    {
+        ::geocaching::ui::shell::beginMapOverlays();
+        s_map_page.geocaching_active = true;
+        s_map_page.overlay_timer = lv_timer_create(refresh_local_cache_overlays, 750, nullptr);
+    }
     sync_workspace_layers_from_viewport();
 
     ::ui::map::MapWorkspaceRequest request{};
@@ -399,6 +422,9 @@ void render_map()
     {
         ::ui::widgets::map::apply_model(s_map_page.runtime, s_map_page.model);
         build_position_overlay();
+        ::geocaching::ui::shell::appendMapOverlays(s_map_page.overlay,
+                                                   s_map_page.model.focus_point.lat, s_map_page.model.focus_point.lon,
+                                                   static_cast<uint8_t>(s_map_page.model.zoom));
         ::ui::widgets::map::apply_overlay(s_map_page.runtime, s_map_page.overlay);
     }
     configure_map_gesture();

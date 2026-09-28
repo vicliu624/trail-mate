@@ -109,6 +109,8 @@ class Source
     virtual void cancelDraftRead(const std::array<uint8_t, 16>&) {}
     // Assigns a stable ID to a new draft; Saved is queried separately after I/O.
     virtual bool saveDraft(DraftInput&) { return false; }
+    // Deletes only this device's draft. Completion uses draftSaveStatus().
+    virtual bool deleteDraft(const std::array<uint8_t, 16>&, uint64_t) { return false; }
     virtual DraftSaveStatus draftSaveStatus(const std::array<uint8_t, 16>&, uint64_t) { return DraftSaveStatus::Failed; }
     virtual bool publicationAuthor(const std::array<uint8_t, 16>&, uint64_t, std::array<uint8_t, 64>&, uint32_t* = nullptr, uint32_t* = nullptr) { return false; }
     virtual bool publishDraft(const std::array<uint8_t, 16>&, uint64_t, const std::array<uint8_t, 64>&, uint32_t) { return false; }

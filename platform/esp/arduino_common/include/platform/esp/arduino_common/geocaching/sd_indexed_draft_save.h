@@ -11,6 +11,22 @@ class SdIndexedDraftSave
 {
   public:
     explicit SdIndexedDraftSave(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    bool beginErase(const ::geocaching::storage::IndexRootView& root, unsigned copy, ::geocaching::ByteView key,
+                    uint64_t expected, uint8_t* frame, size_t capacity, ::geocaching::storage::IndexRootBytes& candidate)
+    {
+        if (result_ != IndexedCommitStep::Idle || copy > 1 || !key.data || key.size != key_.size() || !expected) return false;
+        std::memcpy(key_.data(), key.data, key_.size());
+        mutation_ = {4, {key_.data(), key_.size()}, {}, true};
+        root_ = root;
+        copy_ = copy;
+        expected_ = expected;
+        frame_ = frame;
+        capacity_ = capacity;
+        candidate_ = &candidate;
+        if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 4, mutation_.key, frame_, capacity_)) return false;
+        result_ = IndexedCommitStep::Working;
+        return true;
+    }
     bool beginEdit(const ::geocaching::storage::IndexRootView& root, unsigned copy, ::geocaching::ByteView key,
                    uint8_t* bytes, size_t size, size_t writable_capacity, uint64_t expected, uint8_t* frame, size_t capacity,
                    ::geocaching::storage::IndexRootBytes& candidate)
@@ -76,6 +92,8 @@ class SdIndexedDraftSave
             if (status != IndexGetStep::Ready && status != IndexGetStep::NotFound) return readFailure(status);
             DraftView previous;
             if (status == IndexGetStep::Ready && !decodeDraft(mutation_.key, read.value(), previous)) return fail(IndexedCommitStep::Invalid);
+            if (mutation_.erase)
+                return status == IndexGetStep::Ready && previous.generation == expected_ ? startCommit() : fail(IndexedCommitStep::Invalid);
             if (edit_bytes_)
             {
                 size_t size = mutation_.value.size;

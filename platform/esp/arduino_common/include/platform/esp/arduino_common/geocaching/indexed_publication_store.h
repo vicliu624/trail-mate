@@ -251,6 +251,12 @@ class IndexedPublicationStore final : public PublicationStore
         if (acquired != JournalWriteResult::Verified) return acquired;
         return started(io_->emplace<SdIndexedDraftSave>(volume_).begin(root_, copy_, key, encoded, generation, frame_, capacity_, *roots_[1 - copy_]));
     }
+    JournalWriteResult deleteDraft(::geocaching::ByteView key, uint64_t generation)
+    {
+        const auto acquired = acquire();
+        if (acquired != JournalWriteResult::Verified) return acquired;
+        return started(io_->emplace<SdIndexedDraftSave>(volume_).beginErase(root_, copy_, key, generation, frame_, capacity_, *roots_[1 - copy_]));
+    }
     JournalWriteResult bindDraftAuthor(::geocaching::ByteView key, uint64_t generation, ::geocaching::ByteView author,
                                        uint8_t* workspace, size_t capacity)
     {

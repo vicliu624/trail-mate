@@ -46,6 +46,18 @@ struct TestSource : ui::geocaching::Source
     ui::geocaching::DraftInput draft;
     std::string draft_name, draft_description, draft_hint;
     bool has_draft = false, fail_save = false, snapshot_busy = false;
+    unsigned deletions = 0;
+    bool deleteDraft(const std::array<uint8_t, 16>& id, uint64_t version) override
+    {
+        if (!has_draft || id != draft.id || version != draft.generation) return false;
+        ++deletions;
+        if (!fail_save)
+        {
+            has_draft = false;
+            ++generation;
+        }
+        return true;
+    }
     unsigned pending_reads = 0;
     bool detail_ready = false;
     unsigned detail_closes = 0;
@@ -480,6 +492,28 @@ int main(int argc, char** argv)
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     if (lv_obj_get_child_count(list) != 1 || !std::strstr(lv_label_get_text(lv_obj_get_child(root, 2)), "Cannot read")) return 36;
     source.fail_read = false;
+    // Deleting requires confirmation; cancellation and failed writes keep data.
+    lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
+    auto* remove = lv_obj_get_child(list, lv_obj_get_child_count(list) - 2);
+    auto* cancel_remove = lv_obj_get_child(list, lv_obj_get_child_count(list) - 1);
+    lv_obj_send_event(remove, LV_EVENT_CLICKED, nullptr);
+    if (source.deletions || !source.has_draft || lv_obj_has_flag(cancel_remove, LV_OBJ_FLAG_HIDDEN)) return 39;
+    lv_obj_send_event(cancel_remove, LV_EVENT_CLICKED, nullptr);
+    if (source.deletions || !lv_obj_has_flag(cancel_remove, LV_OBJ_FLAG_HIDDEN)) return 40;
+    source.fail_save = true;
+    lv_obj_send_event(remove, LV_EVENT_CLICKED, nullptr);
+    lv_obj_send_event(remove, LV_EVENT_CLICKED, nullptr);
+    if (source.deletions != 1 || !source.has_draft || !std::strstr(lv_label_get_text(lv_obj_get_child(root, 2)), "Delete failed")) return 41;
+    source.fail_save = false;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    lv_obj_send_event(remove, LV_EVENT_CLICKED, nullptr);
+    if (source.deletions != 2 || source.has_draft) return 42;
+    // Restore the fixture for the remaining lifetime tests.
+    source.has_draft = true;
+    ++source.generation;
+    lv_tick_inc(600);
+    lv_timer_handler();
     source.pending_reads = 2;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     geocaching::ui::shell::bind(nullptr);

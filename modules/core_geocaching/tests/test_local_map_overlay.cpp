@@ -67,6 +67,7 @@ int main()
     *out = {};
     projection->append(*out);
     assert(out->item_count == 10); // Includes drafts beyond the first four rows.
+    assert(out->header.valid);     // Local markers render even without a GPS fix.
     assert(out->items[0].style == ui::map::MapOverlayStyle::Warning);
     assert(out->items[9].style == ui::map::MapOverlayStyle::Default);
     const auto requests = source.requests;

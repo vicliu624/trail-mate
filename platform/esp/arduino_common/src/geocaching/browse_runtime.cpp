@@ -136,6 +136,7 @@ struct Session
         size_t size = 0, capacity = 0;
         uint64_t expected = 0;
         bool started = false, done = false, saved = false, editor_fields = true;
+        bool erase = false;
         ~DraftSave() { heap_caps_free(bytes); }
     };
     std::unique_ptr<DraftSave> draft_save;
@@ -1319,8 +1320,11 @@ class Facade final : public ::ui::geocaching::Source
         if (session && session->draft_save && (draftSaveActive() || section == ::ui::geocaching::Section::Published))
         {
             const auto& job = *session->draft_save;
-            std::snprintf(out.status.data(), out.status.size(), "%s", !job.done ? "Saving local draft..." : job.saved ? "Draft saved locally"
-                                                                                                                      : "Draft save failed; changes not saved");
+            std::snprintf(out.status.data(), out.status.size(), "%s", job.erase   ? (!job.done ? "Deleting local cache..." : job.saved ? "Local cache deleted"
+                                                                                                                                       : "Delete failed; cache retained")
+                                                                      : !job.done ? "Saving local draft..."
+                                                                      : job.saved ? "Draft saved locally"
+                                                                                  : "Draft save failed; changes not saved");
             if (!job.done)
             {
                 out.can_refresh = false;
@@ -1639,6 +1643,21 @@ class Facade final : public ::ui::geocaching::Source
         const auto& job = *session->draft_save;
         return !job.done ? Status::Pending : job.saved ? Status::Saved
                                                        : Status::Failed;
+    }
+    bool deleteDraft(const std::array<uint8_t, 16>& id, uint64_t generation) override
+    {
+        Guard guard;
+        if (!guard.locked || !generation || !session || session->phase != Phase::Ready || !session->store ||
+            session->needsRecovery() || session->store->commitPending() || downloadActive() || publicationActive() || draftSaveActive()) return false;
+        auto job = std::unique_ptr<Session::DraftSave>(new (std::nothrow) Session::DraftSave);
+        if (!job) return false;
+        job->id = id;
+        job->expected = generation;
+        job->erase = true;
+        session->draft_save = std::move(job);
+        next_step.store(0);
+        ++epoch;
+        return true;
     }
     bool download(const ::ui::geocaching::Item& item, uint64_t generation) override
     {
@@ -1998,8 +2017,9 @@ void step()
     if (draftSaveActive())
     {
         auto& job = *s.draft_save;
-        const auto result = job.started ? s.store->stepCommit() : job.editor_fields ? s.store->editDraft({job.id.data(), job.id.size()}, job.bytes, job.size, job.capacity, job.expected)
-                                                                                    : s.store->saveDraft({job.id.data(), job.id.size()}, {job.bytes, job.size}, job.expected);
+        const auto result = job.started ? s.store->stepCommit() : job.erase       ? s.store->deleteDraft({job.id.data(), job.id.size()}, job.expected)
+                                                              : job.editor_fields ? s.store->editDraft({job.id.data(), job.id.size()}, job.bytes, job.size, job.capacity, job.expected)
+                                                                                  : s.store->saveDraft({job.id.data(), job.id.size()}, {job.bytes, job.size}, job.expected);
         if (result != JournalWriteResult::Busy)
         {
             job.started = true;

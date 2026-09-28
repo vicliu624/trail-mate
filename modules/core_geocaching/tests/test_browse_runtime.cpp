@@ -1008,6 +1008,41 @@ int main(int argc, char** argv)
         require(preserved_gpx > 0, "reclamation test had no installed GPX to verify");
         closeRuntime();
     }
+    // Deleting a local draft is an offline transaction and survives restart.
+    test::source->activate(true);
+    tick();
+    until([&]
+          { return snapshot(Section::Published).can_create; },
+          "delete session did not open");
+    test::source->requestWindow(Section::Published, 0, 4);
+    ui::geocaching::Item deleting;
+    until([&]
+          { const auto view = snapshot(Section::Published); return view.ready && test::source->item(Section::Published, 0, view.generation, deleting); },
+          "delete row missing");
+    std::array<uint8_t, 16> delete_id;
+    std::copy_n(deleting.id.data(), delete_id.size(), delete_id.data());
+    const auto count_before_delete = snapshot(Section::Published).count;
+    const auto delete_sends = router.sends;
+    require(test::source->deleteDraft(delete_id, deleting.edit_generation + 1), "stale delete was not queued");
+    until([&]
+          { return test::source->draftSaveStatus(delete_id, deleting.edit_generation + 1) != ui::geocaching::DraftSaveStatus::Pending; },
+          "stale delete did not finish");
+    require(test::source->draftSaveStatus(delete_id, deleting.edit_generation + 1) == ui::geocaching::DraftSaveStatus::Failed, "stale version deleted a cache");
+    require(snapshot(Section::Published).count == count_before_delete, "failed delete changed the catalog");
+    require(test::source->deleteDraft(delete_id, deleting.edit_generation), "delete was not queued");
+    until([&]
+          { return test::source->draftSaveStatus(delete_id, deleting.edit_generation) != ui::geocaching::DraftSaveStatus::Pending; },
+          "delete did not finish");
+    require(test::source->draftSaveStatus(delete_id, deleting.edit_generation) == ui::geocaching::DraftSaveStatus::Saved, "delete failed");
+    until([&] { const auto view = snapshot(Section::Published); return view.ready && view.count == count_before_delete - 1; }, "deleted row stayed in the open list");
+    closeRuntime();
+    test::source->activate(true);
+    tick();
+    until([&]
+          { const auto view = snapshot(Section::Published); return view.ready && view.count == count_before_delete - 1; },
+          "deleted row returned after restart");
+    require(router.sends == delete_sends, "local deletion started network traffic");
+    closeRuntime();
     // A missing directory response has a bounded lifetime without any SD work.
     const auto disk_before_timeout = test::files;
     test::card_ready = false;

@@ -52,6 +52,11 @@ class LocalMapOverlay
 
     void append(map::MapOverlaySnapshot& out) const
     {
+        if (count_)
+        {
+            out.header.valid = true;
+            out.header.version = 1;
+        }
         out.truncated = out.truncated || truncated_;
         for (size_t i = 0; i < count_; ++i)
         {

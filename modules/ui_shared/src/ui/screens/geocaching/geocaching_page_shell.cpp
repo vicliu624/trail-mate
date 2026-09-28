@@ -26,10 +26,13 @@ struct Editor
     std::array<lv_obj_t*, 7> fields{};
     lv_obj_t* container = nullptr;
     lv_obj_t* publication_notice = nullptr;
+    lv_obj_t* remove = nullptr;
+    lv_obj_t* cancel_remove = nullptr;
     std::array<uint8_t, 64> publication_author{};
     uint32_t previous_revision = 0, publication_revision = 0;
     bool public_confirmation = false;
     bool dirty = false, saving = false, confirming = false, loading = false;
+    bool deleting = false, delete_confirmation = false;
 };
 struct PageState
 {
@@ -308,6 +311,11 @@ void refreshView()
             openEditor(&item);
             return;
         }
+        if (editor.remove)
+        {
+            setEnabled(editor.remove, !editor.saving && !editor.public_confirmation && !editor.confirming);
+            setEnabled(editor.cancel_remove, !editor.saving);
+        }
         if (!editor.confirming && !editor.public_confirmation && !editor.saving && editor.input.generation)
         {
             lv_obj_remove_flag(page->previous, LV_OBJ_FLAG_HIDDEN);
@@ -327,7 +335,7 @@ void refreshView()
                 editor.saving = false;
                 for (auto* field : editor.fields) lv_obj_remove_state(field, LV_STATE_DISABLED);
                 lv_obj_remove_state(editor.container, LV_STATE_DISABLED);
-                lv_label_set_text(page->status, "Save failed; edits retained");
+                lv_label_set_text(page->status, editor.deleting ? "Delete failed; cache retained" : "Save failed; edits retained");
                 setEnabled(page->next, true);
             }
         }
@@ -714,6 +722,7 @@ void saveEditor()
         return;
     }
     editor.saving = true;
+    editor.deleting = false;
     for (auto* field : editor.fields) lv_obj_add_state(field, LV_STATE_DISABLED);
     lv_obj_add_state(editor.container, LV_STATE_DISABLED);
     setEnabled(page->next, false);
@@ -800,6 +809,48 @@ void openEditor(const ::ui::geocaching::Item* item)
             editor.container, [](lv_event_t*)
             { if (page && page->editor) page->editor->dirty = true; },
             LV_EVENT_VALUE_CHANGED, nullptr);
+        if (item)
+        {
+            detailBody(page->list, "Delete this device's copy only. Published directory records remain public.");
+            editor.remove = button(page->list, "Delete local cache", ::ui::page_profile::current().control_button_height);
+            editor.cancel_remove = button(page->list, "Cancel delete", ::ui::page_profile::current().control_button_height);
+            lv_obj_add_flag(editor.cancel_remove, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_event_cb(
+                editor.cancel_remove, [](lv_event_t*)
+                {
+                if (!page || !page->editor || page->editor->saving) return;
+                auto& e = *page->editor;
+                e.delete_confirmation = false;
+                lv_label_set_text(lv_obj_get_child(e.remove, 0), "Delete local cache");
+                lv_obj_add_flag(e.cancel_remove, LV_OBJ_FLAG_HIDDEN); },
+                LV_EVENT_CLICKED, nullptr);
+            lv_obj_add_event_cb(
+                editor.remove, [](lv_event_t*)
+                {
+                if (!page || !page->editor || !source) return;
+                auto& e = *page->editor;
+                if (e.loading || e.saving || e.public_confirmation || e.confirming) return;
+                if (!e.delete_confirmation)
+                {
+                    e.delete_confirmation = true;
+                    lv_label_set_text(lv_obj_get_child(e.remove, 0), "Confirm local delete");
+                    lv_obj_remove_flag(e.cancel_remove, LV_OBJ_FLAG_HIDDEN);
+                    return;
+                }
+                if (!source->deleteDraft(e.input.id, e.input.generation))
+                {
+                    lv_label_set_text(page->status, "Cannot delete now; cache retained");
+                    return;
+                }
+                e.deleting = e.saving = true;
+                for (auto* field : e.fields) lv_obj_add_state(field, LV_STATE_DISABLED);
+                lv_obj_add_state(e.container, LV_STATE_DISABLED);
+                setEnabled(page->previous, false);
+                setEnabled(page->next, false);
+                lv_label_set_text(page->status, "Deleting local cache...");
+                refreshView(); },
+                LV_EVENT_CLICKED, nullptr);
+        }
     }
     if (item)
     {
