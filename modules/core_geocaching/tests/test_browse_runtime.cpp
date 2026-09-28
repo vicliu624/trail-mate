@@ -289,10 +289,12 @@ int main(int argc, char** argv)
     // Real SD operations in the remote capture take tens of milliseconds.
     // Exercise the receive handoff and response scheduling at that cadence.
     tick_ms = 40;
+    router.busy_sends_remaining = 3;
     reply(router, fixture(folder, "capabilities-response-v1.bin"), 0);
     until([&]
           { return router.sends == 2; },
           "query request not dispatched");
+    require(router.busy_sends_remaining == 0, "query did not exercise router contention");
     require(test::maintenance::begins * 2 < test::maintenance::slices,
             "ongoing Geocaching work restarted the shared owner for every small slice");
     reply(router, fixture(folder, "query-response-v1.bin"), 2);

@@ -123,6 +123,7 @@ struct Session
         }
     };
     std::unique_ptr<Publication> publication;
+    chat::MeshOperationFailure last_dispatch_failure = chat::MeshOperationFailure::None;
     // Recovery discovers work left by a previous session. New work in this
     // session already has an owner; unrelated query commits must not rescan it.
     bool publication_recovery_complete = false;
@@ -2315,6 +2316,25 @@ void step()
         return;
     }
     const auto phase = s.client->phase();
+    const auto dispatch = [&](gc::ByteView preferred = {})
+    {
+        const auto result = s.dispatcher->dispatchOne(now(nullptr), preferred);
+        if (result.failure != chat::MeshOperationFailure::None && result.failure != s.last_dispatch_failure)
+        {
+            const char* reason = result.failure == chat::MeshOperationFailure::Busy       ? "router_busy"
+                                 : result.failure == chat::MeshOperationFailure::NotReady ? "transport_not_ready"
+                                                                                          : "transport_rejected";
+            Serial.printf("[Geocaching][Dispatch] deferred reason=%s failure=%u query=%u\n", reason,
+                          static_cast<unsigned>(result.failure), static_cast<unsigned>(s.client->phase()));
+            s.last_dispatch_failure = result.failure;
+        }
+        if (result.status == DispatchStatus::Submitted)
+        {
+            Serial.printf("[Geocaching][Dispatch] submitted query=%u\n", static_cast<unsigned>(s.client->phase()));
+            s.last_dispatch_failure = chat::MeshOperationFailure::None;
+        }
+        return result;
+    };
     if (s.client->persistencePending())
     {
         s.client->tick(now(nullptr).monotonic_ms);
@@ -2322,7 +2342,9 @@ void step()
     }
     if (s.dispatch_store->busy())
     {
-        s.dispatcher->dispatchOne(now(nullptr));
+        const auto sent = dispatch();
+        if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
+            fail("Query storage is blocked");
         return;
     }
     if (processResponse(s)) return;
@@ -2383,7 +2405,7 @@ void step()
         std::memcpy(preferred.data() + 16, destination.bytes.data(), 16);
         std::memcpy(preferred.data() + 32, request.bytes.data(), 16);
     }
-    const auto sent = s.dispatcher->dispatchOne(now(nullptr), foreground ? gc::ByteView{preferred.data(), preferred.size()} : gc::ByteView{});
+    const auto sent = dispatch(foreground ? gc::ByteView{preferred.data(), preferred.size()} : gc::ByteView{});
     if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
         fail("Query storage is blocked");
     else if (!s.dispatch_store->busy()) next_step.store(millis() + 250);

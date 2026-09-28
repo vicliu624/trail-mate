@@ -18,6 +18,7 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
     const auto begin = [&](const ::geocaching::Destination& local) -> DispatchResult
     {
         esp_fill_random(attempt_id_.data(), attempt_id_.size());
+        attempt_started_ms_ = now.monotonic_ms;
         const auto begun = store_.beginAttempt(local, {cursor_.data(), cursor_.size()}, attempt_id_, now);
         if (begun == JournalWriteResult::InProgress)
         {
@@ -46,6 +47,7 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
             return {DispatchStatus::Deferred};
         }
         if (completed == Phase::SuccessCommit) return {DispatchStatus::Submitted};
+        if (completed == Phase::FailureCommit) has_preferred_ = false;
         if (completed == Phase::ExpireCommit && !store_.expirationChanged())
         {
             phase_ = Phase::SelectRequest;
@@ -58,6 +60,7 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
     if (store_.commitPending()) return {DispatchStatus::Deferred};
     if (phase_ == Phase::Send)
     {
+        if (now.monotonic_ms < not_before_) return {DispatchStatus::Deferred};
         DispatchSendView outgoing;
         const auto read = store_.readForSend({cursor_.data(), cursor_.size()}, outgoing);
         if (read == DispatchReadResult::Pending) return {DispatchStatus::Deferred};
@@ -84,6 +87,16 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
             const auto sent = router_.sendGeocachingData(cursor_.data() + 16,
                                                          {outgoing.request.data, outgoing.request.size}, false, &hash, cursor_.data());
             send_failure_ = sent.failure;
+            // No message was accepted while the router was busy or offline.
+            // Keep the already durable reservation instead of writing a failed
+            // attempt and scanning history for every transient rejection.
+            // Re-read durable intent on retry so cancellation still wins.
+            if (!sent.ok && (sent.failure == chat::MeshOperationFailure::Busy || sent.failure == chat::MeshOperationFailure::NotReady) &&
+                now.monotonic_ms >= attempt_started_ms_ && now.monotonic_ms - attempt_started_ms_ < attempt_timeout_ms_)
+            {
+                defer();
+                return {DispatchStatus::Deferred, send_failure_};
+            }
             saved = sent.ok ? store_.recordAttemptHash({attempt_key.data(), attempt_key.size()}, hash)
                             : store_.finishAttempt({attempt_key.data(), attempt_key.size()}, TxAttemptState::Failed, now);
             phase_ = sent.ok ? Phase::SuccessCommit : Phase::FailureCommit;
@@ -92,7 +105,11 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
         const bool success = phase_ == Phase::SuccessCommit;
         phase_ = Phase::Select;
         if (saved != JournalWriteResult::Verified) return {DispatchStatus::StorageBlocked};
-        if (!success) defer();
+        if (!success)
+        {
+            has_preferred_ = false;
+            defer();
+        }
         return {success ? DispatchStatus::Submitted : DispatchStatus::Deferred, send_failure_};
     }
     if (!clock_initialized_ || boot_ != now.boot_id)
@@ -108,7 +125,7 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
     {
         // A background scan may already have selected the same request before
         // the caller supplied its hint. Do not reserve it a second time.
-        if (preferred.data && preferred.size == preferred_.size() && has_cursor_ &&
+        if (preferred.data && preferred.size == preferred_.size() && has_cursor_ && send_failure_ == chat::MeshOperationFailure::None &&
             !std::memcmp(preferred.data, cursor_.data(), cursor_.size()))
         {
             preferred_ = cursor_;
@@ -117,6 +134,7 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
         if (preferred.data && preferred.size == preferred_.size() &&
             (!has_preferred_ || std::memcmp(preferred.data, preferred_.data(), preferred_.size())))
         {
+            if (now.monotonic_ms < not_before_) return {DispatchStatus::Deferred};
             ::geocaching::Destination local;
             if (!router_.getGeocachingDispatchDestination(local.bytes.data()) || std::memcmp(preferred.data, local.bytes.data(), 16))
                 return {DispatchStatus::Deferred, chat::MeshOperationFailure::NotReady};
@@ -130,6 +148,9 @@ DispatchResult RequestDispatcher::dispatchOne(const ::geocaching::storage::Store
             }
             return result;
         }
+        // This foreground request is already submitted. Its response timeout
+        // belongs to the client; unrelated historical attempts cannot help it.
+        if (preferred.data && preferred.size == preferred_.size()) return {DispatchStatus::Idle};
         bool expired = false;
         const auto expiration = store_.expireOneAttempt(now, recovery_started_ms_, attempt_timeout_ms_, expired);
         if (expiration == JournalWriteResult::Busy) return {DispatchStatus::Deferred};

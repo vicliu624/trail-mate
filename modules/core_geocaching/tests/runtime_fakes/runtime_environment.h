@@ -239,9 +239,15 @@ class MeshAdapterRouter
     {
         return ::geocaching::protocol::signGeocacheRecord({record.data, record.size}, identity, scratch, capacity, out, output_capacity, written);
     }
+    unsigned busy_sends_remaining = 0;
     MeshSendResult sendGeocachingData(const uint8_t[16], lxmf::ByteSpan bytes, bool, std::array<uint8_t, 32>* hash, const uint8_t expected[16])
     {
         if (!ready || std::memcmp(expected, local.data(), 16)) return MeshSendResult::fail(MeshOperationFailure::NotReady);
+        if (busy_sends_remaining)
+        {
+            --busy_sends_remaining;
+            return MeshSendResult::fail(MeshOperationFailure::Busy);
+        }
         ++sends;
         sent_bytes.assign(bytes.data, bytes.data + bytes.size);
         hash->fill(0x42);

@@ -274,7 +274,7 @@ int checkIncrementalDispatch()
             return SdRequestStore::expireOneAttempt(now, started, timeout, expired);
         }
     };
-    for (unsigned scenario = 0; scenario < 16; ++scenario)
+    for (unsigned scenario = 0; scenario < 20; ++scenario)
     {
         const auto mode = scenario % 4;
         const bool foreground = scenario >= 8;
@@ -292,14 +292,25 @@ int checkIncrementalDispatch()
             drainStore(*store, store->persistNewTask({}, {}, id, {}, 3, {request, size}, {})) != JournalWriteResult::Verified) return 110;
         chat::MeshAdapterRouter router;
         router.send_ok = mode != 1;
+        const bool transient = scenario >= 16;
+        if (transient)
+        {
+            router.send_ok = false;
+            router.send_failure = mode < 2 ? chat::MeshOperationFailure::Busy : chat::MeshOperationFailure::NotReady;
+        }
         auto dispatcher = std::make_unique<RequestDispatcher>(router, *store, 100, 1000);
-        if (mode == 2) fixture::flush_ok = false;
+        if (mode == 2 && !transient) fixture::flush_ok = false;
         bool stopped = false, done = false;
         for (unsigned step = 0; step < 300; ++step)
         {
+            if (transient && (mode % 2) && router.sends == 3 && !stopped)
+            {
+                if (drainStore(*store, store->stopTask({})) != JournalWriteResult::Verified) return 246;
+                stopped = true;
+            }
             // Stop after attempt reservation commits but before sending. The
             // real dispatcher must reacquire state and honor the task intent.
-            if (mode == 3 && !stopped && store->committedSequence() == 2 && !store->commitPending())
+            if (mode == 3 && !transient && !stopped && store->committedSequence() == 2 && !store->commitPending())
             {
                 if (drainStore(*store, store->stopTask({})) != JournalWriteResult::Verified) return 111;
                 stopped = true;
@@ -307,12 +318,32 @@ int checkIncrementalDispatch()
             fixture::step_io_calls = fixture::step_data_calls = 0;
             fixture::step_data_bytes = 0;
             const auto old_sends = router.sends;
-            const auto result = dispatcher->dispatchOne({}, foreground ? ::geocaching::ByteView{preferred.data(), preferred.size()} : ::geocaching::ByteView{});
+            ::geocaching::storage::StoredTime observed;
+            if (transient) observed.monotonic_ms = step * 10;
+            const auto result = dispatcher->dispatchOne(observed, foreground ? ::geocaching::ByteView{preferred.data(), preferred.size()} : ::geocaching::ByteView{});
             if (foreground && store->expiration_calls) return 242;
             if (store->selection_wait && (router.sends || store->expiration_calls != 1)) return 240;
             if (store->send_wait && router.sends) return 241;
             if (!stepBudgetOk()) return 112;
             if (router.sends != old_sends && store->committedSequence() != 2) return 113;
+            if (transient)
+            {
+                if (stopped && store->committedSequence() == 4 && !store->commitPending())
+                {
+                    if (router.sends != 3) return 247;
+                    done = true;
+                    break;
+                }
+                if (!router.send_ok && (store->committedSequence() != 2 && router.sends)) return 244;
+                if (router.sends >= 3) router.send_ok = true;
+                if (result.status == DispatchStatus::Submitted)
+                {
+                    if (router.sends != 4 || store->committedSequence() != 3) return 245;
+                    done = true;
+                    break;
+                }
+                continue;
+            }
             if (mode == 0 && result.status == DispatchStatus::Submitted)
             {
                 if (router.sends != 1 || store->committedSequence() != 3 ||

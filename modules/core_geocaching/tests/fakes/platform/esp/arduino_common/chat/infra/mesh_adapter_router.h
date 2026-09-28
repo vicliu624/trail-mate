@@ -13,6 +13,7 @@ class MeshAdapterRouter
 {
   public:
     bool ready = true, send_ok = true;
+    MeshOperationFailure send_failure = MeshOperationFailure::RadioTxFailed;
     unsigned sends = 0;
     std::array<uint8_t, 16> local{};
     std::vector<uint8_t> sent_bytes;
@@ -27,7 +28,7 @@ class MeshAdapterRouter
     {
         ++sends;
         if (!ready || std::memcmp(expected, local.data(), 16)) return MeshSendResult::fail(MeshOperationFailure::NotReady);
-        if (!send_ok) return MeshSendResult::fail(MeshOperationFailure::RadioTxFailed);
+        if (!send_ok) return MeshSendResult::fail(send_failure);
         sent_bytes.assign(bytes.data, bytes.data + bytes.size);
         hash->fill(0x42);
         return MeshSendResult::success(1);

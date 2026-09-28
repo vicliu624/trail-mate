@@ -50,6 +50,7 @@ class RequestDispatcher
     uint64_t recovery_started_ms_ = 0;
     bool clock_initialized_ = false;
     uint64_t not_before_ = 0;
+    uint64_t attempt_started_ms_ = 0;
     std::array<uint8_t, 16> boot_{};
     std::array<uint8_t, 48> cursor_{};
     bool has_cursor_ = false;
