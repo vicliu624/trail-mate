@@ -5,6 +5,7 @@
 !device/seeed/
 !device/seeed/*.svg
 !.gitignore
+!geocaching.svg
 !animal-island/
 !animal-island/dividers/
 !animal-island/dividers/divider-line-teal.svg

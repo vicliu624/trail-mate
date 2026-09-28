@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import cacheIconUrl from '../../assets/geocaching.svg';
 import {mountIslandShell} from './island-shell.jsx';
 import {countryBounds, countryMatches, regionDisplayGeometry} from './country-boundaries.js';
 import {requestNearbyPosition} from './nearby-location.js';
@@ -151,8 +152,16 @@ function renderMarkers() {
   }
   for (const cluster of cells.values()) {
     const {row,lat,lon} = cluster[0], multi = cluster.length > 1;
+    const content = document.createElement('span'), image = document.createElement('img');
+    image.src = cacheIconUrl; image.alt = ''; image.width = image.height = 32;
+    content.append(image);
+    if (multi) {
+      const count = document.createElement('span');
+      count.className = 'cache-marker-count'; count.textContent = String(cluster.length);
+      content.append(count);
+    }
     const icon = L.divIcon({className:`cache-marker ${multi?'cluster':row.conflict?'conflict':row.summary[3]?'inactive':''}`,
-      html:multi?String(cluster.length):'◆',iconSize:multi?[36,36]:[28,28],iconAnchor:multi?[18,18]:[14,14]});
+      html:content,iconSize:[40,40],iconAnchor:[20,20]});
     const marker = L.marker([lat,lon],{icon,title:multi?`${cluster.length} caches`:row.summary[6]}).addTo(markers);
     marker.on('click', () => multi ? map.setView([lat,lon],Math.min(19,map.getZoom()+2)) : openDetail(row));
   }
