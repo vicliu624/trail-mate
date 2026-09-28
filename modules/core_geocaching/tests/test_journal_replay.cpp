@@ -2492,6 +2492,7 @@ int checkIndexedDownloadReceipt(const char* path)
             if (read_saved(*indexed, {saved_id.data(), 32}, false, crypto) != DownloadRecoveryRead::End || owner.holder()) return 364;
             if (read_saved(*indexed, {other_cache.bytes.data(), 32}, true, crypto) != DownloadRecoveryRead::End || owner.holder()) return 365;
 
+            const auto gpx_reads_before_listing = read_bytes[target];
             SavedCacheCatalog<FileDigest> catalog(*indexed, crypto);
             if (!owner.acquire(&other_owner) || catalog.advance() || !catalog.pending() || !owner.heldBy(&other_owner)) return 366;
             owner.release(&other_owner);
@@ -2525,12 +2526,14 @@ int checkIndexedDownloadReceipt(const char* path)
                 !catalog.checked(other_cache.bytes, record.hash.bytes) || catalog.contains(other_cache.bytes, record.hash.bytes)) return 373;
             files.at(target)[0] ^= 1;
             catalog.reset();
-            if (!advance_catalog() || catalog.contains(record.id.bytes, record.hash.bytes) || !catalog.checked(record.id.bytes, record.hash.bytes)) return 374;
+            // Listing describes the installed record, without rereading the GPX.
+            // External file edits are checked before replacing that file.
+            if (!advance_catalog() || !catalog.contains(record.id.bytes, record.hash.bytes) || !catalog.checked(record.id.bytes, record.hash.bytes)) return 374;
             files = disk;
             catalog.requestWindow(0, 4);
             if (!advance_catalog()) return 375;
             catalog.snapshot(snapshot);
-            if (snapshot.count != 1) return 376;
+            if (snapshot.count != 1 || read_bytes[target] != gpx_reads_before_listing) return 376;
 
             auto make_saved_reader = [&](size_t frame_capacity, size_t verify_capacity, protocol::RecordCrypto& verifier)
             {

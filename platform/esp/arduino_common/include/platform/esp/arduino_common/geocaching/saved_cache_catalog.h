@@ -1,16 +1,14 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/download_store.h"
-#include "platform/esp/arduino_common/geocaching/sd_gpx_hash.h"
 #include "ui_presentation/geocaching/geocaching_source.h"
 #include <cstdio>
-#include <memory>
-#include <new>
 
 namespace platform::esp::arduino_common::geocaching
 {
 // Four owned rows shared by the saved-list window and discovery membership
 // probes. UI calls never scan storage or close files. The maintenance owner
-// advances verification and resets the projection after installs/media handoff.
+// reads saved metadata and resets the projection after installs/media handoff.
+// GPX integrity belongs to installation/recovery, not list rendering.
 template <class Digest>
 class SavedCacheCatalog
 {
@@ -25,7 +23,6 @@ class SavedCacheCatalog
     {
         restart_ = true;
         valid_ = 0;
-        invalid_ = false;
         checking_ = true;
         error_ = DownloadRecoveryRead::End;
         ++generation_;
@@ -36,11 +33,9 @@ class SavedCacheCatalog
     // Maintenance-owner call before a foreground operation or media handoff.
     void releaseRead()
     {
-        if (!reader_ && !reading_ && !metadata_ready_) return;
+        if (!reading_) return;
         if (reading_) store_.releaseRead();
-        reading_ = metadata_ready_ = false;
-        reader_.reset();
-        digest_.reset();
+        reading_ = false;
         reset();
     }
     void requestWindow(size_t offset, size_t count)
@@ -87,21 +82,11 @@ class SavedCacheCatalog
         if (restart_)
         {
             if (reading_) store_.releaseRead();
-            reader_.reset();
-            digest_.reset();
-            reading_ = metadata_ready_ = has_after_ = false;
+            reading_ = has_after_ = false;
             cursor_ = total_ = 0;
             restart_ = false;
         }
         if (!checking_) return false;
-        if (reader_)
-        {
-            if (reader_->step() == GpxHashStep::Reading) return true;
-            std::array<uint8_t, 32> hash;
-            finish(reader_->result(hash) && hash == current_.file_hash);
-            return true;
-        }
-        if (!metadata_ready_)
         {
             if (preview_)
             {
@@ -132,31 +117,13 @@ class SavedCacheCatalog
                 ++cursor_;
                 return true;
             }
-            metadata_ready_ = true;
-        }
-        char path[112]{};
-        std::snprintf(path, sizeof(path), "/trailmate/geocaching/caches/");
-        size_t offset = std::strlen(path);
-        constexpr char hex[] = "0123456789abcdef";
-        for (auto byte : current_.id)
-        {
-            path[offset++] = hex[byte >> 4];
-            path[offset++] = hex[byte & 15];
-        }
-        std::memcpy(path + offset, ".gpx", 5);
-        digest_.reset(new (std::nothrow) Digest);
-        if (digest_) reader_.reset(new (std::nothrow) SdGpxHash<Digest>(*digest_));
-        if (!reader_)
-        {
-            digest_.reset();
-            return readError(DownloadRecoveryRead::Unavailable, true);
         }
         if (error_ != DownloadRecoveryRead::End)
         {
             error_ = DownloadRecoveryRead::End;
             ++generation_;
         }
-        if (!reader_->open(path)) finish(false);
+        finish();
         return true;
     }
     const char* error() const
@@ -183,8 +150,7 @@ class SavedCacheCatalog
         out.generation = generation_;
         out.can_refresh = !checking_;
         out.count = count_;
-        std::snprintf(out.status.data(), out.status.size(), "%s", error() ? error() : checking_ ? "Checking saved GPX files..."
-                                                                                  : invalid_    ? "Some GPX files changed or are unavailable"
+        std::snprintf(out.status.data(), out.status.size(), "%s", error() ? error() : checking_ ? "Loading downloaded caches..."
                                                                                   : out.count   ? "Saved GPX - available offline"
                                                                                                 : "No downloaded caches");
     }
@@ -235,32 +201,23 @@ class SavedCacheCatalog
         }
         return false;
     }
-    void finish(bool valid)
+    void finish()
     {
-        if (valid)
+        const auto slot = preview_ ? requestedRow(current_.id, current_.hash) : total_ >= offset_ ? total_ - offset_
+                                                                                                  : rows_.size();
+        if (slot < window_)
         {
-            const auto slot = preview_ ? requestedRow(current_.id, current_.hash) : total_ >= offset_ ? total_ - offset_
-                                                                                                      : rows_.size();
-            if (slot < window_)
-            {
-                rows_[slot] = current_;
-                valid_ |= uint8_t(1u << slot);
-            }
-            ++total_;
+            rows_[slot] = current_;
+            valid_ |= uint8_t(1u << slot);
         }
-        else invalid_ = true;
+        ++total_;
         after_ = current_.id;
         has_after_ = true;
-        metadata_ready_ = false;
         ++cursor_;
         ++generation_;
-        reader_.reset();
-        digest_.reset();
     }
     DownloadStore& store_;
     ::geocaching::protocol::RecordCrypto& crypto_;
-    std::unique_ptr<Digest> digest_;
-    std::unique_ptr<SdGpxHash<Digest>> reader_;
     std::array<uint8_t, 32> after_{};
     std::array<::geocaching::storage::SavedCacheEntry, 4> rows_{};
     ::geocaching::storage::SavedCacheRecord current_;
@@ -268,7 +225,7 @@ class SavedCacheCatalog
     size_t cursor_ = 0, total_ = 0, count_ = 0, offset_ = 0, window_ = 4;
     uint8_t valid_ = 0, requested_ = 0;
     DownloadRecoveryRead error_ = DownloadRecoveryRead::End;
-    bool checking_ = true, restart_ = false, invalid_ = false, preview_ = false;
-    bool reading_ = false, metadata_ready_ = false, has_after_ = false;
+    bool checking_ = true, restart_ = false, preview_ = false;
+    bool reading_ = false, has_after_ = false;
 };
 } // namespace platform::esp::arduino_common::geocaching

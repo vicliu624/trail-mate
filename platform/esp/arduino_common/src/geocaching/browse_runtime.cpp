@@ -1826,7 +1826,7 @@ void step()
     }
     advanceBrowse(s);
     if (s.detail) s.detail->advanceNetwork(*router, s.local, s.crypto, now(nullptr).monotonic_ms);
-    if (!s.storage_requested || !s.client)
+    if (!s.storage_requested)
     {
         next_step.store(millis() + 100);
         return;
@@ -2126,18 +2126,9 @@ void step()
         s.download_store.reset(new (std::nothrow) IndexedDownloadStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
                                                                        s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
                                                                        s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-        s.dispatch_store.reset(new (std::nothrow) IndexedDispatchStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                                       s.workspace_owner, s.workspace, s.frame, kFrameCapacity));
-        if (!s.store || !s.download_store || !s.dispatch_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
+        if (!s.store || !s.download_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
         {
             fail("Insufficient indexed storage memory");
-            return;
-        }
-        s.dispatcher.reset(new (std::nothrow) RequestDispatcher(*router, *s.dispatch_store, 5000, 120000));
-        s.receipts.reset(new (std::nothrow) StoredReplyReceipt(s.volume, s.root, s.local, s.workspace_owner, s.crypto));
-        if (!s.dispatcher || !s.receipts)
-        {
-            fail("Insufficient storage service memory");
             return;
         }
         s.saved.reset(new (std::nothrow) SavedCacheCatalog<Digest>(*s.download_store, s.crypto));
@@ -2164,8 +2155,8 @@ void step()
                 return;
             }
             // A user-edited installed GPX or missing history remains untouched.
-            // Its catalogue entry is checked separately; keep browsing other
-            // caches instead of turning one offline file into a service outage.
+            // Keep its installed metadata available for browsing instead of
+            // turning one offline file into a service outage.
             s.recovery_attention |= result != gc::DownloadOperationResult::Complete || s.download_port->historyPending();
             s.download_port.reset();
             s.saved->reset();
@@ -2218,6 +2209,27 @@ void step()
     if (s.needsRecovery())
     {
         fail("Storage interrupted - reopen to recover");
+        return;
+    }
+    // Local lists, details, drafts and interrupted file installation above
+    // do not need an online identity or request services. Only resume network
+    // work once the real local destination is known.
+    if (!s.client)
+    {
+        if (!startCheckpoint(s)) next_step.store(millis() + 100);
+        return;
+    }
+    if (!s.dispatch_store)
+        s.dispatch_store.reset(new (std::nothrow) IndexedDispatchStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                                       s.workspace_owner, s.workspace, s.frame, kFrameCapacity));
+    if (s.dispatch_store && !s.dispatcher)
+        s.dispatcher.reset(new (std::nothrow) RequestDispatcher(*router, *s.dispatch_store, 5000, 120000));
+    if (!s.receipts)
+        s.receipts.reset(new (std::nothrow) StoredReplyReceipt(s.volume, s.root, s.local, s.workspace_owner, s.crypto));
+    if (!s.dispatcher || !s.receipts)
+    {
+        s.browse_status = "Waiting for network service memory";
+        next_step.store(millis() + 1000);
         return;
     }
     if (publicationActive())

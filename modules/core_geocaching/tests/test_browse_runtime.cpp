@@ -467,10 +467,13 @@ int main(int argc, char** argv)
     const auto disk = test::files;
     const auto disk_directories = test::directories;
     std::fprintf(stderr, "Runtime: healthy restart\n");
+    // Cold offline startup has no dispatch destination or QueryClient yet.
+    // Saved rows and full details must not wait for either to become available.
+    router.ready = false;
     test::source->activate(true);
     until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
-          "restart did not restore indexed state");
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Waiting for Reticulum IP connection"); },
+          "offline startup did not wait for its online identity");
     test::source->requestWindow(Section::Downloaded, 0, 4);
     until([&]
           {
@@ -478,7 +481,6 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
     require(test::files == disk, "read-only restart changed persisted files");
-    router.ready = false;
     const auto offline_sends = router.sends;
     test::source->open(item, snapshot(Section::Downloaded).generation);
     until([&]
@@ -490,6 +492,9 @@ int main(int argc, char** argv)
     test::source->closeDetail();
     tick();
     router.ready = true;
+    until([&]
+          { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
+          "offline session did not resume discovery when transport became ready");
     test::source->requestWindow(Section::Published, 0, 4);
     until([&]
           {

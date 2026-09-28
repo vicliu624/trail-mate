@@ -777,8 +777,8 @@ int checkDownloadController(const char* query_path, const char* response_path)
             for (unsigned i = 0; saved.pending() && i < 256; ++i) saved.advance();
             saved.snapshot(snapshot);
             if (snapshot.count != 1 || saved.item(1, snapshot.generation, item)) return 342;
-            // Reset during hashing must be a UI-only notification. The next
-            // owner step discards the old reader and starts the new window.
+            // Reset is a UI-only notification. The next owner step starts
+            // reading metadata for the new window.
             saved.requestWindow(0, 1);
             saved.advance();
             fixture::step_io_calls = 0;
@@ -805,7 +805,7 @@ int checkDownloadController(const char* query_path, const char* response_path)
             saved.reset();
             for (unsigned i = 0; saved.pending() && i < 256; ++i) saved.advance();
             saved.snapshot(snapshot);
-            if (snapshot.count || !std::strstr(snapshot.status.data(), "changed")) return 186;
+            if (snapshot.count != 1 || !saved.item(0, snapshot.generation, item)) return 186;
             fixture::files[target] = valid_file;
             std::array<uint8_t, 4096> restored_a{}, restored_b{};
             storage::LogicalState restored(restored_a.data(), restored_b.data(), restored_a.size());
