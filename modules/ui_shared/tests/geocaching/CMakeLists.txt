@@ -8,7 +8,7 @@ add_library(page_test_lvgl STATIC ${LVGL_SOURCES})
 target_include_directories(page_test_lvgl PUBLIC "${LVGL_SOURCE_DIR}")
 target_compile_definitions(page_test_lvgl PUBLIC LV_CONF_SKIP=1 LV_USE_STDLIB_MALLOC=0
     LV_MEM_SIZE=1048576 LV_USE_STDLIB_STRING=1 LV_USE_STDLIB_SPRINTF=1
-    LV_USE_SNAPSHOT=1 LV_FONT_MONTSERRAT_12=1 LV_FONT_MONTSERRAT_16=1)
+    LV_USE_SNAPSHOT=1 LV_FONT_MONTSERRAT_12=1 LV_FONT_MONTSERRAT_16=1 LV_FONT_MONTSERRAT_20=1)
 add_executable(geocaching_page_test test_page.cpp
     "${REPO_ROOT}/modules/ui_shared/src/ui/screens/geocaching/geocaching_page_shell.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/components/two_pane_styles.cpp"

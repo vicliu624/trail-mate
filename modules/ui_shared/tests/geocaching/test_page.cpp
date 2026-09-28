@@ -258,16 +258,16 @@ int main(int argc, char** argv)
     if (lv_obj_get_child_count(list) != visible) return 62;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     if (source.opens != 1 || source.last_open != 0) return 6;
-    if (std::strcmp(lv_label_get_text(lv_obj_get_child(list, 2)), "Loading details...")) return 64;
+    if (std::strcmp(lv_label_get_text(lv_obj_get_child(lv_obj_get_child(list, 1), 1)), "Loading details...")) return 64;
     source.detail_ready = true;
     // Detail completion is independent of list generation changes.
     lv_tick_inc(600);
     lv_timer_handler();
-    if (!std::strstr(lv_label_get_text(lv_obj_get_child(list, 2)), "Follow the stream") ||
-        !std::strstr(lv_label_get_text(lv_obj_get_child(list, 3)), "large flat stone") ||
-        lv_obj_has_flag(lv_obj_get_child(list, 3), LV_OBJ_FLAG_HIDDEN)) return 65;
+    if (!std::strstr(lv_label_get_text(lv_obj_get_child(lv_obj_get_child(list, 1), 1)), "Follow the stream") ||
+        !std::strstr(lv_label_get_text(lv_obj_get_child(lv_obj_get_child(list, 2), 1)), "large flat stone") ||
+        lv_obj_has_flag(lv_obj_get_child(list, 2), LV_OBJ_FLAG_HIDDEN)) return 65;
     if (!save(std::string(argv[3]) + "-detail.ppm", screen)) return 11;
-    lv_obj_scroll_to_y(list, LV_COORD_MAX, LV_ANIM_OFF);
+    lv_obj_scroll_to_view(lv_obj_get_child(list, 2), LV_ANIM_OFF);
     if (!save(std::string(argv[3]) + "-detail-hint.ppm", screen)) return 66;
     if (lv_obj_get_scroll_y(list) <= 0) return 67;
     auto* details_footer = lv_obj_get_child(root, 4);
@@ -276,7 +276,7 @@ int main(int argc, char** argv)
     lv_tick_inc(600);
     lv_timer_handler();
     if (source.reads != detail_reads || lv_obj_has_state(lv_obj_get_child(details_footer, 3), LV_STATE_DISABLED) ||
-        std::strcmp(lv_label_get_text(lv_obj_get_child(list, 0)), "Cache 01 - woodland trail")) return 63;
+        std::strcmp(lv_label_get_text(lv_obj_get_child(lv_obj_get_child(list, 0), 1)), "Cache 01 - woodland trail")) return 63;
     source.snapshot_busy = false;
     lv_obj_send_event(lv_obj_get_child(details_footer, 3), LV_EVENT_CLICKED, nullptr);
     if (source.downloads != 1 || source.saved_index != 0 ||
@@ -301,7 +301,7 @@ int main(int argc, char** argv)
     lv_tick_inc(10);
     lv_timer_handler();
     if (gps::ui::runtime::test_map_host || lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN) || exits) return 16;
-    if (std::strcmp(lv_label_get_text(lv_obj_get_child(list, 0)), "Cache 02 - woodland trail")) return 21;
+    if (std::strcmp(lv_label_get_text(lv_obj_get_child(lv_obj_get_child(list, 0), 1)), "Cache 02 - woodland trail")) return 21;
     lv_obj_send_event(lv_obj_get_child(lv_obj_get_child(root, 0), 0), LV_EVENT_CLICKED, nullptr);
     if (exits || lv_obj_get_child_count(list) != visible) return 12;
     auto* footer = lv_obj_get_child(root, 4);

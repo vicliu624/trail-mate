@@ -209,21 +209,22 @@ void refreshDetailText()
             const auto status = static_cast<uint8_t>(view.status);
             if (p.detail_status == status) return;
             p.detail_status = status;
-            auto* description = lv_obj_get_child(p.list, 2);
-            auto* hint = lv_obj_get_child(p.list, 3);
+            auto* description = lv_obj_get_child(lv_obj_get_child(p.list, 1), 1);
+            auto* hint_card = lv_obj_get_child(p.list, 2);
+            auto* hint = lv_obj_get_child(hint_card, 1);
             if (view.status == ::ui::geocaching::DetailStatus::Ready)
             {
-                lv_label_set_text_fmt(description, "Description\n%.*s", int(view.description.size()), view.description.empty() ? "" : view.description.data());
+                lv_label_set_text_fmt(description, "%.*s", int(view.description.size()), view.description.empty() ? "" : view.description.data());
                 if (view.description.empty()) lv_label_set_text(description, "No description provided.");
-                lv_label_set_text_fmt(hint, "Hint\n%.*s", int(view.hint.size()), view.hint.empty() ? "" : view.hint.data());
-                if (view.hint.empty()) lv_obj_add_flag(hint, LV_OBJ_FLAG_HIDDEN);
-                else lv_obj_remove_flag(hint, LV_OBJ_FLAG_HIDDEN);
+                lv_label_set_text_fmt(hint, "%.*s", int(view.hint.size()), view.hint.empty() ? "" : view.hint.data());
+                if (view.hint.empty()) lv_obj_add_flag(hint_card, LV_OBJ_FLAG_HIDDEN);
+                else lv_obj_remove_flag(hint_card, LV_OBJ_FLAG_HIDDEN);
             }
             else
             {
                 if (view.status == ::ui::geocaching::DetailStatus::Pending) lv_label_set_text(description, "Loading details...");
                 else lv_label_set_text_fmt(description, "%.*s", int(view.error.size()), view.error.empty() ? "" : view.error.data());
-                lv_obj_add_flag(hint, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(hint_card, LV_OBJ_FLAG_HIDDEN);
             }
         },
         nullptr);
@@ -278,8 +279,12 @@ void refreshView()
         const bool same = source->item(page->section, page->detail_index, current.generation, item) &&
                           item.id == page->detail_id && item.revision_hash == page->detail_hash;
         lv_label_set_text(page->status, current.status.data());
-        if (same) lv_label_set_text(lv_obj_get_child(page->list, 1), item.detail.data());
-        lv_label_set_text(lv_obj_get_child(page->next, 0), same && item.downloaded ? "Map" : "Download");
+        if (same)
+        {
+            lv_label_set_text(lv_obj_get_child(lv_obj_get_child(page->list, 3), 1), item.detail.data());
+            lv_label_set_text(lv_obj_get_child(lv_obj_get_child(page->list, 0), 0), item.downloaded ? "GEOCACHE  /  SAVED OFFLINE" : "GEOCACHE");
+        }
+        lv_label_set_text(lv_obj_get_child(page->next, 0), same && item.downloaded ? "Open map" : "Save offline");
         setEnabled(page->next, same && (item.can_download || item.downloaded));
         page->detail_generation = current.generation;
         return;
@@ -388,12 +393,53 @@ void closeDetails()
     if (page->details && source) source->closeDetail();
     page->details = false;
     page->valid = false;
+    lv_obj_remove_flag(lv_obj_get_parent(page->tabs[0]), LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(page->status, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_pad_all(page->list, 3, 0);
+    lv_obj_set_style_pad_row(page->list, 3, 0);
+    lv_obj_remove_local_style_prop(page->range, LV_STYLE_TEXT_FONT, 0);
+    lv_obj_remove_local_style_prop(page->next, LV_STYLE_BG_COLOR, 0);
+    lv_obj_remove_local_style_prop(page->next, LV_STYLE_TEXT_COLOR, 0);
+    lv_obj_remove_local_style_prop(page->next, LV_STYLE_BORDER_COLOR, 0);
     lv_obj_remove_flag(page->previous, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_width(page->next, ::ui::page_profile::current().control_button_height);
     lv_label_set_text(lv_obj_get_child(page->next, 0), LV_SYMBOL_RIGHT);
     lv_obj_remove_flag(page->list, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_scroll_to_y(page->list, 0, LV_ANIM_OFF);
     refreshView();
+}
+lv_obj_t* detailCard(lv_obj_t* parent, const char* heading, bool highlighted = false)
+{
+    auto* card = lv_obj_create(parent);
+    lv_obj_remove_style_all(card);
+    lv_obj_set_width(card, LV_PCT(100));
+    lv_obj_set_height(card, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(card, 10, 0);
+    lv_obj_set_style_pad_row(card, 6, 0);
+    lv_obj_set_style_radius(card, 8, 0);
+    lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(card, lv_color_hex(highlighted ? 0xE7ECDD : 0xFFFAEF), 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_set_style_border_color(card, lv_color_hex(highlighted ? 0xB5C5A5 : styles::kBorder), 0);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    auto* label = lv_label_create(card);
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_label_set_text(label, heading);
+    lv_obj_set_style_text_font(label, ::ui::page_profile::resolve_caption_font(), 0);
+    lv_obj_set_style_text_letter_space(label, 1, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(highlighted ? 0x365D45 : styles::kTextMuted), 0);
+    return card;
+}
+lv_obj_t* detailBody(lv_obj_t* card, const char* text)
+{
+    auto* label = lv_label_create(card);
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(label, text);
+    styles::apply_label_primary(label);
+    lv_obj_set_style_text_line_space(label, 4, 0);
+    return label;
 }
 void showDetails(const ::ui::geocaching::Item& item, size_t index)
 {
@@ -412,33 +458,41 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
     lv_obj_clean(p.list);
     p.rows.fill(nullptr);
     p.row_count = 0;
+    lv_obj_add_flag(lv_obj_get_parent(p.tabs[0]), LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(p.status, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_pad_all(p.list, 8, 0);
+    lv_obj_set_style_pad_row(p.list, 8, 0);
     lv_obj_add_flag(p.list, LV_OBJ_FLAG_SCROLLABLE);
-    auto* title = lv_label_create(p.list);
-    lv_obj_set_width(title, LV_PCT(100));
-    lv_label_set_text(title, item.name.data());
-    styles::apply_label_primary(title);
-    auto* body = lv_label_create(p.list);
-    lv_obj_set_width(body, LV_PCT(100));
-    lv_label_set_text(body, item.detail.data());
-    styles::apply_label_muted(body);
-    auto* description = lv_label_create(p.list);
-    lv_obj_set_width(description, LV_PCT(100));
-    lv_label_set_long_mode(description, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(description, "Loading details...");
-    styles::apply_label_primary(description);
-    auto* hint = lv_label_create(p.list);
-    lv_obj_set_width(hint, LV_PCT(100));
-    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-    styles::apply_label_primary(hint);
+    auto* hero = detailCard(p.list, item.downloaded ? "GEOCACHE  /  SAVED OFFLINE" : "GEOCACHE");
+    lv_obj_set_style_border_side(hero, LV_BORDER_SIDE_LEFT, 0);
+    lv_obj_set_style_border_width(hero, 3, 0);
+    lv_obj_set_style_border_color(hero, lv_color_hex(0x567A52), 0);
+    auto* title = detailBody(hero, item.name.data());
+#if LV_FONT_MONTSERRAT_20
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+#else
+    lv_obj_set_style_text_font(title, ::ui::page_profile::resolve_title_font(), 0);
+#endif
+    detailBody(detailCard(p.list, "ABOUT THIS CACHE"), "Loading details...");
+    auto* hint = detailCard(p.list, LV_SYMBOL_EYE_OPEN "  HINT", true);
+    detailBody(hint, "");
     lv_obj_add_flag(hint, LV_OBJ_FLAG_HIDDEN);
+    auto* metadata = detailBody(detailCard(p.list, "LOCATION & DETAILS"), item.detail.data());
+    lv_obj_set_style_text_font(metadata, ::ui::page_profile::resolve_caption_font(), 0);
+    lv_obj_set_style_text_color(metadata, lv_color_hex(styles::kTextMuted), 0);
     refreshDetailText();
-    lv_label_set_text(p.range, "Details");
+    lv_obj_scroll_to_y(p.list, 0, LV_ANIM_OFF);
+    lv_label_set_text(p.range, "Scroll " LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_font(p.range, ::ui::page_profile::resolve_caption_font(), 0);
     lv_label_set_text(lv_obj_get_child(p.refresh, 0), "Back");
     setEnabled(p.refresh, true);
     setEnabled(p.previous, false);
     lv_obj_add_flag(p.previous, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_width(p.next, ::ui::page_profile::current().control_button_min_width);
-    lv_label_set_text(lv_obj_get_child(p.next, 0), item.downloaded ? "Map" : "Download");
+    lv_obj_set_width(p.next, ::ui::page_profile::current().control_button_min_width + 20);
+    lv_obj_set_style_bg_color(p.next, lv_color_hex(0x45694D), 0);
+    lv_obj_set_style_border_color(p.next, lv_color_hex(0x45694D), 0);
+    lv_obj_set_style_text_color(p.next, lv_color_hex(0xFFFFFF), 0);
+    lv_label_set_text(lv_obj_get_child(p.next, 0), item.downloaded ? "Open map" : "Save offline");
     setEnabled(p.next, item.can_download || item.downloaded);
     if (p.group) lv_group_focus_obj(p.topbar.back_btn);
 }
