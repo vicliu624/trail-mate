@@ -25,6 +25,8 @@ export function mountIslandShell() {
         <Title color="app-teal" size="middle"><Icon name="icon-map" size={24}/> <Label name="title"/></Title>
         <Card color="app-yellow" pattern="app-yellow" className="intro">
           <h1 data-label="heading"/><p data-label="intro"/>
+          <p>Explore author-signed geocaches through live Reticulum directory queries, then save verified GPX files for offline use.</p>
+          <a href="https://github.com/vicliu624/trail-mate/wiki/20.-Geocaching-Developer-Guide">Developer documentation</a>
         </Card>
         <p id="directory-status" className="help" data-label="noDirectory"/>
         <fieldset className="region-filters">
