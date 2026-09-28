@@ -1,0 +1,101 @@
+name: trail-mate-geocaching
+
+x-runtime: &runtime
+  image: trail-mate-geocaching:local
+  build:
+    context: ../../..
+    dockerfile: tools/geocaching/deploy/Dockerfile
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=32m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "3"
+
+services:
+  directory:
+    <<: *runtime
+    command:
+      - python
+      - directory_service.py
+      - --state
+      - /var/lib/trail-mate/directory
+      - --rns-config
+      - /var/lib/trail-mate/reticulum
+      - --name
+      - ${DIRECTORY_NAME:-Trail Mate public directory}
+    volumes:
+      - directory-data:/var/lib/trail-mate/directory
+      - reticulum-data:/var/lib/trail-mate/reticulum
+      - ./reticulum/config:/var/lib/trail-mate/reticulum/config:ro
+    healthcheck:
+      test: [CMD, python, -c, "import socket; socket.create_connection(('127.0.0.1',44242),3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 40s
+
+  bridge:
+    <<: *runtime
+    network_mode: service:directory
+    depends_on:
+      directory:
+        condition: service_healthy
+        restart: true
+    command:
+      - python
+      - packet_bridge.py
+      - --listen
+      - 127.0.0.1
+      - --port
+      - "8787"
+      - --tcp-host
+      - 127.0.0.1
+      - --tcp-port
+      - "44242"
+      - --origin
+      - ${SITE_ORIGIN:-https://vicliu624.github.io}
+      - --max-clients
+      - "32"
+    healthcheck:
+      test: [CMD, python, -c, "import os; from websockets.sync.client import connect; c=connect('ws://127.0.0.1:8787',origin=os.environ['SITE_ORIGIN'],open_timeout=3); c.close()"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      SITE_ORIGIN: ${SITE_ORIGIN:-https://vicliu624.github.io}
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3
+    restart: unless-stopped
+    network_mode: service:directory
+    depends_on:
+      directory:
+        condition: service_healthy
+        restart: true
+      bridge:
+        condition: service_healthy
+        restart: true
+    command: [tunnel, --no-autoupdate, --protocol, http2, run]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set the named Cloudflare tunnel token in .env}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  directory-data:
+  reticulum-data:
