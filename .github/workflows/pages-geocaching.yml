@@ -46,9 +46,10 @@ jobs:
           npm run build:geocaching
           node --test ../tests/site/geocaching-protocol.test.mjs
           node --test ../tests/site/geocaching-regions.test.mjs
-          node --test ../tests/site/geocaching-snapshot.test.mjs
+          node --test ../tests/site/geocaching-live-worker.test.mjs
       - name: Overlay the Geocaching page and navigation
         run: |
+          rm -rf "$RUNNER_TEMP/publish/geocaching"
           cp -a site/geocaching "$RUNNER_TEMP/publish/"
           cp site/index.html site/THIRD_PARTY.md "$RUNNER_TEMP/publish/"
           cp -a site/components-dist "$RUNNER_TEMP/publish/"
