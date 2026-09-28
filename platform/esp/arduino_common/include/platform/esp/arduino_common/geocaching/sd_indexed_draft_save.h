@@ -104,6 +104,10 @@ class SdIndexedDraftSave
             const auto check = checkDraftUpdate(status == IndexGetStep::Ready ? &previous : nullptr, next_, expected_);
             if (check == DraftUpdateCheck::Allowed) return startCommit();
             if (check != DraftUpdateCheck::NeedsRetainedPublication) return fail(IndexedCommitStep::Invalid);
+            // Local edits restore identity from the committed row under the
+            // generation check above. Saving text must not require old network
+            // requests; publication still validates its own retained history.
+            if (edit_bytes_) return startCommit();
             scan_.reset(new (std::nothrow) SdIndexScan(volume_));
             if (!scan_ || !scan_->begin(root_, 5, frame_, capacity_)) return fail(IndexedCommitStep::Invalid);
             operation_.emplace<std::monostate>();

@@ -1005,6 +1005,35 @@ int checkIndexedDraftPublication()
     draft.name = "Next edit";
     const auto frozen_files = files;
     if (save_draft(1) != IndexedCommitStep::Invalid || files != frozen_files) return 206;
+    // A local editor must not depend on a retained network request ledger.
+    // Identity comes from the committed row, never from editable UI fields.
+    {
+        const std::array<IndexRootBytes, 2> saved_roots{roots[0], roots[1]};
+        const auto saved_copy = copy;
+        DraftView edit;
+        edit.generation = 2;
+        edit.name = "Offline edit after publication";
+        if (!encodeDraft({draft_id.data(), draft_id.size()}, edit, encoded, sizeof(encoded), size)) return 250;
+        auto operation = std::make_unique<SdIndexedDraftSave>(volume);
+        if (!operation->beginEdit(current, copy, {draft_id.data(), draft_id.size()}, encoded, size, sizeof(encoded), 1,
+                                  frame, sizeof(frame), roots[1 - copy])) return 251;
+        auto status = IndexedCommitStep::Working;
+        for (unsigned i = 0; i < 8192 && status == IndexedCommitStep::Working; ++i) status = operation->step();
+        if (status != IndexedCommitStep::Verified || !operation->committed(current)) return 252;
+        SdIndexGet get(volume);
+        if (!get.begin(current, 4, {draft_id.data(), draft_id.size()}, frame, sizeof(frame))) return 253;
+        auto read = IndexGetStep::Working;
+        for (unsigned i = 0; i < 512 && read == IndexGetStep::Working; ++i) read = get.step();
+        DraftView stored;
+        if (read != IndexGetStep::Ready || !decodeDraft({draft_id.data(), draft_id.size()}, get.value(), stored) ||
+            stored.name != edit.name || stored.generation != 2 || stored.author.size != author.size() || stored.base_hash.size != hash.size() ||
+            std::memcmp(stored.author.data, author.data(), author.size()) || std::memcmp(stored.base_hash.data, hash.data(), hash.size())) return 254;
+        files = frozen_files;
+        roots[0] = saved_roots[0];
+        roots[1] = saved_roots[1];
+        copy = saved_copy;
+        if (!decodeIndexRoot({roots[copy].data(), roots[copy].size()}, volume, current)) return 255;
+    }
     RecordView record;
     record.author_public_key = {author.data(), author.size()};
     record.creation_nonce = {draft_id.data(), draft_id.size()};
@@ -3097,8 +3126,10 @@ int checkIndexedAuthorReservation(const char* path)
         frozen.author.size != 64 || std::memcmp(frozen.author.data, record.author_public_key.data, 64)) return 16;
     draft.generation = 4;
     draft.name = "Edited on device";
+    // Raw protocol writes must still reject missing identity metadata. The
+    // editor path restores it and is tested separately without request history.
     if (!encodeDraft(key, draft, draft_bytes, sizeof(draft_bytes), size) ||
-        finish(store.editDraft(key, draft_bytes, size, sizeof(draft_bytes), 3)) != JournalWriteResult::StateRejected ||
+        finish(store.saveDraft(key, {draft_bytes, size}, 3)) != JournalWriteResult::StateRejected ||
         files != reserved || store.needsRecovery()) return 37;
     Destination local, remote, wrong_source;
     local.bytes.fill(0x41);
