@@ -71,7 +71,7 @@ int main()
     assert(out->items[9].style == ui::map::MapOverlayStyle::Default);
     const auto requests = source.requests;
     projection->update(source, 0, 102, 10);
-    assert(source.requests == requests); // A stationary map does not rescan SD.
+    assert(source.requests == requests); // A stationary map does not rescan storage.
 
     for (unsigned id = 12; id <= 60; ++id) source.downloaded.push_back(marker(id, false));
     // Panning reselects the nearest bounded set, including later catalog pages.
