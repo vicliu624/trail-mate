@@ -126,6 +126,11 @@ bool sd_rename(const char* from, const char* to)
     fixture::files.erase(from);
     return true;
 }
+bool sd_remove(const char* path)
+{
+    ++fixture::step_io_calls;
+    return fixture::files.erase(path) == 1;
+}
 } // namespace platform::esp::arduino_common::storage
 struct NativeRecordCrypto final : ::geocaching::protocol::RecordCrypto
 {
@@ -628,7 +633,7 @@ int checkDownloadController(const char* query_path, const char* response_path)
         target += hex[byte & 15];
     }
     target += ".gpx";
-    for (unsigned scenario = 0; scenario < 5; ++scenario)
+    for (unsigned scenario = 0; scenario < 7; ++scenario)
     {
         fixture::files.clear();
         if (scenario == 2) fixture::files[target] = "user-owned file";
@@ -871,8 +876,16 @@ int checkDownloadController(const char* query_path, const char* response_path)
             expanded.snapshot(snapshot);
             if (snapshot.count || expanded.contains(summary.id.bytes, summary.hash.bytes)) return 356;
         }
-        if (scenario == 0 || scenario == 3)
+        if (scenario == 0 || scenario == 3 || scenario >= 5)
         {
+            std::string retained = "/trailmate/geocaching/.state/history/";
+            for (auto byte : summary.hash.bytes)
+            {
+                retained += hex[byte >> 4];
+                retained += hex[byte & 15];
+            }
+            retained += ".gpx";
+            if (scenario >= 5) fixture::files[retained] = scenario == 5 ? fixture::files.at(target) : "corrupt history";
             if (scenario == 3) fixture::files[target] = "external edit";
             RequestId next_id;
             next_id.bytes.fill(5);
@@ -899,7 +912,13 @@ int checkDownloadController(const char* query_path, const char* response_path)
                 if (scenario == 0 && update.phase() == DownloadPhase::Installing && !store->commitPending())
                     if (const int result = checkRecovery(next_task, next_id, 2)) return result;
             }
-            if (scenario == 3)
+            if (scenario == 6)
+            {
+                if (update.phase() != DownloadPhase::Failed || fixture::files.at(retained) != "corrupt history") return 357;
+                const std::string backup = "/trailmate/geocaching/.state/staging/43434343434343434343434343434343.old.gpx";
+                if (!fixture::files.count(backup)) return 358;
+            }
+            else if (scenario == 3)
             {
                 if (update.phase() != DownloadPhase::Failed || fixture::files.at(target) != "external edit") return 182;
             }
@@ -913,6 +932,7 @@ int checkDownloadController(const char* query_path, const char* response_path)
                 }
                 history += ".gpx";
                 if (update.phase() != DownloadPhase::Stored || update_port.historyPending() || !fixture::files.count(history)) return 183;
+                if (scenario == 5 && fixture::files.count("/trailmate/geocaching/.state/staging/43434343434343434343434343434343.old.gpx")) return 359;
             }
         }
     }

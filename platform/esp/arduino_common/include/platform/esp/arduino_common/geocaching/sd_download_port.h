@@ -207,9 +207,8 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             {
                 if (storage::sd_exists(history.data()))
                 {
-                    store_.releaseRead();
-                    phase_ = Phase::Complete;
-                    return Result::Complete;
+                    phase_ = Phase::RecoverInstalledHistoryOpen;
+                    return Result::Pending;
                 }
                 history_checked_ = true;
                 return Result::Pending;
@@ -391,6 +390,12 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         if (actual != old_hash_) return fail();
         if (phase_ == Phase::RecoverInstalledHistoryHash)
         {
+            // Only remove the duplicate backup after verifying retained history.
+            if (backup_moved_)
+            {
+                if (!storage::sd_remove(backup_.data())) return fail();
+                backup_moved_ = false;
+            }
             return finalize();
         }
         backup_moved_ = true;

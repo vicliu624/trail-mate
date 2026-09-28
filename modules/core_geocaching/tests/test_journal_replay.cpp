@@ -98,6 +98,10 @@ bool sd_mkdir(const char* path)
     return true;
 }
 bool sd_exists(const char* path) { return files.count(path) != 0; }
+bool sd_remove(const char* path)
+{
+    return files.erase(path) == 1;
+}
 bool sd_rename(const char* from, const char* to)
 {
     if (!files.count(from) || files.count(to)) return false;
