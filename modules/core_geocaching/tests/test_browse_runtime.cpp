@@ -644,13 +644,17 @@ int main(int argc, char** argv)
     {
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
+        test::fail_read = true;
         until([&]
               {
                   overlays->update(*test::source, 31, 121, 15);
+                  require(!std::strstr(snapshot(Section::Published).status.data(), "Restoring geocaching tasks"),
+                          "one local metadata read failure restarted full storage recovery");
                   map = std::make_unique<ui::map::MapOverlaySnapshot>();
                   overlays->append(*map);
                   return map->item_count == 2; },
               "cold offline map lost local cache markers");
+        require(!test::fail_read, "map did not encounter the metadata read failure");
         ui::geocaching::Item local_draft;
         const auto local_view = snapshot(Section::Published);
         require(local_view.ready && test::source->item(Section::Published, 0, local_view.generation, local_draft) &&

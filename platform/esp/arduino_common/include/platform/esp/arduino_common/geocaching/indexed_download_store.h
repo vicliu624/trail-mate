@@ -81,8 +81,16 @@ class IndexedDownloadStore final : public DownloadStore
                                                                                    : status == IndexScanStep::IoError           ? DownloadRecoveryRead::IoError
                                                                                    : status == IndexScanStep::VolumeChanged     ? DownloadRecoveryRead::VolumeChanged
                                                                                                                                 : DownloadRecoveryRead::Invalid;
-        blocked_ = result == DownloadRecoveryRead::Invalid || result == DownloadRecoveryRead::IoError || result == DownloadRecoveryRead::VolumeChanged;
         releaseRead();
+        // Retry only the failed page; transient I/O must not invalidate the
+        // already opened index or start a full storage audit.
+        if (result == DownloadRecoveryRead::IoError && page_read_retries_ < 2)
+        {
+            ++page_read_retries_;
+            return DownloadRecoveryRead::Busy;
+        }
+        page_read_retries_ = 0;
+        blocked_ = result == DownloadRecoveryRead::Invalid || result == DownloadRecoveryRead::IoError || result == DownloadRecoveryRead::VolumeChanged;
         return result;
     }
     // Called by the workspace owner's prepare callback, before acquiring a
@@ -596,6 +604,7 @@ class IndexedDownloadStore final : public DownloadStore
     uint64_t generation_ = 0, revision_ = 0, proof_generation_ = 0;
     size_t install_size_ = 0;
     Phase phase_ = Phase::None;
+    uint8_t page_read_retries_ = 0;
     bool valid_ = false, blocked_ = false, cached_ = false, active_ = false, completed_ = false, has_current_ = false;
 };
 static_assert(sizeof(IndexedDownloadStore) <= 640, "Idle download storage contains metadata and caller buffer leases only");

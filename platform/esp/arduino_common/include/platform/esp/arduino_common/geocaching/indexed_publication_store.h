@@ -137,6 +137,14 @@ class IndexedPublicationStore final : public PublicationStore
         const bool unavailable = catalog_->unavailable();
         releaseDraftRead();
         if (unavailable) return DraftReadResult::Unavailable;
+        // A failed read does not imply corrupt metadata. Retry this page with
+        // a fresh lease before allowing the session to escalate to recovery.
+        if (status == IndexGetStep::IoError && catalog_read_retries_ < 2)
+        {
+            ++catalog_read_retries_;
+            return DraftReadResult::Busy;
+        }
+        catalog_read_retries_ = 0;
         if (status == IndexGetStep::Ready) return DraftReadResult::Ready;
         if (status == IndexGetStep::WorkspaceTooSmall) return DraftReadResult::WorkspaceTooSmall;
         blocked_ = true;
@@ -417,6 +425,7 @@ class IndexedPublicationStore final : public PublicationStore
     std::array<uint8_t, 16> read_key_{};
     std::array<uint8_t, 48> key_{};
     uint64_t revision_ = 0, catalog_generation_ = 0;
+    uint8_t catalog_read_retries_ = 0;
     bool valid_ = false, blocked_ = false;
 };
 static_assert(sizeof(IndexedPublicationStore) <= 264, "Idle publication storage owns leases and small metadata only");
