@@ -109,8 +109,9 @@ void exerciseLateDemand()
     geocaching::browse_runtime::steps = 0;
     assert(adapter.begin(Operation::Persist, 1).inProgress());
     chat.dirty = true;
+    for (unsigned i = 0; i < 7; ++i) assert(adapter.step(Operation::Persist, 1, {}).inProgress());
     assert(adapter.step(Operation::Persist, 1, {}).completed());
-    assert(geocaching::browse_runtime::steps == 1);
+    assert(geocaching::browse_runtime::steps == 8);
     assert(adapter.begin(Operation::Persist, 2).inProgress());
     assert(adapter.step(Operation::Persist, 2, {}).completed());
     assert(chat.finishes == 1);
@@ -125,10 +126,39 @@ void exerciseLateDemand()
     assert(geocaching::browse_runtime::steps == before + 8);
 }
 
+void exerciseContinuousDemand()
+{
+    Backend chat, peers;
+    WorkerContext context{&chat, &peers};
+    SdMaintenanceAdapter adapter(context);
+    geocaching::browse_runtime::pending = true;
+    geocaching::browse_runtime::steps = 0;
+    OperationGeneration generation = 1;
+    // Neither a stream of contacts nor local reads may starve the other.
+    // Require useful local progress between each completed peer persistence.
+    for (unsigned batch = 0; batch < 20; ++batch)
+    {
+        peers.dirty = true;
+        assert(adapter.begin(Operation::Persist, generation).inProgress());
+        for (unsigned slice = 0; slice < 8; ++slice)
+        {
+            const auto result = adapter.step(Operation::Persist, generation, {});
+            assert(slice == 7 ? result.completed() : result.inProgress());
+        }
+        assert(geocaching::browse_runtime::steps == (batch + 1) * 8);
+        ++generation;
+        assert(adapter.begin(Operation::Persist, generation).inProgress());
+        assert(adapter.step(Operation::Persist, generation, {}).completed());
+        assert(peers.finishes == batch + 1 && !peers.in_flight);
+        ++generation;
+    }
+}
+
 int main()
 {
     exerciseRetry(false);
     exerciseRetry(true);
     exerciseLateDemand();
+    exerciseContinuousDemand();
     std::cout << "Storage adapter retry ownership and fairness passed\n";
 }

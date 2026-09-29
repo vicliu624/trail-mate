@@ -168,13 +168,12 @@ class SdMaintenanceAdapter final : public Adapter
         {
             if (budget.max_work_items == 0) return Result::inProgressResult(operation, generation);
             if (geocaching::browse_runtime::workPending()) geocaching::browse_runtime::step();
-            // Recheck demand after every slice: messages or contacts may have
-            // become dirty after this Geocaching batch was admitted. Return to
-            // the shared owner instead of consuming the remaining batch first.
-            const bool other_pending = (context_.chat_store && context_.chat_store->persistencePending()) ||
-                                       (context_.peer_directory && context_.peer_directory->persistencePending());
+            // Finish the bounded batch even when contacts keep becoming dirty.
+            // Otherwise one tiny index read alternates with a full persistence
+            // operation. begin() gives chat/peers the next turn after this batch.
+            // Each slice still returns to the owner and obeys its work budget.
             if (geocaching_steps_) --geocaching_steps_;
-            if (!other_pending && geocaching_steps_ && geocaching::browse_runtime::workPending())
+            if (geocaching_steps_ && geocaching::browse_runtime::workPending())
                 return Result::inProgressResult(operation, generation);
             next_step_ = Step::None;
             return Result::completedResult(operation, generation);
