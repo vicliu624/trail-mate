@@ -631,6 +631,7 @@ int main(int argc, char** argv)
     }
     test::fail_read_path = installed_gpx->first;
     test::busy_reads = 12;
+    test::busy_read_path = "/trailmate/geocaching/.state/index/root.h0";
     test::source->activate(true);
     tick();
     test::source->requestWindow(Section::Downloaded, 0, 4);
@@ -641,6 +642,7 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
     require(!test::busy_reads, "startup did not wait through contended volume reads");
+    test::busy_read_path.clear();
     require((test::clock_ms - local_list_started) / tick_ms < 850,
             "local startup regressed into duplicate index scans or blocking download recovery");
     {

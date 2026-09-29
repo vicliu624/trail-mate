@@ -23,6 +23,7 @@ inline bool memory_available = true, card_ready = true, external_owner = false;
 inline size_t internal_free = SIZE_MAX;
 inline bool fail_read = false, in_ui = false;
 inline unsigned busy_reads = 0;
+inline std::string busy_read_path;
 inline unsigned file_busy_cycles = 0;
 inline std::array<unsigned, 4> file_busy_remaining{}, file_busy_hits{};
 inline std::string fail_read_path;

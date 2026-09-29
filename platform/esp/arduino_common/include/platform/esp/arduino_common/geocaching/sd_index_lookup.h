@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_index_path.h"
 #include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/storage_diagnostics.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -153,6 +154,8 @@ class SdIndexLookup
     };
     IndexLookupStep fail(IndexLookupStep value)
     {
+        if (value == IndexLookupStep::Invalid || value == IndexLookupStep::IoError || value == IndexLookupStep::VolumeChanged)
+            reportIndexReadFailure("lookup", static_cast<unsigned>(phase_), static_cast<unsigned>(value), table_, position_);
         file_.close();
         return result_ = value;
     }

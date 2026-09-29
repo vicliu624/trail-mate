@@ -4,6 +4,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_index_head_reader.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_lookup.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_value_reader.h"
+#include "platform/esp/arduino_common/geocaching/storage_diagnostics.h"
 #include <variant>
 
 namespace platform::esp::arduino_common::geocaching
@@ -229,6 +230,8 @@ class SdIndexScan
     }
     IndexScanStep fail(IndexScanStep status)
     {
+        if (status == IndexScanStep::Invalid || status == IndexScanStep::IoError || status == IndexScanStep::VolumeChanged || status == IndexScanStep::WorkspaceTooSmall)
+            reportIndexReadFailure("scan", static_cast<unsigned>(phase_), static_cast<unsigned>(status), table_, position_);
         file_.close();
         operation_.emplace<std::monostate>();
         value_ = {};

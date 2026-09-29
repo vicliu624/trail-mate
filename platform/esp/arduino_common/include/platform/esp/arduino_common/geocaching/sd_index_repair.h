@@ -90,7 +90,9 @@ class SdIndexRepair
             return recover(true);
         }
         VolumeInstance current;
-        if (inspectSdVolume(current) != SdVolumeResult::Ready) return finish(IndexedRecoveryStep::IoError);
+        const auto inspected = inspectSdVolume(current);
+        if (inspected == SdVolumeResult::Busy) return result_;
+        if (inspected != SdVolumeResult::Ready) return finish(IndexedRecoveryStep::IoError);
         if (current != volume_) return finish(IndexedRecoveryStep::VolumeChanged);
         switch (phase_)
         {
@@ -103,6 +105,7 @@ class SdIndexRepair
             char name[128]{};
             bool is_directory = false;
             const auto status = directory_.read_next_status(name, sizeof(name), &is_directory);
+            if (status == storage::SdDirReadStatus::Busy) return result_;
             if (status == storage::SdDirReadStatus::Entry)
             {
                 const bool index = !std::strcmp(name, "index"), archive = !std::strcmp(name, "index.repair");
@@ -121,13 +124,19 @@ class SdIndexRepair
         {
             if (position_ < 4)
             {
-                const unsigned position = position_++;
-                if (position < 2 ? !index_present_ : !archive_present_) return result_;
+                const unsigned position = position_;
+                if (position < 2 ? !index_present_ : !archive_present_)
+                {
+                    ++position_;
+                    return result_;
+                }
                 char path[80];
                 std::snprintf(path, sizeof(path), "/trailmate/geocaching/.state/%s/root.h%u", position < 2 ? "index" : "index.repair", position % 2);
                 auto& bytes = *roots_[0];
                 const auto read = storage::sd_read_file(path, bytes.data(), bytes.size());
+                if (read.status == storage::SdFileReadStatus::Busy) return result_;
                 if (!readable(read.status)) return finish(IndexedRecoveryStep::IoError);
+                ++position_;
                 IndexRootView root;
                 if (read.status == storage::SdFileReadStatus::Ready && read.file_size == bytes.size() && read.bytes_read == bytes.size() && decodeIndexRoot({bytes.data(), bytes.size()}, volume_, root))
                 {
@@ -153,6 +162,7 @@ class SdIndexRepair
                 char name[128]{};
                 bool is_directory = false;
                 const auto status = directory_.read_next_status(name, sizeof(name), &is_directory);
+                if (status == storage::SdDirReadStatus::Busy) return result_;
                 if (status != storage::SdDirReadStatus::Entry && status != storage::SdDirReadStatus::End) return finish(IndexedRecoveryStep::IoError);
                 if (status == storage::SdDirReadStatus::End)
                 {

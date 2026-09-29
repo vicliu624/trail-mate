@@ -3,6 +3,7 @@
 #include "geocaching/storage/index_entry.h"
 #include "platform/esp/arduino_common/geocaching/sd_record_reader.h"
 #include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/storage_diagnostics.h"
 #include <cstdio>
 
 namespace platform::esp::arduino_common::geocaching
@@ -154,6 +155,8 @@ class SdIndexedValueReader
     };
     IndexedReadStep fail(IndexedReadStep result)
     {
+        if (result == IndexedReadStep::Invalid || result == IndexedReadStep::IoError || result == IndexedReadStep::VolumeChanged || result == IndexedReadStep::WorkspaceTooSmall)
+            reportIndexReadFailure("value", static_cast<unsigned>(phase_), static_cast<unsigned>(result), table_, offset_);
         file_.close();
         value_ = {};
         return result_ = result;
