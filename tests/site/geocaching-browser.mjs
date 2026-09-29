@@ -72,7 +72,10 @@ try {
   const connection=bridge?await waitReady(bridge,'bridge_ready'):{port:bridgePort};
   browser=await chromium.launch({headless:true,...(values.channel?{channel:values.channel}:{})});
   const context=await browser.newContext({viewport:{width:1440,height:960},locale:'en-US',acceptDownloads:true});
-  await context.route('**/geocaching/network.json',route=>route.fulfill({json:{endpoint:`ws://127.0.0.1:${connection.port}`}}));
+  // Match deployment: a late connection may miss the one startup announce.
+  // Discover the signed directory through its configured path hint instead.
+  await context.route('**/geocaching/network.json',route=>route.fulfill({json:{endpoint:`ws://127.0.0.1:${connection.port}`,
+    discoverySeeds:[directoryReady.discovery]}}));
   // Never automate bulk/prefetch requests against the public OSM tile service.
   await context.route('https://tile.openstreetmap.org/**',route=>route.fulfill({contentType:'image/svg+xml',
     body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#dceae4"/><path d="M0 0H256V256H0Z" fill="none" stroke="#cadfd3"/></svg>'}));
