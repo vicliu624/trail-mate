@@ -64,7 +64,9 @@ export class DirectoryClient {
     await this.router.init();
     this.router.addEventListener('message', event => this.receive(event.detail.message).catch(() => {}));
     this.rns.transport.addEventListener('announce', event => this.discover(event.detail).catch(() => {}));
-    this.interface = new WebSocketClientInterface({url: endpoint.href, framing: 'raw', maxReconnectTries: 5});
+    // A long-lived map must recover after a NAS restart or prolonged outage.
+    // The interface owns one cancellable retry loop; keep its rate bounded.
+    this.interface = new WebSocketClientInterface({url: endpoint.href, framing: 'raw', maxReconnectTries: null, reconnectWait: 15});
     this.interface.addEventListener('disconnected', () => {
       this.generation++;
       this.pending?.reject(Error('Map connection interrupted'));

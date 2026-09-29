@@ -3,6 +3,32 @@ import {test} from 'node:test';
 import {Destination, DestType, Identity} from '../../site/node_modules/@reticulum/core/src/index.js';
 import {DirectoryClient} from '../../site/geocaching/src/protocol-client.js';
 import {encode} from '../../site/geocaching/src/protocol.js';
+import {WebSocketClientInterface} from '../../site/node_modules/@reticulum/core/src/interfaces/websocket.js';
+
+test('a long outage remains recoverable beyond five failed dials and close cancels retries', async () => {
+  const originalConnect=WebSocketClientInterface.prototype.connect;
+  WebSocketClientInterface.prototype.connect=async()=>{};
+  const client=new DirectoryClient();
+  try {
+    await client.connect('wss://example.org/');
+    const iface=client.interface, waits=[];
+    let dials=0;
+    iface._sleepInterruptible=async ms=>{waits.push(ms);};
+    iface._establishConnection=async()=>{
+      if(++dials<8)throw Error('NAS offline');
+    };
+    await iface._runReconnectLoop();
+    assert.equal(dials,8,'a long outage must not permanently disable the map');
+    assert.deepEqual(waits,Array(8).fill(15000),'retries must be rate bounded');
+    assert.equal(iface._reconnecting,false);
+    await client.close();
+    await iface._runReconnectLoop();
+    assert.equal(dials,8,'closed clients must not reconnect');
+  } finally {
+    WebSocketClientInterface.prototype.connect=originalConnect;
+    await client.close();
+  }
+});
 
 test('a failed initial capability check can retry on a later signed announce', async () => {
   const events=[],client=new DirectoryClient(event=>events.push(event));

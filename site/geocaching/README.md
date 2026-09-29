@@ -28,9 +28,10 @@ The page automatically connects using the operator-owned `network.json` file.
 Visitors have no endpoint input or connection settings. Set its `endpoint` to a
 verified raw-packet WSS access point before deployment. A null value
 shows a service-unavailable message without asking visitors to configure anything.
-The current deployment uses a temporary Cloudflare Quick Tunnel for public
-acceptance. It depends on the operator computer remaining online and is not a
-permanent production endpoint. `discoverySeeds` contains up to three discovery
+The deployment connects to the operator's NAS at `wss://vicliu.i234.me:18434/`.
+The NAS runs the packet bridge and directory independently of GitHub Pages;
+publishing or updating a cache does not require a website deployment.
+`discoverySeeds` contains up to three discovery
 destination hashes; clients request signed announcements from these hints at
 connection time and still verify identity binding and directory capabilities.
 For localhost testing, `ws://127.0.0.1:8787` is accepted.
@@ -116,7 +117,11 @@ startup announcement is delayed to allow the browser's automatic reconnect.
 This covers a failed initial dial, separately from losing an established
 connection. The RNS interface is attached before dialing, so later reconnects
 can use the same protocol stack and identity even if the initial dial rejected.
-Automatic socket reconnection currently stops after five failed attempts.
+Automatic socket reconnection continues while the client remains open, with
+a 15-second wait between attempts and the interface's five-second dial timeout.
+Only one retry loop runs per interface. Closing the client cancels it. A restored
+connection revalidates known directories and requests fresh discovery paths;
+visitors do not need to reload the page after a prolonged NAS outage.
 
 Verified 2026-09-24: `.codex-build/geocaching-startup-recovery-20260924-a/`
 passed initial-dial recovery, exact author verification, 20,422-byte GPX export,
