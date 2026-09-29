@@ -50,6 +50,8 @@ class StateMachine
     static constexpr std::uint32_t kDefaultTimeoutMs = 60000;
     static constexpr std::uint32_t kMinTimeoutMs = 10000;
     static constexpr std::uint32_t kMaxTimeoutMs = 300000;
+    // Existing settings/UI encode Always with this value; it is not five minutes.
+    static constexpr std::uint32_t kAlwaysOnTimeoutMs = kMaxTimeoutMs;
     static constexpr std::uint32_t kPreviewDurationMs = 3000;
 
     explicit StateMachine(std::uint32_t timeout_ms = kDefaultTimeoutMs);

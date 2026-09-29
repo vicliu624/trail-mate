@@ -66,5 +66,33 @@ int main()
     machine.set_timeout_ms(400000);
     assert(machine.timeout_ms() == StateMachine::kMaxTimeoutMs);
 
+    // Settings and existing saved configurations encode "Always" as 300000.
+    StateMachine always(300000);
+    always.dispatch(Event::Initialize, 100);
+    assert(!always.dispatch(Event::Tick, 300100).sleep_display);
+    assert(!always.dispatch(Event::Tick, 86400100).sleep_display);
+    assert(!always.dispatch(Event::Tick, UINT32_MAX).sleep_display);
+    assert(!always.dispatch(Event::Tick, 1000).sleep_display);
+    assert(always.snapshot().state == State::Awake);
+    always.dispatch(Event::DisableSleep, 1100);
+    always.dispatch(Event::EnableSleep, 1200);
+    assert(!always.dispatch(Event::Tick, 900000).sleep_display);
+    // Selecting a timed option again must restore normal idle sleep.
+    always.set_timeout_ms(15000);
+    always.dispatch(Event::Activity, 900000);
+    assert(!always.dispatch(Event::Tick, 914999).sleep_display);
+    assert(always.dispatch(Event::Tick, 915000).sleep_display);
+    // Applying Always to a sleeping/previewing state must leave it awake.
+    always.set_timeout_ms(300000);
+    assert(always.dispatch(Event::Tick, 915001).wake_display);
+    assert(always.snapshot().state == State::Awake);
+    always.set_timeout_ms(15000);
+    always.dispatch(Event::Tick, 1000000);
+    always.dispatch(Event::WakeInput, 1000001);
+    always.set_timeout_ms(300000);
+    const auto leave_preview = always.dispatch(Event::Tick, 1004001);
+    assert(leave_preview.hide_saver && !leave_preview.sleep_display);
+    assert(always.snapshot().state == State::Awake);
+
     return 0;
 }
