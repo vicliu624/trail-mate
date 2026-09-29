@@ -2,6 +2,7 @@
 #include "geocaching/storage/draft_edit.h"
 #include "geocaching/storage/draft_publication.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -108,7 +109,7 @@ class SdIndexedDraftSave
             // generation check above. Saving text must not require old network
             // requests; publication still validates its own retained history.
             if (edit_bytes_) return startCommit();
-            scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+            scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
             if (!scan_ || !scan_->begin(root_, 5, frame_, capacity_)) return fail(IndexedCommitStep::Invalid);
             operation_.emplace<std::monostate>();
             phase_ = Phase::Requests;
@@ -211,7 +212,7 @@ class SdIndexedDraftSave
     uint64_t expected_ = 0;
     unsigned copy_ = 0;
     std::variant<std::monostate, SdIndexGet, SdIndexedCommit> operation_;
-    std::unique_ptr<SdIndexScan> scan_;
+    ::platform::memory::PsramPtr<SdIndexScan> scan_;
     Phase phase_ = Phase::Previous;
     IndexedCommitStep result_ = IndexedCommitStep::Idle;
 };

@@ -2,6 +2,7 @@
 #include "geocaching/storage/draft_catalog.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_get.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_scan.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 #include <new>
 
@@ -19,7 +20,7 @@ class SdIndexedDraftCatalog
                uint8_t* frame, size_t capacity)
     {
         if (scan_ || page_) return false;
-        scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+        scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
         if (!scan_)
         {
             unavailable_ = true;
@@ -42,7 +43,7 @@ class SdIndexedDraftCatalog
                           uint8_t* frame, size_t capacity)
     {
         if (scan_ || entries_ || !entry.has_author) return false;
-        scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+        scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
         if (!scan_)
         {
             unavailable_ = true;
@@ -184,7 +185,7 @@ class SdIndexedDraftCatalog
                     }
                     std::memcpy(request_key_.data(), row.key.data, 48);
                     std::memcpy(task_key_.data(), outgoing.task_id.data, 16);
-                    task_.reset(new (std::nothrow) SdIndexGet(volume_));
+                    task_.reset(::platform::memory::createPsram<SdIndexGet>(volume_));
                     if (!task_)
                     {
                         unavailable_ = true;
@@ -206,7 +207,7 @@ class SdIndexedDraftCatalog
         for (size_t i = 0; i < page_->count; ++i) has_author |= page_->rows[i].has_author;
         // An unbound draft cannot have publication history.
         if (!has_author) return IndexGetStep::Ready;
-        scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+        scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
         if (!scan_)
         {
             unavailable_ = true;
@@ -222,8 +223,8 @@ class SdIndexedDraftCatalog
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::storage::DraftCatalogPage* page_ = nullptr;
     ::geocaching::storage::DraftCatalogEntry* entries_ = nullptr;
-    std::unique_ptr<SdIndexScan> scan_;
-    std::unique_ptr<SdIndexGet> task_;
+    ::platform::memory::PsramPtr<SdIndexScan> scan_;
+    ::platform::memory::PsramPtr<SdIndexGet> task_;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0, matched_ = 0, count_ = 0;
     std::array<uint8_t, 48> request_key_{};

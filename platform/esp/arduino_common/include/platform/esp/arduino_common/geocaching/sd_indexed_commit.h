@@ -4,6 +4,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_index_transaction.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal_segment.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 
 namespace platform::esp::arduino_common::geocaching
@@ -58,7 +59,7 @@ class SdIndexedCommit
         mutation_count_ = count;
         if (references)
         {
-            references_.reset(new (std::nothrow) SdIndexReferences(volume_));
+            references_.reset(::platform::memory::createPsram<SdIndexReferences>(volume_));
             if (!references_)
             {
                 fail(IndexedCommitStep::OutOfMemory);
@@ -342,7 +343,7 @@ class SdIndexedCommit
     ::geocaching::storage::IndexRootBytes* candidate_ = nullptr;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0, expected_size_ = 0;
-    std::unique_ptr<SdIndexReferences> references_;
+    ::platform::memory::PsramPtr<SdIndexReferences> references_;
     const ::geocaching::storage::MutationView* mutations_ = nullptr;
     size_t mutation_count_ = 0;
     std::variant<std::monostate, SdGeocachingJournal, SdJournalSegment, SdIndexTransaction, SdIndexGet> operation_;

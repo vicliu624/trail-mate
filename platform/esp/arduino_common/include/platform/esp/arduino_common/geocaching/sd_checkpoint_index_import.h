@@ -6,6 +6,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_index_head_writer.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_references.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_root_writer.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 #include <variant>
 
@@ -147,7 +148,7 @@ class SdCheckpointIndexImport
             IndexRootView transition;
             if (replacement_ && !selectIndexRoot(parent_, root, transition)) return fail(IndexRootWriteStep::Invalid);
             if (!encodeIndexRoot(volume_, root, *root_)) return fail(IndexRootWriteStep::Invalid);
-            references_.reset(new (std::nothrow) SdIndexReferences(volume_));
+            references_.reset(::platform::memory::createPsram<SdIndexReferences>(volume_));
             if (!references_ || !references_->begin(root, frame_, capacity_)) return fail(IndexRootWriteStep::Invalid);
             phase_ = Phase::References;
             return result_;
@@ -219,7 +220,7 @@ class SdCheckpointIndexImport
             {
                 IndexRootView candidate;
                 if (!decodeIndexRoot({root_->data(), root_->size()}, volume_, candidate)) return fail(IndexRootWriteStep::Invalid);
-                equivalent_.reset(new (std::nothrow) SdIndexEquivalent(volume_));
+                equivalent_.reset(::platform::memory::createPsram<SdIndexEquivalent>(volume_));
                 if (!equivalent_ || !equivalent_->begin(parent_, candidate, frame_, capacity_, comparison_frame_, comparison_capacity_))
                     return fail(IndexRootWriteStep::Invalid);
                 phase_ = Phase::Equivalent;
@@ -301,8 +302,8 @@ class SdCheckpointIndexImport
     ::geocaching::storage::IndexedMutation entry_;
     ::geocaching::storage::IndexShardHead head_;
     std::variant<std::monostate, SdIndexAppend, SdIndexHeadWriter, SdIndexRootWriter> io_;
-    std::unique_ptr<SdIndexReferences> references_;
-    std::unique_ptr<SdIndexEquivalent> equivalent_;
+    ::platform::memory::PsramPtr<SdIndexReferences> references_;
+    ::platform::memory::PsramPtr<SdIndexEquivalent> equivalent_;
     uint8_t* comparison_frame_ = nullptr;
     size_t comparison_capacity_ = 0;
     ::geocaching::storage::IndexRootBytes* root_ = nullptr;

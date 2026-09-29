@@ -3,6 +3,7 @@
 #include "geocaching/storage/pending_request.h"
 #include "platform/esp/arduino_common/geocaching/index_workspace_owner.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_get.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 
 namespace platform::esp::arduino_common::geocaching
@@ -44,7 +45,7 @@ class StoredReplyReceipt
         {
             if (!owner_.acquire(this)) return;
             revision_ = root_.revision;
-            read_.reset(new (std::nothrow) SdIndexGet(volume_));
+            read_.reset(::platform::memory::createPsram<SdIndexGet>(volume_));
             if (!read_ || !read_->begin(root_, 5, {key_.data(), key_.size()}, frame_, 8192)) return finish(false);
             phase_ = Phase::Outgoing;
             return;
@@ -66,7 +67,7 @@ class StoredReplyReceipt
             return finish(outgoing.terminal_data.size == size_ && crypto_.sha256(outgoing.terminal_data, hash.data()) && hash == hash_);
         }
         std::memcpy(task_.data(), outgoing.task_id.data, task_.size());
-        read_.reset(new (std::nothrow) SdIndexGet(volume_));
+        read_.reset(::platform::memory::createPsram<SdIndexGet>(volume_));
         if (!read_ || !read_->begin(root_, 10, {task_.data(), task_.size()}, frame_, 8192)) return finish(false);
         phase_ = Phase::Task;
     }
@@ -92,7 +93,7 @@ class StoredReplyReceipt
     ::geocaching::Destination local_;
     IndexWorkspaceOwner& owner_;
     ::geocaching::protocol::RecordCrypto& crypto_;
-    std::unique_ptr<SdIndexGet> read_;
+    ::platform::memory::PsramPtr<SdIndexGet> read_;
     uint8_t* frame_ = nullptr;
     std::array<uint8_t, 48> key_{};
     std::array<uint8_t, 32> hash_{};

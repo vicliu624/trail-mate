@@ -21,6 +21,7 @@ add_executable(geocaching_page_test test_page.cpp
     "${REPO_ROOT}/modules/ui_shared/src/ui/widgets/top_bar.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/page/page_profile.cpp")
 target_include_directories(geocaching_page_test PRIVATE stubs
+    "${REPO_ROOT}/modules/core_sys/include"
     "${REPO_ROOT}/modules/ui_lvgl_ux_packs/tests/touch_editor/stubs"
     "${REPO_ROOT}/modules/ui_lvgl_ux_packs/include"
     "${REPO_ROOT}/modules/ui_shared/include" "${REPO_ROOT}/modules/ui_presentation/include")

@@ -156,19 +156,17 @@ bool ensure_filesystem_mutex()
 template <typename T>
 T* psram_preferred_object()
 {
-    void* storage = heap_caps_malloc_prefer(sizeof(T),
-                                            2,
-                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
-                                            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // File/iterator metadata must not spill into the radio and DMA reserve
+    // when a PSRAM-equipped target runs out of external memory.
+    const auto caps = heap_caps_get_total_size(MALLOC_CAP_SPIRAM) ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+    void* storage = heap_caps_malloc(sizeof(T), caps | MALLOC_CAP_8BIT);
     return storage != nullptr ? new (storage) T() : nullptr;
 }
 
 void* psram_preferred_bytes(std::size_t bytes)
 {
-    return heap_caps_malloc_prefer(bytes,
-                                   2,
-                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
-                                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    const auto caps = heap_caps_get_total_size(MALLOC_CAP_SPIRAM) ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+    return heap_caps_malloc(bytes, caps | MALLOC_CAP_8BIT);
 }
 
 template <typename T>

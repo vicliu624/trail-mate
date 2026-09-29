@@ -3,6 +3,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_index_transaction.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal_replay.h"
+#include "platform/memory/psram_ptr.h"
 #include <optional>
 
 namespace platform::esp::arduino_common::geocaching
@@ -77,7 +78,7 @@ class SdIndexReplay
         const auto a = reinterpret_cast<uintptr_t>(pending_frame.data), b = reinterpret_cast<uintptr_t>(validation_frame);
         if (!validation_frame || !validation_capacity ||
             (a <= b ? b - a < pending_frame.size : a - b < validation_capacity)) return false;
-        validation_.reset(new (std::nothrow) SdIndexedCommit(volume_));
+        validation_.reset(::platform::memory::createPsram<SdIndexedCommit>(volume_));
         if (!validation_)
         {
             result_ = IndexReplayStep::OutOfMemory;
@@ -151,7 +152,7 @@ class SdIndexReplay
     ::geocaching::storage::IndexRootBytes* roots_[2];
     SdJournalReplay replay_;
     std::optional<SdIndexTransaction> index_;
-    std::unique_ptr<SdIndexedCommit> validation_;
+    ::platform::memory::PsramPtr<SdIndexedCommit> validation_;
     std::array<uint8_t, 4> pending_crc_{};
     ::geocaching::storage::TransactionView pending_;
     IndexReplayStep result_ = IndexReplayStep::Working;

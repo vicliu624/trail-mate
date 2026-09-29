@@ -1,6 +1,7 @@
 #pragma once
 #include "geocaching/storage/publication_history.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_draft_catalog.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -23,7 +24,7 @@ class SdIndexedPublicationHistory
         root_ = root;
         frame_ = frame;
         capacity_ = capacity;
-        draft_.reset(new (std::nothrow) SdIndexGet(volume_));
+        draft_.reset(::platform::memory::createPsram<SdIndexGet>(volume_));
         if (!draft_)
         {
             unavailable_ = true;
@@ -55,14 +56,14 @@ class SdIndexedPublicationHistory
             // A stale edit is a business conflict, not damaged storage.
             if (draft.generation != generation_ || draft.author.size != author_.size() ||
                 std::memcmp(draft.author.data, author_.data(), author_.size())) return IndexGetStep::NotFound;
-            entry_.reset(new (std::nothrow) DraftCatalogEntry);
+            entry_.reset(::platform::memory::createPsram<DraftCatalogEntry>());
             if (!entry_ || !describeDraft({key_.data(), key_.size()}, draft, crypto_, *entry_))
             {
                 unavailable_ = true;
                 return IndexGetStep::Invalid;
             }
             draft_.reset();
-            catalog_.reset(new (std::nothrow) SdIndexedDraftCatalog(volume_, crypto_));
+            catalog_.reset(::platform::memory::createPsram<SdIndexedDraftCatalog>(volume_, crypto_));
             if (!catalog_)
             {
                 unavailable_ = true;
@@ -83,7 +84,7 @@ class SdIndexedPublicationHistory
             confirmed_ = entry_->publication.confirmed_revision;
             catalog_.reset();
             entry_.reset();
-            scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+            scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
             if (!scan_)
             {
                 unavailable_ = true;
@@ -111,10 +112,10 @@ class SdIndexedPublicationHistory
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::storage::PublicationHistory* out_ = nullptr;
     ::geocaching::storage::PublicationHistoryScan history_;
-    std::unique_ptr<SdIndexGet> draft_;
-    std::unique_ptr<::geocaching::storage::DraftCatalogEntry> entry_;
-    std::unique_ptr<SdIndexedDraftCatalog> catalog_;
-    std::unique_ptr<SdIndexScan> scan_;
+    ::platform::memory::PsramPtr<SdIndexGet> draft_;
+    ::platform::memory::PsramPtr<::geocaching::storage::DraftCatalogEntry> entry_;
+    ::platform::memory::PsramPtr<SdIndexedDraftCatalog> catalog_;
+    ::platform::memory::PsramPtr<SdIndexScan> scan_;
     std::array<uint8_t, 16> key_{};
     std::array<uint8_t, 64> author_{};
     ::geocaching::GeocacheId cache_;

@@ -24,6 +24,7 @@
 #include "platform/esp/common/geocaching_crypto.h"
 #include "platform/esp/common/memory_budget.h"
 #include "platform/esp/common/meshcore_runtime_compat.h"
+#include "platform/memory/psram_ptr.h"
 #include "ui/screens/geocaching/geocaching_page_shell.h"
 #include <Arduino.h>
 #include <atomic>
@@ -65,11 +66,9 @@ struct Announcement
     std::array<uint8_t, 128> data{};
     size_t size = 0;
 };
-// One producer (callbacks serialized by the mesh router) and one consumer
-// (the storage owner). Keep the first pending announcement until consumed.
-// No session mutex or allocation is needed by the network callback.
-Announcement pending_announcement;
-std::atomic<bool> announcement_pending{false};
+// One producer (serialized router callbacks), one storage-owner consumer.
+// The mailbox payload exists only while pending and is allocated in PSRAM.
+std::atomic<Announcement*> pending_announcement{nullptr};
 static_assert(sizeof(Announcement) <= 240);
 // Router callbacks are serialized. The storage owner consumes this one-slot
 // mailbox without sharing its long-lived session/SD mutex with the producer.
@@ -106,14 +105,14 @@ struct Session
         size_t draft_size = 0;
         gc::GeocacheId cache;
         gc::storage::PublicationHistory history;
-        std::unique_ptr<DeviceAuthorIssuePort> author_port;
-        std::unique_ptr<gc::AuthorIssue> issue;
+        ::platform::memory::PsramPtr<DeviceAuthorIssuePort> author_port;
+        ::platform::memory::PsramPtr<gc::AuthorIssue> issue;
         const char* error = nullptr;
         uint8_t* bytes = nullptr;
         size_t size = 0;
         gc::Destination remote;
-        std::unique_ptr<SdPublishPort> port;
-        std::unique_ptr<gc::PublishAttempt> attempt;
+        ::platform::memory::PsramPtr<SdPublishPort> port;
+        ::platform::memory::PsramPtr<gc::PublishAttempt> attempt;
         uint64_t started = 0;
         uint32_t wait_ms = gc::QueryClient::kReplyTimeoutMs;
         ~Publication()
@@ -123,7 +122,7 @@ struct Session
             heap_caps_free(draft_bytes);
         }
     };
-    std::unique_ptr<Publication> publication;
+    ::platform::memory::PsramPtr<Publication> publication;
     chat::MeshOperationFailure last_dispatch_failure = chat::MeshOperationFailure::None;
     // Recovery discovers work left by a previous session. New work in this
     // session already has an owner; unrelated query commits must not rescan it.
@@ -139,7 +138,7 @@ struct Session
         bool erase = false;
         ~DraftSave() { heap_caps_free(bytes); }
     };
-    std::unique_ptr<DraftSave> draft_save;
+    ::platform::memory::PsramPtr<DraftSave> draft_save;
     struct DraftRead
     {
         std::array<uint8_t, 16> id{};
@@ -148,7 +147,7 @@ struct Session
         ::ui::geocaching::DraftReadStatus status = ::ui::geocaching::DraftReadStatus::Pending;
         ~DraftRead() { heap_caps_free(bytes); }
     };
-    std::unique_ptr<DraftRead> draft_read;
+    ::platform::memory::PsramPtr<DraftRead> draft_read;
     bool draft_io_reset = false;
     struct DraftCatalog
     {
@@ -157,7 +156,7 @@ struct Session
         uint64_t sequence = UINT64_MAX, generation = 1;
         bool reading = false, ready = false, failed = false;
     };
-    std::unique_ptr<DraftCatalog> draft_catalog;
+    ::platform::memory::PsramPtr<DraftCatalog> draft_catalog;
     bool draft_catalog_wanted = false;
     Phase phase = Phase::Inspect;
     const char* status = "Opening geocaching storage...";
@@ -187,21 +186,21 @@ struct Session
     gc::RequestId response_id;
     uint8_t response_operation = 0;
     std::array<gc::storage::MutationView, 3> mutations{};
-    std::unique_ptr<SdIndexRepair<Digest>> recovery;
-    std::unique_ptr<SdCheckpointRotation<Digest>> checkpoint;
+    ::platform::memory::PsramPtr<SdIndexRepair<Digest>> recovery;
+    ::platform::memory::PsramPtr<SdCheckpointRotation<Digest>> checkpoint;
     uint64_t checkpoint_attempt_sequence = 0;
     bool checkpoint_recovery_required = false;
-    std::unique_ptr<IndexedPublicationStore> store;
-    std::unique_ptr<IndexedDispatchStore> dispatch_store;
-    std::unique_ptr<LiveQueryPort> port;
-    std::unique_ptr<CacheDetail> detail, pending_detail;
-    std::unique_ptr<StoredReplyReceipt> receipts;
-    std::unique_ptr<gc::QueryClient> client;
-    std::unique_ptr<RequestDispatcher> dispatcher;
-    std::unique_ptr<QueryBrowseSource> source;
-    std::unique_ptr<SavedCacheCatalog<Digest>> saved;
+    ::platform::memory::PsramPtr<IndexedPublicationStore> store;
+    ::platform::memory::PsramPtr<IndexedDispatchStore> dispatch_store;
+    ::platform::memory::PsramPtr<LiveQueryPort> port;
+    ::platform::memory::PsramPtr<CacheDetail> detail, pending_detail;
+    ::platform::memory::PsramPtr<StoredReplyReceipt> receipts;
+    ::platform::memory::PsramPtr<gc::QueryClient> client;
+    ::platform::memory::PsramPtr<RequestDispatcher> dispatcher;
+    ::platform::memory::PsramPtr<QueryBrowseSource> source;
+    ::platform::memory::PsramPtr<SavedCacheCatalog<Digest>> saved;
     ::platform::esp::common::EspGeocachingCrypto crypto;
-    std::unique_ptr<IndexedDownloadStore> download_store;
+    ::platform::memory::PsramPtr<IndexedDownloadStore> download_store;
     struct DownloadStart
     {
         gc::protocol::SummaryView summary;
@@ -212,12 +211,12 @@ struct Session
         size_t response_size = 0;
         ~DownloadStart() { heap_caps_free(response); }
     };
-    std::unique_ptr<DownloadStart> download_start;
+    ::platform::memory::PsramPtr<DownloadStart> download_start;
     const char* download_start_error = nullptr;
     bool download_recovery_complete = false;
     bool download_restore_pending = false;
-    std::unique_ptr<SdDownloadPort<Digest>> download_port;
-    std::unique_ptr<gc::DownloadClient> download;
+    ::platform::memory::PsramPtr<SdDownloadPort<Digest>> download_port;
+    ::platform::memory::PsramPtr<gc::DownloadClient> download;
     std::array<uint8_t, 48> recovered_download{};
     bool have_recovered_download = false;
     bool recovering_installed_download = false, recovery_attention = false;
@@ -229,7 +228,9 @@ struct Session
     {
         const size_t missing = (!frame ? kFrameCapacity : 0) + (!encoded ? kEncodingCapacity : 0) +
                                (operations && !payload ? kPayloadCapacity : 0) + (operations && !verification ? kVerificationCapacity : 0);
-        if (missing && !mem::admit("geocaching.index.io", 4096, 0, missing, 40 * 1024, 0))
+        // These buffers are PSRAM-only (no internal fallback below). Charging
+        // an unrelated internal reserve permanently blocks local reads on L2.
+        if (missing && !mem::admit("geocaching.index.io", 0, 0, missing, 0, 0))
         {
             workspace_unavailable = true;
             return false;
@@ -294,7 +295,7 @@ struct Session
 chat::MeshAdapterRouter* router = nullptr;
 LoraBoard* board = nullptr;
 SemaphoreHandle_t mutex = nullptr;
-std::unique_ptr<Session> session;
+::platform::memory::PsramPtr<Session> session;
 std::array<uint8_t, 16> boot{};
 std::atomic<bool> wanted{false}, active{false}, restart{false};
 std::atomic<bool> network_requested{false};
@@ -374,7 +375,7 @@ bool draftMetadataReady(const Session& s)
 bool advanceDraftCatalog(Session& s)
 {
     if (!s.draft_catalog_wanted || !s.store || s.needsRecovery() || (s.phase != Phase::Ready && s.phase != Phase::ResumeDownloads)) return false;
-    if (!s.draft_catalog) s.draft_catalog.reset(new (std::nothrow) Session::DraftCatalog);
+    if (!s.draft_catalog) s.draft_catalog.reset(::platform::memory::createPsram<Session::DraftCatalog>());
     if (!s.draft_catalog) return false;
     auto& catalog = *s.draft_catalog;
     if (draftCatalogReady(s) || (catalog.failed && catalog.sequence == s.store->catalogGeneration())) return false;
@@ -483,8 +484,8 @@ bool startCheckpoint(Session& s)
     // proves their borrowed index cursors have been released.
     constexpr uint64_t interval = 256;
     if (s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval ||
-        s.workspace_owner.holder() || s.response || announcement_pending.load(std::memory_order_acquire) || downloadActive() || publicationActive() || draftSaveActive()) return false;
-    s.checkpoint.reset(new (std::nothrow) SdCheckpointRotation<Digest>(s.volume));
+        s.workspace_owner.holder() || s.response || pending_announcement.load(std::memory_order_acquire) || downloadActive() || publicationActive() || draftSaveActive()) return false;
+    s.checkpoint.reset(::platform::memory::createPsram<SdCheckpointRotation<Digest>>(s.volume));
     if (!s.checkpoint)
     {
         next_step.store(millis() + 1000);
@@ -546,9 +547,9 @@ bool resumeWaitingDownload(Session& s)
     gc::RequestId request;
     std::memcpy(remote.bytes.data(), recovered.key.data() + 16, 16);
     std::memcpy(request.bytes.data(), recovered.key.data() + 32, 16);
-    s.download_port.reset(new (std::nothrow) SdDownloadPort<Digest>(*s.download_store, s.crypto, s.local,
-                                                                    recovered.identity, recovered.task, recovered.created));
-    if (s.download_port) s.download.reset(new (std::nothrow) gc::DownloadClient(*s.download_port, s.crypto));
+    s.download_port.reset(::platform::memory::createPsram<SdDownloadPort<Digest>>(*s.download_store, s.crypto, s.local,
+                                                                                  recovered.identity, recovered.task, recovered.created));
+    if (s.download_port) s.download.reset(::platform::memory::createPsram<gc::DownloadClient>(*s.download_port, s.crypto));
     if (!s.download)
     {
         s.download_port.reset();
@@ -601,9 +602,9 @@ bool advanceDownloadStart(Session& s)
     randomId(nullptr, task.data());
     if (job.response) request = job.request;
     else randomId(nullptr, request.bytes.data());
-    s.download_port.reset(new (std::nothrow) SdDownloadPort<Digest>(*s.download_store, s.crypto, s.local,
-                                                                    {job.summary.id, job.summary.hash, generation}, task, now(nullptr)));
-    if (s.download_port) s.download.reset(new (std::nothrow) gc::DownloadClient(*s.download_port, s.crypto));
+    s.download_port.reset(::platform::memory::createPsram<SdDownloadPort<Digest>>(*s.download_store, s.crypto, s.local,
+                                                                                  gc::InstallIdentity{job.summary.id, job.summary.hash, generation}, task, now(nullptr)));
+    if (s.download_port) s.download.reset(::platform::memory::createPsram<gc::DownloadClient>(*s.download_port, s.crypto));
     if (!s.download)
     {
         s.download_port.reset();
@@ -639,16 +640,18 @@ bool advanceDownloadStart(Session& s)
 
 void announcementReceived(const chat::lxmf::GeocachingAnnouncementView& message, void*)
 {
-    if (!wanted.load() || announcement_pending.load(std::memory_order_acquire) || message.discovery_destination.size != 16 ||
+    if (!wanted.load() || pending_announcement.load(std::memory_order_acquire) || message.discovery_destination.size != 16 ||
         message.delivery_destination.size != 16 || message.public_key.size != 64 || message.app_data.size > 128 ||
         !message.discovery_destination.data || !message.delivery_destination.data || !message.public_key.data || !message.app_data.data) return;
-    auto& out = pending_announcement;
+    auto pending = ::platform::memory::PsramPtr<Announcement>(::platform::memory::createPsram<Announcement>());
+    if (!pending) return;
+    auto& out = *pending;
     std::memcpy(out.discovery.bytes.data(), message.discovery_destination.data, 16);
     std::memcpy(out.delivery.bytes.data(), message.delivery_destination.data, 16);
     std::memcpy(out.key.data(), message.public_key.data, 64);
     std::memcpy(out.data.data(), message.app_data.data, message.app_data.size);
     out.size = message.app_data.size;
-    announcement_pending.store(true, std::memory_order_release);
+    pending_announcement.store(pending.release(), std::memory_order_release);
     next_step.store(0);
 }
 bool receiveResponse(const chat::lxmf::CustomDeliveryView& message, uint8_t** owned = nullptr)
@@ -717,7 +720,7 @@ bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
     if (guard.locked) return receiveResponse(message);
     ++replies_busy;
     if (!active.load() || pending_reply.load(std::memory_order_acquire)) return false;
-    auto reply = std::unique_ptr<PendingReply>(new (std::nothrow) PendingReply);
+    auto reply = ::platform::memory::PsramPtr<PendingReply>(::platform::memory::createPsram<PendingReply>());
     if (!reply) return false;
     reply->bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.rx", message.data.size, false));
     if (!reply->bytes) return false;
@@ -733,7 +736,7 @@ bool responseReceived(const chat::lxmf::CustomDeliveryView& message, void*)
 void drainReply(Session& s)
 {
     if (s.response || !s.port) return;
-    std::unique_ptr<PendingReply> reply(pending_reply.exchange(nullptr, std::memory_order_acq_rel));
+    ::platform::memory::PsramPtr<PendingReply> reply(pending_reply.exchange(nullptr, std::memory_order_acq_rel));
     if (!reply) return;
     receiveResponse({{reply->source.bytes.data(), 16}, {reply->destination.bytes.data(), 16}, {}, {reply->bytes, reply->size}}, &reply->bytes);
 }
@@ -802,11 +805,11 @@ void advanceBrowse(Session& s)
             s.browse_status = "Waiting for Reticulum IP connection";
             return;
         }
-        if (!s.port) s.port.reset(new (std::nothrow) LiveQueryPort(s.crypto, randomId));
+        if (!s.port) s.port.reset(::platform::memory::createPsram<LiveQueryPort>(s.crypto, randomId));
         if (!s.port) return;
-        s.client.reset(new (std::nothrow) gc::QueryClient(*s.port));
+        s.client.reset(::platform::memory::createPsram<gc::QueryClient>(*s.port));
         if (!s.client) return;
-        s.source.reset(new (std::nothrow) QueryBrowseSource(*s.client, *s.port, kWorld));
+        s.source.reset(::platform::memory::createPsram<QueryBrowseSource>(*s.client, *s.port, kWorld));
         if (!s.source)
         {
             s.client.reset();
@@ -816,12 +819,12 @@ void advanceBrowse(Session& s)
         ++epoch;
     }
     drainReply(s);
-    if (announcement_pending.load(std::memory_order_acquire))
+    if (auto* pending = pending_announcement.exchange(nullptr, std::memory_order_acq_rel))
     {
-        const auto& incoming = pending_announcement;
+        ::platform::memory::PsramPtr<Announcement> owned(pending);
+        const auto& incoming = *owned;
         s.client->observe(incoming.discovery, incoming.delivery, {incoming.key.data(), incoming.key.size()},
                           {incoming.data.data(), incoming.size}, now(nullptr).monotonic_ms);
-        announcement_pending.store(false, std::memory_order_release);
     }
     s.client->tick(now(nullptr).monotonic_ms);
     const auto sent = s.port->dispatch(*router, s.local, now(nullptr).monotonic_ms);
@@ -838,9 +841,9 @@ void startRecovery()
         fail("Insufficient storage workspace");
         return;
     }
-    s.recovery.reset(new (std::nothrow) SdIndexRepair<Digest>(s.volume, s.roots[0], s.roots[1],
-                                                              s.frame, kFrameCapacity, s.encoded, kEncodingCapacity,
-                                                              s.mutations.data(), s.mutations.size()));
+    s.recovery.reset(::platform::memory::createPsram<SdIndexRepair<Digest>>(s.volume, s.roots[0], s.roots[1],
+                                                                            s.frame, kFrameCapacity, s.encoded, kEncodingCapacity,
+                                                                            s.mutations.data(), s.mutations.size()));
     if (!s.recovery)
     {
         fail("Insufficient memory");
@@ -882,18 +885,18 @@ void advanceStorageRecovery(Session& s)
         fail("Insufficient storage workspace");
         return;
     }
-    s.store.reset(new (std::nothrow) IndexedPublicationStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                             s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
-                                                             s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-    s.download_store.reset(new (std::nothrow) IndexedDownloadStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                                   s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
-                                                                   s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
+    s.store.reset(::platform::memory::createPsram<IndexedPublicationStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                                           s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
+                                                                           s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
+    s.download_store.reset(::platform::memory::createPsram<IndexedDownloadStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                                                 s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
+                                                                                 s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
     if (!s.store || !s.download_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
     {
         fail("Insufficient indexed storage memory");
         return;
     }
-    s.saved.reset(new (std::nothrow) SavedCacheCatalog<Digest>(*s.download_store, s.crypto));
+    s.saved.reset(::platform::memory::createPsram<SavedCacheCatalog<Digest>>(*s.download_store, s.crypto));
     if (!s.saved)
     {
         fail("Insufficient catalogue memory");
@@ -930,7 +933,7 @@ bool advanceSavedDetail(Session& s)
     {
         if (downloadActive() || publicationActive() || draftSaveActive()) return false;
         if (!s.workspace_owner.acquire(&job)) return false;
-        job.saved_read.reset(new (std::nothrow) SdIndexedSavedCache(s.volume));
+        job.saved_read.reset(::platform::memory::createPsram<SdIndexedSavedCache>(s.volume));
         if (!job.saved_read || !job.saved_read->begin(s.root, {job.id.bytes.data(), job.id.bytes.size()}, true, s.frame, kFrameCapacity))
             return finish("Insufficient memory to read saved details.");
     }
@@ -990,15 +993,15 @@ PublicationRestore restorePublication(Session& s, const gc::GeocacheId* cache = 
         return PublicationRestore::Invalid;
     gc::RequestId request;
     std::memcpy(request.bytes.data(), selected.key.data() + 32, 16);
-    auto job = std::unique_ptr<Session::Publication>(new (std::nothrow) Session::Publication);
+    auto job = ::platform::memory::PsramPtr<Session::Publication>(::platform::memory::createPsram<Session::Publication>());
     if (!job)
     {
         next_step.store(millis() + 1000);
         return PublicationRestore::Pending;
     }
     std::memcpy(job->remote.bytes.data(), selected.key.data() + 16, 16);
-    job->port.reset(new (std::nothrow) SdPublishPort(*s.store, s.crypto, s.local, selected.cache, selected.hash, selected.task, selected.created));
-    if (job->port) job->attempt.reset(new (std::nothrow) gc::PublishAttempt(*job->port, s.crypto));
+    job->port.reset(::platform::memory::createPsram<SdPublishPort>(*s.store, s.crypto, s.local, selected.cache, selected.hash, selected.task, selected.created));
+    if (job->port) job->attempt.reset(::platform::memory::createPsram<gc::PublishAttempt>(*job->port, s.crypto));
     if (!job->attempt)
     {
         next_step.store(millis() + 1000);
@@ -1245,8 +1248,8 @@ void advanceDraftPublication(Session& s)
     }
     heap_caps_free(job.draft_bytes);
     job.draft_bytes = nullptr;
-    job.author_port.reset(new (std::nothrow) DeviceAuthorIssuePort(*router, *s.store, s.crypto, job.issued, key, job.draft_generation));
-    if (job.author_port) job.issue.reset(new (std::nothrow) gc::AuthorIssue(*job.author_port));
+    job.author_port.reset(::platform::memory::createPsram<DeviceAuthorIssuePort>(*router, *s.store, s.crypto, job.issued, key, job.draft_generation));
+    if (job.author_port) job.issue.reset(::platform::memory::createPsram<gc::AuthorIssue>(*job.author_port));
     if (!job.issue || !job.issue->begin({job.unsigned_bytes, job.unsigned_size}, job.bytes, job.size))
     {
         stop("Cannot start record signing");
@@ -1522,7 +1525,7 @@ class Facade final : public ::ui::geocaching::Source
     {
         Guard guard;
         if (!guard.locked || !session || item.is_draft) return;
-        auto job = std::unique_ptr<CacheDetail>(new (std::nothrow) CacheDetail);
+        auto job = ::platform::memory::PsramPtr<CacheDetail>(::platform::memory::createPsram<CacheDetail>());
         if (!job) return;
         job->id.bytes = item.id;
         job->hash.bytes = item.revision_hash;
@@ -1585,7 +1588,7 @@ class Facade final : public ::ui::geocaching::Source
         std::array<uint8_t, 64> author;
         uint32_t revision = 0;
         if (!guard.locked || !publicationDraftReady(id, generation, author, nullptr, &revision) || author != expected_author || revision != expected_revision) return false;
-        auto job = std::unique_ptr<Session::Publication>(new (std::nothrow) Session::Publication);
+        auto job = ::platform::memory::PsramPtr<Session::Publication>(::platform::memory::createPsram<Session::Publication>());
         if (!job || !session->port->pageSource(job->remote)) return false;
         job->draft_id = id;
         job->draft_generation = generation;
@@ -1615,7 +1618,7 @@ class Facade final : public ::ui::geocaching::Source
         if (!session->draft_read || session->draft_read->id != id)
         {
             session->draft_io_reset = true;
-            session->draft_read.reset(new (std::nothrow) Session::DraftRead);
+            session->draft_read.reset(::platform::memory::createPsram<Session::DraftRead>());
             if (!session->draft_read) return Status::Failed;
             session->draft_read->id = id;
             next_step.store(0);
@@ -1685,7 +1688,7 @@ class Facade final : public ::ui::geocaching::Source
         draft.difficulty_x2 = input.difficulty_x2;
         draft.terrain_x2 = input.terrain_x2;
         draft.container_size = input.container_size;
-        auto job = std::unique_ptr<Session::DraftSave>(new (std::nothrow) Session::DraftSave);
+        auto job = ::platform::memory::PsramPtr<Session::DraftSave>(::platform::memory::createPsram<Session::DraftSave>());
         if (!job) return false;
         const auto capacity = input.name.size() + input.description.size() + input.hint.size() + 160;
         job->capacity = capacity;
@@ -1713,7 +1716,7 @@ class Facade final : public ::ui::geocaching::Source
         Guard guard;
         if (!guard.locked || !generation || !session || session->phase != Phase::Ready || !session->store ||
             session->needsRecovery() || session->store->commitPending() || downloadActive() || publicationActive() || draftSaveActive()) return false;
-        auto job = std::unique_ptr<Session::DraftSave>(new (std::nothrow) Session::DraftSave);
+        auto job = ::platform::memory::PsramPtr<Session::DraftSave>(::platform::memory::createPsram<Session::DraftSave>());
         if (!job) return false;
         job->id = id;
         job->expected = generation;
@@ -1743,7 +1746,7 @@ class Facade final : public ::ui::geocaching::Source
             }
         gc::Destination remote;
         if (!found || !session->port->pageSource(remote)) return false;
-        auto job = std::unique_ptr<Session::DownloadStart>(new (std::nothrow) Session::DownloadStart);
+        auto job = ::platform::memory::PsramPtr<Session::DownloadStart>(::platform::memory::createPsram<Session::DownloadStart>());
         if (!job || summary.name.size() > job->name.size()) return false;
         job->summary = summary;
         std::memcpy(job->name.data(), summary.name.data(), summary.name.size());
@@ -1821,8 +1824,8 @@ bool closeSession()
     if (session->draft_catalog) session->draft_catalog->reading = false;
     if (!router->bindGeocachingHandlers(nullptr, nullptr, nullptr)) return false;
     // Unbinding joins any router callback before clearing its pending payload.
-    announcement_pending.store(false, std::memory_order_release);
-    delete pending_reply.exchange(nullptr, std::memory_order_acq_rel);
+    ::platform::memory::destroyPsram(pending_announcement.exchange(nullptr, std::memory_order_acq_rel));
+    ::platform::memory::destroyPsram(pending_reply.exchange(nullptr, std::memory_order_acq_rel));
     if (session->created_backend && router->backendForProtocol(chat::MeshProtocol::Reticulum) == session->created_backend &&
         router->backendProtocol() != chat::MeshProtocol::Reticulum && router->backendProtocol() != chat::MeshProtocol::RNode)
     {
@@ -1851,7 +1854,7 @@ bool queueDraftSave(const uint8_t id[16], const uint8_t* bytes, size_t size, uin
     if (!guard.locked || !id || !session || !session->store || session->store->commitPending() || session->needsRecovery() ||
         downloadActive() || publicationActive() || draftSaveActive() || session->phase == Phase::ResumeDownloads ||
         !gc::storage::decodeDraft({id, 16}, {bytes, size}, draft) || expected == UINT64_MAX || draft.generation != expected + 1) return false;
-    auto job = std::unique_ptr<Session::DraftSave>(new (std::nothrow) Session::DraftSave);
+    auto job = ::platform::memory::PsramPtr<Session::DraftSave>(::platform::memory::createPsram<Session::DraftSave>());
     if (!job) return false;
     job->bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.draft", size, false));
     if (!job->bytes) return false;
@@ -1874,7 +1877,7 @@ bool queuePublication(const uint8_t* bytes, size_t size)
         downloadActive() || publicationActive() || draftSaveActive()) return false;
     gc::Destination remote;
     if (!session->port->pageSource(remote)) return false;
-    auto job = std::unique_ptr<Session::Publication>(new (std::nothrow) Session::Publication);
+    auto job = ::platform::memory::PsramPtr<Session::Publication>(::platform::memory::createPsram<Session::Publication>());
     if (!job) return false;
     job->bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.publish", 2 * size + 26, false));
     if (!job->bytes) return false;
@@ -1914,7 +1917,7 @@ void step()
     }
     if (!session)
     {
-        session.reset(new (std::nothrow) Session);
+        session.reset(::platform::memory::createPsram<Session>());
         if (!session)
         {
             next_step.store(millis() + 2000);
@@ -2304,8 +2307,8 @@ void step()
             s.recovered_download = recovered.key;
             s.have_recovered_download = true;
             s.recovering_installed_download = recovered.installed;
-            s.download_port.reset(new (std::nothrow) SdDownloadPort<Digest>(*s.download_store, s.crypto,
-                                                                            local, recovered.identity, recovered.task, recovered.created));
+            s.download_port.reset(::platform::memory::createPsram<SdDownloadPort<Digest>>(*s.download_store, s.crypto,
+                                                                                          local, recovered.identity, recovered.task, recovered.created));
             if (!s.download_port || s.download_port->resume(remote, request) != gc::DownloadOperationResult::Pending)
                 fail("Cannot resume downloaded GPX");
             return;
@@ -2339,12 +2342,12 @@ void step()
         return;
     }
     if (!s.dispatch_store)
-        s.dispatch_store.reset(new (std::nothrow) IndexedDispatchStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                                       s.workspace_owner, s.workspace, s.frame, kFrameCapacity));
+        s.dispatch_store.reset(::platform::memory::createPsram<IndexedDispatchStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                                                     s.workspace_owner, s.workspace, s.frame, kFrameCapacity));
     if (s.dispatch_store && !s.dispatcher)
-        s.dispatcher.reset(new (std::nothrow) RequestDispatcher(*router, *s.dispatch_store, 5000, 120000));
+        s.dispatcher.reset(::platform::memory::createPsram<RequestDispatcher>(*router, *s.dispatch_store, 5000, 120000));
     if (!s.receipts)
-        s.receipts.reset(new (std::nothrow) StoredReplyReceipt(s.volume, s.root, s.local, s.workspace_owner, s.crypto));
+        s.receipts.reset(::platform::memory::createPsram<StoredReplyReceipt>(s.volume, s.root, s.local, s.workspace_owner, s.crypto));
     if (!s.dispatcher || !s.receipts)
     {
         s.browse_status = "Waiting for network service memory";
@@ -2381,8 +2384,8 @@ void step()
                 gc::RequestId request;
                 esp_fill_random(task.data(), task.size());
                 esp_fill_random(request.bytes.data(), request.bytes.size());
-                job.port.reset(new (std::nothrow) SdPublishPort(*s.store, s.crypto, s.local, record.id, record.hash, task, now(nullptr)));
-                if (job.port) job.attempt.reset(new (std::nothrow) gc::PublishAttempt(*job.port, s.crypto));
+                job.port.reset(::platform::memory::createPsram<SdPublishPort>(*s.store, s.crypto, s.local, record.id, record.hash, task, now(nullptr)));
+                if (job.port) job.attempt.reset(::platform::memory::createPsram<gc::PublishAttempt>(*job.port, s.crypto));
                 if (job.attempt && !job.attempt->begin(job.remote, request, {job.bytes, job.size}, scratch, job.size + 26)) job.attempt.reset();
             }
             heap_caps_free(job.bytes);

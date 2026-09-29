@@ -244,7 +244,7 @@ DetailText detailText(const ui::geocaching::Item& item)
 }
 int main(int argc, char** argv)
 {
-    require(argc == 2, "expected fixture directory");
+    require(argc == 2 || argc == 3, "expected fixture directory and optional local-draft-only scenario");
     const std::string folder(argv[1]);
     const auto encoded_record = fixture(folder, "record-v1.bin");
     geocaching::RecordView expected_record;
@@ -253,6 +253,71 @@ int main(int argc, char** argv)
     chat::MeshAdapterRouter router;
     LoraBoard board;
     rt::configure(router, board);
+    if (argc == 3)
+    {
+        require(std::strcmp(argv[2], "local-draft-only") == 0, "unknown runtime scenario");
+        router.ready = false;
+        test::in_ui = true;
+        test::source->activate(true);
+        until([&]
+              { return snapshot(Section::Published).can_create; },
+              "empty offline card did not permit a local draft");
+        ui::geocaching::DraftInput local;
+        local.name = "Unpublished local draft";
+        local.description = "Saved without any download or directory connection";
+        local.has_coordinates = true;
+        local.latitude_e7 = 310000000;
+        local.longitude_e7 = 1210000000;
+        require(test::source->saveDraft(local), "offline draft was not queued");
+        until([&]
+              { return test::source->draftSaveStatus(local.id, 0) == ui::geocaching::DraftSaveStatus::Saved; },
+              "offline draft was not saved");
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty(); },
+              "draft editor session did not close");
+        const auto saved_files = test::files;
+        // Reproduce the L2 heap snapshot: PSRAM is available, internal heap is
+        // below the unrelated 40 KiB reserve used by network admissions.
+        test::internal_free = 38904;
+        test::io_delay_ms = 5;
+        test::source->activate(true);
+        auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
+        auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
+        const auto started = test::clock_ms;
+        for (unsigned frame = 0; frame < 12 && !map->item_count; ++frame)
+        {
+            const auto due = test::clock_ms + 750;
+            overlays->update(*test::source, 31, 121, 15);
+            map = std::make_unique<ui::map::MapOverlaySnapshot>();
+            overlays->append(*map);
+            if (map->item_count) break;
+            while (test::clock_ms < due) tick();
+        }
+        require(map->item_count == 1 && map->header.valid, "main Map lost the only unpublished local draft");
+        require(map->items[0].point.valid && map->items[0].point.lat == 31 && map->items[0].point.lon == 121,
+                "local draft coordinates did not reach Map");
+        require(map->items[0].style == ui::map::MapOverlayStyle::Warning, "local draft marker state lost");
+        std::fprintf(stderr, "Draft-only Map elapsed_ms=%llu\n", static_cast<unsigned long long>(test::clock_ms - started));
+        require(test::clock_ms - started <= 3000, "draft-only Map exceeded three seconds");
+        require(test::files == saved_files && !router.sends && !router.service, "local Map wrote storage or started networking");
+        bool draft_loaded = false;
+        const auto read_started = test::clock_ms;
+        until([&]
+              { return draft_loaded || test::source->readDraft(
+                                           local.id, [](const ui::geocaching::DraftInput& value, void* context)
+                                           {
+                          require(value.name == "Unpublished local draft" && value.has_coordinates, "low-heap draft lost its content");
+                          *static_cast<bool*>(context) = true; },
+                                           &draft_loaded) == ui::geocaching::DraftReadStatus::Ready; },
+              "low internal heap blocked the draft editor");
+        require(draft_loaded && test::clock_ms - read_started <= 3000, "draft editor exceeded three seconds with PSRAM available");
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty(); },
+              "draft-only Map did not release storage");
+        return 0;
+    }
     // All interface and transport callbacks below must stay free of SD I/O.
     // Only tick() enters the storage maintenance owner.
     test::in_ui = true;
@@ -634,10 +699,12 @@ int main(int argc, char** argv)
     until([&]
           { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
           "USB browse did not open");
-    test::memory_available = false;
     const auto no_sd = test::files;
     const auto before_sends = router.sends;
     announce(router);
+    // The received announcement itself now lives in PSRAM. Once copied,
+    // processing it must not acquire any SD workspace or further allocations.
+    test::memory_available = false;
     until([&]
           { return router.sends == before_sends + 1; },
           "browse allocated SD workspace");

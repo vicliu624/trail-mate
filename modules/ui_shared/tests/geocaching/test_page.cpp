@@ -1,3 +1,4 @@
+#include "platform/ui/psram_ui_lease.h"
 #include "ui/components/two_pane_styles.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/geocaching/geocaching_page_shell.h"
@@ -261,6 +262,7 @@ int main(int argc, char** argv)
                         { ++*static_cast<unsigned*>(context); }};
     geocaching::ui::shell::enter(&host, screen);
     auto* root = lv_obj_get_child(screen, 0);
+    if (!platform::ui::psramUiRequired()) return 70;
     if (!root || !save(std::string(argv[3]) + "-empty.ppm", screen)) return 2;
     auto* tabs = lv_obj_get_child(root, 1);
     for (unsigned i = 0; i < 3; ++i)
@@ -481,8 +483,26 @@ int main(int argc, char** argv)
     lv_obj_send_event(lv_obj_get_child(footer, 2), LV_EVENT_CLICKED, nullptr);
     lv_obj_send_event(lv_obj_get_child(footer, 3), LV_EVENT_CLICKED, nullptr);
     if (source.publications != 1 || lv_obj_get_child_count(list) != 1) return 32;
-    source.pending_reads = 2;
+    source.pending_reads = 20;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
+    lv_obj_update_layout(root);
+    auto* loading_back = lv_obj_get_child(lv_obj_get_child(root, 0), 0);
+    lv_group_focus_obj(loading_back);
+    lv_obj_scroll_to_y(list, 24, LV_ANIM_OFF);
+    const auto loading_scroll = lv_obj_get_scroll_y(list);
+    for (unsigned poll = 0; poll < 4; ++poll)
+    {
+        lv_tick_inc(600);
+        lv_timer_handler();
+        lv_obj_update_layout(root);
+        if (lv_group_get_focused(lv_group_get_default()) != loading_back) return 69;
+        if (lv_obj_get_scroll_y(list) != loading_scroll)
+        {
+            std::fprintf(stderr, "Pending draft read moved scroll: %d -> %d\n", int(loading_scroll), int(lv_obj_get_scroll_y(list)));
+            return 68;
+        }
+    }
+    source.pending_reads = 1;
     lv_obj_send_event(lv_obj_get_child(footer, 0), LV_EVENT_CLICKED, nullptr);
     lv_tick_inc(600);
     lv_timer_handler();
@@ -537,6 +557,11 @@ int main(int argc, char** argv)
     }
     lv_mem_monitor(&after);
     if (after.free_size != baseline.free_size || lv_obj_get_child_count(screen)) return 10;
+    if (platform::ui::psramUiRequired()) return 71;
+    geocaching::ui::shell::beginMapOverlays();
+    if (!platform::ui::psramUiRequired()) return 72;
+    geocaching::ui::shell::endMapOverlays();
+    if (platform::ui::psramUiRequired()) return 73;
     geocaching::ui::shell::bind(nullptr);
     lv_group_delete(old_group);
     std::printf("%dx%d: visible=%u, no LVGL growth after 20 enter/exit cycles\n", width, height, unsigned(visible));

@@ -17,6 +17,7 @@
 #include "chat/ports/i_mesh_peer_directory.h"
 
 #include <memory>
+#include <new>
 
 class LoraBoard;
 
@@ -43,6 +44,11 @@ class ReticulumAdapter final : public IMeshAdapter,
                                public IIncomingDeliveryCommitPort
 {
   public:
+    static void* operator new(std::size_t size);
+    static void* operator new(std::size_t size, const std::nothrow_t&) noexcept;
+    static void operator delete(void* pointer) noexcept;
+    static void operator delete(void* pointer, std::size_t) noexcept;
+    static void operator delete(void* pointer, const std::nothrow_t&) noexcept;
     explicit ReticulumAdapter(LoraBoard& board,
                               IMeshPeerDirectory* peer_directory = nullptr,
                               ReticulumUsage usage = ReticulumUsage::ActiveChat);

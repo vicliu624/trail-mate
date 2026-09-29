@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_index_cleanup.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_recovery.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 
 namespace platform::esp::arduino_common::geocaching
@@ -225,14 +226,14 @@ class SdIndexRepair
     IndexedRecoveryStep recover(bool rebuilding)
     {
         attempted_ |= rebuilding;
-        recovery_.reset(new (std::nothrow) SdIndexedRecovery<Digest>(volume_, *roots_[0], *roots_[1], frame_, capacity_, validation_frame_, validation_capacity_, mutations_, mutation_capacity_));
+        recovery_.reset(::platform::memory::createPsram<SdIndexedRecovery<Digest>>(volume_, *roots_[0], *roots_[1], frame_, capacity_, validation_frame_, validation_capacity_, mutations_, mutation_capacity_));
         if (!recovery_) return finish(IndexedRecoveryStep::OutOfMemory);
         phase_ = Phase::Recover;
         return result_;
     }
     IndexedRecoveryStep clean(bool archive)
     {
-        cleanup_.reset(new (std::nothrow) SdIndexCleanup(volume_, archive));
+        cleanup_.reset(::platform::memory::createPsram<SdIndexCleanup>(volume_, archive));
         if (!cleanup_) return finish(IndexedRecoveryStep::OutOfMemory);
         phase_ = archive ? Phase::CleanArchive : Phase::CleanPrimary;
         return result_;
@@ -268,8 +269,8 @@ class SdIndexRepair
     size_t validation_capacity_;
     ::geocaching::storage::MutationView* mutations_;
     size_t mutation_capacity_;
-    std::unique_ptr<SdIndexedRecovery<Digest>> recovery_;
-    std::unique_ptr<SdIndexCleanup> cleanup_;
+    ::platform::memory::PsramPtr<SdIndexedRecovery<Digest>> recovery_;
+    ::platform::memory::PsramPtr<SdIndexCleanup> cleanup_;
     storage::SdRuntimeDir directory_;
     storage::SdRuntimeFile floor_file_;
     char floor_path_[80]{};

@@ -5,6 +5,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_checkpoint_selection.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_cleanup.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal_reclaim.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -127,7 +128,7 @@ class SdCheckpointRotation
             if (!writer_)
             {
                 *roots_[1 - copy_] = *roots_[copy_];
-                writer_.reset(new (std::nothrow) SdIndexRootWriter(volume_));
+                writer_.reset(::platform::memory::createPsram<SdIndexRootWriter>(volume_));
                 if (!writer_) return fail(Result::OutOfMemory);
                 if (!writer_->begin(1 - copy_, *roots_[1 - copy_])) return fail(Result::Invalid);
                 return result_;
@@ -143,7 +144,7 @@ class SdCheckpointRotation
         case Phase::References:
             if (!references_)
             {
-                references_.reset(new (std::nothrow) SdCheckpointReferences(volume_));
+                references_.reset(::platform::memory::createPsram<SdCheckpointReferences>(volume_));
                 if (!references_) return fail(Result::OutOfMemory);
                 if (!references_->begin(root_, root_, frame_, capacity_)) return fail(Result::Invalid);
                 return result_;
@@ -172,7 +173,7 @@ class SdCheckpointRotation
         case Phase::VerifyPublished:
             if (!selection_)
             {
-                selection_.reset(new (std::nothrow) SdCheckpointSelection<Digest>(volume_));
+                selection_.reset(::platform::memory::createPsram<SdCheckpointSelection<Digest>>(volume_));
                 if (!selection_) return fail(Result::OutOfMemory);
                 return result_;
             }
@@ -207,7 +208,7 @@ class SdCheckpointRotation
         case Phase::Build:
             if (!build_)
             {
-                build_.reset(new (std::nothrow) SdCheckpointBuild<Digest>(volume_));
+                build_.reset(::platform::memory::createPsram<SdCheckpointBuild<Digest>>(volume_));
                 if (!build_) return fail(Result::OutOfMemory);
                 if (!build_->begin(root_, frame_, capacity_, comparison_, comparison_capacity_))
                     return fail(build_->step() == CheckpointBuildStep::OutOfMemory ? Result::OutOfMemory : Result::Invalid);
@@ -237,7 +238,7 @@ class SdCheckpointRotation
         case Phase::CleanupOld:
             if (!cleanup_)
             {
-                cleanup_.reset(new (std::nothrow) SdIndexCleanup(volume_, root_, root_));
+                cleanup_.reset(::platform::memory::createPsram<SdIndexCleanup>(volume_, root_, root_));
                 if (!cleanup_) return fail(Result::OutOfMemory);
                 return result_;
             }
@@ -259,7 +260,7 @@ class SdCheckpointRotation
         case Phase::Reclaim:
             if (!reclaim_)
             {
-                reclaim_.reset(new (std::nothrow) SdJournalReclaim(volume_));
+                reclaim_.reset(::platform::memory::createPsram<SdJournalReclaim>(volume_));
                 if (!reclaim_) return fail(Result::OutOfMemory);
                 if (!reclaim_->begin(fallback_sequence_, root_.sequence, frame_, capacity_)) return fail(Result::Invalid);
                 return result_;
@@ -279,7 +280,7 @@ class SdCheckpointRotation
         case Phase::Import:
             if (!import_)
             {
-                import_.reset(new (std::nothrow) SdCheckpointIndexImport<Digest>(volume_, digest_));
+                import_.reset(::platform::memory::createPsram<SdCheckpointIndexImport<Digest>>(volume_, digest_));
                 if (!import_) return fail(Result::OutOfMemory);
                 if (!import_->beginReplacement(target_, candidate_, root_, copy_, frame_, capacity_, *roots_[1 - copy_], comparison_, comparison_capacity_)) return fail(Result::Invalid);
                 return result_;
@@ -336,13 +337,13 @@ class SdCheckpointRotation
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::storage::CheckpointCandidate candidate_;
     Digest digest_;
-    std::unique_ptr<SdIndexRootWriter> writer_;
-    std::unique_ptr<SdCheckpointReferences> references_;
-    std::unique_ptr<SdCheckpointSelection<Digest>> selection_;
-    std::unique_ptr<SdCheckpointBuild<Digest>> build_;
-    std::unique_ptr<SdIndexCleanup> cleanup_;
-    std::unique_ptr<SdCheckpointIndexImport<Digest>> import_;
-    std::unique_ptr<SdJournalReclaim> reclaim_;
+    ::platform::memory::PsramPtr<SdIndexRootWriter> writer_;
+    ::platform::memory::PsramPtr<SdCheckpointReferences> references_;
+    ::platform::memory::PsramPtr<SdCheckpointSelection<Digest>> selection_;
+    ::platform::memory::PsramPtr<SdCheckpointBuild<Digest>> build_;
+    ::platform::memory::PsramPtr<SdIndexCleanup> cleanup_;
+    ::platform::memory::PsramPtr<SdCheckpointIndexImport<Digest>> import_;
+    ::platform::memory::PsramPtr<SdJournalReclaim> reclaim_;
     uint8_t *frame_ = nullptr, *comparison_ = nullptr;
     size_t capacity_ = 0, comparison_capacity_ = 0;
     uint64_t fallback_sequence_ = 0, minimum_sequence_delta_ = 0;

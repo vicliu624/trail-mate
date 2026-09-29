@@ -5,11 +5,29 @@
 
 #include "platform/esp/arduino_common/chat/infra/reticulum/reticulum_adapter.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
+#include "platform/memory/psram_ptr.h"
 #include "platform/ui/reticulum_page_runtime.h"
 #include "platform/ui/reticulum_receive_runtime.h"
 
 namespace chat::reticulum
 {
+void* ReticulumAdapter::operator new(std::size_t size, const std::nothrow_t&) noexcept
+{
+    return ::platform::memory::allocatePsram(size);
+}
+void* ReticulumAdapter::operator new(std::size_t size)
+{
+    void* pointer = operator new(size, std::nothrow);
+    if (pointer) return pointer;
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
+    throw std::bad_alloc();
+#else
+    std::abort();
+#endif
+}
+void ReticulumAdapter::operator delete(void* pointer) noexcept { ::platform::memory::freePsram(pointer); }
+void ReticulumAdapter::operator delete(void* pointer, std::size_t) noexcept { operator delete(pointer); }
+void ReticulumAdapter::operator delete(void* pointer, const std::nothrow_t&) noexcept { operator delete(pointer); }
 namespace
 {
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_indexed_saved_cache.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 #include <new>
 
@@ -69,7 +70,7 @@ class SdIndexedSavedPage
         const auto ordinal = (*total_)++;
         if (ordinal < offset_) return heads_.advance() ? IndexScanStep::Working : IndexScanStep::Invalid;
         if (count_ == limit_) return IndexScanStep::End;
-        entry_.reset(new (std::nothrow) SdIndexedSavedCache(volume_));
+        entry_.reset(::platform::memory::createPsram<SdIndexedSavedCache>(volume_));
         if (!entry_)
         {
             unavailable_ = true;
@@ -85,7 +86,7 @@ class SdIndexedSavedPage
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::IndexRootView root_;
     SdIndexScan heads_;
-    std::unique_ptr<SdIndexedSavedCache> entry_;
+    ::platform::memory::PsramPtr<SdIndexedSavedCache> entry_;
     ::geocaching::storage::SavedCacheRecord record_;
     std::array<::geocaching::storage::SavedCacheEntry, 4>* rows_ = nullptr;
     size_t* total_ = nullptr;

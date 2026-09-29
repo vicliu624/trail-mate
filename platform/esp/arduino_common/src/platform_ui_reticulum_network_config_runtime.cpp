@@ -1,3 +1,4 @@
+#include "platform/memory/psram_ptr.h"
 #include "platform/ui/reticulum_network_config_runtime.h"
 
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
@@ -634,8 +635,9 @@ bool updateTcpEndpoint(std::size_t slot, const char* host, uint16_t port)
     }
     else
     {
-        const InterfaceConfig previous = s_active->interfaces[index];
         auto& entry = s_active->interfaces[index];
+        auto previous = ::platform::memory::PsramPtr<InterfaceConfig>(::platform::memory::createPsram<InterfaceConfig>(entry));
+        if (!previous) return false;
         if (append)
         {
             entry = InterfaceConfig{};
@@ -656,7 +658,7 @@ bool updateTcpEndpoint(std::size_t slot, const char* host, uint16_t port)
         entry.target_port = port;
         if (!validate_config(*s_active))
         {
-            entry = previous;
+            entry = *previous;
             if (append) --s_active->interface_count;
             return false;
         }

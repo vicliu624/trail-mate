@@ -8,6 +8,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_indexed_publication_history.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_publication_recovery.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -56,7 +57,7 @@ class IndexedPublicationStore final : public PublicationStore
         if (!reader_)
         {
             if (!owner_.acquire(this)) return DraftReadResult::Busy;
-            reader_.reset(new (std::nothrow) SdIndexGet(volume_));
+            reader_.reset(::platform::memory::createPsram<SdIndexGet>(volume_));
             if (!reader_)
             {
                 owner_.release(this);
@@ -109,7 +110,7 @@ class IndexedPublicationStore final : public PublicationStore
         if (!catalog_)
         {
             if (!owner_.acquire(this)) return DraftReadResult::Busy;
-            catalog_.reset(new (std::nothrow) SdIndexedDraftCatalog(volume_, crypto_));
+            catalog_.reset(::platform::memory::createPsram<SdIndexedDraftCatalog>(volume_, crypto_));
             if (!catalog_)
             {
                 owner_.release(this);
@@ -152,7 +153,7 @@ class IndexedPublicationStore final : public PublicationStore
         if (!history_)
         {
             if (!owner_.acquire(this)) return DraftReadResult::Busy;
-            history_.reset(new (std::nothrow) SdIndexedPublicationHistory(volume_, crypto_));
+            history_.reset(::platform::memory::createPsram<SdIndexedPublicationHistory>(volume_, crypto_));
             if (!history_)
             {
                 owner_.release(this);
@@ -195,7 +196,7 @@ class IndexedPublicationStore final : public PublicationStore
         if (!recovery_)
         {
             if (!owner_.acquire(this)) return DraftReadResult::Busy;
-            recovery_.reset(new (std::nothrow) SdIndexedPublicationRecovery(volume_));
+            recovery_.reset(::platform::memory::createPsram<SdIndexedPublicationRecovery>(volume_));
             if (!recovery_)
             {
                 owner_.release(this);
@@ -369,7 +370,7 @@ class IndexedPublicationStore final : public PublicationStore
             release();
             return JournalWriteResult::StateRejected;
         }
-        io_.reset(new (std::nothrow) Operation);
+        io_.reset(::platform::memory::createPsram<Operation>());
         if (!io_)
         {
             release();
@@ -407,11 +408,11 @@ class IndexedPublicationStore final : public PublicationStore
     uint8_t* verification_;
     size_t verification_capacity_;
     ::geocaching::protocol::RecordCrypto& crypto_;
-    std::unique_ptr<Operation> io_;
-    std::unique_ptr<SdIndexGet> reader_;
-    std::unique_ptr<SdIndexedDraftCatalog> catalog_;
-    std::unique_ptr<SdIndexedPublicationHistory> history_;
-    std::unique_ptr<SdIndexedPublicationRecovery> recovery_;
+    ::platform::memory::PsramPtr<Operation> io_;
+    ::platform::memory::PsramPtr<SdIndexGet> reader_;
+    ::platform::memory::PsramPtr<SdIndexedDraftCatalog> catalog_;
+    ::platform::memory::PsramPtr<SdIndexedPublicationHistory> history_;
+    ::platform::memory::PsramPtr<SdIndexedPublicationRecovery> recovery_;
     ::geocaching::storage::DraftCatalogPage* catalog_page_ = nullptr;
     std::array<uint8_t, 16> read_key_{};
     std::array<uint8_t, 48> key_{};

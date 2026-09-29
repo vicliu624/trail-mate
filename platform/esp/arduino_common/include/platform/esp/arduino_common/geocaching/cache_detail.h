@@ -5,6 +5,7 @@
 #include "platform/esp/arduino_common/chat/infra/mesh_adapter_router.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_saved_cache.h"
 #include "platform/esp/common/memory_budget.h"
+#include "platform/memory/psram_ptr.h"
 #include "ui_presentation/geocaching/geocaching_source.h"
 #include <esp_heap_caps.h>
 #include <memory>
@@ -34,7 +35,7 @@ struct CacheDetail
     bool has_receipt = false;
     uint8_t* response = nullptr;
     size_t response_size = 0;
-    std::unique_ptr<SdIndexedSavedCache> saved_read;
+    ::platform::memory::PsramPtr<SdIndexedSavedCache> saved_read;
     uint64_t started = 0, next_send = 0;
     State state = State::Network;
     const char* error = "Details unavailable. Go back and reopen to retry.";

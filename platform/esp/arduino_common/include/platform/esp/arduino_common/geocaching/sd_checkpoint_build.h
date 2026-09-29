@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_checkpoint_writer.h"
 #include "platform/esp/arduino_common/geocaching/sd_sorted_index.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -29,7 +30,7 @@ class SdCheckpointBuild
                void* sort_buffer, size_t sort_capacity)
     {
         if (result_ != CheckpointBuildStep::Idle || !root.sequence) return false;
-        sort_.reset(new (std::nothrow) SdSortedIndex(volume_));
+        sort_.reset(::platform::memory::createPsram<SdSortedIndex>(volume_));
         if (!sort_)
         {
             fail(CheckpointBuildStep::OutOfMemory);
@@ -89,7 +90,7 @@ class SdCheckpointBuild
         if (phase_ == Phase::Open)
         {
             if (!file_.open(sorted_path_, "r") || file_.size() != total_ * kIndexEntrySize) return fail(CheckpointBuildStep::IoError);
-            writer_.reset(new (std::nothrow) SdCheckpointWriter<Digest>(volume_, digest_));
+            writer_.reset(::platform::memory::createPsram<SdCheckpointWriter<Digest>>(volume_, digest_));
             if (!writer_) return fail(CheckpointBuildStep::OutOfMemory);
             if (!writer_->begin(sequence_)) return fail(CheckpointBuildStep::Invalid);
             phase_ = Phase::Write;
@@ -122,7 +123,7 @@ class SdCheckpointBuild
             reference_read_ += static_cast<size_t>(count);
             if (reference_read_ != reference_.size()) return result_;
             if (!decodeIndexEntry({reference_.data(), reference_.size()}, volume_, entry_) || entry_.erase) return fail(CheckpointBuildStep::Invalid);
-            value_.reset(new (std::nothrow) SdIndexedValueReader(volume_));
+            value_.reset(::platform::memory::createPsram<SdIndexedValueReader>(volume_));
             if (!value_) return fail(CheckpointBuildStep::OutOfMemory);
             if (!value_->begin(entry_, frame_, capacity_)) return fail(CheckpointBuildStep::Invalid);
             phase_ = Phase::ReadValue;
@@ -161,9 +162,9 @@ class SdCheckpointBuild
     }
     ::geocaching::storage::VolumeInstance volume_;
     Digest digest_;
-    std::unique_ptr<SdSortedIndex> sort_;
-    std::unique_ptr<SdCheckpointWriter<Digest>> writer_;
-    std::unique_ptr<SdIndexedValueReader> value_;
+    ::platform::memory::PsramPtr<SdSortedIndex> sort_;
+    ::platform::memory::PsramPtr<SdCheckpointWriter<Digest>> writer_;
+    ::platform::memory::PsramPtr<SdIndexedValueReader> value_;
     storage::SdRuntimeFile file_;
     ::geocaching::storage::IndexEntryBytes reference_{};
     ::geocaching::storage::IndexedMutation entry_;

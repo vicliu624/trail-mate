@@ -1,4 +1,6 @@
 #include "ui/screens/geocaching/geocaching_page_shell.h"
+#include "platform/memory/psram_ptr.h"
+#include "platform/ui/psram_ui_lease.h"
 #include "ui/app_runtime.h"
 #include "ui/components/two_pane_styles.h"
 #include "ui/page/page_profile.h"
@@ -36,6 +38,7 @@ struct Editor
 };
 struct PageState
 {
+    ::platform::ui::PsramUiLease memory_lease;
     Editor* editor = nullptr;
     ::ui::geocaching::Snapshot snapshot;
     ::ui::widgets::TopBar topbar;
@@ -59,7 +62,11 @@ struct PageState
 static_assert(sizeof(PageState) <= 640, "Page state must not contain an entire result list");
 ::ui::geocaching::Source* source = nullptr;
 PageState* page = nullptr;
-::ui::geocaching::LocalMapOverlay* local_map = nullptr;
+struct MapOverlay : ::ui::geocaching::LocalMapOverlay
+{
+    ::platform::ui::PsramUiLease memory_lease;
+};
+MapOverlay* local_map = nullptr;
 struct MapVisit
 {
     ::ui::map::MapLocationRequest location;
@@ -114,7 +121,7 @@ void returnFromMap(void*)
             else invalid_location = true;
         }
     }
-    delete map_visit;
+    ::platform::memory::destroyPsram(map_visit);
     map_visit = nullptr;
     if (!page) return;
     lv_obj_remove_flag(page->root, LV_OBJ_FLAG_HIDDEN);
@@ -129,7 +136,7 @@ void returnFromMap(void*)
 void openLocationMap(void*)
 {
     if (!page || !page->editor || map_visit || page->editor->saving || page->editor->loading || page->editor->public_confirmation) return;
-    map_visit = new (std::nothrow) MapVisit;
+    map_visit = ::platform::memory::createPsram<MapVisit>();
     if (!map_visit)
     {
         lv_label_set_text(page->status, "Cannot open map; edits retained");
@@ -157,7 +164,7 @@ void openLocationMap(void*)
 bool openMap(const ::ui::geocaching::Item& item)
 {
     if (!page || map_visit || !item.downloaded) return false;
-    map_visit = new (std::nothrow) MapVisit;
+    map_visit = ::platform::memory::createPsram<MapVisit>();
     if (!map_visit) return false;
     map_visit->target.latitude_e7 = item.latitude_e7;
     map_visit->target.longitude_e7 = item.longitude_e7;
@@ -212,7 +219,7 @@ bool openMap(const ::ui::geocaching::Item& item)
     lv_obj_add_flag(page->root, LV_OBJ_FLAG_HIDDEN);
     if (page->timer) lv_timer_pause(page->timer);
     if (::gps::ui::runtime::enter_target(&map_visit->host, map_visit->parent, map_visit->target)) return true;
-    delete map_visit;
+    ::platform::memory::destroyPsram(map_visit);
     map_visit = nullptr;
     lv_obj_remove_flag(page->root, LV_OBJ_FLAG_HIDDEN);
     if (page->timer) lv_timer_resume(page->timer);
@@ -607,7 +614,7 @@ void closeEditor()
 {
     if (!page || !page->editor) return;
     if (page->editor->loading && source) source->cancelDraftRead(page->editor->input.id);
-    delete page->editor;
+    ::platform::memory::destroyPsram(page->editor);
     page->editor = nullptr;
     for (auto* tab : page->tabs) setEnabled(tab, true);
     lv_obj_set_width(page->previous, ::ui::page_profile::current().control_button_height);
@@ -733,7 +740,7 @@ void saveEditor()
 void openEditor(const ::ui::geocaching::Item* item)
 {
     if (!page || !source || (page->editor && !page->editor->loading)) return;
-    if (!page->editor) page->editor = new (std::nothrow) Editor;
+    if (!page->editor) page->editor = ::platform::memory::createPsram<Editor>();
     if (!page->editor) return;
     auto& editor = *page->editor;
     if (!editor.loading)
@@ -886,6 +893,8 @@ void openEditor(const ::ui::geocaching::Item* item)
             &editor);
         if (result == ::ui::geocaching::DraftReadStatus::Pending)
         {
+            // Polling must not rebuild focus membership or scroll the form.
+            if (editor.loading) return;
             editor.loading = true;
             editor.input.id = id;
             editor.dirty = false;
@@ -898,7 +907,8 @@ void openEditor(const ::ui::geocaching::Item* item)
             setEnabled(page->refresh, true);
             lv_label_set_text(lv_obj_get_child(page->refresh, 0), "Back");
             lv_label_set_text(page->status, "Loading local draft...");
-            if (page->group) lv_group_focus_obj(page->refresh);
+            if (page->group) lv_group_focus_obj(page->topbar.back_btn);
+            lv_obj_scroll_to_y(page->list, 0, LV_ANIM_OFF);
             return;
         }
         if (result == ::ui::geocaching::DraftReadStatus::Failed)
@@ -940,7 +950,7 @@ void beginMapOverlays()
 {
     endMapOverlays();
     if (!source) return;
-    local_map = new (std::nothrow)::ui::geocaching::LocalMapOverlay;
+    local_map = ::platform::memory::createPsram<MapOverlay>();
     if (local_map && !page) source->activate(true);
 }
 void appendMapOverlays(::ui::map::MapOverlaySnapshot& out, double latitude, double longitude, uint8_t zoom)
@@ -952,13 +962,13 @@ void appendMapOverlays(::ui::map::MapOverlaySnapshot& out, double latitude, doub
 void endMapOverlays()
 {
     if (local_map && source && !page) source->activate(false);
-    delete local_map;
+    ::platform::memory::destroyPsram(local_map);
     local_map = nullptr;
 }
 void enter(void* user_data, lv_obj_t* parent)
 {
     if (page || !parent) return;
-    page = new (std::nothrow) PageState;
+    page = ::platform::memory::createPsram<PageState>();
     if (!page)
     {
         if (user_data) ::ui::page::request_exit(static_cast<const ::ui::page::Host*>(user_data));
@@ -1098,13 +1108,13 @@ void exit(void*, lv_obj_t*)
     lv_async_call_cancel(openLocationMap, nullptr);
     if (!page) return;
     if (page->editor && page->editor->loading && source) source->cancelDraftRead(page->editor->input.id);
-    delete page->editor;
+    ::platform::memory::destroyPsram(page->editor);
     page->editor = nullptr;
     if (map_visit)
     {
         lv_async_call_cancel(returnFromMap, nullptr);
         ::gps::ui::runtime::exit(map_visit->parent);
-        delete map_visit;
+        ::platform::memory::destroyPsram(map_visit);
         map_visit = nullptr;
     }
     if (page->timer) lv_timer_delete(page->timer);
@@ -1112,7 +1122,7 @@ void exit(void*, lv_obj_t*)
     if (page->root) lv_obj_delete(page->root);
     if (page->group) lv_group_delete(page->group);
     if (source) source->activate(false);
-    delete page;
+    ::platform::memory::destroyPsram(page);
     page = nullptr;
 }
 } // namespace geocaching::ui::shell

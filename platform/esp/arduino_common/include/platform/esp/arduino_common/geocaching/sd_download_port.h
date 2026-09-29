@@ -4,6 +4,7 @@
 #include "platform/esp/arduino_common/geocaching/logical_download_store.h"
 #include "platform/esp/arduino_common/geocaching/sd_gpx_hash.h"
 #include "platform/esp/arduino_common/geocaching/sd_gpx_stage.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 #include <new>
 
@@ -164,7 +165,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             if (loaded != JournalWriteResult::Verified) return fail();
             ::geocaching::protocol::VerifiedRecordView record;
             if (!readRecord(record)) return fail();
-            stage_.reset(new (std::nothrow) SdGpxStage);
+            stage_.reset(::platform::memory::createPsram<SdGpxStage>());
             if (!stage_ || stage_->begin(
                                task_, record, crypto_, [](void* context, const uint8_t* data, size_t size)
                                { static_cast<Digest*>(context)->update(data, size); },
@@ -182,7 +183,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
             if (result == StageResult::InProgress) return Result::Pending;
             if (result != StageResult::Written || !stage_digest_.finalize(new_hash_.data(), new_hash_.size())) return fail();
             stage_.reset();
-            install_.reset(new (std::nothrow)::geocaching::GpxInstall(identity_));
+            install_.reset(::platform::memory::createPsram<::geocaching::GpxInstall>(identity_));
             if (!install_) return fail();
             phase_ = Phase::Installing;
             return Result::Pending;
@@ -407,7 +408,7 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         recovered_files_ = true;
         hasher_.reset();
         hash_digest_.reset();
-        install_.reset(new (std::nothrow)::geocaching::GpxInstall(identity_));
+        install_.reset(::platform::memory::createPsram<::geocaching::GpxInstall>(identity_));
         if (!install_) return fail();
         phase_ = Phase::Installing;
         return Result::Pending;
@@ -508,9 +509,9 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
     bool startHash(const char* filename)
     {
         hasher_.reset();
-        hash_digest_.reset(new (std::nothrow) Digest);
+        hash_digest_.reset(::platform::memory::createPsram<Digest>());
         if (!hash_digest_) return false;
-        hasher_.reset(new (std::nothrow) SdGpxHash<Digest>(*hash_digest_));
+        hasher_.reset(::platform::memory::createPsram<SdGpxHash<Digest>>(*hash_digest_));
         return hasher_ && hasher_->open(filename);
     }
     Effect execute(Step step, const ::geocaching::InstallIdentity&) override
@@ -604,10 +605,10 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
     std::array<char, 128> target_{};
     std::array<char, 96> staged_{}, backup_{};
     Digest stage_digest_;
-    std::unique_ptr<Digest> hash_digest_;
-    std::unique_ptr<SdGpxHash<Digest>> hasher_;
-    std::unique_ptr<SdGpxStage> stage_;
-    std::unique_ptr<::geocaching::GpxInstall> install_;
+    ::platform::memory::PsramPtr<Digest> hash_digest_;
+    ::platform::memory::PsramPtr<SdGpxHash<Digest>> hasher_;
+    ::platform::memory::PsramPtr<SdGpxStage> stage_;
+    ::platform::memory::PsramPtr<::geocaching::GpxInstall> install_;
     Phase phase_ = Phase::Idle;
     Step last_step_ = Step::Complete;
     unsigned substep_ = 0;

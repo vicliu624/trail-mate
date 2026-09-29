@@ -1,5 +1,6 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_index_scan.h"
+#include "platform/memory/psram_ptr.h"
 #include <algorithm>
 #include <memory>
 #include <new>
@@ -90,7 +91,7 @@ class SdSortedIndex
             }
             if (!scan_)
             {
-                scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+                scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
                 if (!scan_) return fail(SortedIndexStep::OutOfMemory);
                 if (!scan_->begin(root_, table_, frame_, capacity_)) return fail(SortedIndexStep::Invalid);
             }
@@ -264,7 +265,7 @@ class SdSortedIndex
     }
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::storage::IndexRootView root_;
-    std::unique_ptr<SdIndexScan> scan_;
+    ::platform::memory::PsramPtr<SdIndexScan> scan_;
     Run* run_ = nullptr;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0, used_ = 0, written_ = 0;

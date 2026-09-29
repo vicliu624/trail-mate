@@ -8,6 +8,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_indexed_saved_cache.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_saved_page.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -53,7 +54,7 @@ class IndexedDownloadStore final : public DownloadStore
         if (!page_)
         {
             if (phase_ != Phase::None || saved_ || recovery_ || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
-            page_.reset(new (std::nothrow) SdIndexedSavedPage(volume_, crypto_));
+            page_.reset(::platform::memory::createPsram<SdIndexedSavedPage>(volume_, crypto_));
             if (!page_)
             {
                 owner_.release(this);
@@ -110,7 +111,7 @@ class IndexedDownloadStore final : public DownloadStore
         else
         {
             if (phase_ != Phase::None || recovery_ || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
-            saved_.reset(new (std::nothrow) SdIndexedSavedCache(volume_));
+            saved_.reset(::platform::memory::createPsram<SdIndexedSavedCache>(volume_));
             if (!saved_)
             {
                 owner_.release(this);
@@ -246,7 +247,7 @@ class IndexedDownloadStore final : public DownloadStore
         else
         {
             if (saved_ || page_ || phase_ != Phase::None || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
-            recovery_.reset(new (std::nothrow) SdIndexedDownloadRecovery(volume_));
+            recovery_.reset(::platform::memory::createPsram<SdIndexedDownloadRecovery>(volume_));
             if (!recovery_)
             {
                 owner_.release(this);
@@ -539,7 +540,7 @@ class IndexedDownloadStore final : public DownloadStore
     {
         if (!valid_ || blocked_ || saved_ || page_ || recovery_ || phase_ == Phase::Generation || (phase_ == Phase::GenerationReady && !promote_generation) ||
             copy_ > 1 || !owner_.acquire(this)) return false;
-        if (!io_) io_.reset(new (std::nothrow) Operation);
+        if (!io_) io_.reset(::platform::memory::createPsram<Operation>());
         if (!io_)
         {
             owner_.release(this);
@@ -582,10 +583,10 @@ class IndexedDownloadStore final : public DownloadStore
     uint8_t *frame_, *response_, *verification_;
     size_t capacity_, response_capacity_, verification_capacity_;
     ::geocaching::protocol::RecordCrypto& crypto_;
-    std::unique_ptr<Operation> io_;
-    std::unique_ptr<SdIndexedDownloadRecovery> recovery_;
-    std::unique_ptr<SdIndexedSavedCache> saved_;
-    std::unique_ptr<SdIndexedSavedPage> page_;
+    ::platform::memory::PsramPtr<Operation> io_;
+    ::platform::memory::PsramPtr<SdIndexedDownloadRecovery> recovery_;
+    ::platform::memory::PsramPtr<SdIndexedSavedCache> saved_;
+    ::platform::memory::PsramPtr<SdIndexedSavedPage> page_;
     ::geocaching::ByteView outgoing_;
     ::geocaching::RevisionHash old_revision_;
     std::array<uint8_t, 48> key_{};

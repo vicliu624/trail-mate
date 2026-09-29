@@ -11,6 +11,7 @@
 #include "input/morse_engine.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
 #include "platform/esp/common/shared_spi_coordinator.h"
+#include "platform/ui/psram_ui_lease.h"
 #include "platform/ui/screen_runtime.h"
 #include "screen_sleep.h"
 #include "sys/clock.h"
@@ -27,6 +28,7 @@
 #include <esp_heap_caps.h>
 #include <fcntl.h>
 #include <freertos/task.h>
+#include <soc/soc_memory_types.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -1748,7 +1750,7 @@ extern "C" void* lv_malloc_core(size_t size)
     {
         return nullptr;
     }
-    if (lvgl_external_font_load_uses_strict_psram())
+    if (::platform::ui::psramUiRequired() || lvgl_external_font_load_uses_strict_psram())
     {
         // Font load must fail cleanly rather than silently consume the Wi-Fi,
         // task-stack, and DMA reserve in internal RAM.
@@ -1768,7 +1770,7 @@ extern "C" void* lv_realloc_core(void* p, size_t new_size)
         heap_caps_free(p);
         return nullptr;
     }
-    if (lvgl_external_font_load_uses_strict_psram())
+    if (::platform::ui::psramUiRequired() || (p && esp_ptr_external_ram(p)) || lvgl_external_font_load_uses_strict_psram())
     {
         return heap_caps_realloc(p, new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }

@@ -5,6 +5,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_indexed_directory_reply.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_new_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
+#include "platform/memory/psram_ptr.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -287,7 +288,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
     bool available() const { return valid_ && !blocked_ && pending_ == Pending::None && proof_ != Proof::Outgoing && proof_ != Proof::Task && copy_ < 2; }
     bool allocate()
     {
-        io_.reset(new (std::nothrow) Operation);
+        io_.reset(::platform::memory::createPsram<Operation>());
         return io_ != nullptr;
     }
     Result reject()
@@ -335,7 +336,7 @@ class IndexedQueryStorePort final : public QueryBrowsePort
     RandomId random_;
     Now now_;
     void* context_;
-    std::unique_ptr<Operation> io_;
+    ::platform::memory::PsramPtr<Operation> io_;
     std::array<uint8_t, 48> response_key_{}, pending_key_{}, stopped_key_{};
     mutable std::array<uint8_t, 48> proof_key_{};
     mutable std::array<uint8_t, 32> proof_hash_{};

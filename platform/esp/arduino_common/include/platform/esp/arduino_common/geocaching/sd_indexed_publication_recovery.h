@@ -2,6 +2,7 @@
 #include "geocaching/storage/publication_recovery.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_get.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_scan.h"
+#include "platform/memory/psram_ptr.h"
 #include <memory>
 #include <new>
 
@@ -17,7 +18,7 @@ class SdIndexedPublicationRecovery
                uint8_t* frame, size_t capacity)
     {
         if (result_ != IndexGetStep::Idle) return false;
-        scan_.reset(new (std::nothrow) SdIndexScan(volume_));
+        scan_.reset(::platform::memory::createPsram<SdIndexScan>(volume_));
         if (!scan_)
         {
             unavailable_ = true;
@@ -105,7 +106,7 @@ class SdIndexedPublicationRecovery
   private:
     IndexGetStep startGet(uint8_t table, ::geocaching::ByteView key)
     {
-        get_.reset(new (std::nothrow) SdIndexGet(volume_));
+        get_.reset(::platform::memory::createPsram<SdIndexGet>(volume_));
         if (!get_)
         {
             unavailable_ = true;
@@ -121,8 +122,8 @@ class SdIndexedPublicationRecovery
     ::geocaching::storage::OutgoingView outgoing_;
     std::array<uint8_t, 48> candidate_key_{};
     std::array<uint8_t, 16> task_key_{};
-    std::unique_ptr<SdIndexScan> scan_;
-    std::unique_ptr<SdIndexGet> get_;
+    ::platform::memory::PsramPtr<SdIndexScan> scan_;
+    ::platform::memory::PsramPtr<SdIndexGet> get_;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0;
     IndexGetStep result_ = IndexGetStep::Idle;
