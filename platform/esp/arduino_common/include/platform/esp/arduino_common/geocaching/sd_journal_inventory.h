@@ -38,6 +38,7 @@ class SdJournalInventory
         if (state_ == InventoryStep::Complete || state_ == InventoryStep::Corrupt || state_ == InventoryStep::VolumeChanged) return state_;
         ::geocaching::storage::VolumeInstance current;
         const auto volume = inspectSdVolume(current);
+        if (volume == SdVolumeResult::Busy) return state_ = InventoryStep::Scanning;
         if (volume == SdVolumeResult::Missing || volume == SdVolumeResult::Unavailable || volume == SdVolumeResult::IoError)
             return restart();
         if (volume != SdVolumeResult::Ready) return finish(InventoryStep::Corrupt);
@@ -46,7 +47,9 @@ class SdJournalInventory
         char name[128]{};
         bool is_dir = false;
         const auto result = directory_.read_next_status(name, sizeof(name), &is_dir);
-        if (result == storage::SdDirReadStatus::Busy) return InventoryStep::RetryLater;
+        // Contention leaves the cursor intact. Keep the caller in its current
+        // recovery step instead of reporting a failed inventory attempt.
+        if (result == storage::SdDirReadStatus::Busy) return state_ = InventoryStep::Scanning;
         if (result == storage::SdDirReadStatus::IoError || result == storage::SdDirReadStatus::Unavailable) return restart();
         if (result == storage::SdDirReadStatus::End)
             return finish(InventoryStep::Complete);

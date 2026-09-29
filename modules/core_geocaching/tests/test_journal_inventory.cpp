@@ -6,6 +6,7 @@
 std::vector<std::string> names;
 bool busy_once = false;
 bool fail_after_first = false;
+unsigned volume_busy = 0;
 namespace platform::esp::arduino_common::storage
 {
 class SdRuntimeDir::Impl
@@ -46,6 +47,12 @@ SdFileReadResult sd_read_file(const char*, uint8_t* buffer, size_t capacity)
 {
     const auto header = ::geocaching::storage::encodeVolumeHeader({});
     SdFileReadResult result;
+    if (volume_busy)
+    {
+        --volume_busy;
+        result.status = SdFileReadStatus::Busy;
+        return result;
+    }
     result.status = SdFileReadStatus::Ready;
     result.file_size = header.size();
     result.bytes_read = std::min(capacity, header.size());
@@ -71,7 +78,7 @@ int main()
     names = {"0000000000000001.gcj", "0000000000000002.gcj"};
     SdJournalInventory interrupted({}, 0);
     busy_once = true;
-    if (interrupted.step() != InventoryStep::RetryLater || interrupted.range().complete ||
+    if (interrupted.step() != InventoryStep::Scanning || interrupted.range().complete ||
         interrupted.step() != InventoryStep::Scanning) return 5;
     fail_after_first = true;
     if (interrupted.step() != InventoryStep::RetryLater || interrupted.range().complete) return 6;
@@ -81,5 +88,23 @@ int main()
     SdJournalInventory spanning({}, 4);
     if (spanning.step() != InventoryStep::Scanning || spanning.step() != InventoryStep::Scanning ||
         spanning.step() != InventoryStep::Complete || spanning.range().first_start != 1 || spanning.range().last_start != 8) return 8;
+    names = {"0000000000000001.gcj", "0000000000000008.gcj"};
+    SdJournalInventory contended({}, 4);
+    volume_busy = 12;
+    for (unsigned i = 0; i < 12; ++i)
+        if (contended.step() != InventoryStep::Scanning || contended.range().complete) return 9;
+    if (contended.step() != InventoryStep::Scanning) return 10;
+    // Neither contention source may discard the first segment or restart the
+    // cursor after it has been observed.
+    volume_busy = 12;
+    for (unsigned i = 0; i < 12; ++i)
+        if (contended.step() != InventoryStep::Scanning || contended.range().complete) return 11;
+    for (unsigned i = 0; i < 12; ++i)
+    {
+        busy_once = true;
+        if (contended.step() != InventoryStep::Scanning || contended.range().complete) return 12;
+    }
+    if (contended.step() != InventoryStep::Scanning || contended.step() != InventoryStep::Complete ||
+        contended.range().first_start != 1 || contended.range().last_start != 8) return 13;
     return 0;
 }
