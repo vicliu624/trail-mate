@@ -43,11 +43,16 @@ class LocalMapOverlay
                 item.latitude_e7 > 900000000 || item.longitude_e7 < -1800000000 || item.longitude_e7 >= 1800000000) continue;
             retain(item);
         }
-        if (offset_ < snapshot.count) return;
+        if (offset_ < snapshot.count)
+        {
+            source.requestWindow(section_, offset_, 4);
+            return;
+        }
         if (section_ == Section::Downloaded)
         {
             section_ = Section::Published;
             offset_ = 0;
+            source.requestWindow(section_, offset_, 4);
         }
         else finished_ = true;
     }

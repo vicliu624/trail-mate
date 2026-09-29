@@ -164,6 +164,7 @@ struct Session
     const char* notice = nullptr;
     const char* browse_status = "Connecting to Reticulum...";
     bool storage_requested = false;
+    bool local_read_only = false, local_snapshot_attempted = false;
     size_t saved_offset = 0, saved_count = 0;
     gc::storage::VolumeInstance volume{};
     storage::SdRuntimeFile format;
@@ -297,6 +298,7 @@ std::unique_ptr<Session> session;
 std::array<uint8_t, 16> boot{};
 std::atomic<bool> wanted{false}, active{false}, restart{false};
 std::atomic<bool> network_requested{false};
+std::atomic<bool> local_storage_requested{false};
 std::atomic<bool> cancel_draft_read{false};
 std::atomic<bool> cancel_detail{false};
 std::atomic<uint32_t> next_step{0};
@@ -421,6 +423,7 @@ bool randomId(void*, uint8_t out[16])
 }
 void fail(const char* reason)
 {
+    session->local_read_only = false;
     if (session->saved) session->saved->releaseRead();
     if (session->store && session->store->commitPending()) session->store->cancelCommit();
     if (session->store) session->store->releaseDraftRead();
@@ -847,6 +850,58 @@ void startRecovery()
     ++epoch;
 }
 
+void advanceStorageRecovery(Session& s)
+{
+    const auto result = s.recovery->step();
+    if (result == IndexedRecoveryStep::Working)
+    {
+        if (s.local_snapshot_attempted || network_requested.load() ||
+            !s.recovery->readableSnapshot(s.root, s.root_copy)) return;
+        s.local_snapshot_attempted = s.local_read_only = true;
+        // The root bytes belong to Session. Do not keep the recovery engine and
+        // its scratch leases resident for the lifetime of an offline page.
+        s.recovery.reset();
+    }
+    else
+    {
+        if (result != IndexedRecoveryStep::Restored || !s.recovery->selected(s.root, s.root_copy))
+        {
+            fail(result == IndexedRecoveryStep::VolumeChanged ? "Storage volume changed during recovery"
+                 : result == IndexedRecoveryStep::OutOfMemory ? "Insufficient memory for storage recovery"
+                 : result == IndexedRecoveryStep::IoError     ? "Cannot read cached storage"
+                                                              : "Cached index needs recovery or more workspace");
+            return;
+        }
+        s.recovery.reset();
+    }
+    if (!s.ensureBuffers(true))
+    {
+        fail("Insufficient storage workspace");
+        return;
+    }
+    s.store.reset(new (std::nothrow) IndexedPublicationStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                             s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
+                                                             s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
+    s.download_store.reset(new (std::nothrow) IndexedDownloadStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                                   s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
+                                                                   s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
+    if (!s.store || !s.download_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
+    {
+        fail("Insufficient indexed storage memory");
+        return;
+    }
+    s.saved.reset(new (std::nothrow) SavedCacheCatalog<Digest>(*s.download_store, s.crypto));
+    if (!s.saved)
+    {
+        fail("Insufficient catalogue memory");
+        return;
+    }
+    if (s.saved_count) s.saved->requestWindow(s.saved_offset, s.saved_count);
+    s.phase = s.local_read_only ? Phase::Ready : Phase::ResumeDownloads;
+    s.status = s.local_read_only ? "Saved storage ready" : "Recovering downloaded GPX files...";
+    ++epoch;
+}
+
 // Use the same installed-record lookup as the saved list, but retain the full
 // verified text for the open detail. No new files or persistent tasks.
 bool advanceSavedDetail(Session& s)
@@ -1241,7 +1296,11 @@ class Facade final : public ::ui::geocaching::Source
   public:
     void activate(bool open) override
     {
-        if (open && !wanted.load()) network_requested.store(false);
+        if (open && !wanted.load())
+        {
+            network_requested.store(false);
+            local_storage_requested.store(false);
+        }
         wanted.store(open);
         if (!open) cancel_detail.store(true);
         next_step.store(0);
@@ -1250,6 +1309,7 @@ class Facade final : public ::ui::geocaching::Source
     {
         out = {};
         if (section == ::ui::geocaching::Section::Discover) network_requested.store(true);
+        else local_storage_requested.store(true);
         Guard guard;
         if (!guard.locked)
         {
@@ -1344,6 +1404,7 @@ class Facade final : public ::ui::geocaching::Source
     void requestWindow(::ui::geocaching::Section section, size_t offset, size_t count) override
     {
         if (section == ::ui::geocaching::Section::Discover) network_requested.store(true);
+        else local_storage_requested.store(true);
         Guard guard;
         if (!guard.locked || !session) return;
         if (section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
@@ -1861,6 +1922,7 @@ void step()
     }
     auto& s = *session;
     const bool close_detail = cancel_detail.exchange(false);
+    s.storage_requested |= local_storage_requested.load();
     if (close_detail || s.pending_detail)
     {
         s.workspace_owner.release(s.detail.get());
@@ -1876,6 +1938,42 @@ void step()
         return;
     }
     WorkspaceSlice workspace_slice{s};
+    if (s.local_snapshot_attempted && (s.local_read_only || s.recovery))
+    {
+        if (!storage::sd_card_ready() || storage::sd_external_block_owner_active())
+        {
+            next_step.store(millis() + 1000);
+            return;
+        }
+        if (s.local_read_only && (network_requested.load() || draftSaveActive() || downloadActive() || publicationActive() ||
+                                  s.needsRecovery() || (s.saved && s.saved->error()) || (s.draft_catalog && s.draft_catalog->failed)))
+        {
+            // The audit and local readers share a frame lease. Release every
+            // reader first; queued edits own their bytes independently.
+            s.workspace_owner.release(s.detail.get());
+            s.detail.reset();
+            s.pending_detail.reset();
+            s.store->releaseDraftRead();
+            s.saved.reset();
+            if (s.draft_catalog)
+            {
+                auto& catalog = *s.draft_catalog;
+                catalog.reading = catalog.ready = catalog.failed = false;
+                catalog.page.metadata_ready = false;
+                ++catalog.generation;
+            }
+            s.draft_read.reset();
+            s.store.reset();
+            s.download_store.reset();
+            s.local_read_only = false;
+            startRecovery();
+        }
+        if (s.phase == Phase::Recover)
+        {
+            advanceStorageRecovery(s);
+            return;
+        }
+    }
     if (s.detail && s.detail->state == CacheDetail::State::Saved &&
         (s.phase == Phase::Failed || !storage::sd_card_ready() || storage::sd_external_block_owner_active()))
         advanceSavedDetail(s);
@@ -2014,7 +2112,7 @@ void step()
         }
         // Busy belongs to another job. Let its commit/dispatch advance below.
     }
-    if (draftSaveActive())
+    if (s.phase == Phase::Ready && draftSaveActive())
     {
         auto& job = *s.draft_save;
         const auto result = job.started ? s.store->stepCommit() : job.erase       ? s.store->deleteDraft({job.id.data(), job.id.size()}, job.expected)
@@ -2149,43 +2247,7 @@ void step()
     }
     case Phase::Recover:
     {
-        const auto result = s.recovery->step();
-        if (result == IndexedRecoveryStep::Working) return;
-        if (result != IndexedRecoveryStep::Restored || !s.recovery->selected(s.root, s.root_copy))
-        {
-            fail(result == IndexedRecoveryStep::VolumeChanged ? "Storage volume changed during recovery"
-                 : result == IndexedRecoveryStep::OutOfMemory ? "Insufficient memory for storage recovery"
-                 : result == IndexedRecoveryStep::IoError     ? "Cannot read cached storage"
-                                                              : "Cached index needs recovery or more workspace");
-            return;
-        }
-        s.recovery.reset();
-        if (!s.ensureBuffers(true))
-        {
-            fail("Insufficient storage workspace");
-            return;
-        }
-        s.store.reset(new (std::nothrow) IndexedPublicationStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                                 s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
-                                                                 s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-        s.download_store.reset(new (std::nothrow) IndexedDownloadStore(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                                       s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
-                                                                       s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-        if (!s.store || !s.download_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
-        {
-            fail("Insufficient indexed storage memory");
-            return;
-        }
-        s.saved.reset(new (std::nothrow) SavedCacheCatalog<Digest>(*s.download_store, s.crypto));
-        if (!s.saved)
-        {
-            fail("Insufficient catalogue memory");
-            return;
-        }
-        if (s.saved_count) s.saved->requestWindow(s.saved_offset, s.saved_count);
-        s.phase = Phase::ResumeDownloads;
-        s.status = "Recovering downloaded GPX files...";
-        ++epoch;
+        advanceStorageRecovery(s);
         return;
     }
     case Phase::ResumeDownloads:
@@ -2247,6 +2309,11 @@ void step()
         return;
     }
     case Phase::Ready:
+        if (s.local_read_only)
+        {
+            next_step.store(millis() + 100);
+            return;
+        }
         break;
     case Phase::Failed:
         return;

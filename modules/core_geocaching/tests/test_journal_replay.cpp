@@ -1881,12 +1881,34 @@ int checkCheckpointIndexedRead()
         auto recovery = std::make_unique<SdIndexedRecovery<TestDigest>>(volume, roots[0], roots[1], frame, sizeof(frame),
                                                                         validation_frame, sizeof(validation_frame), mutations, 3);
         auto status = IndexedRecoveryStep::Working;
+        bool read_before_audit = false;
         for (unsigned i = 0; i < 8192 && status == IndexedRecoveryStep::Working; ++i)
         {
             step_bytes = 0;
             status = recovery->step();
             if (step_bytes > 512) return 73;
+            IndexRootView readable;
+            unsigned readable_copy = 0;
+            if (recovery->readableSnapshot(readable, readable_copy))
+            {
+                if (read_before_audit || readable.sequence != (scenario == 2 ? 0 : 13)) return 701;
+                IndexRootView audited;
+                if (recovery->selected(audited, readable_copy)) return 702;
+                const auto before_read = files;
+                if (scenario != 2)
+                {
+                    SdIndexGet read(volume);
+                    if (!read.begin(readable, 4, {key.data(), key.size()}, frame, sizeof(frame))) return 703;
+                    auto read_status = IndexGetStep::Working;
+                    for (unsigned j = 0; j < 512 && read_status == IndexGetStep::Working; ++j) read_status = read.step();
+                    if (read_status != IndexGetStep::Ready || read.value().size != value_size ||
+                        std::memcmp(read.value().data, value, value_size)) return 704;
+                }
+                if (files != before_read) return 705;
+                read_before_audit = true;
+            }
         }
+        if (!read_before_audit) return 706;
         IndexRootView root;
         unsigned copy = 0;
         if (status != IndexedRecoveryStep::Restored || !recovery->selected(root, copy) || root.sequence != (scenario == 2 ? 0 : 13)) return 74;

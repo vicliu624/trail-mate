@@ -42,6 +42,16 @@ class SdIndexRepair
         copy = copy_;
         return true;
     }
+    bool readableSnapshot(::geocaching::storage::IndexRootView& root, unsigned& copy) const
+    {
+        root = {};
+        if (result_ != IndexedRecoveryStep::Working || phase_ != Phase::Recover ||
+            attempted_ || archive_present_ || !recovery_) return false;
+        if (!recovery_->readableSnapshot(root, copy)) return false;
+        if (root.sequence >= floor_) return true;
+        root = {};
+        return false;
+    }
     IndexedRecoveryStep step()
     {
         using namespace ::geocaching::storage;

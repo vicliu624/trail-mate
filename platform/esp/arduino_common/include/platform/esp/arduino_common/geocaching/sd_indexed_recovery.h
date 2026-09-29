@@ -54,6 +54,17 @@ class SdIndexedRecovery
         copy = copy_;
         return true;
     }
+    // A read-only lease after validated suffix replay, before whole-index audit.
+    // Pause step() while using this snapshot and the shared frame. Readers must
+    // validate each accessed record. This is not permission to mutate storage.
+    bool readableSnapshot(::geocaching::storage::IndexRootView& root, unsigned& copy) const
+    {
+        root = {};
+        if (result_ != IndexedRecoveryStep::Working || !readable_snapshot_) return false;
+        root = root_;
+        copy = copy_;
+        return true;
+    }
     IndexedRecoveryStep step()
     {
         using namespace ::geocaching::storage;
@@ -168,10 +179,12 @@ class SdIndexedRecovery
             // before the application can publish new work on this snapshot.
             if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
             phase_ = Phase::Audit;
+            readable_snapshot_ = true;
             return result_;
         }
         case Phase::Audit:
         {
+            readable_snapshot_ = false;
             auto& scan = std::get<SdIndexScan>(io_);
             const auto status = scan.step();
             if (status == IndexScanStep::Working) return result_;
@@ -254,6 +267,7 @@ class SdIndexedRecovery
     unsigned copy_ = 0;
     uint8_t audit_table_ = 1;
     bool root_present_ = false;
+    bool readable_snapshot_ = false;
     Phase phase_ = Phase::Volume;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;
 };

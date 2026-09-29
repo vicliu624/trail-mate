@@ -505,14 +505,19 @@ int main(int argc, char** argv)
         test::source->activate(true);
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
+        const auto map_started = test::clock_ms;
         for (unsigned frame = 0; frame < 100 && map->item_count != 2; ++frame)
         {
             overlays->update(*test::source, 31, 121, 15);
             *map = {};
             overlays->append(*map);
+            if (map->item_count == 2) break;
             for (unsigned work = 0; work < 150; ++work) tick();
         }
         require(map->item_count == 2 && map->header.valid, "direct main map did not load local markers");
+        std::fprintf(stderr, "Direct Map cold-start acceptance: elapsed_ms=%llu budget_ms=3000\n",
+                     static_cast<unsigned long long>(test::clock_ms - map_started));
+        require(test::clock_ms - map_started <= 3000, "main map exceeded the three-second local marker budget");
         test::source->activate(false);
         tick();
         until([&]
@@ -553,7 +558,6 @@ int main(int argc, char** argv)
                 "local map started network discovery");
     }
     require(test::fail_read_path == installed_gpx->first, "completed download reopened GPX during startup or listing");
-    if (std::getenv("TRAIL_MATE_TEST_LOCAL_LATENCY"))
     {
         const auto elapsed = test::clock_ms - local_list_started;
         std::fprintf(stderr, "Local cold-start acceptance: elapsed_ms=%llu budget_ms=3000\n",
@@ -616,6 +620,27 @@ int main(int argc, char** argv)
     ui::geocaching::Snapshot item_snapshot;
     // Corrupt derived metadata must be rebuilt from authoritative facts. A
     // transient read failure must instead preserve the tree and report I/O.
+    {
+        const auto shard = std::find_if(disk.begin(), disk.end(), [](const auto& file)
+                                        { return file.first.find("/index/a/04/") != std::string::npos &&
+                                                 file.first.size() >= 4 && file.first.substr(file.first.size() - 4) == ".gci"; });
+        require(shard != disk.end(), "local recovery test requires a draft shard");
+        test::files = disk;
+        test::directories = disk_directories;
+        test::files.at(shard->first).back() ^= 1;
+        const auto sends_before = router.sends;
+        test::source->activate(true);
+        tick();
+        until([&]
+              { const auto view = snapshot(Section::Published); return view.ready && view.count == 1 &&
+                       test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed; },
+              "offline corrupt draft did not fall back to verified index repair");
+        require(router.sends == sends_before && !router.service, "offline index repair started networking");
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty() && std::strstr(snapshot(Section::Published).status.data(), "Starting Geocaching"); },
+              "offline repaired session did not close");
+    }
     unsigned damaged_files = 0;
     std::fprintf(stderr, "Runtime: startup fault injection\n");
     for (unsigned fault = 0; fault < 3; ++fault)
@@ -633,6 +658,9 @@ int main(int argc, char** argv)
             std::fprintf(stderr, "Startup fault %u: %s\n", fault, entry.first.c_str());
             test::source->activate(true);
             tick();
+            // Enter the network/write path to require complete index audit.
+            // Offline metadata availability alone no longer implies that audit.
+            test::source->snapshot(Section::Discover, item_snapshot);
             test::source->snapshot(Section::Published, item_snapshot);
             until([&]
                   {
