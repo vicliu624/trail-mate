@@ -23,7 +23,7 @@ services:
     <<: *runtime
     # Bridge shares this namespace; publish only its TLS listener.
     ports:
-      - "${WSS_PORT:-18433}:8787/tcp"
+      - "${WSS_PORT:-18434}:8787/tcp"
     command:
       - python
       - directory_service.py

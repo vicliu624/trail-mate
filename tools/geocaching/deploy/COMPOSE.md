@@ -1,10 +1,10 @@
-# Synology DDNS deployment on TCP 18433
+# Synology DDNS deployment on TCP 18434
 
-Use `vicliu.i234.me` with public TCP **18433** forwarded to NAS TCP **18433**. This replaces the previous Cloudflare setup. No Cloudflare account, tunnel token or NAS ports 80/443 are needed. A dynamic public IP is supported through DDNS; the router must have a reachable public IP and allow port forwarding.
+Use `vicliu.i234.me` with public TCP **18434** forwarded to NAS TCP **18434**. This matches the GitHub Pages endpoint. No Cloudflare account, tunnel token or NAS ports 80/443 are needed. A dynamic public IP is supported through DDNS; the router must have a reachable public IP and allow port forwarding.
 
 ```text
-Browser -> wss://vicliu.i234.me:18433/
-        -> router TCP 18433 -> NAS TCP 18433
+Browser -> wss://vicliu.i234.me:18434/
+        -> router TCP 18434 -> NAS TCP 18434
         -> bridge TLS listener, container port 8787
         -> loopback Reticulum TCP 44242 + persistent directory
 ```
@@ -15,7 +15,7 @@ Two containers use the same locally built Python image. Bridge shares directory'
 
 - Linux Docker Engine and Docker Compose v2.17 or later.
 - An amd64 or arm64 NAS able to pull the Python image and install pinned Python packages.
-- Working DDNS and a router forwarding TCP 18433 to a reserved/stable NAS LAN address on port 18433.
+- Working DDNS and a router forwarding TCP 18434 to a reserved/stable NAS LAN address on port 18434.
 - A valid browser-trusted certificate covering `vicliu.i234.me`, its full chain and matching private key.
 - Outbound DNS, HTTPS for installation and TCP 4242 for the configured Reticulum peers.
 
@@ -35,7 +35,7 @@ Configure `.env`:
 
 ```dotenv
 WSS_HOST=vicliu.i234.me
-WSS_PORT=18433
+WSS_PORT=18434
 TLS_CERT_DIR=./certs
 DIRECTORY_NAME=Trail Mate public directory
 SITE_ORIGIN=https://vicliu624.github.io
@@ -67,7 +67,9 @@ Do not change DSM's system certificate-store ownership or mount all NAS keys. Th
 
 ## Router and firewall
 
-Forward **TCP 18433 external -> NAS LAN IP:18433 internal** and allow it in the NAS firewall. No UDP forwarding is required. Do not forward 44242 or 8787 directly. Verify existing services are not using NAS TCP 18433.
+Forward **TCP 18434 external -> NAS LAN IP:18434 internal** and allow it in the NAS firewall. No UDP forwarding is required. Do not forward 44242 or 8787 directly. Verify existing services are not using NAS TCP 18434.
+
+For an existing installation, preserve `.env` and inspect `docker compose port directory 8787` before changing anything. `WSS_PORT` is the NAS-side port, not necessarily the public port. Public TCP 18434 forwarded to NAS TCP 18433 is also valid when the existing `.env` has `WSS_PORT=18433`. The public endpoint must match `site/geocaching/network.json`; internal and external ports need not be equal.
 
 If an AAAA record exists, verify its IPv6 routing/firewall too; an unreachable IPv6 destination can disrupt access even when IPv4 works. Check DDNS after WAN address changes. Test externally because LAN NAT loopback behavior varies.
 
@@ -89,7 +91,17 @@ Directory health verifies its local TCP listener. Bridge health verifies a local
 
 ## External verification and handoff
 
-Test `wss://vicliu.i234.me:18433/` from another Internet connection with Origin **`https://vicliu624.github.io`**. Other Origins are intentionally rejected. An ordinary HTTPS GET may be rejected because this is a WebSocket endpoint, not a homepage.
+Test `wss://vicliu.i234.me:18434/` from another Internet connection with Origin **`https://vicliu624.github.io`**. Other Origins are intentionally rejected. An ordinary HTTPS GET may be rejected because this is a WebSocket endpoint, not a homepage.
+
+If TLS closes before the WebSocket handshake, collect these read-only diagnostics from the deployment directory:
+
+```sh
+docker compose ps
+docker compose port directory 8787
+docker compose logs --tail=80 bridge directory
+```
+
+Compare the reported NAS port with the router's forwarding destination. The bridge must report `bridge_ready` with `tls: true`; a healthy directory TCP listener alone does not establish that WSS is available. Do not send certificate keys or the contents of `.env`.
 
 Return the WSS URL, the **discovery** hash from the ready log, service status and external connectivity results to the website operator. Never send the private key or database. The operator then updates website connection configuration and any required device discovery hints, and verifies spatial queries, signed details and GPX.
 

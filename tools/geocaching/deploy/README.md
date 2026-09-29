@@ -1,6 +1,6 @@
 # 多入口部署
 
-群晖 DDNS + TCP 18433 的 Docker Compose 部署见 [COMPOSE.md](COMPOSE.md)，配置文件为 [compose.yaml](compose.yaml)。此方案不使用 Cloudflare，不占用 NAS 的 80／443 端口。
+群晖 DDNS + TCP 18434 的 Docker Compose 部署见 [COMPOSE.md](COMPOSE.md)，配置文件为 [compose.yaml](compose.yaml)。此方案不使用 Cloudflare，不占用 NAS 的 80／443 端口。
 
 网页自动连接我们维护的 WSS 服务。服务器上的一个 Reticulum 实例同时连接多个
 公共 TCP 入口，并承载持久寻宝目录。普通访客没有网络设置界面。
