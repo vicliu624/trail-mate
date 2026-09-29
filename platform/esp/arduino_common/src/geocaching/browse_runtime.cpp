@@ -435,6 +435,7 @@ void fail(const char* reason)
         session->draft_catalog->failed = true;
     }
     session->publication.reset();
+    session->draft_save.reset();
     session->download.reset();
     session->download_port.reset();
     session->download_start.reset();
@@ -855,7 +856,7 @@ void advanceStorageRecovery(Session& s)
     const auto result = s.recovery->step();
     if (result == IndexedRecoveryStep::Working)
     {
-        if (s.local_snapshot_attempted || network_requested.load() ||
+        if (s.local_snapshot_attempted || draftSaveActive() || downloadActive() || publicationActive() ||
             !s.recovery->readableSnapshot(s.root, s.root_copy)) return;
         s.local_snapshot_attempted = s.local_read_only = true;
         // The root bytes belong to Session. Do not keep the recovery engine and
@@ -864,6 +865,7 @@ void advanceStorageRecovery(Session& s)
     }
     else
     {
+        const auto previous_sequence = s.root.sequence;
         if (result != IndexedRecoveryStep::Restored || !s.recovery->selected(s.root, s.root_copy))
         {
             fail(result == IndexedRecoveryStep::VolumeChanged ? "Storage volume changed during recovery"
@@ -872,6 +874,7 @@ void advanceStorageRecovery(Session& s)
                                                               : "Cached index needs recovery or more workspace");
             return;
         }
+        if (s.root.sequence != previous_sequence) s.draft_catalog.reset();
         s.recovery.reset();
     }
     if (!s.ensureBuffers(true))
@@ -1945,7 +1948,7 @@ void step()
             next_step.store(millis() + 1000);
             return;
         }
-        if (s.local_read_only && (network_requested.load() || draftSaveActive() || downloadActive() || publicationActive() ||
+        if (s.local_read_only && (draftSaveActive() || downloadActive() || publicationActive() ||
                                   s.needsRecovery() || (s.saved && s.saved->error()) || (s.draft_catalog && s.draft_catalog->failed)))
         {
             // The audit and local readers share a frame lease. Release every
@@ -1958,9 +1961,13 @@ void step()
             if (s.draft_catalog)
             {
                 auto& catalog = *s.draft_catalog;
-                catalog.reading = catalog.ready = catalog.failed = false;
-                catalog.page.metadata_ready = false;
-                ++catalog.generation;
+                catalog.reading = false;
+                if (catalog.failed)
+                {
+                    catalog.ready = catalog.failed = false;
+                    catalog.page.metadata_ready = false;
+                    ++catalog.generation;
+                }
             }
             s.draft_read.reset();
             s.store.reset();

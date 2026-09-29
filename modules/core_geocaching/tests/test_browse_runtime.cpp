@@ -531,6 +531,33 @@ int main(int argc, char** argv)
     const auto installed_gpx = std::find_if(disk.begin(), disk.end(), [](const auto& file)
                                             { return file.first.find("/.state/") == std::string::npos && file.first.size() >= 4 && file.first.substr(file.first.size() - 4) == ".gpx"; });
     require(installed_gpx != disk.end(), "restart test requires an installed GPX");
+    // Visiting Discover must not make subsequent offline catalog reads depend
+    // on auditing unrelated network history.
+    {
+        test::source->activate(true);
+        tick();
+        (void)snapshot(Section::Discover);
+        tick();
+        const auto started = test::clock_ms;
+        test::source->requestWindow(Section::Downloaded, 0, 4);
+        until([&]
+              { const auto view = snapshot(Section::Downloaded); return view.ready && view.count == 1 &&
+                       test::source->item(Section::Downloaded, 0, view.generation, item); },
+              "Downloaded did not load after visiting Discover");
+        test::source->requestWindow(Section::Published, 0, 4);
+        until([&]
+              { const auto view = snapshot(Section::Published); return view.ready && view.count == 1 &&
+                       test::source->item(Section::Published, 0, view.generation, item) && item.has_coordinates; },
+              "local draft did not load after visiting Discover");
+        std::fprintf(stderr, "Discover to local acceptance: elapsed_ms=%llu budget_ms=3000 io_delay_ms=%u\n",
+                     static_cast<unsigned long long>(test::clock_ms - started), test::io_delay_ms);
+        require(test::clock_ms - started <= 3000, "visiting Discover made local catalogs wait for full audit");
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty() && !router.service &&
+                       std::strstr(snapshot(Section::Published).status.data(), "Starting Geocaching"); },
+              "Discover to local session did not close");
+    }
     test::fail_read_path = installed_gpx->first;
     test::source->activate(true);
     tick();
@@ -663,8 +690,6 @@ int main(int argc, char** argv)
             std::fprintf(stderr, "Startup fault %u: %s\n", fault, entry.first.c_str());
             test::source->activate(true);
             tick();
-            // Enter the network/write path to require complete index audit.
-            // Offline metadata availability alone no longer implies that audit.
             test::source->snapshot(Section::Discover, item_snapshot);
             test::source->snapshot(Section::Published, item_snapshot);
             until([&]
@@ -672,6 +697,19 @@ int main(int argc, char** argv)
                   const auto view = snapshot(Section::Published);
                       return view.can_create || std::strstr(view.status.data(), "Cannot read cached storage") || std::strstr(view.status.data(), "Cached index needs recovery"); },
                   "damaged-index startup did not reach a terminal status");
+            if (snapshot(Section::Published).can_create)
+            {
+                // An actual write request requires full audit. Deliberately
+                // stale deletion exercises that boundary without changing data.
+                const uint64_t stale_generation = UINT64_MAX - 1;
+                require(test::source->deleteDraft(draft.id, stale_generation), "audit probe was not queued");
+                until([&]
+                      { const auto view = snapshot(Section::Published); return
+                               test::source->draftSaveStatus(draft.id, stale_generation) == ui::geocaching::DraftSaveStatus::Failed ||
+                               std::strstr(view.status.data(), "Cannot read cached storage") ||
+                               std::strstr(view.status.data(), "Cached index needs recovery"); },
+                      "write request did not complete index audit");
+            }
             require(fault == 2 ? std::strstr(snapshot(Section::Published).status.data(), expected) != nullptr : snapshot(Section::Published).can_create,
                     "index repair did not reach the expected result");
             require(test::fail_read_path.empty(), "startup did not reach the injected read failure");
@@ -890,6 +928,16 @@ int main(int argc, char** argv)
             copy = 1 - copy;
         }
         const char old_slot = root.slot;
+        const auto requireWritableStorage = [&]
+        {
+            // Read-only directory browsing must not start checkpoint work.
+            // A stale write admits maintenance without changing saved content.
+            const uint64_t stale_generation = UINT64_MAX - 1;
+            require(test::source->deleteDraft(draft.id, stale_generation), "maintenance audit request rejected");
+            until([&]
+                  { return test::source->draftSaveStatus(draft.id, stale_generation) == ui::geocaching::DraftSaveStatus::Failed; },
+                  "maintenance audit request did not finish");
+        };
         const auto initial_sends = router.sends;
         test::source->activate(true);
         tick();
@@ -897,6 +945,7 @@ int main(int argc, char** argv)
         until([&]
               { return snapshot(Section::Published).can_create; },
               "maintenance fixture did not open");
+        requireWritableStorage();
         until([&]
               { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
               "maintenance network browser did not start on demand");
@@ -928,6 +977,7 @@ int main(int argc, char** argv)
         until([&]
               { return snapshot(Section::Published).can_create; },
               "session checkpoint failed restart recovery");
+        requireWritableStorage();
         const auto resumed_sends = router.sends;
         until([&]
               { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
@@ -960,6 +1010,7 @@ int main(int argc, char** argv)
         until([&]
               { return snapshot(Section::Published).can_create; },
               "pagination restart failed");
+        requireWritableStorage();
         const auto paging_sends = router.sends;
         until([&]
               { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
@@ -1010,6 +1061,7 @@ int main(int argc, char** argv)
         until([&]
               { return snapshot(Section::Published).can_create; },
               "reclamation session did not recover");
+        requireWritableStorage();
         const auto reclaim_sends = router.sends;
         until([&]
               { return std::strstr(snapshot(Section::Discover).status.data(), "Finding a public directory"); },
