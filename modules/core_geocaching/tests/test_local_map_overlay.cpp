@@ -77,7 +77,7 @@ int main()
     assert(out->item_count == 0); // Initial loading is not an empty catalog.
     source.ready = true;
     for (int i = 0; i < 10; ++i) projection->update(source, 0, 102, 10);
-    *out = {};
+    out = std::make_unique<ui::map::MapOverlaySnapshot>();
     projection->append(*out);
     assert(out->item_count == 10); // Includes drafts beyond the first four rows.
     assert(out->header.valid);     // Local markers render even without a GPS fix.
@@ -93,18 +93,18 @@ int main()
     // at Downloaded and starve the later local-draft pages.
     auto moving = std::make_unique<LocalMapOverlay>();
     for (int i = 0; i < 4; ++i) moving->update(source, i * 0.1, 102, 10);
-    *out = {};
+    out = std::make_unique<ui::map::MapOverlaySnapshot>();
     moving->append(*out);
     assert(out->item_count == 10);
 
     for (unsigned id = 12; id <= 60; ++id) source.downloaded.push_back(marker(id, false));
     // Panning reselects the nearest bounded set, including later catalog pages.
     for (int i = 0; i < 30; ++i) projection->update(source, 6, 102, 10);
-    *out = {};
+    out = std::make_unique<ui::map::MapOverlaySnapshot>();
     projection->append(*out);
     assert(out->item_count == 32 && out->truncated);
     assert(std::strcmp(out->items[0].label.c_str(), "Cache 60") == 0);
-    *out = {};
+    out = std::make_unique<ui::map::MapOverlaySnapshot>();
     out->item_count = 31;
     projection->append(*out);
     assert(out->item_count == 32 && out->truncated);
@@ -119,7 +119,7 @@ int main()
     projection->update(source, 0, 0, 10);
     source.busy = false;
     for (int i = 0; i < 4; ++i) projection->update(source, 0, 0, 10);
-    *out = {};
+    out = std::make_unique<ui::map::MapOverlaySnapshot>();
     projection->append(*out);
     assert(out->item_count == 1 && out->items[0].point.valid && out->items[0].point.lon == 0);
 }

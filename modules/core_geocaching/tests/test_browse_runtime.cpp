@@ -434,7 +434,7 @@ int main(int argc, char** argv)
         until([&]
               {
                   overlays->update(*test::source, 31, 121, 15);
-                  *map = {};
+                  map = std::make_unique<ui::map::MapOverlaySnapshot>();
                   overlays->append(*map);
                   return map->item_count == 2; },
               "map did not include unpublished draft and downloaded cache");
@@ -513,7 +513,7 @@ int main(int argc, char** argv)
         {
             const auto refresh_due = test::clock_ms + 750;
             overlays->update(*test::source, 31, 121, 15);
-            *map = {};
+            map = std::make_unique<ui::map::MapOverlaySnapshot>();
             overlays->append(*map);
             if (map->item_count == 2) break;
             while (test::clock_ms < refresh_due) tick();
@@ -576,7 +576,7 @@ int main(int argc, char** argv)
         until([&]
               {
                   overlays->update(*test::source, 31, 121, 15);
-                  *map = {};
+                  map = std::make_unique<ui::map::MapOverlaySnapshot>();
                   overlays->append(*map);
                   return map->item_count == 2; },
               "cold offline map lost local cache markers");
@@ -1147,7 +1147,9 @@ int main(int argc, char** argv)
           { return test::source->draftSaveStatus(delete_id, deleting.edit_generation) != ui::geocaching::DraftSaveStatus::Pending; },
           "delete did not finish");
     require(test::source->draftSaveStatus(delete_id, deleting.edit_generation) == ui::geocaching::DraftSaveStatus::Saved, "delete failed");
-    until([&] { const auto view = snapshot(Section::Published); return view.ready && view.count == count_before_delete - 1; }, "deleted row stayed in the open list");
+    until([&]
+          { const auto view = snapshot(Section::Published); return view.ready && view.count == count_before_delete - 1; },
+          "deleted row stayed in the open list");
     closeRuntime();
     test::source->activate(true);
     tick();
