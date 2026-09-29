@@ -277,7 +277,7 @@ int main(int argc, char** argv)
         repo_root / "platform/esp/arduino_common/src/LV_Helper_v9.cpp");
     assert(contains(lv_helper, "bool lvgl_external_font_load_uses_strict_psram()"));
     const std::size_t strict_psram_scope = position_of(
-        lv_helper, "if (lvgl_external_font_load_uses_strict_psram())");
+        lv_helper, "if (::platform::ui::psramUiRequired() || lvgl_external_font_load_uses_strict_psram())");
     const std::size_t strict_psram_malloc = position_of_after(
         lv_helper,
         "heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);",

@@ -282,6 +282,12 @@ int main(int argc, char** argv)
         test::internal_free = 38904;
         test::io_delay_ms = 5;
         test::source->activate(true);
+        until([&]
+              { return std::strstr(snapshot(Section::Downloaded).status.data(), "Restoring geocaching tasks"); },
+              "map reopen did not start storage");
+        // A map tile read can contend with the newly opened local catalogue.
+        // One failed read must not permanently disable the map's local layer.
+        test::fail_read = true;
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
         const auto started = test::clock_ms;

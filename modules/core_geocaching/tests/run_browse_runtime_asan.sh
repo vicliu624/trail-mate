@@ -20,7 +20,7 @@ PY
 for part in verify sign keypair fe ge sc sha512; do
     gcc -g -O1 -fsanitize=address -fno-omit-frame-pointer -c "$crypto_dir/$part.c" -o "$build_dir/$part.o"
 done
-g++ -std=c++17 -g -O1 -fsanitize=address -fno-omit-frame-pointer -DTRAIL_MATE_RETICULUM_HASH_ONLY=1 \
+g++ -std=c++17 -g -O1 -fsanitize=address -fno-omit-frame-pointer -DTRAIL_MATE_RETICULUM_HASH_ONLY=1 -DESP_PLATFORM=1 \
     -I modules/core_geocaching/tests/runtime_fakes -I modules/core_geocaching/tests/fakes \
     -I modules/core_geocaching/include -I modules/core_sys/include -I modules/core_gps/include \
     -I modules/core_chat/include -I modules/ui_presentation/include -I platform/esp/arduino_common/include \

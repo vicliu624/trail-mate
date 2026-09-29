@@ -164,6 +164,7 @@ struct Session
     const char* browse_status = "Connecting to Reticulum...";
     bool storage_requested = false;
     bool local_read_only = false, local_snapshot_attempted = false;
+    uint8_t startup_read_retries = 0;
     size_t saved_offset = 0, saved_count = 0;
     gc::storage::VolumeInstance volume{};
     storage::SdRuntimeFile format;
@@ -424,6 +425,8 @@ bool randomId(void*, uint8_t out[16])
 }
 void fail(const char* reason)
 {
+    Serial.printf("[Geocaching][Storage] failed phase=%u sequence=%llu reason=%s\n",
+                  static_cast<unsigned>(session->phase), static_cast<unsigned long long>(session->root.sequence), reason);
     session->local_read_only = false;
     if (session->saved) session->saved->releaseRead();
     if (session->store && session->store->commitPending()) session->store->cancelCommit();
@@ -857,6 +860,16 @@ void startRecovery()
 void advanceStorageRecovery(Session& s)
 {
     const auto result = s.recovery->step();
+    // Map tiles and the local catalogue share SD access. A transient read
+    // failure before any snapshot exists must not disable this session forever.
+    // Bound retries; corruption and media changes still fail immediately.
+    if (result == IndexedRecoveryStep::IoError && !s.local_snapshot_attempted && s.startup_read_retries < 2)
+    {
+        ++s.startup_read_retries;
+        startRecovery();
+        next_step.store(millis() + 250 * s.startup_read_retries);
+        return;
+    }
     if (result == IndexedRecoveryStep::Working)
     {
         if (s.local_snapshot_attempted || draftSaveActive() || downloadActive() || publicationActive() ||
