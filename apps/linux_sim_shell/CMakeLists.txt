@@ -1444,6 +1444,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp")
     target_include_directories(trailmate_team_map_overlay_source_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
@@ -1683,6 +1684,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp")
     target_include_directories(trailmate_team_chat_action_sink_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
@@ -1703,6 +1705,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp")
     target_include_directories(trailmate_team_chat_presentation_source_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
@@ -1739,6 +1742,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp")
     target_include_directories(trailmate_team_action_runtime_sink_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
