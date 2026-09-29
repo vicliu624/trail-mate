@@ -549,6 +549,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/store/protocol_chat_codec.cpp")
     target_include_directories(trailmate_protocol_chat_storage_v2_codec_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include")
     target_compile_features(trailmate_protocol_chat_storage_v2_codec_smoke
@@ -562,6 +563,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/store/protocol_chat_codec.cpp")
     target_include_directories(trailmate_protocol_peer_storage_v2_codec_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include")
     target_compile_features(trailmate_protocol_peer_storage_v2_codec_smoke
