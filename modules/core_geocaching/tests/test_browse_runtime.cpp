@@ -39,11 +39,13 @@ void until(Predicate ready, const char* message)
     test::read_bytes_by_path.clear();
     const auto started = test::clock_ms;
     const auto begins = test::maintenance::begins;
+    const auto operations = test::io_operations;
     unsigned ticks = 0;
     for (; ticks < 100000 && !ready(); ++ticks) tick();
-    std::fprintf(stderr, "Runtime wait: %s; ticks=%u simulated_ms=%llu owner_begins=%llu\n", message, ticks,
+    std::fprintf(stderr, "Runtime wait: %s; ticks=%u simulated_ms=%llu owner_begins=%llu io_operations=%llu\n", message, ticks,
                  static_cast<unsigned long long>(test::clock_ms - started),
-                 static_cast<unsigned long long>(test::maintenance::begins - begins));
+                 static_cast<unsigned long long>(test::maintenance::begins - begins),
+                 static_cast<unsigned long long>(test::io_operations - operations));
     if (test::profile_reads)
     {
         std::vector<std::pair<uint64_t, std::string>> reads;
@@ -551,6 +553,13 @@ int main(int argc, char** argv)
                 "local map started network discovery");
     }
     require(test::fail_read_path == installed_gpx->first, "completed download reopened GPX during startup or listing");
+    if (std::getenv("TRAIL_MATE_TEST_LOCAL_LATENCY"))
+    {
+        const auto elapsed = test::clock_ms - local_list_started;
+        std::fprintf(stderr, "Local cold-start acceptance: elapsed_ms=%llu budget_ms=3000\n",
+                     static_cast<unsigned long long>(elapsed));
+        require(elapsed <= 3000, "two offline local markers exceeded the three-second startup budget");
+    }
     test::fail_read_path.clear();
     require(test::files == disk, "read-only restart changed persisted files");
     require(!router.service && !router.announcement && !router.delivery, "local list started a network service");

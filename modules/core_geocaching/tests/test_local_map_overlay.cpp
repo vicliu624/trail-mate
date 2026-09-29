@@ -89,6 +89,14 @@ int main()
     projection->update(source, 0, 102, 10);
     assert(source.requests == requests); // A stationary map does not rescan storage.
 
+    // Moving the viewport while metadata is loading must not repeatedly restart
+    // at Downloaded and starve the later local-draft pages.
+    auto moving = std::make_unique<LocalMapOverlay>();
+    for (int i = 0; i < 4; ++i) moving->update(source, i * 0.1, 102, 10);
+    *out = {};
+    moving->append(*out);
+    assert(out->item_count == 10);
+
     for (unsigned id = 12; id <= 60; ++id) source.downloaded.push_back(marker(id, false));
     // Panning reselects the nearest bounded set, including later catalog pages.
     for (int i = 0; i < 30; ++i) projection->update(source, 6, 102, 10);

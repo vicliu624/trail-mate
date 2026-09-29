@@ -16,8 +16,10 @@ class LocalMapOverlay
     void update(Source& source, double latitude, double longitude, uint8_t zoom)
     {
         const double span = std::ldexp(360.0, -std::min<unsigned>(zoom, 22));
-        if (!started_ || zoom != zoom_ || std::abs(latitude - latitude_) > span / 4 ||
-            std::abs(longitudeDelta(longitude, longitude_)) > span / 4)
+        // Finish the current bounded scan before reselecting for a new viewport.
+        // GPS movement and zoom updates must not cancel every pending page.
+        if (!started_ || (finished_ && (zoom != zoom_ || std::abs(latitude - latitude_) > span / 4 ||
+                                        std::abs(longitudeDelta(longitude, longitude_)) > span / 4)))
         {
             started_ = true;
             latitude_ = latitude;
