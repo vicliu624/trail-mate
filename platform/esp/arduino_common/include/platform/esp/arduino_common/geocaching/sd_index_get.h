@@ -55,7 +55,9 @@ class SdIndexGet
         if (phase_ == Phase::Absent)
         {
             ::geocaching::storage::VolumeInstance current;
-            if (inspectSdVolume(current) != SdVolumeResult::Ready) return fail(IndexGetStep::IoError);
+            const auto status = inspectSdVolume(current);
+            if (status == SdVolumeResult::Busy) return result_;
+            if (status != SdVolumeResult::Ready) return fail(IndexGetStep::IoError);
             return fail(current == volume_ ? IndexGetStep::NotFound : IndexGetStep::VolumeChanged);
         }
         if (phase_ == Phase::Head)

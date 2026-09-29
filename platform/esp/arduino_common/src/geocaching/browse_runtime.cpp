@@ -2182,6 +2182,7 @@ void step()
     case Phase::Inspect:
     {
         const auto result = inspectSdVolume(s.volume);
+        if (result == SdVolumeResult::Busy) return;
         if (result == SdVolumeResult::Ready) startRecovery();
         else if (result == SdVolumeResult::Missing) s.phase = Phase::CheckNew;
         else fail("Geocaching storage requires recovery");
@@ -2255,7 +2256,9 @@ void step()
     case Phase::VerifyFormat:
     {
         gc::storage::VolumeInstance found;
-        if (inspectSdVolume(found) != SdVolumeResult::Ready || found != s.volume)
+        const auto result = inspectSdVolume(found);
+        if (result == SdVolumeResult::Busy) return;
+        if (result != SdVolumeResult::Ready || found != s.volume)
         {
             fail("Storage verification failed");
             return;

@@ -195,7 +195,9 @@ class SdIndexScan
             return result_;
         }
         ::geocaching::storage::VolumeInstance current;
-        if (inspectSdVolume(current) != SdVolumeResult::Ready) return fail(IndexScanStep::IoError);
+        const auto status = inspectSdVolume(current);
+        if (status == SdVolumeResult::Busy) return result_;
+        if (status != SdVolumeResult::Ready) return fail(IndexScanStep::IoError);
         return fail(current == volume_ ? IndexScanStep::End : IndexScanStep::VolumeChanged);
     }
 

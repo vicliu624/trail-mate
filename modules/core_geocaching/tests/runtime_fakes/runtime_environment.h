@@ -22,6 +22,7 @@ inline uint64_t clock_ms = 0;
 inline bool memory_available = true, card_ready = true, external_owner = false;
 inline size_t internal_free = SIZE_MAX;
 inline bool fail_read = false, in_ui = false;
+inline unsigned busy_reads = 0;
 inline std::string fail_read_path;
 inline size_t io_bytes = 0, ui_io = 0, blocked_io = 0;
 inline uint64_t io_operations = 0;

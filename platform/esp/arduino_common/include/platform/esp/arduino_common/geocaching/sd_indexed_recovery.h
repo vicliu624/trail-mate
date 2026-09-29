@@ -74,7 +74,9 @@ class SdIndexedRecovery
         case Phase::Volume:
         {
             VolumeInstance current;
-            if (inspectSdVolume(current) != SdVolumeResult::Ready) return finish(IndexedRecoveryStep::IoError);
+            const auto status = inspectSdVolume(current);
+            if (status == SdVolumeResult::Busy) return result_;
+            if (status != SdVolumeResult::Ready) return finish(IndexedRecoveryStep::IoError);
             if (current != volume_) return finish(IndexedRecoveryStep::VolumeChanged);
             phase_ = Phase::ProbeFirst;
             return result_;
@@ -84,6 +86,7 @@ class SdIndexedRecovery
         {
             uint8_t probe[24];
             const auto read = storage::sd_read_file(phase_ == Phase::ProbeFirst ? "/trailmate/geocaching/.state/index/root.h0" : "/trailmate/geocaching/.state/index/root.h1", probe, sizeof(probe));
+            if (read.status == storage::SdFileReadStatus::Busy) return result_;
             if (read.status != storage::SdFileReadStatus::Missing && read.status != storage::SdFileReadStatus::Ready &&
                 read.status != storage::SdFileReadStatus::Invalid) return finish(IndexedRecoveryStep::IoError);
             root_present_ |= read.status != storage::SdFileReadStatus::Missing;

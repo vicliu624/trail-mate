@@ -50,7 +50,9 @@ class SdIndexLookup
         if (phase_ == Phase::Volume || phase_ == Phase::VerifyVolume)
         {
             VolumeInstance current;
-            if (inspectSdVolume(current) != SdVolumeResult::Ready) return fail(IndexLookupStep::IoError);
+            const auto status = inspectSdVolume(current);
+            if (status == SdVolumeResult::Busy) return result_;
+            if (status != SdVolumeResult::Ready) return fail(IndexLookupStep::IoError);
             if (current != volume_) return fail(IndexLookupStep::VolumeChanged);
             if (phase_ == Phase::VerifyVolume) return result_ = completion_;
             phase_ = length_ ? Phase::Open : Phase::VerifyVolume;

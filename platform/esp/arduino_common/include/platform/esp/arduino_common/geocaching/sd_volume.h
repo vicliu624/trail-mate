@@ -11,7 +11,8 @@ enum class SdVolumeResult : uint8_t
     Unavailable,
     Unsupported,
     Corrupt,
-    IoError
+    IoError,
+    Busy
 };
 
 inline SdVolumeResult inspectSdVolume(::geocaching::storage::VolumeInstance& instance)
@@ -24,6 +25,7 @@ inline SdVolumeResult inspectSdVolume(::geocaching::storage::VolumeInstance& ins
     case storage::SdFileReadStatus::Missing:
         return SdVolumeResult::Missing;
     case storage::SdFileReadStatus::Busy:
+        return SdVolumeResult::Busy;
     case storage::SdFileReadStatus::Unavailable:
         return SdVolumeResult::Unavailable;
     case storage::SdFileReadStatus::IoError:

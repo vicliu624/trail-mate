@@ -48,6 +48,7 @@ class SdIndexedValueReader
         {
             ::geocaching::storage::VolumeInstance current;
             const auto status = inspectSdVolume(current);
+            if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return fail(IndexedReadStep::IoError);
             if (current != volume_) return fail(IndexedReadStep::VolumeChanged);
             if (phase_ == Phase::VerifyVolume) return result_ = erase_ ? IndexedReadStep::Erased : IndexedReadStep::Ready;

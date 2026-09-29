@@ -50,7 +50,9 @@ class SdIndexHeadReader
         if (phase_ == 0 || phase_ == 3)
         {
             ::geocaching::storage::VolumeInstance current;
-            if (inspectSdVolume(current) != SdVolumeResult::Ready) return result_ = IndexHeadReadStep::IoError;
+            const auto status = inspectSdVolume(current);
+            if (status == SdVolumeResult::Busy) return result_;
+            if (status != SdVolumeResult::Ready) return result_ = IndexHeadReadStep::IoError;
             if (current != volume_) return result_ = IndexHeadReadStep::VolumeChanged;
             if (phase_ == 3) return result_ = IndexHeadReadStep::Ready;
             phase_ = 1;
@@ -59,6 +61,7 @@ class SdIndexHeadReader
         const unsigned copy = phase_ - 1;
         path_[std::strlen(path_.data()) - 1] = static_cast<char>('0' + copy);
         const auto read = storage::sd_read_file(path_.data(), bytes_.data(), bytes_.size());
+        if (read.status == storage::SdFileReadStatus::Busy) return result_;
         if (read.status == storage::SdFileReadStatus::Missing || read.status == storage::SdFileReadStatus::Invalid)
             return result_ = IndexHeadReadStep::Invalid;
         if (read.status != storage::SdFileReadStatus::Ready) return result_ = IndexHeadReadStep::IoError;

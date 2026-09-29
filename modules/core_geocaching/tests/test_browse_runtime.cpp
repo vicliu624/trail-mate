@@ -630,6 +630,7 @@ int main(int argc, char** argv)
               "Discover to local session did not close");
     }
     test::fail_read_path = installed_gpx->first;
+    test::busy_reads = 12;
     test::source->activate(true);
     tick();
     test::source->requestWindow(Section::Downloaded, 0, 4);
@@ -639,12 +640,14 @@ int main(int argc, char** argv)
               const auto view = snapshot(Section::Downloaded);
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.id == saved_id && item.downloaded; },
           "restart lost downloaded map row");
+    require(!test::busy_reads, "startup did not wait through contended volume reads");
     require((test::clock_ms - local_list_started) / tick_ms < 850,
             "local startup regressed into duplicate index scans or blocking download recovery");
     {
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
         test::fail_read = true;
+        test::busy_reads = 12;
         until([&]
               {
                   overlays->update(*test::source, 31, 121, 15);
@@ -655,6 +658,7 @@ int main(int argc, char** argv)
                   return map->item_count == 2; },
               "cold offline map lost local cache markers");
         require(!test::fail_read, "map did not encounter the metadata read failure");
+        require(!test::busy_reads, "map did not encounter all contended metadata reads");
         ui::geocaching::Item local_draft;
         const auto local_view = snapshot(Section::Published);
         require(local_view.ready && test::source->item(Section::Published, 0, local_view.generation, local_draft) &&

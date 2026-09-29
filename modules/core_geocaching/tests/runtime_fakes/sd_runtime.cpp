@@ -149,6 +149,12 @@ SdFileReadResult sd_read_file(const char* path, uint8_t* output, size_t capacity
         fail_read = false;
         return result;
     }
+    if (busy_reads)
+    {
+        --busy_reads;
+        result.status = SdFileReadStatus::Busy;
+        return result;
+    }
     const auto found = files.find(path);
     if (found == files.end())
     {
