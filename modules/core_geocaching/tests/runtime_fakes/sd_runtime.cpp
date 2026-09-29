@@ -4,6 +4,18 @@
 namespace platform::esp::arduino_common::storage
 {
 using namespace runtime_test;
+bool fileBusy(unsigned operation)
+{
+    if (!file_busy_cycles) return false;
+    if (file_busy_remaining[operation] < file_busy_cycles)
+    {
+        ++file_busy_remaining[operation];
+        ++file_busy_hits[operation];
+        return true;
+    }
+    file_busy_remaining[operation] = 0;
+    return false;
+}
 bool sd_card_ready() { return card_ready; }
 bool sd_external_block_owner_active() { return external_owner; }
 bool sd_is_directory(const char* path) { return access() && directories.count(path); }
@@ -81,6 +93,8 @@ SdRuntimeFile::~SdRuntimeFile()
 bool SdRuntimeFile::open(const char* path, const char* mode)
 {
     close();
+    read_busy_ = fileBusy(0);
+    if (read_busy_) return false;
     if (!access()) return false;
     impl_->path = path;
     impl_->offset = 0;
@@ -100,15 +114,24 @@ void SdRuntimeFile::close()
     impl_->opened = false;
 }
 bool SdRuntimeFile::is_open() const { return impl_->opened; }
-uint64_t SdRuntimeFile::size() const { return impl_->opened ? files.at(impl_->path).size() : 0; }
+uint64_t SdRuntimeFile::size() const
+{
+    read_busy_ = fileBusy(1);
+    if (read_busy_) return 0;
+    return impl_->opened ? files.at(impl_->path).size() : 0;
+}
 bool SdRuntimeFile::seek(uint64_t offset)
 {
-    if (!access() || !impl_->opened || offset > size()) return false;
+    read_busy_ = fileBusy(2);
+    if (read_busy_) return false;
+    if (!access() || !impl_->opened || offset > files.at(impl_->path).size()) return false;
     impl_->offset = static_cast<size_t>(offset);
     return true;
 }
 int SdRuntimeFile::read(void* output, size_t capacity)
 {
+    read_busy_ = fileBusy(3);
+    if (read_busy_) return -1;
     if (!access() || !impl_->opened) return -1;
     if (fail_read || fail_read_path == impl_->path)
     {

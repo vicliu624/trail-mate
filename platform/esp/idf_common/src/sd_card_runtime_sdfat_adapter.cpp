@@ -933,6 +933,7 @@ SdRuntimeFile::~SdRuntimeFile()
 bool SdRuntimeFile::open(const char* path, const char* mode)
 {
     close();
+    read_busy_ = false;
     if (impl_ == nullptr || path_empty(path))
     {
         return false;
@@ -950,6 +951,7 @@ bool SdRuntimeFile::open(const char* path, const char* mode)
     SdRuntimeBusGuard guard("sd_file_open");
     if (!guard.locked())
     {
+        read_busy_ = s_storage_mutex != nullptr;
         sd_io_end("file_open", impl_->path, start_ms, false, 0, -2);
         return false;
     }
@@ -1015,6 +1017,7 @@ int SdRuntimeFile::available() const
 
 int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
 {
+    read_busy_ = false;
     if (!is_open() || buffer == nullptr || bytes_to_read == 0)
     {
         return 0;
@@ -1025,6 +1028,7 @@ int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
         SdRuntimeBusGuard guard("sd_file_read");
         if (!guard.locked())
         {
+            read_busy_ = s_storage_mutex != nullptr;
             sd_io_end("file_read", impl_->path, start_ms, false, bytes_to_read, -2);
             return -1;
         }
@@ -1146,6 +1150,7 @@ std::size_t SdRuntimeFile::printf(const char* format, ...)
 
 bool SdRuntimeFile::seek(uint64_t offset)
 {
+    read_busy_ = false;
     if (!is_open())
     {
         return false;
@@ -1155,6 +1160,7 @@ bool SdRuntimeFile::seek(uint64_t offset)
         SdRuntimeBusGuard guard("sd_file_seek");
         if (!guard.locked())
         {
+            read_busy_ = s_storage_mutex != nullptr;
             return false;
         }
         return impl_->sdfat_file.seekSet(offset);
@@ -1182,6 +1188,7 @@ uint64_t SdRuntimeFile::position() const
 
 uint64_t SdRuntimeFile::size() const
 {
+    read_busy_ = false;
     if (!is_open())
     {
         return 0;
@@ -1191,6 +1198,7 @@ uint64_t SdRuntimeFile::size() const
         SdRuntimeBusGuard guard("sd_file_size");
         if (!guard.locked())
         {
+            read_busy_ = s_storage_mutex != nullptr;
             return 0;
         }
         return impl_->sdfat_file.fileSize();

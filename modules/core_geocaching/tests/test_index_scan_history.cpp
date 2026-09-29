@@ -100,6 +100,13 @@ int main()
     const auto fallback = scan(144, false);
     const auto optimized = scan(frame.size(), false);
     require(optimized * 2 < fallback, "adjacent obsolete references still repeat full lookups");
+    // Hold every open/size/seek/read busy across multiple worker turns. Neither
+    // scan nor lookup may advance its cursor before the operation succeeds.
+    test::file_busy_cycles = 3;
+    scan(frame.size(), false);
+    scan(144, false);
+    for (auto hits : test::file_busy_hits) require(hits > 0, "file operation contention was not exercised");
+    test::file_busy_cycles = 0;
     char path[80];
     require(sd::indexShardPathForBucket(root.slot, 11, bucket, path, sizeof(path)), "shard path");
     test::files.at(path)[148] ^= 1;

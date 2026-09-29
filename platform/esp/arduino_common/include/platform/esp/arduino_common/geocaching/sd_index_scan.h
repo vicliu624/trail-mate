@@ -90,13 +90,16 @@ class SdIndexScan
         if (phase_ == Phase::Open)
         {
             char path[80];
-            if (!indexShardPathForBucket(root_.slot, table_, static_cast<uint8_t>(bucket_), path, sizeof(path)) || !file_.open(path, "r")) return fail(IndexScanStep::IoError);
+            if (!indexShardPathForBucket(root_.slot, table_, static_cast<uint8_t>(bucket_), path, sizeof(path))) return fail(IndexScanStep::Invalid);
+            if (!file_.open(path, "r")) return file_.read_busy() ? result_ : fail(IndexScanStep::IoError);
             phase_ = Phase::Size;
             return result_;
         }
         if (phase_ == Phase::Size)
         {
-            if (file_.size() < head_.length) return fail(IndexScanStep::Invalid);
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size < head_.length) return fail(IndexScanStep::Invalid);
             position_ = head_.length;
             newer_ = UINT64_MAX;
             phase_ = Phase::Seek;
@@ -109,8 +112,8 @@ class SdIndexScan
                 phase_ = Phase::EndShard;
                 return result_;
             }
+            if (!file_.seek(position_ - kIndexEntrySize)) return file_.read_busy() ? result_ : fail(IndexScanStep::IoError);
             position_ -= kIndexEntrySize;
-            if (!file_.seek(position_)) return fail(IndexScanStep::IoError);
             read_ = 0;
             phase_ = Phase::Read;
             return result_;
@@ -122,6 +125,7 @@ class SdIndexScan
             // the next one. Small callers retain the original lookup path.
             auto* incoming = capacity_ >= bytes_.size() ? frame_ : bytes_.data();
             const int count = file_.read(incoming + read_, bytes_.size() - read_);
+            if (file_.read_busy()) return result_;
             if (count < 0) return fail(IndexScanStep::IoError);
             if (!count || static_cast<size_t>(count) > bytes_.size() - read_) return fail(IndexScanStep::Invalid);
             read_ += static_cast<uint16_t>(count);
@@ -188,7 +192,9 @@ class SdIndexScan
         }
         if (phase_ == Phase::EndShard)
         {
-            if (file_.size() < head_.length) return fail(IndexScanStep::Invalid);
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size < head_.length) return fail(IndexScanStep::Invalid);
             file_.close();
             ++bucket_;
             phase_ = Phase::Bucket;

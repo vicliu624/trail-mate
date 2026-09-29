@@ -72,12 +72,16 @@ class SdIndexLookup
             }
             // Avoid the old one-byte whole-file probe: normal shards always
             // exceeded it, logged Invalid, then had to be opened a second time.
-            phase_ = file_.open(path, "r") ? Phase::CheckLength : Phase::Probe;
+            const bool opened = file_.open(path, "r");
+            if (file_.read_busy()) return result_;
+            phase_ = opened ? Phase::CheckLength : Phase::Probe;
             return result_;
         }
         if (phase_ == Phase::CheckLength)
         {
-            if (file_.size() < length_) return fail(IndexLookupStep::Invalid);
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size < length_) return fail(IndexLookupStep::Invalid);
             phase_ = Phase::Seek;
             return result_;
         }
@@ -89,8 +93,8 @@ class SdIndexLookup
                 phase_ = Phase::CheckSize;
                 return result_;
             }
+            if (!file_.seek(position_ - kIndexEntrySize)) return file_.read_busy() ? result_ : fail(IndexLookupStep::IoError);
             position_ -= kIndexEntrySize;
-            if (!file_.seek(position_)) return fail(IndexLookupStep::IoError);
             read_ = 0;
             phase_ = Phase::Read;
             return result_;
@@ -98,6 +102,7 @@ class SdIndexLookup
         if (phase_ == Phase::Read)
         {
             const int count = file_.read(bytes_.data() + read_, bytes_.size() - read_);
+            if (file_.read_busy()) return result_;
             if (count < 0) return fail(IndexLookupStep::IoError);
             if (!count || static_cast<size_t>(count) > bytes_.size() - read_) return fail(IndexLookupStep::Invalid);
             read_ += static_cast<uint16_t>(count);
@@ -122,7 +127,9 @@ class SdIndexLookup
         }
         if (phase_ == Phase::CheckSize)
         {
-            if (file_.size() < length_) return fail(IndexLookupStep::Invalid);
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size < length_) return fail(IndexLookupStep::Invalid);
             phase_ = Phase::Close;
             return result_;
         }

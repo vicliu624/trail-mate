@@ -63,13 +63,14 @@ class SdIndexedValueReader
                               static_cast<unsigned long long>(location_.segment_first_sequence));
             else std::snprintf(path, sizeof(path), "/trailmate/geocaching/.state/checkpoint/%c.gcs",
                                location_.source == ::geocaching::storage::IndexedValueSource::CheckpointA ? 'a' : 'b');
-            if (!file_.open(path, "r")) return fail(IndexedReadStep::IoError);
+            if (!file_.open(path, "r")) return file_.read_busy() ? result_ : fail(IndexedReadStep::IoError);
             phase_ = Phase::Size;
             return result_;
         }
         if (phase_ == Phase::Size)
         {
             length_ = file_.size();
+            if (file_.read_busy()) return result_;
             const uint64_t limit = location_.source == ::geocaching::storage::IndexedValueSource::Journal ? 1024U * 1024U : UINT32_MAX;
             if (!length_ || length_ > limit || location_.frame_offset >= length_) return fail(IndexedReadStep::Invalid);
             phase_ = Phase::Seek;
@@ -77,7 +78,7 @@ class SdIndexedValueReader
         }
         if (phase_ == Phase::Seek)
         {
-            if (!file_.seek(location_.frame_offset)) return fail(IndexedReadStep::IoError);
+            if (!file_.seek(location_.frame_offset)) return file_.read_busy() ? result_ : fail(IndexedReadStep::IoError);
             offset_ = location_.frame_offset;
             phase_ = Phase::Read;
             return result_;
@@ -127,7 +128,9 @@ class SdIndexedValueReader
         }
         if (phase_ == Phase::CheckSize)
         {
-            if (file_.size() != length_) return fail(IndexedReadStep::Invalid);
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size != length_) return fail(IndexedReadStep::Invalid);
             phase_ = Phase::Close;
             return result_;
         }

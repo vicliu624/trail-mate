@@ -1406,6 +1406,7 @@ bool SdRuntimeFile::open(const char* path, const char* mode)
 bool SdRuntimeFile::open(const char* path, const char* mode, uint32_t expected_session)
 {
     close();
+    read_busy_ = false;
     if (impl_ == nullptr || path_empty(path))
     {
         return false;
@@ -1428,6 +1429,7 @@ bool SdRuntimeFile::open(const char* path, const char* mode, uint32_t expected_s
         mutating ? kSdDurableLockWaitMs : kSdRuntimeLockWaitMs);
     if (!guard.locked())
     {
+        read_busy_ = guard.status() == sys::runtime::BusAcquireStatus::Busy || guard.status() == sys::runtime::BusAcquireStatus::TimedOut;
         sd_io_end("file_open", impl_->path, start_ms, false, 0, -2);
         return false;
     }
@@ -1441,6 +1443,7 @@ bool SdRuntimeFile::open(const char* path, const char* mode, uint32_t expected_s
         }
         impl_->session = expected_session;
         impl_->sdfat_file = s_sdfat.open(normalized, sdfat_open_flags(mode));
+        read_busy_ = !impl_->sdfat_file && (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut);
         impl_->backend = impl_->sdfat_file ? SdCardBackend::SdFat : SdCardBackend::None;
         sd_io_end("file_open", impl_->path, start_ms, impl_->backend == SdCardBackend::SdFat);
         return impl_->backend == SdCardBackend::SdFat;
@@ -1510,6 +1513,7 @@ int SdRuntimeFile::available() const
 
 int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
 {
+    read_busy_ = false;
     if (!is_open() || buffer == nullptr || bytes_to_read == 0)
     {
         return 0;
@@ -1520,6 +1524,7 @@ int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
         SdRuntimeOperationGuard guard("sd_file_read");
         if (!guard.locked() || !is_open())
         {
+            read_busy_ = !guard.locked() && (guard.status() == sys::runtime::BusAcquireStatus::Busy || guard.status() == sys::runtime::BusAcquireStatus::TimedOut);
             sd_io_end("file_read", impl_->path, start_ms, false, bytes_to_read, -2);
             return -1;
         }
@@ -1532,6 +1537,7 @@ int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
             const int current = impl_->sdfat_file.read(out + total_read, slice);
             if (current <= 0)
             {
+                read_busy_ = total_read == 0 && (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut);
                 const int result =
                     total_read > 0 ? static_cast<int>(total_read) : current;
                 sd_io_end("file_read",
@@ -1771,6 +1777,7 @@ std::size_t SdRuntimeFile::printf(const char* format, ...)
 
 bool SdRuntimeFile::seek(uint64_t offset)
 {
+    read_busy_ = false;
     if (!is_open())
     {
         return false;
@@ -1780,9 +1787,12 @@ bool SdRuntimeFile::seek(uint64_t offset)
         SdRuntimeOperationGuard guard("sd_file_seek");
         if (!guard.locked() || !is_open())
         {
+            read_busy_ = !guard.locked() && (guard.status() == sys::runtime::BusAcquireStatus::Busy || guard.status() == sys::runtime::BusAcquireStatus::TimedOut);
             return false;
         }
-        return impl_->sdfat_file.seekSet(offset);
+        const bool result = impl_->sdfat_file.seekSet(offset);
+        read_busy_ = !result && (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut);
+        return result;
     }
     return false;
 }
@@ -1807,6 +1817,7 @@ uint64_t SdRuntimeFile::position() const
 
 uint64_t SdRuntimeFile::size() const
 {
+    read_busy_ = false;
     if (!is_open())
     {
         return 0;
@@ -1816,6 +1827,7 @@ uint64_t SdRuntimeFile::size() const
         SdRuntimeOperationGuard guard("sd_file_size");
         if (!guard.locked() || !is_open())
         {
+            read_busy_ = !guard.locked() && (guard.status() == sys::runtime::BusAcquireStatus::Busy || guard.status() == sys::runtime::BusAcquireStatus::TimedOut);
             return 0;
         }
         return impl_->sdfat_file.fileSize();

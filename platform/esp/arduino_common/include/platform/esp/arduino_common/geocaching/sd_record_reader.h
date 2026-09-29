@@ -47,6 +47,7 @@ inline SegmentReadResult readSdRecord(storage::SdRuntimeFile& file, uint64_t len
         const size_t needed = 24 - cursor.header_read;
         if (needed > length - offset) return SegmentReadResult::Truncated;
         const int n = file.read(buffer + cursor.header_read, needed);
+        if (file.read_busy()) return SegmentReadResult::InProgress;
         if (n == 0) return SegmentReadResult::Truncated;
         if (n < 0 || static_cast<size_t>(n) > needed) return SegmentReadResult::IoError;
         cursor.header_read += static_cast<uint8_t>(n);
@@ -71,6 +72,7 @@ inline SegmentReadResult readSdRecord(storage::SdRuntimeFile& file, uint64_t len
     const size_t requested = std::min<size_t>(budget, remaining);
     auto* destination = buffer + 24 + cursor.payload_read;
     const int n = file.read(destination, requested);
+    if (file.read_busy()) return SegmentReadResult::InProgress;
     if (n == 0) return SegmentReadResult::Truncated;
     if (n < 0 || static_cast<size_t>(n) > requested) return SegmentReadResult::IoError;
     cursor.crc = ::sys::crc32(destination, static_cast<size_t>(n), cursor.crc);
