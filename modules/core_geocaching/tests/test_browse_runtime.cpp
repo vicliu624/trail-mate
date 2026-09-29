@@ -501,6 +501,9 @@ int main(int argc, char** argv)
     // Saved rows and full details must not wait for either to become available.
     router.ready = false;
     // Open the main map directly, without warming either Geocaching list.
+    // Include a synthetic per-operation storage cost; UI refresh deadlines stay
+    // at 750 ms instead of adding a fresh 750 ms after background work finishes.
+    test::io_delay_ms = 5;
     {
         test::source->activate(true);
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
@@ -508,15 +511,16 @@ int main(int argc, char** argv)
         const auto map_started = test::clock_ms;
         for (unsigned frame = 0; frame < 100 && map->item_count != 2; ++frame)
         {
+            const auto refresh_due = test::clock_ms + 750;
             overlays->update(*test::source, 31, 121, 15);
             *map = {};
             overlays->append(*map);
             if (map->item_count == 2) break;
-            for (unsigned work = 0; work < 150; ++work) tick();
+            while (test::clock_ms < refresh_due) tick();
         }
         require(map->item_count == 2 && map->header.valid, "direct main map did not load local markers");
-        std::fprintf(stderr, "Direct Map cold-start acceptance: elapsed_ms=%llu budget_ms=3000\n",
-                     static_cast<unsigned long long>(test::clock_ms - map_started));
+        std::fprintf(stderr, "Direct Map cold-start acceptance: elapsed_ms=%llu budget_ms=3000 io_delay_ms=%u\n",
+                     static_cast<unsigned long long>(test::clock_ms - map_started), test::io_delay_ms);
         require(test::clock_ms - map_started <= 3000, "main map exceeded the three-second local marker budget");
         test::source->activate(false);
         tick();
@@ -560,10 +564,11 @@ int main(int argc, char** argv)
     require(test::fail_read_path == installed_gpx->first, "completed download reopened GPX during startup or listing");
     {
         const auto elapsed = test::clock_ms - local_list_started;
-        std::fprintf(stderr, "Local cold-start acceptance: elapsed_ms=%llu budget_ms=3000\n",
-                     static_cast<unsigned long long>(elapsed));
+        std::fprintf(stderr, "Local cold-start acceptance: elapsed_ms=%llu budget_ms=3000 io_delay_ms=%u\n",
+                     static_cast<unsigned long long>(elapsed), test::io_delay_ms);
         require(elapsed <= 3000, "two offline local markers exceeded the three-second startup budget");
     }
+    test::io_delay_ms = 0;
     test::fail_read_path.clear();
     require(test::files == disk, "read-only restart changed persisted files");
     require(!router.service && !router.announcement && !router.delivery, "local list started a network service");

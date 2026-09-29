@@ -24,6 +24,7 @@ inline bool fail_read = false, in_ui = false;
 inline std::string fail_read_path;
 inline size_t io_bytes = 0, ui_io = 0, blocked_io = 0;
 inline uint64_t io_operations = 0;
+inline uint32_t io_delay_ms = 0;
 // Optional host-only profiling, reset at each acceptance wait boundary.
 inline bool profile_reads = false;
 inline std::map<std::string, uint64_t> read_bytes_by_path;
@@ -40,6 +41,7 @@ inline size_t open_files = 0, open_dirs = 0;
 inline bool access()
 {
     ++io_operations;
+    clock_ms += io_delay_ms;
     if (in_ui) ++ui_io;
     if (!card_ready || external_owner)
     {
