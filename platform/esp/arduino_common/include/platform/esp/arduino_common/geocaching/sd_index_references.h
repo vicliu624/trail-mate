@@ -13,7 +13,7 @@ class SdIndexReferences
 {
   public:
     explicit SdIndexReferences(const ::geocaching::storage::VolumeInstance& volume, SdVolumeReadSession* session = nullptr)
-        : volume_(volume), session_(session ? session : &read_session_) {}
+        : volume_(volume), session_(session) {}
 
     // Pending mutations are borrowed and immutable until completion. Their
     // storage must be disjoint from the reusable read frame.
@@ -214,7 +214,6 @@ class SdIndexReferences
     }
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::storage::IndexRootView root_;
-    SdVolumeReadSession read_session_;
     SdVolumeReadSession* session_;
     std::optional<SdIndexScan> scan_;
     std::optional<SdIndexGet> get_;

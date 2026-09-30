@@ -169,10 +169,16 @@ class IndexedDownloadStore final : public DownloadStore
             object.saved_task = {task_.data(), 16};
             size_t size = 0;
             if (!encodeObjectRef({proof_hash_.data(), 32}, object, response_, response_capacity_, size)) return fail();
+            upgrade_mutations_.reset(::platform::memory::createPsram<std::array<MutationView, 2>>());
+            if (!upgrade_mutations_)
+            {
+                releaseRead();
+                return JournalWriteResult::Unavailable;
+            }
             saved_.reset();
-            upgrade_mutations_[0] = {1, {proof_hash_.data(), 32}, {response_, size}, false};
-            upgrade_mutations_[1] = {2, {cache_.data(), 32}, {install_.data(), install_size_}, false};
-            if (!io_->emplace<SdIndexedCommit>(volume_).begin(root_, copy_, upgrade_mutations_.data(), 2, frame_, capacity_, *roots_[1 - copy_])) return fail();
+            (*upgrade_mutations_)[0] = {1, {proof_hash_.data(), 32}, {response_, size}, false};
+            (*upgrade_mutations_)[1] = {2, {cache_.data(), 32}, {install_.data(), install_size_}, false};
+            if (!io_->emplace<SdIndexedCommit>(volume_).begin(root_, copy_, upgrade_mutations_->data(), 2, frame_, capacity_, *roots_[1 - copy_])) return fail();
             phase_ = Phase::Finish;
             return JournalWriteResult::InProgress;
         }
@@ -329,6 +335,7 @@ class IndexedDownloadStore final : public DownloadStore
         recovery_.reset();
         saved_.reset();
         page_.reset();
+        upgrade_mutations_.reset();
         phase_ = Phase::None;
         cached_ = active_ = completed_ = false;
         outgoing_ = {};
@@ -659,14 +666,20 @@ class IndexedDownloadStore final : public DownloadStore
                                    SdIndexedNewTask, SdIndexedDownloadReply, SdIndexedStopTask, SdIndexedInstall, SdIndexedCommit>;
     JournalWriteResult beginHeadUpgrade(::geocaching::ByteView object = {})
     {
-        upgrade_mutations_[0] = {2, {cache_.data(), 32}, {install_.data(), install_size_}, false};
+        upgrade_mutations_.reset(::platform::memory::createPsram<std::array<::geocaching::storage::MutationView, 2>>());
+        if (!upgrade_mutations_)
+        {
+            releaseRead();
+            return JournalWriteResult::Unavailable;
+        }
+        (*upgrade_mutations_)[0] = {2, {cache_.data(), 32}, {install_.data(), install_size_}, false};
         if (object.size)
         {
             if (object.size > response_capacity_) return fail();
             std::memcpy(response_, object.data, object.size);
-            upgrade_mutations_[1] = {1, {proof_hash_.data(), 32}, {response_, object.size}, false};
+            (*upgrade_mutations_)[1] = {1, {proof_hash_.data(), 32}, {response_, object.size}, false};
         }
-        if (!io_->emplace<SdIndexedCommit>(volume_).begin(root_, copy_, upgrade_mutations_.data(), object.size ? 2 : 1, frame_, capacity_, *roots_[1 - copy_])) return fail();
+        if (!io_->emplace<SdIndexedCommit>(volume_).begin(root_, copy_, upgrade_mutations_->data(), object.size ? 2 : 1, frame_, capacity_, *roots_[1 - copy_])) return fail();
         phase_ = Phase::Finish;
         return JournalWriteResult::InProgress;
     }
@@ -738,7 +751,7 @@ class IndexedDownloadStore final : public DownloadStore
     std::array<uint8_t, 16> task_{};
     std::array<uint8_t, 32> cache_{}, proof_hash_{}, recovery_old_hash_{};
     std::array<uint8_t, 160> install_{};
-    std::array<::geocaching::storage::MutationView, 2> upgrade_mutations_;
+    ::platform::memory::PsramPtr<std::array<::geocaching::storage::MutationView, 2>> upgrade_mutations_;
     uint64_t generation_ = 0, revision_ = 0, proof_generation_ = 0;
     size_t install_size_ = 0;
     Phase phase_ = Phase::None;

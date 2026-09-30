@@ -12,7 +12,7 @@ class SdIndexedDownloadContext
 {
   public:
     explicit SdIndexedDownloadContext(const ::geocaching::storage::VolumeInstance& volume, SdVolumeReadSession* session = nullptr)
-        : volume_(volume), session_(session ? session : &read_session_) {}
+        : volume_(volume), session_(session) {}
     bool begin(const ::geocaching::storage::IndexRootView& root, ::geocaching::ByteView key, uint64_t generation,
                uint8_t* frame, size_t capacity)
     {
@@ -116,7 +116,6 @@ class SdIndexedDownloadContext
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0, task_size_ = 0, head_size_ = 0;
     uint64_t generation_ = 0;
-    SdVolumeReadSession read_session_;
     SdVolumeReadSession* session_;
     Phase phase_ = Phase::Outgoing;
     IndexGetStep result_ = IndexGetStep::Idle;
