@@ -4107,6 +4107,7 @@ int main(int argc, char** argv)
     volume[0] = 1;
     format = ::geocaching::storage::encodeVolumeHeader(volume);
     files["/trailmate/geocaching/.state/format.bin"] = {format.begin(), format.end()};
+    ++media_session; // Replacing a mounted card invalidates all open readers.
     if (nextReady(replay, transaction) != ReplayStep::VolumeChanged) return 4;
     if (exceeded_budget) return 16;
     return 0;

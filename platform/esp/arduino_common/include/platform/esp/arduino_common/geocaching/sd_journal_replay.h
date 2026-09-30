@@ -4,6 +4,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_journal.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal_inventory.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal_segment.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -72,10 +73,11 @@ class SdJournalReplay
     {
         out = {};
         if (corrupt_) return ReplayStep::Corrupt;
+        if (storage::sd_media_session() != media_session_) return ReplayStep::VolumeChanged;
         if (!volume_checked_)
         {
             ::geocaching::storage::VolumeInstance current;
-            const auto volume = inspectSdVolume(current);
+            const auto volume = read_session_.inspect(current);
             if (volume == SdVolumeResult::Missing || volume == SdVolumeResult::Unavailable || volume == SdVolumeResult::IoError)
                 return ReplayStep::RetryLater;
             if (volume != SdVolumeResult::Ready)
@@ -187,6 +189,8 @@ class SdJournalReplay
 
   private:
     const ::geocaching::storage::VolumeInstance volume_;
+    SdVolumeReadSession read_session_;
+    const uint32_t media_session_ = storage::sd_media_session();
     uint64_t applied_;
     JournalSegmentRange range_;
     uint64_t segment_start_;
