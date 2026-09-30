@@ -442,7 +442,9 @@ jobs:
           node-version: "22"
 
       - name: Verify locale packs
-        run: python tools/validate_locale_packs.py --pack-root packs
+        run: |
+          python tools/validate_locale_packs.py --pack-root packs
+          python tests/test_prepare_pages_site.py
 
       - name: Generate Pages release metadata and package repository
         env:
@@ -547,6 +549,9 @@ jobs:
     needs:
       - boundary
       - format
+      - geocaching_web
+      - reticulum_gateway
+      - geocaching
       - build
       - p4_contract
       - build_c6

@@ -72,8 +72,12 @@ def open_with_retries(
     for attempt in range(1, attempts + 1):
         try:
             return urllib.request.urlopen(request, timeout=timeout)
-        except urllib.error.HTTPError:
-            raise
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (408, 429, 500, 502, 503, 504) or attempt >= attempts:
+                raise
+            last_error = exc
+            exc.close()
+            time.sleep(attempt)
         except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected) as exc:
             last_error = exc
             if attempt >= attempts:

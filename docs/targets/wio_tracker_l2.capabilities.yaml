@@ -25,6 +25,8 @@ runtime:
   ui_thread: "arduino_loop"
   radio_thread: "existing_esp_mesh_runtime"
   gps_thread: "existing_esp_gps_runtime"
+  geocaching_owner: "existing_storage_owner"
+  note: "Geocaching advances bounded storage/network slices in the existing storage maintenance task; UI calls enqueue work or read mutex-protected snapshots. Runtime shells remain ESP-specific."
   isr_policy: "defer_to_owner"
   lock_policy: "separate_i2c_radio_audio_and_filesystem_owners"
 
@@ -86,11 +88,13 @@ capability_bindings:
   lora:
     board_provider: "wio_tracker_l2.radio"
     platform_driver: "SX1262_on_dedicated_SPI"
-    protocol_consumers: ["core_mesh", "core_chat"]
+    protocol_consumers: ["core_mesh.meshtastic", "core_mesh.meshcore", "core_chat.reticulum"]
   gps:
     board_provider: "wio_tracker_l2.gps"
     platform_driver: "L76K_UART"
-    protocol_consumers: ["core_gps"]
+    protocol_consumers: ["core_gps.nmea", "core_gps.location_service", "core_gps.time_authority"]
+  ble:
+    protocol_consumers: ["core_phone.meshtastic", "core_phone.meshcore"]
   storage:
     board_provider: "wio_tracker_l2.sdmmc"
     platform_driver: "ArduinoSdmmcBlockDevice"
@@ -101,10 +105,12 @@ capability_bindings:
     runtime_owner: "single_platform_playback_owner"
 
 protocols:
-  meshtastic: {enabled: true, runtime_owner: "shared_protocol_runtime"}
-  meshcore: {enabled: true, runtime_owner: "shared_protocol_runtime"}
+  meshtastic: {enabled: true, runtime_owner: "shared_protocol_runtime", radio_profile_source: "core_mesh", ble_phone_core: "core_phone"}
+  meshcore: {enabled: true, runtime_owner: "shared_protocol_runtime", radio_profile_source: "core_mesh", ble_phone_core: "core_phone"}
   reticulum: {enabled: true, runtime_owner: "existing_reticulum_runtime"}
-  selection: "one_active_product_protocol"
+  selection: "one_active_chat_protocol"
+  reticulum_ip_service: "available_independently_of_active_chat_protocol"
+  note: "Geocaching uses a background IP-only Reticulum service alongside Meshtastic or MeshCore; when Reticulum/RNode chat is active it reuses that backend. Chat/contact protocol partitions remain separate."
 
 storage:
   backend: "existing_SdFat_contract_over_1bit_SDMMC"
@@ -112,6 +118,7 @@ storage:
   messages: "existing_protocol_partitioned_stores_and_ledgers"
   node_store: "existing_protocol_partitioned_stores"
   map_storage: "existing_map_runtime"
+  geocaching: "SD_indexed_journal_and_signed_GPX_details"
 
 race_policy:
   app_to_ui: "snapshot"
@@ -126,4 +133,14 @@ build:
   entrypoint: "platformio.ini"
   app: "apps/esp32_lvgl"
   platformio_envs: ["wio_tracker_l2"]
+  enabled_modules:
+    - "core_chat"
+    - "core_device"
+    - "core_gps"
+    - "core_phone"
+    - "core_mesh"
+    - "core_geocaching"
+    - "ui_presentation"
+    - "core_sys"
+    - "ui_shared"
   hardware_validation: "pending"

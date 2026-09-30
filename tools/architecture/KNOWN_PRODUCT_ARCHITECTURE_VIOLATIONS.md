@@ -6,6 +6,20 @@ without turning the architecture baseline PR into a behavior-changing rewrite.
 
 ## Current Known Categories
 
+### Reticulum and Geocaching compatibility composition
+
+The ESP Geocaching runtime binds its presentation source through
+`modules/ui_shared/include/ui/screens/geocaching/geocaching_page_shell.h`.
+This binding belongs in the composition root in a later extraction. The
+storage-owner worker publishes snapshots and does not mutate LVGL objects.
+
+The ESP LXMF/Reticulum compatibility adapters recognize the
+`trailmate.geocache` destination and sign Geocaching records with the existing
+Reticulum identity. This protocol-facing glue should move behind a shared
+protocol/identity port when the adapters are thinned. It does not change board
+drivers or radio-driver policy. Geocaching and Reticulum Settings also extend
+the historical `core_sys` platform/UI contract layout described below.
+
 ### core_sys still contains platform UI contracts
 
 `modules/core_sys/include/platform/ui/*` currently exposes platform-facing UI
