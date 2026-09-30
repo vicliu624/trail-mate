@@ -41,6 +41,7 @@ add_executable(${PREVIEW_TARGET}
   preview_radio.cpp
   preview_board.cpp
   "${UI}/app_catalog_builder.cpp"
+  "${UI}/screens/geocaching/geocaching_page_shell.cpp"
   "${UI}/screens/calculator/calculator_page_shell.cpp"
   "${UI}/screens/gnss/gnss_skyplot_page_shell.cpp"
   "${UI}/screens/gps/gps_page_shell.cpp"
