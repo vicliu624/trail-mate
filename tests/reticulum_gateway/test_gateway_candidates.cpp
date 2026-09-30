@@ -84,4 +84,26 @@ int main()
     int filtered = pool.select(0, [&](const auto& ep)
                                { return std::strcmp(ep.host, old.host) != 0; });
     assert(filtered >= 0 && !std::strcmp(pool.entry(filtered).endpoint.host, fresh.host));
+    // A persisted endpoint is a tie-breaker, not a permanent winner after
+    // failures. Prefer an untried peer even when the active cooldown expires.
+    pool.reset();
+    assert(pool.observe(old, 0, true));
+    stable = pool.select(0, allow);
+    pool.installed(stable);
+    retry.reset();
+    retry.failed(0);
+    retry.failed(10000);
+    pool.sync(retry);
+    assert(pool.observe(fresh, 30000));
+    next = pool.select(30000, allow);
+    assert(next >= 0 && next != stable);
+    pool.installed(next);
+    retry.reset();
+    retry.connected(30000);
+    pool.sync(retry);
+    assert(pool.select(90000, allow) == -1);
+    retry.failed(90000);
+    pool.sync(retry);
+    // If every alternative is worse, retain the now-eligible active slot.
+    assert(pool.select(100000, allow) == -1);
 }

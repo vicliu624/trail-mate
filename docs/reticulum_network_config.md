@@ -106,6 +106,11 @@ are cooling down, the runtime waits rather than opening parallel connections.
 AutoInterface LAN peers continue to operate independently. C6-based devices also
 retain all three candidates and try them sequentially through their single socket.
 
+When several endpoints are eligible, selection favors fewer consecutive connection
+failures. Equal scores retain the existing rotation order. A 60-second stable
+connection clears the failure score; an announcement or expired cooldown does not.
+This uses observed connection outcomes, not latency estimates or active probes.
+
 Changing a TCP host, port or interface ID, or disabling the interface, discards
 both its ordinary and priority receive queues. Reapplying identical settings
 preserves queued packets. This prevents data from the old connection from being
@@ -126,7 +131,10 @@ automatic admission. One previously stable discovered endpoint can be restored
 from SD. Each discovered candidate retains its own retry history across slot
 changes and repeated announcements. The restored stable endpoint is preferred
 when selecting a replacement; it cannot be hidden by the latest announcement.
-A healthy or still-eligible installed endpoint is retained. Candidates that
+A connected discovered endpoint is retained. For disconnected candidates, fewer
+failures take precedence over the persisted preference; that preference breaks
+ties. An eligible installed endpoint is retained only if no eligible replacement
+ranks higher. Candidates that
 duplicate manual entries are skipped without blocking other candidates.
 
 The bounded candidate pool occupies at most 512 bytes inside the PSRAM adapter.

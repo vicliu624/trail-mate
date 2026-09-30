@@ -60,16 +60,18 @@ class GatewayCandidates
     template <typename CanInstall>
     int select(uint32_t now, CanInstall can_install) const
     {
-        // Retain the installed endpoint until it actually yields to backoff.
-        if (active_ >= 0 && entries_[active_].retry.ready(now)) return -1;
-        int selected = -1;
+        // Keep a connected uplink. An expired cooldown is only permission to
+        // retry, not evidence that a repeatedly failing endpoint is healthy.
+        if (active_ >= 0 && entries_[active_].retry.online()) return -1;
+        int selected = active_ >= 0 && entries_[active_].retry.ready(now) ? active_ : -1;
         for (int i = 0; i < kCapacity; ++i)
         {
             const auto& entry = entries_[i];
             if (i == active_ || !entry.endpoint.port || !entry.retry.ready(now) || !can_install(entry.endpoint)) continue;
-            if (selected < 0 || entry.preferred) selected = i;
+            if (selected < 0 || entry.retry.failures() < entries_[selected].retry.failures() ||
+                (entry.retry.failures() == entries_[selected].retry.failures() && entry.preferred && !entries_[selected].preferred)) selected = i;
         }
-        return selected;
+        return selected == active_ ? -1 : selected;
     }
 
     const Entry& entry(int index) const { return entries_[index]; }

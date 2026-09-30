@@ -48,6 +48,8 @@ class TcpRetry
     }
 
     void reset() { *this = TcpRetry{}; }
+    uint8_t failures() const { return failures_; }
+    bool online() const { return online_; }
     void disconnected() { online_ = false; }
     bool stable(uint32_t now) const
     {

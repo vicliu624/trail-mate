@@ -213,6 +213,7 @@ class WifiGatewayReticulumInterface
     bool isReady() const;
     bool isConfigured() const { return enabled_ && host_[0] != '\0'; }
     bool canAttempt() const;
+    const chat::reticulum::TcpRetry& retryState() const { return reconnect_; }
     bool stableConnection() const;
     bool isConnecting() const { return socket_open_pending_; }
     void setSelected(bool);
@@ -472,4 +473,12 @@ int main()
     pool.tcp_count_ = 0;
     pool.maintain();
     assert(pool.active_tcp_ == UINT8_MAX && !pool.tcp_[0].selected_);
+    ReticulumInterfaceSet ranked;
+    ranked.tcp_[0].reconnect_.failed(0);
+    ranked.tcp_[0].reconnect_.failed(10000);
+    ranked.tcp_[2].reconnect_.failed(0);
+    now = 200000;
+    ranked.maintain();
+    assert(ranked.active_tcp_ == 1 && ranked.tcp_[1].isConnecting());
+    assert(ranked.tcp_[0].connector_.starts == 0 && ranked.tcp_[2].connector_.starts == 0);
 }

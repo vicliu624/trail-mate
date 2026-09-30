@@ -1793,10 +1793,13 @@ void ReticulumInterfaceSet::maintain()
         {
             const auto candidate = static_cast<uint8_t>((next_tcp_ + attempt) % tcp_count_);
             if (!tcp_[candidate].canAttempt()) continue;
-            active_tcp_ = candidate;
-            tcp_[candidate].setSelected(true);
-            tcp_[candidate].maintain();
-            break;
+            if (active_tcp_ == UINT8_MAX || tcp_[candidate].retryState().failures() < tcp_[active_tcp_].retryState().failures())
+                active_tcp_ = candidate;
+        }
+        if (active_tcp_ != UINT8_MAX)
+        {
+            tcp_[active_tcp_].setSelected(true);
+            tcp_[active_tcp_].maintain();
         }
     }
     syncSharedLoRaRxGate();
