@@ -22,7 +22,7 @@ factory defaults add these enabled entries on port 4242, in this order:
 2. `node.reticulumnet.nl`
 3. `rmap.world`
 
-In **Settings → Mesh**, select **TCP Entry** 1, 2 or 3,
+In **Settings → Reticulum**, select **TCP Entry** 1, 2 or 3,
 then edit **Gateway Host** and **Gateway Port**. These fields read the active
 network snapshot and changes use the existing TMS save path. Clearing the host
 removes that entry and shifts subsequent TCP entries forward. Add entries in
@@ -39,9 +39,11 @@ the restore action remain visible on Wi-Fi-capable devices regardless of the
 selected chat protocol or bearer; editing these entries does not itself change
 the bearer policy. Switching chat protocols reloads settings before rebuilding
 the list so previously hidden fields do not show stale `Not set` values.
-These UI fixes have passed targeted syntax checks and the TCP restore host
-regression. The updated L2 firmware was built and flashed on 2026-09-24;
-physical verification of the restore action and public TCP connection remains pending.
+Reticulum has its own Settings category. Bearer preferences, Auto Wi-Fi and
+privacy preferences can be configured without changing the active chat protocol.
+The Mesh protocol selector continues to control chat, Contacts and the integrated
+radio. Runtime identity fields are shown when the Reticulum chat adapter is active;
+opening Settings does not start a network service just to populate them.
 
 The ESP settings-model snapshot and action sink use this same active network
 configuration. Their `rt_tcp_slot` choice selects the entry addressed by

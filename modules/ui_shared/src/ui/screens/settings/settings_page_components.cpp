@@ -5299,6 +5299,9 @@ static settings::ui::SettingItem kMeshItems[] = {
     {"MC Channel Key", settings::ui::SettingType::Text, nullptr, 0, nullptr, nullptr, g_settings.mc_channel_key, sizeof(g_settings.mc_channel_key), true, "mc_channel_key"},
     {"Generate MC Channel Key", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "mc_channel_key_generate"},
     {"Clear MC Channel", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "mc_channel_clear"},
+};
+
+static settings::ui::SettingItem kReticulumItems[] = {
     {"Bearer", settings::ui::SettingType::Enum, kReticulumBearerOptions, sizeof(kReticulumBearerOptions) / sizeof(kReticulumBearerOptions[0]), &g_settings.rt_bearer_policy, nullptr, nullptr, 0, false, "rt_bearer"},
     {"Display Name", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_display_name, sizeof(g_settings.rt_display_name), false, "rt_display_name"},
     {"Identity Hash", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_identity_hash, sizeof(g_settings.rt_identity_hash), false, "rt_identity_hash"},
@@ -5423,6 +5426,7 @@ static const CategoryDef kCategories[] = {
     {"Mesh", kMeshItems, sizeof(kMeshItems) / sizeof(kMeshItems[0])},
     {"Radio", kRadioItems, sizeof(kRadioItems) / sizeof(kRadioItems[0])},
     {"Wi-Fi", kWifiItems, sizeof(kWifiItems) / sizeof(kWifiItems[0])},
+    {"Reticulum", kReticulumItems, sizeof(kReticulumItems) / sizeof(kReticulumItems[0])},
     {"Location", kLocationItems, sizeof(kLocationItems) / sizeof(kLocationItems[0])},
     {"Device", kDeviceItems, sizeof(kDeviceItems) / sizeof(kDeviceItems[0])},
     {"Maintenance", kMaintenanceItems, sizeof(kMaintenanceItems) / sizeof(kMaintenanceItems[0])},

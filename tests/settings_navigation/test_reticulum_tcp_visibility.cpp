@@ -5,7 +5,8 @@ int main()
 {
     using namespace settings::ui;
     const SettingId fields[] = {SettingId::RtTcpSlot, SettingId::RtTcpDefaults,
-                                SettingId::RtWifiHost, SettingId::RtWifiPort};
+                                SettingId::RtWifiHost, SettingId::RtWifiPort,
+                                SettingId::RtWifiAuto};
     for (auto protocol : {chat::MeshProtocol::Meshtastic, chat::MeshProtocol::MeshCore,
                           chat::MeshProtocol::Reticulum})
     {
@@ -22,6 +23,9 @@ int main()
             }
             context.wifi_supported = false;
             for (auto field : fields) assert(!spec::should_show(field, context));
+            for (auto field : {SettingId::RtBearer, SettingId::RtAnonymousPeer,
+                               SettingId::RtLocationRequests})
+                assert(spec::should_show(field, context));
         }
     }
 }

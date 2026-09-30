@@ -527,9 +527,15 @@ bool should_show(SettingId id, const VisibilityContext& context)
     // Geocaching uses Reticulum independently of the selected chat protocol.
     // Keep IP configuration editable even when the current bearer is LoRa-only.
     if (id == SettingId::RtTcpSlot || id == SettingId::RtTcpDefaults ||
-        id == SettingId::RtWifiHost || id == SettingId::RtWifiPort)
+        id == SettingId::RtWifiHost || id == SettingId::RtWifiPort ||
+        id == SettingId::RtWifiAuto)
     {
         return context.wifi_supported;
+    }
+    if (id == SettingId::RtBearer || id == SettingId::RtAnonymousPeer ||
+        id == SettingId::RtLocationRequests)
+    {
+        return true;
     }
     if (id == SettingId::Unknown)
     {
