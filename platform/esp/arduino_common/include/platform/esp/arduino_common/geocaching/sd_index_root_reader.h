@@ -36,7 +36,7 @@ class SdIndexRootReader
     {
         out = {};
         if (result_ != IndexRootReadStep::Ready) return false;
-        out = selected_;
+        out = roots_[selected_copy_];
         return true;
     }
     int selectedCopy() const { return result_ == IndexRootReadStep::Ready ? selected_copy_ : -1; }
@@ -71,8 +71,9 @@ class SdIndexRootReader
             return result_ = IndexRootReadStep::Invalid;
         if (copy == 1)
         {
-            if (!::geocaching::storage::selectIndexRoot(roots_[0], roots_[1], selected_)) return result_ = IndexRootReadStep::Invalid;
-            selected_copy_ = selected_.revision == roots_[0].revision ? 0 : 1;
+            ::geocaching::storage::IndexRootView selected;
+            if (!::geocaching::storage::selectIndexRoot(roots_[0], roots_[1], selected)) return result_ = IndexRootReadStep::Invalid;
+            selected_copy_ = selected.revision == roots_[0].revision ? 0 : 1;
         }
         ++phase_;
         return result_;
@@ -82,7 +83,7 @@ class SdIndexRootReader
     ::geocaching::storage::VolumeInstance volume_;
     SdVolumeReadSession read_session_;
     ::geocaching::storage::IndexRootBytes* buffers_[2]{};
-    ::geocaching::storage::IndexRootView roots_[2], selected_;
+    ::geocaching::storage::IndexRootView roots_[2];
     uint8_t phase_ = 0, selected_copy_ = 0;
     IndexRootReadStep result_ = IndexRootReadStep::Idle;
     bool already_read_ = false;
