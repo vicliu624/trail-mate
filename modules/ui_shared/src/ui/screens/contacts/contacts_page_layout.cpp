@@ -332,8 +332,8 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
             style::apply_label_muted(status_label);
             lv_obj_set_width(status_label, LV_PCT(100));
             lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_RIGHT, 0);
-            lv_obj_set_style_text_font(status_label, ::ui::page_profile::resolve_caption_font(), 0);
             apply_single_line(status_label);
+            lv_obj_set_style_text_font(status_label, ::ui::page_profile::resolve_caption_font(), 0);
         }
     }
 
