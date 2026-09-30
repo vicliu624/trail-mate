@@ -61,6 +61,14 @@ struct TestSource : ui::geocaching::Source
     }
     unsigned pending_reads = 0;
     bool detail_ready = false;
+    unsigned archives = 0;
+    ui::geocaching::DraftSaveStatus archive_result = ui::geocaching::DraftSaveStatus::Pending;
+    bool archiveCache(const std::array<uint8_t, 32>&, const std::array<uint8_t, 32>&) override
+    {
+        ++archives;
+        return true;
+    }
+    ui::geocaching::DraftSaveStatus archiveStatus(const std::array<uint8_t, 32>&) override { return archive_result; }
     unsigned detail_closes = 0;
     bool readDetail(const std::array<uint8_t, 32>&, const std::array<uint8_t, 32>&,
                     void (*sink)(const ui::geocaching::DetailView&, void*), void* context) override
@@ -71,6 +79,7 @@ struct TestSource : ui::geocaching::Source
             view.status = ui::geocaching::DetailStatus::Ready;
             view.description = "A woodland cache beside the old trail.\nFollow the stream to the stone bridge.";
             view.hint = "Look beneath the large flat stone.";
+            view.can_archive = true;
         }
         sink(view, context);
         return true;
@@ -306,6 +315,19 @@ int main(int argc, char** argv)
         !std::strstr(lv_label_get_text(lv_obj_get_child(lv_obj_get_child(list, 2), 1)), "large flat stone") ||
         lv_obj_has_flag(lv_obj_get_child(list, 2), LV_OBJ_FLAG_HIDDEN)) return 65;
     if (!save(std::string(argv[3]) + "-detail.ppm", screen)) return 11;
+    auto* archive_action = lv_obj_get_child(list, 4);
+    if (lv_obj_has_flag(archive_action, LV_OBJ_FLAG_HIDDEN)) return 80;
+    lv_obj_send_event(archive_action, LV_EVENT_CLICKED, nullptr);
+    if (source.archives || std::strcmp(lv_label_get_text(lv_obj_get_child(archive_action, 0)), "Confirm public archive")) return 81;
+    lv_obj_send_event(archive_action, LV_EVENT_CLICKED, nullptr);
+    if (source.archives != 1 || !lv_obj_has_state(archive_action, LV_STATE_DISABLED)) return 82;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (std::strcmp(lv_label_get_text(lv_obj_get_child(archive_action, 0)), "Awaiting directory confirmation...")) return 83;
+    source.archive_result = ui::geocaching::DraftSaveStatus::Saved;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (std::strcmp(lv_label_get_text(lv_obj_get_child(archive_action, 0)), "Archived; directory confirmed")) return 84;
     lv_obj_scroll_to_view(lv_obj_get_child(list, 2), LV_ANIM_OFF);
     if (!save(std::string(argv[3]) + "-detail-hint.ppm", screen)) return 66;
     if (lv_obj_get_scroll_y(list) <= 0) return 67;

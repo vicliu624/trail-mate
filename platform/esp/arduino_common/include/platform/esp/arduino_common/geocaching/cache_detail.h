@@ -54,6 +54,14 @@ struct CacheDetail
     }
     bool verify(::geocaching::ByteView bytes, ::geocaching::protocol::RecordCrypto& crypto)
     {
+        if (state == State::Saved && !response)
+        {
+            response = static_cast<uint8_t*>(::platform::esp::common::memory::allocatePreferred("geocaching.detail.saved", bytes.size, false));
+            if (!response) return false;
+            std::memcpy(response, bytes.data, bytes.size);
+            response_size = bytes.size;
+            bytes = {response, response_size};
+        }
         constexpr size_t capacity = ::geocaching::kMaxRecordBytes + 64;
         auto* scratch = static_cast<uint8_t*>(::platform::esp::common::memory::allocatePreferred("geocaching.detail.verify", capacity, false));
         if (!scratch) return false;

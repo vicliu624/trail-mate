@@ -172,3 +172,28 @@ Deletion, rebinding, and recovery retain full reference validation.
 Read faults can occur during journal readback after redundant preflight reads
 are removed. Fault coverage requires unchanged committed data and rejection of
 further writes until recovery; an unconfirmed journal may remain on storage.
+
+## Public withdrawal and local removal
+
+On a verified cache detail, `Archive public cache` is available only when the
+record author matches the current device identity. Confirming creates a signed
+successor with the same cache ID, the selected revision hash as its parent, and
+state `2`. An existing authored draft is retained with the archived state.
+The UI remains `Awaiting directory confirmation...` until the matching accepted
+directory result is committed. An offline delete never substitutes for this
+public operation. The same action is available on an owned Downloaded detail.
+
+Directories hide archived heads from ordinary queries, including continuation
+pages created before archival. They reject ordinary reads of a former active
+revision with `410 cache_archived`, including retries of previously successful
+GET requests. Explicit signed tombstone reads and registered directory peers
+retain access for replication. Publication receipts and synchronization history
+remain durable; already downloaded copies cannot be remotely erased.
+
+`Delete local copy` only clears the selected installed head and advances its
+installation generation in a journaled transaction. This removes the offline
+entry from Downloaded and Map and prevents older installation tasks from
+restoring it. Immutable historical objects and GPX files remain on SD; this is
+not a promise of immediate physical file reclamation. Local map projections
+invalidate on committed saves, removals and installation changes even when the
+viewport stays unchanged. Work and payload buffers are allocated in PSRAM.

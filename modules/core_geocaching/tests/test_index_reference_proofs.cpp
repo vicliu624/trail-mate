@@ -3,6 +3,7 @@
 #include "platform/esp/arduino_common/geocaching/indexed_dispatch_store.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_initialize.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_remove_saved.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
 #include "runtime_environment.h"
 #include <cstdio>
@@ -171,6 +172,44 @@ int main()
         copy = 1 - copy;
     }
     readSend(0, true);
+    {
+        // Removal selects the exact current revision and advances the durable
+        // generation, without deleting the head's rollback protection.
+        std::array<uint8_t, 32> cache{}, hash{}, wrong{};
+        cache.fill(0x41);
+        hash.fill(0x42);
+        wrong.fill(0x43);
+        gc::CacheHeadView head;
+        head.current_hash = {hash.data(), hash.size()};
+        head.install_generation = 7;
+        head.highest_seen_revision = 9;
+        std::array<uint8_t, 64> value{};
+        size_t size = 0;
+        require(gc::encodeCacheHead({cache.data(), cache.size()}, head, value.data(), value.size(), size), "encode removal fixture head");
+        gc::MutationView row{2, {cache.data(), cache.size()}, {value.data(), size}, false};
+        sd::SdIndexedCommit commit(volume);
+        require(commit.begin(root, copy, &row, 1, frame.data(), frame.size(), roots[1 - copy]) &&
+                    pump(commit, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && commit.committed(root),
+                "commit removal fixture head");
+        copy = 1 - copy;
+        const auto unchanged = test::files;
+        sd::SdIndexedRemoveSaved stale(volume);
+        require(stale.begin(root, copy, cache, wrong, frame.data(), frame.size(), roots[1 - copy]) &&
+                    pump(stale, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Invalid && test::files == unchanged,
+                "stale detail deleted another revision");
+        sd::SdIndexedRemoveSaved remove(volume);
+        require(remove.begin(root, copy, cache, hash, frame.data(), frame.size(), roots[1 - copy]) &&
+                    pump(remove, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && remove.committed(root),
+                "remove offline head");
+        copy = 1 - copy;
+        sd::SdIndexGet read(volume);
+        require(read.begin(root, 2, {cache.data(), cache.size()}, frame.data(), frame.size()) &&
+                    pump(read, sd::IndexGetStep::Working) == sd::IndexGetStep::Ready &&
+                    gc::decodeCacheHead({cache.data(), cache.size()}, read.value(), head),
+                "read removed head");
+        require(!head.current_hash.size && head.install_generation == 8 && head.highest_seen_revision == 9,
+                "removal lost generation or rollback protection");
+    }
     std::printf("Send preparation read bytes: reused=%llu fallback=%llu\n", static_cast<unsigned long long>(reused), static_cast<unsigned long long>(small));
     std::printf("Reference validator size: %u bytes; eviction and overlay mismatch checks passed\n", static_cast<unsigned>(sizeof(sd::SdIndexReferences)));
     return 0;

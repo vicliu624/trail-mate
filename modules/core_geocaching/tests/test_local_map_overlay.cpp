@@ -25,6 +25,14 @@ struct LocalSource : Source
     size_t offset = 0;
     bool ready = false, busy = false;
     unsigned requests = 0;
+    uint64_t revision = 0;
+    bool revision_available = true;
+    bool localMapRevision(uint64_t& out) override
+    {
+        if (!revision_available) return false;
+        out = revision;
+        return true;
+    }
     void snapshot(Section part, Snapshot& out) override
     {
         assert(part != Section::Discover);
@@ -93,6 +101,26 @@ int main()
         auto result = std::make_unique<ui::map::MapOverlaySnapshot>();
         immediate->append(*result);
         assert(result->item_count == 2); // No extra timer tick for cached drafts.
+        const auto requests = available.requests;
+        immediate->update(available, 0, 102, 10);
+        assert(available.requests == requests); // An unchanged view stays cached.
+        available.drafts[0].state = 2;
+        ++available.revision;
+        available.revision_available = false;
+        immediate->update(available, 0, 102, 10);
+        assert(immediate->markerCount() == 2); // Busy source is not deletion.
+        available.revision_available = true;
+        immediate->update(available, 0, 102, 10);
+        assert(immediate->markerCount() == 1); // Archive refreshes the same viewport.
+        available.drafts[0].state = 0;
+        available.drafts[0].latitude_e7 = 123000000;
+        ++available.revision;
+        immediate->update(available, 0, 102, 10);
+        assert(immediate->markerCount() == 2);
+        available.drafts.clear();
+        ++available.revision;
+        immediate->update(available, 0, 102, 10);
+        assert(immediate->markerCount() == 1); // Local deletion refreshes too.
     }
     LocalSource source;
     source.drafts.push_back(marker(1, true, false));

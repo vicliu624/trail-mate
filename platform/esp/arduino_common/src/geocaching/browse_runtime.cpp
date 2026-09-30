@@ -18,6 +18,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_checkpoint_rotation.h"
 #include "platform/esp/arduino_common/geocaching/sd_download_port.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_repair.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_remove_saved.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_publish_port.h"
 #include "platform/esp/arduino_common/geocaching/stored_reply_receipt.h"
@@ -83,6 +84,7 @@ struct PendingReply
 std::atomic<PendingReply*> pending_reply{nullptr};
 struct Session
 {
+    uint64_t local_map_revision = 0;
     struct Publication
     {
         enum class DraftStage : uint8_t
@@ -91,6 +93,8 @@ struct Session
             Bind,
             Binding,
             Encode,
+            Archive,
+            ArchiveSaving,
             Sign
         };
         DraftStage draft_stage = DraftStage::None;
@@ -136,6 +140,9 @@ struct Session
         uint64_t expected = 0;
         bool started = false, done = false, saved = false, editor_fields = true;
         bool erase = false;
+        bool erase_download = false;
+        std::array<uint8_t, 32> cache{}, hash{};
+        ::platform::memory::PsramPtr<SdIndexedRemoveSaved> removal;
         ~DraftSave() { heap_caps_free(bytes); }
     };
     ::platform::memory::PsramPtr<DraftSave> draft_save;
@@ -775,7 +782,11 @@ bool processResponse(Session& s)
         auto& attempt = *s.publication->attempt;
         const auto before = attempt.phase();
         if (attempt.accept(s.response_source, {s.response, s.response_size}) && before != gc::PublishAttemptPhase::Confirmed &&
-            attempt.phase() == gc::PublishAttemptPhase::Confirmed) reportPublication("confirmed", attempt);
+            attempt.phase() == gc::PublishAttemptPhase::Confirmed)
+        {
+            ++s.local_map_revision;
+            reportPublication("confirmed", attempt);
+        }
         ++epoch;
     }
     else if (s.response_operation == 3 && s.download)
@@ -1053,6 +1064,7 @@ PublicationRestore restorePublication(Session& s, const gc::GeocacheId* cache = 
         return PublicationRestore::Pending;
     }
     std::memcpy(job->remote.bytes.data(), selected.key.data() + 16, 16);
+    job->cache = selected.cache;
     job->port.reset(::platform::memory::createPsram<SdPublishPort>(*s.store, s.crypto, s.local, selected.cache, selected.hash, selected.task, selected.created));
     if (job->port) job->attempt.reset(::platform::memory::createPsram<gc::PublishAttempt>(*job->port, s.crypto));
     if (!job->attempt)
@@ -1131,6 +1143,93 @@ void advanceDraftPublication(Session& s)
         job.unsigned_bytes = nullptr;
         job.draft_stage = Stage::None;
         ++epoch;
+        return;
+    }
+    if (job.draft_stage == Stage::ArchiveSaving)
+    {
+        const auto result = s.store->stepCommit();
+        if (result == JournalWriteResult::Busy || result == JournalWriteResult::InProgress) return;
+        if (result != JournalWriteResult::Verified)
+        {
+            stop("Local archive could not be saved");
+            return;
+        }
+        heap_caps_free(job.draft_bytes);
+        job.draft_bytes = nullptr;
+        ++s.local_map_revision;
+        job.draft_stage = Stage::Archive;
+        job.draft_generation = UINT64_MAX;
+        return;
+    }
+    if (job.draft_stage == Stage::Archive)
+    {
+        if (job.draft_generation != UINT64_MAX)
+        {
+            gc::RecordView record;
+            gc::ByteView value;
+            if (!gc::protocol::decodeGeocacheRecord({job.unsigned_bytes, job.unsigned_size}, record))
+            {
+                stop("Invalid archive record");
+                return;
+            }
+            const auto read = s.store->readDraft(record.creation_nonce, value);
+            if (read == DraftReadResult::Pending || read == DraftReadResult::Busy) return;
+            if (read == DraftReadResult::Ready)
+            {
+                gc::storage::DraftView draft;
+                if (!gc::storage::decodeDraft(record.creation_nonce, value, draft) || draft.generation == UINT64_MAX ||
+                    draft.author.size != 64 || std::memcmp(draft.author.data, job.author.data(), 64))
+                {
+                    stop("Local author mismatch");
+                    return;
+                }
+                const auto expected = draft.generation;
+                draft.state = 2;
+                ++draft.generation;
+                job.draft_size = value.size + 32;
+                job.draft_bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.archive-draft", job.draft_size, false));
+                if (!job.draft_bytes || !gc::storage::encodeDraft(record.creation_nonce, draft, job.draft_bytes, job.draft_size, job.draft_size))
+                {
+                    stop("Cannot retain local archive");
+                    return;
+                }
+                s.store->releaseDraftRead();
+                const auto saved = s.store->saveDraft(record.creation_nonce, {job.draft_bytes, job.draft_size}, expected);
+                if (saved == JournalWriteResult::Busy)
+                {
+                    heap_caps_free(job.draft_bytes);
+                    job.draft_bytes = nullptr;
+                    return;
+                }
+                if (saved != JournalWriteResult::InProgress && saved != JournalWriteResult::Verified)
+                {
+                    stop("Local archive save failed");
+                    return;
+                }
+                job.draft_stage = Stage::ArchiveSaving;
+                if (saved == JournalWriteResult::Verified)
+                {
+                    heap_caps_free(job.draft_bytes);
+                    job.draft_bytes = nullptr;
+                    job.draft_generation = UINT64_MAX;
+                    job.draft_stage = Stage::Archive;
+                    ++s.local_map_revision;
+                }
+                return;
+            }
+            s.store->releaseDraftRead();
+            if (read != DraftReadResult::NotFound)
+            {
+                stop("Cannot read local archive ownership");
+                return;
+            }
+            job.draft_generation = UINT64_MAX;
+        }
+        job.author_port.reset(::platform::memory::createPsram<DeviceAuthorIssuePort>(*router, *s.store, s.crypto, job.issued));
+        if (job.author_port) job.issue.reset(::platform::memory::createPsram<gc::AuthorIssue>(*job.author_port));
+        if (!job.issue || !job.issue->begin({job.unsigned_bytes, job.unsigned_size}, job.bytes, job.size))
+            stop("Cannot prepare archive signing");
+        else job.draft_stage = Stage::Sign;
         return;
     }
     gc::ByteView value;
@@ -1353,6 +1452,13 @@ bool publicationDraftReady(const std::array<uint8_t, 16>& id, uint64_t generatio
 class Facade final : public ::ui::geocaching::Source
 {
   public:
+    bool localMapRevision(uint64_t& out) override
+    {
+        Guard guard;
+        if (!guard.locked || !session) return false;
+        out = session->local_map_revision;
+        return true;
+    }
     void activate(bool open) override
     {
         if (open && !wanted.load())
@@ -1636,6 +1742,10 @@ class Facade final : public ::ui::geocaching::Source
             view.status = ::ui::geocaching::DetailStatus::Ready;
             view.description = job->description.data();
             view.hint = job->hint.data();
+            std::array<uint8_t, 64> author{};
+            view.can_archive = job->verified_record.record.state != gc::CacheState::Archived &&
+                               router->getGeocachingAuthorKey(author.data()) &&
+                               !std::memcmp(author.data(), job->verified_record.record.author_public_key.data, author.size());
         }
         else if (job->state == CacheDetail::State::Failed)
         {
@@ -1649,6 +1759,53 @@ class Facade final : public ::ui::geocaching::Source
     {
         cancel_detail.store(true);
         next_step.store(0);
+    }
+    bool archiveCache(const std::array<uint8_t, 32>& id, const std::array<uint8_t, 32>& hash) override
+    {
+        Guard guard;
+        if (!guard.locked || !session || !session->detail || session->detail->state != CacheDetail::State::Ready ||
+            !session->detail->matches(id, hash) || !session->port || session->needsRecovery() ||
+            publicationActive() || downloadActive() || draftSaveActive()) return false;
+        const auto& verified = session->detail->verified_record;
+        auto job = ::platform::memory::PsramPtr<Session::Publication>(::platform::memory::createPsram<Session::Publication>());
+        if (!job || verified.record.revision == UINT32_MAX || verified.record.state == gc::CacheState::Archived ||
+            !router->getGeocachingAuthorKey(job->author.data()) ||
+            std::memcmp(job->author.data(), verified.record.author_public_key.data, job->author.size()) ||
+            !session->port->pageSource(job->remote)) return false;
+        auto record = verified.record;
+        ++record.revision;
+        record.previous_hash = {hash.data(), hash.size()};
+        record.state = gc::CacheState::Archived;
+        record.updated_at = std::max(record.updated_at, static_cast<uint64_t>(std::time(nullptr)));
+        job->issued = now(nullptr);
+        job->issued.has_utc = true;
+        job->issued.utc_seconds = record.updated_at;
+        job->cache = verified.id;
+        job->expected_revision = record.revision;
+        const size_t capacity = record.name.size() + record.description.size() + record.hint.size() + 240;
+        job->unsigned_bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.archive", capacity, false));
+        job->size = capacity + 70;
+        job->bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.sign", 2 * job->size + 26, false));
+        if (!job->unsigned_bytes || !job->bytes || !gc::protocol::encodeGeocacheRecord(record, job->unsigned_bytes, capacity, job->unsigned_size)) return false;
+        job->draft_stage = Session::Publication::DraftStage::Archive;
+        session->storage_requested = true;
+        session->publication = std::move(job);
+        next_step.store(0);
+        ++epoch;
+        return true;
+    }
+    ::ui::geocaching::DraftSaveStatus archiveStatus(const std::array<uint8_t, 32>& id) override
+    {
+        using Status = ::ui::geocaching::DraftSaveStatus;
+        Guard guard;
+        if (!guard.locked) return Status::Pending;
+        if (!session || !session->publication || session->publication->cache.bytes != id) return Status::Failed;
+        const auto& job = *session->publication;
+        if (job.error) return Status::Failed;
+        if (job.draft_stage != Session::Publication::DraftStage::None || job.bytes) return Status::Pending;
+        if (!job.attempt) return Status::Failed;
+        if (job.attempt->phase() == gc::PublishAttemptPhase::Confirmed) return Status::Saved;
+        return publicationActive() ? Status::Pending : Status::Failed;
     }
     bool publicationAuthor(const std::array<uint8_t, 16>& id, uint64_t generation, std::array<uint8_t, 64>& author, uint32_t* from, uint32_t* to) override
     {
@@ -1779,7 +1936,7 @@ class Facade final : public ::ui::geocaching::Source
         using Status = ::ui::geocaching::DraftSaveStatus;
         Guard guard;
         if (!guard.locked) return Status::Pending;
-        if (!session || !session->draft_save || session->draft_save->id != id || session->draft_save->expected != generation) return Status::Failed;
+        if (!session || !session->draft_save || session->draft_save->erase_download || session->draft_save->id != id || session->draft_save->expected != generation) return Status::Failed;
         const auto& job = *session->draft_save;
         return !job.done ? Status::Pending : job.saved ? Status::Saved
                                                        : Status::Failed;
@@ -1798,6 +1955,33 @@ class Facade final : public ::ui::geocaching::Source
         next_step.store(0);
         ++epoch;
         return true;
+    }
+    bool removeDownloaded(const ::ui::geocaching::Item& item) override
+    {
+        Guard guard;
+        if (!guard.locked || item.is_draft || !item.downloaded || !session || session->phase != Phase::Ready ||
+            session->needsRecovery() || downloadActive() || publicationActive() || draftSaveActive() ||
+            (session->store && session->store->commitPending())) return false;
+        auto job = ::platform::memory::PsramPtr<Session::DraftSave>(::platform::memory::createPsram<Session::DraftSave>());
+        if (!job) return false;
+        job->erase_download = true;
+        job->cache = item.id;
+        job->hash = item.revision_hash;
+        session->draft_save = std::move(job);
+        next_step.store(0);
+        ++epoch;
+        return true;
+    }
+    ::ui::geocaching::DraftSaveStatus downloadedRemovalStatus(const std::array<uint8_t, 32>& id, const std::array<uint8_t, 32>& hash) override
+    {
+        using Status = ::ui::geocaching::DraftSaveStatus;
+        Guard guard;
+        if (!guard.locked) return Status::Pending;
+        if (!session || !session->draft_save || !session->draft_save->erase_download ||
+            session->draft_save->cache != id || session->draft_save->hash != hash) return Status::Failed;
+        const auto& job = *session->draft_save;
+        return !job.done ? Status::Pending : job.saved ? Status::Saved
+                                                       : Status::Failed;
     }
     bool download(const ::ui::geocaching::Item& item, uint64_t generation) override
     {
@@ -1846,6 +2030,47 @@ class Facade final : public ::ui::geocaching::Source
     }
 } facade;
 
+bool advanceOfflineRemoval(Session& s)
+{
+    if (!s.draft_save || !s.draft_save->erase_download || s.draft_save->done) return false;
+    auto& job = *s.draft_save;
+    if (!s.workspace_owner.acquire(&job)) return false;
+    auto finish = [&](bool saved)
+    {
+        job.done = true;
+        job.saved = saved;
+        job.removal.reset();
+        s.workspace_owner.release(&job);
+        if (saved)
+        {
+            if (s.saved) s.saved->reset();
+            ++s.local_map_revision;
+            Serial.printf("[Geocaching][LocalDelete] confirmed cache_prefix=%02x%02x%02x%02x\n", job.cache[0], job.cache[1], job.cache[2], job.cache[3]);
+        }
+        ++epoch;
+        return true;
+    };
+    if (!job.removal)
+    {
+        job.removal.reset(::platform::memory::createPsram<SdIndexedRemoveSaved>(s.volume));
+        if (!job.removal || !job.removal->begin(s.root, s.root_copy, job.cache, job.hash, s.frame, kFrameCapacity, s.roots[1 - s.root_copy]))
+            return finish(false);
+    }
+    const auto result = job.removal->step();
+    if (result == IndexedCommitStep::Working) return true;
+    if (result == IndexedCommitStep::Verified)
+    {
+        gc::storage::IndexRootView next;
+        if (!job.removal->committed(next)) return finish(false);
+        s.root = next;
+        s.root_copy = 1 - s.root_copy;
+        return finish(true);
+    }
+    if (result == IndexedCommitStep::IoError || result == IndexedCommitStep::VolumeChanged || result == IndexedCommitStep::RecoveryRequired)
+        s.checkpoint_recovery_required = true;
+    return finish(false);
+}
+
 DispatchResult dispatchForeground(Session& s)
 {
     std::array<uint8_t, 48> key{};
@@ -1883,6 +2108,11 @@ bool closeSession()
     if (!session->needsRecovery() && session->workspace_owner.holder())
     {
         WorkspaceSlice workspace_slice{*session};
+        if (session->draft_save && session->draft_save->erase_download && session->workspace_owner.heldBy(session->draft_save.get()))
+        {
+            advanceOfflineRemoval(*session);
+            return false;
+        }
         if (session->dispatch_store && session->workspace_owner.heldBy(session->dispatch_store.get()))
         {
             dispatchForeground(*session);
@@ -2217,24 +2447,32 @@ void step()
     if (s.phase == Phase::Ready && draftSaveActive())
     {
         auto& job = *s.draft_save;
-        const auto result = job.started ? s.store->stepCommit() : job.erase       ? s.store->deleteDraft({job.id.data(), job.id.size()}, job.expected)
-                                                              : job.editor_fields ? s.store->editDraft({job.id.data(), job.id.size()}, job.bytes, job.size, job.capacity, job.expected)
-                                                                                  : s.store->saveDraft({job.id.data(), job.id.size()}, {job.bytes, job.size}, job.expected);
-        if (result != JournalWriteResult::Busy)
+        if (job.erase_download)
         {
-            job.started = true;
-            if (result != JournalWriteResult::InProgress || s.store->inputConsumed())
+            if (advanceOfflineRemoval(s)) return;
+        }
+        else
+        {
+            const auto result = job.started ? s.store->stepCommit() : job.erase       ? s.store->deleteDraft({job.id.data(), job.id.size()}, job.expected)
+                                                                  : job.editor_fields ? s.store->editDraft({job.id.data(), job.id.size()}, job.bytes, job.size, job.capacity, job.expected)
+                                                                                      : s.store->saveDraft({job.id.data(), job.id.size()}, {job.bytes, job.size}, job.expected);
+            if (result != JournalWriteResult::Busy)
             {
-                heap_caps_free(job.bytes);
-                job.bytes = nullptr;
+                job.started = true;
+                if (result != JournalWriteResult::InProgress || s.store->inputConsumed())
+                {
+                    heap_caps_free(job.bytes);
+                    job.bytes = nullptr;
+                }
+                if (result != JournalWriteResult::InProgress)
+                {
+                    job.done = true;
+                    job.saved = result == JournalWriteResult::Verified;
+                    if (job.saved) ++s.local_map_revision;
+                    ++epoch;
+                }
+                return;
             }
-            if (result != JournalWriteResult::InProgress)
-            {
-                job.done = true;
-                job.saved = result == JournalWriteResult::Verified;
-                ++epoch;
-            }
-            return;
         }
         // Advance the operation that currently owns storage before retrying.
     }
@@ -2493,7 +2731,11 @@ void step()
         if (phase != gc::PublishAttemptPhase::Waiting)
         {
             job.attempt->advance();
-            if (job.attempt->phase() == gc::PublishAttemptPhase::Confirmed) reportPublication("confirmed", *job.attempt);
+            if (job.attempt->phase() == gc::PublishAttemptPhase::Confirmed)
+            {
+                ++s.local_map_revision;
+                reportPublication("confirmed", *job.attempt);
+            }
             ++epoch;
             return;
         }
@@ -2524,7 +2766,11 @@ void step()
         {
             // Queuing, waiting and cancelling requests do not change saved
             // rows. Installation may have committed even if cleanup failed.
-            if (s.saved && before == gc::DownloadPhase::Installing) s.saved->reset();
+            if (before == gc::DownloadPhase::Installing)
+            {
+                ++s.local_map_revision;
+                if (s.saved) s.saved->reset();
+            }
             ++epoch;
         }
         return;

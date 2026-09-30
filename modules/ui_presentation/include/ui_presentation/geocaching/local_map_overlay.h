@@ -19,15 +19,18 @@ class LocalMapOverlay
     void update(Source& source, double latitude, double longitude, uint8_t zoom)
     {
         const double span = std::ldexp(360.0, -std::min<unsigned>(zoom, 22));
+        uint64_t revision = revision_;
+        const bool revision_ready = source.localMapRevision(revision);
         // Finish the current bounded scan before reselecting for a new viewport.
         // GPS movement and zoom updates must not cancel every pending page.
-        if (!started_ || (finished_ && (zoom != zoom_ || std::abs(latitude - latitude_) > span / 4 ||
+        if (!started_ || (finished_ && ((revision_ready && revision != revision_) || zoom != zoom_ || std::abs(latitude - latitude_) > span / 4 ||
                                         std::abs(longitudeDelta(longitude, longitude_)) > span / 4)))
         {
             started_ = true;
             latitude_ = latitude;
             longitude_ = longitude;
             zoom_ = zoom;
+            revision_ = revision;
             section_ = Section::Downloaded;
             offset_ = count_ = 0;
             finished_ = truncated_ = false;
@@ -125,6 +128,7 @@ class LocalMapOverlay
     }
     std::array<Entry, map::MapOverlaySnapshot::kMaxItems> entries_{};
     size_t offset_ = 0, count_ = 0;
+    uint64_t revision_ = 0;
     double latitude_ = 0, longitude_ = 0;
     uint8_t zoom_ = 0;
     Section section_ = Section::Published;

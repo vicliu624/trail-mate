@@ -204,6 +204,13 @@ class DirectoryStore:
                 prior = self.db.execute("SELECT fingerprint,response,created FROM requests WHERE source=? AND version=? AND id=?", (source, version, request_id)).fetchone()
                 if prior and prior["created"] + DEDUP_TTL > now:
                     if prior["fingerprint"] == fingerprint:
+                        if operation == 3 and self._withdrawn(source, body):
+                            return packed([1, 1, operation, request_id, 410, ["cache_archived", None, None]])
+                        if operation == 2:
+                            cached = unpacked(prior["response"])
+                            if cached[4] == 200:
+                                cached[5][1] = self._visible_items(cached[5][1])
+                            return packed(cached)
                         return prior["response"]
                     return packed([1, 1, operation, request_id, 409, ["request_id_reused", None, None]])
                 if self.db.execute("SELECT COUNT(*) FROM requests").fetchone()[0] >= self.max_results:
@@ -252,7 +259,7 @@ class DirectoryStore:
                 south, west, north, east = bbox
                 self.db.execute("""INSERT INTO snapshot_items(snapshot,hash)
                     SELECT ?,o.hash FROM heads h JOIN objects o ON o.hash=h.hash
-                    WHERE h.conflict=0 AND o.latitude BETWEEN ? AND ?
+                    WHERE h.conflict=0 AND o.state!=2 AND o.latitude BETWEEN ? AND ?
                     AND (o.longitude BETWEEN ? AND ? OR (?=1800000000 AND o.longitude=-1800000000))
                     AND (? & (1 << o.state))!=0 AND (? IS NULL OR o.author=?)
                     ORDER BY o.cache LIMIT ?""", (snapshot, south, north, west, east, east, mask, author, author, self.max_snapshot_items + 1))
@@ -266,6 +273,8 @@ class DirectoryStore:
             head = self._head(cache_id)
             if not head:
                 raise ProtocolError(404, "not_found")
+            if self._withdrawn(source, body):
+                raise ProtocolError(410, "cache_archived")
             if wanted is None and head["conflict"]:
                 raise ProtocolError(409, "version_conflict")
             if wanted is None and known == head["hash"]:
@@ -288,6 +297,25 @@ class DirectoryStore:
                 token = self._cursor(source, 4, binding, snapshot, 0, now + CURSOR_TTL)
             return 200, self._page(source, 4, binding, token, limit, budget, request_id, now)
         raise ProtocolError(501, "unsupported_operation")
+
+    def _withdrawn(self, source, body):
+        if type(body) is not list or len(body) != 3 or not binary(body[0], 32):
+            return False
+        head = self._head(body[0])
+        if not head or head["state"] != 2:
+            return False
+        # Explicit tombstone reads and known directory peers retain replication.
+        if body[1] == head["hash"]:
+            return False
+        return self.db.execute("SELECT 1 FROM peers WHERE destination=?", (source,)).fetchone() is None
+
+    def _visible_items(self, items):
+        visible = []
+        for item in items:
+            head = self._head(item[0])
+            if head is not None and head["state"] != 2:
+                visible.append(item)
+        return visible
 
     @staticmethod
     def _valid_cursor(token):
@@ -389,6 +417,8 @@ class DirectoryStore:
             raise ProtocolError(410, expired)
         if cursor["body"] is not None:
             result = msgpack.unpackb(cursor["body"], raw=False)
+            if operation == 2:
+                result[1] = self._visible_items(result[1])
             next_cursor = result[2] if operation == 2 else result[3]
             expires = cursor["expires"]
             if next_cursor is not None:
@@ -410,7 +440,10 @@ class DirectoryStore:
         if not snapshot or snapshot["expires"] <= now:
             raise ProtocolError(410, expired)
         rows = self.db.execute("""SELECT i.position,o.* FROM snapshot_items i JOIN objects o ON o.hash=i.hash
-            WHERE i.snapshot=? AND i.position>? ORDER BY i.position LIMIT ?""", (snapshot_id, position, limit + 1)).fetchall()
+            JOIN heads h ON h.cache=o.cache
+            JOIN objects current ON current.hash=h.hash
+            WHERE i.snapshot=? AND i.position>? AND (?!=2 OR current.state!=2)
+            ORDER BY i.position LIMIT ?""", (snapshot_id, position, operation, limit + 1)).fetchall()
         items = [msgpack.unpackb(row["summary"], raw=False) if operation == 2 else [row["cache"], row["revision"], row["hash"], row["state"]] for row in rows]
         take = min(limit, len(items))
         while True:

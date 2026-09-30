@@ -142,3 +142,20 @@ Caddy 负责证书和 WebSocket 转发。桥接进程重启也会断开现有连
 回退代码前检查数据库格式兼容性。
 
 协议配置参考：<https://reticulum.network/manual/interfaces.html>
+
+### Updating public archive handling
+
+After pulling `codex/geocaching`, rebuild the NAS application image and recreate
+the services from the repository root:
+
+```sh
+git pull --ff-only origin codex/geocaching
+docker compose -f tools/geocaching/deploy/compose.yaml up -d --build
+docker compose -f tools/geocaching/deploy/compose.yaml logs --tail=50 directory
+```
+
+Keep the existing volumes and configuration. This update does not require a new
+directory identity, discovery address, WSS address or GitHub Pages deployment.
+Updating firmware alone does not update the NAS directory. The updated directory
+hides archived caches and rejects old active-version downloads with
+`410 cache_archived`; it retains signed archival records for peer synchronization.

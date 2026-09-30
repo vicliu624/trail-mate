@@ -83,6 +83,39 @@ class DirectoryTests(unittest.TestCase):
         self.assertEqual(self.store.sequence(), 0)
         self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM objects").fetchone()[0], 0)
 
+    def test_archive_withdraws_search_and_old_downloads_after_restart(self):
+        records = [self.record() for _ in range(4)]
+        for signed in records:
+            self.assertEqual(self.publish(signed)[4], 200)
+        search_id = os.urandom(16)
+        first = self.query(limit=1, request_id=search_id)[5]
+        victim_id = first[1][0][0]
+        victim = next(signed for signed in records if verify_cache(signed).cache_id == victim_id)
+        item = verify_cache(victim)
+        get_id = os.urandom(16)
+        self.assertEqual(self.request(3, [item.cache_id, item.revision_hash, None], request_id=get_id)[4], 200)
+        archive = self.record(victim, **{"5": 2})
+        tombstone = verify_cache(archive)
+        self.assertEqual(self.publish(archive)[4], 200)
+        self.store.close()
+        self.store = self.open_store()
+        self.assertNotIn(item.cache_id, [row[0] for row in self.query()[5][1]])
+        self.assertEqual(self.query(limit=1, request_id=search_id)[5][1], [])
+        for body in ([item.cache_id, None, None], [item.cache_id, item.revision_hash, None],
+                     [item.cache_id, None, item.revision_hash]):
+            self.assertEqual(self.request(3, body)[4:6], [410, ["cache_archived", None, None]])
+        self.assertEqual(self.request(3, [item.cache_id, item.revision_hash, None], request_id=get_id)[4], 410)
+        # A signed tombstone remains readable so independent directories can
+        # learn the withdrawal; it never returns the former active payload.
+        self.assertEqual(self.request(3, [item.cache_id, tombstone.revision_hash, None])[5][0], archive)
+        cursor = first[2]
+        remaining = []
+        while cursor:
+            page = self.query(cursor, limit=1)[5]
+            remaining.extend(page[1])
+            cursor = page[2]
+        self.assertNotIn(item.cache_id, [row[0] for row in remaining])
+
     def test_query_snapshot_survives_update_restart_and_budget(self):
         records = [self.record(**{"8": "X" * 96}) for _ in range(8)]
         for signed in records:

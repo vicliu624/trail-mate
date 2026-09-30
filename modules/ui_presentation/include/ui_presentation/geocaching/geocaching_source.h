@@ -76,6 +76,7 @@ struct DetailView
 {
     DetailStatus status = DetailStatus::Pending;
     std::string_view description, hint, error;
+    bool can_archive = false;
 };
 class Source
 {
@@ -90,6 +91,9 @@ class Source
     // UI-thread notification only. A backend may asynchronously prepare this
     // bounded window; item() returns false until its projection is ready.
     virtual void requestWindow(Section, std::size_t, std::size_t) {}
+    // Nonblocking local marker revision; excludes network and loading status.
+    // False means unavailable this tick, so retain the last projection.
+    virtual bool localMapRevision(std::uint64_t&) { return false; }
     // Map needs position metadata only, without publication history auditing.
     virtual void requestMapWindow(Section section, std::size_t offset, std::size_t count)
     {
@@ -106,6 +110,11 @@ class Source
     virtual void closeDetail() {}
     virtual bool loadMore() { return false; }
     virtual bool download(const Item&, std::uint64_t) { return false; }
+    // Removes the selected offline copy, never its public publication.
+    virtual bool removeDownloaded(const Item&) { return false; }
+    virtual bool archiveCache(const std::array<uint8_t, 32>&, const std::array<uint8_t, 32>&) { return false; }
+    virtual DraftSaveStatus archiveStatus(const std::array<uint8_t, 32>&) { return DraftSaveStatus::Failed; }
+    virtual DraftSaveStatus downloadedRemovalStatus(const std::array<uint8_t, 32>&, const std::array<uint8_t, 32>&) { return DraftSaveStatus::Failed; }
     // UI-thread call: enqueue/poll without I/O. Pending never calls or retains
     // the sink/context. Ready calls it synchronously with borrowed text; the
     // sink consumes it immediately and must not reenter Source.

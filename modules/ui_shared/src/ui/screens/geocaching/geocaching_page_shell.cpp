@@ -60,6 +60,9 @@ struct PageState
     uint8_t detail_status = 255;
     std::array<uint8_t, 32> detail_id{}, detail_hash{};
     bool valid = false, details = false;
+    bool detail_delete_confirmation = false, detail_deleting = false;
+    lv_obj_t* detail_archive = nullptr;
+    bool archive_confirmation = false, detail_archiving = false;
 };
 static_assert(sizeof(PageState) <= 640, "Page state must not contain an entire result list");
 ::ui::geocaching::Source* source = nullptr;
@@ -287,6 +290,7 @@ void refreshDetailText()
             const auto status = static_cast<uint8_t>(view.status);
             if (p.detail_status == status) return;
             p.detail_status = status;
+            if (p.detail_archive && view.can_archive) lv_obj_remove_flag(p.detail_archive, LV_OBJ_FLAG_HIDDEN);
             auto* description = lv_obj_get_child(lv_obj_get_child(p.list, 1), 1);
             auto* hint_card = lv_obj_get_child(p.list, 2);
             auto* hint = lv_obj_get_child(hint_card, 1);
@@ -379,6 +383,30 @@ void refreshView()
     if (page->details)
     {
         if (!source) return;
+        if (page->detail_archiving)
+        {
+            const auto result = source->archiveStatus(page->detail_id);
+            if (result == ::ui::geocaching::DraftSaveStatus::Pending) return;
+            page->detail_archiving = false;
+            lv_label_set_text(lv_obj_get_child(page->detail_archive, 0), result == ::ui::geocaching::DraftSaveStatus::Saved ? "Archived; directory confirmed" : "Archive unconfirmed; retry");
+            setEnabled(page->detail_archive, result != ::ui::geocaching::DraftSaveStatus::Saved);
+            return;
+        }
+        if (page->detail_deleting)
+        {
+            const auto result = source->downloadedRemovalStatus(page->detail_id, page->detail_hash);
+            if (result == ::ui::geocaching::DraftSaveStatus::Pending) return;
+            page->detail_deleting = false;
+            if (result == ::ui::geocaching::DraftSaveStatus::Saved)
+            {
+                closeDetails();
+                return;
+            }
+            auto* action = lv_obj_get_child(page->list, 4);
+            setEnabled(action, true);
+            lv_label_set_text(lv_obj_get_child(action, 0), "Delete failed; retry");
+            return;
+        }
         refreshDetailText();
         ::ui::geocaching::Snapshot current;
         source->snapshot(page->section, current);
@@ -504,6 +532,9 @@ void closeDetails()
     if (!page) return;
     if (page->details && source) source->closeDetail();
     page->details = false;
+    page->detail_delete_confirmation = page->detail_deleting = false;
+    page->detail_archive = nullptr;
+    page->archive_confirmation = page->detail_archiving = false;
     page->valid = false;
     lv_obj_remove_flag(lv_obj_get_parent(page->tabs[0]), LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(page->status, LV_OBJ_FLAG_HIDDEN);
@@ -567,6 +598,8 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
     p.detail_generation = p.snapshot.generation;
     p.detail_id = item.id;
     p.detail_hash = item.revision_hash;
+    p.detail_delete_confirmation = p.detail_deleting = false;
+    p.archive_confirmation = p.detail_archiving = false;
     lv_obj_clean(p.list);
     p.rows.fill(nullptr);
     p.row_count = 0;
@@ -592,6 +625,70 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
     auto* metadata = detailBody(detailCard(p.list, "LOCATION & DETAILS"), item.detail.data());
     lv_obj_set_style_text_font(metadata, ::ui::page_profile::resolve_caption_font(), 0);
     lv_obj_set_style_text_color(metadata, lv_color_hex(styles::kTextMuted), 0);
+    if (item.downloaded)
+    {
+        auto* remove = lv_button_create(p.list);
+        lv_obj_set_width(remove, LV_PCT(100));
+        lv_obj_set_height(remove, LV_SIZE_CONTENT);
+        auto* label = lv_label_create(remove);
+        lv_label_set_text(label, "Delete local copy");
+        lv_obj_set_width(label, LV_PCT(100));
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        if (p.group) lv_group_add_obj(p.group, remove);
+        lv_obj_add_event_cb(
+            remove, [](lv_event_t* event)
+            {
+            if (!page || !page->details || !source || page->detail_deleting) return;
+            auto* button = static_cast<lv_obj_t*>(lv_event_get_target(event));
+            if (!page->detail_delete_confirmation)
+            {
+                page->detail_delete_confirmation = true;
+                lv_label_set_text(lv_obj_get_child(button, 0), "Confirm local delete");
+                return;
+            }
+            ::ui::geocaching::Item selected;
+            selected.id = page->detail_id;
+            selected.revision_hash = page->detail_hash;
+            selected.downloaded = true;
+            if (!source->removeDownloaded(selected))
+            {
+                lv_label_set_text(lv_obj_get_child(button, 0), "Busy; retry local delete");
+                return;
+            }
+            page->detail_deleting = true;
+            lv_label_set_text(lv_obj_get_child(button, 0), "Deleting local copy...");
+            setEnabled(button, false);
+            setEnabled(page->next, false); },
+            LV_EVENT_CLICKED, nullptr);
+    }
+    p.detail_archive = lv_button_create(p.list);
+    lv_obj_set_width(p.detail_archive, LV_PCT(100));
+    lv_obj_set_height(p.detail_archive, LV_SIZE_CONTENT);
+    auto* archive_label = lv_label_create(p.detail_archive);
+    lv_label_set_text(archive_label, "Archive public cache");
+    lv_obj_set_width(archive_label, LV_PCT(100));
+    lv_obj_set_style_text_align(archive_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_flag(p.detail_archive, LV_OBJ_FLAG_HIDDEN);
+    if (p.group) lv_group_add_obj(p.group, p.detail_archive);
+    lv_obj_add_event_cb(
+        p.detail_archive, [](lv_event_t*)
+        {
+        if (!page || !source || page->detail_archiving || page->detail_deleting) return;
+        if (!page->archive_confirmation)
+        {
+            page->archive_confirmation = true;
+            lv_label_set_text(lv_obj_get_child(page->detail_archive, 0), "Confirm public archive");
+            return;
+        }
+        if (!source->archiveCache(page->detail_id, page->detail_hash))
+        {
+            lv_label_set_text(lv_obj_get_child(page->detail_archive, 0), "Archive unavailable; retry");
+            return;
+        }
+        page->detail_archiving = true;
+        setEnabled(page->detail_archive, false);
+        lv_label_set_text(lv_obj_get_child(page->detail_archive, 0), "Awaiting directory confirmation..."); },
+        LV_EVENT_CLICKED, nullptr);
     refreshDetailText();
     lv_obj_scroll_to_y(p.list, 0, LV_ANIM_OFF);
     lv_label_set_text(p.range, "Scroll " LV_SYMBOL_DOWN);

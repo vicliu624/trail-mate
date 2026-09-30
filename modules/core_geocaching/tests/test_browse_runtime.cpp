@@ -225,6 +225,7 @@ struct DetailText
 {
     ui::geocaching::DetailStatus status = ui::geocaching::DetailStatus::Pending;
     std::string description, hint, error;
+    bool can_archive = false;
 };
 DetailText detailText(const ui::geocaching::Item& item)
 {
@@ -237,6 +238,7 @@ DetailText detailText(const ui::geocaching::Item& item)
         out.status = value.status;
         out.description = value.description;
         out.hint = value.hint;
+        out.can_archive = value.can_archive;
         out.error = value.error; },
         &result);
     require(!test::ui_io, "detail UI callback touched SD");
@@ -577,23 +579,51 @@ int main(int argc, char** argv)
     // intentionally retains an active revision-2 draft for its map assertions.
     const auto active_fixture = test::files;
     const auto active_directories = test::directories;
-    draft.generation = item.edit_generation;
-    draft.state = 2;
-    require(test::source->saveDraft(draft), "archive draft was not queued");
-    until([&]
-          { return test::source->draftSaveStatus(draft.id, draft.generation) == ui::geocaching::DraftSaveStatus::Saved; },
-          "archive draft was not saved");
-    until([&]
-          {
-              const auto view = snapshot(Section::Published);
-              if (!test::source->item(Section::Published, 0, view.generation, item)) return false;
-              draft_generation = item.edit_generation;
-              return item.state == 2 && !item.publication_confirmed && test::source->publicationAuthor(draft.id, draft_generation, author, &from, &to); },
-          "archive preview not ready or reused previous confirmation");
-    require(from == 2 && to == 3 && test::source->publishDraft(draft.id, draft_generation, author, to), "archive publication was rejected");
+    geocaching::protocol::CmpReader sent({router.sent_bytes.data(), router.sent_bytes.size()});
+    size_t sent_count = 0;
+    uint64_t sent_value = 0;
+    geocaching::ByteView sent_id;
+    require(sent.array(sent_count, 6) && sent.unsignedInteger(sent_value) && sent.unsignedInteger(sent_value) &&
+                sent.unsignedInteger(sent_value) && sent.binary(sent_id, 16),
+            "archive source request invalid");
+    geocaching::RequestId prior_request;
+    std::memcpy(prior_request.bytes.data(), sent_id.data, 16);
+    geocaching::protocol::PublishRequestView published;
+    geocaching::protocol::VerifiedRecordView public_record;
+    std::vector<uint8_t> detail_scratch(8192), own_detail_response(8192);
+    platform::esp::common::EspGeocachingCrypto public_crypto;
+    require(geocaching::protocol::decodePublishRequest({router.sent_bytes.data(), router.sent_bytes.size()}, prior_request, published) &&
+                geocaching::protocol::verifyGeocache(published.signed_cache, public_crypto, detail_scratch.data(), detail_scratch.size(), public_record) == geocaching::protocol::VerificationResult::Valid,
+            "archive base not verified");
+    ui::geocaching::Item public_item;
+    public_item.id = public_record.id.bytes;
+    public_item.revision_hash = public_record.hash.bytes;
+    geocaching::protocol::CmpReader signed_reader(published.signed_cache);
+    geocaching::ByteView archive_record_bytes, signature;
+    require(signed_reader.array(sent_count, 2) && signed_reader.binary(archive_record_bytes, 4096) && signed_reader.binary(signature, 64), "archive signed pair invalid");
+    geocaching::protocol::CmpWriter detail_writer(own_detail_response.data(), own_detail_response.size());
+    require(detail_writer.array(6) && detail_writer.unsignedInteger(1) && detail_writer.unsignedInteger(1) && detail_writer.unsignedInteger(3) &&
+                detail_writer.binary({prior_request.bytes.data(), 16}) && detail_writer.unsignedInteger(200) && detail_writer.array(3) &&
+                detail_writer.array(2) && detail_writer.binary(archive_record_bytes) && detail_writer.binary(signature) && detail_writer.unsignedInteger(1) && detail_writer.unsignedInteger(0),
+            "archive detail response failed");
+    own_detail_response.resize(detail_writer.size());
+    test::source->open(public_item, 0);
     until([&]
           { return router.sends == 7; },
+          "archive detail not requested");
+    reply(router, own_detail_response, 3);
+    until([&]
+          { return detailText(public_item).status == ui::geocaching::DetailStatus::Ready; },
+          "archive detail not verified");
+    require(detailText(public_item).can_archive, "owner cannot manage verified public detail");
+    auto stale_archive = public_item.revision_hash;
+    stale_archive[0] ^= 1;
+    require(!test::source->archiveCache(public_item.id, stale_archive), "archive accepted a stale detail");
+    require(test::source->archiveCache(public_item.id, public_item.revision_hash), "public detail archive not queued");
+    until([&]
+          { return router.sends == 8; },
           "archive request not dispatched");
+    require(test::source->archiveStatus(public_item.id) == ui::geocaching::DraftSaveStatus::Pending, "archive confirmed without directory reply");
     reply(router, publicationReply(router, 3), 1);
     until([&]
           {
@@ -601,6 +631,7 @@ int main(int argc, char** argv)
               return test::source->item(Section::Published, 0, view.generation, item) && item.state == 2 &&
                      item.publication_confirmed && item.publication_revision == 3; },
           "archive directory confirmation not reflected in local record");
+    require(test::source->archiveStatus(public_item.id) == ui::geocaching::DraftSaveStatus::Saved, "archive detail did not show confirmation");
     auto archive_overlay = std::make_unique<ui::geocaching::LocalMapOverlay>();
     auto archive_map = std::make_unique<ui::map::MapOverlaySnapshot>();
     until([&]
@@ -611,6 +642,22 @@ int main(int argc, char** argv)
               return archive_overlay->finished(); },
           "archive map did not finish local metadata");
     require(archive_map->item_count == 1, "archived local cache remained on Map or hid the downloaded cache");
+    test::source->requestWindow(Section::Downloaded, 0, 4);
+    ui::geocaching::Item offline_copy;
+    until([&]
+          { const auto view = snapshot(Section::Downloaded); return view.ready && test::source->item(Section::Downloaded, 0, view.generation, offline_copy); },
+          "offline removal row missing");
+    require(test::source->removeDownloaded(offline_copy), "offline removal not queued");
+    until([&]
+          { return test::source->downloadedRemovalStatus(offline_copy.id, offline_copy.revision_hash) != ui::geocaching::DraftSaveStatus::Pending; },
+          "offline removal stuck");
+    require(test::source->downloadedRemovalStatus(offline_copy.id, offline_copy.revision_hash) == ui::geocaching::DraftSaveStatus::Saved, "offline removal failed");
+    until([&]
+          { const auto view = snapshot(Section::Downloaded); return view.ready && !view.count; },
+          "deleted offline copy remained in Downloaded");
+    until([&]
+          { archive_overlay->update(*test::source, 31, 121, 15); archive_map->item_count = 0; archive_overlay->append(*archive_map); return archive_overlay->finished() && !archive_map->item_count; },
+          "same-viewport map retained deleted offline marker");
     test::source->activate(false);
     until([&]
           { return !router.service; },
