@@ -34,3 +34,4 @@ g++ -std=c++17 -g -O1 -fsanitize=address -fno-omit-frame-pointer -DTRAIL_MATE_RE
     "$build_dir/ge.o" "$build_dir/sc.o" "$build_dir/sha512.o" \
     -o "$build_dir/browse_runtime"
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures save-close-detail

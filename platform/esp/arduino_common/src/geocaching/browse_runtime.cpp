@@ -2085,13 +2085,26 @@ class Facade final : public ::ui::geocaching::Source
         if (!session->response && detail && detail->state == CacheDetail::State::Ready && detail->response &&
             detail->matches(item.id, item.revision_hash) && detail->remote.bytes == remote.bytes)
         {
-            job->verified.reset(::platform::memory::createPsram<gc::protocol::VerifiedRecordView>(detail->verified_record));
+            job->verified.reset(::platform::memory::createPsram<gc::protocol::VerifiedRecordView>());
             if (!job->verified) return false;
             job->request = detail->request;
-            job->response = detail->response;
             job->response_size = detail->response_size;
-            detail->response = nullptr;
-            detail->response_size = 0;
+            job->response = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.download.detail", job->response_size, false));
+            if (!job->response) return false;
+            std::memcpy(job->response, detail->response, job->response_size);
+            // Both owners may outlive the other. Reparse the immutable copy so
+            // every borrowed field belongs to the download's response, while
+            // retaining the already verified identity/hash without more crypto.
+            gc::protocol::GetResponseView parsed;
+            if (!gc::protocol::decodeGetResponse({job->response, job->response_size}, job->request, 8192, parsed) || parsed.has_conflict) return false;
+            gc::protocol::CmpReader reader(parsed.signed_cache);
+            size_t count = 0;
+            gc::ByteView encoded;
+            if (!reader.array(count, 2) || count != 2 || !reader.binary(encoded, gc::kMaxRecordBytes) ||
+                !reader.binary(job->verified->signature, 64) || job->verified->signature.size != 64 || !reader.finished() ||
+                !gc::protocol::decodeGeocacheRecord(encoded, job->verified->record)) return false;
+            job->verified->id = detail->verified_record.id;
+            job->verified->hash = detail->verified_record.hash;
         }
         session->storage_requested = true;
         session->download_start = std::move(job);
@@ -2353,10 +2366,11 @@ void step()
         if (s.local_read_only && (draftSaveActive() || downloadActive() || publicationActive() ||
                                   s.needsRecovery() || (s.saved && s.saved->error()) || (s.draft_catalog && s.draft_catalog->failed)))
         {
-            // The audit and local readers share a frame lease. Release every
-            // reader first; queued edits own their bytes independently.
+            // The audit and local readers share a frame lease. Ready details
+            // own their response independently; release only their reader.
             s.workspace_owner.release(s.detail.get());
-            s.detail.reset();
+            if (s.detail && s.detail->state == CacheDetail::State::Ready) s.detail->saved_read.reset();
+            else s.detail.reset();
             s.pending_detail.reset();
             if (s.store) s.store->releaseDraftRead();
             s.saved.reset();

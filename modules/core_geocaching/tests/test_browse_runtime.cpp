@@ -251,7 +251,8 @@ DetailText detailText(const ui::geocaching::Item& item)
 }
 int main(int argc, char** argv)
 {
-    require(argc == 2 || argc == 3, "expected fixture directory and optional local-draft-only scenario");
+    require(argc == 2 || argc == 3, "expected fixture directory and optional runtime scenario");
+    const bool close_on_save = argc == 3 && std::strcmp(argv[2], "save-close-detail") == 0;
     const std::string folder(argv[1]);
     const auto encoded_record = fixture(folder, "record-v1.bin");
     geocaching::RecordView expected_record;
@@ -260,7 +261,7 @@ int main(int argc, char** argv)
     chat::MeshAdapterRouter router;
     LoraBoard board;
     rt::configure(router, board);
-    if (argc == 3)
+    if (argc == 3 && !close_on_save)
     {
         require(std::strcmp(argv[2], "local-draft-only") == 0, "unknown runtime scenario");
         router.ready = false;
@@ -468,13 +469,48 @@ int main(int argc, char** argv)
           "initial publication projection did not load");
     test::source->requestWindow(Section::Discover, 0, 1);
     generation = snapshot(Section::Discover).generation;
+    void* open_response = nullptr;
+    for (const auto& allocation : test::allocations)
+        if (allocation.second.owner == "geocaching.rx") open_response = allocation.first;
+    require(open_response != nullptr, "open detail response missing before save");
+    test::memory_available = false;
+    require(!test::source->download(item, generation), "save ignored unavailable PSRAM");
+    test::memory_available = true;
+    require(detailText(item).status == ui::geocaching::DetailStatus::Ready,
+            "failed save invalidated the open verified detail");
     require(test::source->download(item, generation), "download not queued");
-    test::source->closeDetail();
+    require(test::allocated("geocaching.download.detail"), "verified download did not own a response copy");
+    if (close_on_save)
+    {
+        // Release the original response before the installation's first tick.
+        // Every verified view must belong to the queued download's copy.
+        test::source->closeDetail();
+        until([&]
+              {
+                  const auto allocation = test::allocations.find(open_response);
+                  return allocation == test::allocations.end() || allocation->second.owner != "geocaching.rx"; },
+              "closing pending download retained the detail response");
+    }
     until([&]
-          { return std::strstr(snapshot(Section::Discover).status.data(), "Shared caches"); },
+          {
+              if (!close_on_save)
+                  require(detailText(item).status == ui::geocaching::DetailStatus::Ready,
+                          "saving invalidated the open verified detail");
+              return std::strstr(snapshot(Section::Discover).status.data(), "Shared caches"); },
           "download did not finish");
+    if (!close_on_save)
+    {
+        require(test::allocations.count(open_response), "saving released the open detail response");
+        require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
+                "saved open detail lost verified text");
+        require(!test::source->archiveCache(item.id, item.revision_hash), "saved foreign detail became archivable");
+        test::source->closeDetail();
+        tick();
+    }
     require(router.sends == 4, "saving verified detail sent a redundant network request");
-    require(!test::allocated("geocaching.detail.rx"), "saved detail retained its response buffer");
+    const auto released_response = test::allocations.find(open_response);
+    require(released_response == test::allocations.end() || released_response->second.owner != "geocaching.rx",
+            "saved detail retained its response buffer");
     // A complete download writes requests, attempts, objects and installed
     // heads. None changes the publication projection we already loaded.
     require(std::strstr(snapshot(Section::Published).status.data(), "No local drafts"),
@@ -486,6 +522,22 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.downloaded; },
           "installed GPX missing from directory");
     const auto saved_id = item.id;
+    if (close_on_save)
+    {
+        test::source->open(item, snapshot(Section::Downloaded).generation);
+        until([&]
+              { return detailText(item).status == ui::geocaching::DetailStatus::Ready; },
+              "closed detail download lost installed details");
+        require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
+                "closed detail download corrupted installed text");
+        require(router.sends == 4, "installed detail required another network request");
+        test::source->closeDetail();
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty(); },
+              "closed detail installation leaked PSRAM");
+        return 0;
+    }
     ui::geocaching::DraftInput draft;
     draft.name = "Published through device runtime";
     draft.description = "A local draft with a durable signed revision";

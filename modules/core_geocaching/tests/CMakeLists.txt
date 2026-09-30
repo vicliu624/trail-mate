@@ -435,6 +435,7 @@ target_compile_features(geocaching_browse_runtime_test PRIVATE cxx_std_17)
 target_compile_definitions(geocaching_browse_runtime_test PRIVATE ESP_PLATFORM=1)
 target_link_libraries(geocaching_browse_runtime_test PRIVATE geocaching_native_hash)
 add_test(NAME geocaching_browse_runtime COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures)
+add_test(NAME geocaching_browse_runtime_close_detail COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures save-close-detail)
 add_test(NAME geocaching_draft_only_map COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures local-draft-only)
 
 add_executable(geocaching_local_map_test test_local_map_overlay.cpp)
