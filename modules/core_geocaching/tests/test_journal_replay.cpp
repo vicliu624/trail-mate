@@ -39,6 +39,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_indexed_new_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_pending_request.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_recovery.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_remove_saved.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_value_reader.h"
 #include "platform/esp/arduino_common/geocaching/sd_journal_replay.h"
@@ -2310,8 +2311,8 @@ int checkIndexedDownloadReceipt(const char* path)
         return true;
     };
     // Use the actual application client and port, including waiting, cancel,
-    // source matching and replacement of an already downloaded exact version.
-    for (unsigned scenario = 0; scenario < 3; ++scenario)
+    // source matching, replacement, and downloading a locally removed version.
+    for (unsigned scenario = 0; scenario < 5; ++scenario)
     {
         if (scenario < 2)
         {
@@ -2323,12 +2324,49 @@ int checkIndexedDownloadReceipt(const char* path)
         }
         auto request_id = id;
         auto task_id = task;
-        const uint64_t generation = scenario == 2 ? 2 : 1;
-        if (scenario == 2)
+        const uint64_t generation = scenario >= 3 ? 2 * scenario - 2 : scenario == 2 ? 2
+                                                                                     : 1;
+        if (scenario >= 2)
         {
-            request_id.bytes[0] ^= 0x55;
-            task_id[0] ^= 0x55;
+            request_id.bytes[0] ^= static_cast<uint8_t>(0x55 + scenario);
+            task_id[0] ^= static_cast<uint8_t>(0x55 + scenario);
         }
+        if (scenario >= 3)
+        {
+            const auto retained_gpx = files.at(target);
+            auto remove = std::make_unique<SdIndexedRemoveSaved>(volume);
+            if (!remove->begin(root, copy, record.id.bytes, record.hash.bytes, frame, sizeof(frame), roots[1 - copy])) return 435;
+            auto status = IndexedCommitStep::Working;
+            for (unsigned i = 0; i < 32768 && status == IndexedCommitStep::Working; ++i) status = remove->step();
+            if (status != IndexedCommitStep::Verified || !remove->committed(root) || files.at(target) != retained_gpx) return 436;
+            copy = 1 - copy;
+            // A local deletion must not be undone by resuming the preceding
+            // completed task, even though its GPX and signed receipt remain.
+            {
+                const auto deleted_disk = files;
+                auto previous_request = id;
+                auto previous_task = task;
+                previous_request.bytes[0] ^= static_cast<uint8_t>(0x54 + scenario);
+                previous_task[0] ^= static_cast<uint8_t>(0x54 + scenario);
+                uint8_t incoming[1024];
+                IndexWorkspaceOwner owner;
+                IndexedDownloadStore stale_store(volume, root, copy, roots[0], roots[1], owner, workspace,
+                                                 frame, sizeof(frame), incoming, sizeof(incoming), verification, sizeof(verification), crypto);
+                SdDownloadPort<FileDigest> stale_port(stale_store, crypto, {}, {record.id, record.hash, generation - 2}, previous_task, {});
+                auto resumed = stale_port.resume({}, previous_request);
+                for (unsigned i = 0; i < 32768 && resumed == DownloadOperationResult::Pending; ++i) resumed = stale_port.poll();
+                if (resumed != DownloadOperationResult::Rejected || owner.holder() || files != deleted_disk) return 438;
+                IndexedDownloadStore reader(volume, root, copy, roots[0], roots[1], owner, workspace,
+                                            frame, sizeof(frame), incoming, sizeof(incoming), verification, sizeof(verification), crypto);
+                SavedCacheRecord removed;
+                auto read = DownloadRecoveryRead::Pending;
+                for (unsigned i = 0; i < 32768 && read == DownloadRecoveryRead::Pending; ++i)
+                    read = reader.readSavedCache({record.id.bytes.data(), 32}, true, crypto, removed);
+                if (read != DownloadRecoveryRead::End || owner.holder() || files != deleted_disk) return 439;
+            }
+            if (scenario == 4) files.at(target)[0] ^= 1;
+        }
+        const auto original_gpx = files.count(target) ? files.at(target) : std::vector<uint8_t>{};
         uint8_t incoming[1024];
         IndexWorkspaceOwner owner;
         auto indexed = std::make_unique<IndexedDownloadStore>(volume, root, copy, roots[0], roots[1], owner, workspace,
@@ -2525,7 +2563,7 @@ int checkIndexedDownloadReceipt(const char* path)
             step_bytes = 0;
             client.advance();
             if (step_bytes > 512) return 275;
-            if (scenario == 2 && client.phase() == DownloadPhase::Installing)
+            if (scenario >= 2 && scenario < 4 && client.phase() == DownloadPhase::Installing)
             {
                 const bool backup_exists = files.count(backup);
                 if (backup_seen && !backup_exists && retained_disk.empty()) retained_disk = files;
@@ -2535,7 +2573,19 @@ int checkIndexedDownloadReceipt(const char* path)
                 last_sequence = root.sequence;
             }
         }
-        if (client.phase() != DownloadPhase::Stored || !files.count(target) || owner.holder()) return 276;
+        if (scenario == 4)
+        {
+            // Even after local removal, an externally edited GPX must never
+            // be replaced using the old installation's digest as permission.
+            if (client.phase() != DownloadPhase::Failed || files.at(target) != original_gpx || owner.holder()) return 437;
+            continue;
+        }
+        if (client.phase() != DownloadPhase::Stored || !files.count(target) || owner.holder())
+        {
+            std::fprintf(stderr, "Indexed download scenario=%u phase=%u generation=%llu blocked=%u\n", scenario, unsigned(client.phase()),
+                         static_cast<unsigned long long>(generation), unsigned(indexed->needsRecovery()));
+            return 276;
+        }
         {
             DownloadRecoveryRequest completed;
             const auto reads_before = read_bytes;
@@ -2675,7 +2725,7 @@ int checkIndexedDownloadReceipt(const char* path)
             auto temporary = make_saved_reader(sizeof(frame), sizeof(verification), unavailable);
             if (read_saved(*temporary, {}, false, unavailable) != DownloadRecoveryRead::Unavailable || temporary->needsRecovery() || owner.holder() || files != disk) return 385;
         }
-        if (scenario == 2)
+        if (scenario >= 2)
         {
             if (!backup_seen || files.count(backup)) return 277;
             std::string history = "/trailmate/geocaching/.state/history/";
@@ -2884,7 +2934,13 @@ int checkIndexedDownloadReceipt(const char* path)
             if (result != DownloadOperationResult::Rejected || owner.holder() || files != interrupted_download.disk) return 279;
             continue;
         }
-        if (result != DownloadOperationResult::Complete || !files.count(target) || owner.holder()) return 262;
+        if (result != DownloadOperationResult::Complete || !files.count(target) || owner.holder())
+        {
+            std::fprintf(stderr, "Indexed recovery snapshot=%zu result=%u generation=%llu installed=%u blocked=%u\n",
+                         static_cast<size_t>(&interrupted_download - interrupted.data()), unsigned(result),
+                         static_cast<unsigned long long>(selected.identity.generation), unsigned(selected.installed), unsigned(indexed->needsRecovery()));
+            return 262;
+        }
         const std::string gpx(files.at(target).begin(), files.at(target).end());
         if (gpx.find("<name>Test</name>") == std::string::npos) return 263;
         if (migrate)

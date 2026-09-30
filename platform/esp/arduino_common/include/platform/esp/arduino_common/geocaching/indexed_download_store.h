@@ -332,6 +332,7 @@ class IndexedDownloadStore final : public DownloadStore
             std::memcpy(task_.data(), outgoing.task_id.data, task_.size());
             std::memcpy(cache_.data(), task.cache_id.data, cache_.size());
             has_current_ = head.current_hash.size == 32;
+            removed_current_ = !has_current_ && head.highest_seen_revision != 0;
             if (has_current_) std::memcpy(old_revision_.bytes.data(), head.current_hash.data, 32);
             if (!io_->emplace<SdIndexGet>(volume_).begin(root_, 12, {task_.data(), task_.size()}, frame_, capacity_)) return fail();
             phase_ = Phase::Install;
@@ -347,14 +348,15 @@ class IndexedDownloadStore final : public DownloadStore
             MutationView row;
             InstallRecordView install;
             if (!scan.item(row) || !decodeInstallRecord(row.key, row.value, install)) return fail();
-            const bool matching = completed_ ? install.generation < generation_ && !std::memcmp(install.new_file_hash.data, recovery_old_hash_.data(), 32)
-                                             : !std::memcmp(install.revision_hash.data, old_revision_.bytes.data(), 32);
+            const bool matching = completed_         ? install.generation < generation_ && !std::memcmp(install.new_file_hash.data, recovery_old_hash_.data(), 32)
+                                  : removed_current_ ? install.generation < generation_
+                                                     : !std::memcmp(install.revision_hash.data, old_revision_.bytes.data(), 32);
             if (install.phase == InstallPhase::Installed && install.generation <= generation_ && install.generation > proof_generation_ &&
                 !std::memcmp(install.cache_id.data, cache_.data(), 32) && matching)
             {
                 proof_generation_ = install.generation;
                 std::memcpy(proof_hash_.data(), install.new_file_hash.data, 32);
-                if (completed_) std::memcpy(old_revision_.bytes.data(), install.revision_hash.data, 32);
+                if (completed_ || removed_current_) std::memcpy(old_revision_.bytes.data(), install.revision_hash.data, 32);
             }
             if (!scan.advance()) return fail();
             return JournalWriteResult::InProgress;
@@ -380,7 +382,9 @@ class IndexedDownloadStore final : public DownloadStore
                 }
             }
             else if (completed_) return fail();
-            if (!has_current_) return reload();
+            // A local deletion retains the GPX. Locate its last committed
+            // installation proof before allowing a later download to replace it.
+            if (!has_current_ && (!removed_current_ || completed_)) return reload();
             if (!io_->emplace<SdIndexScan>(volume_).begin(root_, 12, frame_, capacity_)) return fail();
             phase_ = Phase::Proof;
             return JournalWriteResult::InProgress;
@@ -618,7 +622,7 @@ class IndexedDownloadStore final : public DownloadStore
     size_t install_size_ = 0;
     Phase phase_ = Phase::None;
     uint8_t page_read_retries_ = 0;
-    bool valid_ = false, blocked_ = false, cached_ = false, active_ = false, completed_ = false, has_current_ = false;
+    bool valid_ = false, blocked_ = false, cached_ = false, active_ = false, completed_ = false, has_current_ = false, removed_current_ = false;
 };
 static_assert(sizeof(IndexedDownloadStore) <= 640, "Idle download storage contains metadata and caller buffer leases only");
 } // namespace platform::esp::arduino_common::geocaching

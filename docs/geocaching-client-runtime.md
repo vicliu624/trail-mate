@@ -17,17 +17,17 @@ valid. A nonempty generation must have exactly the length in its head; malformed
 references and CRC failures are still rejected. Legacy heads and readers retain
 their existing checks.
 
-The production transaction writer maintains current-only cache-head shards
-(table 2). It folds all mutations for the same bucket in a transaction into one
+The production transaction writer maintains current-only object, cache-head,
+and draft shards (tables 1, 2, and 4). It folds all mutations for the same bucket in a transaction into one
 replacement, verifies the flushed file by read-back CRC, then publishes the
 shard head through the existing root commit. Failed verification leaves the
 parent head unchanged and requires journal recovery. The bounded writer and its
 optional legacy lookup are allocated in PSRAM only; neither retains a complete
 shard or GPX payload.
 
-Updating a legacy cache-head bucket converts that bucket during the write.
+Updating a legacy object, cache-head, or draft bucket converts that bucket during the write.
 Opening a local list does not create or rebuild generations, and untouched
-legacy buckets still use their original reader. Other tables retain append
+legacy buckets still use their original reader. The remaining tables retain append
 shards. Exclusive index-slot cleanup recognizes generation filenames; older
 generations remain until their retired index slot is cleaned. Full conversion
 of untouched old-card buckets and earlier reclamation remain unfinished.
@@ -221,6 +221,13 @@ restoring it. Immutable historical objects and GPX files remain on SD; this is
 not a promise of immediate physical file reclamation. Local map projections
 invalidate on committed saves, removals and installation changes even when the
 viewport stays unchanged. Work and payload buffers are allocated in PSRAM.
+
+A later download may replace the retained GPX only after its bytes match the
+last committed installation for that cache from an earlier generation. A
+modified or unowned GPX is still rejected. Removing the head does not reactivate
+old download tasks. When identical history already exists, installation
+reacquires the completed receipt before checking the retained file and removing
+its duplicate backup; that cleanup is also safe to resume after restart.
 
 Archive retries reuse an existing author reservation's issuance time and verify
 the reconstructed revision hash before signing. Advancing the wall clock must
