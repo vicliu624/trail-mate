@@ -3,6 +3,7 @@
 #include "platform/esp/arduino_common/geocaching/sd_index_get.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_scan.h"
 #include <optional>
+#include <variant>
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -39,7 +40,7 @@ class SdIndexedDownloadRecovery
     {
         out = {};
         if (!waiting_ || result_ != IndexScanStep::Item) return false;
-        out = preview_;
+        out = std::get<::geocaching::protocol::SummaryView>(task_or_preview_);
         return true;
     }
     bool selected(::geocaching::storage::DownloadRecoveryRequest& out) const
@@ -63,6 +64,7 @@ class SdIndexedDownloadRecovery
                 if (phase_ == Phase::Preview) return finish(IndexScanStep::Invalid);
                 if (!waiting_ || !found_) return result_ = found_ ? IndexScanStep::Item : IndexScanStep::End;
                 if (!scan_.emplace(volume_).begin(root_, 5, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+                task_or_preview_.emplace<protocol::SummaryView>();
                 phase_ = Phase::Preview;
                 return result_;
             }
@@ -72,7 +74,7 @@ class SdIndexedDownloadRecovery
             if (!scan_->item(row) || !decodeOutgoing(row.key, row.value, outgoing)) return finish(IndexScanStep::Invalid);
             if (phase_ == Phase::Preview)
             {
-                if (findWaitingDownloadPreview(row.key, outgoing, best_, preview_)) return result_ = IndexScanStep::Item;
+                if (findWaitingDownloadPreview(row.key, outgoing, best_, std::get<protocol::SummaryView>(task_or_preview_))) return result_ = IndexScanStep::Item;
                 if (!scan_->advance()) return finish(IndexScanStep::Invalid);
                 return result_;
             }
@@ -118,11 +120,12 @@ class SdIndexedDownloadRecovery
         }
         if (phase_ == Phase::Task)
         {
+            auto& task_bytes = std::get<TaskBytes>(task_or_preview_);
             if (!decodeTask({current_.task.data(), current_.task.size()}, get_->value(), task)) return finish(IndexScanStep::Invalid);
             if (task.kind != 2 || task.state == 5 || (waiting_ && (task.state >= 3 || !task.continue_intent))) return continueScan(false);
-            if (task.cache_id.size != 32 || task.revision_hash.size != 32 || get_->value().size > task_.size()) return finish(IndexScanStep::Invalid);
+            if (task.cache_id.size != 32 || task.revision_hash.size != 32 || get_->value().size > task_bytes.size()) return finish(IndexScanStep::Invalid);
             task_size_ = get_->value().size;
-            std::memcpy(task_.data(), get_->value().data, task_size_);
+            std::memcpy(task_bytes.data(), get_->value().data, task_size_);
             std::memcpy(current_.identity.id.bytes.data(), task.cache_id.data, 32);
             std::memcpy(current_.identity.hash.bytes.data(), task.revision_hash.data, 32);
             current_.installed = task.state == 3;
@@ -137,7 +140,7 @@ class SdIndexedDownloadRecovery
             if (head.install_generation != current_.identity.generation) return continueScan(false);
             if (waiting_)
             {
-                if (!decodeTask({current_.task.data(), current_.task.size()}, {task_.data(), task_size_}, task)) return finish(IndexScanStep::Invalid);
+                if (!decodeTask({current_.task.data(), current_.task.size()}, {std::get<TaskBytes>(task_or_preview_).data(), task_size_}, task)) return finish(IndexScanStep::Invalid);
                 OutgoingView outgoing;
                 outgoing.continue_intent = intent_;
                 outgoing.task_id = {current_.task.data(), current_.task.size()};
@@ -152,7 +155,7 @@ class SdIndexedDownloadRecovery
         }
         InstallRecordView install;
         const bool has_install = status == IndexGetStep::Ready;
-        if (!decodeTask({current_.task.data(), current_.task.size()}, {task_.data(), task_size_}, task) ||
+        if (!decodeTask({current_.task.data(), current_.task.size()}, {std::get<TaskBytes>(task_or_preview_).data(), task_size_}, task) ||
             !decodeCacheHead({current_.identity.id.bytes.data(), 32}, {head_.data(), head_size_}, head) ||
             (has_install && !decodeInstallRecord({current_.task.data(), current_.task.size()}, get_->value(), install))) return finish(IndexScanStep::Invalid);
         OutgoingView outgoing;
@@ -194,11 +197,12 @@ class SdIndexedDownloadRecovery
     ::geocaching::storage::DownloadRecoveryRequest current_, best_;
     std::optional<SdIndexScan> scan_;
     std::optional<SdIndexGet> get_;
-    std::array<uint8_t, 256> task_{};
+    // Task bytes are no longer needed after selection enters the preview scan.
+    using TaskBytes = std::array<uint8_t, 256>;
+    std::variant<TaskBytes, ::geocaching::protocol::SummaryView> task_or_preview_;
     std::array<uint8_t, 64> head_{};
     std::array<uint8_t, 48> after_{};
     ::geocaching::Destination local_;
-    ::geocaching::protocol::SummaryView preview_;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0, task_size_ = 0, head_size_ = 0;
     bool has_after_ = false, found_ = false, intent_ = false, waiting_ = false;
