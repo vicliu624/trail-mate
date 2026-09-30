@@ -188,6 +188,7 @@ SdFileReadResult sd_read_file(const char* path, uint8_t* output, size_t capacity
     result.bytes_read = std::min(capacity, found->second.size());
     std::memcpy(output, found->second.data(), result.bytes_read);
     io_bytes += result.bytes_read;
+    if (profile_reads) read_bytes_by_path[path] += result.bytes_read;
     result.status = SdFileReadStatus::Ready;
     return result;
 }

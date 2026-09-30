@@ -1,0 +1,27 @@
+# Geocaching local-read performance reproduction
+
+The native browse runtime links the production local stores and storage worker.
+Its SD seam charges a configurable simulated duration per I/O operation. This is
+a sensitivity model, not a measurement of device latency.
+
+After building `geocaching_browse_runtime_test` from
+`modules/core_geocaching/tests`, set `TRAIL_MATE_TEST_IO_DELAY_MS=25` and
+`TRAIL_MATE_TEST_IO_PROFILE=1`, then run the executable with
+`modules/core_geocaching/tests/fixtures` as its argument. Add `local-draft-only`
+as a second argument to isolate an unpublished draft. The default delay remains
+5 ms. The three-second assertion is unchanged at every delay.
+
+The profile includes both streaming file reads and whole-file metadata reads.
+Direct Map prints every file's bytes and the total I/O operation count.
+
+On 2026-09-30, the 25 ms model failed the existing budget:
+
+| Scenario | Simulated elapsed | Result |
+| --- | ---: | --- |
+| Single unpublished draft, direct Map | 3,045 ms | Failed |
+| Two local markers, direct Map cold start | 6,160 ms | Failed |
+
+The two-marker run performed 199 I/O operations and read 2,296 bytes from the
+28-byte volume header: 82 header reads. The current 5 ms regression passing
+does not establish acceptable device performance. Repeated volume checks are
+an optimization target, but media replacement detection must remain intact.

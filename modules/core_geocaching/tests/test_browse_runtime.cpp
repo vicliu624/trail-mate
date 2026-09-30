@@ -280,7 +280,9 @@ int main(int argc, char** argv)
         // Reproduce the L2 heap snapshot: PSRAM is available, internal heap is
         // below the unrelated 40 KiB reserve used by network admissions.
         test::internal_free = 38904;
-        test::io_delay_ms = 5;
+        test::io_delay_ms = std::getenv("TRAIL_MATE_TEST_IO_DELAY_MS")
+                                ? static_cast<uint32_t>(std::strtoul(std::getenv("TRAIL_MATE_TEST_IO_DELAY_MS"), nullptr, 10))
+                                : 5;
         test::source->activate(true);
         until([&]
               { return std::strstr(snapshot(Section::Downloaded).status.data(), "Restoring geocaching tasks"); },
@@ -574,12 +576,16 @@ int main(int argc, char** argv)
     // Open the main map directly, without warming either Geocaching list.
     // Include a synthetic per-operation storage cost; UI refresh deadlines stay
     // at 750 ms instead of adding a fresh 750 ms after background work finishes.
-    test::io_delay_ms = 5;
+    test::io_delay_ms = std::getenv("TRAIL_MATE_TEST_IO_DELAY_MS")
+                            ? static_cast<uint32_t>(std::strtoul(std::getenv("TRAIL_MATE_TEST_IO_DELAY_MS"), nullptr, 10))
+                            : 5;
     {
         test::source->activate(true);
         auto overlays = std::make_unique<ui::geocaching::LocalMapOverlay>();
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
         const auto map_started = test::clock_ms;
+        const auto map_io_started = test::io_operations;
+        test::read_bytes_by_path.clear();
         for (unsigned frame = 0; frame < 100 && map->item_count != 2; ++frame)
         {
             const auto refresh_due = test::clock_ms + 750;
@@ -592,6 +598,10 @@ int main(int argc, char** argv)
         require(map->item_count == 2 && map->header.valid, "direct main map did not load local markers");
         std::fprintf(stderr, "Direct Map cold-start acceptance: elapsed_ms=%llu budget_ms=3000 io_delay_ms=%u\n",
                      static_cast<unsigned long long>(test::clock_ms - map_started), test::io_delay_ms);
+        std::fprintf(stderr, "Direct Map I/O operations=%llu\n", static_cast<unsigned long long>(test::io_operations - map_io_started));
+        if (test::profile_reads)
+            for (const auto& read : test::read_bytes_by_path)
+                std::fprintf(stderr, "  %llu bytes %s\n", static_cast<unsigned long long>(read.second), read.first.c_str());
         require(test::clock_ms - map_started <= 3000, "main map exceeded the three-second local marker budget");
         test::source->activate(false);
         tick();
