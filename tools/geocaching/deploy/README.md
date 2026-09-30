@@ -17,10 +17,19 @@ TLS 反向代理 → packet_bridge.py → 本机 127.0.0.1:44242
                              └── RMAP TCP 入口
 ```
 
-`reticulum/config` 已配置三个独立 TCPClientInterface 和一个只监听 loopback 的
-TCPServerInterface。多个上游同时启用，由 Reticulum 管理接口、路径和重连；
-桥接程序不把一个包自行广播到多个 TCP socket，不实现另一套选路或故障切换。
-现有链路中断后仍可能需要重新发现路径及重试应用请求，不能承诺无缝切换。
+`reticulum/config` enables native interface discovery with a minimum stamp value
+of 16 and up to two automatically connected discovered interfaces. The three
+configured TCP clients are bootstrap-only: Reticulum detaches them when the
+discovered connection target is reached and restores them if all discovered
+connections are lost. Bootstrap connections can overlap during this transition;
+the two-interface limit applies to automatically discovered connections only.
+The loopback TCP server for the WSS bridge remains enabled independently.
+
+The existing `reticulum-data` volume retains discovered interface state across
+container restarts. Keep that volume when updating. The packet bridge does not
+implement another routing or failover layer. A lost application link can still
+require path rediscovery and a request retry. If no cached or bootstrap endpoint
+is reachable, native discovery alone cannot obtain new Internet entrypoints.
 
 部署时将 `reticulum/` 复制到服务器私有持久目录，以该目录作为服务的
 `--rns-config`。例如将配置置于 `/srv/trail-mate/reticulum/config` 后，分别运行：

@@ -3,6 +3,9 @@
 [reticulum]
   enable_transport = yes
   share_instance = yes
+  discover_interfaces = yes
+  required_discovery_value = 16
+  autoconnect_discovered_interfaces = 2
 
 [logging]
   loglevel = 4
@@ -18,17 +21,20 @@
   [[Public upstream - Sydney]]
     type = TCPClientInterface
     enabled = yes
+    bootstrap_only = yes
     target_host = sydney.reticulum.au
     target_port = 4242
 
   [[Public upstream - ReticulumNet NL]]
     type = TCPClientInterface
     enabled = yes
+    bootstrap_only = yes
     target_host = node.reticulumnet.nl
     target_port = 4242
 
   [[Public upstream - RMAP]]
     type = TCPClientInterface
     enabled = yes
+    bootstrap_only = yes
     target_host = rmap.world
     target_port = 4242

@@ -17,7 +17,7 @@ Two containers use the same locally built Python image. Bridge shares directory'
 - An amd64 or arm64 NAS able to pull the Python image and install pinned Python packages.
 - Working DDNS and a router forwarding TCP 18434 to a reserved/stable NAS LAN address on port 18434.
 - A valid browser-trusted certificate covering `vicliu.i234.me`, its full chain and matching private key.
-- Outbound DNS, HTTPS for installation and TCP 4242 for the configured Reticulum peers.
+- Outbound DNS, HTTPS for installation, TCP 4242 for bootstrap peers and the TCP ports advertised by automatically discovered peers.
 
 A certificate covers the hostname, not the port. Use the appropriate DSM-managed certificate or establish issuance/renewal supported by your DSM setup. Compose does not issue certificates and does not assume HTTP-01 can use blocked port 80. Do not use a self-signed certificate or disable browser verification.
 
@@ -30,6 +30,31 @@ cp .env.example .env
 ```
 
 For an existing checkout, preserve local changes and update the branch. The complete repository is required because the Dockerfile uses the service source files. Its ignore file excludes certificates, databases and firmware output from the build context.
+
+### Updating Reticulum discovery on an existing deployment
+
+Merge the discovery settings from `reticulum/config` into the configuration
+mounted by your deployment. The template enables native discovery, requires a
+stamp value of 16, allows two automatically connected interfaces, and marks the
+three public seeds as `bootstrap_only`. Preserve custom peers and private access
+credentials. Reticulum retains discovery state in the existing `reticulum-data`
+volume; do not remove that volume during an update.
+
+After updating the mounted configuration, recreate both services together because
+the bridge shares the directory container's network namespace:
+
+```sh
+docker compose up -d --force-recreate directory bridge
+docker compose exec directory rnstatus --config /var/lib/trail-mate/reticulum -d
+docker compose exec directory rnstatus --config /var/lib/trail-mate/reticulum -a
+```
+
+The first status command lists discovered candidates; the second shows connected
+interfaces. A listening WSS port alone does not prove upstream connectivity.
+Bootstrap interfaces can overlap with discovered connections while Reticulum
+reaches its target; this template does not impose the device's single-socket
+policy on the NAS. If every cached and bootstrap endpoint is unreachable, native
+discovery cannot learn new endpoints until one connection becomes available.
 
 Configure `.env`:
 
