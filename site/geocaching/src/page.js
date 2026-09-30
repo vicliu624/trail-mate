@@ -26,7 +26,7 @@ const labels = {
 document.documentElement.lang = chinese ? 'zh-Hans' : 'en';
 for (const node of document.querySelectorAll('[data-label]')) node.textContent = labels[node.dataset.label];
 const $ = id => document.getElementById(id);
-const worker = new Worker(new URL('./reticulum-worker.js', import.meta.url), {type:'module'});
+let worker = new Worker(new URL('./reticulum-worker.js', import.meta.url), {type:'module'});
 let nextId = 0, ready = false, rows = [], detailId = null, detailGeneration = 0, partial = null;
 const pending = new Map(), selected = new Set();
 const map = L.map('map', {worldCopyJump:true, minZoom:0}).fitWorld();
@@ -96,7 +96,15 @@ tiles.on('tileerror', () => { $('map-state').textContent = tr('Some map tiles ar
 function rpc(command, args = {}) {
   if (pending.size >= 8) return Promise.reject(Error(tr('Please wait for the current requests.','请等待当前请求完成。')));
   const id = ++nextId;
-  return new Promise((resolve, reject) => { pending.set(id, {resolve,reject}); worker.postMessage({id,command,args}); });
+  return new Promise((resolve, reject) => {
+    pending.set(id, {resolve,reject});
+    try { worker.postMessage({id,command,args}); }
+    catch (error) { pending.delete(id); reject(error); }
+  });
+}
+function rejectPending(message) {
+  const actions = [...pending.values()]; pending.clear();
+  for (const action of actions) action.reject(Error(message));
 }
 const notice = message => { $('notice').textContent = message; };
 const bounds = () => { const b = map.getBounds(); return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]; };
@@ -209,7 +217,7 @@ async function download(cacheIds) {
   } catch (error) { notice(error.message); }
 }
 
-worker.onmessage = ({data}) => {
+function receiveWorkerMessage({data}) {
   if (data.id) {
     const action=pending.get(data.id); if (!action) return; pending.delete(data.id);
     if (data.error) action.reject(Error(data.error)); else action.resolve(data.result);
@@ -237,8 +245,22 @@ worker.onmessage = ({data}) => {
       !rows.length && event.more?tr('No matches in these pages yet. Load more to continue searching this region.','当前批次暂无匹配点，可加载更多继续检索此区域。'):
       tr('Loaded from live directory responses. Open a cache to verify its details.','已加载目录实时响应。打开藏宝点以验证完整详情。'));
   } else if (event.type==='source-error') notice(`${event.name}: ${event.message}`);
-};
-worker.onerror = () => { notice(tr('The map service stopped. Refresh the page to try again.','地图服务已停止，请刷新页面重试。')); ready=false; $('search').disabled=true; $('region-apply').disabled=true; };
+}
+function recoverWorker() {
+  if (serviceStopped) return;
+  serviceStopped=true;
+  receiveWorkerMessage({data:{event:{type:'status',state:'disconnected'}}});
+  clearTimeout(serviceRetry); worker.terminate();
+  rejectPending(tr('Map service interrupted. Reconnecting…','地图服务中断，正在重新连接…'));
+  $('search').disabled=true; $('region-apply').disabled=true; updateSelection();
+  notice(tr('Map service interrupted. Reconnecting…','地图服务中断，正在重新连接…'));
+  serviceRetry=setTimeout(()=>{
+    worker=new Worker(new URL('./reticulum-worker.js',import.meta.url),{type:'module'});
+    worker.onmessage=receiveWorkerMessage; worker.onerror=recoverWorker;
+    serviceStopped=false; startService();
+  },5000);
+}
+worker.onmessage=receiveWorkerMessage; worker.onerror=recoverWorker;
 let serviceRetry = null, serviceStarting = false, serviceStopped = false, serviceRetryDelay = 5000;
 async function startService() {
   if (serviceStarting || serviceStopped) return;
@@ -295,7 +317,7 @@ map.getContainer().addEventListener('wheel',()=>{manualArea=true;},{passive:true
 const initialLocation=locateNearby();
 startService();
 map.on('moveend',renderMarkers);
-window.addEventListener('pagehide',()=>{serviceStopped=true;clearTimeout(serviceRetry);worker.terminate();});
+window.addEventListener('pagehide',()=>{serviceStopped=true;clearTimeout(serviceRetry);worker.terminate();rejectPending('Page closed');});
 // Back/forward cache restores the document but cannot revive a terminated
 // worker. Reconnect through normal startup instead of leaving dead RPCs.
 window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});
