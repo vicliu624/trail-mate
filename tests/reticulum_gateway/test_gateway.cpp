@@ -1,8 +1,12 @@
+#include "chat/domain/reticulum_network_config.h"
 #include "chat/infra/reticulum/tcp_retry.h"
+#include "sys/ringbuf.h"
 #include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <initializer_list>
 
 #define TRAIL_MATE_RETICULUM_WIFI_GATEWAY_AVAILABLE 1
@@ -10,6 +14,15 @@
 #define TRAIL_MATE_RETICULUM_C6_TCP_AVAILABLE 0
 
 static uint32_t now = 0;
+namespace reticulum = chat::reticulum;
+using InterfaceId = uint8_t;
+constexpr InterfaceId kInvalidInterfaceId = 0;
+constexpr size_t kReticulumGatewayHostMaxLen = reticulum::kInterfaceHostMaxLen;
+static const char* boolLabel(bool value) { return value ? "true" : "false"; }
+static void copyHost(char* out, size_t size, const char* input)
+{
+    std::snprintf(out, size, "%s", input ? input : "");
+}
 uint32_t millis() { return now; }
 struct Logger
 {
@@ -141,7 +154,10 @@ class WifiGatewayReticulumInterface
     bool enabled_ = true;
     bool selected_ = false;
     bool auto_connect_wifi_ = true;
-    char host_[16] = "example.invalid";
+    char host_[64] = "example.invalid";
+    InterfaceId interface_id_ = kInvalidInterfaceId;
+    sys::RingBuffer<unsigned, 8> rx_queue_;
+    sys::RingBuffer<unsigned, 4> rx_priority_queue_;
     uint16_t port_ = 4242;
     bool socket_online_ = false;
     bool socket_open_pending_ = false;
@@ -154,6 +170,7 @@ class WifiGatewayReticulumInterface
     platform::esp::arduino_common::net::Connector connector_;
     WiFiClient client_;
     void stop();
+    void applyConfig(const reticulum::NetworkInterfaceConfig*, bool, InterfaceId);
     bool ensureSocket();
     void maintain();
     bool isReady() const;
@@ -183,6 +200,31 @@ int main()
 {
     using chat::reticulum::TcpRetry;
     using platform::esp::arduino_common::net::TcpConnectPhase;
+    // Exercise the production reconfiguration function with both real queue
+    // types. Old priority frames must not acquire the replacement interface ID.
+    WifiGatewayReticulumInterface configured;
+    reticulum::NetworkInterfaceConfig endpoint;
+    endpoint.type = reticulum::NetworkInterfaceType::TcpClient;
+    endpoint.enabled = true;
+    std::strcpy(endpoint.target_host, "first.example.org");
+    configured.applyConfig(&endpoint, true, 32);
+    configured.rx_queue_.append(1);
+    configured.rx_priority_queue_.append(2);
+    configured.applyConfig(&endpoint, true, 32);
+    assert(configured.rx_queue_.size() == 1 && configured.rx_priority_queue_.size() == 1);
+    std::strcpy(endpoint.target_host, "second.example.org");
+    configured.applyConfig(&endpoint, true, 32);
+    assert(configured.rx_queue_.size() == 0 && configured.rx_priority_queue_.size() == 0);
+    configured.rx_priority_queue_.append(3);
+    configured.applyConfig(&endpoint, true, 33);
+    assert(configured.interface_id_ == 33 && configured.rx_priority_queue_.size() == 0);
+    configured.rx_priority_queue_.append(4);
+    ++endpoint.target_port;
+    configured.applyConfig(&endpoint, true, 33);
+    assert(configured.rx_priority_queue_.size() == 0);
+    configured.rx_priority_queue_.append(5);
+    configured.applyConfig(nullptr, true, 33);
+    assert(configured.interface_id_ == kInvalidInterfaceId && configured.rx_priority_queue_.size() == 0);
     // Bounded failures, tick wrap, and stable recovery. A short-lived TCP
     // handshake must not reset a failing endpoint's penalty.
     TcpRetry retry;

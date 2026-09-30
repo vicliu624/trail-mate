@@ -106,6 +106,17 @@ are cooling down, the runtime waits rather than opening parallel connections.
 AutoInterface LAN peers continue to operate independently. C6-based devices also
 retain all three candidates and try them sequentially through their single socket.
 
+Changing a TCP host, port or interface ID, or disabling the interface, discards
+both its ordinary and priority receive queues. Reapplying identical settings
+preserves queued packets. This prevents data from the old connection from being
+reported with a replacement endpoint's interface ID.
+
+Interface IDs are currently 8-bit runtime identifiers. Discovered-candidate
+rotation must explicitly retire the old interface's routes and links before
+reusing a connection slot; monotonically assigning IDs and eventually wrapping
+is not sufficient. Candidate persistence must retain endpoint/access identity,
+not treat a runtime slot number as durable identity.
+
 Candidate selection currently uses the configured entries. Native interface
 announcements are received and validated; persistence and automatic selection
 of discovered candidates are not yet implemented.

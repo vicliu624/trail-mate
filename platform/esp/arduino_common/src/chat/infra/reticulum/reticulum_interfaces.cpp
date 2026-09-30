@@ -253,6 +253,7 @@ void WifiGatewayReticulumInterface::applyConfig(
         hdlc_escape_ = false;
         hdlc_frame_len_ = 0;
         rx_queue_.clear();
+        rx_priority_queue_.clear();
     }
 
     Serial.printf("[Reticulum][IF][TCP] id=%u enabled=%s host=%s port=%u auto_wifi=%s available=%s\n",
