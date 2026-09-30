@@ -5,8 +5,9 @@ and LXMF LXStamper.py. Run manually to reproduce the C++ test vector.
 """
 import hashlib
 import hmac
+import sys
 
-payload = b"Reticulum discovery conformance"
+payload = bytes.fromhex(sys.argv[1]) if len(sys.argv) > 1 else b"Reticulum discovery conformance"
 material = hashlib.sha256(payload).digest()
 work = bytearray()
 for round_number in range(20):

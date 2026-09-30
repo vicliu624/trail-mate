@@ -3445,6 +3445,7 @@ void LxmfAdapter::processRuntime()
         path_manager_.clear();
         deferred_discovery_.clear();
         geocaching_discovery_probe_.reset();
+        gateway_discovery_.reset();
 
         propagation_client_.resetForNetworkConfig(
             rtnet::active().propagation.sync_on_start);
@@ -3459,6 +3460,11 @@ void LxmfAdapter::processRuntime()
 
     const RuntimeBudget budget = makeRuntimeBudget();
     processRadioPackets(budget);
+    if ((budget.allow_propagation_client || budget.allow_public_discovery) && gateway_discovery_.poll())
+    {
+        const auto& endpoint = gateway_discovery_.latest();
+        Serial.printf("[Reticulum][Discovery] verified host=%s port=%u\n", endpoint.host, endpoint.port);
+    }
     if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
                                          identity_.isReady() && interfaces_.hasReadyWifiGateway(), budget))
     {
@@ -3603,7 +3609,9 @@ bool LxmfAdapter::processOneRadioPacket(
     }
     const bool geocaching_discovery = runtime::GeocachingDiscoveryBudget::matches(
         parsed, geocaching_announcement_handler_ != nullptr, budget);
-    if (budget.drop_public_discovery && !geocaching_discovery &&
+    const bool gateway_discovery = (budget.allow_propagation_client || budget.allow_public_discovery) &&
+                                   reticulum::NativeGatewayDiscovery::matches(parsed);
+    if (budget.drop_public_discovery && !geocaching_discovery && !gateway_discovery &&
         isPublicDiscoveryPacket(parsed) &&
         !isForegroundDiscoveryDestination(parsed.destination_hash))
     {
@@ -3671,7 +3679,12 @@ bool LxmfAdapter::processOneRadioPacket(
         noteRxSummary(false, false, false, false, false, true);
         return false;
     }
-    if (!geocaching_discovery && shouldDeferDiscoveryPacket(parsed, ingress_interface, budget))
+    if (gateway_discovery && !gateway_discovery_.consume(millis()))
+    {
+        noteRxSummary(false, false, false, false, false, true);
+        return false;
+    }
+    if (!geocaching_discovery && !gateway_discovery && shouldDeferDiscoveryPacket(parsed, ingress_interface, budget))
     {
         if (deferred_replay)
         {
@@ -3688,7 +3701,7 @@ bool LxmfAdapter::processOneRadioPacket(
         return false;
     }
 
-    if (!geocaching_discovery && !deferred_replay && ingress_wifi && !shouldProcessWifiIngressPacket(parsed, budget))
+    if (!geocaching_discovery && !gateway_discovery && !deferred_replay && ingress_wifi && !shouldProcessWifiIngressPacket(parsed, budget))
     {
         if (budget.phase && std::strcmp(budget.phase, "nomad") == 0 &&
             (packet_len >= 256U ||
@@ -4086,6 +4099,14 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
                                   ingest.status == runtime::AnnounceIngestResult::Status::Ignored &&
                                   ingest.path_decision == runtime::PathAnnounceDecision::RejectReplay &&
                                   ingest.reason && std::strcmp(ingest.reason, "path_rejected") == 0;
+    if ((ingest.status == runtime::AnnounceIngestResult::Status::Accepted || cached_discovery) &&
+        !ingest.local_destination && reticulum::NativeGatewayDiscovery::matches(packet))
+    {
+        gateway_discovery_.offerVerified(ingest.announce.app_data, ingest.announce.app_data_len, ingest.identity_hash);
+        // Discovery metadata belongs to the network manager, not the contact
+        // directory or generic raw-announce archive (which could retain keys).
+        return true;
+    }
     if ((ingest.status == runtime::AnnounceIngestResult::Status::Accepted || cached_discovery) &&
         geocaching_announcement_handler_ && !ingest.local_destination && ingest.announce.name_hash &&
         ingest.announce.public_key && ingest.announce.app_data && ingest.announce.app_data_len <= 96)

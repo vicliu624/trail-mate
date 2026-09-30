@@ -34,6 +34,7 @@
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_runtime_budget.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_runtime_state.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_rx_telemetry.h"
+#include "platform/esp/arduino_common/chat/infra/reticulum/native_gateway_discovery.h"
 #include "platform/esp/arduino_common/chat/infra/reticulum/reticulum_interfaces.h"
 #include "platform/ui/reticulum_page_runtime.h"
 
@@ -184,6 +185,7 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
     };
 
     reticulum::interfaces::ReticulumInterfaceSet interfaces_;
+    reticulum::NativeGatewayDiscovery gateway_discovery_;
     uint32_t network_config_generation_ = 0;
     runtime::AdapterScratchBuffers scratch_{};
     runtime::DeferredDiscoveryQueue deferred_discovery_;

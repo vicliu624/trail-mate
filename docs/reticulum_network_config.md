@@ -107,7 +107,8 @@ AutoInterface LAN peers continue to operate independently. C6-based devices also
 retain all three candidates and try them sequentially through their single socket.
 
 Candidate selection currently uses the configured entries. Native interface
-discovery and persistence of discovered candidates are not yet implemented.
+announcements are received and validated; persistence and automatic selection
+of discovered candidates are not yet implemented.
 
 The discovery parser is available in `chat/infra/reticulum/interface_discovery.h`
 as groundwork for native `rnstransport.discovery.interface` announcements. Its
@@ -127,8 +128,23 @@ check using the firmware's existing Crypto SHA-256 implementation. It streams
 each HKDF output into the final hash, retaining no expanded workblock. Each poll
 does one round; another announcement cannot replace a pending check. The object
 has a 512-byte size ceiling enforced by the native test, and ESP rejects starting
-verification unless the object resides in PSRAM. This component is not yet wired
-to announcement admission or persistent candidate storage.
+verification unless the object resides in PSRAM.
+
+`NativeGatewayDiscovery` connects parsing and stamp validation to the adapter's
+normal signature-verified announcement path. It permits one verification attempt
+per ten seconds, with one in-flight job, including while the L2 screen is awake.
+Call, Nomad-request and screen-saver scheduling still take priority. The complete
+state, capped at 768 bytes, is embedded in the PSRAM-owned adapter; it retains no
+receive-buffer pointers. Only a valid completed stamp replaces the latest
+endpoint. Invalid announcements cannot overwrite that endpoint. Network-config
+changes reset this temporary state. This is a single observation, not a durable
+candidate catalog, and it does not change any configured TCP slot.
+
+Successful validation emits `[Reticulum][Discovery] verified host=... port=...`.
+That log establishes announcement validation only, not server reachability or a
+successful connection. These service announcements do not create Contacts or
+enter the generic raw-announcement archive, avoiding accidental retention of
+credential-bearing discovery metadata there.
 
 The gateway tests include a Python-standard-library reference vector, the real
 Crypto implementation, and checks for altered payloads/stamps, cancellation,

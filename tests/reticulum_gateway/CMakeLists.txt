@@ -77,3 +77,20 @@ else()
     target_compile_options(reticulum_discovery_stamp PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
 add_test(NAME reticulum_discovery_stamp COMMAND reticulum_discovery_stamp)
+
+add_executable(reticulum_native_discovery test_native_discovery.cpp
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/native_gateway_discovery.cpp"
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/discovery_stamp_verifier.cpp"
+    "${REPO}/modules/core_chat/src/infra/reticulum/interface_discovery.cpp"
+    "${REPO}/modules/core_chat/src/infra/reticulum/reticulum_wire.cpp")
+target_compile_features(reticulum_native_discovery PRIVATE cxx_std_17)
+target_compile_definitions(reticulum_native_discovery PRIVATE TRAIL_MATE_RETICULUM_HASH_ONLY)
+target_include_directories(reticulum_native_discovery PRIVATE
+    "${REPO}/platform/esp/arduino_common/include" "${REPO}/modules/core_chat/include")
+target_link_libraries(reticulum_native_discovery PRIVATE reticulum_discovery_crypto)
+if(MSVC)
+    target_compile_options(reticulum_native_discovery PRIVATE /UNDEBUG)
+else()
+    target_compile_options(reticulum_native_discovery PRIVATE -UNDEBUG -Wall -Wextra)
+endif()
+add_test(NAME reticulum_native_discovery COMMAND reticulum_native_discovery)
