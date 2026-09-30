@@ -58,6 +58,22 @@ int main()
     assert(budget.live_packet_limit == 1);
     assert(budget.deferred_discovery_limit == 0);
     assert(budget.drop_public_discovery);
+    assert(budget.allow_propagation_client);
+    assert(!budget.allow_announce_tx);
+    assert(!budget.allow_persistence);
+
+    input.screen_sleeping = true;
+    budget = makeRuntimeBudget(input);
+    assert(budget.allow_propagation_client);
+    input.call_realtime_active = true;
+    budget = makeRuntimeBudget(input);
+    assertPhase(budget.phase, "call");
+    assert(!budget.allow_propagation_client);
+    input.call_realtime_active = false;
+    input.nomad_request_active = true;
+    budget = makeRuntimeBudget(input);
+    assertPhase(budget.phase, "nomad");
+    assert(!budget.allow_propagation_client);
 
     input = RuntimeBudgetInput{};
     input.max_ingress_packets_per_poll = 4;
