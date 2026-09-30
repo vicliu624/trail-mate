@@ -22,9 +22,12 @@ class SdIndexAppend
   public:
     SdIndexAppend(const ::geocaching::storage::VolumeInstance& volume, char slot) : volume_(volume), slot_(slot) {}
     uint64_t writtenLength() const { return result_ == IndexAppendStep::Verified ? length_ + (duplicate_ ? 0 : ::geocaching::storage::kIndexEntrySize) : 0; }
-    bool begin(const ::geocaching::storage::IndexedMutation& entry)
+    bool begin(const ::geocaching::storage::IndexedMutation& entry, bool current_checkpoint = false)
     {
-        if (result_ != IndexAppendStep::Idle || (slot_ != 'a' && slot_ != 'b') || !::geocaching::storage::encodeIndexEntry(volume_, entry, bytes_)) return false;
+        if (result_ != IndexAppendStep::Idle || (slot_ != 'a' && slot_ != 'b') ||
+            (current_checkpoint && entry.location.source == ::geocaching::storage::IndexedValueSource::Journal) ||
+            !::geocaching::storage::encodeIndexEntry(volume_, entry, bytes_)) return false;
+        current_sequence_ = current_checkpoint ? entry.location.record_sequence : 0;
         result_ = IndexAppendStep::Working;
         return true;
     }
@@ -43,8 +46,10 @@ class SdIndexAppend
         }
         if (phase_ == Phase::OpenWrite || phase_ == Phase::OpenRead)
         {
-            char path[80];
-            if (!indexShardPath(slot_, bytes_[20], {bytes_.data() + 52, bytes_[21]}, path, sizeof(path)) ||
+            char path[96];
+            const IndexShardHead head{1, current_sequence_, 0, bytes_[20], static_cast<uint8_t>(::sys::crc32(bytes_.data() + 52, bytes_[21])), true};
+            if (!(current_sequence_ ? indexShardDataPath(slot_, head, path, sizeof(path))
+                                    : indexShardPath(slot_, bytes_[20], {bytes_.data() + 52, bytes_[21]}, path, sizeof(path))) ||
                 !file_.open(path, phase_ == Phase::OpenWrite ? "a+" : "r")) return fail(IndexAppendStep::IoError);
             phase_ = phase_ == Phase::OpenWrite ? Phase::Size : Phase::SeekVerify;
             return result_;
@@ -84,6 +89,7 @@ class SdIndexAppend
                 !decodeIndexEntry({bytes_.data(), bytes_.size()}, volume_, next) || previous.table != next.table ||
                 (::sys::crc32(previous.key.data, previous.key.size) & 0xff) != (::sys::crc32(next.key.data, next.key.size) & 0xff) ||
                 previous.location.record_sequence > next.location.record_sequence) return fail(IndexAppendStep::Invalid);
+            if (current_sequence_ && previous.location.record_sequence != current_sequence_) return fail(IndexAppendStep::Invalid);
             if (previous.location.record_sequence == next.location.record_sequence && previous.key.size == next.key.size &&
                 !std::memcmp(previous.key.data, next.key.data, next.key.size))
             {
@@ -91,6 +97,15 @@ class SdIndexAppend
                 duplicate_ = true;
                 verify_offset_ = tail_offset_;
                 phase_ = Phase::Flush;
+            }
+            else if (current_sequence_)
+            {
+                // Verified checkpoint rows arrive in strict key order. Checking
+                // only the tail proves uniqueness without rereading the bucket.
+                const auto common = previous.key.size < next.key.size ? previous.key.size : next.key.size;
+                const auto order = std::memcmp(previous.key.data, next.key.data, common);
+                if (order > 0 || (order == 0 && previous.key.size >= next.key.size)) return fail(IndexAppendStep::Invalid);
+                phase_ = Phase::Write;
             }
             else if (previous.location.record_sequence == next.location.record_sequence && tail_offset_)
             {
@@ -155,7 +170,7 @@ class SdIndexAppend
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::storage::IndexEntryBytes bytes_{}, verify_{};
     storage::SdRuntimeFile file_;
-    uint64_t length_ = 0, verify_offset_ = 0, tail_offset_ = 0;
+    uint64_t length_ = 0, verify_offset_ = 0, tail_offset_ = 0, current_sequence_ = 0;
     uint16_t read_ = 0;
     char slot_;
     bool duplicate_ = false;

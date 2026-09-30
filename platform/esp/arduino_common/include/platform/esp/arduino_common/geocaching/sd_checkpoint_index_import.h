@@ -176,7 +176,7 @@ class SdCheckpointIndexImport
                 return result_;
             }
             if (phase_ == Phase::CreateTable && !storage::sd_mkdir(path)) return fail(IndexRootWriteStep::IoError);
-            if (!io_.template emplace<SdIndexAppend>(volume_, index_slot_).begin(entry_)) return fail(IndexRootWriteStep::Invalid);
+            if (!io_.template emplace<SdIndexAppend>(volume_, index_slot_).begin(entry_, entry_.table == 1 || entry_.table == 2 || entry_.table == 4)) return fail(IndexRootWriteStep::Invalid);
             phase_ = Phase::Append;
             return result_;
         }
@@ -186,7 +186,8 @@ class SdCheckpointIndexImport
             const auto status = append.step();
             if (status == IndexAppendStep::Working) return result_;
             if (status != IndexAppendStep::Verified) return mapError(status);
-            head_ = {epoch_, selected_.sequence, append.writtenLength(), entry_.table, static_cast<uint8_t>(::sys::crc32(entry_.key.data, entry_.key.size))};
+            head_ = {epoch_, selected_.sequence, append.writtenLength(), entry_.table, static_cast<uint8_t>(::sys::crc32(entry_.key.data, entry_.key.size)),
+                     entry_.table == 1 || entry_.table == 2 || entry_.table == 4};
             if (!io_.template emplace<SdIndexHeadWriter>(volume_, index_slot_).begin(entry_.key, 0, head_)) return fail(IndexRootWriteStep::Invalid);
             phase_ = Phase::HeadFirst;
             return result_;

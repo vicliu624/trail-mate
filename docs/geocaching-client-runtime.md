@@ -25,6 +25,14 @@ parent head unchanged and requires journal recovery. The bounded writer and its
 optional legacy lookup are allocated in PSRAM only; neither retains a complete
 shard or GPX payload.
 
+Checkpoint import and rotation preserve this format for tables 1, 2, and 4.
+They write checkpoint references to the sequence-named generation before
+publishing its head. The checkpoint reader enforces strict key order across
+pages; the appender checks the previous entry to maintain that order within each
+bucket, rather than searching the whole bucket for every imported row. Journal
+appends retain their existing replay behavior. Reference checks, checkpoint
+digest validation, and replacement equivalence still precede root publication.
+
 Updating a legacy object, cache-head, or draft bucket converts that bucket during the write.
 Opening a local list does not create or rebuild generations, and untouched
 legacy buckets still use their original reader. The remaining tables retain append
