@@ -1587,7 +1587,20 @@ int checkIndexedDraftPublication()
             else result = failed_port.pollPersistence();
             transient.trim();
         }
-        if (fail_read_once || !failed_port.needsRecovery() || workspace_owner.holder() || files != unchanged ||
+        // A read fault may occur after journal creation when redundant reads
+        // are removed. No committed data may change; an uncertain journal is
+        // allowed only while the session requires recovery and rejects writes.
+        bool committed_unchanged = true;
+        for (const auto& file : unchanged)
+        {
+            if (file.first.find("journal.pending") != std::string::npos) continue;
+            const auto found = files.find(file.first);
+            committed_unchanged &= found != files.end() && found->second == file.second;
+        }
+        for (const auto& file : files)
+            if (!unchanged.count(file.first))
+                committed_unchanged &= file.first.find("/.state/journal/") != std::string::npos || file.first.find("journal.pending") != std::string::npos;
+        if (fail_read_once || !failed_port.needsRecovery() || workspace_owner.holder() || !committed_unchanged ||
             failed_port.submit(directory, request, {request_bytes, request_size}) != QueryPersistence::Rejected) return 410;
     }
     transient.query = &port;

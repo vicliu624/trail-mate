@@ -16,8 +16,12 @@ class SdIndexReferences
 
     // Pending mutations are borrowed and immutable until completion. Their
     // storage must be disjoint from the reusable read frame.
+    // preserves_existing_links is for owners that prove existing reference
+    // keys unchanged, or require every new task/request key absent at commit.
+    // It must never be used for deletion, rebinding, or recovery validation.
     bool begin(const ::geocaching::storage::IndexRootView& root, uint8_t* frame, size_t capacity,
-               const ::geocaching::storage::MutationView* mutations = nullptr, size_t count = 0)
+               const ::geocaching::storage::MutationView* mutations = nullptr, size_t count = 0,
+               bool preserves_existing_links = false)
     {
         if (result_ != IndexScanStep::Idle || count > 64 || (count && !mutations)) return false;
         auto overlaps = [&](const void* data, size_t size)
@@ -36,7 +40,16 @@ class SdIndexReferences
                 if (mutations[j].table == row.table && mutations[j].key.size == row.key.size &&
                     !std::memcmp(mutations[j].key.data, row.key.data, row.key.size)) return false;
         }
-        if (!scan_.emplace(volume_).begin(root, 5, frame, capacity)) return false;
+        // Attempts only reference outgoing requests; no stored row references
+        // an attempt. Changing attempts cannot invalidate existing task/request
+        // relationships. Validate the changed attempts directly, while keeping
+        // whole-root audits and task/request changes on the full scan path.
+        bool attempts_only = count != 0;
+        for (size_t i = 0; i < count; ++i)
+            attempts_only &= mutations[i].table != 5 && mutations[i].table != 10;
+        const bool changed_only = count && (attempts_only || preserves_existing_links);
+        if (!changed_only && !scan_.emplace(volume_).begin(root, 5, frame, capacity)) return false;
+        scanned_ = changed_only;
         mutations_ = mutations;
         mutation_count_ = count;
         root_ = root;
@@ -46,7 +59,8 @@ class SdIndexReferences
         return true;
     }
 
-    // End means every live task/outgoing/attempt reference was checked.
+    // End means the resulting references were checked: a whole-root audit for
+    // task/request changes, or the changed attempts when their targets persist.
     IndexScanStep step()
     {
         using namespace ::geocaching::storage;

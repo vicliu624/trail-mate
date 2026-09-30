@@ -150,6 +150,9 @@ class PublishAttempt
         return true;
     }
     PublishAttemptPhase phase() const { return phase_; }
+    const GeocacheId& cacheId() const { return id_; }
+    uint32_t revision() const { return revision_; }
+    CacheState state() const { return state_; }
 
   private:
     PublishAttemptPort& port_;

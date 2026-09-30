@@ -33,9 +33,9 @@ void tick()
     require(test::io_bytes <= 512, "runtime exceeded the per-slice transfer budget");
 }
 template <class Predicate>
-void until(Predicate ready, const char* message)
+void until(Predicate ready, const char* message, bool force_profile = false)
 {
-    test::profile_reads = std::getenv("TRAIL_MATE_TEST_IO_PROFILE") != nullptr;
+    test::profile_reads = force_profile || std::getenv("TRAIL_MATE_TEST_IO_PROFILE") != nullptr;
     test::read_bytes_by_path.clear();
     const auto started = test::clock_ms;
     const auto begins = test::maintenance::begins;
@@ -57,7 +57,7 @@ void until(Predicate ready, const char* message)
         }
         std::sort(reads.rbegin(), reads.rend());
         std::fprintf(stderr, "Runtime read profile: total=%llu bytes distinct_files=%u\n", static_cast<unsigned long long>(total), static_cast<unsigned>(reads.size()));
-        for (size_t i = 0; i < std::min<size_t>(5, reads.size()); ++i)
+        for (size_t i = 0; i < (force_profile ? reads.size() : std::min<size_t>(5, reads.size())); ++i)
             std::fprintf(stderr, "  %llu bytes %s\n", static_cast<unsigned long long>(reads[i].first), reads[i].second.c_str());
     }
     if (!ready())
@@ -521,10 +521,22 @@ int main(int argc, char** argv)
     until([&]
           { return test::source->publicationAuthor(draft.id, draft_generation, author, &from, &to); },
           "draft not ready for publication confirmation");
+    const bool dispatch_profile = test::profile_reads;
+    std::vector<std::string> prior_attempt_shards;
+    for (const auto& file : test::files)
+        if (file.first.find("/0d/") != std::string::npos && file.first.size() >= 4 && file.first.substr(file.first.size() - 4) == ".gci")
+            prior_attempt_shards.push_back(file.first);
+    test::profile_reads = true;
+    test::read_bytes_by_path.clear();
     require(from == 0 && to == 1 && test::source->publishDraft(draft.id, draft_generation, author, to), "publication confirmation rejected");
     until([&]
           { return router.sends == 5; },
-          "publication request not dispatched");
+          "publication request not dispatched", true);
+    require(!test::read_bytes_by_path.empty(), "foreground dispatch read profile was not captured");
+    for (const auto& read : test::read_bytes_by_path)
+        require(std::find(prior_attempt_shards.begin(), prior_attempt_shards.end(), read.first) == prior_attempt_shards.end() || !read.second,
+                "foreground publication scanned historical attempts before sending");
+    test::profile_reads = dispatch_profile;
     reply(router, publicationReply(router, 1), 1);
     until([&]
           {
@@ -561,12 +573,52 @@ int main(int argc, char** argv)
               return test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed && item.publication_revision == 2; },
           "second publication receipt not reflected in list");
     require(router.identity.signs == 2, "version update signed more than once");
+    // Isolate archive conformance from the following restart fixture, which
+    // intentionally retains an active revision-2 draft for its map assertions.
+    const auto active_fixture = test::files;
+    const auto active_directories = test::directories;
+    draft.generation = item.edit_generation;
+    draft.state = 2;
+    require(test::source->saveDraft(draft), "archive draft was not queued");
+    until([&]
+          { return test::source->draftSaveStatus(draft.id, draft.generation) == ui::geocaching::DraftSaveStatus::Saved; },
+          "archive draft was not saved");
+    until([&]
+          {
+              const auto view = snapshot(Section::Published);
+              if (!test::source->item(Section::Published, 0, view.generation, item)) return false;
+              draft_generation = item.edit_generation;
+              return item.state == 2 && !item.publication_confirmed && test::source->publicationAuthor(draft.id, draft_generation, author, &from, &to); },
+          "archive preview not ready or reused previous confirmation");
+    require(from == 2 && to == 3 && test::source->publishDraft(draft.id, draft_generation, author, to), "archive publication was rejected");
+    until([&]
+          { return router.sends == 7; },
+          "archive request not dispatched");
+    reply(router, publicationReply(router, 3), 1);
+    until([&]
+          {
+              const auto view = snapshot(Section::Published);
+              return test::source->item(Section::Published, 0, view.generation, item) && item.state == 2 &&
+                     item.publication_confirmed && item.publication_revision == 3; },
+          "archive directory confirmation not reflected in local record");
+    auto archive_overlay = std::make_unique<ui::geocaching::LocalMapOverlay>();
+    auto archive_map = std::make_unique<ui::map::MapOverlaySnapshot>();
+    until([&]
+          {
+              archive_overlay->update(*test::source, 31, 121, 15);
+              archive_map = std::make_unique<ui::map::MapOverlaySnapshot>();
+              archive_overlay->append(*archive_map);
+              return archive_overlay->finished(); },
+          "archive map did not finish local metadata");
+    require(archive_map->item_count == 1, "archived local cache remained on Map or hid the downloaded cache");
     test::source->activate(false);
     until([&]
           { return !router.service; },
           "session did not close");
     require(test::allocations.empty() && !test::open_files && !test::open_dirs, "session leaked buffers or file handles");
     require(!router.service && !router.announcement && !router.delivery, "session did not release background transport");
+    test::files = active_fixture;
+    test::directories = active_directories;
     const auto disk = test::files;
     const auto disk_directories = test::directories;
     std::fprintf(stderr, "Runtime: healthy restart\n");

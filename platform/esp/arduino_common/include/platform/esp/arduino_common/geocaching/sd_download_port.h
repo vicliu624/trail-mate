@@ -31,6 +31,13 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
         stage_.reset();
         store_.releaseRead();
     }
+    bool dispatchKey(std::array<uint8_t, 48>& out) const
+    {
+        out.fill(0);
+        if (phase_ != Phase::Waiting) return false;
+        out = key_;
+        return true;
+    }
     Result submit(const ::geocaching::Destination& remote, const ::geocaching::RequestId& id, ::geocaching::ByteView request) override
     {
         if (phase_ != Phase::Idle) return Result::Rejected;

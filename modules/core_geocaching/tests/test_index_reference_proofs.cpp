@@ -106,6 +106,27 @@ int main()
         for (unsigned i = 0; i < 100000 && state == sd::JournalWriteResult::InProgress; ++i) state = store.stepCommit();
         require(state == sd::JournalWriteResult::Verified, "persist send lease attempt");
     }
+    {
+        // Attempt-only updates validate the target without auditing history.
+        std::array<uint8_t, 64> key{};
+        std::copy(request_keys[1].begin(), request_keys[1].end(), key.begin());
+        std::fill(key.begin() + 48, key.end(), 0x72);
+        gc::TxAttemptView attempt;
+        std::array<uint8_t, 192> value{};
+        size_t size = 0;
+        require(gc::encodeTxAttempt({key.data(), key.size()}, attempt, value.data(), value.size(), size), "encode attempt");
+        gc::MutationView changed{13, {key.data(), key.size()}, {value.data(), size}, false};
+        test::profile_reads = true;
+        test::read_bytes_by_path.clear();
+        verify(&changed, 1, sd::IndexScanStep::End);
+        require(!test::read_bytes_by_path.empty(), "attempt read profile missing");
+        for (const auto& file : test::read_bytes_by_path)
+            require(file.first.find("/0d/") == std::string::npos || file.first.find(".gci.h") != std::string::npos,
+                    "attempt commit scanned historical attempts");
+        test::profile_reads = false;
+        key[0] ^= 0x80;
+        verify(&changed, 1, sd::IndexScanStep::Invalid);
+    }
     geocaching::RequestId expected_id;
     expected_id.bytes.fill(1);
     std::array<uint8_t, 64> expected{};

@@ -310,6 +310,12 @@ std::atomic<uint32_t> next_step{0};
 std::atomic<uint32_t> replies_seen{0}, replies_busy{0}, replies_queued{0};
 uint32_t replies_processed = 0, replies_accepted = 0;
 uint64_t epoch = 0;
+void reportPublication(const char* event, const gc::PublishAttempt& attempt)
+{
+    const auto& id = attempt.cacheId().bytes;
+    Serial.printf("[Geocaching][Publication] %s cache_prefix=%02x%02x%02x%02x revision=%lu state=%u\n",
+                  event, id[0], id[1], id[2], id[3], static_cast<unsigned long>(attempt.revision()), static_cast<unsigned>(attempt.state()));
+}
 // Dispatch consumes borrowed request bytes after releasing its read lease.
 // Free the backing memory only when the entire maintenance slice returns.
 struct WorkspaceSlice
@@ -766,7 +772,10 @@ bool processResponse(Session& s)
     ++replies_processed;
     if (s.response_operation == 1 && s.publication && s.publication->attempt)
     {
-        s.publication->attempt->accept(s.response_source, {s.response, s.response_size});
+        auto& attempt = *s.publication->attempt;
+        const auto before = attempt.phase();
+        if (attempt.accept(s.response_source, {s.response, s.response_size}) && before != gc::PublishAttemptPhase::Confirmed &&
+            attempt.phase() == gc::PublishAttemptPhase::Confirmed) reportPublication("confirmed", attempt);
         ++epoch;
     }
     else if (s.response_operation == 3 && s.download)
@@ -1837,6 +1846,18 @@ class Facade final : public ::ui::geocaching::Source
     }
 } facade;
 
+DispatchResult dispatchForeground(Session& s)
+{
+    std::array<uint8_t, 48> key{};
+    const bool publication = s.publication && s.publication->port && s.publication->attempt &&
+                             s.publication->attempt->phase() == gc::PublishAttemptPhase::Waiting && s.publication->port->dispatchKey(key);
+    const bool download = !publication && s.download && s.download_port &&
+                          s.download->phase() == gc::DownloadPhase::Waiting && s.download_port->dispatchKey(key);
+    const auto result = s.dispatcher->dispatchOne(now(nullptr), publication || download ? gc::ByteView{key.data(), key.size()} : gc::ByteView{});
+    if (publication && result.status == DispatchStatus::Submitted) reportPublication("submitted", *s.publication->attempt);
+    return result;
+}
+
 bool closeSession()
 {
     if (!session) return true;
@@ -1864,7 +1885,7 @@ bool closeSession()
         WorkspaceSlice workspace_slice{*session};
         if (session->dispatch_store && session->workspace_owner.heldBy(session->dispatch_store.get()))
         {
-            session->dispatcher->dispatchOne(now(nullptr));
+            dispatchForeground(*session);
             return false;
         }
         if (session->receipts && session->workspace_owner.heldBy(session->receipts.get()))
@@ -2136,7 +2157,7 @@ void step()
     if (s.detail && s.workspace_owner.heldBy(s.detail.get()) && advanceSavedDetail(s)) return;
     if (s.dispatcher && s.dispatch_store->busy() && s.workspace_owner.heldBy(s.dispatch_store.get()))
     {
-        const auto sent = s.dispatcher->dispatchOne(now(nullptr));
+        const auto sent = dispatchForeground(s);
         if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
             fail("Dispatch storage is blocked");
         return;
@@ -2472,6 +2493,7 @@ void step()
         if (phase != gc::PublishAttemptPhase::Waiting)
         {
             job.attempt->advance();
+            if (job.attempt->phase() == gc::PublishAttemptPhase::Confirmed) reportPublication("confirmed", *job.attempt);
             ++epoch;
             return;
         }
@@ -2522,7 +2544,7 @@ void step()
     }
     if (publicationActive() || (s.download && s.download->phase() == gc::DownloadPhase::Waiting))
     {
-        const auto sent = s.dispatcher->dispatchOne(now(nullptr));
+        const auto sent = dispatchForeground(s);
         if (sent.status == DispatchStatus::StorageBlocked || sent.status == DispatchStatus::Corrupt)
             fail("Download storage is blocked");
         return;

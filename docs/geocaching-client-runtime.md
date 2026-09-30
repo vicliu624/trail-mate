@@ -47,6 +47,13 @@ query and dispatch services retain their separate on-demand activation.
 
 ## Archive a published cache
 
+Foreground publication and download dispatch use their already persisted
+48-byte request key. The dispatcher reserves and reloads that request directly
+instead of selecting it through unrelated attempt-expiration and task-history
+scans. Durable intent, cancellation and current identity checks still run before
+transport submission. A request already submitted is not reserved again while
+its client waits for the directory response.
+
 Open the cache in **My caches**, save any edits, and choose **Archive cache**.
 The device first saves an archived draft, then asks for confirmation before
 publishing the next signed revision with the original author identity.
@@ -62,6 +69,19 @@ remains in **My caches** so publication can be retried or its local copy deleted
 Archival is a terminal record state. A directory receiving the signed revision
 can exclude it from active results; it does not erase signed history or copies
 held by other devices and independent directories.
+
+Publication event logs distinguish transport submission from a persisted
+directory acknowledgement:
+
+```text
+[Geocaching][Publication] submitted cache_prefix=15058ac4 revision=3 state=2
+[Geocaching][Publication] confirmed cache_prefix=15058ac4 revision=3 state=2
+```
+
+`cache_prefix` is the first four bytes of the cache ID, not its name or complete
+ID. State `2` is Archived. Only `confirmed` proves that the matching directory
+response was accepted and its result committed; `submitted` and generic Wi-Fi
+TX success alone do not prove archival. These are event logs, not periodic polls.
 
 Device discovery and browsing use a disposable RAM session. Opening Discover,
 checking directory capabilities, querying, refreshing and paging do not open SD
@@ -139,3 +159,16 @@ clock: absent SD, USB ownership, busy sends, bounded retries, exact duplicate
 checks, pagination during maintenance, saved downloads, publication updates,
 index corruption, interrupted recovery and checkpoint reclamation. These checks
 do not establish ESP peak heap usage or real network latency.
+
+## Incremental commit validation
+
+New task creation validates its matching task/request pair and requires both
+keys absent before writing. Beginning a send attempt validates the existing
+task, request, intent, and installation generation before changing lifecycle
+state. These two owners preserve existing reference links and validate only
+the changed rows. Attempt-only updates similarly check their outgoing target.
+Deletion, rebinding, and recovery retain full reference validation.
+
+Read faults can occur during journal readback after redundant preflight reads
+are removed. Fault coverage requires unchanged committed data and rejection of
+further writes until recovery; an unconfirmed journal may remain on storage.

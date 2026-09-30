@@ -117,7 +117,9 @@ class SdIndexedBeginAttempt
     };
     IndexedCommitStep commit()
     {
-        if (!io_.emplace<SdIndexedCommit>(volume_).begin(root_, copy_, mutations_.data(), mutations_.size(), frame_, capacity_, *candidate_, false, 1))
+        // Both existing endpoints were read and matched above. Only their
+        // lifecycle state changes; all reference keys remain unchanged.
+        if (!io_.emplace<SdIndexedCommit>(volume_).begin(root_, copy_, mutations_.data(), mutations_.size(), frame_, capacity_, *candidate_, false, 1, true))
             return fail(IndexedCommitStep::Invalid);
         phase_ = Phase::Commit;
         return result_;

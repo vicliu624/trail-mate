@@ -35,7 +35,8 @@ class SdIndexedCommit
     bool begin(const ::geocaching::storage::IndexRootView& parent, unsigned parent_copy,
                const ::geocaching::storage::MutationView* mutations, size_t count,
                uint8_t* frame, size_t capacity, ::geocaching::storage::IndexRootBytes& candidate,
-               bool validation_only = false, size_t required_absent = 0)
+               bool validation_only = false, size_t required_absent = 0,
+               bool preserves_existing_links = false)
     {
         using namespace ::geocaching::storage;
         TransactionEncoding encoding;
@@ -65,7 +66,7 @@ class SdIndexedCommit
                 fail(IndexedCommitStep::OutOfMemory);
                 return false;
             }
-            if (!references_->begin(parent, frame, capacity, mutations, count))
+            if (!references_->begin(parent, frame, capacity, mutations, count, preserves_existing_links && !validation_only))
             {
                 fail(IndexedCommitStep::Invalid);
                 return false;

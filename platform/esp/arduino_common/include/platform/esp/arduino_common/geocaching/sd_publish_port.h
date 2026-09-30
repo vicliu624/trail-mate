@@ -68,6 +68,15 @@ class SdPublishPort final : public ::geocaching::PublishAttemptPort
         if (submitted && stop_after_submit_) return stop();
         return Result::Committed;
     }
+    bool dispatchKey(std::array<uint8_t, 48>& out) const
+    {
+        out.fill(0);
+        if (phase_ != Phase::Waiting) return false;
+        std::memcpy(out.data(), local_.bytes.data(), 16);
+        std::memcpy(out.data() + 16, remote_.bytes.data(), 16);
+        std::memcpy(out.data() + 32, request_.bytes.data(), 16);
+        return true;
+    }
 
   private:
     enum class Phase : uint8_t

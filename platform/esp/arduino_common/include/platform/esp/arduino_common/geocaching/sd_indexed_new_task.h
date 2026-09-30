@@ -100,7 +100,9 @@ class SdIndexedNewTask
   private:
     IndexedCommitStep startCommit()
     {
-        if (!operation_.emplace<SdIndexedCommit>(volume_).begin(root_, copy_, mutations_.data(), count_, frame_, capacity_, *candidate_, false, 2))
+        // The encoder creates one matching task/request pair. The commit
+        // requires both keys absent, so no existing relationship is replaced.
+        if (!operation_.emplace<SdIndexedCommit>(volume_).begin(root_, copy_, mutations_.data(), count_, frame_, capacity_, *candidate_, false, 2, true))
             return fail(IndexedCommitStep::Invalid);
         committing_ = true;
         return result_;
