@@ -86,6 +86,7 @@ struct Session
 {
     uint64_t local_map_revision = 0;
     uint64_t saved_catalog_epoch = 0, draft_catalog_epoch = 0;
+    uint64_t discover_catalog_epoch = 0, discover_saved_epoch = 0, discover_saved_generation = 0;
     struct Publication
     {
         enum class DraftStage : uint8_t
@@ -326,6 +327,17 @@ std::atomic<uint32_t> next_step{0};
 std::atomic<uint32_t> replies_seen{0}, replies_busy{0}, replies_queued{0};
 uint32_t replies_processed = 0, replies_accepted = 0;
 uint64_t epoch = 0;
+uint64_t discoverScope(Session& s)
+{
+    const auto saved_generation = s.saved ? s.saved->generation() : 0;
+    if (s.discover_saved_epoch != s.saved_catalog_epoch || s.discover_saved_generation != saved_generation)
+    {
+        s.discover_saved_epoch = s.saved_catalog_epoch;
+        s.discover_saved_generation = saved_generation;
+        s.discover_catalog_epoch = ++epoch;
+    }
+    return s.discover_catalog_epoch;
+}
 void reportPublication(const char* event, const gc::PublishAttempt& attempt)
 {
     const auto& id = attempt.cacheId().bytes;
@@ -888,7 +900,7 @@ void advanceBrowse(Session& s)
             return;
         }
         s.client->query(kWorld);
-        ++epoch;
+        s.discover_catalog_epoch = ++epoch;
     }
     drainReply(s);
     if (auto* pending = pending_announcement.exchange(nullptr, std::memory_order_acq_rel))
@@ -1661,9 +1673,10 @@ class Facade final : public ::ui::geocaching::Source
             out.can_create = out.has_more = false;
         }
         // List ownership and its own content version determine row validity.
-        // Transport progress and other sections must not invalidate local rows.
+        // Transport and operation progress must not invalidate unchanged rows.
         const auto scope = section == ::ui::geocaching::Section::Published && session    ? session->draft_catalog_epoch
                            : section == ::ui::geocaching::Section::Downloaded && session ? session->saved_catalog_epoch
+                           : section == ::ui::geocaching::Section::Discover && session   ? discoverScope(*session)
                                                                                          : epoch;
         out.generation ^= scope << 32;
     }
@@ -1768,7 +1781,7 @@ class Facade final : public ::ui::geocaching::Source
         }
         if (guard.locked && section == ::ui::geocaching::Section::Downloaded && session && session->saved && !session->needsRecovery())
             return session->saved->item(index, generation ^ (session->saved_catalog_epoch << 32), out);
-        if (!guard.locked || !session || !session->source || !session->source->item(section, index, generation ^ (epoch << 32), out)) return false;
+        if (!guard.locked || !session || !session->source || !session->source->item(section, index, generation ^ (discoverScope(*session) << 32), out)) return false;
         out.downloaded = session->saved && session->saved->contains(out.id, out.revision_hash);
         out.can_download = !out.downloaded && !downloadActive() && !publicationActive() && !draftSaveActive() && (!session->store || !session->store->commitPending()) &&
                            !session->needsRecovery() && session->phase != Phase::Failed && storage::sd_card_ready() && !storage::sd_external_block_owner_active() &&
@@ -2091,7 +2104,7 @@ class Facade final : public ::ui::geocaching::Source
         if (session->saved && session->saved->contains(item.id, item.revision_hash)) return false;
         ::ui::geocaching::Snapshot snapshot;
         session->source->snapshot(::ui::geocaching::Section::Discover, snapshot);
-        if ((generation ^ (epoch << 32)) != snapshot.generation) return false;
+        if ((generation ^ (discoverScope(*session) << 32)) != snapshot.generation) return false;
         gc::protocol::SummaryView summary;
         bool found = false;
         for (size_t i = 0; i < snapshot.count; ++i)

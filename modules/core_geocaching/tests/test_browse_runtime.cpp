@@ -537,6 +537,9 @@ int main(int argc, char** argv)
           "online detail not displayed");
     require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
             "online detail omitted full description or hint");
+    ui::geocaching::Item discover_probe;
+    require(snapshot(Section::Discover).generation == generation && test::source->item(Section::Discover, 0, generation, discover_probe),
+            "detail response invalidated unchanged discovery rows");
     require(test::files.empty() && !test::blocked_io, "online detail required SD");
     require(router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
             "verified detail duplicate was not acknowledged");
@@ -601,6 +604,8 @@ int main(int argc, char** argv)
         tick();
     }
     require(router.sends == 4, "saving verified detail sent a redundant network request");
+    require(snapshot(Section::Discover).generation != generation && !test::source->item(Section::Discover, 0, generation, discover_probe),
+            "downloaded membership retained stale discovery rows");
     const auto released_response = test::allocations.find(open_response);
     require(released_response == test::allocations.end() || released_response->second.owner != "geocaching.rx",
             "saved detail retained its response buffer");
@@ -698,6 +703,7 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed && item.publication_revision == 1; },
           "publication receipt not reflected in draft list");
     require(router.identity.signs == 1, "publication signed more than once");
+    const auto discovery_before_edit = snapshot(Section::Discover).generation;
     // Exercise the UI field limits and the confirmed-version edit path through
     // the same device owner, not a direct store call.
     const std::string long_name(96, 'N'), long_description(2048, 'D'), long_hint(512, 'H');
@@ -727,6 +733,9 @@ int main(int argc, char** argv)
               return test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed && item.publication_revision == 2; },
           "second publication receipt not reflected in list");
     require(router.identity.signs == 2, "version update signed more than once");
+    require(snapshot(Section::Discover).generation == discovery_before_edit &&
+                test::source->item(Section::Discover, 0, discovery_before_edit, discover_probe),
+            "unrelated publication invalidated unchanged discovery rows");
     // Isolate archive conformance from the following restart fixture, which
     // intentionally retains an active revision-2 draft for its map assertions.
     const auto active_fixture = test::files;
@@ -1419,8 +1428,11 @@ int main(int argc, char** argv)
             if (found == test::files.end()) removed_staging = true;
             return removed_staging && snapshot(Section::Discover).has_more && found != test::files.end() && found->second.empty(); },
               "pagination test did not enter maintenance");
+        const auto rows_before_pagination = snapshot(Section::Discover).generation;
         require(test::source->loadMore(), "maintenance rejected pagination intent");
         require(!test::source->loadMore() && !snapshot(Section::Discover).has_more, "duplicate pagination was accepted");
+        require(snapshot(Section::Discover).generation == rows_before_pagination,
+                "pagination status invalidated the retained query page");
         require(!test::ui_io, "pagination callback touched storage");
         until([&]
               { return router.sends == paging_sends + 3; },
@@ -1431,6 +1443,9 @@ int main(int argc, char** argv)
               { const auto view = snapshot(Section::Discover); return view.can_refresh && !view.has_more && view.count == 0; },
               "final pagination response was not displayed");
         require(router.sends == paging_sends + 3, "pagination request sent twice");
+        require(snapshot(Section::Discover).generation != rows_before_pagination &&
+                    !test::source->item(Section::Discover, 0, rows_before_pagination, discover_probe),
+                "replacement query page retained a stale selection");
         closeRuntime();
         const auto journalCount = []
         {

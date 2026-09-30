@@ -179,6 +179,13 @@ a catalogue gives it a new lifetime token, so stale selections from a closed
 session cannot become valid when a new catalogue starts at generation one.
 Status messages and action buttons update independently of row rendering.
 
+Discover rows use the committed query page's content generation. Query phase,
+failure text, detail responses and unrelated publication progress do not change
+that version. A separate source-lifetime token and saved-membership generation
+invalidate selections when the browser session is replaced or Downloaded
+membership changes. Pagination retains the existing rows while requesting the
+next page; committing the replacement page invalidates the previous selection.
+
 Background publication recovery filters completed, cancelled and no-intent
 requests before opening their parent tasks. Exact cache lookups still read
 confirmed receipts, and eligible unfinished requests retain task/reference

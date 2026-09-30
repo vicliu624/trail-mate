@@ -84,7 +84,7 @@ class QueryBrowseSource final : public ::ui::geocaching::Source
         QueryBrowseSource& source;
         bool locked;
     };
-    uint64_t generation() const { return (store_.generation() << 8) | static_cast<uint8_t>(client_.phase()) | (static_cast<uint8_t>(client_.failure()) << 4); }
+    uint64_t generation() const { return store_.generation(); }
     const char* status(::geocaching::QueryClientPhase phase) const
     {
         using Phase = ::geocaching::QueryClientPhase;
