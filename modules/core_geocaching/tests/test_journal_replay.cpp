@@ -3646,8 +3646,17 @@ int checkSavedIndexPages()
     std::set<uint8_t> seen;
     const auto disk = files;
     read_bytes.clear();
+    const auto head_bytes_read = [&]
+    {
+        size_t bytes = 0;
+        for (const auto& read : read_bytes)
+            if (read.first.find("/02/") != std::string::npos &&
+                read.first.size() >= 4 && read.first.compare(read.first.size() - 4, 4, ".gci") == 0) bytes += read.second;
+        return bytes;
+    };
     for (size_t offset : {size_t(0), size_t(4), size_t(8), size_t(12)})
     {
+        const auto heads_before = head_bytes_read();
         size_t total = 0;
         auto page = std::make_unique<SdIndexedSavedPage>(volume, crypto);
         if (!page->begin(root, offset, 4, rows, total, frame, sizeof(frame), verification, sizeof(verification))) return 7;
@@ -3659,6 +3668,9 @@ int checkSavedIndexPages()
             if (step_bytes > 512) return 8;
         }
         if (status != IndexScanStep::End || total != std::min(size_t(9), offset + 5)) return 9;
+        // Each fixture head occupies its own shard. Reading a row's metadata
+        // must not look up that same head a second time after the page scan.
+        if (head_bytes_read() - heads_before != total * kIndexEntrySize) return 13;
         for (size_t n = 0; n < 4 && offset + n < 9; ++n)
         {
             const auto& row = rows[n];

@@ -76,8 +76,7 @@ class SdIndexedSavedPage
             unavailable_ = true;
             return IndexScanStep::Invalid;
         }
-        // begin() copies the key before the shared frame is reused.
-        if (!entry_->begin(root_, row.key, true, frame_, capacity_, true)) return IndexScanStep::Invalid;
+        if (!entry_->beginFromHead(root_, row.key, row.value, frame_, capacity_)) return IndexScanStep::Invalid;
         return IndexScanStep::Working;
     }
 

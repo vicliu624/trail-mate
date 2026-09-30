@@ -14,6 +14,22 @@ class SdIndexedSavedCache
 {
   public:
     explicit SdIndexedSavedCache(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    // The page has already verified this head under the same pinned root.
+    // Copy its identifiers before reusing the shared frame for the object.
+    bool beginFromHead(const ::geocaching::storage::IndexRootView& root, ::geocaching::ByteView key,
+                       ::geocaching::ByteView value, uint8_t* frame, size_t capacity)
+    {
+        ::geocaching::storage::CacheHeadView head;
+        if (status_ != IndexScanStep::Idle || !::geocaching::storage::validIndexRoot(root) ||
+            !::geocaching::storage::decodeCacheHead(key, value, head) || !head.current_hash.size) return false;
+        root_ = root;
+        frame_ = frame;
+        capacity_ = capacity;
+        metadata_only_ = true;
+        saveHead(key, head);
+        status_ = IndexScanStep::Working;
+        return startObject() == IndexScanStep::Working;
+    }
     bool begin(const ::geocaching::storage::IndexRootView& root, ::geocaching::ByteView key, bool exact,
                uint8_t* frame, size_t capacity, bool metadata_only = false)
     {
