@@ -1273,6 +1273,9 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
                 out_dispatch->message_id,
                 millis(),
                 kMaxPendingDeliveryReceipts);
+            // Transport accepted the packet. A peer proof may later advance
+            // this to Delivered; waiting for that proof is not queueing.
+            delivery_notifier_.sent(out_dispatch->message_id);
         }
     }
 
@@ -7916,7 +7919,7 @@ void LxmfAdapter::cullTransportState()
         });
 
     delivery_attempt_ledger_.forEachReceipt(
-        [now_ms](const runtime::DeliveryAttemptReceipt& receipt)
+        [this, now_ms](const runtime::DeliveryAttemptReceipt& receipt)
         {
             if (receipt.kind != runtime::DeliveryAttemptKind::DirectPacket)
             {
@@ -7937,6 +7940,9 @@ void LxmfAdapter::cullTransportState()
                           destination_hash,
                           static_cast<unsigned long>(now_ms -
                                                      receipt.created_ms));
+            // Reconcile the sent state before retiring proof tracking, even
+            // if the original notification was lost while the bus was full.
+            delivery_notifier_.sent(receipt.message_id);
         });
     delivery_attempt_ledger_.cull(runtime::DeliveryAttemptKind::DirectPacket,
                                   now_ms,

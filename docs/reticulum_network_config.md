@@ -431,3 +431,8 @@ During synchronization Trail Mate requests the remote transient-ID list,
 downloads only missing messages addressed to its local LXMF delivery
 destination, and acknowledges handled IDs. Seen transient IDs are retained in
 the bounded propagation runtime to suppress duplicate delivery.
+
+For opportunistic direct chat messages, successful transport submission changes
+Queued to Sent. A verified recipient proof changes Sent to Delivered. Expiring
+proof tracking retains Sent and does not claim delivery; a missing proof is not
+evidence that the message remained in the outgoing queue.

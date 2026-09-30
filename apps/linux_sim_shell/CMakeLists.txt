@@ -524,6 +524,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_deferred_discovery_queue.cpp")
     target_include_directories(trailmate_lxmf_deferred_discovery_queue_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include"
