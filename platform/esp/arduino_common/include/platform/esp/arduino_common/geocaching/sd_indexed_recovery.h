@@ -57,6 +57,14 @@ class SdIndexedRecovery
     // A read-only lease after validated suffix replay, before whole-index audit.
     // Pause step() while using this snapshot and the shared frame. Readers must
     // validate each accessed record. This is not permission to mutate storage.
+    bool committedSnapshot(::geocaching::storage::IndexRootView& root, unsigned& copy) const
+    {
+        root = {};
+        if (result_ != IndexedRecoveryStep::Working || !committed_snapshot_) return false;
+        root = root_;
+        copy = copy_;
+        return true;
+    }
     bool readableSnapshot(::geocaching::storage::IndexRootView& root, unsigned& copy) const
     {
         root = {};
@@ -115,6 +123,10 @@ class SdIndexedRecovery
             if (status == IndexRootReadStep::Working) return result_;
             if (status != IndexRootReadStep::Ready || !read.selected(root_)) return error(status);
             copy_ = static_cast<unsigned>(read.selectedCopy());
+            // The committed root is sufficient for local reads. Writers still
+            // require suffix replay and reference validation. Expose this view
+            // before journal inventory; it may omit an uncommitted crash suffix.
+            committed_snapshot_ = true;
             return inventory();
         }
         case Phase::Checkpoint:
@@ -150,6 +162,9 @@ class SdIndexedRecovery
         }
         case Phase::Inventory:
         {
+            // A continuing recovery may rewrite the borrowed root buffers.
+            // Only the boundary above offers the pre-recovery read lease.
+            committed_snapshot_ = false;
             auto& scan = std::get<SdJournalInventory>(io_);
             const auto status = scan.step();
             if (status == InventoryStep::Scanning) return result_;
@@ -273,6 +288,7 @@ class SdIndexedRecovery
     bool root_present_ = false;
     bool roots_loaded_ = true;
     bool readable_snapshot_ = false;
+    bool committed_snapshot_ = false;
     Phase phase_ = Phase::Volume;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;
 };

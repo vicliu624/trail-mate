@@ -1,5 +1,13 @@
 # Geocaching client runtime
 
+Local lists and the standalone Map can open a CRC-checked committed index root
+before journal inventory or suffix replay. The read lease is not a write-ready
+snapshot: saving, downloading and publishing still require full recovery and
+reference validation. An interrupted operation that has not reached the index
+root may therefore remain absent from local views until recovery runs. The
+existing repair floor and archive checks still apply, and an unreadable referenced
+record triggers recovery rather than being silently accepted.
+
 ## Archive a published cache
 
 Open the cache in **My caches**, save any edits, and choose **Archive cache**.

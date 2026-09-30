@@ -49,7 +49,7 @@ class SdIndexRepair
         root = {};
         if (result_ != IndexedRecoveryStep::Working || phase_ != Phase::Recover ||
             attempted_ || archive_present_ || !recovery_) return false;
-        if (!recovery_->readableSnapshot(root, copy)) return false;
+        if (!recovery_->committedSnapshot(root, copy) && !recovery_->readableSnapshot(root, copy)) return false;
         if (root.sequence >= floor_) return true;
         root = {};
         return false;
