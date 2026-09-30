@@ -112,6 +112,11 @@ class WifiGatewayReticulumInterface
     void setSelected(bool selected);
     bool canAttempt() const;
     bool stableConnection() const;
+    const reticulum::TcpRetry& retryState() const { return reconnect_; }
+    void restoreRetryState(const reticulum::TcpRetry& retry)
+    {
+        if (!isReady() && !isConnecting()) reconnect_ = retry;
+    }
     bool isConnecting() const { return socket_open_pending_; }
     void maintain();
     bool isReady() const;
@@ -272,6 +277,11 @@ class ReticulumInterfaceSet
     void maintain();
     bool canReplaceDiscoveredGateway(const char* host, uint16_t port) const;
     bool discoveredGatewayStable() const { return tcp_[reticulum::kMaxTcpClientInterfaces].stableConnection(); }
+    const reticulum::TcpRetry& discoveredGatewayRetry() const { return tcp_[reticulum::kMaxTcpClientInterfaces].retryState(); }
+    void restoreDiscoveredGatewayRetry(const reticulum::TcpRetry& retry)
+    {
+        tcp_[reticulum::kMaxTcpClientInterfaces].restoreRetryState(retry);
+    }
     // Caller retires routes/links for kDiscoveredTcpInterfaceId before replacing.
     void replaceDiscoveredGateway(const char* host, uint16_t port);
     bool hasReadyInterface() const;

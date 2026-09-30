@@ -117,13 +117,23 @@ reusing a connection slot; monotonically assigning IDs and eventually wrapping
 is not sufficient. Candidate persistence must retain endpoint/access identity,
 not treat a runtime slot number as durable identity.
 
-Candidate selection includes the configured entries and one independently
-validated, public discovery endpoint. Discovery never modifies the three manual
+Candidate selection includes the configured entries and up to four independently
+validated, public discovery endpoints sharing one runtime slot. Discovery never modifies the three manual
 entries. When configured candidates fail or are cooling down, the same
 single-uplink selector can try the discovered endpoint. A healthy uplink is
 retained. An empty manual TCP list or a policy that disallows Wi-Fi prevents
 automatic admission. One previously stable discovered endpoint can be restored
-from SD. A maintained multi-candidate discovery catalog is not yet implemented.
+from SD. Each discovered candidate retains its own retry history across slot
+changes and repeated announcements. The restored stable endpoint is preferred
+when selecting a replacement; it cannot be hidden by the latest announcement.
+A healthy or still-eligible installed endpoint is retained. Candidates that
+duplicate manual entries are skipped without blocking other candidates.
+
+The bounded candidate pool occupies at most 512 bytes inside the PSRAM adapter.
+When full, admission can replace the oldest observation that is neither installed,
+preferred nor cooling down. If no such entry exists, the new observation is
+discarded. This prevents announcement churn from clearing endpoint backoff.
+Only the last stable endpoint is persisted; the other observations are transient.
 
 The discovery parser is available in `chat/infra/reticulum/interface_discovery.h`
 as groundwork for native `rnstransport.discovery.interface` announcements. Its
@@ -151,9 +161,9 @@ per ten seconds, with one in-flight job, including while the L2 screen is awake.
 Call, Nomad-request and screen-saver scheduling still take priority. The complete
 state, capped at 768 bytes, is embedded in the PSRAM-owned adapter; it retains no
 receive-buffer pointers. Only a valid completed stamp replaces the latest
-endpoint. Invalid announcements cannot overwrite that endpoint. Network-config
-changes reset this temporary state. This is a single observation, not a durable
-candidate catalog, and it does not change any configured TCP slot.
+endpoint. Invalid announcements cannot overwrite that endpoint. Completed valid
+observations are offered to the bounded candidate pool. Network-config changes
+reset both temporary states. Neither changes any configured TCP slot.
 
 The discovered endpoint has a dedicated runtime TCP slot and interface ID 35.
 It shares the single active TCP connection budget, including on C6. Replacing
@@ -187,8 +197,8 @@ ownership and session changes. Unchanged endpoints cause no further file I/O;
 successful updates are limited to one per ten minutes. State and the 114-byte
 serialization buffer are embedded in the PSRAM adapter with a 384-byte ceiling.
 
-On startup the restored endpoint is offered to the same isolated discovery slot
-when there is no newly verified announcement. It does not overwrite manual
+On startup the restored endpoint is offered to the same candidate pool, even
+when a newer announcement exists. It does not overwrite manual
 configuration or bypass the Wi-Fi policy. New announcements alone never trigger
 a cache write. IFAC credentials are not supported by this record format and are
 not stored here.

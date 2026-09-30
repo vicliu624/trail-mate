@@ -3446,6 +3446,7 @@ void LxmfAdapter::processRuntime()
         deferred_discovery_.clear();
         geocaching_discovery_probe_.reset();
         gateway_discovery_.reset();
+        gateway_candidates_.reset();
         gateway_persistence_.clearInstalled();
 
         propagation_client_.resetForNetworkConfig(
@@ -3464,17 +3465,22 @@ void LxmfAdapter::processRuntime()
     if ((budget.allow_propagation_client || budget.allow_public_discovery) && gateway_discovery_.poll())
     {
         const auto& endpoint = gateway_discovery_.latest();
+        gateway_candidates_.observe(endpoint, millis());
         Serial.printf("[Reticulum][Discovery] verified host=%s port=%u\n", endpoint.host, endpoint.port);
     }
     if (budget.allow_propagation_client || budget.allow_public_discovery)
         gateway_persistence_.poll(millis(), interfaces_.discoveredGatewayStable());
     const auto* restored_gateway = gateway_persistence_.restored();
-    const auto& discovered = gateway_discovery_.latest().port || !restored_gateway
-                                 ? gateway_discovery_.latest()
-                                 : *restored_gateway;
-    if ((budget.allow_propagation_client || budget.allow_public_discovery) &&
-        interfaces_.canReplaceDiscoveredGateway(discovered.host, discovered.port))
+    if (restored_gateway) gateway_candidates_.observe(*restored_gateway, millis(), true);
+    gateway_candidates_.sync(interfaces_.discoveredGatewayRetry());
+    const int candidate = (budget.allow_propagation_client || budget.allow_public_discovery)
+                              ? gateway_candidates_.select(millis(), [this](const auto& endpoint)
+                                                           { return interfaces_.canReplaceDiscoveredGateway(endpoint.host, endpoint.port); })
+                              : -1;
+    if (candidate >= 0)
     {
+        const auto& selected = gateway_candidates_.entry(candidate);
+        const auto& discovered = selected.endpoint;
         constexpr auto interface_id = reticulum::interfaces::kDiscoveredTcpInterfaceId;
         link_manager_.forEachSession([this](LinkSession& session)
                                      {
@@ -3484,6 +3490,8 @@ void LxmfAdapter::processRuntime()
         path_manager_.retireInterface(interface_id);
         deferred_discovery_.clear();
         interfaces_.replaceDiscoveredGateway(discovered.host, discovered.port);
+        interfaces_.restoreDiscoveredGatewayRetry(selected.retry);
+        gateway_candidates_.installed(candidate);
         gateway_persistence_.installed(discovered);
     }
     if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
