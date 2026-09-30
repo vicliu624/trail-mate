@@ -437,6 +437,7 @@ target_link_libraries(geocaching_browse_runtime_test PRIVATE geocaching_native_h
 add_test(NAME geocaching_browse_runtime COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures)
 add_test(NAME geocaching_browse_runtime_close_detail COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures save-close-detail)
 add_test(NAME geocaching_draft_only_map COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures local-draft-only)
+add_test(NAME geocaching_legacy_index_upgrade COMMAND geocaching_browse_runtime_test ${CMAKE_CURRENT_SOURCE_DIR}/fixtures legacy-index-upgrade)
 
 add_executable(geocaching_local_map_test test_local_map_overlay.cpp)
 set(GPS_RUNTIME "${CMAKE_CURRENT_SOURCE_DIR}/../../ui_shared/src/ui/screens/gps/gps_page_runtime.cpp")

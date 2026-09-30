@@ -203,6 +203,9 @@ struct Session
     ::platform::memory::PsramPtr<SdIndexRepair<Digest>> recovery;
     ::platform::memory::PsramPtr<SdCheckpointRotation<Digest>> checkpoint;
     uint64_t checkpoint_attempt_sequence = 0;
+    bool current_index_upgrade_pending = false;
+    uint32_t current_index_upgrade_retry_ms = 0;
+    uint64_t current_index_upgrade_deferred_revision = 0;
     bool checkpoint_recovery_required = false;
     ::platform::memory::PsramPtr<IndexedPublicationStore> store;
     ::platform::memory::PsramPtr<IndexedDispatchStore> dispatch_store;
@@ -500,8 +503,12 @@ bool advanceCheckpoint(Session& s)
         next_step.store(millis() + 1000);
         return true;
     }
+    const auto previous_epoch = s.root.epoch;
     const bool complete = (result == CheckpointRotationStep::Complete || result == CheckpointRotationStep::Yielded) &&
                           s.checkpoint->selected(s.root, s.root_copy);
+    if (complete && s.root.epoch != previous_epoch) s.current_index_upgrade_pending = false;
+    if (result == CheckpointRotationStep::Deferred) s.current_index_upgrade_deferred_revision = s.root.revision;
+    if (s.current_index_upgrade_pending) s.current_index_upgrade_retry_ms = millis() + 5000;
     s.workspace_owner.release(s.checkpoint.get());
     s.checkpoint.reset();
     if (!complete && result != CheckpointRotationStep::Deferred)
@@ -521,8 +528,15 @@ bool startCheckpoint(Session& s)
     // transaction. All consumers use the same workspace lease; acquiring it
     // proves their borrowed index cursors have been released.
     constexpr uint64_t interval = 256;
-    if (s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval ||
+    const bool upgrade = s.current_index_upgrade_pending;
+    if (upgrade && (s.current_index_upgrade_deferred_revision == s.root.revision ||
+                    static_cast<int32_t>(millis() - s.current_index_upgrade_retry_ms) < 0)) return false;
+    if (!upgrade && (s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval)) return false;
+    if (s.local_read_only ||
         s.workspace_owner.holder() || s.response || pending_announcement.load(std::memory_order_acquire) || downloadActive() || publicationActive() || draftSaveActive()) return false;
+    if (upgrade && ((s.saved && s.saved->pending() && !s.draft_catalog_wanted) || (s.draft_catalog_wanted && !draftCatalogReady(s)) ||
+                    (s.detail && s.detail->state == CacheDetail::State::Saved) ||
+                    (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending))) return false;
     s.checkpoint.reset(::platform::memory::createPsram<SdCheckpointRotation<Digest>>(s.volume));
     if (!s.checkpoint)
     {
@@ -536,7 +550,7 @@ bool startCheckpoint(Session& s)
     }
     // Sorting reuses the 8 KiB encoding buffer; the smaller signature scratch
     // cannot hold a run. Import subsequently reuses it for value comparison.
-    if (!s.checkpoint->begin(s.roots[0], s.roots[1], s.root_copy, s.frame, kFrameCapacity, s.encoded, kEncodingCapacity, interval))
+    if (!s.checkpoint->begin(s.roots[0], s.roots[1], s.root_copy, s.frame, kFrameCapacity, s.encoded, kEncodingCapacity, upgrade ? 0 : interval))
     {
         s.workspace_owner.release(s.checkpoint.get());
         s.checkpoint.reset();
@@ -956,6 +970,8 @@ void advanceStorageRecovery(Session& s)
             return;
         }
         if (s.root.sequence != previous_sequence) s.draft_catalog.reset();
+        s.current_index_upgrade_pending = s.recovery->needsCurrentIndexUpgrade();
+        s.current_index_upgrade_retry_ms = millis();
         s.recovery.reset();
     }
     if (!s.ensureBuffers(false))

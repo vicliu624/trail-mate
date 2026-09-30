@@ -47,6 +47,7 @@ class SdIndexScan
         out = {table_, entry_.key, value_, false};
         return true;
     }
+    bool sawLegacyGeneration() const { return legacy_generation_; }
     bool advance()
     {
         if (result_ != IndexScanStep::Item) return false;
@@ -85,6 +86,7 @@ class SdIndexScan
             const auto status = reader.step();
             if (status == IndexHeadReadStep::Working) return result_;
             if (status != IndexHeadReadStep::Ready || !reader.selected(head_)) return error(status);
+            legacy_generation_ |= !head_.current_only;
             if (!head_.length)
             {
                 if (!head_.current_only) return fail(IndexScanStep::Invalid);
@@ -262,6 +264,7 @@ class SdIndexScan
     uint64_t position_ = 0, newer_ = 0;
     uint16_t bucket_ = 0, read_ = 0;
     uint8_t table_ = 0;
+    bool legacy_generation_ = false;
     Phase phase_ = Phase::Bucket;
     IndexScanStep result_ = IndexScanStep::Idle;
 };

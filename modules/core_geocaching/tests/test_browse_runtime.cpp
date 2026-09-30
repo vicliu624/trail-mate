@@ -263,7 +263,8 @@ int main(int argc, char** argv)
     rt::configure(router, board);
     if (argc == 3 && !close_on_save)
     {
-        require(std::strcmp(argv[2], "local-draft-only") == 0, "unknown runtime scenario");
+        const bool legacy_upgrade = std::strcmp(argv[2], "legacy-index-upgrade") == 0;
+        require(legacy_upgrade || std::strcmp(argv[2], "local-draft-only") == 0, "unknown runtime scenario");
         router.ready = false;
         test::in_ui = true;
         test::source->activate(true);
@@ -284,6 +285,48 @@ int main(int argc, char** argv)
         until([&]
               { return test::allocations.empty(); },
               "draft editor session did not close");
+        namespace gc = geocaching::storage;
+        namespace sd = platform::esp::arduino_common::geocaching;
+        gc::VolumeInstance volume;
+        const auto& format = test::files.at("/trailmate/geocaching/.state/format.bin");
+        require(gc::decodeVolumeHeader({format.data(), format.size()}, volume) == gc::VolumeFormatResult::Supported, "legacy fixture volume");
+        const auto selected_root = [&]
+        {
+            gc::IndexRootView first, second, selected;
+            const auto& a = test::files.at("/trailmate/geocaching/.state/index/root.h0");
+            const auto& b = test::files.at("/trailmate/geocaching/.state/index/root.h1");
+            // Maintenance publishes each metadata copy in bounded writes.
+            // A partially written copy is not a completed rotation yet.
+            if (!gc::decodeIndexRoot({a.data(), a.size()}, volume, first) || !gc::decodeIndexRoot({b.data(), b.size()}, volume, second) ||
+                !gc::selectIndexRoot(first, second, selected)) return gc::IndexRootView{};
+            return selected;
+        };
+        if (legacy_upgrade)
+        {
+            const auto root = selected_root();
+            require(gc::validIndexRoot(root), "invalid legacy upgrade roots");
+            for (unsigned bucket = 0; bucket < 256; ++bucket)
+            {
+                if (!gc::indexHasShard(root, 4, static_cast<uint8_t>(bucket))) continue;
+                char paths[2][96];
+                gc::IndexShardHead heads[2], head;
+                for (unsigned copy = 0; copy < 2; ++copy)
+                {
+                    require(sd::indexShardHeadPathForBucket(root.slot, 4, static_cast<uint8_t>(bucket), copy, paths[copy], sizeof(paths[copy])), "legacy fixture head path");
+                    const auto& bytes = test::files.at(paths[copy]);
+                    require(gc::decodeIndexShardHead({bytes.data(), bytes.size()}, volume, root.epoch, 4, static_cast<uint8_t>(bucket), heads[copy]), "legacy fixture head");
+                }
+                require(gc::selectIndexShardHead(heads[0], heads[1], root.sequence, head) && head.current_only, "legacy fixture selected head");
+                char current[96], legacy[96];
+                require(sd::indexShardDataPath(root.slot, head, current, sizeof(current)), "legacy fixture current path");
+                head.current_only = false;
+                require(sd::indexShardDataPath(root.slot, head, legacy, sizeof(legacy)), "legacy fixture append path");
+                test::files[legacy] = test::files.at(current);
+                gc::IndexShardHeadBytes bytes;
+                require(gc::encodeIndexShardHead(volume, head, bytes), "legacy fixture encoding");
+                for (const auto& path : paths) test::files[path] = {bytes.begin(), bytes.end()};
+            }
+        }
         const auto saved_files = test::files;
         // Reproduce the L2 heap snapshot: PSRAM is available, internal heap is
         // below the unrelated 40 KiB reserve used by network admissions.
@@ -328,6 +371,55 @@ int main(int argc, char** argv)
                                            &draft_loaded) == ui::geocaching::DraftReadStatus::Ready; },
               "low internal heap blocked the draft editor");
         require(draft_loaded && test::clock_ms - read_started <= 3000, "draft editor exceeded three seconds with PSRAM available");
+        if (legacy_upgrade)
+        {
+            const auto before_epoch = selected_root().epoch;
+            require(selected_root().sequence < 256, "legacy fixture exceeded ordinary checkpoint interval");
+            ui::geocaching::DraftInput another;
+            another.name = "Second local draft";
+            another.has_coordinates = true;
+            another.latitude_e7 = local.latitude_e7;
+            another.longitude_e7 = local.longitude_e7;
+            require(test::source->saveDraft(another), "legacy card did not accept writable operation");
+            until([&]
+                  { return test::source->draftSaveStatus(another.id, 0) == ui::geocaching::DraftSaveStatus::Saved; },
+                  "legacy card draft save failed");
+            until([&]
+                  { return selected_root().epoch > before_epoch; },
+                  "writable legacy card did not automatically upgrade current indexes");
+            // Wait for mirror/cleanup to finish and verify that idle ticks
+            // do not start another conversion or allocate online transport.
+            const auto upgraded_epoch = selected_root().epoch;
+            for (unsigned i = 0; i < 10000; ++i) tick();
+            require(selected_root().epoch == upgraded_epoch && !router.sends && !router.service, "legacy upgrade repeated or started networking");
+            const auto upgraded = selected_root();
+            for (const uint8_t table : {uint8_t(1), uint8_t(2), uint8_t(4)})
+                for (unsigned bucket = 0; bucket < 256; ++bucket)
+                {
+                    if (!gc::indexHasShard(upgraded, table, static_cast<uint8_t>(bucket))) continue;
+                    gc::IndexShardHead heads[2], head;
+                    for (unsigned copy = 0; copy < 2; ++copy)
+                    {
+                        char path[96];
+                        require(sd::indexShardHeadPathForBucket(upgraded.slot, table, static_cast<uint8_t>(bucket), copy, path, sizeof(path)), "upgraded head path");
+                        const auto& bytes = test::files.at(path);
+                        require(gc::decodeIndexShardHead({bytes.data(), bytes.size()}, volume, upgraded.epoch, table, static_cast<uint8_t>(bucket), heads[copy]), "upgraded head encoding");
+                    }
+                    require(gc::selectIndexShardHead(heads[0], heads[1], upgraded.sequence, head) && head.current_only, "upgrade retained legacy bucket");
+                }
+            test::source->activate(false);
+            until([&]
+                  { return test::allocations.empty(); },
+                  "upgraded session did not close");
+            const auto upgraded_files = test::files;
+            test::source->activate(true);
+            const auto reopened = test::clock_ms;
+            until([&]
+                  { return snapshot(Section::Published).count == 2; },
+                  "upgraded local drafts did not reopen");
+            require(test::clock_ms - reopened <= 3000 && test::files == upgraded_files && !router.sends && !router.service,
+                    "upgraded local reopen was slow, wrote storage or started networking");
+        }
         test::source->activate(false);
         until([&]
               { return test::allocations.empty(); },

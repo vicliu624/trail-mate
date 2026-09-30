@@ -25,6 +25,7 @@ template <class Digest>
 class SdIndexedRecovery
 {
   public:
+    bool needsCurrentIndexUpgrade() const { return result_ == IndexedRecoveryStep::Restored && legacy_current_index_; }
     SdIndexedRecovery(const ::geocaching::storage::VolumeInstance& volume,
                       ::geocaching::storage::IndexRootBytes& first, ::geocaching::storage::IndexRootBytes& second,
                       uint8_t* frame, size_t capacity, uint8_t* validation_frame, size_t validation_capacity,
@@ -213,6 +214,8 @@ class SdIndexedRecovery
                 return result_;
             }
             if (status != IndexScanStep::End) return error(status);
+            if (audit_table_ == 1 || audit_table_ == 2 || audit_table_ == 4)
+                legacy_current_index_ |= scan.sawLegacyGeneration();
             // References scans every live row of these three tables using the
             // same CRC/shape-checked reader. Do not read them twice at startup.
             do
@@ -289,6 +292,7 @@ class SdIndexedRecovery
     bool roots_loaded_ = true;
     bool readable_snapshot_ = false;
     bool committed_snapshot_ = false;
+    bool legacy_current_index_ = false;
     Phase phase_ = Phase::Volume;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;
 };

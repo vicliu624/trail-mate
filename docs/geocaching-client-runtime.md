@@ -33,12 +33,16 @@ bucket, rather than searching the whole bucket for every imported row. Journal
 appends retain their existing replay behavior. Reference checks, checkpoint
 digest validation, and replacement equivalence still precede root publication.
 
-Updating a legacy object, cache-head, or draft bucket converts that bucket during the write.
-Opening a local list does not create or rebuild generations, and untouched
-legacy buckets still use their original reader. The remaining tables retain append
-shards. Exclusive index-slot cleanup recognizes generation filenames; older
-generations remain until their retired index slot is cleaned. Full conversion
-of untouched old-card buckets and earlier reclamation remain unfinished.
+Updating a legacy object, cache-head, or draft bucket converts that bucket during
+the write. The existing recovery audit also detects untouched legacy buckets in
+these tables. After a writable operation completes, idle maintenance uses the
+existing checkpoint rotation to convert them without waiting for the ordinary
+256-record interval. Foreground work takes priority; a pinned checkpoint slot
+defers another attempt until the root changes. No separate migration scan or
+service is created. Opening a local list remains read-only and does not start
+conversion. The remaining tables retain append shards. Exclusive index-slot
+cleanup recognizes generation filenames; older generations remain until their
+retired index slot is cleaned.
 
 Local lists and the standalone Map can open a CRC-checked committed index root
 before journal inventory or suffix replay. The read lease is not a write-ready
@@ -245,8 +249,9 @@ failures are reported in the detail action and once in the publication log.
 Object references (table 1), installed heads (table 2), and local drafts (table
 4) use current-reference shard generations. Repeated changes to one key retain
 one lookup reference, with older generations still available to pinned roots.
-Legacy shards convert when next written; untouched legacy shards still need
-migration before all old-card reads can be free of historical references.
+Legacy shards convert when next written; untouched legacy buckets are detected
+by writable recovery and converted by idle checkpoint maintenance. A card used
+only for local reads retains its compatible legacy reader until a write occurs.
 
 Downloaded page reads allocate index and verification buffers only. The 8 KiB
 download response buffer is allocated by the workspace preparation callback
