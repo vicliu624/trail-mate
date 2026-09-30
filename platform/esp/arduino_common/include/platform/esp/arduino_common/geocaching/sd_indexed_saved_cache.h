@@ -41,7 +41,7 @@ class SdIndexedSavedCache
         has_after_ = key.size != 0;
         if (has_after_) std::memcpy(after_.data(), key.data, 32);
         phase_ = exact ? Phase::Head : Phase::Heads;
-        const bool begun = exact ? operation_.emplace<SdIndexGet>(volume_).begin(root_, 2, key, frame_, capacity_)
+        const bool begun = exact ? operation_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, 2, key, frame_, capacity_)
                                  : operation_.emplace<SdIndexScan>(volume_).begin(root_, 2, frame_, capacity_);
         if (!begun) return false;
         status_ = IndexScanStep::Working;
@@ -69,7 +69,7 @@ class SdIndexedSavedCache
             if (status == IndexScanStep::End)
             {
                 if (phase_ == Phase::Heads) return head_generation_ ? startObject() : finish(IndexScanStep::End);
-                if (!installed_generation_ || !operation_.emplace<SdIndexGet>(volume_).begin(root_, 10, {task_.data(), task_.size()}, frame_, capacity_))
+                if (!installed_generation_ || !operation_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, 10, {task_.data(), task_.size()}, frame_, capacity_))
                     return finish(IndexScanStep::Invalid);
                 phase_ = Phase::Task;
                 return status_;
@@ -134,7 +134,7 @@ class SdIndexedSavedCache
             // only detail readers need the installation's file hash. A
             // same-revision reinstall cannot change this immutable metadata.
             if (metadata_only_) return status_ = IndexScanStep::Item;
-            if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 12, {task_.data(), 16}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+            if (!operation_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, 12, {task_.data(), 16}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
             phase_ = Phase::DirectInstall;
             return status_;
         }
@@ -207,13 +207,13 @@ class SdIndexedSavedCache
     }
     IndexScanStep startObject()
     {
-        if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 1, {record_.hash.data(), 32}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+        if (!operation_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, 1, {record_.hash.data(), 32}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
         phase_ = Phase::Object;
         return status_;
     }
     IndexScanStep startRequest()
     {
-        if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 5, {requests_[request_].data(), 48}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+        if (!operation_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, 5, {requests_[request_].data(), 48}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
         return status_;
     }
     IndexScanStep finish(IndexScanStep result)
@@ -222,6 +222,9 @@ class SdIndexedSavedCache
         return status_ = result;
     }
     ::geocaching::storage::VolumeInstance volume_;
+    // One immutable-format inspection for this pinned candidate. Every read
+    // still checks the mounted-media session, including USB owner transitions.
+    SdVolumeReadSession read_session_;
     ::geocaching::storage::IndexRootView root_;
     std::variant<std::monostate, SdIndexScan, SdIndexGet> operation_;
     ::geocaching::storage::SavedCacheRecord record_;

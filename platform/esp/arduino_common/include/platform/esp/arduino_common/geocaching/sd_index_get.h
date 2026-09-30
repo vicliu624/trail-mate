@@ -25,7 +25,8 @@ enum class IndexGetStep : uint8_t
 class SdIndexGet
 {
   public:
-    explicit SdIndexGet(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    explicit SdIndexGet(const ::geocaching::storage::VolumeInstance& volume, SdVolumeReadSession* session = nullptr)
+        : volume_(volume), session_(session ? session : &read_session_) {}
     bool begin(const ::geocaching::storage::IndexRootView& root, uint8_t table, ::geocaching::ByteView key,
                uint8_t* frame, size_t capacity)
     {
@@ -42,7 +43,7 @@ class SdIndexGet
         const auto bucket = static_cast<uint8_t>(::sys::crc32(key_.data(), key_size_));
         if (::geocaching::storage::indexHasShard(root_, table_, bucket))
         {
-            if (!operation_.emplace<SdIndexHeadReader>(volume_, root_.slot, root_.epoch, root_.sequence, &read_session_).begin(table_, {key_.data(), key_size_})) return false;
+            if (!operation_.emplace<SdIndexHeadReader>(volume_, root_.slot, root_.epoch, root_.sequence, session_).begin(table_, {key_.data(), key_size_})) return false;
             phase_ = Phase::Head;
         }
         result_ = IndexGetStep::Working;
@@ -55,7 +56,7 @@ class SdIndexGet
         if (phase_ == Phase::Absent)
         {
             ::geocaching::storage::VolumeInstance current;
-            const auto status = inspectSdVolume(current);
+            const auto status = session_->inspect(current);
             if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return fail(IndexGetStep::IoError);
             return fail(current == volume_ ? IndexGetStep::NotFound : IndexGetStep::VolumeChanged);
@@ -67,7 +68,7 @@ class SdIndexGet
             if (status == IndexHeadReadStep::Working) return result_;
             ::geocaching::storage::IndexShardHead head;
             if (status != IndexHeadReadStep::Ready || !reader.selected(head)) return error(status);
-            if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head.sequence, head.length, &read_session_).begin(table_, {key_.data(), key_size_})) return fail(IndexGetStep::Invalid);
+            if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head.sequence, head.length, session_).begin(table_, {key_.data(), key_size_})) return fail(IndexGetStep::Invalid);
             phase_ = Phase::Lookup;
             return result_;
         }
@@ -82,7 +83,7 @@ class SdIndexGet
             // The lookup workspace is about to be destroyed; pin the key in
             // this owner before constructing the next operation in its place.
             hint.key = {key_.data(), key_size_};
-            if (!operation_.emplace<SdIndexedValueReader>(volume_, &read_session_).begin(hint, frame_, capacity_)) return fail(IndexGetStep::Invalid);
+            if (!operation_.emplace<SdIndexedValueReader>(volume_, session_).begin(hint, frame_, capacity_)) return fail(IndexGetStep::Invalid);
             phase_ = Phase::Value;
             return result_;
         }
@@ -124,6 +125,7 @@ class SdIndexGet
     uint8_t* frame_ = nullptr;
     ::geocaching::ByteView value_;
     SdVolumeReadSession read_session_;
+    SdVolumeReadSession* session_;
     std::variant<std::monostate, SdIndexHeadReader, SdIndexLookup, SdIndexedValueReader> operation_;
     uint8_t table_ = 0;
     Phase phase_ = Phase::Absent;
