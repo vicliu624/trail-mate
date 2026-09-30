@@ -75,6 +75,10 @@ int main()
     commit(a, true, false);
     const auto scan = [&](size_t capacity, bool corrupt)
     {
+        const auto io_started = test::io_operations;
+        const bool profile = test::profile_reads;
+        test::profile_reads = true;
+        test::read_bytes_by_path.clear();
         sd::SdIndexScan reader(volume);
         require(reader.begin(root, 11, frame.data(), capacity), "begin scan");
         unsigned steps = 0, rows = 0;
@@ -95,6 +99,15 @@ int main()
         }
         require(state == (corrupt ? sd::IndexScanStep::Invalid : sd::IndexScanStep::End), "scan missed historical corruption or failed");
         if (!corrupt) require(rows == 1, "scan emitted duplicate keys");
+        if (!corrupt && !test::file_busy_cycles)
+        {
+            char shard[80];
+            require(sd::indexShardPathForBucket(root.slot, 11, bucket, shard, sizeof(shard)), "profile shard path");
+            std::printf("History scan capacity=%zu live_rows=%u io_operations=%llu shard_bytes=%llu\n", capacity, rows,
+                        static_cast<unsigned long long>(test::io_operations - io_started),
+                        static_cast<unsigned long long>(test::read_bytes_by_path[shard]));
+        }
+        test::profile_reads = profile;
         return steps;
     };
     const auto fallback = scan(144, false);

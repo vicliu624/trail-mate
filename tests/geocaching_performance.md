@@ -1,5 +1,40 @@
 # Geocaching local-read performance reproduction
 
+## Current evidence (2026-09-30, after committed-root local reads)
+
+With `TRAIL_MATE_TEST_IO_DELAY_MS=25` and
+`TRAIL_MATE_TEST_IO_PROFILE=1`, the production-default overlay polling interval
+is 100 ms. Do not set the diagnostic polling override for acceptance runs.
+The current browse runtime test passes its unchanged three-second gates:
+
+| Scenario | Simulated elapsed | I/O operations | Result |
+| --- | ---: | ---: | --- |
+| Two local markers, direct Map cold start | 2,120 ms | 60 | Passed |
+| Local cold-start acceptance | 2,820 ms | — | Passed |
+
+This is a simulated storage sensitivity result, not an L2 device measurement.
+The older measurements below describe intermediate implementations.
+
+### History growth remains unresolved
+
+Run `geocaching_index_scan_history_test` to reproduce two colliding keys,
+60 obsolete versions and a tombstone, leaving one live row. It exercises the
+same `SdIndexScan` backend used by Downloaded, with table 11 test records; it
+is not a direct measurement of a Downloaded page.
+
+| Scanner workspace | Live rows | I/O operations | Shard bytes read | Steps |
+| --- | ---: | ---: | ---: | ---: |
+| 144 bytes, lookup fallback | 1 | 413 | 25,688 | 741 |
+| 8,192 bytes, adjacent-reference optimization | 1 | 236 | 16,720 | 269 |
+
+The scanner still reads obsolete references and validates their CRCs.
+Consequently the two-marker latency gate does not prove history-independent
+pagination. Changing only the page size, timer or adjacent-reference shortcut
+cannot satisfy that requirement. A current-record traversal needs a committed
+index representation that omits superseded references, while preserving pinned
+old roots and crash recovery. The authoritative journal and signature history
+must remain separate from that read projection.
+
 The native browse runtime links the production local stores and storage worker.
 Its SD seam charges a configurable simulated duration per I/O operation. This is
 a sensitivity model, not a measurement of device latency.
