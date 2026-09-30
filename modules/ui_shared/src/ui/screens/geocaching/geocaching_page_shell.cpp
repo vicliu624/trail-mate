@@ -390,6 +390,12 @@ void refreshView()
             page->detail_archiving = false;
             lv_label_set_text(lv_obj_get_child(page->detail_archive, 0), result == ::ui::geocaching::DraftSaveStatus::Saved ? "Archived; directory confirmed" : "Archive unconfirmed; retry");
             setEnabled(page->detail_archive, result != ::ui::geocaching::DraftSaveStatus::Saved);
+            if (result == ::ui::geocaching::DraftSaveStatus::Failed)
+                source->readDetail(
+                    page->detail_id, page->detail_hash, [](const ::ui::geocaching::DetailView& view, void*)
+                    {
+                    if (!view.archive_error.empty()) lv_label_set_text_fmt(lv_obj_get_child(page->detail_archive, 0), "Archive: %.*s", int(view.archive_error.size()), view.archive_error.data()); },
+                    nullptr);
             return;
         }
         if (page->detail_deleting)
@@ -627,10 +633,10 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
     lv_obj_set_style_text_color(metadata, lv_color_hex(styles::kTextMuted), 0);
     if (item.downloaded)
     {
-        auto* remove = lv_button_create(p.list);
+        auto* remove = button(p.list, "Delete local copy", ::ui::page_profile::current().control_button_height);
         lv_obj_set_width(remove, LV_PCT(100));
         lv_obj_set_height(remove, LV_SIZE_CONTENT);
-        auto* label = lv_label_create(remove);
+        auto* label = lv_obj_get_child(remove, 0);
         lv_label_set_text(label, "Delete local copy");
         lv_obj_set_width(label, LV_PCT(100));
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
@@ -661,10 +667,10 @@ void showDetails(const ::ui::geocaching::Item& item, size_t index)
             setEnabled(page->next, false); },
             LV_EVENT_CLICKED, nullptr);
     }
-    p.detail_archive = lv_button_create(p.list);
+    p.detail_archive = button(p.list, "Archive public cache", ::ui::page_profile::current().control_button_height);
     lv_obj_set_width(p.detail_archive, LV_PCT(100));
     lv_obj_set_height(p.detail_archive, LV_SIZE_CONTENT);
-    auto* archive_label = lv_label_create(p.detail_archive);
+    auto* archive_label = lv_obj_get_child(p.detail_archive, 0);
     lv_label_set_text(archive_label, "Archive public cache");
     lv_obj_set_width(archive_label, LV_PCT(100));
     lv_obj_set_style_text_align(archive_label, LV_TEXT_ALIGN_CENTER, 0);

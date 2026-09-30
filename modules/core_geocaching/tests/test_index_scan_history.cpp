@@ -1,4 +1,6 @@
 #include "geocaching/storage/cache_head.h"
+#include "geocaching/storage/draft_record.h"
+#include "geocaching/storage/object_ref.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_get.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_initialize.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_scan.h"
@@ -295,13 +297,58 @@ int main()
             "committed empty generation scanned history");
     // A failed read-back must not publish the new generation or disturb either
     // committed shard head. The journal suffix remains recovery evidence.
+    // Objects and drafts retain one current reference despite repeated updates.
+    for (uint8_t table : {uint8_t(1), uint8_t(4)})
+    {
+        const geocaching::ByteView key{a.data(), table == 4 ? size_t(16) : a.size()};
+        std::array<uint8_t, 256> value;
+        size_t size = 0;
+        for (unsigned update = 0; update < 20; ++update)
+        {
+            if (table == 4)
+            {
+                gc::DraftView draft;
+                draft.name = "Current local draft";
+                draft.generation = update + 1;
+                require(gc::encodeDraft(key, draft, value.data(), value.size(), size), "encode current draft");
+            }
+            else
+            {
+                gc::ObjectRefView object;
+                object.cache_id = {b.data(), b.size()};
+                object.revision = 1;
+                object.created_at = update;
+                require(gc::encodeObjectRef(key, object, value.data(), value.size(), size), "encode current object");
+            }
+            gc::MutationView change{table, key, {value.data(), size}, false};
+            sd::SdIndexedCommit transaction(volume);
+            require(transaction.begin(root, copy, &change, 1, frame.data(), frame.size(), roots[1 - copy]) &&
+                        pump(transaction, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && transaction.committed(root),
+                    "commit current local reference");
+            copy = 1 - copy;
+        }
+        sd::SdIndexHeadReader reader(volume, root.slot, root.epoch, root.sequence);
+        gc::IndexShardHead head;
+        require(reader.begin(table, key) && pump(reader, sd::IndexHeadReadStep::Working) == sd::IndexHeadReadStep::Ready &&
+                    reader.selected(head) && head.current_only && head.length == gc::kIndexEntrySize,
+                "local updates retained historical references");
+        test::profile_reads = true;
+        test::read_bytes_by_path.clear();
+        sd::SdIndexGet get(volume);
+        require(get.begin(root, table, key, frame.data(), frame.size()) && pump(get, sd::IndexGetStep::Working) == sd::IndexGetStep::Ready &&
+                    get.value().size == size && !std::memcmp(get.value().data, value.data(), size),
+                "current local lookup failed");
+        char data_path[96];
+        require(sd::indexShardDataPath(root.slot, head, data_path, sizeof(data_path)) && test::read_bytes_by_path[data_path] == gc::kIndexEntrySize, "current local lookup repeated history");
+        test::profile_reads = false;
+    }
     char first_head[80], second_head[80];
     require(sd::indexShardHeadPathForBucket(root.slot, 2, bucket, 0, first_head, sizeof(first_head)) &&
                 sd::indexShardHeadPathForBucket(root.slot, 2, bucket, 1, second_head, sizeof(second_head)),
             "failure head paths");
     const auto first_before = test::files.at(first_head), second_before = test::files.at(second_head);
     auto pending_head = current;
-    ++pending_head.sequence;
+    pending_head.sequence = root.sequence + 1;
     require(sd::indexShardDataPath(root.slot, pending_head, current_path, sizeof(current_path)), "failure generation path");
     test::fail_read_path = current_path;
     const gc::MutationView failed_changes[] = {{2, {a.data(), a.size()}, {a_value.data(), a_size}, false},

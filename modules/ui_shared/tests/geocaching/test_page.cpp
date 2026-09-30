@@ -316,6 +316,7 @@ int main(int argc, char** argv)
         lv_obj_has_flag(lv_obj_get_child(list, 2), LV_OBJ_FLAG_HIDDEN)) return 65;
     if (!save(std::string(argv[3]) + "-detail.ppm", screen)) return 11;
     auto* archive_action = lv_obj_get_child(list, 4);
+    if (lv_color_to_u32(lv_obj_get_style_bg_color(archive_action, LV_PART_MAIN)) != lv_color_to_u32(lv_color_hex(ui::components::two_pane_styles::kMainPanelBg))) return 85;
     if (lv_obj_has_flag(archive_action, LV_OBJ_FLAG_HIDDEN)) return 80;
     lv_obj_send_event(archive_action, LV_EVENT_CLICKED, nullptr);
     if (source.archives || std::strcmp(lv_label_get_text(lv_obj_get_child(archive_action, 0)), "Confirm public archive")) return 81;

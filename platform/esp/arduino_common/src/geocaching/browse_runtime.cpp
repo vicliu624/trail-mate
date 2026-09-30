@@ -93,6 +93,7 @@ struct Session
             Bind,
             Binding,
             Encode,
+            ArchiveLookup,
             Archive,
             ArchiveSaving,
             Sign
@@ -111,6 +112,7 @@ struct Session
         gc::storage::PublicationHistory history;
         ::platform::memory::PsramPtr<DeviceAuthorIssuePort> author_port;
         ::platform::memory::PsramPtr<gc::AuthorIssue> issue;
+        ::platform::memory::PsramPtr<SdIndexGet> archive_read;
         const char* error = nullptr;
         uint8_t* bytes = nullptr;
         size_t size = 0;
@@ -1101,6 +1103,9 @@ void advanceDraftPublication(Session& s)
     const auto stop = [&](const char* reason)
     {
         job.error = reason;
+        Serial.printf("[Geocaching][Archive] failed cache_prefix=%02x%02x%02x%02x reason=%s\n", job.cache.bytes[0], job.cache.bytes[1], job.cache.bytes[2], job.cache.bytes[3], reason);
+        job.archive_read.reset();
+        s.workspace_owner.release(&job);
         job.draft_stage = Stage::None;
         job.issue.reset();
         job.author_port.reset();
@@ -1113,6 +1118,62 @@ void advanceDraftPublication(Session& s)
         s.store->releaseDraftRead();
         ++epoch;
     };
+    if (job.draft_stage == Stage::ArchiveLookup)
+    {
+        if (!s.workspace_owner.acquire(&job)) return;
+        std::array<uint8_t, 36> key{};
+        std::memcpy(key.data(), job.cache.bytes.data(), 32);
+        for (unsigned i = 0; i < 4; ++i) key[32 + i] = static_cast<uint8_t>(job.expected_revision >> ((3 - i) * 8));
+        if (!job.archive_read)
+        {
+            job.archive_read.reset(::platform::memory::createPsram<SdIndexGet>(s.volume));
+            if (!job.archive_read || !job.archive_read->begin(s.root, 3, {key.data(), key.size()}, s.frame, kFrameCapacity))
+            {
+                stop("Cannot read archive reservation");
+                return;
+            }
+        }
+        const auto status = job.archive_read->step();
+        if (status == IndexGetStep::Working) return;
+        if (status == IndexGetStep::Ready)
+        {
+            gc::storage::AuthorIssuedView prior;
+            gc::RecordView record;
+            gc::RevisionHash hash;
+            gc::GeocacheId cache;
+            size_t size = 0;
+            if (!gc::storage::decodeAuthorIssued({key.data(), key.size()}, job.archive_read->value(), prior) || !prior.issued_at.has_utc ||
+                !gc::protocol::decodeGeocacheRecord({job.unsigned_bytes, job.unsigned_size}, record))
+            {
+                stop("Invalid archive reservation");
+                return;
+            }
+            record.updated_at = prior.issued_at.utc_seconds;
+            if (!gc::protocol::encodeGeocacheRecord(record, job.bytes, job.size, size))
+            {
+                stop("Cannot restore archive version");
+                return;
+            }
+            std::memcpy(job.unsigned_bytes, job.bytes, size);
+            job.unsigned_size = size;
+            if (gc::protocol::deriveGeocacheHashes({job.unsigned_bytes, size}, s.crypto, job.bytes, job.size, cache, hash) != gc::protocol::VerificationResult::Valid ||
+                std::memcmp(hash.bytes.data(), prior.revision_hash.data, 32))
+            {
+                stop("Version already used; reopen latest cache");
+                return;
+            }
+            job.issued = prior.issued_at;
+        }
+        else if (status != IndexGetStep::NotFound)
+        {
+            stop("Archive reservation read failed");
+            return;
+        }
+        job.archive_read.reset();
+        s.workspace_owner.release(&job);
+        job.draft_stage = Stage::Archive;
+        return;
+    }
     if (job.draft_stage == Stage::Binding)
     {
         const auto result = s.store->stepCommit();
@@ -1730,6 +1791,8 @@ class Facade final : public ::ui::geocaching::Source
         if (!guard.locked || !session || !sink) return false;
         const auto* job = session->pending_detail ? session->pending_detail.get() : session->detail.get();
         ::ui::geocaching::DetailView view;
+        if (session->publication && session->publication->cache.bytes == id && session->publication->error)
+            view.archive_error = session->publication->error;
         if (!job || cancel_detail.load() || !job->matches(id, hash))
         {
             view.status = ::ui::geocaching::DetailStatus::Failed;
@@ -1787,7 +1850,7 @@ class Facade final : public ::ui::geocaching::Source
         job->size = capacity + 70;
         job->bytes = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.sign", 2 * job->size + 26, false));
         if (!job->unsigned_bytes || !job->bytes || !gc::protocol::encodeGeocacheRecord(record, job->unsigned_bytes, capacity, job->unsigned_size)) return false;
-        job->draft_stage = Session::Publication::DraftStage::Archive;
+        job->draft_stage = Session::Publication::DraftStage::ArchiveLookup;
         session->storage_requested = true;
         session->publication = std::move(job);
         next_step.store(0);

@@ -380,8 +380,14 @@ int checkIndexTransactions()
     IndexRootView updated;
     if (result != IndexTransactionStep::Verified || !transaction->committed(updated) || updated.sequence != 2 ||
         !readDraftName(updated, 0, "Alpha updated") || !readDraftName(updated, 1, "Beta updated")) return 93;
-    char path[80];
-    if (!indexShardPath('a', 4, {keys[0].data(), 16}, path, sizeof(path)) || files[path].size() != 4 * kIndexEntrySize) return 94;
+    char path[96];
+    IndexShardHead current_head;
+    SdIndexHeadReader current_reader(volume, updated.slot, updated.epoch, updated.sequence);
+    if (!current_reader.begin(4, {keys[0].data(), 16})) return 94;
+    auto current_status = IndexHeadReadStep::Working;
+    for (unsigned i = 0; i < 1024 && current_status == IndexHeadReadStep::Working; ++i) current_status = current_reader.step();
+    if (current_status != IndexHeadReadStep::Ready || !current_reader.selected(current_head) || !current_head.current_only ||
+        !indexShardDataPath(updated.slot, current_head, path, sizeof(path)) || files[path].size() != 2 * kIndexEntrySize) return 94;
     uint8_t erase_payload[64];
     size_t erase_size = 0;
     MutationView erase{4, {keys[0].data(), 16}, {}, true};

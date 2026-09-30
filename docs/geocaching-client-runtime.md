@@ -197,3 +197,14 @@ restoring it. Immutable historical objects and GPX files remain on SD; this is
 not a promise of immediate physical file reclamation. Local map projections
 invalidate on committed saves, removals and installation changes even when the
 viewport stays unchanged. Work and payload buffers are allocated in PSRAM.
+
+Archive retries reuse an existing author reservation's issuance time and verify
+the reconstructed revision hash before signing. Advancing the wall clock must
+not create different bytes for a previously reserved revision. Preparation
+failures are reported in the detail action and once in the publication log.
+
+Object references (table 1), installed heads (table 2), and local drafts (table
+4) use current-reference shard generations. Repeated changes to one key retain
+one lookup reference, with older generations still available to pinned roots.
+Legacy shards convert when next written; untouched legacy shards still need
+migration before all old-card reads can be free of historical references.

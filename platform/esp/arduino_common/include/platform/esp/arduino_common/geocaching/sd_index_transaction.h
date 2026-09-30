@@ -117,7 +117,7 @@ class SdIndexTransaction
                 phase_ = Phase::Root;
                 return result_;
             }
-            if (entry_.table == 2 && shardAlreadyProcessed())
+            if ((entry_.table == 1 || entry_.table == 2 || entry_.table == 4) && shardAlreadyProcessed())
             {
                 ++completed_entries_;
                 return result_;
@@ -219,7 +219,7 @@ class SdIndexTransaction
     }
     IndexTransactionStep startAppend()
     {
-        if (entry_.table == 2)
+        if (entry_.table == 1 || entry_.table == 2 || entry_.table == 4)
         {
             auto& writer = operation_.emplace<CurrentWritePtr>();
             writer.reset(::platform::memory::createPsram<SdIndexCurrentWrite>(volume_, parent_.slot));

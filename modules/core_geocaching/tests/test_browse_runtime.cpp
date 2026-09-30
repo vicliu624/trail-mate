@@ -8,6 +8,11 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace rt = platform::esp::arduino_common::geocaching::browse_runtime;
 namespace test = runtime_test;
@@ -632,6 +637,26 @@ int main(int argc, char** argv)
                      item.publication_confirmed && item.publication_revision == 3; },
           "archive directory confirmation not reflected in local record");
     require(test::source->archiveStatus(public_item.id) == ui::geocaching::DraftSaveStatus::Saved, "archive detail did not show confirmation");
+    // Let wall time advance: a retry must reuse the reserved timestamp rather
+    // than construct different content for the same successor version.
+#ifdef _WIN32
+    Sleep(1100);
+#else
+    usleep(1100000);
+#endif
+    require(test::source->archiveCache(public_item.id, public_item.revision_hash), "archive retry not queued");
+    const auto retry_sends = router.sends;
+    until([&]
+          { return router.sends > retry_sends || test::source->archiveStatus(public_item.id) != ui::geocaching::DraftSaveStatus::Pending; },
+          "archive retry stuck");
+    require(test::source->archiveStatus(public_item.id) != ui::geocaching::DraftSaveStatus::Failed, "timestamp change broke archive retry");
+    if (router.sends > retry_sends)
+    {
+        reply(router, publicationReply(router, 3), 1);
+        until([&]
+              { return test::source->archiveStatus(public_item.id) == ui::geocaching::DraftSaveStatus::Saved; },
+              "archive retry not confirmed");
+    }
     auto archive_overlay = std::make_unique<ui::geocaching::LocalMapOverlay>();
     auto archive_map = std::make_unique<ui::map::MapOverlaySnapshot>();
     until([&]
@@ -860,9 +885,10 @@ int main(int argc, char** argv)
     // Corrupt derived metadata must be rebuilt from authoritative facts. A
     // transient read failure must instead preserve the tree and report I/O.
     {
-        const auto shard = std::find_if(disk.begin(), disk.end(), [](const auto& file)
-                                        { return file.first.find("/index/a/04/") != std::string::npos &&
-                                                 file.first.size() >= 4 && file.first.substr(file.first.size() - 4) == ".gci"; });
+        auto shard = disk.end();
+        for (auto file = disk.begin(); file != disk.end(); ++file)
+            if (file->first.find("/index/a/04/") != std::string::npos && file->first.find(".gci.c") != std::string::npos &&
+                (shard == disk.end() || file->first > shard->first)) shard = file;
         require(shard != disk.end(), "local recovery test requires a draft shard");
         test::files = disk;
         test::directories = disk_directories;

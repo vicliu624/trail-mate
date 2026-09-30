@@ -77,6 +77,7 @@ struct DetailView
     DetailStatus status = DetailStatus::Pending;
     std::string_view description, hint, error;
     bool can_archive = false;
+    std::string_view archive_error;
 };
 class Source
 {
