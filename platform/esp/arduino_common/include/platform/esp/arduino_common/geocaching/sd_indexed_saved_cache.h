@@ -129,6 +129,11 @@ class SdIndexedSavedCache
             record_.latitude_e7 = object.latitude_e7;
             record_.longitude_e7 = object.longitude_e7;
             std::memcpy(record_.name.data(), object.name.data(), object.name.size());
+            // The pinned head selects a committed installed revision. Its
+            // verified object projection is sufficient for list/map rows;
+            // only detail readers need the installation's file hash. A
+            // same-revision reinstall cannot change this immutable metadata.
+            if (metadata_only_) return status_ = IndexScanStep::Item;
             if (!operation_.emplace<SdIndexGet>(volume_).begin(root_, 12, {task_.data(), 16}, frame_, capacity_)) return finish(IndexScanStep::Invalid);
             phase_ = Phase::DirectInstall;
             return status_;

@@ -3680,7 +3680,7 @@ int checkSavedIndexPages()
     }
     if (seen.size() != 9 || crypto.calls || files != disk) return 11;
     for (const auto& read : read_bytes)
-        if (read.first.find("/05/") != std::string::npos || read.first.find("/0a/") != std::string::npos ||
+        if (read.first.find("/05/") != std::string::npos || read.first.find("/0a/") != std::string::npos || read.first.find("/0c/") != std::string::npos ||
             read.first.find(".gpx") != std::string::npos) return 12;
     files.clear();
     index_directories.clear();
