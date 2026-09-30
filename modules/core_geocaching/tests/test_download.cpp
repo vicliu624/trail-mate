@@ -8,6 +8,7 @@
 #include <vector>
 struct Crypto : geocaching::protocol::RecordCrypto
 {
+    unsigned verifications = 0;
     bool sha256(geocaching::ByteView in, std::uint8_t out[32]) override
     {
         chat::reticulum::fullHash(in.data, in.size, out);
@@ -16,6 +17,7 @@ struct Crypto : geocaching::protocol::RecordCrypto
     geocaching::protocol::VerificationResult verifyEd25519(geocaching::ByteView k, geocaching::ByteView s, geocaching::ByteView m) override
     {
         using R = geocaching::protocol::VerificationResult;
+        ++verifications;
         return ed25519_verify(s.data, m.data, m.size, k.data) ? R::Valid : R::InvalidSignature;
     }
 };
@@ -73,6 +75,28 @@ int main(int argc, char** argv)
     port.polled = DownloadOperationResult::Complete;
     client->advance();
     if (client->phase() != DownloadPhase::Stored || client->cancel()) return 10;
+
+    // Reuse the exact immutable response verified by the open detail.
+    protocol::GetResponseView parsed;
+    protocol::VerifiedRecordView verified;
+    if (!protocol::decodeGetResponse(response, id, 8192, parsed) ||
+        protocol::verifyGeocache(parsed.signed_cache, crypto, scratch.data(), scratch.size(), verified,
+                                 &summary.id, &summary.hash) != protocol::VerificationResult::Valid) return 30;
+    Port reused_port;
+    reused_port.installation = DownloadOperationResult::Complete;
+    DownloadClient reused(reused_port, crypto);
+    if (!reused.begin(source, id, summary, 1)) return 31;
+    const auto verifications = crypto.verifications;
+    auto mismatch = verified;
+    mismatch.hash.bytes[0] ^= 1;
+    if (reused.acceptVerified(source, response, mismatch) || reused_port.commits) return 32;
+    auto wrong_source = source;
+    wrong_source.bytes[0] ^= 1;
+    if (reused.acceptVerified(wrong_source, response, verified) || reused_port.commits) return 33;
+    auto copied_response = data[1];
+    if (reused.acceptVerified(source, {copied_response.data(), copied_response.size()}, verified) || reused_port.commits) return 34;
+    if (!reused.acceptVerified(source, response, verified) || reused.phase() != DownloadPhase::Stored ||
+        reused_port.commits != 1 || crypto.verifications != verifications) return 35;
 
     Port delayed;
     delayed.submission = DownloadOperationResult::Pending;

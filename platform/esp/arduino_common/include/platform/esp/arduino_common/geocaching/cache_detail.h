@@ -35,6 +35,7 @@ struct CacheDetail
     bool has_receipt = false;
     uint8_t* response = nullptr;
     size_t response_size = 0;
+    ::geocaching::protocol::VerifiedRecordView verified_record;
     ::platform::memory::PsramPtr<SdIndexedSavedCache> saved_read;
     uint64_t started = 0, next_send = 0;
     State state = State::Network;
@@ -61,6 +62,7 @@ struct CacheDetail
                            ::geocaching::protocol::VerificationResult::Valid;
         if (valid)
         {
+            verified_record = verified;
             description.fill(0);
             hint.fill(0);
             std::memcpy(description.data(), verified.record.description.data(), verified.record.description.size());

@@ -183,6 +183,7 @@ struct Session
     uint8_t* response = nullptr;
     bool workspace_unavailable = false;
     size_t response_size = 0;
+    ::platform::memory::PsramPtr<gc::protocol::VerifiedRecordView> response_verified;
     gc::Destination response_source;
     gc::Destination local;
     gc::RequestId response_id;
@@ -211,6 +212,7 @@ struct Session
         gc::RequestId request;
         uint8_t* response = nullptr;
         size_t response_size = 0;
+        ::platform::memory::PsramPtr<gc::protocol::VerifiedRecordView> verified;
         ~DownloadStart() { heap_caps_free(response); }
     };
     ::platform::memory::PsramPtr<DownloadStart> download_start;
@@ -634,6 +636,7 @@ bool advanceDownloadStart(Session& s)
         s.response_size = job.response_size;
         s.response_source = job.remote;
         s.response_operation = 3;
+        s.response_verified = std::move(job.verified);
     }
     s.download_start.reset();
     if (!begun)
@@ -768,14 +771,20 @@ bool processResponse(Session& s)
     }
     else if (s.response_operation == 3 && s.download)
     {
-        auto* scratch = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.verify", s.download_scratch, false));
-        if (!scratch) return false;
         const auto before = s.download->phase();
-        s.download->accept(s.response_source, {s.response, s.response_size}, scratch, s.download_scratch);
+        if (s.response_verified)
+            s.download->acceptVerified(s.response_source, {s.response, s.response_size}, *s.response_verified);
+        else
+        {
+            auto* scratch = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.verify", s.download_scratch, false));
+            if (!scratch) return false;
+            s.download->accept(s.response_source, {s.response, s.response_size}, scratch, s.download_scratch);
+            heap_caps_free(scratch);
+        }
         if (before != s.download->phase()) ++epoch;
-        heap_caps_free(scratch);
     }
     heap_caps_free(s.response);
+    s.response_verified.reset();
     s.response = nullptr;
     s.response_size = 0;
     return true;
@@ -1795,6 +1804,8 @@ class Facade final : public ::ui::geocaching::Source
         if (!session->response && detail && detail->state == CacheDetail::State::Ready && detail->response &&
             detail->matches(item.id, item.revision_hash) && detail->remote.bytes == remote.bytes)
         {
+            job->verified.reset(::platform::memory::createPsram<gc::protocol::VerifiedRecordView>(detail->verified_record));
+            if (!job->verified) return false;
             job->request = detail->request;
             job->response = detail->response;
             job->response_size = detail->response_size;

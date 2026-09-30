@@ -31,6 +31,12 @@ and hint after author verification. Only the open detail owns these text buffers
 closing it cancels further requests. Online detail reads do not require SD.
 Saved items read the complete signed record already retained by the download
 transaction, so descriptions and hints remain available offline after restart.
+Saving an open verified online detail transfers its immutable response and
+verified record view to the installation job. It does not repeat the network
+request or Ed25519 verification, or allocate a second verification workspace.
+The handoff still checks the source, request ID, revision hash, summary fields,
+and that the verified signature borrows the retained response. New network
+responses continue through full signature verification.
 The GPX also includes both fields and the signed record; no second sidecar file
 or background detail synchronization is introduced.
 

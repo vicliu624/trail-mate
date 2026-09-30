@@ -92,6 +92,21 @@ class DownloadClient
         if (!protocol::decodeGetResponse(response, request_, 8192, parsed) || parsed.has_conflict ||
             protocol::verifyGeocache(parsed.signed_cache, crypto_, scratch, capacity, verified,
                                      &expected_.id, &expected_.hash) != protocol::VerificationResult::Valid) return false;
+        return acceptVerified(source, response, verified);
+    }
+    // Owner-only handoff of an already authenticated, immutable response.
+    // The verified view must keep borrowing this response until commit returns.
+    // Network events must enter accept(), never this trusted handoff.
+    bool acceptVerified(const Destination& source, ByteView response, const protocol::VerifiedRecordView& verified)
+    {
+        if (phase_ != DownloadPhase::Waiting || source.bytes != source_.bytes ||
+            verified.id.bytes != expected_.id.bytes || verified.hash.bytes != expected_.hash.bytes) return false;
+        protocol::GetResponseView parsed;
+        if (!protocol::decodeGetResponse(response, request_, 8192, parsed) || parsed.has_conflict) return false;
+        const auto begin = reinterpret_cast<uintptr_t>(parsed.signed_cache.data);
+        const auto signature = reinterpret_cast<uintptr_t>(verified.signature.data);
+        if (verified.signature.size != 64 || signature < begin || signature - begin > parsed.signed_cache.size ||
+            verified.signature.size > parsed.signed_cache.size - (signature - begin)) return false;
         const auto& r = verified.record;
         if (r.revision != expected_.revision || r.state != expected_.state ||
             r.latitude_e7 != expected_.latitude_e7 || r.longitude_e7 != expected_.longitude_e7 ||
