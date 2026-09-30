@@ -285,4 +285,7 @@ const initialLocation=locateNearby();
 startService();
 map.on('moveend',renderMarkers);
 window.addEventListener('pagehide',()=>worker.terminate());
+// Back/forward cache restores the document but cannot revive a terminated
+// worker. Reconnect through normal startup instead of leaving dead RPCs.
+window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});
 window.addEventListener('keydown',event=>{if(event.key==='Escape')$('close-detail').click();});

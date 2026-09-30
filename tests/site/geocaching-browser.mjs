@@ -46,7 +46,7 @@ const http=createServer(async(req,res)=>{
   const file=resolve(root,path.slice('/trail-mate/'.length)+(path.endsWith('/')?'index.html':''));
   if(!file.startsWith(root+sep)){res.writeHead(403).end();return;}
   try {
-    const type={'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.map':'application/json'}[extname(file)]||'application/octet-stream';
+    const type={'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml','.map':'application/json'}[extname(file)]||'application/octet-stream';
     const content=await readFile(file);
     res.writeHead(200,{'Content-Type':type});res.end(content);
   } catch {res.writeHead(404).end();}
@@ -93,6 +93,8 @@ try {
   }
   await page.waitForFunction(()=>document.querySelector('#results').children.length===2,{},{timeout:85000});
   if(values['late-bridge']) console.log(JSON.stringify({event:'initial_dial_failure_recovered_without_reload'}));
+  const markerIcons=await page.locator('.cache-marker img').evaluateAll(images=>images.map(image=>({src:image.src,loaded:image.complete&&image.naturalWidth>0})));
+  assert.ok(markerIcons.length>0 && markerIcons.every(icon=>/geocaching-.*\.svg$/.test(icon.src)&&icon.loaded),'Cache markers load the shared geocaching SVG');
   assert.ok(await page.locator('#search').evaluate(button=>button.className.includes('animal-btn-')),'Search uses the actual Animal Island UI Button');
   assert.ok(await page.locator('.brand-logo').evaluate(img=>img.complete && img.naturalWidth>0),'Brand image loads without the full site preparation build');
   if(gateway) {
@@ -142,6 +144,15 @@ try {
     console.log(JSON.stringify({event:'browser_reconnected_without_reload'}));
   }
   assert.ok(packetSizes.length>10 && packetSizes.every(size=>size>19&&size<=500),'Bridge carries bounded raw RNS packets');
+  // Deterministically exercise the browser lifecycle pair, including the
+  // worker termination performed when entering the back/forward cache.
+  await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+  await Promise.all([
+    page.waitForEvent('load'),
+    page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})))
+  ]);
+  await page.waitForFunction(()=>document.querySelector('#results').children.length===2,{},{timeout:85000});
+  console.log(JSON.stringify({event:'cached_page_restore_reconnected'}));
   assert.deepEqual(errors,[]);
   await writeFile(resolve(work,'browser.log'),consoleLog.join('\n'));
   await writeFile(resolve(work,'result.json'),JSON.stringify({status:'passed',rawPackets:packetSizes.length,maxPacket:Math.max(...packetSizes),
