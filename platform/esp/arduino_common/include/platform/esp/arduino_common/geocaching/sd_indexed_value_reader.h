@@ -2,7 +2,7 @@
 #include "geocaching/storage/checkpoint_index_cursor.h"
 #include "geocaching/storage/index_entry.h"
 #include "platform/esp/arduino_common/geocaching/sd_record_reader.h"
-#include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 #include "platform/esp/arduino_common/geocaching/storage_diagnostics.h"
 #include <cstdio>
 
@@ -25,7 +25,7 @@ enum class IndexedReadStep : uint8_t
 class SdIndexedValueReader
 {
   public:
-    explicit SdIndexedValueReader(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    explicit SdIndexedValueReader(const ::geocaching::storage::VolumeInstance& volume, SdVolumeReadSession* session = nullptr) : volume_(volume), session_(session) {}
     bool begin(const ::geocaching::storage::IndexedMutation& entry, uint8_t* frame, size_t capacity)
     {
         if (result_ != IndexedReadStep::Idle || !::geocaching::storage::validIndexEntry(entry) || !entry.key.data || !entry.key.size || entry.key.size > key_.size() ||
@@ -49,7 +49,7 @@ class SdIndexedValueReader
         {
             media_session_ = storage::sd_media_session();
             ::geocaching::storage::VolumeInstance current;
-            const auto status = inspectSdVolume(current);
+            const auto status = session_ ? session_->inspect(current) : inspectSdVolume(current);
             if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return fail(IndexedReadStep::IoError);
             if (current != volume_) return fail(IndexedReadStep::VolumeChanged);
@@ -163,6 +163,7 @@ class SdIndexedValueReader
         return result_ = result;
     }
     ::geocaching::storage::VolumeInstance volume_;
+    SdVolumeReadSession* session_ = nullptr;
     ::geocaching::storage::JournalValueLocation location_;
     std::array<uint8_t, 96> key_{};
     size_t key_size_ = 0, capacity_ = 0, frame_size_ = 0;

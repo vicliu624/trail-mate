@@ -32,3 +32,10 @@ operations and 76 volume-header reads (2,128 bytes), taking 6,130 ms in the same
 volume before reading and rejects completion after a media-session change,
 including a remount with an identical header. It no longer reopens the header
 to complete that same value read. No global volume cache is introduced.
+
+Sharing a verified volume session across each indexed get/scan reduces the same
+run further to 178 operations and 54 header reads (1,512 bytes), at 6,115 ms.
+Subreaders still validate shard checksums, sequence boundaries and record shape.
+The session belongs to that one operation; a new query revalidates the header.
+The three-second target remains unmet. Fewer I/O operations have not yet removed
+the dominant end-to-end delay, so this is not a completed latency fix.

@@ -74,7 +74,7 @@ class SdIndexScan
                 phase_ = Phase::Finish;
                 return result_;
             }
-            if (!operation_.emplace<SdIndexHeadReader>(volume_, root_.slot, root_.epoch, root_.sequence).beginBucket(table_, static_cast<uint8_t>(bucket_))) return fail(IndexScanStep::Invalid);
+            if (!operation_.emplace<SdIndexHeadReader>(volume_, root_.slot, root_.epoch, root_.sequence, &read_session_).beginBucket(table_, static_cast<uint8_t>(bucket_))) return fail(IndexScanStep::Invalid);
             phase_ = Phase::Head;
             return result_;
         }
@@ -153,11 +153,11 @@ class SdIndexScan
             }
             if (newest)
             {
-                if (!operation_.emplace<SdIndexedValueReader>(volume_).begin(entry_, frame_, capacity_)) return fail(IndexScanStep::Invalid);
+                if (!operation_.emplace<SdIndexedValueReader>(volume_, &read_session_).begin(entry_, frame_, capacity_)) return fail(IndexScanStep::Invalid);
                 phase_ = Phase::Value;
                 return result_;
             }
-            if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head_.sequence, head_.length).begin(table_, entry_.key)) return fail(IndexScanStep::Invalid);
+            if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head_.sequence, head_.length, &read_session_).begin(table_, entry_.key)) return fail(IndexScanStep::Invalid);
             phase_ = Phase::Latest;
             return result_;
         }
@@ -173,7 +173,7 @@ class SdIndexScan
                 phase_ = Phase::Seek;
                 return result_;
             }
-            if (!operation_.emplace<SdIndexedValueReader>(volume_).begin(entry_, frame_, capacity_)) return fail(IndexScanStep::Invalid);
+            if (!operation_.emplace<SdIndexedValueReader>(volume_, &read_session_).begin(entry_, frame_, capacity_)) return fail(IndexScanStep::Invalid);
             phase_ = Phase::Value;
             return result_;
         }
@@ -202,7 +202,7 @@ class SdIndexScan
             return result_;
         }
         ::geocaching::storage::VolumeInstance current;
-        const auto status = inspectSdVolume(current);
+        const auto status = read_session_.inspect(current);
         if (status == SdVolumeResult::Busy) return result_;
         if (status != SdVolumeResult::Ready) return fail(IndexScanStep::IoError);
         return fail(current == volume_ ? IndexScanStep::End : IndexScanStep::VolumeChanged);
@@ -238,6 +238,7 @@ class SdIndexScan
         return result_ = status;
     }
     ::geocaching::storage::VolumeInstance volume_;
+    SdVolumeReadSession read_session_;
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::storage::IndexShardHead head_;
     ::geocaching::storage::IndexEntryBytes bytes_{};

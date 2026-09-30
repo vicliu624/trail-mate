@@ -1,7 +1,7 @@
 #pragma once
 #include "geocaching/storage/index_shard_head.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_path.h"
-#include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 
 namespace platform::esp::arduino_common::geocaching
 {
@@ -18,8 +18,8 @@ enum class IndexHeadReadStep : uint8_t
 class SdIndexHeadReader
 {
   public:
-    SdIndexHeadReader(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t epoch, uint64_t visible_sequence)
-        : volume_(volume), epoch_(epoch), visible_(visible_sequence), slot_(slot) {}
+    SdIndexHeadReader(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t epoch, uint64_t visible_sequence, SdVolumeReadSession* session = nullptr)
+        : volume_(volume), epoch_(epoch), visible_(visible_sequence), slot_(slot), session_(session) {}
     bool begin(uint8_t table, ::geocaching::ByteView key)
     {
         return key.data && key.size && key.size <= 96 && beginBucket(table, static_cast<uint8_t>(::sys::crc32(key.data, key.size)));
@@ -50,7 +50,7 @@ class SdIndexHeadReader
         if (phase_ == 0 || phase_ == 3)
         {
             ::geocaching::storage::VolumeInstance current;
-            const auto status = inspectSdVolume(current);
+            const auto status = session_ ? session_->inspect(current) : inspectSdVolume(current);
             if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return result_ = IndexHeadReadStep::IoError;
             if (current != volume_) return result_ = IndexHeadReadStep::VolumeChanged;
@@ -82,6 +82,7 @@ class SdIndexHeadReader
     std::array<char, 80> path_{};
     uint64_t epoch_, visible_;
     char slot_;
+    SdVolumeReadSession* session_ = nullptr;
     uint8_t table_ = 0, bucket_ = 0, phase_ = 0;
     IndexHeadReadStep result_ = IndexHeadReadStep::Idle;
 };

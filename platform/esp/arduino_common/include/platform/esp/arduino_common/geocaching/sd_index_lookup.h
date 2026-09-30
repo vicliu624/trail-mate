@@ -1,6 +1,6 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_index_path.h"
-#include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 #include "platform/esp/arduino_common/geocaching/storage_diagnostics.h"
 
 namespace platform::esp::arduino_common::geocaching
@@ -23,8 +23,8 @@ enum class IndexLookupStep : uint8_t
 class SdIndexLookup
 {
   public:
-    SdIndexLookup(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t committed_sequence, uint64_t committed_length)
-        : volume_(volume), visible_(committed_sequence), position_(committed_length), length_(committed_length), slot_(slot) {}
+    SdIndexLookup(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t committed_sequence, uint64_t committed_length, SdVolumeReadSession* session = nullptr)
+        : volume_(volume), visible_(committed_sequence), position_(committed_length), length_(committed_length), slot_(slot), session_(session) {}
     bool begin(uint8_t table, ::geocaching::ByteView key)
     {
         if (result_ != IndexLookupStep::Idle || (slot_ != 'a' && slot_ != 'b') || table < 1 || table > 13 ||
@@ -51,7 +51,7 @@ class SdIndexLookup
         if (phase_ == Phase::Volume || phase_ == Phase::VerifyVolume)
         {
             VolumeInstance current;
-            const auto status = inspectSdVolume(current);
+            const auto status = session_ ? session_->inspect(current) : inspectSdVolume(current);
             if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return fail(IndexLookupStep::IoError);
             if (current != volume_) return fail(IndexLookupStep::VolumeChanged);
@@ -168,6 +168,7 @@ class SdIndexLookup
     size_t key_size_ = 0;
     uint16_t read_ = 0;
     char slot_;
+    SdVolumeReadSession* session_ = nullptr;
     uint8_t table_ = 0;
     bool erased_ = false;
     bool first_entry_ = true;
