@@ -3293,7 +3293,21 @@ int checkIndexedAuthorReservation(const char* path)
     if (publication.phase() != PublishAttemptPhase::Confirmed || root.sequence != 5) return 30;
     if (store.catalogGeneration() <= bound_catalog_generation) return 114;
     const auto confirmed_files = files;
+    // Background resume must not open completed tasks. Make every task shard
+    // unavailable, then restore it for the exact confirmed-receipt lookup.
+    unsigned hidden_task_files = 0;
+    for (auto file = files.begin(); file != files.end();)
+    {
+        if (file->first.find("/0a/") != std::string::npos)
+        {
+            file = files.erase(file);
+            ++hidden_task_files;
+        }
+        else ++file;
+    }
+    if (!hidden_task_files) return 122;
     if (select_publication(recovery_filter) != DraftReadResult::NotFound || owner.holder()) return 94;
+    files = confirmed_files;
     auto exact_publication = recovery_filter;
     exact_publication.has_cache = exact_publication.has_hash = exact_publication.has_remote = true;
     exact_publication.cache = verified.id;

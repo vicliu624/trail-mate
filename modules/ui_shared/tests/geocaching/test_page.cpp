@@ -93,6 +93,8 @@ struct TestSource : ui::geocaching::Source
     size_t saved_index = SIZE_MAX;
     size_t last_open = 0;
     uint64_t generation = 1;
+    const char* list_status = "20 shared caches";
+    bool list_can_refresh = true;
     size_t requested_offset = 0, requested_count = 0;
     unsigned pending_windows = 0;
     ui::geocaching::Section requested_section = ui::geocaching::Section::Discover;
@@ -113,13 +115,13 @@ struct TestSource : ui::geocaching::Source
         }
         out.generation = generation;
         out.count = 20;
-        out.can_refresh = true;
+        out.can_refresh = list_can_refresh;
         if (section == ui::geocaching::Section::Published)
         {
             out.count = has_draft ? 1 : 0;
             out.can_create = true;
         }
-        std::snprintf(out.status.data(), out.status.size(), "20 shared caches");
+        std::snprintf(out.status.data(), out.status.size(), "%s", list_status);
     }
     bool item(ui::geocaching::Section section, size_t index, uint64_t expected, ui::geocaching::Item& out) override
     {
@@ -291,6 +293,20 @@ int main(int argc, char** argv)
     if (!save(std::string(argv[3]) + "-list.ppm", screen)) return 5;
     auto* first_row = lv_obj_get_child(list, 0);
     const auto reads_before_busy = source.reads;
+    source.list_status = "Saving and verifying GPX...";
+    source.list_can_refresh = false;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    auto* status_footer = lv_obj_get_child(root, 4);
+    if (lv_obj_get_child(list, 0) != first_row || source.reads != reads_before_busy ||
+        std::strcmp(lv_label_get_text(lv_obj_get_child(root, 2)), source.list_status) ||
+        !lv_obj_has_state(lv_obj_get_child(status_footer, 0), LV_STATE_DISABLED)) return 78;
+    source.list_status = "20 shared caches";
+    source.list_can_refresh = true;
+    lv_tick_inc(600);
+    lv_timer_handler();
+    if (lv_obj_get_child(list, 0) != first_row || source.reads != reads_before_busy ||
+        lv_obj_has_state(lv_obj_get_child(status_footer, 0), LV_STATE_DISABLED)) return 79;
     source.snapshot_busy = true;
     lv_tick_inc(600);
     lv_timer_handler();

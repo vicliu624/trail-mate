@@ -108,9 +108,12 @@ and hint after author verification. Only the open detail owns these text buffers
 closing it cancels further requests. Online detail reads do not require SD.
 Saved items read the complete signed record already retained by the download
 transaction, so descriptions and hints remain available offline after restart.
-Saving an open verified online detail transfers its immutable response and
-verified record view to the installation job. It does not repeat the network
-request or Ed25519 verification, or allocate a second verification workspace.
+Saving an open verified online detail copies its immutable response into a
+separate PSRAM allocation for installation. The detail retains its own response,
+so staying on the page or closing it cannot invalidate the other owner. The
+installation reparses the copy to bind borrowed fields to its own bytes and
+reuses the verified identity and hash. It does not repeat the network request
+or Ed25519 verification, or allocate a second verification workspace.
 The handoff still checks the source, request ID, revision hash, summary fields,
 and that the verified signature borrows the retained response. New network
 responses continue through full signature verification.
@@ -156,6 +159,19 @@ list metadata from the retained signed record. Subsequent startup skips these
 completed installations without reopening their GPX files. Downloaded pages use
 the current head/object/install indexes, with four rows and one lookahead, rather
 than scanning request history or hashing GPX files.
+
+Local list row tokens combine the current catalogue's lifetime and its own
+content generation. Download and transport progress do not change Published
+row tokens; publication progress does not change Downloaded row tokens. Replacing
+a catalogue gives it a new lifetime token, so stale selections from a closed
+session cannot become valid when a new catalogue starts at generation one.
+Status messages and action buttons update independently of row rendering.
+
+Background publication recovery filters completed, cancelled and no-intent
+requests before opening their parent tasks. Exact cache lookups still read
+confirmed receipts, and eligible unfinished requests retain task/reference
+validation. Selecting unfinished work scans the current request index; it does
+not reopen every completed task or GPX file.
 
 Legacy kind-3 browse tasks remain readable on existing cards. The indexed
 dispatcher skips them without a startup scan that rewrites each task. Older

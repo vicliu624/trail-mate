@@ -311,6 +311,18 @@ void refreshDetailText()
         },
         nullptr);
 }
+void updateListControls(PageState& p)
+{
+    lv_label_set_text(p.status, p.snapshot.status.data());
+    lv_label_set_text_fmt(p.range, "%lu-%lu / %lu%s",
+                          static_cast<unsigned long>(p.row_count ? p.offset + 1 : 0),
+                          static_cast<unsigned long>(p.offset + p.row_count), static_cast<unsigned long>(p.snapshot.count), p.snapshot.has_more ? "+" : "");
+    setEnabled(p.refresh, p.section == Section::Published ? p.snapshot.can_create : p.snapshot.can_refresh);
+    lv_label_set_text(lv_obj_get_child(p.refresh, 0), p.section == Section::Published ? "New" : "Refresh");
+    setEnabled(p.previous, p.offset != 0);
+    setEnabled(p.next, (p.offset + p.row_count < p.snapshot.count || p.snapshot.has_more) && p.row_count != 0 && p.valid);
+}
+
 void refreshView()
 {
     if (!page) return;
@@ -452,11 +464,18 @@ void refreshView()
     else std::snprintf(current.status.data(), current.status.size(), "Geocaching service unavailable");
     if (current.busy && p.valid && p.rendered_source == source && p.rendered_section == p.section &&
         p.rendered_offset == p.offset) return;
+    const bool controls_changed = p.snapshot.can_create != current.can_create || p.snapshot.can_refresh != current.can_refresh ||
+                                  p.snapshot.has_more != current.has_more || std::strcmp(p.snapshot.status.data(), current.status.data());
+    const auto old_count = p.snapshot.count;
     p.snapshot = current;
     if (p.offset >= p.snapshot.count) p.offset = p.snapshot.count ? ((p.snapshot.count - 1) / p.window) * p.window : 0;
     if (source) source->requestWindow(p.section, p.offset, p.window);
     if (p.valid && p.rendered_source == source && p.rendered_section == p.section &&
-        p.rendered_offset == p.offset && old_generation == p.snapshot.generation) return;
+        p.rendered_offset == p.offset && old_generation == p.snapshot.generation && old_count == p.snapshot.count)
+    {
+        if (controls_changed) updateListControls(p);
+        return;
+    }
     p.valid = !current.busy;
     p.rendered_source = source;
     p.rendered_section = p.section;
@@ -466,7 +485,6 @@ void refreshView()
         if (i == static_cast<size_t>(p.section)) lv_obj_add_state(p.tabs[i], LV_STATE_CHECKED);
         else lv_obj_remove_state(p.tabs[i], LV_STATE_CHECKED);
     }
-    lv_label_set_text(p.status, p.snapshot.status.data());
     lv_obj_clean(p.list);
     p.rows.fill(nullptr);
     p.row_count = 0;
@@ -513,13 +531,7 @@ void refreshView()
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_pad_top(empty, 12, 0);
     }
-    lv_label_set_text_fmt(p.range, "%lu-%lu / %lu%s",
-                          static_cast<unsigned long>(p.row_count ? p.offset + 1 : 0),
-                          static_cast<unsigned long>(p.offset + p.row_count), static_cast<unsigned long>(p.snapshot.count), p.snapshot.has_more ? "+" : "");
-    setEnabled(p.refresh, p.section == Section::Published ? p.snapshot.can_create : p.snapshot.can_refresh);
-    lv_label_set_text(lv_obj_get_child(p.refresh, 0), p.section == Section::Published ? "New" : "Refresh");
-    setEnabled(p.previous, p.offset != 0);
-    setEnabled(p.next, (p.offset + p.row_count < p.snapshot.count || p.snapshot.has_more) && p.row_count != 0 && p.valid);
+    updateListControls(p);
     if (p.group)
     {
         if (focused_row)

@@ -65,6 +65,12 @@ inline bool preferPublicationRecovery(const PublicationRecoveryView& candidate, 
     if (candidate.confirmed != selected.confirmed) return candidate.confirmed;
     return candidate.key < selected.key;
 }
+// Filter terminal/no-intent requests before opening their task. Exact cache
+// lookups retain confirmed receipts; background recovery only resumes work.
+inline bool publicationRecoveryRequestEligible(const PublicationRecoveryFilter& filter, const OutgoingView& outgoing)
+{
+    return outgoing.state <= 4 && (outgoing.state == 4 ? filter.has_cache : outgoing.continue_intent);
+}
 template <class View>
 PublicationRecoveryResult readLogicalPublicationRecovery(const View& view, const PublicationRecoveryFilter& filter,
                                                          PublicationRecoveryView& out)
@@ -79,7 +85,9 @@ PublicationRecoveryResult readLogicalPublicationRecovery(const View& view, const
         OutgoingView outgoing;
         TaskView task;
         ByteView value;
-        if (!decodeOutgoing(row.key, row.value, outgoing) || !view.find(10, outgoing.task_id, value) ||
+        if (!decodeOutgoing(row.key, row.value, outgoing)) return PublicationRecoveryResult::Invalid;
+        if (!publicationRecoveryRequestEligible(filter, outgoing)) continue;
+        if (!view.find(10, outgoing.task_id, value) ||
             !decodeTask(outgoing.task_id, value, task)) return PublicationRecoveryResult::Invalid;
         PublicationRecoveryView candidate;
         const auto result = publicationRecoveryCandidate(filter, row.key, outgoing, task, candidate);

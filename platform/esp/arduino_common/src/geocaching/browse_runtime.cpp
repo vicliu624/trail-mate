@@ -85,6 +85,7 @@ std::atomic<PendingReply*> pending_reply{nullptr};
 struct Session
 {
     uint64_t local_map_revision = 0;
+    uint64_t saved_catalog_epoch = 0, draft_catalog_epoch = 0;
     struct Publication
     {
         enum class DraftStage : uint8_t
@@ -397,7 +398,11 @@ bool draftMetadataReady(const Session& s)
 bool advanceDraftCatalog(Session& s)
 {
     if (!s.draft_catalog_wanted || !s.store || s.needsRecovery() || (s.phase != Phase::Ready && s.phase != Phase::ResumeDownloads)) return false;
-    if (!s.draft_catalog) s.draft_catalog.reset(::platform::memory::createPsram<Session::DraftCatalog>());
+    if (!s.draft_catalog)
+    {
+        s.draft_catalog.reset(::platform::memory::createPsram<Session::DraftCatalog>());
+        if (s.draft_catalog) s.draft_catalog_epoch = ++epoch;
+    }
     if (!s.draft_catalog) return false;
     auto& catalog = *s.draft_catalog;
     if (s.map_metadata_only && draftMetadataReady(s))
@@ -977,6 +982,7 @@ void advanceStorageRecovery(Session& s)
         fail("Insufficient catalogue memory");
         return;
     }
+    s.saved_catalog_epoch = ++epoch;
     if (s.saved_count) s.saved->requestWindow(s.saved_offset, s.saved_count);
     s.phase = s.local_read_only ? Phase::Ready : Phase::ResumeDownloads;
     s.status = s.local_read_only ? "Saved storage ready" : "Recovering downloaded GPX files...";
@@ -1638,7 +1644,12 @@ class Facade final : public ::ui::geocaching::Source
             out.can_refresh = true;
             out.can_create = out.has_more = false;
         }
-        out.generation ^= epoch << 32;
+        // List ownership and its own content version determine row validity.
+        // Transport progress and other sections must not invalidate local rows.
+        const auto scope = section == ::ui::geocaching::Section::Published && session    ? session->draft_catalog_epoch
+                           : section == ::ui::geocaching::Section::Downloaded && session ? session->saved_catalog_epoch
+                                                                                         : epoch;
+        out.generation ^= scope << 32;
     }
     void requestWindow(::ui::geocaching::Section section, size_t offset, size_t count) override
     {
@@ -1701,7 +1712,7 @@ class Facade final : public ::ui::geocaching::Source
             out = {};
             if (!draftMetadataReady(*session)) return false;
             const auto& catalog = *session->draft_catalog;
-            if ((generation ^ (epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
+            if ((generation ^ (session->draft_catalog_epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
             const auto& draft = catalog.page.rows[index - catalog.page.offset];
             out.is_draft = true;
             out.state = draft.state;
@@ -1740,7 +1751,7 @@ class Facade final : public ::ui::geocaching::Source
             return true;
         }
         if (guard.locked && section == ::ui::geocaching::Section::Downloaded && session && session->saved && !session->needsRecovery())
-            return session->saved->item(index, generation ^ (epoch << 32), out);
+            return session->saved->item(index, generation ^ (session->saved_catalog_epoch << 32), out);
         if (!guard.locked || !session || !session->source || !session->source->item(section, index, generation ^ (epoch << 32), out)) return false;
         out.downloaded = session->saved && session->saved->contains(out.id, out.revision_hash);
         out.can_download = !out.downloaded && !downloadActive() && !publicationActive() && !draftSaveActive() && (!session->store || !session->store->commitPending()) &&

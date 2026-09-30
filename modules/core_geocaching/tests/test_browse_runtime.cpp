@@ -467,6 +467,7 @@ int main(int argc, char** argv)
     until([&]
           { return std::strstr(snapshot(Section::Published).status.data(), "No local drafts"); },
           "initial publication projection did not load");
+    const auto publication_rows_before_download = snapshot(Section::Published).generation;
     test::source->requestWindow(Section::Discover, 0, 1);
     generation = snapshot(Section::Discover).generation;
     void* open_response = nullptr;
@@ -515,6 +516,8 @@ int main(int argc, char** argv)
     // heads. None changes the publication projection we already loaded.
     require(std::strstr(snapshot(Section::Published).status.data(), "No local drafts"),
             "unrelated download invalidated the loaded publication projection");
+    require(snapshot(Section::Published).generation == publication_rows_before_download,
+            "unrelated download changed the publication row token");
     test::source->requestWindow(Section::Downloaded, 0, 4);
     until([&]
           {

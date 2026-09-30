@@ -91,6 +91,11 @@ class SdIndexedPublicationRecovery
         if (filter_.matchesRequest(row.key))
         {
             if (!decodeOutgoing(row.key, row.value, outgoing_)) return result_ = IndexGetStep::Invalid;
+            if (!publicationRecoveryRequestEligible(filter_, outgoing_))
+            {
+                if (!scan_->advance()) return result_ = IndexGetStep::Invalid;
+                return result_;
+            }
             std::memcpy(candidate_key_.data(), row.key.data, candidate_key_.size());
             std::memcpy(task_key_.data(), outgoing_.task_id.data, task_key_.size());
             // The task read reuses the row frame. Only scalar metadata and an

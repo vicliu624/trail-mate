@@ -1,6 +1,6 @@
 # Geocaching local-read performance reproduction
 
-## Current evidence (2026-09-30, after current cache-head writes)
+## Current evidence (2026-10-01, catalogue-scoped row invalidation)
 
 With `TRAIL_MATE_TEST_IO_DELAY_MS=25` and
 `TRAIL_MATE_TEST_IO_PROFILE=1`, the production-default overlay polling interval
@@ -9,11 +9,19 @@ The current browse runtime test passes its unchanged three-second gates:
 
 | Scenario | Simulated elapsed | I/O operations | Result |
 | --- | ---: | ---: | --- |
-| Two local markers, direct Map cold start | 2,020 ms | 58 | Passed |
-| Local cold-start acceptance | 2,760 ms | — | Passed |
+| Two local markers, direct Map cold start | 1,795 ms | 50 | Passed |
+| Discover to local lists | 1,840 ms | — | Passed |
+| Local cold-start acceptance | 2,515 ms | — | Passed |
 
 This is a simulated storage sensitivity result, not an L2 device measurement.
 The older measurements below describe intermediate implementations.
+
+An unrelated download now preserves the loaded publication catalogue's row
+token. The LVGL page tests also change status text and button availability while
+holding the row token fixed: labels update without reading or recreating rows.
+The journal integration test removes completed task shards during background
+publication recovery, which must finish without those reads; restoring the
+shards then permits the exact confirmed-receipt lookup.
 
 ### Current cache-head generations and legacy history
 

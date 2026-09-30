@@ -54,7 +54,7 @@ class SdIndexedRecovery
         copy = copy_;
         return true;
     }
-    // A read-only lease after validated suffix replay, before whole-index audit.
+    // A read-only lease of the selected committed root, before journal inventory.
     // Pause step() while using this snapshot and the shared frame. Readers must
     // validate each accessed record. This is not permission to mutate storage.
     bool committedSnapshot(::geocaching::storage::IndexRootView& root, unsigned& copy) const
