@@ -46,6 +46,7 @@ class LocalMapOverlay
             {
                 Item item;
                 if (!source.item(section_, offset_, snapshot.generation, item)) return;
+                if (item.is_draft && item.state == 2) continue;
                 if ((!item.downloaded && !item.has_coordinates) || item.latitude_e7 < -900000000 ||
                     item.latitude_e7 > 900000000 || item.longitude_e7 < -1800000000 || item.longitude_e7 >= 1800000000) continue;
                 retain(item);

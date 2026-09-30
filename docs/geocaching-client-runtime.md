@@ -20,8 +20,12 @@ The device first saves an archived draft, then asks for confirmation before
 publishing the next signed revision with the original author identity.
 The local copy remains available. Saving the draft alone does not withdraw
 the public cache: the list shows **Archive not confirmed** until the directory
-accepts that revision. Reopen it and choose **Archive** to retry an interrupted
+accepts that revision. Reopen it and choose **Confirm archive** to retry an interrupted
 publication. **Delete local cache** only removes this device's copy.
+
+The standalone Map excludes an archived local draft as soon as the archived
+state is saved, including while directory confirmation is pending. The record
+remains in **My caches** so publication can be retried or its local copy deleted.
 
 Archival is a terminal record state. A directory receiving the signed revision
 can exclude it from active results; it does not erase signed history or copies

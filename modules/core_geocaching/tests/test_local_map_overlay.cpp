@@ -67,6 +67,23 @@ Item marker(unsigned id, bool draft, bool located = true)
 int main()
 {
     {
+        LocalSource archived;
+        archived.ready = true;
+        archived.drafts = {marker(1, true), marker(2, true), marker(3, true)};
+        archived.drafts[0].state = 2;
+        archived.drafts[1].state = 2;
+        archived.drafts[1].publication_confirmed = true;
+        archived.drafts[2].state = 1;
+        archived.downloaded.push_back(marker(4, false));
+        auto projection = std::make_unique<LocalMapOverlay>();
+        projection->update(archived, 0, 102, 10);
+        auto result = std::make_unique<ui::map::MapOverlaySnapshot>();
+        projection->append(*result);
+        assert(result->item_count == 2);
+        assert(std::strcmp(result->items[0].label.c_str(), "Cache 3") == 0);
+        assert(std::strcmp(result->items[1].label.c_str(), "Cache 4") == 0);
+    }
+    {
         LocalSource available;
         available.ready = true;
         available.downloaded.push_back(marker(1, false));
