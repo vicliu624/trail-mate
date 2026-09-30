@@ -3446,6 +3446,7 @@ void LxmfAdapter::processRuntime()
         deferred_discovery_.clear();
         geocaching_discovery_probe_.reset();
         gateway_discovery_.reset();
+        gateway_persistence_.clearInstalled();
 
         propagation_client_.resetForNetworkConfig(
             rtnet::active().propagation.sync_on_start);
@@ -3465,7 +3466,12 @@ void LxmfAdapter::processRuntime()
         const auto& endpoint = gateway_discovery_.latest();
         Serial.printf("[Reticulum][Discovery] verified host=%s port=%u\n", endpoint.host, endpoint.port);
     }
-    const auto& discovered = gateway_discovery_.latest();
+    if (budget.allow_propagation_client || budget.allow_public_discovery)
+        gateway_persistence_.poll(millis(), interfaces_.discoveredGatewayStable());
+    const auto* restored_gateway = gateway_persistence_.restored();
+    const auto& discovered = gateway_discovery_.latest().port || !restored_gateway
+                                 ? gateway_discovery_.latest()
+                                 : *restored_gateway;
     if ((budget.allow_propagation_client || budget.allow_public_discovery) &&
         interfaces_.canReplaceDiscoveredGateway(discovered.host, discovered.port))
     {
@@ -3478,6 +3484,7 @@ void LxmfAdapter::processRuntime()
         path_manager_.retireInterface(interface_id);
         deferred_discovery_.clear();
         interfaces_.replaceDiscoveredGateway(discovered.host, discovered.port);
+        gateway_persistence_.installed(discovered);
     }
     if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
                                          identity_.isReady() && interfaces_.hasReadyWifiGateway(), budget))

@@ -122,8 +122,8 @@ validated, public discovery endpoint. Discovery never modifies the three manual
 entries. When configured candidates fail or are cooling down, the same
 single-uplink selector can try the discovered endpoint. A healthy uplink is
 retained. An empty manual TCP list or a policy that disallows Wi-Fi prevents
-automatic admission. Persistence and a maintained multi-candidate discovery
-catalog are not yet implemented.
+automatic admission. One previously stable discovered endpoint can be restored
+from SD. A maintained multi-candidate discovery catalog is not yet implemented.
 
 The discovery parser is available in `chat/infra/reticulum/interface_discovery.h`
 as groundwork for native `rnstransport.discovery.interface` announcements. Its
@@ -135,8 +135,8 @@ or BackboneInterface with transport enabled, a host fitting the existing
 interfaces, IPv6 endpoints, duplicate keys, and malformed data are rejected.
 Parsing alone does **not** authenticate a candidate: the outer announcement
 signature and the native 20-round discovery stamp must both be verified before
-admission. The parser is not yet connected to live candidate selection, and its
-borrowed pointers must not be persisted or retained after the input expires.
+admission. Its borrowed pointers must not be persisted or retained after the
+input expires; the runtime copies only the bounded endpoint metadata.
 
 `DiscoveryStampVerifier` implements the native 20-round, minimum-16-bit stamp
 check using the firmware's existing Crypto SHA-256 implementation. It streams
@@ -163,6 +163,35 @@ and relays; other interfaces' paths and links remain intact. Deferred discovery
 packets are cleared before reuse, and reconfiguration clears both receive queues.
 The extra slot and its bounded receive buffers live inside the PSRAM-owned
 adapter. They add PSRAM usage; this is not a reduction in total allocated memory.
+
+### Restoring a previously usable gateway
+
+After the discovered TCP connection remains ready continuously for 60 seconds,
+`GatewayPersistence` can save its public endpoint. Closing or suspending that
+connection resets its stability interval. This checks TCP continuity, not the
+reachability of every Reticulum destination through the server.
+
+The cache alternates between `/trailmate/reticulum/gateway.a` and `gateway.b`.
+Each file is exactly 114 bytes: magic `RGW1` plus four reserved zero bytes,
+little-endian 32-bit sequence, a 64-byte NUL-terminated host, little-endian 16-bit
+port, 16-byte announcing network identity, 16-byte transport identity, and a
+little-endian CRC-32/ISO-HDLC over the preceding 110 bytes. A write targets the
+other slot; the last valid record remains available if the new write is torn.
+Load selects the newest valid sequence using wrap-aware comparison. This is a
+local cache checksum, not a replacement for network-announcement authentication.
+
+Missing or corrupt records do not prevent normal networking. Busy/unavailable
+storage retries at most every five seconds; no record is exposed until both
+slots have been examined in the same SD media session. The cache respects USB
+ownership and session changes. Unchanged endpoints cause no further file I/O;
+successful updates are limited to one per ten minutes. State and the 114-byte
+serialization buffer are embedded in the PSRAM adapter with a 384-byte ceiling.
+
+On startup the restored endpoint is offered to the same isolated discovery slot
+when there is no newly verified announcement. It does not overwrite manual
+configuration or bypass the Wi-Fi policy. New announcements alone never trigger
+a cache write. IFAC credentials are not supported by this record format and are
+not stored here.
 
 Successful validation emits `[Reticulum][Discovery] verified host=... port=...`.
 That log establishes announcement validation only, not server reachability or a

@@ -325,6 +325,11 @@ bool WifiGatewayReticulumInterface::canAttempt() const
     return transport_enabled_ && enabled_ && host_[0] != '\0' && reconnect_.ready(millis());
 }
 
+bool WifiGatewayReticulumInterface::stableConnection() const
+{
+    return isReady() && reconnect_.stable(millis());
+}
+
 bool WifiGatewayReticulumInterface::isConfigured() const
 {
     return enabled_ && host_[0] != '\0';
@@ -451,6 +456,7 @@ bool WifiGatewayReticulumInterface::pollPacket(RxPacket* out)
 
 void WifiGatewayReticulumInterface::stop()
 {
+    reconnect_.disconnected();
 #if TRAIL_MATE_RETICULUM_WIFI_CLIENT_AVAILABLE
     connector_.cancel();
     client_.stop();

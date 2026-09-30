@@ -48,6 +48,11 @@ class TcpRetry
     }
 
     void reset() { *this = TcpRetry{}; }
+    void disconnected() { online_ = false; }
+    bool stable(uint32_t now) const
+    {
+        return online_ && static_cast<uint32_t>(now - since_) >= kStableConnectionMs;
+    }
 
   private:
     uint32_t since_ = 0;

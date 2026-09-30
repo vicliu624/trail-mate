@@ -111,3 +111,17 @@ else()
     target_compile_options(reticulum_path_retirement PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
 add_test(NAME reticulum_path_retirement COMMAND reticulum_path_retirement)
+
+add_executable(reticulum_gateway_persistence test_gateway_persistence.cpp
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/gateway_persistence.cpp")
+target_compile_features(reticulum_gateway_persistence PRIVATE cxx_std_17)
+target_include_directories(reticulum_gateway_persistence PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/storage_fakes" "${REPO}/platform/esp/arduino_common/include"
+    "${REPO}/modules/core_chat/include" "${REPO}/modules/core_sys/include")
+target_link_libraries(reticulum_gateway_persistence PRIVATE reticulum_discovery_crypto)
+if(MSVC)
+    target_compile_options(reticulum_gateway_persistence PRIVATE /UNDEBUG)
+else()
+    target_compile_options(reticulum_gateway_persistence PRIVATE -UNDEBUG -Wall -Wextra)
+endif()
+add_test(NAME reticulum_gateway_persistence COMMAND reticulum_gateway_persistence)

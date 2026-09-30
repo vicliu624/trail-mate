@@ -177,6 +177,7 @@ class WifiGatewayReticulumInterface
     bool isReady() const;
     bool isConfigured() const { return enabled_ && host_[0] != '\0'; }
     bool canAttempt() const;
+    bool stableConnection() const;
     bool isConnecting() const { return socket_open_pending_; }
     void setSelected(bool);
     void syncSocketState() {}
@@ -212,6 +213,13 @@ int main()
 {
     using chat::reticulum::TcpRetry;
     using platform::esp::arduino_common::net::TcpConnectPhase;
+    TcpRetry stability;
+    stability.connected(0);
+    assert(!stability.stable(59999) && stability.stable(60000));
+    stability.disconnected();
+    assert(!stability.stable(60001));
+    stability.connected(60002);
+    assert(!stability.stable(120001) && stability.stable(120002));
     // Exercise the production reconfiguration function with both real queue
     // types. Old priority frames must not acquire the replacement interface ID.
     WifiGatewayReticulumInterface configured;
