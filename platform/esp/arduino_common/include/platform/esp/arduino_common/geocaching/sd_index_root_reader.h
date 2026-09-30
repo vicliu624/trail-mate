@@ -1,6 +1,6 @@
 #pragma once
 #include "geocaching/storage/index_root.h"
-#include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 #include <cstdio>
 
 namespace platform::esp::arduino_common::geocaching
@@ -43,7 +43,7 @@ class SdIndexRootReader
         if (phase_ == 0 || phase_ == 3)
         {
             ::geocaching::storage::VolumeInstance current;
-            const auto status = inspectSdVolume(current);
+            const auto status = read_session_.inspect(current);
             if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return result_ = IndexRootReadStep::IoError;
             if (current != volume_) return result_ = IndexRootReadStep::VolumeChanged;
@@ -74,6 +74,7 @@ class SdIndexRootReader
 
   private:
     ::geocaching::storage::VolumeInstance volume_;
+    SdVolumeReadSession read_session_;
     ::geocaching::storage::IndexRootBytes* buffers_[2]{};
     ::geocaching::storage::IndexRootView roots_[2], selected_;
     uint8_t phase_ = 0, selected_copy_ = 0;
