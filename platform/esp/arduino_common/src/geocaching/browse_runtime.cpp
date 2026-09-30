@@ -876,6 +876,16 @@ void startRecovery()
     ++epoch;
 }
 
+bool ensurePublicationStore(Session& s)
+{
+    if (s.store) return true;
+    if (!s.ensureBuffers(true)) return false;
+    s.store.reset(::platform::memory::createPsram<IndexedPublicationStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
+                                                                           s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
+                                                                           s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
+    return s.store != nullptr;
+}
+
 void advanceStorageRecovery(Session& s)
 {
     const auto result = s.recovery->step();
@@ -917,13 +927,15 @@ void advanceStorageRecovery(Session& s)
         fail("Insufficient storage workspace");
         return;
     }
-    s.store.reset(::platform::memory::createPsram<IndexedPublicationStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
-                                                                           s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
-                                                                           s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
     s.download_store.reset(::platform::memory::createPsram<IndexedDownloadStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
                                                                                  s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
                                                                                  s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-    if (!s.store || !s.download_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
+    if ((!s.local_read_only || s.draft_catalog_wanted) && !ensurePublicationStore(s))
+    {
+        fail("Insufficient publication storage memory");
+        return;
+    }
+    if (!s.download_store || !s.workspace_owner.setPrepare(Session::prepareWorkspace, &s))
     {
         fail("Insufficient indexed storage memory");
         return;
@@ -1355,7 +1367,11 @@ class Facade final : public ::ui::geocaching::Source
             std::snprintf(out.status.data(), out.status.size(), "Updating...");
             return;
         }
-        if (session && section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
+        if (session && section != ::ui::geocaching::Section::Discover)
+        {
+            session->storage_requested = true;
+            if (section == ::ui::geocaching::Section::Published) session->draft_catalog_wanted = true;
+        }
         if (section == ::ui::geocaching::Section::Published && session && (session->phase == Phase::Ready || session->phase == Phase::ResumeDownloads) && session->store && !session->needsRecovery())
         {
             session->draft_catalog_wanted = true;
@@ -1994,6 +2010,11 @@ void step()
         return;
     }
     WorkspaceSlice workspace_slice{s};
+    if (s.phase == Phase::Ready && s.draft_catalog_wanted && !ensurePublicationStore(s))
+    {
+        next_step.store(millis() + 1000);
+        return;
+    }
     if (s.local_snapshot_attempted && (s.local_read_only || s.recovery))
     {
         if (!storage::sd_card_ready() || storage::sd_external_block_owner_active())
@@ -2009,7 +2030,7 @@ void step()
             s.workspace_owner.release(s.detail.get());
             s.detail.reset();
             s.pending_detail.reset();
-            s.store->releaseDraftRead();
+            if (s.store) s.store->releaseDraftRead();
             s.saved.reset();
             if (s.draft_catalog)
             {
@@ -2199,7 +2220,7 @@ void step()
     if (s.phase == Phase::Ready && s.download_start && advanceDownloadStart(s)) return;
     if (advanceSavedDetail(s)) return;
     if (s.saved && s.saved->pending() && !s.draft_catalog_wanted && !(s.phase == Phase::ResumeDownloads && s.download_port) && !downloadActive() && !publicationActive() && !draftSaveActive() &&
-        !s.store->commitPending() && !s.needsRecovery())
+        (!s.store || !s.store->commitPending()) && !s.needsRecovery())
     {
         const auto before = s.saved->generation();
         const bool worked = s.saved->advance();

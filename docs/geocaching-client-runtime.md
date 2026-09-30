@@ -8,6 +8,11 @@ root may therefore remain absent from local views until recovery runs. The
 existing repair floor and archive checks still apply, and an unreadable referenced
 record triggers recovery rather than being silently accepted.
 
+A read-only Downloaded session does not create the draft/publication storage
+adapter. The storage worker creates it when the draft list or draft map section
+is requested, or when full recovery prepares a write-capable session. Network
+query and dispatch services retain their separate on-demand activation.
+
 ## Archive a published cache
 
 Open the cache in **My caches**, save any edits, and choose **Archive cache**.
