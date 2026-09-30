@@ -38,6 +38,12 @@ Engineering evidence: [CI and release workflow](.github/workflows/ci.yml) · [sh
 
 ## 🚀 Try Trail Mate
 
+### Decentralized Geocaching
+
+Create and publish signed caches over Reticulum, browse independently operated directories, and download cache details for offline maps. The [live web map](https://vicliu624.github.io/trail-mate/geocaching/) queries the network directly, so new publications do not require a website update. Publishers keep their own identities; the protocol supports independent directory operators rather than requiring one central service.
+
+Configure network access under **Settings > Reticulum** without changing the chat protocol. Manually configured TCP interfaces support IFAC through the SD configuration; RNode/LoRa and AutoInterface IFAC are still pending. See the [Reticulum settings guide](https://github.com/vicliu624/trail-mate/wiki/4.1.1-Reticulum-Settings) and [Geocaching developer guide](https://github.com/vicliu624/trail-mate/wiki/20.-Geocaching-Developer-Guide).
+
 1. **Choose a device** from the support table below. T-LoRa-Pager SX1262 and T-Deck are the primary validation targets.
 2. **Install a matching image** from [Releases](https://github.com/vicliu624/trail-mate/releases), or use the [website and web flasher](https://vicliu624.github.io/trail-mate/) for supported targets. For source builds, see [Build Methods](#build-methods).
 3. **Prepare for offline use** with the [Wiki](https://github.com/vicliu624/trail-mate/wiki): configure the selected protocol and radio region, and prepare maps and local storage for your device.

@@ -5432,8 +5432,30 @@ static const CategoryDef kCategories[] = {
     {"Maintenance", kMaintenanceItems, sizeof(kMaintenanceItems) / sizeof(kMaintenanceItems[0])},
 };
 
+static bool should_show_item(const settings::ui::SettingItem& item);
+
 static void update_filter_styles()
 {
+    int first_visible = -1;
+    for (size_t i = 0; i < g_state.filter_count; ++i)
+    {
+        if (!g_state.filter_buttons[i]) continue;
+        const auto& category = kCategories[i];
+        bool visible = false;
+        for (size_t item = 0; item < category.item_count && !visible; ++item)
+            visible = should_show_item(category.items[item]);
+        if (visible)
+        {
+            lv_obj_clear_flag(g_state.filter_buttons[i], LV_OBJ_FLAG_HIDDEN);
+            if (first_visible < 0) first_visible = static_cast<int>(i);
+        }
+        else
+        {
+            lv_obj_add_flag(g_state.filter_buttons[i], LV_OBJ_FLAG_HIDDEN);
+            if (static_cast<int>(i) == g_state.current_category) g_state.current_category = -1;
+        }
+    }
+    if (g_state.current_category < 0) g_state.current_category = first_visible;
     for (size_t i = 0; i < g_state.filter_count; ++i)
     {
         if (!g_state.filter_buttons[i]) continue;
@@ -5495,6 +5517,7 @@ static bool select_filter_index(int idx)
     {
         return false;
     }
+    if (!g_state.filter_buttons[idx] || lv_obj_has_flag(g_state.filter_buttons[idx], LV_OBJ_FLAG_HIDDEN)) return false;
 
     g_state.current_category = idx;
     update_filter_styles();
@@ -5695,6 +5718,8 @@ static void build_item_list()
         return;
     }
 
+    update_filter_styles();
+    if (g_state.current_category < 0) return;
     if (visible_item_layout_matches_current())
     {
         refresh_visible_item_values();

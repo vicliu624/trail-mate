@@ -41,7 +41,7 @@ the bearer policy. Switching chat protocols reloads settings before rebuilding
 the list so previously hidden fields do not show stale `Not set` values.
 Reticulum has its own Settings category. Bearer preferences, Auto Wi-Fi and
 privacy preferences can be configured without changing the active chat protocol.
-The Mesh protocol selector continues to control chat, Contacts and the integrated
+The Profile protocol selector continues to control chat, Contacts and the integrated
 radio. Runtime identity fields are shown when the Reticulum chat adapter is active;
 opening Settings does not start a network service just to populate them.
 
