@@ -12,6 +12,9 @@ bool slots_missing = false;
 size_t step_data_bytes = 0;
 namespace platform::esp::arduino_common::storage
 {
+bool sd_card_ready() { return true; }
+bool sd_external_block_owner_active() { return false; }
+uint32_t sd_media_session() { return 1; }
 class SdRuntimeDir::Impl
 {
   public:

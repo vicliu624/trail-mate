@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_index_cleanup.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_recovery.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 #include "platform/memory/psram_ptr.h"
 #include <memory>
 
@@ -90,7 +91,7 @@ class SdIndexRepair
             return recover(true);
         }
         VolumeInstance current;
-        const auto inspected = inspectSdVolume(current);
+        const auto inspected = read_session_.inspect(current);
         if (inspected == SdVolumeResult::Busy) return result_;
         if (inspected != SdVolumeResult::Ready) return finish(IndexedRecoveryStep::IoError);
         if (current != volume_) return finish(IndexedRecoveryStep::VolumeChanged);
@@ -271,6 +272,7 @@ class SdIndexRepair
         CleanArchive
     };
     ::geocaching::storage::VolumeInstance volume_;
+    SdVolumeReadSession read_session_;
     ::geocaching::storage::IndexRootBytes* roots_[2];
     ::geocaching::storage::IndexRootView root_;
     uint8_t* frame_;

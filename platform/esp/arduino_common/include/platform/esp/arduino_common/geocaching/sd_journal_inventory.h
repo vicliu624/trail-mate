@@ -1,5 +1,5 @@
 #pragma once
-#include "platform/esp/arduino_common/geocaching/sd_volume.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
 #include <cstring>
 
 namespace platform::esp::arduino_common::geocaching
@@ -37,7 +37,7 @@ class SdJournalInventory
     {
         if (state_ == InventoryStep::Complete || state_ == InventoryStep::Corrupt || state_ == InventoryStep::VolumeChanged) return state_;
         ::geocaching::storage::VolumeInstance current;
-        const auto volume = inspectSdVolume(current);
+        const auto volume = read_session_.inspect(current);
         if (volume == SdVolumeResult::Busy) return state_ = InventoryStep::Scanning;
         if (volume == SdVolumeResult::Missing || volume == SdVolumeResult::Unavailable || volume == SdVolumeResult::IoError)
             return restart();
@@ -86,6 +86,7 @@ class SdJournalInventory
     const uint64_t checkpoint_;
     uint64_t first_ = 0, last_ = 0;
     storage::SdRuntimeDir directory_;
+    SdVolumeReadSession read_session_;
     InventoryStep state_ = InventoryStep::Scanning;
 };
 } // namespace platform::esp::arduino_common::geocaching
