@@ -46,7 +46,7 @@ std::string emit()
 }
 bool decode(const std::string& document)
 {
-    s_state = {};
+    s_state = ParseState{};
     tms::Decoder reader(
         nullptr, tms::DocumentKind::Working,
         [](void*, const tms::RecordReader& record)
