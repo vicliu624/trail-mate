@@ -6,14 +6,14 @@ const page=await readFile(new URL('../../site/geocaching/src/page.js',import.met
 const rpcSource=page.slice(page.indexOf('function rpc('),page.indexOf('const notice ='));
 const recovery=page.slice(page.indexOf('function recoverWorker()'),page.indexOf('\nworker.onmessage=receiveWorkerMessage;'))
   .replaceAll('import.meta.url','baseUrl');
-function fixture() {
+function fixture(creationFailures=0) {
   const messages=[],timers=[],nodes=new Map();let terminated=0,created=0,started=0;
   const worker={postMessage:message=>messages.push(message),terminate:()=>terminated++};
   const create=new Function('initialWorker','Worker','setTimeout','clearTimeout','$','notice','tr','onMessage','startService','baseUrl',
     `let worker=initialWorker,nextId=0,serviceStopped=false,serviceRetry=null;const pending=new Map();
      const receiveWorkerMessage=onMessage;const updateSelection=()=>{};
      ${rpcSource}\n${recovery}\nreturn {rpc,rejectPending,recoverWorker,size:()=>pending.size};`);
-  const runtime=create(worker,function(){created++;return {...worker};},(callback,delay)=>{const t={callback,delay};timers.push(t);return t;},
+  const runtime=create(worker,function(){created++;if(creationFailures-->0)throw Error('temporarily unavailable');return {...worker};},(callback,delay)=>{const t={callback,delay};timers.push(t);return t;},
     ()=>{},id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);},()=>{},en=>en,
     message=>messages.push(message),()=>started++,'https://example.org/geocaching/src/page.js');
   return {runtime,worker,messages,timers,counts:()=>({terminated,created,started})};
@@ -22,6 +22,16 @@ test('failed worker submission releases its request slot',async()=>{
   const f=fixture();f.worker.postMessage=()=>{throw Error('unavailable');};
   await assert.rejects(f.runtime.rpc('get'),/unavailable/);
   assert.equal(f.runtime.size(),0);
+});
+
+test('worker construction failure keeps retrying until the live service can restart',()=>{
+  const f=fixture(2);f.runtime.recoverWorker();
+  f.timers[0].callback();f.timers[1].callback();
+  assert.equal(f.timers.length,3);
+  assert.equal(f.counts().started,0);
+  assert.ok(f.timers.every(timer=>timer.delay===5000));
+  f.timers[2].callback();
+  assert.deepEqual(f.counts(),{terminated:1,created:3,started:1});
 });
 test('worker failure rejects outstanding requests and schedules one live restart',async()=>{
   const f=fixture();

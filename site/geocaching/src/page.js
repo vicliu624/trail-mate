@@ -254,11 +254,17 @@ function recoverWorker() {
   rejectPending(tr('Map service interrupted. Reconnecting…','地图服务中断，正在重新连接…'));
   $('search').disabled=true; $('region-apply').disabled=true; updateSelection();
   notice(tr('Map service interrupted. Reconnecting…','地图服务中断，正在重新连接…'));
-  serviceRetry=setTimeout(()=>{
-    worker=new Worker(new URL('./reticulum-worker.js',import.meta.url),{type:'module'});
+  const restart=()=>{
+    try {
+      worker=new Worker(new URL('./reticulum-worker.js',import.meta.url),{type:'module'});
+    } catch {
+      serviceRetry=setTimeout(restart,5000);
+      return;
+    }
     worker.onmessage=receiveWorkerMessage; worker.onerror=recoverWorker;
     serviceStopped=false; startService();
-  },5000);
+  };
+  serviceRetry=setTimeout(restart,5000);
 }
 worker.onmessage=receiveWorkerMessage; worker.onerror=recoverWorker;
 let serviceRetry = null, serviceStarting = false, serviceStopped = false, serviceRetryDelay = 5000;
