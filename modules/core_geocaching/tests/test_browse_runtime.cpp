@@ -759,11 +759,13 @@ int main(int argc, char** argv)
         (void)snapshot(Section::Discover);
         tick();
         const auto started = test::clock_ms;
+        const auto payload_allocations = test::payload_allocations;
         test::source->requestWindow(Section::Downloaded, 0, 4);
         until([&]
               { const auto view = snapshot(Section::Downloaded); return view.ready && view.count == 1 &&
                        test::source->item(Section::Downloaded, 0, view.generation, item); },
               "Downloaded did not load after visiting Discover");
+        require(test::payload_allocations == payload_allocations, "Downloaded allocated a download response buffer");
         test::source->requestWindow(Section::Published, 0, 4);
         until([&]
               { const auto view = snapshot(Section::Published); return view.ready && view.count == 1 &&

@@ -41,6 +41,7 @@ struct Allocation
     std::string owner;
 };
 inline std::map<void*, Allocation> allocations;
+inline size_t payload_allocations = 0;
 inline ::ui::geocaching::Source* source = nullptr;
 inline size_t open_files = 0, open_dirs = 0;
 inline bool access()
@@ -110,6 +111,7 @@ inline void* allocatePreferred(const char* owner, size_t size, bool = true)
 {
     if (!runtime_test::memory_available) return nullptr;
     auto* bytes = std::malloc(size);
+    if (bytes && !std::strcmp(owner, "geocaching.index.payload")) ++runtime_test::payload_allocations;
     if (bytes) runtime_test::allocations.emplace(bytes, runtime_test::Allocation{size, owner});
     return bytes;
 }

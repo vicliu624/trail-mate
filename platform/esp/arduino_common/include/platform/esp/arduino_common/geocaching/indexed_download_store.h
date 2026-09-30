@@ -28,8 +28,10 @@ class IndexedDownloadStore final : public DownloadStore
           verification_(verification), verification_capacity_(verification_capacity), crypto_(crypto)
     {
         valid_ = copy < 2 && ::geocaching::storage::validIndexRoot(root) && root.shards.data == roots_[copy]->data() + 48 &&
-                 frame && capacity >= 24 && response && response_capacity && verification && verification_capacity && workspace.outgoing;
-        const ::geocaching::ByteView leases[] = {{first.data(), first.size()}, {second.data(), second.size()}, {frame, capacity}, {response, response_capacity}, {verification, verification_capacity}, {workspace.outgoing, workspace.outgoing_capacity}, {workspace.task.data(), workspace.task.size()}};
+                 frame && capacity >= 24 && response_capacity && verification_capacity && workspace.outgoing;
+        // Payload buffers may be absent until the owner's prepare callback.
+        // Every write acquisition checks them before exposing the workspace.
+        const ::geocaching::ByteView leases[] = {{first.data(), first.size()}, {second.data(), second.size()}, {frame, capacity}, {response, response ? response_capacity : 0}, {verification, verification ? verification_capacity : 0}, {workspace.outgoing, workspace.outgoing_capacity}, {workspace.task.data(), workspace.task.size()}};
         for (size_t i = 0; i < 7; ++i)
             for (size_t j = 0; j < i; ++j)
             {
@@ -47,13 +49,18 @@ class IndexedDownloadStore final : public DownloadStore
     }
     bool needsRecovery() const override { return blocked_; }
     bool hasSavedPages() const override { return true; }
+    bool metadataRead() const { return metadata_read_; }
     DownloadRecoveryRead readSavedPage(size_t offset, size_t limit, std::array<::geocaching::storage::SavedCacheEntry, 4>& rows, size_t& total) override
     {
         if (!valid_ || !limit || limit > rows.size()) return DownloadRecoveryRead::Invalid;
         if (blocked_) return DownloadRecoveryRead::Unavailable;
         if (!page_)
         {
-            if (phase_ != Phase::None || saved_ || recovery_ || cached_ || owner_.heldBy(this) || !owner_.acquire(this)) return DownloadRecoveryRead::Busy;
+            if (phase_ != Phase::None || saved_ || recovery_ || cached_ || owner_.heldBy(this)) return DownloadRecoveryRead::Busy;
+            metadata_read_ = true;
+            const bool acquired = owner_.acquire(this);
+            metadata_read_ = false;
+            if (!acquired) return DownloadRecoveryRead::Busy;
             page_.reset(::platform::memory::createPsram<SdIndexedSavedPage>(volume_, crypto_));
             if (!page_)
             {
@@ -548,6 +555,11 @@ class IndexedDownloadStore final : public DownloadStore
     {
         if (!valid_ || blocked_ || saved_ || page_ || recovery_ || phase_ == Phase::Generation || (phase_ == Phase::GenerationReady && !promote_generation) ||
             copy_ > 1 || !owner_.acquire(this)) return false;
+        if (!frame_ || !response_ || !verification_)
+        {
+            owner_.release(this);
+            return false;
+        }
         if (!io_) io_.reset(::platform::memory::createPsram<Operation>());
         if (!io_)
         {
@@ -590,6 +602,7 @@ class IndexedDownloadStore final : public DownloadStore
     ::geocaching::storage::QueuedRequestWorkspace& workspace_;
     uint8_t *frame_, *response_, *verification_;
     size_t capacity_, response_capacity_, verification_capacity_;
+    bool metadata_read_ = false;
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::platform::memory::PsramPtr<Operation> io_;
     ::platform::memory::PsramPtr<SdIndexedDownloadRecovery> recovery_;

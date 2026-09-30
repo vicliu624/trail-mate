@@ -208,3 +208,8 @@ Object references (table 1), installed heads (table 2), and local drafts (table
 one lookup reference, with older generations still available to pinned roots.
 Legacy shards convert when next written; untouched legacy shards still need
 migration before all old-card reads can be free of historical references.
+
+Downloaded page reads allocate index and verification buffers only. The 8 KiB
+download response buffer is allocated by the workspace preparation callback
+when a download operation acquires its lease, rather than during local startup.
+All these buffers remain PSRAM-only and are trimmed after the lease is released.

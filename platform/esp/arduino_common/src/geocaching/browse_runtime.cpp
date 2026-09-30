@@ -237,10 +237,11 @@ struct Session
     uint32_t download_wait_ms = gc::QueryClient::kReplyTimeoutMs;
     size_t download_scratch = 0;
     chat::IMeshAdapter* created_backend = nullptr;
-    bool ensureBuffers(bool operations)
+    bool ensureBuffers(bool operations, bool metadata = false)
     {
+        const bool needs_verification = operations || metadata;
         const size_t missing = (!frame ? kFrameCapacity : 0) + (!encoded ? kEncodingCapacity : 0) +
-                               (operations && !payload ? kPayloadCapacity : 0) + (operations && !verification ? kVerificationCapacity : 0);
+                               (operations && !payload ? kPayloadCapacity : 0) + (needs_verification && !verification ? kVerificationCapacity : 0);
         // These buffers are PSRAM-only (no internal fallback below). Charging
         // an unrelated internal reserve permanently blocks local reads on L2.
         if (missing && !mem::admit("geocaching.index.io", 0, 0, missing, 0, 0))
@@ -251,16 +252,17 @@ struct Session
         if (!frame) frame = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.index.read", kFrameCapacity, false));
         if (!encoded) encoded = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.index.encode", kEncodingCapacity, false));
         if (operations && !payload) payload = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.index.payload", kPayloadCapacity, false));
-        if (operations && !verification) verification = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.index.verify", kVerificationCapacity, false));
+        if (needs_verification && !verification) verification = static_cast<uint8_t*>(mem::allocatePreferred("geocaching.index.verify", kVerificationCapacity, false));
         workspace.outgoing = encoded;
-        workspace_unavailable = !frame || !encoded || (operations && (!payload || !verification));
+        workspace_unavailable = !frame || !encoded || (operations && !payload) || (needs_verification && !verification);
         return !workspace_unavailable;
     }
     static bool prepareWorkspace(void* context, const void* owner)
     {
         auto& s = *static_cast<Session*>(context);
-        const bool needs_record = owner == s.store.get() || owner == s.download_store.get();
-        if (!s.ensureBuffers(needs_record)) return false;
+        const bool metadata = owner == s.download_store.get() && s.download_store->metadataRead();
+        const bool needs_record = owner == s.store.get() || (owner == s.download_store.get() && !metadata);
+        if (!s.ensureBuffers(needs_record, metadata)) return false;
         if (s.store) s.store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.download_store) s.download_store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.dispatch_store) s.dispatch_store->bindWorkspace(s.frame);
@@ -944,7 +946,7 @@ void advanceStorageRecovery(Session& s)
         if (s.root.sequence != previous_sequence) s.draft_catalog.reset();
         s.recovery.reset();
     }
-    if (!s.ensureBuffers(true))
+    if (!s.ensureBuffers(false))
     {
         fail("Insufficient storage workspace");
         return;
