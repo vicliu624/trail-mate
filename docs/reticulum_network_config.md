@@ -122,6 +122,20 @@ signature and the native 20-round discovery stamp must both be verified before
 admission. The parser is not yet connected to live candidate selection, and its
 borrowed pointers must not be persisted or retained after the input expires.
 
+`DiscoveryStampVerifier` implements the native 20-round, minimum-16-bit stamp
+check using the firmware's existing Crypto SHA-256 implementation. It streams
+each HKDF output into the final hash, retaining no expanded workblock. Each poll
+does one round; another announcement cannot replace a pending check. The object
+has a 512-byte size ceiling enforced by the native test, and ESP rejects starting
+verification unless the object resides in PSRAM. This component is not yet wired
+to announcement admission or persistent candidate storage.
+
+The gateway tests include a Python-standard-library reference vector, the real
+Crypto implementation, and checks for altered payloads/stamps, cancellation,
+incremental progress and PSRAM ownership. To reuse a local Crypto checkout, pass
+`-DTRAIL_MATE_CRYPTO_SOURCE_DIR=<directory-containing-SHA256.cpp>` when configuring
+`tests/reticulum_gateway`; otherwise CMake fetches a pinned upstream revision.
+
 The native `tests/reticulum_gateway` regression compiles the production connect
 and cancel functions with controlled socket, admission and clock adapters. It
 covers pending work, cancellation, retry deadlines, clock wrap, stable recovery,

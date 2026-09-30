@@ -44,3 +44,36 @@ else()
     target_compile_options(reticulum_discovery PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
 add_test(NAME reticulum_discovery COMMAND reticulum_discovery)
+
+# The firmware already depends on rweather/Crypto. Host verification uses the
+# same SHA-256 implementation, never a cryptographic mock. An existing checkout
+# can be supplied to avoid downloading it during local iteration.
+set(TRAIL_MATE_CRYPTO_SOURCE_DIR "" CACHE PATH "Directory containing Crypto SHA256.cpp")
+if(NOT TRAIL_MATE_CRYPTO_SOURCE_DIR)
+    include(FetchContent)
+    if(POLICY CMP0135)
+        cmake_policy(SET CMP0135 NEW)
+    endif()
+    FetchContent_Declare(reticulum_discovery_crypto_source
+        URL "https://codeload.github.com/rweather/arduinolibs/tar.gz/37a76b8f7516568e1c575b6dc9268da1ccaac6b6")
+    FetchContent_MakeAvailable(reticulum_discovery_crypto_source)
+    set(TRAIL_MATE_CRYPTO_SOURCE_DIR "${reticulum_discovery_crypto_source_SOURCE_DIR}/libraries/Crypto")
+endif()
+add_library(reticulum_discovery_crypto STATIC
+    "${TRAIL_MATE_CRYPTO_SOURCE_DIR}/SHA256.cpp"
+    "${TRAIL_MATE_CRYPTO_SOURCE_DIR}/Hash.cpp"
+    "${TRAIL_MATE_CRYPTO_SOURCE_DIR}/Crypto.cpp")
+target_include_directories(reticulum_discovery_crypto PUBLIC "${TRAIL_MATE_CRYPTO_SOURCE_DIR}")
+add_executable(reticulum_discovery_stamp test_discovery_stamp.cpp
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/discovery_stamp_verifier.cpp")
+target_compile_features(reticulum_discovery_stamp PRIVATE cxx_std_17)
+target_compile_definitions(reticulum_discovery_stamp PRIVATE ESP_PLATFORM)
+target_include_directories(reticulum_discovery_stamp PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/fakes" "${REPO}/platform/esp/arduino_common/include")
+target_link_libraries(reticulum_discovery_stamp PRIVATE reticulum_discovery_crypto)
+if(MSVC)
+    target_compile_options(reticulum_discovery_stamp PRIVATE /UNDEBUG)
+else()
+    target_compile_options(reticulum_discovery_stamp PRIVATE -UNDEBUG -Wall -Wextra)
+endif()
+add_test(NAME reticulum_discovery_stamp COMMAND reticulum_discovery_stamp)
