@@ -10,6 +10,7 @@
 #include "chat/domain/reticulum_network_config.h"
 #include "chat/infra/reticulum/reticulum_wire.h"
 #include "chat/infra/reticulum/tcp_retry.h"
+#include "platform/esp/arduino_common/chat/infra/reticulum/interface_access.h"
 #include "platform/esp/arduino_common/chat/infra/rnode/rnode_adapter.h"
 #include "sys/ringbuf.h"
 
@@ -166,8 +167,10 @@ class WifiGatewayReticulumInterface
     uint32_t rx_stats_drops_ = 0;
     uint32_t rx_stats_bytes_ = 0;
     uint32_t rx_stats_read_skips_ = 0;
-    uint8_t hdlc_frame_[reticulum::kReticulumMtu] = {};
-    uint8_t tx_frame_[(reticulum::kReticulumMtu * 2U) + 2U] = {};
+    static constexpr size_t kMaxWirePacketSize = reticulum::kReticulumMtu + reticulum::IfacCodec::kMaxTagSize;
+    reticulum::InterfaceAccess access_;
+    uint8_t hdlc_frame_[kMaxWirePacketSize] = {};
+    uint8_t tx_frame_[(kMaxWirePacketSize * 2U) + 2U] = {};
     uint8_t socket_rx_scratch_[256] = {};
     QueuedPacket poll_scratch_{};
     QueuedPacket enqueue_scratch_{};

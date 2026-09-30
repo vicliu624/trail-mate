@@ -101,6 +101,7 @@ struct ParseState
     bool wifi_password_seen[::platform::ui::wifi::kMaxSavedProfileCount]{};
     ::platform::ui::wifi::Config wifi_profiles[::platform::ui::wifi::kMaxSavedProfileCount]{};
     uint64_t network_seen = 0U;
+    uint32_t access_seen = 0U;
     ::chat::reticulum::ReticulumNetworkConfig network{};
 #if defined(ARDUINO_T_DECK_PRO) && defined(TRAIL_MATE_TDECK_PRO_A7682E)
     uint32_t cellular_seen = 0U;
@@ -311,6 +312,20 @@ tms::RecordConsumeResult consume_network_record(const tms::RecordReader& reader)
     {
         const std::size_t base = 2U + index * kNetworkInterfaceFieldCount;
         char key[48]{};
+        const char* access_fields[] = {"network_name", "passphrase", "ifac_size"};
+        for (unsigned field = 0; field < 3; ++field)
+        {
+            std::snprintf(key, sizeof(key), "rt.net.interface.%u.%s", static_cast<unsigned>(index), access_fields[field]);
+            if (!key_equals(reader, key)) continue;
+            const uint32_t bit = 1U << (index * 3U + field);
+            if (s_state.access_seen & bit) return tms::RecordConsumeResult::Invalid;
+            s_state.access_seen |= bit;
+            auto& access = s_state.network.interfaces[index].access;
+            const bool valid = field == 0   ? reader.text(access.network_name, sizeof(access.network_name))
+                               : field == 1 ? reader.text(access.passphrase, sizeof(access.passphrase))
+                                            : reader.u16(&access.ifac_size_bits, 512U);
+            return valid ? tms::RecordConsumeResult::Accepted : tms::RecordConsumeResult::Invalid;
+        }
         std::snprintf(key, sizeof(key), "rt.net.interface.%u.id", static_cast<unsigned>(index));
         if (key_equals(reader, key))
         {
@@ -448,6 +463,11 @@ tms::RecordConsumeResult consume_network_record(const tms::RecordReader& reader)
 
 bool valid_network_records(uint16_t schema_version)
 {
+    for (std::size_t index = 0; index < ::chat::reticulum::kMaxNetworkInterfaces; ++index)
+    {
+        const auto fields = (s_state.access_seen >> (index * 3U)) & 7U;
+        if (fields && (fields != 7U || index >= s_state.network.interface_count)) return false;
+    }
     if (s_state.network_seen == 0U)
     {
         return schema_version != tms::kSchemaVersion;
@@ -511,6 +531,15 @@ bool write_network_records(tms::RecordWriter& writer, const AppConfig& config)
         if (!writer.u16(key, interface_config.data_port))
         {
             return false;
+        }
+        if (interface_config.access.enabled())
+        {
+            std::snprintf(key, sizeof(key), "rt.net.interface.%u.network_name", static_cast<unsigned>(index));
+            if (!writer.text(key, interface_config.access.network_name)) return false;
+            std::snprintf(key, sizeof(key), "rt.net.interface.%u.passphrase", static_cast<unsigned>(index));
+            if (!writer.text(key, interface_config.access.passphrase)) return false;
+            std::snprintf(key, sizeof(key), "rt.net.interface.%u.ifac_size", static_cast<unsigned>(index));
+            if (!writer.u16(key, interface_config.access.ifac_size_bits)) return false;
         }
     }
     const auto& propagation = s_state.network.propagation;

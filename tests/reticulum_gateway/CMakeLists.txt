@@ -25,7 +25,9 @@ extract_between("void ReticulumInterfaceSet::maintain()" "bool ReticulumInterfac
 extract_between("void WifiGatewayReticulumInterface::readAvailable()" "void WifiGatewayReticulumInterface::feedHdlcByte(" RECEIVE)
 extract_between("void WifiGatewayReticulumInterface::applyConfig(" "void WifiGatewayReticulumInterface::setTransportEnabled(" CONFIGURE)
 extract_between("bool ReticulumInterfaceSet::canReplaceDiscoveredGateway(" "void ReticulumInterfaceSet::setWifiTransportEnabled(" DISCOVERED)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gateway_actual.inc" "${STOP}\n${CONNECT}\n${MAINTAIN}\n${SELECT}\n${RECEIVE}\n${CONFIGURE}\n${DISCOVERED}")
+extract_between("bool WifiGatewayReticulumInterface::sendPacket(" "bool WifiGatewayReticulumInterface::pollPacket(" SEND)
+extract_between("void WifiGatewayReticulumInterface::feedHdlcByte(" "void WifiGatewayReticulumInterface::enqueueFrame(" FRAME)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gateway_actual.inc" "${STOP}\n${CONNECT}\n${MAINTAIN}\n${SELECT}\n${RECEIVE}\n${CONFIGURE}\n${DISCOVERED}\n${SEND}\n${FRAME}")
 add_executable(reticulum_gateway test_gateway.cpp)
 target_compile_features(reticulum_gateway PRIVATE cxx_std_17)
 target_include_directories(reticulum_gateway PRIVATE "${REPO}/modules/core_chat/include" "${REPO}/modules/core_sys/include" "${CMAKE_CURRENT_BINARY_DIR}")
@@ -139,6 +141,12 @@ endif()
 add_test(NAME reticulum_gateway_candidates COMMAND reticulum_gateway_candidates)
 
 set(ED25519_DIR "${REPO}/modules/core_chat/src/infra/meshcore/crypto/ed25519")
+target_sources(reticulum_gateway PRIVATE
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/ifac_codec.cpp"
+    ${ED25519_DIR}/keypair.c ${ED25519_DIR}/sign.c ${ED25519_DIR}/sha512.c
+    ${ED25519_DIR}/ge.c ${ED25519_DIR}/fe.c ${ED25519_DIR}/sc.c)
+target_include_directories(reticulum_gateway PRIVATE "${REPO}/platform/esp/arduino_common/include")
+target_link_libraries(reticulum_gateway PRIVATE reticulum_discovery_crypto)
 add_executable(reticulum_ifac test_ifac.cpp
     "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/ifac_codec.cpp"
     ${ED25519_DIR}/keypair.c ${ED25519_DIR}/sign.c ${ED25519_DIR}/sha512.c
@@ -154,3 +162,28 @@ else()
     target_compile_options(reticulum_ifac PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
 add_test(NAME reticulum_ifac COMMAND reticulum_ifac "${CMAKE_CURRENT_LIST_DIR}/ifac_vectors.tsv")
+
+set(NETWORK_SOURCE "${REPO}/platform/esp/arduino_common/src/platform_ui_reticulum_network_config_runtime.cpp")
+set(TMS_SOURCE "${REPO}/platform/esp/arduino_common/src/app_config_tms_settings_extension.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${NETWORK_SOURCE}" "${TMS_SOURCE}")
+file(READ "${NETWORK_SOURCE}" SOURCE)
+extract_between("bool bounded_text(" "void reset_config(" NETWORK_HELPERS)
+extract_between("bool validate_config(" "void activate(" NETWORK_VALIDATE)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/network_validation.inc" "${NETWORK_HELPERS}\n${NETWORK_VALIDATE}")
+file(READ "${TMS_SOURCE}" SOURCE)
+extract_between("constexpr std::size_t kNetworkInterfaceFieldCount" "enum Seen" TMS_CONSTANTS)
+extract_between("bool mark_network_once(" "bool valid_text_blob(" TMS_NETWORK)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/network_tms.inc" "${TMS_CONSTANTS}\n${TMS_NETWORK}")
+add_executable(reticulum_access_config test_access_config.cpp
+    "${REPO}/modules/core_sys/src/app/tms_config_codec.cpp"
+    "${REPO}/modules/core_chat/src/infra/mesh_protocol_utils.cpp")
+target_compile_features(reticulum_access_config PRIVATE cxx_std_17)
+target_compile_definitions(reticulum_access_config PRIVATE TRAIL_MATE_LORA_TX_POWER_MAX_DBM=22)
+target_include_directories(reticulum_access_config PRIVATE "${CMAKE_CURRENT_BINARY_DIR}"
+    "${REPO}/modules/core_sys/include" "${REPO}/modules/core_chat/include" "${REPO}/modules/core_gps/include")
+if(MSVC)
+    target_compile_options(reticulum_access_config PRIVATE /UNDEBUG)
+else()
+    target_compile_options(reticulum_access_config PRIVATE -UNDEBUG -Wall -Wextra)
+endif()
+add_test(NAME reticulum_access_config COMMAND reticulum_access_config)

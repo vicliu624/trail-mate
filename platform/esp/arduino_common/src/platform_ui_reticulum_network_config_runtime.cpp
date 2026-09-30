@@ -244,6 +244,8 @@ bool validate_config(const NetworkConfig& config)
     for (std::size_t index = 0U; index < config.interface_count; ++index)
     {
         const InterfaceConfig& interface_config = config.interfaces[index];
+        if (!interface_config.access.valid() ||
+            (interface_config.access.enabled() && interface_config.type != chat::reticulum::NetworkInterfaceType::TcpClient)) return false;
         if (!bounded_text(interface_config.id, sizeof(interface_config.id), false))
         {
             return false;
@@ -378,6 +380,20 @@ bool parse_legacy_interface(cJSON* object,
     *out = InterfaceConfig{};
     std::snprintf(out->id, sizeof(out->id), "%s", id);
     out->enabled = json_bool(object, "enabled", true);
+    const char* const network_name = json_string(object, "network_name");
+    const char* const passphrase = json_string(object, "passphrase");
+    const int ifac_size = json_int(object, "ifac_size", 0);
+    const auto* size_value = object_item(object, "ifac_size");
+    if ((object_item(object, "network_name") && !network_name) ||
+        (object_item(object, "passphrase") && !passphrase) ||
+        (size_value && (!cJSON_IsNumber(size_value) || size_value->valuedouble != ifac_size))) return false;
+    if ((network_name && std::strlen(network_name) >= sizeof(out->access.network_name)) ||
+        (passphrase && std::strlen(passphrase) >= sizeof(out->access.passphrase)) ||
+        ifac_size < 0 || ifac_size > 512) return false;
+    copy_text(out->access.network_name, sizeof(out->access.network_name), network_name);
+    copy_text(out->access.passphrase, sizeof(out->access.passphrase), passphrase);
+    out->access.ifac_size_bits = static_cast<uint16_t>(ifac_size);
+    if (!out->access.valid()) return false;
     if (std::strcmp(type, "IntegratedLoRaInterface") == 0)
     {
         out->type = chat::reticulum::NetworkInterfaceType::IntegratedLoRa;

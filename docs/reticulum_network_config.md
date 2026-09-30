@@ -276,21 +276,21 @@ it does not certify public endpoint reachability.
 ### IFAC interoperability requirement (issue #89)
 
 [Issue #89](https://github.com/vicliu624/trail-mate/issues/89) is part of the
-network-access redesign's acceptance scope. IFAC is currently unsupported; the
-discovery parser's rejection of IFAC metadata is a temporary supported-subset
-boundary, not the intended final behavior.
+network-access redesign's acceptance scope. Manually configured TCP interfaces
+now apply IFAC at the carrier boundary. RNode/LoRa, AutoInterface, device form
+fields and protected discovery candidates remain outstanding. The discovery
+parser still rejects IFAC metadata instead of silently attempting public access.
 
-`IfacCodec` now provides the bounded encode/decode primitive, but device interfaces
-and configuration are not wired to it yet. Do not treat its presence as usable
-IFAC support. It derives the interface signing identity, authenticates packets,
+`IfacCodec` derives the interface signing identity, authenticates packets,
 and streams the HKDF mask directly over caller-owned packet storage without a
 second packet or full-mask buffer. Its retained state has a 640-byte ceiling;
 ESP configuration rejects an object outside PSRAM. It reuses the existing
 Ed25519 routines, whose transient arithmetic stack use is unchanged.
 
 The codec accepts tag sizes of 1–64 bytes and UTF-8 credentials up to 128 bytes
-each. Its API takes bytes; RNS configuration expresses `ifac_size` in bits, so
-the future settings adapter must convert and validate that unit explicitly.
+each. The device's stored interface configuration limits each credential to 63
+UTF-8 bytes. Its `ifac_size` field uses bits and requires a multiple of eight from
+8 through 512; the adapter converts this to the codec's byte count.
 An invalid or cleared configuration fails closed. Authenticated decode failure
 clears the working packet, and all failure paths return zero output length.
 
@@ -300,8 +300,45 @@ firmware SHA-256 and Ed25519 code to check both directions, Unicode credentials,
 tag sizes and packet bounds. To independently regenerate and check them, run
 `python tests/reticulum_gateway/ifac_reference.py --check` in an environment with
 `rns==1.5.4`. This command creates no network service or persistent identity.
-Interface integration, TMS round trips, framing and physical-device acceptance
-remain outstanding.
+The host suite also compiles the actual TCP send, HDLC receive and TMS network
+record functions. It covers maximum packets, escaping, credential changes,
+public/private isolation, allocation failure and configuration round trips.
+Physical-device interoperability remains unverified.
+
+#### Configuring a TCP interface through TMS
+
+Edit the existing `/trailmate/config.tms` interface records, using the index of
+the desired TCP interface (not its ordinal in the TCP Entry selector). Add all
+three records before the document's end marker; index `2` is only an example:
+
+```text
+rt.net.interface.2.network_name=str:my-network
+rt.net.interface.2.passphrase=str:example-passphrase
+rt.net.interface.2.ifac_size=u16:128
+```
+
+Use an empty `str:` value for name-only or passphrase-only access. Missing or
+duplicate members of this three-record group are rejected. Existing documents
+without access records retain public behavior. To clear protection, empty both
+credentials and set the size to zero; subsequent saves omit the empty group.
+Use the normal TMS text escaping rules for special characters. Legacy JSON
+migration accepts these same three field names and requires an explicit size.
+IFAC on a non-TCP interface is rejected until its framing path is implemented.
+
+Every TCP entry owns its access profile. A credential change closes its socket
+and clears both receive queues; identical configuration preserves them. Allocation
+or configuration failure disables that interface rather than sending public
+frames. Public entries allocate no codec. Configurations, access state and
+packet buffers belong to the existing PSRAM owners; protected entries lazily
+allocate one codec in PSRAM without internal-heap fallback.
+
+TCP authentication precedes HDLC framing on transmit and follows HDLC decoding
+on receive, before priority classification or packet parsing. The maximum
+protected frame is 564 bytes (500-byte packet plus 64-byte tag). HDLC expansion
+uses the existing transmit buffer in place; receive queues retain only decoded
+500-byte packets. The C6 TCP adapter transports the same framed bytes in chunks;
+it does not own IFAC keys. Protected discovery admission and credential-bearing
+gateway persistence are not enabled by this change.
 
 The implementation must follow the interface-boundary processing in
 [upstream Transport.py](https://github.com/markqvist/Reticulum/blob/7f2b3b9b524c9386316379af1313b43a5e4f7a5d/RNS/Transport.py):

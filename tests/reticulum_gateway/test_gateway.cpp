@@ -1,5 +1,6 @@
 #include "chat/domain/reticulum_network_config.h"
 #include "chat/infra/reticulum/tcp_retry.h"
+#include "platform/esp/arduino_common/chat/infra/reticulum/interface_access.h"
 #include "sys/ringbuf.h"
 #include <array>
 #include <cassert>
@@ -8,12 +9,26 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include <vector>
 
 #define TRAIL_MATE_RETICULUM_WIFI_GATEWAY_AVAILABLE 1
 #define TRAIL_MATE_RETICULUM_WIFI_CLIENT_AVAILABLE 1
 #define TRAIL_MATE_RETICULUM_C6_TCP_AVAILABLE 0
 
 static uint32_t now = 0;
+static bool fail_access_allocation = false;
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept
+{
+    if (fail_access_allocation) return nullptr;
+    try
+    {
+        return ::operator new(size);
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+}
 namespace reticulum = chat::reticulum;
 using InterfaceId = uint8_t;
 constexpr InterfaceId kInvalidInterfaceId = 0;
@@ -49,7 +64,9 @@ enum class Client
 enum class AccessKind
 {
     WifiConnect,
-    LongLivedSocket
+    LongLivedSocket,
+    ReticulumGatewayCallControl,
+    ReticulumGatewayCallAudio
 };
 enum class Priority
 {
@@ -79,10 +96,11 @@ const char* decision_name(int) { return "fixture"; }
 struct Budget
 {
     bool allow_read = true, allow_write = true, allow_connect = true;
-    uint32_t rx_byte_budget = 256, min_read_interval_ms = 0;
+    uint32_t rx_byte_budget = 256, min_read_interval_ms = 0, tx_byte_budget = 1200;
 };
 static Budget budget;
 Budget traffic_budget(Client, Priority) { return budget; }
+Budget traffic_budget(Client, Priority, const uint8_t*, AccessKind) { return budget; }
 } // namespace platform::ui::wifi_access
 namespace platform::esp::arduino_common::net
 {
@@ -140,6 +158,12 @@ struct Connector
 } // namespace platform::esp::arduino_common::net
 struct WiFiClient
 {
+    std::vector<uint8_t> written;
+    size_t write(const uint8_t* data, size_t size)
+    {
+        written.assign(data, data + size);
+        return size;
+    }
     WiFiClient() = default;
     explicit WiFiClient(int) {}
     void stop() {}
@@ -165,6 +189,18 @@ class WifiGatewayReticulumInterface
     bool hdlc_in_frame_ = false;
     bool hdlc_escape_ = false;
     size_t hdlc_frame_len_ = 0;
+    static constexpr size_t kMaxWirePacketSize = 564;
+    static constexpr uint8_t kHdlcFlag = 0x7e, kHdlcEscape = 0x7d, kHdlcEscapeMask = 0x20;
+    reticulum::InterfaceAccess access_;
+    uint8_t tx_frame_[1130]{}, hdlc_frame_[564]{};
+    std::vector<uint8_t> received;
+    unsigned accepted_frames = 0;
+    bool sendPacket(const uint8_t*, size_t, const uint8_t* = nullptr, bool = false);
+    void enqueueFrame(const uint8_t* data, size_t size)
+    {
+        received.assign(data, data + size);
+        ++accepted_frames;
+    }
     uint32_t rx_stats_read_skips_ = 0, last_socket_read_ms_ = 0, rx_stats_bytes_ = 0;
     static constexpr int32_t kSocketConnectTimeoutMs = 5000;
     chat::reticulum::TcpRetry reconnect_;
@@ -183,7 +219,7 @@ class WifiGatewayReticulumInterface
     void syncSocketState() {}
     bool connected() const { return socket_online_; }
     void readAvailable();
-    void feedHdlcByte(uint8_t) {}
+    void feedHdlcByte(uint8_t);
 };
 class ReticulumInterfaceSet
 {
@@ -211,6 +247,61 @@ class ReticulumInterfaceSet
 
 int main()
 {
+    // Real send/framing/receive code with the real IFAC codec. Protect maximum
+    // packets, escape expansion, credential changes and public/private isolation.
+    WifiGatewayReticulumInterface protected_gateway, public_gateway;
+    reticulum::NetworkInterfaceConfig access_config;
+    access_config.type = reticulum::NetworkInterfaceType::TcpClient;
+    access_config.enabled = true;
+    std::strcpy(access_config.target_host, "protected.example");
+    public_gateway.applyConfig(&access_config, true, 33);
+    std::strcpy(access_config.access.network_name, "trail");
+    std::strcpy(access_config.access.passphrase, "example-passphrase");
+    access_config.access.ifac_size_bits = 512;
+    protected_gateway.applyConfig(&access_config, true, 32);
+    protected_gateway.selected_ = protected_gateway.socket_online_ = true;
+    std::array<uint8_t, 500> packet;
+    packet.fill(0x7e);
+    packet[0] = 0x14;
+    assert(protected_gateway.sendPacket(packet.data(), packet.size()));
+    for (auto byte : protected_gateway.client_.written)
+    {
+        protected_gateway.feedHdlcByte(byte);
+        public_gateway.feedHdlcByte(byte);
+    }
+    assert(protected_gateway.received == std::vector<uint8_t>(packet.begin(), packet.end()));
+    assert(public_gateway.accepted_frames == 0);
+    protected_gateway.rx_priority_queue_.append(1);
+    protected_gateway.applyConfig(&access_config, true, 32);
+    assert(protected_gateway.socket_online_ && protected_gateway.rx_priority_queue_.size() == 1);
+    const auto old_wire = protected_gateway.client_.written;
+    std::strcpy(access_config.access.passphrase, "new-passphrase");
+    protected_gateway.applyConfig(&access_config, true, 32);
+    assert(!protected_gateway.socket_online_ && protected_gateway.rx_priority_queue_.size() == 0);
+    for (auto byte : old_wire) protected_gateway.feedHdlcByte(byte);
+    assert(protected_gateway.accepted_frames == 1);
+    public_gateway.selected_ = public_gateway.socket_online_ = true;
+    assert(public_gateway.sendPacket(packet.data(), packet.size()));
+    assert(public_gateway.client_.written.size() == 1001); // All but byte zero escaped.
+    for (auto byte : public_gateway.client_.written)
+    {
+        public_gateway.feedHdlcByte(byte);
+        protected_gateway.feedHdlcByte(byte);
+    }
+    assert(public_gateway.received == std::vector<uint8_t>(packet.begin(), packet.end()));
+    assert(protected_gateway.accepted_frames == 1);
+    access_config.access.ifac_size_bits = 7;
+    protected_gateway.applyConfig(&access_config, true, 32);
+    assert(!protected_gateway.enabled_); // Invalid access never enables public traffic.
+    access_config.access.ifac_size_bits = 128;
+    fail_access_allocation = true;
+    protected_gateway.applyConfig(&access_config, true, 32);
+    fail_access_allocation = false;
+    assert(!protected_gateway.enabled_);
+    for (auto byte : public_gateway.client_.written) protected_gateway.feedHdlcByte(byte);
+    assert(protected_gateway.accepted_frames == 1);
+    protected_gateway.applyConfig(&access_config, true, 32);
+    assert(protected_gateway.enabled_); // Retry the same config once PSRAM is available.
     using chat::reticulum::TcpRetry;
     using platform::esp::arduino_common::net::TcpConnectPhase;
     TcpRetry stability;

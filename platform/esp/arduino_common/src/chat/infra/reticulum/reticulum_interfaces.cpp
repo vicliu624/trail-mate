@@ -233,13 +233,15 @@ void WifiGatewayReticulumInterface::applyConfig(
              next_enabled ? config->target_host : nullptr);
     const uint16_t next_port =
         next_enabled && config->target_port != 0 ? config->target_port : 4242;
+    static constexpr reticulum::InterfaceAccessConfig public_access{};
+    const auto& next_access = next_enabled ? config->access : public_access;
 
     const bool changed = next_enabled != enabled_ ||
                          interface_id != interface_id_ ||
                          next_port != port_ ||
-                         std::strcmp(next_host, host_) != 0;
+                         std::strcmp(next_host, host_) != 0 || !access_.matches(next_access);
 
-    enabled_ = next_enabled;
+    enabled_ = access_.configure(next_access) && next_enabled;
     auto_connect_wifi_ = auto_connect_wifi;
     interface_id_ = next_enabled ? interface_id : kInvalidInterfaceId;
     copyHost(host_, sizeof(host_), next_host);
@@ -366,11 +368,17 @@ bool WifiGatewayReticulumInterface::sendPacket(const uint8_t* data,
         return false;
     }
 
+    // Put the packet in the upper half and expand HDLC into the lower half.
+    // Even a fully escaped packet cannot overtake the next unread source byte.
+    uint8_t* const wire = tx_frame_ + kMaxWirePacketSize + 2U;
+    std::memcpy(wire, data, len);
+    size_t wire_len = len;
+    if (!access_.encode(wire, wire_len, kMaxWirePacketSize)) return false;
     size_t tx_len = 0;
     tx_frame_[tx_len++] = kHdlcFlag;
-    for (size_t i = 0; i < len && tx_len + 2U < sizeof(tx_frame_); ++i)
+    for (size_t i = 0; i < wire_len; ++i)
     {
-        const uint8_t byte = data[i];
+        const uint8_t byte = wire[i];
         if (byte == kHdlcFlag || byte == kHdlcEscape)
         {
             tx_frame_[tx_len++] = kHdlcEscape;
@@ -831,7 +839,8 @@ void WifiGatewayReticulumInterface::feedHdlcByte(uint8_t byte)
     {
         if (hdlc_in_frame_ && hdlc_frame_len_ > 0)
         {
-            enqueueFrame(hdlc_frame_, hdlc_frame_len_);
+            if (access_.decode(hdlc_frame_, hdlc_frame_len_, sizeof(hdlc_frame_)))
+                enqueueFrame(hdlc_frame_, hdlc_frame_len_);
         }
         hdlc_in_frame_ = true;
         hdlc_escape_ = false;

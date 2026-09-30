@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace chat::reticulum
 {
@@ -18,6 +19,26 @@ constexpr std::size_t kMaxTcpClientInterfaces = 3;
 constexpr std::size_t kInterfaceIdMaxLen = 23;
 constexpr std::size_t kInterfaceHostMaxLen = 63;
 constexpr std::size_t kAutoInterfaceGroupMaxLen = 31;
+
+struct InterfaceAccessConfig
+{
+    char network_name[64] = {};
+    char passphrase[64] = {};
+    uint16_t ifac_size_bits = 0;
+
+    bool enabled() const { return network_name[0] || passphrase[0]; }
+    bool valid() const
+    {
+        if (!std::memchr(network_name, 0, sizeof(network_name)) || !std::memchr(passphrase, 0, sizeof(passphrase))) return false;
+        return enabled() ? ifac_size_bits >= 8 && ifac_size_bits <= 512 && ifac_size_bits % 8 == 0 : ifac_size_bits == 0;
+    }
+    bool operator==(const InterfaceAccessConfig& other) const
+    {
+        return ifac_size_bits == other.ifac_size_bits &&
+               !std::memcmp(network_name, other.network_name, sizeof(network_name)) &&
+               !std::memcmp(passphrase, other.passphrase, sizeof(passphrase));
+    }
+};
 
 enum class NetworkInterfaceType : uint8_t
 {
@@ -43,6 +64,7 @@ struct NetworkInterfaceConfig
     char group_id[kAutoInterfaceGroupMaxLen + 1] = "reticulum";
     uint16_t discovery_port = 29716;
     uint16_t data_port = 42671;
+    InterfaceAccessConfig access;
 };
 
 struct LxmfPropagationClientConfig
