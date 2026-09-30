@@ -49,19 +49,11 @@ else()
 endif()
 add_test(NAME reticulum_discovery COMMAND reticulum_discovery)
 
-# The firmware already depends on rweather/Crypto. Host verification uses the
-# same SHA-256 implementation, never a cryptographic mock. An existing checkout
-# can be supplied to avoid downloading it during local iteration.
+# Use the same pinned SHA-256 implementation as ESP-IDF firmware. An existing
+# checkout can still be supplied for compatibility verification.
 set(TRAIL_MATE_CRYPTO_SOURCE_DIR "" CACHE PATH "Directory containing Crypto SHA256.cpp")
 if(NOT TRAIL_MATE_CRYPTO_SOURCE_DIR)
-    include(FetchContent)
-    if(POLICY CMP0135)
-        cmake_policy(SET CMP0135 NEW)
-    endif()
-    FetchContent_Declare(reticulum_discovery_crypto_source
-        URL "https://codeload.github.com/rweather/arduinolibs/tar.gz/37a76b8f7516568e1c575b6dc9268da1ccaac6b6")
-    FetchContent_MakeAvailable(reticulum_discovery_crypto_source)
-    set(TRAIL_MATE_CRYPTO_SOURCE_DIR "${reticulum_discovery_crypto_source_SOURCE_DIR}/libraries/Crypto")
+    set(TRAIL_MATE_CRYPTO_SOURCE_DIR "${REPO}/third_party/rweather_crypto")
 endif()
 add_library(reticulum_discovery_crypto STATIC
     "${TRAIL_MATE_CRYPTO_SOURCE_DIR}/SHA256.cpp"

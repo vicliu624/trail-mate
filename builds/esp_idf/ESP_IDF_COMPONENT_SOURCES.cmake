@@ -105,6 +105,7 @@ set(TRAILMATE_ESP_IDF_CORE_CHAT_SOURCES
     "${TRAILMATE_ROOT}/modules/core_chat/src/infra/reticulum/lxst_call_state_machine.cpp"
     "${TRAILMATE_ROOT}/modules/core_chat/src/infra/reticulum/lxst_telephony_wire.cpp"
     "${TRAILMATE_ROOT}/modules/core_chat/src/infra/reticulum/reticulum_wire.cpp"
+    "${TRAILMATE_ROOT}/modules/core_chat/src/infra/reticulum/interface_discovery.cpp"
     "${TRAILMATE_ROOT}/modules/core_chat/src/infra/rnode/rnode_packet_wire.cpp"
     "${TRAILMATE_ROOT}/modules/core_chat/src/infra/store/ram_store.cpp"
     "${TRAILMATE_ROOT}/modules/core_chat/src/read/chat_read_state_ledger.cpp"
@@ -541,6 +542,13 @@ set(TRAILMATE_ESP_IDF_PLATFORM_COMMON_SOURCES
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_transport_runtime.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/reticulum/reticulum_adapter.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/reticulum/reticulum_interfaces.cpp"
+    "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/reticulum/discovery_stamp_verifier.cpp"
+    "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/reticulum/native_gateway_discovery.cpp"
+    "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/reticulum/gateway_persistence.cpp"
+    "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/reticulum/ifac_codec.cpp"
+    "${TRAILMATE_ROOT}/third_party/rweather_crypto/SHA256.cpp"
+    "${TRAILMATE_ROOT}/third_party/rweather_crypto/Hash.cpp"
+    "${TRAILMATE_ROOT}/third_party/rweather_crypto/Crypto.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/rnode/rnode_adapter.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/hostlink/hostlink_bridge_radio.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/hostlink/hostlink_config_service.cpp"
@@ -609,6 +617,7 @@ set(TRAILMATE_ESP_IDF_T_DISPLAY_P4_BOARD_SOURCES
     "${TRAILMATE_ROOT}/boards/t_display_p4/src/t_display_p4_board.cpp")
 
 set(TRAILMATE_ESP_IDF_FINAL_INCLUDE_DIRS
+    "${TRAILMATE_ROOT}/third_party/rweather_crypto"
     "${TRAILMATE_ROOT}/apps/esp32_lvgl/src"
     "${TRAILMATE_ROOT}/modules/core_hostlink/include"
     "${TRAILMATE_ROOT}/modules/core_sys/include"
