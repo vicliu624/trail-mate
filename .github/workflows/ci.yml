@@ -8,6 +8,25 @@ on:
   pull_request:
 
 jobs:
+  reticulum_gateway:
+    name: Reticulum Gateway and IFAC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify gateway selection, persistence and IFAC codec
+        run: |
+          cmake -S tests/reticulum_gateway -B .codex-build/reticulum-gateway -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/reticulum-gateway --parallel 2
+          ctest --test-dir .codex-build/reticulum-gateway --output-on-failure
+
+      - name: Verify IFAC vectors against Python Reticulum
+        run: |
+          python3 -m venv .codex-build/rns-reference
+          .codex-build/rns-reference/bin/python -m pip install rns==1.5.4
+          .codex-build/rns-reference/bin/python tests/reticulum_gateway/ifac_reference.py --check
+
   geocaching:
     name: Geocaching Core and Device Session
     runs-on: ubuntu-latest

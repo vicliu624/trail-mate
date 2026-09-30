@@ -280,6 +280,29 @@ network-access redesign's acceptance scope. IFAC is currently unsupported; the
 discovery parser's rejection of IFAC metadata is a temporary supported-subset
 boundary, not the intended final behavior.
 
+`IfacCodec` now provides the bounded encode/decode primitive, but device interfaces
+and configuration are not wired to it yet. Do not treat its presence as usable
+IFAC support. It derives the interface signing identity, authenticates packets,
+and streams the HKDF mask directly over caller-owned packet storage without a
+second packet or full-mask buffer. Its retained state has a 640-byte ceiling;
+ESP configuration rejects an object outside PSRAM. It reuses the existing
+Ed25519 routines, whose transient arithmetic stack use is unchanged.
+
+The codec accepts tag sizes of 1–64 bytes and UTF-8 credentials up to 128 bytes
+each. Its API takes bytes; RNS configuration expresses `ifac_size` in bits, so
+the future settings adapter must convert and validate that unit explicitly.
+An invalid or cleared configuration fails closed. Authenticated decode failure
+clears the working packet, and all failure paths return zero output length.
+
+The committed `tests/reticulum_gateway/ifac_vectors.tsv` contains 24 vectors
+generated and decoded by Python Reticulum 1.5.4. The native suite uses the real
+firmware SHA-256 and Ed25519 code to check both directions, Unicode credentials,
+tag sizes and packet bounds. To independently regenerate and check them, run
+`python tests/reticulum_gateway/ifac_reference.py --check` in an environment with
+`rns==1.5.4`. This command creates no network service or persistent identity.
+Interface integration, TMS round trips, framing and physical-device acceptance
+remain outstanding.
+
 The implementation must follow the interface-boundary processing in
 [upstream Transport.py](https://github.com/markqvist/Reticulum/blob/7f2b3b9b524c9386316379af1313b43a5e4f7a5d/RNS/Transport.py):
 

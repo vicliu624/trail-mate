@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(reticulum_gateway LANGUAGES CXX)
+project(reticulum_gateway LANGUAGES C CXX)
 enable_testing()
 set(REPO "${CMAKE_CURRENT_LIST_DIR}/../..")
 set(SOURCE_FILE "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/reticulum_interfaces.cpp")
@@ -137,3 +137,20 @@ else()
     target_compile_options(reticulum_gateway_candidates PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
 add_test(NAME reticulum_gateway_candidates COMMAND reticulum_gateway_candidates)
+
+set(ED25519_DIR "${REPO}/modules/core_chat/src/infra/meshcore/crypto/ed25519")
+add_executable(reticulum_ifac test_ifac.cpp
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/ifac_codec.cpp"
+    ${ED25519_DIR}/keypair.c ${ED25519_DIR}/sign.c ${ED25519_DIR}/sha512.c
+    ${ED25519_DIR}/ge.c ${ED25519_DIR}/fe.c ${ED25519_DIR}/sc.c)
+target_compile_features(reticulum_ifac PRIVATE cxx_std_17)
+target_compile_definitions(reticulum_ifac PRIVATE ESP_PLATFORM)
+target_include_directories(reticulum_ifac PRIVATE "${CMAKE_CURRENT_LIST_DIR}/fakes"
+    "${REPO}/platform/esp/arduino_common/include" "${REPO}/modules/core_chat/include")
+target_link_libraries(reticulum_ifac PRIVATE reticulum_discovery_crypto)
+if(MSVC)
+    target_compile_options(reticulum_ifac PRIVATE /UNDEBUG)
+else()
+    target_compile_options(reticulum_ifac PRIVATE -UNDEBUG -Wall -Wextra)
+endif()
+add_test(NAME reticulum_ifac COMMAND reticulum_ifac "${CMAKE_CURRENT_LIST_DIR}/ifac_vectors.tsv")
