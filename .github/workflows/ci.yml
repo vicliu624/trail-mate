@@ -38,11 +38,12 @@ jobs:
           cmake --build .codex-build/reticulum-gateway --parallel 2
           ctest --test-dir .codex-build/reticulum-gateway --output-on-failure
 
-      - name: Verify IFAC vectors against Python Reticulum
+      - name: Verify IFAC and resource vectors against Python Reticulum
         run: |
           python3 -m venv .codex-build/rns-reference
           .codex-build/rns-reference/bin/python -m pip install rns==1.5.4
           .codex-build/rns-reference/bin/python tests/reticulum_gateway/ifac_reference.py --check
+          .codex-build/rns-reference/bin/python tests/reticulum_conformance/test_resource_interop.py
 
   geocaching:
     name: Geocaching Core and Device Session

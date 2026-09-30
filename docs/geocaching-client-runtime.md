@@ -52,7 +52,15 @@ Foreground publication and download dispatch use their already persisted
 instead of selecting it through unrelated attempt-expiration and task-history
 scans. Durable intent, cancellation and current identity checks still run before
 transport submission. A request already submitted is not reserved again while
-its client waits for the directory response.
+its client waits for the directory response. The reply budget starts after
+transport submission; durable preparation has a separate bounded wait. First
+responses matching current work go directly to validation and result commit.
+Historical receipt lookup is reserved for old or duplicate requests.
+
+LXMF resource advertisements use MessagePack text field names, matching Python
+Reticulum. Binary field names cause the reference parser to reject the
+advertisement and close the link before receiving the publication body. Native
+wire vectors and pinned Python decoder checks cover this interoperability rule.
 
 Open the cache in **My caches**, save any edits, and choose **Archive cache**.
 The device first saves an archived draft, then asks for confirmation before

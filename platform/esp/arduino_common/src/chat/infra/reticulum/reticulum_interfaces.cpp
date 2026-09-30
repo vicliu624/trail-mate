@@ -5,6 +5,7 @@
 
 #include "platform/esp/arduino_common/chat/infra/reticulum/reticulum_interfaces.h"
 
+#include "chat/infra/reticulum/public_gateway_host.h"
 #include "chat/time_utils.h"
 #if defined(ARDUINO)
 #include "platform/esp/arduino_common/app_tasks.h"
@@ -1661,6 +1662,8 @@ void ReticulumInterfaceSet::applyConfig(
 {
     config_ = config;
     network_config_ = network_config;
+    bootstrap_trial_started_ = false;
+    prefer_discovered_ = false;
 
     // Service-local effective policy only: never change persisted user settings.
     // Reapply on every config refresh so a radio interface in the shared network
@@ -1731,7 +1734,7 @@ void ReticulumInterfaceSet::applyConfig(
 bool ReticulumInterfaceSet::canReplaceDiscoveredGateway(const char* host, uint16_t port) const
 {
     // An explicitly empty manual TCP list must not silently enable TCP access.
-    if (!wifiAllowed() || !host || !host[0] || std::strlen(host) > reticulum::kInterfaceHostMaxLen || !port || !tcp_count_) return false;
+    if (!wifiAllowed() || !host || !reticulum::publicGatewayHost(host, std::strlen(host)) || !port || !tcp_count_) return false;
     for (size_t i = 0; i < network_config_.interface_count && i < reticulum::kMaxNetworkInterfaces; ++i)
     {
         const auto& item = network_config_.interfaces[i];
@@ -1744,7 +1747,7 @@ bool ReticulumInterfaceSet::canReplaceDiscoveredGateway(const char* host, uint16
            std::strcmp(discovered_config_.target_host, host) != 0;
 }
 
-void ReticulumInterfaceSet::replaceDiscoveredGateway(const char* host, uint16_t port)
+void ReticulumInterfaceSet::replaceDiscoveredGateway(const char* host, uint16_t port, bool previously_stable)
 {
     if (!canReplaceDiscoveredGateway(host, port)) return;
     discovered_config_.type = reticulum::NetworkInterfaceType::TcpClient;
@@ -1754,6 +1757,7 @@ void ReticulumInterfaceSet::replaceDiscoveredGateway(const char* host, uint16_t 
     tcp_[reticulum::kMaxTcpClientInterfaces].applyConfig(
         &discovered_config_, config_.reticulum_wifi_auto_connect, kDiscoveredTcpInterfaceId);
     tcp_count_ = static_cast<uint8_t>(tcp_.size());
+    prefer_discovered_ = previously_stable;
 }
 
 void ReticulumInterfaceSet::setWifiTransportEnabled(bool enabled)
@@ -1766,9 +1770,42 @@ void ReticulumInterfaceSet::setWifiTransportEnabled(bool enabled)
     syncSharedLoRaRxGate();
 }
 
-void ReticulumInterfaceSet::maintain()
+void ReticulumInterfaceSet::maintain(bool allow_bootstrap_handoff)
 {
     auto_.maintain();
+    const auto bootstrap = [this](uint8_t tcp_index)
+    {
+        uint8_t index = 0;
+        for (size_t i = 0; i < network_config_.interface_count && i < reticulum::kMaxNetworkInterfaces; ++i)
+        {
+            const auto& entry = network_config_.interfaces[i];
+            if (!entry.enabled || entry.type != reticulum::NetworkInterfaceType::TcpClient) continue;
+            if (index++ != tcp_index) continue;
+            if (entry.target_port != 4242 || entry.access.enabled() || std::strncmp(entry.id, "public-tcp-", 11)) return false;
+            return !std::strcmp(entry.target_host, "sydney.reticulum.au") ||
+                   !std::strcmp(entry.target_host, "node.reticulumnet.nl") ||
+                   !std::strcmp(entry.target_host, "rmap.world");
+        }
+        return false;
+    };
+    constexpr uint8_t learned_index = reticulum::kMaxTcpClientInterfaces;
+    auto& learned = tcp_[learned_index];
+    // Factory peers bootstrap discovery. Try one verified candidate after a
+    // stable bootstrap, then keep it if usable or fail back with its cooldown.
+    // A saved stable candidate can skip the bootstrap on subsequent boots.
+    // Explicit/IFAC interfaces and active calls never trigger this handoff.
+    if (allow_bootstrap_handoff && !bootstrap_trial_started_ && active_tcp_ < tcp_count_ && bootstrap(active_tcp_) &&
+        learned.canAttempt() && learned.retryState().failures() == 0 &&
+        (prefer_discovered_ || tcp_[active_tcp_].stableConnection()) &&
+        !::platform::ui::reticulum_call::resource_preempt_active())
+    {
+        Serial.printf("[Reticulum][Discovery] bootstrap handoff host=%s port=%u restored=%u\n",
+                      learned.host(), learned.port(), prefer_discovered_ ? 1U : 0U);
+        tcp_[active_tcp_].setSelected(false);
+        learned.setSelected(true);
+        active_tcp_ = next_tcp_ = learned_index;
+        bootstrap_trial_started_ = true;
+    }
     // One public TCP uplink at a time. Other entries remain candidates with
     // their own cooldown, including on the single-socket C6 transport.
     if (active_tcp_ < tcp_count_)
@@ -1793,11 +1830,14 @@ void ReticulumInterfaceSet::maintain()
         {
             const auto candidate = static_cast<uint8_t>((next_tcp_ + attempt) % tcp_count_);
             if (!tcp_[candidate].canAttempt()) continue;
-            if (active_tcp_ == UINT8_MAX || tcp_[candidate].retryState().failures() < tcp_[active_tcp_].retryState().failures())
+            if (active_tcp_ == UINT8_MAX || tcp_[candidate].retryState().failures() < tcp_[active_tcp_].retryState().failures() ||
+                (candidate == learned_index && prefer_discovered_ && bootstrap(active_tcp_) &&
+                 tcp_[candidate].retryState().failures() == tcp_[active_tcp_].retryState().failures()))
                 active_tcp_ = candidate;
         }
         if (active_tcp_ != UINT8_MAX)
         {
+            if (active_tcp_ == learned_index) bootstrap_trial_started_ = true;
             tcp_[active_tcp_].setSelected(true);
             tcp_[active_tcp_].maintain();
         }

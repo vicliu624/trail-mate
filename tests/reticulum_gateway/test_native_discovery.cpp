@@ -49,6 +49,20 @@ int main()
     assert(discovery.latest().port == 0 && discovery.consume(0));
     assert(!discovery.offerVerified(nullptr, 0, identity));
 
+    // Reject a correctly shaped private address before allocating the stamp
+    // verifier's work. A public announce can then proceed immediately.
+    const auto host_position = std::strstr(packed, "b06e6f64652e6578616d706c652e6f7267");
+    assert(host_position);
+    const size_t offset = 1 + static_cast<size_t>(host_position - packed) / 2;
+    auto private_address = original;
+    private_address.erase(private_address.begin() + offset, private_address.begin() + offset + 17);
+    const char* private_host = "192.168.10.2";
+    private_address.insert(private_address.begin() + offset, private_host, private_host + std::strlen(private_host));
+    private_address.insert(private_address.begin() + offset, static_cast<uint8_t>(0xa0 | std::strlen(private_host)));
+    assert(!discovery.offerVerified(private_address.data(), private_address.size(), identity));
+    assert(discovery.offerVerified(original.data(), original.size(), identity));
+    discovery.reset();
+
     // Matching only selects the service for normal outer signature validation.
     std::vector<uint8_t> payload(64 + 10 + 10 + 64, 0);
     computeNameHash("rnstransport", "discovery.interface", payload.data() + 64);

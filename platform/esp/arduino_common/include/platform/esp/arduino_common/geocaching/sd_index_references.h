@@ -218,12 +218,13 @@ class SdIndexReferences
     ::geocaching::storage::TaskReferenceCheck references_;
     std::array<uint8_t, 48> attempt_key_{};
     std::array<std::array<uint8_t, 64>, 4> proofs_{};
-    uint8_t proof_count_ = 0, proof_next_ = 0;
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0;
     const ::geocaching::storage::MutationView* mutations_ = nullptr;
-    size_t mutation_count_ = 0, mutation_position_ = 0;
     ::geocaching::ByteView overlay_value_;
+    // begin() bounds the immutable overlay to 64 rows.
+    uint8_t mutation_count_ = 0, mutation_position_ = 0;
+    uint8_t proof_count_ = 0, proof_next_ = 0;
     bool overlay_ready_ = false, scanned_ = false;
     uint8_t table_ = 5;
     IndexScanStep result_ = IndexScanStep::Idle;

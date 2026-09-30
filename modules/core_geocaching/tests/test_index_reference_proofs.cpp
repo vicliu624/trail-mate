@@ -75,6 +75,34 @@ int main()
         require(!test::open_files && !test::open_dirs, "reference proof leaked handles");
     };
     verify(nullptr, 0, sd::IndexScanStep::End);
+    {
+        // Exercise the maximum overlay count and its final relationship;
+        // narrowing the bounded counters must not skip the last mutation.
+        std::array<gc::MutationView, 64> rows{};
+        std::array<std::array<uint8_t, 32>, 63> keys{};
+        std::array<uint8_t, 64> head_bytes{}, attempt_key{};
+        size_t head_size = 0;
+        gc::CacheHeadView head;
+        head.install_generation = 1;
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            keys[i].fill(static_cast<uint8_t>(i + 1));
+            if (!i) require(gc::encodeCacheHead({keys[i].data(), keys[i].size()}, head, head_bytes.data(), head_bytes.size(), head_size), "encode bounded overlay head");
+            rows[i] = {2, {keys[i].data(), keys[i].size()}, {head_bytes.data(), head_size}, false};
+        }
+        std::copy(request_keys[0].begin(), request_keys[0].end(), attempt_key.begin());
+        std::fill(attempt_key.begin() + 48, attempt_key.end(), 0x73);
+        gc::TxAttemptView attempt;
+        std::array<uint8_t, 192> attempt_bytes{};
+        size_t attempt_size = 0;
+        require(gc::encodeTxAttempt({attempt_key.data(), attempt_key.size()}, attempt, attempt_bytes.data(), attempt_bytes.size(), attempt_size), "encode bounded overlay attempt");
+        rows.back() = {13, {attempt_key.data(), attempt_key.size()}, {attempt_bytes.data(), attempt_size}, false};
+        verify(rows.data(), rows.size(), sd::IndexScanStep::End);
+        attempt_key[0] ^= 0x80;
+        verify(rows.data(), rows.size(), sd::IndexScanStep::Invalid);
+        sd::SdIndexReferences overflow(volume);
+        require(!overflow.begin(root, frame.data(), frame.size(), rows.data(), rows.size() + 1), "oversized overlay accepted");
+    }
     for (unsigned n = 0; n < task_ids.size(); ++n)
     {
         gc::MutationView removed[] = {{5, {request_keys[n].data(), 48}, {}, true}, {10, {task_ids[n].data(), 16}, {}, true}};

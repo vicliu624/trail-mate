@@ -1,5 +1,6 @@
 #include "platform/esp/arduino_common/chat/infra/reticulum/native_gateway_discovery.h"
 #include "chat/infra/reticulum/interface_discovery.h"
+#include "chat/infra/reticulum/public_gateway_host.h"
 #include <cstring>
 
 namespace chat::reticulum
@@ -28,7 +29,7 @@ bool NativeGatewayDiscovery::offerVerified(const uint8_t* data, size_t size, con
 {
     if (!identity || verifier_.state() == DiscoveryStampVerifier::State::Pending) return false;
     InterfaceDiscoveryView view{};
-    if (!parseInterfaceDiscovery(data, size, view)) return false;
+    if (!parseInterfaceDiscovery(data, size, view) || !publicGatewayHost(reinterpret_cast<const char*>(view.host), view.host_size)) return false;
     if (!verifier_.begin(view.packed, view.packed_size, view.stamp)) return false;
     pending_ = {};
     std::memcpy(pending_.host, view.host, view.host_size);

@@ -1264,24 +1264,26 @@ bool encodeResourceAdvertisement(uint32_t transfer_size,
     }
 
     size_t used = 0;
+    // Python Reticulum reads these fields by text key. Binary map keys make
+    // ResourceAdvertisement.unpack fail and the receiver closes the link.
     if (!appendMapHeader(11, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("t"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("t"), 1, out_payload, *inout_len, used) ||
         !appendUint(transfer_size, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("d"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("d"), 1, out_payload, *inout_len, used) ||
         !appendUint(data_size, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("n"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("n"), 1, out_payload, *inout_len, used) ||
         !appendUint(part_count, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("h"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("h"), 1, out_payload, *inout_len, used) ||
         !appendBin(resource_hash, reticulum::kFullHashSize, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("r"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("r"), 1, out_payload, *inout_len, used) ||
         !appendBin(random_hash, 4, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("o"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("o"), 1, out_payload, *inout_len, used) ||
         !appendBin(original_hash, reticulum::kFullHashSize, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("i"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("i"), 1, out_payload, *inout_len, used) ||
         !appendUint(segment_index, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("l"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("l"), 1, out_payload, *inout_len, used) ||
         !appendUint(total_segments, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("q"), 1, out_payload, *inout_len, used))
+        !appendString(reinterpret_cast<const uint8_t*>("q"), 1, out_payload, *inout_len, used))
     {
         return false;
     }
@@ -1298,9 +1300,9 @@ bool encodeResourceAdvertisement(uint32_t transfer_size,
         return false;
     }
 
-    if (!appendBin(reinterpret_cast<const uint8_t*>("f"), 1, out_payload, *inout_len, used) ||
+    if (!appendString(reinterpret_cast<const uint8_t*>("f"), 1, out_payload, *inout_len, used) ||
         !appendUint(flags, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("m"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("m"), 1, out_payload, *inout_len, used) ||
         !appendBin(hashmap, hashmap_len, out_payload, *inout_len, used))
     {
         return false;

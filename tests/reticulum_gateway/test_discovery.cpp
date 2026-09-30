@@ -1,4 +1,5 @@
 #include "chat/infra/reticulum/interface_discovery.h"
+#include "chat/infra/reticulum/public_gateway_host.h"
 
 #include <cassert>
 #include <cstring>
@@ -54,6 +55,10 @@ static bool parse(const Bytes& bytes)
 
 int main()
 {
+    for (const char* host : {"192.168.10.2", "10.1.2.3", "172.16.0.1", "172.31.255.254", "127.0.0.1", "169.254.1.2", "100.64.0.1", "224.0.0.1", "0.0.0.0", "192.0.2.1", "198.18.0.1", "198.51.100.1", "203.0.113.1", "999.1.2.3", "123", "gateway.local", "gateway.LOCAL", "node.home.arpa", "localhost"})
+        assert(!chat::reticulum::publicGatewayHost(host, std::strlen(host)));
+    for (const char* host : {"1.1.1.1", "172.32.0.1", "100.128.0.1", "192.169.0.1", "rns.arborisis.net", "node.example.org"})
+        assert(chat::reticulum::publicGatewayHost(host, std::strlen(host)));
     const auto packet = announce();
     InterfaceDiscoveryView view;
     assert(parseInterfaceDiscovery(packet.data(), packet.size(), view));

@@ -3,6 +3,7 @@ import cacheIconUrl from '../../assets/geocaching.svg';
 import {mountIslandShell} from './island-shell.jsx';
 import {countryBounds, countryMatches, regionDisplayGeometry} from './country-boundaries.js';
 import {requestNearbyPosition} from './nearby-location.js';
+import {createLiveRefresh} from './live-refresh.js';
 import './page.css';
 import './theme.css';
 
@@ -27,7 +28,7 @@ document.documentElement.lang = chinese ? 'zh-Hans' : 'en';
 for (const node of document.querySelectorAll('[data-label]')) node.textContent = labels[node.dataset.label];
 const $ = id => document.getElementById(id);
 let worker = new Worker(new URL('./reticulum-worker.js', import.meta.url), {type:'module'});
-let nextId = 0, ready = false, rows = [], detailId = null, detailGeneration = 0, partial = null;
+let nextId = 0, ready = false, rows = [], detailId = null, detailRevision = null, detailHash = null, detailGeneration = 0, partial = null;
 const pending = new Map(), selected = new Set();
 const map = L.map('map', {worldCopyJump:true, minZoom:0}).fitWorld();
 const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, updateWhenIdle:true,
@@ -36,6 +37,10 @@ const markers = L.layerGroup().addTo(map);
 const boundaryLayer = L.geoJSON(null, {style:{color:'#0c8d81',weight:2,fillOpacity:0.07},interactive:false}).addTo(map);
 const regionData = new Map();
 let regionFeature = null, regionLoad = 0, querySerial = 0, manualArea = false;
+let lastQuery = null;
+const liveRefresh = createLiveRefresh({refresh:()=>search({automatic:true}),
+  canRefresh:()=>ready && pending.size===0 && lastQuery!==null && navigator.onLine,
+  isVisible:()=>!document.hidden && navigator.onLine});
 const regionName = feature => chinese ? (feature.properties.zh || feature.properties.name) : feature.properties.name;
 
 function populateRegions() {
@@ -53,6 +58,7 @@ function populateRegions() {
 
 async function changeRegionKind() {
   manualArea=true; ++querySerial;
+  lastQuery=null;
   const kind=$('region-kind').value, generation=++regionLoad;
   regionFeature=null; boundaryLayer.clearLayers(); $('region-search').value='';
   $('search').querySelector('[data-label]').textContent=labels.search;
@@ -80,6 +86,7 @@ async function changeRegionKind() {
 
 function selectRegion() {
   manualArea=true; ++querySerial;
+  lastQuery=null;
   regionFeature=(regionData.get($('region-kind').value)||[]).find(feature=>feature.id===$('region-select').value)||null;
   boundaryLayer.clearLayers();
   if (regionFeature) {
@@ -110,16 +117,21 @@ const notice = message => { $('notice').textContent = message; };
 const bounds = () => { const b = map.getBounds(); return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]; };
 const stateMask = () => [...document.querySelectorAll('input[name=state]:checked')].reduce((mask,input) => mask | Number(input.value), 0);
 
-async function search() {
-  const mask = stateMask();
+async function search({automatic=false} = {}) {
+  if (automatic && !lastQuery) return;
+  const mask = automatic ? lastQuery.stateMask : stateMask();
   if (!mask) { notice(tr('Choose at least one cache state.','请至少选择一种状态。')); return; }
-  if ($('region-kind').value!=='map' && !regionFeature) { notice(labels.chooseRegion); return; }
-  rows=[]; renderRows(); $('more').hidden=true;
+  if (!automatic && $('region-kind').value!=='map' && !regionFeature) { notice(labels.chooseRegion); return; }
+  if (!automatic) {
+    lastQuery={bounds:regionFeature?countryBounds(regionFeature):bounds(),stateMask:mask,region:regionFeature};
+    rows=[]; renderRows(); $('more').hidden=true;
+    selected.clear(); updateSelection();
+  }
   const queryToken=++querySerial;
-  selected.clear(); updateSelection();
-  notice(tr('Querying public directories…','正在查询公共目录…'));
-  try { await rpc('query', {bounds:regionFeature?countryBounds(regionFeature):bounds(),stateMask:mask,region:regionFeature,queryToken}); }
+  if (!automatic) notice(tr('Querying public directories…','正在查询公共目录…'));
+  try { await rpc('query', {...lastQuery,queryToken,refresh:automatic}); }
   catch (error) { if(queryToken===querySerial) notice(error.message); }
+  finally { liveRefresh.touch(); }
 }
 
 function updateSelection() {
@@ -176,7 +188,7 @@ function renderMarkers() {
 }
 
 async function openDetail(row) {
-  const generation = ++detailGeneration; detailId = row.id;
+  const generation = ++detailGeneration; detailId = row.id; detailRevision=row.summary[1]; detailHash=row.summary[2];
   $('detail').hidden = false; $('detail-name').textContent = row.summary[6];
   $('detail-coordinates').textContent = `${(row.summary[4]/1e7).toFixed(7)}, ${(row.summary[5]/1e7).toFixed(7)}`;
   $('detail-content').replaceChildren(); $('download-one').disabled = true;
@@ -228,6 +240,7 @@ function receiveWorkerMessage({data}) {
     $('connection-state').textContent = event.state==='disconnected'?tr('Disconnected','连接已断开'):tr('Discovering directories…','正在发现目录…');
     if (event.state==='disconnected') {
       ready=false; ++querySerial; ++detailGeneration; rows=[]; selected.clear(); partial=null; detailId=null;
+      liveRefresh.setReady(false);
       $('detail').hidden=true; $('more').hidden=true; $('download-partial').hidden=true;
       $('search').disabled=true; $('region-apply').disabled=true; $('connection-state').classList.remove('ready');
       renderRows(); updateSelection();
@@ -235,12 +248,24 @@ function receiveWorkerMessage({data}) {
     }
   } else if (event.type==='directory') {
     const first = !ready; ready=true; $('search').disabled=false; $('region-apply').disabled=false;
+    liveRefresh.setReady(true);
     $('connection-state').textContent=tr('Ready to explore','可以开始探索'); $('connection-state').classList.add('ready');
     $('directory-status').textContent=tr(`${event.count} verified public directories`, `已验证 ${event.count} 个公共目录`);
     if (first) initialLocation.finally(()=>{if(ready)search();});
   } else if (event.type==='results') {
     if (!ready || event.queryToken!==querySerial) return;
-    rows=event.rows; $('more').hidden=!event.more; renderRows();
+    rows=event.rows; $('more').hidden=!event.more;
+    const available=new Map(rows.map(row=>[row.id,row]));
+    for (const id of selected) if (!available.has(id) || available.get(id).conflict) selected.delete(id);
+    if (detailId && !available.has(detailId)) {
+      ++detailGeneration; detailId=null; $('detail').hidden=true;
+    } else if (detailId && (available.get(detailId).conflict || available.get(detailId).summary[1]!==detailRevision ||
+      available.get(detailId).summary[2].some((byte,index)=>byte!==detailHash[index]))) {
+      ++detailGeneration;
+      $('detail-state').textContent=tr('Cache updated. Open it again for current details.','藏宝点已更新，请重新打开以查看最新详情。');
+      $('download-one').disabled=true;
+    }
+    renderRows(); updateSelection();
     notice(event.limited?tr('500-item display limit reached. Narrow the area to explore more.','已达到 500 项显示上限，请缩小区域继续探索。'):
       !rows.length && event.more?tr('No matches in these pages yet. Load more to continue searching this region.','当前批次暂无匹配点，可加载更多继续检索此区域。'):
       tr('Loaded from live directory responses. Open a cache to verify its details.','已加载目录实时响应。打开藏宝点以验证完整详情。'));
@@ -323,7 +348,9 @@ map.getContainer().addEventListener('wheel',()=>{manualArea=true;},{passive:true
 const initialLocation=locateNearby();
 startService();
 map.on('moveend',renderMarkers);
-window.addEventListener('pagehide',()=>{serviceStopped=true;clearTimeout(serviceRetry);worker.terminate();rejectPending('Page closed');});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)liveRefresh.resume();});
+window.addEventListener('online',()=>liveRefresh.resume());
+window.addEventListener('pagehide',()=>{liveRefresh.stop();serviceStopped=true;clearTimeout(serviceRetry);worker.terminate();rejectPending('Page closed');});
 // Back/forward cache restores the document but cannot revive a terminated
 // worker. Reconnect through normal startup instead of leaving dead RPCs.
 window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});

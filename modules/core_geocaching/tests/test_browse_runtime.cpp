@@ -624,6 +624,9 @@ int main(int argc, char** argv)
     auto stale_archive = public_item.revision_hash;
     stale_archive[0] ^= 1;
     require(!test::source->archiveCache(public_item.id, stale_archive), "archive accepted a stale detail");
+    // Transport admission may take longer than the response budget. A queued
+    // request must still receive a full budget after its eventual submission.
+    router.busy_sends_remaining = 8;
     require(test::source->archiveCache(public_item.id, public_item.revision_hash), "public detail archive not queued");
     until([&]
           { return router.sends == 8; },

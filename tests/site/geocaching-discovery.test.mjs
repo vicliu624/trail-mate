@@ -84,3 +84,34 @@ test('failed reconnect validation permits rediscovery and a fresh capability che
   await client.discover(announcement);
   assert.equal(checks,3,'healthy peer still suppresses duplicate announcements');
 });
+
+test('discovery paths retry while online after failed capabilities and stop after verification',async()=>{
+  const originals={connect:WebSocketClientInterface.prototype.connect,setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout};
+  const timers=new Map(); let id=0,paths=0;
+  WebSocketClientInterface.prototype.connect=async()=>{};
+  const client=new DirectoryClient();
+  try {
+    globalThis.setTimeout=(callback,delay)=>{const key=++id;timers.set(key,{callback,delay});return key;};
+    globalThis.clearTimeout=key=>timers.delete(key);
+    await client.connect('wss://example.org/',null,['00'.repeat(16)]);
+    client.router.announce=async()=>{};
+    client.rns.transport.requestPathAuto=async()=>{paths++;};
+    client.interface.online=true;
+    client.interface.dispatchEvent(new Event('connected')); await client.tail;
+    assert.equal(paths,1); assert.equal(timers.size,1); assert.equal([...timers.values()][0].delay,60000);
+    const fire=async()=>{const [key,timer]=[...timers][0];timers.delete(key);await timer.callback();};
+    client.pending={}; await fire(); assert.equal(paths,1); assert.equal([...timers.values()][0].delay,5000);
+    client.pending=null; await fire(); assert.equal(paths,2); assert.equal([...timers.values()][0].delay,60000);
+    const entry={ready:false};
+    client.request=async()=>[[1],[1],[0,1,2,3,4],8192,4096,20,0,0,2,0,1,0];
+    await client.checkDirectory(entry); assert.equal(entry.ready,true); assert.equal(timers.size,0);
+    client.interface.dispatchEvent(new Event('connected')); await client.tail;
+    client.interface.online=false; client.interface.dispatchEvent(new Event('disconnected'));
+    assert.equal(timers.size,0,'a disconnected interface must not send discovery traffic');
+    await client.close(); assert.equal(timers.size,0,'closing cancels all discovery work');
+  } finally {
+    globalThis.setTimeout=originals.setTimeout; globalThis.clearTimeout=originals.clearTimeout;
+    WebSocketClientInterface.prototype.connect=originals.connect;
+    await client.close();
+  }
+});

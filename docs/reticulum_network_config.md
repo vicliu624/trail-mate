@@ -124,9 +124,16 @@ not treat a runtime slot number as durable identity.
 
 Candidate selection includes the configured entries and up to four independently
 validated, public discovery endpoints sharing one runtime slot. Discovery never modifies the three manual
-entries. When configured candidates fail or are cooling down, the same
-single-uplink selector can try the discovered endpoint. A healthy uplink is
-retained. An empty manual TCP list or a policy that disallows Wi-Fi prevents
+entries. Factory public entries bootstrap discovery rather than permanently
+occupying the only TCP uplink. After 60 seconds of stable bootstrap connection,
+idle maintenance can try one verified public candidate. A restored stable
+candidate takes priority as soon as its SD record is available. Active calls,
+messages, resources and recent custom requests defer the handoff; the old
+interface's idle links and routes are retired when switching. Failure retains
+the candidate's cooldown and falls back without repeatedly switching healthy
+connections. Custom manual and IFAC interfaces are preserved. When configured
+candidates fail or are cooling down, discovered candidates also participate in
+normal failover. An empty manual TCP list or a policy that disallows Wi-Fi prevents
 automatic admission. One previously stable discovered endpoint can be restored
 from SD. Each discovered candidate retains its own retry history across slot
 changes and repeated announcements. The restored stable endpoint is preferred
@@ -163,7 +170,9 @@ or BackboneInterface with transport enabled, a host fitting the existing
 interfaces, IPv6 endpoints, duplicate keys, and malformed data are rejected.
 Parsing alone does **not** authenticate a candidate: the outer announcement
 signature and the native 20-round discovery stamp must both be verified before
-admission. Its borrowed pointers must not be persisted or retained after the
+admission. Automatic admission and SD restoration reject private, loopback,
+link-local, CGNAT, reserved IPv4 addresses and local-only hostnames. Explicit
+manual LAN entries remain available. Its borrowed pointers must not be retained after the
 input expires; the runtime copies only the bounded endpoint metadata.
 
 `DiscoveryStampVerifier` implements the native 20-round, minimum-16-bit stamp

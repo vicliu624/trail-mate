@@ -121,6 +121,7 @@ struct Session
         ::platform::memory::PsramPtr<gc::PublishAttempt> attempt;
         uint64_t started = 0;
         uint32_t wait_ms = gc::QueryClient::kReplyTimeoutMs;
+        bool submitted = false;
         ~Publication()
         {
             heap_caps_free(bytes);
@@ -722,11 +723,17 @@ bool receiveResponse(const chat::lxmf::CustomDeliveryView& message, uint8_t** ow
         }
         return accepted;
     }
-    if (session->receipts && session->receipts->accepted(source, request, {message.data.data, message.data.size})) return true;
+    // A first response for current work has no durable receipt yet. Process
+    // it directly instead of queuing a fruitless historical receipt lookup.
+    const bool current_publication = value == 1 && session->publication && session->publication->attempt &&
+                                     session->publication->attempt->expectsResponse(source, request);
+    const bool current_download = value == 3 && session->download && session->download->expectsResponse(source, request);
+    if (!current_publication && !current_download && session->receipts &&
+        session->receipts->accepted(source, request, {message.data.data, message.data.size})) return true;
     if (value == 1 && (!session->publication || !session->publication->attempt ||
-                       session->publication->attempt->phase() != gc::PublishAttemptPhase::Waiting || message.data.size > 512)) return false;
+                       !current_publication || session->publication->attempt->phase() != gc::PublishAttemptPhase::Waiting || message.data.size > 512)) return false;
     if (value == 3 && (!session->download || session->download->phase() != gc::DownloadPhase::Waiting ||
-                       message.data.size > session->download_scratch)) return false;
+                       !current_download || message.data.size > session->download_scratch)) return false;
     if (value != 3 && message.data.size > 2048) return false;
     if (session->response) return false;
     auto* bytes = owned ? *owned : static_cast<uint8_t*>(mem::allocatePreferred("geocaching.rx", message.data.size, false));
@@ -2144,7 +2151,12 @@ DispatchResult dispatchForeground(Session& s)
     const bool download = !publication && s.download && s.download_port &&
                           s.download->phase() == gc::DownloadPhase::Waiting && s.download_port->dispatchKey(key);
     const auto result = s.dispatcher->dispatchOne(now(nullptr), publication || download ? gc::ByteView{key.data(), key.size()} : gc::ByteView{});
-    if (publication && result.status == DispatchStatus::Submitted) reportPublication("submitted", *s.publication->attempt);
+    if (publication && result.status == DispatchStatus::Submitted)
+    {
+        s.publication->submitted = true;
+        s.publication->started = now(nullptr).monotonic_ms;
+        reportPublication("submitted", *s.publication->attempt);
+    }
     return result;
 }
 
@@ -2804,8 +2816,13 @@ void step()
             ++epoch;
             return;
         }
-        if (now(nullptr).monotonic_ms - job.started >= job.wait_ms && !s.store->commitPending())
+        // Durable preparation and transport admission have their own bounded
+        // wait. They must not consume the directory response budget.
+        const auto timeout = job.submitted ? job.wait_ms : 120000;
+        if (now(nullptr).monotonic_ms - job.started >= timeout && !s.store->commitPending())
         {
+            job.error = job.submitted ? "Directory did not confirm; retry" : "Request could not be sent; retry";
+            reportPublication(job.submitted ? "confirmation_timeout" : "submission_timeout", *job.attempt);
             job.attempt->cancel();
             ++epoch;
             return;

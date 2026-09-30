@@ -1,4 +1,5 @@
 #include "chat/domain/reticulum_network_config.h"
+#include "chat/infra/reticulum/public_gateway_host.h"
 #include "chat/infra/reticulum/tcp_retry.h"
 #include "platform/esp/arduino_common/chat/infra/reticulum/interface_access.h"
 #include "sys/ringbuf.h"
@@ -102,6 +103,11 @@ static Budget budget;
 Budget traffic_budget(Client, Priority) { return budget; }
 Budget traffic_budget(Client, Priority, const uint8_t*, AccessKind) { return budget; }
 } // namespace platform::ui::wifi_access
+namespace platform::ui::reticulum_call
+{
+static bool active = false;
+bool resource_preempt_active() { return active; }
+} // namespace platform::ui::reticulum_call
 namespace platform::esp::arduino_common::net
 {
 enum class TcpConnectPhase
@@ -213,6 +219,8 @@ class WifiGatewayReticulumInterface
     bool isReady() const;
     bool isConfigured() const { return enabled_ && host_[0] != '\0'; }
     bool canAttempt() const;
+    const char* host() const { return host_; }
+    uint16_t port() const { return port_; }
     const chat::reticulum::TcpRetry& retryState() const { return reconnect_; }
     bool stableConnection() const;
     bool isConnecting() const { return socket_open_pending_; }
@@ -239,9 +247,10 @@ class ReticulumInterfaceSet
         bool reticulum_wifi_auto_connect = true;
     } config_;
     uint8_t tcp_count_ = 3, active_tcp_ = UINT8_MAX, next_tcp_ = 0;
-    void maintain();
+    bool bootstrap_trial_started_ = false, prefer_discovered_ = false;
+    void maintain(bool = false);
     bool canReplaceDiscoveredGateway(const char*, uint16_t) const;
-    void replaceDiscoveredGateway(const char*, uint16_t);
+    void replaceDiscoveredGateway(const char*, uint16_t, bool = false);
     void syncSharedLoRaRxGate() {}
 };
 #include "gateway_actual.inc"
@@ -343,6 +352,7 @@ int main()
     discovered.network_config_.interfaces[0] = endpoint;
     assert(!discovered.canReplaceDiscoveredGateway(endpoint.target_host, endpoint.target_port));
     assert(discovered.canReplaceDiscoveredGateway("learned.example.org", 4242));
+    assert(!discovered.canReplaceDiscoveredGateway("192.168.10.2", 4242));
     discovered.wifi_allowed_ = false;
     assert(!discovered.canReplaceDiscoveredGateway("learned.example.org", 4242));
     discovered.wifi_allowed_ = true;
@@ -481,4 +491,80 @@ int main()
     ranked.maintain();
     assert(ranked.active_tcp_ == 1 && ranked.tcp_[1].isConnecting());
     assert(ranked.tcp_[0].connector_.starts == 0 && ranked.tcp_[2].connector_.starts == 0);
+
+    // Factory seeds are bootstrap candidates, rather than a permanent winner
+    // merely because their TCP socket stays open. Use only one socket during
+    // the bounded trial, retain a healthy discovered peer, and fail back once.
+    ReticulumInterfaceSet automatic;
+    auto& seed = automatic.network_config_.interfaces[0];
+    seed.type = reticulum::NetworkInterfaceType::TcpClient;
+    seed.enabled = true;
+    std::strcpy(seed.id, "public-tcp-1");
+    std::strcpy(seed.target_host, "sydney.reticulum.au");
+    automatic.network_config_.interface_count = automatic.tcp_count_ = 1;
+    automatic.tcp_[0].applyConfig(&seed, true, 32);
+    for (unsigned i = 1; i < 4; ++i) automatic.tcp_[i].applyConfig(nullptr, true, 0);
+    now = 300000;
+    automatic.maintain();
+    automatic.tcp_[0].connector_.state.phase = TcpConnectPhase::Connected;
+    automatic.maintain();
+    automatic.replaceDiscoveredGateway("rns.arborisis.net", 4242);
+    automatic.maintain();
+    assert(automatic.active_tcp_ == 0 && automatic.tcp_[3].connector_.starts == 0);
+    now += 60000;
+    platform::ui::reticulum_call::active = true;
+    automatic.maintain();
+    assert(automatic.active_tcp_ == 0); // Preserve an active call.
+    platform::ui::reticulum_call::active = false;
+    automatic.maintain();
+    assert(automatic.active_tcp_ == 0); // Packet maintenance cannot move a carrier.
+    automatic.maintain(true);
+    assert(automatic.active_tcp_ == 3 && automatic.tcp_[3].isConnecting());
+    assert(!automatic.tcp_[0].selected_ && !automatic.tcp_[0].socket_online_);
+    automatic.tcp_[3].connector_.state.phase = TcpConnectPhase::Connected;
+    automatic.maintain();
+    now += 60000;
+    automatic.maintain();
+    assert(automatic.active_tcp_ == 3 && automatic.tcp_[3].stableConnection());
+    assert(automatic.tcp_[0].connector_.starts == 1);
+    automatic.tcp_[3].stop();
+    automatic.tcp_[3].reconnect_.failed(now);
+    automatic.maintain();
+    assert(automatic.active_tcp_ == 0 && automatic.tcp_[0].isConnecting());
+    automatic.tcp_[0].connector_.state.phase = TcpConnectPhase::Connected;
+    automatic.maintain();
+    automatic.replaceDiscoveredGateway("new.example.org", 4242);
+    now += 60000;
+    automatic.maintain();
+    assert(automatic.active_tcp_ == 0); // No recurring discovery oscillation.
+
+    ReticulumInterfaceSet restored;
+    restored.network_config_ = automatic.network_config_;
+    restored.tcp_count_ = 1;
+    restored.tcp_[0].applyConfig(&seed, true, 32);
+    for (unsigned i = 1; i < 4; ++i) restored.tcp_[i].applyConfig(nullptr, true, 0);
+    restored.replaceDiscoveredGateway("saved.example.org", 4242, true);
+    restored.maintain();
+    assert(restored.active_tcp_ == 3 && restored.tcp_[3].isConnecting());
+    assert(restored.tcp_[0].connector_.starts == 0); // Saved stable peer goes first.
+
+    ReticulumInterfaceSet manual;
+    manual.network_config_ = automatic.network_config_;
+    std::strcpy(manual.network_config_.interfaces[0].id, "my-gateway");
+    manual.tcp_count_ = 1;
+    manual.tcp_[0].applyConfig(&manual.network_config_.interfaces[0], true, 32);
+    for (unsigned i = 1; i < 4; ++i) manual.tcp_[i].applyConfig(nullptr, true, 0);
+    manual.maintain();
+    manual.tcp_[0].connector_.state.phase = TcpConnectPhase::Connected;
+    manual.maintain();
+    manual.replaceDiscoveredGateway("saved.example.org", 4242, true);
+    now += 60000;
+    manual.maintain();
+    assert(manual.active_tcp_ == 0 && manual.tcp_[3].connector_.starts == 0);
+
+    // IFAC protection wins even when the interface retains its factory ID.
+    std::strcpy(manual.network_config_.interfaces[0].id, "public-tcp-1");
+    std::strcpy(manual.network_config_.interfaces[0].access.network_name, "private-network");
+    manual.maintain();
+    assert(manual.active_tcp_ == 0 && manual.tcp_[3].connector_.starts == 0);
 }

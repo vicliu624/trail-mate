@@ -150,6 +150,11 @@ class PublishAttempt
         return true;
     }
     PublishAttemptPhase phase() const { return phase_; }
+    bool expectsResponse(const Destination& source, const RequestId& request) const
+    {
+        return (phase_ == PublishAttemptPhase::Waiting || phase_ == PublishAttemptPhase::Committing) &&
+               source.bytes == destination_.bytes && request.bytes == request_.bytes;
+    }
     const GeocacheId& cacheId() const { return id_; }
     uint32_t revision() const { return revision_; }
     CacheState state() const { return state_; }

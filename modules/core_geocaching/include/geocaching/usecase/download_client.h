@@ -146,6 +146,11 @@ class DownloadClient
         return true;
     }
     DownloadPhase phase() const { return phase_; }
+    bool expectsResponse(const Destination& source, const RequestId& request) const
+    {
+        return (phase_ == DownloadPhase::Waiting || phase_ == DownloadPhase::Installing) &&
+               source.bytes == source_.bytes && request.bytes == request_.bytes;
+    }
 
   private:
     DownloadPort& port_;

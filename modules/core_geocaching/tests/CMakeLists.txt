@@ -371,6 +371,20 @@ add_library(geocaching_native_hash STATIC ../../core_chat/src/infra/reticulum/re
 target_include_directories(geocaching_native_hash PUBLIC ../../core_chat/include)
 target_compile_definitions(geocaching_native_hash PRIVATE TRAIL_MATE_RETICULUM_HASH_ONLY=1)
 target_compile_features(geocaching_native_hash PUBLIC cxx_std_17)
+
+add_executable(geocaching_reticulum_wire_vectors
+    ../../../tests/reticulum_conformance/test_reticulum_supported_subset_vectors.cpp
+    $<TARGET_OBJECTS:geocaching_lxmf_wire_compile>
+    ../../core_chat/src/infra/reticulum/lxst_telephony_wire.cpp
+    ../../core_chat/src/infra/reticulum/lxst_call_state_machine.cpp)
+target_link_libraries(geocaching_reticulum_wire_vectors PRIVATE geocaching_native_hash)
+target_include_directories(geocaching_reticulum_wire_vectors PRIVATE ../../core_team/include)
+if(MSVC)
+    target_compile_options(geocaching_reticulum_wire_vectors PRIVATE /UNDEBUG)
+else()
+    target_compile_options(geocaching_reticulum_wire_vectors PRIVATE -UNDEBUG)
+endif()
+add_test(NAME geocaching_reticulum_wire_vectors COMMAND geocaching_reticulum_wire_vectors)
 add_executable(geocaching_lxmf_custom_test test_lxmf_custom.cpp $<TARGET_OBJECTS:geocaching_lxmf_wire_compile>)
 target_include_directories(geocaching_lxmf_custom_test PRIVATE ../include)
 target_link_libraries(geocaching_lxmf_custom_test PRIVATE geocaching_native_hash)

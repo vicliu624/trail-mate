@@ -9,6 +9,16 @@ using chat::reticulum::TcpRetry;
 int main()
 {
     GatewayCandidates pool;
+    GatewayCandidates::Endpoint private_peer{};
+    private_peer.port = 4242;
+    for (const char* host : {"192.168.10.2", "10.1.2.3", "127.0.0.1", "gateway.local"})
+    {
+        std::strcpy(private_peer.host, host);
+        assert(!pool.observe(private_peer, 0));
+        assert(!pool.observe(private_peer, 0, true));
+    }
+    assert(pool.select(0, [](const auto&)
+                       { return true; }) == -1);
     GatewayCandidates::Endpoint old{}, fresh{};
     std::strcpy(old.host, "stable.example");
     old.port = 4242;

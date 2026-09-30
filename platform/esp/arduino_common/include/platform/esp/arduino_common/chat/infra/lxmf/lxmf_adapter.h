@@ -190,6 +190,8 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
     reticulum::NativeGatewayDiscovery gateway_discovery_;
     reticulum::GatewayPersistence gateway_persistence_;
     reticulum::GatewayCandidates gateway_candidates_;
+    uint32_t gateway_custom_activity_ms_ = 0;
+    bool gateway_custom_activity_seen_ = false;
     uint32_t network_config_generation_ = 0;
     runtime::AdapterScratchBuffers scratch_{};
     runtime::DeferredDiscoveryQueue deferred_discovery_;
@@ -227,6 +229,7 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
 
     RuntimeBudget makeRuntimeBudget() const;
     void processRuntime();
+    void maintainGatewayDiscovery();
     void processRadioPackets(const RuntimeBudget& budget);
     bool processOneRadioPacket(const reticulum::interfaces::RxPacket& packet,
                                const RuntimeBudget& budget,

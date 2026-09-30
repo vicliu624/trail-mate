@@ -46,6 +46,11 @@ int main(int argc, char** argv)
     Destination source;
     auto attempt = std::make_unique<PublishAttempt>(port, crypto);
     if (!attempt->begin(source, request, {record.data(), record.size()}, workspace.data(), workspace.size())) return 2;
+    auto wrong_request = request;
+    wrong_request.bytes[0] ^= 1;
+    auto wrong_source = source;
+    wrong_source.bytes[0] ^= 1;
+    if (!attempt->expectsResponse(source, request) || attempt->expectsResponse(source, wrong_request) || attempt->expectsResponse(wrong_source, request)) return 29;
     std::fill(workspace.begin(), workspace.end(), 0xa5);
     if (attempt->accept(source, {response.data(), response.size()}) || attempt->phase() != PublishAttemptPhase::Waiting) return 3;
     port.commit_ok = true;
@@ -94,6 +99,7 @@ int main(int argc, char** argv)
     asynchronous.advance();
     if (asynchronous.phase() != PublishAttemptPhase::Waiting || asynchronous.accept(source, {response.data(), response.size()}) ||
         asynchronous.phase() != PublishAttemptPhase::Committing || asynchronous.cancel()) return 16;
+    if (!asynchronous.expectsResponse(source, request)) return 30;
     delayed.polled = PublishPersistence::Pending;
     asynchronous.advance();
     if (asynchronous.phase() != PublishAttemptPhase::Committing) return 17;

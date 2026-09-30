@@ -2153,6 +2153,11 @@ MeshSendResult LxmfAdapter::sendCustomDataToDestination(const uint8_t destinatio
     // Geocaching exchanges require a live response. Store-and-forward delivery
     // can finish postage work without ever reaching the active directory.
     const bool ok = dispatchLxmfPayload(*peer, payload.data(), size, false, &dispatch, false);
+    if (ok)
+    {
+        gateway_custom_activity_ms_ = millis();
+        gateway_custom_activity_seen_ = true;
+    }
     if (ok && accepted_lxmf_hash) std::memcpy(accepted_lxmf_hash->data(), dispatch.message_hash, accepted_lxmf_hash->size());
     MeshSendResult result = ok ? MeshSendResult::success(dispatch.message_id)
                                : MeshSendResult::fail(dispatch.failure, dispatch.message_id);
@@ -3430,6 +3435,33 @@ LxmfAdapter::RuntimeBudget LxmfAdapter::makeRuntimeBudget() const
     return runtime::makeRuntimeBudget(input);
 }
 
+void LxmfAdapter::maintainGatewayDiscovery()
+{
+    const uint32_t now_ms = millis();
+    bool busy = delivery_attempt_ledger_.size() != 0 || !network_page_client_.empty() ||
+                propagation_client_.hasPendingUploads() || propagation_client_.pendingDeliveryCount() != 0 ||
+                (gateway_custom_activity_seen_ && uint32_t(now_ms - gateway_custom_activity_ms_) < 120000);
+    link_manager_.forEachSession([&](const LinkSession& session)
+                                 {
+                                    if (session.state == LinkState::Closed) return;
+                                    busy |= session.state == LinkState::Pending || !session.pending_requests.empty() ||
+                                            !session.deferred_payloads.empty() || !session.incoming_resource_assemblies.empty();
+                                    for (const auto& resource : session.incoming_resources) busy |= !resource.complete;
+                                    for (const auto& resource : session.outgoing_resources) busy |= !resource.complete || resource.waiting_for_proof; });
+    const auto previous = interfaces_.activeTcpInterfaceId();
+    interfaces_.maintain(!busy);
+    const auto current = interfaces_.activeTcpInterfaceId();
+    if (previous == reticulum::interfaces::kInvalidInterfaceId || previous == current) return;
+    // A stopped carrier cannot serve the paths or idle links learned through it.
+    // Retire them before subsequent sends select the newly active uplink.
+    link_manager_.forEachSession([this, previous](LinkSession& session)
+                                 {
+                                    if (session.interface_id == previous && session.state != LinkState::Closed)
+                                        closeLinkSession(session, LinkCloseReason::Error); });
+    path_manager_.retireInterface(previous);
+    deferred_discovery_.clear();
+}
+
 void LxmfAdapter::processRuntime()
 {
     rtnet::poll(config_);
@@ -3492,11 +3524,12 @@ void LxmfAdapter::processRuntime()
                                             closeLinkSession(session, LinkCloseReason::Error); });
         path_manager_.retireInterface(interface_id);
         deferred_discovery_.clear();
-        interfaces_.replaceDiscoveredGateway(discovered.host, discovered.port);
+        interfaces_.replaceDiscoveredGateway(discovered.host, discovered.port, selected.preferred);
         interfaces_.restoreDiscoveredGatewayRetry(selected.retry);
         gateway_candidates_.installed(candidate);
         gateway_persistence_.installed(discovered);
     }
+    maintainGatewayDiscovery();
     if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
                                          identity_.isReady() && interfaces_.hasReadyWifiGateway(), budget))
     {

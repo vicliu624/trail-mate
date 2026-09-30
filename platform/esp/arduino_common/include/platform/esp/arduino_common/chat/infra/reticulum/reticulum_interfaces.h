@@ -277,7 +277,11 @@ class ReticulumInterfaceSet
     void applyConfig(const MeshConfig& config,
                      const reticulum::ReticulumNetworkConfig& network_config);
     void setWifiTransportEnabled(bool enabled);
-    void maintain();
+    void maintain(bool allow_bootstrap_handoff = false);
+    InterfaceId activeTcpInterfaceId() const
+    {
+        return active_tcp_ < tcp_count_ ? tcp_[active_tcp_].interfaceId() : kInvalidInterfaceId;
+    }
     bool canReplaceDiscoveredGateway(const char* host, uint16_t port) const;
     bool discoveredGatewayStable() const { return tcp_[reticulum::kMaxTcpClientInterfaces].stableConnection(); }
     const reticulum::TcpRetry& discoveredGatewayRetry() const { return tcp_[reticulum::kMaxTcpClientInterfaces].retryState(); }
@@ -286,7 +290,7 @@ class ReticulumInterfaceSet
         tcp_[reticulum::kMaxTcpClientInterfaces].restoreRetryState(retry);
     }
     // Caller retires routes/links for kDiscoveredTcpInterfaceId before replacing.
-    void replaceDiscoveredGateway(const char* host, uint16_t port);
+    void replaceDiscoveredGateway(const char* host, uint16_t port, bool previously_stable = false);
     bool hasReadyInterface() const;
     bool hasReadyWifiGateway() const;
     bool wifiGatewayConfigured() const;
@@ -319,6 +323,8 @@ class ReticulumInterfaceSet
                reticulum::kMaxTcpClientInterfaces + 1>
         tcp_{};
     reticulum::NetworkInterfaceConfig discovered_config_{};
+    bool bootstrap_trial_started_ = false;
+    bool prefer_discovered_ = false;
     MeshConfig config_{};
     reticulum::ReticulumNetworkConfig network_config_{};
     RxMeta last_rx_meta_{};

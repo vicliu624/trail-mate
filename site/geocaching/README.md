@@ -31,6 +31,13 @@ shows a service-unavailable message without asking visitors to configure anythin
 The deployment connects to the operator's NAS at `wss://vicliu.i234.me:18434/`.
 The NAS runs the packet bridge and directory independently of GitHub Pages;
 publishing or updating a cache does not require a website deployment.
+Visible, online pages refresh their last submitted search every 60 seconds and
+when returning to the page. Hidden or disconnected pages pause polling. Refresh
+keeps the selected area, filters and already opened pagination depth, and does
+not overlap detail or download work. Results change together after the query;
+unchanged selection and details remain available. Updated details must be
+reopened before exporting their new signed record. A failed initial directory
+handshake retries discovery hints while the bridge remains connected.
 `discoverySeeds` contains up to three discovery
 destination hashes; clients request signed announcements from these hints at
 connection time and still verify identity binding and directory capabilities.

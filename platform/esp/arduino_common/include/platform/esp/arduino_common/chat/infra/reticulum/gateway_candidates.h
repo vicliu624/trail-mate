@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chat/infra/reticulum/public_gateway_host.h"
 #include "chat/infra/reticulum/tcp_retry.h"
 #include "platform/esp/arduino_common/chat/infra/reticulum/native_gateway_discovery.h"
 #include <cstring>
@@ -24,7 +25,8 @@ class GatewayCandidates
 
     bool observe(const Endpoint& endpoint, uint32_t now, bool restored = false)
     {
-        if (!endpoint.port || !endpoint.host[0]) return false;
+        const auto* end = static_cast<const char*>(std::memchr(endpoint.host, 0, sizeof(endpoint.host)));
+        if (!endpoint.port || !end || !publicGatewayHost(endpoint.host, static_cast<size_t>(end - endpoint.host))) return false;
         maintain(now);
         int slot = -1;
         for (int i = 0; i < kCapacity; ++i)
