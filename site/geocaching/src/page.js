@@ -239,18 +239,29 @@ worker.onmessage = ({data}) => {
   } else if (event.type==='source-error') notice(`${event.name}: ${event.message}`);
 };
 worker.onerror = () => { notice(tr('The map service stopped. Refresh the page to try again.','地图服务已停止，请刷新页面重试。')); ready=false; $('search').disabled=true; $('region-apply').disabled=true; };
+let serviceRetry = null, serviceStarting = false, serviceStopped = false, serviceRetryDelay = 5000;
 async function startService() {
+  if (serviceStarting || serviceStopped) return;
+  serviceStarting = true;
+  clearTimeout(serviceRetry); serviceRetry = null;
   try {
-    const response = await fetch(new URL('../network.json', import.meta.url), {cache:'no-store'});
+    const response = await fetch(new URL('../network.json', import.meta.url), {cache:'no-store',signal:AbortSignal.timeout(15000)});
     if (!response.ok) throw Error('Missing deployment configuration');
     const config = await response.json();
     const url = new URL(config.endpoint);
     if (url.protocol !== 'wss:' && !(url.protocol === 'ws:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw Error('Invalid deployment endpoint');
+    if (serviceStopped) return;
     await rpc('connect',{url:url.href,discoverySeeds:config.discoverySeeds});
+    serviceRetryDelay = 5000;
   } catch {
+    if (serviceStopped) return;
     $('connection-state').textContent = tr('Service unavailable','服务暂不可用');
     $('directory-status').textContent = tr('Please try again later.','请稍后再试。');
-    notice(tr('The map service is temporarily unavailable. No setup is needed on your side.','寻宝地图服务暂时不可用，你无需进行任何网络设置。'));
+    notice(tr('The map service is temporarily unavailable. Retrying automatically…','寻宝地图服务暂时不可用，正在自动重试…'));
+    serviceRetry = setTimeout(startService, serviceRetryDelay);
+    serviceRetryDelay = Math.min(60000, serviceRetryDelay * 2);
+  } finally {
+    serviceStarting = false;
   }
 }
 $('search').onclick=()=>{manualArea=true;return search();};
@@ -284,7 +295,7 @@ map.getContainer().addEventListener('wheel',()=>{manualArea=true;},{passive:true
 const initialLocation=locateNearby();
 startService();
 map.on('moveend',renderMarkers);
-window.addEventListener('pagehide',()=>worker.terminate());
+window.addEventListener('pagehide',()=>{serviceStopped=true;clearTimeout(serviceRetry);worker.terminate();});
 // Back/forward cache restores the document but cannot revive a terminated
 // worker. Reconnect through normal startup instead of leaving dead RPCs.
 window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});
