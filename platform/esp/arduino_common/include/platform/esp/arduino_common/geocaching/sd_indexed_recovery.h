@@ -84,12 +84,13 @@ class SdIndexedRecovery
         case Phase::ProbeFirst:
         case Phase::ProbeSecond:
         {
-            uint8_t probe[24];
-            const auto read = storage::sd_read_file(phase_ == Phase::ProbeFirst ? "/trailmate/geocaching/.state/index/root.h0" : "/trailmate/geocaching/.state/index/root.h1", probe, sizeof(probe));
+            auto& buffer = *roots_[phase_ == Phase::ProbeFirst ? 0 : 1];
+            const auto read = storage::sd_read_file(phase_ == Phase::ProbeFirst ? "/trailmate/geocaching/.state/index/root.h0" : "/trailmate/geocaching/.state/index/root.h1", buffer.data(), buffer.size());
             if (read.status == storage::SdFileReadStatus::Busy) return result_;
             if (read.status != storage::SdFileReadStatus::Missing && read.status != storage::SdFileReadStatus::Ready &&
                 read.status != storage::SdFileReadStatus::Invalid) return finish(IndexedRecoveryStep::IoError);
             root_present_ |= read.status != storage::SdFileReadStatus::Missing;
+            roots_loaded_ &= read.status == storage::SdFileReadStatus::Ready && read.file_size == buffer.size() && read.bytes_read == buffer.size();
             if (phase_ == Phase::ProbeFirst)
             {
                 phase_ = Phase::ProbeSecond;
@@ -97,7 +98,7 @@ class SdIndexedRecovery
             }
             if (root_present_)
             {
-                if (!io_.template emplace<SdIndexRootReader>(volume_).begin(*roots_[0], *roots_[1])) return finish(IndexedRecoveryStep::RecoveryRequired);
+                if (!roots_loaded_ || !io_.template emplace<SdIndexRootReader>(volume_).begin(*roots_[0], *roots_[1], true)) return finish(IndexedRecoveryStep::RecoveryRequired);
                 phase_ = Phase::Roots;
             }
             else
@@ -270,6 +271,7 @@ class SdIndexedRecovery
     unsigned copy_ = 0;
     uint8_t audit_table_ = 1;
     bool root_present_ = false;
+    bool roots_loaded_ = true;
     bool readable_snapshot_ = false;
     Phase phase_ = Phase::Volume;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;

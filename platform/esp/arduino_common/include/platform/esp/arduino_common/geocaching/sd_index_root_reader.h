@@ -21,11 +21,14 @@ class SdIndexRootReader
 {
   public:
     explicit SdIndexRootReader(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
-    bool begin(::geocaching::storage::IndexRootBytes& first, ::geocaching::storage::IndexRootBytes& second)
+    // Recovery may reuse its exact-length probes. Both buffers must already
+    // contain complete roots; decoding, CRC and volume checks still run here.
+    bool begin(::geocaching::storage::IndexRootBytes& first, ::geocaching::storage::IndexRootBytes& second, bool already_read = false)
     {
         if (result_ != IndexRootReadStep::Idle || &first == &second) return false;
         buffers_[0] = &first;
         buffers_[1] = &second;
+        already_read_ = already_read;
         result_ = IndexRootReadStep::Working;
         return true;
     }
@@ -55,13 +58,16 @@ class SdIndexRootReader
         auto& buffer = *buffers_[copy];
         char path[64];
         std::snprintf(path, sizeof(path), "/trailmate/geocaching/.state/index/root.h%u", copy);
-        const auto read = storage::sd_read_file(path, buffer.data(), buffer.size());
-        if (read.status == storage::SdFileReadStatus::Busy) return result_;
-        if (read.status == storage::SdFileReadStatus::Missing || read.status == storage::SdFileReadStatus::Invalid)
-            return result_ = IndexRootReadStep::Invalid;
-        if (read.status != storage::SdFileReadStatus::Ready) return result_ = IndexRootReadStep::IoError;
-        if (read.file_size != buffer.size() || read.bytes_read != buffer.size() ||
-            !::geocaching::storage::decodeIndexRoot({buffer.data(), buffer.size()}, volume_, roots_[copy]))
+        if (!already_read_)
+        {
+            const auto read = storage::sd_read_file(path, buffer.data(), buffer.size());
+            if (read.status == storage::SdFileReadStatus::Busy) return result_;
+            if (read.status == storage::SdFileReadStatus::Missing || read.status == storage::SdFileReadStatus::Invalid)
+                return result_ = IndexRootReadStep::Invalid;
+            if (read.status != storage::SdFileReadStatus::Ready) return result_ = IndexRootReadStep::IoError;
+            if (read.file_size != buffer.size() || read.bytes_read != buffer.size()) return result_ = IndexRootReadStep::Invalid;
+        }
+        if (!::geocaching::storage::decodeIndexRoot({buffer.data(), buffer.size()}, volume_, roots_[copy]))
             return result_ = IndexRootReadStep::Invalid;
         if (copy == 1)
         {
@@ -79,6 +85,7 @@ class SdIndexRootReader
     ::geocaching::storage::IndexRootView roots_[2], selected_;
     uint8_t phase_ = 0, selected_copy_ = 0;
     IndexRootReadStep result_ = IndexRootReadStep::Idle;
+    bool already_read_ = false;
 };
 static_assert(sizeof(SdIndexRootReader) <= 192, "Root readers borrow their metadata buffers");
 } // namespace platform::esp::arduino_common::geocaching
