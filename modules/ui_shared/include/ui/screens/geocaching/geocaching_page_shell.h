@@ -8,6 +8,7 @@ namespace geocaching::ui::shell
 {
 void bind(::ui::geocaching::Source* source);
 void beginMapOverlays();
+bool pollMapOverlays(double latitude, double longitude, uint8_t zoom);
 void appendMapOverlays(::ui::map::MapOverlaySnapshot& out, double latitude, double longitude, uint8_t zoom);
 void endMapOverlays();
 void enter(void* user_data, lv_obj_t* parent);

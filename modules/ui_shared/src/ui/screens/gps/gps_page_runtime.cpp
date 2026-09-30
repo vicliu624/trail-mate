@@ -34,6 +34,7 @@ using Projection = gps::ui::shell::Projection;
 #include "ui_gps_runtime/gps_page_runtime_pump.h"
 #include "ui_map_runtime/map_geo_coordinates.h"
 #include "ui_map_runtime/map_overlay_snapshot_source.h"
+#include "ui_presentation/geocaching/local_map_overlay.h"
 #include "ui_presentation/gps/gps_status_model.h"
 #include "ui_presentation/map/map_location_request.h"
 #include "ui_presentation/map/map_overlay_snapshot.h"
@@ -3390,8 +3391,13 @@ SharedGpsUiRefreshSink& gps_runtime_refresh_sink()
 void refresh_timer_cb(lv_timer_t* timer)
 {
     (void)timer;
-    sync_map_tile_loader_pause();
     gps_runtime_pump().update(sys::millis_now());
+    if (s_root && s_projection == Projection::Map && !s_map_target)
+    {
+        const auto snapshot = map_workspace_model().snapshot();
+        if (::geocaching::ui::shell::pollMapOverlays(snapshot.viewport.center_lat, snapshot.viewport.center_lon, current_map_zoom()))
+            request_refresh_view();
+    }
 }
 
 void consume_key_event(lv_event_t* e)
@@ -4721,7 +4727,7 @@ void enter(const shell::Host* host, lv_obj_t* parent, shell::Projection projecti
     if (s_target_request) s_target_request->entered = true;
     if (!s_timer)
     {
-        s_timer = lv_timer_create(refresh_timer_cb, 750, nullptr);
+        s_timer = lv_timer_create(refresh_timer_cb, ::ui::geocaching::LocalMapOverlay::kPollIntervalMs, nullptr);
     }
 }
 

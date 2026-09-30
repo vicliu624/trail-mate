@@ -13,6 +13,9 @@ namespace ui::geocaching
 class LocalMapOverlay
 {
   public:
+    static constexpr uint32_t kPollIntervalMs = 100;
+    size_t markerCount() const { return count_; }
+    bool finished() const { return finished_; }
     void update(Source& source, double latitude, double longitude, uint8_t zoom)
     {
         const double span = std::ldexp(360.0, -std::min<unsigned>(zoom, 22));

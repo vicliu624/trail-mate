@@ -1004,6 +1004,14 @@ void appendMapOverlays(::ui::map::MapOverlaySnapshot& out, double latitude, doub
     local_map->update(*source, latitude, longitude, zoom);
     local_map->append(out);
 }
+bool pollMapOverlays(double latitude, double longitude, uint8_t zoom)
+{
+    if (!source || !local_map) return false;
+    const auto count = local_map->markerCount();
+    const auto finished = local_map->finished();
+    local_map->update(*source, latitude, longitude, zoom);
+    return count != local_map->markerCount() || finished != local_map->finished();
+}
 void endMapOverlays()
 {
     if (local_map && source && !page) source->activate(false);

@@ -591,7 +591,7 @@ int main(int argc, char** argv)
         // timer; faster polling must not silently relax the acceptance test.
         const auto refresh_ms = std::getenv("TRAIL_MATE_TEST_MAP_REFRESH_MS")
                                     ? std::max(1UL, std::strtoul(std::getenv("TRAIL_MATE_TEST_MAP_REFRESH_MS"), nullptr, 10))
-                                    : 750UL;
+                                    : ui::geocaching::LocalMapOverlay::kPollIntervalMs;
         test::read_bytes_by_path.clear();
         for (unsigned frame = 0; frame < 100 && map->item_count != 2; ++frame)
         {
