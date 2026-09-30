@@ -66,6 +66,17 @@ Item marker(unsigned id, bool draft, bool located = true)
 }
 int main()
 {
+    {
+        LocalSource available;
+        available.ready = true;
+        available.downloaded.push_back(marker(1, false));
+        available.drafts.push_back(marker(2, true));
+        auto immediate = std::make_unique<LocalMapOverlay>();
+        immediate->update(available, 0, 102, 10);
+        auto result = std::make_unique<ui::map::MapOverlaySnapshot>();
+        immediate->append(*result);
+        assert(result->item_count == 2); // No extra timer tick for cached drafts.
+    }
     LocalSource source;
     source.drafts.push_back(marker(1, true, false));
     for (unsigned id = 2; id <= 10; ++id) source.drafts.push_back(marker(id, true));
@@ -92,9 +103,13 @@ int main()
     // Moving the viewport while metadata is loading must not repeatedly restart
     // at Downloaded and starve the later local-draft pages.
     auto moving = std::make_unique<LocalMapOverlay>();
-    for (int i = 0; i < 4; ++i) moving->update(source, i * 0.1, 102, 10);
-    out = std::make_unique<ui::map::MapOverlaySnapshot>();
-    moving->append(*out);
+    for (int i = 0; i < 4; ++i)
+    {
+        moving->update(source, i * 0.1, 102, 10);
+        out = std::make_unique<ui::map::MapOverlaySnapshot>();
+        moving->append(*out);
+        if (out->item_count == 10) break;
+    }
     assert(out->item_count == 10);
 
     for (unsigned id = 12; id <= 60; ++id) source.downloaded.push_back(marker(id, false));

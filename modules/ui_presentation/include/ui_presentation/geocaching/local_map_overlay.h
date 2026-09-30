@@ -29,32 +29,36 @@ class LocalMapOverlay
             offset_ = count_ = 0;
             finished_ = truncated_ = false;
         }
-        if (finished_) return;
-        source.requestWindow(section_, offset_, 4);
-        Snapshot snapshot;
-        source.snapshot(section_, snapshot);
-        if (snapshot.busy || !snapshot.ready) return;
-        const auto end = std::min(snapshot.count, offset_ + 4);
-        for (; offset_ < end; ++offset_)
-        {
-            Item item;
-            if (!source.item(section_, offset_, snapshot.generation, item)) return;
-            if ((!item.downloaded && !item.has_coordinates) || item.latitude_e7 < -900000000 ||
-                item.latitude_e7 > 900000000 || item.longitude_e7 < -1800000000 || item.longitude_e7 >= 1800000000) continue;
-            retain(item);
-        }
-        if (offset_ < snapshot.count)
+        // Consume both local sections in this refresh when already available.
+        // Switching from downloads to drafts must not impose another Map timer
+        // interval. Work remains bounded to two four-row windows and no I/O.
+        for (unsigned section = 0; section < 2 && !finished_; ++section)
         {
             source.requestWindow(section_, offset_, 4);
-            return;
+            Snapshot snapshot;
+            source.snapshot(section_, snapshot);
+            if (snapshot.busy || !snapshot.ready) return;
+            const auto end = std::min(snapshot.count, offset_ + 4);
+            for (; offset_ < end; ++offset_)
+            {
+                Item item;
+                if (!source.item(section_, offset_, snapshot.generation, item)) return;
+                if ((!item.downloaded && !item.has_coordinates) || item.latitude_e7 < -900000000 ||
+                    item.latitude_e7 > 900000000 || item.longitude_e7 < -1800000000 || item.longitude_e7 >= 1800000000) continue;
+                retain(item);
+            }
+            if (offset_ < snapshot.count)
+            {
+                source.requestWindow(section_, offset_, 4);
+                return;
+            }
+            if (section_ == Section::Downloaded)
+            {
+                section_ = Section::Published;
+                offset_ = 0;
+            }
+            else finished_ = true;
         }
-        if (section_ == Section::Downloaded)
-        {
-            section_ = Section::Published;
-            offset_ = 0;
-            source.requestWindow(section_, offset_, 4);
-        }
-        else finished_ = true;
     }
 
     void append(map::MapOverlaySnapshot& out) const

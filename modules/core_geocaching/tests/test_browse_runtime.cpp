@@ -592,6 +592,10 @@ int main(int argc, char** argv)
             overlays->update(*test::source, 31, 121, 15);
             map = std::make_unique<ui::map::MapOverlaySnapshot>();
             overlays->append(*map);
+            if (test::profile_reads)
+                std::fprintf(stderr, "Map refresh: elapsed_ms=%llu markers=%u io_operations=%llu\n",
+                             static_cast<unsigned long long>(test::clock_ms - map_started), static_cast<unsigned>(map->item_count),
+                             static_cast<unsigned long long>(test::io_operations - map_io_started));
             if (map->item_count == 2) break;
             while (test::clock_ms < refresh_due) tick();
         }
