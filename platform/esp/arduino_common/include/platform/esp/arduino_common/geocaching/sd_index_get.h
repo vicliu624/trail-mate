@@ -50,6 +50,7 @@ class SdIndexGet
         return true;
     }
     ::geocaching::ByteView value() const { return result_ == IndexGetStep::Ready ? value_ : ::geocaching::ByteView{}; }
+    bool usesLegacyGeneration() const { return result_ == IndexGetStep::Ready && legacy_generation_; }
     IndexGetStep step()
     {
         if (result_ != IndexGetStep::Working) return result_;
@@ -68,6 +69,7 @@ class SdIndexGet
             if (status == IndexHeadReadStep::Working) return result_;
             ::geocaching::storage::IndexShardHead head;
             if (status != IndexHeadReadStep::Ready || !reader.selected(head)) return error(status);
+            legacy_generation_ = !head.current_only;
             if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head.sequence, head.length, session_, head.current_only).begin(table_, {key_.data(), key_size_})) return fail(IndexGetStep::Invalid);
             phase_ = Phase::Lookup;
             return result_;
@@ -130,6 +132,7 @@ class SdIndexGet
     uint8_t table_ = 0;
     Phase phase_ = Phase::Absent;
     IndexGetStep result_ = IndexGetStep::Idle;
+    bool legacy_generation_ = false;
 };
 static_assert(sizeof(SdIndexGet) <= 640, "Indexed gets must overlay their metadata workspaces");
 } // namespace platform::esp::arduino_common::geocaching

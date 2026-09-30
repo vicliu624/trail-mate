@@ -39,8 +39,10 @@ these tables. After a writable operation completes, idle maintenance uses the
 existing checkpoint rotation to convert them without waiting for the ordinary
 256-record interval. Foreground work takes priority; a pinned checkpoint slot
 defers another attempt until the root changes. No separate migration scan or
-service is created. Opening a local list remains read-only and does not start
-conversion. The remaining tables retain append shards. Exclusive index-slot
+service is created. Current-format local lists remain read-only. Downloaded
+detects legacy cache-head buckets or missing object display fields and requests
+one bounded, transactional compatibility upgrade before retrying that page.
+The remaining tables retain append shards. Exclusive index-slot
 cleanup recognizes generation filenames; older generations remain until their
 retired index slot is cleaned.
 
@@ -56,6 +58,27 @@ A read-only Downloaded session does not create the draft/publication storage
 adapter. The storage worker creates it when the draft list or draft map section
 is requested, or when full recovery prepares a write-capable session. Network
 query and dispatch services retain their separate on-demand activation.
+
+Old saved objects without display metadata are upgraded once, using their
+retained signed response and committed Installed record. The upgrade admits
+writes through full suffix recovery and reference validation, authenticates the
+exact cache ID and revision, preserves retention fields, and rewrites only its
+object projection and unchanged cache head. It does not open GPX files, change
+installation generations or cleanup proofs, or start network services. Failure
+leaves the old data intact and reports an error instead of retrying forever.
+Subsequent Downloaded pages read only current heads and object projections;
+full details still verify the retained signed record. An operation-scoped volume
+session avoids repeated format reads while checking media/USB transitions on
+every read; CRC and reference checks are unchanged.
+
+The native runtime regressions simulate 25 ms per SD I/O and 38,904 bytes of
+internal free heap with PSRAM available. The oldest saved-object upgrade finishes
+in 9,660 simulated milliseconds; reopening its Downloaded page takes 1,225 ms.
+The tests also cover already projected legacy buckets, an object-only legacy
+bucket, and a corrupted author signature. They assert unchanged edited GPX,
+unchanged installation/cleanup metadata, no GPX reads during upgrade, no history
+reads or writes after reopening, offline full details, and released PSRAM.
+These timings are regression evidence, not hardware measurements.
 
 ## Archive a published cache
 
@@ -258,9 +281,10 @@ Object references (table 1), installed heads (table 2), and local drafts (table
 one lookup reference, with older generations still available to pinned roots.
 Legacy shards convert when next written; untouched legacy buckets are detected
 by writable recovery and converted by idle checkpoint maintenance. A card used
-only for local reads retains its compatible legacy reader until a write occurs.
+only for local draft reads retains its compatible legacy reader until a write
+occurs. Legacy Downloaded records use the one-time metadata upgrade above.
 
-Downloaded page reads allocate index and verification buffers only. The 8 KiB
-download response buffer is allocated by the workspace preparation callback
-when a download operation acquires its lease, rather than during local startup.
+Downloaded page reads allocate index buffers only. Signed-record verification
+and the 8 KiB response buffer are allocated when a detail, download, or legacy
+metadata upgrade acquires its lease, rather than during current-format startup.
 All these buffers remain PSRAM-only and are trimmed after the lease is released.

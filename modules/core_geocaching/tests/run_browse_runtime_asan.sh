@@ -36,3 +36,5 @@ g++ -std=c++17 -g -O1 -fsanitize=address -fno-omit-frame-pointer -DTRAIL_MATE_RE
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures save-close-detail
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures legacy-index-upgrade
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures legacy-saved-projection
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$build_dir/browse_runtime" modules/core_geocaching/tests/fixtures legacy-saved-bad-signature

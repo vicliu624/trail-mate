@@ -197,7 +197,7 @@ class SdIndexedRecovery
             // Root selection and replay only prove the newly applied suffix.
             // Existing shards and their referenced values must also be readable
             // before the application can publish new work on this snapshot.
-            if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+            if (!io_.template emplace<SdIndexScan>(volume_, &read_session_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
             phase_ = Phase::Audit;
             readable_snapshot_ = true;
             return result_;
@@ -224,10 +224,10 @@ class SdIndexedRecovery
             } while (audit_table_ == 5 || audit_table_ == 10 || audit_table_ == 13);
             if (audit_table_ <= 13)
             {
-                if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+                if (!io_.template emplace<SdIndexScan>(volume_, &read_session_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
                 return result_;
             }
-            if (!io_.template emplace<SdIndexReferences>(volume_).begin(root_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+            if (!io_.template emplace<SdIndexReferences>(volume_, &read_session_).begin(root_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
             phase_ = Phase::References;
             return result_;
         }
@@ -283,6 +283,7 @@ class SdIndexedRecovery
     ::geocaching::storage::MutationView* mutations_;
     size_t mutation_capacity_;
     Digest import_digest_;
+    SdVolumeReadSession read_session_;
     std::variant<std::monostate, SdIndexRootReader, SdCheckpointSelection<Digest>, SdIndexInitialize,
                  SdCheckpointIndexImport<Digest>, SdJournalInventory, SdIndexReplay, SdIndexScan, SdIndexReferences>
         io_;

@@ -230,7 +230,7 @@ class SdIndexedInstall
         verification_ = verification;
         verification_capacity_ = verification_capacity;
         candidate_ = &candidate;
-        if (!io_.emplace<SdIndexedDownloadContext>(volume_).begin(root_, {key_.data(), key_.size()}, generation, frame, capacity)) return false;
+        if (!io_.emplace<SdIndexedDownloadContext>(volume_, &read_session_).begin(root_, {key_.data(), key_.size()}, generation, frame, capacity)) return false;
         result_ = IndexedCommitStep::Working;
         return true;
     }
@@ -240,7 +240,7 @@ class SdIndexedInstall
         if (key.size > copied.size()) return fail();
         const auto size = key.size;
         std::memcpy(copied.data(), key.data, size);
-        if (!io_.emplace<SdIndexGet>(volume_).begin(root_, table, {copied.data(), size}, frame_, capacity_)) return fail();
+        if (!io_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, table, {copied.data(), size}, frame_, capacity_)) return fail();
         phase_ = phase;
         return result_;
     }
@@ -356,6 +356,7 @@ class SdIndexedInstall
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::storage::IndexRootBytes* candidate_ = nullptr;
+    SdVolumeReadSession read_session_;
     ::geocaching::GeocacheId cache_;
     ::geocaching::RevisionHash hash_;
     std::array<uint8_t, 48> key_{};

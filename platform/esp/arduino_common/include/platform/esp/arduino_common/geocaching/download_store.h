@@ -17,7 +17,8 @@ enum class DownloadRecoveryRead : uint8_t
     WorkspaceTooSmall,
     IoError,
     VolumeChanged,
-    Invalid
+    Invalid,
+    NeedsUpgrade
 };
 // Read accessors never perform SD I/O. readDownload() advances one bounded
 // step until Verified; its owner pins record bytes through GPX staging. A

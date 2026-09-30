@@ -48,6 +48,7 @@ class SdIndexScan
         return true;
     }
     bool sawLegacyGeneration() const { return legacy_generation_; }
+    bool itemUsesLegacyGeneration() const { return result_ == IndexScanStep::Item && !head_.current_only; }
     bool advance()
     {
         if (result_ != IndexScanStep::Item) return false;

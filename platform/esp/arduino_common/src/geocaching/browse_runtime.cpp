@@ -177,6 +177,8 @@ struct Session
     const char* browse_status = "Connecting to Reticulum...";
     bool storage_requested = false;
     bool local_read_only = false, local_snapshot_attempted = false;
+    std::array<uint8_t, 32> legacy_projection_cache{};
+    bool legacy_projection_pending = false, projection_upgrade_admitted = false;
     uint8_t startup_read_retries = 0;
     size_t saved_offset = 0, saved_count = 0;
     gc::storage::VolumeInstance volume{};
@@ -243,9 +245,9 @@ struct Session
     uint32_t download_wait_ms = gc::QueryClient::kReplyTimeoutMs;
     size_t download_scratch = 0;
     chat::IMeshAdapter* created_backend = nullptr;
-    bool ensureBuffers(bool operations, bool metadata = false)
+    bool ensureBuffers(bool operations)
     {
-        const bool needs_verification = operations || metadata;
+        const bool needs_verification = operations;
         const size_t missing = (!frame ? kFrameCapacity : 0) + (!encoded ? kEncodingCapacity : 0) +
                                (operations && !payload ? kPayloadCapacity : 0) + (needs_verification && !verification ? kVerificationCapacity : 0);
         // These buffers are PSRAM-only (no internal fallback below). Charging
@@ -268,7 +270,7 @@ struct Session
         auto& s = *static_cast<Session*>(context);
         const bool metadata = owner == s.download_store.get() && s.download_store->metadataRead();
         const bool needs_record = owner == s.store.get() || (owner == s.download_store.get() && !metadata);
-        if (!s.ensureBuffers(needs_record, metadata)) return false;
+        if (!s.ensureBuffers(needs_record)) return false;
         if (s.store) s.store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.download_store) s.download_store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.dispatch_store) s.dispatch_store->bindWorkspace(s.frame);
@@ -983,6 +985,7 @@ void advanceStorageRecovery(Session& s)
         }
         if (s.root.sequence != previous_sequence) s.draft_catalog.reset();
         s.current_index_upgrade_pending = s.recovery->needsCurrentIndexUpgrade();
+        s.projection_upgrade_admitted = true;
         s.current_index_upgrade_retry_ms = millis();
         s.recovery.reset();
     }
@@ -994,7 +997,7 @@ void advanceStorageRecovery(Session& s)
     s.download_store.reset(::platform::memory::createPsram<IndexedDownloadStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
                                                                                  s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
                                                                                  s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-    if ((!s.local_read_only || s.draft_catalog_wanted) && !ensurePublicationStore(s))
+    if (((!s.local_read_only && !s.legacy_projection_pending) || s.draft_catalog_wanted) && !ensurePublicationStore(s))
     {
         fail("Insufficient publication storage memory");
         return;
@@ -2391,6 +2394,16 @@ void step()
         return;
     }
     WorkspaceSlice workspace_slice{s};
+    if (s.phase == Phase::Ready && s.download_store && s.download_store->missingSavedProjection(s.legacy_projection_cache))
+    {
+        s.legacy_projection_pending = true;
+        if (s.projection_upgrade_admitted)
+        {
+            s.saved->releaseRead();
+            s.local_read_only = false;
+            s.phase = Phase::ResumeDownloads;
+        }
+    }
     if (s.phase == Phase::Ready && s.draft_catalog_wanted && !ensurePublicationStore(s))
     {
         next_step.store(millis() + 1000);
@@ -2726,6 +2739,30 @@ void step()
     }
     case Phase::ResumeDownloads:
     {
+        if (s.legacy_projection_pending)
+        {
+            const auto result = s.download_store->upgradeSavedProjection(s.legacy_projection_cache);
+            if (result == JournalWriteResult::InProgress || result == JournalWriteResult::Busy) return;
+            if (result == JournalWriteResult::Unavailable && !s.download_store->needsRecovery())
+            {
+                next_step.store(millis() + 1000);
+                return;
+            }
+            if (result != JournalWriteResult::Verified)
+            {
+                fail("Saved cache index upgrade failed - reopen to retry");
+                return;
+            }
+            s.legacy_projection_pending = false;
+            s.saved->reset();
+            // Metadata backfill is not GPX cleanup. Resume normal read-only
+            // browsing without creating download/network recovery services.
+            s.local_snapshot_attempted = s.local_read_only = true;
+            s.phase = Phase::Ready;
+            s.status = "Saved storage ready";
+            ++epoch;
+            return;
+        }
         if (s.download_port)
         {
             const auto result = s.download_port->poll();

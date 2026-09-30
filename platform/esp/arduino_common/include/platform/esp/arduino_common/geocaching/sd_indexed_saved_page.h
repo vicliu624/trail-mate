@@ -11,11 +11,11 @@ namespace platform::esp::arduino_common::geocaching
 class SdIndexedSavedPage
 {
   public:
-    SdIndexedSavedPage(const ::geocaching::storage::VolumeInstance& volume, ::geocaching::protocol::RecordCrypto& crypto)
-        : volume_(volume), crypto_(crypto), heads_(volume, &read_session_) {}
+    SdIndexedSavedPage(const ::geocaching::storage::VolumeInstance& volume, ::geocaching::protocol::RecordCrypto&)
+        : volume_(volume), heads_(volume, &read_session_) {}
     bool begin(const ::geocaching::storage::IndexRootView& root, size_t offset, size_t limit,
                std::array<::geocaching::storage::SavedCacheEntry, 4>& rows, size_t& total,
-               uint8_t* frame, size_t capacity, uint8_t* verification, size_t verification_capacity)
+               uint8_t* frame, size_t capacity, uint8_t*, size_t)
     {
         if (!limit || limit > rows.size() || !heads_.begin(root, 2, frame, capacity)) return false;
         root_ = root;
@@ -26,8 +26,6 @@ class SdIndexedSavedPage
         total = 0;
         frame_ = frame;
         capacity_ = capacity;
-        verification_ = verification;
-        verification_capacity_ = verification_capacity;
         return true;
     }
     bool matches(size_t offset, size_t limit, const std::array<::geocaching::storage::SavedCacheEntry, 4>& rows, const size_t& total) const
@@ -35,6 +33,12 @@ class SdIndexedSavedPage
         return offset == offset_ && limit == limit_ && &rows == rows_ && &total == total_;
     }
     bool unavailable() const { return unavailable_; }
+    bool missingProjection(std::array<uint8_t, 32>& id) const
+    {
+        if (!upgrade_required_) return false;
+        id = record_.id;
+        return true;
+    }
     IndexScanStep step()
     {
         using namespace ::geocaching;
@@ -43,20 +47,11 @@ class SdIndexedSavedPage
         {
             const auto status = entry_->step();
             if (status == IndexScanStep::Working) return status;
+            if (entry_->missingProjection(record_.id)) upgrade_required_ = true;
             ByteView signed_cache;
             if (status != IndexScanStep::Item) return status == IndexScanStep::End ? IndexScanStep::Invalid : status;
             if (!entry_->result(record_, signed_cache)) return IndexScanStep::Invalid;
-            // Old cards can still derive metadata from the retained signed
-            // response. New objects already carry its verified projection.
-            if (signed_cache.size)
-            {
-                const auto result = verifySavedCache(signed_cache, crypto_, verification_, verification_capacity_, record_);
-                if (result != protocol::VerificationResult::Valid)
-                {
-                    unavailable_ = result == protocol::VerificationResult::CryptoUnavailable;
-                    return result == protocol::VerificationResult::WorkspaceTooSmall ? IndexScanStep::WorkspaceTooSmall : IndexScanStep::Invalid;
-                }
-            }
+            if (signed_cache.size) return IndexScanStep::Invalid;
             (*rows_)[count_++] = record_;
             entry_.reset();
             return heads_.advance() ? IndexScanStep::Working : IndexScanStep::Invalid;
@@ -66,6 +61,12 @@ class SdIndexedSavedPage
         MutationView row;
         CacheHeadView head;
         if (!heads_.item(row) || !decodeCacheHead(row.key, row.value, head)) return IndexScanStep::Invalid;
+        if (heads_.itemUsesLegacyGeneration())
+        {
+            std::memcpy(record_.id.data(), row.key.data, 32);
+            upgrade_required_ = true;
+            return IndexScanStep::Invalid;
+        }
         if (!head.current_hash.size) return heads_.advance() ? IndexScanStep::Working : IndexScanStep::Invalid;
         const auto ordinal = (*total_)++;
         if (ordinal < offset_) return heads_.advance() ? IndexScanStep::Working : IndexScanStep::Invalid;
@@ -82,7 +83,6 @@ class SdIndexedSavedPage
 
   private:
     ::geocaching::storage::VolumeInstance volume_;
-    ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::IndexRootView root_;
     SdVolumeReadSession read_session_;
     SdIndexScan heads_;
@@ -90,8 +90,8 @@ class SdIndexedSavedPage
     ::geocaching::storage::SavedCacheRecord record_;
     std::array<::geocaching::storage::SavedCacheEntry, 4>* rows_ = nullptr;
     size_t* total_ = nullptr;
-    uint8_t *frame_ = nullptr, *verification_ = nullptr;
-    size_t offset_ = 0, limit_ = 0, count_ = 0, capacity_ = 0, verification_capacity_ = 0;
-    bool unavailable_ = false;
+    uint8_t* frame_ = nullptr;
+    size_t offset_ = 0, limit_ = 0, count_ = 0, capacity_ = 0;
+    bool unavailable_ = false, upgrade_required_ = false;
 };
 } // namespace platform::esp::arduino_common::geocaching

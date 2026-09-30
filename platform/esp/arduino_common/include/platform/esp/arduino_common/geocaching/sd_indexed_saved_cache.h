@@ -18,7 +18,7 @@ class SdIndexedSavedCache
     // The page has already verified this head under the same pinned root.
     // Copy its identifiers before reusing the shared frame for the object.
     bool beginFromHead(const ::geocaching::storage::IndexRootView& root, ::geocaching::ByteView key,
-                       ::geocaching::ByteView value, uint8_t* frame, size_t capacity)
+                       ::geocaching::ByteView value, uint8_t* frame, size_t capacity, bool metadata_only = true)
     {
         ::geocaching::storage::CacheHeadView head;
         if (status_ != IndexScanStep::Idle || !::geocaching::storage::validIndexRoot(root) ||
@@ -26,7 +26,7 @@ class SdIndexedSavedCache
         root_ = root;
         frame_ = frame;
         capacity_ = capacity;
-        metadata_only_ = true;
+        metadata_only_ = metadata_only;
         saveHead(key, head);
         status_ = IndexScanStep::Working;
         return startObject() == IndexScanStep::Working;
@@ -56,6 +56,21 @@ class SdIndexedSavedCache
         out = record_;
         signed_cache = signed_;
         return true;
+    }
+    bool missingProjection(std::array<uint8_t, 32>& id) const
+    {
+        if (!projection_missing_) return false;
+        id = record_.id;
+        return true;
+    }
+    SdVolumeReadSession& readSession() { return *session_; }
+    const ::geocaching::storage::SavedCacheRecord* installation(::geocaching::ByteView& request, ::geocaching::ByteView& task, ::geocaching::ByteView& signed_cache) const
+    {
+        if (status_ != IndexScanStep::Item || !signed_.size || !installed_generation_) return nullptr;
+        request = {requests_[request_].data(), 48};
+        task = {task_.data(), 16};
+        signed_cache = signed_;
+        return &record_;
     }
     IndexScanStep step()
     {
@@ -122,7 +137,17 @@ class SdIndexedSavedCache
             ObjectRefView object;
             if (!decodeObjectRef({record_.hash.data(), 32}, get.value(), object) ||
                 std::memcmp(object.cache_id.data, record_.id.data(), 32)) return finish(IndexScanStep::Invalid);
-            if (!object.saved_request.size) return startInstalls();
+            if (metadata_only_ && get.usesLegacyGeneration())
+            {
+                projection_missing_ = true;
+                return finish(IndexScanStep::Invalid);
+            }
+            if (!object.saved_request.size)
+            {
+                if (!metadata_only_) return startInstalls();
+                projection_missing_ = true;
+                return finish(IndexScanStep::Invalid);
+            }
             std::memcpy(task_.data(), object.saved_task.data, 16);
             std::memcpy(requests_[0].data(), object.saved_request.data, 48);
             request_count_ = 1;
@@ -239,6 +264,6 @@ class SdIndexedSavedCache
     uint64_t head_generation_ = 0, installed_generation_ = 0;
     Phase phase_ = Phase::Heads;
     IndexScanStep status_ = IndexScanStep::Idle;
-    bool has_after_ = false, metadata_only_ = false;
+    bool has_after_ = false, metadata_only_ = false, projection_missing_ = false;
 };
 } // namespace platform::esp::arduino_common::geocaching
