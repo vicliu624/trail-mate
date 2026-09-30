@@ -1713,6 +1713,34 @@ void ReticulumInterfaceSet::applyConfig(
                   static_cast<unsigned>(tcp_count_));
 }
 
+bool ReticulumInterfaceSet::canReplaceDiscoveredGateway(const char* host, uint16_t port) const
+{
+    // An explicitly empty manual TCP list must not silently enable TCP access.
+    if (!wifiAllowed() || !host || !host[0] || std::strlen(host) > reticulum::kInterfaceHostMaxLen || !port || !tcp_count_) return false;
+    for (size_t i = 0; i < network_config_.interface_count && i < reticulum::kMaxNetworkInterfaces; ++i)
+    {
+        const auto& item = network_config_.interfaces[i];
+        if (item.enabled && item.type == reticulum::NetworkInterfaceType::TcpClient &&
+            item.target_port == port && std::strcmp(item.target_host, host) == 0) return false;
+    }
+    const auto& learned = tcp_[reticulum::kMaxTcpClientInterfaces];
+    if (learned.isReady() || learned.isConnecting()) return false;
+    return !learned.isConfigured() || discovered_config_.target_port != port ||
+           std::strcmp(discovered_config_.target_host, host) != 0;
+}
+
+void ReticulumInterfaceSet::replaceDiscoveredGateway(const char* host, uint16_t port)
+{
+    if (!canReplaceDiscoveredGateway(host, port)) return;
+    discovered_config_.type = reticulum::NetworkInterfaceType::TcpClient;
+    discovered_config_.enabled = true;
+    copyHost(discovered_config_.target_host, sizeof(discovered_config_.target_host), host);
+    discovered_config_.target_port = port;
+    tcp_[reticulum::kMaxTcpClientInterfaces].applyConfig(
+        &discovered_config_, config_.reticulum_wifi_auto_connect, kDiscoveredTcpInterfaceId);
+    tcp_count_ = static_cast<uint8_t>(tcp_.size());
+}
+
 void ReticulumInterfaceSet::setWifiTransportEnabled(bool enabled)
 {
     auto_.setTransportEnabled(enabled);

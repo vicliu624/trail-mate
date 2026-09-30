@@ -17,6 +17,7 @@ static uint32_t now = 0;
 namespace reticulum = chat::reticulum;
 using InterfaceId = uint8_t;
 constexpr InterfaceId kInvalidInterfaceId = 0;
+constexpr InterfaceId kDiscoveredTcpInterfaceId = 35;
 constexpr size_t kReticulumGatewayHostMaxLen = reticulum::kInterfaceHostMaxLen;
 static const char* boolLabel(bool value) { return value ? "true" : "false"; }
 static void copyHost(char* out, size_t size, const char* input)
@@ -174,6 +175,7 @@ class WifiGatewayReticulumInterface
     bool ensureSocket();
     void maintain();
     bool isReady() const;
+    bool isConfigured() const { return enabled_ && host_[0] != '\0'; }
     bool canAttempt() const;
     bool isConnecting() const { return socket_open_pending_; }
     void setSelected(bool);
@@ -189,9 +191,19 @@ class ReticulumInterfaceSet
     {
         void maintain() {}
     } auto_;
-    std::array<WifiGatewayReticulumInterface, 3> tcp_;
+    std::array<WifiGatewayReticulumInterface, 4> tcp_;
+    reticulum::NetworkInterfaceConfig discovered_config_;
+    reticulum::ReticulumNetworkConfig network_config_;
+    bool wifi_allowed_ = true;
+    bool wifiAllowed() const { return wifi_allowed_; }
+    struct Config
+    {
+        bool reticulum_wifi_auto_connect = true;
+    } config_;
     uint8_t tcp_count_ = 3, active_tcp_ = UINT8_MAX, next_tcp_ = 0;
     void maintain();
+    bool canReplaceDiscoveredGateway(const char*, uint16_t) const;
+    void replaceDiscoveredGateway(const char*, uint16_t);
     void syncSharedLoRaRxGate() {}
 };
 #include "gateway_actual.inc"
@@ -225,6 +237,49 @@ int main()
     configured.rx_priority_queue_.append(5);
     configured.applyConfig(nullptr, true, 33);
     assert(configured.interface_id_ == kInvalidInterfaceId && configured.rx_priority_queue_.size() == 0);
+    ReticulumInterfaceSet discovered;
+    discovered.tcp_[3].applyConfig(nullptr, true, 35);
+    discovered.network_config_.interface_count = 1;
+    discovered.network_config_.interfaces[0] = endpoint;
+    assert(!discovered.canReplaceDiscoveredGateway(endpoint.target_host, endpoint.target_port));
+    assert(discovered.canReplaceDiscoveredGateway("learned.example.org", 4242));
+    discovered.wifi_allowed_ = false;
+    assert(!discovered.canReplaceDiscoveredGateway("learned.example.org", 4242));
+    discovered.wifi_allowed_ = true;
+    discovered.tcp_[0].selected_ = true;
+    discovered.tcp_[0].socket_online_ = true;
+    discovered.active_tcp_ = 0;
+    discovered.replaceDiscoveredGateway("learned.example.org", 4242);
+    assert(discovered.tcp_count_ == 4 && discovered.active_tcp_ == 0);
+    assert(discovered.tcp_[0].isReady()); // Adding a candidate leaves healthy uplink intact.
+    assert(discovered.tcp_[3].interface_id_ == 35);
+    assert(std::strcmp(discovered.tcp_[3].host_, "learned.example.org") == 0);
+    assert(!discovered.canReplaceDiscoveredGateway("learned.example.org", 4242));
+    discovered.tcp_[3].socket_open_pending_ = true;
+    assert(!discovered.canReplaceDiscoveredGateway("other.example.org", 4242));
+    discovered.tcp_[3].socket_open_pending_ = false;
+    discovered.tcp_[3].selected_ = true;
+    discovered.tcp_[3].socket_online_ = true;
+    assert(!discovered.canReplaceDiscoveredGateway("other.example.org", 4242));
+    discovered.tcp_[3].socket_online_ = false;
+    discovered.tcp_[3].selected_ = false;
+    for (unsigned i = 0; i < 3; ++i)
+    {
+        discovered.tcp_[i].socket_online_ = false;
+        discovered.tcp_[i].reconnect_.failed(now);
+    }
+    discovered.maintain();
+    assert(discovered.active_tcp_ == 3); // Cooling configured entries yield to discovery.
+    ReticulumInterfaceSet empty;
+    empty.tcp_count_ = 0;
+    assert(!empty.canReplaceDiscoveredGateway("learned.example.org", 4242));
+    ReticulumInterfaceSet single;
+    single.tcp_count_ = 1;
+    for (unsigned i = 1; i < 4; ++i) single.tcp_[i].applyConfig(nullptr, true, 0);
+    single.replaceDiscoveredGateway("learned.example.org", 4242);
+    single.tcp_[0].reconnect_.failed(now);
+    single.maintain();
+    assert(single.active_tcp_ == 3); // Disabled manual slots do not hide discovery.
     // Bounded failures, tick wrap, and stable recovery. A short-lived TCP
     // handshake must not reset a failing endpoint's penalty.
     TcpRetry retry;
@@ -304,7 +359,8 @@ int main()
         assert(pool.active_tcp_ == (failed == 2 ? UINT8_MAX : failed + 1));
     }
     for (unsigned tick = 0; tick < 20; ++tick) pool.maintain();
-    for (const auto& candidate : pool.tcp_) assert(candidate.connector_.starts == 1);
+    for (unsigned i = 0; i < pool.tcp_count_; ++i) assert(pool.tcp_[i].connector_.starts == 1);
+    assert(pool.tcp_[3].connector_.starts == 0); // No discovery candidate was installed.
     now += 10000;
     pool.maintain();
     assert(pool.active_tcp_ == 0 && pool.tcp_[0].connector_.starts == 2);

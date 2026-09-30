@@ -49,6 +49,7 @@ constexpr InterfaceId kInvalidInterfaceId = 0;
 constexpr InterfaceId kLoRaInterfaceId = 1;
 constexpr InterfaceId kAutoInterfaceIdBase = 16;
 constexpr InterfaceId kTcpClientInterfaceIdBase = 32;
+constexpr InterfaceId kDiscoveredTcpInterfaceId = kTcpClientInterfaceIdBase + reticulum::kMaxTcpClientInterfaces;
 
 struct RxPacket
 {
@@ -268,6 +269,9 @@ class ReticulumInterfaceSet
                      const reticulum::ReticulumNetworkConfig& network_config);
     void setWifiTransportEnabled(bool enabled);
     void maintain();
+    bool canReplaceDiscoveredGateway(const char* host, uint16_t port) const;
+    // Caller retires routes/links for kDiscoveredTcpInterfaceId before replacing.
+    void replaceDiscoveredGateway(const char* host, uint16_t port);
     bool hasReadyInterface() const;
     bool hasReadyWifiGateway() const;
     bool wifiGatewayConfigured() const;
@@ -297,8 +301,9 @@ class ReticulumInterfaceSet
     const bool owns_integrated_radio_;
     AutoReticulumInterface auto_;
     std::array<WifiGatewayReticulumInterface,
-               reticulum::kMaxTcpClientInterfaces>
+               reticulum::kMaxTcpClientInterfaces + 1>
         tcp_{};
+    reticulum::NetworkInterfaceConfig discovered_config_{};
     MeshConfig config_{};
     reticulum::ReticulumNetworkConfig network_config_{};
     RxMeta last_rx_meta_{};

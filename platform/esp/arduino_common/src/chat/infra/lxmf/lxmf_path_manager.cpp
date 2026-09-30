@@ -287,6 +287,29 @@ void PathManager::clearPaths()
     transport_.paths.clear();
 }
 
+void PathManager::retireInterface(uint8_t interface_id)
+{
+    if (!interface_id) return;
+    for (const auto& path : transport_.paths)
+    {
+        if (path.interface_id != interface_id) continue;
+        resolvePendingPathRequest(path.destination_hash);
+        forgetPacket(path.cached_packet_hash);
+    }
+    transport_.paths.erase(std::remove_if(transport_.paths.begin(), transport_.paths.end(),
+                                          [interface_id](const PathEntry& path)
+                                          { return path.interface_id == interface_id; }),
+                           transport_.paths.end());
+    transport_.reverse_table.erase(std::remove_if(transport_.reverse_table.begin(), transport_.reverse_table.end(),
+                                                  [interface_id](const ReverseEntry& entry)
+                                                  { return entry.interface_id == interface_id; }),
+                                   transport_.reverse_table.end());
+    transport_.link_relays.erase(std::remove_if(transport_.link_relays.begin(), transport_.link_relays.end(),
+                                                [interface_id](const LinkRelayEntry& entry)
+                                                { return entry.initiator_interface_id == interface_id || entry.responder_interface_id == interface_id; }),
+                                 transport_.link_relays.end());
+}
+
 LinkRelayEntry& PathManager::upsertLinkRelay(
     const uint8_t link_id[reticulum::kTruncatedHashSize],
     std::size_t max_link_relays)

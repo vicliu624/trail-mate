@@ -3465,6 +3465,20 @@ void LxmfAdapter::processRuntime()
         const auto& endpoint = gateway_discovery_.latest();
         Serial.printf("[Reticulum][Discovery] verified host=%s port=%u\n", endpoint.host, endpoint.port);
     }
+    const auto& discovered = gateway_discovery_.latest();
+    if ((budget.allow_propagation_client || budget.allow_public_discovery) &&
+        interfaces_.canReplaceDiscoveredGateway(discovered.host, discovered.port))
+    {
+        constexpr auto interface_id = reticulum::interfaces::kDiscoveredTcpInterfaceId;
+        link_manager_.forEachSession([this](LinkSession& session)
+                                     {
+                                        if (session.interface_id == reticulum::interfaces::kDiscoveredTcpInterfaceId &&
+                                            session.state != LinkState::Closed)
+                                            closeLinkSession(session, LinkCloseReason::Error); });
+        path_manager_.retireInterface(interface_id);
+        deferred_discovery_.clear();
+        interfaces_.replaceDiscoveredGateway(discovered.host, discovered.port);
+    }
     if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
                                          identity_.isReady() && interfaces_.hasReadyWifiGateway(), budget))
     {

@@ -117,9 +117,13 @@ reusing a connection slot; monotonically assigning IDs and eventually wrapping
 is not sufficient. Candidate persistence must retain endpoint/access identity,
 not treat a runtime slot number as durable identity.
 
-Candidate selection currently uses the configured entries. Native interface
-announcements are received and validated; persistence and automatic selection
-of discovered candidates are not yet implemented.
+Candidate selection includes the configured entries and one independently
+validated, public discovery endpoint. Discovery never modifies the three manual
+entries. When configured candidates fail or are cooling down, the same
+single-uplink selector can try the discovered endpoint. A healthy uplink is
+retained. An empty manual TCP list or a policy that disallows Wi-Fi prevents
+automatic admission. Persistence and a maintained multi-candidate discovery
+catalog are not yet implemented.
 
 The discovery parser is available in `chat/infra/reticulum/interface_discovery.h`
 as groundwork for native `rnstransport.discovery.interface` announcements. Its
@@ -150,6 +154,15 @@ receive-buffer pointers. Only a valid completed stamp replaces the latest
 endpoint. Invalid announcements cannot overwrite that endpoint. Network-config
 changes reset this temporary state. This is a single observation, not a durable
 candidate catalog, and it does not change any configured TCP slot.
+
+The discovered endpoint has a dedicated runtime TCP slot and interface ID 35.
+It shares the single active TCP connection budget, including on C6. Replacing
+this slot is permitted only while it is neither ready nor connecting. The
+adapter first closes links bound to ID 35 and removes its paths, reverse routes
+and relays; other interfaces' paths and links remain intact. Deferred discovery
+packets are cleared before reuse, and reconfiguration clears both receive queues.
+The extra slot and its bounded receive buffers live inside the PSRAM-owned
+adapter. They add PSRAM usage; this is not a reduction in total allocated memory.
 
 Successful validation emits `[Reticulum][Discovery] verified host=... port=...`.
 That log establishes announcement validation only, not server reachability or a
