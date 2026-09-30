@@ -34,7 +34,7 @@ class LocalMapOverlay
         // interval. Work remains bounded to two four-row windows and no I/O.
         for (unsigned section = 0; section < 2 && !finished_; ++section)
         {
-            source.requestWindow(section_, offset_, 4);
+            source.requestMapWindow(section_, offset_, 4);
             Snapshot snapshot;
             source.snapshot(section_, snapshot);
             if (snapshot.busy || !snapshot.ready) return;
@@ -49,7 +49,7 @@ class LocalMapOverlay
             }
             if (offset_ < snapshot.count)
             {
-                source.requestWindow(section_, offset_, 4);
+                source.requestMapWindow(section_, offset_, 4);
                 return;
             }
             if (section_ == Section::Downloaded)

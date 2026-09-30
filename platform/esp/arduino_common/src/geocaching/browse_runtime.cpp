@@ -158,6 +158,7 @@ struct Session
     };
     ::platform::memory::PsramPtr<DraftCatalog> draft_catalog;
     bool draft_catalog_wanted = false;
+    bool map_metadata_only = false;
     Phase phase = Phase::Inspect;
     const char* status = "Opening geocaching storage...";
     const char* notice = nullptr;
@@ -379,6 +380,15 @@ bool advanceDraftCatalog(Session& s)
     if (!s.draft_catalog) s.draft_catalog.reset(::platform::memory::createPsram<Session::DraftCatalog>());
     if (!s.draft_catalog) return false;
     auto& catalog = *s.draft_catalog;
+    if (s.map_metadata_only && draftMetadataReady(s))
+    {
+        if (catalog.reading)
+        {
+            s.store->releaseDraftRead();
+            catalog.reading = false;
+        }
+        return false;
+    }
     if (draftCatalogReady(s) || (catalog.failed && catalog.sequence == s.store->catalogGeneration())) return false;
     if (!catalog.reading)
     {
@@ -1426,6 +1436,7 @@ class Facade final : public ::ui::geocaching::Source
         else local_storage_requested.store(true);
         Guard guard;
         if (!guard.locked || !session) return;
+        session->map_metadata_only = false;
         if (section != ::ui::geocaching::Section::Discover) session->storage_requested = true;
         if (section == ::ui::geocaching::Section::Downloaded && count && count <= 4)
         {
@@ -1465,6 +1476,12 @@ class Facade final : public ::ui::geocaching::Source
             ++catalog.generation;
         }
         next_step.store(0);
+    }
+    void requestMapWindow(::ui::geocaching::Section section, size_t offset, size_t count) override
+    {
+        requestWindow(section, offset, count);
+        Guard guard;
+        if (guard.locked && session) session->map_metadata_only = true;
     }
     bool item(::ui::geocaching::Section section, size_t index, uint64_t generation, ::ui::geocaching::Item& out) override
     {

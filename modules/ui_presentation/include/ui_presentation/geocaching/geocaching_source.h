@@ -89,6 +89,11 @@ class Source
     // UI-thread notification only. A backend may asynchronously prepare this
     // bounded window; item() returns false until its projection is ready.
     virtual void requestWindow(Section, std::size_t, std::size_t) {}
+    // Map needs position metadata only, without publication history auditing.
+    virtual void requestMapWindow(Section section, std::size_t offset, std::size_t count)
+    {
+        requestWindow(section, offset, count);
+    }
     // Read a single row from this generation without I/O. False means stale.
     virtual bool item(Section section, std::size_t index, std::uint64_t generation, Item& out) = 0;
     virtual void refresh(Section section) = 0;

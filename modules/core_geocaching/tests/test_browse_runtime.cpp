@@ -585,10 +585,17 @@ int main(int argc, char** argv)
         auto map = std::make_unique<ui::map::MapOverlaySnapshot>();
         const auto map_started = test::clock_ms;
         const auto map_io_started = test::io_operations;
+        const bool previous_profile = test::profile_reads;
+        test::profile_reads = true;
+        // Diagnostic override only. The default models the production Map
+        // timer; faster polling must not silently relax the acceptance test.
+        const auto refresh_ms = std::getenv("TRAIL_MATE_TEST_MAP_REFRESH_MS")
+                                    ? std::max(1UL, std::strtoul(std::getenv("TRAIL_MATE_TEST_MAP_REFRESH_MS"), nullptr, 10))
+                                    : 750UL;
         test::read_bytes_by_path.clear();
         for (unsigned frame = 0; frame < 100 && map->item_count != 2; ++frame)
         {
-            const auto refresh_due = test::clock_ms + 750;
+            const auto refresh_due = test::clock_ms + refresh_ms;
             overlays->update(*test::source, 31, 121, 15);
             map = std::make_unique<ui::map::MapOverlaySnapshot>();
             overlays->append(*map);
@@ -600,6 +607,10 @@ int main(int argc, char** argv)
             while (test::clock_ms < refresh_due) tick();
         }
         require(map->item_count == 2 && map->header.valid, "direct main map did not load local markers");
+        for (const auto& read : test::read_bytes_by_path)
+            require(read.first.find("/05/") == std::string::npos && read.first.find("/0a/") == std::string::npos,
+                    "main Map audited publication requests or parent tasks");
+        test::profile_reads = previous_profile;
         std::fprintf(stderr, "Direct Map cold-start acceptance: elapsed_ms=%llu budget_ms=3000 io_delay_ms=%u\n",
                      static_cast<unsigned long long>(test::clock_ms - map_started), test::io_delay_ms);
         std::fprintf(stderr, "Direct Map I/O operations=%llu\n", static_cast<unsigned long long>(test::io_operations - map_io_started));
