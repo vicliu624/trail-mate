@@ -8,6 +8,23 @@ on:
   pull_request:
 
 jobs:
+  geocaching_web:
+    name: Geocaching Live Web Map
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Verify live map startup, discovery, protocol and regions
+        working-directory: site
+        run: |
+          npm ci --ignore-scripts
+          node --test ../tests/site/geocaching-*.test.mjs
+          npm run build:geocaching
+
   reticulum_gateway:
     name: Reticulum Gateway and IFAC
     runs-on: ubuntu-latest

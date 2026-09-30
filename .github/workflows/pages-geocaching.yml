@@ -44,10 +44,7 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run build:geocaching
-          node --test ../tests/site/geocaching-protocol.test.mjs
-          node --test ../tests/site/geocaching-regions.test.mjs
-          node --test ../tests/site/geocaching-live-worker.test.mjs
-          node --test ../tests/site/geocaching-discovery.test.mjs
+          node --test ../tests/site/geocaching-*.test.mjs
       - name: Overlay the Geocaching page and navigation
         run: |
           rm -rf "$RUNNER_TEMP/publish/geocaching"
