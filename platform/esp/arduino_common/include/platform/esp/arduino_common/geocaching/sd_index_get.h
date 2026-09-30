@@ -68,7 +68,7 @@ class SdIndexGet
             if (status == IndexHeadReadStep::Working) return result_;
             ::geocaching::storage::IndexShardHead head;
             if (status != IndexHeadReadStep::Ready || !reader.selected(head)) return error(status);
-            if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head.sequence, head.length, session_).begin(table_, {key_.data(), key_size_})) return fail(IndexGetStep::Invalid);
+            if (!operation_.emplace<SdIndexLookup>(volume_, root_.slot, head.sequence, head.length, session_, head.current_only).begin(table_, {key_.data(), key_size_})) return fail(IndexGetStep::Invalid);
             phase_ = Phase::Lookup;
             return result_;
         }

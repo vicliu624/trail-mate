@@ -1,5 +1,28 @@
 # Geocaching client runtime
 
+## Current index generations
+
+The shard-head codec and readers support immutable current-only generations.
+The existing 52-byte shard head uses byte 46 as a CRC-covered format flag:
+`0` selects the legacy append prefix; `1` selects a current-only generation at
+`<bucket>.gci.c<sequence as 16 lowercase hex digits>`. Byte 47 remains reserved.
+Entries retain the existing 152-byte encoding and verified journal/checkpoint
+locators. A current generation contains each live key once, in nondecreasing
+record-sequence order, without tombstones. Its head sequence identifies the
+generation and can exceed the sequence of its retained records after deletion.
+
+Readers select the head visible to their committed root, read only that generation,
+and do not consult obsolete append entries. Empty and shrinking generations are
+valid. A nonempty generation must have exactly the length in its head; malformed
+references and CRC failures are still rejected. Legacy heads and readers retain
+their existing checks.
+
+This is the read-side foundation, not an enabled migration. The production
+transaction writer still emits legacy append shards and rejects attempts to
+append to a current-only shard. Replacement writes, old-card conversion, and
+generation cleanup must be integrated before current-only Downloaded reads are
+enabled on devices. Opening a list does not create or rebuild these generations.
+
 Local lists and the standalone Map can open a CRC-checked committed index root
 before journal inventory or suffix replay. The read lease is not a write-ready
 snapshot: saving, downloading and publishing still require full recovery and

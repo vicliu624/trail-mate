@@ -84,15 +84,23 @@ class SdIndexScan
             auto& reader = std::get<SdIndexHeadReader>(operation_);
             const auto status = reader.step();
             if (status == IndexHeadReadStep::Working) return result_;
-            if (status != IndexHeadReadStep::Ready || !reader.selected(head_) || !head_.length) return error(status);
+            if (status != IndexHeadReadStep::Ready || !reader.selected(head_)) return error(status);
+            if (!head_.length)
+            {
+                if (!head_.current_only) return fail(IndexScanStep::Invalid);
+                operation_.emplace<std::monostate>();
+                ++bucket_;
+                phase_ = Phase::Bucket;
+                return result_;
+            }
             operation_.emplace<std::monostate>();
             phase_ = Phase::Open;
             return result_;
         }
         if (phase_ == Phase::Open)
         {
-            char path[80];
-            if (!indexShardPathForBucket(root_.slot, table_, static_cast<uint8_t>(bucket_), path, sizeof(path))) return fail(IndexScanStep::Invalid);
+            char path[96];
+            if (!indexShardDataPath(root_.slot, head_, path, sizeof(path))) return fail(IndexScanStep::Invalid);
             if (!file_.open(path, "r")) return file_.read_busy() ? result_ : fail(IndexScanStep::IoError);
             phase_ = Phase::Size;
             return result_;
@@ -101,7 +109,7 @@ class SdIndexScan
         {
             const auto size = file_.size();
             if (file_.read_busy()) return result_;
-            if (size < head_.length) return fail(IndexScanStep::Invalid);
+            if (size < head_.length || (head_.current_only && size != head_.length)) return fail(IndexScanStep::Invalid);
             position_ = head_.length;
             newer_ = UINT64_MAX;
             phase_ = Phase::Seek;
@@ -134,7 +142,8 @@ class SdIndexScan
             if (read_ != bytes_.size()) return result_;
             if (!decodeIndexEntry({incoming, bytes_.size()}, volume_, entry_) || entry_.table != table_ ||
                 static_cast<uint8_t>(::sys::crc32(entry_.key.data, entry_.key.size)) != bucket_ || entry_.location.record_sequence > newer_ ||
-                (position_ == head_.length - kIndexEntrySize && entry_.location.record_sequence != head_.sequence)) return fail(IndexScanStep::Invalid);
+                entry_.location.record_sequence > head_.sequence || (head_.current_only && entry_.erase) ||
+                (!head_.current_only && position_ == head_.length - kIndexEntrySize && entry_.location.record_sequence != head_.sequence)) return fail(IndexScanStep::Invalid);
             newer_ = entry_.location.record_sequence;
             const bool newest = position_ == head_.length - kIndexEntrySize;
             const bool superseded = incoming != bytes_.data() && !newest && bytes_[21] == entry_.key.size &&
@@ -152,7 +161,7 @@ class SdIndexScan
                 phase_ = Phase::Seek;
                 return result_;
             }
-            if (newest)
+            if (newest || head_.current_only)
             {
                 if (!operation_.emplace<SdIndexedValueReader>(volume_, session_).begin(entry_, frame_, capacity_)) return fail(IndexScanStep::Invalid);
                 phase_ = Phase::Value;
@@ -196,7 +205,7 @@ class SdIndexScan
         {
             const auto size = file_.size();
             if (file_.read_busy()) return result_;
-            if (size < head_.length) return fail(IndexScanStep::Invalid);
+            if (size < head_.length || (head_.current_only && size != head_.length)) return fail(IndexScanStep::Invalid);
             file_.close();
             ++bucket_;
             phase_ = Phase::Bucket;

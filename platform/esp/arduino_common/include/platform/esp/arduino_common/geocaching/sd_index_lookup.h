@@ -23,13 +23,13 @@ enum class IndexLookupStep : uint8_t
 class SdIndexLookup
 {
   public:
-    SdIndexLookup(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t committed_sequence, uint64_t committed_length, SdVolumeReadSession* session = nullptr)
-        : volume_(volume), visible_(committed_sequence), position_(committed_length), length_(committed_length), slot_(slot), session_(session) {}
+    SdIndexLookup(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t committed_sequence, uint64_t committed_length, SdVolumeReadSession* session = nullptr, bool current_only = false)
+        : volume_(volume), visible_(committed_sequence), position_(committed_length), length_(committed_length), slot_(slot), session_(session), current_only_(current_only) {}
     bool begin(uint8_t table, ::geocaching::ByteView key)
     {
         if (result_ != IndexLookupStep::Idle || (slot_ != 'a' && slot_ != 'b') || table < 1 || table > 13 ||
             !key.data || !key.size || key.size > key_.size() || length_ % ::geocaching::storage::kIndexEntrySize ||
-            ((visible_ == 0) != (length_ == 0))) return false;
+            (current_only_ ? visible_ == 0 : ((visible_ == 0) != (length_ == 0)))) return false;
         table_ = table;
         key_size_ = key.size;
         std::memcpy(key_.data(), key.data, key_size_);
@@ -61,8 +61,9 @@ class SdIndexLookup
         }
         if (phase_ == Phase::Probe || phase_ == Phase::Open)
         {
-            char path[80];
-            if (!indexShardPath(slot_, table_, {key_.data(), key_size_}, path, sizeof(path))) return fail(IndexLookupStep::Invalid);
+            char path[96];
+            const IndexShardHead head{1, visible_, length_, table_, static_cast<uint8_t>(::sys::crc32(key_.data(), key_size_)), current_only_};
+            if (!indexShardDataPath(slot_, head, path, sizeof(path))) return fail(IndexLookupStep::Invalid);
             if (phase_ == Phase::Probe)
             {
                 const auto probe = storage::sd_read_file(path, bytes_.data(), 1);
@@ -82,7 +83,7 @@ class SdIndexLookup
         {
             const auto size = file_.size();
             if (file_.read_busy()) return result_;
-            if (size < length_) return fail(IndexLookupStep::Invalid);
+            if (size < length_ || (current_only_ && size != length_)) return fail(IndexLookupStep::Invalid);
             phase_ = Phase::Seek;
             return result_;
         }
@@ -110,7 +111,8 @@ class SdIndexLookup
             if (read_ != bytes_.size()) return result_;
             IndexedMutation entry;
             if (!decodeIndexEntry({bytes_.data(), bytes_.size()}, volume_, entry) || entry.location.record_sequence > newer_sequence_ ||
-                (first_entry_ && entry.location.record_sequence != visible_) ||
+                entry.location.record_sequence > visible_ || (current_only_ && entry.erase) ||
+                (!current_only_ && first_entry_ && entry.location.record_sequence != visible_) ||
                 entry.table != table_ || (::sys::crc32(entry.key.data, entry.key.size) & 0xff) != (::sys::crc32(key_.data(), key_size_) & 0xff))
                 return fail(IndexLookupStep::Invalid);
             newer_sequence_ = entry.location.record_sequence;
@@ -130,7 +132,7 @@ class SdIndexLookup
         {
             const auto size = file_.size();
             if (file_.read_busy()) return result_;
-            if (size < length_) return fail(IndexLookupStep::Invalid);
+            if (size < length_ || (current_only_ && size != length_)) return fail(IndexLookupStep::Invalid);
             phase_ = Phase::Close;
             return result_;
         }
@@ -172,6 +174,7 @@ class SdIndexLookup
     uint8_t table_ = 0;
     bool erased_ = false;
     bool first_entry_ = true;
+    bool current_only_ = false;
     Phase phase_ = Phase::Volume;
     IndexLookupStep result_ = IndexLookupStep::Idle, completion_ = IndexLookupStep::NotFound;
 };

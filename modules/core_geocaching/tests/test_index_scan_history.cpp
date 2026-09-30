@@ -125,6 +125,60 @@ int main()
     test::files.at(path)[148] ^= 1;
     scan(frame.size(), true);
     scan(144, true);
+    // The current generation contains only the remaining live reference. The
+    // obsolete append file is intentionally still corrupt: neither scan nor
+    // Get may inspect it once the selected head points at a current generation.
+    test::files.at(path)[148] ^= 1;
+    const auto legacy_length = test::files.at(path).size();
+    sd::SdIndexLookup lookup(volume, root.slot, root.sequence, legacy_length);
+    require(lookup.begin(11, {b.data(), b.size()}) &&
+                pump(lookup, sd::IndexLookupStep::Working) == sd::IndexLookupStep::Found,
+            "locate retained reference");
+    gc::IndexedMutation retained;
+    gc::IndexEntryBytes reference;
+    require(lookup.result(retained) && gc::encodeIndexEntry(volume, retained, reference), "encode retained reference");
+    gc::IndexShardHead current{root.epoch, root.sequence, gc::kIndexEntrySize, 11, bucket, true};
+    char current_path[96];
+    require(sd::indexShardDataPath(root.slot, current, current_path, sizeof(current_path)), "current generation path");
+    test::files[current_path] = {reference.begin(), reference.end()};
+    const auto publish = [&](const gc::IndexShardHead& head)
+    {
+        gc::IndexShardHeadBytes bytes;
+        require(gc::encodeIndexShardHead(volume, head, bytes), "encode current head");
+        for (unsigned copy = 0; copy < 2; ++copy)
+        {
+            char head_path[80];
+            require(sd::indexShardHeadPathForBucket(root.slot, 11, bucket, copy, head_path, sizeof(head_path)), "current head path");
+            test::files[head_path] = {bytes.begin(), bytes.end()};
+        }
+    };
+    publish(current);
+    test::files.at(path)[148] ^= 1;
+    scan(frame.size(), false);
+    require(test::read_bytes_by_path[path] == 0 && test::read_bytes_by_path[current_path] == gc::kIndexEntrySize,
+            "current scan read obsolete history or repeated the live reference");
+    std::printf("Current generation live_rows=1 obsolete_bytes=0 current_bytes=%llu\n",
+                static_cast<unsigned long long>(test::read_bytes_by_path[current_path]));
+    sd::SdIndexLookup current_lookup(volume, root.slot, current.sequence, current.length, nullptr, true);
+    require(current_lookup.begin(11, {b.data(), b.size()}) &&
+                pump(current_lookup, sd::IndexLookupStep::Working) == sd::IndexLookupStep::Found,
+            "lookup current generation");
+    sd::SdIndexLookup deleted_lookup(volume, root.slot, current.sequence, current.length, nullptr, true);
+    require(deleted_lookup.begin(11, {a.data(), a.size()}) &&
+                pump(deleted_lookup, sd::IndexLookupStep::Working) == sd::IndexLookupStep::NotFound,
+            "current lookup resurrected deletion");
+    test::files.at(current_path)[148] ^= 1;
+    scan(frame.size(), true);
+    test::files.at(current_path)[148] ^= 1;
+    test::files.at(current_path).push_back(0);
+    scan(frame.size(), true);
+    test::files.at(current_path).pop_back();
+    current.length = 0;
+    publish(current);
+    sd::SdIndexScan empty(volume);
+    require(empty.begin(root, 11, frame.data(), frame.size()) &&
+                pump(empty, sd::IndexScanStep::Working) == sd::IndexScanStep::End,
+            "empty current generation");
     require(!test::open_files && !test::open_dirs, "scan leaked handles");
     std::printf("Colliding keys, 60 obsolete versions, tombstone and old CRC fault: fallback=%u optimized=%u steps\n", fallback, optimized);
 }

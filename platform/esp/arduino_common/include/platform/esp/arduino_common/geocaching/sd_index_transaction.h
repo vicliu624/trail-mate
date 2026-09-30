@@ -201,6 +201,9 @@ class SdIndexTransaction
     }
     IndexTransactionStep startAppend()
     {
+        // An append writer cannot update an immutable current generation.
+        // Reject it until the replacement writer owns the complete shard.
+        if (baseline_.current_only) return fail(IndexTransactionStep::Invalid);
         if (!operation_.emplace<SdIndexAppend>(volume_, parent_.slot).begin(entry_)) return fail(IndexTransactionStep::Invalid);
         phase_ = Phase::Append;
         return result_;

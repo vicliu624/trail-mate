@@ -93,6 +93,32 @@ int main()
         head_bytes[i] ^= 1;
     }
     if (decodeIndexShardHead({head_bytes.data(), head_bytes.size()}, volume, 12, 5, 17, selected)) return 24;
+    // Current generations shrink after deletion without invalidating the old
+    // committed view. A conversion is one-way within the same epoch.
+    IndexShardHead compact{11, 3, kIndexEntrySize, 5, 17, true};
+    IndexShardHead empty{11, 4, 0, 5, 17, true};
+    if (!encodeIndexShardHead(volume, compact, head_bytes) ||
+        !decodeIndexShardHead({head_bytes.data(), head_bytes.size()}, volume, 11, 5, 17, selected) || !selected.current_only) return 40;
+    if (!selectIndexShardHead(second, compact, 2, selected) || selected.sequence != 2 || selected.current_only ||
+        !selectIndexShardHead(compact, second, 3, selected) || selected.sequence != 3 || !selected.current_only) return 41;
+    if (!encodeIndexShardHead(volume, empty, head_bytes) ||
+        !decodeIndexShardHead({head_bytes.data(), head_bytes.size()}, volume, 11, 5, 17, selected) || selected.length != 0 ||
+        !selectIndexShardHead(compact, empty, 3, selected) || selected.sequence != 3 ||
+        !selectIndexShardHead(empty, compact, 4, selected) || selected.sequence != 4) return 42;
+    auto downgrade = empty;
+    downgrade.sequence = 5;
+    downgrade.length = 5 * kIndexEntrySize;
+    downgrade.current_only = false;
+    if (selectIndexShardHead(compact, downgrade, 5, selected)) return 43;
+    auto conflict = compact;
+    conflict.current_only = false;
+    if (selectIndexShardHead(compact, conflict, 3, selected)) return 44;
+    for (size_t i = 0; i < head_bytes.size(); ++i)
+    {
+        head_bytes[i] ^= 1;
+        if (decodeIndexShardHead({head_bytes.data(), head_bytes.size()}, volume, 11, 5, 17, selected)) return 45;
+        head_bytes[i] ^= 1;
+    }
     std::array<uint8_t, kIndexShardBitmapSize> bitmap{};
     IndexRootView initial{11, 0, 1, 'a', {bitmap.data(), bitmap.size()}}, root;
     IndexRootBytes root_bytes;
