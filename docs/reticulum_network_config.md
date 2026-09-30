@@ -109,6 +109,19 @@ retain all three candidates and try them sequentially through their single socke
 Candidate selection currently uses the configured entries. Native interface
 discovery and persistence of discovered candidates are not yet implemented.
 
+The discovery parser is available in `chat/infra/reticulum/interface_discovery.h`
+as groundwork for native `rnstransport.discovery.interface` announcements. Its
+wire reference is [Reticulum Discovery.py](https://github.com/markqvist/Reticulum/blob/7f2b3b9b524c9386316379af1313b43a5e4f7a5d/RNS/Discovery.py).
+It borrows the payload, allocates no heap memory, and accepts at most 500 bytes
+and 32 scalar map entries. The supported subset is a public TCPServerInterface
+or BackboneInterface with transport enabled, a host fitting the existing
+63-character limit, and a nonzero 16-bit port. Encrypted discovery, IFAC-protected
+interfaces, IPv6 endpoints, duplicate keys, and malformed data are rejected.
+Parsing alone does **not** authenticate a candidate: the outer announcement
+signature and the native 20-round discovery stamp must both be verified before
+admission. The parser is not yet connected to live candidate selection, and its
+borrowed pointers must not be persisted or retained after the input expires.
+
 The native `tests/reticulum_gateway` regression compiles the production connect
 and cancel functions with controlled socket, admission and clock adapters. It
 covers pending work, cancellation, retry deadlines, clock wrap, stable recovery,
@@ -173,8 +186,9 @@ it does not certify public endpoint reachability.
   and per-peer UDP interface model. Only one entry is allowed.
 - `TCPClientInterface` connects to a Reticulum TCP server or gateway. Up to
   three entries can be configured on boards with native Wi-Fi.
-- T-Display-P4 uses the C6 companion's single TCP transport and therefore uses
-  only the first enabled `TCPClientInterface`. It does not expose an IPv6
+- T-Display-P4 uses the C6 companion's single TCP transport and selects one
+  configured TCP candidate at a time, failing over after a connection failure.
+  It does not expose an IPv6
   AutoInterface through the companion transport.
 - Unknown destinations and announces may fan out over ready interfaces.
   Learned paths, links, proofs, resources, calls, and Nomad requests remain
