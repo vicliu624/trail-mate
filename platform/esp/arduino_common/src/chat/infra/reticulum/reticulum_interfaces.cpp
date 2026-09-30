@@ -740,7 +740,7 @@ void WifiGatewayReticulumInterface::readAvailable()
         if (!budget.allow_connect && !budget.allow_write)
         {
             stop();
-            last_reconnect_ms_ = now_ms;
+            reconnect_.defer(now_ms);
         }
         return;
     }
@@ -792,7 +792,7 @@ void WifiGatewayReticulumInterface::readAvailable()
         if (!budget.allow_connect && !budget.allow_write)
         {
             stop();
-            last_reconnect_ms_ = now_ms;
+            reconnect_.defer(now_ms);
         }
         return;
     }

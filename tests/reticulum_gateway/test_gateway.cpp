@@ -62,6 +62,13 @@ static Lease current;
 bool ensure_connected(const Request&, ConnectResult*) { return false; }
 Lease acquire(const Request&) { return current; }
 const char* decision_name(int) { return "fixture"; }
+struct Budget
+{
+    bool allow_read = true, allow_write = true, allow_connect = true;
+    uint32_t rx_byte_budget = 256, min_read_interval_ms = 0;
+};
+static Budget budget;
+Budget traffic_budget(Client, Priority) { return budget; }
 } // namespace platform::ui::wifi_access
 namespace platform::esp::arduino_common::net
 {
@@ -123,6 +130,9 @@ struct WiFiClient
     explicit WiFiClient(int) {}
     void stop() {}
     void setNoDelay(bool) {}
+    bool connected() const { return true; }
+    int available() const { return 0; }
+    int read() { return -1; }
 };
 class WifiGatewayReticulumInterface
 {
@@ -138,6 +148,7 @@ class WifiGatewayReticulumInterface
     bool hdlc_in_frame_ = false;
     bool hdlc_escape_ = false;
     size_t hdlc_frame_len_ = 0;
+    uint32_t rx_stats_read_skips_ = 0, last_socket_read_ms_ = 0, rx_stats_bytes_ = 0;
     static constexpr int32_t kSocketConnectTimeoutMs = 5000;
     chat::reticulum::TcpRetry reconnect_;
     platform::esp::arduino_common::net::Connector connector_;
@@ -151,7 +162,8 @@ class WifiGatewayReticulumInterface
     void setSelected(bool);
     void syncSocketState() {}
     bool connected() const { return socket_online_; }
-    void readAvailable() {}
+    void readAvailable();
+    void feedHdlcByte(uint8_t) {}
 };
 class ReticulumInterfaceSet
 {
@@ -226,6 +238,12 @@ int main()
     ++now;
     assert(gateway.ensureSocket());
     assert(gateway.socket_online_ && !gateway.socket_open_pending_);
+    platform::ui::wifi_access::budget = {false, false, false, 0, 0};
+    gateway.readAvailable();
+    assert(!gateway.socket_online_ && !gateway.canAttempt());
+    now += 10000;
+    assert(gateway.canAttempt());
+    platform::ui::wifi_access::budget = {};
 
     ReticulumInterfaceSet pool;
     now = 100000;
