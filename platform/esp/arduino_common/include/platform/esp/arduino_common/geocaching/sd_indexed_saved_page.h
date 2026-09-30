@@ -12,7 +12,7 @@ class SdIndexedSavedPage
 {
   public:
     SdIndexedSavedPage(const ::geocaching::storage::VolumeInstance& volume, ::geocaching::protocol::RecordCrypto& crypto)
-        : volume_(volume), crypto_(crypto), heads_(volume) {}
+        : volume_(volume), crypto_(crypto), heads_(volume, &read_session_) {}
     bool begin(const ::geocaching::storage::IndexRootView& root, size_t offset, size_t limit,
                std::array<::geocaching::storage::SavedCacheEntry, 4>& rows, size_t& total,
                uint8_t* frame, size_t capacity, uint8_t* verification, size_t verification_capacity)
@@ -70,7 +70,7 @@ class SdIndexedSavedPage
         const auto ordinal = (*total_)++;
         if (ordinal < offset_) return heads_.advance() ? IndexScanStep::Working : IndexScanStep::Invalid;
         if (count_ == limit_) return IndexScanStep::End;
-        entry_.reset(::platform::memory::createPsram<SdIndexedSavedCache>(volume_));
+        entry_.reset(::platform::memory::createPsram<SdIndexedSavedCache>(volume_, &read_session_));
         if (!entry_)
         {
             unavailable_ = true;
@@ -84,6 +84,7 @@ class SdIndexedSavedPage
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::IndexRootView root_;
+    SdVolumeReadSession read_session_;
     SdIndexScan heads_;
     ::platform::memory::PsramPtr<SdIndexedSavedCache> entry_;
     ::geocaching::storage::SavedCacheRecord record_;
